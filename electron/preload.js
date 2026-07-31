@@ -376,6 +376,65 @@ if (!process.isMainFrame) {
 
   const pathContaining = (target) => nodeAt(target).path;
 
+  // The first rendered element for a path — how a selection made in the
+  // navigator is resolved back to something on the page.
+  const elementForPath = (p) => {
+    const runs = regions.get(p);
+    if (!runs) return null;
+    for (const run of runs) {
+      for (const n of run) if (n.isConnected && n.nodeType === 1) return n;
+    }
+    return null;
+  };
+
+  // What the canvas currently has selected, as a DOM element. Tracked here
+  // rather than pushed down from the app: a click already resolves to the node
+  // it hit, and avb:scroll-to carries the path when the navigator selects one.
+  let selectedEl = null;
+
+  // ── holding a hover-opened menu open ──────────────────────────────────────
+  // A menu that opens on hover closes the instant the pointer leaves for the
+  // style panel, so anything inside one can be selected but never styled. While
+  // something is selected, swallow the leave events aimed at it or at any of its
+  // ancestors: whatever opened to reveal the selection stays open for exactly as
+  // long as the thing being styled is the thing selected, and closes on its own
+  // once the selection moves out of it.
+  //
+  // Two cases, because a mega panel is usually rendered as a sibling of the row
+  // that opens it rather than inside it — so the panel containing the selection
+  // is an ancestor of it, but the trigger row that also closes on leave is not:
+  //
+  //   ancestor of the selection   the panel itself, and everything wrapping it
+  //   relatedTarget === null      the pointer left the page altogether, which
+  //                               is what going to the style panel looks like
+  //
+  // The second is the one that carries the workflow: select something in a menu,
+  // move to the panel to style it, and every leave that fires on the way out is
+  // swallowed no matter where in the page it is bound. Leaves that move from one
+  // element to another inside the page are untouched, so ordinary hover behaviour
+  // is unchanged while the pointer is still on the canvas — a menu whose trigger
+  // is left for some third part of the page does still close.
+  //
+  // documentElement and body are always skipped: the hover readout above listens
+  // for the leave on documentElement and would otherwise never clear.
+  //
+  // Reaches menus driven by script. One held open purely by CSS :hover cannot be
+  // pinned from here — the engine owns that state and does not take instruction.
+  for (const type of ['mouseleave', 'mouseout', 'pointerleave', 'pointerout']) {
+    window.addEventListener(
+      type,
+      (e) => {
+        if (!designMode || !selectedEl || !selectedEl.isConnected) return;
+        const t = e.target;
+        if (!(t instanceof Element)) return;
+        if (t === document.documentElement || t === document.body) return;
+        const leavingPage = e.relatedTarget === null;
+        if (leavingPage || t === selectedEl || t.contains(selectedEl)) e.stopPropagation();
+      },
+      true
+    );
+  }
+
   const startOutlines = () => {
     collectRegions();
     if (!regions.size) return;
@@ -406,7 +465,7 @@ if (!process.isMainFrame) {
     document.addEventListener(
       'dblclick',
       (e) => {
-        if (!designMode) return;
+        if (!designMode || e.altKey) return;
         e.preventDefault();
         e.stopPropagation();
         const p = pathContaining(e.target);
@@ -423,11 +482,20 @@ if (!process.isMainFrame) {
       'click',
       (e) => {
         if (!designMode) return;
+        // Alt-click reaches the page instead of selecting, so the widgets a
+        // design canvas otherwise swallows — accordions, tabs, anything that
+        // opens on click — can be worked while they are being styled. Links and
+        // submits are blocked further up regardless, so this cannot navigate
+        // the canvas away from the page being edited.
+        if (e.altKey) return;
         e.preventDefault();
         e.stopPropagation();
         // A click that hits no marked node still reports (path null) — the
         // app uses empty clicks to back out of component editing.
         const { path: p, occurrence } = nodeAt(e.target);
+        // Remember what to hold hover open around. An empty click deselects in
+        // the app, so it clears here too.
+        selectedEl = p && e.target instanceof Element ? e.target : null;
         window.parent.postMessage(
           { type: 'avb:click-node', path: p || null, occurrence },
           '*'
@@ -449,6 +517,9 @@ if (!process.isMainFrame) {
       sendRects();
     }
     if (d?.type === 'avb:scroll-to' && typeof d.path === 'string') {
+      // Only sent for a selection made outside the canvas, so this is the one
+      // signal the frame gets that the navigator moved the selection.
+      selectedEl = elementForPath(d.path);
       scrollPathIntoView(d.path);
     }
     if (d?.type === 'avb:set-vh' && typeof d.px === 'number') {
