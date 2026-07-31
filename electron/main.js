@@ -150,7 +150,14 @@ function buildMenu() {
     {
       label: 'Edit',
       submenu: [
-        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => send('menu:undo') },
+        {
+          label: 'Undo',
+          accelerator: 'CmdOrCtrl+Z',
+          click: () => {
+            if (styleIsNewest() && popStyleHistory()) return;
+            send('menu:undo');
+          },
+        },
         { label: 'Redo', accelerator: 'Shift+CmdOrCtrl+Z', click: () => send('menu:redo') },
         { type: 'separator' },
         { role: 'cut' },
@@ -1562,12 +1569,14 @@ function writePageText(pagePath, text) {
 }
 
 ipcMain.handle('page:write', async (_e, { pagePath, model }) => {
+  lastModelWriteAt = Date.now();
   writePageText(pagePath, serializePage(model));
   writeChunks(model);
   return { ok: true };
 });
 
 ipcMain.handle('page:writeRaw', async (_e, { pagePath, source }) => {
+  lastModelWriteAt = Date.now();
   writePageText(pagePath, source);
   return { ok: true };
 });
@@ -2231,8 +2240,49 @@ ipcMain.handle('style:readFile', async (_e, filePath) => {
   return { css: fs.readFileSync(abs, 'utf8') };
 });
 
+// ── style-edit history ─────────────────────────────────────────────────────
+// The style panel writes .css files directly, and undo snapshots only pageState,
+// so a colour change has nothing to go back to. Keep the previous contents of
+// every file style:writeFile touches, and let ⌘Z reach them.
+const STYLE_HISTORY = [];
+const STYLE_HISTORY_MAX = 200;
+let lastModelWriteAt = 0;
+
+function pushStyleHistory(abs) {
+  let before;
+  try {
+    before = fs.readFileSync(abs, 'utf8');
+  } catch {
+    return; // first write of a new file — nothing to go back to
+  }
+  const top = STYLE_HISTORY[STYLE_HISTORY.length - 1];
+  if (top && top.path === abs && top.css === before) return; // no-op write
+  STYLE_HISTORY.push({ path: abs, css: before, at: Date.now() });
+  if (STYLE_HISTORY.length > STYLE_HISTORY_MAX) STYLE_HISTORY.shift();
+}
+
+// True when the newest edit was a style write, so ⌘Z should take that rather
+// than the model.
+function styleIsNewest() {
+  const top = STYLE_HISTORY[STYLE_HISTORY.length - 1];
+  return !!top && top.at > lastModelWriteAt;
+}
+
+function popStyleHistory() {
+  const entry = STYLE_HISTORY.pop();
+  if (!entry) return false;
+  try {
+    markSelfWrite(entry.path);
+    fs.writeFileSync(entry.path, entry.css, 'utf8');
+    return true; // Vite's HMR repaints the canvas from the file
+  } catch {
+    return false;
+  }
+}
+
 ipcMain.handle('style:writeFile', async (_e, { filePath, css }) => {
   const abs = assertInProject(filePath);
+  pushStyleHistory(abs);
   markSelfWrite(abs); // the watcher must not treat our own write as external
   fs.writeFileSync(abs, css, 'utf8');
   return { ok: true };
