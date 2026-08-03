@@ -1,0 +1,104 @@
+{
+  "_comment": [
+    "Per-fixture expectations for the round-trip gate (test/roundtrip.test.js).",
+    "Any corpus file NOT listed here must be editable and must round-trip byte-identically.",
+    "",
+    "A file listed with identity:'fail' is a KNOWN defect. The gate asserts it still fails,",
+    "so fixing the parser forces an update here — that is the point. When a fix lands,",
+    "delete the entry and the file becomes a permanent regression test.",
+    "",
+    "severity:'corruption' means the emitted file is not equivalent to the input —",
+    "it changes meaning or is invalid Astro. Those are bugs, not formatting drift.",
+    "severity:'formatting' means the output is semantically the same file, reformatted."
+  ],
+  "spread-props.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "corruption",
+    "note": "`<Button {...rest} />` is emitted as `<Button ...rest />` — invalid Astro, breaks the build. parseAttrs (astroParser.js:38) accepts `.` in its name character class, so `...rest` matches as a bare attribute name and serializeAttrs re-emits it without braces."
+  },
+  "side-effect-css-import.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "corruption",
+    "note": "Import order is rewritten: IMPORT_RE (astroParser.js:19) matches default imports only, so `import '../styles/reset.css'` falls into extraFrontmatter and is emitted BELOW the hoisted default imports. Style import order determines cascade order, so saving a page can restyle it."
+  },
+  "named-imports.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "corruption",
+    "note": "Same root cause as side-effect-css-import: `import { getCollection } from 'astro:content'` is not matched by IMPORT_RE and is reordered below default imports."
+  },
+  "namespace-import.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "corruption",
+    "note": "Same root cause: `import * as utils from '../lib/utils'` is reordered below default imports."
+  },
+  "interleaved-frontmatter.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "corruption",
+    "note": "Imports are hoisted above frontmatter statements that originally preceded them. If a hoisted import's module has side effects, or a const is used in a later import path, hoisting changes evaluation order."
+  },
+  "no-frontmatter.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "A file with no frontmatter gains an empty `---\\n---` block: serializePage (astroParser.js:349) emits the fences unconditionally."
+  },
+  "frontmatter-blank-lines.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "Leading and trailing blank lines inside the frontmatter are lost to extraFrontmatter.trim() (astroParser.js:298)."
+  },
+  "four-space-indent.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "serializeNode re-indents the whole tree at two spaces per level, so a project using four-space indentation has every page reformatted on first save."
+  },
+  "map-loop.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "A `{items.map(...)}` loop is re-emitted with the brace, head and `))` on their own lines at a fixed indent (astroParser.js:424-429) instead of its original layout."
+  },
+  "style-and-script.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "Blank lines around top-level `<style>`/`<script>` blocks are dropped — whitespace-only text nodes are discarded at parse (astroParser.js:155) and the raw serializer trims its own surroundings (astroParser.js:436)."
+  },
+  "comments-and-doctype.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "Gains a trailing blank line: serializePage joins lines and appends '\\n' to a list that already ends in an empty entry."
+  },
+  "dynamic-tag.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "Trailing blank line added at EOF (same cause as comments-and-doctype)."
+  },
+  "expressions.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "Trailing blank line added at EOF (same cause as comments-and-doctype)."
+  },
+  "inline-run.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "Trailing blank line added at EOF (same cause as comments-and-doctype)."
+  },
+  "props-interface.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "Trailing blank line added at EOF. This is Stacki's own scaffold shape — the app does not round-trip the files it generates."
+  }
+}

@@ -7,6 +7,8 @@
   "author": "Timothy Ricks <hello@timothyricks.com>",
   "license": "MIT",
   "scripts": {
+    "test": "node --test 'test/*.test.js'",
+    "roundtrip:report": "node scripts/roundtrip-report.js",
     "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "vite build",
     "start": "npm run build && electron .",

@@ -1,0 +1,23 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Styled">
+  <section class="hero">
+    <h1>Styled</h1>
+  </section>
+</Layout>
+
+<style>
+  .hero {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .hero h1 {
+    font-size: clamp(2rem, 5vw, 4rem);
+  }
+</style>
+
+<script>
+  document.querySelector('.hero')?.classList.add('ready');
+</script>
