@@ -28,6 +28,7 @@ const {
 } = require('./astroParser');
 const { scaffoldProject } = require('./scaffold');
 const { importersOf } = require('./cmsRefs');
+const { registerTerminalHandlers, cleanupTerminals } = require('./terminal');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow = null;
@@ -184,6 +185,9 @@ app.whenReady().then(() => {
   buildMenu();
   createWindow();
   startAutoUpdateChecks();
+  // Terminals open in the project the app has open — same reach as the asset
+  // protocol, which is what `openProjectRoot` already scopes.
+  registerTerminalHandlers({ send, projectRoot: () => openProjectRoot });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -191,10 +195,16 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   stopDevServer();
+  // The pty ids are keyed to the window that opened them, so a surviving shell
+  // could never be reached again — and on macOS the app stays running.
+  cleanupTerminals();
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => stopDevServer());
+app.on('before-quit', () => {
+  stopDevServer();
+  cleanupTerminals();
+});
 
 // ---------------------------------------------------------------------------
 // Auto update

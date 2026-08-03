@@ -14,6 +14,7 @@ import InsertSearch from './ui/InsertSearch.jsx';
 import AssetsPanel from './panels/AssetsPanel.jsx';
 import CmsPanel from './panels/CmsPanel.jsx';
 import CmsView from './panels/CmsView.jsx';
+import TerminalDock from './panels/TerminalDock.jsx';
 import { getElementSchema, GLOBAL_ATTRS, canContainTag } from './elementSchemas.js';
 import { onAssetRequest, clearAssetRequest } from './assetPick.js';
 import { isDataBound } from './bindings.js';
@@ -23,6 +24,7 @@ import {
   ExternalIcon,
   ChevronLeftIcon,
   ElementComponentIcon,
+  TerminalIcon,
 } from './ui/Icons.jsx';
 
 let idCounter = 1000;
@@ -356,6 +358,7 @@ export default function App() {
   const [cmsSettings, setCmsSettings] = useState(false); // editing that collection's fields
   const [inPreview, setInPreview] = useState(false); // interactive full-site preview
   const [previewSrc, setPreviewSrc] = useState(null);
+  const [termOpen, setTermOpen] = useState(false); // bottom terminal dock
   const [codeWin, setCodeWin] = useState(null); // {targetId|kind:'file', title, language}
   const openCodeWindowRef = useRef(null); // latest openCodeWindow, for the Enter shortcut
   const [fileText, setFileText] = useState(''); // loaded text for kind:'file'
@@ -1054,6 +1057,23 @@ export default function App() {
   // ----------------------------------------------------------------
   // Insert palette (⌘F / ⌘E) — quick-add components, tags, loops, …
   // ----------------------------------------------------------------
+
+  // ⌘J / ⌃` toggle the terminal dock, the two bindings people already have in
+  // their fingers. Both carry a modifier, so they still work while a text field
+  // or the terminal itself has focus — unlike the rail's bare-letter shortcuts.
+  useEffect(() => {
+    const onKey = (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      const isToggle =
+        (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j') ||
+        (e.ctrlKey && !e.metaKey && !e.altKey && e.key === '`');
+      if (!isToggle) return;
+      e.preventDefault();
+      setTermOpen((v) => !v);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const [insertOpen, setInsertOpen] = useState(false);
 
@@ -2145,6 +2165,13 @@ export default function App() {
         {/* Both ways of viewing the site, kept together. */}
         <div className="titlebar-actions">
           <button
+            className={`titlebar-btn ${termOpen ? 'on' : ''}`}
+            title={termOpen ? 'Hide terminal (⌘J)' : 'Show terminal (⌘J)'}
+            onClick={() => setTermOpen((v) => !v)}
+          >
+            <TerminalIcon size={14} />
+          </button>
+          <button
             className="titlebar-btn"
             title="Open in browser"
             disabled={!liveUrl}
@@ -2400,6 +2427,16 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* Below `.main`, so it spans the full window rather than being boxed in
+          by the panels. Always mounted but inert until opened: it spawns no
+          shell until then, and once open it hides rather than unmounting, so
+          toggling it doesn't discard the scrollback — see TerminalDock. */}
+      <TerminalDock
+        projectPath={project.path}
+        open={termOpen}
+        onClose={() => setTermOpen(false)}
+      />
 
       {codeWin && codeWinValue !== null && (
         <CodeWindow
