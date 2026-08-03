@@ -901,7 +901,77 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
   flex-direction: column;
   min-height: 0;
 }
-.panel.left { width: 260px; flex-shrink: 0; }
+.panel.left { width: 260px; flex-shrink: 0; position: relative; }
+/* Floats over the canvas instead of taking a column: the preview iframe never
+   gets resized, so it never reflows while the panel opens or is dragged. */
+.panel.left.floating {
+  position: absolute;
+  left: 44px; /* clear of the icon rail */
+  top: 0;
+  bottom: 0;
+  z-index: 30;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+}
+/* Drag handle on the panel's right edge; wider than the border it sits on. */
+.panel-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+}
+.panel-resizer:hover { background: var(--accent); opacity: 0.35; }
+
+/* Terminal panel: one tab per shell, along the top of the panel. */
+.term-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.term-tabs::-webkit-scrollbar { display: none; }
+.term-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 4px 8px;
+  border-radius: 6px 6px 0 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  cursor: default;
+}
+.term-tab:hover { background: var(--bg-hover); }
+.term-tab.on { background: var(--bg-panel-2); color: var(--text); }
+.term-tab-x { padding: 2px; opacity: 0; color: var(--text-faint); }
+.term-tab:hover .term-tab-x, .term-tab.on .term-tab-x { opacity: 1; }
+.term-tab-x:hover { color: var(--text); }
+.term-tab-x.locked { visibility: hidden; }
+/* Harness marks: white, like every other icon in the panel. */
+.term-badge { color: #fff; opacity: 0.85; }
+.term-tab:not(.on) .term-badge { opacity: 0.55; }
+.term-menu-label { display: flex; align-items: center; gap: 8px; }
+/* Shell-reported titles run long (paths, whole command lines). */
+.term-tab-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.term-tab-input {
+  width: 110px;
+  background: var(--bg-input);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 11px;
+  font-family: inherit;
+  padding: 0 4px;
+}
+.term-tab-input:focus { outline: none; }
+.term-add { padding: 3px; color: var(--text-faint); }
+.term-add:hover { color: var(--text); }
 .panel.right { width: 322px; flex-shrink: 0; border-right: none; border-left: 1px solid var(--border); }
 
 .panel-section { display: flex; flex-direction: column; min-height: 0; }

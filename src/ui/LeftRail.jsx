@@ -5,6 +5,7 @@ import {
   ComponentFillIcon,
   AssetManagerIcon,
   CmsIcon,
+  TerminalIcon,
 } from './Icons.jsx';
 
 const TABS = [
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'components', title: 'Components', shortcut: '⇧A', Icon: ComponentFillIcon },
   { id: 'assets', title: 'Assets', shortcut: 'J', Icon: AssetManagerIcon },
   { id: 'cms', title: 'CMS', shortcut: '⌥C', Icon: CmsIcon },
+  { id: 'terminal', title: 'Terminal', shortcut: '⌥T', Icon: TerminalIcon },
 ];
 
 const TOOLTIP_DELAY = 500;
@@ -55,6 +57,9 @@ export default function LeftRail({ active, onSelect }) {
         if (e.code === 'KeyC') {
           e.preventDefault();
           onSelect('cms');
+        } else if (e.code === 'KeyT') {
+          e.preventDefault();
+          onSelect('terminal');
         }
         return;
       }

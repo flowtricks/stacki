@@ -13,6 +13,7 @@ import PageSwitcher from './ui/PageSwitcher.jsx';
 import InsertSearch from './ui/InsertSearch.jsx';
 import AssetsPanel from './panels/AssetsPanel.jsx';
 import CmsPanel from './panels/CmsPanel.jsx';
+import TerminalPanel, { terminalClipboard } from './panels/TerminalPanel.jsx';
 import CmsView from './panels/CmsView.jsx';
 import { getElementSchema, GLOBAL_ATTRS, canContainTag } from './elementSchemas.js';
 import { onAssetRequest, clearAssetRequest } from './assetPick.js';
@@ -332,6 +333,14 @@ function stripLostBindings(node, vars) {
   return removed;
 }
 
+// Left panel width, dragged by the handle on its right edge and remembered
+// per tab: a terminal wants more room than a page list.
+const PANEL_MIN = 200;
+const PANEL_MAX = 900;
+const PANEL_WIDTH = { terminal: 460 };
+const panelWidthOf = (tab) =>
+  Number(localStorage.getItem(`avb.panelWidth.${tab}`)) || PANEL_WIDTH[tab] || 260;
+
 export default function App() {
   const [project, setProject] = useState(null); // {path, name}
   const [scan, setScan] = useState({ pages: [], layouts: [], components: [] });
@@ -350,7 +359,31 @@ export default function App() {
   const [busy, setBusy] = useState(null); // string message
   const [toast, setToast] = useState(null); // {msg, kind}
   const [refreshKey, setRefreshKey] = useState(0);
-  const [leftTab, setLeftTab] = useState('navigator'); // pages | navigator | components | assets | cms | null
+  const [leftTab, setLeftTab] = useState('navigator'); // pages | navigator | components | assets | cms | terminal | null
+  const [panelWidth, setPanelWidth] = useState(() => panelWidthOf('navigator'));
+
+  // Drag the panel's right edge. The pointer crosses the preview iframe, a
+  // separate document that would otherwise swallow every move: capturing it
+  // on the handle keeps the events coming to this window.
+  const startPanelResize = (e) => {
+    e.preventDefault();
+    const handle = e.currentTarget;
+    const startX = e.clientX;
+    const startW = panelWidth;
+    const widthAt = (x) => Math.min(PANEL_MAX, Math.max(PANEL_MIN, startW + x - startX));
+    handle.setPointerCapture(e.pointerId);
+    document.body.style.cursor = 'col-resize';
+    const onMove = (ev) => setPanelWidth(widthAt(ev.clientX));
+    const onUp = (ev) => {
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', onUp);
+      handle.releasePointerCapture?.(ev.pointerId);
+      document.body.style.cursor = '';
+      if (leftTab) localStorage.setItem(`avb.panelWidth.${leftTab}`, String(widthAt(ev.clientX)));
+    };
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', onUp);
+  };
   const [cmsRel, setCmsRel] = useState(null); // JSON file open in the CMS editor
   const [cmsTick, setCmsTick] = useState(0); // bumped on save, refreshes counts
   const [cmsSettings, setCmsSettings] = useState(false); // editing that collection's fields
@@ -1323,6 +1356,13 @@ export default function App() {
         if (pageStateRef.current.pageState && !cmsOpenRef.current) redo();
       }),
       window.avb.onMenu('copy', () => {
+        // The terminal first: its selection lives on a canvas, invisible to
+        // both getSelection() and the native copy below.
+        const term = terminalClipboard();
+        if (term) {
+          term.copy();
+          return;
+        }
         if (inEditable() || String(window.getSelection() || '')) {
           window.avb.nativeCopy();
           return;
@@ -1333,6 +1373,11 @@ export default function App() {
         }
       }),
       window.avb.onMenu('paste', () => {
+        const term = terminalClipboard();
+        if (term) {
+          term.paste();
+          return;
+        }
         if (inEditable()) {
           window.avb.nativePaste();
           return;
@@ -2025,6 +2070,7 @@ export default function App() {
     const trail = pathOfNode(model.nodes, id);
     return trail ? trail.join('.') : null;
   };
+
   // Picking a component swaps the right panel to Settings — its props are the
   // only thing there is to edit on it; picking a plain element (or a dynamic
   // tag, which renders one) swaps back to Style. Anything else — frontmatter,
@@ -2172,11 +2218,23 @@ export default function App() {
       <div className="main">
         <LeftRail
           active={leftTab}
-          onSelect={(id) => setLeftTab((t) => (t === id ? null : id))}
+          onSelect={(id) => {
+            const next = leftTab === id ? null : id;
+            if (next) setPanelWidth(panelWidthOf(next));
+            setLeftTab(next);
+          }}
         />
 
-        {leftTab && (
-          <div className="panel left">
+        {/* Always rendered, only hidden: the terminal panel lives in here, and
+            unmounting it would kill its PTYs — and any harness running in them
+            — every time the rail is collapsed. The terminal also floats over
+            the canvas rather than taking layout width: resizing the preview
+            iframe reflows and repaints the whole page under it. */}
+        <div
+          className={`panel left ${leftTab === 'terminal' ? 'floating' : ''}`}
+          style={{ width: panelWidth, display: leftTab ? 'flex' : 'none' }}
+        >
+            <div className="panel-resizer" onPointerDown={startPanelResize} />
             {leftTab === 'pages' && (
               <PagesPanel
                 scan={scan}
@@ -2245,8 +2303,13 @@ export default function App() {
                 onPickCancel={endAssetPick}
               />
             )}
-          </div>
-        )}
+            {/* Always mounted: unmounting kills the PTY, and with it any
+                harness running in it. `contents` keeps it out of the rail's
+                layout while another tab is open. */}
+            <div style={{ display: leftTab === 'terminal' ? 'contents' : 'none' }}>
+              <TerminalPanel project={project} active={leftTab === 'terminal'} />
+            </div>
+        </div>
 
         <div className="center">
           <PreviewPane

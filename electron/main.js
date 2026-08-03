@@ -1106,6 +1106,32 @@ function resolveIdentifierDefaults(schema, source, filePath, projectPath) {
 }
 
 // ---------------------------------------------------------------------------
+// Terminal panel — CLI coding harnesses in a real PTY (see electron/terminal.js)
+// ---------------------------------------------------------------------------
+
+const terminal = require('./terminal');
+
+// Events go back to whichever renderer asked, rather than through the main
+// window's emitter.
+const replyTo = (event) => (channel, payload) => {
+  if (!event.sender.isDestroyed()) event.sender.send(channel, payload);
+};
+
+ipcMain.handle('term:shells', () => {
+  ensureToolPath();
+  return terminal.listShells();
+});
+ipcMain.handle('term:open', (e, opts) => {
+  ensureToolPath();
+  return terminal.open(replyTo(e), opts || {});
+});
+ipcMain.handle('term:write', (_e, { id, data } = {}) => terminal.write(id, data));
+ipcMain.handle('term:resize', (_e, { id, cols, rows } = {}) => terminal.resize(id, cols, rows));
+ipcMain.handle('term:close', (_e, { id } = {}) => terminal.close(id));
+
+app.on('before-quit', () => terminal.closeAll());
+
+// ---------------------------------------------------------------------------
 // File watching — reflect external edits back into the app
 // ---------------------------------------------------------------------------
 

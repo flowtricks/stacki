@@ -616,6 +616,23 @@ contextBridge.exposeInMainWorld('avb', {
     return () => ipcRenderer.removeListener('fs:changed', listener);
   },
 
+  // Terminal panel (CLI coding harnesses in a PTY)
+  listTermShells: invoke('term:shells'),
+  openTerm: invoke('term:open'),
+  writeTerm: invoke('term:write'),
+  resizeTerm: invoke('term:resize'),
+  closeTerm: invoke('term:close'),
+  onTermData: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('term:data', listener);
+    return () => ipcRenderer.removeListener('term:data', listener);
+  },
+  onTermExit: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('term:exit', listener);
+    return () => ipcRenderer.removeListener('term:exit', listener);
+  },
+
   // Application menu events (macOS menu accelerators never reach the DOM)
   onMenu: (channel, cb) => {
     const listener = () => cb();
