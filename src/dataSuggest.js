@@ -49,6 +49,33 @@ export function parseDeclarations(code) {
   return out;
 }
 
+// Locates one top-level declaration by name and reports where it sits, so a
+// prop bound to `{rotatingWords}` can offer to edit the `const rotatingWords
+// = […]` behind it. `start`/`end` bound the whole statement (its indentation
+// stays outside the range, and a trailing ';' inside it).
+export function findDeclaration(code, name) {
+  const src = String(code || '');
+  const ident = String(name || '');
+  if (!/^[A-Za-z_$][\w$]*$/.test(ident)) return null;
+  const re = new RegExp(
+    `(?:^|\\n)([ \\t]*)((?:export\\s+)?(?:const|let|var)\\s+${ident.replace(/\$/g, '\\$')}\\s*=\\s*)`,
+    'g'
+  );
+  const m = re.exec(src);
+  if (!m) return null;
+  const valueStart = m.index + m[0].length;
+  const start = valueStart - m[2].length;
+  const valueEnd = scanValue(src, valueStart);
+  const end = src[valueEnd] === ';' ? valueEnd + 1 : valueEnd;
+  return {
+    name: ident,
+    start,
+    end,
+    statement: src.slice(start, end),
+    value: src.slice(valueStart, valueEnd).trim(),
+  };
+}
+
 // The first '{…}' object inside an array literal (or the object itself).
 export function firstObjectIn(text) {
   if (!text) return null;

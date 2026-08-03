@@ -52,6 +52,7 @@ export default function PreviewPane({
   devStatus,
   devLog,
   devDiag,
+  pathScope,
   route,
   refreshKey,
   crumbs,
@@ -63,6 +64,7 @@ export default function PreviewPane({
   overlayInfo,
   onSelectPath,
   onOpenPath,
+  onSelectedClasses,
   focusPath,
   device,
   onDevice,
@@ -109,6 +111,16 @@ export default function PreviewPane({
   const lastClickRef = React.useRef(null);
   const [selOcc, setSelOcc] = React.useState(0);
   const [hoverOcc, setHoverOcc] = React.useState(0);
+  // Read by the message handler, which is bound once — refs keep it looking at
+  // the current selection instead of the one it closed over.
+  const selPathRef = React.useRef(selPath);
+  selPathRef.current = selPath;
+  const selOccRef = React.useRef(selOcc);
+  selOccRef.current = selOcc;
+  const onSelectedClassesRef = React.useRef(onSelectedClasses);
+  onSelectedClassesRef.current = onSelectedClasses;
+  // Last reported class string, so repeated rect sends stay quiet.
+  const selClassesRef = React.useRef('');
   // Canvas clicks set the instance directly (below) — including when they
   // land on another instance of the node that's already selected, where
   // selPath never changes. Any other route to a new selection means "the
@@ -128,8 +140,22 @@ export default function PreviewPane({
     const onMsg = (e) => {
       if (!iframeRef.current || e.source !== iframeRef.current.contentWindow) return;
       const d = e.data;
-      if (d?.type === 'avb:rects') setRects(d.rects || {});
-      else if (d?.type === 'avb:hover-node') {
+      if (d?.type === 'avb:rects') {
+        setRects(d.rects || {});
+        // The rendered classes of the selected instance, for the style panel:
+        // an expression-valued class attribute has no text in the model, so
+        // this is the only place the applied classes are knowable. Rects
+        // re-send on scroll/resize, so only report an actual change.
+        if (d.classes) {
+          const runs = d.classes[selPathRef.current] || [];
+          const list = runs[selOccRef.current] || runs[0] || [];
+          const key = list.join(' ');
+          if (key !== selClassesRef.current) {
+            selClassesRef.current = key;
+            onSelectedClassesRef.current?.(list);
+          }
+        }
+      } else if (d?.type === 'avb:hover-node') {
         setCanvasHover(d.path || null);
         setHoverOcc(d.occurrence || 0);
       } else if (d?.type === 'avb:click-node' && onSelectPath) {
@@ -153,11 +179,13 @@ export default function PreviewPane({
   // A navigator hover means "the node", so every instance lights up; a canvas
   // hover means the one under the pointer.
   const hoverOccUsed = navHoverPath ? null : hoverOcc;
-  const trackKey = [...new Set([selPath, hoverPath, focusPath].filter(Boolean))].join('|');
+  // Newline-joined: a namespaced path (src/…/Card.astro|0.1) contains a pipe,
+  // so that can no longer separate the tracked paths.
+  const trackKey = [...new Set([selPath, hoverPath, focusPath].filter(Boolean))].join(String.fromCharCode(10));
   const sendTrack = React.useCallback(() => {
     const w = iframeRef.current?.contentWindow;
     if (!w) return;
-    w.postMessage({ type: 'avb:track', paths: trackKey ? trackKey.split('|') : [] }, '*');
+    w.postMessage({ type: 'avb:track', paths: trackKey ? trackKey.split('\n') : [], scope: pathScope || '' }, '*');
   }, [trackKey]);
   React.useEffect(sendTrack, [sendTrack, url, refreshKey]);
 

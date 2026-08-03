@@ -10,9 +10,10 @@ import ExprInput from '../ui/ExprInput.jsx';
 import RichContent, { isInlineOnly } from '../ui/RichContent.jsx';
 import AssetField from '../ui/AssetField.jsx';
 import { looksLikeAssetPath, mediaKindFor } from '../ui/AssetThumb.jsx';
-import { dataSuggestions, exprSuggestions } from '../dataSuggest.js';
+import { dataSuggestions, exprSuggestions, findDeclaration } from '../dataSuggest.js';
 import LinkField from '../ui/LinkField.jsx';
 import {
+
   ResetIcon,
   FieldNumberIcon,
   ComponentPropertiesIcon,
@@ -26,6 +27,8 @@ import {
   BracesIcon,
   TagIcon,
   ElementImageIcon,
+  PencilIcon,
+  CloseIcon,
 } from '../ui/Icons.jsx';
 
 // Edits the props of the selected node. Fields come from the component's
@@ -41,6 +44,8 @@ export default function PropsPanel({
   slotOptions,
   projectClasses,
   allowAttrs,
+  comment,
+  onSetComment,
   loopContext,
   linkContext,
   onSetProp,
@@ -50,6 +55,7 @@ export default function PropsPanel({
   onSetContent,
   onSetInline,
   onOpenCode,
+  onSetFrontmatter,
   projectPath,
 }) {
   if (!node) {
@@ -237,6 +243,10 @@ export default function PropsPanel({
   // were what shows on the page.
   const isSlot = node.kind === 'element' && node.name === 'slot';
 
+  // Where a prop's {expression} can be pointing, and how to write that source
+  // back — lets an expression field edit the declaration behind it.
+  const dataCtx = { frontmatter: loopContext?.frontmatter || '', onSetFrontmatter };
+
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
       <div className="props-title">
@@ -250,10 +260,10 @@ export default function PropsPanel({
       </div>
       <div className="panel-body" style={{ padding: 0 }}>
         {node.kind === 'element' && onChangeTag && (
-          <TagField key={node.id} tag={node.name} onChangeTag={onChangeTag} />
+          <TagField key="tag" tag={node.name} onChangeTag={onChangeTag} />
         )}
         {isLayout && Array.isArray(layouts) && layouts.length > 0 && (
-          <div className="props-field">
+          <div className="props-field" key="layout">
             <label>
               <span className="prop-label">
                 <ComponentPropertiesIcon size={12} className="prop-label-icon" />
@@ -275,7 +285,7 @@ export default function PropsPanel({
           </div>
         )}
         {showContentField && (
-          <div className="props-field">
+          <div className="props-field" key="content">
             <label>
               <span className="prop-label">
                 <VariableTextSizeIcon size={12} className="prop-label-icon" />
@@ -305,6 +315,7 @@ export default function PropsPanel({
             projectClasses={projectClasses}
             assetCtx={{ projectPath, nodeName: node.name }}
             linkContext={linkContext}
+            dataCtx={dataCtx}
             onChange={(v, immediate) => onSetProp(field.name, v, immediate)}
           />
         ))}
@@ -317,6 +328,7 @@ export default function PropsPanel({
             projectClasses={projectClasses}
             assetCtx={{ projectPath, nodeName: node.name }}
             linkContext={linkContext}
+            dataCtx={dataCtx}
             onChange={(v, immediate) => onSetProp(name, v, immediate)}
           />
         ))}
@@ -331,12 +343,16 @@ export default function PropsPanel({
         )}
         {allowAttrs && (
           <AttributesSection
+            key="attrs"
             node={node}
             names={attrNames}
             projectPath={projectPath}
             onSetProp={onSetProp}
             onRenameProp={onRenameProp}
           />
+        )}
+        {onSetComment && (node.kind === 'element' || node.kind === 'component') && (
+          <CommentField key="comment" value={comment} onCommit={onSetComment} />
         )}
         {!isLayout &&
           !allowAttrs &&
@@ -350,6 +366,42 @@ export default function PropsPanel({
             </div>
           )}
       </div>
+    </div>
+  );
+}
+
+// The HTML comment directly above this node — the note the navigator shows
+// beside its name. Committed on blur (not per keystroke): every edit rewrites
+// the page, and a comment isn't worth a save per character. Clearing the field
+// removes the comment node.
+function CommentField({ value, onCommit }) {
+  const [draft, setDraft] = useState(value ?? '');
+  // Re-sync when the model changes underneath (undo, external edit) — but not
+  // while typing, or the caret would jump.
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) setDraft(value ?? '');
+  }, [value]);
+  const commit = () => {
+    const next = draft.trim();
+    if (next !== (value ?? '').trim()) onCommit(next);
+  };
+  return (
+    <div className="props-field props-comment">
+      <label>
+        <span className="prop-label">
+          <CommentIcon size={12} className="prop-label-icon" />
+          Comment
+        </span>
+      </label>
+      <AutoTextarea
+        minRows={1}
+        placeholder="Note above this element…"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onFocus={() => { focused.current = true; }}
+        onBlur={() => { focused.current = false; commit(); }}
+      />
     </div>
   );
 }
@@ -1008,7 +1060,162 @@ function TagField({ tag, onChangeTag }) {
   );
 }
 
-function PropField({ field, value, slotOptions, projectClasses, assetCtx, linkContext, onChange }) {
+// The identifier an expression is *about*: `rotatingWords` for both
+// `rotatingWords` and `site.nav.items`. Anything with a call, an operator or
+// a literal in it isn't a plain reference to one declaration, so it has no
+// source to open.
+function referencedName(expr) {
+  const m = String(expr ?? '')
+    .trim()
+    .match(/^([A-Za-z_$][\w$]*)(?:\s*\.\s*[A-Za-z_$][\w$]*)*$/);
+  return m ? m[1] : '';
+}
+
+// A prop value that holds JavaScript. It's code, so it's highlighted; and
+// when it names something the file declares, a pencil opens that declaration
+// right here — changing the three words in `const rotatingWords = […]` is
+// part of the same thought as pointing the prop at it, and shouldn't mean a
+// trip to the frontmatter editor.
+function ExprValueField({ value, dataCtx, onChange }) {
+  const [pos, setPos] = useState(null);
+  const wrapRef = useRef(null);
+
+  const code = dataCtx?.frontmatter || '';
+  const name = referencedName(value);
+  const decl = name && dataCtx?.onSetFrontmatter ? findDeclaration(code, name) : null;
+
+  const open = () => {
+    const r = wrapRef.current?.getBoundingClientRect();
+    const width = Math.max(r?.width ?? 240, 260);
+    setPos({
+      top: Math.min((r?.bottom ?? 200) + 6, Math.max(60, window.innerHeight - 240)),
+      left: Math.min(r?.left ?? 0, window.innerWidth - width - 12),
+      width,
+    });
+  };
+
+  return (
+    <>
+      <div className="prop-expr-row" ref={wrapRef}>
+        <ExprInput
+          value={value}
+          syncValue={value}
+          placeholder="expression"
+          onChange={(v) => onChange({ type: 'expr', value: v })}
+          onCommit={(v) => v !== value && onChange({ type: 'expr', value: v }, true)}
+        />
+        {decl && (
+          <button
+            className={`attr-asset-toggle ${pos ? 'on' : ''}`}
+            title={`Edit ${name}`}
+            onClick={() => (pos ? setPos(null) : open())}
+          >
+            <PencilIcon size={12} />
+          </button>
+        )}
+      </div>
+      {pos && decl && (
+        <VarSourceEditor
+          pos={pos}
+          name={name}
+          code={code}
+          onChangeCode={dataCtx.onSetFrontmatter}
+          onClose={() => setPos(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// Edits one declaration's source in place: the statement is spliced back into
+// the frontmatter on every keystroke, so the canvas updates as you type, the
+// rest of the file is untouched, and ⌘Z behaves like any other edit.
+function VarSourceEditor({ pos, name, code, onChangeCode, onClose }) {
+  const ref = useRef(null);
+  const codeRef = useRef(code);
+  codeRef.current = code;
+  const [draft, setDraft] = useState(() => findDeclaration(code, name)?.statement ?? '');
+  const rangeRef = useRef(null);
+
+  const apply = (text) => {
+    setDraft(text);
+    const src = codeRef.current;
+    // Re-locate on every write: the surrounding code can shift under us (an
+    // undo, an edit elsewhere). Renaming the variable inside this editor is
+    // the one case the lookup can't follow — fall back to where we last wrote.
+    const found = findDeclaration(src, name);
+    const range = found ? { start: found.start, end: found.end } : rangeRef.current;
+    if (!range) return;
+    rangeRef.current = { start: range.start, end: range.start + text.length };
+    onChangeCode(src.slice(0, range.start) + text + src.slice(range.end));
+  };
+
+  // Capture phase: what's inside is CodeMirror and what's around it is the
+  // panel's own pointer/key handling, either of which can stop an event before
+  // a bubbling listener on the document would see it.
+  useEffect(() => {
+    const onDown = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) onClose();
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }, [onClose]);
+
+  // Outside edits (undo) reach the editor as a changed statement; our own
+  // writes come back identical, so typing isn't fought.
+  const external = findDeclaration(code, name)?.statement;
+
+  return (
+    <div
+      ref={ref}
+      className="attr-editor var-src"
+      style={{ top: pos.top, left: pos.left, width: pos.width }}
+      // Escape typed inside the code editor closes the popup, independently of
+      // the document listener above.
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+    >
+      <div className="var-src-head">
+        <CodeIcon size={12} />
+        <span className="var-src-name">{name}</span>
+        <span style={{ flex: 1 }} />
+        <button className="ghost" title="Close" onClick={onClose}>
+          <CloseIcon size={12} />
+        </button>
+      </div>
+      <ExprInput
+        multiline
+        autoFocus
+        className="var-src-code"
+        value={draft}
+        syncValue={external ?? draft}
+        onChange={apply}
+      />
+    </div>
+  );
+}
+
+function PropField({
+  field,
+  value,
+  slotOptions,
+  projectClasses,
+  assetCtx,
+  linkContext,
+  dataCtx,
+  onChange,
+}) {
   const { name, type } = field;
   const isSet = value !== undefined;
   const [menuPos, setMenuPos] = useState(null);
@@ -1265,9 +1472,18 @@ function PropField({ field, value, slotOptions, projectClasses, assetCtx, linkCo
     );
   }
 
+  // An expression value is JavaScript, so it edits as code rather than text.
+  if (isExpr) {
+    return (
+      <div className="props-field">
+        {label}
+        <ExprValueField value={str} dataCtx={dataCtx} onChange={onChange} />
+      </div>
+    );
+  }
+
   const long =
-    !isExpr &&
-    (String(str).length > 48 || /text|description|content|body|paragraph/i.test(name));
+    String(str).length > 48 || /text|description|content|body|paragraph/i.test(name);
 
   return (
     <div className="props-field">
@@ -1281,12 +1497,8 @@ function PropField({ field, value, slotOptions, projectClasses, assetCtx, linkCo
       ) : (
         <input
           value={str}
-          placeholder={
-            field.default !== undefined ? String(field.default) : isExpr ? '' : ''
-          }
-          onChange={(e) =>
-            onChange({ type: isExpr ? 'expr' : 'string', value: e.target.value })
-          }
+          placeholder={field.default !== undefined ? String(field.default) : ''}
+          onChange={(e) => onChange({ type: 'string', value: e.target.value })}
         />
       )}
     </div>
@@ -1329,3 +1541,6 @@ function ResetMenu({ pos, onReset, onClose }) {
     </div>
   );
 }
+
+
+

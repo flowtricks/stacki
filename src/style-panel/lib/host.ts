@@ -24,11 +24,30 @@ export type HostState = {
   device: string
   /** Stylesheets in the project, from style:listFiles. */
   files: Array<{ rel: string; name: string; path: string; size: number }>
+  /**
+   * Classes the SELECTED element actually carries on the page, reported by the
+   * preview. `class:list={[…]}` and `class={expr}` are expressions — the source
+   * holds no class text — so this is the only way to know what a given instance
+   * resolved to. Empty when nothing is selected or the node isn't rendered.
+   */
+  renderedClasses: string[]
   /** Write a <style> node's CSS back into the page model. `immediate` saves the page
    *  right away (a committed edit) instead of coalescing like a typing burst. */
   writeStyleNode: ((nodeId: string, css: string, immediate?: boolean) => void) | null
   /** Select a node in the app (used when navigating from a provenance chip). */
   selectNode: ((nodeId: string) => void) | null
+  /** Record an already-applied change on the app's undo stack. Stylesheet edits
+   *  don't go through the page model, so without this ⌘Z would skip straight
+   *  past them to the last layout change. */
+  recordUndo: ((cmd: UndoCommand) => void) | null
+}
+
+export type UndoCommand = {
+  label?: string
+  /** Edits sharing a key inside one burst collapse into a single step. */
+  coalesceKey?: string | null
+  undo: () => void | Promise<void>
+  redo: () => void | Promise<void>
 }
 
 const state: HostState = {
@@ -37,8 +56,10 @@ const state: HostState = {
   selectedId: null,
   device: 'desktop',
   files: [],
+  renderedClasses: [],
   writeStyleNode: null,
   selectNode: null,
+  recordUndo: null,
 }
 
 const listeners = new Set<() => void>()

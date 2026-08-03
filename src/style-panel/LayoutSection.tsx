@@ -7,6 +7,7 @@ import VariableConnect from './VariableConnect'
 import { handleArrowStep } from './lib/number-step'
 import { cap, readProp } from './lib/prop-read'
 import type { ParsedRule } from './lib/types'
+import { splitTopLevelSpaces } from './lib/background'
 
 // The Layout section of the style panel. The Display control is always shown;
 // the rest (flex vs grid controls) conditionally appears based on the current
@@ -117,7 +118,7 @@ function UnlockedIcon() {
 // Split a `gap` value into its row / column parts. One token → both equal (a
 // linked gap); two tokens → `gap: <row> <column>` per the CSS shorthand.
 function parseGap(value: string): { row: string; col: string } {
-  const parts = value.trim().split(/\s+/).filter(Boolean)
+  const parts = splitTopLevelSpaces(value).filter(Boolean)
   if (parts.length === 0) return { row: '', col: '' }
   if (parts.length === 1) return { row: parts[0], col: parts[0] }
   return { row: parts[0], col: parts[1] }

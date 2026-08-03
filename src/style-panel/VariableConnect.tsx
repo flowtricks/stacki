@@ -2,7 +2,7 @@ import { cloneElement, isValidElement, useEffect, useLayoutEffect, useRef, useSt
 import type { CSSProperties, MutableRefObject, ReactElement, ReactNode } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import { streamProjectVariables, type ProjectVariable } from './lib/webflow'
-import { panelBox } from './lib/panel-box'
+import { panelBox, panelSpan } from './lib/panel-box'
 import './embed-editor.css'
 
 // Read the current value out of the wrapped <input> child, so callers don't have to
@@ -170,13 +170,7 @@ export function useSharedVars(active: boolean): { vars: ProjectVariable[]; loadi
 }
 
 // The popup spans the style panel, not the window — it's portaled to <body>, so it has to
-// measure the panel itself (see lib/panel-box).
-function panelSpan(anchor: HTMLElement): { left: number; width: number } {
-  const panel = panelBox(anchor)
-  if (!panel) return { left: 0, width: window.innerWidth }
-  const r = panel.getBoundingClientRect()
-  return { left: r.left, width: r.width }
-}
+// measure the panel itself (panelSpan, in lib/panel-box).
 
 // The picker popup: search field + grouped variable list (name + value). Portaled to
 // <body>, anchored to the dot and clamped into the viewport.

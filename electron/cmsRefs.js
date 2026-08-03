@@ -121,4 +121,30 @@ function importersOf(projectPath, targetAbs) {
 }
 
 
-module.exports = { importersOf, boundNames, resolveSpec, aliasMap };
+// The file an import specifier points at, or null. Extensionless specifiers
+// get the usual candidates tried, the way a bundler would.
+const IMPORT_EXTS = ['', '.astro', '.jsx', '.tsx', '.js', '.ts', '.vue', '.svelte', '.md', '.mdx'];
+
+function resolveImport(projectPath, fromFile, spec) {
+  for (const base of resolveSpec(spec, fromFile, aliasMap(projectPath))) {
+    for (const ext of IMPORT_EXTS) {
+      const candidate = base + ext;
+      try {
+        if (fs.statSync(candidate).isFile()) return candidate;
+      } catch {
+        /* keep looking */
+      }
+    }
+    for (const ext of IMPORT_EXTS.slice(1)) {
+      const candidate = path.join(base, `index${ext}`);
+      try {
+        if (fs.statSync(candidate).isFile()) return candidate;
+      } catch {
+        /* keep looking */
+      }
+    }
+  }
+  return null;
+}
+
+module.exports = { importersOf, boundNames, resolveSpec, resolveImport, aliasMap };

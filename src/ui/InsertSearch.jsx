@@ -20,7 +20,7 @@ const TABS = [
 
 // Quick-insert palette (⌘F / ⌘E): fuzzy-searches components, HTML tags, and
 // special node types; Enter or click inserts at the current selection.
-export default function InsertSearch({ components, onInsert, onClose }) {
+export default function InsertSearch({ components, allowSlot, onInsert, onClose }) {
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState('all');
   const [highlight, setHighlight] = useState(0);
@@ -42,11 +42,14 @@ export default function InsertSearch({ components, onInsert, onClose }) {
         <ElementComponentIcon size={15} style={{ color: '#79e09c' }} />
       ),
     }));
-    const tags = HTML_TAGS.map((tag) => ({
+    // <slot> only belongs in a component or layout — on a page it renders
+    // nothing, since a page has no caller to pass it content.
+    const tags = (allowSlot ? [...HTML_TAGS, 'slot'].sort() : HTML_TAGS).map((tag) => ({
       type: 'element',
       tag,
       label: `<${tag}>`,
-      search: tag,
+      search: tag === 'slot' ? 'slot children content' : tag,
+      sub: tag === 'slot' ? 'what the caller passes in' : undefined,
       cat: 'elements',
       icon: elementIcon(tag, 14),
     }));
@@ -59,7 +62,7 @@ export default function InsertSearch({ components, onInsert, onClose }) {
       { type: 'script', label: 'Script Block', sub: '<script>', cat: 'other', icon: <CodeIcon size={14} /> },
     ];
     return [...comps, ...tags, ...other];
-  }, [components]);
+  }, [components, allowSlot]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();

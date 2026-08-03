@@ -9,6 +9,9 @@ const SCHEMAS = {
     { name: 'type', type: 'enum', options: ['submit', 'button', 'reset'], default: 'submit' },
     { name: 'disabled', type: 'boolean', default: false },
   ],
+  // Astro's slot: unnamed takes the default children, `name` makes it a named
+  // slot the caller fills with `slot="…"`.
+  slot: [{ name: 'name', type: 'string' }],
   a: [
     { name: 'href', type: 'string' },
     { name: 'target', type: 'enum', options: ['_self', '_blank', '_parent', '_top'], default: '_self' },
@@ -129,6 +132,9 @@ export const PHRASING_TAGS = new Set([
   'datalist', 'del', 'dfn', 'em', 'i', 'img', 'input', 'ins', 'kbd', 'label',
   'mark', 'meter', 'output', 'picture', 'progress', 'q', 'ruby', 's', 'samp',
   'select', 'small', 'span', 'strong', 'sub', 'sup', 'svg', 'textarea', 'time',
+  // Astro's <slot />: whatever the caller passes lands here, so it's allowed
+  // wherever text is — `<h1><slot /></h1>` is the standard layout heading.
+  'slot',
   'u', 'var', 'wbr',
 ]);
 

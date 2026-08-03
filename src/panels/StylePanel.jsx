@@ -24,6 +24,8 @@ export default function StylePanel({
   device,
   onWriteStyleNode,
   onSelectNode,
+  onRecordUndo,
+  renderedClasses,
 }) {
   const [files, setFiles] = useState([]);
 
@@ -51,6 +53,8 @@ export default function StylePanel({
     files,
     writeStyleNode: onWriteStyleNode || null,
     selectNode: onSelectNode || null,
+    recordUndo: onRecordUndo || null,
+    renderedClasses: renderedClasses || [],
   });
 
   useEffect(() => {
@@ -62,8 +66,10 @@ export default function StylePanel({
       files,
       writeStyleNode: onWriteStyleNode || null,
       selectNode: onSelectNode || null,
+      recordUndo: onRecordUndo || null,
+      renderedClasses: renderedClasses || [],
     });
-  }, [project?.path, model, node?.id, device, files, onWriteStyleNode, onSelectNode]);
+  }, [project?.path, model, node?.id, device, files, onWriteStyleNode, onSelectNode, onRecordUndo, renderedClasses]);
 
   // The panel's popups (clip path, transitions, background, grid) are portaled
   // to <body> and were written for moden, where the panel filled the window —

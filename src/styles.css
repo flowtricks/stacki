@@ -434,6 +434,37 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 /* The placeholder should read like an input's, not like code. */
 .expr-input .cm-placeholder { color: var(--text-faint); font-family: var(--font); }
 
+/* An expression prop value: the code field, with the "edit its source"
+   pencil tucked beside it. */
+.prop-expr-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+}
+.prop-expr-row .expr-input { flex: 1; }
+
+/* The declaration behind a bound prop, opened in place. */
+.var-src {
+  padding: 8px;
+  gap: 6px;
+}
+.var-src-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.var-src-head .var-src-name {
+  font-family: var(--mono);
+  color: var(--text);
+}
+.var-src-head .ghost { padding: 2px; }
+.var-src-code {
+  max-height: 260px;
+  border: 1px solid var(--border);
+}
+
 /* Insert palette (⌘F / ⌘E) */
 .insert-overlay {
   position: fixed;
@@ -628,6 +659,15 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
   pointer-events: none;
 }
 .asset-tile:hover .asset-badge { opacity: 0; }
+/* A folded-in HTML comment beside a node's name in the navigator. */
+.node-note {
+  color: var(--text-faint);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .asset-ext {
   display: flex;
   flex-direction: column;
@@ -664,6 +704,15 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 
 /* Asset field (src/poster props) */
 .asset-field { position: relative; }
+/* The Asset/URL switch belongs in the field's label row. Anchored to the field
+   itself it had to be lifted out with a negative offset, which the panel body
+   (a scroll box) clipped whenever the field was the first one in the panel —
+   exactly where a component's `src` prop usually is. Anchor it to the whole
+   props-field instead, so the label row it sits in is inside the box. */
+.props-field:has(> .asset-field) { position: relative; }
+.props-field:has(> .asset-field) > label { min-height: 20px; display: flex; align-items: center; }
+.props-field > .asset-field { position: static; }
+.props-field > .asset-field > .af-mode { top: 0; right: 0; }
 .af-mode {
   position: absolute;
   top: -24px;
@@ -1025,6 +1074,12 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_ease-modal,
 body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   width: 100%;
   max-width: 100%;
+}
+/* The provenance card sizes to its content (up to 320px in moden, wider than
+   this panel) — cap it at the panel too. Its left edge is clamped to the panel
+   in ProvenancePopover. */
+body > .embed-editor_provenance {
+  max-width: var(--style-panel-width, 320px);
 }
 
 /* The panel is moden's markup, styled by moden's CSS — which assumes moden's

@@ -25,15 +25,24 @@ export type BackgroundLonghands = {
   attachment: string
 }
 
-/** Split on commas that are NOT inside parentheses (so gradients/rgba survive). */
+/** Split on commas that are NOT inside parentheses, brackets or quotes — so
+ *  gradients, rgba(), clamp(), grid line names and quoted font families all
+ *  survive intact. */
 export function splitTopLevelCommas(value: string): string[] {
   const parts: string[] = []
   let depth = 0
+  let quote: string | null = null
   let start = 0
   for (let i = 0; i < value.length; i += 1) {
     const ch = value[i]
-    if (ch === '(') depth += 1
-    else if (ch === ')') depth = Math.max(0, depth - 1)
+    if (quote) {
+      if (ch === '\\') i += 1
+      else if (ch === quote) quote = null
+      continue
+    }
+    if (ch === '"' || ch === "'") quote = ch
+    else if (ch === '(' || ch === '[') depth += 1
+    else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1)
     else if (ch === ',' && depth === 0) {
       parts.push(value.slice(start, i).trim())
       start = i + 1
@@ -68,14 +77,25 @@ export function colorOverlayImage(color: string): string {
   return `linear-gradient(180deg, ${c}, ${c})`
 }
 
-/** Split on whitespace runs that are NOT inside parentheses. */
+/** Split on whitespace runs that are NOT inside parentheses, brackets or
+ *  quotes. `clamp(4rem, 8vw, 6rem) 2rem` is two tokens, not five. */
 export function splitTopLevelSpaces(value: string): string[] {
   const parts: string[] = []
   let depth = 0
+  let quote: string | null = null
   let cur = ''
-  for (const ch of value.trim()) {
-    if (ch === '(') { depth += 1; cur += ch }
-    else if (ch === ')') { depth = Math.max(0, depth - 1); cur += ch }
+  const chars = [...value.trim()]
+  for (let i = 0; i < chars.length; i += 1) {
+    const ch = chars[i]
+    if (quote) {
+      cur += ch
+      if (ch === '\\' && i + 1 < chars.length) { cur += chars[i + 1]; i += 1 }
+      else if (ch === quote) quote = null
+      continue
+    }
+    if (ch === '"' || ch === "'") { quote = ch; cur += ch }
+    else if (ch === '(' || ch === '[') { depth += 1; cur += ch }
+    else if (ch === ')' || ch === ']') { depth = Math.max(0, depth - 1); cur += ch }
     else if (/\s/.test(ch) && depth === 0) { if (cur) { parts.push(cur); cur = '' } }
     else cur += ch
   }

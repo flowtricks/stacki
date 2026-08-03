@@ -17,6 +17,7 @@ import CmsView from './panels/CmsView.jsx';
 import { getElementSchema, GLOBAL_ATTRS, canContainTag } from './elementSchemas.js';
 import { onAssetRequest, clearAssetRequest } from './assetPick.js';
 import { isDataBound } from './bindings.js';
+import { elementLabel } from './classNames.js';
 import {
   PreviewIcon,
   RefreshIcon,
@@ -81,6 +82,15 @@ function findParentList(model, id) {
     return null;
   };
   return search(model.nodes);
+}
+
+// The comment sitting directly above `index` in its own sibling list — the
+// note the navigator folds into that node's row. Moves and deletes carry it
+// along: the two read as one row, so leaving it behind would silently re-attach
+// someone else's note to whatever ends up next.
+function noteIndexAbove(list, index) {
+  const prev = index > 0 ? list[index - 1] : null;
+  return prev && prev.kind === 'comment' ? index - 1 : -1;
 }
 
 function isDescendantOf(candidateParent, id) {
@@ -177,6 +187,34 @@ function renameLoopVar(nodes, from, to) {
     }
     if (Array.isArray(n.children)) renameLoopVar(n.children, from, to);
   }
+}
+
+// First element with this tag, depth-first. Used to land the selection on a
+// layout's <body> when it is opened: the html/head wrapper above it is not
+// what anyone came to edit, and <body> is the page's real root.
+function findElementByTag(nodes, tag) {
+  for (const n of nodes || []) {
+    if (n.kind === 'element' && String(n.name).toLowerCase() === tag) return n;
+    if (Array.isArray(n.children)) {
+      const found = findElementByTag(n.children, tag);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+// What a freshly opened component starts on: its <body> when it owns the
+// document (a layout), otherwise the first thing its markup renders. Leading
+// comments and text aren't what the file is about, so they're skipped; if
+// there's nothing else, the first node of any kind is better than nothing.
+function openingSelection(nodes) {
+  const list = Array.isArray(nodes) ? nodes : [];
+  return (
+    findElementByTag(list, 'body') ||
+    list.find((n) => n.kind === 'element' || n.kind === 'component') ||
+    list[0] ||
+    null
+  );
 }
 
 function collectUsedNames(model) {
@@ -342,6 +380,11 @@ export default function App() {
   const [editStack, setEditStack] = useState([]);
   const [pageState, setPageState] = useState(null); // {editable, model, source, reason}
   const [selectedId, setSelectedId] = useState(null);
+  // Classes the selected element actually carries on the page, reported by the
+  // preview. An expression-valued class attribute (`class:list={[…]}`,
+  // `class={x}`) has no readable text in the source, so this is what lets the
+  // style panel show the classes this instance resolved to.
+  const [selectedClasses, setSelectedClasses] = useState([]);
   const [hoverNodeId, setHoverNodeId] = useState(null); // navigator row hover
   const [devUrl, setDevUrl] = useState(null);
   const [devStatus, setDevStatus] = useState('off'); // off | starting | on
@@ -569,7 +612,13 @@ export default function App() {
       setSelectedId(null);
       const result = await window.avb.readPage(entry.path);
       setPageState({ ...result, dirty: false });
-      historyRef.current = { past: [], future: [], lastPush: 0, lastKey: null };
+      // A component opens on something rather than nothing: its <body> when it
+      // has one, else the first element it renders.
+      if (entry.kind === 'component' && result?.model?.nodes) {
+        const start = openingSelection(result.model.nodes);
+        if (start) setSelectedId(start.id);
+      }
+      dropPageHistory(); // page snapshots don't apply to another page; commands stay
     },
     [flushSave]
   );
@@ -603,7 +652,7 @@ export default function App() {
       const fresh = await window.avb.readPage(open.path);
       setPageState({ ...fresh, dirty: false });
       setSelectedId(null);
-      historyRef.current = { past: [], future: [], lastPush: 0, lastKey: null };
+      dropPageHistory(); // page snapshots don't apply to another page; commands stay
     } else {
       const next = result.pages[0] || null;
       setEditStack(next ? [{ ...next, kind: 'page' }] : []);
@@ -622,7 +671,28 @@ export default function App() {
   // nesting works to any depth).
   const openComponent = useCallback(
     async (name, hostPath) => {
-      const comp =
+      // A tag is only a local binding — `import Layout from
+      // '@/layouts/BaseLayout.astro'` renders as <Layout> — so follow the
+      // page's own import first, and fall back to matching by filename.
+      const { currentPage: host, pageState: state } = pageStateRef.current;
+      const spec = (state?.model?.imports || []).find((i) => i.name === name)?.path;
+      let comp = null;
+      if (spec && host?.path) {
+        const { path: file } = await window.avb.resolveImport({
+          projectPath: projectRef.current.path,
+          fromFile: host.path,
+          spec,
+        });
+        if (file && /\.astro$/i.test(file)) {
+          comp = { name: file.split('/').pop().replace(/\.astro$/i, ''), path: file };
+        } else if (file) {
+          // A framework island (.jsx/.svelte/…) has no Astro tree to show.
+          showToast(`<${name}> is a ${file.split('.').pop()} component — edit it in code.`, 'error');
+          return;
+        }
+      }
+      comp =
+        comp ||
         scan.components.find((c) => c.name === name) ||
         scan.layouts.find((l) => l.name === name);
       if (!comp) {
@@ -654,7 +724,17 @@ export default function App() {
   }, [openFile]);
 
   // ----------------------------------------------------------------
-  // Undo / redo — per-page history of model (or source) snapshots.
+  // Undo / redo
+  //
+  // One stack for the whole app, so ⌘Z means "undo the last thing I did"
+  // wherever focus happens to be. Two kinds of entry live in it:
+  //
+  //   snapshot — the page model (or raw source) before an edit. Cheap to take
+  //              and restores structure exactly, but only meaningful for the
+  //              page it came from, so these are dropped when a page closes.
+  //   command  — an {undo, redo} pair for anything outside the page model:
+  //              a CSS file, a CMS entry, an asset rename. Each records how to
+  //              put things back, so these survive page switches.
   // ----------------------------------------------------------------
 
   const historyRef = useRef({ past: [], future: [], lastPush: 0, lastKey: null });
@@ -683,6 +763,46 @@ export default function App() {
     h.lastPush = now;
   }, []);
 
+  // Records an already-performed change from outside the page model. `undo`
+  // and `redo` are async and do the work themselves (rewrite the file, restore
+  // the entry, rename back). Consecutive commands sharing a coalesceKey inside
+  // the same burst collapse into one step, so a slider drag or a run of live
+  // CSS writes is a single ⌘Z — the first one's `undo` (the oldest state) is
+  // kept and the newest `redo` replaces the previous.
+  const pushCommand = useCallback((cmd) => {
+    const h = historyRef.current;
+    const now = Date.now();
+    const prev = h.past[h.past.length - 1];
+    const coalesce =
+      cmd.coalesceKey != null &&
+      cmd.coalesceKey === h.lastKey &&
+      now - h.lastPush < 800 &&
+      prev?.kind === 'cmd' &&
+      prev.coalesceKey === cmd.coalesceKey;
+    if (coalesce) {
+      prev.redo = cmd.redo;
+      prev.label = cmd.label ?? prev.label;
+    } else {
+      h.past.push({ kind: 'cmd', ...cmd });
+      if (h.past.length > 100) h.past.shift();
+    }
+    h.future = [];
+    h.lastKey = cmd.coalesceKey ?? null;
+    h.lastPush = now;
+  }, []);
+  const pushCommandRef = useRef(null);
+  pushCommandRef.current = pushCommand;
+
+  // Snapshots belong to one page, so they're dropped when that page closes;
+  // commands carry their own inverse and stay.
+  const dropPageHistory = useCallback(() => {
+    const h = historyRef.current;
+    h.past = h.past.filter((e) => e.kind === 'cmd');
+    h.future = h.future.filter((e) => e.kind === 'cmd');
+    h.lastKey = null;
+    h.lastPush = 0;
+  }, []);
+
   const applySnapshot = useCallback((entry) => {
     setPageState((s) => {
       if (!s) return s;
@@ -702,27 +822,47 @@ export default function App() {
 
   const scheduleSaveRef = useRef(null);
 
-  const undo = useCallback(() => {
+  const undo = useCallback(async () => {
     const h = historyRef.current;
-    const state = pageStateRef.current.pageState;
-    if (!h.past.length || !state) return;
+    if (!h.past.length) return;
+    h.lastKey = null;
+    h.lastPush = 0;
     const entry = h.past.pop();
-    h.future.push(snapshotOf(state));
-    h.lastKey = null;
-    h.lastPush = 0;
-    applySnapshot(entry);
-  }, [applySnapshot]);
-
-  const redo = useCallback(() => {
-    const h = historyRef.current;
+    if (entry.kind === 'cmd') {
+      h.future.push(entry);
+      try {
+        await entry.undo();
+      } catch (err) {
+        showToast(`Couldn’t undo${entry.label ? ` ${entry.label}` : ''}: ${cleanError(err)}`, 'error');
+      }
+      return;
+    }
     const state = pageStateRef.current.pageState;
-    if (!h.future.length || !state) return;
-    const entry = h.future.pop();
-    h.past.push(snapshotOf(state));
+    if (!state) return; // its page is gone — nothing to restore onto
+    h.future.push(snapshotOf(state));
+    applySnapshot(entry);
+  }, [applySnapshot, showToast]);
+
+  const redo = useCallback(async () => {
+    const h = historyRef.current;
+    if (!h.future.length) return;
     h.lastKey = null;
     h.lastPush = 0;
+    const entry = h.future.pop();
+    if (entry.kind === 'cmd') {
+      h.past.push(entry);
+      try {
+        await entry.redo();
+      } catch (err) {
+        showToast(`Couldn’t redo${entry.label ? ` ${entry.label}` : ''}: ${cleanError(err)}`, 'error');
+      }
+      return;
+    }
+    const state = pageStateRef.current.pageState;
+    if (!state) return;
+    h.past.push(snapshotOf(state));
     applySnapshot(entry);
-  }, [applySnapshot]);
+  }, [applySnapshot, showToast]);
 
   // Discrete edits (dropdown, checkbox, drag, delete) save immediately;
   // typing batches keystrokes for 300 ms so the preview doesn't rebuild
@@ -881,10 +1021,27 @@ export default function App() {
 
         const before = loopVarsAt(model.nodes, nodeId);
 
-        found.list.splice(found.index, 1);
+        // Take the node's note with it. Both come out in one splice, so the
+        // drop index has to be shifted by however many were actually removed.
+        const noteAt = noteIndexAbove(found.list, found.index);
+        const note = noteAt === -1 ? null : found.list[noteAt];
+        const removeAt = note ? noteAt : found.index;
+        const removedCount = note ? 2 : 1;
+
+        found.list.splice(removeAt, removedCount);
         let index = target?.index ?? Number.MAX_SAFE_INTEGER;
-        if (sameList && index > found.index) index -= 1;
+        if (sameList && index > removeAt) {
+          // A drop that landed *between* the note and its element collapses
+          // onto where the pair used to start.
+          index = Math.max(removeAt, index - removedCount);
+        }
         insertIntoModel(model, node, target ? { ...target, index } : null);
+        // Put the note back directly above wherever the node landed — let
+        // insertIntoModel decide placement, then follow it.
+        if (note) {
+          const landed = findParentList(model, nodeId);
+          if (landed) landed.list.splice(landed.index, 0, note);
+        }
 
         // Left a loop? Anything still reading its item would throw.
         const after = loopVarsAt(model.nodes, nodeId);
@@ -912,7 +1069,13 @@ export default function App() {
       }
       mutateModel((model) => {
         const found = findParentList(model, nodeId);
-        if (found) found.list.splice(found.index, 1);
+        if (found) {
+          // Delete the node's note with it, or it would re-attach to whatever
+          // now follows and read as that element's description.
+          const noteAt = noteIndexAbove(found.list, found.index);
+          if (noteAt === -1) found.list.splice(found.index, 1);
+          else found.list.splice(noteAt, 2);
+        }
         pruneImports(model);
         return model;
       }, true);
@@ -1219,18 +1382,23 @@ export default function App() {
   // copies, ⌘D duplicates, ⌘V pastes — unless the user is typing in a field.
   useEffect(() => {
     const onKeyDown = (e) => {
-      if (cmsOpenRef.current) return;
       const mod = e.metaKey || e.ctrlKey;
 
       // Undo/redo take priority over native field undo so history stays
-      // consistent no matter where focus is.
+      // consistent no matter where focus is. Handled before the CMS check
+      // below and without requiring an open page: the stack also holds CSS,
+      // CMS and asset changes, which are undoable from anywhere.
       if (mod && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
-        if (!pageStateRef.current.pageState) return;
+        const h = historyRef.current;
+        const wantsRedo = e.key.toLowerCase() === 'y' || e.shiftKey;
+        if (!(wantsRedo ? h.future : h.past).length) return; // let the field's own undo have it
         e.preventDefault();
-        if (e.key.toLowerCase() === 'y' || e.shiftKey) redo();
-        else undo();
+        if (wantsRedo) void redo();
+        else void undo();
         return;
       }
+
+      if (cmsOpenRef.current) return;
 
       // ⌘F / ⌘E open the insert palette (works from anywhere except the
       // code editor, which keeps its own find).
@@ -1449,6 +1617,47 @@ export default function App() {
     return () => clearTimeout(t);
   }, [project, devStatus, currentPage, refreshKey, pageState, leftTab, inPreview, codeWin]);
 
+  // The comment sitting directly above a node. The navigator folds it into
+  // that node's row rather than giving it one of its own, and the props panel
+  // edits it there — so a section's label and its note stay together.
+  const commentAbove = (model, nodeId) => {
+    if (!model || !nodeId) return null;
+    const found = findParentList(model, nodeId);
+    if (!found || found.index === 0) return null;
+    const prev = found.list[found.index - 1];
+    return prev && prev.kind === 'comment' ? prev : null;
+  };
+
+  // Write (or clear) that comment. Empty text removes the node entirely, so
+  // clearing the field doesn't leave `<!---->` behind.
+  const setComment = useCallback(
+    (nodeId, text) => {
+      mutateModel(
+        (model) => {
+          const found = findParentList(model, nodeId);
+          if (!found) return model;
+          const { list, index } = found;
+          const prev = index > 0 ? list[index - 1] : null;
+          const existing = prev && prev.kind === 'comment' ? prev : null;
+          const body = String(text ?? '').trim();
+          if (!body) {
+            if (existing) list.splice(index - 1, 1);
+            return model;
+          }
+          // The parser keeps the raw text between the delimiters, so pad it to
+          // serialize as `<!-- text -->` the way a hand-written one reads.
+          const value = ` ${body} `;
+          if (existing) existing.value = value;
+          else list.splice(index, 0, { id: newId(), kind: 'comment', value });
+          return model;
+        },
+        false,
+        `comment:${nodeId}`
+      );
+    },
+    [mutateModel]
+  );
+
   const setProp = useCallback(
     (nodeId, propName, value, immediate = false) => {
       mutateModel(
@@ -1576,6 +1785,24 @@ export default function App() {
           }
           model.imports = imports;
           model.extraFrontmatter = extra.trim();
+          return model;
+        },
+        false,
+        'frontmatter'
+      );
+    },
+    [mutateModel]
+  );
+
+  // Replaces the frontmatter's non-import code (its declarations), leaving the
+  // import list alone. What the props panel edits when you open the source
+  // behind a `{data}` prop — the imports aren't in play there, so they don't
+  // need re-extracting.
+  const setExtraFrontmatter = useCallback(
+    (code) => {
+      mutateModel(
+        (model) => {
+          model.extraFrontmatter = code;
           return model;
         },
         false,
@@ -1838,10 +2065,23 @@ export default function App() {
   const schemaFor = (entry) => {
     if (!entry) return [];
     const own = entry.schema || [];
-    if (!entry.extendsTag) return own;
     const ownNames = new Set(own.map((f) => f.name));
-    const inherited = getElementSchema(entry.extendsTag).filter((f) => !ownNames.has(f.name));
-    return [...own, ...inherited];
+    const inherited = entry.extendsTag
+      ? getElementSchema(entry.extendsTag).filter((f) => !ownNames.has(f.name))
+      : [];
+    // A component that spreads `...rest` passes class straight through to
+    // whatever it renders, so styling one is a normal thing to want — give it
+    // the same class field an element has rather than making the user add it
+    // by hand in Attributes.
+    const passesClass =
+      entry.hasRest &&
+      !own.some((f) => /^class(Name|es)?$/i.test(f.name)) &&
+      !inherited.some((f) => f.name === 'class');
+    return [
+      ...own,
+      ...(passesClass ? [{ name: 'class', type: 'string', optional: true }] : []),
+      ...inherited,
+    ];
   };
   const selectedSchema =
     selectedNode && selectedNode.kind !== 'text'
@@ -1919,13 +2159,11 @@ export default function App() {
         return at > 0 ? n.head.slice(0, at + 4) : 'loop';
       }
       case 'element':
-      case 'raw': {
-        // First class wins; fall back to the bare tag when the element has none.
-        const cls = n.props?.class;
-        const first =
-          cls && cls.type === 'string' ? cls.value.trim().split(/\s+/)[0] : null;
-        return first || n.name;
-      }
+      case 'raw':
+        // First class wins; fall back to the bare tag when the element has
+        // none. Reads `class:list` too, so a component's inner elements are
+        // named the same way the navigator names them.
+        return elementLabel(n);
       default:
         return n.name;
     }
@@ -2020,23 +2258,47 @@ export default function App() {
 
   // Canvas outlines: nodes are addressed by their index path in the tree
   // (matching the marker paths the dev server's plugin injects).
+  // While a component is open the tree is that component's file, not the
+  // page, so ask in that file's namespace — the plugin marks every .astro
+  // under src with one. The canvas still shows the page, where those markers
+  // appear once per instance, so every instance outlines.
+  const editedRel =
+    editStack.length > 1 && project?.path
+      ? editStack[editStack.length - 1].path.replace(project.path + '/', '')
+      : null;
+  // A marker path may arrive namespaced (src/…/Card.astro|0.1). The index trail
+  // after the pipe is what addresses a node in the open file's tree.
+  const trailOf = (p) => String(p).split('|').pop().split('.').map(Number);
   const pathFor = (id) => {
     if (!model || !id) return null;
     const trail = pathOfNode(model.nodes, id);
-    return trail ? trail.join('.') : null;
+    if (!trail) return null;
+    const path = trail.join('.');
+    return editedRel ? `${editedRel}|${path}` : path;
   };
-  // Picking a component swaps the right panel to Settings — its props are the
-  // only thing there is to edit on it; picking a plain element (or a dynamic
-  // tag, which renders one) swaps back to Style. Anything else — frontmatter,
-  // text, a <style> block — leaves whatever tab the user had open alone.
+  // Crossing between a component and a plain element swaps the right panel:
+  // a component's props are the only thing there is to edit on it, an element
+  // is usually about style. Only the crossing does it — moving between two
+  // elements (or two components) leaves the tab where the user put it, so
+  // picking a tab isn't undone by the next click. Anything else —
+  // frontmatter, text, a <style> block — leaves the tab alone entirely, and
+  // doesn't count as a crossing either: element → text → element is still
+  // "on elements".
   const tabSelRef = useRef(null);
+  const tabKindRef = useRef(null);
   useEffect(() => {
     if (selectedId === tabSelRef.current) return;
     tabSelRef.current = selectedId;
     if (!selectedNode) return;
-    const isComponent = selectedNode.kind === 'component' && !selectedNode.dynamicTag;
-    if (isComponent) setRightTab('settings');
-    else if (selectedNode.kind === 'element' || selectedNode.dynamicTag) setRightTab('style');
+    const kind =
+      selectedNode.kind === 'component' && !selectedNode.dynamicTag
+        ? 'component'
+        : selectedNode.kind === 'element' || selectedNode.dynamicTag
+          ? 'element'
+          : null;
+    if (!kind || kind === tabKindRef.current) return;
+    tabKindRef.current = kind;
+    setRightTab(kind === 'component' ? 'settings' : 'style');
   }, [selectedId, selectedNode]);
 
   // Position the Style/Settings highlight: on tab change, when the panel first
@@ -2056,7 +2318,7 @@ export default function App() {
 
   const overlayInfo = (p) => {
     if (!model || !p) return null;
-    const n = nodeAtPath(model.nodes, p.split('.').map(Number));
+    const n = nodeAtPath(model.nodes, trailOf(p));
     if (!n) return null;
     const label = n.id === 'layout' ? currentLayoutName || n.name : crumbLabel(n);
     // A dynamic tag renders an element, so it shouldn't wear the component
@@ -2243,6 +2505,7 @@ export default function App() {
                 onOpenFile={openAssetFile}
                 pick={assetPick}
                 onPickCancel={endAssetPick}
+                onRecordUndo={pushCommand}
               />
             )}
           </div>
@@ -2260,6 +2523,7 @@ export default function App() {
             onCrumb={(id) => setSelectedId(id)}
             onRefresh={() => setRefreshKey((k) => k + 1)}
             onRestart={() => startPreview(project.path)}
+            pathScope={editedRel ? `${editedRel}|` : ''}
             selPath={pathFor(selectedId)}
             navHoverPath={pathFor(hoverNodeId)}
             overlayInfo={overlayInfo}
@@ -2267,12 +2531,23 @@ export default function App() {
             device={device}
             onDevice={setDevice}
             onSelectPath={(p) => {
-              // Editing a component: the canvas still shows the whole page, so
-              // a click in the dimmed area (or on nothing) means "I'm done in
-              // here" and backs out. Clicks on the lit instance stay put —
-              // the page's markers don't address a component's internals, so
-              // there's no node here to map them onto.
+              // Editing a component: the canvas still shows the whole page,
+              // but the open file's own markup is marked in its namespace, so
+              // a click on it addresses a node in the file being edited —
+              // select that. A click on the lit instance itself stays put, and
+              // one in the dimmed page (or on nothing) means "I'm done in
+              // here" and backs out.
               if (focusPath) {
+                const scope = editedRel ? `${editedRel}|` : '';
+                if (scope && p && p.startsWith(scope)) {
+                  const inner = model && nodeAtPath(model.nodes, trailOf(p));
+                  if (inner) {
+                    setSelectedId(inner.id);
+                    setLeftTab('navigator');
+                    setRevealTick((t) => t + 1);
+                  }
+                  return;
+                }
                 const inside = p && (p === focusPath || p.startsWith(focusPath + '.'));
                 if (!inside) closeComponent();
                 return;
@@ -2290,7 +2565,7 @@ export default function App() {
                 }
                 return;
               }
-              const n = model && nodeAtPath(model.nodes, p.split('.').map(Number));
+              const n = model && nodeAtPath(model.nodes, trailOf(p));
               if (n) {
                 setSelectedId(n.id);
                 // Selecting from the canvas jumps to the node in the tree.
@@ -2298,9 +2573,10 @@ export default function App() {
                 setRevealTick((t) => t + 1);
               }
             }}
+            onSelectedClasses={setSelectedClasses}
             onOpenPath={(p) => {
               // Double-clicking a component on the canvas drills into it.
-              const n = model && nodeAtPath(model.nodes, p.split('.').map(Number));
+              const n = model && nodeAtPath(model.nodes, trailOf(p));
               if (n?.kind === 'component') openComponent(n.name, p);
             }}
           />
@@ -2314,6 +2590,7 @@ export default function App() {
               hidden={leftTab !== 'cms'}
               settings={cmsSettings}
               showToast={showToast}
+              onRecordUndo={pushCommand}
               onSaved={() => setCmsTick((t) => t + 1)}
               onCloseSettings={() => setCmsSettings(false)}
               onDeleted={() => {
@@ -2359,6 +2636,8 @@ export default function App() {
                   setNodeText(nodeId, css, undefined, immediate)
                 }
                 onSelectNode={setSelectedId}
+                onRecordUndo={pushCommand}
+                renderedClasses={selectedClasses}
               />
             )}
             <div style={{ display: rightTab === 'settings' ? 'contents' : 'none' }}>
@@ -2381,6 +2660,8 @@ export default function App() {
                 (selectedNode?.kind === 'component' &&
                   !!insertables.find((c) => c.name === selectedNode.name)?.hasRest)
               }
+              comment={(commentAbove(model, selectedId)?.value ?? '').trim()}
+              onSetComment={(text) => setComment(selectedId, text)}
               onSetProp={(propName, value, immediate) =>
                 setProp(selectedId, propName, value, immediate)
               }
@@ -2394,6 +2675,7 @@ export default function App() {
               onSetContent={(value) => setNodeContent(selectedId, value)}
               onSetInline={(kids) => setNodeInline(selectedId, kids)}
               onOpenCode={openCodeWindow}
+              onSetFrontmatter={setExtraFrontmatter}
               projectPath={project.path}
             />
             </div>
@@ -2421,6 +2703,7 @@ export default function App() {
       {insertOpen && (
         <InsertSearch
           components={insertables}
+          allowSlot={currentPage?.kind === 'component'}
           onInsert={insertItem}
           onClose={() => setInsertOpen(false)}
         />

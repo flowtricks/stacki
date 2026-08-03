@@ -1166,7 +1166,8 @@
   align-items: center;
   justify-content: space-between;
 }
-.embed-editor_grad-check {
+.embed-editor_grad-check,
+.embed-editor_check {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -1176,7 +1177,8 @@
 }
 /* Custom checkbox — the native control renders the bright OS accent, so replace it
    with a dark box + checkmark that fits the panel. */
-.embed-editor_grad-check input[type="checkbox"] {
+.embed-editor_grad-check input[type="checkbox"],
+.embed-editor_check input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
   flex: none;
@@ -1192,12 +1194,15 @@
   transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 /* Hover brightens the label text (not the checkbox outline). */
-.embed-editor_grad-check:hover { color: var(--color-text-primary); }
-.embed-editor_grad-check input[type="checkbox"]:checked {
+.embed-editor_grad-check:hover,
+.embed-editor_check:hover { color: var(--color-text-primary); }
+.embed-editor_grad-check input[type="checkbox"]:checked,
+.embed-editor_check input[type="checkbox"]:checked {
   background: var(--color-selection-bg);
   border-color: var(--color-selection-bg);
 }
-.embed-editor_grad-check input[type="checkbox"]::after {
+.embed-editor_grad-check input[type="checkbox"]::after,
+.embed-editor_check input[type="checkbox"]::after {
   content: '';
   width: 4px;
   height: 8px;
@@ -1207,14 +1212,17 @@
   transform: rotate(45deg) scale(0);
   transition: transform var(--transition-fast);
 }
-.embed-editor_grad-check input[type="checkbox"]:checked::after {
+.embed-editor_grad-check input[type="checkbox"]:checked::after,
+.embed-editor_check input[type="checkbox"]:checked::after {
   transform: rotate(45deg) scale(1);
 }
-.embed-editor_grad-check input[type="checkbox"]:focus-visible {
+.embed-editor_grad-check input[type="checkbox"]:focus-visible,
+.embed-editor_check input[type="checkbox"]:focus-visible {
   outline: none;
   box-shadow: var(--shadow-focus);
 }
-.embed-editor_grad-check input[type="checkbox"]:disabled {
+.embed-editor_grad-check input[type="checkbox"]:disabled,
+.embed-editor_check input[type="checkbox"]:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -1358,10 +1366,10 @@
 .embed-editor_layer-popover { z-index: calc(var(--z-modal) + 2); }
 .embed-editor_layer-popover-box {
   --embed-editor_size-label-w: 42px;
-  /* The wrapper spans the full window; the visible panel (.app_body) is 0.75 of it via
-     zoom, so this box re-applies that zoom and takes width:100% (= window), which the
-     zoom renders at 0.75 → exactly the visible panel width. (calc(100%/0.75) here would
-     render at full window width and overflow the panel by 1/0.75.) */
+  /* The wrapper is sized to the panel (LayerPopover measures it). This box re-applies
+     the panel's 0.75 zoom so its controls match the panel's scale; `zoom` resolves
+     percentages in the zoomed space, so width:100% still comes out at exactly the
+     wrapper's width on screen. (calc(100%/0.75) here overflows by 1/0.75.) */
   zoom: 0.75;
   width: 100%;
   max-height: calc(94vh / 0.75);
@@ -4293,4 +4301,12 @@ textarea.embed-editor_value-input.is-expanded {
   color: var(--color-text-tertiary);
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
+}
+
+/* Reveals the selectors that match nearly every element (:target,
+   :focus-visible, *) — off by default so the list reads as what's actually on
+   this element. Sits under the well, not in it: it isn't a selector to pick. */
+.embed-editor_globals-check {
+  margin-top: calc(var(--space-1) * -1);
+  user-select: none;
 }

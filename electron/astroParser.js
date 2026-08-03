@@ -67,20 +67,44 @@ function serializeAttrs(props) {
 
 const TAG_RE = /<([A-Za-z][\w.-]*)((?:[^>"'{]|"[^"]*"|'[^']*'|\{(?:[^{}]|\{[^{}]*\})*\})*?)(\/?)>/y;
 
-// Finds the index of the '}' matching the '{' at `start`, skipping string
-// and template literals so quotes/braces inside them don't confuse counting.
+// Index just past the string/comment starting at `i`, or `i` itself when
+// nothing starts there. Comments matter as much as strings: `{/* the button's
+// background */}` is an ordinary JSX comment, and without this the apostrophe
+// opens a "string" that never closes, so the scan runs off the end of the file
+// and the whole page is declared unrepresentable.
+function skipStringOrComment(str, i) {
+  const ch = str[i];
+  if (ch === '"' || ch === "'" || ch === '`') {
+    i++;
+    while (i < str.length && str[i] !== ch) {
+      if (str[i] === '\\') i++;
+      i++;
+    }
+    return i + 1;
+  }
+  if (ch === '/' && str[i + 1] === '/') {
+    const nl = str.indexOf('\n', i + 2);
+    return nl === -1 ? str.length : nl; // leave the newline itself unconsumed
+  }
+  if (ch === '/' && str[i + 1] === '*') {
+    const end = str.indexOf('*/', i + 2);
+    return end === -1 ? str.length : end + 2;
+  }
+  return i;
+}
+
+// Finds the index of the '}' matching the '{' at `start`, skipping strings,
+// template literals, and comments so quotes/braces inside them don't confuse
+// counting.
 function findMatchingBrace(str, start) {
   let depth = 0;
   for (let i = start; i < str.length; i++) {
-    const ch = str[i];
-    if (ch === '"' || ch === "'" || ch === '`') {
-      i++;
-      while (i < str.length && str[i] !== ch) {
-        if (str[i] === '\\') i++;
-        i++;
-      }
+    const skipped = skipStringOrComment(str, i);
+    if (skipped !== i) {
+      i = skipped - 1;
       continue;
     }
+    const ch = str[i];
     if (ch === '{') depth++;
     else if (ch === '}') {
       depth--;
@@ -90,19 +114,17 @@ function findMatchingBrace(str, start) {
   return -1;
 }
 
-// Finds the index of the ')' matching the '(' at `start`, skipping strings.
+// Finds the index of the ')' matching the '(' at `start`, skipping strings and
+// comments.
 function findMatchingParen(str, start) {
   let depth = 0;
   for (let i = start; i < str.length; i++) {
-    const ch = str[i];
-    if (ch === '"' || ch === "'" || ch === '`') {
-      i++;
-      while (i < str.length && str[i] !== ch) {
-        if (str[i] === '\\') i++;
-        i++;
-      }
+    const skipped = skipStringOrComment(str, i);
+    if (skipped !== i) {
+      i = skipped - 1;
       continue;
     }
+    const ch = str[i];
     if (ch === '(') depth++;
     else if (ch === ')') {
       depth--;
@@ -136,6 +158,17 @@ function tryParseMap(exprText) {
   };
 }
 
+// What made the last parse give up, so the code-view banner can name the
+// construct and point at it instead of listing everything it might have been.
+// parseTemplate recurses into children, and the innermost frame is the one that
+// actually found the problem — so only the first bail of a run is kept, and
+// parsePage clears it before starting.
+let lastBail = null;
+function bail(nodes, str, at, what) {
+  if (!lastBail) lastBail = { what, near: str.slice(at, at + 60) };
+  return { nodes, clean: false };
+}
+
 // Parses a template string into a node tree.
 // Returns {nodes, clean}; clean=false means unrepresentable content was found.
 function parseTemplate(str) {
@@ -166,7 +199,7 @@ function parseTemplate(str) {
     // anything else is kept verbatim as an opaque node (may contain JSX).
     if (next === br && (lt === -1 || br < lt)) {
       const close = findMatchingBrace(str, br);
-      if (close === -1) return { nodes, clean: false };
+      if (close === -1) return bail(nodes, str, br, 'an unclosed { … } expression');
       const exprText = str.slice(br, close + 1);
       const mapNode = tryParseMap(exprText);
       nodes.push(mapNode || { id: makeId(), kind: 'expr', value: exprText });
@@ -177,7 +210,7 @@ function parseTemplate(str) {
     // Comment
     if (str.startsWith('<!--', lt)) {
       const end = str.indexOf('-->', lt + 4);
-      if (end === -1) return { nodes, clean: false };
+      if (end === -1) return bail(nodes, str, lt, 'an unclosed <!-- comment');
       nodes.push({ id: makeId(), kind: 'comment', value: str.slice(lt + 4, end) });
       pos = end + 3;
       continue;
@@ -186,7 +219,7 @@ function parseTemplate(str) {
     // Doctype
     if (/^<!doctype/i.test(str.slice(lt))) {
       const end = str.indexOf('>', lt);
-      if (end === -1) return { nodes, clean: false };
+      if (end === -1) return bail(nodes, str, lt, 'an unclosed <!doctype>');
       nodes.push({ id: makeId(), kind: 'raw-line', value: str.slice(lt, end + 1) });
       pos = end + 1;
       continue;
@@ -194,13 +227,13 @@ function parseTemplate(str) {
 
     TAG_RE.lastIndex = lt;
     const m = TAG_RE.exec(str);
-    if (!m) return { nodes, clean: false }; // stray '<' or fragment <>
+    if (!m) return bail(nodes, str, lt, 'a stray < or a <> fragment');
 
     const [full, name, attrs, selfClose] = m;
     // One level of nested braces in an attribute ({{ a: 1 }}) is supported;
     // anything deeper would be corrupted by the attr parser — bail to code
     // view instead.
-    if (/=\s*\{[^{}]*\{[^{}]*\{/.test(attrs)) return { nodes, clean: false };
+    if (/=\s*\{[^{}]*\{[^{}]*\{/.test(attrs)) return bail(nodes, str, lt, 'an attribute with deeply nested { } braces');
     const isComponent = /^[A-Z]/.test(name);
     const kind = isComponent ? 'component' : 'element';
     const afterOpen = lt + full.length;
@@ -214,7 +247,7 @@ function parseTemplate(str) {
     // <style>/<script>: capture inner verbatim, no parsing.
     if (!isComponent && RAW_ELEMENTS.has(name.toLowerCase())) {
       const close = str.indexOf(`</${name}`, afterOpen);
-      if (close === -1) return { nodes, clean: false };
+      if (close === -1) return bail(nodes, str, lt, `an unclosed <${name}> block`);
       const closeEnd = str.indexOf('>', close);
       nodes.push({
         id: makeId(),
@@ -228,9 +261,9 @@ function parseTemplate(str) {
     }
 
     const closeIdx = findMatchingClose(str, afterOpen, name);
-    if (closeIdx === -1) return { nodes, clean: false };
+    if (closeIdx === -1) return bail(nodes, str, lt, `an unclosed <${name}> tag`);
     const innerResult = parseTemplate(str.slice(afterOpen, closeIdx));
-    if (!innerResult.clean) return { nodes, clean: false };
+    if (!innerResult.clean) return { nodes, clean: false }; // the inner frame recorded the cause
     nodes.push({
       id: makeId(),
       kind,
@@ -297,11 +330,22 @@ function parsePage(source) {
   }
   extraFrontmatter = extraFrontmatter.trim();
 
+  lastBail = null;
   const { nodes: topNodes, clean } = parseTemplate(body);
   if (!clean) {
+    // Name the construct and point at it. The bail records the text it stopped
+    // on, so find that text back in the file for a line number — far more
+    // actionable than "something in this page".
+    let where = '';
+    if (lastBail) {
+      const at = source.indexOf(lastBail.near);
+      const line = at === -1 ? 0 : source.slice(0, at).split('\n').length;
+      where = ` Found ${lastBail.what}${line ? ` on line ${line}` : ''}.`;
+    }
     return {
       editable: false,
-      reason: 'Page contains markup the visual editor cannot represent (unclosed tags, fragments, or template expressions outside props).',
+      reason: `Page contains markup the visual editor cannot represent.${where}`,
+      bail: lastBail ? { what: lastBail.what, near: lastBail.near } : null,
     };
   }
 
@@ -469,7 +513,11 @@ function serializeNode(node, indent, lines) {
 // path and the dev plugin marks the chunk module itself. Passing it through
 // the id (rather than a side map) also keys Vite's cache: move the Fragment
 // and the chunk module's id changes with it.
-function serializePageMarked(model) {
+// `prefix` namespaces every path so a component file’s markers cannot collide
+// with the page’s. A page marks as "0.1"; src/components/Card.astro marks as
+// "src/components/Card.astro|0.1", and the app asks for that namespace while
+// that component is the file being edited.
+function serializePageMarked(model, prefix = '') {
   const marks = chunkImportMarks(model);
   const lines = ['---'];
   for (const imp of model.imports) {
@@ -483,7 +531,7 @@ function serializePageMarked(model) {
     lines.push('', model.extraFrontmatter);
   }
   lines.push('---');
-  model.nodes.forEach((node, i) => serializeNodeMarked(node, '', lines, String(i)));
+  model.nodes.forEach((node, i) => serializeNodeMarked(node, '', lines, `${prefix}${i}`));
   return lines.join('\n') + '\n';
 }
 

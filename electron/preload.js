@@ -204,6 +204,11 @@ if (!process.isMainFrame) {
   // page reports the deepest node under the cursor.
   const regions = new Map(); // path -> [ [node, ...], ... ]
   let trackedPaths = [];
+  // The file the app is addressing: empty for the page, or a component's
+  // namespace while one is open. Every .astro under src carries markers now,
+  // so hover and click must resolve within the file being edited.
+  let activeScope = '';
+  const inScope = (p) => (activeScope ? p.startsWith(activeScope) : !p.includes('|'));
   let lastHoverPath = undefined;
   let lastHoverOcc = 0;
 
@@ -273,9 +278,36 @@ if (!process.isMainFrame) {
   // One rect per marker-pair occurrence (a loop child renders once per
   // item — each instance gets its own box), unioned across the nodes
   // inside each occurrence.
+  // The box of the nearest descendants that DO have regions, unioned. Used for
+  // a node whose own markers could not survive the HTML parser: a layout wraps
+  // <html>, so its start marker is hoisted into <head> and its end into <body>
+  // — never siblings, so the pair is never found. Its children are inside the
+  // body and marked normally, and their union is exactly the layout's box.
+  const rectsFromDescendants = (p) => {
+    const prefix = p + '.';
+    let best = Infinity;
+    const paths = [];
+    for (const key of regions.keys()) {
+      if (!key.startsWith(prefix)) continue;
+      const depth = key.split('.').length;
+      if (depth < best) {
+        best = depth;
+        paths.length = 0;
+      }
+      if (depth === best) paths.push(key);
+    }
+    let acc = null;
+    for (const key of paths) {
+      for (const run of regions.get(key) || []) {
+        for (const n of run) acc = addNode(acc, n);
+      }
+    }
+    return acc ? [toRect(acc)] : null;
+  };
+
   const rectsForPath = (p) => {
     const runs = regions.get(p);
-    if (!runs) return null;
+    if (!runs) return rectsFromDescendants(p);
     const out = [];
     for (const run of runs) {
       let acc = null;
@@ -290,16 +322,44 @@ if (!process.isMainFrame) {
     if (runs.length === 1) {
       let acc = runs[0].reduce(addNode, null);
       for (const el of document.querySelectorAll(`[${PATH_ATTR}="${p}"]`)) acc = addNode(acc, el);
-      return acc ? [toRect(acc)] : null;
+      // Nothing measurable: fall through to the children (see below).
+      if (acc) return [toRect(acc)];
     }
-    return out.length ? out : null;
+    if (out.length) return out;
+    // A region that exists but contains nothing with a box — the layout case:
+    // its start marker is orphaned in <head>, so the walk collected the head's
+    // scripts and links rather than the page. Its children still measure.
+    return rectsFromDescendants(p);
+  };
+
+  // The classes actually on the page for a node, one entry per occurrence (a
+  // node inside a loop renders once per item). The model can't answer this:
+  // `class:list={[...]}` and `class={expr}` are expressions, so the authored
+  // source has no class text to read — only the rendered element knows what
+  // the expression evaluated to for THIS instance.
+  const classesForPath = (p) => {
+    const out = [];
+    for (const run of regions.get(p) || []) {
+      const el = run.find((n) => n.nodeType === 1 && n.tagName !== 'TEMPLATE');
+      if (el) out.push([...el.classList]);
+    }
+    if (!out.length) {
+      for (const el of document.querySelectorAll(`[${PATH_ATTR}="${p}"]`)) {
+        out.push([...el.classList]);
+      }
+    }
+    return out;
   };
 
   const sendRects = () => {
     if (!trackedPaths.length) return;
     const rects = {};
-    for (const p of trackedPaths) rects[p] = rectsForPath(p);
-    window.parent.postMessage({ type: 'avb:rects', rects }, '*');
+    const classes = {};
+    for (const p of trackedPaths) {
+      rects[p] = rectsForPath(p);
+      classes[p] = classesForPath(p);
+    }
+    window.parent.postMessage({ type: 'avb:rects', rects, classes }, '*');
   };
 
   // Selecting a node in the navigator brings it onto the page. Only scrolls
@@ -348,10 +408,15 @@ if (!process.isMainFrame) {
     // Clones the page's own scripts made aren't in any recorded run, so the
     // tag is the only way to reach them — without this, clicking a split
     // paragraph would select its parent instead.
-    const tagged = target instanceof Element ? target.closest(`[${PATH_ATTR}]`) : null;
+    let tagged = target instanceof Element ? target.closest(`[${PATH_ATTR}]`) : null;
+    // Walk out of any nested namespace until the tag belongs to the open file.
+    while (tagged && !inScope(tagged.getAttribute(PATH_ATTR))) {
+      tagged = tagged.parentElement ? tagged.parentElement.closest(`[${PATH_ATTR}]`) : null;
+    }
     let best = tagged ? tagged.getAttribute(PATH_ATTR) : null;
     let bestDepth = best ? best.split('.').length : -1;
     for (const [p, runs] of regions) {
+      if (!inScope(p)) continue;
       const depth = p.split('.').length;
       if (depth <= bestDepth) continue;
       for (const run of runs) {
@@ -446,6 +511,7 @@ if (!process.isMainFrame) {
     if (d?.type === 'avb:track' && Array.isArray(d.paths)) {
       designMode = true;
       trackedPaths = d.paths;
+      activeScope = typeof d.scope === 'string' ? d.scope : '';
       sendRects();
     }
     if (d?.type === 'avb:scroll-to' && typeof d.path === 'string') {
@@ -541,6 +607,7 @@ contextBridge.exposeInMainWorld('avb', {
   createCms: invoke('cms:create'),
   deleteCms: invoke('cms:delete'),
   cmsUsage: invoke('cms:usage'),
+  resolveImport: invoke('project:resolveImport'),
   cmsMeta: invoke('cms:meta'),
   setCmsMeta: invoke('cms:setMeta'),
   onCmsChanged: (cb) => {

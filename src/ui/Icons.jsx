@@ -57,6 +57,13 @@ export const CodeIcon = (p) => (
   </I>
 );
 
+export const PencilIcon = (p) => (
+  <I {...p}>
+    <path d="M11.2 2.6a1.3 1.3 0 0 1 1.85 1.85L5.6 11.9l-2.45.6.6-2.45Z" />
+    <path d="m10.1 3.7 2.2 2.2" />
+  </I>
+);
+
 export const TagIcon = (p) => (
   <I {...p}>
     <path d="m6 3.5-4 4.5 4 4.5M10 3.5l4 4.5-4 4.5" />
@@ -704,6 +711,7 @@ const TAG_ICONS = {
   textarea: ElementInputIcon,
   select: ElementSelectIcon,
   button: ElementButtonIcon,
+  slot: ElementSlotIcon,
 };
 
 export const SearchIcon = (p) => (
