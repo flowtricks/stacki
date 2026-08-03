@@ -121,6 +121,11 @@ export default function PreviewPane({
   onSelectedClassesRef.current = onSelectedClasses;
   // Last reported class string, so repeated rect sends stay quiet.
   const selClassesRef = React.useRef('');
+  // Selection changed: the app cleared its copy, so the next report must go
+  // through even if the new element happens to carry the same classes.
+  React.useEffect(() => {
+    selClassesRef.current = '';
+  }, [selPath, selOcc]);
   // Canvas clicks set the instance directly (below) — including when they
   // land on another instance of the node that's already selected, where
   // selPath never changes. Any other route to a new selection means "the
@@ -193,15 +198,24 @@ export default function PreviewPane({
   // to the node. A selection that came from clicking the page is skipped —
   // it's already on screen, and moving it would yank it out from under the
   // pointer. Not sent on reload: the frame has no regions mapped yet.
+  const prevFocusRef = React.useRef(focusPath);
   React.useEffect(() => {
     const w = iframeRef.current?.contentWindow;
+    const focusChanged = prevFocusRef.current !== focusPath;
+    prevFocusRef.current = focusPath;
     if (!w || !selPath) return;
     if (clickedPathRef.current === selPath) {
       clickedPathRef.current = null;
       return;
     }
-    w.postMessage({ type: 'avb:scroll-to', path: selPath }, '*');
-  }, [selPath]);
+    // Drilling into a component (or backing out) opens a different file and
+    // selects within it, which looks like a fresh selection — but the canvas
+    // still shows the same page and the instance is already under the pointer.
+    // Scrolling here would jump to whichever instance the new path resolves to.
+    if (focusChanged) return;
+    // Repeated nodes: aim at the instance in play, not the first on the page.
+    w.postMessage({ type: 'avb:scroll-to', path: selPath, occ: selOccRef.current }, '*');
+  }, [selPath, focusPath]);
 
   // A reload wipes iframe state — clear stale boxes until fresh rects arrive.
   React.useEffect(() => {

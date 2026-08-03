@@ -2049,6 +2049,14 @@ export default function App() {
         ? { id: 'frontmatter', kind: 'frontmatter', value: frontmatterCode }
         : findNodeById(model.nodes, selectedId)
       : null;
+  // Rendered classes describe one element. The canvas can only report the new
+  // selection's a frame later, so drop the old ones the instant the selection
+  // changes — otherwise the previous element's classes show up as chips on this
+  // one until the report lands.
+  useEffect(() => {
+    setSelectedClasses((prev) => (prev.length ? [] : prev));
+  }, [selectedId]);
+
   const layoutNode = model ? findNodeById(model.nodes, 'layout') : null;
   // The page may import its layout under any local name (e.g. `import Layout
   // from '../layouts/BaseLayout.astro'`) — resolve the wrapper back to a
@@ -2276,30 +2284,8 @@ export default function App() {
     const path = trail.join('.');
     return editedRel ? `${editedRel}|${path}` : path;
   };
-  // Crossing between a component and a plain element swaps the right panel:
-  // a component's props are the only thing there is to edit on it, an element
-  // is usually about style. Only the crossing does it — moving between two
-  // elements (or two components) leaves the tab where the user put it, so
-  // picking a tab isn't undone by the next click. Anything else —
-  // frontmatter, text, a <style> block — leaves the tab alone entirely, and
-  // doesn't count as a crossing either: element → text → element is still
-  // "on elements".
-  const tabSelRef = useRef(null);
-  const tabKindRef = useRef(null);
-  useEffect(() => {
-    if (selectedId === tabSelRef.current) return;
-    tabSelRef.current = selectedId;
-    if (!selectedNode) return;
-    const kind =
-      selectedNode.kind === 'component' && !selectedNode.dynamicTag
-        ? 'component'
-        : selectedNode.kind === 'element' || selectedNode.dynamicTag
-          ? 'element'
-          : null;
-    if (!kind || kind === tabKindRef.current) return;
-    tabKindRef.current = kind;
-    setRightTab(kind === 'component' ? 'settings' : 'style');
-  }, [selectedId, selectedNode]);
+  // The right panel stays on whichever tab the user picked, whatever gets
+  // selected next. (S / D switch it by hand.)
 
   // Position the Style/Settings highlight: on tab change, when the panel first
   // appears, and whenever the tab strip's width changes.

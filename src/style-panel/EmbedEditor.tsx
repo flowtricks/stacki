@@ -1284,10 +1284,13 @@ function isGlobalSelector(text: string): boolean {
 // input offers an autocomplete list of the element's targetable selectors:
 // ↑/↓ move, Enter applies the highlighted one (or the typed text), Tab fills it
 // into the input to keep typing.
-function SelectorPicker({ selectors, suggestions, activeSelector, busy, onSelect, onDeselect, onAdd }: {
+function SelectorPicker({ selectors, suggestions, activeSelector, activePicked, busy, onSelect, onDeselect, onAdd }: {
   selectors: MatchedSelector[]
   suggestions: SelectorSuggestion[]
   activeSelector: string
+  /** True when the active selector is one the user clicked or typed, rather than
+   *  the panel's auto-composed default. */
+  activePicked: boolean
   busy: boolean
   onSelect: (selector: string) => void
   onDeselect: () => void
@@ -1310,17 +1313,21 @@ function SelectorPicker({ selectors, suggestions, activeSelector, busy, onSelect
   // as just the black well (with its min-height) rather than an add-selector field.
   const showInput = inputOpen
 
-  // Global selectors are folded away behind a count chip — except the active one,
-  // which has to stay on screen for the panel below it to make sense.
+  // Global selectors are folded away behind a count chip. The one exception is a
+  // global the user PICKED — it has to stay on screen for the panel below it to
+  // make sense. A global that is merely the current default target stays hidden,
+  // so the checkbox means what it says.
   const globals = useMemo(() => selectors.filter((sel) => isGlobalSelector(sel.text)), [selectors])
   const shownSelectors = useMemo(
     () =>
       showGlobals
         ? selectors
         : selectors.filter(
-            (sel) => !isGlobalSelector(sel.text) || selectorsMatch(sel.text, activeSelector),
+            (sel) =>
+              !isGlobalSelector(sel.text) ||
+              (activePicked && selectorsMatch(sel.text, activeSelector)),
           ),
-    [selectors, showGlobals, activeSelector],
+    [selectors, showGlobals, activeSelector, activePicked],
   )
 
   const q = draft.trim().toLowerCase()
@@ -1645,6 +1652,7 @@ function StyleCard({
   snapshot,
   selectedNames,
   selectedSelector,
+  activePicked,
   onSelectNames,
   resolved,
   contexts,
@@ -1680,6 +1688,7 @@ function StyleCard({
   snapshot: ElementSnapshot | undefined
   selectedNames: string[]
   selectedSelector: string
+  activePicked: boolean
   onSelectNames: (names: string[]) => void
   resolved: ResolvedStyle
   contexts: StyleContext[]
@@ -1798,6 +1807,7 @@ function StyleCard({
         selectors={selectors}
         suggestions={suggestions}
         activeSelector={activeSelector}
+        activePicked={activePicked}
         busy={busy}
         onSelect={onSelectActive}
         onDeselect={onDeselect}
@@ -4034,6 +4044,7 @@ export default function EmbedEditor() {
               snapshot={snapshot}
               selectedNames={selectedTokens}
               selectedSelector={activeSelector}
+              activePicked={selectedSelectorText != null}
               onSelectNames={selectTokens}
               resolved={resolved ?? EMPTY_RESOLVED}
               contexts={styleContexts}

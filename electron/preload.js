@@ -366,10 +366,13 @@ if (!process.isMainFrame) {
   // when the node is actually out of sight — re-selecting something already
   // on screen shouldn't move the page under the user.
   const SCROLL_MARGIN = 24;
-  const scrollPathIntoView = (p) => {
+  const scrollPathIntoView = (p, occ) => {
     const rects = rectsForPath(p);
     if (!rects || !rects.length) return;
-    const r = rects[0]; // viewport-relative
+    // One path can render many times (a node inside a loop, a component used
+    // repeatedly). Scroll to the instance being worked in, not whichever one
+    // happens to come first in the document.
+    const r = rects[occ] || rects[0]; // viewport-relative
     const vh = window.innerHeight || document.documentElement.clientHeight;
     if (r.y >= SCROLL_MARGIN && r.y + r.h <= vh - SCROLL_MARGIN) return;
     // Taller than the viewport (a full section) — align its top rather than
@@ -439,6 +442,15 @@ if (!process.isMainFrame) {
     return { path: best, occurrence: best ? occurrenceOf(best, target) : 0 };
   };
 
+  // What the pointer is actually over. A page script that calls
+  // setPointerCapture — drag carousels, sliders, anything with a grab
+  // cursor — makes every later pointer event, INCLUDING the click, report
+  // the capturing element as its target. Trusting e.target there selects the
+  // whole carousel however deep you click. Hit-test the cursor instead; a
+  // synthesised event with no coordinates keeps e.target.
+  const targetAt = (e) =>
+    (e.clientX || e.clientY ? document.elementFromPoint(e.clientX, e.clientY) : null) || e.target;
+
   const pathContaining = (target) => nodeAt(target).path;
 
   const startOutlines = () => {
@@ -453,7 +465,7 @@ if (!process.isMainFrame) {
       characterData: true,
     });
     document.addEventListener('mousemove', (e) => {
-      const { path: p, occurrence } = nodeAt(e.target);
+      const { path: p, occurrence } = nodeAt(targetAt(e));
       if (p !== lastHoverPath || occurrence !== lastHoverOcc) {
         lastHoverPath = p;
         lastHoverOcc = occurrence;
@@ -474,7 +486,7 @@ if (!process.isMainFrame) {
         if (!designMode) return;
         e.preventDefault();
         e.stopPropagation();
-        const p = pathContaining(e.target);
+        const p = pathContaining(targetAt(e));
         if (p) window.parent.postMessage({ type: 'avb:open-node', path: p }, '*');
       },
       true
@@ -492,7 +504,7 @@ if (!process.isMainFrame) {
         e.stopPropagation();
         // A click that hits no marked node still reports (path null) — the
         // app uses empty clicks to back out of component editing.
-        const { path: p, occurrence } = nodeAt(e.target);
+        const { path: p, occurrence } = nodeAt(targetAt(e));
         window.parent.postMessage(
           { type: 'avb:click-node', path: p || null, occurrence },
           '*'
@@ -515,7 +527,7 @@ if (!process.isMainFrame) {
       sendRects();
     }
     if (d?.type === 'avb:scroll-to' && typeof d.path === 'string') {
-      scrollPathIntoView(d.path);
+      scrollPathIntoView(d.path, typeof d.occ === 'number' ? d.occ : 0);
     }
     if (d?.type === 'avb:set-vh' && typeof d.px === 'number') {
       document.documentElement.style.setProperty('--avb-vh', d.px / 100 + 'px');
