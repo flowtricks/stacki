@@ -18,6 +18,7 @@ import TerminalDock from './panels/TerminalDock.jsx';
 import { getElementSchema, GLOBAL_ATTRS, canContainTag } from './elementSchemas.js';
 import { onAssetRequest, clearAssetRequest } from './assetPick.js';
 import { isDataBound } from './bindings.js';
+import { cleanError, stripAnsi } from './cleanError.js';
 import {
   PreviewIcon,
   RefreshIcon,
@@ -2498,14 +2499,3 @@ function Toast({ toast }) {
   return <div className={`toast ${toast.kind}`}>{toast.msg}</div>;
 }
 
-export function cleanError(err) {
-  const msg = err?.message || String(err);
-  return stripAnsi(msg.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, ''));
-}
-
-function stripAnsi(s) {
-  return String(s)
-    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
-    .replace(/\x1b/g, '')
-    .replace(/\[(\d{1,2})m/g, '');
-}
