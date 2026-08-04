@@ -1812,13 +1812,10 @@ function selectionTrail(state) {
   return trail.length ? trail : null;
 }
 
-// A paste into a chat arrives with no context, so the trail says what it is.
 ipcMain.handle('selection:copy', async (_e, state) => {
   const trail = selectionTrail(state);
   if (!trail) return { ok: false };
-  clipboard.writeText(
-    `Currently selected in the Stacki editor, outermost first:\n${JSON.stringify(trail, null, 2)}`
-  );
+  clipboard.writeText(trail.join('\n'));
   return { ok: true, count: trail.length };
 });
 
