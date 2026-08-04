@@ -95,6 +95,7 @@ export default function CmsView({
   onCloseSettings,
   onDeleted,
   onClose,
+  onRecordUndo,
 }) {
   const [collection, setCollection] = useState(null);
   const [items, setItems] = useState([]);
@@ -110,6 +111,8 @@ export default function CmsView({
 
   const saveTimer = useRef(null);
   const pending = useRef(null); // items waiting to be written
+  // The data currently on disk, so a save can record what it replaced for undo.
+  const onDiskRef = useRef(null);
   const dragFrom = useRef(null); // row being dragged, readable mid-drag
 
   const load = useCallback(async () => {
@@ -118,6 +121,7 @@ export default function CmsView({
         window.avb.readCms({ projectPath: project.path, rel }),
         window.avb.cmsMeta(project.path),
       ]);
+      onDiskRef.current = data;
       setDeclared(meta?.[rel] || {});
       const name = rel.slice(rel.lastIndexOf('/') + 1);
       const c = collectionOf({ rel, name, dir: rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '', data });
@@ -158,11 +162,26 @@ export default function CmsView({
     pending.current = null;
     if (!next || !collection) return;
     try {
-      await window.avb.writeCms({
-        projectPath: project.path,
-        rel,
-        data: reassemble(collection, next),
-      });
+      const before = onDiskRef.current;
+      const after = reassemble(collection, next);
+      await window.avb.writeCms({ projectPath: project.path, rel, data: after });
+      onDiskRef.current = after;
+      // Content edits don't touch the page model, so they need their own undo
+      // entry. One step per burst of typing in the same collection.
+      if (before !== undefined && onRecordUndo) {
+        const put = async (data) => {
+          await window.avb.writeCms({ projectPath: project.path, rel, data });
+          onDiskRef.current = data;
+          await load();
+          onSaved?.();
+        };
+        onRecordUndo({
+          label: 'content edit',
+          coalesceKey: `cms:${rel}`,
+          undo: () => put(before),
+          redo: () => put(after),
+        });
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 1200);
       onSaved?.(); // the panel's item counts came from before this write
@@ -176,7 +195,7 @@ export default function CmsView({
       if (/no longer exists/.test(message)) return;
       showToast(message, 'error');
     }
-  }, [collection, project.path, rel, showToast, onSaved]);
+  }, [collection, project.path, rel, showToast, onSaved, onRecordUndo, load]);
 
   const flushRef = useRef(flush);
   flushRef.current = flush;

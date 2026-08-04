@@ -28,3 +28,25 @@ export function panelBounds(anchor: Element): DOMRect {
   const el = panelBox(anchor)
   return (el ?? document.documentElement).getBoundingClientRect()
 }
+
+/**
+ * The horizontal span a body-portaled popup should occupy.
+ *
+ * Several of these popups were written as `left: 0; right: 0` — full window,
+ * which in moden WAS the panel. Here the panel is a right-hand column, so they
+ * have to measure it. An anchor inside another portal (a control in a modal)
+ * has no panel ancestor to walk to; the host publishes the panel's box as CSS
+ * variables for that case (see StylePanel.jsx).
+ */
+export function panelSpan(anchor: Element): { left: number; width: number } {
+  const el = panelBox(anchor)
+  if (el) {
+    const r = el.getBoundingClientRect()
+    return { left: r.left, width: r.width }
+  }
+  const root = getComputedStyle(document.documentElement)
+  const left = parseFloat(root.getPropertyValue('--style-panel-left'))
+  const width = parseFloat(root.getPropertyValue('--style-panel-width'))
+  if (Number.isFinite(left) && Number.isFinite(width) && width > 0) return { left, width }
+  return { left: 0, width: window.innerWidth }
+}

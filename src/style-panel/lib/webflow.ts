@@ -96,8 +96,24 @@ export function webflowApi() {
 const nodeById = (id: string | null): HostNode | null =>
   id ? findNode(getHost().nodes, id) : null
 
-const classTokens = (node: HostNode | null): string[] =>
-  propText(node, 'class').split(/\s+/).filter(Boolean)
+// A node's classes. `class="a b"` is readable straight from the source, but
+// `class:list={[…]}` / `class={expr}` are expressions with no class text at
+// all — for those the only truth is what the page rendered. The preview reports
+// that for the selected element, so merge it in: a static class inside a
+// class:list shows up, and a computed one (`gap-${gap}`) shows the value THIS
+// instance resolved to. Source order first, then anything only the DOM knows.
+const classTokens = (node: HostNode | null): string[] => {
+  const authored = propText(node, 'class').split(/\s+/).filter(Boolean)
+  const host = getHost()
+  // Rendered classes describe the selected element only — attributing them to
+  // any other node (an ancestor being matched, say) would be wrong.
+  if (!node || node.id !== host.selectedId) return authored
+  const out = [...authored]
+  for (const cls of host.renderedClasses || []) {
+    if (cls && !out.includes(cls)) out.push(cls)
+  }
+  return out
+}
 
 export async function buildSnapshot(el: AnyEl): Promise<ElementSnapshot> {
   const node = typeof el === 'string' ? nodeById(el) : (el as HostNode)
@@ -321,9 +337,24 @@ export async function writeEmbedDoc(
   // One region covering the whole text, so re-stringify it directly rather
   // than splicing — nothing outside the CSS can be introduced that way.
   const code = doc.regions[0]?.root?.toString() ?? doc.regions[0]?.css ?? ''
+  // What the file held before this write — the undo target, captured before
+  // doc.code is advanced below.
+  const before = doc.code
   try {
     if (doc.source.origin.kind === 'file') {
-      await window.avb.writeStyleFile({ filePath: doc.source.origin.path, css: code })
+      const { path } = doc.source.origin
+      await window.avb.writeStyleFile({ filePath: path, css: code })
+      // A <style> node's write goes through the page model, which the app
+      // already snapshots — only stylesheets need their own history entry.
+      if (before !== code) {
+        getHost().recordUndo?.({
+          label: `styles in ${doc.source.label}`,
+          // One step per file per burst: a slider drag writes on every tick.
+          coalesceKey: `css:${path}`,
+          undo: () => writeStyleFileAndReload(doc, path, before),
+          redo: () => writeStyleFileAndReload(doc, path, code),
+        })
+      }
     } else {
       const write = getHost().writeStyleNode
       if (!write) return { ok: false, error: 'No page open to write into.' }
@@ -334,6 +365,33 @@ export async function writeEmbedDoc(
   } catch (err) {
     return { ok: false, error: String((err as Error)?.message || err) }
   }
+}
+
+// Undo/redo rewrites a stylesheet behind the panel's back, so the doc it will
+// write from next has to be brought back in step — otherwise the next edit
+// would serialize the stale AST and quietly resurrect what was just undone.
+const docsReloaded = new Set<() => void>()
+export function onDocsReloaded(fn: () => void): () => void {
+  docsReloaded.add(fn)
+  return () => { docsReloaded.delete(fn) }
+}
+
+async function writeStyleFileAndReload(doc: EmbedDoc, path: string, text: string): Promise<void> {
+  await window.avb.writeStyleFile({ filePath: path, css: text })
+  const region = doc.regions[0]
+  if (region) {
+    region.css = text
+    region.end = text.length
+    region.parseError = undefined
+    region.root = null
+    try {
+      region.root = postcss.parse(text)
+    } catch (err) {
+      region.parseError = String((err as Error)?.message || err)
+    }
+  }
+  doc.code = text
+  for (const fn of docsReloaded) fn()
 }
 
 export function rebuildRules(docs: EmbedDoc[]): ParsedRule[] {

@@ -14,6 +14,7 @@ import { loadEmbedSource, saveEmbedSource } from './shared/tool-prefs'
 import { handleArrowStep } from './lib/number-step'
 import { hslaToRgba } from './lib/color'
 import { filterCssProperties } from './lib/css-properties'
+import { panelSpan } from './lib/panel-box'
 import SizeSection from './SizeSection'
 import GapControl from './GapControl'
 import GridControls from './GridControls'
@@ -66,6 +67,7 @@ import {
   navigateToEmbed,
   readNativeStyleByName,
   readNativeStyles,
+  onDocsReloaded,
   rebuildRules,
   removeNativePropertyAt,
   resolveIdentityElement,
@@ -85,6 +87,7 @@ import {
 } from './lib/webflow'
 import type { BreakpointId, ElementSnapshot, NativeModel, ParsedDeclaration, ParsedRule, Specificity } from './lib/types'
 import './embed-editor.css'
+import { splitTopLevelSpaces } from './lib/background'
 
 type ScanState = {
   rootSnapshot: ElementSnapshot | undefined
@@ -549,13 +552,15 @@ function PropertyCombobox({ value, busy, onChange, onPick, onEnter, onEscape }: 
   useEffect(() => { setActive(0) }, [value])
 
   // Position the list vertically against the input (above it, flipping below only when
-  // there's more room there); span the FULL panel width — left:0/right:0 — like the
-  // variable picker, so long property names aren't truncated in the input's narrow column.
+  // there's more room there); span the full panel width, like the variable picker, so
+  // long property names aren't truncated in the input's narrow column. The panel is
+  // measured — it's a column of the window here, not the window itself.
   useLayoutEffect(() => {
     if (!open) return
     const input = inputRef.current
     if (!input) return
     const r = input.getBoundingClientRect()
+    const span = panelSpan(input)
     const margin = 8
     const gap = 4
     const spaceAbove = r.top - margin
@@ -563,8 +568,8 @@ function PropertyCombobox({ value, busy, onChange, onPick, onEnter, onEscape }: 
     const up = spaceAbove >= spaceBelow
     const maxHeight = Math.max(120, Math.min(340, (up ? spaceAbove : spaceBelow) - gap))
     setPos(up
-      ? { position: 'fixed', left: 0, right: 0, bottom: window.innerHeight - r.top + gap, maxHeight, visibility: 'visible' }
-      : { position: 'fixed', left: 0, right: 0, top: r.bottom + gap, maxHeight, visibility: 'visible' })
+      ? { position: 'fixed', left: span.left, width: span.width, bottom: window.innerHeight - r.top + gap, maxHeight, visibility: 'visible' }
+      : { position: 'fixed', left: span.left, width: span.width, top: r.bottom + gap, maxHeight, visibility: 'visible' })
   }, [open, matches.length, value])
 
   // Keep the highlighted option scrolled into view during keyboard nav.
@@ -735,10 +740,13 @@ function ProvenancePopover({ prop, anchor, resolved, onClose, onAnchorReclick, o
     if (!el) return
     const margin = 8
     const { width, height } = el.getBoundingClientRect()
+    // Horizontally the popover belongs to the panel, not the window — clamping
+    // to the viewport would let it hang off the panel's left edge.
+    const span = panelSpan(el)
     let left = anchor.left
     let top = anchor.bottom + 6
-    if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width
-    if (left < margin) left = margin
+    if (left + width > span.left + span.width) left = span.left + span.width - width
+    if (left < span.left) left = span.left
     if (top + height > window.innerHeight - margin) {
       const above = anchor.top - 6 - height
       top = above >= margin ? above : Math.max(margin, window.innerHeight - margin - height)
@@ -1017,7 +1025,7 @@ const FLEX_WRAPS = ['nowrap', 'wrap', 'wrap-reverse']
 function currentFlexFlow(read: (prop: string) => ResolvedProp | undefined): string {
   let direction = 'row'
   let wrap = 'nowrap'
-  const flowTokens = effectiveValue(read('flex-flow')).split(/\s+/)
+  const flowTokens = splitTopLevelSpaces(effectiveValue(read('flex-flow')))
   const dir = effectiveValue(read('flex-direction'))
   const wr = effectiveValue(read('flex-wrap'))
   if (FLEX_DIRECTIONS.includes(dir)) direction = dir
@@ -1269,6 +1277,17 @@ const SUGGESTION_KIND_LABEL: Record<SelectorSuggestion['kind'], string> = {
   tag: 'tag', class: 'class', attribute: 'attribute', 'attribute-value': 'attribute', combo: 'combo',
 }
 
+// A selector that says nothing about *this* element — `:target`, `:focus-visible`,
+// `*`, `::selection`, `body > *`. They match almost everything on the page, so a
+// project with a couple of them tacks them onto every element's chip list and
+// buries the selectors that actually describe what's selected. Kept behind a
+// toggle instead. A class, id or attribute anywhere in the selector (including
+// inside `:is(...)`) makes it specific enough to show.
+function isGlobalSelector(text: string): boolean {
+  if (/[.#[]/.test(text)) return false
+  return canonicalCompound(text).tokens.length === 0
+}
+
 // The selector picker: a chip per selector that styles the element (its own
 // classes, stateful, and complex/ancestor selectors), plus an input to add a new
 // one. Clicking a chip makes it the edit target (like clicking a combo class);
@@ -1276,10 +1295,13 @@ const SUGGESTION_KIND_LABEL: Record<SelectorSuggestion['kind'], string> = {
 // input offers an autocomplete list of the element's targetable selectors:
 // ↑/↓ move, Enter applies the highlighted one (or the typed text), Tab fills it
 // into the input to keep typing.
-function SelectorPicker({ selectors, suggestions, activeSelector, busy, onSelect, onDeselect, onAdd }: {
+function SelectorPicker({ selectors, suggestions, activeSelector, activePicked, busy, onSelect, onDeselect, onAdd }: {
   selectors: MatchedSelector[]
   suggestions: SelectorSuggestion[]
   activeSelector: string
+  /** True when the active selector is one the user clicked or typed, rather than
+   *  the panel's auto-composed default. */
+  activePicked: boolean
   busy: boolean
   onSelect: (selector: string) => void
   onDeselect: () => void
@@ -1289,6 +1311,7 @@ function SelectorPicker({ selectors, suggestions, activeSelector, busy, onSelect
   const [open, setOpen] = useState(false)
   const [highlight, setHighlight] = useState(-1)
   const [inputOpen, setInputOpen] = useState(false)
+  const [showGlobals, setShowGlobals] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const wantFocus = useRef(false)
@@ -1300,6 +1323,23 @@ function SelectorPicker({ selectors, suggestions, activeSelector, busy, onSelect
   // selector) — including while selectors are still loading, so the empty box shows
   // as just the black well (with its min-height) rather than an add-selector field.
   const showInput = inputOpen
+
+  // Global selectors are folded away behind a count chip. The one exception is a
+  // global the user PICKED — it has to stay on screen for the panel below it to
+  // make sense. A global that is merely the current default target stays hidden,
+  // so the checkbox means what it says.
+  const globals = useMemo(() => selectors.filter((sel) => isGlobalSelector(sel.text)), [selectors])
+  const shownSelectors = useMemo(
+    () =>
+      showGlobals
+        ? selectors
+        : selectors.filter(
+            (sel) =>
+              !isGlobalSelector(sel.text) ||
+              (activePicked && selectorsMatch(sel.text, activeSelector)),
+          ),
+    [selectors, showGlobals, activeSelector, activePicked],
+  )
 
   const q = draft.trim().toLowerCase()
   const filtered = useMemo(
@@ -1366,13 +1406,14 @@ function SelectorPicker({ selectors, suggestions, activeSelector, busy, onSelect
   }
 
   return (
+    <>
     <div className="embed-editor_selectors">
       {/* One grey well wraps the selector tags; clicking empty space reveals the add
           input at its bottom (the input has no chrome of its own). */}
       <div className="embed-editor_selector-well" onMouseDown={onWellMouseDown}>
-        {selectors.length ? (
+        {shownSelectors.length ? (
           <div className="embed-editor_selector-chips">
-            {selectors.map((sel) => {
+            {shownSelectors.map((sel) => {
               const active = selectorsMatch(sel.text, activeSelector)
               const dimmed = sel.inContext === false
               // Nested rules show their nesting (`.hero { .title }`); selection/matching
@@ -1445,6 +1486,22 @@ function SelectorPicker({ selectors, suggestions, activeSelector, busy, onSelect
         ) : null}
       </div>
     </div>
+    {/* Outside the well's box — a view option, not one of the selectors. */}
+    {globals.length ? (
+      <label
+        className="embed-editor_check embed-editor_globals-check"
+        title="Selectors like :target, :focus-visible and * match nearly every element on the page"
+      >
+        <input
+          type="checkbox"
+          checked={showGlobals}
+          disabled={busy}
+          onChange={(event) => setShowGlobals(event.target.checked)}
+        />
+        <span>Show global selectors ({globals.length})</span>
+      </label>
+    ) : null}
+    </>
   )
 }
 
@@ -1606,6 +1663,7 @@ function StyleCard({
   snapshot,
   selectedNames,
   selectedSelector,
+  activePicked,
   onSelectNames,
   resolved,
   contexts,
@@ -1641,6 +1699,7 @@ function StyleCard({
   snapshot: ElementSnapshot | undefined
   selectedNames: string[]
   selectedSelector: string
+  activePicked: boolean
   onSelectNames: (names: string[]) => void
   resolved: ResolvedStyle
   contexts: StyleContext[]
@@ -1759,6 +1818,7 @@ function StyleCard({
         selectors={selectors}
         suggestions={suggestions}
         activeSelector={activeSelector}
+        activePicked={activePicked}
         busy={busy}
         onSelect={onSelectActive}
         onDeselect={onDeselect}
@@ -2540,6 +2600,16 @@ export default function EmbedEditor() {
       setSelectedTokens([])
       setStateKey('')
       setQuickSnapshot(null) // drop the previous element's chips
+      // The chips are derived from these two models, and both are refilled by
+      // async reads. Left alone they keep listing the PREVIOUS element's
+      // selectors until those land — the list looks stale for as long as the
+      // scan takes. Blank them now: an empty well for a moment is honest,
+      // another element's selectors are not. A cached native model comes
+      // straight back in the identity effect, so that case barely blinks.
+      setScan((prev) => (prev ? { ...prev, model: EMPTY_RULE_MODEL } : prev))
+      setNativeModel(null)
+      nativeModelRef.current = null
+      nativeIdentityRef.current = ''
       // Force the tokens effect to re-default even if the new element shares the old
       // one's token signature (both classless divs, unreadable classes, …).
       tokenIdentityRef.current = ''
@@ -2657,6 +2727,10 @@ export default function EmbedEditor() {
       : []
     setScan((prev) => (prev ? { ...prev, model, placeholders } : prev))
   }, [])
+
+  // An undo/redo rewrote a stylesheet and re-parsed its doc in place — re-resolve
+  // so the fields show what the file now says.
+  useEffect(() => onDocsReloaded(() => { void refreshDerived() }), [refreshDerived])
 
   // True when the active selector is ONE splittable member of a grouped rule
   // (`.a::before, .b::after { … }`) — i.e. an edit should be scoped to just that
@@ -2986,6 +3060,13 @@ export default function EmbedEditor() {
     // Instant: serve the cached model for this class-signature while re-reading in
     // the background, so re-selecting an element doesn't re-lag its native chips.
     const cached = nativeModelCache.get(elementIdentity)
+    if (!cached && nativeModelRef.current) {
+      // A class change on the same element: the model in hand describes the old
+      // class list, so it can't stand in while the new one loads.
+      nativeModelRef.current = null
+      nativeIdentityRef.current = ''
+      setNativeModel(null)
+    }
     if (cached) {
       // Show the cached chips immediately, but do NOT advance nativeIdentityRef here:
       // setNativeModel is async, so the ref would outrun the model the smart-default
@@ -3333,6 +3414,22 @@ export default function EmbedEditor() {
     ),
     [model, currentContext, activeSelector, effectiveSource, nativeContribs, selectedNativeIndex, selectedEmbedKey],
   )
+
+  // The stylesheet the active selector's rule already lives in. resolveStyle
+  // picks selectedRule by selector identity and explicitly does NOT scope it to
+  // the source dropdown, so reading it here can't feed back into itself.
+  const homeEmbedKey = resolved.selectedRule?.embedKey ?? null
+
+  // Selecting an element points "Add custom styles in" at the file that already
+  // defines its selector, so a new declaration joins the rule that's there
+  // instead of landing in whichever stylesheet happens to be first in page
+  // order. An explicit pick still wins: the effect only re-runs when the element
+  // or the selector's home changes, not on every render. Left alone inside a
+  // component, where the source is pinned to that component's own embed.
+  useEffect(() => {
+    if (!homeEmbedKey || inComponentContext) return
+    setSourceSel((prev) => (prev === homeEmbedKey ? prev : homeEmbedKey))
+  }, [elementIdentity, activeSelector, homeEmbedKey, inComponentContext])
 
   // Every selector (with styles) that targets this element in the current context —
   // the element's own classes, stateful, and complex/ancestor selectors — for the
@@ -3958,6 +4055,7 @@ export default function EmbedEditor() {
               snapshot={snapshot}
               selectedNames={selectedTokens}
               selectedSelector={activeSelector}
+              activePicked={selectedSelectorText != null}
               onSelectNames={selectTokens}
               resolved={resolved ?? EMPTY_RESOLVED}
               contexts={styleContexts}

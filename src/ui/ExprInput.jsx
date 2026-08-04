@@ -20,6 +20,11 @@ export default function ExprInput({
   autoFocus,
   syncValue,
   invalid,
+  // A field holds one expression, so Enter commits it. `multiline` is for the
+  // places that hold a whole statement instead (a data declaration's source),
+  // where Enter has to mean a new line.
+  multiline = false,
+  className = '',
 }) {
   const hostRef = useRef(null);
   const viewRef = useRef(null);
@@ -38,17 +43,21 @@ export default function ExprInput({
           history(),
           drawSelection(),
           // Enter commits; the field is one expression, not a document.
-          keymap.of([
-            {
-              key: 'Enter',
-              run: () => {
-                onCommitRef.current?.(viewRef.current?.state.doc.toString() ?? '');
-                return true;
-              },
-            },
-            ...defaultKeymap.filter((b) => b.key !== 'Enter'),
-            ...historyKeymap,
-          ]),
+          keymap.of(
+            multiline
+              ? [...defaultKeymap, ...historyKeymap]
+              : [
+                  {
+                    key: 'Enter',
+                    run: () => {
+                      onCommitRef.current?.(viewRef.current?.state.doc.toString() ?? '');
+                      return true;
+                    },
+                  },
+                  ...defaultKeymap.filter((b) => b.key !== 'Enter'),
+                  ...historyKeymap,
+                ]
+          ),
           javascript(),
           appTheme,
           appHighlight,
@@ -85,5 +94,7 @@ export default function ExprInput({
     }
   }, [syncValue]);
 
-  return <div ref={hostRef} className={`expr-input ${invalid ? 'invalid' : ''}`} />;
+  return (
+    <div ref={hostRef} className={`expr-input ${invalid ? 'invalid' : ''} ${className}`} />
+  );
 }

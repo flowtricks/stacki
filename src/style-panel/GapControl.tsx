@@ -4,6 +4,7 @@ import useScrub from './components/useScrub'
 import { handleArrowStep } from './lib/number-step'
 import VariableConnect from './VariableConnect'
 import type { ResolvedProp } from './lib/resolved'
+import { splitTopLevelSpaces } from './lib/background'
 
 // The Gap control for the Layout section: a lock toggle plus one field (linked →
 // both gaps equal) or two fields (unlinked → separate row/column).
@@ -31,7 +32,7 @@ const GAP_PROPS = [ROW, COL, ROW_LEGACY, COL_LEGACY, SHORTHAND]
 
 // `gap: <row> [<column>]` — one value sets both axes.
 function shorthandPart(value: string, axis: 'row' | 'col'): string {
-  const parts = value.trim().split(/\s+/).filter(Boolean)
+  const parts = splitTopLevelSpaces(value).filter(Boolean)
   if (!parts.length) return ''
   return axis === 'row' ? parts[0] : (parts[1] ?? parts[0])
 }

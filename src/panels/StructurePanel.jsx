@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { canContainTag } from '../elementSchemas.js';
 import { isDataBound } from '../bindings.js';
 import { setDrag, clearDrag, getDrag } from '../dragState.js';
+import { elementLabel } from '../classNames.js';
 import {
   LayoutIcon,
   ElementComponentIcon,
@@ -388,15 +389,50 @@ function ContextMenu({ pos, canPaste, onClose, onAction }) {
   );
 }
 
+// Kinds a comment can be a note *for* — the ones that read as a thing on the
+// page. A comment above another comment (or above text) keeps its own row.
+const ANNOTATABLE = new Set(['element', 'component']);
+
 function NodeList({ nodes, parentId, depth, ...ctx }) {
+  // A comment directly above an element belongs to it: the element's row reads
+  // "name / comment" and the comment gets no row of its own. Ten identical
+  // <Section> rows are otherwise indistinguishable, and the note above each is
+  // the only thing telling them apart.
+  const noteFor = new Map(); // index of the annotated node -> comment node
+  const folded = new Set(); // indices that render as part of the row below
+  nodes.forEach((n, i) => {
+    if (n.kind !== 'comment') return;
+    const next = nodes[i + 1];
+    if (next && ANNOTATABLE.has(next.kind)) {
+      noteFor.set(i + 1, n);
+      folded.add(i);
+    }
+  });
+
   return (
     <>
-      {nodes.map((node, i) => (
-        <React.Fragment key={node.id}>
-          <Gap parentId={parentId} index={i} depth={depth} {...ctx} />
-          <TreeNode node={node} parentId={parentId} index={i} depth={depth} {...ctx} />
-        </React.Fragment>
-      ))}
+      {nodes.map((node, i) =>
+        folded.has(i) ? null : (
+          <React.Fragment key={node.id}>
+            {/* Insert above the note, not between it and its element — the two
+                read as one row, so a drop "above" has to clear both. */}
+            <Gap
+              parentId={parentId}
+              index={noteFor.has(i) ? i - 1 : i}
+              depth={depth}
+              {...ctx}
+            />
+            <TreeNode
+              node={node}
+              note={noteFor.get(i) || null}
+              parentId={parentId}
+              index={i}
+              depth={depth}
+              {...ctx}
+            />
+          </React.Fragment>
+        )
+      )}
       {nodes.length > 0 && <Gap parentId={parentId} index={nodes.length} depth={depth} {...ctx} />}
     </>
   );
@@ -445,7 +481,7 @@ function Gap({ parentId, index, depth, dropTarget, setDropTarget, isDndPayload, 
   );
 }
 
-function TreeNode({ node, parentId, index, depth, ...ctx }) {
+function TreeNode({ node, note, parentId, index, depth, ...ctx }) {
   const {
     selectedId,
     currentLayoutName,
@@ -558,6 +594,12 @@ function TreeNode({ node, parentId, index, depth, ...ctx }) {
         <span className="icon">{icon}</span>
         <span className="label" style={node.kind === 'text' ? { fontWeight: 400, fontStyle: 'italic' } : {}}>
           {label}
+          {note && (
+            <span className="node-note" title={note.value.trim()}>
+              {' / '}
+              {truncate(note.value.replace(/\s+/g, ' ').trim(), 44)}
+            </span>
+          )}
         </span>
       </div>
 
@@ -611,15 +653,12 @@ function describeNode(node) {
       return { icon: <CodeIcon size={12} />, label: node.name };
     case 'raw-line':
       return { icon: <CodeIcon size={12} />, label: truncate(node.value, 30) };
-    case 'element': {
+    case 'element':
       // Webflow-style label: the first class name when the element has
-      // classes, the bare tag name otherwise.
-      const cls = node.props?.class;
-      const classes =
-        cls && cls.type === 'string' ? cls.value.trim().split(/\s+/).filter(Boolean) : [];
-      const label = classes.length ? truncate(classes[0], 40) : node.name;
-      return { icon: elementIcon(node.name), label };
-    }
+      // classes, the bare tag name otherwise (and a named slot's name — see
+      // elementLabel). Covers `class:list={[...]}`, where the classes live in
+      // an expression rather than a string.
+      return { icon: elementIcon(node.name), label: truncate(elementLabel(node), 40) };
     case 'chunk-group':
       return { icon: <FileIcon size={12} />, label: node.name };
     case 'expr':

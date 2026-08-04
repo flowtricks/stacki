@@ -9,6 +9,7 @@ import VariableConnect from './VariableConnect'
 import { GroupLabel } from './TypographySection'
 import { handleArrowStep } from './lib/number-step'
 import type { ResolvedProp } from './lib/resolved'
+import { splitTopLevelSpaces } from './lib/background'
 
 // The Borders section: a corner-radius control (linked / per-corner) and a border
 // control scoped to a side (all / top / right / bottom / left) with style, width,
@@ -205,7 +206,7 @@ type Corners = { tl: string; tr: string; bl: string; br: string }
 // dropped). 1–4 values expand per spec: 1 → all; 2 → tl/br=a, tr/bl=b;
 // 3 → tl=a, tr/bl=b, br=c; 4 → tl tr br bl.
 function parseRadius(shorthand: string): Corners {
-  const p = stripImportant(shorthand).split('/')[0].trim().split(/\s+/).filter(Boolean)
+  const p = splitTopLevelSpaces(stripImportant(shorthand).split('/')[0]).filter(Boolean)
   return {
     tl: p[0] ?? '',
     tr: p[1] ?? p[0] ?? '',

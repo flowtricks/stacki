@@ -9,6 +9,7 @@ import { handleArrowStep } from './lib/number-step'
 import ProvenanceList from './ProvenanceList'
 import VariableConnect from './VariableConnect'
 import type { Contributor, ResolvedProp } from './lib/resolved'
+import { splitTopLevelSpaces } from './lib/background'
 
 // The Size section of the style panel. Every control is always rendered (Webflow
 // parity), driven by the resolved model: a property is blue when the picked
@@ -1034,7 +1035,7 @@ function ImageFitField({ read, busy, setProp, clearProp, liveSetProp, onProvenan
   }
 
   const posRaw = posD.present ? posD.value.trim() : ''
-  const posParts = posRaw.split(/\s+/).filter(Boolean)
+  const posParts = splitTopLevelSpaces(posRaw).filter(Boolean)
   const px = posParts[0] ?? ''
   const py = posParts[1] ?? ''
   const posSet = posRaw !== '' && posRaw.toLowerCase() !== 'unset'

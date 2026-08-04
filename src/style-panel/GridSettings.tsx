@@ -6,6 +6,7 @@ import useScrub from './components/useScrub'
 import VariableConnect from './VariableConnect'
 import { GroupLabel } from './TypographySection'
 import { handleArrowStep } from './lib/number-step'
+import { panelSpan } from './lib/panel-box'
 import { parseTrackList, serializeTrackList, parseTrackSize, serializeTrackSize, trackKind, trackLabel, isFixedSizeTrack, parseAreas, serializeAreas, areaLabel, nextAreaName, type TrackSize, type GridArea } from './lib/grid-template'
 import type { ResolvedProp } from './lib/resolved'
 
@@ -184,6 +185,10 @@ function TrackSizeEditor({ track, busy, autoFit, onChange }: { track: string; bu
 function TrackPopover({ anchorEl, onClose, children }: { anchorEl: HTMLElement; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; caretLeft: number; below: boolean } | null>(null)
+  // The panel's span, read at mount so the first layout (which measures this
+  // popover's height) already has the right width. The anchor lives inside the
+  // grid modal — itself portaled — so this falls back to the published box.
+  const [span] = useState(() => panelSpan(anchorEl))
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
@@ -192,7 +197,9 @@ function TrackPopover({ anchorEl, onClose, children }: { anchorEl: HTMLElement; 
     const h = el.offsetHeight
     const below = anchor.bottom + gap + h <= window.innerHeight
     const top = below ? anchor.bottom + gap : Math.max(gap, anchor.top - gap - h)
-    const caretLeft = Math.max(16, Math.min(anchor.left + anchor.width / 2, window.innerWidth - 16))
+    // The caret is absolutely positioned inside the popover, so its x is local
+    // to the popover's left edge — not the window's.
+    const caretLeft = Math.min(Math.max(anchor.left + anchor.width / 2 - span.left, 16), span.width - 16)
     setPos({ top, caretLeft, below })
   }, [anchorEl])
   useEffect(() => {
@@ -214,7 +221,7 @@ function TrackPopover({ anchorEl, onClose, children }: { anchorEl: HTMLElement; 
       ref={ref}
       className={`embed-editor_grid-popover ${pos && !pos.below ? 'is-above' : ''}`}
       role="dialog"
-      style={{ position: 'fixed', left: 0, right: 0, top: pos?.top ?? 0, visibility: pos == null ? 'hidden' : 'visible' }}
+      style={{ position: 'fixed', left: span.left, width: span.width, top: pos?.top ?? 0, visibility: pos == null ? 'hidden' : 'visible' }}
     >
       <span className="embed-editor_grid-popover-caret" style={{ left: pos?.caretLeft ?? 16 }} aria-hidden="true" />
       {children}

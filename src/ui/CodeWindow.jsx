@@ -9,12 +9,21 @@ const MIN_H = 220;
 // Floating, draggable, resizable code editor window. Non-modal: the rest of
 // the app stays interactive while it's open.
 export default function CodeWindow({ title, language, value, onChange, onClose, editorKey }) {
-  const [rect, setRect] = useState(() => ({
-    x: Math.max(60, window.innerWidth - 660),
-    y: 96,
-    w: 580,
-    h: Math.min(460, window.innerHeight - 160),
-  }));
+  // Opens proportional to the window rather than at a fixed size: embeds and
+  // frontmatter are usually real code, and a small default meant resizing it
+  // every time. Capped so it stays a floating window on a wide monitor, and
+  // floored at the minimums so a short window still gets something usable.
+  const [rect, setRect] = useState(() => {
+    const w = clamp(Math.round(window.innerWidth * 0.52), MIN_W, 1040);
+    const h = clamp(Math.round(window.innerHeight * 0.78), MIN_H, window.innerHeight - 140);
+    return {
+      // Right-anchored, as before — the canvas stays visible to its left.
+      x: Math.max(60, window.innerWidth - w - 80),
+      y: 96,
+      w,
+      h,
+    };
+  });
 
   const startDrag = (e) => {
     if (e.target.closest('button')) return;

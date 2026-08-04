@@ -52,6 +52,7 @@ export default function PreviewPane({
   devStatus,
   devLog,
   devDiag,
+  pathScope,
   route,
   refreshKey,
   crumbs,
@@ -63,7 +64,7 @@ export default function PreviewPane({
   overlayInfo,
   onSelectPath,
   onOpenPath,
-  onResolveKey,
+  onSelectedClasses,
   focusPath,
   device,
   onDevice,
@@ -110,6 +111,21 @@ export default function PreviewPane({
   const lastClickRef = React.useRef(null);
   const [selOcc, setSelOcc] = React.useState(0);
   const [hoverOcc, setHoverOcc] = React.useState(0);
+  // Read by the message handler, which is bound once — refs keep it looking at
+  // the current selection instead of the one it closed over.
+  const selPathRef = React.useRef(selPath);
+  selPathRef.current = selPath;
+  const selOccRef = React.useRef(selOcc);
+  selOccRef.current = selOcc;
+  const onSelectedClassesRef = React.useRef(onSelectedClasses);
+  onSelectedClassesRef.current = onSelectedClasses;
+  // Last reported class string, so repeated rect sends stay quiet.
+  const selClassesRef = React.useRef('');
+  // Selection changed: the app cleared its copy, so the next report must go
+  // through even if the new element happens to carry the same classes.
+  React.useEffect(() => {
+    selClassesRef.current = '';
+  }, [selPath, selOcc]);
   // Canvas clicks set the instance directly (below) — including when they
   // land on another instance of the node that's already selected, where
   // selPath never changes. Any other route to a new selection means "the
@@ -129,61 +145,77 @@ export default function PreviewPane({
     const onMsg = (e) => {
       if (!iframeRef.current || e.source !== iframeRef.current.contentWindow) return;
       const d = e.data;
-      if (d?.type === 'avb:rects') setRects(d.rects || {});
-      else if (d?.type === 'avb:hover-node') {
-        setCanvasHover(onResolveKey ? onResolveKey(d.key || null, d.chain || []) : d.key || null);
+      if (d?.type === 'avb:rects') {
+        setRects(d.rects || {});
+        // The rendered classes of the selected instance, for the style panel:
+        // an expression-valued class attribute has no text in the model, so
+        // this is the only place the applied classes are knowable. Rects
+        // re-send on scroll/resize, so only report an actual change.
+        if (d.classes) {
+          const runs = d.classes[selPathRef.current] || [];
+          const list = runs[selOccRef.current] || runs[0] || [];
+          const key = list.join(' ');
+          if (key !== selClassesRef.current) {
+            selClassesRef.current = key;
+            onSelectedClassesRef.current?.(list);
+          }
+        }
+      } else if (d?.type === 'avb:hover-node') {
+        setCanvasHover(d.path || null);
         setHoverOcc(d.occurrence || 0);
       } else if (d?.type === 'avb:click-node' && onSelectPath) {
-        clickedPathRef.current = d.key || null;
+        clickedPathRef.current = d.path || null;
         // Which instance was clicked: a node inside a loop renders once per
         // item and only that one should light up. Set now, not from the
         // effect above, so clicking a different instance of the already
         // selected node still moves the outline.
-        lastClickRef.current = { path: d.key || null, occ: d.occurrence || 0 };
+        lastClickRef.current = { path: d.path || null, occ: d.occurrence || 0 };
         setSelOcc(d.occurrence || 0);
-        onSelectPath(d.key || null, d.chain || []);
-      } else if (d?.type === 'avb:open-node' && d.key && onOpenPath) {
-        onOpenPath(d.key, d.chain || []);
+        onSelectPath(d.path || null);
+      } else if (d?.type === 'avb:open-node' && d.path && onOpenPath) {
+        onOpenPath(d.path);
       }
     };
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
-  }, [onSelectPath, onOpenPath, onResolveKey]);
+  }, [onSelectPath, onOpenPath]);
 
   const hoverPath = navHoverPath || canvasHover;
   // A navigator hover means "the node", so every instance lights up; a canvas
   // hover means the one under the pointer.
   const hoverOccUsed = navHoverPath ? null : hoverOcc;
-  const trackKey = [...new Set([selPath, hoverPath, focusPath].filter(Boolean))].join('|');
+  // Newline-joined: a namespaced path (src/…/Card.astro|0.1) contains a pipe,
+  // so that can no longer separate the tracked paths.
+  const trackKey = [...new Set([selPath, hoverPath, focusPath].filter(Boolean))].join(String.fromCharCode(10));
   const sendTrack = React.useCallback(() => {
     const w = iframeRef.current?.contentWindow;
     if (!w) return;
-    // `scope` is the drilled-into instance: the component's own markup renders
-    // at every usage site, so its keys need an instance to be measured in.
-    w.postMessage(
-      {
-        type: 'avb:track',
-        keys: trackKey ? trackKey.split('|') : [],
-        scope: focusPath || null,
-      },
-      '*'
-    );
-  }, [trackKey, focusPath]);
+    w.postMessage({ type: 'avb:track', paths: trackKey ? trackKey.split('\n') : [], scope: pathScope || '' }, '*');
+  }, [trackKey]);
   React.useEffect(sendTrack, [sendTrack, url, refreshKey]);
 
   // Selecting in the navigator (or via a breadcrumb) smooth-scrolls the page
   // to the node. A selection that came from clicking the page is skipped —
   // it's already on screen, and moving it would yank it out from under the
   // pointer. Not sent on reload: the frame has no regions mapped yet.
+  const prevFocusRef = React.useRef(focusPath);
   React.useEffect(() => {
     const w = iframeRef.current?.contentWindow;
+    const focusChanged = prevFocusRef.current !== focusPath;
+    prevFocusRef.current = focusPath;
     if (!w || !selPath) return;
     if (clickedPathRef.current === selPath) {
       clickedPathRef.current = null;
       return;
     }
-    w.postMessage({ type: 'avb:scroll-to', key: selPath }, '*');
-  }, [selPath]);
+    // Drilling into a component (or backing out) opens a different file and
+    // selects within it, which looks like a fresh selection — but the canvas
+    // still shows the same page and the instance is already under the pointer.
+    // Scrolling here would jump to whichever instance the new path resolves to.
+    if (focusChanged) return;
+    // Repeated nodes: aim at the instance in play, not the first on the page.
+    w.postMessage({ type: 'avb:scroll-to', path: selPath, occ: selOccRef.current }, '*');
+  }, [selPath, focusPath]);
 
   // A reload wipes iframe state — clear stale boxes until fresh rects arrive.
   React.useEffect(() => {

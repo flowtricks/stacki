@@ -33,7 +33,7 @@ const pickPrompt = {
 // `pick` is set while a field is waiting for an asset (see assetPick.js):
 // the panel filters to the kind that was asked for, starts in the folder the
 // current value lives in, and a click assigns instead of opening the file.
-export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPickCancel }) {
+export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPickCancel, onRecordUndo }) {
   const [entries, setEntries] = useState([]);
   const [missing, setMissing] = useState(false);
   const [cwd, setCwd] = useState('');
@@ -107,9 +107,19 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
     if (!payload) return;
     if (payload.kind === 'asset') {
       if (payload.rel === destRel || parentOf(payload.rel) === destRel) return;
-      act(() =>
-        window.avb.moveAsset({ projectPath: project.path, fromRel: payload.rel, toDirRel: destRel })
-      );
+      const fromDir = parentOf(payload.rel);
+      const name = payload.rel.slice(payload.rel.lastIndexOf('/') + 1);
+      const landedRel = destRel ? `${destRel}/${name}` : name;
+      const move = (fromRel, toDirRel) =>
+        window.avb.moveAsset({ projectPath: project.path, fromRel, toDirRel });
+      act(async () => {
+        await move(payload.rel, destRel);
+        onRecordUndo?.({
+          label: `move ${name}`,
+          undo: () => move(landedRel, fromDir),
+          redo: () => move(payload.rel, destRel),
+        });
+      });
     } else {
       act(() =>
         window.avb.uploadAssets({ projectPath: project.path, destRel, filePaths: payload.paths })
@@ -131,7 +141,17 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
     setRenaming(null);
     const clean = value.trim();
     if (!clean || clean === entry.name) return;
-    act(() => window.avb.renameAsset({ projectPath: project.path, rel: entry.rel, newName: clean }));
+    const dir = parentOf(entry.rel);
+    const toRel = dir ? `${dir}/${clean}` : clean;
+    const rename = (rel, newName) => window.avb.renameAsset({ projectPath: project.path, rel, newName });
+    act(async () => {
+      await rename(entry.rel, clean);
+      onRecordUndo?.({
+        label: `rename to ${clean}`,
+        undo: () => rename(toRel, entry.name),
+        redo: () => rename(entry.rel, clean),
+      });
+    });
   };
 
   // --- Breadcrumb ------------------------------------------------------

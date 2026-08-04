@@ -15,6 +15,7 @@ import LayerPopover from './LayerPopover'
 import ProvenanceList from './ProvenanceList'
 import VariableConnect from './VariableConnect'
 import type { Contributor, ResolvedProp } from './lib/resolved'
+import { splitTopLevelSpaces } from './lib/background'
 
 // The Typography section of the style panel. Like the Size section, every control
 // is always rendered and driven by the resolved model: a property is blue when the
@@ -1084,7 +1085,7 @@ function parseDecoration(value: string): DecorParts {
   const lines: string[] = []
   let style = ''
   const color: string[] = []
-  for (const tok of value.trim().split(/\s+/).filter(Boolean)) {
+  for (const tok of splitTopLevelSpaces(value).filter(Boolean)) {
     const low = tok.toLowerCase()
     if (low === 'none') continue
     if (DECOR_LINE_KW.includes(low)) { if (!lines.includes(low)) lines.push(low) }
