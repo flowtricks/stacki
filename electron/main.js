@@ -34,6 +34,38 @@ const { autoUpdater } = require('electron-updater');
 let mainWindow = null;
 let devServer = null; // {proc, url, projectPath}
 
+// --- Dev reload ------------------------------------------------------------
+// Only the renderer hot-reloads on its own (Vite). preload.js is re-read from
+// disk on a window reload, but main.js and astroParser.js are bound into this
+// process at require time and can only be picked up by starting over — which
+// is what "Reload All Code" does. So the app relaunches itself, leaving the
+// open project in a file for the next process to pick up (the supervisor
+// re-spawns us with the same argv, so there's nothing to hand forward there),
+// landing back where you were instead of on the welcome screen.
+const isDev = !!process.env.VITE_DEV_SERVER_URL;
+// Exiting with this asks scripts/dev-electron.mjs to start us again. Not
+// app.relaunch(): `npm run dev` runs us under `concurrently -k`, so quitting
+// would take the Vite server down with us and the new process would load a
+// dead localhost:5173.
+const RELAUNCH_CODE = 42;
+const reopenFile = () => path.join(app.getPath('userData'), 'dev-reopen.json');
+
+function relaunchApp() {
+  try {
+    // openProjectRoot is set whenever a project's watcher starts, i.e. on open.
+    if (openProjectRoot) {
+      fs.writeFileSync(reopenFile(), JSON.stringify({ path: openProjectRoot }), 'utf8');
+    }
+  } catch {
+    /* worst case the reload lands on the welcome screen */
+  }
+  // app.exit skips before-quit, so take the Astro dev server down by hand —
+  // otherwise it keeps the port and the next process adopts a server still
+  // running the previously generated config.
+  stopDevServer();
+  app.exit(RELAUNCH_CODE);
+}
+
 const isWin = process.platform === 'win32';
 
 // ---------------------------------------------------------------------------
@@ -162,11 +194,64 @@ function buildMenu() {
         { label: 'Insert Element…', accelerator: 'CmdOrCtrl+E', click: () => send('menu:insert') },
       ],
     },
-    { role: 'viewMenu' },
+    // In dev ⌘R has to mean "restart the process". main.js, astroParser.js and
+    // the rest of this side are bound in at require time, so the stock reload
+    // repaints the renderer while silently going on running the old code —
+    // the failure mode is an edit that appears to do nothing. The plain window
+    // reload keeps its usual behaviour one item down. A packaged build has no
+    // supervisor to restart it and no source to pick up, so it keeps the stock
+    // menu.
+    isDev
+      ? {
+          label: 'View',
+          submenu: [
+            { label: 'Reload All Code', accelerator: 'CmdOrCtrl+R', click: () => relaunchApp() },
+            {
+              label: 'Reload Window Only',
+              accelerator: 'Shift+CmdOrCtrl+R',
+              click: () => mainWindow?.webContents.reload(),
+            },
+            { type: 'separator' },
+            { role: 'toggleDevTools' },
+            { type: 'separator' },
+            { role: 'resetZoom' },
+            { role: 'zoomIn' },
+            { role: 'zoomOut' },
+            { type: 'separator' },
+            { role: 'togglefullscreen' },
+          ],
+        }
+      : { role: 'viewMenu' },
     { role: 'windowMenu' },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
+
+// The project to reopen when the renderer mounts in dev, or null on a cold
+// start (which still lands on the welcome screen).
+//
+// Two ways the renderer can come back without the project it had:
+//   - it reloaded but this process didn't — a Vite full page reload, or
+//     "Reload Window Only". openProjectRoot is still in memory, so use it.
+//   - the whole process restarted ("Reload All Code"), and memory is gone —
+//     relaunchApp left the path in a file. Consumed on read, so a later cold
+//     start doesn't silently skip the welcome screen.
+ipcMain.handle('dev:reopen', () => {
+  if (!isDev) return null;
+  if (openProjectRoot && fs.existsSync(openProjectRoot)) return openProjectRoot;
+  let p = null;
+  try {
+    p = JSON.parse(fs.readFileSync(reopenFile(), 'utf8'))?.path || null;
+  } catch {
+    return null;
+  }
+  try {
+    fs.rmSync(reopenFile(), { force: true });
+  } catch {
+    /* non-fatal */
+  }
+  return p && fs.existsSync(p) ? p : null;
+});
 
 // Native clipboard actions on the focused element, requested by the renderer
 // when a menu Copy/Paste lands while a text field has focus.

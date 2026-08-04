@@ -547,6 +547,20 @@ export default function App() {
     [rescan, startPreview] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  // "Reload All Code" (dev, ⌘R) restarts the whole process to pick up main and
+  // preload changes, leaving the open project behind for the new one. Reopen it
+  // so the reload lands where you were instead of on the welcome screen. Returns
+  // null on a normal launch and in packaged builds, so nothing else changes.
+  const reopenedRef = useRef(false);
+  useEffect(() => {
+    if (reopenedRef.current || !window.avb.devReopen) return;
+    reopenedRef.current = true;
+    window.avb
+      .devReopen()
+      .then((p) => p && loadProject(p))
+      .catch(() => {});
+  }, [loadProject]);
+
   // ----------------------------------------------------------------
   // Page loading & saving
   // ----------------------------------------------------------------

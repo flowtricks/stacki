@@ -557,6 +557,9 @@ contextBridge.exposeInMainWorld('avb', {
   removeRecent: invoke('recents:remove'),
   captureThumb: invoke('recents:captureThumb'),
 
+  // Dev only: the project to reopen after a "Reload All Code" relaunch.
+  devReopen: invoke('dev:reopen'),
+
   // Pages
   readPage: invoke('page:read'),
   writePage: invoke('page:write'),
