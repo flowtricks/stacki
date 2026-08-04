@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 import { panelBounds } from '../lib/panel-box'
+import type { ScrubHandlers } from './useScrub'
 
 type Props = {
   children: ReactNode
@@ -21,6 +22,11 @@ type Props = {
   /** Forwarded to the label so it can double as a drag handle (a drag suppresses
    *  the click, so mousedown-to-drag and click-to-open-menu coexist). */
   onMouseDown?: (event: MouseEvent<HTMLElement>) => void
+  /** Pointer handlers from useScrub, making the label a drag handle for the number in
+   *  the field it captions. Same coexistence rule as onMouseDown: a drag eats the click,
+   *  a press that stays put still opens the reset menu. Inert while the field is empty —
+   *  the dim caption doesn't take pointer events, and there'd be nothing to drag. */
+  scrubProps?: ScrubHandlers
   className?: string
 }
 
@@ -30,7 +36,7 @@ type Props = {
  * to reset the field; Option/Alt-clicking it resets immediately. Reusable across
  * tools for any "clearable" input.
  */
-export default function FieldLabel({ children, active, onReset, resetLabel = 'Reset', disabled = false, title, menuNote, onMouseDown, className }: Props) {
+export default function FieldLabel({ children, active, onReset, resetLabel = 'Reset', disabled = false, title, menuNote, onMouseDown, scrubProps, className }: Props) {
   const [open, setOpen] = useState(false)
   const [dropUp, setDropUp] = useState(false)
   const rootRef = useRef<HTMLSpanElement>(null)
@@ -92,7 +98,7 @@ export default function FieldLabel({ children, active, onReset, resetLabel = 'Re
 
   if (!active) {
     return (
-      <span className={['u-field-label', className].filter(Boolean).join(' ')} title={title} onMouseDown={onMouseDown}>
+      <span className={['u-field-label', className].filter(Boolean).join(' ')} title={title} onMouseDown={onMouseDown} {...scrubProps}>
         {children}
       </span>
     )
@@ -125,6 +131,7 @@ export default function FieldLabel({ children, active, onReset, resetLabel = 'Re
         disabled={disabled}
         title={title}
         onMouseDown={onMouseDown}
+        {...scrubProps}
         onClick={onLabelClick}
       >
         {children}

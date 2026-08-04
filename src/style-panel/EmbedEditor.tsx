@@ -5,6 +5,7 @@ import { CodeEditor } from './components/CodeEditor'
 import FieldLabel from './components/FieldLabel'
 import Select, { type SelectOption } from './components/Select'
 import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl'
+import useScrub from './components/useScrub'
 import DisplayControl from './DisplayControl'
 import DirectionControl from './DirectionControl'
 import AlignControl from './AlignControl'
@@ -355,13 +356,14 @@ const ValueField = forwardRef<HTMLTextAreaElement, {
   const cancelLive = () => {
     if (liveTimer.current != null) { window.clearTimeout(liveTimer.current); liveTimer.current = null }
   }
+  // Undelayed live write for the scrub, which throttles its own — see useScrub.
+  const liveNow = (text: string) => {
+    const parsed = parseImportant(text)
+    if (parsed.value) onLiveCommit(parsed.value, parsed.important)
+  }
   const scheduleLive = (text: string) => {
     cancelLive()
-    liveTimer.current = window.setTimeout(() => {
-      liveTimer.current = null
-      const parsed = parseImportant(text)
-      if (parsed.value) onLiveCommit(parsed.value, parsed.important)
-    }, 100)
+    liveTimer.current = window.setTimeout(() => { liveTimer.current = null; liveNow(text) }, 100)
   }
   useEffect(() => cancelLive, [])
 
@@ -384,15 +386,24 @@ const ValueField = forwardRef<HTMLTextAreaElement, {
     }
   }, [expanded, draft])
 
-  const commit = () => {
-    const parsed = parseImportant(draft)
+  const commit = (text = draft) => {
+    const parsed = parseImportant(text)
     if (parsed.value && (parsed.value !== value || parsed.important !== important)) {
       onCommit(parsed.value, parsed.important)
     }
   }
 
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy,
+    onPreview: setDraft,
+    onInput: liveNow,
+    onCommit: (text) => { setDraft(text); commit(text) },
+  })
+
   return (
     <textarea
+      {...scrub.input}
       ref={attachRef}
       data-prop={dataProp}
       className={`u-input embed-editor_value-input ${expanded ? 'is-expanded' : 'is-collapsed'}`}

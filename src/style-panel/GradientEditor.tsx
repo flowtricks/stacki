@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import ColorSwatch from './components/ColorSwatch'
+import useScrub from './components/useScrub'
 import VariableConnect from './VariableConnect'
 import { handleArrowStep } from './lib/number-step'
 import { angleToDegrees, degreesToAngle, gradientCenter, serializeGradient, stopPercent, stopsBarCss, type Gradient, type GradientStop } from './lib/gradient'
@@ -157,10 +158,18 @@ function NumField({ value, unit, label, busy, onLive, onCommit }: {
   const focused = useRef(false)
   useEffect(() => { if (!focused.current) setText(num) }, [num])
   const withUnit = (t: string) => { const s = t.trim(); return s === '' ? '' : /[a-z%]$/i.test(s) ? s : `${s}${unit}` }
+  const scrub = useScrub({
+    value: text,
+    disabled: busy,
+    onPreview: setText,
+    onInput: (t) => onLive(withUnit(t)),
+    onCommit: (t) => { setText(t); onCommit(withUnit(t)) },
+  })
   return (
     <div className="embed-editor_grad-num">
       <VariableConnect ariaLabel={`Connect ${label} to a variable`} disabled={busy} className="is-fill" prop="left" onPick={(binding) => onCommit(binding)}>
         <input
+          {...scrub.input}
           className="u-input embed-editor_grad-num-input"
           value={text}
           inputMode="decimal"

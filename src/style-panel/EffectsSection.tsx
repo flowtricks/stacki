@@ -4,6 +4,7 @@ import FieldLabel from './components/FieldLabel'
 import Select, { type SelectOption } from './components/Select'
 import DragSlider from './components/DragSlider'
 import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl'
+import useScrub from './components/useScrub'
 import SegmentedField, { type SegOption } from './SegmentedField'
 import ColorSwatch from './components/ColorSwatch'
 import LayerList from './LayerList'
@@ -97,19 +98,29 @@ function LiveText({ prop, placeholder, props }: { prop: string; placeholder: str
   useEffect(() => { if (!focused.current) setDraft(external) }, [external])
   const cancel = () => { if (timer.current != null) { window.clearTimeout(timer.current); timer.current = null } }
   useEffect(() => cancel, [])
+  // Undelayed live write for the scrub, which throttles its own — see useScrub.
+  const liveNow = (text: string) => { const t = text.trim(); if (t) { const p = parseImportant(t); liveSetProp(prop, p.value, p.important) } }
   const live = (text: string) => {
     cancel()
-    timer.current = window.setTimeout(() => { const t = text.trim(); if (t) { const p = parseImportant(t); liveSetProp(prop, p.value, p.important) } }, 100)
+    timer.current = window.setTimeout(() => liveNow(text), 100)
   }
-  const commit = () => {
-    const t = draft.trim()
+  const commit = (text = draft) => {
+    const t = text.trim()
     if (!t) { clearProp(prop); return }
     const p = parseImportant(t)
     setProp(prop, p.value, p.important)
   }
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy,
+    onPreview: setDraft,
+    onInput: liveNow,
+    onCommit: (text) => { setDraft(text); commit(text) },
+  })
   return (
     <VariableConnect className="is-fill" ariaLabel={`Connect ${prop} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
     <input
+      {...scrub.input}
       className="u-input embed-editor_size-input embed-editor_eff-value"
       data-prop={prop}
       value={draft}
@@ -301,6 +312,13 @@ function OpacityRow({ props }: { props: Props }) {
   const focused = useRef(false)
   useEffect(() => { if (!focused.current) setText(String(pct)) }, [pct])
   const parse = (t: string) => { const n = parseFloat(t); return Number.isNaN(n) ? null : clamp(n) }
+  const scrub = useScrub({
+    value: text,
+    disabled: busy,
+    onPreview: setText,
+    onInput: (t) => { const n = parse(t); if (n != null) live(n) },
+    onCommit: (t) => { setText(t); const n = parse(t); if (n != null) commit(n); else setText(String(pct)) },
+  })
 
   return (
     <div className="embed-editor_size-row">
@@ -313,6 +331,7 @@ function OpacityRow({ props }: { props: Props }) {
         <div className="embed-editor_grad-num embed-editor_opacity-num">
           <VariableConnect className="is-fill" ariaLabel="Connect Opacity to a variable" disabled={busy} prop="opacity" onPick={(binding) => setProp('opacity', binding, false)}>
           <input
+            {...scrub.input}
             className="u-input embed-editor_grad-num-input"
             value={text}
             inputMode="decimal"
@@ -445,8 +464,16 @@ function AxisInput({ type, label, value, placeholder, busy, onPreview, onLive, o
   useEffect(() => { if (!focused.current) setDraft(value) }, [value])
   const cancel = () => { if (timer.current != null) { window.clearTimeout(timer.current); timer.current = null } }
   useEffect(() => cancel, [])
-  const live = (text: string) => { cancel(); timer.current = window.setTimeout(() => { const t = text.trim(); if (t) onLive(t) }, 100) }
-  const commit = () => { const t = draft.trim(); onCommit(t || placeholder) }
+  const liveNow = (text: string) => { const t = text.trim(); if (t) onLive(t) }
+  const live = (text: string) => { cancel(); timer.current = window.setTimeout(() => liveNow(text), 100) }
+  const commit = (text = draft) => { const t = text.trim(); onCommit(t || placeholder) }
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy,
+    onPreview: (text) => { setDraft(text); onPreview?.(text) },
+    onInput: liveNow,
+    onCommit: (text) => { setDraft(text); commit(text) },
+  })
   return (
     <div className="embed-editor_size-row">
       <span className="embed-editor_size-label embed-editor_bg-caption embed-editor_transform-axis" aria-hidden="true">{transformAxisIcon(type, label.toLowerCase() as 'x' | 'y' | 'z')}</span>
@@ -462,6 +489,7 @@ function AxisInput({ type, label, value, placeholder, busy, onPreview, onLive, o
           onCommit={(s) => onCommit(fmt(s))}
         />
         <input
+          {...scrub.input}
           className="u-input embed-editor_size-input embed-editor_shadow-num"
           value={draft}
           onChange={(e) => { setDraft(e.target.value); live(e.target.value) }}

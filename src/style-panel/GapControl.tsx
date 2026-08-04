@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { displayOf, GroupLabel, PropLabel } from './TypographySection'
+import useScrub from './components/useScrub'
 import { handleArrowStep } from './lib/number-step'
 import VariableConnect from './VariableConnect'
 import type { ResolvedProp } from './lib/resolved'
@@ -120,9 +121,17 @@ function GapInput({ prop, value, busy, ariaLabel, onLive, onCommit }: {
     cancelLive()
     liveTimer.current = window.setTimeout(() => { liveTimer.current = null; onLive(text) }, 100)
   }
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy,
+    onPreview: setDraft,
+    onInput: onLive,
+    onCommit: (text) => { setDraft(text); onCommit(text) },
+  })
   return (
     <VariableConnect className="is-fill" ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => onCommit(binding)}>
     <input
+      {...scrub.input}
       className="u-input embed-editor_size-input"
       value={draft}
       onChange={(event) => { setDraft(event.target.value); scheduleLive(event.target.value) }}

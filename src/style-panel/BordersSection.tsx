@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import FieldLabel from './components/FieldLabel'
 import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl'
 import ColorSwatch from './components/ColorSwatch'
+import useScrub from './components/useScrub'
 import ProvenanceList from './ProvenanceList'
 import VariableConnect from './VariableConnect'
 import { GroupLabel } from './TypographySection'
@@ -124,11 +125,19 @@ export function LiveInput({ value, busy, readOnly = false, ariaLabel, placeholde
     cancelLive()
     liveTimer.current = window.setTimeout(() => { liveTimer.current = null; onLive(text) }, 100)
   }
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy || readOnly,
+    onPreview: setDraft,
+    onInput: onLive,
+    onCommit: (text) => { setDraft(text); onCommit(text) },
+  })
   return (
     <div className={`embed-editor_border-field${prefix ? ' has-prefix' : ''}`}>
       {prefix}
       <VariableConnect ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => (onVariablePick ?? onCommit)(binding)}>
       <input
+        {...scrub.input}
         className="u-input embed-editor_size-input"
         value={draft}
         onChange={(event) => { setDraft(event.target.value); scheduleLive(event.target.value) }}

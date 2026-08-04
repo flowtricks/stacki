@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import FieldLabel from './components/FieldLabel'
 import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl'
 import Select from './components/Select'
+import useScrub, { type ScrubHandlers } from './components/useScrub'
 import { handleArrowStep } from './lib/number-step'
 import ProvenanceList from './ProvenanceList'
 import { blankLayer, colorOverlayImage, colorOverlayOf, layerKind, layerLabel, parseLayers, serializeLayers, splitBackgroundShorthand, splitTopLevelSpaces, type BgLayer, type LayerKind } from './lib/background'
@@ -57,12 +58,13 @@ function parseImportant(input: string): { value: string; important: boolean } {
 
 // ─────────────────────────── Shared label ───────────────────────────
 
-function BgLabel({ label, prop, d, contributors, busy, onClear, onProvenance, onSelectSelector }: {
+function BgLabel({ label, prop, d, contributors, busy, scrubProps, onClear, onProvenance, onSelectSelector }: {
   label: string
   prop: string
   d: Display
   contributors: Contributor[]
   busy: boolean
+  scrubProps?: ScrubHandlers
   onClear: () => void
   onProvenance: (prop: string, anchor: DOMRect) => void
   onSelectSelector: (selector: string, prop?: string) => void
@@ -83,6 +85,7 @@ function BgLabel({ label, prop, d, contributors, busy, onClear, onProvenance, on
       resetLabel="Clear"
       title={d.overridden ? `Overridden by ${d.winnerSelector}` : undefined}
       menuNote={(close) => <ProvenanceList contributors={contributors} prop={prop} onSelect={(sel, p) => { onSelectSelector(sel, p); close() }} />}
+      scrubProps={scrubProps}
     >
       {label}
     </FieldLabel>
@@ -105,26 +108,35 @@ function BgField({ prop, label, placeholder, prefix, read, busy, setProp, clearP
   useEffect(() => { if (!focused.current) setDraft(external) }, [external])
   const cancelLive = () => { if (liveTimer.current != null) { window.clearTimeout(liveTimer.current); liveTimer.current = null } }
   useEffect(() => cancelLive, [])
+  // Undelayed live write for the scrub, which throttles its own — see useScrub.
+  const liveNow = (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const parsed = parseImportant(trimmed)
+    liveSetProp(prop, parsed.value, parsed.important)
+  }
   const scheduleLive = (text: string) => {
     cancelLive()
-    liveTimer.current = window.setTimeout(() => {
-      liveTimer.current = null
-      const trimmed = text.trim()
-      if (!trimmed) return
-      const parsed = parseImportant(trimmed)
-      liveSetProp(prop, parsed.value, parsed.important)
-    }, 100)
+    liveTimer.current = window.setTimeout(() => { liveTimer.current = null; liveNow(text) }, 100)
   }
-  const commit = () => {
-    const trimmed = draft.trim()
+  const commit = (text = draft) => {
+    const trimmed = text.trim()
     if (!trimmed) { clearProp(prop); return }
     const parsed = parseImportant(trimmed)
     setProp(prop, parsed.value, parsed.important)
   }
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy,
+    onPreview: setDraft,
+    onInput: liveNow,
+    onCommit: (text) => { setDraft(text); commit(text) },
+  })
 
   const input = (
     <VariableConnect ariaLabel={`Connect ${label} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
     <input
+      {...scrub.input}
       className="u-input embed-editor_size-input"
       data-prop={prop}
       value={draft}
@@ -152,7 +164,7 @@ function BgField({ prop, label, placeholder, prefix, read, busy, setProp, clearP
 
   return (
     <>
-      <BgLabel label={label} prop={prop} d={d} contributors={read(prop)?.contributors ?? []} busy={busy} onClear={() => clearProp(prop)} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
+      <BgLabel label={label} prop={prop} d={d} contributors={read(prop)?.contributors ?? []} busy={busy} scrubProps={scrub.label} onClear={() => clearProp(prop)} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
       {prefix ? <div className="embed-editor_bg-inline">{prefix}{input}</div> : input}
     </>
   )
@@ -212,19 +224,27 @@ function LayerLonghandField({ layers, index, field, prop, label, placeholder, bu
     const next = layers.map((l, i) => (i === index ? { ...l, [field]: text } : l))
     return serializeLayers(next)[field === 'image' ? 'image' : field] as string
   }
-  const commit = (live: boolean) => {
-    const value = listFor(draft.trim())
+  const commit = (live: boolean, text = draft) => {
+    const value = listFor(text.trim())
     if (live) { if (value) liveSetProp(prop, value, false); return }
     if (value) setProp(prop, value, false)
     else clearProp(prop)
   }
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy,
+    onPreview: setDraft,
+    onInput: (text) => commit(true, text),
+    onCommit: (text) => { setDraft(text); commit(false, text) },
+  })
 
   return (
     <VariableConnect ariaLabel={`Connect ${label} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
     <input
+      {...scrub.input}
       className="u-input embed-editor_size-input"
       value={draft}
-      onChange={(event) => { setDraft(event.target.value); commit(true) }}
+      onChange={(event) => { setDraft(event.target.value); commit(true, event.target.value) }}
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; commit(false) }}
       onKeyDown={(event) => {
@@ -312,8 +332,16 @@ function BgPartInput({ value, placeholder, label, busy, disabled, onLive, onComm
   const [draft, setDraft] = useState(value)
   const focused = useRef(false)
   useEffect(() => { if (!focused.current) setDraft(value) }, [value])
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy || disabled,
+    onPreview: setDraft,
+    onInput: (text) => onLive(text.trim()),
+    onCommit: (text) => { setDraft(text); onCommit(text.trim()) },
+  })
   return (
     <input
+      {...scrub.input}
       className={`u-input embed-editor_size-input ${disabled ? 'is-inactive' : ''}`}
       value={draft}
       placeholder={placeholder}

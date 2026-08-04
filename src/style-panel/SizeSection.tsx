@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import FieldLabel from './components/FieldLabel'
 import { type SegmentedOption, HoverTooltip } from './components/SegmentedControl'
 import Select, { type SelectOption } from './components/Select'
+import useScrub, { type ScrubHandlers } from './components/useScrub'
 import { handleArrowStep } from './lib/number-step'
 import ProvenanceList from './ProvenanceList'
 import VariableConnect from './VariableConnect'
@@ -60,12 +61,13 @@ const cap = (value: string) => value.charAt(0).toUpperCase() + value.slice(1)
 // clear menu; orange (another selector) → a button opening provenance; unset →
 // a dim caption. When the picked selector sets it but a more specific selector
 // wins, the label goes red + struck through and its menu names the winner.
-function SizeLabel({ label, prop, d, contributors, busy, onClear, onProvenance, onSelectSelector }: {
+function SizeLabel({ label, prop, d, contributors, busy, scrubProps, onClear, onProvenance, onSelectSelector }: {
   label: string
   prop: string
   d: Display
   contributors: Contributor[]
   busy: boolean
+  scrubProps?: ScrubHandlers
   onClear: () => void
   onProvenance: (prop: string, anchor: DOMRect) => void
   onSelectSelector: (selector: string, prop?: string) => void
@@ -92,6 +94,7 @@ function SizeLabel({ label, prop, d, contributors, busy, onClear, onProvenance, 
       resetLabel="Clear"
       title={d.overridden ? `Overridden by ${d.winnerSelector}` : undefined}
       menuNote={(close) => <ProvenanceList contributors={contributors} prop={prop} onSelect={(sel, p) => { onSelectSelector(sel, p); close() }} />}
+      scrubProps={scrubProps}
     >
       {label}
     </FieldLabel>
@@ -118,29 +121,41 @@ function LivePropField({ prop, label, placeholder, read, busy, setProp, clearPro
   }
   useEffect(() => cancelLive, [])
 
-  const scheduleLive = (text: string) => {
-    cancelLive()
-    liveTimer.current = window.setTimeout(() => {
-      liveTimer.current = null
-      const trimmed = text.trim()
-      if (!trimmed) return
-      const parsed = parseImportant(trimmed)
-      liveSetProp(prop, parsed.value, parsed.important)
-    }, 100)
+  // Undelayed live write for the scrub, which does its own throttling — a debounce reset
+  // by every mouse move would never fire mid-drag.
+  const liveNow = (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const parsed = parseImportant(trimmed)
+    liveSetProp(prop, parsed.value, parsed.important)
   }
 
-  const commit = () => {
-    const trimmed = draft.trim()
+  const scheduleLive = (text: string) => {
+    cancelLive()
+    liveTimer.current = window.setTimeout(() => { liveTimer.current = null; liveNow(text) }, 100)
+  }
+
+  const commit = (text = draft) => {
+    const trimmed = text.trim()
     if (!trimmed) { clearProp(prop); return }
     const parsed = parseImportant(trimmed)
     setProp(prop, parsed.value, parsed.important)
   }
 
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy,
+    onPreview: setDraft,
+    onInput: liveNow,
+    onCommit: (text) => { setDraft(text); commit(text) },
+  })
+
   return (
     <>
-      <SizeLabel label={label} prop={prop} d={d} contributors={read(prop)?.contributors ?? []} busy={busy} onClear={() => clearProp(prop)} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
+      <SizeLabel label={label} prop={prop} d={d} contributors={read(prop)?.contributors ?? []} busy={busy} scrubProps={scrub.label} onClear={() => clearProp(prop)} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
       <VariableConnect ariaLabel={`Connect ${label} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
       <input
+        {...scrub.input}
         className="u-input embed-editor_size-input"
         data-prop={prop}
         value={draft}
@@ -693,9 +708,17 @@ function RatioNumberInput({ value, busy, ariaLabel, onLive, onCommit }: {
   const focused = useRef(false)
   useEffect(() => { if (!focused.current) setDraft(value) }, [value])
   const sanitize = (raw: string) => raw.replace(/[^\d.]/g, '')
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy,
+    onPreview: setDraft,
+    onInput: onLive,
+    onCommit: (text) => { setDraft(text); onCommit(text) },
+  })
 
   return (
     <input
+      {...scrub.input}
       className="u-input embed-editor_ratio-input"
       value={draft}
       inputMode="decimal"
@@ -930,9 +953,17 @@ function PosInput({ value, busy, label, onLive, onCommit }: {
   const isBareNum = (s: string) => /^-?[\d.]+$/.test(s.trim())
   const norm = (t: string) => { const s = t.trim(); return s === '' ? '' : isBareNum(s) ? `${s}%` : s }
   const showPct = draft.trim() === '' || isBareNum(draft)
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy,
+    onPreview: setDraft,
+    onInput: (text) => onLive(norm(text)),
+    onCommit: (text) => { setDraft(text); onCommit(norm(text)) },
+  })
   return (
     <div className={`embed-editor_imgfit-num ${busy ? 'is-disabled' : ''}`}>
       <input
+        {...scrub.input}
         className="embed-editor_imgfit-input"
         value={draft}
         placeholder="50"

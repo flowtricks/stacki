@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import FieldLabel from './components/FieldLabel'
+import useScrub from './components/useScrub'
 import { handleArrowStep } from './lib/number-step'
 import { parseImportant, readProp, withImportant } from './lib/prop-read'
 import type { ParsedRule } from './lib/types'
@@ -43,30 +44,43 @@ export default function PropField({
   }
   useEffect(() => cancelLive, [])
 
-  const scheduleLive = (text: string) => {
-    cancelLive()
-    liveTimer.current = window.setTimeout(() => {
-      liveTimer.current = null
-      const trimmed = text.trim()
-      if (!trimmed) return
-      const parsed = parseImportant(trimmed)
-      onLiveSetProp(prop, parsed.value, parsed.important)
-    }, 100)
+  // Typing previews on a debounce; a scrub previews on its own throttle and needs the
+  // write itself, undelayed — a debounce that keeps being reset by the next mouse move
+  // would never fire until the drag stopped.
+  const liveNow = (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const parsed = parseImportant(trimmed)
+    onLiveSetProp(prop, parsed.value, parsed.important)
   }
 
-  const commit = () => {
-    const trimmed = draft.trim()
+  const scheduleLive = (text: string) => {
+    cancelLive()
+    liveTimer.current = window.setTimeout(() => { liveTimer.current = null; liveNow(text) }, 100)
+  }
+
+  const commit = (text = draft) => {
+    const trimmed = text.trim()
     if (!trimmed) { onClearProp(prop); return }
     const parsed = parseImportant(trimmed)
     onSetProp(prop, parsed.value, parsed.important)
   }
 
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy,
+    onPreview: setDraft,
+    onInput: liveNow,
+    onCommit: (text) => { setDraft(text); commit(text) },
+  })
+
   return (
     <>
-      <FieldLabel className={labelClassName} active={Boolean(found)} disabled={busy} onReset={() => onClearProp(prop)} resetLabel="Clear">
+      <FieldLabel className={labelClassName} active={Boolean(found)} disabled={busy} onReset={() => onClearProp(prop)} resetLabel="Clear" scrubProps={scrub.label}>
         {label}
       </FieldLabel>
       <input
+        {...scrub.input}
         className={`u-input ${inputClassName}`}
         value={draft}
         onChange={(event) => { setDraft(event.target.value); scheduleLive(event.target.value) }}
