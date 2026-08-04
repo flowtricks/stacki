@@ -578,6 +578,8 @@ if (!process.isMainFrame) {
 const invoke = (channel) => (payload) => ipcRenderer.invoke(channel, payload);
 
 contextBridge.exposeInMainWorld('avb', {
+  platform: process.platform,
+
   // Project
   openProjectDialog: invoke('project:openDialog'),
   newProjectDialog: invoke('project:newDialog'),
@@ -669,6 +671,34 @@ contextBridge.exposeInMainWorld('avb', {
   gitPublish: invoke('git:publish'),
 
   openExternal: invoke('shell:openExternal'),
+
+  // Dev only: the project to reopen after a "Reload All Code" relaunch.
+  devReopen: invoke('dev:reopen'),
+
+  // Terminal (node-pty). Keystrokes and render acks are `send`, not `invoke`:
+  // they're high-frequency and one-way, so they shouldn't pay for a round trip.
+  startTerminal: invoke('terminal:start'),
+  resizeTerminal: invoke('terminal:resize'),
+  closeTerminal: invoke('terminal:close'),
+  terminalInput: (id, data) => ipcRenderer.send('terminal:input', { id, data }),
+  terminalAck: (id, count) => ipcRenderer.send('terminal:ack', { id, count }),
+  terminalClipboardImage: (bytes, mime) =>
+    ipcRenderer.invoke('terminal:clipboardImage', { bytes, mime }),
+  onTerminalData: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('terminal:data', listener);
+    return () => ipcRenderer.removeListener('terminal:data', listener);
+  },
+  onTerminalExit: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('terminal:exit', listener);
+    return () => ipcRenderer.removeListener('terminal:exit', listener);
+  },
+  onTerminalProcess: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('terminal:process', listener);
+    return () => ipcRenderer.removeListener('terminal:process', listener);
+  },
 
   // Events
   onDevLog: (cb) => {
