@@ -115,7 +115,9 @@ function findMatchingParen(str, start) {
 // Recognizes {items.map((item) => ( <JSX/> ))} and turns it into a 'map'
 // node whose JSX body is a parsed child tree (editable in the navigator).
 // Returns null when the expression doesn't fit the pattern.
-function tryParseMap(exprText) {
+// `base`, when a number, is the offset of exprText's '{' in the file (see
+// parseTemplate) so the loop's children carry source offsets too.
+function tryParseMap(exprText, base = null) {
   const inner = exprText.slice(1, -1); // strip the outer { }
   const arrow = inner.match(/^([\s\S]*?\.map\(\s*\(([^)]*)\)\s*=>\s*\()/);
   if (!arrow) return null;
@@ -126,7 +128,8 @@ function tryParseMap(exprText) {
   // After the body must come only the .map() close paren.
   if (!/^\s*\)\s*$/.test(inner.slice(closeIdx + 1))) return null;
   const body = inner.slice(openIdx + 1, closeIdx);
-  const parsed = parseTemplate(body);
+  // inner starts one char into exprText, and body one char past the arrow '('.
+  const parsed = parseTemplate(body, base === null ? null : base + 1 + openIdx + 1);
   if (!parsed.clean) return null;
   return {
     id: makeId(),
@@ -138,9 +141,25 @@ function tryParseMap(exprText) {
 
 // Parses a template string into a node tree.
 // Returns {nodes, clean}; clean=false means unrepresentable content was found.
-function parseTemplate(str) {
+//
+// `base` is the offset of `str` within the file it was read from; pass a
+// number and every node comes back tagged with `start`/`end` source offsets
+// (what locateSelection turns into line numbers). The editor's own parse
+// leaves it null on purpose: offsets describe the file as it was on disk and
+// go stale the moment the model is mutated, so only a fresh parse may use them.
+function parseTemplate(str, base = null) {
   const nodes = [];
   let pos = 0;
+
+  // Tags a node with its source range and returns it — a no-op when offsets
+  // weren't asked for.
+  const at = (node, from, to) => {
+    if (base !== null) {
+      node.start = base + from;
+      node.end = base + to;
+    }
+    return node;
+  };
 
   while (pos < str.length) {
     const lt = str.indexOf('<', pos);
@@ -158,7 +177,7 @@ function parseTemplate(str) {
         (/^\s/.test(text) ? ' ' : '') +
         collapseWhitespace(text) +
         (/\s$/.test(text) ? ' ' : '');
-      nodes.push({ id: makeId(), kind: 'text', value });
+      nodes.push(at({ id: makeId(), kind: 'text', value }, pos, textEnd));
     }
     if (next === -1) break;
 
@@ -168,8 +187,8 @@ function parseTemplate(str) {
       const close = findMatchingBrace(str, br);
       if (close === -1) return { nodes, clean: false };
       const exprText = str.slice(br, close + 1);
-      const mapNode = tryParseMap(exprText);
-      nodes.push(mapNode || { id: makeId(), kind: 'expr', value: exprText });
+      const mapNode = tryParseMap(exprText, base === null ? null : base + br);
+      nodes.push(at(mapNode || { id: makeId(), kind: 'expr', value: exprText }, br, close + 1));
       pos = close + 1;
       continue;
     }
@@ -178,7 +197,7 @@ function parseTemplate(str) {
     if (str.startsWith('<!--', lt)) {
       const end = str.indexOf('-->', lt + 4);
       if (end === -1) return { nodes, clean: false };
-      nodes.push({ id: makeId(), kind: 'comment', value: str.slice(lt + 4, end) });
+      nodes.push(at({ id: makeId(), kind: 'comment', value: str.slice(lt + 4, end) }, lt, end + 3));
       pos = end + 3;
       continue;
     }
@@ -187,7 +206,7 @@ function parseTemplate(str) {
     if (/^<!doctype/i.test(str.slice(lt))) {
       const end = str.indexOf('>', lt);
       if (end === -1) return { nodes, clean: false };
-      nodes.push({ id: makeId(), kind: 'raw-line', value: str.slice(lt, end + 1) });
+      nodes.push(at({ id: makeId(), kind: 'raw-line', value: str.slice(lt, end + 1) }, lt, end + 1));
       pos = end + 1;
       continue;
     }
@@ -206,7 +225,9 @@ function parseTemplate(str) {
     const afterOpen = lt + full.length;
 
     if (selfClose === '/' || (!isComponent && VOID_ELEMENTS.has(name.toLowerCase()))) {
-      nodes.push({ id: makeId(), kind, name, props: parseAttrs(attrs), children: null });
+      nodes.push(
+        at({ id: makeId(), kind, name, props: parseAttrs(attrs), children: null }, lt, afterOpen)
+      );
       pos = afterOpen;
       continue;
     }
@@ -216,30 +237,46 @@ function parseTemplate(str) {
       const close = str.indexOf(`</${name}`, afterOpen);
       if (close === -1) return { nodes, clean: false };
       const closeEnd = str.indexOf('>', close);
-      nodes.push({
-        id: makeId(),
-        kind: 'raw',
-        name,
-        props: parseAttrs(attrs),
-        inner: str.slice(afterOpen, close),
-      });
+      nodes.push(
+        at(
+          {
+            id: makeId(),
+            kind: 'raw',
+            name,
+            props: parseAttrs(attrs),
+            inner: str.slice(afterOpen, close),
+          },
+          lt,
+          closeEnd + 1
+        )
+      );
       pos = closeEnd + 1;
       continue;
     }
 
     const closeIdx = findMatchingClose(str, afterOpen, name);
     if (closeIdx === -1) return { nodes, clean: false };
-    const innerResult = parseTemplate(str.slice(afterOpen, closeIdx));
+    const innerResult = parseTemplate(
+      str.slice(afterOpen, closeIdx),
+      base === null ? null : base + afterOpen
+    );
     if (!innerResult.clean) return { nodes, clean: false };
-    nodes.push({
-      id: makeId(),
-      kind,
-      name,
-      props: parseAttrs(attrs),
-      children: innerResult.nodes,
-    });
     // The close tag may contain whitespace: </Name >
-    pos = str.indexOf('>', closeIdx) + 1;
+    const tagEnd = str.indexOf('>', closeIdx) + 1;
+    nodes.push(
+      at(
+        {
+          id: makeId(),
+          kind,
+          name,
+          props: parseAttrs(attrs),
+          children: innerResult.nodes,
+        },
+        lt,
+        tagEnd
+      )
+    );
+    pos = tagEnd;
   }
 
   return { nodes, clean: true };
@@ -282,10 +319,14 @@ function collapseWhitespace(text) {
 // model = {imports, extraFrontmatter, nodes: tree}. The page's layout wrapper
 // (if any) stays in the tree as a regular node with the well-known id
 // 'layout', so nodes can live before/after it at the top level.
-function parsePage(source) {
+// `opts.locs` records source offsets on every node and the body's own start
+// offset on the model — for reading a location out of the file on disk, not
+// for the editor's live model (see parseTemplate).
+function parsePage(source, opts = {}) {
   const fm = source.match(/^---\r?\n(?:([\s\S]*?)\r?\n)?---\r?\n?/);
   const frontmatter = fm ? fm[1] || '' : '';
-  const body = fm ? source.slice(fm[0].length) : source;
+  const bodyStart = fm ? fm[0].length : 0;
+  const body = source.slice(bodyStart);
 
   const imports = [];
   let extraFrontmatter = frontmatter;
@@ -297,7 +338,7 @@ function parsePage(source) {
   }
   extraFrontmatter = extraFrontmatter.trim();
 
-  const { nodes: topNodes, clean } = parseTemplate(body);
+  const { nodes: topNodes, clean } = parseTemplate(body, opts.locs ? bodyStart : null);
   if (!clean) {
     return {
       editable: false,
@@ -342,7 +383,10 @@ function parsePage(source) {
   };
   markDynamic(topNodes);
 
-  return { editable: true, model: { imports, extraFrontmatter, nodes: topNodes } };
+  return {
+    editable: true,
+    model: { imports, extraFrontmatter, nodes: topNodes, ...(opts.locs ? { bodyStart } : {}) },
+  };
 }
 
 function serializePage(model) {
@@ -459,23 +503,36 @@ function serializeNode(node, indent, lines) {
 }
 
 // Dev-preview variant used by the marker Vite plugin: wraps every node in
-// <template data-avb-s/e="path"> boundary markers (path = index trail, e.g.
-// "0.2.1") so the preview iframe can map rendered DOM back to model nodes.
+// <template data-avb-s/e="key"> boundary markers so the preview iframe can map
+// rendered DOM back to model nodes.
+//
+// A key is "<file>#<path>": the file this node's markup is written in (project
+// relative, e.g. "src/components/Card.astro") and its index trail within that
+// file's tree ("0.2.1"). Components and layouts are marked too, so their
+// internals are addressable — and a bare path can't say which file it belongs
+// to once markup from several files shares one page (a page's "0.1" and a
+// component's "0.1" are different nodes). The file half is inert to the trail
+// arithmetic below: appending ".<i>" to a key extends its path and leaves the
+// file alone.
+//
 // The preview strips the markers from the DOM right after recording them, so
 // they never affect structural CSS selectors (:first-child, :nth-child, …).
 // Children of {…map} loops render once per item and are left unmarked.
 // Chunk subtrees can't be marked here — they render from an imported HTML
 // string, not from page markup — so the ?raw import carries the Fragment's
-// path and the dev plugin marks the chunk module itself. Passing it through
+// key and the dev plugin marks the chunk module itself. Passing it through
 // the id (rather than a side map) also keys Vite's cache: move the Fragment
 // and the chunk module's id changes with it.
-function serializePageMarked(model) {
+function serializePageMarked(model, fileKey) {
   const marks = chunkImportMarks(model);
   const lines = ['---'];
   for (const imp of model.imports) {
     const mark = /\.html\?raw$/i.test(imp.path) ? marks.get(imp.name) : null;
+    // The key rides in a query value, and both halves carry characters that
+    // are structural there ('#' ends the query, '/' and '.' are fine but the
+    // file half is user data) — encode it and let the plugin decode.
     const spec = mark
-      ? `${imp.path}&avb=${mark.path}${mark.group ? '&avbg=1' : ''}`
+      ? `${imp.path}&avb=${encodeURIComponent(`${fileKey}#${mark.path}`)}${mark.group ? '&avbg=1' : ''}`
       : imp.path;
     lines.push(`import ${imp.name} from '${spec}';`);
   }
@@ -483,18 +540,18 @@ function serializePageMarked(model) {
     lines.push('', model.extraFrontmatter);
   }
   lines.push('---');
-  model.nodes.forEach((node, i) => serializeNodeMarked(node, '', lines, String(i)));
+  model.nodes.forEach((node, i) => serializeNodeMarked(node, '', lines, `${fileKey}#${i}`));
   return lines.join('\n') + '\n';
 }
 
-function serializeNodeMarked(node, indent, lines, path) {
+function serializeNodeMarked(node, indent, lines, key) {
   if (node.kind === 'chunk-group') return; // synthetic, not in page source
   // A slotted node's markers must go into the same named slot, or they'd
   // land in the default slot while the node renders elsewhere.
   const slotVal = node.props?.slot;
   const slotAttr =
     slotVal && slotVal.type === 'string' && slotVal.value ? ` slot="${slotVal.value}"` : '';
-  lines.push(`${indent}<template${slotAttr} data-avb-s="${path}"></template>`);
+  lines.push(`${indent}<template${slotAttr} data-avb-s="${key}"></template>`);
   if (
     (node.kind === 'component' || node.kind === 'element') &&
     !node.chunkFile &&
@@ -507,7 +564,7 @@ function serializeNodeMarked(node, indent, lines, path) {
     const attrs = serializeAttrs(node.props);
     lines.push(`${indent}<${node.name}${attrs}>`);
     node.children.forEach((child, i) =>
-      serializeNodeMarked(child, indent + '  ', lines, `${path}.${i}`)
+      serializeNodeMarked(child, indent + '  ', lines, `${key}.${i}`)
     );
     lines.push(`${indent}</${node.name}>`);
   } else if (node.kind === 'map') {
@@ -516,14 +573,14 @@ function serializeNodeMarked(node, indent, lines, path) {
     lines.push(indent + '{');
     lines.push(indent + '  ' + node.head);
     (node.children || []).forEach((child, i) =>
-      serializeNodeMarked(child, indent + '    ', lines, `${path}.${i}`)
+      serializeNodeMarked(child, indent + '    ', lines, `${key}.${i}`)
     );
     lines.push(indent + '  ))');
     lines.push(indent + '}');
   } else {
     serializeNode(node, indent, lines);
   }
-  lines.push(`${indent}<template${slotAttr} data-avb-e="${path}"></template>`);
+  lines.push(`${indent}<template${slotAttr} data-avb-e="${key}"></template>`);
 }
 
 // ---------------------------------------------------------------------------
@@ -676,7 +733,7 @@ function serializeNodes(nodes) {
 
 let chunkGroupId = 1;
 
-function resolveChunks(model, pagePath) {
+function resolveChunks(model, pagePath, opts = {}) {
   // ident -> absolute chunk file path
   const rawImports = new Map();
   for (const imp of model.imports) {
@@ -702,7 +759,12 @@ function resolveChunks(model, pagePath) {
 
   const parseChunkFile = (filePath) => {
     try {
-      const { nodes, clean } = parseTemplate(fs.readFileSync(filePath, 'utf8'));
+      // Chunk offsets are into the chunk file, not the page — locateSelection
+      // switches files at the boundary node.
+      const { nodes, clean } = parseTemplate(
+        fs.readFileSync(filePath, 'utf8'),
+        opts.locs ? 0 : null
+      );
       return clean ? nodes : null;
     } catch {
       return null;
@@ -777,9 +839,10 @@ function chunkImportMarks(model) {
 }
 
 // Dev-preview only: the chunk's markup with the same boundary markers the
-// page serializer emits, numbered from the Fragment's (or group's) path so
-// chunk nodes address identically to the app's tree. A group also gets a
-// marker pair of its own — nothing in the page wraps it. Returns null when
+// page serializer emits, numbered from the Fragment's (or group's) key so
+// chunk nodes address identically to the app's tree. `prefix` is a full
+// "<file>#<path>" key — the file half rides along untouched. A group also gets
+// a marker pair of its own — nothing in the page wraps it. Returns null when
 // the chunk isn't representable, so the caller can serve it unmarked.
 function markChunkHtml(source, prefix, group) {
   const { nodes, clean } = parseTemplate(source);
@@ -791,8 +854,81 @@ function markChunkHtml(source, prefix, group) {
   return lines.join('\n') + '\n';
 }
 
+// ---------------------------------------------------------------------------
+// Selection → source location
+// ---------------------------------------------------------------------------
+
+// 1-based line number of a source offset.
+function lineOf(source, offset) {
+  let line = 1;
+  for (let i = 0; i < offset && i < source.length; i++) {
+    if (source[i] === '\n') line++;
+  }
+  return line;
+}
+
+// Where a canvas selection sits in source. `indexPath` is the "0.2.1" half of
+// a "<file>#<path>" node key — '' for the file itself, 'frontmatter' for the
+// frontmatter block. Reads the file from disk and parses it fresh, so the
+// answer describes what an agent opening that file would actually see.
+//
+// The file returned isn't always the one asked for: chunk children are written
+// in the imported .html, not in the page that pulls it in. A node with no
+// range of its own (an unrepresentable file, a synthetic chunk group, a path
+// that no longer resolves) comes back as a bare file.
+function locateSelection(absPath, indexPath) {
+  let source;
+  try {
+    source = fs.readFileSync(absPath, 'utf8');
+  } catch {
+    return null;
+  }
+  const bare = { file: absPath };
+  if (!indexPath) return bare;
+
+  const parsed = parsePage(source, { locs: true });
+  if (!parsed.editable) return bare;
+  if (indexPath === 'frontmatter') {
+    return parsed.model.bodyStart
+      ? { file: absPath, startLine: 1, endLine: lineOf(source, parsed.model.bodyStart - 1) }
+      : bare;
+  }
+  resolveChunks(parsed.model, absPath, { locs: true });
+
+  let file = absPath;
+  let list = parsed.model.nodes;
+  let node = null;
+  for (const part of indexPath.split('.')) {
+    // Stepping past a chunk boundary: everything below it is written in the
+    // chunk file, while the boundary node itself belongs to the page.
+    if (node?.chunkFile) file = node.chunkFile;
+    node = Array.isArray(list) ? list[Number(part)] : null;
+    if (!node) return { file };
+    list = node.children;
+  }
+  if (typeof node.start !== 'number') return { file };
+
+  let text = source;
+  if (file !== absPath) {
+    try {
+      text = fs.readFileSync(file, 'utf8');
+    } catch {
+      return { file };
+    }
+  }
+  // Text nodes run from the end of the previous tag, so their range starts and
+  // ends in whitespace on lines that hold nothing else. Tighten it to the
+  // lines the content is actually on.
+  let start = node.start;
+  let end = Math.min(node.end, text.length);
+  while (start < end && /\s/.test(text[start])) start++;
+  while (end > start && /\s/.test(text[end - 1])) end--;
+  return { file, startLine: lineOf(text, start), endLine: lineOf(text, end - 1) };
+}
+
 module.exports = {
   parsePage,
+  locateSelection,
   serializePage,
   serializePageMarked,
   parseTemplate,

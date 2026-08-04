@@ -362,6 +362,7 @@ export default function App() {
   const [termOpen, setTermOpen] = useState(false); // bottom terminal dock
   const [codeWin, setCodeWin] = useState(null); // {targetId|kind:'file', title, language}
   const openCodeWindowRef = useRef(null); // latest openCodeWindow, for the Enter shortcut
+  const selectionKeysRef = useRef([]); // node keys ⇧⌘C resolves to file:line
   const [fileText, setFileText] = useState(''); // loaded text for kind:'file'
   // Breakpoint lives here, not in PreviewPane: a re-mount of that pane must
   // not silently drop the user out of the view they picked (which would
@@ -653,7 +654,15 @@ export default function App() {
       // keeps the outermost instance as the focus: a nested component's
       // internals aren't addressable in the page's own markers.
       const focusPath = stack[stack.length - 1]?.focusPath ?? hostPath ?? null;
-      const entry = { kind: 'component', name: comp.name, path: comp.path, focusPath };
+      // focusPath collapses to the outermost instance; hostKey keeps this
+      // level's own, which is what the selection trail walks down.
+      const entry = {
+        kind: 'component',
+        name: comp.name,
+        path: comp.path,
+        focusPath,
+        hostKey: hostPath ?? null,
+      };
       setEditStack((s) =>
         s.some((e) => e.path === comp.path) ? s : [...s, entry]
       );
@@ -1376,9 +1385,22 @@ export default function App() {
           pasteNode();
         }
       }),
+      // ⇧⌘C — the selection's file:line trail, for pasting into an AI chat.
+      // Copies markup coordinates, not markup: ⌘C already does the node.
+      window.avb.onMenu('copySelection', async () => {
+        // The lines are read off the file on disk, and typing is saved on a
+        // 300 ms debounce — land the pending edit first or they're one edit old.
+        await flushSave();
+        const res = await window.avb.copySelection({
+          projectPath: projectRef.current?.path,
+          keys: selectionKeysRef.current,
+        });
+        if (res?.ok) showToast('Selection copied — paste it into your AI chat.');
+        else showToast('Nothing selected to copy.', 'error');
+      }),
     ];
     return () => offs.forEach((off) => off());
-  }, [undo, redo, copyNode, pasteNode]);
+  }, [undo, redo, copyNode, pasteNode, flushSave, showToast]);
 
   // ----------------------------------------------------------------
   // Interactive preview mode — browse the site inside the app; on exit,
@@ -2053,13 +2075,62 @@ export default function App() {
     crumbs.push(...chain.map((n) => ({ id: n.id, label: crumbLabel(n) })));
   }
 
-  // Canvas outlines: nodes are addressed by their index path in the tree
-  // (matching the marker paths the dev server's plugin injects).
-  const pathFor = (id) => {
-    if (!model || !id) return null;
-    const trail = pathOfNode(model.nodes, id);
-    return trail ? trail.join('.') : null;
+  // Canvas outlines: nodes are addressed by a "<file>#<path>" key — the file
+  // the node's markup is written in, plus its index trail in that file's tree.
+  // Matches what the dev server's marker plugin injects, which stamps every
+  // .astro under src/ (see serializePageMarked): once a component's own markup
+  // is marked too, a bare path no longer says which file a node belongs to.
+  const fileKeyOf = (absPath) => {
+    if (!project?.path || !absPath) return null;
+    const root = project.path.replace(/\\/g, '/').replace(/\/+$/, '');
+    const p = absPath.replace(/\\/g, '/');
+    return p.startsWith(root + '/') ? p.slice(root.length + 1) : p;
   };
+  // The file being edited right now — a page, or a component drilled into.
+  const editedFile = fileKeyOf(currentPage?.path);
+  const keyFor = (id) => {
+    if (!model || !id || !editedFile) return null;
+    const trail = pathOfNode(model.nodes, id);
+    return trail ? `${editedFile}#${trail.join('.')}` : null;
+  };
+  const localOf = (key) => (key && key.includes('#') ? key.slice(key.indexOf('#') + 1) : null);
+  const fileOf = (key) => (key && key.includes('#') ? key.slice(0, key.indexOf('#')) : null);
+  // The node a canvas identity resolves to in the file currently open.
+  //
+  // The chain runs outermost→innermost across every file whose markup covers
+  // the click, so the answer is the INNERMOST entry this file owns. Not the
+  // outermost: a page node slotted into a layout is a DOM descendant of that
+  // layout's root, and collapsing outward would select the layout instance
+  // instead of the thing under the cursor. Not the innermost overall either:
+  // that's the component's own markup, which isn't addressable until the
+  // editor is drilled into it.
+  const ownedKey = (chain) => {
+    if (!editedFile) return null;
+    for (let i = chain.length - 1; i >= 0; i--) {
+      if (fileOf(chain[i]) === editedFile) return chain[i];
+    }
+    return null;
+  };
+  const nodeForKey = (key) => {
+    const local = localOf(key);
+    if (!model || !local) return null;
+    return nodeAtPath(model.nodes, local.split('.').map(Number));
+  };
+  // What ⇧⌘C copies: the path an editor would take to reach the selection —
+  // the page, the instance of each component drilled into on the way down,
+  // then the node itself — so an agent reading it lands on the markup the user
+  // is looking at, not on some other use of the same component. With nothing
+  // selected the open file alone still says where the user is. Through a ref
+  // because the menu handler is bound long before any of this is in scope.
+  selectionKeysRef.current = !editedFile
+    ? []
+    : [
+        ...editStack.slice(1).map((e) => e.hostKey).filter(Boolean),
+        selectedId === 'frontmatter'
+          ? `${editedFile}#frontmatter`
+          : (selectedId && keyFor(selectedId)) || `${editedFile}#`,
+      ];
+
   // Picking a component swaps the right panel to Settings — its props are the
   // only thing there is to edit on it; picking a plain element (or a dynamic
   // tag, which renders one) swaps back to Style. Anything else — frontmatter,
@@ -2091,7 +2162,7 @@ export default function App() {
 
   const overlayInfo = (p) => {
     if (!model || !p) return null;
-    const n = nodeAtPath(model.nodes, p.split('.').map(Number));
+    const n = nodeForKey(p);
     if (!n) return null;
     const label = n.id === 'layout' ? currentLayoutName || n.name : crumbLabel(n);
     // A dynamic tag renders an element, so it shouldn't wear the component
@@ -2242,7 +2313,7 @@ export default function App() {
                 revealTick={revealTick}
                 onSelect={setSelectedId}
                 onHoverNode={setHoverNodeId}
-                onOpenComponent={(name, id) => openComponent(name, pathFor(id))}
+                onOpenComponent={(name, id) => openComponent(name, keyFor(id))}
                 onChangeLayout={changeLayout}
                 onDropComponent={addComponent}
                 onMoveNode={moveNode}
@@ -2302,37 +2373,42 @@ export default function App() {
             onCrumb={(id) => setSelectedId(id)}
             onRefresh={() => setRefreshKey((k) => k + 1)}
             onRestart={() => startPreview(project.path)}
-            selPath={pathFor(selectedId)}
-            navHoverPath={pathFor(hoverNodeId)}
+            selPath={keyFor(selectedId)}
+            navHoverPath={keyFor(hoverNodeId)}
             overlayInfo={overlayInfo}
             focusPath={focusPath}
             device={device}
             onDevice={setDevice}
-            onSelectPath={(p) => {
+            // Hover follows the same rules as a click, so the box always shows
+            // what clicking would select — including nothing, outside the
+            // instance being edited.
+            onResolveKey={(key, chain) =>
+              !key || (focusPath && !chain.includes(focusPath)) ? null : ownedKey(chain)
+            }
+            onSelectPath={(key, chain) => {
               // Editing a component: the canvas still shows the whole page, so
-              // a click in the dimmed area (or on nothing) means "I'm done in
-              // here" and backs out. Clicks on the lit instance stay put —
-              // the page's markers don't address a component's internals, so
-              // there's no node here to map them onto.
-              if (focusPath) {
-                const inside = p && (p === focusPath || p.startsWith(focusPath + '.'));
-                if (!inside) closeComponent();
+              // a click outside the instance being edited (or on nothing) means
+              // "I'm done in here" and backs out. Inside it, the component's
+              // own markup is marked too, so its nodes select like any other.
+              if (focusPath && !chain.includes(focusPath)) {
+                closeComponent();
                 return;
               }
               // Chrome the layout renders itself — header, footer, anything
-              // outside the page's <slot> — carries no page-model marker, so a
-              // click there arrives with no path. The layout owns that markup,
-              // so select it instead of doing nothing.
-              if (!p) {
+              // outside the page's <slot> — belongs to a file that isn't open,
+              // so nothing in the chain is addressable. The layout owns that
+              // markup, so select it instead of doing nothing.
+              const owned = key ? ownedKey(chain) : null;
+              if (!owned) {
                 const layout = model && findNodeById(model.nodes, 'layout');
-                if (layout) {
+                if (layout && !focusPath) {
                   setSelectedId(layout.id);
                   setLeftTab('navigator');
                   setRevealTick((t) => t + 1);
                 }
                 return;
               }
-              const n = model && nodeAtPath(model.nodes, p.split('.').map(Number));
+              const n = nodeForKey(owned);
               if (n) {
                 setSelectedId(n.id);
                 // Selecting from the canvas jumps to the node in the tree.
@@ -2340,10 +2416,11 @@ export default function App() {
                 setRevealTick((t) => t + 1);
               }
             }}
-            onOpenPath={(p) => {
+            onOpenPath={(key, chain) => {
               // Double-clicking a component on the canvas drills into it.
-              const n = model && nodeAtPath(model.nodes, p.split('.').map(Number));
-              if (n?.kind === 'component') openComponent(n.name, p);
+              const owned = key ? ownedKey(chain) : null;
+              const n = owned && nodeForKey(owned);
+              if (n?.kind === 'component') openComponent(n.name, owned);
             }}
           />
 

@@ -63,6 +63,7 @@ export default function PreviewPane({
   overlayInfo,
   onSelectPath,
   onOpenPath,
+  onResolveKey,
   focusPath,
   device,
   onDevice,
@@ -130,24 +131,24 @@ export default function PreviewPane({
       const d = e.data;
       if (d?.type === 'avb:rects') setRects(d.rects || {});
       else if (d?.type === 'avb:hover-node') {
-        setCanvasHover(d.path || null);
+        setCanvasHover(onResolveKey ? onResolveKey(d.key || null, d.chain || []) : d.key || null);
         setHoverOcc(d.occurrence || 0);
       } else if (d?.type === 'avb:click-node' && onSelectPath) {
-        clickedPathRef.current = d.path || null;
+        clickedPathRef.current = d.key || null;
         // Which instance was clicked: a node inside a loop renders once per
         // item and only that one should light up. Set now, not from the
         // effect above, so clicking a different instance of the already
         // selected node still moves the outline.
-        lastClickRef.current = { path: d.path || null, occ: d.occurrence || 0 };
+        lastClickRef.current = { path: d.key || null, occ: d.occurrence || 0 };
         setSelOcc(d.occurrence || 0);
-        onSelectPath(d.path || null);
-      } else if (d?.type === 'avb:open-node' && d.path && onOpenPath) {
-        onOpenPath(d.path);
+        onSelectPath(d.key || null, d.chain || []);
+      } else if (d?.type === 'avb:open-node' && d.key && onOpenPath) {
+        onOpenPath(d.key, d.chain || []);
       }
     };
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
-  }, [onSelectPath, onOpenPath]);
+  }, [onSelectPath, onOpenPath, onResolveKey]);
 
   const hoverPath = navHoverPath || canvasHover;
   // A navigator hover means "the node", so every instance lights up; a canvas
@@ -157,8 +158,17 @@ export default function PreviewPane({
   const sendTrack = React.useCallback(() => {
     const w = iframeRef.current?.contentWindow;
     if (!w) return;
-    w.postMessage({ type: 'avb:track', paths: trackKey ? trackKey.split('|') : [] }, '*');
-  }, [trackKey]);
+    // `scope` is the drilled-into instance: the component's own markup renders
+    // at every usage site, so its keys need an instance to be measured in.
+    w.postMessage(
+      {
+        type: 'avb:track',
+        keys: trackKey ? trackKey.split('|') : [],
+        scope: focusPath || null,
+      },
+      '*'
+    );
+  }, [trackKey, focusPath]);
   React.useEffect(sendTrack, [sendTrack, url, refreshKey]);
 
   // Selecting in the navigator (or via a breadcrumb) smooth-scrolls the page
@@ -172,7 +182,7 @@ export default function PreviewPane({
       clickedPathRef.current = null;
       return;
     }
-    w.postMessage({ type: 'avb:scroll-to', path: selPath }, '*');
+    w.postMessage({ type: 'avb:scroll-to', key: selPath }, '*');
   }, [selPath]);
 
   // A reload wipes iframe state — clear stale boxes until fresh rects arrive.
