@@ -2,7 +2,7 @@
 
 Visual Builder for Astro.
 
-A Mac & Windows desktop app for editing [Astro](https://astro.build) projects visually.
+A Mac, Windows & Linux desktop app for editing [Astro](https://astro.build) projects visually.
 
 MIT licensed — fork it, build on it, ship your own version.
 
@@ -40,10 +40,13 @@ needs no Apple Developer account and no certificates:
 ```bash
 npm run dist:mac:unsigned   # .dmg + .zip, no signing (build on macOS)
 npm run dist:win            # NSIS installer (build on Windows)
+npm run dist:linux          # AppImage + .deb (build on Linux)
 ```
 
 Output lands in `release/`. macOS will warn the first time you open an
 unsigned build; right-click the app and choose Open to get past Gatekeeper.
+On Ubuntu 24.04+ the AppImage needs libfuse2 to run
+(`sudo apt install libfuse2t64`); the .deb does not.
 
 The signed variants are for maintainers with the release certificates:
 
@@ -55,10 +58,11 @@ npm run dist:mac   # requires a Developer ID cert + notarization credentials
 
 Official builds are published by CI, not from anyone's laptop. Pushing a
 `v*` tag runs `.github/workflows/release.yml`, which builds a signed and
-notarized macOS universal build plus a Windows installer, uploads them to
-the `stacki-releases` repo, and only makes the release visible once both
-platforms have landed. Shipped apps auto-update from that feed via
-`electron-updater`.
+notarized macOS universal build, a Windows installer, and Linux
+AppImage/.deb packages, uploads them to the `stacki-releases` repo, and
+only makes the release visible once all platforms have landed. Shipped
+apps auto-update from that feed via `electron-updater` (on Linux
+auto-update applies to the AppImage only, not the .deb).
 
 Signing and notarization credentials live in GitHub Actions secrets. They
 are never in this repository, and GitHub does not expose them to workflows

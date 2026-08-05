@@ -74,10 +74,36 @@ jobs:
           EP_PRE_RELEASE: false
           EP_DRAFT: true
 
-  # Only now does the release become visible to updaters, with mac and
-  # Windows assets both present.
+  # Linux needs no signing; the AppImage is the auto-update target for
+  # electron-updater, the .deb is a plain install.
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+      - run: npm ci
+      - run: npm run build
+      - run: npx electron-builder --linux --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          EP_PRE_RELEASE: false
+          EP_DRAFT: true
+
+  # Only now does the release become visible to updaters, with mac,
+  # Windows and Linux assets all present.
   publish:
-    needs: [build-mac, build-windows]
+    needs: [build-mac, build-windows, build-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Verify both platforms uploaded, then publish
@@ -88,7 +114,7 @@ jobs:
           assets=$(gh release view "$TAG" --repo flowtricks/stacki-releases \
             --json assets --jq '[.assets[].name] | join(" ")')
           echo "assets: $assets"
-          for required in latest-mac.yml latest.yml; do
+          for required in latest-mac.yml latest.yml latest-linux.yml; do
             case " $assets " in
               *" $required "*) ;;
               *) echo "missing $required — refusing to publish"; exit 1 ;;
