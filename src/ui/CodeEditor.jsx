@@ -69,7 +69,7 @@ export const appHighlight = syntaxHighlighting(
   )
 );
 
-export default function CodeEditor({ value, language, onChange }) {
+export default function CodeEditor({ value, language, onChange, revealLine }) {
   const hostRef = useRef(null);
   const viewRef = useRef(null);
   const onChangeRef = useRef(onChange);
@@ -109,6 +109,19 @@ export default function CodeEditor({ value, language, onChange }) {
       view.dispatch({ changes: { from: 0, to: cur.length, insert: value ?? '' } });
     }
   }, [value]);
+
+  // Open on a particular line — the declaration you asked to edit, rather than
+  // the top of a file you then have to search.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !revealLine) return;
+    const line = view.state.doc.line(Math.max(1, Math.min(revealLine, view.state.doc.lines)));
+    view.dispatch({
+      selection: { anchor: line.from },
+      effects: EditorView.scrollIntoView(line.from, { y: 'center' }),
+    });
+    view.focus();
+  }, [revealLine, value]);
 
   return <div ref={hostRef} className="cm-host" />;
 }

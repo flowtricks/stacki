@@ -10,9 +10,20 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
+/**
+ * A value the CMS carries as source rather than data: `{ __expr: "new
+ * Date().getFullYear() - FOUNDED" }`. Anything in a data file or a page's
+ * frontmatter that isn't a literal arrives this way, so it can still be seen
+ * and edited — as code — instead of being invisible. Written back verbatim.
+ * The same marker is produced and consumed in electron/jsCollections.js.
+ */
+export const EXPR_KEY = '__expr';
+export const isExpr = (v) => isPlainObject(v) && typeof v[EXPR_KEY] === 'string';
+
 // Field types, most specific first. When items disagree about a field (one has
 // a short string, another a paragraph) the earlier type wins.
 const TYPE_RANK = [
+  'code',
   'objects',
   'object',
   'list',
@@ -30,6 +41,7 @@ const TYPE_RANK = [
 ];
 
 export function inferType(value) {
+  if (isExpr(value)) return 'code';
   if (value === null || value === undefined || value === '') return 'empty';
   if (typeof value === 'boolean') return 'boolean';
   if (typeof value === 'number') return 'number';
@@ -193,6 +205,7 @@ export function keyFor(name) {
 }
 
 export function emptyValueFor(type) {
+  if (type === 'code') return { [EXPR_KEY]: '' };
   if (type === 'boolean') return false;
   if (type === 'number') return 0;
   if (type === 'list' || type === 'objects') return [];

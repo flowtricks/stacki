@@ -76,6 +76,41 @@ export function findDeclaration(code, name) {
   };
 }
 
+/**
+ * The import that brings `name` into a file, as {name, spec}, or null.
+ * Covers `import x from`, `import { a, b as c } from`, `import * as ns from`
+ * and type-only imports — everything a page's frontmatter can carry.
+ */
+export function findImportOf(code, name) {
+  const ident = String(name || '');
+  if (!/^[A-Za-z_$][\w$]*$/.test(ident)) return null;
+  const re = /import\s+(?:type\s+)?([\s\S]*?)\s+from\s*['"]([^'"]+)['"]/g;
+  let m;
+  while ((m = re.exec(String(code || ''))) !== null) {
+    const clause = m[1];
+    const spec = m[2];
+    // `* as ns` and a default binding are the whole name; a braced list needs
+    // its entries split, honouring `a as b` (the local name is what's used).
+    const braced = clause.match(/\{([\s\S]*)\}/);
+    const names = [];
+    const outside = clause.replace(/\{[\s\S]*\}/, '').replace(/\*\s+as\s+/, '');
+    for (const part of outside.split(',')) {
+      const t = part.trim();
+      if (t) names.push(t);
+    }
+    if (braced) {
+      for (const part of braced[1].split(',')) {
+        const t = part.trim();
+        if (!t) continue;
+        const as = t.split(/\s+as\s+/);
+        names.push((as[1] || as[0]).trim());
+      }
+    }
+    if (names.includes(ident)) return { name: ident, spec };
+  }
+  return null;
+}
+
 // The first '{…}' object inside an array literal (or the object itself).
 export function firstObjectIn(text) {
   if (!text) return null;

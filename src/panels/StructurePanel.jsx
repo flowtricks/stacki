@@ -6,6 +6,7 @@ import { elementLabel } from '../classNames.js';
 import {
   LayoutIcon,
   ElementComponentIcon,
+  astroAssetIcon,
   TextIcon,
   CommentIcon,
   CodeIcon,
@@ -14,6 +15,8 @@ import {
   DragIcon,
   FileIcon,
   RepeatIcon,
+  BranchIcon,
+  CornerIcon,
   ExpandVerticalIcon,
   CollapseVerticalIcon,
   elementIcon,
@@ -514,7 +517,9 @@ function TreeNode({ node, note, parentId, index, depth, ...ctx }) {
     node.kind === 'component' ||
     node.kind === 'element' ||
     node.kind === 'chunk-group' ||
-    node.kind === 'map';
+    node.kind === 'map' ||
+    // A condition holds nothing directly; each of its branches does.
+    node.kind === 'branch';
   const nodeCollapsed = isCollapsed(node);
   const isDropInto = dropTarget?.intoId === node.id;
 
@@ -529,12 +534,14 @@ function TreeNode({ node, note, parentId, index, depth, ...ctx }) {
       <div
         ref={rowRef}
         data-node-id={node.id}
-        className={`structure-node ${node.kind === 'component' && !node.dynamicTag ? 'is-component' : ''} ${node.kind === 'map' || (isDataBound(node) && !(node.kind === 'component' && !node.dynamicTag)) ? 'is-map' : ''} ${isLayoutNode ? 'layout-node' : ''} ${isSelected ? 'selected' : ''}`}
+        className={`structure-node ${node.kind === 'component' && !node.dynamicTag ? 'is-component' : ''} ${node.kind === 'map' || node.kind === 'cond' || node.kind === 'branch' || (isDataBound(node) && !(node.kind === 'component' && !node.dynamicTag)) ? 'is-map' : ''} ${isLayoutNode ? 'layout-node' : ''} ${isSelected ? 'selected' : ''}`}
         style={{
           paddingLeft: 6 + depth * 16,
           ...(isDropInto ? { borderColor: 'var(--accent)', background: 'var(--accent-soft)' } : {}),
         }}
-        draggable={node.kind !== 'chunk-group'}
+        // A branch is part of its condition's shape, not a node you can move
+        // or drop somewhere else.
+        draggable={node.kind !== 'chunk-group' && node.kind !== 'branch'}
         onDragStart={(e) => {
           e.stopPropagation();
           e.dataTransfer.setData('avb/node', node.id);
@@ -563,7 +570,11 @@ function TreeNode({ node, note, parentId, index, depth, ...ctx }) {
         }}
         onDoubleClick={(e) => {
           // Drill into a component's own file, the way Webflow opens one.
-          if (node.kind !== 'component' || node.dynamicTag || !onOpenComponent) return;
+          // astro:assets components live in Astro, not the project — there is
+          // no file to open, so a double-click does nothing rather than
+          // hunting for one that can't be found.
+          if (node.kind !== 'component' || node.dynamicTag || node.astroAsset) return;
+          if (!onOpenComponent) return;
           e.stopPropagation();
           onOpenComponent(node.name, node.id);
         }}
@@ -673,11 +684,24 @@ function describeNode(node) {
         label: at > 0 ? node.head.slice(0, at + 4) : truncate(node.head, 24),
       };
     }
+    case 'cond':
+      // The test is what tells one condition from another, so it's the label.
+      return { icon: <BranchIcon size={12} />, label: truncate(`if ${node.test}`, 40) };
+    case 'branch':
+      return {
+        icon: <CornerIcon size={12} />,
+        label: node.name === 'else' ? 'else' : 'then',
+      };
     default:
       // `<Tag>` from `const Tag = tag` is a dynamic element, not a component
       // — no file behind it, so it shouldn't wear the component's colours.
       if (node.dynamicTag) {
         return { icon: <CustomElementIcon size={12} />, label: node.name };
+      }
+      // astro:assets' <Image>/<Picture> aren't the project's components —
+      // there's no file to open — so they get Astro's mark, not the green cube.
+      if (node.astroAsset) {
+        return { icon: astroAssetIcon(node.name, 14), label: node.name };
       }
       return { icon: <ElementComponentIcon size={14} />, label: node.name };
   }

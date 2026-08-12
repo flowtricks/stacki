@@ -3,6 +3,7 @@ import { HTML_TAGS, VOID_TAGS } from '../elementSchemas.js';
 import { elementIcon } from '../ui/Icons.jsx';
 import Dropdown from '../ui/Dropdown.jsx';
 import AutoTextarea from '../ui/AutoTextarea.jsx';
+import PropTip from '../ui/PropTip.jsx';
 import ClassInput from '../ui/ClassInput.jsx';
 import CodeEditor from '../ui/CodeEditor.jsx';
 import StyleEditor, { collapseDeclarations } from '../ui/StyleEditor.jsx';
@@ -10,7 +11,7 @@ import ExprInput from '../ui/ExprInput.jsx';
 import RichContent, { isInlineOnly } from '../ui/RichContent.jsx';
 import AssetField from '../ui/AssetField.jsx';
 import { looksLikeAssetPath, mediaKindFor } from '../ui/AssetThumb.jsx';
-import { dataSuggestions, exprSuggestions, findDeclaration } from '../dataSuggest.js';
+import { dataSuggestions, exprSuggestions, findDeclaration, findImportOf } from '../dataSuggest.js';
 import LinkField from '../ui/LinkField.jsx';
 import {
 
@@ -19,14 +20,20 @@ import {
   ComponentPropertiesIcon,
   VariableTextSizeIcon,
   ElementComponentIcon,
+  astroAssetIcon,
+  FieldSwitchIcon,
   ElementSlotIcon,
   CommentIcon,
   CodeIcon,
+  ChevronDownIcon,
   PlusIcon,
   TrashIcon,
   BracesIcon,
+  ChevronRightIcon,
   TagIcon,
   ElementImageIcon,
+  BranchIcon,
+  CornerIcon,
   PencilIcon,
   CloseIcon,
 } from '../ui/Icons.jsx';
@@ -49,6 +56,8 @@ export default function PropsPanel({
   loopContext,
   linkContext,
   onSetProp,
+  onSetProps,
+  onSetAssetProp,
   onRenameProp,
   onChangeTag,
   onSetText,
@@ -56,8 +65,22 @@ export default function PropsPanel({
   onSetInline,
   onOpenCode,
   onSetFrontmatter,
+  frontmatterSource,
+  onOpenSymbol,
+  onToggleElse,
   projectPath,
+  filePath,
 }) {
+  // Where the data a field points at can be edited: declarations in this
+  // file's frontmatter, imports (which live in another file), and the two ways
+  // of getting at them.
+  const buildDataCtx = () => ({
+    frontmatter: loopContext?.frontmatter || '',
+    imports: frontmatterSource || '',
+    onSetFrontmatter,
+    onOpenSymbol,
+  });
+
   if (!node) {
     return (
       <div className="panel-section grow" style={{ flex: '1 1 50%' }}>
@@ -112,6 +135,41 @@ export default function PropsPanel({
     );
   }
 
+  // A literal line of source — in practice the doctype. It isn't an element,
+  // so it has no tag and no props; without this it fell through to the
+  // component render and claimed to "declare no props".
+  if (node.kind === 'raw-line') {
+    const isDoctype = /^<!doctype/i.test(node.value || '');
+    return (
+      <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
+        <div className="panel-header">
+          <h2>{isDoctype ? 'Doctype' : 'Source line'}</h2>
+        </div>
+        <div className="props-field" style={{ marginTop: 8 }}>
+          <label>
+            <span className="prop-label">
+              <CodeIcon size={12} className="prop-label-icon" />
+              Line
+            </span>
+          </label>
+          <AutoTextarea
+            key={node.id}
+            minRows={1}
+            value={node.value}
+            spellCheck={false}
+            style={{ fontFamily: 'var(--mono)' }}
+            onChange={(e) => onSetText(e.target.value)}
+          />
+          <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 6, lineHeight: 1.5 }}>
+            {isDoctype
+              ? 'Written out verbatim at the top of the page. Not an element — it has no tag or attributes.'
+              : 'Written out verbatim, exactly as typed.'}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Map/loop nodes: friendly Data/Item/Index fields when the head fits the
   // simple `data.map((item[, index]) => (` shape; raw code otherwise.
   if (node.kind === 'map') {
@@ -120,7 +178,77 @@ export default function PropsPanel({
         <div className="panel-header">
           <h2>Loop</h2>
         </div>
-        <MapEditor key={node.id} node={node} loopContext={loopContext} onSetText={onSetText} />
+        <MapEditor
+          key={node.id}
+          node={node}
+          loopContext={loopContext}
+          dataCtx={buildDataCtx()}
+          onSetText={onSetText}
+        />
+      </div>
+    );
+  }
+
+  // Conditions: the test is the whole node, and it's JavaScript.
+  if (node.kind === 'cond') {
+    const hasElse = (node.children || []).length > 1;
+    return (
+      <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
+        <div className="panel-header">
+          <h2>Condition</h2>
+        </div>
+        <div className="props-field" style={{ marginTop: 8 }}>
+          <label>
+            <span className="prop-label">
+              <BranchIcon size={12} className="prop-label-icon" />
+              Show when
+            </span>
+          </label>
+          <ExprInput
+            key={node.id}
+            value={node.test}
+            syncValue={node.test}
+            placeholder="e.g. logo.src"
+            onCommit={(v) => v.trim() && v !== node.test && onSetText(v.trim())}
+          />
+          <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.5 }}>
+            True renders <strong>then</strong>
+            {hasElse ? (
+              <>
+                , false renders <strong>else</strong>.
+              </>
+            ) : (
+              '; nothing renders otherwise.'
+            )}{' '}
+            Drop elements into either branch in the navigator.
+          </div>
+        </div>
+        {onToggleElse && (
+          <div className="props-field">
+            <button style={{ width: '100%' }} onClick={() => onToggleElse(!hasElse)}>
+              {hasElse ? 'Remove else branch' : 'Add else branch'}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // One side of a condition — nothing to configure, but saying which side it
+  // is beats an empty panel.
+  if (node.kind === 'branch') {
+    const isElse = node.name === 'else';
+    return (
+      <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
+        <div className="props-title">
+          <CornerIcon size={14} className="props-title-icon" />
+          {isElse ? 'else' : 'then'}
+        </div>
+        <div className="props-empty">
+          {isElse
+            ? 'Rendered when the condition is false.'
+            : 'Rendered when the condition is true.'}
+        </div>
       </div>
     );
   }
@@ -226,7 +354,11 @@ export default function PropsPanel({
   let attrNames = [];
   if (allowAttrs) {
     attrNames = extraProps.filter((k) => k !== 'class' && k !== 'slot');
-    extraProps = extraProps.filter((k) => k === 'class' || k === 'slot');
+    // `slot` is sorted last so a hand-written one lands where the picker's
+    // does — directly above the comment — instead of in among the props.
+    extraProps = extraProps
+      .filter((k) => k === 'class' || k === 'slot')
+      .sort((a, b) => (a === 'slot' ? 1 : b === 'slot' ? -1 : 0));
   }
 
   // Content field: shown when the children are inline-only (text plus simple
@@ -245,7 +377,165 @@ export default function PropsPanel({
 
   // Where a prop's {expression} can be pointing, and how to write that source
   // back — lets an expression field edit the declaration behind it.
-  const dataCtx = { frontmatter: loopContext?.frontmatter || '', onSetFrontmatter };
+  const dataCtx = buildDataCtx();
+
+  // Astro's <Image> (and any component that forwards to it) rejects a public/
+  // path with no width and height — "MissingImageDimension" takes the page
+  // down. The picker already knows the size it just showed, so an image pick
+  // fills those in when the component has them. One edit, one undo.
+  // The size of the image currently in `src`. width/height fall back to it
+  // when unset, so it is what those fields should show as their placeholder.
+  const [srcDims, setSrcDims] = useState(null);
+  useEffect(() => setSrcDims(null), [node?.id]);
+
+  // …and read them from the file as well. The card above reports what its
+  // thumbnail decoded, which only happens if a thumbnail rendered — so a
+  // source the picker couldn't preview (or a field the eye never reached)
+  // left width/height claiming the size was "inferred". Astro infers nothing
+  // for a local asset: it reads the real size out of the file, and so do we.
+  const srcProp = node?.props?.src;
+  const srcKey = srcProp ? `${srcProp.type}:${srcProp.value}` : '';
+  useEffect(() => {
+    if (!srcProp || !projectPath) return undefined;
+    let live = true;
+    const fromRel = (rel) =>
+      rel &&
+      window.avb
+        .assetDimensions({ projectPath, rel })
+        .then((r) => live && r?.dims && setSrcDims(r.dims))
+        .catch(() => {});
+
+    if (srcProp.type === 'string') {
+      const value = String(srcProp.value || '');
+      // A remote source is the one case Astro really does infer — leave it.
+      if (!value || /^(https?:)?\/\//.test(value) || value.startsWith('data:')) return undefined;
+      fromRel(`public/${value.replace(/^\//, '')}`);
+      return () => { live = false; };
+    }
+    const binding = assetImportOf(srcProp.value, dataCtx?.imports);
+    if (!binding || !filePath) return undefined;
+    window.avb
+      .resolveSourcePath({ projectPath, fromFile: filePath, spec: binding.spec })
+      .then((r) => live && r?.ok && fromRel(r.rel))
+      .catch(() => {});
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [srcKey, projectPath, filePath]);
+
+  // Changing the discriminant changes which props exist. The ones that no
+  // longer apply are removed, not just hidden — leaving them in the markup
+  // means the file carries props the component will ignore, and they would
+  // reappear the moment the discriminant went back. Same edit, so it is one
+  // undo, and the value is recoverable that way.
+  const setPropCascading = (fieldName, value, immediate) => {
+    // Setting a prop can move which branch applies, and the props the new
+    // branch forbids have to go — leaving them means the file carries props
+    // the component ignores, and they would reappear on switching back. Same
+    // edit, so it is one undo and the values come back together.
+    const next = { ...(node.props || {}), [fieldName]: value };
+    if (value === undefined) delete next[fieldName];
+    const doomed = new Set();
+    for (const union of unions) {
+      if (!union.names.includes(fieldName)) continue;
+      const fits = union.branches.filter((b) => {
+        for (const name of b.forbids) if (next[name] !== undefined) return false;
+        for (const [name, want] of Object.entries(b.pins)) {
+          const set = next[name];
+          const have = set ? (set.type === 'bare' ? 'true' : String(set.value ?? ''))
+            : (schema.find((x) => x.name === name)?.default ?? undefined);
+          if (have !== undefined && String(have) !== want) return false;
+        }
+        return true;
+      });
+      const live = fits.length ? fits : union.branches;
+      for (const name of union.names) {
+        if (name === fieldName || node.props?.[name] === undefined) continue;
+        if (live.every((b) => b.forbids.includes(name))) doomed.add(name);
+      }
+    }
+    if (!doomed.size || !onSetProps) {
+      onSetProp(fieldName, value, immediate);
+      return;
+    }
+    const patch = { [fieldName]: value };
+    for (const name of doomed) patch[name] = undefined;
+    onSetProps(node.id, patch);
+  };
+
+  // A union type says which props go together. The panel matches what is
+  // currently set against each branch and shows only the branches that could
+  // still apply — so `type` disappears once `href` is filled, and `sizes` once
+  // the variant is one that forbids it.
+  //
+  // Discrimination is by value (`variant: "fixed"`) or by presence
+  // (`href?: never`); both are the same test here. When more than one branch
+  // still fits — nothing set yet — everything shows, because the type hasn't
+  // ruled anything out.
+  const unions = schema.find((f) => f.unions)?.unions || [];
+  const effective = (name) => {
+    const set = node.props?.[name];
+    if (set) return set.type === 'bare' ? 'true' : String(set.value ?? '');
+    const f = schema.find((x) => x.name === name);
+    return f?.default === undefined ? undefined : String(f.default);
+  };
+  const liveBranches = unions.map((union) => {
+    const fits = union.branches.filter((b) => {
+      // A branch is out if something set on the node is forbidden there…
+      for (const name of b.forbids) if (node.props?.[name] !== undefined) return false;
+      // …or if it fixes a prop to a value the node doesn't have.
+      for (const [name, want] of Object.entries(b.pins)) {
+        const have = effective(name);
+        if (have !== undefined && have !== want) return false;
+      }
+      return true;
+    });
+    // No branch fits (the markup is already invalid) — show everything rather
+    // than hide the fields needed to fix it.
+    return fits.length ? fits : union.branches;
+  });
+  const appliesNow = (field) => {
+    for (const [i, union] of unions.entries()) {
+      if (!union.names.includes(field.name)) continue;
+      if (liveBranches[i].every((b) => b.forbids.includes(field.name))) return false;
+    }
+    return true;
+  };
+
+  // The class field, wherever it came from: the element's schema, a
+  // component's declared prop, or the markup itself. Rendered on its own,
+  // below the props and above Attributes. Defined here rather than up with
+  // the other field lists because it asks `appliesNow` — reading a `const`
+  // above its declaration is a ReferenceError, not a warning.
+  // The folded "Settings" group at the foot of the panel. Kept on the panel
+  // (not per node) so opening it once keeps it open as you move around.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const classField =
+    schema.find((f) => f.name === 'class' && appliesNow(f)) ||
+    (node.props?.class !== undefined ? { name: 'class', type: 'string' } : null);
+
+
+  const hasSettings =
+    !!classField ||
+    allowAttrs ||
+    showSlotField ||
+    !!(onSetComment && (node.kind === 'element' || node.kind === 'component'));
+  // How many of the four actually carry something, shown on the closed header.
+  const settingsCount =
+    (node.props?.class !== undefined ? 1 : 0) +
+    attrNames.length +
+    (comment ? 1 : 0) +
+    (node.props?.slot !== undefined ? 1 : 0);
+
+  const onPickDimensions = (fieldName, dims) => {
+    if (!onSetProps || !node || !dims?.w || !dims?.h) return;
+    if (!/^(src|poster)$/i.test(fieldName)) return;
+    const takes = (n) => (schema || []).some((f) => f.name === n);
+    const patch = {};
+    if (takes('width')) patch.width = { type: 'expr', value: String(dims.w) };
+    if (takes('height')) patch.height = { type: 'expr', value: String(dims.h) };
+    if (Object.keys(patch).length) onSetProps(node.id, patch);
+  };
 
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
@@ -253,13 +543,19 @@ export default function PropsPanel({
         {node.kind === 'element' ? (
           elementIcon(node.name, 16, 'props-title-icon')
         ) : (
-          <ElementComponentIcon size={16} className="props-title-icon" />
+          node.astroAsset ? (
+            astroAssetIcon(node.name, 16, 'props-title-icon')
+          ) : (
+            <ElementComponentIcon size={16} className="props-title-icon" />
+          )
         )}
         {isLayout ? currentLayoutName || node.name : node.name}
         {isLayout && <span className="badge">layout</span>}
       </div>
       <div className="panel-body" style={{ padding: 0 }}>
-        {node.kind === 'element' && onChangeTag && (
+        {/* A slot isn't a tag choice — it's where the caller's content plugs
+            in. Renaming it would silently turn it into an empty element. */}
+        {node.kind === 'element' && onChangeTag && !isSlot && (
           <TagField key="tag" tag={node.name} onChangeTag={onChangeTag} />
         )}
         {isLayout && Array.isArray(layouts) && layouts.length > 0 && (
@@ -306,39 +602,67 @@ export default function PropsPanel({
             )}
           </div>
         )}
-        {schema.map((field) => (
+        {schema.filter(appliesNow).filter((f) => f.name !== 'class').map((field) => (
           <PropField
             key={field.name}
             field={field}
             value={node.props[field.name]}
             slotOptions={slotOptions}
             projectClasses={projectClasses}
-            assetCtx={{ projectPath, nodeName: node.name }}
+            assetCtx={{ projectPath, filePath, nodeName: node.name, onPickDimensions, srcDims, onSrcDimensions: setSrcDims, onPickAsset: onSetAssetProp && ((f, picked) => onSetAssetProp(node.id, f, picked)) }}
             linkContext={linkContext}
             dataCtx={dataCtx}
-            onChange={(v, immediate) => onSetProp(field.name, v, immediate)}
+            onChange={(v, immediate) => setPropCascading(field.name, v, immediate)}
           />
         ))}
-        {extraProps.map((name) => (
+        {extraProps.filter((name) => name !== 'class').map((name) => (
           <PropField
             key={name}
             field={{ name, type: 'other' }}
             value={node.props[name]}
             slotOptions={slotOptions}
             projectClasses={projectClasses}
-            assetCtx={{ projectPath, nodeName: node.name }}
+            assetCtx={{ projectPath, filePath, nodeName: node.name, onPickDimensions, srcDims, onSrcDimensions: setSrcDims, onPickAsset: onSetAssetProp && ((f, picked) => onSetAssetProp(node.id, f, picked)) }}
             linkContext={linkContext}
             dataCtx={dataCtx}
             onChange={(v, immediate) => onSetProp(name, v, immediate)}
           />
         ))}
-        {showSlotField && (
+        {/* Class, attributes, the comment and slot are the same four fields on
+            every node, and they're the ones you reach for least — folded away
+            behind one heading so a component's own props are what the panel
+            opens on. Shut by default; the choice sticks while the app is up. */}
+        {hasSettings && (
+          <div className={`props-group ${settingsOpen ? 'open' : ''}`}>
+            <button
+              type="button"
+              className="props-group-head"
+              aria-expanded={settingsOpen}
+              onClick={() => setSettingsOpen((v) => !v)}
+            >
+              <span className="props-group-name">Settings</span>
+              {/* Something set in there is worth knowing about without opening
+                  it — otherwise a class you gave the element looks lost. */}
+              {!settingsOpen && settingsCount > 0 && (
+                <span className="props-group-count">{settingsCount}</span>
+              )}
+              <ChevronRightIcon size={11} className="props-group-chevron" />
+            </button>
+          </div>
+        )}
+        {hasSettings && settingsOpen && (
+        <>
+        {classField && (
           <PropField
-            key="slot"
-            field={{ name: 'slot', type: 'slot' }}
-            value={node.props?.slot}
+            key="class"
+            field={classField}
+            value={node.props?.class}
             slotOptions={slotOptions}
-            onChange={(v, immediate) => onSetProp('slot', v, immediate)}
+            projectClasses={projectClasses}
+            assetCtx={{ projectPath, filePath, nodeName: node.name, onPickDimensions, srcDims, onSrcDimensions: setSrcDims, onPickAsset: onSetAssetProp && ((f, picked) => onSetAssetProp(node.id, f, picked)) }}
+            linkContext={linkContext}
+            dataCtx={dataCtx}
+            onChange={(v, immediate) => setPropCascading('class', v, immediate)}
           />
         )}
         {allowAttrs && (
@@ -348,11 +672,26 @@ export default function PropsPanel({
             names={attrNames}
             projectPath={projectPath}
             onSetProp={onSetProp}
+            onSetProps={onSetProps}
             onRenameProp={onRenameProp}
           />
         )}
         {onSetComment && (node.kind === 'element' || node.kind === 'component') && (
           <CommentField key="comment" value={comment} onCommit={onSetComment} />
+        )}
+        {/* `slot` is not a prop of this component — it tells the PARENT where to
+            put it — so it sits apart from the component's own props, last of
+            all, below even the comment. */}
+        {showSlotField && (
+          <PropField
+            key="slot"
+            field={{ name: 'slot', type: 'slot' }}
+            value={node.props?.slot}
+            slotOptions={slotOptions}
+            onChange={(v, immediate) => onSetProp('slot', v, immediate)}
+          />
+        )}
+        </>
         )}
         {!isLayout &&
           !allowAttrs &&
@@ -371,9 +710,10 @@ export default function PropsPanel({
 }
 
 // The HTML comment directly above this node — the note the navigator shows
-// beside its name. Committed on blur (not per keystroke): every edit rewrites
-// the page, and a comment isn't worth a save per character. Clearing the field
-// removes the comment node.
+// beside its name. Written as you type, so that label keeps up with the field:
+// the write is coalesced and the save debounced (see setComment), so a burst of
+// typing is still one save and one undo step. Clearing the field removes the
+// comment node.
 function CommentField({ value, onCommit }) {
   const [draft, setDraft] = useState(value ?? '');
   // Re-sync when the model changes underneath (undo, external edit) — but not
@@ -382,8 +722,8 @@ function CommentField({ value, onCommit }) {
   useEffect(() => {
     if (!focused.current) setDraft(value ?? '');
   }, [value]);
-  const commit = () => {
-    const next = draft.trim();
+  const commit = (text = draft) => {
+    const next = text.trim();
     if (next !== (value ?? '').trim()) onCommit(next);
   };
   return (
@@ -398,7 +738,10 @@ function CommentField({ value, onCommit }) {
         minRows={1}
         placeholder="Note above this element…"
         value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          commit(e.target.value);
+        }}
         onFocus={() => { focused.current = true; }}
         onBlur={() => { focused.current = false; commit(); }}
       />
@@ -419,7 +762,7 @@ const encodeAttr = (text) => {
 
 // Free-form attribute list for elements and ...rest components: + adds,
 // hover-trash deletes, clicking a row opens a name/value editor.
-function AttributesSection({ node, names, projectPath, onSetProp, onRenameProp }) {
+function AttributesSection({ node, names, projectPath, onSetProp, onSetProps, onRenameProp }) {
   const [editor, setEditor] = useState(null); // {attr: string|null, top}
   const listRef = useRef(null);
 
@@ -435,7 +778,9 @@ function AttributesSection({ node, names, projectPath, onSetProp, onRenameProp }
 
   return (
     <div className="props-field" ref={listRef}>
-      <label style={{ display: 'flex', alignItems: 'center' }}>
+      {/* Not a <label>: a click anywhere inside one activates the control it
+          holds, so the whole row — icon, word and all — acted as the button. */}
+      <div className="props-label-row">
         <span className="prop-label">
           <BracesIcon size={12} className="prop-label-icon" />
           Attributes
@@ -444,7 +789,7 @@ function AttributesSection({ node, names, projectPath, onSetProp, onRenameProp }
         <button className="ghost" title="Add attribute" onClick={() => openEditor(null)}>
           <PlusIcon size={12} />
         </button>
-      </label>
+      </div>
 
       {names.length > 0 && (
         <div className="attrs-list">
@@ -498,6 +843,30 @@ function AttributesSection({ node, names, projectPath, onSetProp, onRenameProp }
           onChangeValue={(text) => {
             if (editor.attr) onSetProp(editor.attr, encodeAttr(text));
           }}
+          // Pasting `id="hero"` fills both boxes at once — the attribute is
+          // created and given its value in one go rather than needing the
+          // name committed first.
+          onCommitPair={(attrName, text) => {
+            const clean = attrName.trim();
+            if (!clean) return;
+            if (editor.attr && editor.attr !== clean) onRenameProp(editor.attr, clean);
+            onSetProp(clean, encodeAttr(text), true);
+            setEditor((e) => ({ ...e, attr: clean }));
+          }}
+          // Several pairs pasted at once — written together so it is one undo,
+          // and the editor closes because there is no single attribute left
+          // for it to be editing.
+          onCommitMany={(pairs) => {
+            const patch = {};
+            for (const { name: attrName, value: text } of pairs) {
+              const clean = attrName.trim();
+              if (clean) patch[clean] = encodeAttr(text);
+            }
+            if (!Object.keys(patch).length) return;
+            if (onSetProps) onSetProps(node.id, patch);
+            else for (const [k, v] of Object.entries(patch)) onSetProp(k, v, true);
+            setEditor(null);
+          }}
           onClose={() => setEditor(null)}
         />
       )}
@@ -505,8 +874,31 @@ function AttributesSection({ node, names, projectPath, onSetProp, onRenameProp }
   );
 }
 
+// Attribute markup pasted into the name box — `id="hero"`, `id=hero`, or a
+// whole run of them — split into the pairs it describes. Copying attributes
+// off an existing element is the normal way to move them, and typing them
+// back one box at a time is the tedious part.
+//
+// Deliberately looser than the .astro parser: HTML allows an unquoted value
+// (`id=hero`), and that is exactly what someone types from memory. A brace
+// value keeps its braces so encodeAttr reads it as an expression.
+const ATTR_PASTE_RE =
+  /([\w@:.-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{(?:[^{}]|\{[^{}]*\})*\})|([^\s]+)))?/g;
+
+function parseAttrPaste(text) {
+  const out = [];
+  ATTR_PASTE_RE.lastIndex = 0;
+  let m;
+  while ((m = ATTR_PASTE_RE.exec(text)) !== null) {
+    if (!m[0].trim()) continue;
+    const value = m[2] ?? m[3] ?? m[4] ?? m[5];
+    out.push({ name: m[1], value: value === undefined ? '' : value });
+  }
+  return out;
+}
+
 // Floating name/value editor for one attribute.
-function AttrEditor({ pos, name, value, isNew, projectPath, onCommitName, onChangeValue, onClose }) {
+function AttrEditor({ pos, name, value, isNew, projectPath, onCommitName, onCommitPair, onCommitMany, onChangeValue, onClose }) {
   const [draftName, setDraftName] = useState(name);
   const [draftValue, setDraftValue] = useState(value);
   const ref = useRef(null);
@@ -564,6 +956,22 @@ function AttrEditor({ pos, name, value, isNew, projectPath, onCommitName, onChan
           value={draftName}
           placeholder="data-attribute"
           spellCheck={false}
+          onPaste={(e) => {
+            const text = e.clipboardData.getData('text');
+            // Only when it actually looks like markup — a plain name paste
+            // must keep behaving like a paste into a text box.
+            if (!text || !/=/.test(text)) return;
+            const pairs = parseAttrPaste(text);
+            if (!pairs.length) return;
+            e.preventDefault();
+            if (pairs.length === 1) {
+              setDraftName(pairs[0].name);
+              setDraftValue(pairs[0].value);
+              onCommitPair(pairs[0].name, pairs[0].value);
+            } else {
+              onCommitMany(pairs);
+            }
+          }}
           onChange={(e) => setDraftName(e.target.value.replace(/[^\w@:.-]/g, ''))}
           onBlur={commitName}
           onKeyDown={(e) => e.key === 'Enter' && (commitName(), e.currentTarget.blur())}
@@ -690,14 +1098,14 @@ function ObjectAttrsField({ pill, menu, entries, onCommit }) {
 
   return (
     <div className="props-field" ref={listRef}>
-      <label style={{ display: 'flex', alignItems: 'center' }}>
+      <div className="props-label-row">
         {pill}
         <span style={{ flex: 1 }} />
         <button className="ghost" title="Add attribute" onClick={() => openEditor(null)}>
           <PlusIcon size={12} />
         </button>
         {menu}
-      </label>
+      </div>
 
       {entries.length > 0 && (
         <div className="attrs-list">
@@ -780,7 +1188,7 @@ const NO_SOURCE = '[]';
 const CUSTOM_SOURCE = '__custom__'; // not a valid expression, so it can't collide
 const DEFAULT_ITEM = 'item'; // a value no expression can collide with
 
-function MapEditor({ node, loopContext, onSetText }) {
+function MapEditor({ node, loopContext, dataCtx, onSetText }) {
   const parsed = parseMapHead(node.head);
   const [fields, setFields] = useState(parsed || { data: '', item: '', index: '' });
   const lastBuiltRef = useRef(node.head);
@@ -850,6 +1258,9 @@ function MapEditor({ node, loopContext, onSetText }) {
     commit({ ...fields, data, item: changed ? DEFAULT_ITEM : fields.item });
   };
 
+  // Anchors the source popup under the Data row.
+  const dataRef = useRef(null);
+
   const parseableNow = !!parseMapHead(node.head);
   const isNoSource = !fields.data.trim() || fields.data.trim() === NO_SOURCE;
   const itemBad = fields.item !== '' && !IDENT_RE.test(fields.item);
@@ -859,10 +1270,14 @@ function MapEditor({ node, loopContext, onSetText }) {
     <>
       {parseableNow ? (
         <>
-          <div className="props-field" style={{ marginTop: 8 }}>
+          <div className="props-field" style={{ marginTop: 8 }} ref={dataRef}>
             <label>
               <span className="prop-label">Data</span>
             </label>
+            {/* The pencil sits beside whichever field holds the source — the
+                list itself is what you actually want to edit, and it lives
+                wherever it was declared, often in another file. */}
+            <div className="prop-expr-row">
             <Dropdown
               livePreview={false}
               className={`dd-source ${custom || !isNoSource ? 'on' : ''}`}
@@ -884,8 +1299,16 @@ function MapEditor({ node, loopContext, onSetText }) {
                 commitSource(v || NO_SOURCE);
               }}
             />
+              {!custom && (
+                <SourceEditButton
+                  name={referencedName(fields.data)}
+                  dataCtx={dataCtx}
+                  anchorRef={dataRef}
+                />
+              )}
+            </div>
             {custom && (
-              <div style={{ marginTop: 6 }}>
+              <div className="prop-expr-row" style={{ marginTop: 6 }}>
                 <ExprInput
                   autoFocus
                   value={fields.data}
@@ -893,6 +1316,11 @@ function MapEditor({ node, loopContext, onSetText }) {
                   placeholder="e.g. Astro.props.items"
                   onChange={(v) => update({ data: v })}
                   onCommit={(v) => commitSource(v)}
+                />
+                <SourceEditButton
+                  name={referencedName(fields.data)}
+                  dataCtx={dataCtx}
+                  anchorRef={dataRef}
                 />
               </div>
             )}
@@ -987,7 +1415,9 @@ function TagField({ tag, onChangeTag }) {
 
   const commit = (t) => {
     const clean = String(t).trim().toLowerCase();
-    if (/^[a-z][a-z0-9-]*$/.test(clean) && clean !== tag) onChangeTag(clean);
+    // Not `slot` either: a slot shows no Tag field, so switching into one
+    // here would be a one-way door. Insert a slot from the palette instead.
+    if (/^[a-z][a-z0-9-]*$/.test(clean) && clean !== tag && clean !== 'slot') onChangeTag(clean);
     else setDraft(tag);
   };
 
@@ -1071,21 +1501,31 @@ function referencedName(expr) {
   return m ? m[1] : '';
 }
 
-// A prop value that holds JavaScript. It's code, so it's highlighted; and
-// when it names something the file declares, a pencil opens that declaration
-// right here — changing the three words in `const rotatingWords = […]` is
-// part of the same thought as pointing the prop at it, and shouldn't mean a
-// trip to the frontmatter editor.
-function ExprValueField({ value, dataCtx, onChange }) {
-  const [pos, setPos] = useState(null);
-  const wrapRef = useRef(null);
+// Where the data behind an expression can be edited from here: 'local' when
+// this file's frontmatter declares it (edited in place), 'file' when it's
+// imported (opens the file that defines it), null when neither.
+function symbolTarget(name, dataCtx) {
+  if (!name || !dataCtx) return null;
+  if (dataCtx.onSetFrontmatter && findDeclaration(dataCtx.frontmatter || '', name)) return 'local';
+  if (dataCtx.onOpenSymbol && findImportOf(dataCtx.imports || '', name)) return 'file';
+  return null;
+}
 
-  const code = dataCtx?.frontmatter || '';
-  const name = referencedName(value);
-  const decl = name && dataCtx?.onSetFrontmatter ? findDeclaration(code, name) : null;
+// The pencil beside a field bound to data: it opens whatever defines that
+// data. A `const` in this file opens inline, right under the field; anything
+// imported opens its own file, on the line that declares it. Renders nothing
+// when the value doesn't name something we can find.
+function SourceEditButton({ name, dataCtx, anchorRef, className = 'attr-asset-toggle' }) {
+  const [pos, setPos] = useState(null);
+  const target = symbolTarget(name, dataCtx);
+  if (!target) return null;
 
   const open = () => {
-    const r = wrapRef.current?.getBoundingClientRect();
+    if (target === 'file') {
+      dataCtx.onOpenSymbol(name);
+      return;
+    }
+    const r = anchorRef?.current?.getBoundingClientRect();
     const width = Math.max(r?.width ?? 240, 260);
     setPos({
       top: Math.min((r?.bottom ?? 200) + 6, Math.max(60, window.innerHeight - 240)),
@@ -1096,34 +1536,107 @@ function ExprValueField({ value, dataCtx, onChange }) {
 
   return (
     <>
-      <div className="prop-expr-row" ref={wrapRef}>
-        <ExprInput
-          value={value}
-          syncValue={value}
-          placeholder="expression"
-          onChange={(v) => onChange({ type: 'expr', value: v })}
-          onCommit={(v) => v !== value && onChange({ type: 'expr', value: v }, true)}
-        />
-        {decl && (
-          <button
-            className={`attr-asset-toggle ${pos ? 'on' : ''}`}
-            title={`Edit ${name}`}
-            onClick={() => (pos ? setPos(null) : open())}
-          >
-            <PencilIcon size={12} />
-          </button>
-        )}
-      </div>
-      {pos && decl && (
+      <button
+        className={`${className} ${pos ? 'on' : ''}`}
+        title={target === 'file' ? `Open where ${name} is defined` : `Edit ${name}`}
+        onClick={() => (pos ? setPos(null) : open())}
+      >
+        <PencilIcon size={12} />
+      </button>
+      {pos && (
         <VarSourceEditor
           pos={pos}
           name={name}
-          code={code}
+          code={dataCtx.frontmatter || ''}
           onChangeCode={dataCtx.onSetFrontmatter}
           onClose={() => setPos(null)}
         />
       )}
     </>
+  );
+}
+
+// Files an import can name that are pictures rather than code.
+const MEDIA_IMPORT_RE =
+  /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|mp4|webm|mov|m4v|ogg|mp3|wav)(\?.*)?$/i;
+
+// The image an expression is bound to, if it is one: `hero` and `hero.src`
+// both point at whatever `hero` was imported from. Returns null for any other
+// expression, which then edits as code.
+function assetImportOf(expr, frontmatter) {
+  const m = String(expr ?? '')
+    .trim()
+    .match(/^([A-Za-z_$][\w$]*)(?:\.src)?$/);
+  if (!m || !frontmatter) return null;
+  const imp = findImportOf(frontmatter, m[1]);
+  if (!imp || !MEDIA_IMPORT_RE.test(imp.spec)) return null;
+  return { ident: m[1], spec: imp.spec };
+}
+
+// The asset card for an imported image. The import specifier is resolved to a
+// real file so the card can show it; picking a new one goes through the host,
+// which rewrites the import rather than the value.
+function AssetImportField({ binding, name, assetCtx, onChange }) {
+  const [rel, setRel] = useState(null);
+
+  useEffect(() => {
+    let live = true;
+    setRel(null);
+    window.avb
+      .resolveSourcePath({
+        projectPath: assetCtx.projectPath,
+        fromFile: assetCtx.filePath,
+        spec: binding.spec,
+      })
+      .then((r) => live && setRel(r?.ok ? r.rel : null))
+      .catch(() => live && setRel(null));
+    return () => {
+      live = false;
+    };
+  }, [binding.spec, assetCtx.projectPath, assetCtx.filePath]);
+
+  return (
+    <AssetField
+      value=""
+      srcRel={rel}
+      mediaKind={/\.(mp4|webm|mov|m4v)$/i.test(binding.spec) ? 'video' : 'image'}
+      initialMode="asset"
+      plainLabel="URL"
+      projectPath={assetCtx.projectPath}
+      onChange={(v, immediate) =>
+        v === '' ? onChange(undefined, immediate) : onChange({ type: 'string', value: v }, immediate)
+      }
+      onPickEntry={assetCtx.onPickAsset && ((picked) => assetCtx.onPickAsset(name, picked))}
+      onDimensions={(d) => assetCtx.onPickDimensions?.(name, d)}
+      onCurrentDimensions={(d) => /^src$/i.test(name) && assetCtx.onSrcDimensions?.(d)}
+    />
+  );
+}
+
+// A prop value that holds JavaScript. It's code, so it's highlighted; and
+// when it names something with a definition — here or in another file — the
+// pencil goes straight to it. Changing the three words in `const
+// rotatingWords = […]` is part of the same thought as pointing the prop at
+// it, and shouldn't mean hunting for the file.
+function ExprValueField({ value, placeholder, dataCtx, onChange }) {
+  const wrapRef = useRef(null);
+  const name = referencedName(value);
+
+  return (
+    <div className="prop-expr-row" ref={wrapRef}>
+      <ExprInput
+        value={value}
+        syncValue={value}
+        // Empty when nothing is known, like every other field. The old
+        // generic "expression" described the input format, not the fallback,
+        // and in a column of placeholders that all name real values it read as
+        // if the value itself were the word.
+        placeholder={placeholder || ''}
+        onChange={(v) => onChange({ type: 'expr', value: v })}
+        onCommit={(v) => v !== value && onChange({ type: 'expr', value: v }, true)}
+      />
+      <SourceEditButton name={name} dataCtx={dataCtx} anchorRef={wrapRef} />
+    </div>
   );
 }
 
@@ -1216,6 +1729,22 @@ function PropField({
   dataCtx,
   onChange,
 }) {
+  // What an empty field falls back to, most concrete first:
+  //   the literal default the component declares  (picture = false)
+  //   the source image's own size                 (width/height of the asset)
+  //   the behaviour its docs describe             ("inferred")
+  // Blank when the component says nothing — better than implying a value that
+  // isn't there.
+  const placeholderFor = (field) => {
+    if (field.default !== undefined) return String(field.default);
+    const dims = assetCtx?.srcDims;
+    if (dims) {
+      if (/^width$/i.test(field.name) && dims.w) return String(dims.w);
+      if (/^height$/i.test(field.name) && dims.h) return String(dims.h);
+    }
+    return field.hint || '';
+  };
+
   const { name, type } = field;
   const isSet = value !== undefined;
   const [menuPos, setMenuPos] = useState(null);
@@ -1242,8 +1771,10 @@ function PropField({
       onClick={onLabelClick}
     >
       {type === 'number' && <FieldNumberIcon size={12} className="prop-label-icon" />}
+      {type === 'boolean' && <FieldSwitchIcon size={12} className="prop-label-icon" />}
       {type === 'enum' && <ComponentPropertiesIcon size={12} className="prop-label-icon" />}
       {type === 'attrs' && <BracesIcon size={12} className="prop-label-icon" />}
+      {type === 'code' && <CodeIcon size={12} className="prop-label-icon" />}
       {(type === 'slot' || name === 'slot') && (
         <ElementSlotIcon size={12} className="prop-label-icon" />
       )}
@@ -1259,6 +1790,9 @@ function PropField({
   const label = (
     <label>
       {pill}
+      {/* The prop's own documentation — the comment above it in the
+          component's `interface Props`. */}
+      <PropTip text={field.doc} />
       {menu}
     </label>
   );
@@ -1355,7 +1889,10 @@ function PropField({
         {label}
         <Dropdown
           value={cur}
-          placeholder="(not set)"
+          // Says what happens when nothing is picked. For a conditional
+          // default that's the condition itself — better than naming one of
+          // the two answers as if it were the only one.
+          placeholder={placeholderFor(field) || '(not set)'}
           options={opts.map((o) => ({ value: o === defaultStr ? '' : o, label: o }))}
           onChange={(v) =>
             v === ''
@@ -1368,59 +1905,111 @@ function PropField({
   }
 
   if (type === 'boolean') {
-    const checked = value ? value.type !== 'expr' || value.value === 'true' : !!field.default;
+    // A checkbox can only say on/off, and a boolean prop has three states:
+    // true, false, and unset (= whatever the component defaults to). Two
+    // segments say which one is in effect, and picking the default clears the
+    // prop rather than writing it out — the same rule the enum dropdown uses,
+    // so an untouched component stays untouched in the markup.
+    // A boolean that isn't there is false — that's what the component sees for
+    // an undeclared default, so false IS the default unless the component says
+    // otherwise. Picking it clears the prop instead of writing `x={false}`,
+    // which would mark the field set and put `false` in the markup to say what
+    // its absence already said.
+    const fallback = field.default === undefined ? false : !!field.default;
+    const current = value ? value.type !== 'expr' || value.value === 'true' : fallback;
+    const choose = (next) =>
+      next === fallback
+        ? onChange(undefined, true)
+        : onChange({ type: 'expr', value: next ? 'true' : 'false' }, true);
     return (
       <div className="props-field">
         {label}
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) =>
-            onChange({ type: 'expr', value: e.target.checked ? 'true' : 'false' }, true)
-          }
-        />
+        <div className={`bool-seg ${current ? 'is-true' : 'is-false'}`} role="group">
+          {[true, false].map((v) => (
+            <button
+              key={String(v)}
+              type="button"
+              className={current === v ? 'on' : ''}
+              aria-pressed={current === v}
+              onClick={() => choose(v)}
+            >
+              {v ? 'True' : 'False'}
+            </button>
+          ))}
+        </div>
       </div>
     );
   }
 
   if (type === 'number') {
     const num = value?.type === 'expr' ? value.value : value?.value ?? '';
-    // Shift+arrow steps by 10, Option/Alt+arrow by 0.1; plain arrows keep
-    // the input's native ±1 stepping.
+    // One place decides what a step does, so the arrow keys and the buttons
+    // can't drift apart. Shift ×10, Option ÷10 — the modifiers the style
+    // panel's number fields already use.
+    const step = (dir, mods, from) => {
+      const size = mods.shiftKey ? 10 : mods.altKey ? 0.1 : 1;
+      const cur = parseFloat(from);
+      // An empty field steps from the value it is SHOWING — the placeholder is
+      // the effective value (the source image's 115, the component's default),
+      // so ▲ on a blank width goes to 116, not 1.
+      const shown = parseFloat(placeholderFor(field));
+      const base = Number.isFinite(cur)
+        ? cur
+        : Number.isFinite(shown)
+          ? shown
+          : parseFloat(field.default) || 0;
+      // Round away float noise (e.g. 38.1 + 0.1 = 38.199999…).
+      onChange({ type: 'expr', value: String(Math.round((base + dir * size) * 1e6) / 1e6) });
+    };
     const onStepKey = (e) => {
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-      if (!e.shiftKey && !e.altKey) return;
       e.preventDefault();
-      const step = e.shiftKey ? 10 : 0.1;
-      const dir = e.key === 'ArrowUp' ? 1 : -1;
-      const cur = parseFloat(e.target.value);
-      const base = Number.isFinite(cur) ? cur : parseFloat(field.default) || 0;
-      // Round away float noise (e.g. 38.1 + 0.1 = 38.199999…).
-      const next = Math.round((base + dir * step) * 1e6) / 1e6;
-      onChange({ type: 'expr', value: String(next) });
+      step(e.key === 'ArrowUp' ? 1 : -1, e, e.target.value);
     };
     return (
       <div className="props-field">
         {label}
-        <input
-          type="number"
-          step="any"
-          value={num}
-          placeholder={field.default !== undefined ? String(field.default) : ''}
-          onKeyDown={onStepKey}
-          onChange={(e) =>
-            e.target.value === ''
-              ? onChange(undefined)
-              : onChange({ type: 'expr', value: e.target.value })
-          }
-        />
+        {/* type=text, not number: the native spinner can't be styled, ignores
+            the modifier steps, and its scroll-to-change fires while scrolling
+            the panel. inputMode keeps the numeric keypad on touch. */}
+        <div className="num-field">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={num}
+            placeholder={placeholderFor(field)}
+            onKeyDown={onStepKey}
+            onChange={(e) =>
+              e.target.value === ''
+                ? onChange(undefined)
+                : onChange({ type: 'expr', value: e.target.value })
+            }
+          />
+          <span className="num-steppers">
+            {[1, -1].map((dir) => (
+              <button
+                key={dir}
+                type="button"
+                tabIndex={-1}
+                aria-label={dir > 0 ? 'Increase' : 'Decrease'}
+                title={`${dir > 0 ? 'Increase' : 'Decrease'} — ⇧ by 10, ⌥ by 0.1`}
+                onClick={(e) => step(dir, e, num)}
+              >
+                <ChevronDownIcon size={11} style={dir > 0 ? { transform: 'rotate(180deg)' } : undefined} />
+              </button>
+            ))}
+          </span>
+        </div>
       </div>
     );
   }
 
   // string / other
   const str = value ? value.value : '';
-  const isExpr = value?.type === 'expr';
+  // An array/object prop is a JS value, so it edits as code and writes
+  // `prop={…}`. Without this a text field writes `densities="[1, 2]"` — a
+  // string the component then calls .map on.
+  const isExpr = value?.type === 'expr' || (type === 'code' && value?.type !== 'string');
 
   // href gets the Webflow-style link settings: URL / page / section / email /
   // phone / asset, all compiling down to one href string.
@@ -1467,6 +2056,27 @@ function PropField({
           onChange={(v, immediate) =>
             v === '' ? onChange(undefined, immediate) : onChange({ type: 'string', value: v }, immediate)
           }
+          onPickEntry={assetCtx.onPickAsset && ((picked) => assetCtx.onPickAsset(name, picked))}
+          onDimensions={(d) => assetCtx.onPickDimensions?.(name, d)}
+          onCurrentDimensions={(d) => /^src$/i.test(name) && assetCtx.onSrcDimensions?.(d)}
+        />
+      </div>
+    );
+  }
+
+  // An expression bound to an imported image is still an image: `src={hero}`
+  // gets the same card and "Choose Image…" a public/ path does, instead of
+  // becoming a code field the moment you pick one.
+  const assetBinding = assetImportOf(str, dataCtx?.imports);
+  if (isExpr && assetBinding && assetCtx?.projectPath && assetCtx?.filePath) {
+    return (
+      <div className="props-field">
+        {label}
+        <AssetImportField
+          binding={assetBinding}
+          name={name}
+          assetCtx={assetCtx}
+          onChange={onChange}
         />
       </div>
     );
@@ -1477,10 +2087,16 @@ function PropField({
     return (
       <div className="props-field">
         {label}
-        <ExprValueField value={str} dataCtx={dataCtx} onChange={onChange} />
+        <ExprValueField
+          value={str}
+          placeholder={placeholderFor(field)}
+          dataCtx={dataCtx}
+          onChange={onChange}
+        />
       </div>
     );
   }
+
 
   const long =
     String(str).length > 48 || /text|description|content|body|paragraph/i.test(name);
@@ -1491,13 +2107,13 @@ function PropField({
       {long ? (
         <AutoTextarea
           value={str}
-          placeholder={field.default !== undefined ? String(field.default) : ''}
+          placeholder={placeholderFor(field)}
           onChange={(e) => onChange({ type: 'string', value: e.target.value })}
         />
       ) : (
         <input
           value={str}
-          placeholder={field.default !== undefined ? String(field.default) : ''}
+          placeholder={placeholderFor(field)}
           onChange={(e) => onChange({ type: 'string', value: e.target.value })}
         />
       )}

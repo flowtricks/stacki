@@ -17,7 +17,9 @@ export function onAssetRequest(fn) {
   };
 }
 
-// { mediaKind: 'image'|'video'|'audio'|'asset', current: string, onPick(rel) }
+// { mediaKind: 'image'|'video'|'audio'|'asset', current: string,
+//   onPick(rel, entry) } — entry carries the root ('public'|'src') and abs path,
+//   which decide whether the value is a URL string or an ESM import.
 export function requestAsset(req) {
   pending = req;
   listener?.(req);

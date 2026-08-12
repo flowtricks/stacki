@@ -26,7 +26,15 @@ const {
   parseExtendsTag,
   parseSlots,
 } = require('./astroParser');
+const { parseMarkdownPage, serializeMarkdownPage } = require('./markdownParser');
 const { scaffoldProject } = require('./scaffold');
+const {
+  findCollections,
+  replaceCollection,
+  readGeneral,
+  writeGeneral,
+  GENERAL,
+} = require('./jsCollections');
 const { importersOf, resolveImport } = require('./cmsRefs');
 const { autoUpdater } = require('electron-updater');
 
@@ -580,6 +588,13 @@ function findFreePort(start) {
   });
 }
 
+// The page formats Astro routes from a file: .astro, plus markdown when the
+// project has the integration for it (.md always, .mdx via @astrojs/mdx).
+// Kept as one place so discovery, routing and reading can't drift apart.
+const PAGE_MD_RE = /\.mdx?$/i;
+const isMarkdownPage = (p) => PAGE_MD_RE.test(p);
+const isMdx = (p) => /\.mdx$/i.test(p);
+
 function listAstroFiles(dir) {
   if (!fs.existsSync(dir)) return [];
   const out = [];
@@ -587,7 +602,9 @@ function listAstroFiles(dir) {
     for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
       const full = path.join(d, entry.name);
       if (entry.isDirectory()) walk(full);
-      else if (entry.name.endsWith('.astro') || (d.includes(`${path.sep}pages`) && entry.name.endsWith('.md'))) {
+      // Markdown only counts as a page. A .md under src/components isn't a
+      // component, it's a README.
+      else if (entry.name.endsWith('.astro') || (d.includes(`${path.sep}pages`) && PAGE_MD_RE.test(entry.name))) {
         out.push(full);
       }
     }
@@ -602,7 +619,7 @@ function toPosix(p) {
 
 function routeForPage(projectPath, pagePath) {
   const pagesDir = path.join(projectPath, 'src', 'pages');
-  let rel = toPosix(path.relative(pagesDir, pagePath)).replace(/\.(astro|md)$/, '');
+  let rel = toPosix(path.relative(pagesDir, pagePath)).replace(/\.(astro|mdx?)$/i, '');
   if (rel === 'index') return '/';
   if (rel.endsWith('/index')) rel = rel.slice(0, -'/index'.length);
   return '/' + rel;
@@ -1132,6 +1149,7 @@ ipcMain.handle('watch:start', async (_e, projectPath) => {
   let pending = new Set();
   let timer = null;
   let cmsTimer = null;
+  let srcAssetTimer = null;
 
   watcher = fs.watch(srcDir, { recursive: true }, (_event, filename) => {
     if (!filename) return;
@@ -1145,7 +1163,17 @@ ipcMain.handle('watch:start', async (_e, projectPath) => {
       cmsTimer = setTimeout(() => send('cms:changed', {}), 200);
       return;
     }
-    if (!/\.(astro|md|html)$/i.test(name)) return;
+    // Media under src/ is listed by the Assets panel now, so it has to hear
+    // about changes there the same way it hears about public/.
+    if (MEDIA_EXT.test(name)) {
+      const full = path.join(srcDir, name);
+      const wrote = selfWrites.get(path.resolve(full));
+      if (wrote && Date.now() - wrote < 1000) return;
+      clearTimeout(srcAssetTimer);
+      srcAssetTimer = setTimeout(() => send('assets:changed', {}), 200);
+      return;
+    }
+    if (!/\.(astro|md|mdx|html)$/i.test(name)) return;
     const full = path.join(srcDir, name);
     // Ignore events caused by the app's own recent writes.
     const wrote = selfWrites.get(path.resolve(full));
@@ -1189,10 +1217,33 @@ let assetsWatcher = null;
 
 const publicDirOf = (projectPath) => path.join(projectPath, 'public');
 
-// Refuses paths that escape public/.
+// Assets live in two places and they mean different things:
+//
+//   public/  copied to the site as-is; referenced by URL ("/hero.png")
+//   src/     imported by the build; referenced by ESM import, and optimised
+//            (this is where <Image> wants its images)
+//
+// So an asset is addressed by a ROOTED rel — "public/img/hero.png" or
+// "src/assets/hero.png" — and every handler below takes that. The root is the
+// first segment, which keeps one string identifying a file across listing,
+// moving, renaming and picking, and makes a cross-root move just a move.
+const ASSET_ROOTS = ['public', 'src'];
+
+// Media only under src/: everything else there is code. public/ lists whatever
+// is in it — that folder exists to be served.
+const MEDIA_EXT =
+  /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|tiff?|mp4|webm|mov|m4v|ogv|mp3|wav|ogg|m4a|flac|aac|woff2?|ttf|otf|eot)$/i;
+
+const rootOfRel = (rel) => String(rel || '').split('/')[0];
+
+// Refuses anything that escapes the two roots.
 function assetAbs(projectPath, rel) {
-  const abs = path.resolve(publicDirOf(projectPath), rel || '');
-  if (!abs.startsWith(path.resolve(publicDirOf(projectPath)))) {
+  const clean = String(rel || '').replace(/^\/+/, '');
+  const root = rootOfRel(clean);
+  if (!ASSET_ROOTS.includes(root)) throw new Error('Invalid asset path');
+  const rootAbs = path.resolve(projectPath, root);
+  const abs = path.resolve(projectPath, clean);
+  if (abs !== rootAbs && !abs.startsWith(rootAbs + path.sep)) {
     throw new Error('Invalid asset path');
   }
   return abs;
@@ -1211,24 +1262,38 @@ function uniqueDest(dir, name) {
 }
 
 ipcMain.handle('assets:list', async (_e, projectPath) => {
-  const root = publicDirOf(projectPath);
   const entries = [];
-  if (!fs.existsSync(root)) return { entries, missing: true };
-  const walk = (dir, rel) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name.startsWith('.')) continue;
+  // Folders are only worth showing when something is in them, which for src/
+  // means "holds media somewhere below" — otherwise every component folder in
+  // the project would show up as an empty asset folder.
+  const walk = (dir, rel, mediaOnly) => {
+    let held = false;
+    let names = [];
+    try {
+      names = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return false;
+    }
+    for (const entry of names) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
       const full = path.join(dir, entry.name);
-      const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
+      const entryRel = `${rel}/${entry.name}`;
       if (entry.isDirectory()) {
-        entries.push({ rel: entryRel, name: entry.name, parent: rel, isDir: true });
-        walk(full, entryRel);
+        const at = entries.length;
+        const placeholder = { rel: entryRel, name: entry.name, parent: rel, isDir: true, root: rootOfRel(rel) };
+        entries.push(placeholder);
+        const any = walk(full, entryRel, mediaOnly);
+        if (any) held = true;
+        else if (mediaOnly) entries.splice(at, 1); // nothing below it — not an asset folder
       } else {
+        if (mediaOnly && !MEDIA_EXT.test(entry.name)) continue;
         let size = 0;
         try {
           size = fs.statSync(full).size;
         } catch {
           /* race */
         }
+        held = true;
         entries.push({
           rel: entryRel,
           name: entry.name,
@@ -1236,12 +1301,27 @@ ipcMain.handle('assets:list', async (_e, projectPath) => {
           isDir: false,
           size,
           abs: full,
+          root: rootOfRel(rel),
         });
       }
     }
+    return held;
   };
-  walk(root, '');
-  return { entries };
+
+  // The roots themselves are entries, so the panel navigates and drops into
+  // them with the folder handling it already has.
+  const publicDir = publicDirOf(projectPath);
+  const srcDir = path.join(projectPath, 'src');
+  const hasPublic = fs.existsSync(publicDir);
+  if (hasPublic) {
+    entries.push({ rel: 'public', name: 'public', parent: '', isDir: true, root: 'public', isRoot: true });
+    walk(publicDir, 'public', false);
+  }
+  if (fs.existsSync(srcDir)) {
+    entries.push({ rel: 'src', name: 'src', parent: '', isDir: true, root: 'src', isRoot: true });
+    walk(srcDir, 'src', true);
+  }
+  return { entries, missing: !hasPublic };
 });
 
 // Opens a picker and copies the chosen files into public/<destRel>.
@@ -1280,6 +1360,17 @@ function copyAssetsIn(projectPath, destRel, filePaths) {
 ipcMain.handle('assets:move', async (_e, { projectPath, fromRel, toDirRel }) => {
   const from = assetAbs(projectPath, fromRel);
   const toDir = assetAbs(projectPath, toDirRel);
+  // Between roots the file's IDENTITY changes, not just its path: a public/
+  // asset is referenced by URL and a src/ one by import, so every reference to
+  // it would have to be rewritten in place. Until that rewrite exists, refuse
+  // — moving the file alone would leave the site pointing at nothing, quietly.
+  if (rootOfRel(fromRel) !== rootOfRel(toDirRel)) {
+    throw new Error(
+      'Moving between public/ and src/ changes how the file is referenced ' +
+        '(URL vs import), so it needs the references updated too. Not supported yet — ' +
+        'move it outside the app and fix the references by hand.'
+    );
+  }
   if (!fs.existsSync(from)) return { ok: false };
   // Refuse moving a folder into itself/its own subtree.
   if (fs.statSync(from).isDirectory() && (toDir === from || toDir.startsWith(from + path.sep))) {
@@ -1345,6 +1436,38 @@ const MAX_CMS_BYTES = 2 * 1024 * 1024;
 // Config files that happen to live in src/ aren't content.
 const CMS_SKIP = /^(tsconfig|jsconfig|package|package-lock|env\.d)\.json$/i;
 
+// How a page's frontmatter is scanned: no exports there, and a list of plain
+// strings is the content itself rather than a constant.
+const PAGE_SCAN = { requireExport: false, allowPlainLists: true };
+
+const isAstroRel = (rel) => /\.astro$/i.test(String(rel || ''));
+
+// The frontmatter's own span, so a page's data can be read and written without
+// the scanners ever seeing its markup.
+function frontmatterSpan(source) {
+  const open = /^---[ \t]*\r?\n/.exec(source);
+  if (!open) return null;
+  const start = open[0].length;
+  const close = source.slice(start).search(/\r?\n---[ \t]*(\r?\n|$)/);
+  if (close === -1) return null;
+  return { start, end: start + close };
+}
+
+function frontmatterOf(source) {
+  const span = frontmatterSpan(source);
+  return span ? source.slice(span.start, span.end) : null;
+}
+
+// A JS/TS collection is addressed as `path/to/file.ts#EXPORT_NAME` — the file
+// holds several, so the export name picks which one. A page's frontmatter uses
+// the same form: `pages/index.astro#rotatingWords`.
+function splitCmsRel(rel) {
+  const at = String(rel || '').lastIndexOf('#');
+  return at === -1
+    ? { fileRel: String(rel || ''), exportName: null }
+    : { fileRel: String(rel).slice(0, at), exportName: String(rel).slice(at + 1) };
+}
+
 // Refuses paths that escape src/.
 function cmsAbs(projectPath, rel) {
   const root = path.resolve(projectPath, 'src');
@@ -1373,6 +1496,83 @@ ipcMain.handle('cms:list', async (_e, projectPath) => {
       const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         walk(full, entryRel);
+      } else if (/\.(ts|js|mjs|mts)$/i.test(entry.name) && !/\.d\.ts$/i.test(entry.name)) {
+        // Exported record arrays edit like a JSON collection. They're grouped
+        // under their file rather than their folder, since one file usually
+        // holds several and the folder alone wouldn't tell them apart.
+        let source = '';
+        try {
+          if (fs.statSync(full).size > MAX_CMS_BYTES) continue;
+          source = fs.readFileSync(full, 'utf8');
+        } catch {
+          continue;
+        }
+        if (!/export\s+const\s+[A-Za-z_$][\w$]*\s*(?::[^=]+)?=\s*\[/.test(source)) continue;
+        // Single values (site name, url, a count) have no rows to repeat, so
+        // they ride together as one "General" record at the top of the file's
+        // group rather than being invisible.
+        const general = readGeneral(source);
+        if (general) {
+          files.push({
+            rel: `${entryRel}#${GENERAL}`,
+            name: 'General',
+            dir: entryRel,
+            abs: full,
+            fromFile: true,
+            data: general,
+          });
+        }
+        for (const col of findCollections(source)) {
+          if (!col.data) continue; // computed contents — nothing safe to write back
+          files.push({
+            rel: `${entryRel}#${col.name}`,
+            name: col.name,
+            dir: entryRel, // the file is the group
+            abs: full,
+            fromFile: true,
+            data: col.data,
+          });
+        }
+      } else if (/\.astro$/i.test(entry.name)) {
+        // A page's own data — the lists and values declared in its
+        // frontmatter — edits like any other collection, grouped under the
+        // page. Nothing is exported there, and a list of plain strings is
+        // content rather than a constant, so the scan is told both.
+        let source = '';
+        try {
+          if (fs.statSync(full).size > MAX_CMS_BYTES) continue;
+          source = fs.readFileSync(full, 'utf8');
+        } catch {
+          continue;
+        }
+        const body = frontmatterOf(source);
+        if (!body) continue;
+        // Single values ride together as one "General" record, the same way a
+        // data file's do.
+        const general = readGeneral(body, PAGE_SCAN);
+        if (general) {
+          files.push({
+            rel: `${entryRel}#${GENERAL}`,
+            name: 'General',
+            dir: entryRel,
+            abs: full,
+            fromFile: true,
+            fromPage: true,
+            data: general,
+          });
+        }
+        for (const col of findCollections(body, PAGE_SCAN)) {
+          if (!col.data) continue;
+          files.push({
+            rel: `${entryRel}#${col.name}`,
+            name: col.name,
+            dir: entryRel,
+            abs: full,
+            fromFile: true,
+            fromPage: true,
+            data: col.data,
+          });
+        }
       } else if (/\.json$/i.test(entry.name) && !CMS_SKIP.test(entry.name)) {
         const file = { rel: entryRel, name: entry.name, dir: rel, abs: full };
         try {
@@ -1396,13 +1596,64 @@ ipcMain.handle('cms:list', async (_e, projectPath) => {
 });
 
 ipcMain.handle('cms:read', async (_e, { projectPath, rel }) => {
-  const abs = cmsAbs(projectPath, rel);
-  return { data: JSON.parse(fs.readFileSync(abs, 'utf8')) };
+  const { fileRel, exportName } = splitCmsRel(rel);
+  const abs = cmsAbs(projectPath, fileRel);
+  if (!exportName) return { data: JSON.parse(fs.readFileSync(abs, 'utf8')) };
+  const file = fs.readFileSync(abs, 'utf8');
+  // A page's data lives in its frontmatter; everything below it is markup the
+  // scanners must never see.
+  const page = isAstroRel(fileRel);
+  const source = page ? frontmatterOf(file) : file;
+  if (source == null) throw new Error(`src/${fileRel} has no frontmatter.`);
+  const scan = page ? PAGE_SCAN : undefined;
+  if (exportName === GENERAL) {
+    const general = readGeneral(source, scan);
+    if (!general) throw new Error(`src/${fileRel} has no single values left to edit.`);
+    return { data: general };
+  }
+  const col = findCollections(source, scan).find((c) => c.name === exportName);
+  if (!col) {
+    throw new Error(
+      page
+        ? `${exportName} is no longer declared in src/${fileRel}.`
+        : `${exportName} is no longer exported from src/${fileRel}.`
+    );
+  }
+  if (!col.data) throw new Error(`${exportName} isn't plain data — ${col.reason}.`);
+  return { data: col.data };
 });
 
 // Writes the collection back, matching the file's existing indentation so
 // the diff stays limited to what the user actually changed.
 ipcMain.handle('cms:write', async (_e, { projectPath, rel, data }) => {
+  const { fileRel, exportName } = splitCmsRel(rel);
+  if (exportName) {
+    const abs = cmsAbs(projectPath, fileRel);
+    if (!fs.existsSync(abs)) throw new Error(`src/${fileRel} no longer exists.`);
+    // Only the edited span is rewritten — imports, comments and the file's
+    // other exports are left exactly as they were.
+    const file = fs.readFileSync(abs, 'utf8');
+    // Only the frontmatter is handed to the writer for a page, and only its
+    // span is spliced back — the markup below is never re-serialized.
+    const page = isAstroRel(fileRel);
+    const span = page ? frontmatterSpan(file) : null;
+    if (page && !span) throw new Error(`src/${fileRel} has no frontmatter.`);
+    const source = page ? file.slice(span.start, span.end) : file;
+    const scan = page ? PAGE_SCAN : undefined;
+    const written =
+      exportName === GENERAL
+        ? writeGeneral(source, data && typeof data === 'object' && !Array.isArray(data) ? data : {}, scan)
+        : replaceCollection(source, exportName, data, scan);
+    if (written == null) throw new Error(`Couldn't write ${exportName} back into src/${fileRel}.`);
+    const next = page ? file.slice(0, span.start) + written + file.slice(span.end) : written;
+    markSelfWrite(abs);
+    fs.writeFileSync(abs, next, 'utf8');
+    // Editing a page's own frontmatter changes a file the editor may have
+    // open. Our writes are invisible to the watcher, so say so directly —
+    // otherwise the model would keep the old data and write it back over this.
+    if (page) send('fs:changed', { files: [abs] });
+    return { ok: true };
+  }
   const abs = cmsAbs(projectPath, rel);
   // A save still in flight when the collection is deleted must not recreate
   // the file — the editor closes a moment after the delete lands.
@@ -1471,11 +1722,16 @@ ipcMain.handle('cms:setMeta', async (_e, { projectPath, rel, fields }) => {
 // `clients.map(...)` on the page working and rendering nothing.
 
 ipcMain.handle('cms:usage', async (_e, { projectPath, rel }) => {
-  const abs = cmsAbs(projectPath, rel);
+  const abs = cmsAbs(projectPath, splitCmsRel(rel).fileRel);
   return { files: importersOf(projectPath, abs).map((h) => h.rel) };
 });
 
 ipcMain.handle('cms:delete', async (_e, { projectPath, rel }) => {
+  // An export shares its file with other code, so there's no file to trash and
+  // removing the statement is a code edit, not a content one.
+  if (splitCmsRel(rel).exportName) {
+    throw new Error('This collection is an export inside a source file — remove it in code.');
+  }
   const abs = cmsAbs(projectPath, rel);
   const hits = importersOf(projectPath, abs);
   for (const hit of hits) {
@@ -1533,8 +1789,11 @@ function writeChunks(model) {
 
 ipcMain.handle('page:read', async (_e, pagePath) => {
   const source = fs.readFileSync(pagePath, 'utf8');
-  if (pagePath.endsWith('.md')) {
-    return { editable: false, reason: 'Markdown pages open in code view.', source };
+  // Markdown builds the same tree from a different syntax, so everything
+  // downstream — navigator, props, text editing, undo — is unchanged. Only
+  // the writer has to know which one it is; model.format carries that.
+  if (isMarkdownPage(pagePath)) {
+    return { ...parseMarkdownPage(source, { mdx: isMdx(pagePath) }), source };
   }
   const parsed = parsePage(source);
   if (parsed.editable) resolveChunks(parsed.model, pagePath);
@@ -1574,6 +1833,10 @@ function writePageText(pagePath, text) {
 }
 
 ipcMain.handle('page:write', async (_e, { pagePath, model }) => {
+  if (isMarkdownPage(pagePath)) {
+    writePageText(pagePath, serializeMarkdownPage(model));
+    return { ok: true };
+  }
   writePageText(pagePath, serializePage(model));
   writeChunks(model);
   return { ok: true };
@@ -1672,6 +1935,45 @@ ipcMain.handle('pagefolder:delete', async (_e, { projectPath, dir }) => {
   if (full === pagesDir) throw new Error('Invalid folder.');
   fs.rmSync(full, { recursive: true, force: true });
   return { ok: true };
+});
+
+// Fill a route pattern in with one entry's params: /posts/[slug] + {slug:'a'}
+// → /posts/a. A rest param ([...path]) holds a whole segment run, and an
+// undefined one collapses rather than writing "undefined" into the URL.
+function fillRoute(pattern, params) {
+  const filled = pattern.replace(/\[(\.\.\.)?([^\]]+)\]/g, (_m, rest, name) => {
+    const value = params?.[name];
+    if (value == null) return '';
+    return String(value)
+      .split('/')
+      .map((s) => encodeURIComponent(s))
+      .join('/');
+  });
+  // A dropped rest param leaves a double slash or a trailing one behind.
+  return filled.replace(/\/{2,}/g, '/').replace(/(.)\/$/, '$1');
+}
+
+// The concrete URLs a dynamic page stands for, by asking the dev server to run
+// its getStaticPaths. Returns [] for a static page, and for any failure — a
+// page that can't answer is previewed at its own pattern, exactly as before.
+ipcMain.handle('page:dynamicPaths', async (_e, { projectPath, pagePath, devUrl }) => {
+  const pattern = routeForPage(projectPath, pagePath);
+  if (!pattern.includes('[') || !devUrl) return { entries: [] };
+  const rel = toPosix(path.relative(projectPath, pagePath));
+  try {
+    const res = await fetch(`${devUrl}/__avb/paths?p=${encodeURIComponent(rel)}`);
+    if (!res.ok) return { entries: [], error: `Dev server returned ${res.status}` };
+    const data = await res.json();
+    const entries = (data.entries || []).map((params) => ({
+      params,
+      route: fillRoute(pattern, params),
+      // The values themselves read better in a picker than "slug=hello-world".
+      label: Object.values(params).map(String).join(' / ') || pattern,
+    }));
+    return { entries, error: data.error || null };
+  } catch (err) {
+    return { entries: [], error: String(err?.message || err) };
+  }
 });
 
 ipcMain.handle('page:importPathFor', async (_e, { pagePath, targetPath, projectPath }) => {
@@ -1775,6 +2077,47 @@ function parseExistingServer(log) {
 // headings, wrappers) render something visible instead of an empty shell.
 // The stage lays out at a desktop width, then a fit script scales the
 // rendered content to fill the card.
+// Which concrete URLs a dynamic route ([slug].astro) actually stands for.
+//
+// getStaticPaths is ordinary JS — it can read a content collection, hit an API,
+// map over anything — so the only reliable way to know its paths is to run it,
+// and the only thing that can run it is the dev server itself. Hence an
+// injected endpoint rather than parsing the frontmatter.
+//
+// The page module is imported lazily through a glob: importing it evaluates
+// module scope (where getStaticPaths lives) but not the component body, so
+// nothing that needs Astro.params runs here.
+const PATHS_ENDPOINT = `// Generated by Stacki (dev preview only) — do not edit.
+export const prerender = false;
+
+const pages = import.meta.glob('/src/pages/**/*.{astro,md,mdx}');
+
+export async function GET({ url }) {
+  const rel = url.searchParams.get('p') || '';
+  const body = { entries: [], error: null };
+  try {
+    // The glob keys are project-root-absolute, matching what the app sends.
+    const load = pages['/' + rel.replace(/^\\/+/, '')];
+    if (!load) {
+      body.error = 'Page not found: ' + rel;
+    } else {
+      const mod = await load();
+      if (typeof mod.getStaticPaths === 'function') {
+        const result = await mod.getStaticPaths();
+        body.entries = (Array.isArray(result) ? result : [])
+          .map((e) => (e && typeof e === 'object' ? e.params : null))
+          .filter((p) => p && typeof p === 'object');
+      }
+    }
+  } catch (err) {
+    body.error = String((err && err.message) || err);
+  }
+  return new Response(JSON.stringify(body), {
+    headers: { 'content-type': 'application/json' },
+  });
+}
+`;
+
 const PREVIEW_PAGE = `---
 // Generated by Stacki (dev preview only) — do not edit.
 // On-demand so Astro.url keeps its query string (prerendered pages get
@@ -1929,6 +2272,27 @@ const PAGES_DIR = ${JSON.stringify(pagesDir)};
 const SRC_DIR = ${JSON.stringify(srcDir)};
 const PROJECT_DIR = ${JSON.stringify(projectDirPosix)};
 
+// The markers are for the editor canvas, where the preload records them and
+// takes them straight back out. Anywhere else — this dev server opened in a
+// real browser, or the app's own interactive preview — they are litter in
+// somebody's devtools, and a <template> between two elements is a sibling
+// that :nth-child can count. So the page removes them itself unless it is the
+// canvas, which announces itself with #avb-design.
+const AVB_CLEANUP = [
+  '<script is:inline>',
+  "if (!location.hash.includes('avb-design')) {",
+  "  for (const t of document.querySelectorAll('template[data-avb-s],template[data-avb-e]')) t.remove();",
+  '  const gone = [];',
+  '  const walk = (p) => { for (let n = p.firstChild; n; n = n.nextSibling) {',
+  "    if (n.nodeType === 8 && /^avb-[se]:/.test(n.data)) gone.push(n);",
+  '    if (n.nodeType === 1) walk(n);',
+  '  } };',
+  '  walk(document);',
+  '  for (const n of gone) n.remove();',
+  '}',
+  '</script>',
+].join('\\n');
+
 // Must hook \`load\` (not \`transform\`): Astro's own compiler plugin is also
 // enforce:'pre' and runs first, so a transform would receive compiled JS —
 // and returning Astro source at that point breaks the module graph.
@@ -1968,15 +2332,67 @@ const avbMarkers = {
       const parsed = parsePage(readFileSync(file, 'utf8'));
       if (!parsed.editable) return null;
       resolveChunks(parsed.model, file);
-      if (isPage) return serializePageMarked(parsed.model);
       // Project-relative, matching what the app derives from the open file.
       const rel = file.slice(PROJECT_DIR.length + 1);
-      return serializePageMarked(parsed.model, rel + '|');
+      const marked = isPage
+        ? serializePageMarked(parsed.model)
+        : serializePageMarked(parsed.model, rel + '|');
+      return isPage ? marked + AVB_CLEANUP : marked;
     } catch {
       return null;
     }
   },
 };
+
+// Markdown can't use the load hook above: Astro's own \`astro:markdown\` plugin
+// is enforce:'pre', owns load for .md, and reads the file off disk itself — so
+// there is nothing to intercept. The document AST is the hook it does hand out,
+// and it's the right place anyway.
+//
+// One marker pair per ROOT node, numbered to match that block's index in the
+// app's tree. Frontmatter isn't in the tree so it isn't counted; an MDX import
+// is (the app keeps it as a node) but isn't wrapped, because a template in the
+// middle of the import block would be rendered content.
+const AVB_BLOCK_TYPES = [
+  'paragraph', 'heading', 'thematicBreak', 'blockquote', 'list', 'html', 'code',
+  'definition', 'footnoteDefinition', 'table', 'math', 'containerDirective',
+  'leafDirective', 'mdxJsxFlowElement', 'mdxFlowExpression',
+];
+const avbSatteriMarkers = () => {
+  const plugin = { name: 'avb-node-markers' };
+  const visit = (node, ctx) => {
+    const parent = ctx.parent(node);
+    if (!parent || parent.type !== 'root') return;
+    const raw = ctx.indexOf(node);
+    if (raw == null) return;
+    // Frontmatter is a root child here but not a node in the app's tree, so
+    // everything after it would be numbered one too high.
+    const children = parent.children || [];
+    let offset = 0;
+    for (let i = 0; i < raw && i < children.length; i++) {
+      if (children[i] && (children[i].type === 'yaml' || children[i].type === 'toml')) offset++;
+    }
+    const path = String(raw - offset);
+    ctx.insertBefore(node, { type: 'html', value: '<template data-avb-s="' + path + '"></template>' });
+    ctx.insertAfter(node, { type: 'html', value: '<template data-avb-e="' + path + '"></template>' });
+  };
+  for (const type of AVB_BLOCK_TYPES) plugin[type] = visit;
+  return plugin;
+};
+
+// Only when the project is on the processor Astro ships by default, and only
+// when it hasn't chosen its own. \`markdown.remarkPlugins\` is NOT a safe
+// fallback: on Astro 7 it needs @astrojs/markdown-remark installed, and setting
+// it without that fails config validation — the dev server wouldn't start at
+// all. A project this can't reach simply gets no markdown outlines; editing
+// through the navigator is unaffected.
+let avbMarkdownProcessor = null;
+try {
+  const { satteri } = await import('@astrojs/markdown-satteri');
+  avbMarkdownProcessor = satteri({ mdastPlugins: [avbSatteriMarkers] });
+} catch {
+  /* different Astro, different processor — skip the markers */
+}
 
 // Isolated component previews for the palette hover cards.
 const avbPreviewRoute = {
@@ -1985,6 +2401,9 @@ const avbPreviewRoute = {
     'astro:config:setup': ({ injectRoute }) => {
       injectRoute({ pattern: '/__avb/preview', entrypoint: ${JSON.stringify(
         toPosix(path.join(dir, 'preview.astro'))
+      )} });
+      injectRoute({ pattern: '/__avb/paths', entrypoint: ${JSON.stringify(
+        toPosix(path.join(dir, 'paths.js'))
       )} });
     },
   },
@@ -2005,6 +2424,12 @@ export default {
   // own dev server and build keep whatever it configured.
   compressHTML: false,
   integrations: [...(base.integrations || []), avbPreviewRoute],
+  markdown: {
+    ...(base.markdown || {}),
+    ...(avbMarkdownProcessor && !(base.markdown && base.markdown.processor)
+      ? { processor: avbMarkdownProcessor }
+      : {}),
+  },
   vite: {
     ...(base.vite || {}),
     plugins: [avbMarkers, ...((base.vite && base.vite.plugins) || [])],
@@ -2014,6 +2439,7 @@ export default {
     const cfgPath = path.join(dir, 'astro.config.mjs');
     fs.writeFileSync(cfgPath, cfg);
     fs.writeFileSync(path.join(dir, 'preview.astro'), PREVIEW_PAGE);
+    fs.writeFileSync(path.join(dir, 'paths.js'), PATHS_ENDPOINT);
     return cfgPath;
   } catch {
     return null; // preview still works, just without outlines
@@ -2267,6 +2693,206 @@ ipcMain.handle('style:writeFile', async (_e, { filePath, css }) => {
   const abs = assertInProject(filePath);
   markSelfWrite(abs); // the watcher must not treat our own write as external
   fs.writeFileSync(abs, css, 'utf8');
+  return { ok: true };
+});
+
+// ---------------------------------------------------------------------------
+// Source files behind a symbol
+// ---------------------------------------------------------------------------
+
+// tsconfig/jsconfig `paths` for the open project, as [prefix, [targets]] with
+// the trailing /* stripped. Astro's own config is extended, not read: only the
+// project's aliases matter here, and those live in its own file.
+function projectAliases(projectPath) {
+  for (const name of ['tsconfig.json', 'jsconfig.json']) {
+    const file = path.join(projectPath, name);
+    if (!fs.existsSync(file)) continue;
+    try {
+      // Config files allow comments and trailing commas; strip both rather
+      // than pulling in a JSON5 parser for one field.
+      const raw = fs
+        .readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:])\/\/.*$/gm, '$1')
+        .replace(/,(\s*[}\]])/g, '$1');
+      const json = JSON.parse(raw);
+      const paths = json?.compilerOptions?.paths;
+      if (!paths) continue;
+      return Object.entries(paths).map(([k, v]) => [
+        k.replace(/\*$/, ''),
+        (Array.isArray(v) ? v : [v]).map((t) => String(t).replace(/\*$/, '')),
+      ]);
+    } catch {
+      // A malformed config just means no aliases.
+    }
+  }
+  return [];
+}
+
+const SRC_EXTS = ['', '.ts', '.js', '.mjs', '.mts', '.tsx', '.jsx', '.json', '.astro'];
+
+function firstExisting(base) {
+  for (const ext of SRC_EXTS) {
+    const p = base + ext;
+    if (fs.existsSync(p) && fs.statSync(p).isFile()) return p;
+  }
+  for (const ext of SRC_EXTS.slice(1)) {
+    const p = path.join(base, 'index' + ext);
+    if (fs.existsSync(p) && fs.statSync(p).isFile()) return p;
+  }
+  return null;
+}
+
+// The file an import specifier points at: relative paths, project aliases
+// (`@/consts.ts`), and the usual extension guessing. Bare package names
+// resolve to nothing — node_modules isn't the user's code to edit.
+function resolveImportPath(projectPath, fromFile, spec) {
+  const s = String(spec || '');
+  if (!s) return null;
+  if (s.startsWith('.')) {
+    return firstExisting(path.resolve(path.dirname(fromFile), s));
+  }
+  for (const [prefix, targets] of projectAliases(projectPath)) {
+    if (!prefix || !s.startsWith(prefix)) continue;
+    const rest = s.slice(prefix.length);
+    for (const target of targets) {
+      const found = firstExisting(path.resolve(projectPath, target, rest));
+      if (found) return found;
+    }
+  }
+  if (s.startsWith('/')) return firstExisting(path.join(projectPath, s.slice(1)));
+  return null;
+}
+
+// 1-based line of `name`'s top-level declaration, so the editor can open on it.
+function declarationLine(text, name) {
+  if (!name) return 0;
+  const re = new RegExp(
+    // `[ \t]*`, not `\s*`: with the m flag `\s` eats the newlines before the
+    // declaration, and the match would start on a blank line above it.
+    `^[ \\t]*(?:export\\s+)?(?:const|let|var|function|class)\\s+${String(name).replace(/[^\w$]/g, '')}\\b`,
+    'm'
+  );
+  const m = re.exec(text);
+  if (!m) return 0;
+  return text.slice(0, m.index).split('\n').length;
+}
+
+// Opens the file an imported symbol comes from. `fromFile` is the file doing
+// the importing, so relative specifiers resolve the way the bundler sees them.
+ipcMain.handle('src:readSymbol', async (_e, { projectPath, fromFile, spec, name }) => {
+  if (!projectPath || !fromFile) return { ok: false };
+  const abs = resolveImportPath(projectPath, path.resolve(fromFile), spec);
+  if (!abs) return { ok: false, reason: 'not-found' };
+  assertInProject(abs);
+  const stat = fs.statSync(abs);
+  if (stat.size > MAX_EDITABLE_BYTES) return { ok: false, reason: 'too-large' };
+  const text = fs.readFileSync(abs, 'utf8');
+  return {
+    ok: true,
+    rel: path.relative(projectPath, abs),
+    text,
+    line: declarationLine(text, name),
+  };
+});
+
+// Where an import points, as a project-relative path. Same resolution as
+// src:readSymbol, but it never reads the file — the callers here are asking
+// about images, and their bytes are none of this channel's business.
+ipcMain.handle('src:resolvePath', async (_e, { projectPath, fromFile, spec }) => {
+  if (!projectPath || !fromFile) return { ok: false };
+  const abs = resolveImportPath(projectPath, path.resolve(fromFile), spec);
+  if (!abs) return { ok: false };
+  assertInProject(abs);
+  return { ok: true, rel: toPosix(path.relative(projectPath, abs)) };
+});
+
+// An image's pixel size, read from the file's own header.
+//
+// Astro takes the intrinsic size straight from a local asset — only a remote
+// source gets `inferSize`. So a width/height field over a project file should
+// say what that size IS, and to do that the app has to know it without waiting
+// for a thumbnail somewhere to finish decoding.
+function imageSizeOf(abs) {
+  let fd;
+  try {
+    fd = fs.openSync(abs, 'r');
+    const head = Buffer.alloc(32768);
+    const read = fs.readSync(fd, head, 0, head.length, 0);
+    const buf = head.subarray(0, read);
+
+    // PNG: IHDR is always the first chunk.
+    if (buf.length > 24 && buf.toString('binary', 1, 4) === 'PNG') {
+      return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+    }
+    // GIF: little-endian in the logical screen descriptor.
+    if (buf.length > 10 && buf.toString('binary', 0, 3) === 'GIF') {
+      return { w: buf.readUInt16LE(6), h: buf.readUInt16LE(8) };
+    }
+    // WebP: VP8 (lossy), VP8L (lossless) and VP8X (extended) each differ.
+    if (buf.length > 30 && buf.toString('binary', 0, 4) === 'RIFF' && buf.toString('binary', 8, 12) === 'WEBP') {
+      const kind = buf.toString('binary', 12, 16);
+      if (kind === 'VP8 ') return { w: buf.readUInt16LE(26) & 0x3fff, h: buf.readUInt16LE(28) & 0x3fff };
+      if (kind === 'VP8L') {
+        const bits = buf.readUInt32LE(21);
+        return { w: (bits & 0x3fff) + 1, h: ((bits >> 14) & 0x3fff) + 1 };
+      }
+      if (kind === 'VP8X') {
+        const w = 1 + (buf[24] | (buf[25] << 8) | (buf[26] << 16));
+        const h = 1 + (buf[27] | (buf[28] << 8) | (buf[29] << 16));
+        return { w, h };
+      }
+    }
+    // JPEG: walk the segments to the start-of-frame, which carries the size.
+    if (buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+      let at = 2;
+      while (at + 9 < buf.length) {
+        if (buf[at] !== 0xff) { at += 1; continue; }
+        const marker = buf[at + 1];
+        const len = buf.readUInt16BE(at + 2);
+        // SOF0…SOF15, minus the four that aren't frame headers.
+        if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc, 0xd8].includes(marker)) {
+          return { h: buf.readUInt16BE(at + 5), w: buf.readUInt16BE(at + 7) };
+        }
+        at += 2 + len;
+      }
+    }
+    // SVG: width/height when they're absolute, else the viewBox's own units.
+    if (/\.svg$/i.test(abs)) {
+      const text = buf.toString('utf8');
+      const tag = text.match(/<svg\b[^>]*>/i)?.[0] || '';
+      const num = (name) => {
+        const raw = tag.match(new RegExp(`\\b${name}\\s*=\\s*["']([^"']+)["']`, 'i'))?.[1];
+        return raw && /^[\d.]+(px)?$/i.test(raw.trim()) ? Math.round(parseFloat(raw)) : null;
+      };
+      const w = num('width');
+      const h = num('height');
+      if (w && h) return { w, h };
+      const box = tag.match(/\bviewBox\s*=\s*["']\s*[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+([\d.]+)/i);
+      if (box) return { w: Math.round(parseFloat(box[1])), h: Math.round(parseFloat(box[2])) };
+    }
+  } catch {
+    /* unreadable or a format we don't decode — the caller falls back */
+  } finally {
+    if (fd !== undefined) try { fs.closeSync(fd); } catch { /* already gone */ }
+  }
+  return null;
+}
+
+ipcMain.handle('assets:dimensions', async (_e, { projectPath, rel }) => {
+  const abs = assertInProject(path.resolve(projectPath, rel));
+  return { dims: imageSizeOf(abs) };
+});
+
+ipcMain.handle('src:readText', async (_e, { projectPath, rel }) => {
+  const abs = assertInProject(path.resolve(projectPath, rel));
+  return { text: fs.readFileSync(abs, 'utf8') };
+});
+
+ipcMain.handle('src:writeText', async (_e, { projectPath, rel, text }) => {
+  const abs = assertInProject(path.resolve(projectPath, rel));
+  markSelfWrite(abs);
+  fs.writeFileSync(abs, text, 'utf8');
   return { ok: true };
 });
 

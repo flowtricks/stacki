@@ -21,9 +21,12 @@ import {
   ElementListDefaultIcon,
   BracesIcon,
   RepeatIcon,
+  CodeIcon,
 } from '../ui/Icons.jsx';
 import AutoTextarea from '../ui/AutoTextarea.jsx';
 import AssetField from '../ui/AssetField.jsx';
+import ExprInput from '../ui/ExprInput.jsx';
+import useListReorder from '../ui/useListReorder.js';
 import {
   applyToItems,
   collectionOf,
@@ -41,6 +44,8 @@ import {
   inferType,
   keyFor,
   isPlainObject,
+  isExpr,
+  EXPR_KEY,
   reassemble,
 } from '../cmsSchema.js';
 
@@ -63,24 +68,16 @@ const FIELD_TYPES = [
   { value: 'list', label: 'List of text', Icon: ElementListDefaultIcon, hint: 'Tags, bullets' },
   { value: 'object', label: 'Group', Icon: BracesIcon, hint: 'Fields kept together' },
   { value: 'objects', label: 'Repeating items', Icon: RepeatIcon, hint: 'A list of entries' },
+  // Not offered when creating a field: a value is code because the file says
+  // so, never because someone picked it from a list.
+  { value: 'code', label: 'Code', Icon: CodeIcon, hint: 'A computed value' },
 ];
+
+// The types you can choose for a new field.
+const CREATABLE_TYPES = FIELD_TYPES.filter((t) => t.value !== 'code');
 
 const typeInfo = (type) =>
   FIELD_TYPES.find((t) => t.value === type) || FIELD_TYPES[0];
-
-// Reordering by drag, done the way the Navigator does it: the gate on
-// `dragover` reads dataTransfer.types, which is there the moment the drag
-// starts. Gating on React state instead can miss — a native drag runs its own
-// event loop, so a state update from `dragstart` isn't guaranteed to have
-// committed by the first `dragover`, and without preventDefault() the browser
-// refuses the drop and the row silently springs back.
-const dragging = (e, kind) => e.dataTransfer.types.includes(`avb/${kind}`);
-
-// Before or after the row under the pointer, by which half it's over.
-const edgeIndex = (e, index) => {
-  const box = e.currentTarget.getBoundingClientRect();
-  return e.clientY < box.top + box.height / 2 ? index : index + 1;
-};
 
 // The CMS editor, shown over the canvas while the CMS panel is open: items on
 // the left, the selected item's fields on the right. Everything writes back to
@@ -102,8 +99,6 @@ export default function CmsView({
   const [sel, setSel] = useState(0);
   const [query, setQuery] = useState('');
   const [saved, setSaved] = useState(false);
-  const [dragIndex, setDragIndex] = useState(null);
-  const [dropIndex, setDropIndex] = useState(null);
   // Types the user picked when creating a field, keyed by dotted field path.
   // Inference can't tell a phone number from a line of text, and an empty
   // field tells it nothing at all, so these are remembered on disk.
@@ -113,7 +108,7 @@ export default function CmsView({
   const pending = useRef(null); // items waiting to be written
   // The data currently on disk, so a save can record what it replaced for undo.
   const onDiskRef = useRef(null);
-  const dragFrom = useRef(null); // row being dragged, readable mid-drag
+  const moveRef = useRef(null); // set below, once `move` exists
 
   const load = useCallback(async () => {
     try {
@@ -223,6 +218,17 @@ export default function CmsView({
       .filter(({ item, index }) => !q || titleOf(item, index).toLowerCase().includes(q));
   }, [items, query]);
 
+  // Reordering is by pointer, not the native drag API — see useListReorder.
+  // Declared with the other hooks, above the early return below: `move` is
+  // defined further down (it needs `commit`), so it's reached through a ref.
+  // Disabled while a search is on — the visible rows aren't the whole list, so
+  // "drop it here" has no honest answer.
+  const reorder = useListReorder({
+    count: items.length,
+    onMove: (from, to) => moveRef.current?.(from, to),
+    disabled: !!query,
+  });
+
   if (!collection) return <div className={`cms-view ${hidden ? 'hidden' : ''}`} />;
 
   const single = collection.single;
@@ -259,6 +265,7 @@ export default function CmsView({
     commit(next);
     setSel(next.indexOf(moved));
   };
+  moveRef.current = move;
 
   const setItemValue = (key, value) => {
     const next = items.map((it, i) => (i === sel ? { ...it, [key]: value } : it));
@@ -366,59 +373,12 @@ export default function CmsView({
           </div>
         )}
 
-        {/* Dropping in the space under the last row moves an item to the end,
-            which is otherwise a fiddly target. */}
-        <div
-          className="cms-item-list"
-          onDragOver={(e) => {
-            if (!dragging(e, 'cms-item') || e.target !== e.currentTarget) return;
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            setDropIndex(items.length);
-          }}
-          onDrop={(e) => {
-            if (!dragging(e, 'cms-item') || e.target !== e.currentTarget) return;
-            e.preventDefault();
-            const from = dragFrom.current ?? Number(e.dataTransfer.getData('avb/cms-item'));
-            move(from, items.length);
-            dragFrom.current = null;
-            setDragIndex(null);
-            setDropIndex(null);
-          }}
-        >
+        <div className="cms-item-list">
           {filtered.map(({ item: row, index }) => (
             <div
               key={index}
-              className={`cms-item ${index === sel ? 'on' : ''} ${
-                dropIndex === index ? 'drop-before' : ''
-              } ${dropIndex === items.length && index === items.length - 1 ? 'drop-after' : ''}`}
-              draggable={!query}
-              onDragStart={(e) => {
-                dragFrom.current = index;
-                setDragIndex(index);
-                e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('avb/cms-item', String(index));
-              }}
-              onDragOver={(e) => {
-                if (!dragging(e, 'cms-item')) return;
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                setDropIndex(edgeIndex(e, index));
-              }}
-              onDragEnd={() => {
-                dragFrom.current = null;
-                setDragIndex(null);
-                setDropIndex(null);
-              }}
-              onDrop={(e) => {
-                if (!dragging(e, 'cms-item')) return;
-                e.preventDefault();
-                const from = dragFrom.current ?? Number(e.dataTransfer.getData('avb/cms-item'));
-                move(from, edgeIndex(e, index));
-                dragFrom.current = null;
-                setDragIndex(null);
-                setDropIndex(null);
-              }}
+              className={`cms-item ${index === sel ? 'on' : ''} ${reorder.rowClass(index)}`}
+              {...reorder.rowProps(index)}
               onClick={() => setSel(index)}
             >
               <span className="cms-item-grip">
@@ -451,13 +411,13 @@ export default function CmsView({
             <CloseIcon size={13} />
           </button>
           <span className="cms-detail-title">
-            {item ? titleOf(item, sel) : collection.label}
+            {item !== undefined ? titleOf(item, sel) : collection.label}
           </span>
           <span className={`cms-saved ${saved ? 'on' : ''}`}>
             <CheckIcon size={11} /> Saved
           </span>
           <span className="cms-detail-path">src/{collection.rel}</span>
-          {item && !single && (
+          {item !== undefined && !single && (
             <>
               <button className="ghost" title="Duplicate item" onClick={duplicate}>
                 <CopyIcon size={13} />
@@ -485,7 +445,7 @@ export default function CmsView({
             </div>
           )}
 
-          {item && isPlainObject(item) && (
+          {isPlainObject(item) && (
             <div className="cms-card">
               <h3>{single ? collection.label : 'Basic info'}</h3>
               {fields.map((field) => (
@@ -510,7 +470,7 @@ export default function CmsView({
             </div>
           )}
 
-          {!item && !collection.error && (
+          {item === undefined && !collection.error && (
             <div className="props-empty">Select an item to edit it.</div>
           )}
         </div>
@@ -621,24 +581,21 @@ async function deleteCollection(collection, project, showToast, onDeleted) {
 function FieldSchema({ items, declared, path, ...ops }) {
   const fields = withDeclaredTypes(fieldsAt(items, path), declared, path);
   const [expanded, setExpanded] = useState(() => new Set());
-  const [dragKey, setDragKey] = useState(null);
-  const [dropKeyAt, setDropKeyAt] = useState(null);
-  const dragFrom = useRef(null);
-  // A nested level's fields must not answer a drag from the level above it.
-  const dragType = `avb/cms-field-${path.join('.') || 'root'}`;
 
-  const drop = (source, target) => {
-    if (!source || !target || source === target) return;
-    if (!fields.some((f) => f.key === source)) return;
-    const keys = fields.map((f) => f.key).filter((k) => k !== source);
-    const at = keys.indexOf(target);
-    keys.splice(at < 0 ? keys.length : at, 0, source);
+  // Each level reorders its own fields; nesting is handled by the hook being
+  // per-FieldSchema, so a nested list never answers the level above it.
+  const move = (from, to) => {
+    if (from === to || to == null) return;
+    const keys = fields.map((f) => f.key);
+    const [moved] = keys.splice(from, 1);
+    keys.splice(to > from ? to - 1 : to, 0, moved);
     ops.onReorderFields(path, keys);
   };
+  const reorder = useListReorder({ count: fields.length, onMove: move });
 
   return (
     <div className="cms-schema">
-      {fields.map((field) => {
+      {fields.map((field, fieldIndex) => {
         const nested = field.type === 'objects' || field.type === 'object';
         const open = expanded.has(field.key);
         const info = typeInfo(field.type === 'empty' ? 'text' : field.type);
@@ -646,34 +603,8 @@ function FieldSchema({ items, declared, path, ...ops }) {
         return (
           <div key={field.key} className="cms-schema-group">
             <div
-              className={`cms-schema-row ${dropKeyAt === field.key ? 'drop-before' : ''}`}
-              draggable
-              onDragStart={(e) => {
-                dragFrom.current = field.key;
-                setDragKey(field.key);
-                e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData(dragType, field.key);
-              }}
-              onDragOver={(e) => {
-                if (!e.dataTransfer.types.includes(dragType)) return;
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                setDropKeyAt(field.key);
-              }}
-              onDragEnd={() => {
-                dragFrom.current = null;
-                setDragKey(null);
-                setDropKeyAt(null);
-              }}
-              onDrop={(e) => {
-                if (!e.dataTransfer.types.includes(dragType)) return;
-                e.preventDefault();
-                e.stopPropagation();
-                drop(dragFrom.current ?? e.dataTransfer.getData(dragType), field.key);
-                dragFrom.current = null;
-                setDragKey(null);
-                setDropKeyAt(null);
-              }}
+              className={`cms-schema-row ${reorder.rowClass(fieldIndex)}`}
+              {...reorder.rowProps(fieldIndex)}
             >
               <span className="cms-schema-grip">
                 <DragIcon size={11} />
@@ -817,6 +748,22 @@ function FieldRow({ label, type, value, onChange, projectPath, depth = 0 }) {
 }
 
 function FieldControl({ type, value, onChange, projectPath, depth }) {
+  // A computed value — shown as the code it is, in the same JS editor the
+  // props panel uses. Committed on blur or Enter rather than per keystroke:
+  // this text lands in a real source file, and half-typed code would break
+  // the page in the preview while you're still writing it.
+  if (type === 'code') {
+    const text = isExpr(value) ? value[EXPR_KEY] : String(value ?? '');
+    return (
+      <ExprInput
+        value={text}
+        syncValue={text}
+        placeholder="expression"
+        onCommit={(v) => v.trim() !== text.trim() && onChange({ [EXPR_KEY]: v.trim() })}
+      />
+    );
+  }
+
   if (type === 'boolean') {
     return (
       <button
@@ -985,9 +932,6 @@ function GroupEditor({ value, onChange, projectPath, depth }) {
 // so a long item doesn't push the rest of the form off the screen.
 function RepeaterEditor({ value, onChange, projectPath, depth }) {
   const [openIndex, setOpenIndex] = useState(null);
-  const [dragIndex, setDragIndex] = useState(null);
-  const [dropIndex, setDropIndex] = useState(null);
-  const dragFrom = useRef(null);
 
   const removeAt = (i) => {
     onChange(value.filter((_, j) => j !== i));
@@ -1009,39 +953,15 @@ function RepeaterEditor({ value, onChange, projectPath, depth }) {
     setOpenIndex(next.length - 1); // straight into the new entry's fields
   };
 
+  const reorder = useListReorder({ count: value.length, onMove: move });
+
   return (
     <div className="cms-repeater">
       {value.map((entry, i) => (
         <div
           key={i}
-          className={`cms-repeat-row ${dropIndex === i ? 'drop-before' : ''}`}
-          draggable
-          onDragStart={(e) => {
-            dragFrom.current = i;
-            setDragIndex(i);
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('avb/cms-entry', String(i));
-          }}
-          onDragOver={(e) => {
-            if (!dragging(e, 'cms-entry')) return;
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            setDropIndex(edgeIndex(e, i));
-          }}
-          onDragEnd={() => {
-            dragFrom.current = null;
-            setDragIndex(null);
-            setDropIndex(null);
-          }}
-          onDrop={(e) => {
-            if (!dragging(e, 'cms-entry')) return;
-            e.preventDefault();
-            const from = dragFrom.current ?? Number(e.dataTransfer.getData('avb/cms-entry'));
-            move(from, edgeIndex(e, i));
-            dragFrom.current = null;
-            setDragIndex(null);
-            setDropIndex(null);
-          }}
+          className={`cms-repeat-row ${reorder.rowClass(i)}`}
+          {...reorder.rowProps(i)}
           onClick={() => setOpenIndex(i)}
         >
           <span className="cms-repeat-grip">
@@ -1215,7 +1135,7 @@ function NewFieldDialog({ onAdd, onClose }) {
 
         {!type ? (
           <div className="cms-type-grid">
-            {FIELD_TYPES.map(({ value, label, Icon, hint }) => (
+            {CREATABLE_TYPES.map(({ value, label, Icon, hint }) => (
               <button key={value} className="cms-type-tile" onClick={() => setType(value)}>
                 <Icon size={18} />
                 <span className="cms-type-name">{label}</span>

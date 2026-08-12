@@ -22,9 +22,11 @@ export default function StylePanel({
   model,
   node,
   device,
+  pathOf,
   onWriteStyleNode,
   onSelectNode,
   onRecordUndo,
+  onAddClass,
   renderedClasses,
 }) {
   const [files, setFiles] = useState([]);
@@ -49,11 +51,13 @@ export default function StylePanel({
     projectPath: project?.path || null,
     nodes: model?.nodes || [],
     selectedId: node?.id || null,
+    pathOf: pathOf || null,
     device: device || 'desktop',
     files,
     writeStyleNode: onWriteStyleNode || null,
     selectNode: onSelectNode || null,
     recordUndo: onRecordUndo || null,
+    addClass: onAddClass || null,
     renderedClasses: renderedClasses || [],
   });
 
@@ -62,14 +66,16 @@ export default function StylePanel({
       projectPath: project?.path || null,
       nodes: model?.nodes || [],
       selectedId: node?.id || null,
+      pathOf: pathOf || null,
       device: device || 'desktop',
       files,
       writeStyleNode: onWriteStyleNode || null,
       selectNode: onSelectNode || null,
       recordUndo: onRecordUndo || null,
+      addClass: onAddClass || null,
       renderedClasses: renderedClasses || [],
     });
-  }, [project?.path, model, node?.id, device, files, onWriteStyleNode, onSelectNode, onRecordUndo, renderedClasses]);
+  }, [project?.path, model, node?.id, device, files, onWriteStyleNode, onSelectNode, onRecordUndo, onAddClass, renderedClasses]);
 
   // The panel's popups (clip path, transitions, background, grid) are portaled
   // to <body> and were written for moden, where the panel filled the window —

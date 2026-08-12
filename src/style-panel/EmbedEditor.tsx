@@ -70,6 +70,7 @@ import {
   rebuildRules,
   removeNativePropertyAt,
   resolveIdentityElement,
+  primeDomMatches,
   resolveTarget,
   scanAllComponents,
   scanHasElement,
@@ -123,13 +124,16 @@ function parseImportant(input: string): { value: string; important: boolean } {
 
 function headerLabel(snapshot: ElementSnapshot | undefined): string {
   if (!snapshot) return 'None'
-  const tag = snapshot.tag ?? snapshot.webflowType.toLowerCase()
   const id = snapshot.id ? `#${snapshot.id}` : ''
   // Show classes in their Webflow CSS form, de-duplicated (the snapshot keeps the raw
   // display name too — e.g. `Div Block` alongside `div-block` — for matching).
   const formatted = [...new Set(snapshot.classes.map(webflowClassToCss).filter(Boolean))]
   const classes = formatted.length ? `.${formatted.slice(0, 5).join('.')}` : ''
-  return `${tag}${id}${classes}` || tag
+  // This line reads as a selector, so it only shows what really is one. A
+  // component instance has no tag; writing its kind there would spell
+  // `component.card`, implying a `<component>` element exists.
+  const tag = snapshot.tag ?? ''
+  return `${tag}${id}${classes}` || snapshot.webflowType || 'Element'
 }
 
 // A selector Webflow can represent as one base class without an element carrying it.
@@ -2056,8 +2060,9 @@ function chainPrefixDepth(classes: string[], classList: string[]): number {
 
 // The chip display order: tag → base class (`.test`) → its pseudos (`.test:hover`,
 // `.test:is(:hover,:focus)`) → the applied combo chain (`.test.is-2` → `.test.is-2.ready`
-// + pseudos) → standalone/global classes (`.is-2`) → data attributes → complex/nested
-// selectors (`body > .test`). Returns a comparable [category, depth, pseudo] tuple.
+// + pseudos) → the element's remaining classes IN THE ORDER THEY'RE APPLIED →
+// data attributes → complex/nested selectors (`body > .test`). Returns a
+// comparable [category, depth, pseudo] tuple.
 function selectorOrder(text: string, classList: string[]): [number, number, number] {
   const canon = canonicalCompound(text)
   const classes = canon.tokens.filter((t) => t.startsWith('class:')).map((t) => t.slice('class:'.length))
@@ -2068,7 +2073,17 @@ function selectorOrder(text: string, classList: string[]): [number, number, numb
   if (classes.length) {
     const depth = chainPrefixDepth(classes, classList)
     if (depth > 0) return [1, depth, pseudo] // element's own chain: base(1) → combos
-    return [2, 0, pseudo] // standalone / global class
+    // Not a prefix chain of the applied classes. These all used to tie at 0 and
+    // fall through to specificity, then alphabetical — so the chips came out in
+    // an order the element knows nothing about. Rank them by where the class
+    // actually sits in `class="…"` instead. A combo sorts by its last applied
+    // class; a class that isn't on the element at all goes after them.
+    let applied = -1
+    for (const cls of classes) {
+      const at = classList.indexOf(cls)
+      if (at > applied) applied = at
+    }
+    return [2, applied === -1 ? classList.length : applied, pseudo]
   }
   if (hasAttr) return [3, 0, pseudo] // data attributes
   if (hasTag) return [0, 0, 0] // a tag that has styles — first
@@ -2451,6 +2466,9 @@ export default function EmbedEditor() {
     const { target, rootSnapshot } = await resolveTarget(element as never, content.scan)
     if (seq !== seqRef.current) return
     targetRef.current = target
+    // Ask the rendered page first — it knows what components render and what
+    // classes ran at runtime; the source tree can't see either.
+    await primeDomMatches(target, content.rules)
     const model = await computeRuleModel(content.rules, target)
     if (seq !== seqRef.current) return
     // Don't let a lagging partial clobber the final (partials share seq*2+0, the
@@ -2562,7 +2580,10 @@ export default function EmbedEditor() {
     if (snapChanged) {
       // Classes / attributes changed → selectors re-match; re-resolve against the
       // cached embeds and refresh the header identity.
-      const model = await computeRuleModel(content.rules, target)
+      // Ask the rendered page first — it knows what components render and what
+    // classes ran at runtime; the source tree can't see either.
+    await primeDomMatches(target, content.rules)
+    const model = await computeRuleModel(content.rules, target)
       if (busyRef.current || element !== selectedRef.current) return
       targetRef.current = target
       classListRef.current = snap.classList
@@ -2710,6 +2731,7 @@ export default function EmbedEditor() {
     if (contentRef.current) contentRef.current.rules = rules
     const target = targetRef.current
     if (!target) return
+    await primeDomMatches(target, rules)
     const model = await computeRuleModel(rules, target)
     const placeholders = contentRef.current?.scan.inComponentContext
       ? computePlaceholders(contentRef.current.docs, classListRef.current)
@@ -3172,6 +3194,21 @@ export default function EmbedEditor() {
         return
       }
     }
+    // A lone class typed here should also land on the element, the way a
+    // class field would. Anything more — a combinator, :is(), a state, a
+    // second token — is a selector being authored deliberately, so the
+    // element is left alone. canonicalCompound already draws that line.
+    const canon = canonicalCompound(trimmed)
+    if (
+      canon.simple &&
+      canon.oneCompound &&
+      !canon.pseudoElement &&
+      canon.pseudoClasses.length === 0 &&
+      canon.tokens.length === 1 &&
+      canon.tokens[0].startsWith('class:')
+    ) {
+      getHost().addClass?.(canon.tokens[0].slice('class:'.length))
+    }
     selectActiveSelector(trimmed)
   }, [selectActiveSelector])
   // Add a custom query (@media/@container/@supports) to the current selector from the
@@ -3491,7 +3528,10 @@ export default function EmbedEditor() {
     const nextContext = styleContexts.find((entry) => entry.key === next)
     if (!nextContext || !model) return
     // Only selectors with styles IN this context (drop the dimmed other-context ones).
-    const styled = styledSelectorsFor(model, nativeModel, nextContext).filter((s) => s.inContext !== false)
+    // Never jump to a global selector (`:focus-visible`, `*`): editing one edits
+    // most of the site, and it isn't about this element.
+    const styled = styledSelectorsFor(model, nativeModel, nextContext)
+      .filter((s) => s.inContext !== false && !isGlobalSelector(s.text))
     if (!styled.length) return
     if (activeSelector && styled.some((s) => selectorsMatch(s.text, activeSelector))) return
     selectActiveSelector(styled[styled.length - 1].text)
@@ -3515,30 +3555,37 @@ export default function EmbedEditor() {
     // armed so we retry as they arrive, instead of committing to the unstyled combo.
     if (!styled.length) return
     pendingDefaultRef.current = false
+    // A global selector must never become the default. It matches nearly every
+    // element, so picking one would both force its (hidden) chip back on screen
+    // and point the style fields at a rule that isn't about this element —
+    // editing `:focus-visible` here would restyle the whole site. With only
+    // globals styling this element, the composed token selector stays the pick.
+    const local = styled.filter((s) => !isGlobalSelector(s.text))
+    if (!local.length) return
     // Use the FRESH default the effect just set (not `activeSelector`, which is still
     // the previous element's here). Keep it if it's already styled, else pick the strongest.
     const defaultSel = tokensToSelector(defaultTokensRef.current, tokens)
-    if (defaultSel && styled.some((s) => selectorsMatch(s.text, defaultSel))) return
+    if (defaultSel && local.some((s) => selectorsMatch(s.text, defaultSel))) return
     // Fall back to the FIRST applied class that has styles (the primary block class in
     // Lumos) rather than styled[last] — utility classes (u-*) sort last by name and
     // shouldn't win the default just because their specificity ties the base class.
     const primaryStyled = defaultTokensRef.current
       .flatMap((tok) => {
-        const found = styled.find((s) => selectorsMatch(s.text, tokensToSelector([tok], tokens)))
+        const found = local.find((s) => selectorsMatch(s.text, tokensToSelector([tok], tokens)))
         return found ? [found] : []
       })[0]
     // Otherwise the FIRST selector in chip display order after the tag — the element's
     // own class/nesting selector (`.hero_component > .hero_paragraph`), not the highest-
     // specificity one (a foreign `:not(…) > :is(…)` shouldn't win the default).
     const classList = snapshot?.classList ?? []
-    const inChipOrder = [...styled]
+    const inChipOrder = [...local]
       .map((s) => ({ s, rank: selectorOrder(s.text, classList) }))
       .sort((a, b) =>
         a.rank[0] - b.rank[0] || a.rank[1] - b.rank[1] || a.rank[2] - b.rank[2] ||
         compareSpecificity(a.s.specificity, b.s.specificity) || a.s.text.localeCompare(b.s.text))
       .map((e) => e.s)
     const firstAfterTag = inChipOrder.find((s) => selectorOrder(s.text, classList)[0] > 0)
-    selectActiveSelector((primaryStyled ?? firstAfterTag ?? inChipOrder[0] ?? styled[styled.length - 1]).text)
+    selectActiveSelector((primaryStyled ?? firstAfterTag ?? inChipOrder[0] ?? local[local.length - 1]).text)
   }, [model, nativeModel, context, styleContexts, tokens, elementIdentity, snapshot, selectActiveSelector])
 
   // ── Native (Webflow class style) writes ──

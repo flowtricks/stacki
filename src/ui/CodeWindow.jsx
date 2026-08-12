@@ -8,7 +8,7 @@ const MIN_H = 220;
 
 // Floating, draggable, resizable code editor window. Non-modal: the rest of
 // the app stays interactive while it's open.
-export default function CodeWindow({ title, language, value, onChange, onClose, editorKey }) {
+export default function CodeWindow({ title, language, value, onChange, onClose, editorKey, revealLine }) {
   // Opens proportional to the window rather than at a fixed size: embeds and
   // frontmatter are usually real code, and a small default meant resizing it
   // every time. Capped so it stays a floating window on a wide monitor, and
@@ -93,7 +93,7 @@ export default function CodeWindow({ title, language, value, onChange, onClose, 
         </button>
       </div>
       <div className="code-window-body">
-        <CodeEditor key={editorKey} language={language} value={value} onChange={onChange} />
+        <CodeEditor key={editorKey} language={language} value={value} onChange={onChange} revealLine={revealLine} />
       </div>
       <div className="cw-rz cw-rz-n" onPointerDown={startResize('n')} />
       <div className="cw-rz cw-rz-s" onPointerDown={startResize('s')} />

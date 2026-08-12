@@ -276,20 +276,26 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
   background: transparent;
   border-radius: 6px;
   color: var(--text-faint);
+  transition: color 0.18s ease;
 }
-/* Only unselected buttons take a hover fill — the sliding indicator owns
-   the active button's background. */
+/* Hovering only lifts the icon — a fill would read as a second selection
+   while the chip is still travelling to where you clicked. */
 .link-types button:hover:not(:disabled):not(.on) {
   color: var(--text);
-  background: var(--bg-hover);
+  background: transparent;
 }
 .link-types button.on { background: transparent; color: var(--text); }
+/* Same chip as the True/False switcher: a flat tint this close to the track
+   disappears, so it carries a drop shadow and a hairline to lift off it. */
 .link-types-indicator {
   position: absolute;
   top: 2px;
   bottom: 2px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   transition:
     left 0.25s cubic-bezier(0.3, 0.7, 0.3, 1),
     width 0.25s cubic-bezier(0.3, 0.7, 0.3, 1);
@@ -441,7 +447,14 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
   align-items: flex-start;
   gap: 2px;
 }
-.prop-expr-row .expr-input { flex: 1; }
+.prop-expr-row .expr-input,
+.prop-expr-row .dd-trigger {
+  flex: 1;
+  min-width: 0;
+}
+/* Against a single-line control the pencil centres rather than hugging the
+   top the way it does beside a code field that can grow. */
+.prop-expr-row:has(> .dd-trigger) { align-items: center; }
 
 /* The declaration behind a bound prop, opened in place. */
 .var-src {
@@ -977,6 +990,10 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
   min-height: 0;
   overflow-y: auto;
   overflow-x: auto;
+  /* The 8px scrollbar takes layout space, so a panel whose content crosses
+     the fold used to jog sideways as it appeared and vanished — worst while
+     typing in a field that grows. The gutter is always there instead. */
+  scrollbar-gutter: stable;
   padding: 2px 8px 12px;
 }
 
@@ -1141,6 +1158,10 @@ body > .embed-editor_provenance {
   padding: var(--space-5, 16px);
   overflow-x: clip;
   overflow-y: auto;
+  /* Same gutter as the Settings tab: opening a section pushes past the fold,
+     and without this the whole tab jogs sideways when the bar appears — and
+     again when switching tabs, since the two would disagree by 8px. */
+  scrollbar-gutter: stable;
 }
 
 /* Props / Style switch at the top of the right panel. */
@@ -1477,7 +1498,12 @@ body > .embed-editor_provenance {
 /* ------------------------------------------------------------------ */
 
 .props-field { margin: 0 12px 12px; }
-.props-field label {
+/* The heading over a list (Attributes) — a label in look only: it names the
+   section rather than a field, and labelling nothing keeps its clicks from
+   reaching the button beside it. */
+.props-label-row { display: flex; align-items: center; }
+.props-field label,
+.props-field .props-label-row {
   display: block;
   font-size: 11px;
   font-weight: 500;
@@ -1696,7 +1722,8 @@ body > .embed-editor_provenance {
   flex-shrink: 0;
 }
 .props-title .props-title-icon { color: var(--text-dim); }
-.props-title .badge {
+.props-title .badge,
+.cms-collection .badge {
   font-size: 10px;
   padding: 2px 7px;
   border-radius: 99px;
@@ -1704,6 +1731,7 @@ body > .embed-editor_provenance {
   color: var(--accent);
   font-weight: 600;
 }
+.cms-collection .badge { flex-shrink: 0; }
 
 /* ------------------------------------------------------------------ */
 /* Preview                                                             */
@@ -2584,6 +2612,21 @@ body > .embed-editor_provenance {
 /* CMS — JSON under src/ edited as collections                         */
 /* ------------------------------------------------------------------ */
 
+/* Header of the collections panel: a back arrow and the open group's name,
+   kept together so the "+" stays at the far right. */
+.cms-crumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.cms-crumb h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cms-crumb button { margin-left: -4px; }
+
 .cms-group + .cms-group { margin-top: 10px; }
 .cms-group-label {
   padding: 6px 8px 4px;
@@ -2673,6 +2716,12 @@ body > .embed-editor_provenance {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 500;
+}
+/* Reordering: the row being dragged fades, the insertion point is a line. */
+.cms-item.is-dragging,
+.cms-repeat-row.is-dragging,
+.cms-schema-row.is-dragging {
+  opacity: 0.4;
 }
 .cms-item-grip { color: var(--text-faint); opacity: 0; display: flex; cursor: grab; }
 .cms-item:hover .cms-item-grip { opacity: 1; }
@@ -2807,6 +2856,7 @@ body > .embed-editor_provenance {
 }
 .cms-repeat-row:hover { color: var(--text); background: var(--bg-hover); }
 .cms-repeat-row.drop-before { border-top-color: var(--accent); }
+.cms-repeat-row.drop-after { border-bottom-color: var(--accent); }
 .cms-repeat-title {
   flex: 1;
   min-width: 0;
@@ -2864,6 +2914,7 @@ body > .embed-editor_provenance {
   background: var(--bg-panel-2);
 }
 .cms-schema-row.drop-before { border-top-color: var(--accent); }
+.cms-schema-row.drop-after { border-bottom-color: var(--accent); }
 .cms-schema-grip { color: var(--text-faint); opacity: 0; display: flex; cursor: grab; }
 .cms-schema-row:hover .cms-schema-grip { opacity: 1; }
 .cms-schema-expand {
@@ -2937,3 +2988,219 @@ body > .embed-editor_provenance {
   background: var(--bg-input);
   cursor: pointer;
 }
+
+/* Dynamic-route entry picker in the top bar. A [slug] page has no single URL,
+   so the canvas renders one of getStaticPaths' entries and this says which. */
+.route-picker { display: inline-flex; flex-shrink: 0; max-width: 220px; }
+.route-picker .dd-trigger { height: 22px; padding: 0 6px; font-size: 11px; }
+.route-chip {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--bg-input);
+  color: var(--text-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.route-chip.is-error { color: #e6a03c; background: rgba(230, 160, 60, 0.12); }
+
+/* A prop's documentation, from the comment above it in `interface Props`. The
+   "?" sits beside the name; the bubble is fixed so the panel's scroll box
+   can't clip it. */
+.prop-tip-icon {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 5px;
+  color: var(--text-faint);
+  cursor: help;
+  border-radius: 50%;
+  outline: none;
+}
+.prop-tip-icon:hover, .prop-tip-icon:focus-visible { color: var(--text-dim); }
+.prop-tip-icon:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+
+.prop-tip {
+  position: fixed;
+  z-index: 600;
+  transform: translate(-50%, -100%);
+  max-width: 260px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #2e2e2e;
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.45;
+  white-space: normal;
+  pointer-events: none;
+}
+.prop-tip.below { transform: translate(-50%, 0); }
+/* The pointer, on whichever side the bubble ended up. */
+.prop-tip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  /* Slides with the bubble when it's pushed off an edge, so it keeps
+     pointing at the icon rather than at wherever the bubble landed. */
+  margin-left: calc(-5px + var(--tip-arrow, 0px));
+  border: 5px solid transparent;
+  border-top-color: #2e2e2e;
+  top: 100%;
+}
+.prop-tip.below::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: #2e2e2e;
+}
+
+/* Boolean prop: True / False segments rather than a checkbox, so the field
+   states which value is in effect instead of leaving "unchecked" to mean both
+   "false" and "not set". The lit half SLIDES between the two, the way the
+   panel tabs do — the movement is what makes it read as one control with a
+   position, rather than two buttons that light up independently. */
+.bool-seg {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--bg-input);
+}
+/* Sized to one column and moved by exactly one column + the gap, so no
+   measuring is needed — two equal halves is the only layout this control has. */
+.bool-seg::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc(50% - 3px);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  transition: transform 0.25s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+.bool-seg.is-false::before { transform: translateX(calc(100% + 2px)); }
+
+.bool-seg button,
+.bool-seg button:hover:not(:disabled) {
+  position: relative; /* above the sliding chip */
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+.bool-seg button:hover:not(.on) { color: var(--text); }
+.bool-seg button.on,
+.bool-seg button.on:hover:not(:disabled) {
+  color: var(--text);
+  background: transparent; /* the chip behind it is the background */
+}
+
+/* Number prop: app-drawn steppers instead of the browser's. The native ones
+   can't be restyled, ignore the ⇧/⌥ step modifiers, and change the value when
+   the pointer happens to scroll over them. Revealed on hover/focus so a column
+   of numbers stays quiet until you reach for one. */
+.num-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.num-field input {
+  width: 100%;
+  padding-right: 20px; /* room for the steppers */
+}
+.num-steppers {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  bottom: 3px;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.num-field:hover .num-steppers,
+.num-field:focus-within .num-steppers { opacity: 1; }
+.num-steppers button,
+.num-steppers button:hover:not(:disabled) {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.num-steppers button:hover:not(:disabled) {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.num-steppers button:active { color: var(--accent); }
+
+/* The folded group at the foot of the props panel (class, attributes, the
+   comment, slot) — the fields every node has, kept out of the way of the ones
+   that describe this one. */
+.props-group { margin: 4px 0 0; border-top: 1px solid var(--border); }
+.props-group-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: transparent;
+  border-radius: 0;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+/* No hover fill: it's a heading you can click, not a row you pick from — and
+   the app-wide `button:hover` would otherwise light the whole strip. */
+.props-group-head:hover:not(:disabled) { background: transparent; }
+.props-group-head:hover .props-group-chevron { color: var(--text-dim); }
+.props-group-name { flex: 1; text-align: left; }
+.props-group-count {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-faint);
+  background: var(--bg-input);
+  border-radius: 10px;
+  padding: 1px 6px;
+}
+.props-group-chevron { color: var(--text-faint); transition: transform 0.12s; }
+.props-group.open .props-group-chevron { transform: rotate(90deg); }
+
+/* The URL bar is an input so it can be selected, copied and typed into — but
+   it must still read as the quiet label it was, not a form field, until you
+   reach for it. The app styles inputs globally; this puts the pill back. */
+.titlebar input.url,
+.titlebar input.url:hover {
+  border: 1px solid transparent;
+  text-align: center;
+  cursor: text;
+}
+.titlebar input.url:hover:not(:read-only) { background: var(--bg-active); }
+.titlebar input.url:focus {
+  outline: none;
+  border-color: var(--accent);
+  color: var(--text);
+  text-align: left;
+}
+.titlebar input.url::placeholder { color: var(--text-faint); }

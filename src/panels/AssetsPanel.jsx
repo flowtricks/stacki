@@ -28,8 +28,11 @@ const pickPrompt = {
   asset: 'Choose a file',
 };
 
-// Assets panel: browses public/, uploads, drag-in/out of folders, renames.
-// External changes to public/ refresh the listing via the fs watcher.
+// Assets panel: browses the project's two asset roots — public/ (served as-is,
+// referenced by URL) and src/ (imported and optimised by the build, which is
+// where <Image> wants its images). Uploads, drag between folders and roots,
+// renames. External changes to either root refresh the listing via the fs
+// watcher.
 // `pick` is set while a field is waiting for an asset (see assetPick.js):
 // the panel filters to the kind that was asked for, starts in the folder the
 // current value lives in, and a click assigns instead of opening the file.
@@ -156,7 +159,8 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
 
   // --- Breadcrumb ------------------------------------------------------
 
-  const crumbs = [{ rel: '', label: 'public' }];
+  // '' is above both roots now, so it can't be called "public".
+  const crumbs = [{ rel: '', label: 'Assets' }];
   if (cwd) {
     const parts = cwd.split('/');
     parts.forEach((part, i) => {
@@ -164,7 +168,7 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
     });
   }
 
-  if (missing) {
+  if (missing && !entries.length) {
     return (
       <div className="panel-section grow">
         <div className="panel-header">
@@ -202,12 +206,18 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
       <div className="panel-header">
         <h2>Assets</h2>
         <div style={{ display: 'flex', gap: 2 }}>
-          <button className="ghost" title="New folder" onClick={() => setNewFolder(true)}>
+          <button
+            className="ghost"
+            title={cwd ? 'New folder' : 'Open public/ or src/ first'}
+            disabled={!cwd}
+            onClick={() => setNewFolder(true)}
+          >
             <FolderPlusIcon size={14} />
           </button>
           <button
             className="ghost"
-            title="Upload assets"
+            title={cwd ? 'Upload assets' : 'Open public/ or src/ first'}
+            disabled={!cwd}
             onClick={() =>
               act(() => window.avb.pickUploadAssets({ projectPath: project.path, destRel: cwd }))
             }
@@ -334,7 +344,7 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
               }
               // While picking, the whole tile assigns — including for text
               // files, whose thumb would otherwise open the code editor.
-              onClick={pick ? () => pick.onPick(file.rel) : undefined}
+              onClick={pick ? () => pick.onPick(file.rel, file) : undefined}
             >
               <AssetThumb
                 file={file}

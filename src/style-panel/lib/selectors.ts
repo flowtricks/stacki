@@ -387,7 +387,22 @@ export type TreeView = {
   snapshot: (key: string) => Promise<ElementSnapshot | null>
 }
 
-export type MatchTarget = { rootKey: string; view: TreeView }
+export type MatchTarget = {
+  rootKey: string
+  view: TreeView
+  /**
+   * What the RENDERED page says about this element, when a live canvas can be
+   * asked (see canvasQuery.js / primeDomMatches). Keyed by selector text.
+   *
+   * The tree walk below can only see the source: it stops at a component's
+   * edge, and knows nothing of classes applied at runtime. Chromium matching
+   * against the real DOM has neither limit, so its answer wins wherever it
+   * has one — this map — and the walk stays as the fallback for everything
+   * else (no preview running, a page that failed to build, a selector the
+   * engine rejected).
+   */
+  domMatched?: Map<string, boolean>
+}
 
 const MAX_HAS_DESCENDANTS = 2000
 
@@ -395,7 +410,14 @@ const MAX_HAS_DESCENDANTS = 2000
 export async function matchSelectorList(selectorText: string, target: MatchTarget): Promise<MatchResult[]> {
   const compiled = compileSelectorList(selectorText)
   const results: MatchResult[] = []
-  for (const sel of compiled) results.push(await matchComplex(sel, target.rootKey, target.view))
+  for (const sel of compiled) {
+    const fromDom = target.domMatched?.get(sel.text)
+    if (fromDom !== undefined) {
+      results.push({ matched: fromDom, approximate: false })
+      continue
+    }
+    results.push(await matchComplex(sel, target.rootKey, target.view))
+  }
   return results
 }
 

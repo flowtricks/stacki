@@ -36,6 +36,16 @@ export type HostState = {
   writeStyleNode: ((nodeId: string, css: string, immediate?: boolean) => void) | null
   /** Select a node in the app (used when navigating from a provenance chip). */
   selectNode: ((nodeId: string) => void) | null
+  /** Put a class on the selected element. Typing a bare class in the selector
+   *  box should land it on the element, the way a class field would — a rule
+   *  for a class the element doesn't carry would never apply. */
+  addClass: ((className: string) => void) | null
+  /**
+   * A node's path in the rendered page (`0.1.2`), which is how the canvas
+   * addresses elements. Lets the panel ask the real DOM about the selected
+   * element instead of inferring it from the source tree.
+   */
+  pathOf: ((nodeId: string) => string | null) | null
   /** Record an already-applied change on the app's undo stack. Stylesheet edits
    *  don't go through the page model, so without this ⌘Z would skip straight
    *  past them to the last layout change. */
@@ -54,12 +64,14 @@ const state: HostState = {
   projectPath: null,
   nodes: [],
   selectedId: null,
+  pathOf: null,
   device: 'desktop',
   files: [],
   renderedClasses: [],
   writeStyleNode: null,
   selectNode: null,
   recordUndo: null,
+  addClass: null,
 }
 
 const listeners = new Set<() => void>()

@@ -38,8 +38,8 @@ function countPages(node) {
   return n;
 }
 
-const stripExt = (base) => base.replace(/\.(astro|md)$/i, '');
-const extOf = (base) => (base.match(/\.(astro|md)$/i) || ['.astro'])[0];
+const stripExt = (base) => base.replace(/\.(astro|mdx?)$/i, '');
+const extOf = (base) => (base.match(/\.(astro|mdx?)$/i) || ['.astro'])[0];
 const dirOf = (rel) => rel.split('/').slice(0, -1).join('/');
 
 // Webflow-style pages tree: folders (create, rename, delete, collapse with

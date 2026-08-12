@@ -31,6 +31,7 @@ import type {
   StyleRegion,
 } from './types'
 import type { MatchTarget, TreeView } from './selectors'
+import { hasCanvas, queryCanvas } from '../../canvasQuery.js'
 import type { NativeStyleOptions } from './native-styles'
 
 type AnyEl = unknown
@@ -102,8 +103,35 @@ const nodeById = (id: string | null): HostNode | null =>
 // that for the selected element, so merge it in: a static class inside a
 // class:list shows up, and a computed one (`gap-${gap}`) shows the value THIS
 // instance resolved to. Source order first, then anything only the DOM knows.
+// The string literals in an expression-valued class attribute. `class:list={[
+// "container", gap !== "8" && `gap-${gap}`, ...rest ]}` yields `container` — a
+// literal is a class this element always has, so it can be shown straight away
+// instead of waiting on the canvas. Template literals with a `${}` hole are
+// skipped: only the rendered element knows what they became. Values that aren't
+// class-shaped (selectors, URLs, sentences) are dropped.
+const CLASS_RE = /^[A-Za-z_-][A-Za-z0-9_-]*$/
+const literalClasses = (node: HostNode | null, name: string): string[] => {
+  const prop = node?.props?.[name]
+  if (!prop || prop.type !== 'expr') return []
+  const out: string[] = []
+  for (const [, quote, body] of String(prop.value ?? '').matchAll(/(['"`])([^'"`]*)\1/g)) {
+    if (quote === '`' && body.includes('${')) continue
+    for (const tok of body.split(/\s+/)) if (CLASS_RE.test(tok)) out.push(tok)
+  }
+  return out
+}
+
 const classTokens = (node: HostNode | null): string[] => {
-  const authored = propText(node, 'class').split(/\s+/).filter(Boolean)
+  // A class can be named in more than one place (`class` plus `class:list`, or
+  // twice within one list) — the element still carries it once.
+  const authored = [
+    ...new Set([
+      ...propText(node, 'class').split(/\s+/).filter(Boolean),
+      // `class:list={[…]}`, and `class={…}` when it's an expression.
+      ...literalClasses(node, 'class:list'),
+      ...literalClasses(node, 'class'),
+    ]),
+  ]
   const host = getHost()
   // Rendered classes describe the selected element only — attributing them to
   // any other node (an ancestor being matched, say) would be wrong.
@@ -266,7 +294,7 @@ export function scanHasElement(scan: EmbedScan, selected: AnyEl): boolean {
 // and kinds whose element count can't be known without running the page.
 // Everything else (text, comment, raw-line) renders no element at all.
 const ELEMENT_KINDS = new Set(['element', 'component', 'raw'])
-const OPAQUE_COUNT_KINDS = new Set(['map', 'expr', 'chunk-group'])
+const OPAQUE_COUNT_KINDS = new Set(['map', 'expr', 'chunk-group', 'cond', 'branch'])
 
 function buildTreeMaps() {
   const parentByKey = new Map<string, string>()
@@ -435,6 +463,65 @@ export async function navigateToEmbed(
   return { ok: true }
 }
 
+// ───────────────────────── Asking the rendered page ─────────────────────────
+
+// State pseudo-classes describe a moment, not an element: `.card:hover` only
+// matches while the pointer is there, but the panel is asking "does this rule
+// target this element", which it does whether or not it's hovered right now.
+// Stripped before asking, and the answer stored under the original text.
+// Longest name first, and `(?![\w-])` rather than `\b` to close the trap that
+// `-` is a non-word character: `:focus\b` happily matches inside
+// `:focus-visible`, leaving the nonsense selector `a-visible`.
+const STATE_PSEUDO_RE =
+  /:(?:focus-visible|focus-within|focus|hover|active|visited|target|checked|indeterminate|default|disabled|enabled|placeholder-shown|autofill|user-invalid|user-valid|read-only|read-write|open)(?![\w-])/g
+const PSEUDO_ELEMENT_RE =
+  /::?(?:before|after|first-line|first-letter|selection|placeholder|marker|backdrop|file-selector-button)(?![\w-])|::(?:part|slotted)\([^)]*\)/g
+
+function askableForm(text: string): string | null {
+  const bare = text.replace(PSEUDO_ELEMENT_RE, '').replace(STATE_PSEUDO_RE, '').trim()
+  // What's left has to still be a selector: `:hover {}` on its own strips to
+  // nothing, and `.a > :hover` to a dangling combinator.
+  if (!bare || /[>+~]\s*$/.test(bare) || bare.startsWith('>')) return null
+  return bare
+}
+
+/**
+ * Fill `target.domMatched` by asking the canvas, in one round trip, which of
+ * these selectors actually match the selected element on the page.
+ *
+ * This is the whole point of the exercise: the rendered DOM knows what every
+ * component renders, what every loop produced, and what classes a script or a
+ * `class:list` expression put there — none of which the source tree can see.
+ * Selectors the engine can't be asked about (or a canvas that doesn't answer)
+ * are simply left out of the map, so they fall back to the source matcher.
+ */
+export async function primeDomMatches(target: MatchTarget, rules: ParsedRule[]): Promise<void> {
+  const path = getHost().pathOf?.(target.rootKey)
+  if (!path || !hasCanvas()) return
+  // One entry per distinct selector, mapped back to every text that asked for
+  // it — `.a:hover` and `.a` ask the same question of the DOM.
+  const askedFor = new Map<string, string[]>()
+  for (const rule of rules) {
+    for (const sel of rule.selectors) {
+      const ask = askableForm(sel.text)
+      if (!ask) continue
+      const list = askedFor.get(ask)
+      if (list) list.push(sel.text)
+      else askedFor.set(ask, [sel.text])
+    }
+  }
+  if (!askedFor.size) return
+  const answer = await queryCanvas(path, [...askedFor.keys()])
+  if (!answer) return
+  const matched = new Map<string, boolean>()
+  for (const [ask, texts] of askedFor) {
+    const hit = answer.matched[ask]
+    if (typeof hit !== 'boolean') continue // the engine refused it — fall back
+    for (const text of texts) matched.set(text, hit)
+  }
+  target.domMatched = matched
+}
+
 // ───────────────────────────── Match target ─────────────────────────────
 
 export async function resolveTarget(
@@ -469,7 +556,32 @@ export async function resolveTarget(
       return snap
     },
   }
-  return { target: { rootKey, view }, rootSnapshot: await buildSnapshot(selected) }
+  const target: MatchTarget = { rootKey, view }
+  let rootSnapshot = await buildSnapshot(selected)
+  // What the selected node actually renders as. A component instance has no
+  // tag or classes of its own — `<Section>` says nothing about the
+  // `<section class="section">` it produces — so the header, the chips, and
+  // every selector composed from them were describing the call site rather
+  // than the element on the page. The canvas knows the difference.
+  const path = getHost().pathOf?.(rootKey)
+  if (path && hasCanvas()) {
+    const answer = await queryCanvas(path, [])
+    const identity = answer?.identity
+    if (identity) {
+      const attributes = { ...identity.attributes }
+      delete attributes.class
+      if (identity.classes.length) attributes.class = identity.classes.join(' ')
+      rootSnapshot = {
+        ...rootSnapshot,
+        tag: identity.tag,
+        id: identity.id ?? rootSnapshot.id,
+        classes: identity.classes,
+        classList: identity.classes,
+        attributes,
+      }
+    }
+  }
+  return { target, rootSnapshot }
 }
 
 // ───────────────────────────── Breakpoints ─────────────────────────────

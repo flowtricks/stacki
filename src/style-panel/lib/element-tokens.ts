@@ -11,8 +11,11 @@ export function snapshotTokens(snapshot: ElementSnapshot | undefined): ClassToke
   if (!snapshot) return []
   const tokens: ClassToken[] = []
 
-  // Tag first (every element has one).
-  const tag = snapshot.tag ?? (snapshot.webflowType ? snapshot.webflowType.toLowerCase() : null)
+  // Tag first — when there is one. A component instance renders markup this
+  // side can't see, so it has no tag of its own, and the node's KIND is not a
+  // substitute: `component.card` is a selector for a `<component>` element,
+  // which no page has. Such an element is matched by its classes alone.
+  const tag = snapshot.tag
   if (tag) tokens.push({ name: `tag:${tag}`, label: tag, kind: 'tag' })
 
   // Then classes, in element order — each shown in its Webflow CSS form (`Div Block`

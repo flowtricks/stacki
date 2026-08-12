@@ -59,19 +59,39 @@ export default function LinkField({ value, context, onChange }) {
     onChange({ type: 'string', value: next }, immediate);
   };
 
-  // Sliding highlight behind the active type button.
+  // Sliding highlight behind the active type button. Measuring once on mount
+  // isn't enough: the Settings pane is display:none while the Style tab is up,
+  // so a field that mounts behind it measures a zero-wide chip — invisible,
+  // and it would stay that way until the type was changed. Re-measure after
+  // every render (the panel re-renders when the tab comes back) and whenever
+  // the row itself resizes (panel drag, or gaining a box on reveal).
+  const rowRef = useRef(null);
   const btnRefs = useRef({});
+  const typeRef = useRef(type);
+  typeRef.current = type;
   const [indicator, setIndicator] = useState(null);
+  const measure = () => {
+    const el = btnRefs.current[typeRef.current];
+    const next = el && el.offsetWidth ? { left: el.offsetLeft, width: el.offsetWidth } : null;
+    // Same numbers must yield the same object, or measuring on every render
+    // would re-render forever.
+    setIndicator((prev) =>
+      prev && next && prev.left === next.left && prev.width === next.width ? prev : next
+    );
+  };
+  useLayoutEffect(measure);
   useLayoutEffect(() => {
-    const el = btnRefs.current[type];
-    setIndicator(el ? { left: el.offsetLeft, width: el.offsetWidth } : null);
-  }, [type]);
+    if (!rowRef.current || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(measure);
+    ro.observe(rowRef.current);
+    return () => ro.disconnect();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { email, subject } = type === 'email' ? parseMailto(str) : { email: '', subject: '' };
 
   return (
     <>
-      <div className="link-types">
+      <div className="link-types" ref={rowRef}>
         {indicator && <span className="link-types-indicator" style={indicator} />}
         {TYPES.map((t) => (
           <button
@@ -90,7 +110,7 @@ export default function LinkField({ value, context, onChange }) {
       {type === 'url' && (
         <input
           value={str}
-          placeholder="https://… or /path"
+          placeholder="#"
           spellCheck={false}
           onChange={(e) => commit(e.target.value)}
         />

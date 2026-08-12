@@ -1,6 +1,10 @@
 import React from 'react';
 
 // Minimal stroke-based icon set on a 16px grid, Framer-style.
+// Astro's brand accent, so anything from astro:assets is identifiable at a
+// glance as Astro's rather than the project's or plain HTML's.
+export const ASTRO_ASSET_ACCENT = '#ff5d01';
+
 const I = ({ children, size = 16, className, style, filled = false, strokeWidth = 1.3 }) => (
   <svg
     width={size}
@@ -193,6 +197,18 @@ export const PreviewIcon = (p) => (
 export const FolderIcon = (p) => (
   <I {...p}>
     <path d="M2 12.5V3.8a.8.8 0 0 1 .8-.8h3.4l1.5 1.8h5.5a.8.8 0 0 1 .8.8v6.9a.8.8 0 0 1-.8.8H2.8a.8.8 0 0 1-.8-.8Z" />
+  </I>
+);
+
+// Webflow's folder glyph — a filled evenodd path, so it opts into `filled`
+// rather than the stroked default the other icons use.
+export const FolderDefaultIcon = (p) => (
+  <I filled {...p}>
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M8.70703 5H13C13.5523 5 14 5.44772 14 6V12C14 12.5523 13.5523 13 13 13H3C2.44771 13 2 12.5523 2 12V4C2 3.44772 2.44772 3 3 3H6.70703L8.70703 5ZM3 12H13V8H3V12ZM3 7H13V6H8.29297L6.29297 4H3V7Z"
+    />
   </I>
 );
 
@@ -428,6 +444,14 @@ export const CheckIcon = (p) => (
   </I>
 );
 
+// The "goes here" elbow: one side of a condition, in the navigator.
+export const CornerIcon = (p) => (
+  <I {...p}>
+    <path d="M4.5 3v6.5a1 1 0 0 0 1 1h6" />
+    <path d="m9.3 8.2 2.4 2.3-2.4 2.3" />
+  </I>
+);
+
 export const BranchIcon = (p) => (
   <I {...p}>
     <circle cx="4.5" cy="3.5" r="1.6" />
@@ -644,6 +668,34 @@ export const DropletIcon = (p) => (
   </I>
 );
 
+export const HelpCircleIcon = ({ size = 16, className, style }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    className={className}
+    style={{ display: 'block', flexShrink: 0, ...style }}
+    aria-hidden="true"
+  >
+    <path
+      d="M7.5 4C6.67157 4 6 4.67157 6 5.5V6H7V5.5C7 5.22386 7.22386 5 7.5 5H9.32578C9.75296 5 9.98341 5.50106 9.70541 5.8254L8.36111 7.39374C8.12809 7.6656 8 8.01186 8 8.36992V9H9V8.36992C9 8.25057 9.0427 8.13515 9.12037 8.04453L10.4647 6.47619C11.2987 5.50318 10.6073 4 9.32578 4H7.5Z"
+      fill="currentColor"
+    />
+    <path
+      d="M8.5 11.25C8.91421 11.25 9.25 10.9142 9.25 10.5C9.25 10.0858 8.91421 9.75 8.5 9.75C8.08579 9.75 7.75 10.0858 7.75 10.5C7.75 10.9142 8.08579 11.25 8.5 11.25Z"
+      fill="currentColor"
+    />
+    <path
+      opacity="0.4"
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M8.5 1C12.0899 1 15 3.91015 15 7.5C15 11.0899 12.0899 14 8.5 14C4.91015 14 2 11.0899 2 7.5C2 3.91015 4.91015 1 8.5 1ZM8.5 2C5.46243 2 3 4.46243 3 7.5C3 10.5376 5.46243 13 8.5 13C11.5376 13 14 10.5376 14 7.5C14 4.46243 11.5376 2 8.5 2Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
 export const GearIcon = (p) => (
   <I {...p}>
     <circle cx="8" cy="8" r="2.15" />
@@ -725,3 +777,61 @@ export function elementIcon(tag, size = 12, className) {
   const Icon = TAG_ICONS[String(tag).toLowerCase()] || CustomElementIcon;
   return <Icon size={size} className={className} />;
 }
+
+// astro:assets <Image> / <Picture>. The glyph is the element they render, so
+// the row still reads as an image, tinted with Astro's accent and carrying a
+// small mark — a plain <img> is grey, a project component is green, and this
+// is neither.
+export function astroAssetIcon(name, size = 14, className) {
+  const stack = name === 'Picture';
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+      style={{ display: 'block', flexShrink: 0, color: ASTRO_ASSET_ACCENT }}
+    >
+      {/* A second frame behind the first says "more than one source". */}
+      {stack && (
+        <path
+          d="M4.5 3.5H2.75A.75.75 0 0 0 2 4.25v8a.75.75 0 0 0 .75.75H10"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          opacity="0.55"
+        />
+      )}
+      <rect
+        x={stack ? 5 : 2.6}
+        y={stack ? 2 : 3}
+        width={stack ? 9 : 10.8}
+        height={stack ? 9 : 10}
+        rx="1.1"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <circle cx={stack ? 7.6 : 5.6} cy={stack ? 4.7 : 5.9} r="1" fill="currentColor" />
+      <path
+        d={stack ? 'M5.4 10.2 8.2 7.6l5.2 4.6' : 'M3 12.2l3.4-3.2 6.6 5.5'}
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// Boolean prop — a switch, matching the True/False control the field renders.
+export const FieldSwitchIcon = (p) => (
+  <I {...p} filled>
+    <path d="M10 10.5C11.3807 10.5 12.5 9.38071 12.5 8C12.5 6.61929 11.3807 5.5 10 5.5C8.61929 5.5 7.5 6.61929 7.5 8C7.5 9.38071 8.61929 10.5 10 10.5Z" />
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M6 3C3.23858 3 1 5.23858 1 8C1 10.7614 3.23858 13 6 13H10C12.7614 13 15 10.7614 15 8C15 5.23858 12.7614 3 10 3H6ZM2 8C2 5.79086 3.79086 4 6 4H10C12.2091 4 14 5.79086 14 8C14 10.2091 12.2091 12 10 12H6C3.79086 12 2 10.2091 2 8Z"
+    />
+  </I>
+);

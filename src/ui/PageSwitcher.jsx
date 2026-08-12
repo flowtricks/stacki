@@ -12,7 +12,7 @@ export default function PageSwitcher({ pages, currentPage, onSelect }) {
   const popRef = useRef(null);
   const inputRef = useRef(null);
 
-  const pretty = (p) => p.name.replace(/\.(astro|md)$/i, '');
+  const pretty = (p) => p.name.replace(/\.(astro|mdx?)$/i, '');
   const q = query.trim().toLowerCase();
   const filtered = (pages || []).filter(
     (p) => !q || p.name.toLowerCase().includes(q) || p.route.toLowerCase().includes(q)

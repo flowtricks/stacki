@@ -197,11 +197,19 @@ if (!process.isMainFrame) {
 
   // --- Node outlines --------------------------------------------------------
   // Pages served through the app's marker plugin wrap every model node in
-  // <template data-avb-s/e="path"> pairs. Record each pair's run of sibling
-  // DOM nodes, then strip the markers so they can't affect structural CSS
-  // selectors (:first-child, :nth-child, …). The app tracks paths; their
-  // rects are pushed back on scroll/resize/DOM changes, and hovering the
-  // page reports the deepest node under the cursor.
+  // <!--avb-s:path--> / <!--avb-e:path--> comment pairs. Record each pair's
+  // run of sibling DOM nodes, then take the markers out.
+  //
+  // Comments, not elements: a <template> counts for :nth-child, :first-child,
+  // + and ~ like anything else, so the markers this replaced shifted the
+  // page's own structural selectors for as long as they were in the DOM —
+  // through first paint, since they can only be removed once the run has been
+  // recorded. A comment is invisible to all of those. The exception is a
+  // slotted node, whose markers must carry its `slot` attribute to travel
+  // with it: an attribute needs an element, so those stay <template>s and are
+  // read here too. The app tracks paths; their rects are pushed back on
+  // scroll/resize/DOM changes, and hovering the page reports the deepest node
+  // under the cursor.
   const regions = new Map(); // path -> [ [node, ...], ... ]
   let trackedPaths = [];
   // The file the app is addressing: empty for the page, or a component's
@@ -222,24 +230,65 @@ if (!process.isMainFrame) {
   // *nodes* would change what :first-child/:nth-child match.
   const PATH_ATTR = 'data-avb-p';
 
+  // An element can carry more than one path, space separated. The page
+  // addresses a slotted element by its page path (written into the markup by
+  // the serializer, since a slotted node can't be wrapped in markers); the
+  // component that renders the slot addresses that same element by its own
+  // path. Whichever file is open picks its namespace out of the list.
+  const pathsOf = (el) => (el.getAttribute(PATH_ATTR) || '').split(' ').filter(Boolean);
+  const addPath = (el, p) => {
+    const list = pathsOf(el);
+    if (list.includes(p)) return;
+    list.push(p);
+    el.setAttribute(PATH_ATTR, list.join(' '));
+  };
+  const elementsWithPath = (p) =>
+    [...document.querySelectorAll(`[${PATH_ATTR}]`)].filter((el) => pathsOf(el).includes(p));
+
+  // The path a node marks, or null when it isn't a marker. `kind` is 's'/'e'.
+  const markerPath = (n, kind) => {
+    if (!n) return null;
+    if (n.nodeType === 8) {
+      const tag = `avb-${kind}:`;
+      return n.data.startsWith(tag) ? n.data.slice(tag.length) : null;
+    }
+    if (n.nodeType === 1 && n.tagName === 'TEMPLATE') return n.getAttribute(`data-avb-${kind}`);
+    return null;
+  };
+
   const collectRegions = () => {
-    const starts = document.querySelectorAll('template[data-avb-s]');
+    // One pass in document order over both marker forms — the deeper path has
+    // to be seen last so that it wins the tag on an element they share.
+    // Walked by hand rather than with a TreeWalker: this runs in the preload's
+    // isolated world, and depending on nothing but firstChild/nextSibling
+    // keeps it working whatever that world does or doesn't expose. It is also
+    // the only thing standing between the page and no outlines at all —
+    // startOutlines gives up entirely when nothing is recorded.
+    const starts = [];
+    const markers = [];
+    const visit = (parent) => {
+      for (let n = parent.firstChild; n; n = n.nextSibling) {
+        const isStart = markerPath(n, 's') !== null;
+        if (isStart) starts.push(n);
+        if (isStart || markerPath(n, 'e') !== null) markers.push(n);
+        if (n.nodeType === 1) visit(n);
+      }
+    };
+    visit(document);
     for (const s of starts) {
-      const p = s.getAttribute('data-avb-s');
+      const p = markerPath(s, 's');
       const run = [];
       for (let n = s.nextSibling; n; n = n.nextSibling) {
-        if (n.nodeType === 1 && n.tagName === 'TEMPLATE' && n.getAttribute('data-avb-e') === p) break;
+        if (markerPath(n, 'e') === p) break;
         run.push(n);
         // A chunk group's run contains its members, which are marked too —
         // document order puts the deeper path last, so it wins the tag.
-        if (n.nodeType === 1 && n.tagName !== 'TEMPLATE') n.setAttribute(PATH_ATTR, p);
+        if (n.nodeType === 1 && n.tagName !== 'TEMPLATE') addPath(n, p);
       }
       if (!regions.has(p)) regions.set(p, []);
       regions.get(p).push(run);
     }
-    document
-      .querySelectorAll('template[data-avb-s], template[data-avb-e]')
-      .forEach((t) => t.remove());
+    for (const n of markers) n.remove();
   };
 
   // Grows `acc` (a left/top/right/bottom box, or null) by one node's box.
@@ -258,6 +307,8 @@ if (!process.isMainFrame) {
         for (const c of n.childNodes) acc = addNode(acc, c);
         return acc;
       }
+    } else if (n.nodeType === 8) {
+      return acc; // a marker still sitting in a recorded run — no box to add
     } else if (n.nodeType === 3 && n.textContent.trim()) {
       const range = document.createRange();
       range.selectNode(n);
@@ -307,7 +358,17 @@ if (!process.isMainFrame) {
 
   const rectsForPath = (p) => {
     const runs = regions.get(p);
-    if (!runs) return rectsFromDescendants(p);
+    if (!runs) {
+      // No marker pair — a slotted element carries its path as an attribute
+      // instead, because a marker beside it would render into the wrong slot.
+      // One box per tagged element, in document order.
+      const only = [];
+      for (const el of elementsWithPath(p)) {
+        const acc = addNode(null, el);
+        if (acc) only.push(toRect(acc));
+      }
+      return only.length ? only : rectsFromDescendants(p);
+    }
     const out = [];
     for (const run of runs) {
       let acc = null;
@@ -321,11 +382,26 @@ if (!process.isMainFrame) {
     // stay separate boxes, so they keep the per-run rects above.
     if (runs.length === 1) {
       let acc = runs[0].reduce(addNode, null);
-      for (const el of document.querySelectorAll(`[${PATH_ATTR}="${p}"]`)) acc = addNode(acc, el);
+      for (const el of elementsWithPath(p)) acc = addNode(acc, el);
       // Nothing measurable: fall through to the children (see below).
       if (acc) return [toRect(acc)];
     }
     if (out.length) return out;
+    // Every run measured nothing, yet the node may well be on screen: a page
+    // script can replace the recorded nodes outright (a marquee that clones its
+    // track, a slider that rebuilds slides). The tag survives on the clones, so
+    // re-resolve from the live DOM — one box per tagged element, in document
+    // order, which is the order occurrences are counted in. Without this a
+    // looped node under such a script draws no outline at all, even though
+    // clicking it still selects (nodeAt reads the same tag).
+    const tagged = elementsWithPath(p);
+    if (tagged.length) {
+      for (const el of tagged) {
+        const acc = addNode(null, el);
+        if (acc) out.push(toRect(acc));
+      }
+      if (out.length) return out;
+    }
     // A region that exists but contains nothing with a box — the layout case:
     // its start marker is orphaned in <head>, so the walk collected the head's
     // scripts and links rather than the page. Its children still measure.
@@ -344,7 +420,7 @@ if (!process.isMainFrame) {
       if (el) out.push([...el.classList]);
     }
     if (!out.length) {
-      for (const el of document.querySelectorAll(`[${PATH_ATTR}="${p}"]`)) {
+      for (const el of elementsWithPath(p)) {
         out.push([...el.classList]);
       }
     }
@@ -383,6 +459,7 @@ if (!process.isMainFrame) {
 
   let rectsQueued = false;
   const queueRects = () => {
+    thinCache = null; // scrolled, resized or rebuilt — every box moved
     if (rectsQueued) return;
     rectsQueued = true;
     requestAnimationFrame(() => {
@@ -405,18 +482,62 @@ if (!process.isMainFrame) {
     return 0;
   };
 
+  // Nodes that render as a line — an empty <div>, an <hr>, a wrapper whose
+  // children are all absolutely positioned. They have a box, and the app draws
+  // it, but nothing can be *inside* something zero pixels tall, so the hit test
+  // below always lands on the parent and they'd be reachable only from the
+  // navigator. Hit-test those with a few pixels of slack instead, which is how
+  // wide the outline looks anyway.
+  const THIN = 3; // a box this flat can't be entered
+  const THIN_SLACK = 5; // …so accept the cursor this near it
+  let thinCache = null;
+  const thinTargets = () => {
+    if (thinCache) return thinCache;
+    thinCache = [];
+    for (const el of document.querySelectorAll(`[${PATH_ATTR}]`)) {
+      const p = pathsOf(el).find(inScope);
+      if (!p) continue;
+      const b = el.getBoundingClientRect();
+      // Fully collapsed (0×0) is left alone: the app draws no outline for it,
+      // so snapping to it would highlight nothing.
+      if (b.width < 1 && b.height < 1) continue;
+      if (b.height > THIN && b.width > THIN) continue;
+      thinCache.push({ path: p, el, box: b });
+    }
+    return thinCache;
+  };
+
+  // The deepest line-thin node the cursor is within slack of. Constrained to
+  // descendants of what the normal hit test found, so this only ever refines
+  // the answer — it can't jump to something else on the page.
+  const thinAt = (x, y, best) => {
+    let hit = null;
+    let hitDepth = best ? best.split('.').length : 0;
+    for (const t of thinTargets()) {
+      if (best && !t.path.startsWith(best + '.')) continue;
+      const depth = t.path.split('.').length;
+      if (depth <= hitDepth) continue;
+      const b = t.box;
+      if (x < b.left - THIN_SLACK || x > b.right + THIN_SLACK) continue;
+      if (y < b.top - THIN_SLACK || y > b.bottom + THIN_SLACK) continue;
+      hit = t;
+      hitDepth = depth;
+    }
+    return hit;
+  };
+
   // Deepest marked node whose rendered DOM contains the target, plus which
   // instance of it was hit — the app outlines only that one.
-  const nodeAt = (target) => {
+  const nodeAt = (target, x = null, y = null) => {
     // Clones the page's own scripts made aren't in any recorded run, so the
     // tag is the only way to reach them — without this, clicking a split
     // paragraph would select its parent instead.
     let tagged = target instanceof Element ? target.closest(`[${PATH_ATTR}]`) : null;
     // Walk out of any nested namespace until the tag belongs to the open file.
-    while (tagged && !inScope(tagged.getAttribute(PATH_ATTR))) {
+    while (tagged && !pathsOf(tagged).some(inScope)) {
       tagged = tagged.parentElement ? tagged.parentElement.closest(`[${PATH_ATTR}]`) : null;
     }
-    let best = tagged ? tagged.getAttribute(PATH_ATTR) : null;
+    let best = tagged ? pathsOf(tagged).find(inScope) ?? null : null;
     let bestDepth = best ? best.split('.').length : -1;
     for (const [p, runs] of regions) {
       if (!inScope(p)) continue;
@@ -437,6 +558,12 @@ if (!process.isMainFrame) {
         }
       }
     }
+    // Nothing containing the cursor can be flat, so this runs last, over the
+    // node that did win: a zero-height child of it takes precedence.
+    if (x !== null) {
+      const thin = thinAt(x, y, best);
+      if (thin) return { path: thin.path, occurrence: occurrenceOf(thin.path, thin.el) };
+    }
     // Resolved separately from the search above: when the winning path came
     // from the tag, its own runs were never scanned.
     return { path: best, occurrence: best ? occurrenceOf(best, target) : 0 };
@@ -451,7 +578,12 @@ if (!process.isMainFrame) {
   const targetAt = (e) =>
     (e.clientX || e.clientY ? document.elementFromPoint(e.clientX, e.clientY) : null) || e.target;
 
-  const pathContaining = (target) => nodeAt(target).path;
+  // Same resolution for hover, click and dblclick, so what lights up under the
+  // cursor is exactly what a click selects.
+  const nodeAtEvent = (e) =>
+    e.clientX || e.clientY
+      ? nodeAt(targetAt(e), e.clientX, e.clientY)
+      : nodeAt(targetAt(e));
 
   const startOutlines = () => {
     collectRegions();
@@ -465,7 +597,7 @@ if (!process.isMainFrame) {
       characterData: true,
     });
     document.addEventListener('mousemove', (e) => {
-      const { path: p, occurrence } = nodeAt(targetAt(e));
+      const { path: p, occurrence } = nodeAtEvent(e);
       if (p !== lastHoverPath || occurrence !== lastHoverOcc) {
         lastHoverPath = p;
         lastHoverOcc = occurrence;
@@ -486,8 +618,11 @@ if (!process.isMainFrame) {
         if (!designMode) return;
         e.preventDefault();
         e.stopPropagation();
-        const p = pathContaining(targetAt(e));
-        if (p) window.parent.postMessage({ type: 'avb:open-node', path: p }, '*');
+        // Report even when nothing in scope matched: markup the layout renders
+        // itself (nav, footer — anything outside the page's <slot>) has no
+        // in-scope marker, and the app opens the layout for those.
+        const p = nodeAtEvent(e).path;
+        window.parent.postMessage({ type: 'avb:open-node', path: p || null }, '*');
       },
       true
     );
@@ -504,7 +639,7 @@ if (!process.isMainFrame) {
         e.stopPropagation();
         // A click that hits no marked node still reports (path null) — the
         // app uses empty clicks to back out of component editing.
-        const { path: p, occurrence } = nodeAt(targetAt(e));
+        const { path: p, occurrence } = nodeAtEvent(e);
         window.parent.postMessage(
           { type: 'avb:click-node', path: p || null, occurrence },
           '*'
@@ -517,13 +652,87 @@ if (!process.isMainFrame) {
   let designMode = false;
 
   let frozen = false;
+  // --- Asking the page itself ------------------------------------------------
+  //
+  // The style panel used to answer "does this selector target this element?"
+  // by walking the app's source tree, which stops at a component's edge: a
+  // rule hinging on a class the component renders (`.section > *`) looked like
+  // no match, and a class added by a script was invisible. The rendered page
+  // is right here, so ask it — Chromium's own selector engine, over the real
+  // DOM, knows every element and every class however it got there.
+  const elementsForPath = (p) => {
+    const out = [];
+    for (const run of regions.get(p) || []) {
+      for (const n of run) {
+        if (n.nodeType !== 1) continue;
+        // A run holds everything between the marker pair, which includes the
+        // markers of anything nested — a component instance starts with its
+        // own <template data-avb-s="…">. Those are detached once collected,
+        // and they never describe the element: reporting one as the node's
+        // identity tells the style panel the tag is `template` and there are
+        // no classes. Same rule the rect measuring uses.
+        if (!n.isConnected || n.tagName === 'TEMPLATE') continue;
+        out.push(n);
+      }
+    }
+    for (const el of elementsWithPath(p)) {
+      if (!out.includes(el)) out.push(el);
+    }
+    // A node that renders nothing of its own (a component wrapping a fragment,
+    // `display: contents`) still has descendants that do — the first of those
+    // stands in for it, the same fallback the rect measuring uses.
+    if (!out.length) {
+      const first = [...document.querySelectorAll(`[${PATH_ATTR}]`)].find((el) =>
+        pathsOf(el).some((x) => x.startsWith(p + '.'))
+      );
+      if (first) out.push(first);
+    }
+    return out;
+  };
+
+  const identityOf = (el) => ({
+    tag: el.tagName.toLowerCase(),
+    id: el.id || null,
+    classes: [...el.classList],
+    attributes: Object.fromEntries(
+      [...el.attributes]
+        .filter((a) => a.name !== PATH_ATTR)
+        .map((a) => [a.name, a.value])
+    ),
+  });
+
   window.addEventListener('message', (e) => {
     if (e.source !== window.parent) return;
     const d = e.data;
+    if (d?.type === 'avb:query' && typeof d.id === 'number') {
+      const els = typeof d.path === 'string' ? elementsForPath(d.path) : [];
+      const matched = {};
+      for (const sel of d.selectors || []) {
+        try {
+          // Any of the element's occurrences matching counts — a loop child is
+          // one node in the tree and many elements on the page.
+          matched[sel] = els.some((el) => el.matches(sel));
+        } catch {
+          matched[sel] = null; // not a selector this engine accepts
+        }
+      }
+      window.parent.postMessage(
+        {
+          type: 'avb:query-result',
+          id: d.id,
+          found: els.length > 0,
+          identity: els[0] ? identityOf(els[0]) : null,
+          matched,
+        },
+        '*'
+      );
+      return;
+    }
     if (d?.type === 'avb:track' && Array.isArray(d.paths)) {
       designMode = true;
       trackedPaths = d.paths;
       activeScope = typeof d.scope === 'string' ? d.scope : '';
+      thinCache = null; // scope decides what's hit-testable
       sendRects();
     }
     if (d?.type === 'avb:scroll-to' && typeof d.path === 'string') {
@@ -598,6 +807,13 @@ contextBridge.exposeInMainWorld('avb', {
   mkdirAssets: invoke('assets:mkdir'),
   readAssetText: invoke('assets:readText'),
   writeAssetText: invoke('assets:writeText'),
+  // The source file an imported symbol is defined in — data files, consts,
+  // anything the page pulls values from.
+  readSymbolSource: invoke('src:readSymbol'),
+  resolveSourcePath: invoke('src:resolvePath'),
+  assetDimensions: invoke('assets:dimensions'),
+  readSourceText: invoke('src:readText'),
+  writeSourceText: invoke('src:writeText'),
   // OS drag-and-drop: resolve a DOM File to its filesystem path.
   getFilePath: (file) => {
     try {
@@ -645,6 +861,7 @@ contextBridge.exposeInMainWorld('avb', {
   renamePageFolder: invoke('pagefolder:rename'),
   deletePageFolder: invoke('pagefolder:delete'),
   importPathFor: invoke('page:importPathFor'),
+  dynamicPaths: invoke('page:dynamicPaths'),
 
   // Dev server
   startDevServer: invoke('dev:start'),

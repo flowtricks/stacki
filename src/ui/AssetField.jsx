@@ -31,6 +31,22 @@ export default function AssetField({
   initialMode,
   // Label for the free-text mode; "URL" reads wrong for data-* attributes.
   plainLabel = 'URL',
+  // Called with {w, h} once a NEWLY PICKED image has loaded, so the host can
+  // fill in width/height. Only after a pick — firing on every load would
+  // rewrite those props just for selecting the node.
+  onDimensions,
+  // Called with the picked entry when the host wants to decide how the value
+  // is written — a public/ asset is a URL, a src/ one is an ESM import. When
+  // absent the field falls back to writing a URL itself.
+  onPickEntry,
+  // The project-relative file a src/ import currently resolves to
+  // (`src/assets/hero.png`), so the card can show the image behind an
+  // `src={hero}` binding rather than the identifier.
+  srcRel,
+  // Called with {w, h} whenever the shown image's size is known — not only
+  // after a pick. Lets sibling width/height fields show what the source is,
+  // which is exactly what they fall back to when left blank.
+  onCurrentDimensions,
 }) {
   const current = value || '';
   const [mode, setMode] = useState(
@@ -38,6 +54,7 @@ export default function AssetField({
   );
   const [entries, setEntries] = useState([]);
   const [dims, setDims] = useState(null);
+  const justPicked = React.useRef(false);
 
   const refresh = React.useCallback(async () => {
     const { entries: list } = await window.avb.listAssets(projectPath);
@@ -50,10 +67,14 @@ export default function AssetField({
     return off;
   }, [refresh]);
 
-  const rel = current.replace(/^\//, '');
+  // A URL value names a file under public/, so that's the rooted rel it maps
+  // to. A src/ asset is never a URL — it arrives as an import expression, and
+  // the host resolves which file that is (see srcEntry).
+  const rel = srcRel || current.replace(/^\//, '');
   const entry = useMemo(
-    () => entries.find((e) => !e.isDir && e.rel === rel) || null,
-    [entries, rel]
+    () =>
+      entries.find((e) => !e.isDir && e.rel === (srcRel || `public/${rel}`)) || null,
+    [entries, rel, srcRel]
   );
 
   useEffect(() => setDims(null), [current]);
@@ -99,14 +120,24 @@ export default function AssetField({
       <div className="af-card">
         <div className="af-thumb">
           {entry ? (
-            <AssetThumb file={entry} onImageLoad={setDims} />
+            <AssetThumb
+              file={entry}
+              onImageLoad={(d) => {
+                setDims(d);
+                onCurrentDimensions?.(d);
+                if (justPicked.current) {
+                  justPicked.current = false;
+                  onDimensions?.(d);
+                }
+              }}
+            />
           ) : (
             <ElementImageIcon size={18} />
           )}
         </div>
         <div className="af-meta">
-          <div className="af-name" title={current}>
-            {entry ? entry.name : current ? current : 'No asset selected'}
+          <div className="af-name" title={srcRel || current}>
+            {entry ? entry.name : srcRel || current || 'No asset selected'}
           </div>
           {dims && (
             <div className="af-sub">
@@ -114,7 +145,9 @@ export default function AssetField({
             </div>
           )}
           {entry && <div className="af-sub">{fmtSize(entry.size)}</div>}
-          {!entry && current && <div className="af-sub">not found in public/</div>}
+          {!entry && (srcRel || current) && (
+            <div className="af-sub">not found in {srcRel ? 'src/' : 'public/'}</div>
+          )}
         </div>
       </div>
       <button
@@ -123,7 +156,14 @@ export default function AssetField({
           requestAsset({
             mediaKind,
             current: rel,
-            onPick: (pickedRel) => onChange('/' + pickedRel, true),
+            onPick: (pickedRel, picked) => {
+              justPicked.current = true;
+              if (onPickEntry) {
+                onPickEntry(picked || { rel: pickedRel, root: pickedRel.split('/')[0] });
+                return;
+              }
+              onChange('/' + pickedRel.replace(/^public\//, ''), true);
+            },
           })
         }
       >

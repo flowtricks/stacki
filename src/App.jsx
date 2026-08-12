@@ -10,6 +10,12 @@ import GitChip from './panels/GitChip.jsx';
 import LeftRail from './ui/LeftRail.jsx';
 import CodeWindow from './ui/CodeWindow.jsx';
 import PageSwitcher from './ui/PageSwitcher.jsx';
+import DynamicPicker from './ui/DynamicPicker.jsx';
+import {
+  ASTRO_ASSETS_MODULE,
+  PLACEHOLDER_PROPS,
+  astroAsset as astroAssetDef,
+} from './astroAssets.js';
 import InsertSearch from './ui/InsertSearch.jsx';
 import AssetsPanel from './panels/AssetsPanel.jsx';
 import CmsPanel from './panels/CmsPanel.jsx';
@@ -18,6 +24,7 @@ import { getElementSchema, GLOBAL_ATTRS, canContainTag } from './elementSchemas.
 import { onAssetRequest, clearAssetRequest } from './assetPick.js';
 import { isDataBound } from './bindings.js';
 import { elementLabel } from './classNames.js';
+import { findImportOf } from './dataSuggest.js';
 import {
   PreviewIcon,
   RefreshIcon,
@@ -171,6 +178,9 @@ function renameLoopVar(nodes, from, to) {
         if (data !== p.data) {
           n.head = `${data}.map((${p.item}${p.index ? `, ${p.index}` : ''}) => (`;
         }
+        // Declarations in a statement-body loop read the outer item as
+        // freely as the markup does.
+        if (Array.isArray(n.body)) n.body = n.body.map((line) => renameIdent(line, from, to));
         // A nested loop that re-declares the name shadows the outer one, so
         // everything below it means something else by it.
         if (p.item === from || p.index === from) continue;
@@ -179,6 +189,8 @@ function renameLoopVar(nodes, from, to) {
       }
     } else if (n.kind === 'expr') {
       n.value = renameIdent(n.value, from, to);
+    } else if (n.kind === 'cond') {
+      n.test = renameIdent(n.test, from, to);
     } else if (n.kind === 'text') {
       n.value = renameInBraces(n.value, from, to);
     }
@@ -280,11 +292,19 @@ function disconnectDependentLoops(list, vars) {
       if (h && vars.some((v) => readsVar(h.data, v))) {
         n.head = `[].map((${h.item}${h.index ? `, ${h.index}` : ''}) => (`;
       }
+      // The declarations are left alone: an empty list never calls the
+      // callback, so nothing in there can run, and the code is still what the
+      // user wrote for when they point it at data again.
       // A nested loop that reuses the name shadows it, so anything deeper
       // refers to the inner one and is still valid.
       const shadowed = new Set([h?.item, h?.index].filter(Boolean));
       const rest = vars.filter((v) => !shadowed.has(v));
       if (rest.length) disconnectDependentLoops(n.children, rest);
+    } else if (n.kind === 'cond') {
+      // Same for a condition reading the item: false renders the else branch
+      // instead of throwing.
+      if (vars.some((v) => readsVar(n.test, v))) n.test = 'false';
+      disconnectDependentLoops(n.children, vars);
     } else {
       disconnectDependentLoops(n.children, vars);
     }
@@ -360,6 +380,26 @@ function stripLostBindings(node, vars) {
         n.head = `[].map((${h.item}${h.index ? `, ${h.index}` : ''}) => (`;
         removed++;
       }
+      if (Array.isArray(n.body)) {
+        // This loop can still run (its own data may be fine), so a
+        // declaration reading a lost variable would throw. Dropping the line
+        // would orphan whatever reads the name it declares — so keep the
+        // binding and swap what it's assigned, the same placeholder a lost
+        // text binding gets.
+        n.body = n.body.map((line) => {
+          if (!vars.some((x) => readsVar(line, x))) return line;
+          const decl = line.match(/^((?:const|let)\s+[^=]+=\s*)/);
+          if (!decl) return line;
+          removed++;
+          return `${decl[1]}'${UNBOUND_TEXT}';`;
+        });
+      }
+    }
+    // A condition on a variable that's gone would throw; false keeps the
+    // markup and renders the else branch.
+    if (n.kind === 'cond' && vars.some((x) => readsVar(n.test, x))) {
+      n.test = 'false';
+      removed++;
     }
     if (Array.isArray(n.children)) {
       n.children.forEach(walk);
@@ -393,6 +433,10 @@ export default function App() {
   const [busy, setBusy] = useState(null); // string message
   const [toast, setToast] = useState(null); // {msg, kind}
   const [refreshKey, setRefreshKey] = useState(0);
+  // Concrete paths behind a dynamic route, and which one the canvas is showing.
+  const [dynamicPaths, setDynamicPaths] = useState([]);
+  const [dynamicIndex, setDynamicIndex] = useState(0);
+  const [dynamicError, setDynamicError] = useState(null);
   const [leftTab, setLeftTab] = useState('navigator'); // pages | navigator | components | assets | cms | null
   const [cmsRel, setCmsRel] = useState(null); // JSON file open in the CMS editor
   const [cmsTick, setCmsTick] = useState(0); // bumped on save, refreshes counts
@@ -623,6 +667,11 @@ export default function App() {
     [flushSave]
   );
 
+  // What's typed in the URL bar while it's being edited; null means "show the
+  // real one". Kept separate so the bar keeps tracking the canvas until you
+  // actually start typing.
+  const [urlDraft, setUrlDraft] = useState(null);
+
   const selectPage = useCallback(
     async (page) => {
       // Opening a page from the switcher leaves any component drill-down.
@@ -631,6 +680,33 @@ export default function App() {
     },
     [openFile]
   );
+
+  // Enter in the URL bar. A route names a page file, so this switches the
+  // editor to it rather than pointing the canvas somewhere the panels know
+  // nothing about — the model and the canvas showing different pages is the
+  // one state the app can't represent.
+  const goToUrl = useCallback(
+    (typed) => {
+      setUrlDraft(null);
+      const raw = String(typed || '').trim();
+      if (!raw) return;
+      // Accept a full URL or a bare path.
+      let route = raw;
+      const m = raw.match(/^https?:\/\/[^/]+(\/.*)?$/i);
+      if (m) route = m[1] || '/';
+      if (!route.startsWith('/')) route = '/' + route;
+      route = route.replace(/\?.*$|#.*$/, '');
+      const norm = (r) => (r !== '/' ? r.replace(/\/$/, '') : r);
+      const page = (scan.pages || []).find((p) => norm(p.route) === norm(route));
+      if (page) {
+        selectPage(page);
+        return;
+      }
+      showToast(`No page matches ${route}`, 'error');
+    },
+    [scan.pages, showToast, selectPage]
+  );
+
 
   // Re-reads whatever is open straight from disk. A git checkout rewrites the
   // working tree wholesale, and the file watcher can't be relied on for it:
@@ -1279,7 +1355,8 @@ export default function App() {
           // insert alongside instead of inside.
           return childTag ? canContainTag(tag, childTag) : true;
         }
-        if (n.kind === 'map' || n.kind === 'chunk-group') return true;
+        // A condition holds nothing itself — its branches do.
+        if (n.kind === 'map' || n.kind === 'chunk-group' || n.kind === 'branch') return true;
         if (n.kind === 'component') {
           return (insertables.find((c) => c.name === n.name)?.slots || []).includes('default');
         }
@@ -1333,6 +1410,40 @@ export default function App() {
         return;
       }
 
+      // <Image>/<Picture> need `import { … } from 'astro:assets'` — a named
+      // import of a virtual module, so there is no file path to resolve the
+      // way a project component's is.
+      if (item.type === 'astroAsset') {
+        const assetId = newId();
+        mutateModel((model) => {
+          if (!model.imports.some((i) => i.name === item.name && !i.typeOnly)) {
+            model.imports.push({
+              name: item.name,
+              imported: item.name,
+              path: ASTRO_ASSETS_MODULE,
+              named: true,
+            });
+          }
+          insertIntoModel(
+            model,
+            // Self-closing, and already valid: Astro throws on an <Image>
+            // with no src, so a bare one would swap the canvas for a stack
+            // trace the moment it landed. See PLACEHOLDER_PROPS.
+            {
+              id: assetId,
+              kind: 'component',
+              name: item.name,
+              props: { ...PLACEHOLDER_PROPS },
+              children: null,
+            },
+            target
+          );
+          return model;
+        }, true);
+        setSelectedId(assetId);
+        return;
+      }
+
       const id = newId();
       let node = null;
       if (item.type === 'element') {
@@ -1353,12 +1464,27 @@ export default function App() {
         // renders nothing; a placeholder name would throw "x is not defined"
         // and take the preview down the moment the loop lands on the page.
         node = { id, kind: 'map', head: '[].map((item) => (', children: [] };
+      } else if (item.type === 'cond') {
+        // `true` until a real test is typed: the then branch renders, so the
+        // condition is visible on the canvas the moment it lands.
+        node = {
+          id,
+          kind: 'cond',
+          op: '?',
+          test: 'true',
+          children: [
+            { id: newId(), kind: 'branch', name: 'then', children: [] },
+            { id: newId(), kind: 'branch', name: 'else', children: [] },
+          ],
+        };
       } else if (item.type === 'comment') {
         node = { id, kind: 'comment', value: ' Comment ' };
       } else if (item.type === 'text') {
         node = { id, kind: 'text', value: 'Text' };
       } else if (item.type === 'expr') {
         node = { id, kind: 'expr', value: '{/* code */}' };
+      } else if (item.type === 'doctype') {
+        node = { id, kind: 'raw-line', value: '<!doctype html>' };
       } else if (item.type === 'style' || item.type === 'script') {
         node = { id, kind: 'raw', name: item.type, props: {}, inner: '' };
       }
@@ -1586,6 +1712,37 @@ export default function App() {
     return () => document.removeEventListener('keydown', onKey);
   }, [inPreview, editStack.length, closeComponent]);
 
+  // A dynamic page ([slug].astro) has a route pattern, not a URL. Ask the dev
+  // server which concrete paths its getStaticPaths produces, so the canvas can
+  // show one of them instead of a 404. Static pages never reach the fetch.
+  useEffect(() => {
+    const entry = editStack[0] || currentPage;
+    const route = entry?.route;
+    if (!project || !entry || !route?.includes('[') || devStatus !== 'on' || !devUrl) {
+      setDynamicPaths([]);
+      return undefined;
+    }
+    let live = true;
+    window.avb
+      .dynamicPaths({ projectPath: project.path, pagePath: entry.path, devUrl })
+      .then((r) => {
+        if (!live) return;
+        setDynamicPaths(r?.entries || []);
+        // Keep showing the same entry across reloads where we can — the
+        // params are what identify it, not its position in the list.
+        setDynamicIndex((i) => (i < (r?.entries || []).length ? i : 0));
+        if (r?.error) setDynamicError(r.error);
+        else setDynamicError(null);
+      })
+      .catch(() => live && setDynamicPaths([]));
+    return () => {
+      live = false;
+    };
+    // Frontmatter rather than the whole pageState: getStaticPaths lives there,
+    // and depending on the model would re-run a collection query on every
+    // keystroke in the page body.
+  }, [project, editStack, currentPage, devStatus, devUrl, pageState?.model?.extraFrontmatter]);
+
   // Capture a preview thumbnail for the welcome screen's recents list a few
   // seconds after the preview settles (page switch, refresh, or edit).
   useEffect(() => {
@@ -1658,6 +1815,29 @@ export default function App() {
     [mutateModel]
   );
 
+  // Typing a bare class in the style panel's selector box puts it on the
+  // element too — a rule for a class the element doesn't carry would never
+  // apply. Only a plain class="" is safe to extend: class:list and expression
+  // values are code we'd have to rewrite, so those are left alone.
+  const addClassToNode = useCallback(
+    (nodeId, className) => {
+      const clean = String(className || '').trim();
+      if (!nodeId || !clean) return;
+      mutateModel((model) => {
+        const node = findNodeById(model.nodes, nodeId);
+        if (!node) return model;
+        const cls = node.props?.class;
+        if (cls && cls.type !== 'string') return model;
+        const existing = cls ? cls.value.trim().split(/\s+/).filter(Boolean) : [];
+        if (existing.includes(clean)) return model;
+        if (!node.props) node.props = {};
+        node.props.class = { type: 'string', value: [...existing, clean].join(' ') };
+        return model;
+      }, true);
+    },
+    [mutateModel]
+  );
+
   const setProp = useCallback(
     (nodeId, propName, value, immediate = false) => {
       mutateModel(
@@ -1674,6 +1854,79 @@ export default function App() {
       );
     },
     [mutateModel]
+  );
+
+  // Several props in one edit, so picking an image and getting its width and
+  // height back is a single undo rather than three.
+  const setProps = useCallback(
+    (nodeId, patch, immediate = true) => {
+      mutateModel(
+        (model) => {
+          const node = findNodeById(model.nodes, nodeId);
+          if (!node) return model;
+          if (!node.props) node.props = {};
+          for (const [name, value] of Object.entries(patch)) {
+            if (value === undefined) delete node.props[name];
+            else node.props[name] = value;
+          }
+          return model;
+        },
+        immediate,
+        `props:${nodeId}:${Object.keys(patch).join(',')}`
+      );
+    },
+    [mutateModel]
+  );
+
+  // Writes an asset pick into a prop. The root decides the form:
+  //
+  //   public/  served as-is → a URL string, src="/hero.png"
+  //   src/     built and optimised → an ESM import, src={hero}
+  //
+  // The src/ form is the one Astro wants for <Image>: it carries the file's
+  // real dimensions, so nothing has to be typed in and MissingImageDimension
+  // can't happen. An element gets `hero.src` instead — a plain <img> needs the
+  // URL out of the imported object, not the object.
+  const setAssetProp = useCallback(
+    async (nodeId, propName, picked) => {
+      const { pageState: state, currentPage: page } = pageStateRef.current;
+      if (!state?.editable || !page || !picked?.rel) return;
+      const withoutRoot = picked.rel.split('/').slice(1).join('/');
+      if (picked.root !== 'src') {
+        setProp(nodeId, propName, { type: 'string', value: '/' + withoutRoot }, true);
+        return;
+      }
+      const abs = picked.abs || `${projectRef.current?.path}/${picked.rel}`;
+      const paths = await window.avb.importPathFor({
+        pagePath: page.path,
+        targetPath: abs,
+        projectPath: projectRef.current?.path,
+      });
+      mutateModel((model) => {
+        const node = findNodeById(model.nodes, nodeId);
+        if (!node) return model;
+        const spec = chooseImportPath(model, paths);
+        // Reuse the binding if this file is already imported — importing the
+        // same asset twice under two names is just noise.
+        let local = (model.imports || []).find((i) => !i.named && i.path === spec)?.name;
+        if (!local) {
+          const base = withoutRoot.split('/').pop().replace(/\.[^.]+$/, '');
+          let candidate = base.replace(/[^A-Za-z0-9_$]/g, '_').replace(/^(\d)/, '_$1') || 'asset';
+          const taken = new Set((model.imports || []).map((i) => i.name));
+          let n = 2;
+          while (taken.has(candidate)) candidate = `${base}${n++}`;
+          local = candidate;
+          model.imports.push({ name: local, path: spec });
+        }
+        if (!node.props) node.props = {};
+        node.props[propName] = {
+          type: 'expr',
+          value: node.kind === 'element' ? `${local}.src` : local,
+        };
+        return model;
+      }, true);
+    },
+    [mutateModel, setProp]
   );
 
   // Renames an attribute in place, preserving its value and position.
@@ -1755,6 +2008,8 @@ export default function App() {
               const vars = [next.item, next.index].filter(Boolean);
               if (vars.length) disconnectDependentLoops(node.children || [], vars);
             }
+          } else if (node.kind === 'cond') {
+            node.test = value;
           } else if (node.kind === 'raw') node.inner = value;
           else if (node.kind === 'text' || node.kind === 'expr' || node.kind === 'comment') {
             node.value = value;
@@ -1789,6 +2044,35 @@ export default function App() {
         },
         false,
         'frontmatter'
+      );
+    },
+    [mutateModel]
+  );
+
+  // Adds or removes a condition's else branch. Removing keeps the markup that
+  // was in it — it moves to the then branch rather than being deleted — so the
+  // button can't quietly throw work away.
+  const toggleElseBranch = useCallback(
+    (nodeId, want) => {
+      mutateModel(
+        (model) => {
+          const node = findNodeById(model.nodes, nodeId);
+          if (!node || node.kind !== 'cond') return model;
+          const kids = node.children || (node.children = []);
+          if (!kids[0]) kids[0] = { id: newId(), kind: 'branch', name: 'then', children: [] };
+          if (want && kids.length < 2) {
+            kids[1] = { id: newId(), kind: 'branch', name: 'else', children: [] };
+            node.op = '?';
+          } else if (!want && kids.length > 1) {
+            const rescued = kids[1].children || [];
+            kids.length = 1;
+            kids[0].children = [...(kids[0].children || []), ...rescued];
+            node.op = '&&';
+          }
+          return model;
+        },
+        true,
+        undefined
       );
     },
     [mutateModel]
@@ -1856,10 +2140,47 @@ export default function App() {
     [mutateModel]
   );
 
+  // Set/replace/remove the `layout:` key in a markdown page's YAML
+  // frontmatter, leaving every other key and its formatting alone. The
+  // frontmatter text stays the single source of truth — editing it by hand in
+  // the frontmatter editor and picking a layout here write to the same place.
+  const withLayoutField = (frontmatter, layoutPath) => {
+    const fm = frontmatter ?? '';
+    if (/^[ \t]*layout[ \t]*:/m.test(fm)) {
+      return layoutPath
+        ? fm.replace(/^[ \t]*layout[ \t]*:.*$/m, `layout: ${layoutPath}`)
+        : fm.replace(/^[ \t]*layout[ \t]*:.*(\n|$)/m, '');
+    }
+    if (!layoutPath) return fm;
+    // First, so it reads as the page's frame rather than one field among many.
+    return fm ? `layout: ${layoutPath}\n${fm}` : `layout: ${layoutPath}`;
+  };
+
+  const isMarkdownFormatRef = useRef(false);
+  isMarkdownFormatRef.current = pageState?.model?.format === 'md' || pageState?.model?.format === 'mdx';
+
   const layoutSeq = useRef(0);
   const changeLayout = useCallback(
     async (layoutName) => {
       const seq = ++layoutSeq.current;
+      // A markdown page has no wrapper node to swap — Astro reads its layout
+      // from the `layout:` frontmatter key, as a path relative to the file.
+      // Same picker, different place to write the answer.
+      if (isMarkdownFormatRef.current) {
+        const layout = layoutName ? scan.layouts.find((l) => l.name === layoutName) : null;
+        if (layoutName && !layout) return;
+        // A file-relative path, not an alias: `layout:` is resolved by Astro
+        // against the page, and every project has that whether or not it has
+        // configured `@/…`.
+        const rel = layout ? (await resolveImportPath(layout.path)).relative : null;
+        if (seq !== layoutSeq.current) return;
+        mutateModel((model) => {
+          model.extraFrontmatter = withLayoutField(model.extraFrontmatter, rel);
+          model.layoutPath = rel;
+          return model;
+        }, true);
+        return;
+      }
       if (!layoutName) {
         // Unwrap: replace the wrapper node with its children.
         mutateModel((model) => {
@@ -2062,6 +2383,15 @@ export default function App() {
   // from '../layouts/BaseLayout.astro'`) — resolve the wrapper back to a
   // scanned layout file name for display, pickers, and schema lookup.
   const currentLayoutName = (() => {
+    // Markdown names its layout by path in frontmatter rather than wrapping
+    // the page in a node, so the picker reads it from there.
+    if (isMarkdownFormatRef.current) {
+      // Read back out of the frontmatter text, not a cached field: editing
+      // that text by hand has to move the picker too.
+      const m = (model?.extraFrontmatter || '').match(/^[ \t]*layout[ \t]*:[ \t]*(.+?)[ \t]*$/m);
+      const base = m?.[1].replace(/^['"]|['"]$/g, '').split('/').pop()?.replace(/\.astro$/i, '');
+      return base && scan.layouts.some((l) => l.name === base) ? base : '';
+    }
     if (!layoutNode) return '';
     const imp = (model.imports || []).find((i) => i.name === layoutNode.name);
     const base = imp?.path.split('/').pop()?.replace(/\.astro$/i, '');
@@ -2091,13 +2421,30 @@ export default function App() {
       ...inherited,
     ];
   };
+  // Every element takes a class, and it's the field people reach for most —
+  // but it lives in the global attributes, not in any tag's own schema, so it
+  // only appeared once something had already set one. Given first place, right
+  // under the tag, on anything that renders an element.
+  const withClassField = (fields) =>
+    fields.some((f) => f.name === 'class')
+      ? fields
+      : [{ name: 'class', type: 'string', optional: true }, ...fields];
+
   const selectedSchema =
     selectedNode && selectedNode.kind !== 'text'
       ? selectedId === 'layout'
         ? schemaFor(scan.layouts.find((l) => l.name === currentLayoutName))
         : selectedNode.kind === 'element'
-          ? getElementSchema(selectedNode.name)
-          : schemaFor(insertables.find((c) => c.name === selectedNode.name))
+          ? withClassField(getElementSchema(selectedNode.name))
+          : selectedNode.dynamicTag
+            ? // `<Tag>` from `const Tag = tag` renders a real element, so it
+              // takes a class the same way one does.
+              withClassField([])
+          : schemaFor(
+              selectedNode.astroAsset
+                ? astroAssetDef(selectedNode.name)
+                : insertables.find((c) => c.name === selectedNode.name)
+            )
       : [];
 
   // Slots offered by the selected node's parent (the component or layout the
@@ -2166,6 +2513,10 @@ export default function App() {
         const at = n.head.indexOf('.map');
         return at > 0 ? n.head.slice(0, at + 4) : 'loop';
       }
+      case 'cond':
+        return `if ${n.test}`;
+      case 'branch':
+        return n.name === 'else' ? 'else' : 'then';
       case 'element':
       case 'raw':
         // First class wins; fall back to the bare tag when the element has
@@ -2233,18 +2584,66 @@ export default function App() {
     [project, showToast]
   );
 
+  // Opens the file an imported symbol is defined in, on its declaration —
+  // `{FOOTER_LINKS}` on the page, the array itself in src/consts.ts. Values
+  // declared in this file's own frontmatter never come here: those are edited
+  // in place, in the panel (see the props panel's source popup).
+  const openSymbolFile = useCallback(
+    async (name) => {
+      if (!project) return false;
+      const imp = findImportOf(frontmatterCode, name);
+      if (!imp) return false;
+      const stack = editStackRef.current;
+      const fromFile = stack[stack.length - 1]?.path || currentPage?.path;
+      if (!fromFile) return false;
+      try {
+        const r = await window.avb.readSymbolSource({
+          projectPath: project.path,
+          fromFile,
+          spec: imp.spec,
+          name,
+        });
+        if (!r?.ok) {
+          showToast(
+            r?.reason === 'too-large'
+              ? 'That file is too large to edit in the app.'
+              : `Couldn't find where ${name} is defined (${imp.spec}).`,
+            'error'
+          );
+          return false;
+        }
+        setFileText(r.text);
+        setCodeWin({
+          kind: 'file',
+          area: 'src',
+          rel: r.rel,
+          title: r.rel,
+          language: /\.css$/i.test(r.rel) ? 'css' : 'javascript',
+          revealLine: r.line,
+        });
+        return true;
+      } catch (err) {
+        showToast(cleanError(err), 'error');
+        return false;
+      }
+    },
+    [project, frontmatterCode, currentPage, showToast]
+  );
+
   // File edits stream to disk (debounced) — the dev server picks them up.
   const fileSaveTimer = useRef(null);
   const setAssetFileText = useCallback(
     (text) => {
       setFileText(text);
       if (!codeWin || codeWin.kind !== 'file') return;
-      const { rel } = codeWin;
+      const { rel, area } = codeWin;
+      // Source files live anywhere in the project; assets are rooted in public/.
+      const write = area === 'src' ? window.avb.writeSourceText : window.avb.writeAssetText;
       clearTimeout(fileSaveTimer.current);
       fileSaveTimer.current = setTimeout(() => {
-        window.avb
-          .writeAssetText({ projectPath: project.path, rel, text })
-          .catch((err) => showToast(`Save failed: ${cleanError(err)}`, 'error'));
+        write({ projectPath: project.path, rel, text }).catch((err) =>
+          showToast(`Save failed: ${cleanError(err)}`, 'error')
+        );
       }, 300);
     },
     [codeWin, project, showToast]
@@ -2274,6 +2673,15 @@ export default function App() {
     editStack.length > 1 && project?.path
       ? editStack[editStack.length - 1].path.replace(project.path + '/', '')
       : null;
+  // The file being edited, relative to src/ — how the CMS addresses a page's
+  // own data (`pages/index.astro#rotatingWords`).
+  const openFileSrcRel = (() => {
+    const p = editStack[editStack.length - 1]?.path || currentPage?.path;
+    if (!p || !project?.path) return null;
+    const rel = p.startsWith(project.path + '/') ? p.slice(project.path.length + 1) : p;
+    return rel.startsWith('src/') ? rel.slice(4) : rel;
+  })();
+
   // A marker path may arrive namespaced (src/…/Card.astro|0.1). The index trail
   // after the pipe is what addresses a node in the open file's tree.
   const trailOf = (p) => String(p).split('|').pop().split('.').map(Number);
@@ -2312,7 +2720,7 @@ export default function App() {
     const kind =
       n.kind === 'component' && !n.dynamicTag
         ? 'component'
-        : n.kind === 'map'
+        : n.kind === 'map' || n.kind === 'cond' || n.kind === 'branch'
           ? 'map'
           : 'element';
     // The tag drives the overlay's icon, so it matches the Navigator row.
@@ -2321,6 +2729,8 @@ export default function App() {
       label,
       kind,
       tag,
+      astroAsset: !!n.astroAsset,
+      dynamicTag: !!n.dynamicTag,
       nodeKind: n.kind,
       isLayout: n.id === 'layout',
       bound: kind === 'element' && isDataBound(n),
@@ -2349,8 +2759,12 @@ export default function App() {
   // The canvas always renders the page — editing a component just dims
   // everything outside the instance being worked on.
   const pageEntry = editStack[0] || currentPage;
-  const pageRoute = pageEntry?.route;
+  const patternRoute = pageEntry?.route;
   const focusPath = currentPage?.kind === 'component' ? currentPage.focusPath : null;
+  // A dynamic page's route is a pattern, not a URL — /posts/[slug] is a 404.
+  // Preview one of the entries it actually stands for; `dynamicEntry` is which.
+  const dynamicEntry = dynamicPaths[dynamicIndex] || null;
+  const pageRoute = dynamicEntry ? dynamicEntry.route : patternRoute;
   const liveUrl = devUrl && pageRoute ? devUrl + pageRoute : null;
 
   return (
@@ -2385,9 +2799,41 @@ export default function App() {
           >
             <RefreshIcon size={13} />
           </button>
-          <span className="url">
-            {liveUrl || (devStatus === 'starting' ? 'Starting Astro dev server…' : 'Preview offline')}
-          </span>
+          {/* A real input, not a label: the URL is something you copy out and
+              something you type a route into. Focus selects it all, so one
+              click and ⌘C gets the whole thing. */}
+          <input
+            className="url"
+            spellCheck={false}
+            value={urlDraft ?? liveUrl ?? ''}
+            placeholder={devStatus === 'starting' ? 'Starting Astro dev server…' : 'Preview offline'}
+            readOnly={!liveUrl}
+            onFocus={(e) => e.currentTarget.select()}
+            onChange={(e) => setUrlDraft(e.target.value)}
+            onBlur={() => setUrlDraft(null)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setUrlDraft(null);
+                e.currentTarget.blur();
+                return;
+              }
+              if (e.key !== 'Enter') return;
+              e.currentTarget.blur();
+              goToUrl(e.currentTarget.value);
+            }}
+          />
+          {/* Which entry of a dynamic route the canvas is showing. The template
+              is what gets edited either way — this only changes the data it's
+              rendered against. */}
+          {patternRoute?.includes('[') && (
+            <DynamicPicker
+              entries={dynamicPaths}
+              index={dynamicIndex}
+              onPick={setDynamicIndex}
+              error={dynamicError}
+              pattern={patternRoute}
+            />
+          )}
         </div>
         <span className="spacer" />
         {/* Both ways of viewing the site, kept together. */}
@@ -2472,10 +2918,15 @@ export default function App() {
               <CmsPanel
                 project={project}
                 selectedRel={cmsRel}
+                currentFile={openFileSrcRel}
                 refreshKey={cmsTick}
                 onSelect={(r) => {
                   setCmsRel(r);
                   setCmsSettings(false);
+                  // Closing a collection leaves nothing selected anywhere, so
+                  // the right-hand panels show their empty state rather than
+                  // the node that happened to be picked before.
+                  if (!r) setSelectedId(null);
                 }}
                 onOpenSettings={(r) => {
                   setCmsRel(r);
@@ -2492,6 +2943,7 @@ export default function App() {
                 pick={assetPick}
                 onPickCancel={endAssetPick}
                 onRecordUndo={pushCommand}
+                onAddClass={(name) => addClassToNode(selectedId, name)}
               />
             )}
           </div>
@@ -2561,9 +3013,17 @@ export default function App() {
             }}
             onSelectedClasses={setSelectedClasses}
             onOpenPath={(p) => {
-              // Double-clicking a component on the canvas drills into it.
+              // Double-clicking a component on the canvas drills into it. With no
+              // path the click landed on chrome the layout renders itself (nav,
+              // footer) — that markup belongs to the layout, so open the layout,
+              // matching what a single click there selects.
+              if (!p) {
+                if (layoutNode) openComponent(layoutNode.name, pathFor('layout'));
+                return;
+              }
               const n = model && nodeAtPath(model.nodes, trailOf(p));
-              if (n?.kind === 'component') openComponent(n.name, p);
+              // astro:assets components have no file behind them to open.
+              if (n?.kind === 'component' && !n.astroAsset) openComponent(n.name, p);
             }}
           />
 
@@ -2623,6 +3083,7 @@ export default function App() {
                 }
                 onSelectNode={setSelectedId}
                 onRecordUndo={pushCommand}
+                pathOf={pathFor}
                 renderedClasses={selectedClasses}
               />
             )}
@@ -2651,6 +3112,10 @@ export default function App() {
               onSetProp={(propName, value, immediate) =>
                 setProp(selectedId, propName, value, immediate)
               }
+              onSetProps={(nodeId, patch) => setProps(nodeId, patch)}
+              onSetAssetProp={(nodeId, propName, picked) =>
+                setAssetProp(nodeId, propName, picked)
+              }
               onRenameProp={(oldName, newName) => renameProp(selectedId, oldName, newName)}
               onChangeTag={(tag) => changeElementTag(selectedId, tag)}
               onSetText={(value, renames) =>
@@ -2662,7 +3127,11 @@ export default function App() {
               onSetInline={(kids) => setNodeInline(selectedId, kids)}
               onOpenCode={openCodeWindow}
               onSetFrontmatter={setExtraFrontmatter}
+              frontmatterSource={frontmatterCode}
+              onOpenSymbol={openSymbolFile}
+              onToggleElse={(want) => toggleElseBranch(selectedId, want)}
               projectPath={project.path}
+              filePath={editStack[editStack.length - 1]?.path || currentPage?.path || null}
             />
             </div>
           </div>
@@ -2675,6 +3144,7 @@ export default function App() {
           language={codeWin.language}
           value={codeWinValue}
           editorKey={isFileWin ? `file:${codeWin.rel}` : codeWin.targetId}
+          revealLine={codeWin.revealLine}
           onChange={(value) =>
             isFileWin
               ? setAssetFileText(value)

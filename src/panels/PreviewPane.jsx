@@ -1,5 +1,6 @@
 import React from 'react';
 import CanvasView from './CanvasView.jsx';
+import { setCanvasFrame, receiveCanvasReply } from '../canvasQuery.js';
 import {
   DesktopIcon,
   TabletIcon,
@@ -7,8 +8,11 @@ import {
   CanvasIcon,
   ChevronRightIcon,
   ElementComponentIcon,
+  astroAssetIcon,
   LayoutIcon,
   RepeatIcon,
+  BranchIcon,
+  CornerIcon,
   TextIcon,
   CommentIcon,
   CodeIcon,
@@ -21,10 +25,21 @@ import {
 function outlineIcon(info) {
   const size = 11;
   if (info.isLayout) return <LayoutIcon size={size} />;
-  if (info.nodeKind === 'component') return <ElementComponentIcon size={size} />;
+  if (info.nodeKind === 'component') {
+    // Same order the Navigator uses: a dynamic tag (`const Tag = tag`) is an
+    // element with no file behind it, then astro:assets, then real components.
+    if (info.dynamicTag) return <CustomElementIcon size={size} />;
+    return info.astroAsset
+      ? astroAssetIcon(info.label, size)
+      : <ElementComponentIcon size={size} />;
+  }
   switch (info.nodeKind) {
     case 'map':
       return <RepeatIcon size={size} />;
+    case 'cond':
+      return <BranchIcon size={size} />;
+    case 'branch':
+      return <CornerIcon size={size} />;
     case 'text':
       return <TextIcon size={size} />;
     case 'comment':
@@ -103,9 +118,12 @@ export default function PreviewPane({
   const [rects, setRects] = React.useState({});
   const [canvasHover, setCanvasHover] = React.useState(null);
 
-  // The path of the last selection made by clicking the page itself, so the
-  // scroll-into-view below can skip it.
-  const clickedPathRef = React.useRef(null);
+  // Set by a click on the page, so the scroll-into-view below can skip it.
+  // `undefined` means no click is pending; a click stores its path, which is
+  // NULL when it landed on markup the open file doesn't address (layout chrome)
+  // — that still selects something, just not the path that was clicked, so the
+  // skip can't be a path comparison.
+  const clickedPathRef = React.useRef(undefined);
   // Which instance of a repeated node is outlined. Canvas clicks pick the one
   // under the pointer; selections from anywhere else fall back to the first.
   const lastClickRef = React.useRef(null);
@@ -172,8 +190,15 @@ export default function PreviewPane({
         lastClickRef.current = { path: d.path || null, occ: d.occurrence || 0 };
         setSelOcc(d.occurrence || 0);
         onSelectPath(d.path || null);
-      } else if (d?.type === 'avb:open-node' && d.path && onOpenPath) {
-        onOpenPath(d.path);
+      } else if (d?.type === 'avb:query-result') {
+        // An answer from the page about what it really renders — see
+        // canvasQuery.js. Routed here because this is the component that
+        // knows which frame the message came from.
+        receiveCanvasReply(d);
+      } else if (d?.type === 'avb:open-node' && onOpenPath) {
+        // A null path means the double-click landed on markup the open file
+        // doesn't address — the layout's own chrome. App decides what that opens.
+        onOpenPath(d.path || null);
       }
     };
     window.addEventListener('message', onMsg);
@@ -187,6 +212,16 @@ export default function PreviewPane({
   // Newline-joined: a namespaced path (src/…/Card.astro|0.1) contains a pipe,
   // so that can no longer separate the tracked paths.
   const trackKey = [...new Set([selPath, hoverPath, focusPath].filter(Boolean))].join(String.fromCharCode(10));
+  // The frame the style panel asks about the rendered DOM. Re-registered on
+  // every load: a reloaded document is a different window to talk to.
+  const registerFrame = React.useCallback(() => {
+    setCanvasFrame(iframeRef.current?.contentWindow || null);
+  }, []);
+  React.useEffect(() => {
+    registerFrame();
+    return () => setCanvasFrame(null);
+  }, [registerFrame, url, refreshKey]);
+
   const sendTrack = React.useCallback(() => {
     const w = iframeRef.current?.contentWindow;
     if (!w) return;
@@ -204,8 +239,11 @@ export default function PreviewPane({
     const focusChanged = prevFocusRef.current !== focusPath;
     prevFocusRef.current = focusPath;
     if (!w || !selPath) return;
-    if (clickedPathRef.current === selPath) {
-      clickedPathRef.current = null;
+    // Any selection that came from a click on the page: whatever it resolved to
+    // is already on screen under the pointer. Notably the layout, whose box is
+    // the whole page — scrolling to it always jumps to the top.
+    if (clickedPathRef.current !== undefined) {
+      clickedPathRef.current = undefined;
       return;
     }
     // Drilling into a component (or backing out) opens a different file and
@@ -391,7 +429,10 @@ export default function PreviewPane({
                 ref={iframeRef}
                 src={`${url}#avb-design`}
                 title="Site preview"
-                onLoad={sendTrack}
+                onLoad={() => {
+                  registerFrame();
+                  sendTrack();
+                }}
               />
               {/* Editing a component: the page stays in context and everything
                   around the instance dims, so the piece being worked on is

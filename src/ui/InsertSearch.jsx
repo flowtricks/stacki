@@ -1,14 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { HTML_TAGS } from '../elementSchemas.js';
+import { ASTRO_ASSETS } from '../astroAssets.js';
 import {
   elementIcon,
   ElementComponentIcon,
   LayoutIcon,
   RepeatIcon,
+  BranchIcon,
   TextIcon,
   CommentIcon,
   CodeIcon,
   SearchIcon,
+  astroAssetIcon,
 } from './Icons.jsx';
 
 const TABS = [
@@ -42,6 +45,18 @@ export default function InsertSearch({ components, allowSlot, onInsert, onClose 
         <ElementComponentIcon size={15} style={{ color: '#79e09c' }} />
       ),
     }));
+    // Astro's own <Image>/<Picture>. They insert like a component (they need
+    // an import) but come from astro:assets rather than a file in src, so they
+    // are listed with the components and marked as Astro's.
+    const assets = ASTRO_ASSETS.map((a) => ({
+      type: 'astroAsset',
+      name: a.name,
+      label: `<${a.name}>`,
+      sub: 'astro:assets',
+      search: `${a.name} astro assets image picture optimised responsive`,
+      cat: 'components',
+      icon: astroAssetIcon(a.name, 15),
+    }));
     // <slot> only belongs in a component or layout — on a page it renders
     // nothing, since a page has no caller to pass it content.
     const tags = (allowSlot ? [...HTML_TAGS, 'slot'].sort() : HTML_TAGS).map((tag) => ({
@@ -55,13 +70,17 @@ export default function InsertSearch({ components, allowSlot, onInsert, onClose 
     }));
     const other = [
       { type: 'map', label: 'Loop', sub: 'items.map', cat: 'other', icon: <RepeatIcon size={14} style={{ color: '#c4afff' }} /> },
+      { type: 'cond', label: 'Condition', sub: 'if / else', search: 'condition if else ternary show hide', cat: 'other', icon: <BranchIcon size={14} style={{ color: '#c4afff' }} /> },
       { type: 'text', label: 'Text', cat: 'other', icon: <TextIcon size={14} /> },
       { type: 'comment', label: 'Comment', cat: 'other', icon: <CommentIcon size={14} /> },
       { type: 'expr', label: 'Code Expression', sub: '{ }', cat: 'other', icon: <CodeIcon size={14} /> },
+      { type: 'doctype', label: 'Doctype', sub: '<!doctype html>', search: 'doctype html', cat: 'other', icon: <CodeIcon size={14} /> },
       { type: 'style', label: 'Style Block', sub: '<style>', cat: 'other', icon: <CodeIcon size={14} /> },
       { type: 'script', label: 'Script Block', sub: '<script>', cat: 'other', icon: <CodeIcon size={14} /> },
     ];
-    return [...comps, ...tags, ...other];
+    // The project's own components first: a project is entitled to a
+    // component called Image, and its own must not be shadowed by Astro's.
+    return [...comps, ...assets, ...tags, ...other];
   }, [components, allowSlot]);
 
   const results = useMemo(() => {
