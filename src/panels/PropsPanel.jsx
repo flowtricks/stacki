@@ -32,6 +32,7 @@ import {
   ChevronRightIcon,
   TagIcon,
   ElementImageIcon,
+  LayoutIcon,
   BranchIcon,
   CornerIcon,
   PencilIcon,
@@ -43,12 +44,16 @@ import {
 // already set on the node that aren't in the schema.
 export default function PropsPanel({
   node,
+  /** Bumped by ⌘Enter — open Settings and focus the class field. */
+  focusClass,
   isLayout,
   layouts,
   currentLayoutName,
   onChangeLayout,
   schema,
   slotOptions,
+  takesSlotText,
+  tagOptions,
   projectClasses,
   allowAttrs,
   comment,
@@ -350,10 +355,10 @@ export default function PropsPanel({
     (k) => !schemaNames.has(k) && !(showSlotField && k === 'slot')
   );
   // With a free-form Attributes section, unknown attrs live there instead of
-  // as individual fields — except class, which keeps its dedicated field.
+  // as individual fields — except class and style, which keep dedicated ones.
   let attrNames = [];
   if (allowAttrs) {
-    attrNames = extraProps.filter((k) => k !== 'class' && k !== 'slot');
+    attrNames = extraProps.filter((k) => k !== 'class' && k !== 'style' && k !== 'slot');
     // `slot` is sorted last so a hand-written one lands where the picker's
     // does — directly above the comment — instead of in among the props.
     extraProps = extraProps
@@ -366,10 +371,22 @@ export default function PropsPanel({
   // that's still empty — a just-inserted <h1> or <p> — has no inline children
   // to detect, so offer the editor there too; otherwise there'd be no way to
   // type its first words. Void tags can't hold content at all.
+  // A component with a default <slot/> holds content exactly the way an
+  // element does. Without this an empty one — everything the insert palette
+  // adds, since a fresh instance is self-closing — has no Content field, and
+  // so no way to be given its first words.
   const isEmpty = !Array.isArray(node.children) || node.children.length === 0;
   const canHoldText =
-    node.kind === 'element' && !VOID_TAGS.has(String(node.name).toLowerCase());
+    (node.kind === 'element' && !VOID_TAGS.has(String(node.name).toLowerCase())) ||
+    !!takesSlotText;
   const showContentField = isInlineOnly(node.children) || (isEmpty && canHoldText);
+  // HTML lets a node hold text *and* elements — `<div>Intro<Button/></div>` is
+  // ordinary markup — but the rich editor above only covers all-inline
+  // children. Rather than leave the text unreachable from the node that owns
+  // it, mixed children get a plain field over the loose text alone; the
+  // element children it sits among are left exactly where they are.
+  const looseText = !isEmpty && (node.children || []).find((c) => c.kind === 'text');
+  const showLooseTextField = !showContentField && canHoldText && !isEmpty;
   // <slot> does take children, but they're the fallback Astro renders only
   // when the caller passes nothing — labelling it "Content" reads as if it
   // were what shows on the page.
@@ -422,11 +439,39 @@ export default function PropsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [srcKey, projectPath, filePath]);
 
+  // What Astro will do with whatever is in `src`, which decides whether the
+  // optimisation props mean anything:
+  //   'svg'    — passed through untouched, however it's asked to be encoded
+  //   'public' — served as-is; Astro never reads files under public/
+  //   'asset' / 'remote' — processed normally
+  // The type system can't say this (the prop is valid, the value is what makes
+  // it moot) and the component can only warn about it at runtime, so the panel
+  // is the only place it can be said before the fact.
+  const srcKind = React.useMemo(() => {
+    if (!srcProp) return null;
+    const isSvg = (s) => /\.svg(\?|#|$)/i.test(String(s || ''));
+    if (srcProp.type === 'string') {
+      const v = String(srcProp.value || '');
+      if (!v) return null;
+      if (isSvg(v)) return 'svg';
+      return /^(https?:)?\/\//.test(v) || v.startsWith('data:') ? 'remote' : 'public';
+    }
+    const binding = assetImportOf(srcProp.value, dataCtx?.imports);
+    if (!binding) return null;
+    return isSvg(binding.spec) ? 'svg' : 'asset';
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [srcKey, dataCtx?.imports]);
+
   // Changing the discriminant changes which props exist. The ones that no
   // longer apply are removed, not just hidden — leaving them in the markup
   // means the file carries props the component will ignore, and they would
   // reappear the moment the discriminant went back. Same edit, so it is one
   // undo, and the value is recoverable that way.
+  // Values a discriminant switch took away, per node, kept only while the
+  // panel is up: flicking variant → full-width → constrained should hand
+  // `sizes` back, but reopening the project shouldn't resurrect it.
+  const stashRef = useRef({});
+
   const setPropCascading = (fieldName, value, immediate) => {
     // Setting a prop can move which branch applies, and the props the new
     // branch forbids have to go — leaving them means the file carries props
@@ -434,31 +479,68 @@ export default function PropsPanel({
     // edit, so it is one undo and the values come back together.
     const next = { ...(node.props || {}), [fieldName]: value };
     if (value === undefined) delete next[fieldName];
-    const doomed = new Set();
+    // Which props this branch rules out, and every prop the same union covers
+    // — the second set bounds what a switch back is allowed to bring in, so a
+    // value held for one union can't be restored by an edit to another.
+    const forbidden = new Set();
+    const involved = new Set();
     for (const union of unions) {
       if (!union.names.includes(fieldName)) continue;
-      const fits = union.branches.filter((b) => {
-        for (const name of b.forbids) if (next[name] !== undefined) return false;
+      for (const name of union.names) involved.add(name);
+      // How this union decides which branch applies. When the edited prop is
+      // one the branches pin to a literal (variant: "constrained"), the value
+      // just picked settles it on its own — the props the losing branches
+      // allowed are precisely the ones to clear, so they mustn't get a vote.
+      // Otherwise the branch is discriminated by presence (`href?: never`) and
+      // what's set is the only evidence there is.
+      const pinsField = union.branches.some((b) =>
+        Object.prototype.hasOwnProperty.call(b.pins, fieldName)
+      );
+      const pinsMatch = (b) => {
         for (const [name, want] of Object.entries(b.pins)) {
           const set = next[name];
           const have = set ? (set.type === 'bare' ? 'true' : String(set.value ?? ''))
             : (schema.find((x) => x.name === name)?.default ?? undefined);
-          if (have !== undefined && String(have) !== want) return false;
+          // `want` is the set of values this branch allows for that prop —
+          // one for `variant: "autofit"`, several for `"autofit" | "autofill"`.
+          if (have !== undefined && !want.includes(String(have))) return false;
         }
         return true;
+      };
+      const fits = union.branches.filter((b) => {
+        if (!pinsField) for (const name of b.forbids) if (next[name] !== undefined) return false;
+        return pinsMatch(b);
       });
       const live = fits.length ? fits : union.branches;
       for (const name of union.names) {
-        if (name === fieldName || node.props?.[name] === undefined) continue;
-        if (live.every((b) => b.forbids.includes(name))) doomed.add(name);
+        if (name === fieldName) continue;
+        if (live.every((b) => b.forbids.includes(name))) forbidden.add(name);
       }
     }
-    if (!doomed.size || !onSetProps) {
+
+    const stash = stashRef.current[node.id] || (stashRef.current[node.id] = {});
+    // Writing a prop by hand supersedes whatever was held for it.
+    delete stash[fieldName];
+
+    const patch = { [fieldName]: value };
+    for (const name of forbidden) {
+      if (node.props?.[name] === undefined) continue;
+      stash[name] = node.props[name]; // held, so switching back can put it back
+      patch[name] = undefined;
+    }
+    // Switching back: anything set aside that this branch allows again, and
+    // that nothing has written in the meantime, returns exactly as it was.
+    for (const [name, held] of Object.entries(stash)) {
+      if (!involved.has(name) || forbidden.has(name)) continue;
+      if (node.props?.[name] !== undefined) continue;
+      patch[name] = held;
+      delete stash[name];
+    }
+
+    if (Object.keys(patch).length === 1 || !onSetProps) {
       onSetProp(fieldName, value, immediate);
       return;
     }
-    const patch = { [fieldName]: value };
-    for (const name of doomed) patch[name] = undefined;
     onSetProps(node.id, patch);
   };
 
@@ -485,7 +567,7 @@ export default function PropsPanel({
       // …or if it fixes a prop to a value the node doesn't have.
       for (const [name, want] of Object.entries(b.pins)) {
         const have = effective(name);
-        if (have !== undefined && have !== want) return false;
+        if (have !== undefined && !want.includes(String(have))) return false;
       }
       return true;
     });
@@ -510,19 +592,69 @@ export default function PropsPanel({
   // (not per node) so opening it once keeps it open as you move around.
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // ⌘Enter, forwarded from App as a counter: open Settings and put the caret
+  // in the class field. Two steps, because the field doesn't exist to focus
+  // until the render that opens the group has happened.
+  const [wantClassFocus, setWantClassFocus] = useState(false);
+  const rootRef = useRef(null);
+  useEffect(() => {
+    if (!focusClass) return;
+    setSettingsOpen(true);
+    setWantClassFocus(true);
+  }, [focusClass]);
+  useEffect(() => {
+    if (!wantClassFocus || !settingsOpen) return;
+    setWantClassFocus(false);
+    const input = rootRef.current?.querySelector('.class-input-field');
+    if (!input) return;
+    input.focus();
+    input.closest('.props-field')?.scrollIntoView({ block: 'nearest' });
+  }, [wantClassFocus, settingsOpen]);
+
   const classField =
     schema.find((f) => f.name === 'class' && appliesNow(f)) ||
     (node.props?.class !== undefined ? { name: 'class', type: 'string' } : null);
 
+  // Inline styles, directly under the class field. Anything that renders a
+  // real element has one, whatever it declares; a component only when it
+  // takes the attribute (…rest) or already carries it, so the panel never
+  // offers a prop the component would ignore. Always the CSS editor, even
+  // when a component types it `style?: string`.
+  const styleField =
+    allowAttrs || node.props?.style !== undefined
+      ? { ...(schema.find((f) => f.name === 'style') || {}), name: 'style', type: 'style' }
+      : null;
+
+  // The page's wrapper switches through the same Tag field as everything else
+  // — it just answers with a layout rather than a tag, so its list is the
+  // project's layouts and the change goes through the import rewrite.
+  const layoutTag = isLayout && !!onChangeLayout && Array.isArray(layouts) && layouts.length > 0;
+  const changeToLayout = (name) => {
+    // The wrapper is an import, not markup: a name no layout file provides
+    // can't be written, so the field puts the old one back.
+    if (!layouts.some((l) => l.name === name)) return false;
+    onChangeLayout(name);
+    return true;
+  };
+
+  // Anything with a real tag or component name — not a loop, a condition, a
+  // comment or a slot (switching a slot away would be a one-way door).
+  const showTagField =
+    !isSlot &&
+    (layoutTag ||
+      (!!onChangeTag && !isLayout && (node.kind === 'element' || node.kind === 'component')));
 
   const hasSettings =
+    showTagField ||
     !!classField ||
+    !!styleField ||
     allowAttrs ||
     showSlotField ||
     !!(onSetComment && (node.kind === 'element' || node.kind === 'component'));
-  // How many of the four actually carry something, shown on the closed header.
+  // How many of them actually carry something, shown on the closed header.
   const settingsCount =
     (node.props?.class !== undefined ? 1 : 0) +
+    (node.props?.style !== undefined ? 1 : 0) +
     attrNames.length +
     (comment ? 1 : 0) +
     (node.props?.slot !== undefined ? 1 : 0);
@@ -538,7 +670,7 @@ export default function PropsPanel({
   };
 
   return (
-    <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
+    <div className="panel-section grow" ref={rootRef} style={{ flex: '1 1 50%', overflow: 'hidden' }}>
       <div className="props-title">
         {node.kind === 'element' ? (
           elementIcon(node.name, 16, 'props-title-icon')
@@ -555,31 +687,7 @@ export default function PropsPanel({
       <div className="panel-body" style={{ padding: 0 }}>
         {/* A slot isn't a tag choice — it's where the caller's content plugs
             in. Renaming it would silently turn it into an empty element. */}
-        {node.kind === 'element' && onChangeTag && !isSlot && (
-          <TagField key="tag" tag={node.name} onChangeTag={onChangeTag} />
-        )}
-        {isLayout && Array.isArray(layouts) && layouts.length > 0 && (
-          <div className="props-field" key="layout">
-            <label>
-              <span className="prop-label">
-                <ComponentPropertiesIcon size={12} className="prop-label-icon" />
-                Layout
-              </span>
-            </label>
-            <Dropdown
-              value={currentLayoutName}
-              options={[
-                // Keep an unresolvable wrapper (not one of the scanned layout
-                // files) selectable rather than showing an empty trigger.
-                ...(currentLayoutName && !layouts.some((l) => l.name === currentLayoutName)
-                  ? [{ value: currentLayoutName, label: currentLayoutName }]
-                  : []),
-                ...layouts.map((l) => ({ value: l.name, label: l.name })),
-              ]}
-              onChange={(v) => onChangeLayout(v)}
-            />
-          </div>
-        )}
+
         {showContentField && (
           <div className="props-field" key="content">
             <label>
@@ -602,27 +710,49 @@ export default function PropsPanel({
             )}
           </div>
         )}
-        {schema.filter(appliesNow).filter((f) => f.name !== 'class').map((field) => (
+        {showLooseTextField && (
+          <div className="props-field" key="loose-text">
+            <label>
+              <span className={`prop-label${looseText ? ' set' : ''}`}>
+                <VariableTextSizeIcon size={12} className="prop-label-icon" />
+                Content
+              </span>
+            </label>
+            <AutoTextarea
+              key={node.id}
+              minRows={2}
+              value={looseText ? looseText.value : ''}
+              placeholder="Text alongside the children below"
+              onChange={(e) => onSetContent(e.target.value)}
+            />
+          </div>
+        )}
+        {schema
+          .filter(appliesNow)
+          .filter((f) => f.name !== 'class' && !(styleField && f.name === 'style'))
+          .map((field) => (
           <PropField
             key={field.name}
             field={field}
             value={node.props[field.name]}
             slotOptions={slotOptions}
             projectClasses={projectClasses}
-            assetCtx={{ projectPath, filePath, nodeName: node.name, onPickDimensions, srcDims, onSrcDimensions: setSrcDims, onPickAsset: onSetAssetProp && ((f, picked) => onSetAssetProp(node.id, f, picked)) }}
+            assetCtx={{ projectPath, filePath, nodeName: node.name, onPickDimensions, srcDims, onSrcDimensions: setSrcDims, siblingProps: node.props, srcKind, onPickAsset: onSetAssetProp && ((f, picked) => onSetAssetProp(node.id, f, picked)) }}
             linkContext={linkContext}
             dataCtx={dataCtx}
             onChange={(v, immediate) => setPropCascading(field.name, v, immediate)}
           />
         ))}
-        {extraProps.filter((name) => name !== 'class').map((name) => (
+        {extraProps
+          .filter((name) => name !== 'class' && !(styleField && name === 'style'))
+          .map((name) => (
           <PropField
             key={name}
             field={{ name, type: 'other' }}
             value={node.props[name]}
             slotOptions={slotOptions}
             projectClasses={projectClasses}
-            assetCtx={{ projectPath, filePath, nodeName: node.name, onPickDimensions, srcDims, onSrcDimensions: setSrcDims, onPickAsset: onSetAssetProp && ((f, picked) => onSetAssetProp(node.id, f, picked)) }}
+            assetCtx={{ projectPath, filePath, nodeName: node.name, onPickDimensions, srcDims, onSrcDimensions: setSrcDims, siblingProps: node.props, srcKind, onPickAsset: onSetAssetProp && ((f, picked) => onSetAssetProp(node.id, f, picked)) }}
             linkContext={linkContext}
             dataCtx={dataCtx}
             onChange={(v, immediate) => onSetProp(name, v, immediate)}
@@ -652,6 +782,20 @@ export default function PropsPanel({
         )}
         {hasSettings && settingsOpen && (
         <>
+        {/* First in Settings, and on every node: the tag is what the node IS,
+            and it's how a <div> becomes a component (or a component becomes a
+            <div>) without going to the code. */}
+        {showTagField && (
+          <TagField
+            key="tag"
+            // A layout shows (and offers) the layout it resolves to, not the
+            // local name the page imported it under — that name is a detail of
+            // this page, while the file is what you're choosing between.
+            tag={layoutTag ? currentLayoutName || node.name : node.name}
+            options={layoutTag ? layouts.map((l) => ({ name: l.name, kind: 'layout' })) : tagOptions}
+            onChangeTag={layoutTag ? changeToLayout : onChangeTag}
+          />
+        )}
         {classField && (
           <PropField
             key="class"
@@ -659,10 +803,25 @@ export default function PropsPanel({
             value={node.props?.class}
             slotOptions={slotOptions}
             projectClasses={projectClasses}
-            assetCtx={{ projectPath, filePath, nodeName: node.name, onPickDimensions, srcDims, onSrcDimensions: setSrcDims, onPickAsset: onSetAssetProp && ((f, picked) => onSetAssetProp(node.id, f, picked)) }}
+            assetCtx={{ projectPath, filePath, nodeName: node.name, onPickDimensions, srcDims, onSrcDimensions: setSrcDims, siblingProps: node.props, srcKind, onPickAsset: onSetAssetProp && ((f, picked) => onSetAssetProp(node.id, f, picked)) }}
             linkContext={linkContext}
             dataCtx={dataCtx}
             onChange={(v, immediate) => setPropCascading('class', v, immediate)}
+          />
+        )}
+        {styleField && (
+          <PropField
+            // The editor is mounted with its text and doesn't re-sync, so it
+            // has to be a new one per node — otherwise selecting a sibling
+            // would leave the previous element's CSS sitting in the field.
+            key={`style:${node.id}`}
+            field={styleField}
+            value={node.props?.style}
+            slotOptions={slotOptions}
+            projectClasses={projectClasses}
+            linkContext={linkContext}
+            dataCtx={dataCtx}
+            onChange={(v, immediate) => setPropCascading('style', v, immediate)}
           />
         )}
         {allowAttrs && (
@@ -785,7 +944,6 @@ function AttributesSection({ node, names, projectPath, onSetProp, onSetProps, on
           <BracesIcon size={12} className="prop-label-icon" />
           Attributes
         </span>
-        <span style={{ flex: 1 }} />
         <button className="ghost" title="Add attribute" onClick={() => openEditor(null)}>
           <PlusIcon size={12} />
         </button>
@@ -1037,6 +1195,18 @@ function AttrEditor({ pos, name, value, isNew, projectPath, onCommitName, onComm
 // Shallow object literal ({ id: "x", tabindex: 3 }) ↔ ordered entries.
 // Returns null for nesting/spreads the row editor can't represent (the
 // caller falls back to the generic expression field).
+// Does this prop name end in the word "href"? Splits camelCase, kebab and
+// snake alike, so `buttonHref`, `cta-href` and plain `href` all say yes while
+// `hrefLabel` says no.
+function isHrefName(name) {
+  const words = String(name)
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  return words[words.length - 1] === 'href';
+}
+
 function parseObjectLiteral(src) {
   const t = String(src ?? '').trim();
   const m = t.match(/^\{([\s\S]*)\}$/);
@@ -1100,7 +1270,6 @@ function ObjectAttrsField({ pill, menu, entries, onCommit }) {
     <div className="props-field" ref={listRef}>
       <div className="props-label-row">
         {pill}
-        <span style={{ flex: 1 }} />
         <button className="ghost" title="Add attribute" onClick={() => openEditor(null)}>
           <PlusIcon size={12} />
         </button>
@@ -1170,12 +1339,16 @@ function ObjectAttrsField({ pill, menu, entries, onCommit }) {
 // Parses a loop head like `service.tags.map((tag) => (` or
 // `items.filter(i => i.on).map((item, index) => (` into friendly fields.
 // The data part is any expression, so filtered/sorted collections still fit;
-// only destructured params or non-arrow callbacks fall back to code.
+// the single parameter may be bare — `items.map(item => (` — the way a
+// one-argument arrow is often written. Only destructured params or non-arrow
+// callbacks fall back to code.
 function parseMapHead(head) {
   const m = String(head)
     .trim()
-    .match(/^([\s\S]+?)\.map\(\s*\(\s*([\w$]+)\s*(?:,\s*([\w$]+)\s*)?\)\s*=>\s*\($/);
-  return m ? { data: m[1].trim(), item: m[2], index: m[3] || '' } : null;
+    .match(
+      /^([\s\S]+?)\.map\(\s*(?:\(\s*([\w$]+)\s*(?:,\s*([\w$]+)\s*)?\)|([\w$]+))\s*=>\s*\($/
+    );
+  return m ? { data: m[1].trim(), item: m[2] || m[4], index: m[3] || '' } : null;
 }
 
 const IDENT_RE = /^[A-Za-z_$][\w$]*$/;
@@ -1383,23 +1556,59 @@ function MapEditor({ node, loopContext, dataCtx, onSetText }) {
 // Tag switcher for plain elements: free text with a suggestion list of
 // standard HTML tags. Committing renames the element — the navigator icon
 // follows the tag, and attributes invalid for the new tag are dropped.
-function TagField({ tag, onChangeTag }) {
+// The glyph an option wears in the tag list — the same ones the insert
+// palette uses, so a component reads as a component in both places.
+function tagOptionIcon(opt) {
+  if (opt.kind === 'astroAsset') return astroAssetIcon(opt.name, 13);
+  if (opt.kind === 'layout') return <LayoutIcon size={13} style={{ color: '#79e09c' }} />;
+  if (opt.kind === 'component')
+    return <ElementComponentIcon size={13} style={{ color: '#79e09c' }} />;
+  return elementIcon(opt.name, 13);
+}
+
+function TagField({ tag, options, onChangeTag }) {
   const [draft, setDraft] = useState(tag);
   const [focused, setFocused] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const [popupPos, setPopupPos] = useState(null);
   const wrapRef = useRef(null);
   const inputRef = useRef(null);
-  useEffect(() => setDraft(tag), [tag]);
+  // Two refs, because picking from the list commits and then blurs in the same
+  // tick — before React has re-rendered with either new value:
+  //   committedRef — what the field has already asked for. `tag` doesn't catch
+  //     up until the app re-renders, so it can't answer "did I just do this?".
+  //   draftRef — the live text. The blur handler closes over the `draft` of the
+  //     render it was created in, which is still the half-typed "bu" when a
+  //     pick blurs the input; committing that put "bu" on the element and left
+  //     the picked name sitting in the box.
+  const committedRef = useRef(tag);
+  const draftRef = useRef(tag);
+  const updateDraft = (v) => {
+    draftRef.current = v;
+    setDraft(v);
+  };
+  useEffect(() => {
+    committedRef.current = tag;
+    updateDraft(tag);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tag]);
 
-  const q = draft.trim().toLowerCase();
+  // Components as well as tags: Astro tells them apart by case, and so does
+  // this list — typing a capital narrows to what the page can actually
+  // provide (a project component, an astro:assets one, or something the
+  // frontmatter already imports).
+  const pool =
+    options && options.length ? options : HTML_TAGS.map((name) => ({ name, kind: 'element' }));
+  const q = draft.trim();
+  const ql = q.toLowerCase();
   const matches =
     focused && q && q !== tag
-      ? HTML_TAGS.filter((t) => t.includes(q))
+      ? pool
+          .filter((o) => o.name.toLowerCase().includes(ql))
           .sort((a, b) => {
-            const ap = a.startsWith(q) ? 0 : 1;
-            const bp = b.startsWith(q) ? 0 : 1;
-            return ap - bp || a.length - b.length;
+            const ap = a.name.toLowerCase().startsWith(ql) ? 0 : 1;
+            const bp = b.name.toLowerCase().startsWith(ql) ? 0 : 1;
+            return ap - bp || a.name.length - b.name.length;
           })
           .slice(0, 12)
       : [];
@@ -1413,12 +1622,32 @@ function TagField({ tag, onChangeTag }) {
     setPopupPos({ left: r.left, top: r.bottom + 4, width: r.width });
   }, [matches.length, draft]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Ask for a name, and put the old one back if the caller says nothing
+  // provides it — a component that isn't imported anywhere, a layout name
+  // that isn't a layout file.
+  const apply = (name) => {
+    committedRef.current = name;
+    updateDraft(name);
+    Promise.resolve(onChangeTag(name)).then((ok) => {
+      if (ok === false) {
+        committedRef.current = tag;
+        updateDraft(tag);
+      }
+    });
+  };
+
   const commit = (t) => {
-    const clean = String(t).trim().toLowerCase();
-    // Not `slot` either: a slot shows no Tag field, so switching into one
-    // here would be a one-way door. Insert a slot from the palette instead.
-    if (/^[a-z][a-z0-9-]*$/.test(clean) && clean !== tag && clean !== 'slot') onChangeTag(clean);
-    else setDraft(tag);
+    const raw = String(t).trim();
+    if (raw === committedRef.current) return updateDraft(committedRef.current);
+    // A capital means a component — passed through with its case intact, and
+    // it's the caller that decides whether anything provides that name.
+    if (/^[A-Z][\w$]*$/.test(raw)) return apply(raw);
+    const clean = raw.toLowerCase();
+    // Not `slot` either: switching into one here would be a one-way door —
+    // insert a slot from the palette instead.
+    if (/^[a-z][a-z0-9-]*$/.test(clean) && clean !== committedRef.current && clean !== 'slot') {
+      apply(clean);
+    } else updateDraft(committedRef.current);
   };
 
   const onKeyDown = (e) => {
@@ -1428,16 +1657,15 @@ function TagField({ tag, onChangeTag }) {
     } else if (e.key === 'ArrowUp' && matches.length) {
       e.preventDefault();
       setHighlight((h) => Math.max(h - 1, 0));
-    } else if (e.key === 'Enter') {
+    } else if (e.key === 'Enter' || (e.key === 'Tab' && matches.length)) {
       e.preventDefault();
-      commit(matches.length ? matches[Math.min(highlight, matches.length - 1)] : draft);
-      inputRef.current?.blur();
-    } else if (e.key === 'Tab' && matches.length) {
-      e.preventDefault();
-      commit(matches[Math.min(highlight, matches.length - 1)]);
+      const picked = matches[Math.min(highlight, matches.length - 1)];
+      commit(picked ? picked.name : draftRef.current);
       inputRef.current?.blur();
     } else if (e.key === 'Escape') {
-      setDraft(tag);
+      // Put the text back before blurring, or the blur below would commit
+      // whatever was being typed — the opposite of what Escape means.
+      updateDraft(committedRef.current);
       inputRef.current?.blur();
     }
   };
@@ -1455,13 +1683,15 @@ function TagField({ tag, onChangeTag }) {
         value={draft}
         spellCheck={false}
         onChange={(e) => {
-          setDraft(e.target.value);
+          updateDraft(e.target.value);
           setHighlight(0);
         }}
         onFocus={() => setFocused(true)}
         onBlur={() => {
           setFocused(false);
-          commit(draft);
+          // The ref, not `draft`: a pick blurs the input in the same tick it
+          // sets the text, so the state this handler closed over is stale.
+          commit(draftRef.current);
         }}
         onKeyDown={onKeyDown}
       />
@@ -1470,18 +1700,19 @@ function TagField({ tag, onChangeTag }) {
           className="dd-popup class-suggest"
           style={{ left: popupPos.left, top: popupPos.top, width: popupPos.width }}
         >
-          {matches.map((t, i) => (
+          {matches.map((o, i) => (
             <div
-              key={t}
+              key={o.name}
               className={`dd-option ${i === highlight ? 'highlight' : ''}`}
               onMouseDown={(e) => e.preventDefault()}
               onMouseEnter={() => setHighlight(i)}
               onClick={() => {
-                commit(t);
+                commit(o.name);
                 inputRef.current?.blur();
               }}
             >
-              <span className="dd-option-label">{t}</span>
+              <span className="dd-option-icon">{tagOptionIcon(o)}</span>
+              <span className="dd-option-label">{o.name}</span>
             </div>
           ))}
         </div>
@@ -1719,6 +1950,67 @@ function VarSourceEditor({ pos, name, code, onChangeCode, onClose }) {
   );
 }
 
+// Whether a prop name says "this holds a file". Read as words, so the LAST one
+// decides: `image` and `ogImage` are pictures, `imageAlt` and `imageClass` are
+// not. A name alone is the only signal available — the type is just `string`.
+const MEDIA_WORDS = new Set([
+  'src', 'image', 'poster', 'icon', 'logo', 'avatar', 'thumb', 'thumbnail',
+  'photo', 'banner', 'cover', 'video', 'audio',
+]);
+function mediaWord(name) {
+  const words = String(name || '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .trim()
+    .split(/\s+/);
+  return words[words.length - 1] || '';
+}
+function isMediaName(name) {
+  return MEDIA_WORDS.has(mediaWord(name));
+}
+
+// "1–12, whole numbers" — what a bounded number field will take, on hover.
+// The doc comment says it too, but that's behind the ? and reads as prose.
+function boundsHint(field) {
+  const { min, max, step, minExclusive, maxExclusive } = field;
+  const parts = [];
+  if (min !== undefined && max !== undefined) {
+    parts.push(`${minExclusive ? '>' : ''}${min}–${maxExclusive ? '<' : ''}${max}`);
+  } else if (min !== undefined) {
+    parts.push(minExclusive ? `greater than ${min}` : `${min} or more`);
+  } else if (max !== undefined) {
+    parts.push(maxExclusive ? `less than ${max}` : `${max} or less`);
+  }
+  if (step === 1) parts.push('whole numbers');
+  else if (step !== undefined) parts.push(`steps of ${step}`);
+  return parts.length ? `Accepts ${parts.join(', ')}` : undefined;
+}
+
+// Two choices, side by side, with the chip sliding between them. Used for
+// booleans and for any two-option enum: a dropdown to pick between exactly two
+// things costs a click to see what the other one even is, and this shows both
+// at once.
+function SegSwitch({ options, current, onPick }) {
+  const at = options.findIndex((o) => o.value === current);
+  return (
+    <div className={`bool-seg ${at === 1 ? 'is-second' : 'is-first'}`} role="group">
+      {options.map((o) => (
+        <button
+          key={String(o.value)}
+          type="button"
+          className={o.value === current ? 'on' : ''}
+          aria-pressed={o.value === current}
+          title={o.label}
+          onClick={() => onPick(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function PropField({
   field,
   value,
@@ -1729,6 +2021,15 @@ function PropField({
   dataCtx,
   onChange,
 }) {
+  // A sibling prop as a plain number, or null when it's unset or an
+  // expression we can't evaluate ({heroWidth}).
+  const siblingNumber = (propName) => {
+    const v = assetCtx?.siblingProps?.[propName];
+    if (!v) return null;
+    const n = parseFloat(v.type === 'expr' ? v.value : v.value);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
   // What an empty field falls back to, most concrete first:
   //   the literal default the component declares  (picture = false)
   //   the source image's own size                 (width/height of the asset)
@@ -1739,8 +2040,20 @@ function PropField({
     if (field.default !== undefined) return String(field.default);
     const dims = assetCtx?.srcDims;
     if (dims) {
-      if (/^width$/i.test(field.name) && dims.w) return String(dims.w);
-      if (/^height$/i.test(field.name) && dims.h) return String(dims.h);
+      const isW = /^width$/i.test(field.name);
+      const isH = /^height$/i.test(field.name);
+      if ((isW || isH) && dims.w && dims.h) {
+        // Setting one dimension makes the other follow the source's aspect
+        // ratio — that, not the asset's own size, is what leaving this field
+        // empty now means.
+        const other = siblingNumber(isW ? 'height' : 'width');
+        if (other) {
+          const ratio = isW ? dims.w / dims.h : dims.h / dims.w;
+          return String(Math.round(other * ratio));
+        }
+      }
+      if (isW && dims.w) return String(dims.w);
+      if (isH && dims.h) return String(dims.h);
     }
     return field.hint || '';
   };
@@ -1748,6 +2061,28 @@ function PropField({
   const { name, type } = field;
   const isSet = value !== undefined;
   const [menuPos, setMenuPos] = useState(null);
+  // The last value a bounded number field accepted, so a rejected one has
+  // somewhere to go back to.
+  const lastGoodRef = useRef('');
+
+  // Props that only mean something while Astro is actually processing the
+  // image. Set one against a source it passes through and nothing happens —
+  // the component can warn once it renders, the panel can say so up front.
+  const reason =
+    !/^(quality|format|formats|fallbackFormat|densities|widths|sizes)$/i.test(name) ||
+    !assetCtx?.srcKind
+      ? null
+      : assetCtx.srcKind === 'svg'
+        ? 'SVG sources are passed through unoptimized, so this has no effect.'
+        : assetCtx.srcKind === 'public'
+          ? 'Files in public/ are served as-is — import from src/assets to optimize.'
+          : null;
+
+  // Nothing to offer, so don't: the field is gone for this source. One that
+  // already carries a value stays, flagged — it's in the markup either way,
+  // and hiding it would leave a prop the component ignores with no way to
+  // reach it from here.
+  if (reason && !isSet) return null;
 
   const reset = () => {
     setMenuPos(null);
@@ -1774,7 +2109,7 @@ function PropField({
       {type === 'boolean' && <FieldSwitchIcon size={12} className="prop-label-icon" />}
       {type === 'enum' && <ComponentPropertiesIcon size={12} className="prop-label-icon" />}
       {type === 'attrs' && <BracesIcon size={12} className="prop-label-icon" />}
-      {type === 'code' && <CodeIcon size={12} className="prop-label-icon" />}
+      {(type === 'code' || type === 'style') && <CodeIcon size={12} className="prop-label-icon" />}
       {(type === 'slot' || name === 'slot') && (
         <ElementSlotIcon size={12} className="prop-label-icon" />
       )}
@@ -1793,9 +2128,37 @@ function PropField({
       {/* The prop's own documentation — the comment above it in the
           component's `interface Props`. */}
       <PropTip text={field.doc} />
+      {reason && (
+        <span className="prop-inert" title={reason}>
+          ignored
+        </span>
+      )}
       {menu}
     </label>
   );
+
+  // Inline CSS. A declaration list, not a string, so it gets the same little
+  // CSS editor the Attributes popover uses — and its own field, since every
+  // element has one. An {expression} value falls through to the plain input
+  // below: that's JavaScript, and the CSS mode would mangle it.
+  if (type === 'style' && (!isSet || value.type === 'string')) {
+    return (
+      <div className="props-field">
+        {label}
+        <StyleEditor
+          value={value?.value || ''}
+          placeholder="color: red;"
+          onChange={(text) => {
+            const flat = collapseDeclarations(text);
+            // Nothing left in it means no attribute at all — an element never
+            // asked for an empty style="" and shouldn't carry one.
+            if (!flat) onChange(undefined, true);
+            else onChange({ type: 'string', value: flat }, false);
+          }}
+        />
+      </div>
+    );
+  }
 
   // Attributes-object props (containerAttrs etc.) edit as name/value rows.
   if (type === 'attrs') {
@@ -1875,6 +2238,34 @@ function PropField({
   if (type === 'enum' && field.options?.length) {
     const defaultStr = field.default !== undefined ? String(field.default) : undefined;
     const raw = value?.value;
+    // Exactly two options, one of them the default: the same shape as a
+    // boolean — an either/or with a known resting state — so it reads as one.
+    // Only when what's set is one of the two; an out-of-schema value has to
+    // stay visible, and the dropdown is the only field that can show it.
+    if (
+      field.options.length === 2 &&
+      defaultStr !== undefined &&
+      field.options.includes(defaultStr) &&
+      (raw === undefined || field.options.includes(raw))
+    ) {
+      const current = raw ?? defaultStr;
+      return (
+        <div className="props-field">
+          {label}
+          <SegSwitch
+            options={field.options.map((o) => ({ value: o, label: o }))}
+            current={current}
+            onPick={(v) =>
+              // Picking the default clears the prop, exactly as the dropdown
+              // does — an untouched component stays untouched in the markup.
+              v === defaultStr
+                ? onChange(undefined, true)
+                : onChange({ type: field.numeric ? 'expr' : 'string', value: v }, true)
+            }
+          />
+        </div>
+      );
+    }
     // The default option is encoded as '' (= prop not set), so an unset prop
     // shows its default as the selected option and picking the default
     // resets the prop rather than writing it out explicitly.
@@ -1897,7 +2288,9 @@ function PropField({
           onChange={(v) =>
             v === ''
               ? onChange(undefined, true)
-              : onChange({ type: 'string', value: v }, true)
+              : // A union of numbers is still numbers: the component is typed
+                // for one, so it has to be written `cols={3}`, not `cols="3"`.
+                onChange({ type: field.numeric ? 'expr' : 'string', value: v }, true)
           }
         />
       </div>
@@ -1924,25 +2317,50 @@ function PropField({
     return (
       <div className="props-field">
         {label}
-        <div className={`bool-seg ${current ? 'is-true' : 'is-false'}`} role="group">
-          {[true, false].map((v) => (
-            <button
-              key={String(v)}
-              type="button"
-              className={current === v ? 'on' : ''}
-              aria-pressed={current === v}
-              onClick={() => choose(v)}
-            >
-              {v ? 'True' : 'False'}
-            </button>
-          ))}
-        </div>
+        <SegSwitch
+          options={[
+            { value: true, label: 'True' },
+            { value: false, label: 'False' },
+          ]}
+          current={current}
+          onPick={choose}
+        />
       </div>
     );
   }
 
   if (type === 'number') {
     const num = value?.type === 'expr' ? value.value : value?.value ?? '';
+    // What the component says it will accept (see numberRules): a bound the
+    // type can't express, read from the doc comment. Typing stays free — you
+    // have to be able to pass through "-" or "1." on the way to a real number
+    // — and the check happens when the value is committed, on Enter or on
+    // leaving the field.
+    const { min, max, step: grain, minExclusive, maxExclusive } = field;
+    const bounded = min !== undefined || max !== undefined || grain !== undefined;
+    const allows = (n) => {
+      if (!Number.isFinite(n)) return false;
+      if (min !== undefined && (minExclusive ? n <= min : n < min)) return false;
+      if (max !== undefined && (maxExclusive ? n >= max : n > max)) return false;
+      // Rounded before comparing, or 0.1 + 0.2 fails a step of 0.1.
+      if (grain !== undefined && Math.abs(Math.round(n / grain) * grain - n) > 1e-9) return false;
+      return true;
+    };
+    const clamp = (n) => {
+      let v = n;
+      if (grain !== undefined) v = Math.round(v / grain) * grain;
+      if (min !== undefined) v = Math.max(v, minExclusive ? min + (grain ?? 1e-6) : min);
+      if (max !== undefined) v = Math.min(v, maxExclusive ? max - (grain ?? 1e-6) : max);
+      return Math.round(v * 1e6) / 1e6;
+    };
+    // The last value that was allowed, to fall back to. An empty field is
+    // allowed — it means "unset", and the component's own default applies.
+    if (num === '' || allows(parseFloat(num))) lastGoodRef.current = num;
+    const revertIfRejected = () => {
+      if (!bounded || num === '' || allows(parseFloat(num))) return;
+      const back = lastGoodRef.current;
+      onChange(back === '' ? undefined : { type: 'expr', value: back }, true);
+    };
     // One place decides what a step does, so the arrow keys and the buttons
     // can't drift apart. Shift ×10, Option ÷10 — the modifiers the style
     // panel's number fields already use.
@@ -1958,10 +2376,17 @@ function PropField({
         : Number.isFinite(shown)
           ? shown
           : parseFloat(field.default) || 0;
-      // Round away float noise (e.g. 38.1 + 0.1 = 38.199999…).
-      onChange({ type: 'expr', value: String(Math.round((base + dir * size) * 1e6) / 1e6) });
+      // Round away float noise (e.g. 38.1 + 0.1 = 38.199999…), then keep the
+      // result inside what the component accepts — a step is an applied value,
+      // so it should never land somewhere the field would reject.
+      const next = Math.round((base + dir * size) * 1e6) / 1e6;
+      onChange({ type: 'expr', value: String(bounded ? clamp(next) : next) });
     };
     const onStepKey = (e) => {
+      if (e.key === 'Enter') {
+        revertIfRejected();
+        return;
+      }
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
       e.preventDefault();
       step(e.key === 'ArrowUp' ? 1 : -1, e, e.target.value);
@@ -1979,6 +2404,8 @@ function PropField({
             value={num}
             placeholder={placeholderFor(field)}
             onKeyDown={onStepKey}
+            onBlur={revertIfRejected}
+            title={boundsHint(field)}
             onChange={(e) =>
               e.target.value === ''
                 ? onChange(undefined)
@@ -2012,8 +2439,11 @@ function PropField({
   const isExpr = value?.type === 'expr' || (type === 'code' && value?.type !== 'string');
 
   // href gets the Webflow-style link settings: URL / page / section / email /
-  // phone / asset, all compiling down to one href string.
-  if (name === 'href' && !isExpr && linkContext) {
+  // phone / asset, all compiling down to one href string. Not just the
+  // attribute itself: a component that forwards a link namespaces it
+  // (`buttonHref`, `ctaHref`), and that's the same value going to the same
+  // place. The last word has to BE href, so `hrefLabel` stays a text field.
+  if (isHrefName(name) && !isExpr && linkContext && (type === 'string' || type === 'other')) {
     return (
       <div className="props-field">
         {label}
@@ -2028,14 +2458,18 @@ function PropField({
 
   // Media attributes, and any other prop whose value already names a file in
   // public/ (image="/img/hero.png"), get the asset picker.
-  const isMediaAttr = name === 'src' || name === 'poster';
+  const isMediaAttr = isMediaName(name);
   if (!isExpr && assetCtx?.projectPath && (isMediaAttr || looksLikeAssetPath(str))) {
     const nodeName = String(assetCtx.nodeName || '').toLowerCase();
     const mediaKind = looksLikeAssetPath(str)
       ? mediaKindFor(str)
-      : name === 'poster'
+      : /^(poster|image|logo|icon|avatar|thumb|thumbnail|photo|banner|cover)$/.test(mediaWord(name))
         ? 'image'
-        : nodeName === 'video'
+        : mediaWord(name) === 'video'
+          ? 'video'
+          : mediaWord(name) === 'audio'
+            ? 'audio'
+            : nodeName === 'video'
           ? 'video'
           : nodeName === 'audio'
             ? 'audio'

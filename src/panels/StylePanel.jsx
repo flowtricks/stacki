@@ -28,8 +28,10 @@ export default function StylePanel({
   onRecordUndo,
   onAddClass,
   renderedClasses,
+  openFilePath,
 }) {
   const [files, setFiles] = useState([]);
+  const [astroFiles, setAstroFiles] = useState([]);
 
   useEffect(() => {
     let live = true;
@@ -43,39 +45,46 @@ export default function StylePanel({
     };
   }, [project?.path]);
 
+  // Components carrying a <style is:global> block. Re-scanned when the open
+  // file changes as well as on project open: adding such a block to a component
+  // shouldn't need a restart before its rules show up.
+  useEffect(() => {
+    let live = true;
+    if (!project?.path) return undefined;
+    window.avb
+      .listAstroStyleFiles(project.path)
+      .then((r) => live && setAstroFiles(r?.files || []))
+      .catch(() => live && setAstroFiles([]));
+    return () => {
+      live = false;
+    };
+  }, [project?.path, openFilePath]);
+
   // Set during render, not in an effect: React runs a child's effects before
   // its parent's, so EmbedEditor would read an empty bridge on mount and
   // settle on "No element selected". setHost only notifies on real changes,
   // so calling it every render is cheap.
-  setHost({
+  const hostPatch = {
     projectPath: project?.path || null,
     nodes: model?.nodes || [],
     selectedId: node?.id || null,
     pathOf: pathOf || null,
     device: device || 'desktop',
     files,
+    astroFiles,
+    openFilePath: openFilePath || null,
     writeStyleNode: onWriteStyleNode || null,
     selectNode: onSelectNode || null,
     recordUndo: onRecordUndo || null,
     addClass: onAddClass || null,
     renderedClasses: renderedClasses || [],
-  });
+  };
+  setHost(hostPatch);
 
   useEffect(() => {
-    setHost({
-      projectPath: project?.path || null,
-      nodes: model?.nodes || [],
-      selectedId: node?.id || null,
-      pathOf: pathOf || null,
-      device: device || 'desktop',
-      files,
-      writeStyleNode: onWriteStyleNode || null,
-      selectNode: onSelectNode || null,
-      recordUndo: onRecordUndo || null,
-      addClass: onAddClass || null,
-      renderedClasses: renderedClasses || [],
-    });
-  }, [project?.path, model, node?.id, device, files, onWriteStyleNode, onSelectNode, onRecordUndo, onAddClass, renderedClasses]);
+    setHost(hostPatch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.path, model, node?.id, device, files, astroFiles, openFilePath, onWriteStyleNode, onSelectNode, onRecordUndo, onAddClass, renderedClasses]);
 
   // The panel's popups (clip path, transitions, background, grid) are portaled
   // to <body> and were written for moden, where the panel filled the window —

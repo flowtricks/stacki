@@ -18,7 +18,7 @@
 // just text with CSS regions in it, and a stylesheet is that with one region
 // covering the whole file.
 
-import { collectRules } from './css'
+import { collectRules, renderEmbed, splitEmbed } from './css'
 import postcss from 'postcss'
 import { findNode, getHost, onHostChange, propText, walkNodes, type HostNode } from './host'
 import type { StateKey } from './resolved'
@@ -181,8 +181,12 @@ export type EmbedSource = {
   order: number
   element: AnyEl
   instance?: AnyEl
-  /** Where the CSS lives — the panel writes back through this. */
-  origin: { kind: 'file'; path: string } | { kind: 'node'; nodeId: string }
+  /** Where the CSS lives — the panel writes back through this. `astro` is a
+   *  component file whose `<style is:global>` blocks are edited in place. */
+  origin:
+    | { kind: 'file'; path: string }
+    | { kind: 'node'; nodeId: string }
+    | { kind: 'astro'; path: string }
 }
 
 export type EmbedDoc = {
@@ -242,6 +246,26 @@ function styleSources(): EmbedSource[] {
       order: order++,
       element: f.path,
       origin: { kind: 'file', path: f.path },
+    })
+  }
+
+  // Every OTHER component's `<style is:global>`. Those rules are unhashed, so
+  // they style what the page renders no matter which file the selection came
+  // from — without this, styling a component instance from a page shows an
+  // empty panel even though the element is clearly styled on the canvas. The
+  // open file is skipped: its own <style> blocks come from the model below,
+  // and reading it twice would let the two copies write over each other.
+  for (const f of host.astroFiles) {
+    if (host.openFilePath && f.path === host.openFilePath) continue
+    out.push({
+      key: `astro:${f.path}`,
+      label: f.name,
+      classNames: [],
+      fromComponent: true,
+      componentName: f.name.replace(/\.astro$/i, ''),
+      order: order++,
+      element: f.path,
+      origin: { kind: 'astro', path: f.path },
     })
   }
 
@@ -318,7 +342,31 @@ function buildTreeMaps() {
 // holds only its inner text — the app keeps the tag itself in the model. So
 // each is one region spanning the whole text. (A Webflow embed was HTML with
 // <style> blocks inside it, which is why the original had to split it.)
+/** Is this `<style>` block global — i.e. does it style the page rather than
+ *  only its own component? A block with no opening tag recorded (a stylesheet)
+ *  is global by definition. */
+function isGlobalRegion(region: StyleRegion): boolean {
+  return region.openTag == null || /\bis:global\b/.test(region.openTag)
+}
+
 function docForSource(source: EmbedSource, code: string): EmbedDoc {
+  // A component file is markup with <style> blocks in it — the shape the embed
+  // model was built for. Only its global blocks are parsed; a scoped block is
+  // left as untouched text, so renderEmbed writes it back verbatim and
+  // rebuildRules (which skips region.root === null) never offers its rules for
+  // an element in another component.
+  if (source.origin.kind === 'astro') {
+    const { segments, regions } = splitEmbed(code)
+    for (const region of regions) {
+      if (!isGlobalRegion(region)) continue
+      try {
+        region.root = postcss.parse(region.css)
+      } catch (err) {
+        region.parseError = String((err as Error)?.message || err)
+      }
+    }
+    return { source, code, segments, regions }
+  }
   const region: StyleRegion = { start: 0, end: code.length, css: code, root: null }
   try {
     region.root = postcss.parse(code)
@@ -329,12 +377,20 @@ function docForSource(source: EmbedSource, code: string): EmbedDoc {
 }
 
 async function readSource(source: EmbedSource): Promise<string> {
-  if (source.origin.kind === 'file') {
+  if (source.origin.kind === 'file' || source.origin.kind === 'astro') {
     const res = await window.avb.readStyleFile(source.origin.path)
     return res?.css ?? ''
   }
   const node = nodeById(source.origin.nodeId)
   return String(node?.inner ?? '')
+}
+
+/** The text this doc's source file should now hold. A stylesheet or a <style>
+ *  node is all CSS; a component file is its markup with only the edited
+ *  regions re-stringified. */
+function serializeDoc(doc: EmbedDoc): string {
+  if (doc.source.origin.kind === 'astro') return renderEmbed(doc.segments, doc.regions)
+  return doc.regions[0]?.root?.toString() ?? doc.regions[0]?.css ?? ''
 }
 
 export async function loadEmbedDocs(
@@ -362,14 +418,12 @@ export async function writeEmbedDoc(
    *  so the canvas doesn't wait out a typing debounce for a single click. */
   live = false,
 ): Promise<{ ok: true; code: string } | { ok: false; error: string }> {
-  // One region covering the whole text, so re-stringify it directly rather
-  // than splicing — nothing outside the CSS can be introduced that way.
-  const code = doc.regions[0]?.root?.toString() ?? doc.regions[0]?.css ?? ''
+  const code = serializeDoc(doc)
   // What the file held before this write — the undo target, captured before
   // doc.code is advanced below.
   const before = doc.code
   try {
-    if (doc.source.origin.kind === 'file') {
+    if (doc.source.origin.kind === 'file' || doc.source.origin.kind === 'astro') {
       const { path } = doc.source.origin
       await window.avb.writeStyleFile({ filePath: path, css: code })
       // A <style> node's write goes through the page model, which the app
@@ -406,18 +460,12 @@ export function onDocsReloaded(fn: () => void): () => void {
 
 async function writeStyleFileAndReload(doc: EmbedDoc, path: string, text: string): Promise<void> {
   await window.avb.writeStyleFile({ filePath: path, css: text })
-  const region = doc.regions[0]
-  if (region) {
-    region.css = text
-    region.end = text.length
-    region.parseError = undefined
-    region.root = null
-    try {
-      region.root = postcss.parse(text)
-    } catch (err) {
-      region.parseError = String((err as Error)?.message || err)
-    }
-  }
+  // Re-derive the doc from what the file now holds, the same way it was first
+  // read — for a component file that means re-splitting its markup, not
+  // treating the whole file as one region of CSS.
+  const fresh = docForSource(doc.source, text)
+  doc.segments = fresh.segments
+  doc.regions = fresh.regions
   doc.code = text
   for (const fn of docsReloaded) fn()
 }
@@ -454,6 +502,9 @@ export function rebuildRules(docs: EmbedDoc[]): ParsedRule[] {
 export async function navigateToEmbed(
   source: EmbedSource,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (source.origin.kind === 'astro') {
+    return { ok: false, error: `These styles live in ${source.label} — open that component to see them in the tree.` }
+  }
   if (source.origin.kind !== 'node') {
     return { ok: false, error: `${source.label} is a stylesheet — open it from the Assets panel.` }
   }
@@ -732,6 +783,27 @@ async function readAllProjectCss(): Promise<Array<{ label: string; css: string }
     try {
       const res = await window.avb.readStyleFile(f.path)
       out.push({ label: f.rel, css: res?.css ?? '' })
+    } catch {
+      /* unreadable — skip it rather than fail the whole scan */
+    }
+  }
+  // Variables are just as often declared in a component's global block as in a
+  // stylesheet, so the picker has to read those too.
+  let astro = host.astroFiles
+  if (!astro.length && host.projectPath) {
+    try {
+      const res = await window.avb.listAstroStyleFiles(host.projectPath)
+      astro = res?.files || []
+    } catch {
+      astro = []
+    }
+  }
+  for (const f of astro) {
+    try {
+      const res = await window.avb.readStyleFile(f.path)
+      for (const region of splitEmbed(res?.css ?? '').regions) {
+        if (isGlobalRegion(region)) out.push({ label: f.name, css: region.css })
+      }
     } catch {
       /* unreadable — skip it rather than fail the whole scan */
     }

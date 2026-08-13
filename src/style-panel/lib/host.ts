@@ -24,6 +24,13 @@ export type HostState = {
   device: string
   /** Stylesheets in the project, from style:listFiles. */
   files: Array<{ rel: string; name: string; path: string; size: number }>
+  /** Component files holding a `<style is:global>` block, from
+   *  style:listAstroStyles. Their rules reach the whole page, so they belong to
+   *  the cascade even when the selection came from another file. */
+  astroFiles: Array<{ rel: string; name: string; path: string; size: number }>
+  /** Absolute path of the file being edited — its own <style> blocks come from
+   *  the model, so it must not also be read off disk. */
+  openFilePath: string | null
   /**
    * Classes the SELECTED element actually carries on the page, reported by the
    * preview. `class:list={[…]}` and `class={expr}` are expressions — the source
@@ -67,6 +74,8 @@ const state: HostState = {
   pathOf: null,
   device: 'desktop',
   files: [],
+  astroFiles: [],
+  openFilePath: null,
   renderedClasses: [],
   writeStyleNode: null,
   selectNode: null,

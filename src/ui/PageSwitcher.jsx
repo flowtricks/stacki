@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { comparePageNames } from '../pageOrder.js';
 import { FileIcon, ChevronDownIcon, CheckIcon } from './Icons.jsx';
 
 // Title-bar page switcher: shows the current page, opens a searchable list
@@ -14,9 +15,9 @@ export default function PageSwitcher({ pages, currentPage, onSelect }) {
 
   const pretty = (p) => p.name.replace(/\.(astro|mdx?)$/i, '');
   const q = query.trim().toLowerCase();
-  const filtered = (pages || []).filter(
-    (p) => !q || p.name.toLowerCase().includes(q) || p.route.toLowerCase().includes(q)
-  );
+  const filtered = (pages || [])
+    .filter((p) => !q || p.name.toLowerCase().includes(q) || p.route.toLowerCase().includes(q))
+    .sort((a, b) => comparePageNames(a.name, b.name));
 
   useLayoutEffect(() => {
     if (!open || !btnRef.current) return;

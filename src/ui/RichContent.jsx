@@ -164,7 +164,14 @@ export default function RichContent({ nodes, onChange, exprOptions }) {
   const emit = () => {
     const el = hostRef.current;
     if (!el) return;
-    const next = domToNodes(el);
+    let next = domToNodes(el);
+    // Deleting the last character leaves a <br> behind: a contentEditable
+    // needs one line for the caret to sit on, so the browser puts a
+    // placeholder there. It isn't content, and writing it out means the
+    // component still receives slot content — a heading emptied in the panel
+    // would keep rendering, holding a line break. A lone <br> is that
+    // placeholder and nothing else, so it clears to nothing.
+    if (next.length === 1 && next[0].kind === 'element' && next[0].name === 'br') next = [];
     // Canonical, not el.innerHTML: the app hands the nodes back with ids
     // added and the browser normalises markup as you type, so only the
     // serialised form is comparable on the way back in.

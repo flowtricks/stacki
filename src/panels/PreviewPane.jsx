@@ -53,12 +53,25 @@ function outlineIcon(info) {
 }
 
 // Desktop fills the canvas (width: null = fill).
+// `width` is what clicking one sets the canvas to; `from` is where its band
+// starts, so the button can also be lit by the canvas simply being that wide.
+// The bands are the usual CSS ones — under 768 is phone, 768–1023 tablet,
+// 1024 and up desktop — which is where a project's own media queries sit.
 const DEVICES = [
-  { key: 'desktop', Icon: DesktopIcon, title: 'Desktop — 1', width: null },
-  { key: 'tablet', Icon: TabletIcon, title: 'Tablet (768px) — 2', width: 768 },
-  { key: 'phone', Icon: PhoneIcon, title: 'Phone (375px) — 3', width: 375 },
+  { key: 'desktop', Icon: DesktopIcon, title: 'Desktop — 1', width: null, from: 1024 },
+  { key: 'tablet', Icon: TabletIcon, title: 'Tablet (768px) — 2', width: 768, from: 768 },
+  { key: 'phone', Icon: PhoneIcon, title: 'Phone (375px) — 3', width: 375, from: 0 },
   { key: 'canvas', Icon: CanvasIcon, title: 'Canvas — all breakpoints — 4', width: null },
 ];
+
+// Which band a canvas of this width is in. Exported so the rule can be
+// checked on its own — the measurement that feeds it comes from a
+// ResizeObserver, which only fires while the window is actually rendering.
+export function deviceForWidth(px) {
+  if (!Number.isFinite(px) || px <= 0) return null;
+  const bands = DEVICES.filter((d) => d.from !== undefined).sort((a, b) => b.from - a.from);
+  return (bands.find((d) => px >= d.from) || bands[bands.length - 1]).key;
+}
 
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
@@ -80,6 +93,8 @@ export default function PreviewPane({
   onSelectPath,
   onOpenPath,
   onSelectedClasses,
+  onRenderedPaths,
+  onNodeClasses,
   focusPath,
   device,
   onDevice,
@@ -137,6 +152,10 @@ export default function PreviewPane({
   selOccRef.current = selOcc;
   const onSelectedClassesRef = React.useRef(onSelectedClasses);
   onSelectedClassesRef.current = onSelectedClasses;
+  const onRenderedPathsRef = React.useRef(onRenderedPaths);
+  onRenderedPathsRef.current = onRenderedPaths;
+  const onNodeClassesRef = React.useRef(onNodeClasses);
+  onNodeClassesRef.current = onNodeClasses;
   // Last reported class string, so repeated rect sends stay quiet.
   const selClassesRef = React.useRef('');
   // Selection changed: the app cleared its copy, so the next report must go
@@ -178,6 +197,13 @@ export default function PreviewPane({
             onSelectedClassesRef.current?.(list);
           }
         }
+      } else if (d?.type === 'avb:node-classes') {
+        // What each node's classes resolved to — the navigator labels rows
+        // with them when the source only has an expression.
+        onNodeClassesRef.current?.(d.classes || {});
+      } else if (d?.type === 'avb:rendered-nodes') {
+        // Which nodes actually reached the page — the navigator marks the rest.
+        onRenderedPathsRef.current?.(d.paths || []);
       } else if (d?.type === 'avb:hover-node') {
         setCanvasHover(d.path || null);
         setHoverOcc(d.occurrence || 0);
@@ -278,6 +304,21 @@ export default function PreviewPane({
 
   const selectDevice = (key) => setDevice(key);
 
+  // Which breakpoint the canvas is actually sitting in. Picking Tablet or
+  // Phone pins a width, so those agree with themselves; Desktop fills the
+  // pane and a drag sets its own width, and in both cases the window is what
+  // decides — resize it narrow enough and the page is being shown at phone
+  // width whatever button was last clicked. Highlight what's true, not what
+  // was asked for. Canvas is every breakpoint at once, so it stays put.
+  // What the page inside actually gets: a pinned width, but never more than
+  // the pane can give it — squeeze the window with Tablet selected and the
+  // frame is narrower than 768, so the page is laying out as a phone.
+  const shownWidth = Math.min(width ?? Infinity, wrapWidth ?? Infinity);
+  const activeDevice = React.useMemo(() => {
+    if (device === 'canvas') return 'canvas';
+    return deviceForWidth(shownWidth) || device;
+  }, [device, shownWidth]);
+
   // Any breakpoint change drops the drag-resize override — a click, a 1–4
   // keypress, or App resetting the pane to desktop when a project opens.
   // 'custom' is the drag itself, so it must not clear what the drag just set.
@@ -291,13 +332,15 @@ export default function PreviewPane({
   const btnRefs = React.useRef({});
   const [indicator, setIndicator] = React.useState(null);
   React.useLayoutEffect(() => {
-    const el = btnRefs.current[device];
+    const el = btnRefs.current[activeDevice];
     if (!el) {
       setIndicator(null); // drag-resized "custom" state — no active tab
       return;
     }
     setIndicator({ left: el.offsetLeft, width: el.offsetWidth });
-  }, [device]);
+    // Follows the width too, not just the click — resizing the window moves
+    // the highlight to whichever breakpoint the canvas now falls in.
+  }, [activeDevice]);
 
   // 1 / 2 / 3 switch to the desktop / tablet / phone breakpoints (ignored
   // while typing in a field so prop values can still contain digits).
@@ -400,7 +443,7 @@ export default function PreviewPane({
             <button
               key={key}
               ref={(el) => (btnRefs.current[key] = el)}
-              className={device === key ? 'on' : ''}
+              className={activeDevice === key ? 'on' : ''}
               title={title}
               onClick={() => selectDevice(key)}
             >

@@ -1,5 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { EditorView, keymap, highlightSpecialChars, drawSelection } from '@codemirror/view';
+import {
+  EditorView,
+  keymap,
+  highlightSpecialChars,
+  drawSelection,
+  placeholder as cmPlaceholder,
+} from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { StreamLanguage } from '@codemirror/language';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
@@ -136,12 +142,13 @@ export const collapseDeclarations = (text) => splitDeclarations(text).join('; ')
 
 // Compact declaration editor: no gutters, no line numbers, no folding — it
 // sits inside a popover a couple of hundred pixels wide.
-export default function StyleEditor({ value, onChange, autoFocus }) {
+export default function StyleEditor({ value, onChange, autoFocus, placeholder = '' }) {
   const hostRef = useRef(null);
+  const viewRef = useRef(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  // Mounted once with the expanded text: the parent stores a collapsed,
-  // single-line value, so feeding that back in would fight every keystroke.
+  // Mounted once with the expanded text; from then on the effect below decides
+  // when the incoming value is news and when it's this editor's own echo.
   const [initial] = useState(() => expandDeclarations(value));
 
   useEffect(() => {
@@ -155,6 +162,7 @@ export default function StyleEditor({ value, onChange, autoFocus }) {
           drawSelection(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           styleMode,
+          cmPlaceholder(placeholder),
           appTheme,
           appHighlight,
           EditorView.lineWrapping,
@@ -164,10 +172,29 @@ export default function StyleEditor({ value, onChange, autoFocus }) {
         ],
       }),
     });
+    viewRef.current = view;
     if (autoFocus) view.focus();
-    return () => view.destroy();
+    return () => {
+      viewRef.current = null;
+      view.destroy();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A change that didn't come from here — Reset, undo, a value written by
+  // something else — has to reach the document, or the editor goes on showing
+  // (and re-committing) text the element no longer has. Compared in collapsed
+  // form, which is exactly what this editor emits, so the parent echoing an
+  // edit straight back is a no-op and typing is never interrupted.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const next = value || '';
+    if (collapseDeclarations(view.state.doc.toString()) === next) return;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: expandDeclarations(next) },
+    });
+  }, [value]);
 
   return <div ref={hostRef} className="style-editor" />;
 }

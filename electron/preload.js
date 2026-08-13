@@ -81,7 +81,10 @@ if (!process.isMainFrame) {
         // the selection was made in the navigator.
         const isDelete = !mod && !e.altKey && (e.key === 'Delete' || e.key === 'Backspace');
         const isDuplicate = mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'd';
-        if (isDelete || isDuplicate) {
+        // ⌘Enter jumps to the class field. The canvas is where the selection is
+        // usually made, so it has to reach the app from in here too.
+        const isClassJump = mod && !e.altKey && !e.shiftKey && e.key === 'Enter';
+        if (isDelete || isDuplicate || isClassJump) {
           e.preventDefault();
           try {
             window.parent.postMessage(
@@ -134,16 +137,51 @@ if (!process.isMainFrame) {
   // rules at the end of the cascade would let base rules beat utility
   // classes that legitimately override them later in source order.
   const filterRule = (rule) => {
-    if (rule.cssRules && rule.cssRules.length) {
-      // Grouping rule (@media, @supports, @keyframes …) — recurse.
+    // An @import brings a whole stylesheet in, and its rules hang off
+    // `rule.styleSheet`, not `rule.cssRules` — so a sheet reached this way was
+    // invisible here. That's where a design system's `body { min-height:
+    // 100svh }` usually lives, and leaving it live is what makes a stretched
+    // canvas frame grow without end: svh tracks the frame, body grows, the
+    // page reports a taller height, the frame stretches again.
+    if (rule.type === 3 /* CSSImportRule */ || rule.styleSheet) {
+      // Still loading: nothing to copy yet, and no <head> mutation will
+      // announce it later, so ask for another pass.
+      if (!rule.styleSheet) {
+        importsPending = true;
+        return '';
+      }
+      let inner = '';
+      try {
+        for (const r of rule.styleSheet.cssRules) inner += filterRule(r);
+      } catch {
+        return ''; // cross-origin import — can't read it
+      }
+      if (!inner) return '';
+      // Keep whatever layer it was imported into, or the copy would outrank
+      // (or be outranked by) the original.
+      const layer = /\blayer\(([^)]*)\)/i.exec(rule.cssText || '');
+      return layer ? `@layer ${layer[1].trim()} {\n${inner}}\n` : inner;
+    }
+    const selector = rule.selectorText || rule.keyText;
+    const isStyleRule = !!rule.style && !!selector;
+    if (rule.cssRules && rule.cssRules.length && !isStyleRule) {
+      // Grouping rule (@media, @supports, @layer, @keyframes …) — recurse.
       let inner = '';
       for (const r of rule.cssRules) inner += filterRule(r);
       if (!inner) return '';
       const head = rule.cssText.slice(0, rule.cssText.indexOf('{'));
       return head + '{\n' + inner + '}\n';
     }
-    const selector = rule.selectorText || rule.keyText;
-    if (!rule.style || !selector) return '';
+    if (!isStyleRule) return '';
+    // With CSS nesting a style rule is BOTH: it has its own declarations and
+    // it contains rules. Taking the grouping branch above on the strength of
+    // `cssRules` alone skipped everything the rule itself declared — which is
+    // exactly where `body { min-height: 100svh; > main { … } }` hides, and why
+    // a frame with that in its stylesheet grew without end.
+    let nested = '';
+    if (rule.cssRules && rule.cssRules.length) {
+      for (const r of rule.cssRules) nested += filterRule(r);
+    }
     let decls = '';
     for (const prop of rule.style) {
       const val = rule.style.getPropertyValue(prop);
@@ -161,11 +199,17 @@ if (!process.isMainFrame) {
         : val.replace(VH_RE, 'calc($1 * var(--avb-vh, 1$2))');
       decls += `${prop}: ${newVal}${prio ? ' !important' : ''}; `;
     }
-    return decls ? `${selector} { ${decls}}\n` : '';
+    // Nested matches are re-emitted inside their parent, keeping the nesting
+    // (and so the `&` context) they were written with.
+    if (!decls && !nested) return '';
+    return `${selector} { ${decls}${nested ? '\n' + nested : ''}}\n`;
   };
 
+  let importsPending = false;
+  let importRetries = 0;
   const rewriteSheets = () => {
     if (!document.head) return;
+    importsPending = false;
     // Un-stretch html/body so the frame's height comes from content, not
     // from the (stretched) viewport — kills height:100% feedback.
     let css = 'html, body { height: auto !important; }\n';
@@ -185,6 +229,13 @@ if (!process.isMainFrame) {
     }
     if (overrideEl.textContent !== css) overrideEl.textContent = css;
     if (document.head.lastElementChild !== overrideEl) document.head.appendChild(overrideEl);
+    // An @import that hadn't finished loading has rules we still need, and it
+    // won't touch <head> when it arrives — so nothing else would bring us
+    // back. Try again shortly, a bounded number of times.
+    if (importsPending && importRetries < 25) {
+      importRetries += 1;
+      setTimeout(rewriteSheets, 120);
+    }
   };
 
   const scheduleRewrite = () => {
@@ -438,6 +489,80 @@ if (!process.isMainFrame) {
     window.parent.postMessage({ type: 'avb:rects', rects, classes }, '*');
   };
 
+  // Nodes that put nothing on the page: a component that returns null for the
+  // props it was given (an <Img> with no src, a grid with no children) still
+  // has its marker pair, with nothing between them. Structural only — no
+  // measuring — so this can cover every node in the file rather than the two
+  // or three whose rects are tracked. A node that renders only whitespace
+  // counts as empty; one that renders a zero-size element does not, because
+  // something IS there.
+  // What actually reached the page. Reported the positive way round, because
+  // a node can put nothing on screen in two ways: its markers are there with
+  // nothing between them (a component that returned null), or its markers
+  // never got emitted at all — everything inside a component that rendered
+  // nothing, whose slot content was never evaluated. Only the app knows the
+  // full node list, so it takes this set and treats the rest as unrendered.
+  //
+  // Structural only, no measuring, so it can cover every node in the file.
+  let lastRenderedKey = '';
+  const sendRendered = () => {
+    const rendered = [];
+    for (const [p, runs] of regions) {
+      if (!inScope(p)) continue;
+      let live = false;
+      for (const run of runs) {
+        for (const n of run) {
+          if (!n.isConnected) continue;
+          if (n.nodeType === 1 && n.tagName !== 'TEMPLATE') live = true;
+          else if (n.nodeType === 3 && n.textContent.trim()) live = true;
+          if (live) break;
+        }
+        if (live) break;
+      }
+      // The tag survives on clones when a script rebuilds the DOM, so a node
+      // whose recorded run went stale is still rendering something.
+      if (!live && elementsWithPath(p).length) live = true;
+      if (live) rendered.push(p);
+    }
+    // A slotted node is never wrapped in markers — it's addressed by the tag
+    // alone (see pathsOf) — so it has no region to be found above. Anything
+    // carrying a tag is on the page by definition.
+    for (const el of document.querySelectorAll(`[${PATH_ATTR}]`)) {
+      for (const p of pathsOf(el)) if (inScope(p) && !rendered.includes(p)) rendered.push(p);
+    }
+    const key = rendered.join('\n');
+    if (key === lastRenderedKey) return;
+    lastRenderedKey = key;
+    window.parent.postMessage({ type: 'avb:rendered-nodes', paths: rendered }, '*');
+  };
+
+  // The classes each node actually ended up with. `class:list={[...]}` and
+  // `class={expr}` are expressions, so the source can't say what they resolve
+  // to — only the rendered element knows, and the navigator has no way to ask
+  // per row. Reported for every node in the open file, first instance only:
+  // a label needs one answer, and where instances differ the first is the one
+  // the outline and the props panel are already showing.
+  let lastClassKey = '';
+  const sendClasses = () => {
+    const out = {};
+    for (const p of regions.keys()) {
+      if (!inScope(p)) continue;
+      const list = classesForPath(p)[0];
+      if (list && list.length) out[p] = list;
+    }
+    // Slotted nodes have no marker pair, so they never appear above.
+    for (const el of document.querySelectorAll(`[${PATH_ATTR}]`)) {
+      if (!el.classList.length) continue;
+      for (const p of pathsOf(el)) {
+        if (inScope(p) && !out[p]) out[p] = [...el.classList];
+      }
+    }
+    const key = JSON.stringify(out);
+    if (key === lastClassKey) return;
+    lastClassKey = key;
+    window.parent.postMessage({ type: 'avb:node-classes', classes: out }, '*');
+  };
+
   // Selecting a node in the navigator brings it onto the page. Only scrolls
   // when the node is actually out of sight — re-selecting something already
   // on screen shouldn't move the page under the user.
@@ -465,6 +590,8 @@ if (!process.isMainFrame) {
     requestAnimationFrame(() => {
       rectsQueued = false;
       sendRects();
+      sendRendered();
+      sendClasses();
     });
   };
 
@@ -733,7 +860,11 @@ if (!process.isMainFrame) {
       trackedPaths = d.paths;
       activeScope = typeof d.scope === 'string' ? d.scope : '';
       thinCache = null; // scope decides what's hit-testable
+      lastRenderedKey = ''; // scope decides which nodes are even asked about
+      lastClassKey = '';
       sendRects();
+      sendRendered();
+      sendClasses();
     }
     if (d?.type === 'avb:scroll-to' && typeof d.path === 'string') {
       scrollPathIntoView(d.path, typeof d.occ === 'number' ? d.occ : 0);
@@ -743,6 +874,9 @@ if (!process.isMainFrame) {
       if (!frozen) {
         frozen = true;
         rewriteSheets();
+        // Subresources — @import among them — are done by `load`, so take one
+        // more pass then even if the retries above have run out.
+        window.addEventListener('load', scheduleRewrite);
         // Vite HMR injects/replaces <style> tags — keep the override current
         // (and last in the cascade).
         new MutationObserver(scheduleRewrite).observe(document.head || document.documentElement, {
@@ -870,6 +1004,7 @@ contextBridge.exposeInMainWorld('avb', {
 
   // Style panel targets
   listStyleFiles: invoke('style:listFiles'),
+  listAstroStyleFiles: invoke('style:listAstroStyles'),
   readStyleFile: invoke('style:readFile'),
   writeStyleFile: invoke('style:writeFile'),
 

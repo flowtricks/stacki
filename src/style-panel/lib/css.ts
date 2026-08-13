@@ -51,6 +51,7 @@ export function extractStyleRegions(code: string): StyleRegion[] {
       end: closeIdx,
       css: code.slice(innerStart, closeIdx),
       root: null,
+      openTag: match[0],
     })
     STYLE_OPEN.lastIndex = closeIdx + STYLE_CLOSE.length
   }

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { comparePageNames } from '../pageOrder.js';
 import Dropdown from '../ui/Dropdown.jsx';
 import {
   FileIcon,
@@ -220,15 +221,15 @@ export default function PagesPanel({
         )}
       {node.pages
         .slice()
-        .sort((a, b) => a.base.localeCompare(b.base))
+        .sort((a, b) => comparePageNames(a.base, b.base))
         .map((p) => renderPage(p, depth))}
     </>
   );
 
   const searchResults = q
-    ? scan.pages.filter(
-        (p) => p.name.toLowerCase().includes(q) || p.route.toLowerCase().includes(q)
-      )
+    ? scan.pages
+        .filter((p) => p.name.toLowerCase().includes(q) || p.route.toLowerCase().includes(q))
+        .sort((a, b) => comparePageNames(a.name, b.name))
     : null;
 
   return (

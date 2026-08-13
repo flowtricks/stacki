@@ -3,6 +3,7 @@ import { canContainTag } from '../elementSchemas.js';
 import { isDataBound } from '../bindings.js';
 import { setDrag, clearDrag, getDrag } from '../dragState.js';
 import { elementLabel } from '../classNames.js';
+import { isContentOnlyChild } from '../treeSelection.js';
 import {
   LayoutIcon,
   ElementComponentIcon,
@@ -11,6 +12,7 @@ import {
   CommentIcon,
   CodeIcon,
   ChevronRightIcon,
+  HideIcon,
   ChevronDownIcon,
   DragIcon,
   FileIcon,
@@ -35,6 +37,8 @@ export default function StructurePanel({
   layouts,
   currentLayoutName,
   selectedId,
+  emptyNodeIds,
+  liveClassesById,
   revealTick,
   onSelect,
   onHoverNode,
@@ -284,6 +288,8 @@ export default function StructurePanel({
           parentId={null}
           depth={0}
           selectedId={selectedId}
+          emptyNodeIds={emptyNodeIds}
+          liveClassesById={liveClassesById}
           currentLayoutName={currentLayoutName}
           onChangeLayout={onChangeLayout}
           onHoverNode={onHoverNode}
@@ -509,6 +515,8 @@ function TreeNode({ node, note, parentId, index, depth, ...ctx }) {
     if (isSelected) rowRef.current?.scrollIntoView({ block: 'nearest' });
   }, [isSelected]);
 
+  // Reported by the page: this node's markers wrap nothing.
+  const rendersNothing = !!ctx.emptyNodeIds?.has(node.id);
   const hasChildren = Array.isArray(node.children) && node.children.length > 0;
   // Pure text (plus simple {expr} interpolations) is edited via the Content
   // field — showing those as rows is noise until real tags are involved.
@@ -523,10 +531,17 @@ function TreeNode({ node, note, parentId, index, depth, ...ctx }) {
   const nodeCollapsed = isCollapsed(node);
   const isDropInto = dropTarget?.intoId === node.id;
 
-  let { icon, label } = describeNode(node);
+  let { icon, label } = describeNode(node, ctx.liveClassesById?.get(node.id));
+  // The layout wrapper is the one node whose row named something the markup
+  // doesn't: a page that does `import Layout from '…/BaseLayout.astro'` writes
+  // `<Layout>`, and showing "BaseLayout" made the tree disagree with the file.
+  // The name it was imported under leads, like every other row; the layout it
+  // resolves to rides along on the right, since that's the part worth knowing.
+  let hint = null;
   if (isLayoutNode) {
     icon = <LayoutIcon size={13} />;
-    label = currentLayoutName || node.name;
+    label = node.name || currentLayoutName;
+    if (currentLayoutName && currentLayoutName !== label) hint = currentLayoutName;
   }
 
   return (
@@ -612,21 +627,25 @@ function TreeNode({ node, note, parentId, index, depth, ...ctx }) {
             </span>
           )}
         </span>
+        {hint && (
+          <span className="prop-preview" title={`Imported from ${hint}.astro`}>
+            {hint}
+          </span>
+        )}
+        {rendersNothing && (
+          <span
+            className="node-empty"
+            title="Renders nothing on the page with its current props"
+          >
+            <HideIcon size={13} />
+          </span>
+        )}
       </div>
 
       {showChildren && !nodeCollapsed && (
         <NodeList nodes={node.children} parentId={node.id} depth={depth + 1} {...ctx} />
       )}
     </>
-  );
-}
-
-// Children the Content field fully covers: plain text and simple {expr}
-// interpolations (single braces, no JSX). These get no navigator rows.
-function isContentOnlyChild(c) {
-  return (
-    c.kind === 'text' ||
-    (c.kind === 'expr' && /^\{[^{}]*\}$/.test(c.value) && !c.value.includes('<'))
   );
 }
 
@@ -654,7 +673,7 @@ function defaultCollapsed(node) {
 
 // The row's icon already says what kind a node is, so no trailing kind badge
 // ("comment", "loop", …) — it only repeated the icon in words.
-function describeNode(node) {
+function describeNode(node, live) {
   switch (node.kind) {
     case 'text':
       return { icon: <TextIcon size={12} />, label: truncate(node.value, 34) };
@@ -664,12 +683,19 @@ function describeNode(node) {
       return { icon: <CodeIcon size={12} />, label: node.name };
     case 'raw-line':
       return { icon: <CodeIcon size={12} />, label: truncate(node.value, 30) };
-    case 'element':
+    case 'element': {
       // Webflow-style label: the first class name when the element has
       // classes, the bare tag name otherwise (and a named slot's name — see
       // elementLabel). Covers `class:list={[...]}`, where the classes live in
       // an expression rather than a string.
-      return { icon: elementIcon(node.name), label: truncate(elementLabel(node), 40) };
+      const fromSource = elementLabel(node);
+      // A class the source can't resolve — `class:list={["button_wrap", …]}`
+      // or a whole class passed in as a prop — leaves the label as the bare
+      // tag. The page knows what it rendered as, so use that instead.
+      const label =
+        fromSource === node.name && live?.length ? live[0] : fromSource;
+      return { icon: elementIcon(node.name), label: truncate(label, 40) };
+    }
     case 'chunk-group':
       return { icon: <FileIcon size={12} />, label: node.name };
     case 'expr':
@@ -695,8 +721,14 @@ function describeNode(node) {
     default:
       // `<Tag>` from `const Tag = tag` is a dynamic element, not a component
       // — no file behind it, so it shouldn't wear the component's colours.
+      // Its name is a variable, so it says nothing about what the row is; the
+      // class it rendered with does, the same as for any other element.
       if (node.dynamicTag) {
-        return { icon: <CustomElementIcon size={12} />, label: node.name };
+        const named = elementLabel(node);
+        return {
+          icon: <CustomElementIcon size={12} />,
+          label: truncate(named === node.name && live?.length ? live[0] : named, 40),
+        };
       }
       // astro:assets' <Image>/<Picture> aren't the project's components —
       // there's no file to open — so they get Astro's mark, not the green cube.

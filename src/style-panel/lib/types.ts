@@ -17,6 +17,9 @@ export type StyleRegion = {
   css: string
   root: Root | null
   parseError?: string
+  /** The region's opening tag verbatim (`<style is:global>`) — what tells a
+   *  component's global block from a scoped one. */
+  openTag?: string
 }
 
 /** Specificity tuple: [ids, classes/attrs/pseudo-classes, types/pseudo-elements]. */

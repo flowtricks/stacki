@@ -1,6 +1,25 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronDownIcon, CheckIcon } from './Icons.jsx';
 
+// Where a popup of `wanted` pixels goes, given the trigger's box and the
+// window height. Below unless it doesn't fit and above has more room; capped
+// only when the chosen side is genuinely smaller than the list, so a list that
+// fits is never given a scrollbar it doesn't need.
+export const POPUP_GAP = 4;
+const POPUP_EDGE = 8; // never sit flush against the window edge
+const POPUP_MIN = 120; // a cramped window still shows a few rows
+export function popupBox(rect, wanted, winH) {
+  const roomBelow = winH - rect.bottom - POPUP_GAP - POPUP_EDGE;
+  const roomAbove = rect.top - POPUP_GAP - POPUP_EDGE;
+  const up = wanted > roomBelow && roomAbove > roomBelow;
+  const room = Math.max(POPUP_MIN, up ? roomAbove : roomBelow);
+  return {
+    top: up ? undefined : rect.bottom + POPUP_GAP,
+    bottom: up ? winH - rect.top + POPUP_GAP : undefined,
+    maxHeight: wanted > room ? room : undefined,
+  };
+}
+
 // Custom dropdown that replaces native <select>. Options: [{value, label}].
 //
 // Live preview: hovering (or arrow-keying) an option applies it immediately
@@ -67,19 +86,29 @@ export default function Dropdown({
     triggerRef.current?.focus();
   };
 
+  // Open at whatever height the list actually needs, and only scroll when the
+  // window can't give it that. The first pass positions from an estimate so
+  // the popup has somewhere to render; the second measures what rendered and
+  // corrects both the side and the cap.
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    const maxHeight = 260;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const up = spaceBelow < Math.min(maxHeight, options.length * 30 + 12) && rect.top > spaceBelow;
-    setPos({
-      left: rect.left,
-      width: rect.width,
-      top: up ? undefined : rect.bottom + 4,
-      bottom: up ? window.innerHeight - rect.top + 4 : undefined,
-    });
-  }, [open, options.length]);
+    // Measured once it exists; before that, a row's worth per option.
+    const wanted = popupRef.current
+      ? popupRef.current.scrollHeight
+      : options.length * 30 + 12;
+    const next = { left: rect.left, width: rect.width, ...popupBox(rect, wanted, window.innerHeight) };
+    setPos((prev) =>
+      prev &&
+      prev.left === next.left &&
+      prev.width === next.width &&
+      prev.top === next.top &&
+      prev.bottom === next.bottom &&
+      prev.maxHeight === next.maxHeight
+        ? prev
+        : next
+    );
+  }, [open, options.length, pos]);
 
   useEffect(() => {
     if (!open) return;
@@ -164,6 +193,7 @@ export default function Dropdown({
             top: pos.top,
             bottom: pos.bottom,
             width: pos.width,
+            maxHeight: pos.maxHeight,
           }}
         >
           {options.map((o, i) => (

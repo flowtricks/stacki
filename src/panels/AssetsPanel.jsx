@@ -12,6 +12,10 @@ import AssetThumb, { TEXT_EXT } from '../ui/AssetThumb.jsx';
 
 const parentOf = (rel) => (rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '');
 
+// Where a pick with no current value starts: Astro's home for images that go
+// through the build (public/ is for files served untouched).
+const PICK_HOME = 'src/assets';
+
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp)$/i;
 const VIDEO_EXT = /\.(mp4|webm|mov|m4v|ogv|ogg)$/i;
 const AUDIO_EXT = /\.(mp3|wav|m4a|aac|flac|oga)$/i;
@@ -66,11 +70,34 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
   // asset doesn't start over at the root. Keyed on the request itself: while
   // one is open the user is free to browse elsewhere.
   const pickKey = pick ? `${pick.mediaKind}:${pick.current || ''}` : null;
+  // Which request has already been placed. The listing arrives asynchronously,
+  // so a pick opened before it lands has to wait for it — and once placed, the
+  // refreshes that follow must not yank the user back out of wherever they
+  // browsed to.
+  const placedRef = useRef(null);
   useEffect(() => {
-    if (!pick) return;
-    setCwd(pick.current?.includes('/') ? parentOf(pick.current) : '');
+    if (!pick) {
+      placedRef.current = null;
+      return;
+    }
+    if (placedRef.current === pickKey) return;
+    if (pick.current?.includes('/')) {
+      setCwd(parentOf(pick.current));
+      placedRef.current = pickKey;
+      return;
+    }
+    // Nothing set yet: start in src/assets, where Astro wants the images it
+    // optimises. Only when something of the kind being asked for is actually
+    // in there — otherwise an empty folder is a worse start than the roots.
+    if (!entries.length) return; // listing hasn't landed; this runs again when it does
+    const inHome = (e) => e.rel === PICK_HOME || e.rel.startsWith(`${PICK_HOME}/`);
+    const hasMatch = entries.some(
+      (e) => !e.isDir && inHome(e) && kindMatches(pick.mediaKind, e.name)
+    );
+    setCwd(hasMatch ? PICK_HOME : '');
+    placedRef.current = pickKey;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickKey]);
+  }, [pickKey, entries]);
 
   const folders = entries.filter((e) => e.isDir && e.parent === cwd);
   const files = entries

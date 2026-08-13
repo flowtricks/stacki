@@ -419,6 +419,10 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 .style-editor:focus-within { border-color: var(--accent); }
 .style-editor .cm-content { padding: 6px 8px; }
 .style-editor .cm-line { padding: 0; }
+/* The placeholder should read like an input's, not like code. */
+.style-editor .cm-placeholder { color: var(--text-faint); font-family: var(--font); }
+/* As a field of its own (inline styles, under class) it's a block, not a row. */
+.props-field > .style-editor { width: 100%; }
 
 /* Highlighted JS in an input's clothing (loop data, code preview). */
 .expr-input {
@@ -680,6 +684,19 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* A node that renders nothing: the label keeps its colour (it's a real node
+   in the file, not disabled) and the struck-through eye rides the right edge,
+   the way a hidden layer reads. */
+.node-empty {
+  margin-left: auto;
+  padding-left: 6px;
+  display: flex;
+  align-items: center;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+.structure-node.selected .node-empty { color: var(--text-dim); }
 
 .asset-ext {
   display: flex;
@@ -1452,7 +1469,8 @@ body > .embed-editor_provenance {
 .dd-popup {
   position: fixed;
   z-index: 400;
-  max-height: 260px;
+  /* Height comes from the content; the component caps it inline, and only
+     when the window has less room than the list needs. */
   overflow-y: auto;
   background: #232323;
   border: 1px solid var(--border-strong);
@@ -1484,6 +1502,17 @@ body > .embed-editor_provenance {
   flex-shrink: 0;
 }
 .dd-option-label { overflow: hidden; text-overflow: ellipsis; }
+/* A leading glyph in an option row (the tag switcher's element/component
+   icons), in the same 16px column a check mark would occupy. */
+.dd-option-icon {
+  width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+.dd-option.highlight .dd-option-icon { color: #fff; }
 .dd-option .dd-hint {
   margin-left: auto;
   padding-left: 10px;
@@ -1501,14 +1530,22 @@ body > .embed-editor_provenance {
 /* The heading over a list (Attributes) — a label in look only: it names the
    section rather than a field, and labelling nothing keeps its clicks from
    reaching the button beside it. */
-.props-label-row { display: flex; align-items: center; }
 .props-field label,
 .props-field .props-label-row {
-  display: block;
   font-size: 11px;
   font-weight: 500;
   color: var(--text-dim);
   margin-bottom: 5px;
+}
+.props-field label { display: block; }
+/* Its own rule, not the block above: the row holds the + button beside the
+   heading, and as a block the button would hang off the text baseline —
+   sitting visibly high against an 11px label. */
+.props-label-row,
+.props-field .props-label-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 .props-field label .type-tag {
   font-size: 10px;
@@ -1532,6 +1569,22 @@ body > .embed-editor_provenance {
   cursor: pointer;
 }
 .prop-label.set:hover { background: rgba(0, 153, 255, 0.26); }
+
+/* A prop the current source makes moot — an SVG or a public/ file is passed
+   through, so quality, format and the srcset props do nothing. Unset, the
+   field isn't shown at all; this marks the one case that survives, a value
+   already in the markup that the component will ignore. */
+.prop-inert {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #f0b429;
+  background: rgba(240, 180, 41, 0.14);
+  cursor: help;
+}
 
 /* Popup menu opened by clicking a set prop's label */
 .prop-menu {
@@ -2522,6 +2575,18 @@ body > .embed-editor_provenance {
   margin: 0 -4px;
 }
 .class-suggest { z-index: 500; }
+/* The open tag stays lit while its family menu is up, so it's clear which
+   class the list belongs to when several are on the element. */
+.class-tag.open { box-shadow: 0 0 0 2px var(--bg-input), 0 0 0 3px var(--accent); }
+/* Sized to its longest class rather than to the field: a family menu is a
+   short list of near-identical names, and stretching it to the panel width
+   reads as a different control than the suggestion list. */
+.class-family {
+  z-index: 500;
+  min-width: 120px;
+  max-height: 300px;
+  overflow-y: auto;
+}
 
 /* Component edit mode: a cutout that dims the whole canvas except the
    instance being edited. The huge spread paints everything around the rect;
@@ -3086,7 +3151,7 @@ body > .embed-editor_provenance {
     inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   transition: transform 0.25s cubic-bezier(0.3, 0.7, 0.3, 1);
 }
-.bool-seg.is-false::before { transform: translateX(calc(100% + 2px)); }
+.bool-seg.is-second::before { transform: translateX(calc(100% + 2px)); }
 
 .bool-seg button,
 .bool-seg button:hover:not(:disabled) {
@@ -3103,6 +3168,15 @@ body > .embed-editor_provenance {
   transition: color 0.18s ease;
 }
 .bool-seg button:hover:not(.on) { color: var(--text); }
+/* An enum's labels are whatever the type says, so they can be long enough to
+   need clipping — True/False never was. */
+.bool-seg button {
+  min-width: 0;
+  padding-inline: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .bool-seg button.on,
 .bool-seg button.on:hover:not(:disabled) {
   color: var(--text);

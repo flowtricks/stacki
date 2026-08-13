@@ -246,10 +246,11 @@ const blockHead = (head) => head.replace(/\($/, '{');
 
 function tryParseMap(exprText) {
   const inner = exprText.slice(1, -1); // strip the outer { }
-  // Both forms are tried: the concise matcher's lazy prefix can run past a
-  // block body's `=> {` and match a NESTED `.map((t) => (` in its markup, so
-  // its failure says nothing about whether this is a block-bodied loop.
-  return tryParseConciseMap(inner) || tryParseBlockMap(inner);
+  // Every form is tried: the concise matcher's lazy prefix can run past a
+  // block body's `=> {`, or past a bare body's `=> <`, and match a NESTED
+  // `.map((t) => (` in its markup, so its failure says nothing about whether
+  // this is a block-bodied or paren-less loop.
+  return tryParseConciseMap(inner) || tryParseBareMap(inner) || tryParseBlockMap(inner);
 }
 
 function tryParseConciseMap(inner) {
@@ -278,6 +279,33 @@ function tryParseConciseMap(inner) {
     // page was written. Keep the original layout to re-emit while the head
     // still says the same thing; see serializeNode's 'map' case.
     headSource: dedentHead(headRaw),
+    children: parsed.nodes,
+  };
+}
+
+// The same loop with no parentheses around its body — `.map((x) => <Tag/>)`,
+// the shape an arrow function returning a single element is usually written in.
+// The body runs to the `)` that closes `.map(`, so that paren is found rather
+// than assumed. Normalized to the same node the parenthesized form produces,
+// with `bare` remembering how it was written.
+function tryParseBareMap(inner) {
+  const arrow = inner.match(
+    /^([\s\S]*?\.map\(\s*(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*)</
+  );
+  if (!arrow) return null;
+  const headRaw = arrow[1];
+  const mapOpen = headRaw.lastIndexOf('.map(') + '.map'.length;
+  const mapClose = findMatchingParen(inner, mapOpen);
+  if (mapClose === -1) return null;
+  // After the body must come only the .map() close paren.
+  if (inner.slice(mapClose + 1).trim()) return null;
+  const parsed = parseTemplate(inner.slice(headRaw.length, mapClose));
+  if (!parsed.clean) return null;
+  return {
+    id: makeId(),
+    kind: 'map',
+    head: normalizeHead(headRaw + '('), // the Loop editor reads one shape
+    bare: true,
     children: parsed.nodes,
   };
 }
@@ -860,6 +888,17 @@ function serializeNode(node, indent, lines) {
         lines.push(indent + '}');
         return;
       }
+      // A loop written without parens around its body keeps that shape —
+      // adding them would rewrite a line the user never edited.
+      if (node.bare) {
+        lines.push(indent + '  ' + node.head.replace(/\($/, '').trimEnd());
+        for (const child of node.children || []) {
+          serializeNode(child, indent + '    ', lines);
+        }
+        lines.push(indent + '  )');
+        lines.push(indent + '}');
+        return;
+      }
       // Untouched heads keep the lines they were written on; an edited one is
       // written as the single line the Loop field holds.
       const kept =
@@ -1125,9 +1164,14 @@ function explodeMembers(block) {
   return splitTypeTop(block, ';').join('\n');
 }
 
-function parsePropSchema(source) {
+// `prelude` carries type declarations this file imports from elsewhere. A
+// component is free to write `type Props = SeoProps` with SeoProps in
+// types.ts, and without the declaration text there is nothing to read — the
+// panel would show a component with no props at all. The caller (which has
+// file access; this doesn't) resolves and reads them.
+function parsePropSchema(source, prelude = '') {
   const fm = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  const frontmatter = fm ? fm[1] : '';
+  const frontmatter = (prelude ? prelude + '\n' : '') + (fm ? fm[1] : '');
   const schema = new Map();
 
   // Collect local type aliases (type HeadingTag = "h1" | "h2" | ...) so props
@@ -1263,9 +1307,29 @@ function parsePropSchema(source) {
 
   const memberEntries = (block) => {
     const out = new Map();
+    // Line by line first — that reads members written one per line, including
+    // several separated by commas rather than semicolons.
     for (const line of explodeMembers(block).split('\n')) {
       const m = line.trim().match(/^(?:readonly\s+)?([\w$]+)\??\s*:\s*([^;\n]+?)[;,]?\s*$/);
       if (m) out.set(m[1], m[2].trim());
+    }
+    // …then whole members, for a type that spans lines:
+    //   variant?:
+    //     | "stack"
+    //     | "card";
+    // No single line of that is a member, so the scan above sees nothing and
+    // the prop vanishes from its branch — which is how a six-option variant
+    // came out as a text field instead of a dropdown.
+    for (const raw of splitTypeTop(block, ';')) {
+      const flat = raw
+        .replace(/\/\*[\s\S]*?\*\//g, ' ')
+        .replace(/\/\/[^\n]*/g, ' ')
+        .replace(/[{}]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!flat.includes('\n') && out.size && !/\|/.test(flat)) continue;
+      const m = flat.match(/^(?:readonly\s+)?([\w$]+)\??\s*:\s*(.+?),?$/);
+      if (m && !out.has(m[1])) out.set(m[1], m[2].trim());
     }
     return out;
   };
@@ -1279,14 +1343,25 @@ function parsePropSchema(source) {
       for (const name of names) {
         const t = m.get(name);
         if (!t) continue;
-        // A branch only PINS a prop when it fixes it to one value. A union of
-        // its own (`"primary" | "secondary"`) fixes nothing — and it starts
-        // and ends with a quote, so a naive literal test reads the whole thing
-        // as one string and pins garbage.
-        const single = splitTypeTop(t, '|').length === 1;
-        if (t === 'never') forbids.push(name);
-        else if (single && /^(['"`]).*\1$/.test(t)) pins[name] = t.slice(1, -1);
-        else if (single && /^(true|false|-?\d+(\.\d+)?)$/.test(t)) pins[name] = t;
+        // A branch PINS a prop when it fixes it to a known set of values —
+        // one (`variant: "autofit"`) or several (`variant: "autofit" |
+        // "autofill"`), which is still a discriminant, just a wider one.
+        // Anything with a non-literal member (string, number, an alias like
+        // GridColumns) fixes nothing and pins nothing. Split first: a naive
+        // literal test on the whole type reads `"a" | "b"` as one string,
+        // because it does start and end with a quote.
+        if (t === 'never') {
+          forbids.push(name);
+          continue;
+        }
+        const parts = splitTypeTop(t, '|')
+          .map((x) => x.trim())
+          .filter((x) => x && x !== 'undefined' && x !== 'null');
+        const isLiteral = (x) =>
+          /^(['"`]).*\1$/.test(x) || /^(true|false|-?\d+(\.\d+)?)$/.test(x);
+        if (parts.length && parts.every(isLiteral)) {
+          pins[name] = parts.map((x) => (/^['"`]/.test(x) ? x.slice(1, -1) : x));
+        }
       }
       return { forbids, pins };
     });
@@ -1303,6 +1378,16 @@ function parsePropSchema(source) {
   const rawTypes = new Map();
   const noted = new Map();
 
+  // An alias standing in for a union of literals, expanded to those literals.
+  // Only for alias bodies that are plain unions — one holding an object shape
+  // describes members, not values, and exploding it would be nonsense.
+  const expandAlias = (part, seen = new Set()) => {
+    const body = aliases.get(part);
+    if (!body || seen.has(part) || /[{}]/.test(body)) return [part];
+    seen.add(part);
+    return splitTypeTop(body, '|').flatMap((p) => expandAlias(p.trim(), seen));
+  };
+
   for (const block of blocks) {
     // Walked line by line rather than matched in one pass, so the comment
     // above a prop can be carried onto it — that's the prop's documentation,
@@ -1310,8 +1395,9 @@ function parsePropSchema(source) {
     const entryRe = /^\s*(?:readonly\s+)?([\w$]+)(\?)?\s*:\s*([^;\n]+?)[;,]?\s*$/;
     let doc = [];
     let inBlock = false;
-    for (const rawLine of explodeMembers(block).split('\n')) {
-      const line = rawLine.trim();
+    const lines = explodeMembers(block).split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
       if (inBlock) {
         // Closing a block that opened on an earlier line.
         const end = line.indexOf('*/');
@@ -1335,7 +1421,30 @@ function parsePropSchema(source) {
         doc = [];
         continue;
       }
-      const m = line.match(entryRe);
+      let m = line.match(entryRe);
+      // A member whose type is written across lines —
+      //   variant?:
+      //     | "stack"
+      //     | "card"
+      // — has no single line that reads as a declaration, so the scan above
+      // sees nothing and the prop disappears from the schema entirely. When a
+      // line opens one, take the rest of the member with it. (explodeMembers
+      // already ended the member at its `;`, so what follows belongs to it.)
+      if (!m && /^(?:readonly\s+)?[\w$]+\??\s*:\s*$/.test(line)) {
+        const rest = [];
+        while (i + 1 < lines.length) {
+          const next = lines[i + 1].trim();
+          if (!next || next.startsWith('/*') || next.startsWith('//')) break;
+          if (entryRe.test(next) || /^(?:readonly\s+)?[\w$]+\??\s*:\s*$/.test(next)) break;
+          rest.push(next);
+          i += 1;
+        }
+        if (rest.length) {
+          m = (line + ' ' + rest.join(' ')).replace(/\s+/g, ' ').match(
+            /^(?:readonly\s+)?([\w$]+)(\?)?\s*:\s*(.+?)[;,]?\s*$/
+          );
+        }
+      }
       if (!m) {
         doc = [];
         continue;
@@ -1355,7 +1464,13 @@ function parsePropSchema(source) {
         if (!rawTypes.has(name)) rawTypes.set(name, { parts: [], optional: false });
         const rec = rawTypes.get(name);
         for (const part of typeStr.split('|').map((x) => x.trim()).filter(Boolean)) {
-          if (part !== 'never' && !rec.parts.includes(part)) rec.parts.push(part);
+          // `variant?: PlainVariant | ReversibleVariant` names two aliases
+          // rather than being one, so the substitution above doesn't reach it
+          // — and an unexpanded name among the literals is a non-literal, so
+          // the whole thing stops reading as a fixed set of options.
+          for (const piece of expandAlias(part)) {
+            if (piece !== 'never' && !rec.parts.includes(piece)) rec.parts.push(piece);
+          }
         }
         if (m[2]) rec.optional = true;
       }
@@ -1366,14 +1481,18 @@ function parsePropSchema(source) {
   }
 
   for (const [name, rec] of rawTypes) {
-    const { type, options } = normalizeType(rec.parts.join(' | '));
+    const { type, options, numeric } = normalizeType(rec.parts.join(' | '));
     schema.set(name, {
       name,
       type,
       options,
+      numeric,
       optional: rec.optional,
       default: undefined,
       doc: noted.get(name),
+      // Range and step, for the fields that can be typed into freely. A list
+      // of literals already can't take a wrong value.
+      ...(type === 'number' ? numberRules(noted.get(name)) : {}),
       // The union shapes this component declares, so the panel can show only
       // the branch that matches what's currently set. Same table on every
       // field — it describes the type, not the prop.
@@ -1530,6 +1649,114 @@ function parseSlots(source) {
   return found.has('default') ? ['default', ...named] : named;
 }
 
+// Tags that hold a line of text rather than a place to put blocks. What
+// wraps a component's default <slot /> says what the component is for: a
+// <slot> inside a <p> or a heading wants words, one inside a <div> wants
+// other components.
+const TEXT_TAGS = new Set([
+  'a', 'b', 'blockquote', 'button', 'caption', 'cite', 'code', 'dd', 'dt', 'em',
+  'figcaption', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'i', 'label', 'legend',
+  'li', 'option', 'p', 'q', 'small', 'span', 'strong', 'summary', 'td', 'th',
+  'title',
+]);
+
+// A tag name written as `<Tag>` is a variable — resolve it back to the literal
+// it holds. `const Tag = tag;` with `tag = "h2"` in the props destructure is
+// the common shape; `const Tag = isLink ? "a" : "button"` names its options
+// outright. Returns every tag it could be, or [] when that can't be told.
+function dynamicTagLiterals(frontmatter, name) {
+  const decl = frontmatter.match(
+    new RegExp(`\\b(?:const|let|var)\\s+${name}\\s*=\\s*([^;\\n]+)`)
+  );
+  if (!decl) return [];
+  const literals = [...decl[1].matchAll(/["'`]([A-Za-z][\w-]*)["'`]/g)].map((m) => m[1]);
+  if (literals.length) return literals;
+  const ident = decl[1].trim().match(/^([A-Za-z_$][\w$]*)$/);
+  if (!ident) return [];
+  // `const Tag = tag` — the default sits in the destructure or its own const.
+  const viaDefault = frontmatter.match(
+    new RegExp(`\\b${ident[1]}\\s*=\\s*["'\`]([A-Za-z][\\w-]*)["'\`]`)
+  );
+  return viaDefault ? [viaDefault[1]] : [];
+}
+
+// The HTML tag a component renders as, so nesting rules can reach through it:
+// a <Paragraph> is a <p>, and a <p> can't go inside an <h1> however the
+// component is named. Returns { tag } when it's fixed, { prop, fallback,
+// options } when a prop decides it (`<Tag>` from `const Tag = tag`, with
+// `tag = "h2"` in the destructure), or null when it can't be told.
+function rootTag(source) {
+  const fm = source.match(/^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/);
+  const frontmatter = fm ? fm[0] : '';
+  const body = fm ? source.slice(fm[0].length) : source;
+  // The first element of the template that isn't a wrapper Astro strips.
+  const re = /<(\/?)([A-Za-z][\w.-]*)\b((?:[^>"'{]|"[^"]*"|'[^']*'|\{[^}]*\})*?)(\/?)>/g;
+  let m;
+  while ((m = re.exec(body)) !== null) {
+    const [, closing, name] = m;
+    if (closing) continue;
+    const lower = name.toLowerCase();
+    if (lower === 'fragment' || lower === 'slot' || lower === 'style' || lower === 'script') continue;
+    if (!/^[A-Z]/.test(name)) return { tag: lower };
+    // A capitalised name is either another component — whose own tag this
+    // file can't know — or a variable holding one.
+    const decl = frontmatter.match(
+      new RegExp(`\\b(?:const|let|var)\\s+${name}\\s*=\\s*([^;\\n]+)`)
+    );
+    if (!decl) return null;
+    const expr = decl[1].trim();
+    // `const Tag = tag` — the prop decides, so report it along with the
+    // default, and an instance that sets the prop overrides the default.
+    const ident = expr.match(/^([A-Za-z_$][\w$]*)$/);
+    if (ident) {
+      const prop = ident[1];
+      const dflt = frontmatter.match(
+        new RegExp(`\\b${prop}\\s*=\\s*["'\`]([A-Za-z][\\w-]*)["'\`]`)
+      );
+      return dflt ? { prop, tag: dflt[1].toLowerCase() } : { prop };
+    }
+    // `const Tag = isLink ? "a" : "button"` — it's one of these, and which
+    // one depends on values only the page knows.
+    const lits = [...expr.matchAll(/["'`]([A-Za-z][\w-]*)["'`]/g)].map((x) => x[1].toLowerCase());
+    if (lits.length === 1) return { tag: lits[0] };
+    if (lits.length > 1) return { options: lits };
+    return null;
+  }
+  return null;
+}
+
+// Whether a component's default <slot /> sits somewhere text belongs, so a
+// freshly inserted one can arrive with a word in it instead of empty. False
+// for a slot that isn't wrapped at all, or wrapped in something structural.
+function defaultSlotInline(source) {
+  const fm = source.match(/^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/);
+  const frontmatter = fm ? fm[0] : '';
+  const body = fm ? source.slice(fm[0].length) : source;
+  const stack = [];
+  const re = /<(\/?)([A-Za-z][\w.-]*)\b((?:[^>"'{]|"[^"]*"|'[^']*'|\{[^}]*\})*?)(\/?)>/g;
+  let m;
+  while ((m = re.exec(body)) !== null) {
+    const [, closing, tag, attrs, selfClosing] = m;
+    if (tag.toLowerCase() === 'slot') {
+      if (closing) continue;
+      if (/\bname\s*=/.test(attrs)) continue;
+      const parent = stack[stack.length - 1];
+      if (!parent) return false;
+      if (TEXT_TAGS.has(parent.toLowerCase())) return true;
+      if (!/^[A-Z]/.test(parent)) return false;
+      const options = dynamicTagLiterals(frontmatter, parent);
+      return options.length > 0 && options.every((t) => TEXT_TAGS.has(t.toLowerCase()));
+    }
+    if (closing) {
+      const at = stack.lastIndexOf(tag);
+      if (at !== -1) stack.length = at;
+    } else if (!selfClosing && !VOID_ELEMENTS.has(tag.toLowerCase())) {
+      stack.push(tag);
+    }
+  }
+  return false;
+}
+
 // Extracts the tag from `interface Props extends HTMLAttributes<"button">`
 // so the UI can offer that element's built-in attributes (type, disabled, …).
 function parseExtendsTag(source) {
@@ -1541,6 +1768,67 @@ function parseExtendsTag(source) {
   return m ? m[1] : null;
 }
 
+// What a number prop will actually accept. TypeScript can't say "greater than
+// zero", so components say it in the doc comment — either as a tag, which is
+// exact, or in the sentence a human reads, which is a guess and can be
+// overridden by a tag. Returns {} when the doc says nothing about a range.
+const NUMBER_RE = String.raw`-?\d+(?:\.\d+)?`;
+function numberRules(doc) {
+  if (!doc) return {};
+  const rules = {};
+  const tag = (name) => {
+    const m = doc.match(new RegExp(`@${name}\\s+(${NUMBER_RE})`, 'i'));
+    return m ? parseFloat(m[1]) : undefined;
+  };
+  const min = tag('min');
+  const max = tag('max');
+  const step = tag('step');
+  if (min !== undefined) rules.min = min;
+  if (max !== undefined) rules.max = max;
+  if (step !== undefined) rules.step = step;
+  if (/@(?:int|integer)\b/i.test(doc) && rules.step === undefined) rules.step = 1;
+
+  // Prose, for the props that were written before any of that existed. Only
+  // phrases that state a bound outright — "Defaults to 12" is not one, and
+  // neither is "Columns from 30rem up". Each match is struck out as it is
+  // read, so "no more than 8" can't be picked up a second time by the bare
+  // "more than" pattern underneath it and turned into a minimum.
+  let prose = doc.replace(/@\w+\s+-?[\d.]+/g, ' ');
+  const take = (re, apply) => {
+    const m = prose.match(re);
+    if (!m) return;
+    apply(...m.slice(1).map(parseFloat));
+    prose = prose.replace(m[0], ' ');
+  };
+  take(new RegExp(`between\\s+(${NUMBER_RE})\\s+and\\s+(${NUMBER_RE})`, 'i'), (a, b) => {
+    if (rules.min === undefined) rules.min = a;
+    if (rules.max === undefined) rules.max = b;
+  });
+  // Inclusive bounds first: they contain the words the exclusive ones use.
+  take(
+    new RegExp(`(?:no more than|not more than|at most|maximum(?: of)?|up to)\\s+(${NUMBER_RE})`, 'i'),
+    (n) => { if (rules.max === undefined) rules.max = n; }
+  );
+  take(
+    new RegExp(`(?:no less than|not less than|at least|minimum(?: of)?)\\s+(${NUMBER_RE})`, 'i'),
+    (n) => { if (rules.min === undefined) rules.min = n; }
+  );
+  take(new RegExp(`(?:greater than|more than|above)\\s+(${NUMBER_RE})`, 'i'), (n) => {
+    if (rules.min !== undefined) return;
+    rules.min = n;
+    rules.minExclusive = true;
+  });
+  take(new RegExp(`(?:less than|below|under)\\s+(${NUMBER_RE})`, 'i'), (n) => {
+    if (rules.max !== undefined) return;
+    rules.max = n;
+    rules.maxExclusive = true;
+  });
+  if (rules.step === undefined && /\b(whole numbers?|integers?|no decimals?)\b/i.test(prose)) {
+    rules.step = 1;
+  }
+  return rules;
+}
+
 function normalizeType(t) {
   // Union of string literals ('primary' | 'secondary') → enum with options.
   const parts = t.split('|').map((s) => s.trim()).filter(Boolean);
@@ -1549,6 +1837,15 @@ function normalizeType(t) {
     const rest = parts.filter((p) => !/^(['"`]).*\1$/.test(p));
     if (literals.length >= 2 && rest.every((p) => p === 'undefined' || p === 'null')) {
       return { type: 'enum', options: literals.map((p) => p.slice(1, -1)) };
+    }
+    // The same thing written with numbers — `1 | 2 | … | 12` for a column
+    // count. A free number field would take -1, 0 and 1.5, none of which the
+    // type allows, so this is a list too. `numeric` tells the panel to write
+    // `cols={3}` rather than `cols="3"`; the component is typed for a number.
+    const nums = parts.filter((p) => /^-?\d+(?:\.\d+)?$/.test(p));
+    const notNums = parts.filter((p) => !/^-?\d+(?:\.\d+)?$/.test(p));
+    if (nums.length >= 2 && notNums.every((p) => p === 'undefined' || p === 'null')) {
+      return { type: 'enum', numeric: true, options: nums };
     }
   }
   // Arrays, tuples and object literals are values only JS can express —
@@ -1715,6 +2012,9 @@ module.exports = {
   parsePropSchema,
   parseExtendsTag,
   parseSlots,
+  defaultSlotInline,
+  rootTag,
+  numberRules,
   parseAttrs,
   serializeAttrs,
 };

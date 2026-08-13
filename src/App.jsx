@@ -3,6 +3,7 @@ import WelcomeScreen from './panels/WelcomeScreen.jsx';
 import PagesPanel from './panels/PagesPanel.jsx';
 import PalettePanel from './panels/PalettePanel.jsx';
 import StructurePanel from './panels/StructurePanel.jsx';
+import { noteIndexAbove, selectionAfterDelete } from './treeSelection.js';
 import PropsPanel from './panels/PropsPanel.jsx';
 import StylePanel from './panels/StylePanel.jsx';
 import PreviewPane from './panels/PreviewPane.jsx';
@@ -12,6 +13,7 @@ import CodeWindow from './ui/CodeWindow.jsx';
 import PageSwitcher from './ui/PageSwitcher.jsx';
 import DynamicPicker from './ui/DynamicPicker.jsx';
 import {
+  ASTRO_ASSETS,
   ASTRO_ASSETS_MODULE,
   PLACEHOLDER_PROPS,
   astroAsset as astroAssetDef,
@@ -20,7 +22,7 @@ import InsertSearch from './ui/InsertSearch.jsx';
 import AssetsPanel from './panels/AssetsPanel.jsx';
 import CmsPanel from './panels/CmsPanel.jsx';
 import CmsView from './panels/CmsView.jsx';
-import { getElementSchema, GLOBAL_ATTRS, canContainTag } from './elementSchemas.js';
+import { getElementSchema, GLOBAL_ATTRS, canContainTag, HTML_TAGS } from './elementSchemas.js';
 import { onAssetRequest, clearAssetRequest } from './assetPick.js';
 import { isDataBound } from './bindings.js';
 import { elementLabel } from './classNames.js';
@@ -89,15 +91,6 @@ function findParentList(model, id) {
     return null;
   };
   return search(model.nodes);
-}
-
-// The comment sitting directly above `index` in its own sibling list — the
-// note the navigator folds into that node's row. Moves and deletes carry it
-// along: the two read as one row, so leaving it behind would silently re-attach
-// someone else's note to whatever ends up next.
-function noteIndexAbove(list, index) {
-  const prev = index > 0 ? list[index - 1] : null;
-  return prev && prev.kind === 'comment' ? index - 1 : -1;
 }
 
 function isDescendantOf(candidateParent, id) {
@@ -221,12 +214,16 @@ function findElementByTag(nodes, tag) {
 // there's nothing else, the first node of any kind is better than nothing.
 function openingSelection(nodes) {
   const list = Array.isArray(nodes) ? nodes : [];
-  return (
-    findElementByTag(list, 'body') ||
-    list.find((n) => n.kind === 'element' || n.kind === 'component') ||
-    list[0] ||
-    null
-  );
+  return findElementByTag(list, 'body') || outermostNode(list);
+}
+
+// The outermost thing a page renders: its layout wrapper when it has one,
+// otherwise the first real node. A doctype line, a leading comment or stray
+// whitespace isn't what the page is about, so those are skipped — but any
+// node beats selecting nothing.
+function outermostNode(nodes) {
+  const list = Array.isArray(nodes) ? nodes : [];
+  return list.find((n) => n.kind === 'element' || n.kind === 'component') || list[0] || null;
 }
 
 function collectUsedNames(model) {
@@ -241,11 +238,48 @@ function collectUsedNames(model) {
   return used;
 }
 
-// Only prune imports of .astro files; leave assets, utilities, etc. alone.
+// Everything in the file that is code rather than markup: the frontmatter, a
+// loop's head, a condition's test, an expression node, a raw <script>, and any
+// prop whose value is an expression. An imported name can be used in any of
+// them without ever appearing as a tag.
+function codeText(model) {
+  const parts = [model.extraFrontmatter || ''];
+  const walk = (list) => {
+    for (const node of list) {
+      if (node.kind === 'expr' || node.kind === 'raw-line') parts.push(node.value || '');
+      if (node.kind === 'raw') parts.push(node.inner || '');
+      if (node.kind === 'map') parts.push(node.head || '');
+      if (node.kind === 'cond') parts.push(node.test || '');
+      for (const v of Object.values(node.props || {})) {
+        if (v && (v.type === 'expr' || v.type === 'spread')) parts.push(String(v.value ?? ''));
+      }
+      if (Array.isArray(node.children)) walk(node.children);
+    }
+  };
+  walk(model.nodes);
+  return parts.join('\n');
+}
+
+// Imports the app is willing to remove once nothing refers to them: a project
+// component, and Astro's own <Image>/<Picture>. An asset or a utility is left
+// alone — those are used from expressions far more often than as a tag, and
+// deleting one that is still in use breaks the page.
+function prunableImport(i) {
+  return i.path.endsWith('.astro') || i.path === ASTRO_ASSETS_MODULE;
+}
+
 function pruneImports(model) {
   const used = collectUsedNames(model);
+  // A name can be referenced as code rather than as a tag — inside a
+  // `<Fragment set:html>` chunk, a frontmatter const, a prop expression. The
+  // test is deliberately loose (a bare word anywhere in the code counts),
+  // because the cost of a false positive is a stray import and the cost of a
+  // false negative is deleting something the page still needs.
+  const code = codeText(model);
+  const mentioned = (name) =>
+    new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(code);
   model.imports = model.imports.filter(
-    (i) => !i.path.endsWith('.astro') || used.has(i.name)
+    (i) => !prunableImport(i) || used.has(i.name) || mentioned(i.name)
   );
 }
 
@@ -426,6 +460,12 @@ export default function App() {
   // style panel show the classes this instance resolved to.
   const [selectedClasses, setSelectedClasses] = useState([]);
   const [hoverNodeId, setHoverNodeId] = useState(null); // navigator row hover
+  // Paths the page reports as having actually rendered something. Null until
+  // the page has said anything, which is not the same as "nothing rendered".
+  const [renderedPaths, setRenderedPaths] = useState(null);
+  // path -> the classes that node rendered with, for labelling rows whose
+  // class is an expression the source can't resolve.
+  const [nodeClasses, setNodeClasses] = useState(null);
   const [devUrl, setDevUrl] = useState(null);
   const [devStatus, setDevStatus] = useState('off'); // off | starting | on
   const [devLog, setDevLog] = useState('');
@@ -455,6 +495,9 @@ export default function App() {
   // element twice still reveals it.
   const [revealTick, setRevealTick] = useState(0);
   const [rightTab, setRightTab] = useState('style'); // style | settings
+  // ⌘Enter asks the props panel to open Settings and take the caret into the
+  // class field — a counter, so pressing it again re-focuses.
+  const [classFocus, setClassFocus] = useState(0);
   // Sliding highlight behind the active Style/Settings tab, measured from the
   // buttons so it tracks their real geometry (and any panel resize).
   const rightTabRefs = useRef({});
@@ -505,13 +548,23 @@ export default function App() {
       .catch(() => setDevDiag(null));
   }, []);
 
-  const endAssetPick = useCallback(() => {
+  // `picked` is passed as literal true by the pick itself — the Cancel button
+  // hands this its click event, which must not read as a pick.
+  const endAssetPick = useCallback((picked) => {
     clearAssetRequest();
     setAssetPick(null);
-    // Back to whatever was open before, so answering a field doesn't leave
-    // the user parked in the asset browser.
-    setLeftTab((t) => (t === 'assets' && tabBeforePick.current ? tabBeforePick.current : t));
+    setLeftTab((t) => {
+      if (t !== 'assets') return t;
+      // Answering the field ends the errand: show the element it belongs to
+      // rather than leaving the user parked in the asset browser — including
+      // when the browser is where they started, which used to strand them.
+      // Cancelling changed nothing, so that goes back where they came from.
+      return picked === true ? 'navigator' : tabBeforePick.current || 'navigator';
+    });
     tabBeforePick.current = null;
+    // The navigator opens on the element that was just given an asset, not
+    // wherever it happened to be scrolled.
+    if (picked === true) setRevealTick((n) => n + 1);
   }, []);
 
   useEffect(() => {
@@ -521,7 +574,7 @@ export default function App() {
         ...req,
         onPick: (rel) => {
           req.onPick(rel);
-          endAssetPick();
+          endAssetPick(true);
         },
       });
       setLeftTab((t) => {
@@ -656,10 +709,14 @@ export default function App() {
       setSelectedId(null);
       const result = await window.avb.readPage(entry.path);
       setPageState({ ...result, dirty: false });
-      // A component opens on something rather than nothing: its <body> when it
-      // has one, else the first element it renders.
-      if (entry.kind === 'component' && result?.model?.nodes) {
-        const start = openingSelection(result.model.nodes);
+      // Whatever opens, opens on something rather than nothing: a component on
+      // its <body> when it has one, else the first element it renders; a page
+      // on its outermost node, which is the layout wrapper when it has one.
+      if (result?.model?.nodes) {
+        const start =
+          entry.kind === 'component'
+            ? openingSelection(result.model.nodes)
+            : outermostNode(result.model.nodes);
         if (start) setSelectedId(start.id);
       }
       dropPageHistory(); // page snapshots don't apply to another page; commands stay
@@ -1067,7 +1124,18 @@ export default function App() {
             path: chooseImportPath(model, paths),
           });
         }
-        const node = { id, kind: 'component', name: comp.name, props: {}, children: null };
+        // A component whose default slot sits in a text context arrives with a
+        // word in it, the way an inserted <h1> or <p> does — something on the
+        // canvas to aim at. A wrapper whose slot holds blocks (ButtonWrapper,
+        // Section) comes in empty: a stray "Text" there is only ever deleted.
+        const takesText = (comp.slots || []).includes('default') && !!comp.slotText;
+        const node = {
+          id,
+          kind: 'component',
+          name: comp.name,
+          props: {},
+          children: takesText ? [{ id: newId(), kind: 'text', value: 'Text' }] : null,
+        };
         insertIntoModel(model, node, target);
         return model;
       }, true);
@@ -1143,6 +1211,8 @@ export default function App() {
         showToast('This section comes from the page frontmatter — remove it from the code instead.', 'error');
         return;
       }
+      // Worked out against the tree as it stands, before the node is gone.
+      const nextId = state?.editable ? selectionAfterDelete(state.model, nodeId) : null;
       mutateModel((model) => {
         const found = findParentList(model, nodeId);
         if (found) {
@@ -1155,7 +1225,9 @@ export default function App() {
         pruneImports(model);
         return model;
       }, true);
-      setSelectedId((id) => (id === nodeId ? null : id));
+      // Only the selection that just vanished moves — deleting some other row
+      // (navigator menu, canvas) leaves what you were working on alone.
+      setSelectedId((id) => (id === nodeId ? nextId : id));
     },
     [mutateModel, showToast]
   );
@@ -1339,13 +1411,36 @@ export default function App() {
     };
   }, []);
 
+  // What a component renders as. Fixed for most (<Section> is a <section>);
+  // decided by a prop for the ones that take a `tag` (<Heading tag="h1">),
+  // in which case an instance's own value wins over the component's default.
+  // Null when it can't be told — several possible tags, or no root element.
+  const tagOfComponent = (comp, node) => {
+    const rt = comp?.renderTag;
+    if (!rt) return null;
+    if (rt.prop && node) {
+      const set = node.props?.[rt.prop];
+      const v = set && set.type !== 'expr' ? String(set.value || '') : '';
+      if (v) return v.toLowerCase();
+    }
+    return rt.tag || null;
+  };
+
   // Where a new node goes: inside the selection when it accepts children,
   // otherwise right after it; with no selection, at the end of the page.
   const insertTargetFor = useCallback(
     (model, selId, item) => {
-      // The tag being inserted, when it's a plain element — components and
-      // other node kinds have no fixed content model to check against.
-      const childTag = item && item.type === 'element' ? item.tag : null;
+      // The tag being inserted. A component counts too: <Paragraph> renders a
+      // <p>, and a <p> is no more allowed inside a heading for being wrapped
+      // in a component. Unknown when the tag depends on values only the page
+      // knows (`const Tag = isLink ? "a" : "button"`), and unknown means
+      // allowed — a wrong refusal is worse than a wrong nesting.
+      const childTag =
+        item && item.type === 'element'
+          ? item.tag
+          : item && item.type === 'component'
+            ? tagOfComponent(insertables.find((c) => c.name === item.name))
+            : null;
       const acceptsChildren = (n) => {
         if (n.id === 'layout') return true;
         if (n.kind === 'element') {
@@ -1358,7 +1453,11 @@ export default function App() {
         // A condition holds nothing itself — its branches do.
         if (n.kind === 'map' || n.kind === 'chunk-group' || n.kind === 'branch') return true;
         if (n.kind === 'component') {
-          return (insertables.find((c) => c.name === n.name)?.slots || []).includes('default');
+          const comp = insertables.find((c) => c.name === n.name);
+          if (!(comp?.slots || []).includes('default')) return false;
+          // …and what it renders as still has to be able to hold the child.
+          const tag = tagOfComponent(comp, n);
+          return tag && childTag ? canContainTag(tag, childTag) : true;
         }
         return false;
       };
@@ -1534,6 +1633,19 @@ export default function App() {
         if (el instanceof HTMLElement && el.closest('.cm-editor')) return;
         e.preventDefault();
         setInsertOpen(true);
+        return;
+      }
+
+      // ⌘Enter goes straight to the class field: Settings tab, Settings group
+      // open, caret in the class input. Before the "am I typing" guard below,
+      // so it also works from another field in the panel.
+      if (mod && !e.altKey && !e.shiftKey && e.key === 'Enter') {
+        if (!selectedIdRef.current) return;
+        const el = e.target;
+        if (el instanceof HTMLElement && el.closest('.cm-editor')) return;
+        e.preventDefault();
+        setRightTab('settings');
+        setClassFocus((n) => n + 1);
         return;
       }
 
@@ -1952,14 +2064,74 @@ export default function App() {
   // tag's built-in schema but aren't valid for the new one are dropped
   // (loading="eager" on img → div); global, data-* and aria-* attributes
   // and anything custom stay.
+  // Renaming a node's tag can change what kind of node it is. Astro decides
+  // that by case: `<div>` is an element, `<AstroLogo>` is a component — and a
+  // component is only real if something in the frontmatter provides it, so a
+  // capitalised name is only accepted when it names a project component or an
+  // existing import. Typing `div` over a component turns it back.
+  const changeNodeKind = useCallback(
+    async (nodeId, newTag) => {
+      const name = String(newTag || '').trim();
+      if (!/^[A-Z][\w$]*$/.test(name)) return false;
+      const state = pageStateRef.current.pageState;
+      if (!state?.editable) return false;
+      const already = (state.model.imports || []).some((i) => i.name === name);
+      const comp = insertables.find((c) => c.name === name);
+      const asset = ASTRO_ASSETS.some((a) => a.name === name);
+      if (!already && !comp && !asset) return false; // nothing provides it
+      const paths = comp && !already ? await resolveImportPath(comp.path) : null;
+      mutateModel((model) => {
+        const node = findNodeById(model.nodes, nodeId);
+        if (!node || node.name === name) return model;
+        if (!model.imports.some((i) => i.name === name)) {
+          if (paths) model.imports.push({ name, path: chooseImportPath(model, paths) });
+          else if (asset) {
+            model.imports.push({ name, imported: name, path: ASTRO_ASSETS_MODULE, named: true });
+          }
+        }
+        // Attributes that belonged to the old element's tag mean nothing to a
+        // component; class, data- and aria- carry over the way they do for a
+        // tag change.
+        if (node.kind === 'element') {
+          const oldNames = new Set(getElementSchema(node.name).map((f) => f.name));
+          for (const attr of Object.keys(node.props || {})) {
+            if (oldNames.has(attr) && !GLOBAL_ATTRS.has(attr) && !/^(data-|aria-)/.test(attr)) {
+              delete node.props[attr];
+            }
+          }
+        }
+        node.kind = 'component';
+        node.name = name;
+        delete node.dynamicTag;
+        node.astroAsset = asset || undefined;
+        if (node.children === null) node.children = [];
+        pruneImports(model);
+        return model;
+      }, true);
+      return true;
+    },
+    [insertables, mutateModel, resolveImportPath]
+  );
+
   const changeElementTag = useCallback(
     (nodeId, newTag) => {
       const tag = String(newTag || '').trim().toLowerCase();
       if (!/^[a-z][a-z0-9-]*$/.test(tag)) return;
       mutateModel((model) => {
         const node = findNodeById(model.nodes, nodeId);
-        if (!node || node.kind !== 'element' || node.name === tag) return model;
-        const oldNames = new Set(getElementSchema(node.name).map((f) => f.name));
+        if (!node || node.name === tag) return model;
+        // A component becoming a plain tag keeps only what a tag understands:
+        // its props were the component's API, and they'd serialize as junk
+        // attributes on a <div>.
+        const wasComponent = node.kind !== 'element';
+        const oldNames = wasComponent
+          ? new Set(Object.keys(node.props || {}))
+          : new Set(getElementSchema(node.name).map((f) => f.name));
+        if (wasComponent) {
+          node.kind = 'element';
+          delete node.astroAsset;
+          delete node.dynamicTag;
+        }
         const newNames = new Set(getElementSchema(tag).map((f) => f.name));
         for (const attr of Object.keys(node.props || {})) {
           if (
@@ -1975,6 +2147,7 @@ export default function App() {
         // Void elements can't have children; paired tags serialize as a pair.
         if (VOID_ELEMENTS.has(tag)) node.children = null;
         else if (node.children === null) node.children = [];
+        pruneImports(model);
         return model;
       }, true);
     },
@@ -2097,6 +2270,10 @@ export default function App() {
   );
 
   // Sets the text content of a component (single text child convenience).
+  // Where each node's loose text last sat, so emptying the Content field and
+  // typing again restores its place rather than appending.
+  const textSlotRef = useRef({});
+
   const setNodeContent = useCallback(
     (nodeId, value) => {
       mutateModel(
@@ -2104,9 +2281,24 @@ export default function App() {
           const node = findNodeById(model.nodes, nodeId);
           if (!node || node.kind === 'text') return model;
           if (!Array.isArray(node.children)) node.children = [];
-          const textChild = node.children.find((c) => c.kind === 'text');
-          if (textChild) textChild.value = value;
-          else node.children.push({ id: newId(), kind: 'text', value });
+          const at = node.children.findIndex((c) => c.kind === 'text');
+          // Emptying the field takes the text node out rather than leaving an
+          // empty one behind for the serializer to puzzle over — but where it
+          // sat is remembered, so clearing the field and typing again puts the
+          // words back among the children instead of after all of them.
+          if (at !== -1 && !value) {
+            textSlotRef.current[nodeId] = at;
+            node.children.splice(at, 1);
+          } else if (at !== -1) {
+            node.children[at].value = value;
+          } else if (value) {
+            const back = textSlotRef.current[nodeId];
+            const idx =
+              Number.isInteger(back) && back <= node.children.length
+                ? back
+                : node.children.length;
+            node.children.splice(idx, 0, { id: newId(), kind: 'text', value });
+          }
           return model;
         },
         false,
@@ -2499,6 +2691,36 @@ export default function App() {
   }
   const linkContext = { pages: scan.pages, sectionIds };
 
+  // A class the source can't resolve — `class:list={["button_wrap", …]}` —
+  // leaves a node named after its tag, or after a variable in the case of a
+  // dynamic `<Tag>`. The page reports what each node rendered with, so the
+  // breadcrumb and the canvas chip can say the same thing the navigator does.
+  const liveLabel = (n, fromSource) => {
+    if (fromSource && fromSource !== n.name) return fromSource;
+    const live = liveClassesById?.get(n.id);
+    return live?.length ? live[0] : fromSource;
+  };
+
+  // What the Tag field offers: every HTML tag, the project's components,
+  // Astro's own, and anything this page's frontmatter already imports — which
+  // is how `<AstroLogo />` from an imported .svg becomes reachable.
+  // Each option carries what it is, so the list can wear the same icons the
+  // insert palette does — a tag, a component, a layout, one of Astro's.
+  const tagOptions = React.useMemo(() => {
+    const out = [];
+    const seen = new Set();
+    const add = (name, kind) => {
+      if (!name || seen.has(name)) return;
+      seen.add(name);
+      out.push({ name, kind });
+    };
+    for (const t of HTML_TAGS) add(t, 'element');
+    for (const c of insertables) add(c.name, c.isLayout ? 'layout' : 'component');
+    for (const a of ASTRO_ASSETS) add(a.name, 'astroAsset');
+    for (const i of model?.imports || []) add(i.name, 'component');
+    return out;
+  }, [insertables, model]);
+
   // Breadcrumb trail for the canvas toolbar: page → ancestors → selection.
   const crumbLabel = (n) => {
     if (n.id === 'layout') return currentLayoutName || n.name;
@@ -2522,8 +2744,11 @@ export default function App() {
         // First class wins; fall back to the bare tag when the element has
         // none. Reads `class:list` too, so a component's inner elements are
         // named the same way the navigator names them.
-        return elementLabel(n);
+        return liveLabel(n, elementLabel(n));
       default:
+        // `<Tag>` from `const Tag = tag` renders a real element and its name
+        // is a variable, so the class it rendered with names it better.
+        if (n.dynamicTag) return liveLabel(n, elementLabel(n));
         return n.name;
     }
   };
@@ -2654,6 +2879,49 @@ export default function App() {
     if (codeWin && !isFileWin && codeWinValue === null) setCodeWin(null);
   }, [codeWin, isFileWin, codeWinValue]);
 
+  const editedRel =
+    editStack.length > 1 && project?.path
+      ? editStack[editStack.length - 1].path.replace(project.path + '/', '')
+      : null;
+
+  // The reported classes, keyed by node id — same walk as the render report,
+  // so a path only has to be resolved once.
+  const liveClassesById = React.useMemo(() => {
+    if (!nodeClasses || !model) return null;
+    const prefix = editedRel ? `${editedRel}|` : '';
+    const byId = new Map();
+    const walk = (list, trail) => {
+      list.forEach((n, i) => {
+        const t = [...trail, i];
+        const hit = nodeClasses[prefix + t.join('.')];
+        if (hit && hit.length) byId.set(n.id, hit);
+        if (Array.isArray(n.children)) walk(n.children, t);
+      });
+    };
+    walk(model.nodes, []);
+    return byId;
+  }, [nodeClasses, model, editedRel]);
+
+  // The file being edited, relative to src/ — how the CMS addresses a page's
+  // own data (`pages/index.astro#rotatingWords`).
+  const openFileSrcRel = (() => {
+    const p = editStack[editStack.length - 1]?.path || currentPage?.path;
+    if (!p || !project?.path) return null;
+    const rel = p.startsWith(project.path + '/') ? p.slice(project.path.length + 1) : p;
+    return rel.startsWith('src/') ? rel.slice(4) : rel;
+  })();
+
+  // A marker path may arrive namespaced (src/…/Card.astro|0.1). The index trail
+  // after the pipe is what addresses a node in the open file's tree.
+  const trailOf = (p) => String(p).split('|').pop().split('.').map(Number);
+  // An edit renumbers paths, so a report from before it describes nodes that
+  // have since moved. Drop it and show nothing until the page has re-rendered
+  // and said so again — a marker on the wrong row is worse than none.
+  useEffect(() => {
+    setRenderedPaths(null);
+    setNodeClasses(null);
+  }, [model]);
+
   const crumbs = [];
   if (currentPage) crumbs.push({ id: null, label: currentPage.name.replace(/\.(astro|md)$/i, '') });
   if (model && selectedId === 'frontmatter') {
@@ -2669,22 +2937,38 @@ export default function App() {
   // page, so ask in that file's namespace — the plugin marks every .astro
   // under src with one. The canvas still shows the page, where those markers
   // appear once per instance, so every instance outlines.
-  const editedRel =
-    editStack.length > 1 && project?.path
-      ? editStack[editStack.length - 1].path.replace(project.path + '/', '')
-      : null;
-  // The file being edited, relative to src/ — how the CMS addresses a page's
-  // own data (`pages/index.astro#rotatingWords`).
-  const openFileSrcRel = (() => {
-    const p = editStack[editStack.length - 1]?.path || currentPage?.path;
-    if (!p || !project?.path) return null;
-    const rel = p.startsWith(project.path + '/') ? p.slice(project.path.length + 1) : p;
-    return rel.startsWith('src/') ? rel.slice(4) : rel;
-  })();
+  // Which nodes put nothing on the page, as ids. A node counts as rendering if
+  // it rendered something itself OR anything under it did: a layout wraps
+  // <html>, so its own markers are split across <head> and <body> and never
+  // pair up, but its children measure fine — without the ancestor closure it
+  // would read as empty. Everything left over really did produce nothing,
+  // including nodes inside a component that never evaluated its slot, whose
+  // markers were never emitted at all.
+  const emptyNodeIds = React.useMemo(() => {
+    if (!renderedPaths || !model) return null;
+    const prefix = editedRel ? `${editedRel}|` : '';
+    const live = new Set();
+    for (const p of renderedPaths) {
+      const local = prefix && p.startsWith(prefix) ? p.slice(prefix.length) : p;
+      const parts = local.split('.');
+      for (let i = parts.length; i > 0; i--) live.add(parts.slice(0, i).join('.'));
+    }
+    // Only kinds where "renders nothing" is a fact about the page. A comment,
+    // the frontmatter row or a doctype line never renders and saying so on
+    // every one of them would be noise.
+    const MARKABLE = new Set(['element', 'component', 'map']);
+    const ids = new Set();
+    const walk = (list, trail) => {
+      list.forEach((n, i) => {
+        const t = [...trail, i];
+        if (MARKABLE.has(n.kind) && !live.has(t.join('.'))) ids.add(n.id);
+        if (Array.isArray(n.children)) walk(n.children, t);
+      });
+    };
+    walk(model.nodes, []);
+    return ids;
+  }, [renderedPaths, model, editedRel]);
 
-  // A marker path may arrive namespaced (src/…/Card.astro|0.1). The index trail
-  // after the pipe is what addresses a node in the open file's tree.
-  const trailOf = (p) => String(p).split('|').pop().split('.').map(Number);
   const pathFor = (id) => {
     if (!model || !id) return null;
     const trail = pathOfNode(model.nodes, id);
@@ -2891,6 +3175,8 @@ export default function App() {
                 layouts={scan.layouts}
                 currentLayoutName={currentLayoutName}
                 selectedId={selectedId}
+                emptyNodeIds={emptyNodeIds}
+                liveClassesById={liveClassesById}
                 revealTick={revealTick}
                 onSelect={setSelectedId}
                 onHoverNode={setHoverNodeId}
@@ -3012,6 +3298,8 @@ export default function App() {
               }
             }}
             onSelectedClasses={setSelectedClasses}
+            onRenderedPaths={setRenderedPaths}
+            onNodeClasses={setNodeClasses}
             onOpenPath={(p) => {
               // Double-clicking a component on the canvas drills into it. With no
               // path the click landed on chrome the layout renders itself (nav,
@@ -3085,17 +3373,27 @@ export default function App() {
                 onRecordUndo={pushCommand}
                 pathOf={pathFor}
                 renderedClasses={selectedClasses}
+                openFilePath={editStack[editStack.length - 1]?.path || currentPage?.path || null}
               />
             )}
             <div style={{ display: rightTab === 'settings' ? 'contents' : 'none' }}>
             <PropsPanel
               node={selectedNode}
+              focusClass={classFocus}
               isLayout={selectedId === 'layout'}
               layouts={scan.layouts}
               currentLayoutName={currentLayoutName}
               onChangeLayout={changeLayout}
               schema={selectedSchema}
               slotOptions={slotOptions}
+              // Whether this component takes default slot content — the same
+              // test used to decide what an insert or paste can go inside.
+              takesSlotText={
+                selectedNode?.kind === 'component' &&
+                (insertables.find((c) => c.name === selectedNode.name)?.slots || []).includes(
+                  'default'
+                )
+              }
               loopContext={loopContext}
               linkContext={linkContext}
               projectClasses={projectClasses}
@@ -3117,7 +3415,15 @@ export default function App() {
                 setAssetProp(nodeId, propName, picked)
               }
               onRenameProp={(oldName, newName) => renameProp(selectedId, oldName, newName)}
-              onChangeTag={(tag) => changeElementTag(selectedId, tag)}
+              // A capital is a component name; anything else is a tag. The
+              // component path answers whether the name resolves, so the
+              // field can put the old value back when it doesn't.
+              onChangeTag={(tag) =>
+                /^[A-Z]/.test(tag)
+                  ? changeNodeKind(selectedId, tag)
+                  : changeElementTag(selectedId, tag)
+              }
+              tagOptions={tagOptions}
               onSetText={(value, renames) =>
                 selectedId === 'frontmatter'
                   ? setFrontmatter(value)

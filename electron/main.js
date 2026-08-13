@@ -25,6 +25,8 @@ const {
   parsePropSchema,
   parseExtendsTag,
   parseSlots,
+  defaultSlotInline,
+  rootTag,
 } = require('./astroParser');
 const { parseMarkdownPage, serializeMarkdownPage } = require('./markdownParser');
 const { scaffoldProject } = require('./scaffold');
@@ -1002,15 +1004,77 @@ ipcMain.handle('project:classes', async (_e, projectPath) => {
   return [...out].sort();
 });
 
+// The declaration text for every type this file imports, so `type Props =
+// SeoProps` can be read when SeoProps lives in types.ts. One level deep and
+// only within the project — enough for the shape components actually use,
+// without turning this into a type checker.
+function importedTypes(source, filePath, projectPath) {
+  const fm = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!fm) return '';
+  const out = [];
+  const seen = new Set();
+  // `import type { A, B } from '…'`, `import { type A } from '…'`, and the
+  // default form — a type-only import is the common way to write this, but a
+  // plain `import { X }` of a type is legal too.
+  const re = /import\s+(?:type\s+)?(\{[^}]*\}|[\w$]+)\s*from\s*['"]([^'"]+)['"]/g;
+  let m;
+  while ((m = re.exec(fm[1])) !== null) {
+    const names = m[1]
+      .replace(/[{}]/g, '')
+      .split(',')
+      .map((n) => n.replace(/\btype\b/, '').split(/\s+as\s+/)[0].trim())
+      .filter(Boolean);
+    if (!names.length) continue;
+    const target = resolveImportPath(projectPath, filePath, m[2]);
+    if (!target || seen.has(target) || target.endsWith('.astro')) continue;
+    seen.add(target);
+    let text;
+    try {
+      text = fs.readFileSync(target, 'utf8');
+    } catch {
+      continue;
+    }
+    // Only the declarations that were actually imported, so an unrelated type
+    // in the same file can't shadow one the component declares itself.
+    for (const name of names) {
+      const decl = new RegExp(
+        `(?:^|\n)\\s*(?:export\\s+)?(?:type|interface)\\s+${name.replace(/[^\w$]/g, '')}\\b`
+      ).exec(text);
+      if (!decl) continue;
+      const from = decl.index;
+      // To the end of the declaration: an interface ends at its closing brace,
+      // a type alias at the semicolon that closes it.
+      let depth = 0;
+      let end = text.length;
+      for (let i = from; i < text.length; i++) {
+        const c = text[i];
+        if ('{(['.includes(c)) depth++;
+        else if ('})]'.includes(c)) {
+          depth--;
+          if (depth === 0 && /\{/.test(text.slice(from, i))) { end = i + 1; break; }
+        } else if (c === ';' && depth === 0 && from !== i) { end = i + 1; break; }
+      }
+      out.push(text.slice(from, end));
+    }
+  }
+  return out.join('\n');
+}
+
 function safeSchema(filePath, projectPath) {
   try {
     const source = fs.readFileSync(filePath, 'utf8');
-    const schema = parsePropSchema(source);
+    const schema = parsePropSchema(source, importedTypes(source, filePath, projectPath));
     resolveIdentifierDefaults(schema, source, filePath, projectPath);
     return {
       schema,
       extendsTag: parseExtendsTag(source),
       slots: parseSlots(source),
+      // Where that default slot sits decides whether a fresh instance
+      // arrives holding a word or empty — see defaultSlotInline.
+      slotText: defaultSlotInline(source),
+      // The HTML tag it renders as, so nesting rules apply through a
+      // component the same way they do through a plain element.
+      renderTag: rootTag(source),
       // A `...rest` spread on Astro.props means the component forwards
       // arbitrary attributes — the UI offers a free-form Attributes section.
       // Anchored to the end of the destructure rather than scanning forward
@@ -1020,7 +1084,7 @@ function safeSchema(filePath, projectPath) {
       hasRest: /\.\.\.\s*\w+\s*\}\s*(?::[^=]+)?=\s*Astro\.props/.test(source),
     };
   } catch {
-    return { schema: [], extendsTag: null, slots: [], hasRest: false };
+    return { schema: [], extendsTag: null, slots: [], slotText: false, renderTag: null, hasRest: false };
   }
 }
 
@@ -2682,6 +2746,55 @@ function listCssFiles(root) {
 ipcMain.handle('style:listFiles', async (_e, projectPath) => {
   if (!projectPath) return { files: [] };
   return { files: listCssFiles(projectPath) };
+});
+
+// A component's `<style is:global>` is page CSS. Astro leaves those rules
+// unhashed, so they style whatever the page renders — including elements that
+// live in a different file from the one being edited, which is exactly the case
+// the style panel used to be blind to. Scoped `<style>` blocks are deliberately
+// left out: Astro hashes them to their own component's elements, so their rules
+// can't reach a selection made from another file.
+const ASTRO_GLOBAL_STYLE = /<style\b[^>]*\bis:global\b[^>]*>/i;
+const ASTRO_SCAN_LIMIT = 512 * 1024; // a .astro file this big isn't a component
+
+function listAstroStyleFiles(root) {
+  const out = [];
+  const walk = (dir, rel) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const full = path.join(dir, entry.name);
+      const relPath = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        if (CSS_SKIP_DIRS.has(entry.name)) continue;
+        walk(full, relPath);
+        continue;
+      }
+      if (!/\.astro$/i.test(entry.name)) continue;
+      try {
+        const { size } = fs.statSync(full);
+        if (size > ASTRO_SCAN_LIMIT) continue;
+        if (!ASTRO_GLOBAL_STYLE.test(fs.readFileSync(full, 'utf8'))) continue;
+        out.push({ rel: toPosix(relPath), name: entry.name, path: full, size });
+      } catch {
+        /* unreadable — nothing to offer for it */
+      }
+    }
+  };
+  // Only src/: components elsewhere aren't part of the page's CSS, and this
+  // keeps the scan off node_modules and build output entirely.
+  walk(path.join(root, 'src'), 'src');
+  return out.sort((a, b) => a.rel.localeCompare(b.rel));
+}
+
+ipcMain.handle('style:listAstroStyles', async (_e, projectPath) => {
+  if (!projectPath) return { files: [] };
+  return { files: listAstroStyleFiles(projectPath) };
 });
 
 ipcMain.handle('style:readFile', async (_e, filePath) => {
