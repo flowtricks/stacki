@@ -83,6 +83,15 @@ function affectedSides(side: Side, event: { shiftKey: boolean; altKey: boolean }
   return [side]
 }
 
+// The props of `sides` alongside `prop`, which names `side` (`padding-right` →
+// `padding-`, the bare inset `right` → ``). Only sides share a prefix this way,
+// so anything else stays a one-property edit.
+function siblingProps(prop: string, side: Side, sides: Side[]): string[] {
+  if (!prop.endsWith(side)) return [prop]
+  const prefix = prop.slice(0, prop.length - side.length)
+  return sides.map((s) => `${prefix}${s}`)
+}
+
 // CSS px of value change per screen px dragged. 0.5 ≈ half-speed for fine control.
 const DRAG_SENSITIVITY = 0.5
 
@@ -408,6 +417,7 @@ export function SpacingLabel({
 // same arrow-step / !important handling as before). Commits + closes on blur.
 export function SpacingEditor({
   prop,
+  side,
   placeholder,
   read,
   setProp,
@@ -418,6 +428,7 @@ export function SpacingEditor({
   onSameLabelPress,
 }: {
   prop: string
+  side: Side
   placeholder: string
   read: Read
   setProp: SetProp
@@ -441,6 +452,11 @@ export function SpacingEditor({
   // used so a plain open+close leaves the side untouched (see `close`).
   const originalRef = useRef(external)
   const commitRequested = useRef(false)
+  // Which sides the pending commit writes. Enter alone writes this one; the drag
+  // modifiers mean the same here — Option/Alt adds the opposite side, Shift takes
+  // all four. Reset on every keystroke so a modifier only counts on the Enter that
+  // held it, and left at this side alone for a commit that comes from a blur.
+  const commitProps = useRef<string[]>([prop])
 
   const setDraftValue = (text: string) => { draftRef.current = text; setDraft(text) }
 
@@ -474,8 +490,12 @@ export function SpacingEditor({
     const trimmed = draftRef.current.trim()
     const changed = trimmed !== originalRef.current.trim()
     if (commitRequested.current || changed) {
-      if (!trimmed) clearProp(prop)
-      else { const parsed = parseImportant(trimmed); setProp(prop, parsed.value, parsed.important) }
+      const props = commitProps.current
+      if (!trimmed) clearProp(props)
+      else {
+        const parsed = parseImportant(trimmed)
+        props.forEach((target) => setProp(target, parsed.value, parsed.important))
+      }
     }
     onClose()
   }
@@ -523,7 +543,15 @@ export function SpacingEditor({
             onChange={(event) => { setDraftValue(event.target.value); scheduleLive(event.target.value) }}
             onBlur={close}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') { commitRequested.current = true; event.currentTarget.blur(); return }
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                commitRequested.current = true
+                commitProps.current = siblingProps(prop, side, affectedSides(side, event))
+                event.currentTarget.blur()
+                return
+              }
+              // A modifier only applies to the Enter that carries it.
+              commitProps.current = [prop]
               if (event.key === 'Escape') { cancelLive(); closed.current = true; onClose(); return }
               const stepped = handleArrowStep(event)
               if (!stepped) return
@@ -624,6 +652,7 @@ export function useSpacingBox(shared: SharedProps, options?: { emptyLabel?: stri
     <SpacingEditor
       key={editing.prop}
       prop={editing.prop}
+      side={editing.side}
       placeholder={emptyLabel}
       read={shared.read}
       setProp={shared.setProp}

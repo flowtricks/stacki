@@ -135,6 +135,44 @@ function nodeAtPath(nodes, trail) {
   return node;
 }
 
+// The node whose children list holds `id` — null when it sits at the page root.
+function findParentNode(nodes, id) {
+  for (const n of nodes) {
+    if (!Array.isArray(n.children)) continue;
+    if (n.children.some((c) => c.id === id)) return n;
+    const found = findParentNode(n.children, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+// Loops and conditionals render their children straight through, so a `slot`
+// under one is still read by whatever component sits above it.
+const SLOT_TRANSPARENT = new Set(['map', 'cond', 'branch', 'chunk-group']);
+
+// The component (or layout) whose slots a node's `slot` attribute names,
+// looking past those pass-through wrappers. Null when the node lands in a
+// plain element or at the page root — nothing there reads a slot name.
+function slotHostOf(model, id) {
+  let node = findParentNode(model.nodes, id);
+  while (node && SLOT_TRANSPARENT.has(node.kind)) {
+    node = findParentNode(model.nodes, node.id);
+  }
+  return node && node.kind === 'component' ? node : null;
+}
+
+// What we know about a placed component, which may be imported under a local
+// name of its own (`import Layout from '../layouts/BaseLayout.astro'`) — so
+// fall back to the file the import points at. Null means "no definition
+// scanned", which is never the same answer as "has no slots".
+function definitionOf(model, node, insertables) {
+  const byName = insertables.find((c) => c.name === node.name);
+  if (byName) return byName;
+  const imp = (model.imports || []).find((i) => i.name === node.name);
+  const base = imp?.path.split('/').pop()?.replace(/\.astro$/i, '');
+  return (base && insertables.find((c) => c.name === base)) || null;
+}
+
 // ---------------------------------------------------------------------------
 // Renaming a loop variable
 //
@@ -238,16 +276,31 @@ function collectUsedNames(model) {
   return used;
 }
 
+// Comments in the frontmatter are prose about the page, and prose names the
+// things the page is built from — `// Hero copy` is talk about <Hero>, not a
+// use of it. Only whole-line `//` comments go: a trailing one can't be told
+// from the `//` inside a URL without really parsing, and cutting a string in
+// half there would hide a reference that is real.
+function stripComments(code) {
+  return code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+}
+
 // Everything in the file that is code rather than markup: the frontmatter, a
-// loop's head, a condition's test, an expression node, a raw <script>, and any
-// prop whose value is an expression. An imported name can be used in any of
-// them without ever appearing as a tag.
+// loop's head, a condition's test, an expression node, and any prop whose
+// value is an expression. An imported name can be used in any of them without
+// ever appearing as a tag.
+//
+// <style> and <script> bodies are pointedly not code for this purpose. Both
+// are their own scope in Astro — CSS never sees a frontmatter binding, and a
+// <script> is a separate module — so a name inside one is a coincidence, not
+// a use. Reading them meant a `.Hero` class or a `/* Hero */` note pinned
+// <Hero>'s import in place for good. What those blocks genuinely share comes
+// in through `define:vars`, which is a prop expression and is still read.
 function codeText(model) {
-  const parts = [model.extraFrontmatter || ''];
+  const parts = [stripComments(model.extraFrontmatter || '')];
   const walk = (list) => {
     for (const node of list) {
       if (node.kind === 'expr' || node.kind === 'raw-line') parts.push(node.value || '');
-      if (node.kind === 'raw') parts.push(node.inner || '');
       if (node.kind === 'map') parts.push(node.head || '');
       if (node.kind === 'cond') parts.push(node.test || '');
       for (const v of Object.values(node.props || {})) {
@@ -260,12 +313,22 @@ function codeText(model) {
   return parts.join('\n');
 }
 
-// Imports the app is willing to remove once nothing refers to them: a project
-// component, and Astro's own <Image>/<Picture>. An asset or a utility is left
-// alone — those are used from expressions far more often than as a tag, and
-// deleting one that is still in use breaks the page.
+// Imports the app is willing to remove once nothing refers to them: a
+// component file of any flavour Astro renders, an image, and Astro's own
+// <Image>/<Picture>. All three are reachable only as a tag or from an
+// expression, both of which the check below reads in full. A stylesheet, a
+// data module or a utility is left alone — those get imported for effects
+// this file can't see, and dropping one that is still doing its job breaks
+// the page.
+const COMPONENT_IMPORT_RE = /\.(astro|jsx|tsx|vue|svelte)$/i;
+const ASSET_IMPORT_RE = /\.(png|jpe?g|gif|webp|avif|svg)$/i;
+
 function prunableImport(i) {
-  return i.path.endsWith('.astro') || i.path === ASTRO_ASSETS_MODULE;
+  return (
+    COMPONENT_IMPORT_RE.test(i.path) ||
+    ASSET_IMPORT_RE.test(i.path) ||
+    i.path === ASTRO_ASSETS_MODULE
+  );
 }
 
 function pruneImports(model) {
@@ -1187,6 +1250,20 @@ export default function App() {
           if (landed) landed.list.splice(landed.index, 0, note);
         }
 
+        // `slot` names a slot of the component the node used to sit in —
+        // carried into a plain element, or into a component without that
+        // slot, it renders nothing at all. Drop it, unless the new host's
+        // definition is one we never scanned (then we can't say it's wrong).
+        const slot = node.props?.slot;
+        const slotName = slot?.type === 'string' ? slot.value : null;
+        if (slotName) {
+          const host = slotHostOf(model, nodeId);
+          const def = host ? definitionOf(model, host, insertables) : null;
+          if (!host || (def && !(def.slots || []).includes(slotName))) {
+            delete node.props.slot;
+          }
+        }
+
         // Left a loop? Anything still reading its item would throw.
         const after = loopVarsAt(model.nodes, nodeId);
         const lost = before.filter((v) => !after.includes(v));
@@ -1200,7 +1277,7 @@ export default function App() {
         return model;
       }, true);
     },
-    [mutateModel, showToast]
+    [insertables, mutateModel, showToast]
   );
 
   const removeNode = useCallback(
@@ -2035,6 +2112,9 @@ export default function App() {
           type: 'expr',
           value: node.kind === 'element' ? `${local}.src` : local,
         };
+        // Picking a second image over a first leaves the first one's import
+        // behind with nothing pointing at it.
+        pruneImports(model);
         return model;
       }, true);
     },
@@ -2641,15 +2721,6 @@ export default function App() {
 
   // Slots offered by the selected node's parent (the component or layout the
   // node is slotted into) — turns the `slot` attribute into a dropdown.
-  const findParentNode = (nodes, id) => {
-    for (const n of nodes) {
-      if (!Array.isArray(n.children)) continue;
-      if (n.children.some((c) => c.id === id)) return n;
-      const found = findParentNode(n.children, id);
-      if (found) return found;
-    }
-    return null;
-  };
   let slotOptions = null;
   if (model && selectedNode && selectedId !== 'layout') {
     const parent = findParentNode(model.nodes, selectedId);
