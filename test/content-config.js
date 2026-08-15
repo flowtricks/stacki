@@ -32,7 +32,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { readContentConfig } = require('../electron/contentConfig.js');
+const { readContentConfig, stopAllServices } = require('../electron/contentConfig.js');
 
 const DEFAULT_FIXTURE = path.join(os.homedir(), 'Downloads', 'awesome-client-main');
 const projectPath = path.resolve(
@@ -200,7 +200,11 @@ const defOf = (root, ref) => root?.$defs?.[String(ref).split('/').pop()] || null
   if (failures.length) {
     console.error(`\ncontent-config: ${failures.length} failed, ${checked - failures.length} passed  [${total} collections]\n`);
     console.error(failures.join('\n') + '\n');
+    stopAllServices();
     process.exit(1);
   }
+  // Logged before the service is stopped: with nothing left holding the loop
+  // open, node can exit before a piped stdout has flushed.
   console.log(`content-config: ${checked} passed  [${total} collections, ${path.basename(projectPath)}]`);
+  stopAllServices();
 })();

@@ -17,6 +17,9 @@
      outline, and the "inside a component" back button. */
   --component-green: #79e09c;
   --component-green-soft: rgba(121, 224, 156, 0.16);
+  /* Pages Astro generates from a collection ([id], [...slug]) read in this
+     purple wherever pages are listed. */
+  --collection-purple: #c4afff;
   --red: #ff453a;
   --amber: #ffd60a;
   --radius: 8px;
@@ -206,6 +209,13 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 .page-menu-item.highlight { background: var(--bg-active); color: var(--text); }
 .page-menu-item.current { color: var(--text); }
 .page-menu-item.current svg:last-child { color: var(--accent); }
+/* A generated route ([id], [...slug]) — same purple as the Pages panel.
+   Both selectors beat `.page-menu-item svg` / `.page-switch-btn svg:first-child`
+   on specificity, and neither touches the check on the current row. */
+.page-menu-item.collection > svg:first-child,
+.page-menu-item.collection .page-menu-name,
+.page-switch-btn.collection > svg:first-child,
+.page-switch-btn.collection .page-switch-label { color: var(--collection-purple); }
 .page-menu-name {
   font-weight: 500;
   overflow: hidden;
@@ -1059,6 +1069,13 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 .list-item:hover .row-action { opacity: 1; }
 .list-item .row-action:hover { color: var(--red); background: var(--bg-hover); }
 
+/* A generated route, not an authored page — see isCollectionRoute. Stated for
+   hover and active too, which otherwise recolour the row. */
+.list-item.collection .icon,
+.list-item.collection:hover .icon,
+.list-item.collection.active .icon,
+.list-item.collection .label { color: var(--collection-purple); }
+
 /* Pages tree */
 .list-item.folder .icon { color: var(--text-dim); }
 .list-item.folder.drop {
@@ -1245,6 +1262,216 @@ body > .embed-editor_provenance {
 .expr-menu .dd-option:hover .dd-check { color: white; }
 .expr-menu .dd-check { color: var(--accent); }
 
+/* A prop's value as a field you type in, with the data in it shown as chips.
+   Sized and coloured as an input because that is what it is — the chips are
+   the same purple the content editor gives an {expression}, so "this comes
+   from data" reads the same wherever it appears. */
+.bind-row { align-items: center; }
+.bind-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 30px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  /* Typed spaces are part of the value — one on either side of a chip is the
+     difference between "Posted today" and "Postedtoday". */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+  transition: border-color 0.1s, background 0.1s;
+}
+.bind-input:hover { background: rgba(255, 255, 255, 0.08); }
+.bind-input:focus { outline: none; border-color: var(--accent); background: var(--bg-input); }
+.bind-input:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.bind-input .expr-chip { font-size: 11px; padding: 1px 5px; }
+
+/* The data behind the page, as something to look through. Every row is a
+   value in scope with what it currently holds beside it — picking what a prop
+   is bound to becomes reading real content instead of recalling a path. */
+.bind-menu { padding: 0; overflow: hidden; }
+.data-picker { display: flex; flex-direction: column; max-height: 340px; }
+
+/* Which entry the values below come from, and the way to the next one. */
+.dp-entry {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px 5px 4px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.dp-entry-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.dp-entry-count {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.dp-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.dp-step:hover:not(:disabled) { background: var(--bg-active); color: var(--text); }
+
+.dp-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+.dp-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  height: auto;
+  font-size: 12px;
+  color: var(--text);
+}
+.dp-search input:focus { border: none; box-shadow: none; background: transparent; }
+
+.dp-list { overflow-y: auto; padding: 4px; }
+.dp-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.dp-row:hover { background: var(--accent); color: white; }
+/* What the field is bound to now: the row is lit in the same purple as the
+   chip that opened the picker, so the connection between the two is visible
+   rather than something to work out. */
+.dp-row.selected {
+  background: rgba(146, 116, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(146, 116, 255, 0.4);
+}
+.dp-row.selected .dp-key { color: var(--collection-purple); }
+.dp-row.selected:hover { background: var(--accent); box-shadow: none; }
+.dp-row:hover .dp-key,
+.dp-row:hover .dp-val,
+.dp-row:hover .dp-twist { color: white; }
+.dp-key {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dp-check { flex-shrink: 0; color: var(--collection-purple); }
+/* What the value IS, down the right — the column you actually read to find
+   the field you mean. Dim, and the first thing to give up space. */
+.dp-val {
+  margin-left: auto;
+  padding-left: 8px;
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  text-align: right;
+}
+.dp-val.kind { color: var(--text-faint); font-style: italic; }
+/* Bound to, but not present in the entry on the canvas — an optional field
+   nobody filled in. Stepping to another entry often fills it. */
+.dp-row.missing .dp-key { font-style: italic; opacity: 0.85; }
+
+/* Kept so what is under it can be reached, but not itself a choice. */
+.dp-row.path-only .dp-key { color: var(--text-dim); }
+.dp-row.path-only .dp-val { opacity: 0.6; }
+/* The target is the box, not the glyph: a 10px chevron is a 10px thing to hit
+   with a mouse. Padded out to 20x22 and pulled back with negative margins, so
+   it is easy to click without moving the column it sits in — and it stays
+   clear of the key beside it, since a stray hit there would pick the field
+   rather than open it. */
+.dp-twist {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 22px;
+  margin: -4px -2px -4px -4px;
+  border-radius: 4px;
+  color: var(--text-faint);
+}
+.dp-twist > svg { transition: transform 0.12s ease; }
+.dp-twist.hidden { visibility: hidden; }
+.dp-twist.open > svg { transform: rotate(90deg); }
+.dp-row:hover .dp-twist:not(.hidden):hover { background: rgba(255, 255, 255, 0.22); }
+/* Collections the page doesn't read yet — a different kind of thing from what
+   is already in scope, so it says so rather than running on as one list. */
+.dp-section {
+  padding: 8px 8px 4px;
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.dp-loading {
+  padding: 4px 6px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-faint);
+}
+.dp-empty {
+  padding: 10px 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+/* The escape hatch to code, for what no path can say. */
+.dp-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.dp-foot:hover { background: var(--bg-hover); color: var(--text); }
+
 /* Loop data source: a purple tag once a source is chosen, matching the
    purple the navigator already uses for loops. Plain while it's None, so an
    unset loop doesn't read as configured. */
@@ -1364,15 +1591,23 @@ body > .embed-editor_provenance {
 .structure-node.layout-node { color: var(--text-dim); }
 .structure-node .icon { display: flex; align-items: center; color: var(--text-faint); }
 .structure-node:hover .icon { color: var(--text-dim); }
+/* Both the drag grip and — on a node with children — the collapse arrow, and
+   as tall as the row rather than as tall as its 10px icon. The row is 28px of
+   travel; hitting the toggle should not ask for the middle third of it. */
 .structure-node .drag-handle {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
+  flex-shrink: 0;
+  width: 18px;
+  align-self: stretch;
+  margin: 0 -2px 0 -4px;
+  border-radius: 4px;
   cursor: grab;
   color: var(--text-faint);
   opacity: 0.6;
 }
+.structure-node .drag-handle:hover { opacity: 1; color: var(--text); }
 .structure-node .label {
   flex: 1;
   white-space: nowrap;
@@ -1505,6 +1740,38 @@ body > .embed-editor_provenance {
   flex-shrink: 0;
 }
 .dd-option-label { overflow: hidden; text-overflow: ellipsis; }
+.dd-icon { display: flex; align-items: center; flex-shrink: 0; color: var(--text-faint); }
+.dd-option.highlight .dd-icon { color: rgba(255, 255, 255, 0.85); }
+
+/* A popup with a filter box scrolls its list, not itself, so the box stays
+   put while the options move under it. */
+/* Wide enough to read an entry id in: the trigger is a chip in the title bar,
+   and inheriting its width is what cut "2025/the-cost-of-a-thousand-images"
+   down to "2025/the-cost-of-a-tho…". */
+.dd-popup.dd-searchable { display: flex; flex-direction: column; overflow: hidden; padding: 0; min-width: 300px; }
+.dd-search {
+  flex-shrink: 0;
+  height: 30px;
+  margin: 4px 4px 2px;
+  padding: 0 8px;
+  font-size: 12px;
+  background: var(--bg-input);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+}
+.dd-search:focus { outline: none; border-color: var(--accent); }
+.dd-popup.dd-searchable .dd-list { overflow-y: auto; padding: 2px 4px 4px; }
+.dd-empty { padding: 8px; font-size: 11.5px; color: var(--text-faint); }
+
+/* A generated route is purple wherever it appears — the Pages panel, the title
+   bar, and here, where every option is one page a collection makes. */
+.dd-trigger.collection .dd-label,
+.dd-trigger.collection .dd-icon,
+.dd-popup.collection .dd-option-label,
+.dd-popup.collection .dd-icon { color: var(--collection-purple); }
+.dd-popup.collection .dd-option.highlight .dd-option-label,
+.dd-popup.collection .dd-option.highlight .dd-icon { color: white; }
 /* A leading glyph in an option row (the tag switcher's element/component
    icons), in the same 16px column a check mark would occupy. */
 .dd-option-icon {
@@ -1572,6 +1839,71 @@ body > .embed-editor_provenance {
   cursor: pointer;
 }
 .prop-label.set:hover { background: rgba(0, 153, 255, 0.26); }
+
+/* The way data gets into a field. Nothing until the field is hovered, then a
+   dot on its top-left corner — in the purple a binding is shown in, so what it
+   does is legible before it is read. Hovering the dot grows it into a +, which
+   is the click. Permanent chrome on every field would cost more than it is
+   worth for something most fields never need. */
+.props-field { position: relative; }
+.props-field > label { position: relative; }
+.bind-handle {
+  position: absolute;
+  left: -6px;
+  /* Centred on the control's top-left corner: the label's own bottom margin
+     is 5px, so half a 12px dot below that lands on the corner itself. */
+  bottom: -11px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border-radius: 50%;
+  background: #9274ff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: width 0.1s ease, height 0.1s ease, left 0.1s ease, bottom 0.1s ease,
+    opacity 0.12s ease;
+}
+/* Three steps, so the panel is quiet but never a guessing game: a pointer
+   anywhere in it shows every field that can take data, faintly; the field
+   under the pointer shows its own solidly; and the dot itself is the target.
+   Without the first step, which fields these are is something you can only
+   find by hovering each one in turn. */
+.panel-section:hover .bind-handle { opacity: 0.4; }
+.props-field:hover > label > .bind-handle,
+.bind-handle.on {
+  opacity: 1;
+  pointer-events: auto;
+}
+.bind-handle:hover:not(:disabled),
+.bind-handle.on {
+  background: #9274ff;
+  width: 18px;
+  height: 18px;
+  left: -9px;
+  bottom: -14px;
+}
+.bind-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #fff;
+  transition: opacity 0.1s ease;
+}
+.bind-plus {
+  position: absolute;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.bind-handle:hover .bind-dot,
+.bind-handle.on .bind-dot { opacity: 0; }
+.bind-handle:hover .bind-plus,
+.bind-handle.on .bind-plus { opacity: 1; }
 
 /* A prop the current source makes moot — an SVG or a public/ file is passed
    through, so quality, format and the srcset props do nothing. Unset, the
@@ -2458,6 +2790,10 @@ body > .embed-editor_provenance {
   object-position: top;
   display: block;
 }
+/* A picture being retaken says so with the picture itself, and nothing else —
+   the old one dims until the new one lands. */
+.recent-thumb { position: relative; }
+.recent-thumb.busy img { opacity: 0.5; transition: opacity 0.2s ease; }
 .recent-name {
   font-size: 12px;
   font-weight: 600;
@@ -3288,3 +3624,144 @@ body > .embed-editor_provenance {
   text-align: left;
 }
 .titlebar input.url::placeholder { color: var(--text-faint); }
+
+/* Content collections (schema-driven editor) --------------------------------
+   The controls reuse the CMS ones; what is new here is everything the schema
+   makes possible — a rule under a field, an error on it, a reference to
+   another entry, a kind switcher, and the notices that say when a collection
+   is not ours to write. */
+.content-count { font-size: 10.5px; color: var(--text-faint); }
+
+.content-banner {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  max-width: 720px;
+  margin-bottom: 14px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+}
+.content-banner svg { flex-shrink: 0; margin-top: 1px; }
+.content-banner.soft { background: transparent; }
+
+.content-hint { font-size: 10.5px; color: var(--text-faint); margin-top: 4px; }
+.content-issue { font-size: 10.5px; color: var(--red); margin-top: 4px; }
+.cms-field.has-issue input,
+.cms-field.has-issue textarea,
+.cms-field.has-issue select { border-color: rgba(255, 69, 58, 0.55); }
+.content-required { color: var(--text-faint); }
+.content-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--text-faint);
+  margin-left: auto;
+}
+.content-warn { font-size: 10.5px; color: var(--yellow, #e0b341); margin-top: 4px; }
+.content-null { font-size: 11.5px; color: var(--text-faint); padding: 6px 0; }
+.content-none {
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 10px;
+  color: var(--text-faint);
+  background: var(--bg-input);
+}
+.content-none.on { color: var(--text); background: rgba(255, 255, 255, 0.12); }
+.cms-field-head .content-clear { margin-left: auto; opacity: 0; padding: 1px; }
+.cms-field:hover .cms-field-head .content-clear { opacity: 1; }
+
+.content-add-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.content-add-field button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 2px 6px;
+}
+.content-default { font-size: 10.5px; color: var(--text-faint); }
+
+.content-tags,
+.content-reflist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.content-tags input { flex: 1; min-width: 90px; height: 22px; border: 0; background: transparent; padding: 0 4px; }
+.content-reflist select { flex: 1; min-width: 130px; height: 24px; }
+.content-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.1);
+}
+.content-chip .missing { color: var(--red); }
+.content-chip button { padding: 1px; color: var(--text-faint); background: transparent; }
+
+.content-union-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.content-union-head label { font-size: 11.5px; color: var(--text-dim); }
+.content-union-head select { flex: 1; }
+
+.content-record-row { padding-bottom: 8px; }
+.content-record-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.content-record-head .content-key { font-weight: 600; }
+.content-record-add { display: flex; gap: 6px; align-items: center; }
+.content-record-add input { flex: 1; }
+
+.content-simple-list { display: flex; flex-direction: column; gap: 5px; align-items: stretch; }
+.content-simple-row { display: flex; gap: 6px; align-items: center; }
+.content-simple-row > *:first-child { flex: 1; min-width: 0; }
+.content-open-item {
+  padding: 10px;
+  margin: 2px 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+}
+.content-body-note { font-size: 10.5px; color: var(--text-faint); margin-bottom: 6px; }
+
+.content-id {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-family: var(--mono, ui-monospace, monospace);
+  padding: 2px 6px;
+  border-radius: 5px;
+}
+.content-id:hover { color: var(--text); background: rgba(255, 255, 255, 0.08); }
+.content-rename {
+  max-width: 720px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+}
+.content-rename-row { display: flex; gap: 6px; align-items: center; }
+.content-rename-row label { font-size: 11.5px; color: var(--text-dim); }
+.content-rename-row input { flex: 1; }
+.content-rename-plan {
+  margin-top: 10px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.content-rename-plan .primary { margin-top: 8px; }
+.content-pointer { font-size: 10.5px; color: var(--text-faint); }

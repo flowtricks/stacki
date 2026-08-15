@@ -132,3 +132,38 @@ export function describe(mod) {
     collections: Object.entries(collections).map(([name, c]) => describeCollection(name, c)),
   };
 }
+
+// --- validation ------------------------------------------------------------
+//
+// The same schemas, used the way Astro uses them. A form can enforce a field's
+// own rules on its own, but not `.refine()` or `.superRefine()` — those see the
+// whole entry, and the only thing that can answer them is the schema itself.
+// So an edited entry is parsed here, against the real zod, and what comes back
+// is the list of issues with the exact paths they belong to.
+
+const schemaCache = new Map();
+
+function schemaOf(mod, name) {
+  if (schemaCache.has(name)) return schemaCache.get(name);
+  const collection = mod?.collections?.[name];
+  const raw = collection?.schema ?? collection?.loader?.schema ?? null;
+  const schema = typeof raw === 'function' ? raw({ image: imageStub }) : raw;
+  schemaCache.set(name, schema || null);
+  return schema || null;
+}
+
+export function validate(mod, { collection, data }) {
+  const schema = schemaOf(mod, collection);
+  // No schema means every shape is allowed — which is a real answer, not a
+  // missing one.
+  if (!schema) return { issues: [], unchecked: true };
+  const result = schema.safeParse(data);
+  if (result.success) return { issues: [] };
+  return {
+    issues: result.error.issues.map((issue) => ({
+      path: issue.path.map((p) => (typeof p === 'symbol' ? String(p) : p)),
+      message: issue.message,
+      code: issue.code,
+    })),
+  };
+}

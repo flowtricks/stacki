@@ -70,6 +70,7 @@ import {
   rebuildRules,
   removeNativePropertyAt,
   resolveIdentityElement,
+  askCanvasAbout,
   primeDomMatches,
   resolveTarget,
   scanAllComponents,
@@ -2025,6 +2026,11 @@ const BG_REFRESH_THROTTLE_MS = 4000
 // apply only when a signature actually differs.
 const DESIGNER_SYNC_INTERVAL_MS = 1500
 
+/** The selectors currently in play, as one comparable string: what the canvas was
+ *  last asked about. Values aren't in it — changing one doesn't change which rules
+ *  target the element, so it doesn't warrant asking again. */
+const selectorKeyOf = (rules: ParsedRule[]): string => rules.map((r) => r.selectorText).join('\n')
+
 // A fingerprint of the selected element's identity (tag + id + classes + attrs) —
 // changes when a class or data attribute is added/removed in the Designer.
 function snapshotSignature(snap: ElementSnapshot): string {
@@ -2463,12 +2469,16 @@ export default function EmbedEditor() {
 
   // The cheap part — resolve the selected element against cached content.
   const applyResolve = useCallback(async (element: unknown, content: Content, seq: number, silent = false) => {
-    const { target, rootSnapshot } = await resolveTarget(element as never, content.scan)
+    // Ask the rendered page first — it knows what components render and what
+    // classes ran at runtime; the source tree can't see either. One question
+    // covers both halves (identity + which selectors match), so the chips wait
+    // out a single round trip rather than two back to back.
+    const asked = await askCanvasAbout(serializeElementId(element as never), content.rules)
+    const { target, rootSnapshot } = await resolveTarget(element as never, content.scan, asked)
     if (seq !== seqRef.current) return
     targetRef.current = target
-    // Ask the rendered page first — it knows what components render and what
-    // classes ran at runtime; the source tree can't see either.
-    await primeDomMatches(target, content.rules)
+    await primeDomMatches(target, content.rules, asked)
+    primedRef.current = { target, key: selectorKeyOf(content.rules) }
     const model = await computeRuleModel(content.rules, target)
     if (seq !== seqRef.current) return
     // Don't let a lagging partial clobber the final (partials share seq*2+0, the
@@ -2539,6 +2549,9 @@ export default function EmbedEditor() {
   // (the API has no change events). Cheap in steady state: it reads + compares
   // signatures and only touches state when something actually differs. Embed-code
   // edits are picked up separately by the (throttled) backgroundRefresh.
+  // What the canvas was last asked about, and for which element — see
+  // refreshDerived.
+  const primedRef = useRef<{ target: MatchTarget; key: string } | null>(null)
   const lastSnapSigRef = useRef('')
   const syncFromDesigner = useCallback(async () => {
     if (busyRef.current || refreshingRef.current) return
@@ -2549,8 +2562,10 @@ export default function EmbedEditor() {
     let target: MatchTarget
     let snap: ElementSnapshot
     let native: NativeModel
+    let asked: Awaited<ReturnType<typeof askCanvasAbout>>
     try {
-      const resolved = await resolveTarget(element as never, content.scan)
+      asked = await askCanvasAbout(serializeElementId(element as never), content.rules)
+      const resolved = await resolveTarget(element as never, content.scan, asked)
       target = resolved.target
       snap = resolved.rootSnapshot
       // Read from the RESOLVED identity element (as refreshNative and the load effect
@@ -2580,10 +2595,10 @@ export default function EmbedEditor() {
     if (snapChanged) {
       // Classes / attributes changed → selectors re-match; re-resolve against the
       // cached embeds and refresh the header identity.
-      // Ask the rendered page first — it knows what components render and what
-    // classes ran at runtime; the source tree can't see either.
-    await primeDomMatches(target, content.rules)
-    const model = await computeRuleModel(content.rules, target)
+      // Reuses the answer the identity read above already got back.
+      await primeDomMatches(target, content.rules, asked)
+      primedRef.current = { target, key: selectorKeyOf(content.rules) }
+      const model = await computeRuleModel(content.rules, target)
       if (busyRef.current || element !== selectedRef.current) return
       targetRef.current = target
       classListRef.current = snap.classList
@@ -2731,7 +2746,16 @@ export default function EmbedEditor() {
     if (contentRef.current) contentRef.current.rules = rules
     const target = targetRef.current
     if (!target) return
-    await primeDomMatches(target, rules)
+    // Only re-ask the page when the question changed. domMatched is keyed by
+    // selector text, so as long as the same element is selected and the same
+    // selectors exist, the answers it holds are still the answers — and an
+    // edit that only changed a VALUE (most of them) changes neither. Asking
+    // anyway put a round trip, and its 1.5s ceiling, after every click.
+    const key = selectorKeyOf(rules)
+    if (!(primedRef.current?.target === target && primedRef.current.key === key)) {
+      await primeDomMatches(target, rules)
+      primedRef.current = { target, key }
+    }
     const model = await computeRuleModel(rules, target)
     const placeholders = contentRef.current?.scan.inComponentContext
       ? computePlaceholders(contentRef.current.docs, classListRef.current)
@@ -2811,7 +2835,7 @@ export default function EmbedEditor() {
         // in-memory edit and remember it — it flushes automatically on exit.
         if (inComponentRef.current && !doc.source.fromComponent) {
           markPending(doc.source.key)
-          setStatus('Kept as unsaved — page embeds save when you exit the component.')
+          setStatus('Held — this rule lives in the page, so the canvas shows it once you leave the component.')
           return
         }
         setSaveError(res.error)
@@ -2965,7 +2989,7 @@ export default function EmbedEditor() {
         if (!res.ok) {
           if (inComponentRef.current && !doc.source.fromComponent) {
             markPending(doc.source.key)
-            setStatus('Kept as unsaved — page embeds save when you exit the component.')
+            setStatus('Held — this rule lives in the page, so the canvas shows it once you leave the component.')
             return
           }
           setSaveError(res.error)
@@ -3208,6 +3232,9 @@ export default function EmbedEditor() {
       canon.tokens[0].startsWith('class:')
     ) {
       getHost().addClass?.(canon.tokens[0].slice('class:'.length))
+      // The element itself changed, so the matches the canvas gave us for these
+      // same selectors no longer hold — ask again on the next refresh.
+      primedRef.current = null
     }
     selectActiveSelector(trimmed)
   }, [selectActiveSelector])
@@ -3737,7 +3764,7 @@ export default function EmbedEditor() {
       if (!res.ok) {
         if (inComponentRef.current && !doc.source.fromComponent) {
           markPending(doc.source.key)
-          setStatus('Kept as unsaved — page embeds save when you exit the component.')
+          setStatus('Held — this rule lives in the page, so the canvas shows it once you leave the component.')
           return
         }
         setSaveError(res.error)
@@ -3780,7 +3807,7 @@ export default function EmbedEditor() {
         if (!res.ok) {
           if (inComponentRef.current && !doc.source.fromComponent) {
             markPending(doc.source.key)
-            setStatus('Kept as unsaved — page embeds save when you exit the component.')
+            setStatus('Held — this rule lives in the page, so the canvas shows it once you leave the component.')
             return
           }
           setSaveError(res.error)
@@ -4064,14 +4091,17 @@ export default function EmbedEditor() {
         error={saveError}
         pending={
           pendingKeys.size
-            ? `${pendingKeys.size} change${pendingKeys.size === 1 ? '' : 's'} save when you exit the component`
+            ? `${pendingKeys.size} change${pendingKeys.size === 1 ? '' : 's'} to the page's styles — not on the canvas until you leave this component`
             : null
         }
       />
 
       {pendingKeys.size ? (
         <p className="embed-editor_pending-note">
-          {pendingKeys.size} unsaved page-embed change{pendingKeys.size === 1 ? '' : 's'} — will save when you exit the component.
+          {pendingKeys.size} change{pendingKeys.size === 1 ? '' : 's'} to the page's own &lt;style&gt;{' '}
+          block{pendingKeys.size === 1 ? '' : 's'} {pendingKeys.size === 1 ? 'is' : 'are'} held here —
+          the canvas won't show {pendingKeys.size === 1 ? 'it' : 'them'} until you leave this component,
+          and {pendingKeys.size === 1 ? 'it saves' : 'they save'} when you do.
         </p>
       ) : null}
 

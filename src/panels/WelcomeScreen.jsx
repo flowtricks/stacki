@@ -8,6 +8,10 @@ export default function WelcomeScreen({ onOpen, setBusy, showToast }) {
   const [error, setError] = useState(null);
   const [recents, setRecents] = useState([]);
   const [newProjectDir, setNewProjectDir] = useState(null);
+  // Which cards are having their picture retaken. Nothing is announced about
+  // it: a thumbnail being out of date is the app's problem, not something to
+  // put a badge on and ask the user to deal with.
+  const [refreshing, setRefreshing] = useState({});
 
   useEffect(() => {
     window.avb
@@ -15,6 +19,43 @@ export default function WelcomeScreen({ onOpen, setBusy, showToast }) {
       .then((list) => setRecents(list || []))
       .catch(() => {});
   }, []);
+
+  // A card whose site has changed since its picture was taken quietly gets a
+  // new one: the home page is rendered off screen and the image swaps in when
+  // it is ready (see electron/thumbs.js). One project at a time, in the order
+  // they are shown, and it stops the moment this screen goes away — opening a
+  // project should not be competing with a screenshot for the same machine.
+  useEffect(() => {
+    const stale = recents.filter((r) => r.canRefresh && (r.stale || !r.thumb));
+    if (!stale.length) return undefined;
+    let live = true;
+    (async () => {
+      for (const project of stale) {
+        if (!live) return;
+        setRefreshing((r) => ({ ...r, [project.path]: true }));
+        try {
+          const result = await window.avb.refreshThumb(project.path);
+          if (live && result?.thumb) {
+            setRecents((prev) =>
+              prev.map((p) =>
+                p.path === project.path ? { ...p, thumb: result.thumb, stale: !!result.stale } : p
+              )
+            );
+          }
+        } catch {
+          // A project that will not render keeps the picture it had. There is
+          // nothing here the user asked for, so there is nothing to report.
+        } finally {
+          if (live) setRefreshing((r) => ({ ...r, [project.path]: false }));
+        }
+      }
+    })();
+    return () => {
+      live = false;
+    };
+    // Runs when the list first arrives, not on every image that swaps in.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recents.length]);
 
   const openExisting = async () => {
     setError(null);
@@ -78,7 +119,7 @@ export default function WelcomeScreen({ onOpen, setBusy, showToast }) {
                 >
                   <CloseIcon size={11} />
                 </button>
-                <div className="recent-thumb">
+                <div className={`recent-thumb ${refreshing[r.path] ? 'busy' : ''}`}>
                   {r.thumb ? (
                     <img src={r.thumb} alt="" draggable={false} />
                   ) : (

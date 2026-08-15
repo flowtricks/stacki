@@ -18,3 +18,12 @@ export function comparePageNames(a, b) {
   const bn = String(b || '').replace(/\.(astro|mdx?)$/i, '');
   return pageRank(an) - pageRank(bn) || collator.compare(an, bn);
 }
+
+// A route with a bracketed segment — `[id].astro`, `[...slug].astro`, or a
+// page under a `[lang]/` folder — isn't a page someone wrote one of: Astro
+// generates it once per entry from a collection. Listed with the collection
+// icon and colour instead of the plain page one, so a folder of authored
+// pages and a folder of generated ones read differently at a glance.
+export function isCollectionRoute(name) {
+  return /\[[^\]]*\]/.test(String(name || ''));
+}

@@ -77,11 +77,34 @@ function stageRunner(projectPath, configAbs) {
   fs.writeFileSync(
     entry,
     [
-      `import { describe } from ${JSON.stringify('./introspect.mjs')};`,
+      `import { describe, validate } from ${JSON.stringify('./introspect.mjs')};`,
       `import * as config from ${JSON.stringify(configAbs)};`,
-      // The config, or a loader it calls, may print. The manifest is whatever
-      // follows the last sentinel, so nothing it says can be mistaken for it.
-      `process.stdout.write(${JSON.stringify(SENTINEL)} + JSON.stringify(describe(config)));`,
+      `const S = ${JSON.stringify(SENTINEL)};`,
+      // The config, or a loader it calls, may print. Every answer is prefixed,
+      // so nothing the project says can be mistaken for one.
+      'const send = (value) => process.stdout.write(S + JSON.stringify(value) + "\\n");',
+      'send({ type: "manifest", value: describe(config) });',
+      // The schemas stay loaded, and answer questions about entries until the
+      // app has no more to ask. Re-reading the config for every keystroke would
+      // cost a process spawn each time.
+      'let buffer = "";',
+      'process.stdin.on("data", (chunk) => {',
+      '  buffer += chunk;',
+      '  let at;',
+      '  while ((at = buffer.indexOf("\\n")) >= 0) {',
+      '    const line = buffer.slice(0, at); buffer = buffer.slice(at + 1);',
+      '    if (!line.trim()) continue;',
+      '    let request;',
+      '    try { request = JSON.parse(line); } catch { continue; }',
+      '    try {',
+      '      const value = request.op === "validate" ? validate(config, request) : { error: "unknown request" };',
+      '      send({ type: "reply", id: request.id, value });',
+      '    } catch (err) {',
+      '      send({ type: "reply", id: request.id, value: { error: String(err && err.message || err) } });',
+      '    }',
+      '  }',
+      '});',
+      'process.stdin.resume();',
       '',
     ].join('\n'),
     'utf8'
@@ -131,43 +154,6 @@ async function bundle(esbuild, projectPath, dir, entry) {
   return { outfile, inputs: Object.keys(result.metafile?.inputs || {}) };
 }
 
-function run(projectPath, bundlePath) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [bundlePath], {
-      cwd: projectPath,
-      // Electron's own binary, told to behave as node, so this works the same
-      // in a packaged app as it does in development.
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let out = '';
-    let err = '';
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL');
-      reject(new Error('Reading the content config timed out.'));
-    }, RUN_TIMEOUT);
-    child.stdout.on('data', (chunk) => (out += chunk));
-    child.stderr.on('data', (chunk) => (err = (err + chunk).slice(-4000)));
-    child.on('error', (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    child.on('close', () => {
-      clearTimeout(timer);
-      const at = out.lastIndexOf(SENTINEL);
-      if (at === -1) {
-        reject(new Error(cleanError(err) || 'The content config produced no output.'));
-        return;
-      }
-      try {
-        resolve(JSON.parse(out.slice(at + SENTINEL.length)));
-      } catch (error) {
-        reject(new Error(`Could not read the content config — ${error.message}`));
-      }
-    });
-  });
-}
-
 // esbuild and node both decorate what they print; the first real lines are the
 // part that names what went wrong.
 function cleanError(text) {
@@ -190,44 +176,181 @@ const stampOf = (projectPath, inputs) =>
     })
     .join('|');
 
-const cache = new Map(); // projectPath -> { stamp, inputs, value }
+// One live process per project, holding the config's schemas in memory.
+//
+// Reading the config is the expensive half — a bundle and a process start —
+// and validating an entry against a schema is the cheap half, which is asked
+// for on every edit. So the process that read the config stays around to answer
+// those, and is replaced when the config it read changes.
+const services = new Map(); // projectPath -> service
+const IDLE_TIMEOUT = 5 * 60 * 1000;
+
+function stopService(projectPath) {
+  const service = services.get(projectPath);
+  if (!service) return;
+  services.delete(projectPath);
+  clearTimeout(service.idle);
+  for (const pending of service.pending.values()) pending.reject(new Error('The content config was reloaded.'));
+  service.pending.clear();
+  try {
+    service.child.kill();
+  } catch {
+    /* already gone */
+  }
+}
+
+function touch(service) {
+  clearTimeout(service.idle);
+  // Nothing to answer for a while: let the process go, and pay for the next one
+  // when it is actually needed.
+  service.idle = setTimeout(() => stopService(service.projectPath), IDLE_TIMEOUT);
+  if (service.idle.unref) service.idle.unref();
+}
+
+async function startService(projectPath, configAbs) {
+  const esbuild = esbuildOf(projectPath);
+  if (!esbuild) throw new Error('Reading the content config needs the project dependencies installed.');
+
+  const { dir, entry } = stageRunner(projectPath, configAbs);
+  const { outfile, inputs } = await bundle(esbuild, projectPath, dir, entry);
+
+  const child = spawn(process.execPath, [outfile], {
+    cwd: projectPath,
+    // Electron's own binary, told to behave as node, so this works the same in
+    // a packaged app as it does in development.
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+
+  // Deliberately not unref'd: the pipes are what carry the answers, and a
+  // process with nothing else to do would exit mid-question. Callers outside
+  // the app end with stopAllServices(); inside it, the idle timer does.
+  const service = {
+    projectPath,
+    child,
+    inputs,
+    stamp: stampOf(projectPath, inputs),
+    pending: new Map(),
+    nextId: 1,
+    stderr: '',
+    idle: null,
+  };
+  services.set(projectPath, service);
+
+  const manifest = new Promise((resolve, reject) => {
+    service.resolveManifest = resolve;
+    service.rejectManifest = reject;
+  });
+
+  let buffer = '';
+  child.stdout.on('data', (chunk) => {
+    buffer += chunk;
+    let at;
+    while ((at = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, at);
+      buffer = buffer.slice(at + 1);
+      const start = line.indexOf(SENTINEL);
+      if (start === -1) continue; // something the project printed
+      let message;
+      try {
+        message = JSON.parse(line.slice(start + SENTINEL.length));
+      } catch {
+        continue;
+      }
+      if (message.type === 'manifest') service.resolveManifest(message.value);
+      else if (message.type === 'reply') {
+        const pending = service.pending.get(message.id);
+        if (pending) {
+          service.pending.delete(message.id);
+          pending.resolve(message.value);
+        }
+      }
+    }
+  });
+  child.stderr.on('data', (chunk) => (service.stderr = (service.stderr + chunk).slice(-4000)));
+  child.on('error', (err) => service.rejectManifest(err));
+  child.on('exit', () => {
+    service.rejectManifest(new Error(cleanError(service.stderr) || 'The content config could not be read.'));
+    stopService(projectPath);
+  });
+
+  const timer = setTimeout(() => {
+    service.rejectManifest(new Error('Reading the content config timed out.'));
+    stopService(projectPath);
+  }, RUN_TIMEOUT);
+  if (timer.unref) timer.unref();
+
+  try {
+    service.manifest = await manifest;
+  } finally {
+    clearTimeout(timer);
+  }
+  touch(service);
+  return service;
+}
+
+// The service for a project, started or restarted as needed. Restarted when
+// anything the config imports has changed on disk since it was read.
+async function serviceFor(projectPath, { force = false } = {}) {
+  const existing = services.get(projectPath);
+  if (existing && !force && existing.stamp === stampOf(projectPath, existing.inputs)) {
+    touch(existing);
+    return existing;
+  }
+  if (existing) stopService(projectPath);
+  const found = configPathOf(projectPath);
+  if (!found) return null;
+  return startService(projectPath, found.abs);
+}
 
 /**
  * { collections: [...] } for a project, { missing: true } when it has no
- * content config, or { error } when the config could not be read. Cached until
- * the config — or anything it imports — changes on disk.
+ * content config, or { error } when the config could not be read.
  */
 async function readContentConfig(projectPath, { force = false } = {}) {
   const found = configPathOf(projectPath);
   if (!found) return { missing: true, collections: [] };
-
-  const cached = cache.get(projectPath);
-  if (!force && cached && cached.stamp === stampOf(projectPath, cached.inputs)) {
-    return cached.value;
-  }
-
-  const esbuild = esbuildOf(projectPath);
-  if (!esbuild) {
-    return {
-      collections: [],
-      configPath: found.rel,
-      error: 'Reading the content config needs the project dependencies installed.',
-    };
-  }
-
   try {
-    const { dir, entry } = stageRunner(projectPath, found.abs);
-    const { outfile, inputs } = await bundle(esbuild, projectPath, dir, entry);
-    const manifest = await run(projectPath, outfile);
-    const value = { ...manifest, configPath: found.rel };
-    cache.set(projectPath, { stamp: stampOf(projectPath, inputs), inputs, value });
-    return value;
+    const service = await serviceFor(projectPath, { force });
+    return { ...service.manifest, configPath: found.rel };
   } catch (err) {
-    // Not cached: a config that fails to read is usually a config being
-    // edited, and the next call should try again.
-    cache.delete(projectPath);
     return { collections: [], configPath: found.rel, error: cleanError(err.message) };
   }
 }
 
-module.exports = { readContentConfig, configPathOf };
+/**
+ * Parses an entry's data with the collection's real schema, and reports what
+ * zod says — including the rules that look at the whole entry rather than one
+ * field, which are the ones a form cannot check on its own.
+ */
+async function validateEntry(projectPath, { collection, data }) {
+  let service;
+  try {
+    service = await serviceFor(projectPath);
+  } catch (err) {
+    return { issues: [], error: cleanError(err.message) };
+  }
+  if (!service) return { issues: [], unchecked: true };
+  touch(service);
+  const id = service.nextId++;
+  const reply = new Promise((resolve, reject) => {
+    service.pending.set(id, { resolve, reject });
+    const timer = setTimeout(() => {
+      service.pending.delete(id);
+      reject(new Error('Checking the entry timed out.'));
+    }, RUN_TIMEOUT);
+    if (timer.unref) timer.unref();
+  });
+  try {
+    service.child.stdin.write(JSON.stringify({ id, op: 'validate', collection, data }) + '\n');
+    return await reply;
+  } catch (err) {
+    return { issues: [], error: cleanError(err.message) };
+  }
+}
+
+const stopAllServices = () => {
+  for (const projectPath of [...services.keys()]) stopService(projectPath);
+};
+
+module.exports = { readContentConfig, validateEntry, configPathOf, stopService, stopAllServices };

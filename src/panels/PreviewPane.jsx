@@ -1,6 +1,6 @@
 import React from 'react';
 import CanvasView from './CanvasView.jsx';
-import { setCanvasFrame, receiveCanvasReply } from '../canvasQuery.js';
+import { setCanvasFrame, receiveCanvasReply, noteCanvasReady } from '../canvasQuery.js';
 import {
   DesktopIcon,
   TabletIcon,
@@ -96,6 +96,7 @@ export default function PreviewPane({
   onRenderedPaths,
   onNodeClasses,
   focusPath,
+  focusOcc,
   device,
   onDevice,
 }) {
@@ -216,6 +217,10 @@ export default function PreviewPane({
         lastClickRef.current = { path: d.path || null, occ: d.occurrence || 0 };
         setSelOcc(d.occurrence || 0);
         onSelectPath(d.path || null);
+      } else if (d?.type === 'avb:canvas-ready') {
+        // The page has walked its markers — anything asked too early can be
+        // asked again now (see canvasQuery.js).
+        noteCanvasReady();
       } else if (d?.type === 'avb:query-result') {
         // An answer from the page about what it really renders — see
         // canvasQuery.js. Routed here because this is the component that
@@ -224,7 +229,10 @@ export default function PreviewPane({
       } else if (d?.type === 'avb:open-node' && onOpenPath) {
         // A null path means the double-click landed on markup the open file
         // doesn't address — the layout's own chrome. App decides what that opens.
-        onOpenPath(d.path || null);
+        // The occurrence says which instance was opened: a component rendered
+        // inside a loop is many boxes on the page, and only the one that was
+        // double-clicked should be the one being edited.
+        onOpenPath(d.path || null, d.occurrence || 0);
       }
     };
     window.addEventListener('message', onMsg);
@@ -251,8 +259,20 @@ export default function PreviewPane({
   const sendTrack = React.useCallback(() => {
     const w = iframeRef.current?.contentWindow;
     if (!w) return;
-    w.postMessage({ type: 'avb:track', paths: trackKey ? trackKey.split('\n') : [], scope: pathScope || '' }, '*');
-  }, [trackKey]);
+    w.postMessage(
+      {
+        type: 'avb:track',
+        paths: trackKey ? trackKey.split(String.fromCharCode(10)) : [],
+        scope: pathScope || '',
+        // The instance being edited. Everything the page reports back — boxes,
+        // hits, classes — is confined to it, so a component in a loop lights
+        // up once instead of once per item.
+        focus: focusPath || '',
+        focusOcc: focusOcc || 0,
+      },
+      '*'
+    );
+  }, [trackKey, pathScope, focusPath, focusOcc]);
   React.useEffect(sendTrack, [sendTrack, url, refreshKey]);
 
   // Selecting in the navigator (or via a breadcrumb) smooth-scrolls the page

@@ -268,8 +268,63 @@ if (!process.isMainFrame) {
   // so hover and click must resolve within the file being edited.
   let activeScope = '';
   const inScope = (p) => (activeScope ? p.startsWith(activeScope) : !p.includes('|'));
+
+  // Which rendered copy of the open component is being edited. A component
+  // used inside a loop renders once per item, and drilling into one card
+  // means THAT card — so everything below (outlines, hit testing, the classes
+  // the style panel reads) narrows to the nodes that one instance put on the
+  // page. Its siblings stay as dim and as unclickable as the rest of it.
+  let focusPath = '';
+  let focusOcc = 0;
+  // A run whose every node has left the document isn't an instance any more:
+  // a patched page collects fresh runs and leaves the old ones in the map.
+  const isLive = (run) => run.some((n) => n.isConnected);
+  // Undefined until asked, then null (nothing to narrow) or the run of nodes
+  // the focused instance rendered. Recomputed whenever the DOM moves — a
+  // patched page rebuilds the regions these come from.
+  let focusCache;
+  const focusRoots = () => {
+    if (focusCache !== undefined) return focusCache;
+    focusCache = null;
+    if (focusPath) {
+      const runs = (regions.get(focusPath) || []).filter(isLive);
+      // One instance is every instance — nothing to narrow. Narrowing when the
+      // region was never found at all (a layout, whose marker pair can't
+      // survive the parser) would hide the whole page instead.
+      if (runs.length > 1) focusCache = runs[focusOcc] || runs[0];
+    }
+    return focusCache;
+  };
+  const inFocus = (n) => {
+    const roots = focusRoots();
+    if (!roots) return true;
+    return roots.some((f) => f === n || (f.nodeType === 1 && f.contains(n)));
+  };
+  // The occurrences of a path that are on the page, narrowed to the focused
+  // instance when there is one. Rects, classes and occurrence numbering all
+  // read this, so "the second copy" means the same thing to all of them.
+  const runsOf = (p) => {
+    const runs = regions.get(p);
+    if (!runs) return runs;
+    const live = runs.filter(isLive);
+    return focusRoots() ? live.filter((run) => run.some(inFocus)) : live;
+  };
   let lastHoverPath = undefined;
   let lastHoverOcc = 0;
+  // Whether the markers have been walked yet. The app can ask about a node
+  // before then — a selection made while the page is still parsing, or in the
+  // instant after a patch — and the honest answer is "not yet", not "no such
+  // element". Every answer carries this so the asker can tell the two apart,
+  // and the announcement below tells it when to try again.
+  let mapped = false;
+  const announceMapped = () => {
+    mapped = true;
+    try {
+      window.parent.postMessage({ type: 'avb:canvas-ready' }, '*');
+    } catch {
+      /* no parent to tell */
+    }
+  };
 
   // Element nodes also carry their path as an attribute, because the node
   // references above go stale: the page's own scripts are free to rebuild
@@ -294,7 +349,9 @@ if (!process.isMainFrame) {
     el.setAttribute(PATH_ATTR, list.join(' '));
   };
   const elementsWithPath = (p) =>
-    [...document.querySelectorAll(`[${PATH_ATTR}]`)].filter((el) => pathsOf(el).includes(p));
+    [...document.querySelectorAll(`[${PATH_ATTR}]`)].filter(
+      (el) => pathsOf(el).includes(p) && inFocus(el)
+    );
 
   // The path a node marks, or null when it isn't a marker. `kind` is 's'/'e'.
   const markerPath = (n, kind) => {
@@ -340,6 +397,7 @@ if (!process.isMainFrame) {
       regions.get(p).push(run);
     }
     for (const n of markers) n.remove();
+    focusCache = undefined; // new runs — the focused instance may be among them
   };
 
   // Grows `acc` (a left/top/right/bottom box, or null) by one node's box.
@@ -400,7 +458,7 @@ if (!process.isMainFrame) {
     }
     let acc = null;
     for (const key of paths) {
-      for (const run of regions.get(key) || []) {
+      for (const run of runsOf(key) || []) {
         for (const n of run) acc = addNode(acc, n);
       }
     }
@@ -408,7 +466,8 @@ if (!process.isMainFrame) {
   };
 
   const rectsForPath = (p) => {
-    const runs = regions.get(p);
+    const all = regions.get(p);
+    const runs = runsOf(p);
     if (!runs) {
       // No marker pair — a slotted element carries its path as an attribute
       // instead, because a marker beside it would render into the wrong slot.
@@ -431,8 +490,8 @@ if (!process.isMainFrame) {
     // the rest of it lives in clones. Union every tagged piece back into one
     // box. Repeated occurrences (a loop child, once per item) are meant to
     // stay separate boxes, so they keep the per-run rects above.
-    if (runs.length === 1) {
-      let acc = runs[0].reduce(addNode, null);
+    if (all.length === 1) {
+      let acc = (runs[0] || []).reduce(addNode, null);
       for (const el of elementsWithPath(p)) acc = addNode(acc, el);
       // Nothing measurable: fall through to the children (see below).
       if (acc) return [toRect(acc)];
@@ -466,7 +525,7 @@ if (!process.isMainFrame) {
   // the expression evaluated to for THIS instance.
   const classesForPath = (p) => {
     const out = [];
-    for (const run of regions.get(p) || []) {
+    for (const run of runsOf(p) || []) {
       const el = run.find((n) => n.nodeType === 1 && n.tagName !== 'TEMPLATE');
       if (el) out.push([...el.classList]);
     }
@@ -507,10 +566,10 @@ if (!process.isMainFrame) {
   let lastRenderedKey = '';
   const sendRendered = () => {
     const rendered = [];
-    for (const [p, runs] of regions) {
+    for (const p of regions.keys()) {
       if (!inScope(p)) continue;
       let live = false;
-      for (const run of runs) {
+      for (const run of runsOf(p) || []) {
         for (const n of run) {
           if (!n.isConnected) continue;
           if (n.nodeType === 1 && n.tagName !== 'TEMPLATE') live = true;
@@ -528,6 +587,7 @@ if (!process.isMainFrame) {
     // alone (see pathsOf) — so it has no region to be found above. Anything
     // carrying a tag is on the page by definition.
     for (const el of document.querySelectorAll(`[${PATH_ATTR}]`)) {
+      if (!inFocus(el)) continue;
       for (const p of pathsOf(el)) if (inScope(p) && !rendered.includes(p)) rendered.push(p);
     }
     const key = rendered.join('\n');
@@ -552,7 +612,7 @@ if (!process.isMainFrame) {
     }
     // Slotted nodes have no marker pair, so they never appear above.
     for (const el of document.querySelectorAll(`[${PATH_ATTR}]`)) {
-      if (!el.classList.length) continue;
+      if (!el.classList.length || !inFocus(el)) continue;
       for (const p of pathsOf(el)) {
         if (inScope(p) && !out[p]) out[p] = [...el.classList];
       }
@@ -585,6 +645,7 @@ if (!process.isMainFrame) {
   let rectsQueued = false;
   const queueRects = () => {
     thinCache = null; // scrolled, resized or rebuilt — every box moved
+    focusCache = undefined; // …including the instance being edited
     if (rectsQueued) return;
     rectsQueued = true;
     requestAnimationFrame(() => {
@@ -598,7 +659,7 @@ if (!process.isMainFrame) {
   // Which rendered copy of a node the target sits in. A node inside a loop
   // is recorded once per item, so the runs are the instances in order.
   const occurrenceOf = (path, target) => {
-    const runs = regions.get(path);
+    const runs = runsOf(path);
     if (!runs || runs.length < 2) return 0;
     for (let i = 0; i < runs.length; i++) {
       for (const n of runs[i]) {
@@ -622,6 +683,7 @@ if (!process.isMainFrame) {
     if (thinCache) return thinCache;
     thinCache = [];
     for (const el of document.querySelectorAll(`[${PATH_ATTR}]`)) {
+      if (!inFocus(el)) continue;
       const p = pathsOf(el).find(inScope);
       if (!p) continue;
       const b = el.getBoundingClientRect();
@@ -660,14 +722,18 @@ if (!process.isMainFrame) {
     // tag is the only way to reach them — without this, clicking a split
     // paragraph would select its parent instead.
     let tagged = target instanceof Element ? target.closest(`[${PATH_ATTR}]`) : null;
-    // Walk out of any nested namespace until the tag belongs to the open file.
-    while (tagged && !pathsOf(tagged).some(inScope)) {
+    // Walk out of any nested namespace until the tag belongs to the open file
+    // — and, while an instance is focused, until it belongs to that instance:
+    // a click on one of its siblings resolves to nothing, which is how the app
+    // hears "done in here".
+    while (tagged && !(inFocus(tagged) && pathsOf(tagged).some(inScope))) {
       tagged = tagged.parentElement ? tagged.parentElement.closest(`[${PATH_ATTR}]`) : null;
     }
     let best = tagged ? pathsOf(tagged).find(inScope) ?? null : null;
     let bestDepth = best ? best.split('.').length : -1;
-    for (const [p, runs] of regions) {
+    for (const p of regions.keys()) {
       if (!inScope(p)) continue;
+      const runs = runsOf(p) || [];
       const depth = p.split('.').length;
       if (depth <= bestDepth) continue;
       for (const run of runs) {
@@ -720,9 +786,14 @@ if (!process.isMainFrame) {
     // what gets it a second chance.
     document.addEventListener('avb:morphed', () => {
       collectRegions();
+      announceMapped();
       queueRects();
     });
     collectRegions();
+    // Said even when the page has no markers at all: "nothing here" is a real
+    // answer, and withholding it would leave every question waiting out its
+    // timeout.
+    announceMapped();
     if (!regions.size) return;
     window.addEventListener('scroll', queueRects, true);
     window.addEventListener('resize', queueRects);
@@ -757,8 +828,13 @@ if (!process.isMainFrame) {
         // Report even when nothing in scope matched: markup the layout renders
         // itself (nav, footer — anything outside the page's <slot>) has no
         // in-scope marker, and the app opens the layout for those.
-        const p = nodeAtEvent(e).path;
-        window.parent.postMessage({ type: 'avb:open-node', path: p || null }, '*');
+        // With the occurrence: a component inside a loop renders once per
+        // item, and opening it means the one under the cursor.
+        const { path: p, occurrence } = nodeAtEvent(e);
+        window.parent.postMessage(
+          { type: 'avb:open-node', path: p || null, occurrence },
+          '*'
+        );
       },
       true
     );
@@ -798,7 +874,7 @@ if (!process.isMainFrame) {
   // DOM, knows every element and every class however it got there.
   const elementsForPath = (p) => {
     const out = [];
-    for (const run of regions.get(p) || []) {
+    for (const run of runsOf(p) || []) {
       for (const n of run) {
         if (n.nodeType !== 1) continue;
         // A run holds everything between the marker pair, which includes the
@@ -856,6 +932,7 @@ if (!process.isMainFrame) {
         {
           type: 'avb:query-result',
           id: d.id,
+          ready: mapped,
           found: els.length > 0,
           identity: els[0] ? identityOf(els[0]) : null,
           matched,
@@ -868,6 +945,9 @@ if (!process.isMainFrame) {
       designMode = true;
       trackedPaths = d.paths;
       activeScope = typeof d.scope === 'string' ? d.scope : '';
+      focusPath = typeof d.focus === 'string' ? d.focus : '';
+      focusOcc = typeof d.focusOcc === 'number' ? d.focusOcc : 0;
+      focusCache = undefined;
       thinCache = null; // scope decides what's hit-testable
       lastRenderedKey = ''; // scope decides which nodes are even asked about
       lastClassKey = '';
@@ -981,6 +1061,13 @@ contextBridge.exposeInMainWorld('avb', {
   resolveImport: invoke('project:resolveImport'),
   cmsMeta: invoke('cms:meta'),
   contentConfig: invoke('content:config'),
+  contentCollections: invoke('content:collections'),
+  contentEntries: invoke('content:entries'),
+  writeContentEntry: invoke('content:writeEntry'),
+  validateContentEntry: invoke('content:validate'),
+  contentTargets: invoke('content:targets'),
+  contentRenamePlan: invoke('content:renamePlan'),
+  renameContentEntry: invoke('content:rename'),
   setCmsMeta: invoke('cms:setMeta'),
   onCmsChanged: (cb) => {
     const listener = () => cb();
@@ -992,7 +1079,12 @@ contextBridge.exposeInMainWorld('avb', {
   listRecents: invoke('recents:list'),
   addRecent: invoke('recents:add'),
   removeRecent: invoke('recents:remove'),
-  captureThumb: invoke('recents:captureThumb'),
+  refreshThumb: invoke('recents:refreshThumb'),
+  onThumbUpdated: (cb) => {
+    const listener = (_e, payload) => cb(payload);
+    ipcRenderer.on('recents:thumb', listener);
+    return () => ipcRenderer.removeListener('recents:thumb', listener);
+  },
 
   // Pages
   readPage: invoke('page:read'),
@@ -1006,6 +1098,7 @@ contextBridge.exposeInMainWorld('avb', {
   deletePageFolder: invoke('pagefolder:delete'),
   importPathFor: invoke('page:importPathFor'),
   dynamicPaths: invoke('page:dynamicPaths'),
+  sampleEntry: invoke('content:sampleEntry'),
 
   // Dev server
   startDevServer: invoke('dev:start'),

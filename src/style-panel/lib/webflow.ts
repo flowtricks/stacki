@@ -393,20 +393,34 @@ function serializeDoc(doc: EmbedDoc): string {
   return doc.regions[0]?.root?.toString() ?? doc.regions[0]?.css ?? ''
 }
 
+/**
+ * Read each source's code and parse it into live regions. The reads run
+ * concurrently — each is an IPC round trip to the main process, and waiting
+ * for one before starting the next made the scan linear in the number of
+ * stylesheets and global-style components the project has. `onDoc` fires as
+ * each lands so callers can stream; the returned arrays stay in source order,
+ * which is cascade order.
+ */
 export async function loadEmbedDocs(
   sources: EmbedSource[],
   onDoc?: (doc: EmbedDoc) => void,
 ): Promise<{ docs: EmbedDoc[]; errors: Array<{ label: string; error: string }> }> {
+  const loaded = await Promise.all(
+    sources.map(async (source) => {
+      try {
+        const doc = docForSource(source, await readSource(source))
+        onDoc?.(doc)
+        return { doc, error: null }
+      } catch (err) {
+        return { doc: null, error: { label: source.label, error: String((err as Error)?.message || err) } }
+      }
+    }),
+  )
   const docs: EmbedDoc[] = []
   const errors: Array<{ label: string; error: string }> = []
-  for (const source of sources) {
-    try {
-      const doc = docForSource(source, await readSource(source))
-      docs.push(doc)
-      onDoc?.(doc)
-    } catch (err) {
-      errors.push({ label: source.label, error: String((err as Error)?.message || err) })
-    }
+  for (const entry of loaded) {
+    if (entry.doc) docs.push(entry.doc)
+    if (entry.error) errors.push(entry.error)
   }
   return { docs, errors }
 }
@@ -440,7 +454,13 @@ export async function writeEmbedDoc(
     } else {
       const write = getHost().writeStyleNode
       if (!write) return { ok: false, error: 'No page open to write into.' }
-      write(doc.source.origin.nodeId, code, !live)
+      // A <style> block belonging to the page, while a component is open: there
+      // is no such node in the model being edited. The write used to find
+      // nothing and quietly do nothing, leaving the panel to report a save the
+      // canvas would never show.
+      if (write(doc.source.origin.nodeId, code, !live) === false) {
+        return { ok: false, error: "Couldn't find that <style> block in the open file." }
+      }
     }
     doc.code = code
     return { ok: true, code }
@@ -536,19 +556,9 @@ function askableForm(text: string): string | null {
   return bare
 }
 
-/**
- * Fill `target.domMatched` by asking the canvas, in one round trip, which of
- * these selectors actually match the selected element on the page.
- *
- * This is the whole point of the exercise: the rendered DOM knows what every
- * component renders, what every loop produced, and what classes a script or a
- * `class:list` expression put there — none of which the source tree can see.
- * Selectors the engine can't be asked about (or a canvas that doesn't answer)
- * are simply left out of the map, so they fall back to the source matcher.
- */
-export async function primeDomMatches(target: MatchTarget, rules: ParsedRule[]): Promise<void> {
-  const path = getHost().pathOf?.(target.rootKey)
-  if (!path || !hasCanvas()) return
+/** The selectors worth asking the DOM about, mapped back to the rule texts
+ *  that asked for them. */
+function askableSelectors(rules: ParsedRule[]): Map<string, string[]> {
   // One entry per distinct selector, mapped back to every text that asked for
   // it — `.a:hover` and `.a` ask the same question of the DOM.
   const askedFor = new Map<string, string[]>()
@@ -561,16 +571,70 @@ export async function primeDomMatches(target: MatchTarget, rules: ParsedRule[]):
       else askedFor.set(ask, [sel.text])
     }
   }
-  if (!askedFor.size) return
+  return askedFor
+}
+
+/** What the page said about one element: what it renders as, and which of the
+ *  asked-for selectors target it. */
+export type CanvasIdentity = {
+  tag: string
+  id?: string | null
+  classes: string[]
+  attributes: Record<string, string>
+}
+export type CanvasAsk = {
+  answer: { identity: CanvasIdentity | null; matched: Record<string, boolean | null> } | null
+  askedFor: Map<string, string[]>
+}
+
+/**
+ * Ask the page everything the panel needs about the selected element, in ONE
+ * round trip. Identity and selector matching used to be asked separately —
+ * two questions about the same element at the same moment, each bounded by
+ * its own 1.5s timeout, and the second couldn't start until the first came
+ * back. The chips stayed blank for the sum of the two.
+ *
+ * Returns null when there's nothing to ask (no path for the node, or no
+ * canvas), which callers pass straight through so they don't ask again.
+ */
+export async function askCanvasAbout(rootKey: string, rules: ParsedRule[]): Promise<CanvasAsk | null> {
+  const path = getHost().pathOf?.(rootKey)
+  if (!path || !hasCanvas()) return null
+  const askedFor = askableSelectors(rules)
   const answer = await queryCanvas(path, [...askedFor.keys()])
-  if (!answer) return
+  return { answer, askedFor }
+}
+
+/**
+ * Fill `target.domMatched` from what the canvas said about these selectors.
+ *
+ * This is the whole point of the exercise: the rendered DOM knows what every
+ * component renders, what every loop produced, and what classes a script or a
+ * `class:list` expression put there — none of which the source tree can see.
+ * Selectors the engine can't be asked about (or a canvas that doesn't answer)
+ * are simply left out of the map, so they fall back to the source matcher.
+ *
+ * Pass `asked` (including null) to reuse an answer already in hand; omit it and
+ * this asks on its own.
+ */
+export async function primeDomMatches(
+  target: MatchTarget,
+  rules: ParsedRule[],
+  asked?: CanvasAsk | null,
+): Promise<void> {
+  const ask = asked !== undefined ? asked : await askCanvasAbout(target.rootKey, rules)
+  if (!ask?.answer) return
   const matched = new Map<string, boolean>()
-  for (const [ask, texts] of askedFor) {
-    const hit = answer.matched[ask]
-    if (typeof hit !== 'boolean') continue // the engine refused it — fall back
-    for (const text of texts) matched.set(text, hit)
-  }
+  for (const [text, hit] of matchedTexts(ask)) matched.set(text, hit)
   target.domMatched = matched
+}
+
+function* matchedTexts(ask: CanvasAsk): Generator<[string, boolean]> {
+  for (const [sel, texts] of ask.askedFor) {
+    const hit = ask.answer?.matched[sel]
+    if (typeof hit !== 'boolean') continue // the engine refused it — fall back
+    for (const text of texts) yield [text, hit]
+  }
 }
 
 // ───────────────────────────── Match target ─────────────────────────────
@@ -578,6 +642,9 @@ export async function primeDomMatches(target: MatchTarget, rules: ParsedRule[]):
 export async function resolveTarget(
   selected: AnyEl,
   scan: EmbedScan,
+  /** An answer already in hand (see askCanvasAbout) — including null, which
+   *  means "there was nothing to ask". Omit it and this asks the page itself. */
+  asked?: CanvasAsk | null,
 ): Promise<{ target: MatchTarget; rootSnapshot: ElementSnapshot }> {
   const rootKey = serializeElementId(selected)
   const snapshots = new Map<string, ElementSnapshot | null>()
@@ -614,22 +681,22 @@ export async function resolveTarget(
   // `<section class="section">` it produces — so the header, the chips, and
   // every selector composed from them were describing the call site rather
   // than the element on the page. The canvas knows the difference.
-  const path = getHost().pathOf?.(rootKey)
-  if (path && hasCanvas()) {
-    const answer = await queryCanvas(path, [])
-    const identity = answer?.identity
-    if (identity) {
-      const attributes = { ...identity.attributes }
-      delete attributes.class
-      if (identity.classes.length) attributes.class = identity.classes.join(' ')
-      rootSnapshot = {
-        ...rootSnapshot,
-        tag: identity.tag,
-        id: identity.id ?? rootSnapshot.id,
-        classes: identity.classes,
-        classList: identity.classes,
-        attributes,
-      }
+  let identity: CanvasIdentity | null | undefined = asked?.answer?.identity
+  if (asked === undefined) {
+    const path = getHost().pathOf?.(rootKey)
+    if (path && hasCanvas()) identity = (await queryCanvas(path, []))?.identity
+  }
+  if (identity) {
+    const attributes = { ...identity.attributes }
+    delete attributes.class
+    if (identity.classes.length) attributes.class = identity.classes.join(' ')
+    rootSnapshot = {
+      ...rootSnapshot,
+      tag: identity.tag,
+      id: identity.id ?? rootSnapshot.id,
+      classes: identity.classes,
+      classList: identity.classes,
+      attributes,
     }
   }
   return { target, rootSnapshot }

@@ -32,29 +32,51 @@ export function popupBox(rect, wanted, winH) {
 // `livePreview={false}` turns the hover/arrow preview off, for values where
 // applying one costs more than a repaint — a loop's data source rewrites the
 // page's code, so skimming the list would churn through every option.
+//
+// `searchable` puts a filter box at the top of the popup. It is off by default:
+// most of these lists are five options long, where a search box is furniture.
+// It earns its place on lists that grow with the project's content — every
+// entry of a collection, say — which is also where an option carries an `icon`.
 export default function Dropdown({
   value,
   options,
   onChange,
   className,
+  // The popup is a sibling of the trigger, not a child, so a caller that wants
+  // to style both has to name both.
+  menuClassName,
   placeholder,
   livePreview = true,
+  searchable = false,
+  searchPlaceholder = 'Search…',
 }) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
+  const [query, setQuery] = useState('');
   const [pos, setPos] = useState(null); // {left, top, bottom, width}
   const triggerRef = useRef(null);
   const popupRef = useRef(null);
+  const listRef = useRef(null);
+  const searchRef = useRef(null);
   const committedRef = useRef(value); // value when the popup opened
   const previewedRef = useRef(null); // last live-previewed value, or null
 
   const selected = options.find((o) => o.value === value);
-  const selectedIndex = options.findIndex((o) => o.value === value);
+
+  // What the popup is showing. Everything below indexes into this, not into
+  // `options` — with a filter typed in, the two are different lists.
+  const q = query.trim().toLowerCase();
+  const visible =
+    searchable && q
+      ? options.filter((o) => `${o.label} ${o.hint || ''}`.toLowerCase().includes(q))
+      : options;
+  const selectedIndex = visible.findIndex((o) => o.value === value);
 
   const openPopup = () => {
     committedRef.current = value;
     previewedRef.current = null;
-    setHighlight(selectedIndex);
+    setQuery('');
+    setHighlight(options.findIndex((o) => o.value === value));
     setOpen(true);
   };
 
@@ -69,7 +91,7 @@ export default function Dropdown({
 
   const previewOption = (i) => {
     setHighlight(i);
-    const o = options[i];
+    const o = visible[i];
     if (!o || !livePreview) return;
     const applied = previewedRef.current ?? committedRef.current;
     if (o.value !== applied) {
@@ -96,7 +118,7 @@ export default function Dropdown({
     // Measured once it exists; before that, a row's worth per option.
     const wanted = popupRef.current
       ? popupRef.current.scrollHeight
-      : options.length * 30 + 12;
+      : visible.length * 30 + 12 + (searchable ? 34 : 0);
     const next = { left: rect.left, width: rect.width, ...popupBox(rect, wanted, window.innerHeight) };
     setPos((prev) =>
       prev &&
@@ -108,7 +130,7 @@ export default function Dropdown({
         ? prev
         : next
     );
-  }, [open, options.length, pos]);
+  }, [open, visible.length, pos]);
 
   useEffect(() => {
     if (!open) return;
@@ -137,10 +159,17 @@ export default function Dropdown({
 
   // Keep the highlighted option in view while navigating with arrows.
   useEffect(() => {
-    if (!open || highlight < 0 || !popupRef.current) return;
-    const el = popupRef.current.children[highlight];
+    if (!open || highlight < 0) return;
+    const el = (listRef.current || popupRef.current)?.children[highlight];
     if (el) el.scrollIntoView({ block: 'nearest' });
   }, [open, highlight]);
+
+  // A filter box is only useful with the caret in it.
+  useEffect(() => {
+    if (!open || !searchable) return undefined;
+    const t = setTimeout(() => searchRef.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [open, searchable]);
 
   const onKeyDown = (e) => {
     if (!open) {
@@ -155,13 +184,14 @@ export default function Dropdown({
       closeAndRevert();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      previewOption(Math.min(highlight + 1, options.length - 1));
+      previewOption(Math.min(highlight + 1, visible.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       previewOption(Math.max(highlight - 1, 0));
-    } else if (e.key === 'Enter' || e.key === ' ') {
+    } else if (e.key === 'Enter' || (e.key === ' ' && !searchable)) {
+      // Space is a character while there is a box to type it into.
       e.preventDefault();
-      if (highlight >= 0 && options[highlight]) pick(options[highlight]);
+      if (highlight >= 0 && visible[highlight]) pick(visible[highlight]);
     } else if (e.key === 'Tab') {
       closeAndRevert();
     }
@@ -176,6 +206,7 @@ export default function Dropdown({
         onClick={() => (open ? closeAndRevert() : openPopup())}
         onKeyDown={onKeyDown}
       >
+        {selected?.icon && <span className="dd-icon">{selected.icon}</span>}
         <span className={`dd-label ${selected && !selected.dim ? '' : 'dim'}`}>
           {selected ? selected.label : placeholder || ''}
         </span>
@@ -187,7 +218,7 @@ export default function Dropdown({
       {open && pos && (
         <div
           ref={popupRef}
-          className="dd-popup"
+          className={`dd-popup ${searchable ? 'dd-searchable' : ''} ${menuClassName || ''}`}
           style={{
             left: pos.left,
             top: pos.top,
@@ -196,20 +227,38 @@ export default function Dropdown({
             maxHeight: pos.maxHeight,
           }}
         >
-          {options.map((o, i) => (
-            <div
-              key={`${o.value}-${i}`}
-              className={`dd-option ${i === highlight ? 'highlight' : ''} ${o.value === committedRef.current && open ? 'selected' : ''} ${o.dim ? 'dim' : ''}`}
-              onMouseEnter={() => previewOption(i)}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => pick(o)}
-            >
-              <span className="dd-check">
-                {o.value === committedRef.current ? <CheckIcon size={11} /> : null}
-              </span>
-              <span className="dd-option-label">{o.label}</span>
-            </div>
-          ))}
+          {searchable && (
+            <input
+              ref={searchRef}
+              className="dd-search"
+              value={query}
+              placeholder={searchPlaceholder}
+              spellCheck={false}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setHighlight(0);
+              }}
+              onKeyDown={onKeyDown}
+            />
+          )}
+          <div className="dd-list" ref={listRef}>
+            {visible.map((o, i) => (
+              <div
+                key={`${o.value}-${i}`}
+                className={`dd-option ${i === highlight ? 'highlight' : ''} ${o.value === committedRef.current && open ? 'selected' : ''} ${o.dim ? 'dim' : ''}`}
+                onMouseEnter={() => previewOption(i)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(o)}
+              >
+                <span className="dd-check">
+                  {o.value === committedRef.current ? <CheckIcon size={11} /> : null}
+                </span>
+                {o.icon && <span className="dd-icon">{o.icon}</span>}
+                <span className="dd-option-label">{o.label}</span>
+              </div>
+            ))}
+            {!visible.length && <div className="dd-empty">Nothing matches</div>}
+          </div>
         </div>
       )}
     </>

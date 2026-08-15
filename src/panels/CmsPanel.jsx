@@ -6,8 +6,13 @@ import {
   ChevronLeftIcon,
   GearIcon,
   FolderDefaultIcon,
+  CollectionIcon,
+  HideIcon,
 } from '../ui/Icons.jsx';
-import { collectionOf } from '../cmsSchema.js';
+import { collectionOf, labelize } from '../cmsSchema.js';
+
+// The one group that is not a folder of files.
+const CONTENT_KEY = '\u0000content';
 
 // Where a collection comes from, as one row in the top level of the panel: a
 // source file when the data is an exported const (one file usually holds
@@ -38,20 +43,38 @@ function groupOf(collection) {
 export default function CmsPanel({
   project,
   selectedRel,
+  selectedContent,
   currentFile,
   refreshKey,
   onSelect,
+  onSelectContent,
   onOpenSettings,
   showToast,
 }) {
   const [files, setFiles] = useState([]);
+  // The collections the project's content config declares. They are a different
+  // kind of thing from the JSON files below them — schema-checked, sometimes
+  // read-only, spread over folders — so they get their own group rather than
+  // being mixed in.
+  const [content, setContent] = useState({ collections: [], covered: null });
   const [creating, setCreating] = useState(false);
   // Which group is open; null is the list of groups.
   const [openKey, setOpenKey] = useState(null);
 
   const refresh = useCallback(async () => {
-    const { files: list } = await window.avb.listCms(project.path);
-    setFiles(list || []);
+    // Two independent questions, asked independently. A project with no content
+    // config, an older preload, a config that will not load — none of those are
+    // reasons to show an empty panel to somebody whose src/ is full of JSON.
+    const [files, contentResult] = await Promise.allSettled([
+      window.avb.listCms(project.path),
+      window.avb.contentCollections?.(project.path),
+    ]);
+    setFiles(files.status === 'fulfilled' ? files.value?.files || [] : []);
+    setContent(
+      contentResult.status === 'fulfilled' && contentResult.value
+        ? contentResult.value
+        : { collections: [], covered: null }
+    );
   }, [project.path]);
 
   // refreshKey bumps when the editor saves — our own writes don't come back
@@ -72,7 +95,15 @@ export default function CmsPanel({
     }
   };
 
-  const collections = files.map(collectionOf);
+  // A file a content collection owns is edited through its schema, in the
+  // other editor. Listing it here as well would offer a second way in, with
+  // different rules and no validation.
+  const covered = content.covered || { files: [], dirs: [] };
+  const ownedByContent = (rel) =>
+    covered.files.includes(`src/${rel}`) ||
+    covered.dirs.some((dir) => `src/${rel}`.startsWith(`${dir}/`));
+  const collections = files.filter((f) => !ownedByContent(f.rel.split('#')[0])).map(collectionOf);
+  const contentCollections = content.collections || [];
 
   const groups = [];
   for (const c of collections) {
@@ -120,7 +151,7 @@ export default function CmsPanel({
     <div className="panel-section grow">
       <div className="panel-header">
         <div className="cms-crumb">
-          {open && (
+          {(open || openKey === CONTENT_KEY) && (
             <button
               className="ghost"
               title="All collections"
@@ -130,12 +161,15 @@ export default function CmsPanel({
                 // the collection too, so the panels don't keep showing the
                 // last one as if it were still open.
                 onSelect(null);
+                onSelectContent(null);
               }}
             >
               <ChevronLeftIcon size={14} />
             </button>
           )}
-          <h2 title={open ? open.path : undefined}>{open ? open.label : 'CMS Collections'}</h2>
+          <h2 title={open ? open.path : undefined}>
+            {openKey === CONTENT_KEY ? 'Content collections' : open ? open.label : 'CMS Collections'}
+          </h2>
         </div>
         <button className="ghost" title="New collection" onClick={() => setCreating(true)}>
           <PlusIcon size={14} />
@@ -160,6 +194,46 @@ export default function CmsPanel({
             />
           </div>
         )}
+
+        {!open && contentCollections.length > 0 && (
+          <div
+            className="cms-collection"
+            onClick={() => setOpenKey(CONTENT_KEY)}
+            title={content.configPath ? `Declared in ${content.configPath}` : undefined}
+          >
+            <CollectionIcon size={14} />
+            <span className="cms-collection-name">Content collections</span>
+            <span className="cms-collection-count">
+              {contentCollections.length === 1 ? '1 collection' : `${contentCollections.length} collections`}
+            </span>
+            <span className="cms-collection-chevron">
+              <ChevronRightIcon size={10} />
+            </span>
+          </div>
+        )}
+
+        {openKey === CONTENT_KEY &&
+          contentCollections.map((c) => (
+            <div
+              key={c.name}
+              className={`cms-collection ${selectedContent === c.name ? 'on' : ''} ${c.error ? 'broken' : ''}`}
+              onClick={() => onSelectContent(c.name)}
+              title={
+                c.editable
+                  ? `${c.loader?.kind === 'file' ? c.loader.file : c.loader?.base} — ${c.loader?.kind} loader`
+                  : 'Built by a loader in this project: read-only'
+              }
+            >
+              {c.editable ? <CmsIcon size={14} /> : <HideIcon size={14} />}
+              <span className="cms-collection-name">{labelize(c.name)}</span>
+              <span className="cms-collection-count">
+                {c.error ? 'unreadable' : c.count === 1 ? '1 entry' : `${c.count} entries`}
+              </span>
+              <span className="cms-collection-chevron">
+                <ChevronRightIcon size={10} />
+              </span>
+            </div>
+          ))}
 
         {!open &&
           groups.map((group) => (
@@ -217,7 +291,7 @@ export default function CmsPanel({
             </div>
           ))}
 
-        {collections.length === 0 && !creating && (
+        {collections.length === 0 && contentCollections.length === 0 && !creating && (
           <div className="props-empty">
             No content found in <code>src/</code>.
             <div style={{ marginTop: 10 }}>

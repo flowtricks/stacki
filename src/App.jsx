@@ -22,11 +22,22 @@ import InsertSearch from './ui/InsertSearch.jsx';
 import AssetsPanel from './panels/AssetsPanel.jsx';
 import CmsPanel from './panels/CmsPanel.jsx';
 import CmsView from './panels/CmsView.jsx';
+import ContentView from './panels/ContentView.jsx';
 import { getElementSchema, GLOBAL_ATTRS, canContainTag, HTML_TAGS } from './elementSchemas.js';
 import { onAssetRequest, clearAssetRequest } from './assetPick.js';
 import { isDataBound } from './bindings.js';
 import { elementLabel } from './classNames.js';
-import { findImportOf } from './dataSuggest.js';
+import {
+  autoQueryName,
+  collectionsInScope,
+  findImportOf,
+  markedQueries,
+  namesInScope,
+  queriesInScope,
+  QUERY_MARK,
+  referencesInScope,
+  removeMarkedQuery,
+} from './dataSuggest.js';
 import {
   PreviewIcon,
   RefreshIcon,
@@ -313,6 +324,9 @@ function codeText(model) {
   return parts.join('\n');
 }
 
+// How long a pending save waits, by urgency. See scheduleSave.
+const SAVE_DELAY = { true: 0, live: 120, false: 300 };
+
 // A route is stored the way it identifies a page — slashless, so /de/hotel
 // and /de/hotel/ are the same entry however a link was typed. A URL is a
 // different thing: Astro's dev server serves exactly one of those spellings,
@@ -553,14 +567,29 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   // Concrete paths behind a dynamic route, and which one the canvas is showing.
   const [dynamicPaths, setDynamicPaths] = useState([]);
+  // One sampled entry per collection the open file reads by name, for the
+  // binding picker. Keyed by collection; a name present with a null value has
+  // been asked for and has no answer, which stops it being asked again.
+  const [collectionSamples, setCollectionSamples] = useState({});
+  // Every collection the project has, so data anywhere in the site is
+  // reachable from the picker — not only what this page already reads.
+  const [collections, setCollections] = useState([]);
+  const sampleAskedRef = useRef(new Set());
   const [dynamicIndex, setDynamicIndex] = useState(0);
   const [dynamicError, setDynamicError] = useState(null);
   const [leftTab, setLeftTab] = useState('navigator'); // pages | navigator | components | assets | cms | null
   const [cmsRel, setCmsRel] = useState(null); // JSON file open in the CMS editor
+  // Content collection open in the schema-driven editor. Only one of the two
+  // is ever open: they edit the same kind of thing in two different ways.
+  const [contentName, setContentName] = useState(null);
   const [cmsTick, setCmsTick] = useState(0); // bumped on save, refreshes counts
   const [cmsSettings, setCmsSettings] = useState(false); // editing that collection's fields
   const [inPreview, setInPreview] = useState(false); // interactive full-site preview
   const [previewSrc, setPreviewSrc] = useState(null);
+  // The path the canvas is on, kept where the preview toggle can read it: it's
+  // derived at the bottom of this component (a dynamic page's entry is picked
+  // there), long after the callbacks up here are defined.
+  const livePathRef = useRef(null);
   const [codeWin, setCodeWin] = useState(null); // {targetId|kind:'file', title, language}
   const openCodeWindowRef = useRef(null); // latest openCodeWindow, for the Enter shortcut
   const [fileText, setFileText] = useState(''); // loaded text for kind:'file'
@@ -886,7 +915,7 @@ export default function App() {
   // stack remembers what to come back to (pages and components alike, so
   // nesting works to any depth).
   const openComponent = useCallback(
-    async (name, hostPath) => {
+    async (name, hostPath, hostOcc = 0) => {
       // A tag is only a local binding — `import Layout from
       // '@/layouts/BaseLayout.astro'` renders as <Layout> — so follow the
       // page's own import first, and fall back to matching by filename.
@@ -920,8 +949,15 @@ export default function App() {
       // opened — that region stays lit while the rest dims. Drilling deeper
       // keeps the outermost instance as the focus: a nested component's
       // internals aren't addressable in the page's own markers.
-      const focusPath = stack[stack.length - 1]?.focusPath ?? hostPath ?? null;
-      const entry = { kind: 'component', name: comp.name, path: comp.path, focusPath };
+      //
+      // Which copy of it, too: a component rendered inside a loop is on the
+      // page once per item, and opening one card means that card. Without the
+      // occurrence every instance stayed lit, and editing one looked like
+      // editing all of them.
+      const top = stack[stack.length - 1];
+      const focusPath = top?.focusPath ?? hostPath ?? null;
+      const focusOcc = top?.focusPath != null ? top.focusOcc ?? 0 : hostOcc;
+      const entry = { kind: 'component', name: comp.name, path: comp.path, focusPath, focusOcc };
       setEditStack((s) =>
         s.some((e) => e.path === comp.path) ? s : [...s, entry]
       );
@@ -1084,6 +1120,12 @@ export default function App() {
   // typing batches keystrokes for 300 ms so the preview doesn't rebuild
   // per character. The timeout-0 for immediate saves lets React commit the
   // state update first so flushSave sees the new model.
+  //
+  // 'live' is the third case: a style-panel scrub or mid-typing write, which
+  // arrives already debounced (100 ms at the field) and is watched on the
+  // canvas as it happens. Making it wait out the typing pause too put nearly
+  // half a second between the drag and the result. It still coalesces, just
+  // over the gap between two ticks rather than the gap between two words.
   const scheduleSave = useCallback(
     (immediate = false) => {
       clearTimeout(saveTimer.current);
@@ -1091,7 +1133,7 @@ export default function App() {
         () => {
           flushSave().catch((err) => showToast(`Save failed: ${cleanError(err)}`, 'error'));
         },
-        immediate ? 0 : 300
+        SAVE_DELAY[immediate] ?? 300
       );
     },
     [flushSave, showToast]
@@ -1697,7 +1739,7 @@ export default function App() {
   // True while the CMS covers the canvas: the page-editing shortcuts below
   // would act on a selection the user can't see.
   const cmsOpenRef = useRef(false);
-  cmsOpenRef.current = leftTab === 'cms' && !!cmsRel;
+  cmsOpenRef.current = leftTab === 'cms' && (!!cmsRel || !!contentName);
 
   // Keyboard: ⌘Z undoes, ⇧⌘Z / ⌘Y redoes (app-wide, even inside fields —
   // field edits live in the same history); Delete/Backspace removes, ⌘C
@@ -1855,9 +1897,15 @@ export default function App() {
 
   const enterPreview = useCallback(() => {
     if (!devUrl) return;
-    const route = pageStateRef.current.currentPage?.route || '/';
-    previewPathRef.current = route;
-    setPreviewSrc(devUrl + routeToPath(route, trailingSlash));
+    // Whatever the canvas is showing — which for a dynamic page is one entry's
+    // URL, not its pattern. Opening /blog/[...id] asks the dev server for a
+    // route no page produces, and it answers with the site's 404, while the
+    // URL field (built from the same entry) went on claiming otherwise.
+    const path =
+      livePathRef.current ||
+      routeToPath(pageStateRef.current.currentPage?.route || '/', trailingSlash);
+    previewPathRef.current = path;
+    setPreviewSrc(devUrl + path);
     setInPreview(true);
   }, [devUrl, trailingSlash]);
 
@@ -1952,36 +2000,121 @@ export default function App() {
     // keystroke in the page body.
   }, [project, editStack, currentPage, devStatus, devUrl, pageState?.model?.extraFrontmatter]);
 
-  // Capture a preview thumbnail for the welcome screen's recents list a few
-  // seconds after the preview settles (page switch, refresh, or edit).
+  // What one entry of each collection this file reads actually holds — the
+  // sample values the binding picker shows beside a field's name. Only the dev
+  // server can run the project's loaders, so without one the picker falls back
+  // to whatever the source alone says.
   useEffect(() => {
-    if (!project || devStatus !== 'on' || !currentPage) return;
-    const t = setTimeout(() => {
-      const iframe = document.querySelector('.frame-clip iframe');
-      if (!iframe) return;
-      const r = iframe.getBoundingClientRect();
-      if (r.width < 100 || r.height < 100) return;
-      // capturePage photographs the WINDOW at these coordinates, not the frame
-      // itself — and several things sit over the canvas without unmounting it
-      // (the CMS view, preview mode, the code window, the insert palette, a
-      // modal). Capturing then files a picture of that panel as the project's
-      // thumbnail. Rather than enumerate them, ask the document what is
-      // actually on top at a few points across the frame: unless every one of
-      // them lands inside the canvas, something is covering it — skip this
-      // round and keep the thumbnail we already have.
-      const covered = [0.25, 0.5, 0.75].some((f) => {
-        const el = document.elementFromPoint(r.x + r.width * f, r.y + r.height * 0.25);
-        return !el || !el.closest('.frame-clip');
+    setCollectionSamples({});
+    sampleAskedRef.current = new Set();
+  }, [project?.path]);
+  useEffect(() => {
+    if (!project?.path) return undefined;
+    let live = true;
+    window.avb
+      .contentCollections?.(project.path)
+      .then((r) => live && setCollections(r?.collections || []))
+      .catch(() => {});
+    const off = window.avb.onCmsChanged?.(() => {
+      window.avb
+        .contentCollections?.(project.path)
+        .then((r) => live && setCollections(r?.collections || []))
+        .catch(() => {});
+    });
+    return () => {
+      live = false;
+      off?.();
+    };
+  }, [project?.path]);
+  useEffect(() => {
+    if (!devUrl || devStatus !== 'on') return undefined;
+    const frontmatter = pageState?.model?.extraFrontmatter || '';
+    // The entry on the canvas, which is what a reference in this file resolves
+    // AGAINST — this post's author, not the collection's first.
+    const props =
+      currentPage?.kind === 'component' ? null : dynamicPaths[dynamicIndex]?.props || null;
+    const wanted = [
+      ...collectionsInScope(frontmatter).map((name) => ({ key: name, name })),
+      ...referencesInScope(frontmatter, props).map((r) => ({
+        key: r.key,
+        name: r.collection,
+        id: r.id,
+      })),
+    ].filter((w) => !(w.key in collectionSamples));
+    if (!wanted.length) return undefined;
+    let live = true;
+    Promise.all(
+      wanted.map((w) =>
+        window.avb
+          .sampleEntry({ devUrl, name: w.name, id: w.id })
+          .then((r) => [w.key, r?.entry || null])
+      )
+    )
+      .then((pairs) => {
+        if (live) setCollectionSamples((prev) => ({ ...prev, ...Object.fromEntries(pairs) }));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [
+    pageState?.model?.extraFrontmatter,
+    devUrl,
+    devStatus,
+    collectionSamples,
+    dynamicPaths,
+    dynamicIndex,
+    currentPage,
+  ]);
+
+  // Takes back the queries it wrote, once the page stops using them: delete the
+  // last chip reading a collection and its `const … = await getCollection(…)`
+  // goes too, rather than leaving a query fetching content for nobody.
+  //
+  // Three things keep this safe. Only queries carrying Stacki's own marker are
+  // considered, so a hand-written one is never touched. "Used" is tested
+  // against the whole node tree as text, which over-detects rather than
+  // under-detects — the wrong answer here is deleting something live. And it
+  // waits for a pause in typing, because a half-typed name reads as unused.
+  useEffect(() => {
+    const current = pageState?.model;
+    if (!current?.extraFrontmatter?.includes(QUERY_MARK)) return undefined;
+    const timer = setTimeout(() => {
+      const focused = document.activeElement;
+      if (focused?.closest?.('.props-field, .rich-content, .bind-input, .expr-input, .attr-editor'))
+        return;
+      const fm = current.extraFrontmatter || '';
+      const markup = JSON.stringify(current.nodes || []);
+      const dead = markedQueries(fm).filter((q) => {
+        const word = new RegExp(`\\b${q.name}\\b`);
+        const elsewhere = fm.slice(0, q.start) + fm.slice(q.end);
+        return !word.test(elsewhere) && !word.test(markup);
       });
-      if (covered) return;
-      // Only the top of tall frames — thumbnails show above-the-fold content.
-      window.avb.captureThumb({
-        projectPath: project.path,
-        rect: { x: r.x, y: r.y, width: r.width, height: Math.min(r.height, r.width * 0.75) },
+      if (!dead.length) return;
+      mutateModel((m) => {
+        let next = m.extraFrontmatter || '';
+        for (const q of dead) next = removeMarkedQuery(next, q.name);
+        m.extraFrontmatter = next;
+        // The import goes with the last query that needed it — but only when
+        // nothing else in the file mentions it, so an import someone else put
+        // there and still uses stays put.
+        if (!/\bgetCollection\b/.test(next) && !/\bgetCollection\b/.test(JSON.stringify(m.nodes || []))) {
+          m.imports = m.imports.filter(
+            (i) => !(i.name === 'getCollection' && i.path === 'astro:content')
+          );
+        }
+        return m;
       });
-    }, 4000);
-    return () => clearTimeout(t);
-  }, [project, devStatus, currentPage, refreshKey, pageState, leftTab, inPreview, codeWin]);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [pageState?.model, mutateModel]);
+
+  // The welcome screen's thumbnails are taken in the main process now, from
+  // the project's home page rendered in a window of its own (see
+  // electron/thumbs.js). Photographing this window was what put the editor's
+  // own panels — and whatever page and scroll position the user left — into
+  // the picture that is supposed to show the site.
+
 
   // The comment sitting directly above a node. The navigator folds it into
   // that node's row rather than giving it one of its own, and the props panel
@@ -2656,6 +2789,47 @@ export default function App() {
       ].join('\n')
     : '';
 
+  // One entry of a collection, asked for when someone opens it in the picker.
+  // The ref is what stops a row that has no answer from asking again forever.
+  const requestCollectionSample = (name) => {
+    if (!name || !devUrl || devStatus !== 'on') return;
+    if (sampleAskedRef.current.has(name)) return;
+    sampleAskedRef.current.add(name);
+    window.avb
+      .sampleEntry({ devUrl, name })
+      .then((r) => setCollectionSamples((prev) => ({ ...prev, [name]: r?.entry || null })))
+      .catch(() => {});
+  };
+
+  // Binding to a collection this page doesn't read yet: the query that fetches
+  // it is written here, and the binding then names it like any other value.
+  // A query already targeting that collection is reused — one page asking the
+  // same content twice is a page doing the same work twice.
+  const ensureCollectionQuery = (collection) => {
+    const fm = model?.extraFrontmatter || '';
+    const existing = queriesInScope(fm).get(collection);
+    if (existing) return existing;
+    const name = autoQueryName(collection, namesInScope(fm, model?.imports));
+    mutateModel((m) => {
+      if (!m.imports.some((i) => i.name === 'getCollection' && i.path === 'astro:content')) {
+        m.imports.push({
+          name: 'getCollection',
+          imported: 'getCollection',
+          path: 'astro:content',
+          quote: "'",
+          named: true,
+        });
+      }
+      const cur = m.extraFrontmatter || '';
+      const gap = cur && !cur.endsWith('\n') ? '\n' : '';
+      // No trailing newline: the serializer ends the line, and one added here
+      // would be left behind as a blank line when the query is taken back.
+      m.extraFrontmatter = `${cur}${gap}const ${name} = await getCollection('${collection}'); // ${QUERY_MARK}`;
+      return m;
+    });
+    return name;
+  };
+
   const selectedNode =
     model && selectedId
       ? selectedId === 'frontmatter'
@@ -2753,7 +2927,7 @@ export default function App() {
     }
   }
 
-  // In-scope data at the selection: the page's frontmatter declarations and
+  // In-scope data at the selection: the file's frontmatter declarations and
   // imports, plus the item/index variables of every enclosing loop. Feeds the
   // loop editor's source list and the content editor's expression chips.
   const loopContext =
@@ -3136,11 +3310,53 @@ export default function App() {
   const pageEntry = editStack[0] || currentPage;
   const patternRoute = pageEntry?.route;
   const focusPath = currentPage?.kind === 'component' ? currentPage.focusPath : null;
+  const focusOcc = currentPage?.kind === 'component' ? currentPage.focusOcc ?? 0 : 0;
   // A dynamic page's route is a pattern, not a URL — /posts/[slug] is a 404.
   // Preview one of the entries it actually stands for; `dynamicEntry` is which.
   const dynamicEntry = dynamicPaths[dynamicIndex] || null;
+
+  // What the binding picker shows: the names in scope, plus the DATA behind
+  // them wherever the app can see it. Two sources, and between them a designer
+  // gets real values rather than a list of identifiers:
+  //   the entry on the canvas — getStaticPaths' props ARE Astro.props for a
+  //     dynamic route, so `post.data.title` shows this post's actual title
+  //   this file's own `interface Props` — no values, but every prop still says
+  //     what it is, which is all a component outside a page can offer
+  const editedEntry = insertables.find((c) => c.path === currentPage?.path) || null;
+  const bindContext = loopContext && {
+    ...loopContext,
+    // A component's frontmatter is not the page's, so the page's entry is not
+    // its data — only the file the canvas is actually rendering as a page.
+    propsSample: currentPage?.kind === 'component' ? null : dynamicEntry?.props || null,
+    propsSchema: schemaFor(editedEntry),
+    collectionSamples,
+    collections,
+    // Opening a collection in the picker asks for one entry of it; nothing is
+    // fetched for collections nobody looks at.
+    onNeedSample: requestCollectionSample,
+    // Picking from a collection this page doesn't read yet writes the query
+    // that fetches it, and answers with the name it ended up under.
+    ensureQuery: ensureCollectionQuery,
+    // Stepping through a dynamic route's entries from inside the picker. It is
+    // the SAME index the canvas renders against, so moving it previews the page
+    // against other content and re-reads the sample values at once — which is
+    // the point: you are checking a layout against real data, not one post.
+    entryNav:
+      dynamicPaths.length > 1
+        ? {
+            index: dynamicIndex,
+            count: dynamicPaths.length,
+            label: dynamicEntry?.label || '',
+            onStep: (dir) =>
+              setDynamicIndex(
+                (i) => (i + dir + dynamicPaths.length) % dynamicPaths.length
+              ),
+          }
+        : null,
+  };
   const pageRoute = dynamicEntry ? dynamicEntry.route : patternRoute;
   const pageUrlPath = pageRoute ? routeToPath(pageRoute, trailingSlash) : null;
+  livePathRef.current = pageUrlPath;
   const liveUrl = devUrl && pageUrlPath ? devUrl + pageUrlPath : null;
 
   return (
@@ -3296,11 +3512,20 @@ export default function App() {
               <CmsPanel
                 project={project}
                 selectedRel={cmsRel}
+                selectedContent={contentName}
+                onSelectContent={(name) => {
+                  setContentName(name);
+                  if (name) {
+                    setCmsRel(null);
+                    setCmsSettings(false);
+                  }
+                }}
                 currentFile={openFileSrcRel}
                 refreshKey={cmsTick}
                 onSelect={(r) => {
                   setCmsRel(r);
                   setCmsSettings(false);
+                  if (r) setContentName(null);
                   // Closing a collection leaves nothing selected anywhere, so
                   // the right-hand panels show their empty state rather than
                   // the node that happened to be picked before.
@@ -3344,6 +3569,7 @@ export default function App() {
             navHoverPath={pathFor(hoverNodeId)}
             overlayInfo={overlayInfo}
             focusPath={focusPath}
+            focusOcc={focusOcc}
             device={device}
             onDevice={setDevice}
             onSelectPath={(p) => {
@@ -3392,7 +3618,7 @@ export default function App() {
             onSelectedClasses={setSelectedClasses}
             onRenderedPaths={setRenderedPaths}
             onNodeClasses={setNodeClasses}
-            onOpenPath={(p) => {
+            onOpenPath={(p, occ) => {
               // Double-clicking a component on the canvas drills into it. With no
               // path the click landed on chrome the layout renders itself (nav,
               // footer) — that markup belongs to the layout, so open the layout,
@@ -3403,12 +3629,23 @@ export default function App() {
               }
               const n = model && nodeAtPath(model.nodes, trailOf(p));
               // astro:assets components have no file behind them to open.
-              if (n?.kind === 'component' && !n.astroAsset) openComponent(n.name, p);
+              if (n?.kind === 'component' && !n.astroAsset) openComponent(n.name, p, occ);
             }}
           />
 
           {/* The CMS edits content, not layout — it covers the canvas rather
               than replacing it, so the preview keeps its loaded page. */}
+          {contentName && (
+            <ContentView
+              project={project}
+              name={contentName}
+              hidden={leftTab !== 'cms'}
+              showToast={showToast}
+              onSaved={() => setCmsTick((t) => t + 1)}
+              onClose={() => setContentName(null)}
+            />
+          )}
+
           {cmsRel && (
             <CmsView
               project={project}
@@ -3458,9 +3695,16 @@ export default function App() {
                 model={model}
                 node={selectedNode}
                 device={device}
-                onWriteStyleNode={(nodeId, css, immediate) =>
-                  setNodeText(nodeId, css, undefined, immediate)
-                }
+                onWriteStyleNode={(nodeId, css, immediate) => {
+                  // Editing a component: a <style> block of the PAGE is not in
+                  // the model this writes into, and mutating nothing would look
+                  // like a save. Report it instead — the panel holds the edit
+                  // and writes it when the component closes.
+                  const model = pageStateRef.current.pageState?.model;
+                  if (!model || !findNodeById(model.nodes, nodeId)) return false;
+                  setNodeText(nodeId, css, undefined, immediate || 'live');
+                  return true;
+                }}
                 onSelectNode={setSelectedId}
                 onRecordUndo={pushCommand}
                 pathOf={pathFor}
@@ -3487,6 +3731,7 @@ export default function App() {
                 )
               }
               loopContext={loopContext}
+              bindContext={bindContext}
               linkContext={linkContext}
               projectClasses={projectClasses}
               allowAttrs={

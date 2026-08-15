@@ -11,8 +11,11 @@ import ExprInput from '../ui/ExprInput.jsx';
 import RichContent, { isInlineOnly } from '../ui/RichContent.jsx';
 import AssetField from '../ui/AssetField.jsx';
 import { looksLikeAssetPath, mediaKindFor } from '../ui/AssetThumb.jsx';
-import { dataSuggestions, exprSuggestions, findDeclaration, findImportOf } from '../dataSuggest.js';
+import { dataTree, findDeclaration, findImportOf, listsOnly } from '../dataSuggest.js';
 import LinkField from '../ui/LinkField.jsx';
+import DataPicker from '../ui/DataPicker.jsx';
+import BindInput from '../ui/BindInput.jsx';
+import { partsFromValue, resolvePick, valueFromParts, valueModeOf } from '../bindings.js';
 import {
 
   ResetIcon,
@@ -59,6 +62,9 @@ export default function PropsPanel({
   comment,
   onSetComment,
   loopContext,
+  /** loopContext plus what the app can see of the data itself — the entry on
+      the canvas, this file's declared props. Feeds the binding picker. */
+  bindContext,
   linkContext,
   onSetProp,
   onSetProps,
@@ -187,6 +193,7 @@ export default function PropsPanel({
           key={node.id}
           node={node}
           loopContext={loopContext}
+          bindCtx={bindContext || loopContext}
           dataCtx={buildDataCtx()}
           onSetText={onSetText}
         />
@@ -298,6 +305,8 @@ export default function PropsPanel({
             {attrs.map((name) => (
               <PropField
                 key={name}
+                nodeKey={node.id}
+                bindCtx={bindContext || loopContext}
                 field={{ name, type: 'other' }}
                 value={node.props[name]}
                 onChange={(v, immediate) => onSetProp(name, v, immediate)}
@@ -588,6 +597,11 @@ export default function PropsPanel({
   // below the props and above Attributes. Defined here rather than up with
   // the other field lists because it asks `appliesNow` — reading a `const`
   // above its declaration is a ReferenceError, not a warning.
+  // The data picker over the Content field, and the way into the editor's
+  // caret once something is chosen.
+  const [contentPicker, setContentPicker] = useState(null);
+  const contentInsertRef = useRef(null);
+
   // The folded "Settings" group at the foot of the panel. Kept on the panel
   // (not per node) so opening it once keeps it open as you move around.
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -695,13 +709,46 @@ export default function PropsPanel({
                 <VariableTextSizeIcon size={12} className="prop-label-icon" />
                 {isSlot ? 'Fallback' : 'Content'}
               </span>
+              {/* Text can hold data too — the same handle, the same picker,
+                  dropping the same chip in at the caret. Without it, putting a
+                  field into a sentence means knowing to type
+                  `{post.data.title}`. */}
+              <BindHandle
+                active={!!contentPicker}
+                onOpen={(host) => {
+                  if (contentPicker) {
+                    setContentPicker(null);
+                    return;
+                  }
+                  const r = host?.getBoundingClientRect();
+                  if (!r) return;
+                  setContentPicker({
+                    left: r.left,
+                    top: Math.min(r.bottom + 4, Math.max(60, window.innerHeight - 340)),
+                    width: Math.max(r.width, 240),
+                  });
+                }}
+              />
             </label>
             <RichContent
             key={node.id}
             nodes={node.children}
-            exprOptions={exprSuggestions(loopContext || {})}
+            bindCtx={bindContext || loopContext}
+            insertRef={contentInsertRef}
             onChange={onSetInline}
           />
+            {contentPicker && (
+              <FieldDataPicker
+                pos={contentPicker}
+                bindCtx={bindContext || loopContext}
+                current={null}
+                onPick={(path) => {
+                  setContentPicker(null);
+                  contentInsertRef.current?.insert(path);
+                }}
+                onClose={() => setContentPicker(null)}
+              />
+            )}
             {isSlot && (
               <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 6, lineHeight: 1.5 }}>
                 Shown only when whatever uses this component passes nothing for
@@ -733,6 +780,8 @@ export default function PropsPanel({
           .map((field) => (
           <PropField
             key={field.name}
+            nodeKey={node.id}
+            bindCtx={bindContext || loopContext}
             field={field}
             value={node.props[field.name]}
             slotOptions={slotOptions}
@@ -748,6 +797,8 @@ export default function PropsPanel({
           .map((name) => (
           <PropField
             key={name}
+            nodeKey={node.id}
+            bindCtx={bindContext || loopContext}
             field={{ name, type: 'other' }}
             value={node.props[name]}
             slotOptions={slotOptions}
@@ -799,6 +850,8 @@ export default function PropsPanel({
         {classField && (
           <PropField
             key="class"
+            nodeKey={node.id}
+            bindCtx={bindContext || loopContext}
             field={classField}
             value={node.props?.class}
             slotOptions={slotOptions}
@@ -815,6 +868,8 @@ export default function PropsPanel({
             // has to be a new one per node — otherwise selecting a sibling
             // would leave the previous element's CSS sitting in the field.
             key={`style:${node.id}`}
+            nodeKey={node.id}
+            bindCtx={bindContext || loopContext}
             field={styleField}
             value={node.props?.style}
             slotOptions={slotOptions}
@@ -1361,22 +1416,26 @@ const NO_SOURCE = '[]';
 const CUSTOM_SOURCE = '__custom__'; // not a valid expression, so it can't collide
 const DEFAULT_ITEM = 'item'; // a value no expression can collide with
 
-function MapEditor({ node, loopContext, dataCtx, onSetText }) {
+function MapEditor({ node, loopContext, bindCtx, dataCtx, onSetText }) {
   const parsed = parseMapHead(node.head);
   const [fields, setFields] = useState(parsed || { data: '', item: '', index: '' });
   const lastBuiltRef = useRef(node.head);
 
-  // Everything on the page that can actually be looped: frontmatter lists,
-  // imports, the items of enclosing loops.
-  const sources = React.useMemo(
-    () => dataSuggestions(loopContext || {}, ''),
-    // loopContext is rebuilt per render in App, so key on its contents.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [JSON.stringify(loopContext || {})]
-  );
+  // Whether the source is something the picker offers, or an expression
+  // someone wrote themselves — which is what decides between showing the
+  // picker's name and showing the code field.
   const isCustomData = (data) => {
     const d = (data || '').trim();
-    return !!d && d !== NO_SOURCE && !sources.some((s) => s.insert === d);
+    if (!d || d === NO_SOURCE) return false;
+    const known = new Set();
+    const walk = (nodes) => {
+      for (const n of nodes || []) {
+        if (n.pickable !== false) known.add(n.path);
+        walk(n.children);
+      }
+    };
+    walk(listsOnly(dataTree(bindCtx || loopContext || {})));
+    return !known.has(d);
   };
   const [custom, setCustom] = useState(() => isCustomData(fields.data));
 
@@ -1433,6 +1492,16 @@ function MapEditor({ node, loopContext, dataCtx, onSetText }) {
 
   // Anchors the source popup under the Data row.
   const dataRef = useRef(null);
+  const [sourceMenu, setSourceMenu] = useState(null);
+  const openSourceMenu = () => {
+    const r = dataRef.current?.getBoundingClientRect();
+    if (!r) return;
+    setSourceMenu({
+      left: r.left,
+      top: Math.min(r.bottom + 4, Math.max(60, window.innerHeight - 340)),
+      width: Math.max(r.width, 240),
+    });
+  };
 
   const parseableNow = !!parseMapHead(node.head);
   const isNoSource = !fields.data.trim() || fields.data.trim() === NO_SOURCE;
@@ -1451,27 +1520,42 @@ function MapEditor({ node, loopContext, dataCtx, onSetText }) {
                 list itself is what you actually want to edit, and it lives
                 wherever it was declared, often in another file. */}
             <div className="prop-expr-row">
-            <Dropdown
-              livePreview={false}
-              className={`dd-source ${custom || !isNoSource ? 'on' : ''}`}
-              value={custom ? CUSTOM_SOURCE : isNoSource ? '' : fields.data.trim()}
-              options={[
-                { value: '', label: 'None' },
-                ...sources.map((s) => ({ value: s.insert, label: s.insert })),
-                { value: CUSTOM_SOURCE, label: 'Custom…' },
-              ]}
-              onChange={(v) => {
-                if (v === CUSTOM_SOURCE) {
+            {/* The same picker the prop fields use, showing only what can be
+                looped and what each one currently holds — a loop is chosen by
+                looking at the data, not by recalling the name of a list. */}
+            <button
+              type="button"
+              className={`dd-trigger dd-source ${custom || !isNoSource ? 'on' : ''}`}
+              onClick={() => (sourceMenu ? setSourceMenu(null) : openSourceMenu())}
+            >
+              <span className={`dd-label ${custom || !isNoSource ? '' : 'dim'}`}>
+                {custom ? 'Custom' : isNoSource ? 'None' : fields.data.trim()}
+              </span>
+              <span className="dd-chevron">
+                <ChevronDownIcon size={11} />
+              </span>
+            </button>
+            {sourceMenu && (
+              <FieldDataPicker
+                pos={sourceMenu}
+                bindCtx={bindCtx || loopContext}
+                tree={listsOnly(dataTree(bindCtx || loopContext || {}))}
+                current={isNoSource ? null : fields.data.trim()}
+                onPick={(path) => {
+                  setSourceMenu(null);
+                  setCustom(false);
+                  commitSource(path);
+                }}
+                onWrite={() => {
+                  setSourceMenu(null);
                   // Start the field empty rather than showing the `[]` that
                   // stands for "none" — that's an implementation detail.
                   setCustom(true);
                   if (!isCustomData(fields.data)) update({ data: '' });
-                  return;
-                }
-                setCustom(false);
-                commitSource(v || NO_SOURCE);
-              }}
-            />
+                }}
+                onClose={() => setSourceMenu(null)}
+              />
+            )}
               {!custom && (
                 <SourceEditButton
                   name={referencedName(fields.data)}
@@ -1871,6 +1955,222 @@ function ExprValueField({ value, placeholder, dataCtx, onChange }) {
   );
 }
 
+// The way data gets into a field: nothing until the field is hovered, then a
+// small purple dot on its top-left corner — the same purple a binding is shown
+// in, so what it does is legible before it is read. Hovering the dot itself
+// grows it into a +, which is the click. A button that sat there permanently
+// would be chrome on every field in the panel, for something most fields never
+// need.
+function BindHandle({ active, onOpen }) {
+  return (
+    <button
+      type="button"
+      className={`bind-handle${active ? ' on' : ''}`}
+      title="Insert data — a component prop, a CMS field"
+      aria-label="Insert data"
+      onClick={(e) => onOpen(e.currentTarget.closest('.props-field'))}
+    >
+      <span className="bind-dot" />
+      <PlusIcon size={10} className="bind-plus" />
+    </button>
+  );
+}
+
+// The picker, over a field. Positioned against whatever the handle belongs to
+// rather than against the handle itself, so it lines up with the field's edge.
+function FieldDataPicker({ pos, bindCtx, current, tree, onPick, onWrite, onClose }) {
+  const pick = (path, query) => onPick(resolvePick(path, query, bindCtx));
+  useEffect(() => {
+    const close = (e) => {
+      // The thing that opened it is not "outside": letting the mousedown close
+      // it would leave the click that follows to open it straight back up.
+      if (e.target.closest?.('.bind-menu, .bind-handle, .dd-source')) return;
+      onClose();
+    };
+    const onKey = (e) => e.key === 'Escape' && onClose();
+    const onScroll = (e) => {
+      if (e.target?.closest?.('.bind-menu')) return;
+      onClose();
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onClose);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onClose);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="dd-popup bind-menu" style={{ left: pos.left, top: pos.top, width: pos.width }}>
+      <DataPicker
+        tree={tree || dataTree(bindCtx || {})}
+        current={current}
+        entries={bindCtx?.entryNav}
+        onPick={pick}
+        onExpand={(node) => node.query && bindCtx?.onNeedSample?.(node.query.collection)}
+        onWrite={onWrite}
+        footer={!!onWrite}
+      />
+    </div>
+  );
+}
+
+// A prop's value, edited as what it IS: text with the data in it shown as
+// chips. `Posted ` · [post.data.pubDate] reads as one field rather than as a
+// binding that took the field over — so a value can be part typed and part
+// bound, and either half changed without touching the other.
+//
+// Clicking a chip repoints it. The braces button drops a new one in at the
+// caret. Both open the same picker, which is where the data itself is.
+function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef, onChange }) {
+  const wrapRef = useRef(null);
+  const inputRef = useRef(null);
+  const [menu, setMenu] = useState(null); // {left, top, width, chip}
+  const [raw, setRaw] = useState(false);
+  // Typing must not move the field out from under the caret: an expression
+  // half-way to becoming a call reads as code the moment the bracket lands,
+  // and swapping in the code editor mid-word would take the text with it.
+  const [editing, setEditing] = useState(false);
+  const parts = partsFromValue(value);
+  const expr = value?.type === 'expr' ? String(value.value ?? '').trim() : '';
+  // Code no field of chips and text can hold keeps the code editor.
+  const showInput = !raw && (parts !== null || editing);
+  // What the parts mean when they are written back — content, or an
+  // expression with data in it. The value decides, so a field never changes
+  // the meaning of what it was opened on.
+  const mode = valueModeOf(value);
+  const numeric =
+    field?.type === 'number' ||
+    field?.type === 'boolean' ||
+    (field?.type === 'enum' && field?.numeric);
+
+  const open = (chip) => {
+    const r = wrapRef.current?.getBoundingClientRect();
+    if (!r) return;
+    setMenu({
+      left: r.left,
+      // Below the field, or above it when the field sits near the bottom of
+      // the panel — the popup is fixed, so it would otherwise run off-screen.
+      top: Math.min(r.bottom + 4, Math.max(60, window.innerHeight - 340)),
+      width: Math.max(r.width, 240),
+      chip: chip || null,
+    });
+  };
+
+  const pick = (rawPath, query) => {
+    const chip = menu?.chip;
+    const path = resolvePick(rawPath, query, bindCtx);
+    setMenu(null);
+    if (!showInput) {
+      // The code editor holds one expression, so a pick replaces it.
+      setRaw(false);
+      onChange({ type: 'expr', value: path }, true);
+      return;
+    }
+    if (chip) inputRef.current?.replace(chip, path);
+    else inputRef.current?.insert(path);
+  };
+
+  useEffect(() => {
+    if (!menu) return undefined;
+    const close = (e) => {
+      if (e.target.closest?.('.bind-menu, .bind-pick, .expr-chip')) return;
+      setMenu(null);
+    };
+    const onKey = (e) => e.key === 'Escape' && setMenu(null);
+    const onScroll = (e) => {
+      // The list scrolls inside itself; the panel behind it moves the field
+      // out from under it, so that one closes it.
+      if (e.target?.closest?.('.bind-menu')) return;
+      setMenu(null);
+    };
+    const onResize = () => setMenu(null);
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [menu]);
+
+  const list = menu && (
+    <div
+      className="dd-popup bind-menu"
+      style={{ left: menu.left, top: menu.top, width: menu.width }}
+    >
+      {/* Built on every render rather than captured when the popup opened:
+          stepping to another entry from inside it changes what the data IS,
+          and a snapshot would go on showing the entry you stepped away from. */}
+      <DataPicker
+        tree={dataTree(bindCtx || {})}
+        current={menu.chip ? menu.chip.getAttribute('data-expr') : showInput ? null : expr}
+        entries={bindCtx?.entryNav}
+        onPick={pick}
+        onExpand={(node) => node.query && bindCtx?.onNeedSample?.(node.query.collection)}
+        onWrite={() => {
+          setMenu(null);
+          setRaw(true);
+        }}
+      />
+    </div>
+  );
+
+  // The field's handle inserts through here, so one picker serves both the
+  // chip already in the field and the next one. Null while the code editor is
+  // up: that holds one expression, so a pick replaces it instead.
+  useEffect(() => {
+    if (!apiRef) return undefined;
+    apiRef.current = showInput ? { insert: (path) => inputRef.current?.insert(path) } : null;
+    return () => {
+      apiRef.current = null;
+    };
+  });
+
+  if (showInput) {
+    return (
+      <div className="prop-expr-row bind-row" ref={wrapRef}>
+        <BindInput
+          ref={inputRef}
+          parts={parts}
+          placeholder={placeholder || 'Type, or insert data'}
+          onChange={(next) => onChange(valueFromParts(next, { numeric, mode }))}
+          onChipClick={(chip) => open(chip)}
+          onFocus={() => setEditing(true)}
+          onBlur={() => setEditing(false)}
+        />
+        <SourceEditButton
+          name={parts.length === 1 && parts[0].expr ? referencedName(parts[0].expr) : ''}
+          dataCtx={dataCtx}
+          anchorRef={wrapRef}
+        />
+        {list}
+      </div>
+    );
+  }
+
+  return (
+    <div className="prop-expr-row" ref={wrapRef}>
+      <ExprInput
+        value={expr}
+        syncValue={expr}
+        placeholder={placeholder || ''}
+        onChange={(v) => onChange({ type: 'expr', value: v })}
+        onCommit={(v) => v !== expr && onChange({ type: 'expr', value: v }, true)}
+      />
+      <SourceEditButton name={referencedName(expr)} dataCtx={dataCtx} anchorRef={wrapRef} />
+      {list}
+    </div>
+  );
+}
+
 // Edits one declaration's source in place: the statement is spliced back into
 // the frontmatter on every keystroke, so the canvas updates as you type, the
 // rest of the file is untouched, and ⌘Z behaves like any other edit.
@@ -1987,6 +2287,61 @@ function boundsHint(field) {
   return parts.length ? `Accepts ${parts.join(', ')}` : undefined;
 }
 
+// Every field with a control of its own — a toggle, an options list, a link or
+// asset picker — can also hold a binding instead: `overlap={overlap}` passes a
+// parent prop straight through, `title={post.data.title}` reads a CMS entry.
+// No control can show one of those, so the field switches to a plain
+// expression input for them. These three decide when that happens and how a
+// value crosses between the two.
+
+// Whether this value is a binding rather than something the control can show.
+// "Is it an expression" is the wrong question: booleans, numbers and numeric
+// unions are ALL written as expressions (`cols={3}`), and each of those is
+// exactly what its own control puts there.
+function isBoundValue(field, value) {
+  if (!value || value.type !== 'expr') return false;
+  const src = String(value.value).trim();
+  if (field.type === 'boolean') return !/^(true|false)$/.test(src);
+  if (field.type === 'number') return !/^[-+]?(\d+\.?\d*|\.\d+)$/.test(src);
+  if (field.type === 'enum') return !(field.options || []).includes(src);
+  return true;
+}
+
+// The way back. An expression the control could have written itself survives
+// as a value; anything else WAS the binding, so dropping it drops the prop and
+// the component's default applies again — better than leaving markup the field
+// on screen no longer shows.
+function valueFromExpr(field, raw) {
+  const src = String(raw ?? '').trim();
+  const quoted = src.match(/^(['"])((?:[^\\]|\\.)*)\1$/);
+  if (quoted) {
+    if (field.type === 'boolean' || field.type === 'number') return undefined;
+    const text = quoted[2].replace(/\\n/g, '\n').replace(/\\(['"\\])/g, '$1');
+    return field.type === 'enum' && !(field.options || []).includes(text)
+      ? undefined
+      : { type: 'string', value: text };
+  }
+  if (field.type === 'boolean') return /^(true|false)$/.test(src) ? { type: 'expr', value: src } : undefined;
+  if (field.type === 'number')
+    return /^[-+]?(\d+\.?\d*|\.\d+)$/.test(src) ? { type: 'expr', value: src } : undefined;
+  if (field.type === 'enum')
+    return (field.options || []).includes(src)
+      ? { type: field.numeric ? 'expr' : 'string', value: src }
+      : undefined;
+  return undefined;
+}
+
+// What the toggle offers to go back to, named as what's on screen rather than
+// as a type — "Use the toggle" beats "switch to boolean".
+function controlWord(field) {
+  if (field.type === 'boolean') return 'toggle';
+  if (field.type === 'enum' && field.options?.length) return 'options list';
+  if (field.type === 'style') return 'CSS editor';
+  if (isMediaName(field.name)) return 'asset picker';
+  if (isHrefName(field.name)) return 'link settings';
+  return 'normal field';
+}
+
 // Two choices, side by side, with the chip sliding between them. Used for
 // booleans and for any two-option enum: a dropdown to pick between exactly two
 // things costs a click to see what the other one even is, and this shows both
@@ -2014,6 +2369,11 @@ function SegSwitch({ options, current, onPick }) {
 function PropField({
   field,
   value,
+  /** The node this field is editing — a different one resets the custom
+      switch, since the same component instance edits both. */
+  nodeKey,
+  /** In-scope data at the selection, for the binding menu. */
+  bindCtx,
   slotOptions,
   projectClasses,
   assetCtx,
@@ -2065,6 +2425,30 @@ function PropField({
   // somewhere to go back to.
   const lastGoodRef = useRef('');
 
+  // Whether this field is showing a plain expression instead of its own
+  // control. A value that already IS a binding opens that way on its own;
+  // `custom` is the manual switch, for putting a binding where there isn't one
+  // yet — the control has no way to write `overlap={overlap}`.
+  const [custom, setCustom] = useState(false);
+  // The data picker this field's handle opens, and the way into the value
+  // field's caret once something is chosen.
+  const [insertAt, setInsertAt] = useState(null);
+  const bindApiRef = useRef(null);
+  // The same field component edits the next node's prop of this name, so the
+  // switch has to go back to what THAT value is.
+  useEffect(() => setCustom(false), [nodeKey, name]);
+  // Attribute rows and code fields have no control to switch away from: one
+  // edits as name/value pairs, the other is already an expression. `slot` names
+  // one of the parent's slots, which is markup, not data.
+  const bindable = type !== 'code' && type !== 'attrs' && name !== 'slot';
+  const str = value ? value.value : '';
+  const assetBinding = assetImportOf(str, dataCtx?.imports);
+  // `src={hero}` is an expression, but it's the one expression a picker can
+  // show and replace — that card stays rather than dropping to raw code.
+  const shownAsAsset =
+    value?.type === 'expr' && assetBinding && assetCtx?.projectPath && assetCtx?.filePath;
+  const showExpr = bindable && (custom || (isBoundValue(field, value) && !shownAsAsset));
+
   // Props that only mean something while Astro is actually processing the
   // image. Set one against a source it passes through and nothing happens —
   // the component can warn once it renders, the panel can say so up front.
@@ -2089,8 +2473,15 @@ function PropField({
     onChange(undefined, true);
   };
 
+  const fromCustom = () => {
+    setCustom(false);
+    if (value?.type === 'expr') onChange(valueFromExpr(field, value.value), true);
+  };
+
   const onLabelClick = (e) => {
-    if (!isSet) return;
+    // A field switched to a value has something to offer even before anything
+    // is set: the way back to its control.
+    if (!isSet && !showExpr) return;
     if (e.altKey) {
       reset();
       return;
@@ -2102,7 +2493,7 @@ function PropField({
   const pill = (
     <span
       className={`prop-label${isSet ? ' set' : ''}`}
-      title={isSet ? '⌥-click to reset to default' : undefined}
+      title={isSet ? '⌥-click to reset to default' : showExpr ? 'Click for options' : undefined}
       onClick={onLabelClick}
     >
       {type === 'number' && <FieldNumberIcon size={12} className="prop-label-icon" />}
@@ -2120,9 +2511,17 @@ function PropField({
     </span>
   );
   const menu = menuPos && (
-    <ResetMenu pos={menuPos} onReset={reset} onClose={() => setMenuPos(null)} />
+    <ResetMenu
+      pos={menuPos}
+      onReset={reset}
+      // Only while the field is showing a value instead of its own control —
+      // it is the way back, and there is nothing to go back FROM otherwise.
+      onUnbind={showExpr ? fromCustom : null}
+      unbindLabel={`Use the ${controlWord(field)}`}
+      onClose={() => setMenuPos(null)}
+    />
   );
-  const label = (
+  const labelEl = (
     <label>
       {pill}
       {/* The prop's own documentation — the comment above it in the
@@ -2133,9 +2532,89 @@ function PropField({
           ignored
         </span>
       )}
+      {bindable && (
+        <BindHandle
+          active={!!insertAt}
+          onOpen={(host) => {
+            if (insertAt) {
+              setInsertAt(null);
+              return;
+            }
+            const r = host?.getBoundingClientRect();
+            if (!r) return;
+            setInsertAt({
+              left: r.left,
+              top: Math.min(r.bottom + 4, Math.max(60, window.innerHeight - 340)),
+              width: Math.max(r.width, 240),
+            });
+          }}
+        />
+      )}
       {menu}
     </label>
   );
+
+  const pickerEl = insertAt && (
+    <FieldDataPicker
+      pos={insertAt}
+      bindCtx={bindCtx}
+      current={showExpr ? null : undefined}
+      onPick={(path) => {
+        setInsertAt(null);
+        // Into the value field's caret when there is one — so a chip can land
+        // beside text already typed. Otherwise this is the field's first
+        // binding, and choosing one is what turns the control into a value.
+        if (bindApiRef.current?.insert) {
+          bindApiRef.current.insert(path);
+          return;
+        }
+        setCustom(true);
+        // Text already typed is kept and the chip goes after it — inserting
+        // data into "Read more about " should not throw the sentence away. A
+        // control's value can't be joined to anything (`true` and a binding is
+        // not a value), so those are replaced.
+        const numeric =
+          type === 'number' || type === 'boolean' || (type === 'enum' && field.numeric);
+        const keep = numeric || type === 'enum' ? null : partsFromValue(value);
+        const next = keep?.length ? [...keep, { expr: path }] : [{ expr: path }];
+        onChange(valueFromParts(next, { numeric }), true);
+      }}
+      onClose={() => setInsertAt(null)}
+    />
+  );
+  // Carried with the label so every kind of field gets one, wherever its own
+  // branch returns. The popup is fixed, so where it sits in the DOM is moot.
+  const label = (
+    <>
+      {labelEl}
+      {pickerEl}
+    </>
+  );
+
+  // A binding is code, so it edits as code: no toggle, dropdown or picker can
+  // show `post.data.title`, let alone let you change it.
+  if (showExpr) {
+    return (
+      <div className="props-field">
+        {label}
+        <BindField
+          value={value}
+          field={field}
+          apiRef={bindApiRef}
+          placeholder={placeholderFor(field)}
+          bindCtx={bindCtx}
+          dataCtx={dataCtx}
+          onChange={(v, immediate) => {
+            // Editing holds the field open: clearing a binding on the way to
+            // another one shouldn't snap the control back mid-edit. An empty
+            // value unsets the prop and leaves the field where it is.
+            setCustom(true);
+            onChange(v, immediate);
+          }}
+        />
+      </div>
+    );
+  }
 
   // Inline CSS. A declaration list, not a string, so it gets the same little
   // CSS editor the Attributes popover uses — and its own field, since every
@@ -2432,7 +2911,6 @@ function PropField({
   }
 
   // string / other
-  const str = value ? value.value : '';
   // An array/object prop is a JS value, so it edits as code and writes
   // `prop={…}`. Without this a text field writes `densities="[1, 2]"` — a
   // string the component then calls .map on.
@@ -2501,7 +2979,6 @@ function PropField({
   // An expression bound to an imported image is still an image: `src={hero}`
   // gets the same card and "Choose Image…" a public/ path does, instead of
   // becoming a code field the moment you pick one.
-  const assetBinding = assetImportOf(str, dataCtx?.imports);
   if (isExpr && assetBinding && assetCtx?.projectPath && assetCtx?.filePath) {
     return (
       <div className="props-field">
@@ -2556,7 +3033,7 @@ function PropField({
 }
 
 // Small fixed-position menu opened by clicking a set prop's label.
-function ResetMenu({ pos, onReset, onClose }) {
+function ResetMenu({ pos, onReset, onUnbind, unbindLabel, onClose }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -2584,6 +3061,12 @@ function ResetMenu({ pos, onReset, onClose }) {
 
   return (
     <div ref={ref} className="prop-menu" style={{ left: pos.left, top: pos.top }}>
+      {onUnbind && (
+        <div className="prop-menu-item" onClick={onUnbind}>
+          <CornerIcon size={12} />
+          {unbindLabel}
+        </div>
+      )}
       <div className="prop-menu-item" onClick={onReset}>
         <ResetIcon size={12} />
         Reset to default property value

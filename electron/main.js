@@ -38,7 +38,10 @@ const {
   GENERAL,
 } = require('./jsCollections');
 const { importersOf, resolveImport } = require('./cmsRefs');
-const { readContentConfig } = require('./contentConfig');
+const { readContentConfig, validateEntry, stopAllServices } = require('./contentConfig');
+const thumbs = require('./thumbs');
+const { listEntries, writeEntry, countEntries, coveredPaths } = require('./contentEntries');
+const { planRename, applyRename } = require('./contentRefs');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow = null;
@@ -201,11 +204,19 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  // The hidden window a thumbnail is captured in is still a window, and
+  // destroying it fires this. That is not the app being closed — and treating
+  // it as one killed the dev server (and, off macOS, quit) in the middle of
+  // taking a picture.
+  if (mainWindow && !mainWindow.isDestroyed()) return;
   stopDevServer();
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', () => stopDevServer());
+// Reading a project's content config leaves a process behind holding its
+// schemas; they go when the app does.
+app.on('before-quit', () => stopAllServices());
 
 // ---------------------------------------------------------------------------
 // Auto update
@@ -706,7 +717,6 @@ function isAstroProject(dir) {
 // ---------------------------------------------------------------------------
 
 const recentsFile = () => path.join(app.getPath('userData'), 'recents.json');
-const thumbsDir = () => path.join(app.getPath('userData'), 'thumbs');
 
 function readRecents() {
   try {
@@ -725,11 +735,6 @@ function writeRecents(list) {
   }
 }
 
-function thumbPathFor(projectPath) {
-  const hash = crypto.createHash('sha1').update(projectPath).digest('hex').slice(0, 16);
-  return path.join(thumbsDir(), `${hash}.png`);
-}
-
 ipcMain.handle('recents:list', async () => {
   // Drop entries whose folder is gone or no longer looks like an Astro project.
   const list = readRecents().filter((r) => {
@@ -739,19 +744,30 @@ ipcMain.handle('recents:list', async () => {
       return false;
     }
   });
+  const userData = app.getPath('userData');
   return list.map((r) => {
+    // `stale` compares the picture against the files it was taken from, so a
+    // project edited in another editor — or by a teammate, through git — says
+    // so on the card instead of showing last month's homepage as if it were
+    // today's.
+    let stale = true;
     let thumb = null;
     try {
-      const tp = thumbPathFor(r.path);
-      if (fs.existsSync(tp)) {
-        thumb = 'data:image/png;base64,' + fs.readFileSync(tp).toString('base64');
-      }
+      thumb = thumbs.readThumb(userData, r.path);
+      stale = thumbs.isStale(userData, r.path);
     } catch {
       /* card renders a placeholder */
     }
-    return { ...r, thumb };
+    return { ...r, thumb, stale: !!stale, canRefresh: hasDependencies(r.path) };
   });
 });
+
+// Astro has to be installed for a page to be rendered at all; without it the
+// card can only offer to open the project.
+function hasDependencies(projectPath) {
+  const binName = isWin ? 'astro.cmd' : 'astro';
+  return fs.existsSync(path.join(projectPath, 'node_modules', '.bin', binName));
+}
 
 ipcMain.handle('recents:add', async (_e, projectPath) => {
   const list = readRecents().filter((r) => r.path !== projectPath);
@@ -766,33 +782,148 @@ ipcMain.handle('recents:add', async (_e, projectPath) => {
 
 ipcMain.handle('recents:remove', async (_e, projectPath) => {
   writeRecents(readRecents().filter((r) => r.path !== projectPath));
-  try {
-    fs.rmSync(thumbPathFor(projectPath), { force: true });
-  } catch {
-    /* non-fatal */
-  }
+  // The picture and the note about when it was taken both go.
+  thumbs.forget(app.getPath('userData'), projectPath);
   return { ok: true };
 });
 
-// Captures the given window region (the preview iframe's rect, in DIP
-// coordinates) and stores it as the project's thumbnail.
-ipcMain.handle('recents:captureThumb', async (_e, { projectPath, rect }) => {
-  if (!mainWindow || mainWindow.isDestroyed()) return { ok: false };
+// The project's home page, rendered on its own and photographed from the top.
+//
+// Two ways in. The project that is open already has a dev server, so its
+// picture costs one hidden window. A project on the start screen has nothing
+// running, so one is started for it, used, and stopped again — which is what
+// makes "the site as it is now" true for a project that was last edited
+// somewhere else entirely.
+let capturing = null; // one at a time: each capture is a browser and a server
+// Bumped when a project is opened. A capture waiting its turn behind another
+// one belongs to a start screen that is no longer on screen — and the machine
+// is now busy starting the project the user actually asked for.
+let captureEra = 0;
+
+async function captureThumb(projectPath) {
+  const era = captureEra;
+  if (capturing) await capturing.catch(() => {});
+  if (era !== captureEra) return { ok: false, error: 'skipped' };
+  capturing = doCaptureThumb(projectPath);
   try {
-    const image = await mainWindow.webContents.capturePage({
-      x: Math.max(0, Math.round(rect.x)),
-      y: Math.max(0, Math.round(rect.y)),
-      width: Math.max(1, Math.round(rect.width)),
-      height: Math.max(1, Math.round(rect.height)),
-    });
-    if (image.isEmpty()) return { ok: false };
-    fs.mkdirSync(thumbsDir(), { recursive: true });
-    fs.writeFileSync(thumbPathFor(projectPath), image.resize({ width: 640 }).toPNG());
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
+    return await capturing;
+  } finally {
+    capturing = null;
   }
+}
+
+async function doCaptureThumb(projectPath) {
+  const userData = app.getPath('userData');
+  // Already running for this project (it is the one that is open) — use it.
+  if (devServer && devServer.projectPath === projectPath && devServer.url) {
+    if (await serverAlive(devServer.url)) {
+      return thumbs.capture(userData, projectPath, devServer.url + '/');
+    }
+  }
+  if (!hasDependencies(projectPath)) {
+    return { ok: false, error: 'This project has no dependencies installed yet.' };
+  }
+  return withTemporaryServer(projectPath, (url) => thumbs.capture(userData, projectPath, url + '/'));
+}
+
+// A dev server for a project that is not open, kept apart from the app's own:
+// `devServer` belongs to the canvas, and a thumbnail must not disturb what the
+// editor is showing. The project's own config is used rather than the app's
+// generated one — the picture is of the site, not of the canvas.
+async function withTemporaryServer(projectPath, fn) {
+  const binName = isWin ? 'astro.cmd' : 'astro';
+  const localBin = path.join(projectPath, 'node_modules', '.bin', binName);
+  const port = await findFreePort(4400 + Math.floor(Math.random() * 200));
+  const [cmd, argv] = nodeCliCommand(localBin, [
+    'dev',
+    '--port',
+    String(port),
+    '--host',
+    '127.0.0.1',
+  ]);
+  const proc = spawn(cmd, argv, {
+    cwd: projectPath,
+    shell: isWin && cmd === localBin,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+  });
+  let log = '';
+  proc.stdout.on('data', (d) => (log = (log + d).slice(-4000)));
+  proc.stderr.on('data', (d) => (log = (log + d).slice(-4000)));
+
+  const url = `http://127.0.0.1:${port}`;
+  const stop = () => {
+    // Astro >= 7 forks the real server and the CLI exits, so killing what was
+    // spawned is not enough — the CLI is asked to stop it, and the process
+    // group is killed for the versions that do not fork.
+    try {
+      const [stopCmd, stopArgv] = nodeCliCommand(localBin, ['dev', 'stop']);
+      execFile(stopCmd, stopArgv, { cwd: projectPath, timeout: 10000 }, () => {});
+    } catch {
+      /* best effort */
+    }
+    try {
+      if (isWin) spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { shell: true });
+      else process.kill(-proc.pid, 'SIGTERM');
+    } catch {
+      try {
+        proc.kill('SIGTERM');
+      } catch {
+        /* already gone */
+      }
+    }
+  };
+
+  try {
+    const deadline = Date.now() + 45000;
+    let up = false;
+    while (Date.now() < deadline) {
+      if (await serverAlive(url)) {
+        up = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    if (!up) {
+      return { ok: false, error: cleanDevLog(log) || 'the dev server did not start in time' };
+    }
+    return await fn(url);
+  } finally {
+    stop();
+  }
+}
+
+const cleanDevLog = (text) =>
+  String(text || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !/^\[?\d{1,2}:\d{2}/.test(l))
+    .slice(-2)
+    .join(' ')
+    .slice(0, 300);
+
+// Asked for by the start screen, for a card whose picture is out of date.
+ipcMain.handle('recents:refreshThumb', async (_e, projectPath) => {
+  const result = await captureThumb(projectPath);
+  const userData = app.getPath('userData');
+  return { ...result, thumb: thumbs.readThumb(userData, projectPath), stale: thumbs.isStale(userData, projectPath) };
 });
+
+// While a project is open, its picture is kept current in the background: once
+// when the preview comes up, and again a while after the last edit. Neither
+// touches the window the user is working in.
+let thumbTimer = null;
+function scheduleThumb(projectPath, delay) {
+  clearTimeout(thumbTimer);
+  thumbTimer = setTimeout(() => {
+    if (!devServer || devServer.projectPath !== projectPath) return;
+    if (!thumbs.isStale(app.getPath('userData'), projectPath)) return;
+    captureThumb(projectPath).then((r) => {
+      if (r?.ok) send('recents:thumb', { projectPath });
+    });
+  }, delay);
+  if (thumbTimer.unref) thumbTimer.unref();
+}
 
 // ---------------------------------------------------------------------------
 // Project IPC
@@ -1301,6 +1432,9 @@ ipcMain.handle('watch:start', async (_e, projectPath) => {
     const wrote = selfWrites.get(path.resolve(full));
     if (wrote && Date.now() - wrote < 1000) return;
     pending.add(full);
+    // The site changed, so its picture is out of date — but not urgently, and
+    // not while the user is still typing.
+    scheduleThumb(projectPath, 60000);
     clearTimeout(timer);
     timer = setTimeout(() => {
       const files = [...pending];
@@ -1830,6 +1964,78 @@ ipcMain.handle('content:config', async (_e, { projectPath, force } = {}) =>
   readContentConfig(projectPath, { force: !!force })
 );
 
+// One collection's entries: where each one lives, what it holds, and what
+// identifies it. A collection whose loader builds its entries has none to give.
+const collectionOf = async (projectPath, name) => {
+  const config = await readContentConfig(projectPath);
+  const collection = (config.collections || []).find((c) => c.name === name);
+  if (!collection) throw new Error(`${name} is not a collection in this project.`);
+  return { config, collection };
+};
+
+// The collections themselves, with counts, for the panel that lists them.
+ipcMain.handle('content:collections', async (_e, projectPath) => {
+  const config = await readContentConfig(projectPath);
+  if (config.missing || config.error) return { ...config, collections: [] };
+  const collections = (config.collections || []).map((collection) => ({
+    name: collection.name,
+    editable: collection.editable,
+    loader: collection.loader,
+    hasSchema: !!collection.schema,
+    freeform: !!collection.freeform,
+    error: collection.error || null,
+    count: countEntries(projectPath, collection),
+  }));
+  return { collections, covered: coveredPaths(config.collections || []), configPath: config.configPath };
+});
+
+ipcMain.handle('content:entries', async (_e, { projectPath, name }) => {
+  const { collection } = await collectionOf(projectPath, name);
+  return { collection, ...listEntries(projectPath, collection) };
+});
+
+// A save is a list of edits against one entry, not a new copy of the file: see
+// contentEntries.js and ./formats for what that protects.
+ipcMain.handle('content:writeEntry', async (_e, { projectPath, entry, edits, body }) => {
+  const result = writeEntry(projectPath, entry, edits || [], { body });
+  markSelfWrite(path.resolve(projectPath, entry.file));
+  send('cms:changed', {});
+  return result;
+});
+
+ipcMain.handle('content:validate', async (_e, { projectPath, collection, data }) =>
+  validateEntry(projectPath, { collection, data })
+);
+
+// What renaming an entry's id would change, and then changing it. Two calls,
+// because an id is what every reference to the entry holds: the plan is shown
+// before anything is written, so a rename that would touch six other entries
+// says so first.
+ipcMain.handle('content:renamePlan', async (_e, { projectPath, name, from, to }) => {
+  const config = await readContentConfig(projectPath);
+  const plan = planRename(projectPath, config.collections || [], { collection: name, from, to });
+  // The entry data itself is big and the renderer only needs the shape of the
+  // change.
+  return { ...plan, entry: { id: plan.entry.id, file: plan.entry.file } };
+});
+
+ipcMain.handle('content:rename', async (_e, { projectPath, name, from, to }) => {
+  const config = await readContentConfig(projectPath);
+  const plan = planRename(projectPath, config.collections || [], { collection: name, from, to });
+  const result = applyRename(projectPath, plan);
+  for (const file of result.files) markSelfWrite(path.resolve(projectPath, file));
+  send('cms:changed', {});
+  return result;
+});
+
+// Every entry of a collection something can point at, as id and label — what a
+// reference field offers instead of asking the user to remember ids.
+ipcMain.handle('content:targets', async (_e, { projectPath, name }) => {
+  const { collection } = await collectionOf(projectPath, name);
+  const { entries } = listEntries(projectPath, collection);
+  return { targets: entries.map((e) => ({ id: e.id, title: e.title })) };
+});
+
 // Where an import in a page actually points. The tag name is only a local
 // binding — `import Layout from '@/layouts/BaseLayout.astro'` renders as
 // <Layout> — so drilling into a component has to follow the import, not the
@@ -2095,15 +2301,36 @@ ipcMain.handle('page:dynamicPaths', async (_e, { projectPath, pagePath, devUrl }
     const res = await fetch(`${devUrl}/__avb/paths?p=${encodeURIComponent(rel)}`);
     if (!res.ok) return { entries: [], error: `Dev server returned ${res.status}` };
     const data = await res.json();
-    const entries = (data.entries || []).map((params) => ({
-      params,
-      route: fillRoute(pattern, params),
-      // The values themselves read better in a picker than "slug=hello-world".
-      label: Object.values(params).map(String).join(' / ') || pattern,
-    }));
+    const entries = (data.entries || []).map((e) => {
+      // A dev server started before this app was updated still answers with
+      // bare params objects — read both shapes rather than break its preview.
+      const params = e && e.params ? e.params : e;
+      return {
+        params,
+        props: (e && e.props) || null,
+        route: fillRoute(pattern, params),
+        // The values themselves read better in a picker than "slug=hello-world".
+        label: Object.values(params).map(String).join(' / ') || pattern,
+      };
+    });
     return { entries, error: data.error || null };
   } catch (err) {
     return { entries: [], error: String(err?.message || err) };
+  }
+});
+
+// One entry of a collection, sampled — what a picker shows beside the fields
+// of a page that lists them. Answered by the dev server because only it can
+// run the project's loaders; without one there is simply no sample.
+ipcMain.handle('content:sampleEntry', async (_e, { devUrl, name, id }) => {
+  if (!devUrl || !name) return { entry: null };
+  try {
+    const q = `c=${encodeURIComponent(name)}${id ? `&id=${encodeURIComponent(id)}` : ''}`;
+    const res = await fetch(`${devUrl}/__avb/data?${q}`);
+    if (!res.ok) return { entry: null, error: `Dev server returned ${res.status}` };
+    return await res.json();
+  } catch (err) {
+    return { entry: null, error: String(err?.message || err) };
   }
 });
 
@@ -2223,6 +2450,51 @@ export const prerender = false;
 
 const pages = import.meta.glob('/src/pages/**/*.{astro,md,mdx}');
 
+// getStaticPaths' props ARE the page's Astro.props — the only place the editor
+// can see REAL data for a dynamic route, the entry behind the canvas with its
+// values in it. What crosses the wire is a SAMPLE, not the data: long strings
+// are clipped, long lists cut short, deep nesting stopped, and anything JSON
+// can't hold (a function, a symbol) dropped. Enough to show a designer what a
+// field holds and what it is called; never enough to be worth its weight.
+const MAX_STRING = 160;
+const MAX_ITEMS = 8;
+const MAX_DEPTH = 6;
+export function sample(value, depth) {
+  const d = depth || 0;
+  if (value === null || value === undefined) return null;
+  const t = typeof value;
+  if (t === 'string') return value.length > MAX_STRING ? value.slice(0, MAX_STRING) + '…' : value;
+  if (t === 'number' || t === 'boolean') return value;
+  if (t !== 'object') return undefined; // functions, symbols, bigints
+  // A date is a value, not a shape: kept as one, tagged so the editor can say
+  // "date" rather than showing an object with no keys.
+  if (value instanceof Date)
+    return { __stacki: 'date', value: isNaN(value.getTime()) ? null : value.toISOString() };
+  if (d >= MAX_DEPTH) return { __stacki: 'deep' };
+  if (Array.isArray(value)) {
+    const out = value.slice(0, MAX_ITEMS).map((v) => {
+      const s = sample(v, d + 1);
+      return s === undefined ? null : s;
+    });
+    if (value.length > MAX_ITEMS) out.push({ __stacki: 'more', count: value.length - MAX_ITEMS });
+    return out;
+  }
+  const out = {};
+  for (const key of Object.keys(value)) {
+    let s;
+    try {
+      s = sample(value[key], d + 1);
+    } catch {
+      continue; // a getter that throws is not worth the whole entry
+    }
+    if (s !== undefined) out[key] = s;
+  }
+  return out;
+}
+
+// Named for the importer's sake: /__avb/data samples entries the same way.
+export const SAMPLE = sample;
+
 export async function GET({ url }) {
   const rel = url.searchParams.get('p') || '';
   const body = { entries: [], error: null };
@@ -2236,8 +2508,14 @@ export async function GET({ url }) {
       if (typeof mod.getStaticPaths === 'function') {
         const result = await mod.getStaticPaths();
         body.entries = (Array.isArray(result) ? result : [])
-          .map((e) => (e && typeof e === 'object' ? e.params : null))
-          .filter((p) => p && typeof p === 'object');
+          .filter((e) => e && typeof e === 'object' && e.params && typeof e.params === 'object')
+          .map((e, i) => ({
+            params: e.params,
+            // Only the first few: the editor shows ONE entry's data at a time,
+            // and a collection of 400 posts would otherwise cross the wire in
+            // full every time the frontmatter changes.
+            props: i < 30 ? sample(e.props) : null,
+          }));
       }
     }
   } catch (err) {
@@ -2247,6 +2525,47 @@ export async function GET({ url }) {
     headers: { 'content-type': 'application/json' },
   });
 }
+`;
+
+// The other half of the picker's data: a page that never declares
+// getStaticPaths still reads collections in its frontmatter
+// (`const posts = await getCollection("blog")`), and that is the common list
+// page. One entry is all a picker needs to show what a post HAS.
+const DATA_ENDPOINT = `// Generated by Stacki (dev preview only) — do not edit.
+export const prerender = false;
+
+import { SAMPLE } from './paths.js';
+
+export async function GET({ url }) {
+  const name = url.searchParams.get('c') || '';
+  // A particular entry when the editor knows which one — a reference names it
+  // — and otherwise the first, which is enough to show what a collection has.
+  const id = url.searchParams.get('id') || '';
+  const body = { entry: null, error: null };
+  if (!/^[\\w-]+$/.test(name) || (id && (!/^[\\w\\-./]+$/.test(id) || id.includes('..')))) {
+    body.error = 'Bad collection or entry name';
+    return json(body);
+  }
+  try {
+    // Imported here rather than at the top: a project with no content config
+    // has no astro:content to import, and this route must not take the dev
+    // server down with it.
+    const { getCollection, getEntry } = await import('astro:content');
+    if (id) {
+      const entry = await getEntry(name, id);
+      body.entry = entry ? SAMPLE(entry) : null;
+    } else {
+      const entries = await getCollection(name);
+      body.entry = entries && entries.length ? SAMPLE(entries[0]) : null;
+    }
+  } catch (err) {
+    body.error = String((err && err.message) || err);
+  }
+  return json(body);
+}
+
+const json = (body) =>
+  new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
 `;
 
 const PREVIEW_PAGE = `---
@@ -2665,6 +2984,9 @@ const avbPreviewRoute = {
       injectRoute({ pattern: '/__avb/paths', entrypoint: ${JSON.stringify(
         toPosix(path.join(dir, 'paths.js'))
       )} });
+      injectRoute({ pattern: '/__avb/data', entrypoint: ${JSON.stringify(
+        toPosix(path.join(dir, 'data.js'))
+      )} });
     },
   },
 };
@@ -2700,6 +3022,7 @@ export default {
     fs.writeFileSync(cfgPath, cfg);
     fs.writeFileSync(path.join(dir, 'preview.astro'), PREVIEW_PAGE);
     fs.writeFileSync(path.join(dir, 'paths.js'), PATHS_ENDPOINT);
+    fs.writeFileSync(path.join(dir, 'data.js'), DATA_ENDPOINT);
     // This file is assembled here and handed to Astro as its config. If it
     // will not parse, Astro does not start, and the project gets no preview at
     // all — the editor's own canvas broken by the editor's own scaffolding,
@@ -2826,11 +3149,20 @@ function readAstroLock(projectPath) {
 let devStartInFlight = null;
 
 ipcMain.handle('dev:start', (_e, projectPath) => {
+  // Whatever thumbnails were queued for the start screen, this takes priority.
+  captureEra++;
   if (devStartInFlight) return devStartInFlight;
   devStartInFlight = doDevStart(projectPath)
     // Now that a server has resolved the config, this is the authoritative
     // answer — the scan before it could only read the config's text.
     .then((r) => ({ ...r, trailingSlash: readTrailingSlash(projectPath) }))
+    .then((r) => {
+      // The server that just came up can also take the project's picture. A
+      // few seconds in, so it does not compete with the canvas's own first
+      // load for the same server.
+      scheduleThumb(projectPath, 6000);
+      return r;
+    })
     .finally(() => {
       devStartInFlight = null;
     });

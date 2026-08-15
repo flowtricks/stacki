@@ -40,7 +40,11 @@ export type HostState = {
   renderedClasses: string[]
   /** Write a <style> node's CSS back into the page model. `immediate` saves the page
    *  right away (a committed edit) instead of coalescing like a typing burst. */
-  writeStyleNode: ((nodeId: string, css: string, immediate?: boolean) => void) | null
+  /** Writes a <style> node's text into the open file's model. Returns false when
+   *  that node isn't in the file currently open (a page's block while a component
+   *  is being edited) — the panel then keeps the edit and flushes it on exit
+   *  rather than reporting a save that never happened. */
+  writeStyleNode: ((nodeId: string, css: string, immediate?: boolean) => boolean | void) | null
   /** Select a node in the app (used when navigating from a provenance chip). */
   selectNode: ((nodeId: string) => void) | null
   /** Put a class on the selected element. Typing a bare class in the selector

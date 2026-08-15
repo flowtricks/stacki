@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CheckIcon } from './Icons.jsx';
+import DataPicker from './DataPicker.jsx';
+import { dataTree } from '../dataSuggest.js';
+import { BIND_PATH_RE, resolvePick } from '../bindings.js';
+import { deleteChipAtCaret } from './chipKeys.js';
 
 // Rich inline-content editor for the props panel: a contentEditable field
 // showing a node's inline children (text + <strong>/<em>/<sup>/… tags) with a
@@ -37,11 +40,21 @@ const esc = (s) =>
 
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
-// `chipOf` is the set of expressions the panel can offer alternatives for.
-// Only those become chips: a chip is atomic and unedittable, so turning a
-// hand-written expression like {index + 1} into one would take away the only
-// way to fix the "+ 1". Anything not in the set stays literal, editable text.
-export function nodesToHtml(nodes, chippable) {
+// Which expressions become chips: a PLAIN PATH does — `{post.data.title}` is
+// one thing, and the way to change it is to choose another, not to retype it
+// character by character. A computed expression stays literal, editable text,
+// because a chip is atomic and turning `{index + 1}` into one would take away
+// the only way to fix the "+ 1". The same rule the prop fields use, so a
+// binding looks the same wherever it appears.
+export function isChippable(inner) {
+  const t = String(inner || '').trim();
+  // `{true}`, `{0}`, `{" "}` — expressions, but nothing is bound in them, and
+  // a chip would take away the only way to change what they say.
+  if (/^(true|false|null|undefined)$/.test(t) || /^[-+]?(\d+\.?\d*|\.\d+)$/.test(t)) return false;
+  return BIND_PATH_RE.test(t);
+}
+
+export function nodesToHtml(nodes, chippable = isChippable) {
   let out = '';
   for (const n of nodes || []) {
     if (n.kind === 'text') {
@@ -52,7 +65,7 @@ export function nodesToHtml(nodes, chippable) {
       // text either side stays editable. The braces live in data-expr; the
       // label reads better without them.
       const inner = n.value.replace(/^\{|\}$/g, '').trim();
-      if (chippable?.has(inner)) {
+      if (chippable(inner)) {
         out += `<span class="expr-chip" contenteditable="false" data-expr="${esc(n.value).replace(
           /"/g,
           '&quot;'
@@ -127,7 +140,7 @@ function domToNodes(el) {
   return out;
 }
 
-export default function RichContent({ nodes, onChange, exprOptions }) {
+const RichContent = function RichContent({ nodes, onChange, bindCtx, insertRef }) {
   const hostRef = useRef(null);
   const bubbleRef = useRef(null);
   const lastEmittedRef = useRef(null);
@@ -139,11 +152,7 @@ export default function RichContent({ nodes, onChange, exprOptions }) {
   const [chipMenu, setChipMenu] = useState(null); // {chip, left, top, current}
   const [linkUrl, setLinkUrl] = useState('');
 
-  const chippable = React.useMemo(
-    () => new Set((exprOptions || []).map((o) => o.insert)),
-    [exprOptions]
-  );
-  const html = nodesToHtml(nodes, chippable);
+  const html = nodesToHtml(nodes, isChippable);
 
   // Load / external updates. lastEmittedRef holds the canonical html of the
   // nodes this editor last emitted, so an incoming value that matches it is
@@ -175,7 +184,7 @@ export default function RichContent({ nodes, onChange, exprOptions }) {
     // Canonical, not el.innerHTML: the app hands the nodes back with ids
     // added and the browser normalises markup as you type, so only the
     // serialised form is comparable on the way back in.
-    lastEmittedRef.current = nodesToHtml(next, chippable);
+    lastEmittedRef.current = nodesToHtml(next, isChippable);
     onChange(next);
   };
 
@@ -205,6 +214,55 @@ export default function RichContent({ nodes, onChange, exprOptions }) {
     s.link = inTag('a');
     return s;
   };
+
+  // Where the caret is, saved whenever it is inside the editor. The bubble
+  // below only tracks real selections; inserting data needs the collapsed
+  // caret too, and by the time the picker is open focus has left the editor.
+  const caretRef = useRef(null);
+  useEffect(() => {
+    const onSel = () => {
+      const el = hostRef.current;
+      const sel = window.getSelection();
+      if (!el || !sel?.rangeCount) return;
+      const r = sel.getRangeAt(0);
+      if (el.contains(r.commonAncestorContainer)) caretRef.current = r.cloneRange();
+    };
+    document.addEventListener('selectionchange', onSel);
+    return () => document.removeEventListener('selectionchange', onSel);
+  }, []);
+
+  // Dropping data in from outside — the Content field's own insert button.
+  useEffect(() => {
+    if (!insertRef) return undefined;
+    insertRef.current = {
+      insert(path) {
+        const el = hostRef.current;
+        if (!el) return;
+        el.focus();
+        const sel = window.getSelection();
+        const saved = caretRef.current;
+        const range = document.createRange();
+        if (saved && el.contains(saved.commonAncestorContainer)) {
+          range.setStart(saved.startContainer, saved.startOffset);
+          range.setEnd(saved.endContainer, saved.endOffset);
+        } else {
+          range.selectNodeContents(el);
+          range.collapse(false);
+        }
+        sel.removeAllRanges();
+        sel.addRange(range);
+        document.execCommand(
+          'insertHTML',
+          false,
+          `<span class="expr-chip" contenteditable="false" data-expr="{${path}}">${path}</span>`
+        );
+        emit();
+      },
+    };
+    return () => {
+      insertRef.current = null;
+    };
+  });
 
   // Selection bubble: track selections anchored inside the editor.
   useEffect(() => {
@@ -354,7 +412,7 @@ export default function RichContent({ nodes, onChange, exprOptions }) {
       // very mousedown that opened the menu is still propagating to document.
       // Without the exclusion the menu closes on the click that opened it —
       // and clicking straight from one chip to another would too.
-      if (e.target.closest?.(".expr-menu, .expr-chip")) return;
+      if (e.target.closest?.(".bind-menu, .expr-chip")) return;
       setChipMenu(null);
     };
     const onKey = (e) => e.key === "Escape" && setChipMenu(null);
@@ -385,33 +443,29 @@ export default function RichContent({ nodes, onChange, exprOptions }) {
             e.preventDefault();
             document.execCommand('insertHTML', false, '<br>');
             emit();
+            return;
+          }
+          // Backspace against a chip takes that chip, and only that chip —
+          // not the sentence it sits in.
+          if (deleteChipAtCaret(hostRef.current, e)) {
+            e.preventDefault();
+            emit();
           }
         }}
       />
       {chipMenu && (
         <div
-          className="dd-popup expr-menu"
-          style={{ left: chipMenu.left, top: chipMenu.top, width: 220 }}
+          className="dd-popup bind-menu"
+          style={{ left: chipMenu.left, top: chipMenu.top, width: 260 }}
         >
-          {(exprOptions || []).map((o) => (
-            <div
-              key={o.insert}
-              className={`dd-option ${o.insert === chipMenu.current ? "selected" : ""}`}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => pickExpr(o.insert)}
-            >
-              <span className="dd-check">
-                {o.insert === chipMenu.current ? <CheckIcon size={11} /> : null}
-              </span>
-              <span className="dd-option-label">{o.insert}</span>
-              {o.hint && <span className="dd-hint">{o.hint}</span>}
-            </div>
-          ))}
-          {(exprOptions || []).length === 0 && (
-            <div className="dd-option dim">
-              <span className="dd-option-label">Nothing else in scope</span>
-            </div>
-          )}
+          <DataPicker
+            tree={dataTree(bindCtx || {})}
+            current={chipMenu.current}
+            entries={bindCtx?.entryNav}
+            onPick={(path, query) => pickExpr(resolvePick(path, query, bindCtx))}
+            onExpand={(node) => node.query && bindCtx?.onNeedSample?.(node.query.collection)}
+            footer={false}
+          />
         </div>
       )}
       {bubble && (
@@ -469,4 +523,6 @@ export default function RichContent({ nodes, onChange, exprOptions }) {
       )}
     </>
   );
-}
+};
+
+export default RichContent;
