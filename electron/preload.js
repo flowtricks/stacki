@@ -713,6 +713,15 @@ if (!process.isMainFrame) {
       : nodeAt(targetAt(e));
 
   const startOutlines = () => {
+    // A page edit now patches the document instead of reloading it, so the
+    // markers this map is built from move without the page ever going away.
+    // Registered before the early return: the first collection can come up
+    // empty (a page whose markup arrives with the first patch), and this is
+    // what gets it a second chance.
+    document.addEventListener('avb:morphed', () => {
+      collectRegions();
+      queueRects();
+    });
     collectRegions();
     if (!regions.size) return;
     window.addEventListener('scroll', queueRects, true);

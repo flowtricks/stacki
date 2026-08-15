@@ -2362,6 +2362,145 @@ if (/^[A-Za-z][\\w-]*$/.test(name)) {
 </html>
 `;
 
+// Served to every page as a module so it can hear Vite's HMR channel. See
+// the avbMorph plugin below for why a page edit reaches this instead of
+// reloading the document.
+const MORPH_CLIENT = `
+// Astro renders components on the server, so it cannot hot-swap one: every
+// page edit is a full document reload. A reload restarts each CSS animation,
+// rewinds each <video>, drops scroll position and closes anything the user
+// had opened. The dev plugin suppresses that reload and sends a message here
+// instead — fetch the page again and change only what actually differs, so
+// everything untouched simply keeps running.
+
+const KEY = 'data-avb-p'; // the editor's own node path: a real identity to match on
+
+const keyOf = (n) => (n && n.nodeType === 1 ? n.getAttribute(KEY) || n.id || null : null);
+
+// Nodes this must never touch.
+//
+// An external script, because removing and re-inserting one re-runs it, which
+// is the reload this whole mechanism exists to avoid.
+//
+// A dev stylesheet, because it belongs to Vite. The page markup arrives fresh
+// from the server but the <style> it inlines does not — Vite serves the real
+// one from the module's own URL and swaps it in by data-vite-dev-id. Writing
+// the fetched copy over it puts the old CSS back a moment after Vite fixed it.
+const pinned = (n) =>
+  n.nodeType === 1 &&
+  ((n.tagName === 'SCRIPT' && !!n.src) || (n.tagName === 'STYLE' && n.hasAttribute('data-vite-dev-id')));
+
+function morphAttrs(from, to) {
+  const want = to.attributes;
+  for (let i = 0; i < want.length; i++) {
+    const a = want[i];
+    if (from.getAttribute(a.name) !== a.value) from.setAttribute(a.name, a.value);
+  }
+  const have = from.attributes;
+  for (let i = have.length - 1; i >= 0; i--) {
+    if (!to.hasAttribute(have[i].name)) from.removeAttribute(have[i].name);
+  }
+}
+
+// Same node, or a different one wearing the same position? A key decides it
+// outright; without one, the tag name is all there is to go on.
+function same(a, b) {
+  if (a.nodeType !== b.nodeType) return false;
+  if (a.nodeType !== 1) return true;
+  if (a.tagName !== b.tagName) return false;
+  const ka = keyOf(a);
+  const kb = keyOf(b);
+  return ka || kb ? ka === kb : true;
+}
+
+function morph(from, to) {
+  if (from.nodeType === 3 || from.nodeType === 8) {
+    if (from.data !== to.data) from.data = to.data;
+    return;
+  }
+  if (from.nodeType !== 1) return;
+  if (pinned(from)) return;
+  morphAttrs(from, to);
+  // A <style> holds one text node; writing it only when it differs is exactly
+  // what stops an unchanged @keyframes from starting over.
+  if (from.tagName === 'STYLE' || from.tagName === 'SCRIPT') {
+    if (from.textContent !== to.textContent) from.textContent = to.textContent;
+    return;
+  }
+  morphChildren(from, to);
+}
+
+function morphChildren(from, to) {
+  let oldChild = from.firstChild;
+  let newChild = to.firstChild;
+  while (newChild) {
+    const nextNew = newChild.nextSibling;
+    if (!oldChild) {
+      from.appendChild(document.importNode(newChild, true));
+      newChild = nextNew;
+      continue;
+    }
+    if (same(oldChild, newChild)) {
+      morph(oldChild, newChild);
+      oldChild = oldChild.nextSibling;
+      newChild = nextNew;
+      continue;
+    }
+    // Look ahead for the same key further down: an element inserted above a
+    // component shouldn't force everything below it to be rebuilt.
+    const k = keyOf(newChild);
+    let found = null;
+    if (k) for (let c = oldChild; c; c = c.nextSibling) if (keyOf(c) === k) { found = c; break; }
+    if (found) {
+      while (oldChild && oldChild !== found) {
+        const gone = oldChild;
+        oldChild = oldChild.nextSibling;
+        if (!pinned(gone)) from.removeChild(gone);
+      }
+      morph(oldChild, newChild);
+      oldChild = oldChild.nextSibling;
+    } else {
+      from.insertBefore(document.importNode(newChild, true), oldChild);
+    }
+    newChild = nextNew;
+  }
+  while (oldChild) {
+    const gone = oldChild;
+    oldChild = oldChild.nextSibling;
+    if (!pinned(gone)) from.removeChild(gone);
+  }
+}
+
+let busy = false;
+let again = false;
+
+async function update() {
+  if (busy) { again = true; return; }        // coalesce: a burst of edits is one fetch
+  busy = true;
+  try {
+    const res = await fetch(location.href, { cache: 'no-store' });
+    if (!res.ok) throw new Error('dev server answered ' + res.status);
+    const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+    morphAttrs(document.documentElement, doc.documentElement);
+    morphChildren(document.head, doc.head);
+    morphChildren(document.body, doc.body);
+    // The editor's outline map is built from markers that just moved.
+    document.dispatchEvent(new CustomEvent('avb:morphed'));
+  } catch (err) {
+    // Anything unexpected falls back to what used to happen, so a page is
+    // never left showing something the file doesn't say.
+    console.warn('[stacki] could not patch the page, reloading:', err);
+    location.reload();
+    return;
+  } finally {
+    busy = false;
+  }
+  if (again) { again = false; update(); }
+}
+
+if (import.meta.hot) import.meta.hot.on('avb:page-changed', update);
+`;
+
 function writeMarkerConfig(projectPath) {
   try {
     const dir = path.join(projectPath, 'node_modules', '.avb');
@@ -2420,6 +2559,52 @@ const AVB_CLEANUP = [
 // Must hook \`load\` (not \`transform\`): Astro's own compiler plugin is also
 // enforce:'pre' and runs first, so a transform would receive compiled JS —
 // and returning Astro source at that point breaks the module graph.
+// Astro renders components on the server, so Vite cannot hot-swap one: any
+// edit to a page or a component it uses ends in "reload the document". A
+// reload restarts every CSS animation, rewinds every <video>, drops scroll
+// position and closes whatever the user had open — which in an editor is the
+// state you were looking at when you made the change.
+//
+// Everything else the dev server does is wanted, including stylesheet updates
+// and invalidation, so none of it is touched here. Only the one message that
+// throws the page away is caught, and turned into a request to patch the page
+// instead. Vite reaches the browser through more than one object and which
+// one Astro picks depends on its version, so every distinct channel is
+// wrapped; identity dedupes the ones that are really the same object.
+const avbMorph = {
+  name: 'avb-morph',
+  resolveId(id) {
+    if (id === 'virtual:avb-morph') return '\0virtual:avb-morph';
+    return null;
+  },
+  load(id) {
+    return id === '\0virtual:avb-morph' ? ${JSON.stringify(MORPH_CLIENT)} : null;
+  },
+  configureServer(server) {
+    const seen = new Set();
+    const channels = [server.hot, server.ws];
+    for (const env of Object.values(server.environments || {})) channels.push(env && env.hot);
+    for (const ch of channels) {
+      if (!ch || typeof ch.send !== 'function' || seen.has(ch)) continue;
+      seen.add(ch);
+      const send = ch.send.bind(ch);
+      ch.send = (...args) => {
+        const payload = args[0];
+        if (payload && payload.type === 'full-reload') {
+          return send({ type: 'custom', event: 'avb:page-changed' });
+        }
+        return send(...args);
+      };
+    }
+  },
+};
+
+// \`is:inline\` so Astro leaves it exactly as written and the browser asks the
+// dev server for it — which is what puts it in the module graph, and what
+// gives it an import.meta.hot to listen on.
+const AVB_MORPH_TAG =
+  '<script type="module" src="/@id/__x00__virtual:avb-morph" is:inline></script>';
+
 const avbMarkers = {
   name: 'avb-node-markers',
   enforce: 'pre',
@@ -2461,7 +2646,7 @@ const avbMarkers = {
       const marked = isPage
         ? serializePageMarked(parsed.model)
         : serializePageMarked(parsed.model, rel + '|');
-      return isPage ? marked + AVB_CLEANUP : marked;
+      return isPage ? marked + AVB_CLEANUP + AVB_MORPH_TAG : marked;
     } catch {
       return null;
     }
@@ -2570,7 +2755,7 @@ export default {
   },
   vite: {
     ...(base.vite || {}),
-    plugins: [avbMarkers, ...((base.vite && base.vite.plugins) || [])],
+    plugins: [avbMarkers, avbMorph, ...((base.vite && base.vite.plugins) || [])],
   },
 };
 `;
