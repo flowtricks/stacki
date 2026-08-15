@@ -14,7 +14,7 @@ const fs = require('fs');
 const { pathToFileURL } = require('url');
 const net = require('net');
 const crypto = require('crypto');
-const { spawn, execFile, execFileSync } = require('child_process');
+const { spawn, spawnSync, execFile, execFileSync } = require('child_process');
 
 const {
   parsePage,
@@ -2381,6 +2381,21 @@ const MORPH_TAG_HTML = MORPH_CLIENT
   ? '<script type="module" src="/@id/__x00__virtual:avb-morph" is:inline></script>'
   : '';
 
+// Node's own parser, asked the same question it will be asked at startup.
+// Cheap next to spawning a dev server, and it turns a whole class of mistake
+// in the generated config from "no preview" into "preview without extras".
+function parsesAsModule(file) {
+  try {
+    const bin = resolveNodeBin();
+    if (!bin) return true; // nothing to check with — let Astro have its say
+    const out = spawnSync(bin, ['--check', file], { encoding: 'utf8', timeout: 10000 });
+    if (out.error || out.status === null) return true; // check could not run
+    return out.status === 0;
+  } catch {
+    return true;
+  }
+}
+
 function writeMarkerConfig(projectPath) {
   try {
     const dir = path.join(projectPath, 'node_modules', '.avb');
@@ -2675,18 +2690,34 @@ export default {
     fs.writeFileSync(cfgPath, cfg);
     fs.writeFileSync(path.join(dir, 'preview.astro'), PREVIEW_PAGE);
     fs.writeFileSync(path.join(dir, 'paths.js'), PATHS_ENDPOINT);
+    // This file is assembled here and handed to Astro as its config. If it
+    // will not parse, Astro does not start, and the project gets no preview at
+    // all — the editor's own canvas broken by the editor's own scaffolding,
+    // over something the project never asked for. Read it back the way node
+    // will and say no rather than hand over something that cannot load: the
+    // caller falls back to a plain dev server, which costs the outlines and
+    // the live patching and keeps everything else working.
+    if (!parsesAsModule(cfgPath)) {
+      pushDevLog(
+        '\n[stacki] the generated preview config did not parse; starting the dev ' +
+          'server without it. Outlines and live updates are off for this session.\n'
+      );
+      return null;
+    }
     return cfgPath;
   } catch {
     return null; // preview still works, just without outlines
   }
 }
 
-async function spawnDevServer(projectPath, localBin, force) {
+async function spawnDevServer(projectPath, localBin, force, bare) {
   const port = await findFreePort(4321);
   const args = ['dev', '--port', String(port), '--host', '127.0.0.1'];
   // Astro resolves --config against the project root and rejects absolute
   // paths ([ConfigNotFound]), so pass it relative to the spawn cwd.
-  const markerCfg = writeMarkerConfig(projectPath);
+  // `bare` is the last resort: the project's own config, none of this app's,
+  // so a preview still comes up even if what this app generates cannot run.
+  const markerCfg = bare ? null : writeMarkerConfig(projectPath);
   if (markerCfg) args.push('--config', toPosix(path.relative(projectPath, markerCfg)));
   if (force) args.push('--force');
 
@@ -2857,7 +2888,23 @@ async function doDevStart(projectPath) {
       await new Promise((r) => setTimeout(r, 800));
     }
   }
-  throw lastErr;
+  // Everything above ran with this app's generated config. A project whose
+  // preview will not come up is worse than one without outlines, so try once
+  // more on the project's own config before giving up. What starts here has no
+  // markers and no live patching — an edit reloads the page, the way it did
+  // before any of this — but the canvas is a canvas again.
+  try {
+    const url = await spawnDevServer(projectPath, localBin, true, true);
+    pushDevLog(
+      '\n[stacki] the preview would not start with this app\'s config, so it is ' +
+        'running on the project\'s own. Outlines and live updates are off; the ' +
+        'log above says why.\n'
+    );
+    if (devServer) devServer.bare = true;
+    return { url, bare: true };
+  } catch {
+    throw lastErr; // report the first failure: it is the one that explains it
+  }
 }
 
 // ---------------------------------------------------------------------------
