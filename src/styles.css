@@ -798,6 +798,9 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
   white-space: nowrap;
 }
 .af-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+/* A hosted image previews above the URL box rather than replacing it — the
+   URL stays editable while you can see what it points at. */
+.asset-field .af-card + input { margin-top: 8px; }
 .af-choose {
   width: 100%;
   margin-top: 8px;
@@ -2832,6 +2835,13 @@ body > .embed-editor_provenance {
 .cms-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
 
 .cms-field { margin-bottom: 14px; }
+/* Same as the props panel: the Asset/URL switch belongs in the field label
+   row, so it anchors to the whole field rather than being lifted out of the
+   control with an offset the scroll box would clip. */
+.cms-field:has(> .asset-field) { position: relative; }
+.cms-field:has(> .asset-field) > .cms-field-head { min-height: 20px; }
+.cms-field > .asset-field { position: static; }
+.cms-field > .asset-field > .af-mode { top: 0; right: 0; }
 .cms-field-head { display: flex; align-items: center; gap: 4px; margin-bottom: 5px; }
 .cms-field-head label { font-size: 11.5px; color: var(--text-dim); font-weight: 500; }
 .cms-field-remove { opacity: 0; padding: 1px; color: var(--text-faint); }

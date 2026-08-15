@@ -498,11 +498,12 @@ function parseTemplate(str) {
     const textEnd = next === -1 ? str.length : next;
     const text = str.slice(pos, textEnd);
     if (text.trim()) {
-      const value =
-        (/^\s/.test(text) ? ' ' : '') +
-        collapseWhitespace(text) +
-        (/\s$/.test(text) ? ' ' : '');
-      nodes.push({ id: makeId(), kind: 'text', value });
+      // `source` only when the slice spans lines, because that is the only
+      // case where the collapsed value isn't the whole truth. The serializer
+      // hands those lines back if nothing has edited the node since.
+      const node = { id: makeId(), kind: 'text', value: textValue(text) };
+      if (text.includes('\n')) node.source = text;
+      nodes.push(node);
     }
     if (next === -1) break;
 
@@ -576,12 +577,20 @@ function parseTemplate(str) {
 
     const closeIdx = findMatchingClose(str, afterOpen, name);
     if (closeIdx === -1) return bail(nodes, str, lt, `an unclosed <${name}> tag`);
-    const innerResult = parseTemplate(str.slice(afterOpen, closeIdx));
+    const inner = str.slice(afterOpen, closeIdx);
+    const innerResult = parseTemplate(inner);
     if (!innerResult.clean) return { nodes, clean: false }; // the inner frame recorded the cause
+    // A run written across several lines keeps its raw inner. The tree can't
+    // hold it: whitespace-only text between the tags is dropped, so the break
+    // before a closing tag exists nowhere else, and the serializer needs it to
+    // put a hand-wrapped paragraph back the way it found it.
+    const source =
+      inner.includes('\n') && isInlineRun(innerResult.nodes) ? inner : undefined;
     nodes.push({
       id: makeId(),
       kind,
       name,
+      ...(source === undefined ? {} : { source }),
       props: parseAttrs(attrs),
       children: innerResult.nodes,
     });
@@ -621,6 +630,17 @@ function collapseWhitespace(text) {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+// What a text node holds: the words, with every run of whitespace inside them
+// squeezed to one space, and a single space kept at either end where the
+// source had any — a newline-and-indent boundary renders as one space, and
+// "people <strong>Acme</strong>" would otherwise lose the gap. Shared with the
+// serializer, which recomputes it to tell an edited node from an untouched one.
+function textValue(raw) {
+  return (
+    (/^\s/.test(raw) ? ' ' : '') + collapseWhitespace(raw) + (/\s$/.test(raw) ? ' ' : '')
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Page parse / serialize
 // ---------------------------------------------------------------------------
@@ -635,12 +655,15 @@ function parsePage(source) {
   const body = fm ? source.slice(fm[0].length) : source;
 
   const imports = [];
-  let extraFrontmatter = frontmatter;
+  // Where each import's text sits, so the block can be cut out by position.
+  // A `.replace(m[0], '')` left behind the line break that ended the
+  // statement, and the blank lines those leave built up on every save.
+  const cuts = [];
   let m;
   IMPORT_RE.lastIndex = 0;
   while ((m = IMPORT_RE.exec(frontmatter)) !== null) {
     imports.push({ name: m[1], path: m[2], at: m.index });
-    extraFrontmatter = extraFrontmatter.replace(m[0], '');
+    cuts.push([m.index, m.index + m[0].length]);
   }
   // Named imports become one entry per specifier, so "is this name imported"
   // stays a single lookup. `named` groups them back onto one line on the way
@@ -672,13 +695,37 @@ function parsePage(source) {
         ...(typeOnly ? { typeOnly: true } : {}),
       });
     }
-    extraFrontmatter = extraFrontmatter.replace(m[0], '');
+    cuts.push([m.index, m.index + m[0].length]);
   }
   // Back into the order they were written in — the two passes above collect
   // default and named imports separately, and without this every save would
   // shuffle one group past the other.
   imports.sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
-  extraFrontmatter = extraFrontmatter.trim();
+  cuts.sort((a, b) => a[0] - b[0]);
+
+  // Whatever stands above the first import belongs above it. A page that
+  // opens with a `/** … */` describing it had that comment hoisted below the
+  // import block by every save — a loud diff for an edit that never went
+  // near it. Anything between or after the imports still gathers below them,
+  // which is where it already was.
+  const firstImport = cuts.length ? cuts[0][0] : -1;
+  const frontmatterLead = firstImport === -1 ? '' : frontmatter.slice(0, firstImport).trim();
+  let rest = firstImport === -1 ? frontmatter : frontmatter.slice(firstImport);
+  // Back to front, so an earlier cut can't shift a later one's offsets. The
+  // statement goes with the line break that ended it, or removing it would
+  // leave the blank line behind.
+  for (let i = cuts.length - 1; i >= 0; i--) {
+    const from = cuts[i][0] - firstImport;
+    const to = cuts[i][1] - firstImport;
+    const eol = rest.slice(to).match(/^[ \t]*\r?\n/);
+    rest = rest.slice(0, from) + rest.slice(eol ? to + eol[0].length : to);
+  }
+  // Whether a blank line stood between the import block and what follows.
+  // Writing one unconditionally moved `import type { … }` — which stays in the
+  // frontmatter text, being a type and never a component — a line further
+  // down on every save.
+  const extraFrontmatterSpaced = /^[ \t]*\r?\n/.test(rest);
+  const extraFrontmatter = rest.trim();
 
   lastBail = null;
   const { nodes: topNodes, clean } = parseTemplate(body);
@@ -747,7 +794,16 @@ function parsePage(source) {
   };
   markDynamic(topNodes);
 
-  return { editable: true, model: { imports, extraFrontmatter, nodes: topNodes } };
+  return {
+    editable: true,
+    model: {
+      imports,
+      frontmatterLead,
+      extraFrontmatter,
+      extraFrontmatterSpaced,
+      nodes: topNodes,
+    },
+  };
 }
 
 // Writes the import block. Named specifiers that share a module are emitted
@@ -772,12 +828,25 @@ function serializeImports(model, lines, specFor) {
   }
 }
 
+// The frontmatter, in the order it was written: whatever stood above the
+// imports, the import block, then the rest. The blank line only appears
+// between two things that are both there — on a page with no imports it used
+// to open the frontmatter with an empty line.
+function serializeFrontmatter(model, lines, specFor) {
+  const start = lines.length;
+  if (model.frontmatterLead) lines.push(model.frontmatterLead);
+  serializeImports(model, lines, specFor);
+  if (model.extraFrontmatter) {
+    // `!== false` so a model built anywhere but the parser keeps the spacing
+    // the app has always written.
+    if (lines.length > start && model.extraFrontmatterSpaced !== false) lines.push('');
+    lines.push(model.extraFrontmatter);
+  }
+}
+
 function serializePage(model) {
   const lines = ['---'];
-  serializeImports(model, lines);
-  if (model.extraFrontmatter) {
-    lines.push('', model.extraFrontmatter);
-  }
+  serializeFrontmatter(model, lines);
   lines.push('---');
 
   for (const node of model.nodes) serializeNode(node, '', lines);
@@ -824,6 +893,51 @@ function inlineString(nodes) {
   return out;
 }
 
+// A node still saying exactly what the file said keeps the lines it was
+// written on — the same bargain `headSource` strikes for a loop head. A text
+// node with no `source` never had lines to lose, so its value is the original.
+function textAsWritten(node) {
+  if (!node.source) return node.value;
+  return textValue(node.source) === node.value ? node.source : null;
+}
+
+// Whitespace inside an inline run is collapsed by the renderer, so the run can
+// be shifted to a new indent without changing a thing about the page. Worth
+// doing: an element that has been moved, or whose ancestor was re-indented,
+// would otherwise hold the indentation of wherever it used to live. The last
+// line of the stored inner is the whitespace before the closing tag, which is
+// the indent the element was written at.
+function reindentRun(source, indent) {
+  const lines = source.split('\n');
+  const base = lines[lines.length - 1];
+  if (lines.length < 2 || !/^[ \t]*$/.test(base) || base === indent) return source;
+  let shift;
+  if (indent.startsWith(base)) {
+    const add = indent.slice(base.length);
+    shift = (line) => (line.trim() ? add + line : line);
+  } else if (base.startsWith(indent)) {
+    const drop = base.slice(indent.length);
+    shift = (line) => (line.startsWith(drop) ? line.slice(drop.length) : line);
+  } else {
+    return source; // tabs against spaces — no shift that isn't a guess
+  }
+  return [lines[0], ...lines.slice(1, -1).map(shift), indent].join('\n');
+}
+
+// Does an element's stored inner still describe the run hanging off it? Both
+// sides collapse to the same words when nothing has been edited: a changed
+// word, an added child or a rewritten inline tag all break the match, and the
+// run is reflowed onto one line as before. Compared trimmed because the
+// whitespace-only tail before a closing tag is in the source and not in the
+// tree — which is the whole reason the source is kept.
+function inlineRunUnchanged(node) {
+  return (
+    !!node.source &&
+    node.source.includes('\n') &&
+    textValue(node.source).trim() === inlineString(node.children).trim()
+  );
+}
+
 // A conditional without the { } that put it in markup context. An else-if
 // chain is one of these directly inside another's else — writing the braces
 // there would make it an object literal, not a nested condition.
@@ -861,9 +975,21 @@ function serializeNode(node, indent, lines) {
     return;
   }
   switch (node.kind) {
-    case 'text':
-      lines.push(indent + node.value);
+    case 'text': {
+      // Prose the author wrapped by hand comes back on the lines they wrapped
+      // it on. Each line already carries its own indentation; only the first
+      // takes the tree's, the way a multi-line expression does.
+      const written = textAsWritten(node);
+      if (written === null || !written.includes('\n')) {
+        lines.push(indent + node.value);
+        return;
+      }
+      const body = written.replace(/^[ \t]*\r?\n/, '').replace(/\s+$/, '');
+      const [first, ...more] = body.split('\n');
+      lines.push(indent + first.replace(/^[ \t]+/, ''));
+      for (const line of more) lines.push(line);
       return;
+    }
     case 'expr': {
       // Verbatim, multi-line safe: only the first line gets the tree indent
       // (subsequent lines carry their original indentation).
@@ -953,6 +1079,17 @@ function serializeNode(node, indent, lines) {
       }
       // Inline runs stay on one line: <p>We're <strong>Acme</strong>.</p>
       if (node.children.length > 0 && isInlineRun(node.children)) {
+        // Unless the file already wrote the run across several lines and
+        // nothing has touched it since. Re-flowing a hand-wrapped paragraph
+        // onto one long line is a diff on a page that was only opened, and
+        // the stored inner puts the tag back whole — its line breaks, its
+        // indentation, and the break before the closing tag.
+        if (inlineRunUnchanged(node)) {
+          const written = reindentRun(node.source, indent);
+          const block = `${indent}<${node.name}${attrs}>${written}</${node.name}>`;
+          for (const line of block.split('\n')) lines.push(line);
+          return;
+        }
         lines.push(`${indent}<${node.name}${attrs}>${inlineString(node.children).trim()}</${node.name}>`);
         return;
       }
@@ -986,13 +1123,13 @@ function serializeNode(node, indent, lines) {
 function serializePageMarked(model, prefix = '') {
   const marks = chunkImportMarks(model);
   const lines = ['---'];
-  serializeImports(model, lines, (imp) => {
+  // Through the same writer as a real save: `frontmatterLead` is ordinary
+  // frontmatter that happens to sit above the imports, and a preview that
+  // dropped it would be missing whatever it declares.
+  serializeFrontmatter(model, lines, (imp) => {
     const mark = /\.html\?raw$/i.test(imp.path) ? marks.get(imp.name) : null;
     return mark ? `${imp.path}&avb=${mark.path}${mark.group ? '&avbg=1' : ''}` : imp.path;
   });
-  if (model.extraFrontmatter) {
-    lines.push('', model.extraFrontmatter);
-  }
   lines.push('---');
   model.nodes.forEach((node, i) => serializeNodeMarked(node, '', lines, `${prefix}${i}`));
   return lines.join('\n') + '\n';
@@ -1060,23 +1197,38 @@ function serializeNodeMarked(node, indent, lines, path, inSlot = false) {
   } else if (node.kind === 'map') {
     // Loop children render once per item, so their marker pairs repeat in
     // the DOM — the collector unions every instance into one region.
+    //
+    // The body goes inside a <Fragment>, for the same reason the branches of
+    // a `cond` do: what an iteration returns is a marker, the child, and
+    // another marker, and `(a b c)` is a list where one expression is wanted.
+    // Astro's own compiler accepts it — it reads the children as one template
+    // — but Astro 7's Rust compiler (@astrojs/compiler-rs) does not, and the
+    // page fails to build with a bare "Unexpected token".
+    //
+    // Inside that Fragment the children are slot content, where a plain html
+    // comment is dropped by both compilers, so the markers have to go in as
+    // `set:html` — hence inSlot. Missing that is silent: the page builds and
+    // the loop renders, but nothing inside it can be outlined.
     lines.push(indent + '{');
+    const loopBody = (bodyIndent) => {
+      lines.push(bodyIndent + '<Fragment>');
+      (node.children || []).forEach((child, i) =>
+        serializeNodeMarked(child, bodyIndent + '  ', lines, `${path}.${i}`, true)
+      );
+      lines.push(bodyIndent + '</Fragment>');
+    };
     if (node.body && node.body.length) {
       lines.push(indent + '  ' + blockHead(node.head));
       for (const line of node.body) lines.push(indent + '    ' + line);
       lines.push(indent + '    return (');
-      (node.children || []).forEach((child, i) =>
-        serializeNodeMarked(child, indent + '      ', lines, `${path}.${i}`, inSlot)
-      );
+      loopBody(indent + '      ');
       lines.push(indent + '    );');
       lines.push(indent + '  })');
       lines.push(indent + '}');
       return;
     }
     lines.push(indent + '  ' + node.head);
-    (node.children || []).forEach((child, i) =>
-      serializeNodeMarked(child, indent + '    ', lines, `${path}.${i}`, inSlot)
-    );
+    loopBody(indent + '    ');
     lines.push(indent + '  ))');
     lines.push(indent + '}');
   } else if (node.kind === 'cond') {
@@ -1095,7 +1247,10 @@ function serializeNodeMarked(node, indent, lines, path, inSlot = false) {
     const inner = indent + '    ';
     const branchOut = (branch, i) => {
       lines.push(inner + '<Fragment>');
-      if (branch) serializeNodeMarked(branch, inner + '  ', lines, `${path}.${i}`);
+      // Slot content of that Fragment, so the markers must be the `set:html`
+      // form — a plain comment directly inside a component is dropped, which
+      // left everything in a branch unoutlinable.
+      if (branch) serializeNodeMarked(branch, inner + '  ', lines, `${path}.${i}`, true);
       lines.push(inner + '</Fragment>');
     };
     lines.push(indent + '{');
