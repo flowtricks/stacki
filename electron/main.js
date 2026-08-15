@@ -3661,7 +3661,33 @@ ipcMain.handle('git:info', async (_e, projectPath) => {
   } catch {
     return { isRepo: false };
   }
-  const info = { isRepo: true, branch: '', branches: [], remote: null, dirty: false, ahead: 0 };
+  const info = {
+    isRepo: true,
+    branch: '',
+    branches: [],
+    remote: null,
+    dirty: false,
+    ahead: 0,
+    // Branches holding work that was left behind on the way out, so the
+    // switcher can say where it is rather than making it a thing you have to
+    // remember.
+    parked: [],
+  };
+  try {
+    const { stdout } = await git(projectPath, ['stash', 'list', '--format=%gs']);
+    const tag = /stacki:park:(.+)$/;
+    info.parked = [
+      ...new Set(
+        stdout
+          .split('\n')
+          .map((l) => (l.match(tag) || [])[1])
+          .filter(Boolean)
+          .map((b) => b.trim())
+      ),
+    ];
+  } catch {
+    /* no stashes, or not a repo yet */
+  }
   try {
     info.branch = (await git(projectPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim();
   } catch {
@@ -3742,11 +3768,85 @@ ipcMain.handle('git:init', async (_e, projectPath) => {
   return { ok: true };
 });
 
-ipcMain.handle('git:checkout', async (_e, { projectPath, branch, create }) => {
+// Work in progress, set aside under the branch it belongs to.
+//
+// Git will not switch branches over changes it would have to overwrite, and
+// the usual advice — commit first — asks for a commit that only exists to
+// make git cooperate. So the changes are put away against the branch being
+// left, and taken back out when that branch is next opened. They are never
+// lost and never travel to a branch they were not written on.
+//
+// The tag is what makes this safe: only a stash Stacki wrote is ever restored,
+// so someone's own `git stash` is left alone.
+const parkTag = (branch) => `stacki:park:${branch}`;
+
+async function isDirty(projectPath) {
+  const { stdout } = await git(projectPath, ['status', '--porcelain']);
+  return stdout.trim().length > 0;
+}
+
+// The most recent parking for this branch, as a ref that is still valid right
+// now — stash indices shift as entries come and go, so this is resolved
+// immediately before it is used.
+async function parkedRef(projectPath, branch) {
+  const { stdout } = await git(projectPath, ['stash', 'list', '--format=%gd%x09%gs']);
+  const tag = parkTag(branch);
+  for (const line of stdout.split('\n')) {
+    const [ref, subject] = line.split('\t');
+    if (ref && subject && subject.trim().endsWith(tag)) return ref.trim();
+  }
+  return null;
+}
+
+async function park(projectPath, branch) {
+  if (!(await isDirty(projectPath))) return false;
+  await git(projectPath, ['stash', 'push', '--include-untracked', '-m', parkTag(branch)]);
+  return true;
+}
+
+async function unpark(projectPath, branch) {
+  const ref = await parkedRef(projectPath, branch);
+  if (!ref) return { restored: false };
+  try {
+    await git(projectPath, ['stash', 'pop', ref]);
+    return { restored: true };
+  } catch (err) {
+    // A pop that cannot apply leaves conflict markers in the files. That is a
+    // reasonable state for someone at a terminal and a bad one for an editor
+    // that will parse those files a moment later — the page would read as
+    // broken markup. The tree goes back to the branch as committed, and the
+    // work stays parked, which is the state it was already in. Safe because
+    // the switch left the tree clean, so there is nothing else here to lose.
+    try {
+      await git(projectPath, ['reset', '--hard', 'HEAD']);
+      await git(projectPath, ['clean', '-fd']);
+    } catch {
+      /* nothing better to try */
+    }
+    return {
+      restored: false,
+      error:
+        `Your work on "${branch}" is still parked — it could not be put back automatically because the branch has changed underneath it. ` +
+        'It is safe: recover it with `git stash list` and `git stash pop`.',
+    };
+  }
+}
+
+ipcMain.handle('git:checkout', async (_e, { projectPath, branch, create, parkFirst }) => {
+  const from = await currentBranch(projectPath);
+  let parked = false;
+  // Creating a branch carries the work onto it, which is what starting a
+  // branch from what you have in front of you means. Only a switch parks.
+  if (parkFirst && !create) parked = await park(projectPath, from);
   const args = create ? ['checkout', '-b', branch] : ['checkout', branch];
   try {
     await git(projectPath, args);
   } catch (err) {
+    if (parked) {
+      // The switch failed, so put the work straight back rather than leaving
+      // it stashed behind a branch change that never happened.
+      await unpark(projectPath, from);
+    }
     const detail = String(err.stderr || err.message || '');
     // Git refuses to switch when the working tree would be clobbered, and
     // leaves HEAD where it was — every later edit then lands on the branch

@@ -85,7 +85,7 @@ export default function GitChip({ project, showToast, flushSave, onWorktreeChang
       setOpen(false);
       return;
     }
-    switchNow(branch);
+    parkThenSwitch(branch); // nothing to park; this still brings back what is waiting
   };
 
   const switchNow = (branch) =>
@@ -94,6 +94,27 @@ export default function GitChip({ project, showToast, flushSave, onWorktreeChang
       `Switched to ${branch}`,
       'Switching…'
     );
+
+  // Leave the work where it was written and pick it up again on the way back.
+  // No commit, nothing carried onto a branch it does not belong to.
+  const parkThenSwitch = (branch) => {
+    const from = info.branch;
+    return act(
+      async () => {
+        const r = await window.avb.gitCheckout({
+          projectPath: project.path,
+          branch,
+          parkFirst: true,
+        });
+        // The switch worked; anything else to say is about the changes.
+        if (r?.error) showToast(r.error, 'error');
+        else if (r?.restored) showToast(`Picked your changes back up on ${branch}`, 'success');
+        return r;
+      },
+      `On ${branch} — your changes are waiting on ${from}`,
+      'Switching…'
+    );
+  };
 
   const commitThenSwitch = (branch, message) => {
     const from = info.branch;
@@ -219,6 +240,11 @@ export default function GitChip({ project, showToast, flushSave, onWorktreeChang
                 {b === info.branch ? <CheckIcon size={12} /> : null}
               </span>
               <span className="label">{b}</span>
+              {(info.parked || []).includes(b) && b !== info.branch && (
+                <span className="branch-parked" title="Changes waiting on this branch">
+                  changes waiting
+                </span>
+              )}
             </div>
           ))}
           <div className="dropdown-row">
@@ -322,6 +348,9 @@ export default function GitChip({ project, showToast, flushSave, onWorktreeChang
           files={info.dirtyFiles || []}
           busy={busy}
           onCancel={() => setSwitchTo(null)}
+          onLeaveHere={async () => {
+            if (await parkThenSwitch(switchTo)) setSwitchTo(null);
+          }}
           onTakeAlong={async () => {
             if (await switchNow(switchTo)) setSwitchTo(null);
           }}
@@ -348,7 +377,7 @@ export default function GitChip({ project, showToast, flushSave, onWorktreeChang
 // has no default action: taking changes with you and leaving them behind are
 // both reasonable, and picking one silently is how the edits ended up on the
 // wrong branch in the first place.
-function SwitchBranchModal({ from, to, files, busy, onCancel, onTakeAlong, onCommitFirst }) {
+function SwitchBranchModal({ from, to, files, busy, onCancel, onLeaveHere, onTakeAlong, onCommitFirst }) {
   const [message, setMessage] = useState('');
   const working = !!busy;
   const shown = files.slice(0, 5);
@@ -363,8 +392,8 @@ function SwitchBranchModal({ from, to, files, busy, onCancel, onTakeAlong, onCom
         <div className="modal-header">Uncommitted changes</div>
         <div className="modal-body">
           <div className="hint-text">
-            You have unsaved-to-git changes on <strong>{from}</strong>. Git carries them
-            across a switch, so they’d end up part of <strong>{to}</strong>.
+            You have changes on <strong>{from}</strong> that aren’t committed. They can wait
+            here until you come back — no commit needed.
           </div>
 
           {shown.length > 0 && (
@@ -377,7 +406,7 @@ function SwitchBranchModal({ from, to, files, busy, onCancel, onTakeAlong, onCom
           )}
 
           <div>
-            <label>Commit message</label>
+            <label>Or commit them first</label>
             <input
               autoFocus
               placeholder={`Update ${from}`}
@@ -401,15 +430,27 @@ function SwitchBranchModal({ from, to, files, busy, onCancel, onTakeAlong, onCom
           <button onClick={onCancel} disabled={working}>
             Cancel
           </button>
-          <button onClick={onTakeAlong} disabled={working} title={`Leave them uncommitted and switch to ${to}`}>
-            Take changes to {to}
+          <button
+            onClick={onTakeAlong}
+            disabled={working}
+            title={`Carry them onto ${to} uncommitted`}
+          >
+            Take them to {to}
+          </button>
+          <button
+            onClick={() => onCommitFirst(message.trim() || `Update ${from}`)}
+            disabled={working}
+            title={`Commit to ${from}, then switch`}
+          >
+            Commit first
           </button>
           <button
             className="primary"
             disabled={working}
-            onClick={() => onCommitFirst(message.trim() || `Update ${from}`)}
+            onClick={onLeaveHere}
+            title={`Set them aside on ${from} and pick them up when you return`}
           >
-            Commit to {from}, then switch
+            Leave them on {from}
           </button>
         </div>
       </div>

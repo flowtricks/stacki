@@ -3765,3 +3765,15 @@ body > .embed-editor_provenance {
 }
 .content-rename-plan .primary { margin-top: 8px; }
 .content-pointer { font-size: 10.5px; color: var(--text-faint); }
+
+/* A branch holding work that was set aside on the way out. */
+.branch-parked {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--text-dim, #9aa0a6);
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+  white-space: nowrap;
+}
