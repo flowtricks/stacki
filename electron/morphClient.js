@@ -99,14 +99,19 @@ const pinned = (n) =>
 const keyOf = (n) => (n && n.nodeType === 1 ? n.getAttribute('id') || null : null);
 
 // What makes two nodes the same kind of thing for the purpose of lining up two
-// lists. An element is its tag plus whatever identity it has; every text node
-// is interchangeable with every other, and so is every comment, because their
-// content is what changes and the diff below is what decides which is which.
+// lists: a tag, and an id if it has one. Every text node is interchangeable
+// with every other, and so is every comment — their content is what changes,
+// and the diff below decides which is which.
+//
+// Class is pointedly NOT part of this. It reads like free identity, but a
+// class is the thing these props exist to change: pick another variant or
+// theme and a wrapper goes from `theme-brand` to `theme-invert`. Counting that
+// as a different element meant the old one was removed and a new one built in
+// its place — and a wrapper takes the whole page down with it, which is why
+// changing a variant threw the canvas back to the top. It is an attribute, and
+// it is patched like one.
 function keyFor(n) {
-  if (n.nodeType === 1) {
-    const k = keyOf(n);
-    return 'e:' + n.tagName + '#' + (k !== null ? k : n.getAttribute('class') || '');
-  }
+  if (n.nodeType === 1) return 'e:' + n.tagName + '#' + (keyOf(n) || '');
   return n.nodeType === 8 ? 'c' : 't';
 }
 
