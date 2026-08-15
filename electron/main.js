@@ -2362,200 +2362,24 @@ if (/^[A-Za-z][\\w-]*$/.test(name)) {
 </html>
 `;
 
-// Served to every page as a module so it can hear Vite's HMR channel. See
-// the avbMorph plugin below for why a page edit reaches this instead of
-// reloading the document.
-const MORPH_CLIENT = `
-// Astro renders components on the server, so it cannot hot-swap one: every
-// page edit is a full document reload. A reload restarts each CSS animation,
-// rewinds each <video>, drops scroll position and closes anything the user
-// had opened. The dev plugin suppresses that reload and sends a message here
-// instead — fetch the page again and change only what actually differs, so
-// everything untouched simply keeps running.
-
-const KEY = 'data-avb-p'; // the editor's own node path: a real identity to match on
-
-const keyOf = (n) => (n && n.nodeType === 1 ? n.getAttribute(KEY) || n.id || null : null);
-
-// Nodes this must never touch.
-//
-// An external script, because removing and re-inserting one re-runs it, which
-// is the reload this whole mechanism exists to avoid.
-//
-// A dev stylesheet, because it belongs to Vite. The page markup arrives fresh
-// from the server but the <style> it inlines does not — Vite serves the real
-// one from the module's own URL and swaps it in by data-vite-dev-id. Writing
-// the fetched copy over it puts the old CSS back a moment after Vite fixed it.
-const pinned = (n) =>
-  n.nodeType === 1 &&
-  ((n.tagName === 'SCRIPT' && !!n.src) || (n.tagName === 'STYLE' && n.hasAttribute('data-vite-dev-id')));
-
-function morphAttrs(from, to) {
-  const want = to.attributes;
-  for (let i = 0; i < want.length; i++) {
-    const a = want[i];
-    if (from.getAttribute(a.name) !== a.value) from.setAttribute(a.name, a.value);
-  }
-  const have = from.attributes;
-  for (let i = have.length - 1; i >= 0; i--) {
-    if (!to.hasAttribute(have[i].name)) from.removeAttribute(have[i].name);
-  }
+// The page patcher, handed to every page as a module. It lives in its own
+// file rather than as a string in here because it is real code that has to
+// stay readable — and it is read rather than required, since it runs in the
+// browser and not in this process. If it cannot be read, pages simply reload
+// the way they always did.
+let MORPH_CLIENT = '';
+try {
+  MORPH_CLIENT = fs.readFileSync(path.join(__dirname, 'morphClient.js'), 'utf8');
+} catch {
+  MORPH_CLIENT = '';
 }
 
-// Same node, or a different one wearing the same position? A key decides it
-// outright; without one, the tag name is all there is to go on.
-function same(a, b) {
-  if (a.nodeType !== b.nodeType) return false;
-  if (a.nodeType !== 1) return true;
-  if (a.tagName !== b.tagName) return false;
-  const ka = keyOf(a);
-  const kb = keyOf(b);
-  return ka || kb ? ka === kb : true;
-}
-
-// Most nodes carry no key: data-avb-p is only written onto slotted elements,
-// and the marker comments are stripped from the live page before this runs.
-// Tag name alone then makes an inserted sibling look like a rewrite of the one
-// below it, which rebuilds that node and restarts whatever it was animating.
-// A matching class is not identity, but it is enough to tell the two apart.
-const strongMatch = (a, b) =>
-  a.nodeType === 1 &&
-  b.nodeType === 1 &&
-  a.tagName === b.tagName &&
-  a.getAttribute('class') === b.getAttribute('class');
-
-// Does this old node match a later new one better than the one in front of it?
-// Then the node in front is an insertion and the old one should be left where
-// it is. Deliberately not the reverse test: an element whose class was just
-// edited finds no better match further along, so it is still patched in place
-// rather than replaced.
-function isInsertion(oldChild, newChild) {
-  if (strongMatch(oldChild, newChild)) return false;
-  for (let n = newChild.nextSibling; n; n = n.nextSibling) {
-    if (strongMatch(oldChild, n)) return true;
-  }
-  return false;
-}
-
-function morph(from, to) {
-  if (from.nodeType === 3 || from.nodeType === 8) {
-    if (from.data !== to.data) from.data = to.data;
-    return;
-  }
-  if (from.nodeType !== 1) return;
-  if (pinned(from)) return;
-  morphAttrs(from, to);
-  // A <style> holds one text node; writing it only when it differs is exactly
-  // what stops an unchanged @keyframes from starting over.
-  if (from.tagName === 'STYLE' || from.tagName === 'SCRIPT') {
-    if (from.textContent !== to.textContent) from.textContent = to.textContent;
-    return;
-  }
-  morphChildren(from, to);
-}
-
-function morphChildren(from, to) {
-  let oldChild = from.firstChild;
-  let newChild = to.firstChild;
-  while (newChild) {
-    const nextNew = newChild.nextSibling;
-    if (!oldChild) {
-      from.appendChild(document.importNode(newChild, true));
-      newChild = nextNew;
-      continue;
-    }
-    if (isInsertion(oldChild, newChild)) {
-      from.insertBefore(document.importNode(newChild, true), oldChild);
-      newChild = nextNew;
-      continue;
-    }
-    if (same(oldChild, newChild)) {
-      morph(oldChild, newChild);
-      oldChild = oldChild.nextSibling;
-      newChild = nextNew;
-      continue;
-    }
-    // Look ahead for the same key further down: an element inserted above a
-    // component shouldn't force everything below it to be rebuilt.
-    const k = keyOf(newChild);
-    let found = null;
-    if (k) for (let c = oldChild; c; c = c.nextSibling) if (keyOf(c) === k) { found = c; break; }
-    if (found) {
-      while (oldChild && oldChild !== found) {
-        const gone = oldChild;
-        oldChild = oldChild.nextSibling;
-        if (!pinned(gone)) from.removeChild(gone);
-      }
-      morph(oldChild, newChild);
-      oldChild = oldChild.nextSibling;
-    } else {
-      from.insertBefore(document.importNode(newChild, true), oldChild);
-    }
-    newChild = nextNew;
-  }
-  while (oldChild) {
-    const gone = oldChild;
-    oldChild = oldChild.nextSibling;
-    if (!pinned(gone)) from.removeChild(gone);
-  }
-}
-
-// The editor's own markers. A page that isn't the canvas strips these on load
-// (see the cleanup script that ships with every page), so the fetched copy has
-// to be stripped the same way before anything is compared. Otherwise every
-// patch puts them back — littering a DOM that deliberately removed them, and
-// leaving the two trees a different shape, which costs elements their match
-// and restarts whatever they were animating.
-function stripMarkers(root) {
-  const gone = [];
-  const walk = (p) => {
-    for (let n = p.firstChild; n; n = n.nextSibling) {
-      if (n.nodeType === 8 && /^avb-[se]:/.test(n.data)) gone.push(n);
-      else if (n.nodeType === 1) {
-        if (n.tagName === 'TEMPLATE' && (n.hasAttribute('data-avb-s') || n.hasAttribute('data-avb-e'))) {
-          gone.push(n);
-        } else {
-          walk(n);
-        }
-      }
-    }
-  };
-  walk(root);
-  for (const n of gone) n.remove();
-}
-
-const isCanvas = () => location.hash.indexOf('avb-design') !== -1;
-
-let busy = false;
-let again = false;
-
-async function update() {
-  if (busy) { again = true; return; }        // coalesce: a burst of edits is one fetch
-  busy = true;
-  try {
-    const res = await fetch(location.href, { cache: 'no-store' });
-    if (!res.ok) throw new Error('dev server answered ' + res.status);
-    const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
-    if (!isCanvas()) stripMarkers(doc);
-    morphAttrs(document.documentElement, doc.documentElement);
-    morphChildren(document.head, doc.head);
-    morphChildren(document.body, doc.body);
-    // The editor's outline map is built from markers that just moved.
-    document.dispatchEvent(new CustomEvent('avb:morphed'));
-  } catch (err) {
-    // Anything unexpected falls back to what used to happen, so a page is
-    // never left showing something the file doesn't say.
-    console.warn('[stacki] could not patch the page, reloading:', err);
-    location.reload();
-    return;
-  } finally {
-    busy = false;
-  }
-  if (again) { again = false; update(); }
-}
-
-if (import.meta.hot) import.meta.hot.on('avb:page-changed', update);
-`;
+// `is:inline` so Astro leaves it exactly as written and the browser asks the
+// dev server for it — which is what puts it in the module graph, and what
+// gives it an import.meta.hot to listen on.
+const MORPH_TAG_HTML = MORPH_CLIENT
+  ? '<script type="module" src="/@id/__x00__virtual:avb-morph" is:inline></script>'
+  : '';
 
 function writeMarkerConfig(projectPath) {
   try {
@@ -2591,23 +2415,20 @@ const PAGES_DIR = ${JSON.stringify(pagesDir)};
 const SRC_DIR = ${JSON.stringify(srcDir)};
 const PROJECT_DIR = ${JSON.stringify(projectDirPosix)};
 
-// The markers are for the editor canvas, where the preload records them and
-// takes them straight back out. Anywhere else — this dev server opened in a
-// real browser, or the app's own interactive preview — they are litter in
-// somebody's devtools, and a <template> between two elements is a sibling
-// that :nth-child can count. So the page removes them itself unless it is the
-// canvas, which announces itself with #avb-design.
+// A <template> marker is an element like any other: it sits between two
+// siblings and :nth-child counts it. Outside the canvas nothing needs it, so
+// the page takes those out itself.
+//
+// The comment markers stay. They are invisible to selectors, to layout and to
+// the box model, and they are the one thing on the page that says which node
+// is which — the patcher that replaces a full reload matches the server's new
+// rendering against the live document through them, and without them it would
+// be guessing from tag names. A comment in devtools is a small price for not
+// rebuilding an element that was only meant to change its text.
 const AVB_CLEANUP = [
   '<script is:inline>',
   "if (!location.hash.includes('avb-design')) {",
   "  for (const t of document.querySelectorAll('template[data-avb-s],template[data-avb-e]')) t.remove();",
-  '  const gone = [];',
-  '  const walk = (p) => { for (let n = p.firstChild; n; n = n.nextSibling) {',
-  "    if (n.nodeType === 8 && /^avb-[se]:/.test(n.data)) gone.push(n);",
-  '    if (n.nodeType === 1) walk(n);',
-  '  } };',
-  '  walk(document);',
-  '  for (const n of gone) n.remove();',
   '}',
   '</script>',
 ].join('\\n');
@@ -2627,6 +2448,24 @@ const AVB_CLEANUP = [
 // instead. Vite reaches the browser through more than one object and which
 // one Astro picks depends on its version, so every distinct channel is
 // wrapped; identity dedupes the ones that are really the same object.
+// What the <style> blocks of a file said the last time it was looked at.
+// Comparing the source rather than the compiled output is deliberate: Astro's
+// scope hash comes from the file's path, so identical style blocks compile to
+// identical CSS, and reading the file cannot disturb the module graph.
+const avbStyleText = new Map();
+const avbReadFile = (file) => {
+  try {
+    return readFileSync(file, 'utf8');
+  } catch {
+    return '';
+  }
+};
+const avbStyleTextOf = (src) => (src.match(/<style[^>]*>[\\s\\S]*?<\\/style>/gi) || []).join('\\n');
+const avbIsStyleModule = (m) => {
+  const u = m.url || m.id || '';
+  return u.indexOf('type=style') !== -1 || u.indexOf('lang.css') !== -1 || /\\.css($|\\?)/.test(u);
+};
+
 const avbMorph = {
   name: 'avb-morph',
   resolveId(id) {
@@ -2635,6 +2474,23 @@ const avbMorph = {
   },
   load(id) {
     return id === '\0virtual:avb-morph' ? ${JSON.stringify(MORPH_CLIENT)} : null;
+  },
+  // Vite reapplies a page's extracted stylesheet whenever its .astro file
+  // changes, whether or not a single character of that CSS is different. The
+  // browser treats the rewritten <style> as a new stylesheet, so every
+  // animation it defines starts over — once per keystroke while typing into a
+  // text field, which is exactly the thing this feature exists to stop. When
+  // the style blocks in the file are byte for byte what they were, the
+  // stylesheet updates are dropped and only the page patch goes out. A real
+  // CSS edit compares differently and takes Vite's own path, untouched.
+  handleHotUpdate(ctx) {
+    if (!/\\.(astro|md|mdx)$/i.test(ctx.file)) return;
+    const before = avbStyleText.get(ctx.file);
+    const now = avbStyleTextOf(avbReadFile(ctx.file));
+    avbStyleText.set(ctx.file, now);
+    if (before === undefined || before !== now) return;
+    const rest = ctx.modules.filter((m) => !avbIsStyleModule(m));
+    return rest.length === ctx.modules.length ? undefined : rest;
   },
   configureServer(server) {
     const seen = new Set();
@@ -2655,11 +2511,7 @@ const avbMorph = {
   },
 };
 
-// \`is:inline\` so Astro leaves it exactly as written and the browser asks the
-// dev server for it — which is what puts it in the module graph, and what
-// gives it an import.meta.hot to listen on.
-const AVB_MORPH_TAG =
-  '<script type="module" src="/@id/__x00__virtual:avb-morph" is:inline></script>';
+const AVB_MORPH_TAG = ${JSON.stringify(MORPH_TAG_HTML)};
 
 const avbMarkers = {
   name: 'avb-node-markers',
@@ -2694,7 +2546,11 @@ const avbMarkers = {
     const isPage = file.startsWith(PAGES_DIR + '/');
     if (!isPage && !file.startsWith(SRC_DIR + '/')) return null;
     try {
-      const parsed = parsePage(readFileSync(file, 'utf8'));
+      const source = readFileSync(file, 'utf8');
+      // Seeded here so the very first edit already has something to compare
+      // against, rather than spending one stylesheet rewrite learning it.
+      if (!avbStyleText.has(file)) avbStyleText.set(file, avbStyleTextOf(source));
+      const parsed = parsePage(source);
       if (!parsed.editable) return null;
       resolveChunks(parsed.model, file);
       // Project-relative, matching what the app derives from the open file.
