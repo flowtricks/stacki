@@ -90,8 +90,13 @@ const pinned = (n) =>
   ((n.tagName === 'SCRIPT' && !!n.getAttribute('src')) ||
     (n.tagName === 'STYLE' && n.hasAttribute('data-vite-dev-id')));
 
-const keyOf = (n) =>
-  n && n.nodeType === 1 ? n.getAttribute('data-avb-p') || n.getAttribute('id') || null : null;
+// An id, and deliberately nothing else. `data-avb-p` looks like a better key —
+// it is the editor's own node path — but the canvas stamps it onto live
+// elements as it records them, while the server's HTML mostly has no such
+// attribute. Reading it here compared a stamped path against an id, decided
+// every element was a different element, and fell back to reloading the page
+// on every keystroke: the exact thing this was written to stop.
+const keyOf = (n) => (n && n.nodeType === 1 ? n.getAttribute('id') || null : null);
 
 // What makes two nodes the same kind of thing for the purpose of lining up two
 // lists. An element is its tag plus whatever identity it has; every text node
@@ -170,11 +175,11 @@ function findLive(from, serverNode) {
     if (n.nodeType !== 1) continue;
     if (n.tagName !== serverNode.tagName) continue;
     const ks = keyOf(serverNode);
-    if (ks) {
-      if (keyOf(n) === ks) return n;
-      continue; // a key is identity: a different one is a different element
-    }
-    if (n.getAttribute('class') === serverNode.getAttribute('class')) return n;
+    if (ks !== null && keyOf(n) === ks) return n;
+    if (ks === null && n.getAttribute('class') === serverNode.getAttribute('class')) return n;
+    // Same tag, weaker evidence. Kept in case nothing better turns up: the
+    // diff has already decided this node persists, so the only question left
+    // is which one it is, and a same-tag sibling beats giving up and reloading.
     if (!loose) loose = n;
   }
   return loose;
