@@ -2437,10 +2437,19 @@ function PropField({
   // The same field component edits the next node's prop of this name, so the
   // switch has to go back to what THAT value is.
   useEffect(() => setCustom(false), [nodeKey, name]);
-  // Attribute rows and code fields have no control to switch away from: one
-  // edits as name/value pairs, the other is already an expression. `slot` names
-  // one of the parent's slots, which is markup, not data.
-  const bindable = type !== 'code' && type !== 'attrs' && name !== 'slot';
+  // Attribute rows edit as name/value pairs, and `slot` names one of the
+  // parent's slots, which is markup rather than data — neither has anything to
+  // bind to.
+  //
+  // A code prop does. It was excluded on the grounds that it is already an
+  // expression and so has no control to switch away from, which is true and
+  // beside the point: `headings` passed straight through from the frontmatter
+  // is the same binding as `previous` next to it, and showing one as a chip
+  // and the other as raw text made the pair look like different things. What
+  // it holds still decides — a name or a path chips, and anything a field of
+  // chips cannot hold honestly (`items.filter(Boolean)`, a call) keeps the code
+  // editor exactly as before.
+  const bindable = type !== 'attrs' && name !== 'slot';
   const str = value ? value.value : '';
   const assetBinding = assetImportOf(str, dataCtx?.imports);
   // `src={hero}` is an expression, but it's the one expression a picker can
