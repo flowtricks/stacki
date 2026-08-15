@@ -3,7 +3,7 @@ import WelcomeScreen from './panels/WelcomeScreen.jsx';
 import PagesPanel from './panels/PagesPanel.jsx';
 import PalettePanel from './panels/PalettePanel.jsx';
 import StructurePanel from './panels/StructurePanel.jsx';
-import { noteIndexAbove, selectionAfterDelete } from './treeSelection.js';
+import { noteIndexAbove, noteText, noteValue, selectionAfterDelete } from './treeSelection.js';
 import PropsPanel from './panels/PropsPanel.jsx';
 import StylePanel from './panels/StylePanel.jsx';
 import PreviewPane from './panels/PreviewPane.jsx';
@@ -2147,9 +2147,11 @@ export default function App() {
             if (existing) list.splice(index - 1, 1);
             return model;
           }
-          // The parser keeps the raw text between the delimiters, so pad it to
-          // serialize as `<!-- text -->` the way a hand-written one reads.
-          const value = ` ${body} `;
+          // The parser keeps the raw text between the delimiters, so it is
+          // padded to serialize as `<!-- text -->` the way a hand-written one
+          // reads — and a note written as a divider keeps its rule, to the
+          // same width, so a column of them stays lined up.
+          const value = noteValue(existing?.value, body);
           if (existing) existing.value = value;
           else list.splice(index, 0, { id: newId(), kind: 'comment', value });
           return model;
@@ -3759,7 +3761,7 @@ export default function App() {
                 (selectedNode?.kind === 'component' &&
                   !!insertables.find((c) => c.name === selectedNode.name)?.hasRest)
               }
-              comment={(commentAbove(model, selectedId)?.value ?? '').trim()}
+              comment={noteText(commentAbove(model, selectedId)?.value)}
               onSetComment={(text) => setComment(selectedId, text)}
               onSetProp={(propName, value, immediate) =>
                 setProp(selectedId, propName, value, immediate)

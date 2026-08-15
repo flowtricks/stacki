@@ -60,3 +60,33 @@ export function selectionAfterDelete(model, nodeId) {
   for (let i = at - 1; i >= 0; i--) if (!folded(i)) return rest[i].id;
   return parent ? parent.id : null;
 }
+
+// A note is often written as a divider — `--------------- CTA` — which is a
+// rule drawn in front of a label. The label is the part worth reading, so it
+// is the part shown in the navigator and in the comments box.
+//
+// Nothing is thrown away: the rule is put back when the note is written, and
+// kept to the same overall width, so a column of dividers stays lined up as
+// labels of different lengths are typed into it.
+const RULE = /^\s*([-=*_])\1{2,}\s*/;
+const RULE_END = /\s*([-=*_])\1{2,}\s*$/;
+
+export function noteText(raw) {
+  const full = String(raw ?? '').trim();
+  const label = full.replace(RULE, '').replace(RULE_END, '').trim();
+  // A rule with no label is decoration rather than a note. Shown as it is,
+  // because showing nothing would invite clearing a field that looks empty and
+  // taking the divider with it.
+  return label || full;
+}
+
+export function noteValue(previous, text) {
+  const body = String(text ?? '').trim();
+  if (!body) return null; // the caller removes the node
+  const full = String(previous ?? '').trim();
+  const lead = full.match(RULE);
+  if (!lead) return ` ${body} `;
+  const rule = lead[1];
+  const width = Math.max(3, full.length - body.length - 1);
+  return ` ${rule.repeat(width)} ${body} `;
+}

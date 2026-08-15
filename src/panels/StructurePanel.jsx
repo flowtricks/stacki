@@ -3,7 +3,7 @@ import { canContainTag } from '../elementSchemas.js';
 import { isDataBound } from '../bindings.js';
 import { setDrag, clearDrag, getDrag } from '../dragState.js';
 import { elementLabel } from '../classNames.js';
-import { isContentOnlyChild } from '../treeSelection.js';
+import { isContentOnlyChild, noteText } from '../treeSelection.js';
 import {
   LayoutIcon,
   ElementComponentIcon,
@@ -623,7 +623,7 @@ function TreeNode({ node, note, parentId, index, depth, ...ctx }) {
           {note && (
             <span className="node-note" title={note.value.trim()}>
               {' / '}
-              {truncate(note.value.replace(/\s+/g, ' ').trim(), 44)}
+              {truncate(noteText(note.value).replace(/\s+/g, ' '), 44)}
             </span>
           )}
         </span>
