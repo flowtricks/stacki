@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "vite build",
+    "test:markers": "node test/markers.js",
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
@@ -31,6 +32,8 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@astrojs/compiler": "^4.0.0",
+    "@astrojs/compiler-rs": "^0.4.0",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",

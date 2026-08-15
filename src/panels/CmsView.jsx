@@ -104,6 +104,12 @@ export default function CmsView({
   // field tells it nothing at all, so these are remembered on disk.
   const [declared, setDeclared] = useState({});
 
+  // An image in a data file is named relative to the file itself
+  // ("../assets/hero.png"), which is the form Astro follows back into src/.
+  // The fields need that folder to know what a value points at, and where a
+  // newly picked one has to point back from.
+  const baseDir = `src/${rel}`.replace(/\/[^/]*$/, '');
+
   const saveTimer = useRef(null);
   const pending = useRef(null); // items waiting to be written
   // The data currently on disk, so a save can record what it replaced for undo.
@@ -440,6 +446,7 @@ export default function CmsView({
                 type={inferType(item)}
                 value={item}
                 projectPath={project.path}
+                baseDir={baseDir}
                 onChange={(v) => commit(items.map((it, i) => (i === sel ? v : it)))}
               />
             </div>
@@ -459,6 +466,7 @@ export default function CmsView({
                   }
                   value={item[field.key]}
                   projectPath={project.path}
+                  baseDir={baseDir}
                   onChange={(v) => setItemValue(field.key, v)}
                 />
               ))}
@@ -719,7 +727,7 @@ function bestType(collectionType, value) {
 // Fields
 // ---------------------------------------------------------------------------
 
-function FieldRow({ label, type, value, onChange, projectPath, depth = 0 }) {
+function FieldRow({ label, type, value, onChange, projectPath, baseDir, depth = 0 }) {
   // Typing an 81st character turns a text field into a paragraph one, and
   // swapping <input> for <textarea> mid-word would take the caret with it.
   // The control only changes shape while the field is idle.
@@ -741,13 +749,14 @@ function FieldRow({ label, type, value, onChange, projectPath, depth = 0 }) {
         value={value}
         onChange={onChange}
         projectPath={projectPath}
+        baseDir={baseDir}
         depth={depth}
       />
     </div>
   );
 }
 
-function FieldControl({ type, value, onChange, projectPath, depth }) {
+function FieldControl({ type, value, onChange, projectPath, baseDir, depth }) {
   // A computed value — shown as the code it is, in the same JS editor the
   // props panel uses. Committed on blur or Enter rather than per keystroke:
   // this text lands in a real source file, and half-typed code would break
@@ -794,7 +803,7 @@ function FieldControl({ type, value, onChange, projectPath, depth }) {
         onChange={onChange}
         mediaKind="image"
         projectPath={projectPath}
-        showModeToggle={false}
+        baseDir={baseDir}
       />
     );
   }
@@ -857,6 +866,7 @@ function FieldControl({ type, value, onChange, projectPath, depth }) {
         value={isPlainObject(value) ? value : {}}
         onChange={onChange}
         projectPath={projectPath}
+        baseDir={baseDir}
         depth={depth + 1}
       />
     );
@@ -868,6 +878,7 @@ function FieldControl({ type, value, onChange, projectPath, depth }) {
         value={Array.isArray(value) ? value : []}
         onChange={onChange}
         projectPath={projectPath}
+        baseDir={baseDir}
         depth={depth + 1}
       />
     );
@@ -907,7 +918,7 @@ function ListEditor({ value, onChange }) {
 }
 
 // A nested object: its keys become fields one level in.
-function GroupEditor({ value, onChange, projectPath, depth }) {
+function GroupEditor({ value, onChange, projectPath, baseDir, depth }) {
   const fields = fieldsOf([value]);
   return (
     <div className="cms-group-box">
@@ -918,6 +929,7 @@ function GroupEditor({ value, onChange, projectPath, depth }) {
           type={field.type}
           value={value[field.key]}
           projectPath={projectPath}
+          baseDir={baseDir}
           depth={depth}
           onChange={(v) => onChange({ ...value, [field.key]: v })}
         />
@@ -930,7 +942,7 @@ function GroupEditor({ value, onChange, projectPath, depth }) {
 // Array of objects — a list inside an item (nav links, stats, steps). Each
 // entry is one row showing its name; the fields behind it open in a dialog,
 // so a long item doesn't push the rest of the form off the screen.
-function RepeaterEditor({ value, onChange, projectPath, depth }) {
+function RepeaterEditor({ value, onChange, projectPath, baseDir, depth }) {
   const [openIndex, setOpenIndex] = useState(null);
 
   const removeAt = (i) => {
@@ -991,6 +1003,7 @@ function RepeaterEditor({ value, onChange, projectPath, depth }) {
           entry={value[openIndex]}
           title={titleOf(value[openIndex], openIndex)}
           projectPath={projectPath}
+          baseDir={baseDir}
           depth={depth}
           onChange={(next) => {
             const copy = [...value];
@@ -1007,7 +1020,7 @@ function RepeaterEditor({ value, onChange, projectPath, depth }) {
 
 // One entry of a repeater, in a dialog. Edits apply as they're typed — the
 // buttons are for leaving and removing, not for committing.
-function NestedItemDialog({ entry, title, projectPath, depth, onChange, onDelete, onClose }) {
+function NestedItemDialog({ entry, title, projectPath, baseDir, depth, onChange, onDelete, onClose }) {
   const overlayRef = useRef(null);
   const fields = fieldsOf([entry]);
 
@@ -1046,6 +1059,7 @@ function NestedItemDialog({ entry, title, projectPath, depth, onChange, onDelete
               type={field.type}
               value={entry[field.key]}
               projectPath={projectPath}
+              baseDir={baseDir}
               depth={depth}
               onChange={(v) => onChange({ ...entry, [field.key]: v })}
             />

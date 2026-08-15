@@ -313,6 +313,20 @@ function codeText(model) {
   return parts.join('\n');
 }
 
+// A route is stored the way it identifies a page — slashless, so /de/hotel
+// and /de/hotel/ are the same entry however a link was typed. A URL is a
+// different thing: Astro's dev server serves exactly one of those spellings,
+// and answers the other with a 404 help page. So the project's trailingSlash
+// is applied on the way from one to the other, never before.
+function routeToPath(route, trailingSlash) {
+  if (!route || route === '/') return route || '/';
+  // An extension means a file, not a directory-style route: /rss.xml keeps
+  // its shape under every setting, which is also how Astro checks it.
+  if (trailingSlash === 'always') return /\.[^/]+$/.test(route) ? route : route + '/';
+  if (trailingSlash === 'never') return route.replace(/\/$/, '');
+  return route; // 'ignore' — the default, and it serves either
+}
+
 // Imports the app is willing to remove once nothing refers to them: a
 // component file of any flavour Astro renders, an image, and Astro's own
 // <Image>/<Picture>. All three are reachable only as a tag or from an
@@ -530,6 +544,7 @@ export default function App() {
   // class is an expression the source can't resolve.
   const [nodeClasses, setNodeClasses] = useState(null);
   const [devUrl, setDevUrl] = useState(null);
+  const [trailingSlash, setTrailingSlash] = useState('ignore');
   const [devStatus, setDevStatus] = useState('off'); // off | starting | on
   const [devLog, setDevLog] = useState('');
   const [devDiag, setDevDiag] = useState(null); // {kind, nodePath, nodeVersion, …}
@@ -635,8 +650,10 @@ export default function App() {
       if (!req) return; // cleared from this side already
       setAssetPick({
         ...req,
-        onPick: (rel) => {
-          req.onPick(rel);
+        // The entry rides along: which root it came from decides whether the
+        // field writes a URL, an import, or a path relative to its own file.
+        onPick: (rel, entry) => {
+          req.onPick(rel, entry);
           endAssetPick(true);
         },
       });
@@ -682,6 +699,7 @@ export default function App() {
   const rescan = useCallback(async (projectPath) => {
     const result = await window.avb.scanProject(projectPath);
     setScan(result);
+    if (result?.trailingSlash) setTrailingSlash(result.trailingSlash);
     window.avb
       .listProjectClasses(projectPath)
       .then((c) => setProjectClasses(c || []))
@@ -693,8 +711,10 @@ export default function App() {
     async (projectPath) => {
       setDevStatus('starting');
       try {
-        const { url, external } = await window.avb.startDevServer(projectPath);
+        const { url, external, trailingSlash: resolved } =
+          await window.avb.startDevServer(projectPath);
         setDevUrl(url);
+        if (resolved) setTrailingSlash(resolved);
         setDevStatus('on');
         setDevDiag(null);
         if (external) {
@@ -1837,9 +1857,9 @@ export default function App() {
     if (!devUrl) return;
     const route = pageStateRef.current.currentPage?.route || '/';
     previewPathRef.current = route;
-    setPreviewSrc(devUrl + route);
+    setPreviewSrc(devUrl + routeToPath(route, trailingSlash));
     setInPreview(true);
-  }, [devUrl]);
+  }, [devUrl, trailingSlash]);
 
   const exitPreview = useCallback(() => {
     setInPreview(false);
@@ -3120,7 +3140,8 @@ export default function App() {
   // Preview one of the entries it actually stands for; `dynamicEntry` is which.
   const dynamicEntry = dynamicPaths[dynamicIndex] || null;
   const pageRoute = dynamicEntry ? dynamicEntry.route : patternRoute;
-  const liveUrl = devUrl && pageRoute ? devUrl + pageRoute : null;
+  const pageUrlPath = pageRoute ? routeToPath(pageRoute, trailingSlash) : null;
+  const liveUrl = devUrl && pageUrlPath ? devUrl + pageUrlPath : null;
 
   return (
     <div className="app">
@@ -3312,7 +3333,7 @@ export default function App() {
             devStatus={devStatus}
             devLog={devLog}
             devDiag={devDiag}
-            route={pageRoute}
+            route={pageUrlPath}
             refreshKey={refreshKey}
             crumbs={crumbs}
             onCrumb={(id) => setSelectedId(id)}
