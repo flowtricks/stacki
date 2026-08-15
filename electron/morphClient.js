@@ -82,12 +82,26 @@ function syncAnchors(liveRoot, serverRoot) {
   walk(liveRoot, serverRoot);
 }
 
-// Never written to. A dev stylesheet belongs to Vite, which swaps it in by
+// Never looked inside. A dev stylesheet belongs to Vite, which swaps it in by
 // data-vite-dev-id; an external script re-runs if it is re-inserted, which is
 // the reload this exists to avoid.
+//
+// <noscript> is here for a different and less obvious reason. Whether its
+// markup is parsed at all depends on whether scripting is enabled in the
+// document doing the parsing. In the live page it is, so the contents are
+// inert text and the element has no children. In a DOMParser document it is
+// not, so the same markup comes back as real elements. The two can never be
+// compared, and walking in found children on one side and none on the other,
+// gave up, and reloaded — on every patch, for any page carrying a <noscript>.
+// Nothing in it can change without the file around it changing anyway.
+//
+// <template> is opaque for the same kind of reason: its markup lives in a
+// separate fragment rather than in childNodes.
 const pinned = (n) =>
   n.nodeType === 1 &&
-  ((n.tagName === 'SCRIPT' && !!n.getAttribute('src')) ||
+  (n.tagName === 'NOSCRIPT' ||
+    n.tagName === 'TEMPLATE' ||
+    (n.tagName === 'SCRIPT' && !!n.getAttribute('src')) ||
     (n.tagName === 'STYLE' && n.hasAttribute('data-vite-dev-id')));
 
 // An id, and deliberately nothing else. `data-avb-p` looks like a better key —
