@@ -699,6 +699,14 @@ export async function resolveTarget(
       attributes,
     }
   }
+  // What the header shows is also what the MATCHER should match against. The
+  // view builds its snapshots from the source tree, where a component instance
+  // or a layout has no tag of its own — and the matcher rejects a type selector
+  // (and `:root`) it cannot verify. So `html { … }` and `:root { … }` silently
+  // failed to target the very element the panel was calling `html.theme-dark`,
+  // while the class and attribute selectors beside them matched. Seed the cache
+  // with the resolved snapshot so the selected element is matched as rendered.
+  snapshots.set(rootKey, rootSnapshot)
   return { target, rootSnapshot }
 }
 

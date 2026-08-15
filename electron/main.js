@@ -40,6 +40,7 @@ const {
 const { importersOf, resolveImport } = require('./cmsRefs');
 const { readContentConfig, validateEntry, stopAllServices } = require('./contentConfig');
 const thumbs = require('./thumbs');
+const cssVars = require('./cssVars');
 const { listEntries, writeEntry, countEntries, coveredPaths } = require('./contentEntries');
 const { planRename, applyRename } = require('./contentRefs');
 const { autoUpdater } = require('electron-updater');
@@ -1403,6 +1404,7 @@ ipcMain.handle('watch:start', async (_e, projectPath) => {
   let timer = null;
   let cmsTimer = null;
   let srcAssetTimer = null;
+  let cssTimer = null;
 
   watcher = fs.watch(srcDir, { recursive: true }, (_event, filename) => {
     if (!filename) return;
@@ -1424,6 +1426,14 @@ ipcMain.handle('watch:start', async (_e, projectPath) => {
       if (wrote && Date.now() - wrote < 1000) return;
       clearTimeout(srcAssetTimer);
       srcAssetTimer = setTimeout(() => send('assets:changed', {}), 200);
+      return;
+    }
+    if (/\.css$/i.test(name)) {
+      const full = path.join(srcDir, name);
+      const wrote = selfWrites.get(path.resolve(full));
+      if (wrote && Date.now() - wrote < 1000) return;
+      clearTimeout(cssTimer);
+      cssTimer = setTimeout(() => send('css:changed', {}), 200);
       return;
     }
     if (!/\.(astro|md|mdx|html)$/i.test(name)) return;
@@ -1974,6 +1984,55 @@ const collectionOf = async (projectPath, name) => {
 };
 
 // The collections themselves, with counts, for the panel that lists them.
+// Every CSS custom property in the project, grouped the way the stylesheets
+// themselves group them — see cssVars.js for what "the way" means.
+ipcMain.handle('css:variables', async (_e, projectPath) => {
+  try {
+    return cssVars.readVariables(projectPath);
+  } catch (err) {
+    return { files: [], error: String(err.message || err) };
+  }
+});
+
+// A variable added at the bottom of a group. One call carries several: a row in
+// a table of modes is one name in every mode, and a row in a family is one
+// property of every member.
+ipcMain.handle('css:addVariables', async (_e, { projectPath, adds }) => {
+  let last = { ok: true };
+  for (const add of adds || []) {
+    markSelfWrite(path.resolve(projectPath, add.file));
+    last = cssVars.addVariable(projectPath, add);
+    if (!last.ok) break;
+  }
+  if (last.ok) send('css:changed', {});
+  return last;
+});
+
+// A row dragged to a new place: the declaration moves inside its rule, which is
+// where the order actually lives.
+ipcMain.handle('css:moveVariables', async (_e, { projectPath, moves }) => {
+  let last = { ok: true };
+  for (const move of moves || []) {
+    markSelfWrite(path.resolve(projectPath, move.file));
+    // A group carries its heading and every line under it; a row is one line.
+    last = move.names ? cssVars.moveSection(projectPath, move) : cssVars.moveVariable(projectPath, move);
+    if (!last.ok) break;
+  }
+  if (last.ok) send('css:changed', {});
+  return last;
+});
+
+// One value, replaced where it sits. The old value is sent back with the new
+// one: if the file no longer says what the panel was showing, somebody else has
+// edited it and the offsets are meaningless.
+ipcMain.handle('css:setVariable', async (_e, { projectPath, ...edit }) => {
+  const abs = path.resolve(projectPath, edit.file);
+  markSelfWrite(abs);
+  const result = cssVars.setVariable(projectPath, edit);
+  if (result.ok) send('css:changed', {});
+  return result;
+});
+
 ipcMain.handle('content:collections', async (_e, projectPath) => {
   const config = await readContentConfig(projectPath);
   if (config.missing || config.error) return { ...config, collections: [] };
@@ -3860,12 +3919,15 @@ ipcMain.handle('git:checkout', async (_e, { projectPath, branch, create, parkFir
       throw new Error(
         `Still on "${(await currentBranch(projectPath)) || 'this branch'}" — switching to "${branch}" would overwrite uncommitted changes` +
           (files.length ? ` in ${files.slice(0, 4).join(', ')}` : '') +
-          '. Commit them first, then switch.'
+          '. Leave them on this branch instead, or commit them.'
       );
     }
     throw new Error(detail.trim() || `Could not switch to "${branch}".`);
   }
-  return { ok: true };
+  // Whatever was last left on this branch comes back out, however the switch
+  // was made — that half is always wanted.
+  const back = await unpark(projectPath, branch);
+  return { ok: true, parked, parkedFrom: parked ? from : null, ...back };
 });
 
 async function currentBranch(projectPath) {

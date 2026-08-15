@@ -12,6 +12,11 @@
   --text-faint: #666666;
   --accent: #0099ff;
   --accent-soft: rgba(0, 153, 255, 0.16);
+  /* Selected text, everywhere. A saturated blue rather than the accent, which
+     is too light to carry white text — this one clears 5:1 against white, so a
+     selected value stays as readable as an unselected one. */
+  --selection: #1668e3;
+  --selection-text: #ffffff;
   --green: #30c158;
   /* Components read in this green everywhere: Navigator rows, the canvas
      outline, and the "inside a component" back button. */
@@ -3159,7 +3164,15 @@ body > .embed-editor_provenance {
 }
 .cms-saved.on { opacity: 1; }
 
-.cms-detail-body { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 24px 60px; }
+/* `--cms-body-inset` is this padding's top, named so a sticky heading inside
+   can cancel it instead of repeating the number. */
+.cms-detail-body {
+  --cms-body-inset: 20px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--cms-body-inset) 24px 60px;
+}
 
 .cms-card {
   max-width: 720px;
@@ -3766,6 +3779,230 @@ body > .embed-editor_provenance {
 .content-rename-plan .primary { margin-top: 8px; }
 .content-pointer { font-size: 10.5px; color: var(--text-faint); }
 
+/* Variables sheet -----------------------------------------------------------
+   The same sheet the CMS uses, with a table in it. Columns are either the
+   rules a variable is declared in (a theme and its modes) or the things a
+   family of names describes (h1…h6) — see electron/cssVars.js. */
+.vars-view .cms-detail { width: 100%; }
+/* One column geometry for the whole sheet: every table lays its columns on the
+   same tracks, so names and values line up from the top of the group to the
+   bottom whatever each block holds. Wide sets scroll (the body's overflow-y
+   makes the x axis scrollable too) rather than squeezing the columns. */
+.vars-body {
+  padding-bottom: 40px;
+  /* The sheet's own left/right inset. It lives INSIDE the rows (the first grid
+     track carries it, see VariablesView), not on this body: the rows have to
+     reach the panel's edges so their rules do, and so the sticky name column
+     has an edge to sit against. */
+  padding-left: 0;
+  padding-right: 0;
+  --vars-inset: 24px;
+  --vars-name-col: 200px;
+  --vars-col: 260px;
+  /* One group at a time scrolls sideways (each table's value stack is its own
+     scroller), so the sheet itself never does — otherwise a single wide group
+     would drag every other group's names off with it. */
+  overflow-x: hidden;
+}
+/* A group is two stacks: the labels, which never move, and a scroller holding
+   its values. Only the right-hand one scrolls, so a row always says what it is
+   — and nothing has to be held in place against the scroll. */
+.vars-table {
+  margin-bottom: 22px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+}
+/* The horizontal bar lands on the group's "New variable" line, because the
+   value side has no row of its own down there — see Table. The bar sits at the
+   bottom of this box, so the padding is what centres it in that line: half a
+   row (15px) puts the bar's own middle (it is 8px tall) on the row's middle. */
+/* The value stack no longer scrolls as one box. A heading has to sit outside a
+   horizontal scroller to stick to the sheet — a box that scrolls in x is a
+   scroll container in both axes, and `position: sticky` inside one resolves
+   against that box, so the headings rode the rows out of sight. The scrolling
+   moved down to the rows; the heading strip above them is held level with it
+   from VariablesView. The room for the scrollbar goes with the scroller. */
+.vars-scroll { min-width: 0; }
+.vars-scroll-rows {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  min-width: 0;
+  padding-bottom: 19px;
+}
+.vars-scroll-head { overflow: hidden; min-width: 0; }
+
+/* A group's name and its column headings stay with you while its own rows go
+   past, and give way to the next group's — which is what says which group you
+   are reading once the top of it has gone. Both stacks, or the two halves of a
+   line would part company. Opaque, or the rows show through. */
+/* The selector's column headings, over every group in the sheet. Above the
+   group titles, which come to rest just under them. */
+.vars-sheet-head {
+  position: sticky;
+  top: calc(-1 * var(--cms-body-inset));
+  z-index: 4;
+  background: var(--bg);
+}
+
+/* A group's title stops below the headings rather than over them — the height
+   is measured in VariablesView, since a row's is set here and reading it back
+   beats writing the number down twice. */
+.vars-fixed-head,
+.vars-scroll-head {
+  position: sticky;
+  /* The sheet's body is inset from the top, and sticky measures from the
+     content edge — so at top:0 the heading came to rest below that inset and
+     rows slid through the band above it. Pulled up by the same amount, it
+     stops flush against the sheet's head and nothing passes over it. It still
+     sits at its natural place until it has something to stick to. */
+  top: calc(var(--vars-head-h, 30px) - var(--cms-body-inset));
+  z-index: 3;
+  /* The sheet's own background — .cms-view paints it, and the body over it is
+     transparent, so anything else here reads as a band of a different colour. */
+  background: var(--bg);
+}
+/* The rows carry the inset themselves; anything else in the sheet (the
+   no-results line) still needs it. */
+.vars-body > .props-empty { padding-left: var(--vars-inset); }
+.vars-search {
+  height: 24px;
+  width: 180px;
+  margin-left: auto;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+/* A group heading is a row too: same height, lined up with the names under it,
+   lights up on hover, and drags by the same grip. The space between groups is
+   the table's, not the heading's — a margin here would make the heading row
+   taller than the rows it heads. */
+.vars-section {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+/* The name sits in the label stack, so it can run past the name track's width
+   without meeting anything. */
+.vars-section-text { grid-column: 2 / -1; white-space: nowrap; }
+/* A row is a grid of its own — a label row in the fixed stack, a value row in
+   the scrolling one — with fixed tracks, so the two stacks line up with each
+   other and every group's columns start at the same x. */
+.vars-row {
+  display: grid;
+  align-items: center;
+  column-gap: 10px;
+  min-width: min-content;
+  padding: 2px 0;
+  /* Every row is the same height, heading or not: the field inside a value row
+     is 26px, and the two padding lines make 30. A heading that measured itself
+     from its own text would sit shorter and break the rhythm of the list. */
+  min-height: 30px;
+}
+/* A row is a label and a value stack side by side, so the highlight is driven
+   from React (see Table) rather than :hover — one half can't light the other. */
+.vars-row.is-hover:not(.is-head) { background: rgba(255, 255, 255, 0.055); }
+/* The sheet is a table: the rows and the fields in it are square. The rows'
+   radius curled the ends of every rule, and a rounded field box on each value
+   read as a chip sitting in a column of chips.
+   The colour box keeps its corners — it is a swatch rather than a field, it
+   reads as one everywhere else in the app, and a hard-edged square of colour
+   against the round-cornered chip beside it looked like a mistake. */
+.vars-body .vars-row,
+.vars-body .u-input,
+.vars-body .var-input { border-radius: 0; }
+/* The sheet's right-hand inset, and room at the left of the value stack for the
+   connect dot: it sits on the field's left edge and grows on hover, and the
+   scroller clips whatever hangs past its edge — which cropped the first
+   column's dot in half. 22px clears it at its hovered size. */
+.vars-scroll .vars-row { padding: 2px var(--vars-inset) 2px 22px; }
+/* The two rule lines in the sheet: one under the group's name, one under the
+   column labels — so the name, the labels and the values each sit in their own
+   band. Rows are separated by hover, not borders; these are the only lines.
+   Plain borders reach the panel's edges now that the rows do: the inset moved
+   into the first grid track, so a row's box starts at the panel's left edge and
+   runs to at least its right one. */
+.vars-section,
+.vars-row.is-head {
+  border-bottom: 1px solid var(--border);
+}
+.vars-row.is-head {
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+}
+.vars-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: var(--vars-inset);
+  height: 100%;
+  color: var(--text-faint);
+  cursor: grab;
+}
+.vars-grip > svg { opacity: 0; }
+.vars-row:hover .vars-grip > svg { opacity: 1; }
+.vars-grip:active { cursor: grabbing; }
+/* While a row is being dragged, and where it would land. */
+.vars-row.is-dragging { background: rgba(255, 255, 255, 0.09); opacity: 0.75; }
+.vars-row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.vars-row.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+
+.vars-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  padding: 3px 2px;
+  min-width: 0;
+}
+.vars-name > svg { color: var(--text-faint); }
+.vars-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Value, colour box and field: the box is beside the field, not in it, and the
+   text starts at the left edge of the field like every other input in the app. */
+.var-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.var-cell.empty { color: var(--text-faint); font-size: 11px; padding-left: 8px; }
+.var-cell .u-color-swatch {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  /* Under a colour that does not fill it — a translucent one, or one nothing
+     can compute — the checkerboard shows through. */
+  background:
+    repeating-conic-gradient(rgba(255, 255, 255, 0.22) 0% 25%, transparent 0% 50%) 0 0 / 8px 8px,
+    #3a3a3a;
+}
+.var-cell .varconnect,
+.var-cell .embed-editor_varconnect { flex: 1; min-width: 0; }
+/* A field with a box around it, on every row, is a wall of boxes — and the
+   value is the thing to read, not the input holding it. So the field is
+   nothing until it is the one under the pointer (or the one being typed in),
+   which is also when the connect dot appears. */
+.var-input {
+  width: 100%;
+  height: 26px;
+  padding: 0 8px;
+  text-align: left;
+  font-size: 11.5px;
+  font-family: var(--mono, ui-monospace, monospace);
+  background: transparent;
+  border-color: transparent;
+}
+/* The token editor stands in for the input and wears its class, so hovering
+   either — the field, or the chip-bearing editor over it — lights the field.
+   The wrapper is the hover target, since the dot sits inside it. */
+.var-cell .embed-editor_varconnect:hover .var-input,
+.var-input:hover,
+.var-input:focus {
+  background: var(--bg-input);
+}
+.var-input:focus { border-color: var(--accent); }
+
 /* A branch holding work that was set aside on the way out. */
 .branch-parked {
   margin-left: auto;
@@ -3777,3 +4014,149 @@ body > .embed-editor_provenance {
   background: var(--surface-2, rgba(255, 255, 255, 0.06));
   white-space: nowrap;
 }
+
+/* Custom value ---------------------------------------------------------------
+   A long value is a long expression, and the thing that makes one editable is
+   seeing all of it at once. Clicking a value that does not fit its column (or
+   pressing "=" in any field) opens it here, in the same field the cell uses —
+   so the variable chips inside it stay chips. */
+.var-custom {
+  position: fixed;
+  z-index: 420;
+  width: 440px;
+  max-width: calc(100vw - 24px);
+  display: flex;
+  flex-direction: column;
+  background: #232323;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.6);
+  padding: 10px;
+}
+.var-custom-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.var-custom-name {
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--text-faint);
+  font-family: var(--mono, ui-monospace, monospace);
+  margin-left: auto;
+}
+.var-custom-input {
+  width: 100%;
+  min-height: 92px;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  font-family: var(--mono, ui-monospace, monospace);
+  resize: vertical;
+}
+.var-custom-foot { font-size: 10.5px; color: var(--text-faint); margin-top: 8px; }
+/* The token editor is single-line by default (it stands in for an <input>).
+   Here it stands in for a textarea, so it wraps and grows instead. */
+.embed-editor_varconnect.is-multiline.is-token > .embed-editor_varconnect-editor {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-y: auto;
+  min-height: 92px;
+  max-height: 40vh;
+  line-height: 1.6;
+}
+.embed-editor_varconnect.is-multiline { display: block; width: 100%; }
+
+/* Selection, app-wide.
+   Chromium's default is the system accent, which changes with the user's OS
+   settings and does not belong to this interface. Set here so a selected value
+   looks the same in a panel field, a name in the navigator and a line of code.
+   The canvas is an iframe rendering someone's own site and is not touched. */
+::selection {
+  background: var(--selection);
+  color: var(--selection-text);
+}
+input::selection,
+textarea::selection {
+  background: var(--selection);
+  color: var(--selection-text);
+}
+
+/* The last line of a group: what adds a variable to it. It reads as a row so
+   the list ends where the rows do, and it is quiet until it is wanted. */
+.vars-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  /* No left padding, and no stretching: a button is centred and full-width by
+     default in this app, which as a grid item put "New variable" in the middle
+     of the name column instead of at the start of it. It lines up with the
+     glyphs of the variables above it. */
+  padding: 2px 4px 2px 0;
+  background: transparent;
+  justify-self: start;
+  justify-content: flex-start;
+}
+.vars-row:hover .vars-add-btn,
+.vars-add-btn:hover { color: var(--text-dim); }
+.vars-add-field { display: flex; align-items: center; gap: 2px; min-width: 0; }
+/* The part of the name the group has already decided — typed names follow it. */
+.vars-add-stem {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--mono, ui-monospace, monospace);
+}
+.vars-add-field input {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11.5px;
+  font-family: var(--mono, ui-monospace, monospace);
+}
+
+/* Fluid type accessibility ---------------------------------------------------
+   A badge beside a clamp() that a reader cannot enlarge: red where the value
+   never doubles at 500% zoom, orange where it ignores the reader's font size.
+   The message itself is drawn on the document (see FluidBadge), because the
+   column the badge sits in scrolls and would crop it. */
+.fluid-badge {
+  --fluid-badge-size: 13px;
+  flex-shrink: 0;
+  width: var(--fluid-badge-size);
+  height: var(--fluid-badge-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: help;
+}
+.fluid-badge.is-error { color: #ff6161; cursor: pointer; }
+.fluid-badge.is-warning { color: #ffba17; }
+.fluid-badge-icon { display: block; width: 100%; height: 100%; }
+.fluid-badge-icon svg { display: block; width: 100%; height: 100%; }
+
+.fluid-tip {
+  position: fixed;
+  z-index: 500;
+  padding: 8px 11px;
+  border-radius: 8px;
+  background: #2f2f2f;
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: left;
+  pointer-events: none;
+}
+.fluid-tip-more { display: block; margin-top: 4px; color: var(--accent); }

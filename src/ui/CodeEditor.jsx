@@ -27,8 +27,12 @@ export const appTheme = EditorView.theme(
     '.cm-content': { caretColor: 'var(--accent)', padding: '8px 0' },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)' },
     '&.cm-focused': { outline: 'none' },
+    // The same selection as the rest of the app. CodeMirror paints its own
+    // layer rather than using ::selection, so it has to be told separately or
+    // code is the one place a selection looks different.
     '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground':
-      { backgroundColor: 'rgba(0, 153, 255, 0.25)' },
+      { backgroundColor: 'var(--selection)' },
+    '.cm-content ::selection': { backgroundColor: 'var(--selection)', color: 'var(--selection-text)' },
     '.cm-activeLine': { backgroundColor: 'rgba(255, 255, 255, 0.03)' },
     '.cm-gutters': {
       backgroundColor: 'transparent',

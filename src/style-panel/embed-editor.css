@@ -4109,6 +4109,28 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_varconnect.is-fill { flex: 1 1 0; }
 /* The dot sits in the input's top-left corner, hidden until the input is hovered —
    white with a purple ring. --ee-connect is Webflow's variable-connect purple. */
+/* The rich field stands in for an input, so it wears the same focus ring. Left
+   to itself a contentEditable draws the browser's own — which on macOS is the
+   accent colour from System Settings, so the box came up orange, green or
+   whatever the user happens to have chosen. */
+.embed-editor_varconnect-editor:focus {
+  outline: none;
+  box-shadow: 0 0 0 var(--border-width-default) var(--color-border-focus);
+}
+
+/* Syntax colours for a value edited as code (see lib/css-code.ts). Kept close to
+   the token chips' own palette so a value reads as one thing: the purple is the
+   variable's, numbers are the value's own, and everything structural stays quiet.
+   Inherited `color` is the fallback for anything untokenised. */
+.cx-num { color: #d6b6ff; }
+.cx-unit { color: #9d7fd8; }
+.cx-fn { color: #7fd1e8; }
+.cx-ident { color: var(--color-text-primary, #f5f5f5); }
+.cx-string { color: #a8dba8; }
+.cx-hex { color: #a8dba8; }
+.cx-prop { color: #c4afff; }
+.cx-comment { color: var(--color-text-tertiary, #666); font-style: italic; }
+
 .embed-editor_varconnect-dot {
   --ee-connect: #7c5cff;
   position: absolute;

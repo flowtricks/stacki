@@ -5,6 +5,7 @@ import {
   ComponentFillIcon,
   AssetManagerIcon,
   CmsIcon,
+  VariableIcon,
 } from './Icons.jsx';
 
 const TABS = [
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'components', title: 'Components', shortcut: '⇧A', Icon: ComponentFillIcon },
   { id: 'assets', title: 'Assets', shortcut: 'J', Icon: AssetManagerIcon },
   { id: 'cms', title: 'CMS', shortcut: '⌥C', Icon: CmsIcon },
+  { id: 'variables', title: 'Variables', shortcut: '⌥V', Icon: VariableIcon },
 ];
 
 const TOOLTIP_DELAY = 500;

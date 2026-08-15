@@ -51,11 +51,14 @@ const codeEditorTheme = EditorView.theme({
   '.cm-cursor': {
     borderLeftColor: 'var(--color-text-primary)',
   },
+  // Matches the selection used everywhere else; CodeMirror paints its own
+  // layer instead of using ::selection.
   '.cm-selectionBackground, &.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': {
-    backgroundColor: 'rgba(147, 197, 253, 0.24)',
+    backgroundColor: 'var(--selection)',
   },
   '.cm-content ::selection': {
-    backgroundColor: 'rgba(147, 197, 253, 0.30)',
+    color: 'var(--selection-text)',
+    backgroundColor: 'var(--selection)',
     color: 'var(--color-text-primary)',
   },
 }, { dark: true })

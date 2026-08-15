@@ -30,10 +30,12 @@ export const BREAKPOINTS: readonly BreakpointDef[] = [
   { id: 'tiny', label: 'Mobile', media: '(max-width: 479px)' },
 ]
 
-// Webflow's three below-desktop breakpoints are always available in the Designer,
-// so the dropdown always lists them (with a dot when the element has native styles
-// there). The larger min-width breakpoints only appear when they carry styles.
-const ALWAYS_SHOWN_BREAKPOINTS: ReadonlySet<BreakpointId> = new Set(['medium', 'small', 'tiny'])
+// No breakpoint is listed for its own sake. Tablet, Mobile (L) and Mobile used
+// to be, because a Webflow project always has them; an Astro one does not, and
+// three device widths nobody had written a rule for sat above the queries the
+// project actually uses. Every breakpoint now appears on the same terms as the
+// desktop ones — when it carries styles — so a project that does use them still
+// sees them, and one that does not is not asked to scroll past them.
 
 // The panel's interaction state → Webflow pseudo (null = base / noPseudo).
 const PSEUDO_FOR_STATE: Record<StateKey, string | null> = {
@@ -159,13 +161,13 @@ export function buildStyleContexts(
     }
     const bp = breakpointForAtContext(key)
     if (bp) {
-      // A breakpoint query: the default ones (Tablet/Mobile) always show; the rest
-      // only when they carry values (native, or the element has styles here). Key
-      // it by `bp:<id>` (NOT the embed @media string) so the selected breakpoint
-      // stays stable across elements — different elements may or may not have an
-      // equivalent embed @media, but Tablet is always Tablet.
+      // A breakpoint query, listed when it carries values — native, or the
+      // element has styles here. Key it by `bp:<id>` (NOT the embed @media
+      // string) so the selected breakpoint stays stable across elements —
+      // different elements may or may not have an equivalent embed @media, but
+      // Tablet is always Tablet.
       if (usedBp.has(bp)) return
-      if (!ALWAYS_SHOWN_BREAKPOINTS.has(bp) && !nativeBps.has(bp) && !styledEmbedContexts.has(key)) return
+      if (!nativeBps.has(bp) && !styledEmbedContexts.has(key)) return
       usedBp.add(bp)
       list.push({ key: `bp:${bp}`, label: breakpointLabel(bp), breakpoint: bp, embedAtContext: key })
     } else {
@@ -176,9 +178,11 @@ export function buildStyleContexts(
     }
   })
 
+  // Any breakpoint the loop above did not reach, on the same terms: it is
+  // listed because something is written there, not because it exists.
   for (const def of BREAKPOINTS) {
     if (def.id === 'main' || usedBp.has(def.id)) continue
-    if (!ALWAYS_SHOWN_BREAKPOINTS.has(def.id) && !nativeBps.has(def.id)) continue
+    if (!nativeBps.has(def.id)) continue
     usedBp.add(def.id)
     list.push({ key: `bp:${def.id}`, label: def.label, breakpoint: def.id, embedAtContext: null })
   }

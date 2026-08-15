@@ -1061,6 +1061,17 @@ contextBridge.exposeInMainWorld('avb', {
   resolveImport: invoke('project:resolveImport'),
   cmsMeta: invoke('cms:meta'),
   contentConfig: invoke('content:config'),
+  // Variables (CSS custom properties)
+  cssVariables: invoke('css:variables'),
+  setCssVariable: invoke('css:setVariable'),
+  moveCssVariables: invoke('css:moveVariables'),
+  addCssVariables: invoke('css:addVariables'),
+  onCssChanged: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on('css:changed', listener);
+    return () => ipcRenderer.removeListener('css:changed', listener);
+  },
+
   contentCollections: invoke('content:collections'),
   contentEntries: invoke('content:entries'),
   writeContentEntry: invoke('content:writeEntry'),
