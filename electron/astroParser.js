@@ -554,6 +554,17 @@ function parseTemplate(str) {
       const close = findMatchingBrace(str, br);
       if (close === -1) return bail(nodes, str, br, 'an unclosed { … } expression');
       const exprText = str.slice(br, close + 1);
+      // `{/* … */}` is a comment that happens to be written the way markup
+      // requires inside JSX. It is the same thing as `<!-- … -->` to everyone
+      // reading the file — and to this app, where a comment above a node is
+      // that node's note — so it is one here too, remembering which of the two
+      // forms it was written in so it goes back the same way.
+      const jsxComment = exprText.match(/^\{\s*\/\*([\s\S]*?)\*\/\s*\}$/);
+      if (jsxComment) {
+        emit({ id: makeId(), kind: 'comment', value: jsxComment[1], jsx: true });
+        pos = close + 1;
+        continue;
+      }
       const structural = tryParseMapWithSource(exprText) || tryParseCond(exprText);
       emit(structural || { id: makeId(), kind: 'expr', value: exprText });
       pos = close + 1;
@@ -1191,7 +1202,9 @@ function serializeNode(node, indent, lines) {
       for (const child of node.children || []) serializeNode(child, indent, lines);
       return;
     case 'comment':
-      lines.push(`${indent}<!--${node.value}-->`);
+      lines.push(
+        node.jsx ? `${indent}{/*${node.value}*/}` : `${indent}<!--${node.value}-->`
+      );
       return;
     case 'raw-line':
       lines.push(indent + node.value);
