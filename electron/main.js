@@ -2413,6 +2413,30 @@ function same(a, b) {
   return ka || kb ? ka === kb : true;
 }
 
+// Most nodes carry no key: data-avb-p is only written onto slotted elements,
+// and the marker comments are stripped from the live page before this runs.
+// Tag name alone then makes an inserted sibling look like a rewrite of the one
+// below it, which rebuilds that node and restarts whatever it was animating.
+// A matching class is not identity, but it is enough to tell the two apart.
+const strongMatch = (a, b) =>
+  a.nodeType === 1 &&
+  b.nodeType === 1 &&
+  a.tagName === b.tagName &&
+  a.getAttribute('class') === b.getAttribute('class');
+
+// Does this old node match a later new one better than the one in front of it?
+// Then the node in front is an insertion and the old one should be left where
+// it is. Deliberately not the reverse test: an element whose class was just
+// edited finds no better match further along, so it is still patched in place
+// rather than replaced.
+function isInsertion(oldChild, newChild) {
+  if (strongMatch(oldChild, newChild)) return false;
+  for (let n = newChild.nextSibling; n; n = n.nextSibling) {
+    if (strongMatch(oldChild, n)) return true;
+  }
+  return false;
+}
+
 function morph(from, to) {
   if (from.nodeType === 3 || from.nodeType === 8) {
     if (from.data !== to.data) from.data = to.data;
@@ -2437,6 +2461,11 @@ function morphChildren(from, to) {
     const nextNew = newChild.nextSibling;
     if (!oldChild) {
       from.appendChild(document.importNode(newChild, true));
+      newChild = nextNew;
+      continue;
+    }
+    if (isInsertion(oldChild, newChild)) {
+      from.insertBefore(document.importNode(newChild, true), oldChild);
       newChild = nextNew;
       continue;
     }
@@ -2471,6 +2500,32 @@ function morphChildren(from, to) {
   }
 }
 
+// The editor's own markers. A page that isn't the canvas strips these on load
+// (see the cleanup script that ships with every page), so the fetched copy has
+// to be stripped the same way before anything is compared. Otherwise every
+// patch puts them back — littering a DOM that deliberately removed them, and
+// leaving the two trees a different shape, which costs elements their match
+// and restarts whatever they were animating.
+function stripMarkers(root) {
+  const gone = [];
+  const walk = (p) => {
+    for (let n = p.firstChild; n; n = n.nextSibling) {
+      if (n.nodeType === 8 && /^avb-[se]:/.test(n.data)) gone.push(n);
+      else if (n.nodeType === 1) {
+        if (n.tagName === 'TEMPLATE' && (n.hasAttribute('data-avb-s') || n.hasAttribute('data-avb-e'))) {
+          gone.push(n);
+        } else {
+          walk(n);
+        }
+      }
+    }
+  };
+  walk(root);
+  for (const n of gone) n.remove();
+}
+
+const isCanvas = () => location.hash.indexOf('avb-design') !== -1;
+
 let busy = false;
 let again = false;
 
@@ -2481,6 +2536,7 @@ async function update() {
     const res = await fetch(location.href, { cache: 'no-store' });
     if (!res.ok) throw new Error('dev server answered ' + res.status);
     const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+    if (!isCanvas()) stripMarkers(doc);
     morphAttrs(document.documentElement, doc.documentElement);
     morphChildren(document.head, doc.head);
     morphChildren(document.body, doc.body);
