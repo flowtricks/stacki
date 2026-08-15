@@ -183,7 +183,24 @@ async function capture(userDataPath, projectPath, url) {
       )
       .catch(() => '');
     await wait(SETTLE_MS);
-    await win.webContents.executeJavaScript('window.scrollTo(0, 0)', true).catch(() => {});
+
+    // Back to the top, and stay there until it has been painted. Two things
+    // make this more than one line: a page with smooth scrolling animates to
+    // the top rather than jumping (so the capture catches it halfway), and a
+    // scroll that has been applied has not necessarily been drawn — the
+    // compositor paints on the next frame, and capturePage photographs
+    // whatever is on screen now.
+    await win.webContents
+      .executeJavaScript(
+        `new Promise((done) => {
+           document.documentElement.style.scrollBehavior = 'auto';
+           window.scrollTo(0, 0);
+           requestAnimationFrame(() => requestAnimationFrame(() => done(true)));
+         })`,
+        true
+      )
+      .catch(() => {});
+    await wait(150);
 
     const image = await win.webContents.capturePage({
       x: 0,

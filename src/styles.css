@@ -3765,3 +3765,103 @@ body > .embed-editor_provenance {
 }
 .content-rename-plan .primary { margin-top: 8px; }
 .content-pointer { font-size: 10.5px; color: var(--text-faint); }
+
+/* Variables sheet -----------------------------------------------------------
+   The same sheet the CMS uses, with a table in it. Columns are either the
+   rules a variable is declared in (a theme and its modes) or the things a
+   family of names describes (h1…h6) — see electron/cssVars.js. */
+.vars-view .cms-detail { width: 100%; }
+.vars-body { padding-bottom: 40px; }
+.vars-search {
+  height: 24px;
+  width: 180px;
+  margin-left: auto;
+  padding: 0 8px;
+  font-size: 11px;
+}
+.vars-table { margin-bottom: 22px; }
+.vars-section {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 6px;
+}
+.vars-grid {
+  display: grid;
+  align-items: center;
+  row-gap: 2px;
+  column-gap: 10px;
+  min-width: min-content;
+}
+.vars-head {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  padding: 4px 2px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vars-name {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  padding: 3px 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.var-cell { min-width: 0; }
+.var-cell.empty { color: var(--text-faint); font-size: 11px; padding-left: 8px; }
+.var-token {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  color: var(--text);
+  background: var(--bg-input);
+  text-align: left;
+}
+.var-token:hover { background: rgba(255, 255, 255, 0.09); }
+/* A value that is just another variable is a pointer, and reads as one. */
+.var-token.ref { background: rgba(146, 116, 255, 0.22); }
+.var-token.ref:hover { background: rgba(146, 116, 255, 0.32); }
+.var-token-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.var-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+/* A colour nothing can compute — color-mix() against currentcolor resolves
+   against whatever it lands on, so the swatch says "not knowable" rather than
+   inventing one. */
+.var-swatch.checker {
+  background:
+    repeating-conic-gradient(rgba(255, 255, 255, 0.25) 0% 25%, transparent 0% 50%) 0 0 / 8px 8px,
+    #3a3a3a;
+}
+.var-input {
+  width: 100%;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 11.5px;
+  font-family: var(--mono, ui-monospace, monospace);
+}
+
+/* A branch holding work that was set aside on the way out. */
+.branch-parked {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--text-dim, #9aa0a6);
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+  white-space: nowrap;
+}

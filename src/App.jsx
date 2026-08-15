@@ -23,6 +23,8 @@ import AssetsPanel from './panels/AssetsPanel.jsx';
 import CmsPanel from './panels/CmsPanel.jsx';
 import CmsView from './panels/CmsView.jsx';
 import ContentView from './panels/ContentView.jsx';
+import VariablesPanel from './panels/VariablesPanel.jsx';
+import VariablesView from './panels/VariablesView.jsx';
 import { getElementSchema, GLOBAL_ATTRS, canContainTag, HTML_TAGS } from './elementSchemas.js';
 import { onAssetRequest, clearAssetRequest } from './assetPick.js';
 import { isDataBound } from './bindings.js';
@@ -582,6 +584,8 @@ export default function App() {
   // Content collection open in the schema-driven editor. Only one of the two
   // is ever open: they edit the same kind of thing in two different ways.
   const [contentName, setContentName] = useState(null);
+  // Which stylesheet group the variables sheet is showing: { file, index }.
+  const [varsGroup, setVarsGroup] = useState(null);
   const [cmsTick, setCmsTick] = useState(0); // bumped on save, refreshes counts
   const [cmsSettings, setCmsSettings] = useState(false); // editing that collection's fields
   const [inPreview, setInPreview] = useState(false); // interactive full-site preview
@@ -3538,6 +3542,9 @@ export default function App() {
                 showToast={showToast}
               />
             )}
+            {leftTab === 'variables' && (
+              <VariablesPanel project={project} selected={varsGroup} onSelect={setVarsGroup} />
+            )}
             {leftTab === 'assets' && (
               <AssetsPanel
                 project={project}
@@ -3635,6 +3642,16 @@ export default function App() {
 
           {/* The CMS edits content, not layout — it covers the canvas rather
               than replacing it, so the preview keeps its loaded page. */}
+          {varsGroup && leftTab === 'variables' && (
+            <VariablesView
+              project={project}
+              selected={varsGroup}
+              hidden={leftTab !== 'variables'}
+              showToast={showToast}
+              onClose={() => setVarsGroup(null)}
+            />
+          )}
+
           {contentName && (
             <ContentView
               project={project}
