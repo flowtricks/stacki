@@ -10,6 +10,8 @@
     "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "vite build",
     "test:markers": "node test/markers.js",
+    "test:content": "node test/content-config.js",
+    "test": "npm run test:markers && npm run test:content",
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",

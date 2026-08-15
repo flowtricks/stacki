@@ -16,11 +16,11 @@
 const fs = require('fs');
 const path = require('path');
 
-const IMPORT_RE = /import\s+(\w+)\s+from\s+['"]([^'"]+)['"];?/g;
+const IMPORT_RE = /import\s+(\w+)\s+from\s+(['"])([^'"]+)\2;?/g;
 // `import { Image, Picture } from 'astro:assets'` — Astro's own components come
 // in this way, so without it <Image> looks like an unimported capitalized tag
 // (a dynamic `const Tag = …`) rather than the component it is.
-const NAMED_IMPORT_RE = /import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"];?/g;
+const NAMED_IMPORT_RE = /import\s*\{([^}]*)\}\s*from\s*(['"])([^'"]+)\2;?/g;
 const VOID_ELEMENTS = new Set([
   'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
   'link', 'meta', 'param', 'source', 'track', 'wbr',
@@ -66,6 +66,17 @@ function parseAttrs(attrString) {
     else props[name] = { type: 'bare' };
   }
   return props;
+}
+
+// A tag whose attributes were written across several lines keeps them there,
+// as long as none of them has been edited. Compared with the whitespace taken
+// out, so the question asked is "do these say the same thing", not "were they
+// laid out the same way". Editing one attribute reflows the tag onto a line,
+// which is the same bargain struck everywhere else here.
+function attrsAsWritten(node) {
+  if (!node.attrSource) return null;
+  const flat = (t) => t.replace(/\s+/g, ' ').trim();
+  return flat(node.attrSource) === flat(serializeAttrs(node.props)) ? node.attrSource : null;
 }
 
 function serializeAttrs(props) {
@@ -465,8 +476,19 @@ function parseCondSource(src) {
 // Recognizes conditional markup — {cond ? ( … ) : ( … )}, {cond && ( … )} —
 // and turns it into a 'cond' node whose branches are parsed child trees, so
 // each side is navigable and editable instead of a wall of code.
+function tryParseMapWithSource(exprText) {
+  const node = tryParseMap(exprText);
+  if (node) node.source = exprText;
+  return node;
+}
+
 function tryParseCond(exprText) {
-  return parseCondSource(exprText.slice(1, -1));
+  const node = parseCondSource(exprText.slice(1, -1));
+  // The text it was written as. A condition that has not been edited is
+  // written back exactly, rather than reflowed onto the shape this file would
+  // choose — `{x && <p/>}` is not improved by becoming four lines.
+  if (node) node.source = exprText;
+  return node;
 }
 
 // What made the last parse give up, so the code-view banner can name the
@@ -485,6 +507,19 @@ function bail(nodes, str, at, what) {
 function parseTemplate(str) {
   const nodes = [];
   let pos = 0;
+  // Blank lines between nodes are the author's paragraphing. They are not
+  // nodes themselves — the whitespace they live in is dropped — so they are
+  // counted here and carried on whatever comes next, to be written back out
+  // in front of it. Without this a save closed up every gap in the file.
+  let pendingBlank = 0;
+  const emit = (node) => {
+    if (pendingBlank) {
+      node.blankBefore = pendingBlank;
+      pendingBlank = 0;
+    }
+    nodes.push(node);
+    return node;
+  };
 
   while (pos < str.length) {
     const lt = str.indexOf('<', pos);
@@ -497,13 +532,18 @@ function parseTemplate(str) {
     // (HTML renders a newline+indent boundary as one space too).
     const textEnd = next === -1 ? str.length : next;
     const text = str.slice(pos, textEnd);
+    if (!text.trim() && text) {
+      // Whitespace only: no node, but remember any blank line inside it.
+      const breaks = (text.match(/\n/g) || []).length;
+      if (breaks > 1) pendingBlank = Math.max(pendingBlank, breaks - 1);
+    }
     if (text.trim()) {
       // `source` only when the slice spans lines, because that is the only
       // case where the collapsed value isn't the whole truth. The serializer
       // hands those lines back if nothing has edited the node since.
       const node = { id: makeId(), kind: 'text', value: textValue(text) };
       if (text.includes('\n')) node.source = text;
-      nodes.push(node);
+      emit(node);
     }
     if (next === -1) break;
 
@@ -514,8 +554,8 @@ function parseTemplate(str) {
       const close = findMatchingBrace(str, br);
       if (close === -1) return bail(nodes, str, br, 'an unclosed { … } expression');
       const exprText = str.slice(br, close + 1);
-      const structural = tryParseMap(exprText) || tryParseCond(exprText);
-      nodes.push(structural || { id: makeId(), kind: 'expr', value: exprText });
+      const structural = tryParseMapWithSource(exprText) || tryParseCond(exprText);
+      emit(structural || { id: makeId(), kind: 'expr', value: exprText });
       pos = close + 1;
       continue;
     }
@@ -524,7 +564,7 @@ function parseTemplate(str) {
     if (str.startsWith('<!--', lt)) {
       const end = str.indexOf('-->', lt + 4);
       if (end === -1) return bail(nodes, str, lt, 'an unclosed <!-- comment');
-      nodes.push({ id: makeId(), kind: 'comment', value: str.slice(lt + 4, end) });
+      emit({ id: makeId(), kind: 'comment', value: str.slice(lt + 4, end) });
       pos = end + 3;
       continue;
     }
@@ -533,7 +573,7 @@ function parseTemplate(str) {
     if (/^<!doctype/i.test(str.slice(lt))) {
       const end = str.indexOf('>', lt);
       if (end === -1) return bail(nodes, str, lt, 'an unclosed <!doctype>');
-      nodes.push({ id: makeId(), kind: 'raw-line', value: str.slice(lt, end + 1) });
+      emit({ id: makeId(), kind: 'raw-line', value: str.slice(lt, end + 1) });
       pos = end + 1;
       continue;
     }
@@ -554,7 +594,16 @@ function parseTemplate(str) {
     const afterOpen = lt + full.length;
 
     if (selfClose === '/' || (!isComponent && VOID_ELEMENTS.has(name.toLowerCase()))) {
-      nodes.push({ id: makeId(), kind, name, props: parseAttrs(attrs), children: null });
+      emit({
+        id: makeId(),
+        kind,
+        name,
+        props: parseAttrs(attrs),
+        ...(attrs && attrs.includes('\n') ? { attrSource: attrs } : {}),
+        // `<x/>` and `<x />` mean the same thing and are not the same text.
+        ...(selfClose === '/' && !/\s\/>$/.test(full) ? { tightClose: true } : {}),
+        children: null,
+      });
       pos = afterOpen;
       continue;
     }
@@ -564,11 +613,12 @@ function parseTemplate(str) {
       const close = str.indexOf(`</${name}`, afterOpen);
       if (close === -1) return bail(nodes, str, lt, `an unclosed <${name}> block`);
       const closeEnd = str.indexOf('>', close);
-      nodes.push({
+      emit({
         id: makeId(),
         kind: 'raw',
         name,
         props: parseAttrs(attrs),
+        ...(attrs && attrs.includes('\n') ? { attrSource: attrs } : {}),
         inner: str.slice(afterOpen, close),
       });
       pos = closeEnd + 1;
@@ -585,20 +635,31 @@ function parseTemplate(str) {
     // before a closing tag exists nowhere else, and the serializer needs it to
     // put a hand-wrapped paragraph back the way it found it.
     const source =
-      inner.includes('\n') && isInlineRun(innerResult.nodes) ? inner : undefined;
-    nodes.push({
+      inner.includes('\n') && (isInlineRun(innerResult.nodes) || innerResult.nodes.length === 0)
+        ? inner
+        : undefined;
+    const blankAfter = innerResult.trailingBlank || 0;
+    // The close tag may contain whitespace: </Name >
+    const closeEnd = str.indexOf('>', closeIdx) + 1;
+    // Kept when it is written across lines — the style that hangs the bracket
+    // on its own line, which several formatters produce and which is not this
+    // file's to undo.
+    const closeText = str.slice(closeIdx, closeEnd);
+    emit({
       id: makeId(),
       kind,
       name,
       ...(source === undefined ? {} : { source }),
+      ...(blankAfter ? { blankAfter } : {}),
       props: parseAttrs(attrs),
+      ...(attrs && attrs.includes('\n') ? { attrSource: attrs } : {}),
+      ...(closeText.includes('\n') ? { closeSource: closeText } : {}),
       children: innerResult.nodes,
     });
-    // The close tag may contain whitespace: </Name >
-    pos = str.indexOf('>', closeIdx) + 1;
+    pos = closeEnd;
   }
 
-  return { nodes, clean: true };
+  return { nodes, clean: true, trailingBlank: pendingBlank };
 }
 
 // Index of the close tag matching an already-consumed open tag, handling
@@ -652,6 +713,7 @@ function textValue(raw) {
 function parsePage(source) {
   const fm = source.match(/^---\r?\n(?:([\s\S]*?)\r?\n)?---\r?\n?/);
   const frontmatter = fm ? fm[1] || '' : '';
+  const hadFrontmatter = !!fm;
   const body = fm ? source.slice(fm[0].length) : source;
 
   const imports = [];
@@ -662,7 +724,7 @@ function parsePage(source) {
   let m;
   IMPORT_RE.lastIndex = 0;
   while ((m = IMPORT_RE.exec(frontmatter)) !== null) {
-    imports.push({ name: m[1], path: m[2], at: m.index });
+    imports.push({ name: m[1], path: m[3], quote: m[2], at: m.index });
     cuts.push([m.index, m.index + m[0].length]);
   }
   // Named imports become one entry per specifier, so "is this name imported"
@@ -689,7 +751,8 @@ function parsePage(source) {
       imports.push({
         name: local || imported,
         imported,
-        path: m[2],
+        path: m[3],
+        quote: m[2],
         named: true,
         at: m.index,
         ...(typeOnly ? { typeOnly: true } : {}),
@@ -728,7 +791,17 @@ function parsePage(source) {
   const extraFrontmatter = rest.trim();
 
   lastBail = null;
-  const { nodes: topNodes, clean } = parseTemplate(body);
+  const { nodes: topNodes, clean, trailingBlank } = parseTemplate(body);
+  // A newline at the very start of the body is a blank line, because the
+  // frontmatter's closing --- already ended its own line. Everywhere else a
+  // leading newline is just the break after the tag before it, which is why
+  // parseTemplate counts one fewer — so the first node is told directly.
+  if (topNodes.length) {
+    const lead = (body.match(/^(?:[ \t]*\r?\n)+/) || [''])[0];
+    const blanks = (lead.match(/\n/g) || []).length;
+    if (blanks) topNodes[0].blankBefore = blanks;
+    else delete topNodes[0].blankBefore;
+  }
   if (!clean) {
     // Name the construct and point at it. The bail records the text it stopped
     // on, so find that text back in the file for a line number — far more
@@ -801,6 +874,8 @@ function parsePage(source) {
       frontmatterLead,
       extraFrontmatter,
       extraFrontmatterSpaced,
+      hadFrontmatter,
+      trailingBlank,
       nodes: topNodes,
     },
   };
@@ -814,8 +889,11 @@ function serializeImports(model, lines, specFor) {
   const done = new Set();
   for (const imp of model.imports) {
     if (done.has(imp)) continue;
+    // Whichever quote the file used. Rewriting every import line to change
+    // one character is a diff on a page that was only opened.
+    const q = imp.quote === '"' ? '"' : "'";
     if (!imp.named) {
-      lines.push(`import ${imp.name} from '${specFor ? specFor(imp) : imp.path}';`);
+      lines.push(`import ${imp.name} from ${q}${specFor ? specFor(imp) : imp.path}${q};`);
       continue;
     }
     const group = model.imports.filter((i) => i.named && i.path === imp.path);
@@ -824,7 +902,7 @@ function serializeImports(model, lines, specFor) {
       const base = g.imported && g.imported !== g.name ? `${g.imported} as ${g.name}` : g.name;
       return g.typeOnly ? `type ${base}` : base;
     });
-    lines.push(`import { ${specs.join(', ')} } from '${imp.path}';`);
+    lines.push(`import { ${specs.join(', ')} } from ${q}${imp.path}${q};`);
   }
 }
 
@@ -845,11 +923,19 @@ function serializeFrontmatter(model, lines, specFor) {
 }
 
 function serializePage(model) {
-  const lines = ['---'];
-  serializeFrontmatter(model, lines);
-  lines.push('---');
+  // A file that never had a frontmatter block does not acquire one. Writing
+  // `---` twice at the top of a component that had none is a change to every
+  // line number in it, for nothing.
+  const fmLines = [];
+  serializeFrontmatter(model, fmLines);
+  const lines = [];
+  if (fmLines.length || model.hadFrontmatter !== false) {
+    lines.push('---', ...fmLines, '---');
+  }
 
   for (const node of model.nodes) serializeNode(node, '', lines);
+  // Blank lines the file ended on.
+  for (let i = 0; i < (model.trailingBlank || 0); i++) lines.push('');
   return lines.join('\n') + '\n';
 }
 
@@ -884,8 +970,12 @@ function inlineString(nodes) {
   for (const n of nodes) {
     if (n.kind === 'text') out += n.value;
     else if (n.kind === 'expr') out += n.value;
-    else if (n.children === null || n.children.length === 0) {
+    else if (n.children === null) {
       out += n.name === 'br' ? '<br />' : `<${n.name}${serializeAttrs(n.props)} />`;
+    } else if (n.children.length === 0) {
+      // Written as a pair with nothing between them. Closing it as `<span />`
+      // says the same thing to a browser and a different thing to a diff.
+      out += `<${n.name}${serializeAttrs(n.props)}></${n.name}>`;
     } else {
       out += `<${n.name}${serializeAttrs(n.props)}>${inlineString(n.children)}</${n.name}>`;
     }
@@ -924,6 +1014,11 @@ function reindentRun(source, indent) {
   return [lines[0], ...lines.slice(1, -1).map(shift), indent].join('\n');
 }
 
+const flatten = (t) => t.replace(/\s+/g, ' ').trim();
+// Whitespace between two inline tags lives in text nodes the tree drops, so
+// comparing runs has to ignore it entirely rather than merely collapse it.
+const squash = (t) => t.replace(/\s+/g, '');
+
 // Does an element's stored inner still describe the run hanging off it? Both
 // sides collapse to the same words when nothing has been edited: a changed
 // word, an added child or a rewritten inline tag all break the match, and the
@@ -934,7 +1029,32 @@ function inlineRunUnchanged(node) {
   return (
     !!node.source &&
     node.source.includes('\n') &&
-    textValue(node.source).trim() === inlineString(node.children).trim()
+    squash(textValue(node.source)) === squash(inlineString(node.children))
+  );
+}
+
+// A block — a condition, a loop — as the file wrote it, or null once anything
+// inside it has changed. It is rebuilt the way this file would write it from
+// scratch and the two are compared with whitespace and this file's own
+// brackets taken out, so the question is whether they say the same thing
+// rather than whether they were laid out the same way. Rebuilding by running
+// the serializer over a copy with the source removed means there is only one
+// description of how these are written, and this cannot drift from it.
+function blockAsWritten(node, indent) {
+  if (!node.source) return null;
+  const probe = { ...node, source: undefined, blankBefore: 0, blankAfter: 0 };
+  const rebuilt = [];
+  serializeNode(probe, '', rebuilt);
+  const flat = (t) => t.replace(/[\s(){}]+/g, '').trim();
+  if (flat(rebuilt.join('\n')) !== flat(node.source)) return null;
+  const src = node.source.split('\n');
+  const base = (src[src.length - 1].match(/^[ \t]*/) || [''])[0];
+  return src.map((line, i) =>
+    i === 0
+      ? indent + line
+      : line.startsWith(base)
+        ? indent + line.slice(base.length)
+        : line
   );
 }
 
@@ -970,6 +1090,8 @@ function serializeNode(node, indent, lines) {
   // Chunk containers: children live in external .html files (set:html),
   // never in the page — emit the component self-closing, skip the subtree.
   if (node.kind === 'chunk-group') return; // synthetic, not in page source
+  // The gap the author left in front of this node.
+  for (let i = 0; i < (node.blankBefore || 0); i++) lines.push('');
   if (node.chunkFile || node.chunkAggregate) {
     lines.push(`${indent}<${node.name}${serializeAttrs(node.props)} />`);
     return;
@@ -999,6 +1121,11 @@ function serializeNode(node, indent, lines) {
       return;
     }
     case 'map': {
+      const keptMap = blockAsWritten(node, indent);
+      if (keptMap) {
+        for (const line of keptMap) lines.push(line);
+        return;
+      }
       lines.push(indent + '{');
       // A loop whose body declares things keeps the statement form: the
       // declarations, then the markup inside `return ( … )`.
@@ -1047,11 +1174,17 @@ function serializeNode(node, indent, lines) {
       lines.push(indent + '}');
       return;
     }
-    case 'cond':
+    case 'cond': {
+      const kept = blockAsWritten(node, indent);
+      if (kept) {
+        for (const line of kept) lines.push(line);
+        return;
+      }
       lines.push(indent + '{');
       serializeCondBody(node, indent + '  ', lines);
       lines.push(indent + '}');
       return;
+    }
     case 'branch':
       // Written by the condition above; standing on its own it is just its
       // contents.
@@ -1065,16 +1198,34 @@ function serializeNode(node, indent, lines) {
       return;
     case 'raw': {
       lines.push(`${indent}<${node.name}${serializeAttrs(node.props)}>`);
-      // Keep raw inner verbatim (trim outer blank lines only).
-      const inner = node.inner.replace(/^\r?\n/, '').replace(/\s+$/, '');
-      if (inner) lines.push(inner);
+      // Keep raw inner verbatim. Only the line break that ends the last line
+      // goes, since the closing tag supplies its own — trimming all trailing
+      // whitespace also took away a blank line the author left in the CSS.
+      const inner = node.inner.replace(/^\r?\n/, '').replace(/\r?\n[ \t]*$/, '');
+      if (inner) for (const line of inner.split('\n')) lines.push(line);
       lines.push(`${indent}</${node.name}>`);
       return;
     }
     default: {
-      const attrs = serializeAttrs(node.props);
+      const kept = attrsAsWritten(node);
+      const attrs = kept === null ? serializeAttrs(node.props) : kept;
+      // The closing tag as written, when it was written across lines. Only
+      // trusted while it still names this element: renaming the tag rebuilds
+      // it the ordinary way.
+      const closeTag =
+        node.closeSource && node.closeSource.startsWith(`</${node.name}`)
+          ? node.closeSource
+          : `</${node.name}>`;
+      const openTag = (close) => {
+        // Preserved attributes carry their own trailing whitespace — the line
+        // break before the closing bracket — so the usual leading space would
+        // be one too many.
+        const tail = kept !== null && /\s$/.test(attrs) ? close.replace(/^ /, '') : close;
+        const text = `${indent}<${node.name}${attrs}${tail}`;
+        for (const line of text.split('\n')) lines.push(line);
+      };
       if (node.children === null) {
-        lines.push(`${indent}<${node.name}${attrs} />`);
+        openTag(node.tightClose ? '/>' : ' />');
         return;
       }
       // Inline runs stay on one line: <p>We're <strong>Acme</strong>.</p>
@@ -1085,17 +1236,20 @@ function serializeNode(node, indent, lines) {
         // the stored inner puts the tag back whole — its line breaks, its
         // indentation, and the break before the closing tag.
         if (inlineRunUnchanged(node)) {
-          const written = reindentRun(node.source, indent);
-          const block = `${indent}<${node.name}${attrs}>${written}</${node.name}>`;
-          for (const line of block.split('\n')) lines.push(line);
+          openTag(`>${reindentRun(node.source, indent)}${closeTag}`);
           return;
         }
-        lines.push(`${indent}<${node.name}${attrs}>${inlineString(node.children).trim()}</${node.name}>`);
+        openTag(`>${inlineString(node.children).trim()}${closeTag}`);
         return;
       }
-      lines.push(`${indent}<${node.name}${attrs}>`);
+      if (node.children.length === 0) {
+        openTag(`>${node.source ? reindentRun(node.source, indent) : ''}${closeTag}`);
+        return;
+      }
+      openTag('>');
       for (const child of node.children) serializeNode(child, indent + '  ', lines);
-      lines.push(`${indent}</${node.name}>`);
+      for (let i = 0; i < (node.blankAfter || 0); i++) lines.push('');
+      for (const line of `${indent}${closeTag}`.split('\n')) lines.push(line);
     }
   }
 }

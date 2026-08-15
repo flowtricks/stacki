@@ -38,6 +38,7 @@ const {
   GENERAL,
 } = require('./jsCollections');
 const { importersOf, resolveImport } = require('./cmsRefs');
+const { readContentConfig } = require('./contentConfig');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow = null;
@@ -1819,6 +1820,15 @@ function readCmsMeta(projectPath) {
 }
 
 ipcMain.handle('cms:meta', async (_e, projectPath) => ({ meta: readCmsMeta(projectPath) }));
+
+// What the project's content config declares: every collection, where its
+// entries live, whether they can be written at all, and the JSON Schema its
+// zod schema amounts to. Read from the config itself rather than inferred from
+// the data, so the editor enforces the same rules the build does — see
+// contentConfig.js for how, and why it happens in a child process.
+ipcMain.handle('content:config', async (_e, { projectPath, force } = {}) =>
+  readContentConfig(projectPath, { force: !!force })
+);
 
 // Where an import in a page actually points. The tag name is only a local
 // binding — `import Layout from '@/layouts/BaseLayout.astro'` renders as

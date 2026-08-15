@@ -980,6 +980,7 @@ contextBridge.exposeInMainWorld('avb', {
   cmsUsage: invoke('cms:usage'),
   resolveImport: invoke('project:resolveImport'),
   cmsMeta: invoke('cms:meta'),
+  contentConfig: invoke('content:config'),
   setCmsMeta: invoke('cms:setMeta'),
   onCmsChanged: (cb) => {
     const listener = () => cb();
