@@ -10,6 +10,7 @@ import {
   HelpCircleIcon,
 } from '../ui/Icons.jsx';
 import AutoTextarea from '../ui/AutoTextarea.jsx';
+import CodeEditor from '../ui/CodeEditor.jsx';
 import AssetField from '../ui/AssetField.jsx';
 import ExprInput from '../ui/ExprInput.jsx';
 import useListReorder from '../ui/useListReorder.js';
@@ -977,11 +978,18 @@ export default function ContentView({ project, name, hidden, showToast, onClose,
               <div className="content-body-note">
                 Markdown, written to the file exactly as it is typed here.
               </div>
-              <AutoTextarea
-                value={body ?? ''}
-                minRows={8}
-                onChange={(e) => change({ data, body: e.target.value })}
-              />
+              {/* The body is the one field that is a document rather than a
+                  value: headings, fences, links, and in an .mdx file a run of
+                  imports and components. Keyed by entry so switching one does
+                  not carry the previous body's undo history over. */}
+              <div className="content-body-editor">
+                <CodeEditor
+                  key={entry.rel || entry.id}
+                  language="markdown"
+                  value={body ?? ''}
+                  onChange={(text) => change({ data, body: text })}
+                />
+              </div>
             </div>
           )}
 

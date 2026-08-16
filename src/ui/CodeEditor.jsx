@@ -3,7 +3,8 @@ import { EditorView, basicSetup } from 'codemirror';
 import { EditorState } from '@codemirror/state';
 import { css } from '@codemirror/lang-css';
 import { javascript } from '@codemirror/lang-javascript';
-import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import { syntaxHighlighting, HighlightStyle, LanguageDescription } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 
 // CodeMirror 6 wrapper themed to match the app. Controlled-ish: `value` in,
@@ -68,6 +69,17 @@ export const appHighlight = syntaxHighlighting(
       { tag: [t.operator, t.punctuation, t.separator], color: '#89ddff' },
       { tag: [t.labelName, t.attributeName], color: '#80cbc4' },
       { tag: [t.color, t.constant(t.name), t.standard(t.name)], color: '#f78c6c' },
+      // Markdown: the structure of a document rather than of code. Headings
+      // lead, code and links pick up the colours their kind already has
+      // elsewhere in this theme, and the marks (#, *, `) stay quiet.
+      { tag: [t.heading], color: '#f5f5f5', fontWeight: '600' },
+      { tag: [t.emphasis], fontStyle: 'italic' },
+      { tag: [t.strong], fontWeight: '600', color: '#f5f5f5' },
+      { tag: [t.link, t.url], color: '#82aaff', textDecoration: 'underline' },
+      { tag: [t.monospace], color: '#c3e88d' },
+      { tag: [t.quote], color: '#999999', fontStyle: 'italic' },
+      { tag: [t.list], color: '#89ddff' },
+      { tag: [t.processingInstruction], color: '#616161' },
     ],
     { themeType: 'dark' }
   )
@@ -80,7 +92,29 @@ export default function CodeEditor({ value, language, onChange, revealLine }) {
   onChangeRef.current = onChange;
 
   useEffect(() => {
-    const lang = language === 'css' ? css() : javascript({ typescript: true });
+    const lang =
+      language === 'css'
+        ? css()
+        : language === 'markdown'
+          ? // GFM as the base, and the languages a fenced block is likely to
+            // hold. An .mdx body's imports and JSX read as prose to the
+            // markdown parser — the headings, fences, links and emphasis
+            // around them are what there is to colour, and the alternative
+            // (a JS parser over a document that is mostly prose) colours the
+            // prose wrongly instead.
+            markdown({
+              base: markdownLanguage,
+              codeLanguages: [
+                LanguageDescription.of({ name: 'css', extensions: ['css'], load: async () => css() }),
+                LanguageDescription.of({
+                  name: 'javascript',
+                  alias: ['js', 'jsx', 'ts', 'tsx', 'typescript'],
+                  extensions: ['js', 'ts'],
+                  load: async () => javascript({ typescript: true, jsx: true }),
+                }),
+              ],
+            })
+          : javascript({ typescript: true });
     const view = new EditorView({
       parent: hostRef.current,
       state: EditorState.create({

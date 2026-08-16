@@ -74,6 +74,10 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   global.Element = dom.window.Element;
   global.Node = dom.window.Node;
   global.getComputedStyle = dom.window.getComputedStyle;
+  // The body field is a CodeMirror editor now: it observes the DOM it is
+  // mounted in, and measures itself against the window class by name.
+  global.MutationObserver = dom.window.MutationObserver;
+  global.Window = dom.window.Window;
   global.requestAnimationFrame = (cb) => setTimeout(cb, 0);
   global.cancelAnimationFrame = clearTimeout;
   global.IS_REACT_ACT_ENVIRONMENT = true;

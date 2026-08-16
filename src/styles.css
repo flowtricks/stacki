@@ -3751,6 +3751,21 @@ body > .embed-editor_provenance {
   border-radius: 10px;
 }
 .content-body-note { font-size: 10.5px; color: var(--text-faint); margin-bottom: 6px; }
+/* The body is an editor, not a growing textarea: a long post would push every
+   other field off the screen, so it scrolls within a window big enough to
+   write in. Bordered like the fields around it so the card still reads as one
+   form. */
+.content-body-editor {
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--bg-input);
+  min-height: 260px;
+  max-height: 60vh;
+  overflow: hidden;
+  display: flex;
+}
+.content-body-editor .cm-host { flex: 1; min-width: 0; overflow: auto; }
+.content-body-editor .cm-editor { height: 100%; }
 
 .content-id {
   font-size: 10.5px;
