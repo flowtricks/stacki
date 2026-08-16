@@ -28,6 +28,8 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     ':root {\n  --blue: #0af;\n  --ink: #111;\n}\n\n.light { --bg: white; }\n.dark { --bg: black; }\n'
   );
   fs.writeFileSync(path.join(dir, 'src', 'styles', 'other.css'), '.card { --lift: 2px; --shade: 4px; }\n');
+  // One rule, so one group: there is no inside to show.
+  fs.writeFileSync(path.join(dir, 'src', 'styles', 'motion.css'), ':root { --ease: linear; --duration: 200ms; }\n');
 
   const esbuild = require('esbuild');
   const buildDir = path.join(__dirname, '..', 'node_modules', '.stacki-test');
@@ -85,17 +87,37 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     });
 
   await render();
-  check('stylesheets are listed', names().join('|') === 'other.css|tokens.css', names().join('|'));
+  check('stylesheets are listed', names().join('|') === 'motion.css|other.css|tokens.css', names().join('|'));
   check(
     'with what each one holds',
-    all('.cms-collection-count').map((n) => n.textContent).join('|') === '2 variables|4 variables',
+    all('.cms-collection-count').map((n) => n.textContent).join('|') === '2 variables|2 variables|4 variables',
     all('.cms-collection-count').map((n) => n.textContent).join('|')
   );
   check('and nothing is open yet', selected === null);
 
-  // Opening a stylesheet opens its first group.
+  // A stylesheet with one group opens that group, and stays in the list: there
+  // is no inside to go into.
   await act(async () => {
-    all('.cms-collection')[1].click();
+    all('.cms-collection')[0].click();
+    await settle(30);
+  });
+  check('a one-group stylesheet opens straight away', selected?.file.endsWith('motion.css'), JSON.stringify(selected));
+  check('and the list stays where it was', names().join('|') === 'motion.css|other.css|tokens.css', names().join('|'));
+  check(
+    'with that stylesheet marked as the open one',
+    all('.cms-collection.on').length === 1 &&
+      all('.cms-collection.on')[0].textContent.includes('motion.css'),
+    all('.cms-collection').map((n) => n.className).join('|')
+  );
+  check(
+    'and no chevron promising more inside it',
+    !all('.cms-collection')[0].querySelector('.cms-collection-chevron'),
+    'it still points further in'
+  );
+
+  // A stylesheet with more than one opens its first group and goes inside.
+  await act(async () => {
+    all('.cms-collection')[2].click();
     await settle(30);
   });
   check('opening a stylesheet selects its first group', !!selected, JSON.stringify(selected));
@@ -120,7 +142,11 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     await settle(30);
   });
   check('backing out closes the sheet', selected === null);
-  check('and shows the stylesheets again', names().join('|') === 'other.css|tokens.css', names().join('|'));
+  check(
+    'and shows the stylesheets again',
+    names().join('|') === 'motion.css|other.css|tokens.css',
+    names().join('|')
+  );
 
   await act(async () => reactRoot.unmount());
   fs.rmSync(dir, { recursive: true, force: true });

@@ -108,6 +108,21 @@ export function transitionLabel(t: Transition): string {
 // ─────────────────────────── Easing ───────────────────────────
 
 /** The four cubic-bezier control values for a timing-function keyword or cubic-bezier(). */
+/**
+ * Is this a timing function the curve editor can open?
+ *
+ * Deliberately narrow: the five keywords and a well-formed `cubic-bezier()`,
+ * which are exactly what a bezier curve can express and round-trip. `steps(4,
+ * end)` and `linear(0, 0.5 50%, 1)` are timing functions too, and opening a
+ * curve editor on one would quietly rewrite it as a bezier — so they are left
+ * alone rather than mangled.
+ */
+export function isEasing(value: string): boolean {
+  const v = String(value ?? '').trim().toLowerCase()
+  if (/^(?:ease|linear|ease-in|ease-out|ease-in-out)$/.test(v)) return true
+  return /^cubic-bezier\(\s*[\d.-]+\s*,\s*[\d.-]+\s*,\s*[\d.-]+\s*,\s*[\d.-]+\s*\)$/.test(v)
+}
+
 export function easingToBezier(timing: string): [number, number, number, number] {
   const v = timing.trim().toLowerCase()
   const named: Record<string, [number, number, number, number]> = {

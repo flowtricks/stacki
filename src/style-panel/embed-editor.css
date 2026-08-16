@@ -1323,6 +1323,9 @@
 .embed-editor_bg-modal-backdrop {
   position: fixed;
   inset: 0;
+  /* Nothing inside a backdrop may give the document something to scroll: a box
+     hanging past the right edge would push the app's own panels off-screen. */
+  overflow: hidden;
   z-index: calc(var(--z-modal) + 2);
   display: flex;
   align-items: center;
@@ -4056,7 +4059,29 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_ease-path { fill: none; stroke: #fff; stroke-width: 2; }
 .embed-editor_ease-handle { fill: var(--color-info); stroke: var(--color-bg-surface); stroke-width: 1.5; cursor: grab; }
 .embed-editor_ease-handle:active { cursor: grabbing; }
-.embed-editor_ease-value { font-family: var(--font-family-mono); font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+/* The value under the curve: a field, not a caption. Full width of the curve
+   above it so a long cubic-bezier() has room. */
+.embed-editor_ease-value { width: 100%; max-width: 280px; }
+.embed-editor_ease-input {
+  width: 100%;
+  text-align: center;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+/* Opened over one panel rather than the whole window (see the `frame` prop):
+   the backdrop still covers everything, the modal sits over the panel it came
+   from. Fixed, not absolute — its left/width are viewport coordinates, and it
+   should not depend on the backdrop being its containing block. */
+.embed-editor_ease-modal.is-framed {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  /* A dialog, not a sheet: the curve and the first presets, with the rest of
+     them scrolling inside it. */
+  max-height: min(70vh, 560px);
+  border: var(--border-width-thin) solid var(--color-border-default);
+  border-radius: var(--radius-md);
+}
 .embed-editor_ease-presets {
   padding: var(--space-4);
   border-top: var(--border-width-thin) solid var(--color-border-default);

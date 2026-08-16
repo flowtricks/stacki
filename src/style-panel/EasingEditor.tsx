@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { easingToBezier, bezierToEasing } from './lib/transition'
+import { easingToBezier, bezierToEasing, isEasing } from './lib/transition'
+import VariableConnect from './VariableConnect'
 
 // A cubic-bezier easing editor (Webflow-style): preset curves on the left, a large
 // draggable curve on the right. Dragging either control point (or picking a preset)
@@ -32,6 +33,27 @@ const PRESETS: ReadonlyArray<{ heading: string; items: ReadonlyArray<{ label: st
   ] },
 ]
 
+// Where a framed modal actually goes. The caller passes the box of the panel it
+// belongs over, and that box is trusted only as far as the window: a panel
+// wider than the viewport (or one measured while the layout was mid-change)
+// would otherwise put the modal partly or wholly off-screen, and take the app's
+// layout with it — an absolutely positioned box hanging past the right edge
+// gives the document something to scroll.
+const EDGE = 8
+// Wide enough for the curve (280px) and a row of preset thumbnails (8 x 46 plus
+// gaps), and no wider: filling the panel made a dialog the size of the sheet it
+// was opened over.
+const IDEAL_WIDTH = 480
+function framedStyle(frame: { left: number; width: number }): { left: number; width: number } {
+  const room = (typeof window === 'undefined' ? 0 : window.innerWidth) || frame.width || IDEAL_WIDTH
+  const panel = frame.width || room
+  const width = Math.max(320, Math.min(IDEAL_WIDTH, panel - EDGE * 2, room - EDGE * 2))
+  // Centred in the panel it belongs to, then kept inside the window.
+  const centred = (frame.left || 0) + (panel - width) / 2
+  const left = Math.max(EDGE, Math.min(centred, room - width - EDGE))
+  return { left, width }
+}
+
 const bezEq = (a: Bezier, b: Bezier) => a.every((n, i) => Math.abs(n - b[i]) < 0.005)
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
 // One coordinate of the unit cubic-bezier (0,0)->(1,1) at parameter s.
@@ -61,7 +83,9 @@ const PlayIcon = () => (<svg viewBox="0 0 16 16" width="16" height="16" fill="no
 const PauseIcon = () => (<svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.2" /><path d="M6.4 5.5v5M9.6 5.5v5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>)
 
 // A small preview curve for a preset button (unit bezier drawn in a 24×24 box).
-function MiniCurve({ b }: { b: Bezier }) {
+/** The curve itself, at glyph size: a preset's thumbnail here, and the icon on
+ *  the button that opens this editor from the variables sheet. */
+export function MiniCurve({ b }: { b: Bezier }) {
   const S = 24
   const p = (x: number, y: number) => `${(x * S).toFixed(1)} ${(S - y * S).toFixed(1)}`
   return (
@@ -136,8 +160,20 @@ function BezierEditor({ value, onChange, playT }: { value: Bezier; onChange: (b:
   )
 }
 
-export default function EasingEditor({ value, onClose, onChange }: { value: string; onClose: () => void; onChange: (timing: string) => void }) {
+export default function EasingEditor({ value, onClose, onChange, frame }: {
+  value: string
+  onClose: () => void
+  onChange: (timing: string) => void
+  /** Where to put the modal, when it belongs over one panel rather than the
+   *  window. The style panel opens it full width (its own panel IS the width);
+   *  the variables sheet passes its own box so the editor covers the sheet it
+   *  was opened from instead of the panel beside it. */
+  frame?: { left: number; width: number } | null
+}) {
   const [bezier, setBezier] = useState<Bezier>(() => easingToBezier(value))
+  // What is being typed into the value field, until it is committed. Null while
+  // the field simply shows the curve.
+  const [draft, setDraft] = useState<string | null>(null)
   const [playT, setPlayT] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
   const playRaf = useRef<number | null>(null)
@@ -147,7 +183,14 @@ export default function EasingEditor({ value, onClose, onChange }: { value: stri
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
   useEffect(() => () => { if (playRaf.current != null) cancelAnimationFrame(playRaf.current) }, [])
-  const apply = (b: Bezier) => { setBezier(b); onChange(bezierToEasing(b)) }
+  const apply = (b: Bezier) => { setDraft(null); setBezier(b); onChange(bezierToEasing(b)) }
+  /** Take what was typed, if it is a curve this editor can show. */
+  const commitText = () => {
+    const text = (draft ?? '').trim()
+    setDraft(null)
+    if (!text || !isEasing(text)) return
+    apply(easingToBezier(text))
+  }
   // Preview: the playhead + dot trace the easing. It LOOPS — play → brief hold → restart
   // — until paused (matching Webflow); the button toggles play/pause.
   const stopPlay = () => {
@@ -170,8 +213,17 @@ export default function EasingEditor({ value, onClose, onChange }: { value: stri
   const togglePlay = () => { if (playing) stopPlay(); else startPlay() }
 
   return createPortal(
-    <div className="embed-editor_bg-modal-backdrop embed-editor_ease-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="embed-editor_ease-modal u-surface-surface" role="dialog" aria-modal="true" aria-label="Easing editor">
+    <div
+      className={`embed-editor_bg-modal-backdrop embed-editor_ease-backdrop${frame ? ' is-framed' : ''}`}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div
+        className={`embed-editor_ease-modal u-surface-surface${frame ? ' is-framed' : ''}`}
+        style={frame ? framedStyle(frame) : undefined}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Easing editor"
+      >
         <header className="embed-editor_ease-head">
           <span className="embed-editor_ease-title"><GearIcon /> Easing Editor</span>
           <button type="button" className="embed-editor_icon-btn" onClick={onClose} aria-label="Close">
@@ -185,7 +237,33 @@ export default function EasingEditor({ value, onClose, onChange }: { value: stri
               <span className="embed-editor_ease-name">{presetName(bezier)}</span>
             </div>
             <BezierEditor value={bezier} onChange={apply} playT={playT} />
-            <div className="embed-editor_ease-value">{bezierToEasing(bezier)}</div>
+            {/* The value as text, editable: the same code field the variables
+                sheet uses, so it is coloured as you read it and a curve can be
+                typed or pasted rather than only dragged. A value that is not a
+                curve the editor can show (a steps(), a half-typed one) reverts
+                on commit — the curve above it is the source of truth. */}
+            <div className="embed-editor_ease-value">
+              <VariableConnect
+                className="is-fill"
+                code
+                prop="transition-timing-function"
+                ariaLabel="Timing function"
+                onPick={(binding) => setDraft(binding)}
+              >
+                <input
+                  className="u-input embed-editor_ease-input"
+                  value={draft ?? bezierToEasing(bezier)}
+                  spellCheck={false}
+                  aria-label="Timing function"
+                  onChange={(e) => setDraft(e.target.value)}
+                  onBlur={() => commitText()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); commitText() }
+                    if (e.key === 'Escape') { e.preventDefault(); setDraft(null) }
+                  }}
+                />
+              </VariableConnect>
+            </div>
           </div>
           <div className="embed-editor_ease-presets">
             {PRESETS.map((group) => (

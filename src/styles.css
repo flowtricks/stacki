@@ -1134,6 +1134,24 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   width: 100%;
   max-width: 100%;
 }
+/* A popup opened from somewhere OTHER than the style panel (the variables
+   sheet passes its own box — see the `frame` prop) can't live in the style
+   panel's coordinates: its box is in window ones, and measured against a
+   backdrop pinned to the panel it landed off the right of the screen, taking
+   the app's layout with it. Framed popups get the whole window to sit in, and
+   place themselves inside it. */
+body > .embed-editor_bg-modal-backdrop.is-framed {
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  height: auto;
+}
+body > .embed-editor_bg-modal-backdrop.is-framed > .embed-editor_ease-modal {
+  width: auto;
+  max-width: none;
+}
 /* The provenance card sizes to its content (up to 320px in moden, wider than
    this panel) — cap it at the panel too. Its left edge is clamped to the panel
    in ProvenancePopover. */
@@ -4015,6 +4033,26 @@ body > .embed-editor_provenance {
     repeating-conic-gradient(rgba(255, 255, 255, 0.22) 0% 25%, transparent 0% 50%) 0 0 / 8px 8px,
     #3a3a3a;
 }
+/* The curve button: the same size and quiet weight as a colour's swatch, so a
+   row with one does not read as busier than a row with the other. */
+.var-ease {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.var-ease:hover { color: var(--text); border-color: var(--border-strong); }
+/* The curve glyph is the editor's own preset thumbnail, which sizes itself to
+   its box (width/height: 100%) — inside a 22px button that box has to be
+   stated, or the drawing takes whatever room the row will give it. */
+.var-ease svg { width: 15px; height: 15px; flex: none; }
 .var-cell .varconnect,
 .var-cell .embed-editor_varconnect { flex: 1; min-width: 0; }
 /* A field with a box around it, on every row, is a wall of boxes — and the

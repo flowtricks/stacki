@@ -25,6 +25,11 @@ const STYLESHEET = `/* =========================================================
    ========================================================================== */
 
 :root {
+  /* Curves */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-linear: linear;
+  --duration-main: 260ms;
+
   /* Swatches */
   --light-100: #ffffff;
   --dark-900: #1f1d1e;
@@ -94,6 +99,8 @@ const STYLESHEET = `/* =========================================================
   global.Element = dom.window.Element;
   global.HTMLElement = dom.window.HTMLElement;
   global.Node = dom.window.Node;
+  // A committed value is pushed through the input's native setter.
+  global.HTMLInputElement = dom.window.HTMLInputElement;
 
   const toasts = [];
   dom.window.avb = {
@@ -461,6 +468,142 @@ const STYLESHEET = `/* =========================================================
       dom.window.document.activeElement === editor,
       dom.window.document.activeElement?.className
     );
+  }
+
+  // --- an easing value opens the curve editor --------------------------------
+  {
+    // A timing function is four numbers nobody reads as a curve, so the cell
+    // offers the same editor the style panel's transitions use. Only for values
+    // that ARE curves: a duration next to them is not one, and a `steps()` is a
+    // timing function the bezier editor cannot represent.
+    // By the value itself: the names are in one stack and the values in the
+    // other, and it is the value's own cell that carries the button.
+    const cellShowing = (text) => all('.var-cell').find((c) => c.textContent.trim() === text) || null;
+    const easeCell = cellShowing('cubic-bezier(0.16, 1, 0.3, 1)');
+    check('a curve value offers the editor', !!easeCell?.querySelector('.var-ease'), easeCell?.innerHTML.slice(0, 120));
+    check('a keyword curve does too', !!cellShowing('linear')?.querySelector('.var-ease'));
+    check('a duration beside it does not', !cellShowing('260ms')?.querySelector('.var-ease'));
+    // The glyph is the curve it opens, so two different easings do not draw the
+    // same button.
+    const glyph = (cell) => cell?.querySelector('.var-ease svg path')?.getAttribute('d');
+    check('the button draws the value\'s curve', !!glyph(easeCell), glyph(easeCell));
+    check(
+      'and a different curve draws differently',
+      glyph(easeCell) !== glyph(cellShowing('linear')),
+      `${glyph(easeCell)} vs ${glyph(cellShowing('linear'))}`
+    );
+
+    // jsdom measures everything as zero; give the sheet a box so the editor has
+    // one to be placed over.
+    const sheet = find('.vars-view') || container.querySelector('.cms-view');
+    sheet.getBoundingClientRect = () => ({ left: 100, top: 0, width: 800, height: 600, right: 900, bottom: 600, x: 100, y: 0 });
+    await act(async () => {
+      easeCell.querySelector('.var-ease').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await settle(60);
+    });
+    const modal = dom.window.document.querySelector('.embed-editor_ease-modal');
+    check('pressing it opens the editor', !!modal);
+    // Over the sheet it was opened from, not the panel beside it.
+    check('placed over the sheet', modal?.classList.contains('is-framed'), modal?.className);
+    // A dialog centred in the sheet's box (left 100, width 800), not the whole
+    // width of it: 480 wide, so (800 - 480) / 2 = 160 in from the sheet's edge.
+    check(
+      'sized as a dialog',
+      modal?.style.width === '480px',
+      `${modal?.style.left} / ${modal?.style.width}`
+    );
+    check(
+      'centred over the sheet it came from',
+      modal?.style.left === '260px',
+      `${modal?.style.left} / ${modal?.style.width}`
+    );
+    // …but never past the window. A box measured wider than the viewport (or
+    // measured mid-layout) must not put the editor off-screen, or take the
+    // app's own panels with it.
+    check(
+      'and never wider than the window',
+      Number.parseFloat(modal.style.width) + Number.parseFloat(modal.style.left) <= dom.window.innerWidth,
+      `${modal.style.left} + ${modal.style.width} in ${dom.window.innerWidth}px`
+    );
+    check('on this value', modal?.textContent.includes('cubic-bezier(0.16, 1, 0.3, 1)'), modal?.textContent.slice(0, 200));
+    check('naming the curve it recognises', modal?.textContent.includes('Ease Out Expo'), modal?.textContent.slice(0, 120));
+
+    // The value under the curve is the sheet's own code field: editable, and
+    // coloured. Typing a curve into it moves the editor and the cell together.
+    const valueField = modal?.querySelector('.embed-editor_varconnect-editor');
+    check('the value is an editable field', !!valueField, modal?.querySelector('.embed-editor_ease-value')?.innerHTML.slice(0, 160));
+    check('with the value coloured in it', (valueField?.querySelectorAll('span').length || 0) > 1, valueField?.innerHTML.slice(0, 160));
+    await act(async () => {
+      // What committing a typed value does — the field hands its text over on
+      // Enter, the same as it does on blur.
+      valueField.textContent = 'ease-in-out';
+      valueField.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+      valueField.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await settle(80);
+    });
+    check('typing a curve moves the editor to it', modal?.textContent.includes('Ease In Out'), modal?.textContent.slice(0, 120));
+
+    // A preset moves the value in the field, and the file is written once —
+    // when the editor closes, not per frame of a drag.
+    const before = fs.readFileSync(file, 'utf8');
+    const preset = [...modal.querySelectorAll('button')].find((b) => (b.getAttribute('title') || '') === 'Ease In Back');
+    check('the presets are there', !!preset, [...modal.querySelectorAll('button')].map((b) => b.getAttribute('title')).join('|'));
+    await act(async () => {
+      preset.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await settle(60);
+    });
+    check('picking one leaves the file alone for now', fs.readFileSync(file, 'utf8') === before);
+    await act(async () => {
+      dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await settle(80);
+    });
+    check('closing it writes the new curve', /--ease-out-expo: cubic-bezier\(0\.36, 0, 0\.66, -0\.56\)/.test(fs.readFileSync(file, 'utf8')), fs.readFileSync(file, 'utf8').slice(0, 300));
+    check('and the editor is gone', !dom.window.document.querySelector('.embed-editor_ease-modal'));
+
+    // A box bigger than the window: the modal comes back inside it rather than
+    // hanging off the edge.
+    sheet.getBoundingClientRect = () => ({ left: 900, top: 0, width: 1600, height: 600, right: 2500, bottom: 600, x: 900, y: 0 });
+    await act(async () => {
+      cellShowing('linear')?.querySelector('.var-ease')
+        .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await settle(60);
+    });
+    {
+      const box = dom.window.document.querySelector('.embed-editor_ease-modal');
+      const left = Number.parseFloat(box.style.left);
+      const width = Number.parseFloat(box.style.width);
+      check('an oversized box is brought back inside the window', left >= 0 && left + width <= dom.window.innerWidth, `${left} + ${width} in ${dom.window.innerWidth}px`);
+    }
+    await act(async () => {
+      dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await settle(60);
+    });
+
+    // One curve at a time: the icon of another opens that one and closes this.
+    await act(async () => {
+      cellShowing('cubic-bezier(0.36, 0, 0.66, -0.56)')?.querySelector('.var-ease')
+        .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await settle(60);
+    });
+    await act(async () => {
+      cellShowing('linear')?.querySelector('.var-ease')
+        .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await settle(60);
+    });
+    check(
+      'opening another curve leaves only one open',
+      dom.window.document.querySelectorAll('.embed-editor_ease-modal').length === 1,
+      `${dom.window.document.querySelectorAll('.embed-editor_ease-modal').length} editors`
+    );
+    check(
+      'and it is the one just opened',
+      dom.window.document.querySelector('.embed-editor_ease-modal')?.textContent.includes('Linear'),
+      dom.window.document.querySelector('.embed-editor_ease-modal')?.textContent.slice(0, 120)
+    );
+    await act(async () => {
+      dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await settle(60);
+    });
   }
 
   // --- editing a cell writes the file ---------------------------------------

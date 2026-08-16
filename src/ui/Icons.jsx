@@ -30,6 +30,13 @@ export const FileIcon = (p) => (
   </I>
 );
 
+// An easing curve: what the editor behind it edits.
+export const EaseIcon = (p) => (
+  <I {...p}>
+    <path d="M2 13c5.5 0 5-10 12-10" />
+  </I>
+);
+
 export const ComponentIcon = (p) => (
   <I {...p}>
     <rect x="5.2" y="5.2" width="5.6" height="5.6" rx="0.8" transform="rotate(45 8 8)" />

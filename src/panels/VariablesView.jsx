@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CloseIcon, CheckIcon, DragIcon, PlusIcon } from '../ui/Icons.jsx';
+import { CloseIcon, CheckIcon, DragIcon, EaseIcon, PlusIcon } from '../ui/Icons.jsx';
 import useListReorder from '../ui/useListReorder.js';
 import VariableTypeIcon from '../ui/VariableTypeIcon.jsx';
 import FluidBadge from '../ui/FluidBadge.jsx';
 import { fluidCheck, resolveValue } from '../fluid.js';
 import ColorSwatch from '../style-panel/components/ColorSwatch';
 import VariableConnect from '../style-panel/VariableConnect';
+import EasingEditor, { MiniCurve } from '../style-panel/EasingEditor';
+import { easingToBezier, isEasing } from '../style-panel/lib/transition';
 import { setHost } from '../style-panel/lib/host';
 import { popupBox, POPUP_GAP } from '../ui/Dropdown.jsx';
 import '../style-panel/utilities.css';
@@ -63,6 +65,11 @@ const isLong = (value) => String(value).length > LONG_VALUE || String(value).inc
 // nothing), and that stop is also what keeps it from reaching the open box's
 // outside-press handler — hence this rather than relying on the press.
 let closeOpenCustom = null;
+
+// And one curve editor, for the same reason: each cell owns its own, so the
+// sheet holds the pointer and opening another closes the one before it —
+// keeping whatever that one had been dragged to.
+let closeOpenCurve = null;
 
 /** Is the value wider than the field showing it? */
 function doesNotFit(cell, value) {
@@ -237,6 +244,7 @@ function withBinding(value, binding) {
 function Cell({ cell, onSave, fluidOf, onDraft }) {
   const [draft, setDraft] = useState(null);
   const [custom, setCustom] = useState(null); // the anchor rect while open
+  const [curve, setCurve] = useState(null); // {left,width} of the sheet, while the editor is open
   const value = draft ?? cell?.value ?? '';
 
   useEffect(() => setDraft(null), [cell?.value, cell?.valueStart]);
@@ -256,6 +264,23 @@ function Cell({ cell, onSave, fluidOf, onDraft }) {
     if (next === cell.value) return;
     await onSave(cell, next);
   };
+
+  // Whatever `commit` is this render — the closer below outlives the render it
+  // was made in, and must not write a value from an older one.
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
+  useEffect(() => {
+    if (!curve) return undefined;
+    closeOpenCurve?.(); // never two at once
+    const close = () => {
+      setCurve(null);
+      commitRef.current();
+    };
+    closeOpenCurve = close;
+    return () => {
+      if (closeOpenCurve === close) closeOpenCurve = null;
+    };
+  }, [curve]);
 
   const isColor = !!cell.color || cell.unknownColor;
 
@@ -301,6 +326,52 @@ function Cell({ cell, onSave, fluidOf, onDraft }) {
         openCustom(e.currentTarget);
       }}
     >
+      {/* A timing function is a curve, and a curve is easier to judge by eye
+          than by four numbers — so it gets the same editor the style panel's
+          transitions use. Beside the value, like a colour's swatch: the value
+          itself stays editable as text. */}
+      {isEasing(value) && (
+        <button
+          type="button"
+          className="var-ease"
+          title={`Edit the curve for ${cell.name}`}
+          aria-label={`Edit the curve for ${cell.name}`}
+          // The editor belongs over the sheet it was opened from, not over the
+          // panel beside it — so it is handed the sheet's own box. Read at the
+          // press rather than held in state: the sheet is resizable.
+          onClick={(e) => {
+            const sheet = e.currentTarget.closest('.vars-view') || e.currentTarget.closest('.cms-view');
+            const box = sheet?.getBoundingClientRect();
+            // Always framed, even when the sheet measures nothing (a mid-layout
+            // read): the window is the fallback, never the style panel's box —
+            // the shared backdrop is pinned to that panel, and a popup opened
+            // from here has nothing to do with it.
+            setCurve(
+              box?.width
+                ? { left: box.left, width: box.width }
+                : { left: 0, width: typeof window === 'undefined' ? 0 : window.innerWidth }
+            );
+          }}
+        >
+          {/* The value's own curve, at glyph size — the same drawing the
+              editor's presets use, so the button says which ease it opens. */}
+          <MiniCurve b={easingToBezier(value)} />
+        </button>
+      )}
+      {curve && (
+        <EasingEditor
+          value={value}
+          frame={curve}
+          // Dragging a control point emits a value per frame. Those land in the
+          // draft so the field follows the curve, and the file is written once,
+          // when the editor closes — a drag is one edit, not sixty.
+          onChange={(timing) => setDraft(timing)}
+          onClose={() => {
+            setCurve(null);
+            commit();
+          }}
+        />
+      )}
       {isColor && (
         <ColorSwatch
           value={cell.color || 'transparent'}

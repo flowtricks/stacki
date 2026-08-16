@@ -23,12 +23,21 @@ export default function VariablesPanel({ project, selected, onSelect }) {
     return window.avb.onCssChanged(refresh);
   }, [refresh]);
 
+  // A stylesheet with one group in it has no inside worth showing: the list of
+  // groups would be a list of one, and the thing being looked for is a click
+  // further on. Clicking the file opens that group and leaves the list of
+  // stylesheets up, which is also what says which one is open.
+  const onlyGroup = (file) => (file && file.groups?.length === 1 ? file : null);
+
   // Opening the panel with a group already open lands inside its file rather
-  // than back at the list.
+  // than back at the list — unless the file is one of those, in which case the
+  // list of stylesheets is where it belongs.
   useEffect(() => {
     if (!selected || openFile) return;
+    const file = files.find((f) => f.rel === selected.file);
+    if (!file || onlyGroup(file)) return;
     setOpenFile(selected.file);
-  }, [selected, openFile]);
+  }, [selected, openFile, files]);
 
   const open = openFile ? files.find((f) => f.rel === openFile) : null;
 
@@ -57,14 +66,18 @@ export default function VariablesPanel({ project, selected, onSelect }) {
           files.map((file) => (
             <div
               key={file.rel}
-              className={`cms-collection ${file.error ? 'broken' : ''}`}
+              className={`cms-collection ${file.error ? 'broken' : ''} ${
+                onlyGroup(file) && selected?.file === file.rel ? 'on' : ''
+              }`}
               title={file.rel}
               onClick={() => {
-                setOpenFile(file.rel);
                 // Opening a stylesheet opens what is in it. A list of group
                 // names with an empty sheet beside it is a second click to
-                // reach the thing you came for.
-                if (file.groups?.length) onSelect({ file: file.rel, index: 0 });
+                // reach the thing you came for — and where there is only one
+                // group, the list of names is not worth a level of its own.
+                if (!file.groups?.length) return;
+                if (!onlyGroup(file)) setOpenFile(file.rel);
+                onSelect({ file: file.rel, index: 0 });
               }}
             >
               <FileIcon size={14} />
@@ -72,9 +85,12 @@ export default function VariablesPanel({ project, selected, onSelect }) {
               <span className="cms-collection-count">
                 {file.error ? 'unreadable' : file.count === 1 ? '1 variable' : `${file.count} variables`}
               </span>
-              <span className="cms-collection-chevron">
-                <ChevronRightIcon size={10} />
-              </span>
+              {/* Nothing to go into, so nothing pointing further in. */}
+              {!onlyGroup(file) && (
+                <span className="cms-collection-chevron">
+                  <ChevronRightIcon size={10} />
+                </span>
+              )}
             </div>
           ))}
 
