@@ -958,10 +958,33 @@ export default function App() {
       // page once per item, and opening one card means that card. Without the
       // occurrence every instance stayed lit, and editing one looked like
       // editing all of them.
+      //
+      // A layout is the exception: it wraps <html>, so the instance IS the
+      // page and there is nothing around it to dim. Its path still names the
+      // focus — clicks route by it, and one in the page's own content still
+      // means "I'm done in here" — but the lit region would be the page's slot
+      // content, which is the one part of the canvas the layout does NOT own.
+      // Dimming the header, the sidebar and the footer while lighting the page
+      // body said the opposite of what opening a layout does.
       const top = stack[stack.length - 1];
+      const hostNode = hostPath
+        ? nodeAtPath(
+            state?.model?.nodes || [],
+            String(hostPath).split('|').pop().split('.').map(Number)
+          )
+        : null;
       const focusPath = top?.focusPath ?? hostPath ?? null;
-      const focusOcc = top?.focusPath != null ? top.focusOcc ?? 0 : hostOcc;
-      const entry = { kind: 'component', name: comp.name, path: comp.path, focusPath, focusOcc };
+      const nested = top?.focusPath != null;
+      const focusOcc = nested ? top.focusOcc ?? 0 : hostOcc;
+      const focusWhole = nested ? !!top.focusWhole : hostNode?.id === 'layout';
+      const entry = {
+        kind: 'component',
+        name: comp.name,
+        path: comp.path,
+        focusPath,
+        focusOcc,
+        focusWhole,
+      };
       setEditStack((s) =>
         s.some((e) => e.path === comp.path) ? s : [...s, entry]
       );
@@ -3322,6 +3345,8 @@ export default function App() {
   const patternRoute = pageEntry?.route;
   const focusPath = currentPage?.kind === 'component' ? currentPage.focusPath : null;
   const focusOcc = currentPage?.kind === 'component' ? currentPage.focusOcc ?? 0 : 0;
+  // The focus routes clicks either way; this says whether it also draws.
+  const focusWhole = currentPage?.kind === 'component' && !!currentPage.focusWhole;
   // A dynamic page's route is a pattern, not a URL — /posts/[slug] is a 404.
   // Preview one of the entries it actually stands for; `dynamicEntry` is which.
   const dynamicEntry = dynamicPaths[dynamicIndex] || null;
@@ -3584,6 +3609,7 @@ export default function App() {
             overlayInfo={overlayInfo}
             focusPath={focusPath}
             focusOcc={focusOcc}
+            focusWhole={focusWhole}
             device={device}
             onDevice={setDevice}
             onSelectPath={(p) => {

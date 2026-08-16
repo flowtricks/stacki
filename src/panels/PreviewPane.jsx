@@ -97,6 +97,7 @@ export default function PreviewPane({
   onNodeClasses,
   focusPath,
   focusOcc,
+  focusWhole,
   device,
   onDevice,
 }) {
@@ -499,8 +500,11 @@ export default function PreviewPane({
               />
               {/* Editing a component: the page stays in context and everything
                   around the instance dims, so the piece being worked on is
-                  the only lit part of the canvas. */}
+                  the only lit part of the canvas. A layout has no "around" —
+                  it wraps the whole page — so it lights all of it by drawing
+                  nothing. */}
               {focusPath &&
+                !focusWhole &&
                 (rects[focusPath] || []).map((r, i) => (
                   <div
                     key={`focus-${i}`}
