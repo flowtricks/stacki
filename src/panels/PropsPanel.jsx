@@ -1406,6 +1406,38 @@ function parseMapHead(head) {
   return m ? { data: m[1].trim(), item: m[2] || m[4], index: m[3] || '' } : null;
 }
 
+// The leading name in an expression — what the value is a list OF, before
+// anything is done to it. `posts.filter(p => p.draft)[0]` is `posts`; a lone
+// `Astro.props.items` is all of it.
+const SOURCE_RE = /^\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/;
+
+function sourceChip(value) {
+  const text = String(value || '').trim();
+  if (!text || text === NO_SOURCE) return '';
+  const match = SOURCE_RE.exec(text);
+  if (!match) return '';
+  let name = match[1];
+  // A segment that is called is not part of the path: `posts.filter(…)` is
+  // `posts`, done to — and a call on the whole thing (`getPosts()`) names a
+  // function, which is not a source anything can be swapped for.
+  while (text[name.length] === '(') {
+    const at = name.lastIndexOf('.');
+    if (at < 0) return '';
+    name = name.slice(0, at);
+  }
+  return name;
+}
+
+// The same expression with a different source: what follows the old one is
+// kept, so choosing another list does not throw away the code around it.
+function withSource(value, path) {
+  const current = sourceChip(value);
+  if (!current) return path;
+  const text = String(value);
+  const at = text.indexOf(current);
+  return text.slice(0, at) + path + text.slice(at + current.length);
+}
+
 const IDENT_RE = /^[A-Za-z_$][\w$]*$/;
 
 // "No source yet" has to be written as real code, since the head is what
@@ -1437,7 +1469,10 @@ function MapEditor({ node, loopContext, bindCtx, dataCtx, onSetText }) {
     walk(listsOnly(dataTree(bindCtx || loopContext || {})));
     return !known.has(d);
   };
-  const [custom, setCustom] = useState(() => isCustomData(fields.data));
+  // Kept only so the picker's "write an expression" entry can put the caret in
+  // the field; there is no longer a mode to be in — the field is always the
+  // expression, with its source drawn as a chip inside it.
+  const [, setCustom] = useState(false);
 
   // External changes (undo, file reload, code edits below) re-sync fields.
   useEffect(() => {
@@ -1516,70 +1551,56 @@ function MapEditor({ node, loopContext, bindCtx, dataCtx, onSetText }) {
             <label>
               <span className="prop-label">Data</span>
             </label>
-            {/* The pencil sits beside whichever field holds the source — the
-                list itself is what you actually want to edit, and it lives
-                wherever it was declared, often in another file. */}
+            {/* One field, holding one expression. What names the source is
+                drawn as a chip inside it — the same purple a binding wears
+                everywhere else — and everything after it is ordinary code, so
+                `.filter(…)` or `[1]` is typed where it reads. The chip and the
+                chevron both open the picker; the pencil goes to where the list
+                is declared, which is usually another file. */}
             <div className="prop-expr-row">
-            {/* The same picker the prop fields use, showing only what can be
-                looped and what each one currently holds — a loop is chosen by
-                looking at the data, not by recalling the name of a list. */}
-            <button
-              type="button"
-              className={`dd-trigger dd-source ${custom || !isNoSource ? 'on' : ''}`}
-              onClick={() => (sourceMenu ? setSourceMenu(null) : openSourceMenu())}
-            >
-              <span className={`dd-label ${custom || !isNoSource ? '' : 'dim'}`}>
-                {custom ? 'Custom' : isNoSource ? 'None' : fields.data.trim()}
-              </span>
-              <span className="dd-chevron">
+              <ExprInput
+                value={isNoSource ? '' : fields.data}
+                syncValue={isNoSource ? '' : fields.data}
+                placeholder="Choose or write a list…"
+                chip={sourceChip(fields.data)}
+                onChipClick={() => (sourceMenu ? setSourceMenu(null) : openSourceMenu())}
+                onChange={(v) => update({ data: v })}
+                onCommit={(v) => commitSource(v.trim() || NO_SOURCE)}
+              />
+              <button
+                type="button"
+                className="prop-source-open"
+                title="Choose a list"
+                onClick={() => (sourceMenu ? setSourceMenu(null) : openSourceMenu())}
+              >
                 <ChevronDownIcon size={11} />
-              </span>
-            </button>
+              </button>
+              <SourceEditButton
+                name={referencedName(fields.data)}
+                dataCtx={dataCtx}
+                anchorRef={dataRef}
+              />
+            </div>
             {sourceMenu && (
               <FieldDataPicker
                 pos={sourceMenu}
                 bindCtx={bindCtx || loopContext}
                 tree={listsOnly(dataTree(bindCtx || loopContext || {}))}
-                current={isNoSource ? null : fields.data.trim()}
+                current={isNoSource ? null : sourceChip(fields.data) || fields.data.trim()}
                 onPick={(path) => {
                   setSourceMenu(null);
                   setCustom(false);
-                  commitSource(path);
+                  // Picking swaps the source and keeps the code after it: a
+                  // list chosen again is still `.filter(…)`-ed the same way.
+                  commitSource(withSource(fields.data, path));
                 }}
                 onWrite={() => {
                   setSourceMenu(null);
-                  // Start the field empty rather than showing the `[]` that
-                  // stands for "none" — that's an implementation detail.
                   setCustom(true);
-                  if (!isCustomData(fields.data)) update({ data: '' });
+                  if (isNoSource) update({ data: '' });
                 }}
                 onClose={() => setSourceMenu(null)}
               />
-            )}
-              {!custom && (
-                <SourceEditButton
-                  name={referencedName(fields.data)}
-                  dataCtx={dataCtx}
-                  anchorRef={dataRef}
-                />
-              )}
-            </div>
-            {custom && (
-              <div className="prop-expr-row" style={{ marginTop: 6 }}>
-                <ExprInput
-                  autoFocus
-                  value={fields.data}
-                  syncValue={fields.data}
-                  placeholder="e.g. Astro.props.items"
-                  onChange={(v) => update({ data: v })}
-                  onCommit={(v) => commitSource(v)}
-                />
-                <SourceEditButton
-                  name={referencedName(fields.data)}
-                  dataCtx={dataCtx}
-                  anchorRef={dataRef}
-                />
-              </div>
             )}
           </div>
           <div className="props-field">

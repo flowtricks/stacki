@@ -27,12 +27,13 @@
     "test:varsview": "node test/vars-view.js",
     "test:varspanel": "node test/vars-panel.js",
     "test:binding": "node test/binding.js",
+    "test:loopsource": "node test/loop-source.js",
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
     "dist:mac:unsigned": "npm run build && electron-builder --mac -c.mac.forceCodeSigning=false -c.mac.notarize=false -c.mac.identity=null",
-    "test": "npm run test:bridge && npm run test:markers && npm run test:content && npm run test:entries && npm run test:refs && npm run test:fields && npm run test:view && npm run test:panel && npm run test:dropdown && npm run test:thumbs && npm run test:welcome && npm run test:cssvars && npm run test:fluid && npm run test:varsview && npm run test:varspanel && npm run test:csscode && npm run test:styletarget && npm run test:binding"
+    "test": "npm run test:markers && npm run test:bridge && npm run test:content && npm run test:entries && npm run test:refs && npm run test:fields && npm run test:view && npm run test:panel && npm run test:dropdown && npm run test:csscode && npm run test:styletarget && npm run test:thumbs && npm run test:welcome && npm run test:cssvars && npm run test:fluid && npm run test:varsview && npm run test:varspanel && npm run test:binding && npm run test:loopsource"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",
