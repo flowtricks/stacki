@@ -2562,6 +2562,23 @@ function PropField({
           ignored
         </span>
       )}
+      {/* The way between the field's own control and an expression, both ways,
+          in the one place a field's name already is. Some values a control
+          cannot hold — `href={page.url}` is not a link setting — and until this
+          existed the only way in was to pick data, which is a value rather than
+          the code somebody had in mind. */}
+      {bindable && (
+        <button
+          type="button"
+          className={`prop-expr-toggle${showExpr ? ' on' : ''}`}
+          title={showExpr ? `Use the ${controlWord(field)}` : 'Write an expression'}
+          aria-pressed={showExpr}
+          aria-label="Write an expression"
+          onClick={() => (showExpr ? fromCustom() : setCustom(true))}
+        >
+          <BracesIcon size={12} />
+        </button>
+      )}
       {bindable && (
         <BindHandle
           active={!!insertAt}

@@ -1845,6 +1845,31 @@ body > .embed-editor_provenance {
 }
 .prop-label.set:hover { background: rgba(0, 153, 255, 0.26); }
 
+/* The `{}` beside a prop's name: the switch between the control the field
+   normally shows and a plain expression. It sits quiet — the weight of the `?`
+   next to it — until the field is hovered, and turns purple, the colour a
+   binding is written in, while the expression is the thing on screen. */
+.prop-expr-toggle {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 4px;
+  padding: 2px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+}
+.props-field:hover > label > .prop-expr-toggle { color: var(--text-dim); }
+.prop-expr-toggle:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.prop-expr-toggle.on,
+.props-field:hover > label > .prop-expr-toggle.on {
+  color: #9274ff;
+  background: rgba(146, 116, 255, 0.16);
+}
+.prop-expr-toggle.on:hover:not(:disabled) { background: rgba(146, 116, 255, 0.28); }
+
 /* The way data gets into a field. Nothing until the field is hovered, then a
    dot on its top-left corner — in the purple a binding is shown in, so what it
    does is legible before it is read. Hovering the dot grows it into a +, which
@@ -1873,12 +1898,10 @@ body > .embed-editor_provenance {
   transition: width 0.1s ease, height 0.1s ease, left 0.1s ease, bottom 0.1s ease,
     opacity 0.12s ease;
 }
-/* Three steps, so the panel is quiet but never a guessing game: a pointer
-   anywhere in it shows every field that can take data, faintly; the field
-   under the pointer shows its own solidly; and the dot itself is the target.
-   Without the first step, which fields these are is something you can only
-   find by hovering each one in turn. */
-.panel-section:hover .bind-handle { opacity: 0.4; }
+/* Two steps: the field under the pointer shows its own dot, and the dot itself
+   is the target. Lighting every dot in the section at once put a column of
+   purple beside a panel the pointer was only passing through, and said nothing
+   about the field being pointed at. */
 .props-field:hover > label > .bind-handle,
 .bind-handle.on {
   opacity: 1;
