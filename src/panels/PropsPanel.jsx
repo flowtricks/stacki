@@ -1521,13 +1521,40 @@ function MapEditor({ node, loopContext, bindCtx, dataCtx, onSetText }) {
   // old data ("service" for a list of projects) is worse than none. Back to
   // the default; the rename above carries the children with it.
   const commitSource = (data) => {
-    const changed = (parseMapHead(node.head)?.data || '') !== data.trim();
+    // The source, not the whole expression: `.slice(0, 3)` typed after a list
+    // — or a value dropped into it — leaves the item exactly what it was, and
+    // only picking a different list makes the old name wrong.
+    const changed = sourceChip(parseMapHead(node.head)?.data || '') !== sourceChip(data);
     commit({ ...fields, data, item: changed ? DEFAULT_ITEM : fields.item });
   };
 
   // Anchors the source popup under the Data row.
   const dataRef = useRef(null);
+  const codeRef = useRef(null);
   const [sourceMenu, setSourceMenu] = useState(null);
+  // The bind handle's picker, and the way into whichever field it belongs to.
+  // The source picker chooses what is being looped over; this drops a value
+  // into the expression around it — `posts.slice(0, count)` needs `count` from
+  // somewhere, and there was no way to reach it from here.
+  const [insertAt, setInsertAt] = useState(null); // {pos, field}
+  const dataApiRef = useRef(null);
+  const codeApiRef = useRef(null);
+  const openInsert = (field, ref) => {
+    if (insertAt) {
+      setInsertAt(null);
+      return;
+    }
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    setInsertAt({
+      field,
+      pos: {
+        left: r.left,
+        top: Math.min(r.bottom + 4, Math.max(60, window.innerHeight - 340)),
+        width: Math.max(r.width, 240),
+      },
+    });
+  };
   const openSourceMenu = () => {
     const r = dataRef.current?.getBoundingClientRect();
     if (!r) return;
@@ -1550,31 +1577,31 @@ function MapEditor({ node, loopContext, bindCtx, dataCtx, onSetText }) {
           <div className="props-field" style={{ marginTop: 8 }} ref={dataRef}>
             <label>
               <span className="prop-label">Data</span>
+              <BindHandle
+                active={insertAt?.field === 'data'}
+                onOpen={() => openInsert('data', dataRef)}
+              />
             </label>
             {/* One field, holding one expression. What names the source is
                 drawn as a chip inside it — the same purple a binding wears
                 everywhere else — and everything after it is ordinary code, so
-                `.filter(…)` or `[1]` is typed where it reads. The chip and the
-                chevron both open the picker; the pencil goes to where the list
-                is declared, which is usually another file. */}
+                `.filter(…)` or `[1]` is typed where it reads. The chip IS the
+                way to another list: it is the thing on screen that names the
+                one in use, so pressing it opens the picker, and the chevron
+                that used to sit beside it was a second button for the job the
+                chip was already doing. The pencil goes to where the list is
+                declared, which is usually another file. */}
             <div className="prop-expr-row">
               <ExprInput
                 value={isNoSource ? '' : fields.data}
                 syncValue={isNoSource ? '' : fields.data}
                 placeholder="Choose or write a list…"
                 chip={sourceChip(fields.data)}
+                apiRef={dataApiRef}
                 onChipClick={() => (sourceMenu ? setSourceMenu(null) : openSourceMenu())}
                 onChange={(v) => update({ data: v })}
                 onCommit={(v) => commitSource(v.trim() || NO_SOURCE)}
               />
-              <button
-                type="button"
-                className="prop-source-open"
-                title="Choose a list"
-                onClick={() => (sourceMenu ? setSourceMenu(null) : openSourceMenu())}
-              >
-                <ChevronDownIcon size={11} />
-              </button>
               <SourceEditButton
                 name={referencedName(fields.data)}
                 dataCtx={dataCtx}
@@ -1641,19 +1668,41 @@ function MapEditor({ node, loopContext, bindCtx, dataCtx, onSetText }) {
           Custom loop code — edit it below.
         </div>
       )}
-      <div className="props-field" style={{ marginTop: parseableNow ? 2 : 0 }}>
+      <div className="props-field" style={{ marginTop: parseableNow ? 2 : 0 }} ref={codeRef}>
         <label>
           <span className="prop-label">
             <CodeIcon size={12} className="prop-label-icon" />
             Code
           </span>
+          <BindHandle
+            active={insertAt?.field === 'code'}
+            onOpen={() => openInsert('code', codeRef)}
+          />
         </label>
         <ExprInput
           value={node.head}
           syncValue={node.head}
+          apiRef={codeApiRef}
           onCommit={(v) => v !== node.head && onSetText(v)}
         />
       </div>
+      {insertAt && (
+        <FieldDataPicker
+          pos={insertAt.pos}
+          bindCtx={bindCtx || loopContext}
+          current={null}
+          onPick={(path) => {
+            const field = insertAt.field;
+            setInsertAt(null);
+            const next =
+              field === 'data' ? dataApiRef.current?.insert(path) : codeApiRef.current?.insert(path);
+            if (next == null) return;
+            if (field === 'data') commitSource(next.trim() || NO_SOURCE);
+            else if (next !== node.head) onSetText(next);
+          }}
+          onClose={() => setInsertAt(null)}
+        />
+      )}
     </>
   );
 }
@@ -2005,7 +2054,16 @@ function FieldDataPicker({ pos, bindCtx, current, tree, onPick, onWrite, onClose
     const close = (e) => {
       // The thing that opened it is not "outside": letting the mousedown close
       // it would leave the click that follows to open it straight back up.
-      if (e.target.closest?.('.bind-menu, .bind-handle, .dd-source')) return;
+      //
+      // A chip is in that list because it opens the picker ON MOUSEDOWN — the
+      // caret must not land inside a name — and React flushes this effect
+      // synchronously for a discrete event, so the listener below is live
+      // while the very mousedown that opened the picker is still on its way up
+      // to document. Without the chip here, pressing it opened the picker and
+      // closed it again before the button came back up, which looked like a
+      // chip that did nothing at all. Clicking it again still closes, through
+      // the same toggle that opened it.
+      if (e.target.closest?.('.bind-menu, .bind-handle, .dd-source, .cm-chip')) return;
       onClose();
     };
     const onKey = (e) => e.key === 'Escape' && onClose();

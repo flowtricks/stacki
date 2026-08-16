@@ -74,9 +74,17 @@ export default function ExprInput({
   // what to do when it is clicked.
   chip = '',
   onChipClick,
+  // Set to {insert} while the field is mounted, so a bind handle beside it can
+  // drop a path in at the caret.
+  apiRef,
 }) {
   const hostRef = useRef(null);
   const viewRef = useRef(null);
+  // Whether the caret in the state is one the user put there. CodeMirror keeps
+  // a selection whether or not the field has ever been touched, and its idea
+  // of "nowhere" is offset 0 — which would insert in front of the expression
+  // rather than after it.
+  const touchedRef = useRef(false);
   const onChangeRef = useRef(onChange);
   const onCommitRef = useRef(onCommit);
   const onChipClickRef = useRef(onChipClick);
@@ -125,6 +133,10 @@ export default function ExprInput({
               onChipClickRef.current?.();
               return true;
             },
+            focus: () => {
+              touchedRef.current = true;
+              return false;
+            },
             blur: () => {
               onCommitRef.current?.(viewRef.current?.state.doc.toString() ?? '');
               return false;
@@ -144,6 +156,30 @@ export default function ExprInput({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Dropping data in from outside: at the caret, or at the end for a field
+  // nobody has clicked into yet — the same place BindInput puts it. Returns
+  // the whole value, since the caller is usually about to commit it.
+  useEffect(() => {
+    if (!apiRef) return undefined;
+    apiRef.current = {
+      insert(text) {
+        const view = viewRef.current;
+        if (!view) return null;
+        const end = view.state.doc.length;
+        const { from, to } = touchedRef.current ? view.state.selection.main : { from: end, to: end };
+        view.dispatch({
+          changes: { from, to, insert: text },
+          selection: { anchor: from + text.length },
+        });
+        view.focus();
+        return view.state.doc.toString();
+      },
+    };
+    return () => {
+      apiRef.current = null;
+    };
+  });
 
   // The chip follows whatever the caller says the source is.
   useEffect(() => {

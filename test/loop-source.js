@@ -91,6 +91,41 @@ function withSource(value, path) {
   check('picking into an empty field just sets it', withSource('', 'authors') === 'authors');
   check('and into a literal replaces it', withSource('[1, 2]', 'authors') === 'authors');
 
+  // The chip is the control. A second button beside it opening the same picker
+  // was two affordances for one job.
+  check(
+    'the chip opens the picker',
+    /onChipClick=\{\(\) => \(sourceMenu \? setSourceMenu\(null\) : openSourceMenu\(\)\)\}/.test(source)
+  );
+  check(
+    'and nothing else has to',
+    !source.includes('prop-source-open'),
+    'the chevron beside the Data field is back'
+  );
+  check(
+    'and the press that opens it does not also close it',
+    /\.bind-menu, \.bind-handle, \.dd-source, \.cm-chip/.test(source),
+    'the picker treats the chip as outside itself, so a chip press opens and closes in one go'
+  );
+
+  // Data goes into the expression as well as choosing it: a slice needs its
+  // length from somewhere.
+  check('the Data field takes an insert', /apiRef=\{dataApiRef\}/.test(source));
+  check('and so does the Code field', /apiRef=\{codeApiRef\}/.test(source));
+  check(
+    'both have a handle to open it with',
+    (source.match(/<BindHandle\s+active=\{insertAt\?\.field ===/g) || []).length === 2
+  );
+
+  // Renaming the item is about the source, not the expression: typing a filter
+  // after a list — or dropping a value into one — must not rename the item out
+  // from under the children that reference it.
+  const renames = (before, after) => sourceChip(before) !== sourceChip(after);
+  check('a different list renames the item', renames('posts', 'authors'));
+  check('a filter typed after it does not', !renames('posts', 'posts.filter(p => !p.draft)'));
+  check('nor does a value dropped into one', !renames('posts.slice(0, 3)', 'posts.slice(0, count)'));
+  check('and a first list still does', renames('[]', 'posts'));
+
   // The chip is a mark over text, so the value never contains anything but the
   // expression itself.
   const expr = require('fs').readFileSync(path.join(__dirname, '..', 'src', 'ui', 'ExprInput.jsx'), 'utf8');

@@ -4210,20 +4210,3 @@ textarea::selection {
   cursor: pointer;
 }
 .expr-input .cm-chip:hover { background: rgba(146, 116, 255, 0.34); }
-
-/* The picker's own affordance beside the Data field: quiet until the row is
-   hovered, like the pencil next to it. */
-.prop-source-open {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  color: var(--text-faint);
-  border-radius: 5px;
-}
-.props-field:hover .prop-source-open,
-.prop-source-open:hover { color: var(--text-dim); background: rgba(255, 255, 255, 0.07); }
