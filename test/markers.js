@@ -27,6 +27,29 @@ const fs = require('fs');
 const path = require('path');
 const { parsePage, serializePageMarked } = require('../electron/astroParser.js');
 
+// Markers can't go inside an inline run — each one is written on its own line,
+// and those newlines render as spaces, which moves the words. The nodes in
+// there are addressed by a `data-avb-p` tag instead, and without it a link in
+// a sentence can't be outlined and reads as a node that never rendered.
+function checkInlineRun() {
+  const source = '---\n---\n<nav>\n  <a href="/docs">Docs</a>\n  <span>/</span>\n  <span>Here</span>\n</nav>\n';
+  const parsed = parsePage(source);
+  if (!parsed.editable) return fail('inline run tags', '    page did not parse');
+  const marked = serializePageMarked(parsed.model);
+  // The <nav> is node 0; its children are the run, spaces included, so the
+  // tags land on the odd indices.
+  for (const path of ['0.0', '0.2', '0.4']) {
+    if (!marked.includes(`data-avb-p="${path}"`)) {
+      fail('inline run tags', `    no tag for ${path}\n${indented(marked)}`);
+      return;
+    }
+  }
+  // …and the words still have the spaces the source rendered between them.
+  if (!/>Docs<\/a> <span[^>]*>\/<\/span> <span/.test(marked)) {
+    fail('inline run tags', `    the run lost its spacing\n${indented(marked)}`);
+  }
+}
+
 // Pages whose marked output has caught a real bug. Kept inline: each is small,
 // and what matters is the construct, not a file full of realistic markup.
 const CASES = {
@@ -41,6 +64,7 @@ const CASES = {
   'loop inside conditional': '---\nconst c = true;\nconst xs = [1];\n---\n<div>{c && <ul>{xs.map((x) => (<li>{x}</li>))}</ul>}</div>\n',
   'slotted child': '---\nimport Card from "../components/Card.astro";\n---\n<Card><h2 slot="header">Hi</h2><p>Body</p></Card>\n',
   'plain elements': '---\n---\n<div><p>hi</p></div>\n',
+  'inline run': '---\n---\n<nav>\n  <a href="/docs">Docs</a>\n  <span>/</span>\n  <span>Here</span>\n</nav>\n',
 };
 
 // Every marker the serializer put in the source, so the compiled output can be
@@ -139,6 +163,8 @@ function walk(dir, out = []) {
     );
     process.exit(2);
   }
+
+  checkInlineRun();
 
   let skipped = 0;
   for (const [label, source] of Object.entries(CASES)) {

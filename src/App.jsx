@@ -3,7 +3,7 @@ import WelcomeScreen from './panels/WelcomeScreen.jsx';
 import PagesPanel from './panels/PagesPanel.jsx';
 import PalettePanel from './panels/PalettePanel.jsx';
 import StructurePanel from './panels/StructurePanel.jsx';
-import { noteIndexAbove, noteText, noteValue, selectionAfterDelete } from './treeSelection.js';
+import { isInlineRun, noteIndexAbove, noteText, noteValue, selectionAfterDelete } from './treeSelection.js';
 import PropsPanel from './panels/PropsPanel.jsx';
 import StylePanel from './panels/StylePanel.jsx';
 import PreviewPane from './panels/PreviewPane.jsx';
@@ -3229,14 +3229,19 @@ export default function App() {
     // every one of them would be noise.
     const MARKABLE = new Set(['element', 'component', 'map']);
     const ids = new Set();
-    const walk = (list, trail) => {
+    // An inline run — words with <a>, <strong>, <span> among them — is written
+    // as one line, and markers inside it would render as spaces, so nothing in
+    // there carries one. The page therefore says nothing about those nodes,
+    // which is not the same as saying they rendered nothing: `unmarked` keeps
+    // a link sitting in a sentence from being reported as invisible.
+    const walk = (list, trail, unmarked) => {
       list.forEach((n, i) => {
         const t = [...trail, i];
-        if (MARKABLE.has(n.kind) && !live.has(t.join('.'))) ids.add(n.id);
-        if (Array.isArray(n.children)) walk(n.children, t);
+        if (!unmarked && MARKABLE.has(n.kind) && !live.has(t.join('.'))) ids.add(n.id);
+        if (Array.isArray(n.children)) walk(n.children, t, unmarked || isInlineRun(n.children));
       });
     };
-    walk(model.nodes, []);
+    walk(model.nodes, [], false);
     return ids;
   }, [renderedPaths, model, editedRel]);
 

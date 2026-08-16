@@ -512,6 +512,12 @@ function parseTemplate(str) {
   // counted here and carried on whatever comes next, to be written back out
   // in front of it. Without this a save closed up every gap in the file.
   let pendingBlank = 0;
+  // Where whitespace-only text sat between two nodes. It carries no words, so
+  // it is no node — except in an inline run, where the newline and indent
+  // between `</a>` and `<span>` is the space the page shows between them. The
+  // run's shape isn't known until every sibling is in, so the positions are
+  // noted here and the spaces put back at the end.
+  const gaps = [];
   const emit = (node) => {
     if (pendingBlank) {
       node.blankBefore = pendingBlank;
@@ -536,6 +542,7 @@ function parseTemplate(str) {
       // Whitespace only: no node, but remember any blank line inside it.
       const breaks = (text.match(/\n/g) || []).length;
       if (breaks > 1) pendingBlank = Math.max(pendingBlank, breaks - 1);
+      if (nodes.length) gaps.push(nodes.length);
     }
     if (text.trim()) {
       // `source` only when the slice spans lines, because that is the only
@@ -670,6 +677,18 @@ function parseTemplate(str) {
     pos = closeEnd;
   }
 
+  // The gaps that turned out to be inside an inline run become the single
+  // space a browser renders them as. Without this, editing anything in
+  // `<a>Docs</a> <span>/</span>` — which the serializer writes back as one
+  // line — closed the words up into `Docs/`, on the page as well as in the
+  // panel. A gap after the last node is the indent before the closing tag and
+  // renders as nothing, so it is left out.
+  if (gaps.length && isInlineRun(nodes)) {
+    for (let i = gaps.length - 1; i >= 0; i--) {
+      if (gaps[i] >= nodes.length) continue;
+      nodes.splice(gaps[i], 0, { id: makeId(), kind: 'text', value: ' ' });
+    }
+  }
   return { nodes, clean: true, trailingBlank: pendingBlank };
 }
 
@@ -992,6 +1011,31 @@ function inlineString(nodes) {
     }
   }
   return out;
+}
+
+// Paths for the nodes inside an inline run, written onto the tags themselves.
+// A marker pair can't go there — the serializer puts each marker on its own
+// line, and those newlines render as spaces, which moves the words — so until
+// now nothing inside a run could be outlined or reported as rendered, and a
+// link in a sentence read as a node that wasn't on the page at all. The
+// collector already resolves a path from `data-avb-p` (it is how a slotted
+// element is addressed), so the attribute does the whole job and adds nothing
+// to the DOM. The stored `source` goes: it would put the run back verbatim,
+// tags and all, without them.
+function tagInlineRun(nodes, path) {
+  return nodes.map((n, i) => {
+    if (n.kind !== 'element') return n;
+    const childPath = `${path}.${i}`;
+    const tagged = {
+      ...n,
+      source: undefined,
+      props: { ...n.props, 'data-avb-p': { type: 'string', value: childPath } },
+    };
+    if (Array.isArray(n.children) && n.children.length > 0) {
+      tagged.children = tagInlineRun(n.children, childPath);
+    }
+    return tagged;
+  });
 }
 
 // A node still saying exactly what the file said keeps the lines it was
@@ -1438,7 +1482,21 @@ function serializeNodeMarked(node, indent, lines, path, inSlot = false) {
       serializeNodeMarked(child, indent, lines, `${path}.${i}`, inSlot)
     );
   } else {
-    serializeNode(tagInPlace ? { ...node, props: markedProps } : node, indent, lines);
+    const base = tagInPlace ? { ...node, props: markedProps } : node;
+    const inlineKids =
+      (node.kind === 'component' || node.kind === 'element') &&
+      !node.chunkFile &&
+      !node.chunkAggregate &&
+      Array.isArray(node.children) &&
+      node.children.length > 0 &&
+      isInlineRun(node.children);
+    serializeNode(
+      inlineKids
+        ? { ...base, source: undefined, children: tagInlineRun(node.children, path) }
+        : base,
+      indent,
+      lines
+    );
   }
   if (!tagInPlace) {
     lines.push(

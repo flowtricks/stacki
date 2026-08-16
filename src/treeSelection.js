@@ -11,6 +11,32 @@ export function isContentOnlyChild(c) {
   );
 }
 
+// Tags the serializer keeps on one line with the words around them.
+const INLINE_TAGS = new Set([
+  'strong', 'em', 'b', 'i', 'sup', 'sub', 'code', 'a', 'span', 'br',
+  'small', 'mark', 'u', 's',
+]);
+
+// Whether a child list is written out as a single inline run. The serializer
+// puts no markers inside one — each marker's own newlines would render as a
+// space, which would move the words — so the page reports nothing about what
+// is in there, and "this rendered nothing" is a question that can't be asked
+// of it. Mirrors isInlineRun in the parser; the two have to agree, or a node
+// nobody ever marked reads as a node that produced nothing.
+export function isInlineRun(nodes) {
+  return (
+    Array.isArray(nodes) &&
+    nodes.length > 0 &&
+    nodes.every(
+      (n) =>
+        isContentOnlyChild(n) ||
+        (n.kind === 'element' &&
+          INLINE_TAGS.has(String(n.name).toLowerCase()) &&
+          (n.children === null || n.children.length === 0 || isInlineRun(n.children)))
+    )
+  );
+}
+
 // The comment sitting directly above `index` in its own sibling list — the
 // note the navigator folds into that node's row. Moves and deletes carry it
 // along: the two read as one row, so leaving it behind would silently re-attach
@@ -52,10 +78,14 @@ export function selectionAfterDelete(model, nodeId) {
   if (rest.every(isContentOnlyChild)) return parent ? parent.id : null;
   // Where the hole is, in the surviving list.
   const at = siblings.slice(0, index).filter((_, i) => !gone.has(i)).length;
+  // Rows the selection can't land on: a comment folded into the row beneath
+  // it, and the text and {expr} the Content field covers — including the
+  // spaces that hold an inline run apart, which are text nodes like any other.
   const folded = (i) =>
-    rest[i].kind === 'comment' &&
-    rest[i + 1] &&
-    (rest[i + 1].kind === 'element' || rest[i + 1].kind === 'component');
+    isContentOnlyChild(rest[i]) ||
+    (rest[i].kind === 'comment' &&
+      rest[i + 1] &&
+      (rest[i + 1].kind === 'element' || rest[i + 1].kind === 'component'));
   for (let i = at; i < rest.length; i++) if (!folded(i)) return rest[i].id;
   for (let i = at - 1; i >= 0; i--) if (!folded(i)) return rest[i].id;
   return parent ? parent.id : null;
