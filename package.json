@@ -11,6 +11,7 @@
     "build": "vite build",
     "test:markers": "node test/markers.js",
     "test:bridge": "node test/bridge.js",
+    "test:starter": "node test/starter.js",
     "test:content": "node test/content-config.js",
     "test:entries": "node test/content-entries.js",
     "test:refs": "node test/content-refs.js",
@@ -33,7 +34,7 @@
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
     "dist:mac:unsigned": "npm run build && electron-builder --mac -c.mac.forceCodeSigning=false -c.mac.notarize=false -c.mac.identity=null",
-    "test": "npm run test:markers && npm run test:bridge && npm run test:content && npm run test:entries && npm run test:refs && npm run test:fields && npm run test:view && npm run test:panel && npm run test:dropdown && npm run test:csscode && npm run test:styletarget && npm run test:thumbs && npm run test:welcome && npm run test:cssvars && npm run test:fluid && npm run test:varsview && npm run test:varspanel && npm run test:binding && npm run test:loopsource"
+    "test": "npm run test:markers && npm run test:bridge && npm run test:starter && npm run test:content && npm run test:entries && npm run test:refs && npm run test:fields && npm run test:view && npm run test:panel && npm run test:dropdown && npm run test:csscode && npm run test:styletarget && npm run test:thumbs && npm run test:welcome && npm run test:cssvars && npm run test:fluid && npm run test:varsview && npm run test:varspanel && npm run test:binding && npm run test:loopsource"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",

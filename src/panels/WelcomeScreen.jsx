@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { cleanError } from '../App.jsx';
 import { LayersIcon, CloseIcon } from '../ui/Icons.jsx';
 import StackiLogo from '../ui/StackiLogo.jsx';
@@ -8,6 +8,8 @@ export default function WelcomeScreen({ onOpen, setBusy, showToast }) {
   const [error, setError] = useState(null);
   const [recents, setRecents] = useState([]);
   const [newProjectDir, setNewProjectDir] = useState(null);
+  // Where a site started from a template should go, once the folder is chosen.
+  const [starterDir, setStarterDir] = useState(null);
   // Which cards are having their picture retaken. Nothing is announced about
   // it: a thumbnail being out of date is the app's problem, not something to
   // put a badge on and ask the user to deal with.
@@ -81,6 +83,20 @@ export default function WelcomeScreen({ onOpen, setBusy, showToast }) {
     setNewProjectDir(result.projectPath);
   };
 
+  // A site built on Lumos: the framework's own scaffolder, run in a folder of
+  // their choosing under a name of their choosing. The empty-Astro path above
+  // is untouched — this is the other way in, not a replacement for it.
+  const startFromLumos = async () => {
+    setError(null);
+    const result = await window.avb.parentDialog();
+    if (result.canceled) return;
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setStarterDir(result.parentPath);
+  };
+
   return (
     <div className="welcome">
       <WelcomeBackground />
@@ -88,11 +104,27 @@ export default function WelcomeScreen({ onOpen, setBusy, showToast }) {
       <div className="welcome-hero">
         <StackiLogo width={320} className="welcome-logo" />
         <p className="welcome-tagline">Visual Builder for Astro</p>
+        {/* Ordered by how often each is reached for, and weighted by the
+            situation the screen is in. With projects below, the rail is how
+            somebody returns to one and this row is for the project that is not
+            in it; on a first run there is no rail, nothing to return to, and
+            the useful thing is to start a site. Two of these make a new
+            project, so the plain one has to say what makes it different. */}
         <div className="actions">
-          <button className="primary" onClick={createNew}>
-            New Project…
+          <div className="actions-row">
+            <button className={recents.length ? 'primary' : ''} onClick={openExisting}>
+              Open Project…
+            </button>
+            <button className={recents.length ? '' : 'primary'} onClick={startFromLumos}>
+              Start from Lumos…
+            </button>
+          </div>
+          {/* Under the two, not beside them: it is the way in for somebody who
+              wants none of what the others offer, and a third button in the row
+              made the choice look like three of a kind. */}
+          <button className="quiet" onClick={createNew}>
+            Empty Astro project…
           </button>
-          <button onClick={openExisting}>Open Existing Project…</button>
         </div>
         {error && <div className="error-text">{error}</div>}
       </div>
@@ -134,6 +166,18 @@ export default function WelcomeScreen({ onOpen, setBusy, showToast }) {
         </div>
       )}
 
+      {starterDir && (
+        <StarterWizard
+          parentPath={starterDir}
+          onClose={() => setStarterDir(null)}
+          onDone={(dir) => {
+            setStarterDir(null);
+            showToast('Site created', 'success');
+            onOpen(dir);
+          }}
+        />
+      )}
+
       {newProjectDir && (
         <NewProjectWizard
           dir={newProjectDir}
@@ -159,6 +203,92 @@ const TEMPLATES = [
 
 // Runs the real create-astro CLI with the answers collected here, streaming
 // its output so it reads like the terminal session it replaces.
+// Starting from the Lumos starter: a name for the site, the folder it lands in,
+// and the scaffolder itself with its output where it can be read. The name is
+// the folder's name, so it is checked the way a folder name has to be — the app
+// can rename a site later, but it cannot rename it out of a folder that already
+// exists.
+function StarterWizard({ parentPath, onClose, onDone }) {
+  const [name, setName] = useState('my-site');
+  const [running, setRunning] = useState(false);
+  const [failed, setFailed] = useState(null);
+  const [log, setLog] = useState('');
+  const logRef = useRef(null);
+
+  useEffect(() => window.avb.onCreateLog((chunk) => setLog((l) => l + chunk)), []);
+  useEffect(() => {
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [log]);
+
+  const invalid = !name.trim() || !/^[A-Za-z0-9._-]+$/.test(name.trim());
+
+  const run = async () => {
+    setRunning(true);
+    setFailed(null);
+    setLog('');
+    try {
+      const { projectPath } = await window.avb.createStarter({
+        starter: 'lumos',
+        parentPath,
+        name: name.trim(),
+      });
+      onDone(projectPath);
+    } catch (err) {
+      setRunning(false);
+      setFailed(cleanError(err));
+    }
+  };
+
+  return (
+    <div
+      className="modal-overlay"
+      onMouseDown={(e) => e.target === e.currentTarget && !running && onClose()}
+    >
+      <div className="modal new-project-modal">
+        <div className="modal-header">Start from Lumos</div>
+        <div className="modal-body">
+          <label className="starter-field">
+            <span>Site name</span>
+            <input
+              autoFocus
+              value={name}
+              spellCheck={false}
+              disabled={running}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !invalid && !running) run();
+              }}
+            />
+          </label>
+          <div className="new-project-dir" title={`${parentPath}/${name.trim() || 'my-site'}`}>
+            {`${parentPath}/${name.trim() || 'my-site'}`}
+          </div>
+          <div className="starter-note">
+            Runs <code>npm create lumos@latest</code>, then starts a git history of its
+            own — so publishing it later publishes your site, not a fork of the starter.
+          </div>
+
+          {(running || log) && (
+            <pre className="create-log" ref={logRef}>
+              {log}
+            </pre>
+          )}
+          {failed && <div className="error-text">{failed}</div>}
+        </div>
+        <div className="modal-footer">
+          <button className="ghost" onClick={onClose} disabled={running}>
+            Cancel
+          </button>
+          <button className="primary" onClick={run} disabled={running || invalid}>
+            {running ? 'Creating…' : 'Create site'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NewProjectWizard({ dir, onClose, onDone }) {
   const [template, setTemplate] = useState('basics');
   const [install, setInstall] = useState(true);

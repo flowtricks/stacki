@@ -41,6 +41,7 @@ const { importersOf, resolveImport } = require('./cmsRefs');
 const { readContentConfig, validateEntry, stopAllServices } = require('./contentConfig');
 const thumbs = require('./thumbs');
 const cssVars = require('./cssVars');
+const { createStarter } = require('./starter');
 const { listEntries, writeEntry, countEntries, coveredPaths } = require('./contentEntries');
 const { planRename, applyRename } = require('./contentRefs');
 const { autoUpdater } = require('electron-updater');
@@ -1060,6 +1061,34 @@ ipcMain.handle('project:createAstro', async (_e, opts) => {
       }
     });
   });
+});
+
+// A folder to put a new project IN, rather than the project's own folder: the
+// starter arrives as a directory of its own, named by the user.
+ipcMain.handle('project:parentDialog', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose where the site should go',
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (result.canceled || !result.filePaths.length) return { canceled: true };
+  return { canceled: false, parentPath: result.filePaths[0] };
+});
+
+// Starting from a starter. The scaffolder, the first commit and the package's
+// name are in ./starter.js; what is here is the install that follows and the
+// log the wizard reads.
+ipcMain.handle('project:createStarter', async (_e, { starter = 'lumos', parentPath, name }) => {
+  ensureToolPath(); // npm and git are both on the PATH the Dock does not have
+  const result = await createStarter({
+    starter,
+    parentPath,
+    name,
+    onLog: (text) => send('create:log', text),
+  });
+  send('create:log', '\n> installing dependencies\n');
+  await installDependencies(result.projectPath);
+  send('progress', { message: null });
+  return result;
 });
 
 ipcMain.handle('project:scaffold', async (_e, { dir, name }) => {

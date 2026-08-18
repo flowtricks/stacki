@@ -1015,6 +1015,8 @@ contextBridge.exposeInMainWorld('avb', {
   newProjectDialog: invoke('project:newDialog'),
   scaffoldProject: invoke('project:scaffold'),
   createAstroProject: invoke('project:createAstro'),
+  parentDialog: invoke('project:parentDialog'),
+  createStarter: invoke('project:createStarter'),
   hasNodeModules: invoke('project:hasNodeModules'),
   installDeps: invoke('project:install'),
   scanProject: invoke('project:scan'),

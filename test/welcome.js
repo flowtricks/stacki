@@ -60,7 +60,7 @@ const PIXEL =
   const WelcomeScreen = require(bundlePath).default;
 
   const container = dom.window.document.getElementById('root');
-  const reactRoot = createRoot(container);
+  let reactRoot = createRoot(container);
   const all = (selector) => [...container.querySelectorAll(selector)];
   const text = () => container.textContent;
 
@@ -112,6 +112,20 @@ const PIXEL =
   await mount();
 
   check('every recent project gets a card', all('.recent-card').length === 4, `${all('.recent-card').length}`);
+
+  // Three ways to start, in the order they are reached for — and the one the
+  // situation calls for is the one that looks like the answer.
+  const actions = all('.actions button').map((b) => b.textContent.trim());
+  check('the actions read in that order', actions.join(' | ') === 'Open Project… | Start from Lumos… | Empty Astro project…', actions.join(' | '));
+  check(
+    'with projects to return to, opening one leads',
+    all('.actions button')[0].classList.contains('primary'),
+    all('.actions button').map((b) => b.className).join(' | ')
+  );
+  check(
+    'and the blank one is the quiet third',
+    all('.actions button')[2].classList.contains('quiet')
+  );
   check('nothing tells the user a picture is old', !/out of date/i.test(text()), text());
   check('and nothing offers to fix it', all('.recent-refresh').length === 0);
 
@@ -137,6 +151,66 @@ const PIXEL =
   );
   check('so the queue ends', asked.length === 2, JSON.stringify(asked));
   check('quietly', toasts.length === 0, JSON.stringify(toasts));
+
+  // Starting from Lumos: the folder is chosen first, then the site is named.
+  // Nothing in between is a screen the user can be left on, so the wizard has
+  // to actually arrive.
+  {
+    let asked = false;
+    dom.window.avb.parentDialog = async () => {
+      asked = true;
+      return { canceled: false, parentPath: '/tmp/sites' };
+    };
+    dom.window.avb.onCreateLog = () => () => {};
+    await act(async () => {
+      all('.actions button')[1].click();
+      await settle(40);
+    });
+    check('choosing it asks where the site should go', asked);
+    const wizard = dom.window.document.querySelector('.new-project-modal');
+    check('and then asks what it is called', !!wizard, 'no wizard appeared after the folder was chosen');
+    check('naming it Lumos', /Start from Lumos/.test(wizard?.textContent || ''), wizard?.textContent?.slice(0, 80));
+    check(
+      'with a name to edit and where it will land',
+      !!wizard?.querySelector('input') && /\/tmp\/sites\/my-site/.test(wizard?.textContent || ''),
+      wizard?.textContent?.slice(0, 200)
+    );
+
+    // Cancelling the folder dialog leaves the screen where it was.
+    await act(async () => {
+      wizard.querySelector('.modal-footer .ghost').click();
+      await settle(20);
+    });
+    check('cancelling closes it', !dom.window.document.querySelector('.new-project-modal'));
+    dom.window.avb.parentDialog = async () => ({ canceled: true });
+    await act(async () => {
+      all('.actions button')[1].click();
+      await settle(30);
+    });
+    check('and cancelling the folder shows nothing', !dom.window.document.querySelector('.new-project-modal'));
+  }
+
+  // A first run has nothing to return to, so starting a site is the answer
+  // rather than opening one.
+  {
+    dom.window.avb.listRecents = async () => [];
+    // A fresh mount: re-rendering the same element keeps the state it fetched,
+    // recents and all.
+    await act(async () => {
+      reactRoot.unmount();
+      await settle(10);
+    });
+    reactRoot = createRoot(container);
+    await act(async () => {
+      reactRoot.render(
+        React.createElement(WelcomeScreen, { onOpen: () => {}, setBusy: () => {}, showToast: () => {} })
+      );
+      await settle(40);
+    });
+    const buttons = all('.actions button');
+    check('with no projects, starting from Lumos leads', buttons[1]?.classList.contains('primary'), buttons.map((b) => b.className).join(' | '));
+    check('and opening one does not', !buttons[0]?.classList.contains('primary'));
+  }
 
   // Leaving the screen stops it: the machine belongs to the project being
   // opened now.
