@@ -167,11 +167,19 @@ export default function PreviewPane({
   const onNodeClassesRef = React.useRef(onNodeClasses);
   onNodeClassesRef.current = onNodeClasses;
   // Last reported class string, so repeated rect sends stay quiet.
-  const selClassesRef = React.useRef('');
-  // Selection changed: the app cleared its copy, so the next report must go
-  // through even if the new element happens to carry the same classes.
+  //
+  // `null` rather than '' for "nothing reported yet". An element with no
+  // classes at all reports the empty string, and against an empty-string
+  // starting value that report would look like a repeat and be swallowed — so
+  // selecting an unclassed element would say nothing, and the panel would go
+  // on showing the last element's classes with no idea they were stale.
+  const selClassesRef = React.useRef(null);
+  // Selection changed, so the next report must go through even when the new
+  // element happens to carry exactly the same classes: the app uses it to
+  // learn WHICH element the classes it is holding describe, not only what
+  // they are.
   React.useEffect(() => {
-    selClassesRef.current = '';
+    selClassesRef.current = null;
   }, [selPath, selOcc]);
   // Canvas clicks set the instance directly (below) — including when they
   // land on another instance of the node that's already selected, where

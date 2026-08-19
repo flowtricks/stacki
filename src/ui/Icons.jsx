@@ -497,6 +497,16 @@ export const BranchIcon = (p) => (
 // The reverse of BranchIcon: a side branch curving back into the trunk. The
 // arrowhead is what tells the two apart at 12px — without it a merge and a
 // branch are the same three dots and a curve.
+// A clock turned back — the panel is about what the project looked like
+// before, and a plain clock would read as "scheduled".
+export const HistoryIcon = (p) => (
+  <I {...p}>
+    <path d="M2.6 7.2a5.6 5.6 0 1 1 .9 3.9" />
+    <path d="M2.2 4.3v2.9h2.9" />
+    <path d="M8 5.1v3.1l2.2 1.3" />
+  </I>
+);
+
 export const MergeIcon = (p) => (
   <I {...p}>
     <circle cx="4.5" cy="3.5" r="1.6" />

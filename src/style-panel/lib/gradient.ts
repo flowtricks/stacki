@@ -71,10 +71,20 @@ function isPrelude(type: GradientType, part: string): boolean {
   if (type === 'linear') return p.startsWith('to ') || isAngle(p)
   if (type === 'conic') return p.startsWith('from ') || p.startsWith('at ')
   // radial: shape / size keyword / explicit size / an `at <pos>`.
-  return (
-    p.startsWith('circle') || p.startsWith('ellipse') || p.includes(' at ') || p.startsWith('at ') ||
-    RADIAL_SIZE_KW.has(p) || splitTopLevelSpaces(p).some((t) => RADIAL_SIZE_KW.has(t) || isLength(t))
-  )
+  //
+  // EVERY token has to look like geometry, not just one of them. A colour stop
+  // carries a position — `red 0%` — and `0%` on its own reads as a radial
+  // size, so testing whether ANY token looked like geometry swallowed the
+  // first stop as though it were a prelude. On a two-stop gradient that left
+  // one stop, which is not a gradient, and the whole thing came back
+  // unparseable: `radial-gradient(red 0%, blue 100%)` — ordinary, valid CSS —
+  // could not be read by the editor at all.
+  if (p.startsWith('circle') || p.startsWith('ellipse') || p.includes(' at ') || p.startsWith('at ')) {
+    return true
+  }
+  if (RADIAL_SIZE_KW.has(p)) return true
+  const tokens = splitTopLevelSpaces(p)
+  return tokens.length > 0 && tokens.every((t) => RADIAL_SIZE_KW.has(t.toLowerCase()) || isLength(t))
 }
 
 export function parseGradient(image: string): Gradient | null {
@@ -137,6 +147,29 @@ function conicPrelude(g: Gradient): string {
   const centered = (!x || x === '50%') && (!y || y === '50%')
   const at = centered ? '' : `at ${x || '50%'} ${y || '50%'}`
   return [from, at].filter(Boolean).join(' ')
+}
+
+/**
+ * A gradient of `type` with no colours and no geometry set.
+ *
+ * Used when switching a layer between gradient kinds: the stops carry over,
+ * the geometry does not. An angle is a direction for a linear gradient and
+ * means nothing to a radial one; a centre point is the other way round. So each
+ * kind starts on its own CSS defaults — every field `''` — and the caller puts
+ * the colours back.
+ */
+export function blankGradientOf(type: GradientType): Gradient {
+  return {
+    type,
+    repeating: false,
+    angle: '',
+    shape: '',
+    size: '',
+    from: '',
+    posX: '',
+    posY: '',
+    stops: [],
+  }
 }
 
 export function serializeGradient(g: Gradient): string {

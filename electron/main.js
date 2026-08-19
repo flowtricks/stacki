@@ -45,7 +45,10 @@ const { readInjectedRoutes } = require('./injectedRoutes.js');
 const { createStarter } = require('./starter');
 const { listEntries, writeEntry, countEntries, coveredPaths } = require('./contentEntries');
 const { planRename, applyRename } = require('./contentRefs');
-const { mergeBranch, deleteBranch } = require('./gitBranches');
+const { mergeBranch, deleteBranch, switchBranch, resolveMerge } = require('./gitBranches');
+const gitHistory = require('./gitHistory');
+const gitSnapshot = require('./gitSnapshot');
+const previewWorktree = require('./previewWorktree');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow = null;
@@ -221,6 +224,9 @@ app.on('before-quit', () => stopDevServer());
 // Reading a project's content config leaves a process behind holding its
 // schemas; they go when the app does.
 app.on('before-quit', () => stopAllServices());
+// The preview checkouts live inside the user's projects, so leaving one behind
+// leaves a stray folder in a place they will notice.
+app.on('before-quit', () => stopAllPreviews());
 
 // ---------------------------------------------------------------------------
 // Auto update
@@ -3821,6 +3827,22 @@ ipcMain.handle('git:info', async (_e, projectPath) => {
     info.branch = '(no commits yet)';
   }
   try {
+    // What HEAD actually points at. The history panel reloads when this moves,
+    // which is how a commit made from the chip shows up in the timeline
+    // without the panel having to know the chip exists.
+    info.head = (await git(projectPath, ['rev-parse', 'HEAD'])).stdout.trim();
+  } catch {
+    info.head = null; // no commits yet
+  }
+  try {
+    // Whose commits are "yours". Git records an author on every commit, and on
+    // your own machine that is nearly always you — "Timothy Ricks changed the
+    // hero" reads oddly about yourself.
+    info.userEmail = (await git(projectPath, ['config', 'user.email'])).stdout.trim() || null;
+  } catch {
+    info.userEmail = null;
+  }
+  try {
     const listed = (await git(projectPath, ['branch', '--format=%(refname:short)'])).stdout
       .split('\n')
       .map((s) => s.trim())
@@ -3831,6 +3853,11 @@ ipcMain.handle('git:info', async (_e, projectPath) => {
     // and the rest keep the order git gave them.
     const trunk = ['main', 'master'].find((b) => listed.includes(b));
     info.branches = trunk ? [trunk, ...listed.filter((b) => b !== trunk)] : listed;
+    // Named as well as ordered. Git will delete the trunk as readily as any
+    // other branch — `git branch -d main` succeeds the moment main is merged
+    // into whatever you are standing on — and the branch everything comes back
+    // to is not one to lose to a stray click.
+    info.trunk = trunk || null;
   } catch {
     /* empty repo */
   }
@@ -3965,43 +3992,22 @@ async function unpark(projectPath, branch) {
   }
 }
 
+// Switching branches. The behaviour, and why it tries before it asks, is in
+// gitBranches.js; park/unpark are handed in because they live here.
 ipcMain.handle('git:checkout', async (_e, { projectPath, branch, create, parkFirst }) => {
-  const from = await currentBranch(projectPath);
-  let parked = false;
-  // Creating a branch carries the work onto it, which is what starting a
-  // branch from what you have in front of you means. Only a switch parks.
-  if (parkFirst && !create) parked = await park(projectPath, from);
-  const args = create ? ['checkout', '-b', branch] : ['checkout', branch];
-  try {
-    await git(projectPath, args);
-  } catch (err) {
-    if (parked) {
-      // The switch failed, so put the work straight back rather than leaving
-      // it stashed behind a branch change that never happened.
-      await unpark(projectPath, from);
-    }
-    const detail = String(err.stderr || err.message || '');
-    // Git refuses to switch when the working tree would be clobbered, and
-    // leaves HEAD where it was — every later edit then lands on the branch
-    // the user thought they left. Say so plainly instead of passing the raw
-    // porcelain through.
-    if (/would be overwritten|Please commit your changes|overwritten by checkout/i.test(detail)) {
-      const files = detail
-        .split('\n')
-        .map((l) => l.trim())
-        .filter((l) => l && !/^(error|Please|Aborting|warning)/i.test(l) && !l.endsWith(':'));
-      throw new Error(
-        `Still on "${(await currentBranch(projectPath)) || 'this branch'}" — switching to "${branch}" would overwrite uncommitted changes` +
-          (files.length ? ` in ${files.slice(0, 4).join(', ')}` : '') +
-          '. Leave them on this branch instead, or commit them.'
-      );
-    }
-    throw new Error(detail.trim() || `Could not switch to "${branch}".`);
-  }
+  const r = await switchBranch(git, {
+    projectPath,
+    branch,
+    create,
+    parkFirst,
+    park: async () => park(projectPath, await currentBranch(projectPath)),
+    unpark: (from) => unpark(projectPath, from),
+  });
+  if (!r.ok) return r;
   // Whatever was last left on this branch comes back out, however the switch
   // was made — that half is always wanted.
   const back = await unpark(projectPath, branch);
-  return { ok: true, parked, parkedFrom: parked ? from : null, ...back };
+  return { ...r, parkedFrom: r.parked ? r.from : null, ...back };
 });
 
 async function currentBranch(projectPath) {
@@ -4012,18 +4018,184 @@ async function currentBranch(projectPath) {
   }
 }
 
+// --- Previewing an old version ---------------------------------------------
+//
+// A second, deliberately dumb dev server pointed at a checkout of an old
+// commit (see previewWorktree.js). None of the primary server's machinery
+// applies: a preview is read-only, so it needs no markers, no morph client and
+// no click-to-select — it only has to render. That is `bare` on spawnDevServer,
+// which already exists as the primary server's last-resort path.
+//
+// Kept in its own registry rather than generalising `devServer`, whose daemon
+// detection, external-server adoption and log plumbing are all keyed to there
+// being exactly one.
+const previewServers = new Map(); // projectPath -> {proc, url, ref, port}
+
+async function stopPreview(projectPath) {
+  const cur = previewServers.get(projectPath);
+  if (!cur) return;
+  previewServers.delete(projectPath);
+  try {
+    cur.proc?.kill();
+  } catch {
+    /* already gone */
+  }
+  try {
+    await previewWorktree.removeWorktree(git, { projectPath });
+  } catch {
+    /* the checkout is disposable; nothing here is the user's work */
+  }
+}
+
+function stopAllPreviews() {
+  for (const [projectPath] of previewServers) stopPreview(projectPath);
+}
+
+ipcMain.handle('preview:atCommit', async (_e, { projectPath, ref }) => {
+  const dir = await previewWorktree.ensureWorktree(git, { projectPath, ref });
+
+  // A server already up for this project just needs the checkout moved under
+  // it — Vite notices the files changed and reloads, which is far quicker than
+  // starting Astro again for every commit somebody clicks.
+  const running = previewServers.get(projectPath);
+  if (running?.proc && !running.proc.killed) {
+    running.ref = ref;
+    return { url: running.url, ref, reused: true };
+  }
+
+  const bin = isWin ? 'astro.cmd' : 'astro';
+  const localBin = path.join(projectPath, 'node_modules', '.bin', bin);
+  if (!fs.existsSync(localBin)) {
+    throw new Error(
+      'This project’s packages aren’t installed, so an older version can’t be shown. Install them and try again.'
+    );
+  }
+  const port = await findFreePort(4500);
+  const [cmd, argv] = nodeCliCommand(localBin, [
+    'dev',
+    '--port',
+    String(port),
+    '--host',
+    '127.0.0.1',
+  ]);
+  const proc = spawn(cmd, argv, {
+    cwd: dir,
+    shell: isWin && cmd === localBin,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+  });
+  const url = `http://127.0.0.1:${port}`;
+  let log = '';
+  proc.stdout.on('data', (d) => (log += d.toString()));
+  proc.stderr.on('data', (d) => (log += d.toString()));
+  previewServers.set(projectPath, { proc, url, ref, port });
+  proc.on('exit', () => {
+    if (previewServers.get(projectPath)?.proc === proc) previewServers.delete(projectPath);
+  });
+
+  // Wait for it to answer rather than guessing at a delay. An old commit can
+  // need packages that are not installed now, and that shows up as a server
+  // that never comes up — so the failure has to be caught here and explained,
+  // not left as a blank canvas.
+  const deadline = Date.now() + 45000;
+  while (Date.now() < deadline) {
+    if (proc.exitCode !== null || proc.killed) break;
+    if (await serverAlive(url)) return { url, ref, reused: false };
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  await stopPreview(projectPath);
+  // The commonest real cause, said in those terms rather than as a stack trace.
+  const missing = /Cannot find (?:module|package) ['"]?([^'"\s]+)/i.exec(log);
+  throw new Error(
+    missing
+      ? `That version needs ${missing[1]}, which isn’t installed here. It can’t be shown without it.`
+      : 'That version wouldn’t start. It may need packages that aren’t installed any more.'
+  );
+});
+
+ipcMain.handle('preview:stop', async (_e, { projectPath }) => {
+  await stopPreview(projectPath);
+  return { ok: true };
+});
+
+// --- Reading history -------------------------------------------------------
+//
+// The panel gets files already described (see describeFile): "Home" rather
+// than "src/pages/index.astro". Done here rather than in the renderer because
+// this is the side that knows the project's shape, and because it keeps the
+// panel about drawing rather than about interpreting paths.
+
+ipcMain.handle('git:log', async (_e, { projectPath, ref, limit, skip }) =>
+  gitHistory.log(git, { projectPath, ref, limit, skip })
+);
+
+ipcMain.handle('git:commitFiles', async (_e, { projectPath, ref }) =>
+  gitHistory.describeFiles(await gitHistory.commitFiles(git, { projectPath, ref }))
+);
+
+// Every file in the project, with what has happened to each — the file
+// browser's list, and the same status the commit picker reads.
+ipcMain.handle('git:allFiles', async (_e, { projectPath }) =>
+  gitHistory.describeFiles(await gitHistory.allFiles(git, { projectPath }))
+);
+
+ipcMain.handle('git:status', async (_e, { projectPath }) =>
+  gitHistory.describeFiles(await gitHistory.status(git, { projectPath }))
+);
+
+ipcMain.handle('git:fileAt', async (_e, { projectPath, ref, path: filePath }) =>
+  gitHistory.fileAt(git, { projectPath, ref, path: filePath })
+);
+
+ipcMain.handle('git:worktrees', async (_e, { projectPath }) =>
+  gitHistory.worktrees(git, { projectPath })
+);
+
+// Setting work aside and picking it back up, on their own. The switch has done
+// this internally for a while; a merge that finds unsaved work in its way needs
+// the same two steps, and the user is the one deciding to take them.
+ipcMain.handle('git:park', async (_e, { projectPath }) => {
+  const branch = await currentBranch(projectPath);
+  const parked = await park(projectPath, branch);
+  return { ok: true, parked, branch };
+});
+
+ipcMain.handle('git:unpark', async (_e, { projectPath }) => {
+  const branch = await currentBranch(projectPath);
+  return unpark(projectPath, branch);
+});
+
 ipcMain.handle('git:merge', async (_e, { projectPath, branch }) =>
   mergeBranch(git, { projectPath, branch })
+);
+
+// Finishing a merge the user has chosen their way through. The conflicting
+// files come back from git:merge with both versions; this applies the answers.
+ipcMain.handle('git:resolveMerge', async (_e, { projectPath, branch, choices }) =>
+  resolveMerge(git, { projectPath, branch, choices })
 );
 
 ipcMain.handle('git:deleteBranch', async (_e, { projectPath, branch, force }) =>
   deleteBranch(git, { projectPath, branch, force })
 );
 
-ipcMain.handle('git:commit', async (_e, { projectPath, message }) => {
-  await git(projectPath, ['add', '-A']);
-  await git(projectPath, ['commit', '-m', message || 'Update from Stacki']);
-  return { ok: true };
+ipcMain.handle('git:commit', async (_e, { projectPath, message, paths }) =>
+  gitSnapshot.commit(git, { projectPath, message, paths })
+);
+
+ipcMain.handle('git:restoreFile', async (_e, { projectPath, ref, path: filePath }) =>
+  gitSnapshot.restoreFile(git, { projectPath, ref, path: filePath })
+);
+
+// `park` is handed in rather than imported: it lives here, over the stash, and
+// is the reason going back to an old version cannot lose what is on disk now.
+ipcMain.handle('git:restoreProject', async (_e, { projectPath, ref }) => {
+  const branch = await currentBranch(projectPath);
+  return gitSnapshot.restoreProject(git, {
+    projectPath,
+    ref,
+    park: () => park(projectPath, branch),
+  });
 });
 
 ipcMain.handle('git:push', async (_e, { projectPath, branch }) => {

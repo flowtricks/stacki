@@ -8,6 +8,9 @@ import PropsPanel from './panels/PropsPanel.jsx';
 import StylePanel from './panels/StylePanel.jsx';
 import PreviewPane from './panels/PreviewPane.jsx';
 import GitChip from './panels/GitChip.jsx';
+import HistoryPanel, { relativeTime } from './panels/HistoryPanel.jsx';
+import { ConfirmHost, confirmDialog } from './ui/ConfirmDialog.jsx';
+import { mergeBranchAction, deleteBranchAction } from './gitActions.js';
 import LeftRail from './ui/LeftRail.jsx';
 import CodeWindow from './ui/CodeWindow.jsx';
 import PageSwitcher from './ui/PageSwitcher.jsx';
@@ -567,6 +570,10 @@ export default function App() {
   // `class={x}`) has no readable text in the source, so this is what lets the
   // style panel show the classes this instance resolved to.
   const [selectedClasses, setSelectedClasses] = useState([]);
+  // Which selection the classes above describe, and a counter that lets the
+  // effect below re-check the moment a report lands rather than on a timer.
+  const classesForRef = useRef(null);
+  const [classesTick, setClassesTick] = useState(0);
   const [hoverNodeId, setHoverNodeId] = useState(null); // navigator row hover
   // Paths the page reports as having actually rendered something. Null until
   // the page has said anything, which is not the same as "nothing rendered".
@@ -627,6 +634,15 @@ export default function App() {
   const [rightTab, setRightTab] = useState('style'); // style | settings
   // ⌘Enter asks the props panel to open Settings and take the caret into the
   // class field — a counter, so pressing it again re-focuses.
+  // Git state, read here so the History panel and the title-bar chip cannot
+  // disagree about which branch is checked out. The chip still refreshes it on
+  // its own schedule; this is the copy the panel reads.
+  const [gitInfo, setGitInfo] = useState(null);
+  // The commit being previewed, or null for the working tree. See phase 4:
+  // while this is set the canvas points at a separate server and the editor is
+  // read-only.
+  const [previewRef, setPreviewRef] = useState(null);
+  const [previewInfo, setPreviewInfo] = useState(null); // {url, subject, when}
   const [classFocus, setClassFocus] = useState(0);
   const [contentFocus, setContentFocus] = useState(0);
   // Sliding highlight behind the active Style/Settings tab, measured from the
@@ -655,6 +671,16 @@ export default function App() {
   pageStateRef.current = { currentPage, pageState };
   const selectedIdRef = useRef(null);
   selectedIdRef.current = selectedId;
+
+  // A report from the canvas about what the selected element's classes really
+  // are. It is always about whatever is selected right now — the canvas is
+  // asked for the tracked path — so this records which element it answered
+  // for, which is what lets the panel tell a fresh answer from a stale one.
+  const receiveClasses = useCallback((list) => {
+    classesForRef.current = selectedIdRef.current;
+    setSelectedClasses(list);
+    setClassesTick((n) => n + 1);
+  }, []);
   const editStackRef = useRef([]);
   editStackRef.current = editStack;
   const inPreviewRef = useRef(false);
@@ -1049,6 +1075,56 @@ export default function App() {
   //              a CSS file, a CMS entry, an asset rename. Each records how to
   //              put things back, so these survive page switches.
   // ----------------------------------------------------------------
+
+  // Previewing an old version points the canvas at a second dev server running
+  // against a checkout of that commit, and makes the editor read-only. The
+  // read-only part is not decoration: the files behind that server are a
+  // disposable checkout, so anything typed into them would be thrown away the
+  // moment the preview ends, with nothing to say it had happened.
+  const previewCommit = useCallback(
+    async (commit) => {
+      if (!project) return;
+      setBusy('Getting that version ready…');
+      try {
+        const r = await window.avb.previewAtCommit({ projectPath: project.path, ref: commit.hash });
+        setPreviewRef(commit.hash);
+        setPreviewInfo({ url: r.url, subject: commit.subject, when: commit.when });
+      } catch (err) {
+        showToast(cleanError(err), 'error');
+      } finally {
+        setBusy(null);
+      }
+    },
+    [project, showToast]
+  );
+
+  // Named apart from exitPreview below, which is the app's own interactive
+  // preview mode — a different thing entirely.
+  const exitCommitPreview = useCallback(async () => {
+    setPreviewRef(null);
+    setPreviewInfo(null);
+    if (project) await window.avb.previewStop({ projectPath: project.path }).catch(() => {});
+  }, [project]);
+
+  // Leaving the project (or closing it) must not leave a second server and a
+  // checkout behind inside it.
+  useEffect(() => {
+    if (!project) return undefined;
+    return () => {
+      window.avb.previewStop({ projectPath: project.path }).catch(() => {});
+    };
+  }, [project?.path]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refreshGit = useCallback(async () => {
+    if (!project) return null;
+    const r = await window.avb.gitInfo(project.path);
+    setGitInfo(r);
+    return r;
+  }, [project]);
+
+  useEffect(() => {
+    refreshGit();
+  }, [refreshGit, refreshKey]);
 
   const historyRef = useRef({ past: [], future: [], lastPush: 0, lastKey: null });
 
@@ -2008,16 +2084,20 @@ export default function App() {
 
   // Escape exits preview mode.
   useEffect(() => {
-    if (!inPreview) return;
+    // Escape leaves either kind of looking-not-working. An older version takes
+    // precedence: it is the one covering everything, so it is the one Escape
+    // is about while it is up.
+    if (!inPreview && !previewRef) return undefined;
     const onKey = (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        exitPreview();
+        if (previewRef) exitCommitPreview();
+        else exitPreview();
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [inPreview, exitPreview]);
+  }, [inPreview, exitPreview, previewRef, exitCommitPreview]);
 
   // Escape backs out of a drilled-into component, one level at a time.
   useEffect(() => {
@@ -2773,7 +2853,16 @@ export default function App() {
 
   const deletePage = useCallback(
     async (page) => {
-      if (!confirm(`Delete ${page.name}? This removes the file from disk.`)) return;
+      if (
+        !(await confirmDialog({
+          title: `Delete ${page.name}?`,
+          body: 'This removes the file from disk. It can be brought back from History if it was saved in a version.',
+          confirmLabel: 'Delete page',
+          danger: true,
+        }))
+      ) {
+        return;
+      }
       await window.avb.deletePage(page.path);
       const result = await rescan(project.path);
       if (currentPage?.path === page.path) {
@@ -2850,10 +2939,19 @@ export default function App() {
 
   const deletePageFolder = useCallback(
     async (dir, pageCount) => {
-      const suffix = pageCount
-        ? ` and the ${pageCount} page${pageCount === 1 ? '' : 's'} inside it`
+      const inside = pageCount
+        ? `the ${pageCount} page${pageCount === 1 ? '' : 's'} inside it and `
         : '';
-      if (!confirm(`Delete the folder "${dir}"${suffix}? This removes files from disk.`)) return;
+      if (
+        !(await confirmDialog({
+          title: `Delete the folder “${dir}”?`,
+          body: `This removes ${inside}the folder from disk.`,
+          confirmLabel: 'Delete folder',
+          danger: true,
+        }))
+      ) {
+        return;
+      }
       try {
         await window.avb.deletePageFolder({ projectPath: project.path, dir });
         const result = await rescan(project.path);
@@ -2935,13 +3033,25 @@ export default function App() {
         ? { id: 'frontmatter', kind: 'frontmatter', value: frontmatterCode }
         : findNodeById(model.nodes, selectedId)
       : null;
-  // Rendered classes describe one element. The canvas can only report the new
-  // selection's a frame later, so drop the old ones the instant the selection
-  // changes — otherwise the previous element's classes show up as chips on this
-  // one until the report lands.
+  // Rendered classes describe one element, and the canvas can only say what the
+  // NEW selection's are a frame or two later. Two ways to spend that gap, and
+  // both used to be wrong in one direction:
+  //
+  //   clear at once   the selector field empties and then refills, so every
+  //                   click on the canvas flickers through a blank panel.
+  //   keep the old    the field is briefly wrong rather than briefly empty,
+  //                   which is steadier to look at — but if the report never
+  //                   comes (an element the page doesn't render has no classes
+  //                   to report) the wrong ones would sit there for good.
+  //
+  // So: keep the old ones, and only fall back to empty if nothing has arrived
+  // by the time the gap stops being a gap. In practice the report lands first
+  // and the timer never fires.
   useEffect(() => {
-    setSelectedClasses((prev) => (prev.length ? [] : prev));
-  }, [selectedId]);
+    if (classesForRef.current === selectedId) return undefined;
+    const t = setTimeout(() => setSelectedClasses((prev) => (prev.length ? [] : prev)), 600);
+    return () => clearTimeout(t);
+  }, [selectedId, classesTick]);
 
   const layoutNode = model ? findNodeById(model.nodes, 'layout') : null;
   // The page may import its layout under any local name (e.g. `import Layout
@@ -3416,6 +3526,7 @@ export default function App() {
         <WelcomeScreen onOpen={loadProject} setBusy={setBusy} showToast={showToast} />
         {busy && <BusyOverlay message={busy} />}
         {toast && <Toast toast={toast} />}
+        <ConfirmHost />
       </div>
     );
   }
@@ -3480,6 +3591,9 @@ export default function App() {
   const pageUrlPath = pageRoute ? routeToPath(pageRoute, trailingSlash) : null;
   livePathRef.current = pageUrlPath;
   const liveUrl = devUrl && pageUrlPath ? devUrl + pageUrlPath : null;
+  // The old version is served by its own dev server, on the same route the
+  // editor is on, so switching in and out is a like-for-like comparison.
+  const oldVersionUrl = previewInfo && pageUrlPath ? previewInfo.url + pageUrlPath : null;
 
   return (
     <div className="app">
@@ -3560,11 +3674,23 @@ export default function App() {
           >
             <ExternalIcon size={14} />
           </button>
+          {/* Two things put the canvas into a state you are looking at rather
+              than working in — the interactive preview, and an older version —
+              and this button is where both of them end. Lit for either, so it
+              is never on while the only button that turns it off looks idle. */}
           <button
-            className={`titlebar-btn preview-btn ${inPreview ? 'on' : ''}`}
-            title={inPreview ? 'Exit preview (Esc)' : 'Preview the site'}
+            className={`titlebar-btn preview-btn ${inPreview || previewRef ? 'on' : ''}`}
+            title={
+              previewRef
+                ? 'Back to now (Esc)'
+                : inPreview
+                  ? 'Exit preview (Esc)'
+                  : 'Preview the site'
+            }
             disabled={!devUrl}
-            onClick={() => (inPreview ? exitPreview() : enterPreview())}
+            onClick={() =>
+              previewRef ? exitCommitPreview() : inPreview ? exitPreview() : enterPreview()
+            }
           >
             <PreviewIcon size={15} />
           </button>
@@ -3666,6 +3792,147 @@ export default function App() {
             {leftTab === 'variables' && (
               <VariablesPanel project={project} selected={varsGroup} onSelect={setVarsGroup} />
             )}
+            {leftTab === 'history' && (
+              <HistoryPanel
+                project={project}
+                gitInfo={gitInfo}
+                previewRef={previewRef}
+                onRefreshGit={refreshGit}
+                showToast={showToast}
+                onOpenFile={(f) => {
+                  // A page opens in the editor. Anything else has no canvas to
+                  // show it on, so the row says where it is and does nothing —
+                  // better than opening an empty editor onto a stylesheet.
+                  const page = scan.pages.find((p) => p.path.endsWith(f.path));
+                  if (page) selectPage(page);
+                  else showToast(`${f.path} isn’t a page — nothing to open on the canvas.`, 'info');
+                }}
+                onPreviewCommit={previewCommit}
+                onExitPreview={exitCommitPreview}
+                onRestoreFile={async (commit, file) => {
+                  if (
+                    !(await confirmDialog({
+                      title: `Put ${file.label} back?`,
+                      body: `It goes back to how it was in “${commit.subject}”, and lands as an unsaved change — so you can look at it and undo it like any other edit.`,
+                      confirmLabel: 'Put it back',
+                    }))
+                  ) {
+                    return;
+                  }
+                  try {
+                    const r = await window.avb.gitRestoreFile({
+                      projectPath: project.path,
+                      ref: commit.hash,
+                      path: file.path,
+                    });
+                    if (r?.missing) {
+                      showToast(r.message, 'error');
+                      return;
+                    }
+                    await refreshGit();
+                    await reloadFromDisk();
+                    showToast(`${file.label} is back to how it was`, 'success');
+                  } catch (err) {
+                    showToast(cleanError(err), 'error');
+                  }
+                }}
+                onRestoreProject={async (commit) => {
+                  if (
+                    !(await confirmDialog({
+                      title: `Take everything back to “${commit.subject}”?`,
+                      body:
+                        'Anything you haven’t saved is put aside first, so nothing is lost. Your saved ' +
+                        'history stays exactly as it is — this lands as a set of unsaved changes you can ' +
+                        'look over, keep, or undo.',
+                      confirmLabel: 'Take it back',
+                    }))
+                  ) {
+                    return;
+                  }
+                  setBusy('Going back…');
+                  try {
+                    const r = await window.avb.gitRestoreProject({
+                      projectPath: project.path,
+                      ref: commit.hash,
+                    });
+                    await refreshGit();
+                    await reloadFromDisk();
+                    showToast(
+                      r?.parked
+                        ? 'The project is back — your unsaved work is waiting on this branch'
+                        : 'The project is back to how it was',
+                      'success'
+                    );
+                  } catch (err) {
+                    showToast(cleanError(err), 'error');
+                  } finally {
+                    setBusy(null);
+                  }
+                }}
+                onSwitchBranch={async (b) => {
+                  // Same as the chip: try it, and only say something if git
+                  // could not carry the work across. Parking is what the chip's
+                  // dialog offers after that, not a thing done pre-emptively.
+                  try {
+                    const r = await window.avb.gitCheckout({ projectPath: project.path, branch: b });
+                    if (r?.blocked) {
+                      showToast(
+                        `${gitInfo?.branch} and ${b} have different versions of ` +
+                          `${r.files?.[0] || 'a file'} you have unsaved work in — switch from the branch button to decide what to do with it.`,
+                        'error'
+                      );
+                      return;
+                    }
+                    await refreshGit();
+                    await reloadFromDisk();
+                    showToast(
+                      r?.restored ? `Picked your changes back up on ${b}` : `Switched to ${b}`,
+                      'success'
+                    );
+                  } catch (err) {
+                    showToast(cleanError(err), 'error');
+                  }
+                }}
+                onMergeBranch={(b) =>
+                  mergeBranchAction({
+                    projectPath: project.path,
+                    branch: b,
+                    into: gitInfo?.branch,
+                    trunk: gitInfo?.trunk,
+                    run: (fn) =>
+                      fn()
+                        .then(async () => {
+                          await refreshGit();
+                          await reloadFromDisk();
+                        })
+                        .catch((err) => showToast(cleanError(err), 'error')),
+                    showToast,
+                    // Both branches changed the same files. The chooser lives
+                    // on the branch chip, so this points there rather than
+                    // being a second, different answer to the same question.
+                    onConflict: (r) =>
+                      showToast(
+                        `${r.from} and ${r.branch} both changed ` +
+                          `${r.files.length === 1 ? r.files[0].path : `${r.files.length} files`}. ` +
+                          'Open the branch button to choose which versions to keep.',
+                        'info'
+                      ),
+                  })
+                }
+                onDeleteBranch={(b) =>
+                  deleteBranchAction({
+                    projectPath: project.path,
+                    branch: b,
+                    parked: (gitInfo?.parked || []).includes(b),
+                    run: (fn) =>
+                      fn()
+                        .then(refreshGit)
+                        .catch((err) => showToast(cleanError(err), 'error')),
+                    showToast,
+                  })
+                }
+              />
+            )}
             {leftTab === 'assets' && (
               <AssetsPanel
                 project={project}
@@ -3744,7 +4011,7 @@ export default function App() {
                 setRevealTick((t) => t + 1);
               }
             }}
-            onSelectedClasses={setSelectedClasses}
+            onSelectedClasses={receiveClasses}
             onRenderedPaths={setRenderedPaths}
             onNodeClasses={setNodeClasses}
             onOpenPath={(p, occ) => {
@@ -3824,7 +4091,29 @@ export default function App() {
           </div>
         )}
 
-        {pageState?.editable && (
+        {/* An old version covers the canvas rather than replacing what it
+            points at. The editing canvas draws outlines from the model, and
+            the model is read from the files on disk — which are the CURRENT
+            ones. Pointed at an old server it would draw this version's boxes
+            over that version's page: every outline in the wrong place, and
+            every click editing a file that isn't what's on screen. An overlay
+            cannot do that, because there is nothing to click. */}
+        {oldVersionUrl && (
+          <div className="preview-mode old-version">
+            <div className="preview-banner">
+              <span className="preview-banner-text">
+                You’re looking at <strong>{previewInfo.subject}</strong> — how the site was{' '}
+                {relativeTime(previewInfo.when)}. This is a look, not a place to work.
+              </span>
+              <button className="preview-banner-exit" onClick={exitCommitPreview}>
+                Back to now
+              </button>
+            </div>
+            <iframe src={oldVersionUrl} title="An earlier version of the site" />
+          </div>
+        )}
+
+        {pageState?.editable && !previewRef && (
           <div className="panel right">
             <div className="right-tabs">
               {rightTabInd && <span className="right-tabs-indicator" style={rightTabInd} />}
@@ -3967,6 +4256,7 @@ export default function App() {
 
       {busy && <BusyOverlay message={busy} />}
       {toast && <Toast toast={toast} />}
+      <ConfirmHost />
     </div>
   );
 }

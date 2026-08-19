@@ -6,6 +6,7 @@ import {
   AssetManagerIcon,
   CmsIcon,
   VariableIcon,
+  HistoryIcon,
 } from './Icons.jsx';
 
 const TABS = [
@@ -15,6 +16,7 @@ const TABS = [
   { id: 'assets', title: 'Assets', shortcut: 'J', Icon: AssetManagerIcon },
   { id: 'cms', title: 'CMS', shortcut: '⌥C', Icon: CmsIcon },
   { id: 'variables', title: 'Variables', shortcut: '⌥V', Icon: VariableIcon },
+  { id: 'history', title: 'History', shortcut: '⌥H', Icon: HistoryIcon },
 ];
 
 const TOOLTIP_DELAY = 500;
@@ -41,7 +43,7 @@ export default function LeftRail({ active, onSelect }) {
 
   useEffect(() => () => clearTimeout(timerRef.current), []);
 
-  // P / Z / ⇧A / J / ⌥C toggle the panels (ignored while typing in a field).
+  // P / Z / ⇧A / J / ⌥C / ⌥H toggle the panels (ignored while typing in a field).
   useEffect(() => {
     const onKey = (e) => {
       if (e.metaKey || e.ctrlKey) return;
@@ -52,11 +54,15 @@ export default function LeftRail({ active, onSelect }) {
       ) {
         return;
       }
-      // ⌥C — matched on the physical key, since Option rewrites e.key to "ç".
       if (e.altKey) {
+        // Matched on the physical key: Option rewrites e.key ("ç" for C,
+        // "˙" for H), so e.key would never equal the letter.
         if (e.code === 'KeyC') {
           e.preventDefault();
           onSelect('cms');
+        } else if (e.code === 'KeyH') {
+          e.preventDefault();
+          onSelect('history');
         }
         return;
       }

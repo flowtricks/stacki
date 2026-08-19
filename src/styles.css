@@ -273,6 +273,219 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
   display: block;
 }
 
+/* A question, asked in the app's own window rather than the browser's.
+   Narrow, because a confirm that needs a wide window is a confirm asking too
+   much at once. */
+.confirm-dialog { width: 380px; max-width: 90vw; }
+.confirm-body { font-size: 12px; line-height: 1.55; color: var(--text-dim); white-space: pre-line; }
+.confirm-body strong { color: var(--text); font-weight: 600; }
+/* A decision that belongs with the question rather than after it. */
+.confirm-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+  color: var(--text);
+}
+.confirm-check input { margin: 1px 0 0; flex-shrink: 0; }
+.confirm-check-hint { display: block; margin-top: 2px; color: var(--text-faint); font-style: normal; font-size: 11px; }
+/* Destructive confirms are red and do NOT answer to Return — the button has to
+   be chosen on purpose. */
+.modal-footer button.danger {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.modal-footer button.danger:hover { filter: brightness(1.08); }
+
+/* A merge that touched twenty files is not twenty things to read at once:
+   the files down the side, one of them open at a time. */
+.conflict-modal { width: 880px; max-width: 94vw; display: flex; flex-direction: column; }
+.conflict-intro { padding: 0 16px 10px; }
+.conflict-split { display: grid; grid-template-columns: 220px 1fr; min-height: 0; flex: 1; }
+.conflict-files {
+  border-right: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  overflow-y: auto;
+  max-height: 460px;
+  padding: 6px;
+}
+.conflict-file-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: 'name badge' 'dir badge';
+  gap: 0 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+.conflict-file-row:hover { background: var(--bg-hover); }
+.conflict-file-row.on { background: var(--accent-soft); }
+.conflict-file-name {
+  grid-area: name;
+  font-size: 11.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conflict-file-dir {
+  grid-area: dir;
+  font-size: 10px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+/* "sorted" is the common state and stays quiet; anything still wanting a
+   decision is the only thing on this list worth the eye. */
+.conflict-file-badge {
+  grid-area: badge;
+  align-self: center;
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--text-faint);
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+  white-space: nowrap;
+}
+.conflict-file-badge.warn { color: #fff; background: var(--accent); }
+
+.conflict-detail {
+  overflow-y: auto;
+  max-height: 460px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}
+.conflict-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+.conflict-detail-path {
+  flex: 1;
+  font-size: 11px;
+  font-family: var(--mono, ui-monospace, monospace);
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+/* A line either side, so a difference can be placed in the file without the
+   whole file being on screen. */
+.conflict-ctx {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  opacity: 0.6;
+  padding: 1px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conflict-whole { padding: 10px 4px; font-size: 11.5px; color: var(--text-faint); }
+
+/* Two or three buttons rather than a toggle: which side is chosen has to be
+   readable at a glance down a column of differences, and a switch only shows
+   its state by position. */
+.conflict-choice { display: flex; gap: 2px; flex-shrink: 0; }
+.conflict-choice button {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 5px;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.conflict-choice button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* One difference. */
+.conflict-hunk { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+.conflict-hunk-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.conflict-hunk-n {
+  flex: 1;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* Both versions side by side. The kept one is lit; the other stays legible
+   rather than hidden, so the choice can be checked without changing it. */
+.conflict-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.conflict-side {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  opacity: 0.5;
+  transition: opacity 0.12s ease, border-color 0.12s ease;
+}
+.conflict-side.kept { opacity: 1; border-color: var(--accent); }
+.conflict-side-label {
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-faint);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conflict-side.kept .conflict-side-label { color: var(--accent); }
+.conflict-side .code-block { background: var(--bg); }
+.conflict-empty { padding: 8px; font-size: 11px; color: var(--text-faint); font-style: italic; }
+
+/* Code shown rather than edited — the editor's own type and colours, with
+   nothing that invites a cursor. */
+.code-block { font-size: 11px; }
+.code-block .cm-editor { background: transparent; }
+.code-block .cm-content { padding: 6px 8px; }
+.code-block .cm-line { padding: 0; }
+.conflict-hunk.combined .conflict-hunk-n { color: var(--green); }
+
+/* An old version, covering the canvas. Laid out as a column so the banner is
+   part of the overlay rather than floating over the page — a bar that overlaps
+   the site being looked at is a bar that hides the thing you came to see. */
+.preview-mode.old-version { display: flex; flex-direction: column; background: var(--bg); }
+.preview-mode.old-version iframe { flex: 1; min-height: 0; background: white; }
+
+.preview-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.preview-banner-text { flex: 1; line-height: 1.4; }
+.preview-banner-text strong { font-weight: 600; }
+.preview-banner-exit {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 4px 10px;
+}
+.preview-banner-exit:hover { background: rgba(255, 255, 255, 0.28); }
+
 /* Link settings (href fields) */
 .link-types {
   position: relative;
@@ -4131,6 +4344,309 @@ body > .embed-editor_provenance {
 .var-input:focus { border-color: var(--accent); }
 
 /* A branch holding work that was set aside on the way out. */
+/* The file picker on the commit box. Closed by default: someone who just
+   wants to save everything should never have to read a file list to do it. */
+.git-pick-toggle { width: 100%; font-size: 11px; padding: 4px; }
+.git-pick {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.git-pick-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.git-pick-head button { font-size: 10.5px; padding: 2px 4px; }
+.git-pick-count { font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.git-pick-list { max-height: 220px; overflow-y: auto; padding: 2px; }
+/* The heading toggles its whole group — "just the stylesheets" is the shape of
+   most real picks, and hunting them out of a flat list is not. */
+.git-pick-group + .git-pick-group { margin-top: 4px; }
+.git-pick-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 4px 3px;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.git-pick-group-head:hover { color: var(--text-dim); }
+.git-pick-group-count { font-weight: 500; letter-spacing: 0; }
+.git-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.git-pick-row:hover { background: var(--bg-hover); color: var(--text); }
+.git-pick-row input { margin: 0; flex-shrink: 0; }
+.git-pick-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The real filename, when the friendly name hides it: "Home" does not say
+   index.astro, and which file is being saved is the whole question here. */
+.git-pick-file {
+  margin-left: auto;
+  padding-left: 6px;
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* File browser                                                        */
+/* ------------------------------------------------------------------ */
+
+.file-browser { display: flex; flex-direction: column; min-height: 0; }
+.fb-search { display: flex; align-items: center; gap: 4px; padding: 0 0 6px; }
+.fb-search input { flex: 1; font-size: 11.5px; }
+.fb-search .ghost { padding: 2px 6px; font-size: 14px; line-height: 1; color: var(--text-faint); }
+
+.fb-list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+.fb-empty { padding: 10px 6px; font-size: 11.5px; color: var(--text-faint); }
+
+.fb-row,
+.fb-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding-right: 6px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.fb-row:hover, .fb-folder:hover { background: var(--bg-hover); color: var(--text); }
+/* The row the arrow keys are on, so the field can be driven without the mouse. */
+.fb-row.active { background: var(--bg-active); color: var(--text); }
+.fb-row.on { color: var(--text); }
+.fb-row input, .fb-folder input { margin: 0; flex-shrink: 0; }
+
+.fb-folder-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+.fb-caret { display: flex; color: var(--text-faint); flex-shrink: 0; }
+.fb-folder-icon { display: flex; color: var(--text-faint); flex-shrink: 0; }
+.fb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.fb-count { font-size: 10px; color: var(--text-faint); flex-shrink: 0; }
+/* Only shown while searching — in the tree the indentation already says where
+   a file is, and repeating it on every row would be noise. */
+.fb-dir {
+  font-size: 10px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  max-width: 45%;
+  flex-shrink: 0;
+}
+
+.fb-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.fb-foot .ghost { font-size: 10.5px; padding: 2px 4px; }
+.fb-selected { font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------------------ */
+/* History panel                                                       */
+/* ------------------------------------------------------------------ */
+
+.history-body { padding-top: 0; }
+
+.history-section + .history-section { margin-top: 4px; border-top: 1px solid var(--border); }
+.history-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 9px 4px 7px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.history-section-head:hover { color: var(--text); }
+.history-section-title { flex: 1; text-align: left; }
+.history-section-count {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-faint);
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
+/* A date is a heading over the commits under it, not a row of its own — it
+   should read as a label on the group and never be mistaken for something
+   clickable. */
+.history-day {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 10px 4px 4px;
+}
+
+.history-commit { border-radius: 6px; }
+.history-commit.previewing { background: var(--accent-soft); }
+.history-commit-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.history-commit-head:hover { background: var(--bg-hover); }
+/* The dot is the timeline: one per commit, in a column, so the eye has a line
+   to run down rather than a list of paragraphs. */
+.history-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.history-commit.previewing .history-dot { background: var(--accent); }
+.history-commit-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.history-subject {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-meta {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-commit-body { padding: 2px 8px 10px 23px; display: flex; flex-direction: column; gap: 8px; }
+.history-files { display: flex; flex-direction: column; }
+.history-file {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.history-file:hover { background: var(--bg-hover); }
+.history-file.muted { color: var(--text-faint); font-style: italic; }
+.history-file-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A word, not a letter: "M" needed explaining, which is a sign it was the
+   wrong thing to show. Quiet enough not to lead the row — the file's name is
+   what anyone is reading for — and colour-coded so the kind of change reads
+   before the word does. */
+.file-status {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  color: var(--text-faint);
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+}
+.file-status.s-A { color: var(--green); background: rgba(48, 193, 88, 0.14); }
+.file-status.s-M { color: var(--accent); background: var(--accent-soft); }
+.file-status.s-D { color: var(--red); background: rgba(255, 69, 58, 0.14); }
+.file-status.s-R,
+.file-status.s-C { color: var(--text-dim); }
+.file-status.s-U { color: #ffcb6b; background: rgba(255, 203, 107, 0.14); }
+
+.history-commit-actions { display: flex; flex-direction: column; gap: 5px; }
+.history-commit-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 11.5px;
+}
+.history-hash { font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+.history-more,
+.history-exit-preview {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px;
+  font-size: 11.5px;
+}
+.history-exit-preview { margin: 8px 0; background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.history-empty,
+.history-note {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-faint);
+  padding: 4px 4px 8px;
+}
+.history-error { font-size: 11.5px; line-height: 1.5; color: var(--red); padding: 4px; }
+
+/* Branch rows keep their actions visible. Hover-revealed icons meant that
+   until you happened to hover a row there was no sign the app could merge or
+   delete anything — dim is quiet enough, and findable. */
+.list-item .row-action.merge,
+.list-item .row-action.branch-action { opacity: 0.45; }
+.list-item:hover .row-action.merge,
+.list-item:hover .row-action.branch-action { opacity: 1; }
+/* Disabled ones stay put rather than vanishing: a greyed button that says why
+   is a better answer than a row that is missing something. */
+.list-item .row-action:disabled,
+.list-item:hover .row-action:disabled {
+  opacity: 0.18;
+  cursor: default;
+  background: none;
+}
+.list-item .row-action:disabled:hover { color: var(--text-faint); background: none; }
+
 /* Merging is not a destructive act, so it does not get the red the other row
    actions turn on hover — a branch row would otherwise say "danger" twice and
    mean it once. */

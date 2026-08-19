@@ -39,7 +39,7 @@ const encodePath = (abs) =>
 // packaged build, but in dev the renderer is on http and Chromium blocks
 // file:// subresources from it. Try our scheme first, then fall back to
 // file:// so a packaged build still works if the scheme is unavailable.
-const srcCandidates = (abs) => [
+export const srcCandidates = (abs) => [
   `stacki-asset://local/${encodePath(abs)}`,
   `file:///${encodePath(abs)}`,
 ];

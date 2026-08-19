@@ -9,10 +9,13 @@ import ProvenanceList from './ProvenanceList'
 import { blankLayer, colorOverlayImage, colorOverlayOf, layerKind, layerLabel, parseLayers, serializeLayers, splitBackgroundShorthand, splitTopLevelSpaces, type BgLayer, type LayerKind } from './lib/background'
 import LayerList from './LayerList'
 import VariableConnect from './VariableConnect'
-import { parseGradient, serializeGradient } from './lib/gradient'
+import { blankGradientOf, parseGradient, serializeGradient } from './lib/gradient'
+import { requestAsset } from '../assetPick.js'
+import { assetValueFor } from '../assetPath.js'
+import { srcCandidates } from '../ui/AssetThumb.jsx'
+import { getHost } from './lib/host'
 import GradientEditor from './GradientEditor'
 import ColorSwatch from './components/ColorSwatch'
-import ImageAssetPicker from './components/ImageAssetPicker'
 import type { Contributor, ResolvedProp } from './lib/resolved'
 
 // The Backgrounds section — Webflow parity. `background` is a stack of layers
@@ -461,32 +464,91 @@ function imageUrlOf(image: string): string | null {
   const m = image.match(/url\(\s*['"]?([^'")]+?)['"]?\s*\)/i)
   return m ? m[1] : null
 }
+
+// Where on disk a CSS url points.
+//
+// A background's url is written for the SITE — `/lumos-background.svg` is
+// served out of public/ by the dev server. The style panel is not the site: it
+// runs in the app's own window, on the app's own origin, where that path is a
+// 404 and every preview came up empty.
+//
+// The path is worked out rather than looked up. There is no list of the
+// project's assets in the style panel (`host.files` is the STYLESHEETS), and
+// fetching one would make a thumbnail wait on a round trip. A root-relative
+// url is public/ or it is the project root, so both are offered and the img
+// falls through to the next when one does not load — the same fallback
+// AssetThumb already uses for its two url schemes.
+function assetSrcCandidates(url: string | null): string[] {
+  if (!url) return []
+  const clean = url.split(/[?#]/)[0]
+  // Hosted elsewhere, or inline: not a file, and shown from where it points.
+  if (/^(https?:)?\/\//.test(clean) || clean.startsWith('data:')) return [clean]
+  const root = getHost().projectPath
+  if (!root) return [clean]
+  const rel = clean.replace(/^\/+/, '')
+  const base = root.replace(/[\\/]+$/, '')
+  // public/ first: a leading-slash url is nearly always served from there.
+  // The project root second, which is where `/src/...` lands.
+  return [`${base}/public/${rel}`, `${base}/${rel}`].flatMap((abs) => srcCandidates(abs))
+}
+
+// An <img> that works through a list of sources until one loads.
+function FallbackImg({ srcs, alt = '', onLoad }: { srcs: string[]; alt?: string; onLoad?: (d: { w: number; h: number }) => void }) {
+  const [i, setI] = useState(0)
+  useEffect(() => { setI(0) }, [srcs.join('|')])
+  if (!srcs.length || i >= srcs.length) return null
+  return (
+    <img
+      src={srcs[i]}
+      alt={alt}
+      draggable={false}
+      onLoad={(e) => onLoad?.({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+      onError={() => setI((n) => n + 1)}
+    />
+  )
+}
+
 function LayerImageField({ layers, index, busy, applyLayers }: { layers: BgLayer[]; index: number; busy: boolean; applyLayers: (l: BgLayer[]) => void }) {
   const image = layers[index]?.image ?? ''
   const url = imageUrlOf(image)
   const name = url ? (url.split('?')[0].split(/[\\/]/).pop() || url) : ''
-  const [open, setOpen] = useState(false)
   const [dims, setDims] = useState('')
+  const srcs = assetSrcCandidates(url)
   useEffect(() => { setDims('') }, [url])
   const pick = (assetUrl: string) => {
     applyLayers(layers.map((l, i) => (i === index ? { ...l, image: `url("${assetUrl}")` } : l)))
-    setOpen(false)
   }
   return (
     <div className="embed-editor_bg-image">
       <div className="embed-editor_bg-image-row">
         <span className="embed-editor_bg-thumb">
-          {url ? <img src={url} alt="" onLoad={(e) => setDims(`${e.currentTarget.naturalWidth} × ${e.currentTarget.naturalHeight}`)} /> : null}
+          <FallbackImg srcs={srcs} onLoad={(d) => setDims(`${d.w} × ${d.h}`)} />
         </span>
         <div className="embed-editor_bg-image-meta">
           <span className="embed-editor_bg-image-name" title={url ?? ''}>{name || 'No image'}</span>
           {dims ? <span className="embed-editor_bg-image-dim">{dims}</span> : null}
         </div>
       </div>
-      <button type="button" className="u-button is-small embed-editor_bg-choose" disabled={busy} onClick={() => setOpen((o) => !o)}>
-        Choose image
+      {/* Asks the Assets panel, the same way every other "Choose…" in the app
+          does (see assetPick.js). A grid of thumbnails crammed into a 320px
+          style panel could show a handful at a time and had none of what makes
+          the real panel usable — search, folders, uploading — so picking a
+          background meant a different, worse version of a thing the app
+          already had. */}
+      <button
+        type="button"
+        className="u-button is-small embed-editor_bg-choose"
+        disabled={busy}
+        onClick={() =>
+          requestAsset({
+            mediaKind: 'image',
+            current: url ?? '',
+            onPick: (pickedRel: string) => pick(assetValueFor(pickedRel, null)),
+          })
+        }
+      >
+        {url ? 'Replace image…' : 'Choose image…'}
       </button>
-      {open ? <ImageAssetPicker selectedUrl={url ?? ''} onPick={pick} /> : null}
     </div>
   )
 }
@@ -560,6 +622,30 @@ function LayerEditor({ layers, index, busy, setProp, clearProp, liveSetProp, app
 
   const setKind = (next: LayerKind) => {
     if (next === displayKind) return
+    // Switching between gradient kinds keeps the colours.
+    //
+    // The stops are the work — picked, positioned, adjusted — and the kind is
+    // just how they are painted. Seeding a blank layer threw them away, so
+    // trying radial to see how it looked cost the whole gradient and there was
+    // no way back to it.
+    //
+    // The geometry does NOT carry, because it does not mean the same thing:
+    // an angle is a direction for a linear gradient and nothing at all for a
+    // radial one, and a centre point is the reverse. Each kind starts on its
+    // own defaults and keeps the colours.
+    const GRADIENTS = ['linear', 'radial', 'conic']
+    if (GRADIENTS.includes(next) && GRADIENTS.includes(displayKind)) {
+      const current = parseGradient(layer.image)
+      if (current?.stops?.length) {
+        const carried = serializeGradient({
+          ...blankGradientOf(next),
+          repeating: current.repeating,
+          stops: current.stops,
+        })
+        applyLayers(layers.map((l, i) => (i === index ? { ...l, image: carried } : l)))
+        return
+      }
+    }
     const seeded = blankLayer(next)
     applyLayers(layers.map((l, i) => (i === index ? { ...l, image: seeded.image } : l)))
   }
@@ -746,7 +832,29 @@ export default function BackgroundSection(props: Props) {
         onReorder={reorder}
         onRemove={removeLayer}
         renderRow={(i) => ({
-          preview: <span className="embed-editor_bg-layer-preview" style={{ background: layers[i].image, backgroundSize: 'cover', backgroundPosition: 'center' }} aria-hidden="true" />,
+          preview: (() => {
+            const u = imageUrlOf(layers[i].image)
+            // A gradient is CSS this window paints as it stands.
+            if (!u) {
+              return (
+                <span
+                  className="embed-editor_bg-layer-preview"
+                  style={{ background: layers[i].image, backgroundSize: 'cover', backgroundPosition: 'center' }}
+                  aria-hidden="true"
+                />
+              )
+            }
+            // An image comes off disk, and through an <img> rather than a CSS
+            // background — the file can be reached by more than one url scheme
+            // and only an element can try the next one when the first does not
+            // load. A background that fails just paints nothing, with no way to
+            // tell that from an image that is genuinely blank.
+            return (
+              <span className="embed-editor_bg-layer-preview is-image" aria-hidden="true">
+                <FallbackImg srcs={assetSrcCandidates(u)} />
+              </span>
+            )
+          })(),
           label: layerLabel(layers[i].image),
         })}
       />

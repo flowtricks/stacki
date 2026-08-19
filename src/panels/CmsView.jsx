@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { confirmDialog } from '../ui/ConfirmDialog.jsx';
 import {
   PlusIcon,
   CloseIcon,
@@ -256,8 +257,17 @@ export default function CmsView({
     setSel(sel + 1);
   };
 
-  const removeItem = () => {
-    if (!window.confirm(`Delete “${titleOf(item, sel)}”?`)) return;
+  const removeItem = async () => {
+    if (
+      !(await confirmDialog({
+        title: `Delete “${titleOf(item, sel)}”?`,
+        body: 'It’s removed from this collection.',
+        confirmLabel: 'Delete',
+        danger: true,
+      }))
+    ) {
+      return;
+    }
     const next = items.filter((_, i) => i !== sel);
     commit(next);
     setSel(Math.max(0, Math.min(sel, next.length - 1)));
@@ -576,7 +586,16 @@ async function deleteCollection(collection, project, showToast, onDeleted) {
           .slice(0, 3)
           .join(', ')}${used.length > 3 ? `, +${used.length - 3} more` : ''}). ` +
         'They will keep working, showing nothing, until you point them at other data.';
-  if (!window.confirm(`Delete the ${collection.label} collection?\n\n${where}`)) return;
+  if (
+    !(await confirmDialog({
+      title: `Delete the ${collection.label} collection?`,
+      body: where,
+      confirmLabel: 'Delete collection',
+      danger: true,
+    }))
+  ) {
+    return;
+  }
   try {
     await window.avb.deleteCms({ projectPath: project.path, rel: collection.rel });
     onDeleted?.();
@@ -660,11 +679,14 @@ function FieldSchema({ items, declared, path, ...ops }) {
               <button
                 className="ghost danger"
                 title="Delete field"
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    window.confirm(
-                      `Delete the “${field.label}” field? Its content is removed from every item.`
-                    )
+                    await confirmDialog({
+                      title: `Delete the “${field.label}” field?`,
+                      body: 'Its content is removed from every item in this collection.',
+                      confirmLabel: 'Delete field',
+                      danger: true,
+                    })
                   ) {
                     ops.onRemoveField(path, field.key);
                   }
