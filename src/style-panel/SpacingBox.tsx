@@ -7,7 +7,7 @@ import ProvenanceList from './ProvenanceList'
 import VariableConnect, { useSharedVars } from './VariableConnect'
 import type { ProjectVariable } from './lib/webflow'
 import { selectorsMatch, type ResolvedProp } from './lib/resolved'
-import { getHost } from './lib/host'
+import { getHost, getModifiers, onModifiers, setModifiers } from './lib/host'
 
 // Shared "spacing box" primitives: Webflow's masked-SVG frame with draggable side
 // handles, click-to-edit value labels, and a popover editor. Used by SpacingSection
@@ -295,21 +295,23 @@ function useSideDrag({
   // than as they were at the start: reach for one mid-drag and the other sides
   // join in from that moment.
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
+    const follow = ({ shiftKey, altKey }: { shiftKey: boolean; altKey: boolean }) => {
       const d = drag.current
-      if (!d) return
-      // Read off any key event, not just the modifiers themselves — see the
-      // hover hook below for why.
-      if (d.shiftKey === event.shiftKey && d.altKey === event.altKey) return
-      d.shiftKey = event.shiftKey
-      d.altKey = event.altKey
+      if (!d || (d.shiftKey === shiftKey && d.altKey === altKey)) return
+      d.shiftKey = shiftKey
+      d.altKey = altKey
       apply()
     }
+    // Read off any key event, not just the modifiers themselves, and through
+    // the shared store — see the hover hook below for both reasons.
+    const onKey = (event: KeyboardEvent) => setModifiers(event.shiftKey, event.altKey)
     window.addEventListener('keydown', onKey, true)
     window.addEventListener('keyup', onKey, true)
+    const offModifiers = onModifiers(follow)
     return () => {
       window.removeEventListener('keydown', onKey, true)
       window.removeEventListener('keyup', onKey, true)
+      offModifiers()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -420,33 +422,36 @@ function useSideHover({ propFor, kind, read }: { propFor: (side: Side) => string
   reportRef.current = report
 
   useEffect(() => {
-    // Every key event, not only the modifier keys themselves: what is wanted is
-    // the state of Shift and Option right now, and reading it off whatever
-    // event just happened means a missed keyup (the window lost focus for a
-    // moment, a shortcut ate the event) is corrected by the next one rather
-    // than leaving the canvas lit up for a modifier nobody is holding.
-    const follow = (shiftKey: boolean, altKey: boolean) => {
+    const follow = ({ shiftKey, altKey }: { shiftKey: boolean; altKey: boolean }) => {
       const o = over.current
       if (!o || (o.shiftKey === shiftKey && o.altKey === altKey)) return
       o.shiftKey = shiftKey
       o.altKey = altKey
       reportRef.current()
     }
-    const onKey = (event: KeyboardEvent) => follow(event.shiftKey, event.altKey)
-    // Nobody is holding anything the app cannot see: a modifier let go of while
-    // another window had focus never reaches this one.
-    const onBlur = () => follow(false, false)
+    // Every key event, not only the modifier keys themselves: what is wanted is
+    // the state of Shift and Option right now, and reading it off whatever
+    // event just happened means a missed keyup (focus moved for a moment, a
+    // shortcut ate the event) is corrected by the next one rather than leaving
+    // the canvas lit up for a modifier nobody is holding.
+    //
     // Captured rather than bubbled: a field in the panel that stops a key event
-    // from travelling must not stop the canvas from following the modifier.
+    // from travelling must not stop the canvas from following the modifier. And
+    // the answer goes through the shared store, because the other place these
+    // are pressed is the canvas — see setModifiers.
+    const onKey = (event: KeyboardEvent) => setModifiers(event.shiftKey, event.altKey)
+    const onBlur = () => setModifiers(false, false)
     window.addEventListener('keydown', onKey, true)
     window.addEventListener('keyup', onKey, true)
     window.addEventListener('blur', onBlur)
+    const offModifiers = onModifiers(follow)
     // Leaving the panel entirely (or unmounting mid-hover) must not leave the
     // canvas lit up with nothing pointing at it.
     return () => {
       window.removeEventListener('keydown', onKey, true)
       window.removeEventListener('keyup', onKey, true)
       window.removeEventListener('blur', onBlur)
+      offModifiers()
       if (over.current) { over.current = null; getHost().onSpacingHover?.(null) }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -454,7 +459,14 @@ function useSideHover({ propFor, kind, read }: { propFor: (side: Side) => string
 
   return {
     onEnter: (side: Side) => (event: React.MouseEvent | React.PointerEvent) => {
-      over.current = { side, shiftKey: event.shiftKey, altKey: event.altKey }
+      // A modifier held before the pointer arrived counts: the pointer event
+      // knows what this window saw, the store knows what the canvas saw too.
+      const held = getModifiers()
+      over.current = {
+        side,
+        shiftKey: event.shiftKey || held.shiftKey,
+        altKey: event.altKey || held.altKey,
+      }
       report()
     },
     onLeave: () => {

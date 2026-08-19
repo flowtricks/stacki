@@ -219,6 +219,33 @@ const stacked = (n, a = 0.14) => 1 - (1 - a) ** n;
     check('at the place it is now', drawn[0]?.y === 300, JSON.stringify(drawn));
   }
 
+  // --- keys pressed on the page -----------------------------------------------
+  // Clicking an element on the canvas puts keyboard focus inside this frame, so
+  // every key after that is delivered here and the app's own listeners never
+  // fire. The style panel reads Shift and Option to decide how much of the
+  // spacing box a hover applies to — from the app's side, nobody was pressing
+  // anything. So the frame says what it heard.
+  {
+    const heard = () => sent.filter((m) => m.type === 'avb:modifiers');
+    sent.length = 0;
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Shift', shiftKey: true }));
+    check('shift on the page is forwarded', heard().length === 1, JSON.stringify(sent));
+    check('as being held', heard()[0]?.shiftKey === true, JSON.stringify(heard()[0]));
+
+    sent.length = 0;
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'a', shiftKey: true }));
+    check('and typing on does not repeat it', heard().length === 0, JSON.stringify(sent));
+
+    sent.length = 0;
+    window.dispatchEvent(new window.KeyboardEvent('keyup', { key: 'Shift', shiftKey: false, altKey: true }));
+    check('letting go of it is forwarded too', heard()[0]?.shiftKey === false, JSON.stringify(heard()[0]));
+    check('along with what is still held', heard()[0]?.altKey === true, JSON.stringify(heard()[0]));
+
+    sent.length = 0;
+    window.dispatchEvent(new window.Event('blur'));
+    check('and losing focus holds nothing', heard()[0]?.altKey === false, JSON.stringify(heard()[0]));
+  }
+
   // --- styling it moves it, and the outline has to move with it ---------------
   // A style edit reaches the page as CSS: the dev server swaps a <style> in
   // <head>, the element changes shape, and nothing in the body has changed at

@@ -42,7 +42,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
       `export { spacingBands } from ${JSON.stringify(
         path.join(__dirname, '..', 'src', 'spacingBands.js')
       )};\n` +
-      `export { getHost, setHost } from ${JSON.stringify(
+      `export { getHost, setHost, setModifiers } from ${JSON.stringify(
         path.join(__dirname, '..', 'src', 'style-panel', 'lib', 'host.ts')
       )};\n`
   );
@@ -85,6 +85,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     stepNumberAtCaret,
     spacingBands,
     setHost,
+    setModifiers,
   } = require(bundlePath);
 
   const container = dom.window.document.getElementById('root');
@@ -454,6 +455,29 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     await key('keyup', { key: 'Alt', altKey: false });
     check('letting go of both is the one side again', last()?.sides.join(' ') === 'top', JSON.stringify(last()));
 
+    // The modifier pressed with the canvas focused. Clicking an element on the
+    // page puts keyboard focus inside the preview frame, and every key after
+    // that is delivered there — the panel's own listeners never fire. The frame
+    // forwards what it heard; this is that arriving.
+    await act(async () => { setModifiers(true, false); await settle(0); });
+    check(
+      'a shift pressed with the canvas focused reaches the panel',
+      last()?.sides.length === 4,
+      JSON.stringify(last())
+    );
+    await act(async () => { setModifiers(false, true); await settle(0); });
+    check(
+      'and swapping it for option, from there too',
+      last()?.sides.slice().sort().join(' ') === 'bottom top',
+      JSON.stringify(last())
+    );
+    await act(async () => { setModifiers(false, false); await settle(0); });
+    check(
+      'and releasing both goes back to the one side',
+      last()?.sides.join(' ') === 'top',
+      JSON.stringify(last())
+    );
+
     // A modifier released while another window had focus is never seen going
     // up; coming back must not leave the canvas lit for it.
     await key('keydown', { key: 'Shift', shiftKey: true });
@@ -543,6 +567,19 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
   // --- the canvas draws what it is told ---------------------------------------
   {
+    const frame = fs.readFileSync(path.join(__dirname, '..', 'electron', 'preload.js'), 'utf8');
+    check(
+      'the page forwards the modifiers it hears',
+      /type: 'avb:modifiers'/.test(frame),
+      'keys pressed with the canvas focused stay in the canvas'
+    );
+    check(
+      'and the app passes them to the panel',
+      /avb:modifiers'[\s\S]{0,400}setModifiers\(/.test(
+        fs.readFileSync(path.join(__dirname, '..', 'src', 'panels', 'PreviewPane.jsx'), 'utf8')
+      ),
+      'the message arrives and goes nowhere'
+    );
     const pane = fs.readFileSync(
       path.join(__dirname, '..', 'src', 'panels', 'PreviewPane.jsx'),
       'utf8'

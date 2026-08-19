@@ -4,6 +4,7 @@ import { setCanvasFrame, receiveCanvasReply, noteCanvasReady } from '../canvasQu
 import { forgetComputedColors } from '../style-panel/lib/computed-color';
 import { onePerPlace } from '../outlineBoxes.js';
 import { spacingBands } from '../spacingBands.js';
+import { setModifiers } from '../style-panel/lib/host.ts';
 import {
   DesktopIcon,
   TabletIcon,
@@ -214,6 +215,11 @@ export default function PreviewPane({
       } else if (d?.type === 'avb:rendered-nodes') {
         // Which nodes actually reached the page — the navigator marks the rest.
         onRenderedPathsRef.current?.(d.paths || []);
+      } else if (d?.type === 'avb:modifiers') {
+        // Keys pressed while the canvas has focus never reach the app's own
+        // listeners — the frame forwards them so the panels can still read
+        // what is being held.
+        setModifiers(!!d.shiftKey, !!d.altKey);
       } else if (d?.type === 'avb:hover-node') {
         setCanvasHover(d.path || null);
         setHoverOcc(d.occurrence || 0);

@@ -31,6 +31,30 @@ if (!process.isMainFrame) {
       true
     );
     window.addEventListener('submit', (e) => e.preventDefault(), true);
+    // Which modifiers are held, forwarded for the same reason as the shortcuts
+    // below: clicking an element on the canvas puts keyboard focus in here, so
+    // every key after that is delivered to this frame and never reaches the
+    // app. The style panel reads Shift and Option to decide how much of the
+    // spacing box a hover or a drag applies to — and from the app's side,
+    // nobody was pressing anything.
+    let held = { shiftKey: false, altKey: false };
+    const tellModifiers = (e) => {
+      const next = { shiftKey: !!e.shiftKey, altKey: !!e.altKey };
+      if (next.shiftKey === held.shiftKey && next.altKey === held.altKey) return;
+      held = next;
+      try {
+        window.parent.postMessage({ type: 'avb:modifiers', ...held }, '*');
+      } catch {
+        /* no parent to tell */
+      }
+    };
+    // Any key event, not just the modifiers themselves — see the style panel's
+    // hover hook: what matters is the state now, so a keyup missed while this
+    // frame was out of focus is corrected by whatever happens next.
+    window.addEventListener('keydown', tellModifiers, true);
+    window.addEventListener('keyup', tellModifiers, true);
+    // Nothing is held once the page stops receiving keys.
+    window.addEventListener('blur', () => tellModifiers({ shiftKey: false, altKey: false }));
     // Forward app shortcuts when the canvas has keyboard focus — otherwise
     // ⌘F/⌘E die inside the iframe and the insert palette never opens.
     window.addEventListener(
