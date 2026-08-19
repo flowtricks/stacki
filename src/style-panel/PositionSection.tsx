@@ -2,11 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import Select from './components/Select'
 import FieldLabel from './components/FieldLabel'
+import { PropTip, ProvenanceLabel } from './components/PropTip'
+import { useComputedChoice } from './lib/computed-style'
 import ProvenanceList from './ProvenanceList'
 import VariableConnect from './VariableConnect'
 import { SpacingFill, useSpacingBox } from './SpacingBox'
 import { handleArrowStep } from './lib/number-step'
 import type { ResolvedProp } from './lib/resolved'
+import SegmentPill from './components/SegmentPill'
+import { commitInPlace } from './lib/commit-in-place'
 
 // The Position section: a position-type dropdown (with a Custom escape hatch), an
 // inset box (top/right/bottom/left, like the spacing box), a z-index field, and
@@ -115,7 +119,7 @@ function LiveField({ prop, placeholder, ariaLabel, read, busy, setProp, clearPro
     setProp(prop, parsed.value, parsed.important)
   }
   return (
-    <VariableConnect ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
+    <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
     <input
       className="u-input embed-editor_position-input"
       value={draft}
@@ -126,7 +130,7 @@ function LiveField({ prop, placeholder, ariaLabel, read, busy, setProp, clearPro
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; cancel(); commit() }}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') { event.currentTarget.blur(); return }
+        if (event.key === 'Enter') { commitInPlace(event.currentTarget); return }
         const stepped = handleArrowStep(event)
         if (!stepped) return
         event.preventDefault()
@@ -176,7 +180,7 @@ function PositionCustomField({ read, busy, setProp }: { read: Read; busy: boolea
       onChange={(event) => setDraft(event.target.value)}
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; commit() }}
-      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+      onKeyDown={(event) => { if (event.key === 'Enter') commitInPlace(event.currentTarget) }}
       aria-label="Position value"
     />
     </VariableConnect>
@@ -186,14 +190,21 @@ function PositionCustomField({ read, busy, setProp }: { read: Read; busy: boolea
 function PositionControl({ read, busy, setProp, liveSetProp }: { read: Read; busy: boolean; setProp: SetProp; liveSetProp: LiveSetProp }) {
   const current = effVal(read, 'position')
   const isPreset = POSITION_PRESET_VALUES.has(current)
+  // Unset → what the page computes (a `*` rule the panel can't see, a UA default),
+  // then `static`.
+  const computed = useComputedChoice(current ? '' : 'position', POSITION_PRESETS.map((p) => p.value))
   // Custom whenever position is a free value (var()/unset/…) or !important, or the user
   // explicitly entered custom (kept until a preset is picked).
   const [forceCustom, setForceCustom] = useState(false)
+  // …or until the property goes away. Picking Custom seeds `unset`, so custom mode
+  // survives on that value; clearing it from the row label leaves nothing for the
+  // free-value field to be about, and it read as "custom value" over an empty field.
+  useEffect(() => { if (!current) setForceCustom(false) }, [current])
   const custom = forceCustom || (!!current && !isPreset) || displayOf(read('position')).important
   return (
     <Select
       className="embed-editor_position-select"
-      value={custom ? CUSTOM : (current || 'static')}
+      value={custom ? CUSTOM : (current || computed || 'static')}
       options={[
         ...POSITION_PRESETS.map((p) => ({ value: p.value, label: p.label, icon: p.icon })),
         { value: CUSTOM, label: 'Custom' },
@@ -211,6 +222,86 @@ function PositionControl({ read, busy, setProp, liveSetProp }: { read: Read; bus
 }
 
 // ─────────────────────────── Inset box (top/right/bottom/left) ───────────────────────────
+
+// ─────────────────────────── Inset presets ───────────────────────────
+//
+// Pinning a positioned element to a corner, an edge, or the whole box is four
+// declarations to write by hand and one to pick from here. Without them the
+// inset box is the only way in, and it asks for each side separately — so
+// "fill the parent" means typing 0 four times, and "stick to the bottom right"
+// means knowing that the OTHER two sides have to be cleared or the element
+// stretches instead of moving.
+//
+// Each preset is exactly that pair of facts: the sides it sets to 0, and the
+// sides it clears. Everything else about the element is left alone.
+
+const INSET_SIDES = ['top', 'right', 'bottom', 'left'] as const
+type InsetSide = (typeof INSET_SIDES)[number]
+
+// A hint of the element's box, and the part of it being pinned.
+function InsetIcon({ x, y, w, h }: { x: number; y: number; w: number; h: number }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="10" height="10" rx="1.5" stroke="currentColor" opacity="0.4" />
+      <rect x={x} y={y} width={w} height={h} rx="0.75" fill="currentColor" />
+    </svg>
+  )
+}
+
+const INSET_PRESETS: ReadonlyArray<{ value: string; label: string; sides: readonly InsetSide[]; icon: ReactNode }> = [
+  { value: 'top-left', label: 'Top left', sides: ['top', 'left'], icon: <InsetIcon x={3.5} y={3.5} w={4} h={4} /> },
+  { value: 'top-right', label: 'Top right', sides: ['top', 'right'], icon: <InsetIcon x={8.5} y={3.5} w={4} h={4} /> },
+  { value: 'bottom-left', label: 'Bottom left', sides: ['bottom', 'left'], icon: <InsetIcon x={3.5} y={8.5} w={4} h={4} /> },
+  { value: 'bottom-right', label: 'Bottom right', sides: ['bottom', 'right'], icon: <InsetIcon x={8.5} y={8.5} w={4} h={4} /> },
+  { value: 'left', label: 'Left edge', sides: ['top', 'bottom', 'left'], icon: <InsetIcon x={3.5} y={3.5} w={3} h={9} /> },
+  { value: 'right', label: 'Right edge', sides: ['top', 'bottom', 'right'], icon: <InsetIcon x={9.5} y={3.5} w={3} h={9} /> },
+  { value: 'bottom', label: 'Bottom edge', sides: ['left', 'right', 'bottom'], icon: <InsetIcon x={3.5} y={9.5} w={9} h={3} /> },
+  { value: 'top', label: 'Top edge', sides: ['left', 'right', 'top'], icon: <InsetIcon x={3.5} y={3.5} w={9} h={3} /> },
+  { value: 'full', label: 'Fill', sides: ['top', 'right', 'bottom', 'left'], icon: <InsetIcon x={3.5} y={3.5} w={9} h={9} /> },
+]
+
+function InsetPresets({ read, busy, setProp, clearProp }: Props) {
+  // Which sides are pinned right now — by whether they are SET at all, not by
+  // whether they are still 0. Nudging a corner to `12px` has not stopped it
+  // being pinned to that corner, and the row should go on saying so.
+  const pinned = INSET_SIDES.filter((side) => {
+    const v = (effVal(read, side) || '').trim().toLowerCase()
+    return v !== '' && v !== 'auto'
+  })
+  const current =
+    INSET_PRESETS.find(
+      (p) => p.sides.length === pinned.length && p.sides.every((side) => pinned.includes(side))
+    )?.value ?? ''
+
+  const apply = (preset: (typeof INSET_PRESETS)[number]) => {
+    // Clear the others FIRST: an element that has `left` set and then gains
+    // `right` stretches between them rather than moving, so a preset that only
+    // added sides would give a different result from the one its icon shows.
+    const others = INSET_SIDES.filter((side) => !preset.sides.includes(side))
+    if (others.length) clearProp(others as unknown as string[])
+    preset.sides.forEach((side) => setProp(side, '0', false))
+  }
+
+  return (
+    <div className="embed-editor_inset-presets" role="radiogroup" aria-label="Pin to">
+      {INSET_PRESETS.map((preset) => (
+        <button
+          key={preset.value}
+          type="button"
+          role="radio"
+          aria-checked={current === preset.value}
+          className={`embed-editor_inset-preset ${current === preset.value ? 'is-selected' : ''}`}
+          disabled={busy}
+          title={preset.label}
+          aria-label={preset.label}
+          onClick={() => apply(preset)}
+        >
+          {preset.icon}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 // The inset box: Webflow's position frame (a single band, no nesting) driven by the
 // shared SpacingBox — draggable side handles, click-to-edit labels, and a popover
@@ -295,8 +386,9 @@ function SegmentedIconControl({ prop, ariaLabel, segments, current, busy, setPro
 
   return (
     <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label={ariaLabel}>
+      <SegmentPill />
       {customMode ? (
-        <VariableConnect ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
+        <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
         <input
           ref={inputRef}
           className="embed-editor_value-input embed-editor_display-input"
@@ -307,7 +399,7 @@ function SegmentedIconControl({ prop, ariaLabel, segments, current, busy, setPro
           onChange={(event) => { setDraft(event.target.value); const t = event.target.value.trim(); if (t) { const p = parseImportant(t); liveSetProp(prop, p.value, p.important) } }}
           onFocus={() => { focused.current = true }}
           onBlur={() => { focused.current = false; commitCustom() }}
-          onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+          onKeyDown={(event) => { if (event.key === 'Enter') commitInPlace(event.currentTarget) }}
           aria-label={`${ariaLabel} value`}
         />
         </VariableConnect>
@@ -382,15 +474,7 @@ function RowLabel({ label, prop, read, busy, clearProp, onProvenance, onSelectSe
   // Set by ANOTHER selector → orange, click opens the provenance popover.
   if (resolved && !isSelected) {
     return (
-      <button
-        type="button"
-        className="embed-editor_size-label embed-editor_prop-orange"
-        disabled={busy}
-        title="Set through another selector — click to see all"
-        onClick={(event) => onProvenance(prop, event.currentTarget.getBoundingClientRect())}
-      >
-        {label}
-      </button>
+      <ProvenanceLabel label={label} props={[prop]} busy={busy} onProvenance={onProvenance} />
     )
   }
   // Blue (picked selector sets it) or dim (unset). The clear menu also lists every
@@ -402,6 +486,7 @@ function RowLabel({ label, prop, read, busy, clearProp, onProvenance, onSelectSe
       disabled={busy}
       onReset={() => clearProp(prop)}
       resetLabel="Clear"
+      tooltip={<PropTip props={[prop]} />}
       menuNote={contributors.length ? (close) => <ProvenanceList contributors={contributors} prop={prop} onSelect={(sel, p) => { onSelectSelector(sel, p); close() }} /> : undefined}
     >
       {label}
@@ -420,12 +505,6 @@ function Row({ label, children }: { label: ReactNode; children: ReactNode }) {
 
 export default function PositionSection(props: Props) {
   const { read } = props
-  const position = effVal(read, 'position') || 'static'
-  // The inset box is always shown (the offsets read "Auto" until set). z-index only
-  // matters once the element is positioned (Webflow parity) — or is already set, so
-  // an inherited/other value stays visible.
-  const positioned = ['relative', 'absolute', 'fixed', 'sticky'].includes(position)
-    || read('z-index') != null
 
   const rowLabel = (label: string, prop: string) => (
     <RowLabel label={label} prop={prop} read={read} busy={props.busy} clearProp={props.clearProp} onProvenance={props.onProvenance} onSelectSelector={props.onSelectSelector} />
@@ -435,11 +514,21 @@ export default function PositionSection(props: Props) {
     <div className="embed-editor_position">
       <Row label={rowLabel('Position', 'position')}><PositionControl read={read} busy={props.busy} setProp={props.setProp} liveSetProp={props.liveSetProp} /></Row>
 
+      {/* Always there, whatever `position` says — the same reasoning as the
+          inset box below it, which has never hidden either. A row that comes
+          and goes as the dropdown changes is a row you have to find again, and
+          picking a pin is a perfectly good way to say what you were going to
+          set the position to anyway. */}
+      <InsetPresets {...props} />
+
       <InsetBox {...props} />
 
-      {positioned ? (
-        <Row label={rowLabel('z-index', 'z-index')}><LiveField prop="z-index" placeholder="Auto" ariaLabel="z-index" {...props} /></Row>
-      ) : null}
+      {/* Always shown, like the presets and the inset box above it. It used to
+          appear only once the element was positioned, which meant the field
+          moved in and out of the panel as the dropdown changed — and reading
+          "Auto" from a field that is there is clearer than inferring it from a
+          field that isn't. */}
+      <Row label={rowLabel('z-index', 'z-index')}><LiveField prop="z-index" placeholder="Auto" ariaLabel="z-index" {...props} /></Row>
 
       <Row label={rowLabel('Float', 'float')}>
         <SegmentedIconControl prop="float" ariaLabel="Float" segments={FLOAT_SEGS} current={effVal(read, 'float') || 'none'} {...props} />

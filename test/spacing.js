@@ -656,6 +656,58 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     JSON.stringify(stepNumberAtCaret('0rem', 1, -1, 'whole'))
   );
 
+  // --- Gap bands ------------------------------------------------------------
+  //
+  // Padding and margin are four numbers on the element, so the panel works out
+  // where they are from the box alone. A gap cannot be: it lives between
+  // children, and where those are is something only the laid-out page knows.
+  // So the canvas measures the rectangles and this only picks the axis asked
+  // for — which is worth checking, because the two axes share a code path with
+  // "sides" that are not sides at all.
+  {
+    const spacing = {
+      padding: { top: 10, right: 10, bottom: 10, left: 10 },
+      margin: { top: 0, right: 0, bottom: 0, left: 0 },
+      gaps: [
+        { axis: 'column', x: 100, y: 0, w: 24, h: 50 },
+        { axis: 'column', x: 200, y: 0, w: 24, h: 50 },
+        { axis: 'row', x: 0, y: 50, w: 300, h: 24 },
+      ],
+    };
+    const box = { x: 0, y: 0, w: 300, h: 200 };
+
+    const both = spacingBands(box, spacing, 'gap', ['row', 'column']);
+    check('gap draws every measured space', both.length === 3, JSON.stringify(both));
+    // One band per space, not one per axis: a row of four children has three
+    // column gaps and they are three separate rectangles.
+    check('including two gaps on the same axis', both.filter((b) => b.side === 'column').length === 2);
+
+    const cols = spacingBands(box, spacing, 'gap', ['column']);
+    check('one axis draws only its own', cols.length === 2, JSON.stringify(cols));
+    check('and they are the column ones', cols.every((b) => b.side === 'column'), JSON.stringify(cols));
+    const rows = spacingBands(box, spacing, 'gap', ['row']);
+    check('the other axis likewise', rows.length === 1 && rows[0].side === 'row', JSON.stringify(rows));
+    // The rectangles come through untouched — they were measured on the page
+    // and second-guessing them here would move the outline off the gap.
+    check('the geometry is passed through', rows[0].x === 0 && rows[0].y === 50 && rows[0].w === 300 && rows[0].h === 24, JSON.stringify(rows[0]));
+
+    // An element with no gaps measured draws nothing, rather than falling back
+    // to padding's four-sided shape.
+    check('no measured gaps draws nothing', spacingBands(box, { ...spacing, gaps: [] }, 'gap', ['row', 'column']).length === 0);
+    check('and a missing gaps list does not throw', spacingBands(box, { padding: {}, margin: {} }, 'gap', ['row']).length === 0);
+    // Gap does not need the element's box at all, so a selection whose rect has
+    // not arrived yet still lights up.
+    check('gap needs no box', spacingBands(null, spacing, 'gap', ['column']).length === 2);
+    // Zero-sized bands are not somewhere to look.
+    check(
+      'an empty band is skipped',
+      spacingBands(box, { gaps: [{ axis: 'row', x: 0, y: 0, w: 300, h: 0 }] }, 'gap', ['row']).length === 0
+    );
+    // Padding and margin must be unaffected by any of this.
+    check('padding still works', spacingBands(box, spacing, 'padding', ['top']).length === 1);
+    check('and margin still returns nothing when there is none', spacingBands(box, spacing, 'margin', ['top']).length === 0);
+  }
+
   if (failures.length) {
     console.error(`\nspacing: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');

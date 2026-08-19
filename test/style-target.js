@@ -128,19 +128,27 @@ const check = (what, condition, detail) => {
     // Undo rewrites the stylesheets and the page model directly. The panel
     // reads both, so it is told when that happens — otherwise it keeps showing
     // what it cached until its own refresh comes round, and trails the canvas.
+    // Subscribers hear about it a microtask later (the panel patches the host
+    // from inside its own render, where calling them would update one component
+    // while another is rendering); the state itself is written straight away.
+    const settle = () => Promise.resolve().then(() => {});
     let notified = 0;
     const off = onHostChange(() => { notified += 1; });
     const before = getHost().historyTick;
     check('the host carries a history tick', typeof before === 'number', typeof before);
     setHost({ historyTick: before + 1 });
+    check('it reads back at once', getHost().historyTick === before + 1, `${getHost().historyTick}`);
+    check('without calling anyone mid-render', notified === 0, `${notified} notifications`);
+    await settle();
     check('moving it notifies', notified === 1, `${notified} notifications`);
-    check('and it reads back', getHost().historyTick === before + 1, `${getHost().historyTick}`);
     const after = notified;
     setHost({ historyTick: before + 1 });
+    await settle();
     check('setting the same value again says nothing', notified === after, `${notified} vs ${after}, tick=${getHost().historyTick}`);
     const beforeOff = notified;
     off();
     setHost({ historyTick: before + 2 });
+    await settle();
     check('and nothing after unsubscribing', notified === beforeOff, `${notified} vs ${beforeOff}`);
   }
 

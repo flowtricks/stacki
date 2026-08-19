@@ -2,6 +2,8 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties, ReactNode } from 'react'
 import FieldLabel from './components/FieldLabel'
+import { PropTip, ProvenanceLabel } from './components/PropTip'
+import { useComputedChoice } from './lib/computed-style'
 import { type SegmentedOption, HoverTooltip } from './components/SegmentedControl'
 import Select, { type SelectOption } from './components/Select'
 import { handleArrowStep } from './lib/number-step'
@@ -9,6 +11,8 @@ import ProvenanceList from './ProvenanceList'
 import VariableConnect from './VariableConnect'
 import type { Contributor, ResolvedProp } from './lib/resolved'
 import { splitTopLevelSpaces } from './lib/background'
+import SegmentPill from './components/SegmentPill'
+import { commitInPlace } from './lib/commit-in-place'
 
 // The Size section of the style panel. Every control is always rendered (Webflow
 // parity), driven by the resolved model: a property is blue when the picked
@@ -72,17 +76,7 @@ function SizeLabel({ label, prop, d, contributors, busy, onClear, onProvenance, 
   onSelectSelector: (selector: string, prop?: string) => void
 }) {
   if (d.present && !d.isSelected) {
-    return (
-      <button
-        type="button"
-        className="embed-editor_size-label embed-editor_prop-orange"
-        disabled={busy}
-        title="Set through another selector — click to see all"
-        onClick={(event) => onProvenance(prop, event.currentTarget.getBoundingClientRect())}
-      >
-        {label}
-      </button>
-    )
+    return <ProvenanceLabel label={label} props={[prop]} busy={busy} onProvenance={onProvenance} />
   }
   return (
     <FieldLabel
@@ -91,6 +85,7 @@ function SizeLabel({ label, prop, d, contributors, busy, onClear, onProvenance, 
       disabled={busy}
       onReset={onClear}
       resetLabel="Clear"
+      tooltip={<PropTip props={[prop]} />}
       title={d.overridden ? `Overridden by ${d.winnerSelector}` : undefined}
       menuNote={(close) => <ProvenanceList contributors={contributors} prop={prop} onSelect={(sel, p) => { onSelectSelector(sel, p); close() }} />}
     >
@@ -140,7 +135,7 @@ function LivePropField({ prop, label, placeholder, read, busy, setProp, clearPro
   return (
     <>
       <SizeLabel label={label} prop={prop} d={d} contributors={read(prop)?.contributors ?? []} busy={busy} onClear={() => clearProp(prop)} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
-      <VariableConnect ariaLabel={`Connect ${label} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
+      <VariableConnect code ariaLabel={`Connect ${label} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
       <input
         className="u-input embed-editor_size-input"
         data-prop={prop}
@@ -149,7 +144,7 @@ function LivePropField({ prop, label, placeholder, read, busy, setProp, clearPro
         onFocus={() => { focused.current = true }}
         onBlur={() => { focused.current = false; cancelLive(); commit() }}
         onKeyDown={(event) => {
-          if (event.key === 'Enter') { event.currentTarget.blur(); return }
+          if (event.key === 'Enter') { commitInPlace(event.currentTarget); return }
           const stepped = handleArrowStep(event)
           if (!stepped) return
           event.preventDefault()
@@ -241,6 +236,7 @@ const OVERFLOW_SEGS: ReadonlyArray<{ value: string; icon?: ReactNode; label: str
   { value: 'auto', label: 'Auto' },
 ]
 const OVERFLOW_SUPPORTED = new Set(OVERFLOW_SEGS.map((seg) => seg.value))
+const OVERFLOW_VALUES = OVERFLOW_SEGS.map((seg) => seg.value)
 
 // Editable free-value field (unset, var(), …) shown in the overflow bar's custom mode.
 function OverflowCustomInput({ value, busy, inputRef, onCommit, onLiveCommit, onClear, ariaLabel = 'Overflow value', placeholder = 'custom value' }: {
@@ -283,7 +279,7 @@ function OverflowCustomInput({ value, busy, inputRef, onCommit, onLiveCommit, on
       onChange={(event) => { setDraft(event.target.value); scheduleLive(event.target.value) }}
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; cancelLive(); commit() }}
-      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+      onKeyDown={(event) => { if (event.key === 'Enter') commitInPlace(event.currentTarget) }}
       disabled={busy}
       spellCheck={false}
       placeholder={placeholder}
@@ -363,6 +359,7 @@ function OverflowBar({ value, busy, onCommit, onLiveCommit, onClear }: {
 
   return (
     <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label="Overflow">
+      <SegmentPill />
       {customMode ? (
         <OverflowCustomInput value={value} busy={busy} inputRef={inputRef} onCommit={onCommit} onLiveCommit={onLiveCommit} onClear={onClear} />
       ) : (
@@ -430,7 +427,10 @@ function OverflowRow({ label, prop, d, contributors, fallback, toggle, busy, set
   onProvenance: (prop: string, anchor: DOMRect) => void
   onSelectSelector: (selector: string, prop?: string) => void
 }) {
-  const value = d.present ? d.value.toLowerCase() : fallback
+  // Nothing authored here → the page's own computed overflow, then the caller's
+  // fallback (the shorthand's value, for the X / Y rows).
+  const computed = useComputedChoice(d.present ? '' : prop, OVERFLOW_VALUES)
+  const value = d.present ? d.value.toLowerCase() : (fallback || computed)
   const labelEl = (
     <SizeLabel
       label={label}
@@ -598,6 +598,7 @@ function BoxSizingBar({ value, busy, onCommit, onLiveCommit, onClear }: {
 
   return (
     <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label="Box sizing">
+      <SegmentPill />
       {customMode ? (
         <OverflowCustomInput value={value} busy={busy} inputRef={inputRef} onCommit={onCommit} onLiveCommit={onLiveCommit} onClear={onClear} ariaLabel="Box sizing value" />
       ) : (
@@ -704,7 +705,7 @@ function RatioNumberInput({ value, busy, ariaLabel, onLive, onCommit }: {
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; onCommit(draft) }}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') { event.currentTarget.blur(); return }
+        if (event.key === 'Enter') { commitInPlace(event.currentTarget); return }
         const stepped = handleArrowStep(event)
         if (!stepped) return
         event.preventDefault()
@@ -777,7 +778,7 @@ function RatioOtherInput({ value, busy, onCommit, onLiveCommit, onClear, ariaLab
       onChange={(event) => { setDraft(event.target.value); scheduleLive(event.target.value) }}
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; cancelLive(); commit() }}
-      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+      onKeyDown={(event) => { if (event.key === 'Enter') commitInPlace(event.currentTarget) }}
       disabled={busy}
       spellCheck={false}
       placeholder={placeholder}
@@ -944,7 +945,7 @@ function PosInput({ value, busy, label, onLive, onCommit }: {
         onFocus={() => { focused.current = true }}
         onBlur={() => { focused.current = false; onCommit(norm(draft)) }}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') { e.currentTarget.blur(); return }
+          if (e.key === 'Enter') { commitInPlace(e.currentTarget); return }
           const stepped = handleArrowStep(e)
           if (!stepped) return
           e.preventDefault()
@@ -1068,6 +1069,7 @@ function ImageFitField({ read, busy, setProp, clearProp, liveSetProp, onProvenan
               disabled={busy}
               onReset={() => clearProp('object-position')}
               resetLabel="Clear"
+              tooltip={<PropTip props={['object-position']} />}
             >
               Position
             </FieldLabel>

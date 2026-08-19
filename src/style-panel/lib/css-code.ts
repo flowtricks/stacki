@@ -102,6 +102,8 @@ export function stepNumberAt(
   text: string,
   caret: number,
   delta: number,
+  /** Floor for the stepped number — padding stops at 0, a margin doesn't. */
+  min?: number,
 ): { text: string; caret: number } | null {
   NUMBER_AT.lastIndex = 0
   let match: RegExpExecArray | null
@@ -124,7 +126,7 @@ export function stepNumberAt(
   const start = signed ? hit.start - 1 : hit.start
   const current = Number((signed ? '-' : '') + hit.text)
   if (!Number.isFinite(current)) return null
-  const next = current + delta
+  const next = min == null ? current + delta : Math.max(min, current + delta)
   // Float arithmetic: 0.1 + 0.2 must read 0.3 in a field someone is watching.
   const shown = next.toFixed(precisionOf(hit.text, delta)).replace(/^(-?)0\./, '$1.').replace(/\.$/, '')
   return {

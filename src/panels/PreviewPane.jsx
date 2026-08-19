@@ -2,6 +2,7 @@ import React from 'react';
 import CanvasView from './CanvasView.jsx';
 import { setCanvasFrame, receiveCanvasReply, noteCanvasReady } from '../canvasQuery.js';
 import { forgetComputedColors } from '../style-panel/lib/computed-color';
+import { forgetComputedStyles } from '../style-panel/lib/computed-style';
 import { onePerPlace } from '../outlineBoxes.js';
 import { spacingBands } from '../spacingBands.js';
 import { setModifiers } from '../style-panel/lib/host.ts';
@@ -246,6 +247,7 @@ export default function PreviewPane({
         // so what a variable resolves to may have moved with it.
         noteCanvasReady();
         forgetComputedColors();
+        forgetComputedStyles();
       } else if (d?.type === 'avb:query-result') {
         // An answer from the page about what it really renders — see
         // canvasQuery.js. Routed here because this is the component that
@@ -546,9 +548,12 @@ export default function PreviewPane({
                   (spacing[selPath] || [])[selOcc] || (spacing[selPath] || [])[0],
                   spacingHover.kind,
                   spacingHover.sides
-                ).map((b) => (
+                ).map((b, i) => (
                   <div
-                    key={`sp-${b.side}`}
+                    // Padding and margin have one band per side; gap has one
+                    // per space between children, so several share a side and
+                    // the side alone is not a key.
+                    key={`sp-${b.side}-${i}`}
                     className={`spacing-band is-${spacingHover.kind}`}
                     style={{ left: b.x, top: b.y, width: b.w, height: b.h }}
                   >

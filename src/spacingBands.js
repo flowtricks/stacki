@@ -20,13 +20,25 @@ const SIDES = ['top', 'right', 'bottom', 'left'];
 /**
  * The rectangles to draw over `box` (the element's border box, in canvas
  * coordinates) for `sides` of `kind` — 'padding' inside the box, 'margin'
- * around it.
+ * around it, 'gap' between its children (where `sides` are axes, 'row' and
+ * 'column', rather than edges).
  *
  * `spacing` is the element's computed spacing in px: `{ padding: {top,…},
  * margin: {…} }`. A side with nothing on it draws nothing: an empty strip is
  * not somewhere to look.
  */
 export function spacingBands(box, spacing, kind, sides) {
+  // Gap is not four numbers on this element — it is the space between its
+  // children, and where those children are is a question only the laid-out
+  // page can answer. The canvas measures it (see gapBandsFor in preload.js)
+  // and sends the rectangles, so there is nothing to work out here beyond
+  // which axis was asked for.
+  if (kind === 'gap') {
+    const want = new Set(sides || ['row', 'column']);
+    return (spacing?.gaps || [])
+      .filter((b) => want.has(b.axis) && b.w > 0 && b.h > 0)
+      .map((b) => ({ side: b.axis, x: b.x, y: b.y, w: b.w, h: b.h }));
+  }
   if (!box || !spacing?.[kind]) return [];
   const size = spacing[kind];
   const want = new Set(sides || []);

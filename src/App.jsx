@@ -4,6 +4,7 @@ import PagesPanel from './panels/PagesPanel.jsx';
 import PalettePanel from './panels/PalettePanel.jsx';
 import StructurePanel from './panels/StructurePanel.jsx';
 import { isInlineRun, noteIndexAbove, noteText, noteValue, selectionAfterDelete } from './treeSelection.js';
+import { setSoundEnabled } from './ui/sound.js';
 import PropsPanel from './panels/PropsPanel.jsx';
 import StylePanel from './panels/StylePanel.jsx';
 import PreviewPane from './panels/PreviewPane.jsx';
@@ -1652,6 +1653,21 @@ export default function App() {
   const [insertOpen, setInsertOpen] = useState(false);
 
   // Open requests from the app menu (⌘E accelerator) and from canvas
+  // Interface sound. The menu owns the setting, so the app reads it once on
+  // load and takes the menu's word for it afterwards; nothing in here decides
+  // to make a noise on its own.
+  useEffect(() => {
+    let live = true;
+    window.avb.settings?.().then((s) => {
+      if (live) setSoundEnabled(!!s?.sound);
+    });
+    const off = window.avb.onMenu('sound', (on) => setSoundEnabled(!!on));
+    return () => {
+      live = false;
+      off?.();
+    };
+  }, []);
+
   // iframes (which forward ⌘F/⌘E when they hold keyboard focus).
   useEffect(() => {
     const openIfEditable = () => {
@@ -4153,6 +4169,7 @@ export default function App() {
                 onSpacingHover={setSpacingHover}
                 pathOf={pathFor}
                 renderedClasses={selectedClasses}
+                projectClasses={projectClasses}
                 historyTick={historyTick}
                 openFilePath={editStack[editStack.length - 1]?.path || currentPage?.path || null}
               />

@@ -1,6 +1,7 @@
 const {
   app,
   BrowserWindow,
+  screen,
   ipcMain,
   dialog,
   shell,
@@ -43,6 +44,7 @@ const thumbs = require('./thumbs');
 const cssVars = require('./cssVars');
 const { readInjectedRoutes } = require('./injectedRoutes.js');
 const { createStarter } = require('./starter');
+const { openingBounds } = require('./windowBounds');
 const { listEntries, writeEntry, countEntries, coveredPaths } = require('./contentEntries');
 const { planRename, applyRename } = require('./contentRefs');
 const { mergeBranch, deleteBranch, switchBranch, resolveMerge } = require('./gitBranches');
@@ -127,11 +129,20 @@ function setApplicationIcon() {
 }
 
 function createWindow() {
+  // Opened filled: the display the pointer is on, minus what the OS keeps (see
+  // windowBounds.js). The display under the pointer rather than the primary
+  // one — on a laptop with a monitor beside it, the app should open where the
+  // person is looking.
+  let bounds;
+  try {
+    bounds = openingBounds(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea);
+  } catch {
+    // No display to ask about (a headless run, an unusual session): a laptop
+    // sized window is a fine thing to fall back to.
+    bounds = openingBounds({ width: 1480, height: 940 });
+  }
   mainWindow = new BrowserWindow({
-    width: 1480,
-    height: 940,
-    minWidth: 1024,
-    minHeight: 640,
+    ...bounds,
     title: 'Stacki',
     backgroundColor: '#111111',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
@@ -167,7 +178,31 @@ function buildMenu() {
   const isMac = process.platform === 'darwin';
   const template = [
     ...(isMac ? [{ role: 'appMenu' }] : []),
-    { role: 'fileMenu' },
+    {
+      // Spelled out rather than `role: 'fileMenu'`, which takes no additions.
+      // What that role provides is one item — Close Window on macOS, Quit
+      // everywhere else — so the menu keeps exactly what it had, with the
+      // update check above it.
+      label: 'File',
+      submenu: [
+        {
+          label: 'Interface Sounds',
+          type: 'checkbox',
+          checked: !!settings.sound,
+          // The menu owns the setting: it is the only place it can be changed,
+          // so the tick is the state rather than a copy of it.
+          click: (item) => {
+            settings = { ...settings, sound: item.checked };
+            writeSettings();
+            send('menu:sound', item.checked);
+          },
+        },
+        { type: 'separator' },
+        { label: 'Check for Updates…', click: () => void checkForUpdatesFromMenu() },
+        { type: 'separator' },
+        isMac ? { role: 'close' } : { role: 'quit' },
+      ],
+    },
     {
       label: 'Edit',
       submenu: [
@@ -200,6 +235,8 @@ ipcMain.handle('native:paste', () => {
 });
 
 app.whenReady().then(() => {
+  // Before the menu, which draws the sound item's tick from it.
+  settings = readSettings();
   setApplicationIcon();
   registerAssetProtocol();
   buildMenu();
@@ -240,6 +277,9 @@ const AUTO_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 let autoUpdateInterval = null;
 let autoUpdateCheckInFlight = false;
 let autoUpdateErrorDialogShown = false;
+// A check somebody asked for, rather than the scheduled one. It answers in a
+// dialog either way, so the error handler below leaves the talking to it.
+let manualUpdateCheck = false;
 
 // Update-check failures the user can do nothing about, and so should never
 // see a dialog for: they're offline, or a release is mid-publish and its
@@ -350,6 +390,10 @@ function registerAutoUpdaterEvents() {
   autoUpdater.on('error', (error) => {
     logAutoUpdate('Auto update error', formatAutoUpdateError(error));
 
+    // A check from the File menu reports its own failure, and reports it even
+    // when this dialog has already been shown once — two dialogs for the one
+    // click would be worse than none.
+    if (manualUpdateCheck) return;
     if (autoUpdateErrorDialogShown || isExpectedAutoUpdateNetworkError(error)) return;
     autoUpdateErrorDialogShown = true;
 
@@ -377,6 +421,74 @@ async function runAutoUpdateCheck() {
     }
   } finally {
     autoUpdateCheckInFlight = false;
+  }
+}
+
+// The File menu's own check. The scheduled one is deliberately silent — it
+// logs, and speaks up only when there is something to install — but somebody
+// who asks is owed an answer either way, "you already have the latest"
+// included. Otherwise the menu item looks broken every time it works.
+async function checkForUpdatesFromMenu() {
+  const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+
+  // Nothing to check against: electron-updater reads the feed the installer
+  // was built with, and a dev run has no installer. Saying so beats a check
+  // that silently does nothing.
+  if (!app.isPackaged) {
+    await dialog.showMessageBox(parent, {
+      type: 'info',
+      title: 'Check for Updates',
+      message: 'Updates are only checked in the installed app.',
+      detail: `This is a development build (${app.getVersion()}), which updates when you rebuild it.`,
+    });
+    return;
+  }
+
+  if (autoUpdateCheckInFlight) {
+    await dialog.showMessageBox(parent, {
+      type: 'info',
+      title: 'Check for Updates',
+      message: 'Already checking for updates.',
+    });
+    return;
+  }
+
+  autoUpdateCheckInFlight = true;
+  manualUpdateCheck = true;
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    // `downloadPromise` is the difference between "there is a newer version"
+    // and "there is a version": the feed always names one, and downloading is
+    // what electron-updater does only when it is actually newer.
+    if (result?.downloadPromise) {
+      logAutoUpdate('Manual check found an update', { version: result.updateInfo?.version });
+      await dialog.showMessageBox(parent, {
+        type: 'info',
+        title: 'Update Available',
+        message: `Stacki ${result.updateInfo?.version} is downloading.`,
+        detail: 'You’ll be asked whether to restart once it has finished.',
+      });
+      return;
+    }
+    logAutoUpdate('Manual check found no update', { version: app.getVersion() });
+    await dialog.showMessageBox(parent, {
+      type: 'info',
+      title: 'Check for Updates',
+      message: `Stacki ${app.getVersion()} is the latest version.`,
+    });
+  } catch (error) {
+    logAutoUpdate('Manual check failed', formatAutoUpdateError(error));
+    await dialog.showMessageBox(parent, {
+      type: 'warning',
+      title: 'Check for Updates',
+      // The raw error carries response headers and a stack; the log has all of
+      // it, the dialog gets the first line.
+      message: 'Stacki could not check for updates.',
+      detail: formatAutoUpdateError(error).split('\n')[0].slice(0, 200),
+    });
+  } finally {
+    autoUpdateCheckInFlight = false;
+    manualUpdateCheck = false;
   }
 }
 
@@ -721,6 +833,40 @@ function isAstroProject(dir) {
     fs.existsSync(path.join(dir, f))
   );
 }
+
+// ---------------------------------------------------------------------------
+// Settings
+//
+// One file, read once at startup and written on every change. Only the app's
+// own preferences live here — anything about a project belongs to the project.
+// ---------------------------------------------------------------------------
+
+// Sound is off. An editor that makes a noise the first time somebody touches it
+// is an editor they turn off, so it is asked for rather than opted out of.
+const SETTINGS_DEFAULTS = { sound: false };
+let settings = { ...SETTINGS_DEFAULTS };
+
+const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
+
+function readSettings() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
+    return saved && typeof saved === 'object' ? { ...SETTINGS_DEFAULTS, ...saved } : { ...SETTINGS_DEFAULTS };
+  } catch {
+    return { ...SETTINGS_DEFAULTS };
+  }
+}
+
+function writeSettings() {
+  try {
+    fs.writeFileSync(settingsFile(), JSON.stringify(settings, null, 2), 'utf8');
+  } catch {
+    /* non-fatal — the setting still holds for this run */
+  }
+}
+
+// The renderer asks once on load; the menu pushes every change after that.
+ipcMain.handle('settings:get', () => settings);
 
 // ---------------------------------------------------------------------------
 // Recent projects + preview thumbnails

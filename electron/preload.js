@@ -583,6 +583,85 @@ if (!process.isMainFrame) {
   // authored value, because that is the question being asked — where is it on
   // the page, not what was typed.
   const SIDES = ['top', 'right', 'bottom', 'left'];
+
+  // Where an element's `gap` actually is, as rectangles.
+  //
+  // Padding and margin are four numbers on the element itself, so the panel can
+  // draw them from the box alone. A gap is not: it lives BETWEEN children, and
+  // where those children are is a question only the laid-out page can answer —
+  // flex wraps, grid places, and neither is reconstructable from the parent's
+  // rectangle. So the bands are measured here, in the same viewport coordinates
+  // as every other rect, and the app only has to draw them.
+  //
+  // Measured, but never larger than the gap: with `justify-content:
+  // space-between` the space between two children is the gap PLUS the free
+  // space shared out between them, and lighting all of that would say `gap` is
+  // bigger than it is. The band is capped at the computed gap and sits against
+  // the child before it, which is the part of that space the property is
+  // actually responsible for.
+  const gapBandsFor = (el, cs) => {
+    const display = cs.display;
+    if (!/(^|\s)(flex|grid|inline-flex|inline-grid)$/.test(display)) return [];
+    const colGap = parseFloat(cs.columnGap) || 0;
+    const rowGap = parseFloat(cs.rowGap) || 0;
+    if (colGap <= 0 && rowGap <= 0) return [];
+
+    const kids = [];
+    for (const child of el.children) {
+      if (child.tagName === 'TEMPLATE') continue;
+      const r = child.getBoundingClientRect();
+      // A child with no box is not somewhere a gap can be seen.
+      if (r.width <= 0 && r.height <= 0) continue;
+      const cd = window.getComputedStyle(child).display;
+      if (cd === 'none' || cd === 'contents') continue;
+      kids.push(r);
+    }
+    if (kids.length < 2) return [];
+
+    // Children grouped into visual rows: two that overlap vertically are on
+    // the same line, whether that line came from flex-wrap or from grid.
+    const byTop = [...kids].sort((a, b) => a.top - b.top || a.left - b.left);
+    const rows = [];
+    for (const r of byTop) {
+      const row = rows[rows.length - 1];
+      const overlaps = row && r.top < row.bottom - 1 && r.bottom > row.top + 1;
+      if (overlaps) {
+        row.items.push(r);
+        row.top = Math.min(row.top, r.top);
+        row.bottom = Math.max(row.bottom, r.bottom);
+      } else {
+        rows.push({ top: r.top, bottom: r.bottom, items: [r] });
+      }
+    }
+
+    const bands = [];
+    // Between columns, within each row.
+    if (colGap > 0) {
+      for (const row of rows) {
+        const across = [...row.items].sort((a, b) => a.left - b.left);
+        for (let i = 1; i < across.length; i++) {
+          const space = across[i].left - across[i - 1].right;
+          const w = Math.min(space, colGap);
+          if (w <= 0.5) continue;
+          bands.push({ axis: 'column', x: across[i - 1].right, y: row.top, w, h: row.bottom - row.top });
+        }
+      }
+    }
+    // Between rows, across the width the children occupy.
+    if (rowGap > 0) {
+      for (let i = 1; i < rows.length; i++) {
+        const space = rows[i].top - rows[i - 1].bottom;
+        const h = Math.min(space, rowGap);
+        if (h <= 0.5) continue;
+        const span = [...rows[i - 1].items, ...rows[i].items];
+        const left = Math.min(...span.map((r) => r.left));
+        const right = Math.max(...span.map((r) => r.right));
+        bands.push({ axis: 'row', x: left, y: rows[i - 1].bottom, w: right - left, h });
+      }
+    }
+    return bands;
+  };
+
   const spacingForPath = (p) => {
     const out = [];
     for (const run of runsOf(p) || []) {
@@ -595,7 +674,7 @@ if (!process.isMainFrame) {
         const cs = window.getComputedStyle(el);
         const box = (kind) =>
           Object.fromEntries(SIDES.map((s) => [s, parseFloat(cs.getPropertyValue(`${kind}-${s}`)) || 0]));
-        return { padding: box('padding'), margin: box('margin') };
+        return { padding: box('padding'), margin: box('margin'), gaps: gapBandsFor(el, cs) };
       } catch {
         // Whatever went wrong measuring one element, the boxes everything else
         // depends on still have to be reported.
@@ -1044,6 +1123,32 @@ if (!process.isMainFrame) {
         }
         probe.remove();
       }
+      // What the element's style ACTUALLY is for a property nothing in the panel
+      // sets — inherited from a parent, painted by a `*` rule the panel can't see
+      // past a component edge, or a user-agent default. The panel highlights that
+      // value in its dropdowns so an unset control still shows what's on the page.
+      const computedProps = {};
+      const props = Array.isArray(d.props) ? d.props : [];
+      if (props.length && els[0]) {
+        // Design mode paints `cursor: default !important` over everything (see the
+        // top of this file), so the page's own cursor is hidden behind it. Lift that
+        // sheet for the read and put it straight back — nothing paints in between,
+        // and otherwise every element would report `default`.
+        const designStyle = document.getElementById('avb-design-style');
+        try {
+          if (designStyle) designStyle.disabled = true;
+          const cs = getComputedStyle(els[0]);
+          for (const prop of props) {
+            if (typeof prop !== 'string') continue;
+            computedProps[prop] = cs.getPropertyValue(prop) || null;
+          }
+        } catch {
+          // A detached or cross-document element answers nothing; the panel
+          // falls back to its own defaults.
+        } finally {
+          if (designStyle) designStyle.disabled = false;
+        }
+      }
       for (const sel of d.selectors || []) {
         try {
           // Any of the element's occurrences matching counts — a loop child is
@@ -1060,6 +1165,7 @@ if (!process.isMainFrame) {
           ready: mapped,
           found: els.length > 0,
           computed,
+          computedProps,
           identity: els[0] ? identityOf(els[0]) : null,
           matched,
         },
@@ -1305,9 +1411,14 @@ contextBridge.exposeInMainWorld('avb', {
     return () => ipcRenderer.removeListener('fs:changed', listener);
   },
 
+  // App preferences — read once on load; the menu pushes changes as they happen.
+  settings: invoke('settings:get'),
+
   // Application menu events (macOS menu accelerators never reach the DOM)
   onMenu: (channel, cb) => {
-    const listener = () => cb();
+    // The payload is forwarded: a checkbox item sends its new state, and the
+    // items that send nothing simply call back with undefined as before.
+    const listener = (_e, data) => cb(data);
     ipcRenderer.on(`menu:${channel}`, listener);
     return () => ipcRenderer.removeListener(`menu:${channel}`, listener);
   },

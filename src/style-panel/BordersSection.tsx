@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import FieldLabel from './components/FieldLabel'
-import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl'
+import { PropTip, ProvenanceLabel } from './components/PropTip'
+import type { SegmentedOption } from './components/SegmentedControl'
 import ColorSwatch from './components/ColorSwatch'
+import { useLiveColor } from './lib/live-color'
 import ProvenanceList from './ProvenanceList'
 import VariableConnect from './VariableConnect'
-import { GroupLabel } from './TypographySection'
 import { handleArrowStep } from './lib/number-step'
 import type { ResolvedProp } from './lib/resolved'
 import { splitTopLevelSpaces } from './lib/background'
+import { useComputedChoice } from './lib/computed-style'
+import SegmentPill from './components/SegmentPill'
+import { commitInPlace } from './lib/commit-in-place'
 
 // The Borders section: a corner-radius control (linked / per-corner) and a border
 // control scoped to a side (all / top / right / bottom / left) with style, width,
@@ -46,6 +50,7 @@ function parseImportant(input: string): { value: string; important: boolean } {
 }
 
 const stripImportant = (value: string) => value.replace(/\s*!important\s*$/i, '').trim()
+const joinImportant = (value: string, important: boolean) => (important ? `${value} !important` : value)
 
 // ─────────────────── Provenance-aware label (mirrors SizeLabel) ───────────────────
 
@@ -58,34 +63,30 @@ function OverrideNote({ selector, onSelect }: { selector: string; onSelect: () =
   )
 }
 
-function PropLabel({ label, prop, clearProps, read, busy, clearProp, onProvenance, onSelectSelector }: {
+function PropLabel({ label, prop, clearProps, className = '', read, busy, clearProp, onProvenance, onSelectSelector }: {
   label: ReactNode
   prop: string
   clearProps?: string[]
+  /** Extra class on the label — the corner glyphs use it to size their pill. */
+  className?: string
 } & Pick<Props, 'read' | 'busy' | 'clearProp' | 'onProvenance' | 'onSelectSelector'>) {
   const resolved = read(prop)
   const d = displayOf(resolved)
   const contributors = resolved?.contributors ?? []
+  // A grouped label (the four corners, all four edges) names every property it
+  // writes in its tooltip; a single-property one just names its own.
+  const tip = clearProps ?? [prop]
   if (d.present && !d.isSelected) {
-    return (
-      <button
-        type="button"
-        className="embed-editor_size-label embed-editor_prop-orange"
-        disabled={busy}
-        title="Set through another selector — click to see all"
-        onClick={(event) => onProvenance(prop, event.currentTarget.getBoundingClientRect())}
-      >
-        {label}
-      </button>
-    )
+    return <ProvenanceLabel label={label} props={tip} className={`embed-editor_size-label ${className}`} anchorProp={prop} busy={busy} onProvenance={onProvenance} />
   }
   return (
     <FieldLabel
-      className={`embed-editor_size-label ${d.overridden ? 'is-overridden' : ''}`}
+      className={`embed-editor_size-label ${className} ${d.overridden ? 'is-overridden' : ''}`}
       active={d.isSelected}
       disabled={busy}
       onReset={() => clearProp(clearProps ?? prop)}
       resetLabel="Clear"
+      tooltip={<PropTip props={tip} />}
       title={d.overridden ? `Overridden by ${d.winnerSelector}` : undefined}
       menuNote={(close) => (
         <>
@@ -101,13 +102,12 @@ function PropLabel({ label, prop, clearProps, read, busy, clearProp, onProvenanc
 
 // ─────────────────── Live value field ───────────────────
 
-export function LiveInput({ value, busy, readOnly = false, ariaLabel, placeholder, prefix, prop, onLive, onCommit, onVariablePick }: {
+export function LiveInput({ value, busy, readOnly = false, ariaLabel, placeholder, prop, onLive, onCommit, onVariablePick }: {
   value: string
   busy: boolean
   readOnly?: boolean
   ariaLabel: string
   placeholder?: string
-  prefix?: ReactNode
   /** The CSS property being edited — filters the variable picker (border-color →
    *  Color only; radius / width → no color/font). */
   prop: string
@@ -126,9 +126,8 @@ export function LiveInput({ value, busy, readOnly = false, ariaLabel, placeholde
     liveTimer.current = window.setTimeout(() => { liveTimer.current = null; onLive(text) }, 100)
   }
   return (
-    <div className={`embed-editor_border-field${prefix ? ' has-prefix' : ''}`}>
-      {prefix}
-      <VariableConnect ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => (onVariablePick ?? onCommit)(binding)}>
+    <div className="embed-editor_border-field">
+      <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => (onVariablePick ?? onCommit)(binding)}>
       <input
         className="u-input embed-editor_size-input"
         value={draft}
@@ -136,7 +135,7 @@ export function LiveInput({ value, busy, readOnly = false, ariaLabel, placeholde
         onFocus={() => { focused.current = true }}
         onBlur={() => { focused.current = false; cancelLive(); onCommit(draft) }}
         onKeyDown={(event) => {
-          if (event.key === 'Enter') { event.currentTarget.blur(); return }
+          if (event.key === 'Enter') { commitInPlace(event.currentTarget); return }
           const stepped = handleArrowStep(event)
           if (!stepped) return
           event.preventDefault()
@@ -159,22 +158,25 @@ export function LiveInput({ value, busy, readOnly = false, ariaLabel, placeholde
 
 // ─────────────────────────── Icons ───────────────────────────
 
+// Webflow's corner glyphs: the box drawn dim, with the one rounded corner this
+// field controls picked out in full strength.
 function CornerIcon({ corner }: { corner: 'tl' | 'tr' | 'bl' | 'br' }) {
-  const rot = { tl: 0, tr: 90, br: 180, bl: 270 }[corner]
+  const box = {
+    tl: ['M14 14V9H13V13H9V14H14Z', 'M7 14V13H3V9H2V14H7Z', 'M2 7H3V6.5C3 4.567 4.567 3 6.5 3H7V2H6.5C4.01472 2 2 4.01472 2 6.5V7Z', 'M9 2V3H13V7H14V2H9Z'],
+    tr: ['M2 14V9H3V13H7V14H2Z', 'M9 14V13H13V9H14V14H9Z', 'M14 7H13V6.5C13 4.567 11.433 3 9.5 3H9V2H9.5C11.9853 2 14 4.01472 14 6.5V7Z', 'M7 2V3H3V7H2V2H7Z'],
+    bl: ['M2 2V7H3V3H7V2H2Z', 'M9 2V3H13V7H14V2H9Z', 'M14 9H13V13H9V14H14V9Z', 'M7 14V13H6.5C4.567 13 3 11.433 3 9.5V9H2V9.5C2 11.9853 4.01472 14 6.5 14H7Z'],
+    br: ['M2 2V7H3V3H7V2H2Z', 'M9 2V3H13V7H14V2H9Z', 'M14 9H13V11.5C13 12.3284 12.3284 13 11.5 13H9V14H11.5C12.8807 14 14 12.8807 14 11.5V9Z', 'M7 14V13H3V9H2V14H7Z'],
+  }[corner]
+  const arc = {
+    tl: 'M2.5 7V6.5C2.5 4.29086 4.29086 2.5 6.5 2.5H7',
+    tr: 'M13.5 7V6.5C13.5 4.29086 11.7091 2.5 9.5 2.5H9',
+    bl: 'M2.5 9V9.5C2.5 11.7091 4.29086 13.5 6.5 13.5H7',
+    br: 'M13.5 9V9.5C13.5 11.7091 11.7091 13.5 9.5 13.5H9',
+  }[corner]
   return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ transform: `rotate(${rot}deg)` }}>
-      <path d="M3 13V7a4 4 0 0 1 4-4h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  )
-}
-function LinkedRadiusIcon() {
-  return <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="3.5" stroke="currentColor" strokeWidth="1.4" /></svg>
-}
-function SplitRadiusIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-      <path d="M3 6V5a2 2 0 0 1 2-2h1" /><path d="M10 3h1a2 2 0 0 1 2 2v1" />
-      <path d="M13 10v1a2 2 0 0 1-2 2h-1" /><path d="M6 13H5a2 2 0 0 1-2-2v-1" />
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <g opacity="0.4">{box.map((d, i) => <path key={i} d={d} fill="currentColor" />)}</g>
+      <path d={arc} stroke="currentColor" />
     </svg>
   )
 }
@@ -183,12 +185,11 @@ function SplitRadiusIcon() {
 
 const RADIUS = 'border-radius'
 const CORNERS = [
-  { prop: 'border-top-left-radius', corner: 'tl' as const },
-  { prop: 'border-top-right-radius', corner: 'tr' as const },
-  { prop: 'border-bottom-left-radius', corner: 'bl' as const },
-  { prop: 'border-bottom-right-radius', corner: 'br' as const },
+  { prop: 'border-top-left-radius', corner: 'tl' as const, name: 'Top left' },
+  { prop: 'border-top-right-radius', corner: 'tr' as const, name: 'Top right' },
+  { prop: 'border-bottom-left-radius', corner: 'bl' as const, name: 'Bottom left' },
+  { prop: 'border-bottom-right-radius', corner: 'br' as const, name: 'Bottom right' },
 ]
-const CORNER_PROPS = CORNERS.map((c) => c.prop)
 
 type Corners = { tl: string; tr: string; bl: string; br: string }
 
@@ -206,97 +207,72 @@ function parseRadius(shorthand: string): Corners {
   }
 }
 
-// Build the tightest `border-radius` shorthand (TL TR BR BL), collapsing equal
-// runs; empty corners default to 0.
-function serializeRadius(c: Corners): string {
-  const v = (x: string) => x.trim() || '0'
-  const tl = v(c.tl), tr = v(c.tr), br = v(c.br), bl = v(c.bl)
-  if (tl === tr && tr === br && br === bl) return tl
-  if (tl === br && tr === bl) return `${tl} ${tr}`
-  if (tr === bl) return `${tl} ${tr} ${br}`
-  return `${tl} ${tr} ${br} ${bl}`
-}
-
+// The Radius control: one field per property — the `border-radius` shorthand first,
+// then the four corner longhands. A corner left empty inherits the shorthand, which
+// its placeholder shows; typing in it writes that corner's longhand (which wins over
+// the shorthand in the cascade), and clearing it hands the corner back.
 function RadiusControl(props: Props) {
   const { read, busy } = props
-  // Webflow models the four corners as one `border-radius` shorthand — writing the
-  // corner longhands individually makes it drop the others (they flash and reset).
-  // So we always read/write the single shorthand, and split mode edits rebuild it.
-  // Explicit corner longhands (an author's embed) still take precedence for display.
-  const cornerReads = CORNERS.map((c) => displayOf(read(c.prop)))
-  const anyCorner = cornerReads.some((d) => d.present)
   const radiusD = displayOf(read(RADIUS))
-  const parsed = parseRadius(radiusD.value)
-  const cornerVals = CORNERS.map((c, i) => (cornerReads[i].present ? cornerReads[i].value : parsed[c.corner]))
-  const allEqual = cornerVals.every((v) => v === cornerVals[0])
-  const present = anyCorner || radiusD.present
-  const single = allEqual ? cornerVals[0] : ''
-
-  const [override, setOverride] = useState<boolean | null>(null)
-  const linked = override ?? (present ? allEqual : true)
-
-  // Every radius edit writes the ONE `border-radius` property (no corner coupling),
-  // clearing any stray corner longhands so the shorthand is the single source.
-  const writeShorthand = (value: string, important: boolean, live: boolean) => {
-    ;(live ? props.liveSetProp : props.setProp)(RADIUS, value, important)
-    if (!live && anyCorner) props.clearProp(CORNER_PROPS)
-  }
-  const writeAll = (next: string, live: boolean) => {
-    const trimmed = next.trim()
-    if (!trimmed) { if (!live) props.clearProp([RADIUS, ...CORNER_PROPS]); return }
-    const { value, important } = parseImportant(trimmed)
-    writeShorthand(value, important, live)
-  }
-  const writeCorner = (index: number, next: string, live: boolean) => {
-    const corners: Corners = { tl: cornerVals[0], tr: cornerVals[1], bl: cornerVals[2], br: cornerVals[3] }
-    corners[CORNERS[index].corner] = stripImportant(next.trim())
-    writeShorthand(serializeRadius(corners), false, live)
-  }
-  const clearAll = () => { setOverride(null); props.clearProp([RADIUS, ...CORNER_PROPS]) }
-  const setMode = (mode: string) => {
-    if (mode === 'linked') {
-      setOverride(true)
-      const seed = stripImportant(single) || cornerVals.map(stripImportant).find(Boolean) || ''
-      if (seed) writeAll(seed, false); else clearAll()
-    } else setOverride(false)
-  }
-
+  const fromShorthand = parseRadius(radiusD.value)
+  const write = (prop: string) => ({
+    onLive: (next: string) => {
+      const t = next.trim()
+      if (t) { const { value, important } = parseImportant(t); props.liveSetProp(prop, value, important) }
+    },
+    onCommit: (next: string) => {
+      const t = next.trim()
+      if (!t) { props.clearProp(prop); return }
+      const { value, important } = parseImportant(t)
+      props.setProp(prop, value, important)
+    },
+  })
   return (
     <>
       <div className="embed-editor_size-row">
-        <GroupLabel label="Radius" props={[RADIUS, ...CORNER_PROPS]} read={read} busy={busy} onClear={clearAll} onProvenance={props.onProvenance} onSelectSelector={props.onSelectSelector} />
+        {/* This label belongs to the field beside it — the `border-radius` shorthand
+            and nothing else; each corner glyph below owns its own longhand. */}
+        <PropLabel label="Radius" prop={RADIUS} read={read} busy={busy} clearProp={props.clearProp} onProvenance={props.onProvenance} onSelectSelector={props.onSelectSelector} />
         <div className="embed-editor_radius-head">
-          <SegmentedControl
-            className="embed-editor_radius-toggle"
-            widthMode="hug"
-            value={linked ? 'linked' : 'split'}
-            options={[
-              { value: 'linked', label: <LinkedRadiusIcon />, ariaLabel: 'One radius for all corners' },
-              { value: 'split', label: <SplitRadiusIcon />, ariaLabel: 'Radius per corner' },
-            ]}
-            onChange={setMode}
+          <LiveInput
+            value={radiusD.present ? joinImportant(radiusD.value, radiusD.important) : ''}
+            busy={busy}
+            ariaLabel="Border radius"
+            prop={RADIUS}
+            {...write(RADIUS)}
           />
-          {linked ? (
-            <LiveInput value={single} busy={busy} ariaLabel="Border radius" prop="border-radius" onLive={(v) => writeAll(v, true)} onCommit={(v) => writeAll(v, false)} />
-          ) : null}
         </div>
       </div>
-      {!linked ? (
-        <div className="embed-editor_radius-grid">
-          {CORNERS.map((c, i) => (
-            <LiveInput
-              key={c.prop}
-              value={cornerVals[i]}
-              busy={busy}
-              ariaLabel={`${c.corner} radius`}
-              prop={c.prop}
-              prefix={<span className="embed-editor_border-icon"><CornerIcon corner={c.corner} /></span>}
-              onLive={(v) => writeCorner(i, v, true)}
-              onCommit={(v) => writeCorner(i, v, false)}
-            />
-          ))}
-        </div>
-      ) : null}
+      <div className="embed-editor_radius-grid">
+        {CORNERS.map((c) => {
+          const d = displayOf(read(c.prop))
+          return (
+            <div className="embed-editor_radius-corner" key={c.prop}>
+              {/* The corner glyph IS the label: blue when the picked selector sets this
+                  corner, orange when another does, dim when it only inherits the
+                  shorthand. Its menu clears just this corner. */}
+              <PropLabel
+                label={<><CornerIcon corner={c.corner} /><span className="u-sr-only">{c.name} radius</span></>}
+                prop={c.prop}
+                className="embed-editor_radius-corner-label"
+                read={read}
+                busy={busy}
+                clearProp={props.clearProp}
+                onProvenance={props.onProvenance}
+                onSelectSelector={props.onSelectSelector}
+              />
+              <LiveInput
+                value={d.present ? joinImportant(d.value, d.important) : ''}
+                busy={busy}
+                ariaLabel={`${c.name} radius`}
+                placeholder={fromShorthand[c.corner] || '0'}
+                prop={c.prop}
+                {...write(c.prop)}
+              />
+            </div>
+          )
+        })}
+      </div>
     </>
   )
 }
@@ -407,13 +383,20 @@ function MenuItem({ label, selected, onClick }: { label: string; selected: boole
 // the presets to switch back — mirroring the Display / Float / Clear controls. Writes
 // go through the side-aware `write` (which handles the `border-style` shorthand for
 // "all" vs a per-side longhand).
-function StyleControl({ value, busy, write, clear }: {
+function StyleControl({ value, prop, busy, write, clear }: {
   value: string
+  /** The property this bar edits (side-aware) — its computed value highlights an
+   *  unset control, so an inherited or UA style shows instead of an empty bar. */
+  prop: string
   busy: boolean
   write: (value: string, live: boolean) => void
   clear: () => void
 }) {
   const lower = value.trim().toLowerCase()
+  // Unset → what the page draws: its computed border style, or `none` (the initial
+  // value) when there's no canvas to ask.
+  const computed = useComputedChoice(lower ? '' : prop, STYLE_OPTIONS.map((o) => o.value))
+  const shown = lower || computed || 'none'
   const customMode = !!lower && !STYLE_VALUES.has(lower)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -446,6 +429,7 @@ function StyleControl({ value, busy, write, clear }: {
 
   return (
     <div ref={rootRef} className={`embed-editor_display embed-editor_border-style ${customMode ? 'is-custom' : ''}`} role="group" aria-label="Border style">
+      <SegmentPill />
       {customMode ? (
         <VariableConnect ariaLabel="Connect border style to a variable" disabled={busy} prop="border-style" onPick={(binding) => write(binding, false)}>
         <input
@@ -458,7 +442,7 @@ function StyleControl({ value, busy, write, clear }: {
           onChange={(event) => { setDraft(event.target.value); const t = event.target.value.trim(); if (t) write(t, true) }}
           onFocus={() => { focused.current = true }}
           onBlur={() => { focused.current = false; commitCustom() }}
-          onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+          onKeyDown={(event) => { if (event.key === 'Enter') commitInPlace(event.currentTarget) }}
           aria-label="Border style value"
         />
         </VariableConnect>
@@ -468,8 +452,8 @@ function StyleControl({ value, busy, write, clear }: {
             key={seg.value}
             type="button"
             role="radio"
-            aria-checked={lower === seg.value}
-            className={`embed-editor_display-seg ${lower === seg.value ? 'is-selected' : ''}`}
+            aria-checked={shown === seg.value}
+            className={`embed-editor_display-seg ${shown === seg.value ? 'is-selected' : ''}`}
             disabled={busy}
             title={seg.ariaLabel}
             aria-label={seg.ariaLabel}
@@ -493,7 +477,7 @@ function StyleControl({ value, busy, write, clear }: {
       {open ? (
         <div className="embed-editor_display-menu" role="menu">
           {customMode
-            ? STYLE_OPTIONS.map((seg) => <MenuItem key={seg.value} label={seg.ariaLabel ?? seg.value} selected={lower === seg.value} onClick={() => pick(seg.value)} />)
+            ? STYLE_OPTIONS.map((seg) => <MenuItem key={seg.value} label={seg.ariaLabel ?? seg.value} selected={shown === seg.value} onClick={() => pick(seg.value)} />)
             : <MenuItem label="Custom" selected={false} onClick={enterCustom} />}
         </div>
       ) : null}
@@ -520,11 +504,23 @@ export function ColorVariableInput({
   onCommit: (value: string) => void
   onVariablePick?: (binding: string) => void
 }) {
+  // A live drag writes to the canvas, not to the model this field reads — so the
+  // value it emitted is what both show until the model catches up.
+  const [shown, noteLive] = useLiveColor(value)
   return (
     <div className="embed-editor_border-color">
-      <ColorSwatch value={stripImportant(swatchValue)} busy={busy} ariaLabel={ariaLabel} onChange={(color, live) => live ? onLive(color) : onCommit(color)} />
+      <ColorSwatch
+        value={stripImportant(shown === value ? swatchValue : shown)}
+        busy={busy}
+        ariaLabel={ariaLabel}
+        onChange={(color, live) => {
+          noteLive(live ? color : null)
+          if (live) onLive(color)
+          else onCommit(color)
+        }}
+      />
       <LiveInput
-        value={value}
+        value={shown}
         busy={busy}
         ariaLabel={ariaLabel}
         placeholder="black"
@@ -570,6 +566,7 @@ function BorderControl(props: Props) {
           <PropLabel label="Style" prop={styleF.prop} clearProps={facetClear('style', side)} {...props} />
           <StyleControl
             value={styleF.d.present ? styleF.d.value.trim() : ''}
+            prop={styleF.prop}
             busy={busy}
             write={writeStyle}
             clear={() => props.clearProp(facetClear('style', side))}

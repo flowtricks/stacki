@@ -4,6 +4,9 @@ import { createPortal, flushSync } from 'react-dom'
 import { streamProjectVariables, type ProjectVariable } from './lib/webflow'
 import { panelBox, panelSpan } from './lib/panel-box'
 import { caretOffset, highlightCss, setCaretOffset, stepNumberAt, stepSize } from './lib/css-code'
+import CustomValue, { doesNotFit } from '../ui/CustomValueEditor.jsx'
+import { insertBinding } from './lib/insert-binding'
+import { inOwnedPopup, registerPopupLayer } from './lib/popup-layer'
 import './embed-editor.css'
 
 // Read the current value out of the wrapped <input> child, so callers don't have to
@@ -13,6 +16,13 @@ function childValue(children: ReactNode): string {
     ? (children.props as { value: string }).value
     : ''
 }
+// The wrapped input's placeholder ("Auto", "0", …). The rich field replaces that
+// input on screen, so it has to show the same hint when the value is empty.
+function childPlaceholder(children: ReactNode): string {
+  const p = isValidElement(children) ? (children.props as { placeholder?: unknown }).placeholder : undefined
+  return typeof p === 'string' ? p : ''
+}
+
 // A binding's display name — parsed from the custom-property tail (…--<name> → <name>),
 // used as the chip label until the exact variable name resolves from the loaded list.
 function bindingName(binding: string): string {
@@ -207,6 +217,10 @@ export function VariablePicker({ anchor, vars, loading, prop, selectedBinding, o
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  // This popup belongs to the field it was opened from — see lib/popup-layer. A
+  // layout effect, so it is on the register before the search box takes focus and
+  // blurs that field.
+  useLayoutEffect(() => registerPopupLayer(ref.current, anchor), [anchor])
   const [q, setQ] = useState('')
   // Scroll the selected item to the middle of the list, once, when it first mounts.
   const scrolledToSelected = useRef(false)
@@ -246,10 +260,38 @@ export function VariablePicker({ anchor, vars, loading, prop, selectedBinding, o
     const margin = 8
     const row = (anchor.parentElement ?? anchor).getBoundingClientRect()
     const { height } = el.getBoundingClientRect()
-    let top = row.bottom + 4
-    if (top + height > window.innerHeight - margin) top = Math.max(margin, row.top - 4 - height)
     const { left, width } = pickerSpan(anchor)
-    setStyle({ position: 'fixed', top, left, width, visibility: 'visible' })
+    const below = row.bottom + 4
+    if (below + height <= window.innerHeight - margin) {
+      // Below the row: its TOP is the edge that must stay put, and it already
+      // does. Filtering shortens it from the bottom, which is where the empty
+      // space belongs.
+      setStyle({
+        position: 'fixed',
+        top: below,
+        left,
+        width,
+        maxHeight: Math.max(0, window.innerHeight - below - margin),
+        visibility: 'visible',
+      })
+      return
+    }
+    // Flipped above: anchor the BOTTOM to the row rather than working out a top
+    // from the height it happens to have right now.
+    //
+    // A top computed once is a top that stops being right the moment the list
+    // gets shorter — and the list gets shorter on every keystroke. The box then
+    // shrank away from the field it belongs to, leaving a growing gap between
+    // them while its top edge stayed nailed where it opened. Held by the bottom,
+    // it stays against the field and grows upward into the space it has.
+    setStyle({
+      position: 'fixed',
+      bottom: Math.max(margin, window.innerHeight - (row.top - 4)),
+      left,
+      width,
+      maxHeight: Math.max(0, row.top - 4 - margin),
+      visibility: 'visible',
+    })
   }, [anchor])
 
   useEffect(() => {
@@ -532,8 +574,11 @@ function jumpCaretPastChip(root: HTMLElement, dir: 'left' | 'right'): boolean {
   return false
 }
 
+// The keys bracket-matching cares about (see the handler below).
+const BRACKET_KEYS = new Set(['(', ')', 'Backspace'])
+
 function TokenField({
-  value, chips, chipBare, chipVar, className, ariaLabel, disabled, code,
+  value, chips, chipBare, chipVar, className, ariaLabel, placeholder, disabled, code, stepMin,
   editorRef, onFocusField, onCommit, onDraft, onChipClick,
 }: {
   value: string
@@ -542,6 +587,8 @@ function TokenField({
   chipVar: string
   className: string
   ariaLabel: string
+  /** Shown while the field is empty, like the input's own placeholder. */
+  placeholder?: string
   disabled?: boolean
   editorRef: MutableRefObject<HTMLDivElement | null>
   onFocusField: () => void
@@ -557,10 +604,20 @@ function TokenField({
   /** Treat the value as code: colour it as it is typed, and let the arrow keys
    *  step the number the caret is in. */
   code?: boolean
+  /** Floor for arrow-stepping, when the property has one (padding at 0). */
+  stepMin?: number
 }) {
   // Tracks the value the DOM already reflects, so our own edits (which round-trip back
   // through `value`) don't rebuild innerHTML and reset the caret.
   const synced = useRef<string | null>(null)
+  // Every edit, to whoever is holding this field's value. Recorded as synced too: a
+  // parent that stores it hands it straight back as `value`, and rebuilding the field
+  // from a value it already shows would throw the caret to the end mid-word.
+  const report = (el: HTMLElement) => {
+    const next = serializeTokens(el, chipBare, chipVar)
+    synced.current = next
+    onDraft?.(next)
+  }
 
   useLayoutEffect(() => {
     const el = editorRef.current
@@ -588,6 +645,7 @@ function TokenField({
       role="textbox"
       aria-multiline="false"
       aria-label={ariaLabel}
+      data-placeholder={placeholder || undefined}
       spellCheck={false}
       onFocus={onFocusField}
       onBlur={() => {
@@ -602,7 +660,7 @@ function TokenField({
         // WATCHES the value — a badge saying this size cannot be enlarged —
         // has to move with the keystroke or it is telling you about the value
         // you had a moment ago.
-        onDraft?.(serializeTokens(el, chipBare, chipVar))
+        report(el)
         // Re-colour what was just typed. The browser has already put the
         // characters in; this replaces the markup around them and puts the
         // caret back where it was, counted in characters rather than nodes.
@@ -611,16 +669,41 @@ function TokenField({
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); return }
+        // Brackets, the way an editor does them — a CSS value is nested calls more
+        // often than not, and `calc(min(` is four keystrokes of closing parens to
+        // remember. Typing `(` puts the pair in and leaves the caret between them;
+        // typing `)` where one already sits steps over it instead of doubling it;
+        // backspacing between an empty pair takes both. Only with a collapsed caret:
+        // over a selection these keys mean what they always did.
+        if (code && !e.metaKey && !e.ctrlKey && !e.altKey && BRACKET_KEYS.has(e.key)) {
+          const el = e.currentTarget
+          const at = caretOffset(el)
+          const collapsed = el.ownerDocument.getSelection()?.isCollapsed !== false
+          if (at != null && collapsed) {
+            const text = fieldText(el)
+            const put = (next: string, caret: number) => {
+              e.preventDefault()
+              paint(el, next, caret, chipsOf(el))
+              report(el)
+            }
+            if (e.key === '(') { put(`${text.slice(0, at)}()${text.slice(at)}`, at + 1); return }
+            if (e.key === ')' && text[at] === ')') { put(text, at + 1); return }
+            if (e.key === 'Backspace' && text[at - 1] === '(' && text[at] === ')') {
+              put(text.slice(0, at - 1) + text.slice(at + 1), at - 1)
+              return
+            }
+          }
+        }
         if (code && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
           const el = e.currentTarget
           const at = caretOffset(el)
           const step = stepSize(e) * (e.key === 'ArrowUp' ? 1 : -1)
-          const next = at == null ? null : stepNumberAt(fieldText(el), at, step)
+          const next = at == null ? null : stepNumberAt(fieldText(el), at, step, stepMin)
           // No number under the caret — let the key do whatever it normally does.
           if (!next) return
           e.preventDefault()
           paint(el, next.text, next.caret, chipsOf(el))
-          onDraft?.(serializeTokens(el, chipBare, chipVar))
+          report(el)
           return
         }
         if (e.key === 'ArrowRight' && jumpCaretPastChip(e.currentTarget, 'right')) e.preventDefault()
@@ -636,12 +719,19 @@ function TokenField({
 // Update the hidden input's DOM value before invoking its controlled onChange handler.
 // The handler is called directly by VariableConnect below; dispatching a native `input`
 // event from inside the contentEditable's blur proved timing-sensitive in React.
-function setInputValue(input: HTMLInputElement, value: string) {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+// The native setter, so React's own tracker sees the change (assigning `.value`
+// straight would be swallowed as "no change" on a controlled field). It has to be
+// the setter for the element's OWN class: the big value editor wraps a <textarea>,
+// and HTMLInputElement's setter refuses to run on one — it throws mid-commit, so
+// everything typed into the rich field never reached the parent's draft.
+function setInputValue(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  // The element's OWN prototype, whichever it is — read off the element rather than
+  // named, so this doesn't depend on the global being there.
+  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value')?.set
   setter?.call(input, value)
 }
 
-export default function VariableConnect({ onPick, onDraft, disabled, ariaLabel = 'Connect to variable', className, prop, code, children }: {
+export default function VariableConnect({ onPick, onDraft, disabled, ariaLabel = 'Connect to variable', className, prop, code, stepMin, expanded, children }: {
   onPick: (binding: string) => void
   /** Called with the value as it is typed, before it is committed. */
   onDraft?: (value: string) => void
@@ -656,6 +746,14 @@ export default function VariableConnect({ onPick, onDraft, disabled, ariaLabel =
    *  number under the caret. Implies the rich field even for a value with no
    *  variable in it — there is nothing to colour in a plain <input>. */
   code?: boolean
+  /** Floor for the rich field's arrow-stepping — passed through to the editor. */
+  stepMin?: number
+  /** This field is already the room a long value needs — a multi-line editor
+   *  given its own space in the panel. A long value opens the big editor from
+   *  an ordinary field because a slot showing a third of what you are changing
+   *  is the worst place to change it from; opening one over a field that is
+   *  already that size just puts a box in front of the box. */
+  expanded?: boolean
   children: ReactNode
 }) {
   const [open, setOpen] = useState(false)
@@ -664,7 +762,8 @@ export default function VariableConnect({ onPick, onDraft, disabled, ariaLabel =
   const [active, setActive] = useState(false)
   const dotRef = useRef<HTMLButtonElement>(null)
   const editorRef = useRef<HTMLDivElement | null>(null)
-  const inputRef = useRef<HTMLInputElement | null>(null)
+  // The wrapped child: an <input> in a panel field, a <textarea> in the big editor.
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
 
   // A variable is applied when the value contains a var(…) — pure, or inside an expression
   // like calc(var(…) + 10px) — or when a bare value equals a project variable's NAME (a
@@ -712,7 +811,7 @@ export default function VariableConnect({ onPick, onDraft, disabled, ariaLabel =
   // Hand the token editor a ref to the real <input> so it can push serialized edits back
   // through the field's own onChange/commit; merge with any ref the child already carries.
   const child = isValidElement(children) ? children : null
-  const attachRef = (el: HTMLInputElement | null) => {
+  const attachRef = (el: HTMLInputElement | HTMLTextAreaElement | null) => {
     inputRef.current = el
     const r = child ? (child as unknown as { ref?: unknown }).ref : null
     if (typeof r === 'function') (r as (n: HTMLInputElement | null) => void)(el)
@@ -730,6 +829,8 @@ export default function VariableConnect({ onPick, onDraft, disabled, ariaLabel =
     onChange?: (e: unknown) => void
     onFocus?: (e: unknown) => void
     onBlur?: (e: unknown) => void
+    onMouseEnter?: (e: unknown) => void
+    onMouseLeave?: (e: unknown) => void
   } | undefined
   // …but onBlur's commit() closes over the input's `draft`. Our flushSync push re-renders
   // the input with a NEW closure (draft = the serialized value); the handler we captured
@@ -742,8 +843,148 @@ export default function VariableConnect({ onPick, onDraft, disabled, ariaLabel =
 
   const anchor = showToken ? editorRef.current : dotRef.current
 
+  // The whole value, in a box big enough to read it.
+  //
+  // The variables sheet has had this for a while and the style panel had
+  // nothing: a `calc()` of three variables in a 90px field is edited through a
+  // slot showing a third of itself. Both now open it the same two ways — a
+  // press on a field whose value does not fit, and `=` in any field at all —
+  // and it is the same box, so it behaves identically wherever it appears.
+  //
+  // Here rather than on each field because this wraps nearly every input in
+  // the panel, and `onPick` is already the path a value takes to be written.
+  // Where the caret was when the picker was opened.
+  //
+  // Read on the dot's mousedown, which is the last moment it still exists — the
+  // click that follows has already moved focus off the field, and by the time a
+  // variable is chosen there is no selection left to ask about.
+  //
+  // The token editor's own offset counts a chip as ONE character, while the
+  // value it serializes to spells that chip out as `var(--x)`. An offset from
+  // one measured against the other lands in the wrong place, so the marks
+  // before the caret are expanded to the length they serialize to.
+  // What the field says RIGHT NOW, rather than what the parent last heard.
+  //
+  // No caller passes `onDraft`, so text typed into the rich token editor never
+  // reaches the parent's state — the child's `value` prop still holds whatever
+  // was there before the edit began. Reading that was how picking a variable
+  // wiped an expression: the field showed `calc(2rem + )`, the prop still said
+  // `70rem`, and a plain value is one a variable is supposed to replace.
+  //
+  // (Pressing the dot used to blur the field, which committed the draft and
+  // hid this by accident. Keeping focus so the caret survives took that
+  // accident away, which is what made the wipe show up every time.)
+  const liveValue = (): string => {
+    const el = editorRef.current
+    if (el) return serializeTokens(el, binding ?? varText, binding ?? varText)
+    return inputRef.current?.value ?? value
+  }
+
+  // Every edit, into the field this stands in for. Without it the rich editor is a
+  // different field with the same look: the input behind it keeps the value from
+  // before the edit, and whatever live preview that input drives while you type never
+  // runs. A caller that wants the drafts itself (the big value editor) passes its own.
+  const pushDraft = (next: string) => {
+    const el = inputRef.current
+    if (!el) return
+    setInputValue(el, next)
+    childHandlersRef.current?.onChange?.(fakeEvent())
+  }
+
+  const caretRef = useRef<number | null>(null)
+  // Recorded as it moves, not grabbed when the dot is pressed.
+  //
+  // Reading it on the press alone was too late to be reliable: the picker's
+  // search field takes focus the moment it opens, and a field that has lost
+  // focus has no selection to ask about. Keeping the last known position means
+  // the answer is already in hand before anything moves.
+  const readCaret = () => {
+    const el = editorRef.current
+    if (!el) {
+      const input = inputRef.current
+      caretRef.current = typeof input?.selectionStart === 'number' ? input.selectionStart : null
+      return
+    }
+    const at = caretOffset(el)
+    // Nothing selected IN THE FIELD at this moment — the wrapper hears focus and
+    // select events from everything inside it, and the field itself goes quiet the
+    // instant the picker takes focus. Keep the last position we knew rather than
+    // forgetting it: recording the caret as it moves is only worth anything if the
+    // answer survives until the pick, and a forgotten one puts the variable at the
+    // end of the value.
+    if (at == null) return
+    // Each chip serializes to its OWN binding — a value can hold several, and
+    // they need not be the same variable — so the lengths are read off the
+    // chips themselves rather than assumed equal.
+    const bindings = Array.from(el.querySelectorAll<HTMLElement>('[data-chip]')).map(
+      (n) => n.dataset.binding ?? ''
+    )
+    let len = 0
+    let chip = 0
+    for (const ch of fieldText(el).slice(0, at)) {
+      if (ch === CHIP_MARK) len += (bindings[chip++] ?? '').length
+      else len += 1
+    }
+    caretRef.current = len
+  }
+
+  const [big, setBig] = useState<DOMRect | null>(null)
+  const wrapRef = useRef<HTMLSpanElement | null>(null)
+  const openBig = () => {
+    const el = wrapRef.current
+    if (el) setBig(el.getBoundingClientRect())
+  }
+
   return (
-    <span className={`embed-editor_varconnect${className ? ` ${className}` : ''}${showToken ? ' is-token' : ''}`}>
+    <span
+      ref={wrapRef}
+      className={`embed-editor_varconnect${className ? ` ${className}` : ''}${showToken ? ' is-token' : ''}`}
+      // Every way a caret can end up somewhere: typing, clicking into the
+      // field, dragging a selection, arrowing about.
+      // The token editor covers the input it stands for, so the pointer never
+      // reaches it — a field that lights something up while hovered (gap's
+      // bands on the canvas) stayed dark unless it also had focus. Hand enter
+      // and leave over the same way focus and blur are handed over, and only
+      // while the editor is the thing on top; otherwise the input hears them
+      // itself.
+      onMouseEnter={showToken ? (e) => childHandlersRef.current?.onMouseEnter?.(e) : undefined}
+      onMouseLeave={showToken ? (e) => childHandlersRef.current?.onMouseLeave?.(e) : undefined}
+      onKeyUp={readCaret}
+      onMouseUp={readCaret}
+      onInput={readCaret}
+      onSelect={readCaret}
+      // Including the focus the big value editor puts there itself when it
+      // opens — nothing has been typed or clicked at that point, so without
+      // this the first thing you do in it has no recorded position.
+      onFocus={readCaret}
+      onKeyDownCapture={(e) => {
+        // `=` is not something a CSS value starts with, and it is what the
+        // variables sheet already uses — one key, the same everywhere.
+        if (e.key === '=' && !disabled && !big && !expanded) {
+          e.preventDefault()
+          e.stopPropagation()
+          openBig()
+        }
+      }}
+      onMouseDownCapture={(e) => {
+        // …or while the picker is up. It portals to <body>, but a portal is still a
+        // React CHILD, so its presses capture through here: on a value long enough to
+        // open the big editor, choosing a variable was taken as a press on the field —
+        // the pick never landed and the big editor opened over it instead.
+        if (disabled || big || expanded || open) return
+        // The dot and the swatch are their own controls; a press on those means
+        // what it has always meant.
+        const t = e.target
+        if (t instanceof Element && t.closest('.embed-editor_varconnect-dot, .u-color-swatch, .embed-editor_varpicker, .var-custom')) return
+        // Only when the value has outgrown the field. Putting the caret in a
+        // slot showing a third of what is being changed is the worst place in
+        // the app to edit from, and it is exactly where a long value lands you.
+        if (!wrapRef.current || !doesNotFit(wrapRef.current, liveValue())) return
+        e.preventDefault()
+        e.stopPropagation()
+        openBig()
+      }}
+    >
       {prepared}
       {showToken ? (
         <TokenField
@@ -751,9 +992,10 @@ export default function VariableConnect({ onPick, onDraft, disabled, ariaLabel =
           chips={chips}
           chipBare={binding ?? varText}
           chipVar={binding ?? varText}
-          onDraft={onDraft}
+          onDraft={onDraft ?? pushDraft}
           className={`${childClass} embed-editor_varconnect-editor`}
           ariaLabel={ariaLabel}
+          placeholder={childPlaceholder(children)}
           disabled={disabled}
           editorRef={editorRef}
           onFocusField={() => { setActive(true); childHandlers?.onFocus?.(fakeEvent()) }}
@@ -774,6 +1016,7 @@ export default function VariableConnect({ onPick, onDraft, disabled, ariaLabel =
           }}
           onChipClick={() => { if (!disabled) setOpen(true) }}
           code={code}
+          stepMin={stepMin}
         />
       ) : null}
       {/* The dot is how a value with no variable in it reaches the picker. It
@@ -792,6 +1035,14 @@ export default function VariableConnect({ onPick, onDraft, disabled, ariaLabel =
           aria-label={ariaLabel}
           aria-haspopup="dialog"
           aria-expanded={open}
+          onMouseDown={(e) => {
+            // Don't let the press move focus off the field. The picker takes
+            // focus for its search box a moment later either way, but the
+            // caret stays put — and stays visible — rather than the field
+            // going dark the instant the dot is touched.
+            e.preventDefault()
+            readCaret()
+          }}
           onClick={() => setOpen((v) => !v)}
         >
           <PlusIcon />
@@ -804,8 +1055,26 @@ export default function VariableConnect({ onPick, onDraft, disabled, ariaLabel =
           loading={loading}
           prop={prop}
           selectedBinding={isVar ? binding : undefined}
-          onPick={(b) => { onPick(b); setOpen(false) }}
+          // A plain value is replaced; an expression has the variable put in
+          // where the caret was, so picking one inside a calc() no longer
+          // throws the calc away. See insert-binding.ts.
+          onPick={(b) => { onPick(insertBinding(liveValue(), b, caretRef.current)); setOpen(false) }}
           onClose={() => setOpen(false)}
+        />
+      ) : null}
+      {big ? (
+        <CustomValue
+          value={liveValue()}
+          label={prop || ariaLabel}
+          anchor={big}
+          anchorEl={wrapRef.current}
+          onCancel={() => setBig(null)}
+          onSave={(next: string) => {
+            setBig(null)
+            // The same path a picked variable takes — one way in and out of a
+            // field, whether the value came from the picker or was typed.
+            if (next !== value) onPick(next)
+          }}
         />
       ) : null}
     </span>

@@ -1,22 +1,33 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import SegmentPill from './components/SegmentPill'
+import { commitInPlace } from './lib/commit-in-place'
 
 // The value editor for `display`. For values we can represent it shows a
-// segmented bar (Block / Flex / Grid + a None/inline 4th slot). For anything
-// else (var(--x), contents, unset, …) it shows an editable text field. Both
+// segmented bar (Block / Flex / Grid + a 4th slot for the inline set, None and
+// Contents). For anything else (var(--x), unset, table-cell, …) it shows an
+// editable text field. Both
 // modes carry a dropdown arrow: from the bar you can jump to inline values or
 // "Custom"; from a custom value you can jump back to any built-in.
 
 const PRIMARY = ['block', 'flex', 'grid'] as const
 const INLINE = ['inline-block', 'inline-flex', 'inline-grid', 'inline'] as const
-// 4th-slot values (the inline set + none), used to detect the bar's 4th segment.
-const OTHER = [...INLINE, 'none'] as const
+// The two that leave no box of their own: `none` takes the element and its
+// children off the page, `contents` takes only the box, so the children lay out
+// as if the element weren't there. Grouped together in the menu because that is
+// the question they answer — what happens to this element's own box.
+const BOXLESS = ['none', 'contents'] as const
+// 4th-slot values (the inline set + the boxless pair), used to detect the bar's
+// 4th segment.
+const OTHER = [...INLINE, ...BOXLESS] as const
 
 const SUPPORTED: ReadonlySet<string> = new Set<string>([...PRIMARY, ...OTHER])
+export const DISPLAY_VALUES: readonly string[] = [...PRIMARY, ...OTHER]
 
 // Compact labels for the bar's narrow 4th segment.
 const SHORT: Record<string, string> = {
   none: 'None',
+  contents: 'Contents',
   inline: 'Inline',
   'inline-block': 'In-block',
   'inline-flex': 'In-flex',
@@ -25,6 +36,7 @@ const SHORT: Record<string, string> = {
 // Full labels for the dropdown menu.
 const FULL: Record<string, string> = {
   none: 'None',
+  contents: 'Contents',
   inline: 'Inline',
   'inline-block': 'Inline-block',
   'inline-flex': 'Inline-flex',
@@ -38,6 +50,7 @@ const TOOLTIPS: Record<string, ReactNode> = {
   flex: <><strong>Flex</strong> lays out its child elements on a horizontal or vertical axis.</>,
   grid: <><strong>Grid</strong> lets you place items within rows and columns.</>,
   none: <><strong>None</strong> hides elements.</>,
+  contents: <><strong>Contents</strong> removes the element's own box. Its children stay, and lay out as though they were children of its parent.</>,
   'inline-block': <><strong>Inline-block</strong> behaves like inline, but accepts width and height properties.</>,
   'inline-flex': <><strong>Inline-flex</strong> behaves as an inline element. It stacks its content horizontally or vertically.</>,
   'inline-grid': <><strong>Inline-grid</strong> behaves as an inline element. It stacks its content in rows and columns.</>,
@@ -115,7 +128,7 @@ function CustomValueField({
       onChange={(event) => setDraft(event.target.value)}
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; commit() }}
-      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+      onKeyDown={(event) => { if (event.key === 'Enter') commitInPlace(event.currentTarget) }}
       disabled={busy}
       spellCheck={false}
       aria-label="Value"
@@ -217,6 +230,7 @@ export default function DisplayControl({
         <CustomValueField value={value} important={important} busy={busy} inputRef={inputRef} onCommit={onCommit} />
       ) : (
         <>
+          <SegmentPill />
           {PRIMARY.map((option) => (
             <button
               key={option}
@@ -272,7 +286,9 @@ export default function DisplayControl({
                 <MenuItem key={option} label={FULL[option]} selected={current === option} onClick={() => pick(option)} />
               ))}
               <div className="embed-editor_display-menu-divider" />
-              <MenuItem label={FULL.none} selected={current === 'none'} onClick={() => pick('none')} />
+              {BOXLESS.map((option) => (
+                <MenuItem key={option} label={FULL[option]} selected={current === option} onClick={() => pick(option)} />
+              ))}
             </>
           ) : (
             // From the bar: inline values, None, and an escape hatch to Custom.
@@ -281,7 +297,9 @@ export default function DisplayControl({
                 <MenuItem key={option} label={FULL[option]} selected={current === option} onClick={() => pick(option)} />
               ))}
               <div className="embed-editor_display-menu-divider" />
-              <MenuItem label={FULL.none} selected={current === 'none'} onClick={() => pick('none')} />
+              {BOXLESS.map((option) => (
+                <MenuItem key={option} label={FULL[option]} selected={current === option} onClick={() => pick(option)} />
+              ))}
               <div className="embed-editor_display-menu-divider" />
               <MenuItem label="Custom" selected={false} onClick={enterCustom} />
             </>

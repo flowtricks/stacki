@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { GroupLabel } from './TypographySection'
+import FieldLabel from './components/FieldLabel'
+import { PropTip } from './components/PropTip'
 import Select, { type SelectOption } from './components/Select'
 import SegmentedControl, { HoverTooltip, type SegmentedOption } from './components/SegmentedControl'
 import GridSettings from './GridSettings'
 import VariableConnect from './VariableConnect'
 import type { ResolvedProp } from './lib/resolved'
+import { useComputedChoice } from './lib/computed-style'
+import { commitInPlace } from './lib/commit-in-place'
 
 // The grid controls in the Layout section (shown when Display is grid). Mirrors
 // Webflow: Columns/Rows track counts, Direction (+ dense), Align (justify-items X /
@@ -40,6 +44,23 @@ const GRID_FLOW: ReadonlyArray<SegmentedOption<string>> = [
 // Item alignment (justify-items = X, align-items = Y), Webflow's order.
 const GRID_ITEM_ALIGN = ['start', 'center', 'end', 'stretch', 'baseline']
 const GRID_CONTENT = ['start', 'center', 'end', 'stretch', 'space-between', 'space-around', 'space-evenly']
+
+// Box alignment has flex-flavoured synonyms for the same positions, and the Flex
+// settings block writes those (`justify-content: flex-start` is valid on a grid
+// container and behaves as `start`). Fold them onto the grid spelling for DISPLAY, so
+// a value authored there — or by hand — still lands on a preset instead of dropping
+// the control into its raw-value input. The declaration itself is left alone until
+// the user picks something.
+const GRID_SYNONYMS: Record<string, string> = {
+  'flex-start': 'start',
+  'flex-end': 'end',
+  'self-start': 'start',
+  'self-end': 'end',
+  left: 'start',
+  right: 'end',
+  normal: 'stretch',
+}
+const gridKeyword = (value: string) => GRID_SYNONYMS[value] ?? value
 
 // Webflow's grid align-self glyphs — the Column set drives X (justify-items), the Row
 // set drives Y (align-items). Keyed by grid keyword.
@@ -251,7 +272,7 @@ function TemplateField({ value, busy, ariaLabel, onCommit }: { value: string; bu
   const focused = useRef(false)
   useEffect(() => { if (!focused.current) setText(value) }, [value])
   return (
-    <VariableConnect ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop="grid-template-columns" onPick={(binding) => onCommit(binding)}>
+    <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop="grid-template-columns" onPick={(binding) => onCommit(binding)}>
       <input
         className="u-input embed-editor_size-input"
         value={text}
@@ -262,7 +283,7 @@ function TemplateField({ value, busy, ariaLabel, onCommit }: { value: string; bu
         onChange={(e) => setText(e.target.value)}
         onFocus={() => { focused.current = true }}
         onBlur={() => { focused.current = false; onCommit(text.trim()) }}
-        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        onKeyDown={(e) => { if (e.key === 'Enter') commitInPlace(e.currentTarget) }}
       />
     </VariableConnect>
   )
@@ -335,7 +356,7 @@ function GridDirectionControl({ value, busy, onSet, onCommitCustom }: {
             onChange={(e) => setDraft(e.target.value)}
             onFocus={() => { focused.current = true }}
             onBlur={() => { focused.current = false; commitCustom() }}
-            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+            onKeyDown={(e) => { if (e.key === 'Enter') commitInPlace(e.currentTarget) }}
             disabled={busy}
             spellCheck={false}
             placeholder="e.g. row dense"
@@ -373,15 +394,18 @@ function GridDirectionControl({ value, busy, onSet, onCommitCustom }: {
 // segments + a dropdown arrow whose menu swaps to a free-value field (a value outside
 // the presets — a CSS-wide keyword, var(), … — shows the field automatically).
 // Mirrors GridDirectionControl.
-function GridContentControl({ value, vertical, ariaLabel, busy, onSet, onCommitCustom }: {
+function GridContentControl({ value, prop, vertical, ariaLabel, busy, onSet, onCommitCustom }: {
   value: string
+  /** The property this bar edits — its computed value highlights an unset control. */
+  prop: string
   vertical: boolean
   ariaLabel: string
   busy: boolean
   onSet: (value: string) => void
   onCommitCustom: (value: string, important: boolean) => void
 }) {
-  const cur = value.trim().toLowerCase()
+  const cur = gridKeyword(value.trim().toLowerCase())
+  const computed = gridKeyword(useComputedChoice(cur ? '' : prop, [...GRID_CONTENT, ...Object.keys(GRID_SYNONYMS)]))
   const [forceCustom, setForceCustom] = useState(false)
   const customMode = forceCustom || (!!cur && !GRID_CONTENT.includes(cur))
   const [open, setOpen] = useState(false)
@@ -413,7 +437,7 @@ function GridContentControl({ value, vertical, ariaLabel, busy, onSet, onCommitC
   const pickPreset = (v: string) => { setOpen(false); setForceCustom(false); onSet(v) }
   const commitCustom = () => { const p = parseImportant(draft); if (p.value) onCommitCustom(p.value, p.important) }
   // Unset → show stretch selected (grid's default); a known value shows itself.
-  const segValue = cur ? (GRID_CONTENT.includes(cur) ? cur : '') : 'stretch'
+  const segValue = cur ? (GRID_CONTENT.includes(cur) ? cur : '') : (computed || 'stretch')
 
   return (
     <div ref={rootRef} className={`embed-editor_grid-dir-bar ${customMode ? 'is-custom' : ''}`}>
@@ -425,7 +449,7 @@ function GridContentControl({ value, vertical, ariaLabel, busy, onSet, onCommitC
           onChange={(e) => setDraft(e.target.value)}
           onFocus={() => { focused.current = true }}
           onBlur={() => { focused.current = false; commitCustom() }}
-          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+          onKeyDown={(e) => { if (e.key === 'Enter') commitInPlace(e.currentTarget) }}
           disabled={busy}
           spellCheck={false}
           placeholder="custom value"
@@ -485,7 +509,7 @@ function CountField({ value, busy, ariaLabel, onCommit }: { value: number; busy:
         onFocus={() => { focused.current = true }}
         onBlur={() => { focused.current = false; commit(text) }}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') { e.currentTarget.blur(); return }
+          if (e.key === 'Enter') { commitInPlace(e.currentTarget); return }
           if (e.key === 'ArrowUp') { e.preventDefault(); step(1) }
           else if (e.key === 'ArrowDown') { e.preventDefault(); step(-1) }
         }}
@@ -566,7 +590,7 @@ function GridAxisCustomInput({ value, busy, ariaLabel, autoFocus, onCommit, onCl
       onChange={(e) => setDraft(e.target.value)}
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; commit() }}
-      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+      onKeyDown={(e) => { if (e.key === 'Enter') commitInPlace(e.currentTarget) }}
       disabled={busy}
       spellCheck={false}
       placeholder="unset"
@@ -578,20 +602,29 @@ function GridAxisCustomInput({ value, busy, ariaLabel, autoFocus, onCommit, onCl
 
 // One grid align axis (X = justify-items, Y = align-items): the icon dropdown plus a
 // trailing "Custom" option that seeds `unset` and swaps in a free-value field for any
-// keyword the presets don't cover (matching the flex Align axes).
-function GridAlignAxis({ axis, value, busy, onSet, onPreview, onClear }: {
+// keyword the presets don't cover (matching the flex Align axes). The X / Y label owns
+// clear / provenance for that axis's property, so the two reset independently.
+function GridAlignAxis({ axis, prop, value, busy, read, onSet, onPreview, onClear, onProvenance, onSelectSelector }: {
   axis: 'X' | 'Y'
+  prop: string
   value: string
   busy: boolean
+  read: Read
   onSet: (value: string) => void
   /** Live-preview the hovered option; `null` restores the committed value. */
   onPreview: (value: string | null) => void
   onClear: () => void
+  onProvenance: (prop: string, anchor: DOMRect) => void
+  onSelectSelector: (selector: string, prop?: string) => void
 }) {
   const [forceCustom, setForceCustom] = useState(false)
   const present = Boolean(value)
-  const known = GRID_ITEM_ALIGN.includes(value)
+  const shown = gridKeyword(value)
+  const known = GRID_ITEM_ALIGN.includes(shown)
   const customMode = forceCustom || (present && !known)
+  // Unset → what the page computes for this element before falling back to grid's
+  // own `stretch` default.
+  const computed = useComputedChoice(present ? '' : prop, GRID_ITEM_ALIGN)
   const labels = axis === 'X' ? X_ALIGN_LABELS : Y_ALIGN_LABELS
   const icons = axis === 'X' ? X_ALIGN_ICONS : Y_ALIGN_ICONS
   const options: SelectOption<string>[] = GRID_ITEM_ALIGN.map((v) => ({ value: v, label: labels[v], icon: <GridAlignIcon paths={icons[v]} /> }))
@@ -603,11 +636,19 @@ function GridAlignAxis({ axis, value, busy, onSet, onPreview, onClear }: {
   }
   return (
     <div className="embed-editor_align-axis">
-      <span className="embed-editor_align-axis-label">{axis}</span>
+      <GroupLabel
+        label={axis}
+        props={[prop]}
+        read={read}
+        busy={busy}
+        onClear={onClear}
+        onProvenance={onProvenance}
+        onSelectSelector={onSelectSelector}
+      />
       {/* Grid's initial justify-items / align-items behave as stretch, so an unset axis
-          shows Stretch (Webflow's default). Clear via the row's Align label. */}
+          shows Stretch (Webflow's default). Clear via this axis's X / Y label. */}
       <Select
-        value={customMode ? AXIS_CUSTOM : (known ? value : 'stretch')}
+        value={customMode ? AXIS_CUSTOM : (known ? shown : (computed || 'stretch'))}
         options={options}
         ariaLabel={`Align ${axis}`}
         disabled={busy}
@@ -663,11 +704,15 @@ export default function GridControls({ read, busy, setProp, clearProp, liveSetPr
   const alignAxis = (axis: 'X' | 'Y', prop: string) => (
     <GridAlignAxis
       axis={axis}
+      prop={prop}
       value={val(prop).toLowerCase()}
       busy={busy}
+      read={read}
       onSet={(v) => setProp(prop, v, false)}
       onPreview={(v) => liveSetProp(prop, v, false)}
       onClear={() => clearProp(prop)}
+      onProvenance={onProvenance}
+      onSelectSelector={onSelectSelector}
     />
   )
   // Content distribution as a Webflow-style icon segmented control. `vertical` rotates
@@ -677,6 +722,7 @@ export default function GridControls({ read, busy, setProp, clearProp, liveSetPr
       <GroupLabel label={label} props={[prop]} read={read} busy={busy} onClear={() => clearProp(prop)} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
       <GridContentControl
         value={val(prop)}
+        prop={prop}
         vertical={vertical}
         ariaLabel={label}
         busy={busy}
@@ -728,9 +774,10 @@ export default function GridControls({ read, busy, setProp, clearProp, liveSetPr
       </div>
 
       <div className="embed-editor_size-row embed-editor_bg-row-top embed-editor_align-row">
-        <GroupLabel label="Align" props={['justify-items', 'align-items']} read={read} busy={busy} onClear={() => clearProp(['justify-items', 'align-items'])} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
+        {/* Inert caption — the X / Y labels below own clear / provenance per axis. */}
+        <FieldLabel className="embed-editor_size-label" active={false} disabled={busy} onReset={() => {}} tooltip={<PropTip props={['justify-items', 'align-items']} />}>Align</FieldLabel>
         <div className="embed-editor_align">
-          <GridAlignBox justifyItems={val('justify-items').toLowerCase()} alignItems={val('align-items').toLowerCase()} busy={busy} onSet={(p, v) => setProp(p, v, false)} />
+          <GridAlignBox justifyItems={gridKeyword(val('justify-items').toLowerCase())} alignItems={gridKeyword(val('align-items').toLowerCase())} busy={busy} onSet={(p, v) => setProp(p, v, false)} />
           <div className="embed-editor_align-axes">
             {alignAxis('X', 'justify-items')}
             {alignAxis('Y', 'align-items')}

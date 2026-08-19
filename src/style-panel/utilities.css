@@ -479,6 +479,18 @@
 }
 .u-segmented-tooltip strong,
 .u-segmented-popup strong { color: var(--color-text-primary); font-weight: var(--font-weight-semibold); }
+
+/* Property-name tooltip (PropTip.tsx): the CSS property in mono, with an optional
+   note — "set through another selector", "overridden by …" — beneath it. */
+.u-prop-tip {
+  display: block;
+  font-family: var(--font-family-mono);
+  color: var(--color-text-primary);
+}
+.u-prop-tip-note {
+  margin-top: var(--space-2);
+  color: var(--color-text-tertiary);
+}
 .u-segmented-tooltip-arrow,
 .u-segmented-popup-arrow { position: absolute; border: 6px solid transparent; }
 
@@ -615,7 +627,11 @@
 .u-drag-slider {
   position: relative;
   flex: 1 1 auto;
-  min-width: 0;
+  /* Everything inside it is absolutely positioned, so its content width is 0 —
+     and as the only shrinkable thing in most of its rows, a tight row squeezed
+     it to nothing and left the thumb sitting on its own. A slider narrower than
+     this is not a slider. */
+  min-width: 72px;
   height: var(--size-control-md);
   display: flex;
   align-items: center;
@@ -720,7 +736,14 @@
   cursor: pointer;
   transition: background var(--transition-fast), box-shadow var(--transition-fast);
 }
-.u-select-button:hover { background: var(--surface-control-hover); }
+/* Hover lays the house's 5%-white lift OVER whatever the control is painted,
+   rather than swapping the colour for the next one on the ramp. Three reasons:
+   a ramp step is a different shade, so the control reads as swapped rather than
+   pointed at; at the top of the ramp there is no next step, so the deepest
+   panels had no hover at all; and a colour computed from a token is only
+   brighter if that token is what actually painted the button — an overlay is
+   brighter than whatever is under it, whichever rule put it there. */
+.u-select-button:hover { background-image: linear-gradient(var(--color-bg-hover), var(--color-bg-hover)); }
 .u-select-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 var(--border-width-default) var(--color-border-focus);
@@ -946,6 +969,12 @@
   pointer-events: none;
 }
 
+/* A dim caption is inert so clicks reach the field beneath it — except when it
+   carries a hover tooltip naming its CSS property, which needs the pointer. */
+.u-field-label.is-hoverable {
+  pointer-events: auto;
+}
+
 .u-field-label-wrap {
   position: relative;
   display: inline-flex;
@@ -1146,12 +1175,18 @@
 .u-color-channels { flex: 3; display: flex; gap: var(--space-1); min-width: 0; }
 .u-color-field-input {
   width: 100%;
-  padding: 5px var(--space-1);
+  padding: 5px var(--space-2);
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
   text-align: center;
 }
-.u-color-field.is-wide .u-color-field-input { text-align: left; }
+/* The hex field reads from the left, so its text needs room at that edge — 2px
+   of it sat the `#` on the border. The centred channel fields never showed
+   this, because centred text is nowhere near either edge. */
+.u-color-field.is-wide .u-color-field-input {
+  text-align: left;
+  padding-inline: var(--space-4);
+}
 /* Label row (matches the input columns above): HEX and A are static labels; the
    middle spans the three channel fields and IS the notation toggle. */
 .u-color-modes { display: flex; gap: var(--space-1); align-items: center; }
@@ -1161,8 +1196,38 @@
   font-size: var(--font-size-2xs);
   color: var(--color-text-tertiary);
 }
-.u-color-mode-static.is-hex { flex: 1.8; text-align: left; padding-left: var(--space-2); }
 .u-color-mode-static.is-alpha { flex: 1; }
+/* The HEX label is a notation too, so it is a button like the channel pill —
+   quiet until it is the one being written. */
+.u-color-mode.is-hex {
+  flex: 1.8;
+  text-align: left;
+  padding: 4px var(--space-4);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  box-shadow: none;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-2xs);
+  cursor: pointer;
+}
+.u-color-mode.is-hex:hover { color: var(--color-text-secondary); }
+.u-color-mode.is-hex.is-on {
+  background: var(--color-bg-surface-high);
+  box-shadow: inset 0 0 0 1px var(--color-border-default);
+  color: var(--color-text-primary);
+}
+/* …and while hex is the notation, the letters beside it are only labelling the
+   numbers, so they drop back to matching weight. */
+.u-color-mode.is-channel.is-off {
+  background: none;
+  box-shadow: none;
+  color: var(--color-text-tertiary);
+}
+.u-color-mode.is-channel.is-off:hover {
+  background: none;
+  color: var(--color-text-secondary);
+}
 /* The cycling channel button: spans the three channel columns, its letters sitting
    over each field. Always shows Webflow's blue-ringed pill (press to cycle). */
 .u-color-mode.is-channel {

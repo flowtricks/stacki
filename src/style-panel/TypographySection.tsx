@@ -1,20 +1,26 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import FieldLabel from './components/FieldLabel'
+import { PropTip, ProvenanceLabel } from './components/PropTip'
 import Select, { type SelectOption } from './components/Select'
 import SegmentedControl from './components/SegmentedControl'
 import ColorSwatch from './components/ColorSwatch'
+import { useLiveColor } from './lib/live-color'
 import { ShadowNum, ShadowColorRow } from './ShadowFields'
 import { handleArrowStep } from './lib/number-step'
 import { panelBounds } from './lib/panel-box'
 import { getProjectFontFamilies } from './lib/webflow'
 import { parseShadows, serializeShadows, blankShadow, shadowLabel, type Shadow } from './lib/text-shadow'
+import { parseHideable, serializeHideable, type Hideable } from './lib/hideable'
 import LayerList from './LayerList'
 import LayerPopover from './LayerPopover'
 import ProvenanceList from './ProvenanceList'
 import VariableConnect from './VariableConnect'
 import type { Contributor, ResolvedProp } from './lib/resolved'
 import { splitTopLevelSpaces } from './lib/background'
+import { useComputedChoice } from './lib/computed-style'
+import SegmentPill from './components/SegmentPill'
+import { commitInPlace } from './lib/commit-in-place'
 
 // The Typography section of the style panel. Like the Size section, every control
 // is always rendered and driven by the resolved model: a property is blue when the
@@ -125,9 +131,11 @@ function DirectionRTLIcon() {
 // A typography control's label: blue (picked selector sets it) → FieldLabel with a
 // clear menu; orange (another selector) → a button opening provenance; unset → a
 // dim caption. Mirrors the Size section's SizeLabel.
-export function PropLabel({ label, prop, d, contributors, busy, onClear, onProvenance, onSelectSelector }: {
+export function PropLabel({ label, prop, tipProps, d, contributors, busy, onClear, onProvenance, onSelectSelector }: {
   label: string
   prop: string
+  /** Properties named in the hover tooltip — defaults to the one `prop` shown. */
+  tipProps?: readonly string[]
   d: Display
   contributors: Contributor[]
   busy: boolean
@@ -135,18 +143,9 @@ export function PropLabel({ label, prop, d, contributors, busy, onClear, onProve
   onProvenance: (prop: string, anchor: DOMRect) => void
   onSelectSelector: (selector: string, prop?: string) => void
 }) {
+  const tip = tipProps ?? [prop]
   if (d.present && !d.isSelected) {
-    return (
-      <button
-        type="button"
-        className="embed-editor_size-label embed-editor_prop-orange"
-        disabled={busy}
-        title="Set through another selector — click to see all"
-        onClick={(event) => onProvenance(prop, event.currentTarget.getBoundingClientRect())}
-      >
-        {label}
-      </button>
-    )
+    return <ProvenanceLabel label={label} props={tip} anchorProp={prop} busy={busy} onProvenance={onProvenance} />
   }
   return (
     <FieldLabel
@@ -155,6 +154,7 @@ export function PropLabel({ label, prop, d, contributors, busy, onClear, onProve
       disabled={busy}
       onReset={onClear}
       resetLabel="Clear"
+      tooltip={<PropTip props={tip} />}
       title={d.overridden ? `Overridden by ${d.winnerSelector}` : undefined}
       menuNote={(close) => <ProvenanceList contributors={contributors} prop={prop} onSelect={(sel, p) => { onSelectSelector(sel, p); close() }} />}
     >
@@ -184,6 +184,7 @@ export function GroupLabel({ label, props, read, busy, onClear, onProvenance, on
     <PropLabel
       label={label}
       prop={prop}
+      tipProps={props}
       d={displayOf(read(prop))}
       contributors={read(prop)?.contributors ?? []}
       busy={busy}
@@ -241,7 +242,7 @@ export function LiveInput({ value, busy, placeholder, ariaLabel, className, data
   }
 
   return (
-    <VariableConnect ariaLabel={`Connect ${ariaLabel || 'value'} to a variable`} disabled={busy} prop={prop} onPick={(binding) => onCommit(binding, false)}>
+    <VariableConnect code ariaLabel={`Connect ${ariaLabel || 'value'} to a variable`} disabled={busy} prop={prop} onPick={(binding) => onCommit(binding, false)}>
       <input
         ref={inputRef}
         className={className}
@@ -251,7 +252,7 @@ export function LiveInput({ value, busy, placeholder, ariaLabel, className, data
         onFocus={() => { focused.current = true }}
         onBlur={() => { focused.current = false; cancelLive(); commit() }}
         onKeyDown={(event) => {
-          if (event.key === 'Enter') { event.currentTarget.blur(); return }
+          if (event.key === 'Enter') { commitInPlace(event.currentTarget); return }
           const stepped = handleArrowStep(event)
           if (!stepped) return
           event.preventDefault()
@@ -273,17 +274,34 @@ export function LiveInput({ value, busy, placeholder, ariaLabel, className, data
 
 // A label + text field bound to one property. An optional swatch (color field)
 // renders inside the field to the left of the input.
-function TextField({ prop, label, placeholder, swatch, read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: {
+function TextField({ prop, label, placeholder, swatch, swatchLabel, read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: {
   prop: string
   label: string
   placeholder?: string
   swatch?: ReactNode
+  /** Render a colour swatch for this same property before the field. Owned here
+   *  rather than passed in as `swatch` so a drag on it shows in the field: the
+   *  drag writes to the canvas, not to the model this field reads. */
+  swatchLabel?: string
 } & Props) {
   const d = displayOf(read(prop))
   const external = d.present ? joinImportant(d.value, d.important) : ''
+  const [shown, noteLive] = useLiveColor(external)
+  const ownSwatch = swatchLabel ? (
+    <ColorSwatch
+      value={shown}
+      busy={busy}
+      ariaLabel={swatchLabel}
+      onChange={(color, live) => {
+        noteLive(live ? color : null)
+        if (live) liveSetProp(prop, color, false)
+        else setProp(prop, color, false)
+      }}
+    />
+  ) : null
   const input = (
     <LiveInput
-      value={external}
+      value={shown}
       busy={busy}
       placeholder={placeholder}
       ariaLabel={label}
@@ -298,7 +316,7 @@ function TextField({ prop, label, placeholder, swatch, read, busy, setProp, clea
   return (
     <>
       <PropLabel label={label} prop={prop} d={d} contributors={read(prop)?.contributors ?? []} busy={busy} onClear={() => clearProp(prop)} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
-      {swatch ? <div className="embed-editor_type-field">{swatch}{input}</div> : input}
+      {ownSwatch ?? swatch ? <div className="embed-editor_type-field">{ownSwatch ?? swatch}{input}</div> : input}
     </>
   )
 }
@@ -592,6 +610,7 @@ export function SegBar({ segs, current, ariaLabel, prop, busy, onCommit, onLiveC
 
   return (
     <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label={ariaLabel}>
+      <SegmentPill />
       {customMode ? (
         <LiveInput
           value={seed ?? current}
@@ -667,8 +686,10 @@ const ALIGN_SEGS: readonly Seg[] = [
 
 function AlignRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Props) {
   const d = displayOf(read('text-align'))
-  // No text-align set → CSS defaults to `left` (start, LTR), so show that active.
-  const current = (d.present ? d.value.trim().toLowerCase() : 'left') || 'left'
+  // Nothing set here → what the page computes for this element (text-align inherits,
+  // so that's usually a parent's), falling back to `left` (start, LTR).
+  const computed = useComputedChoice(d.present ? '' : 'text-align', ALIGN_SEGS.map((s) => s.value))
+  const current = (d.present ? d.value.trim().toLowerCase() : (computed || 'left')) || 'left'
   return (
     <div className="embed-editor_size-row">
       <PropLabel label="Align" prop="text-align" d={d} contributors={read('text-align')?.contributors ?? []} busy={busy} onClear={() => clearProp('text-align')} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
@@ -763,7 +784,8 @@ function SegCell({ prop, label, ariaLabel, segs, fallback, read, busy, setProp, 
   fallback: string
 } & Props) {
   const d = displayOf(read(prop))
-  const current = (d.present ? d.value.trim().toLowerCase() : fallback) || fallback
+  const computed = useComputedChoice(d.present ? '' : prop, segs.map((s) => s.value))
+  const current = (d.present ? d.value.trim().toLowerCase() : (computed || fallback)) || fallback
   return (
     <div className="embed-editor_type-cell">
       <SegBar
@@ -784,11 +806,9 @@ function SegCell({ prop, label, ariaLabel, segs, fallback, read, busy, setProp, 
 // ─────────────────────────── Color ───────────────────────────
 
 function ColorField(props: Props) {
-  const d = displayOf(props.read('color'))
-  const swatch = <ColorSwatch value={d.present ? d.value : ''} busy={props.busy} ariaLabel="Text color" onChange={(c, live) => { if (live) props.liveSetProp('color', c, false); else props.setProp('color', c, false) }} />
   return (
     <div className="embed-editor_size-row">
-      <TextField prop="color" label="Color" placeholder="currentColor" swatch={swatch} {...props} />
+      <TextField prop="color" label="Color" placeholder="currentColor" swatchLabel="Text color" {...props} />
     </div>
   )
 }
@@ -836,17 +856,7 @@ function PopLabel({ label, prop, read, busy, clearProp, onProvenance, onSelectSe
   const resolved = read(prop)
   const d = displayOf(resolved)
   if (d.present && !d.isSelected) {
-    return (
-      <button
-        type="button"
-        className="embed-editor_size-label embed-editor_prop-orange"
-        disabled={busy}
-        title="Set through another selector — click to see all"
-        onClick={(event) => onProvenance(prop, event.currentTarget.getBoundingClientRect())}
-      >
-        {label}
-      </button>
-    )
+    return <ProvenanceLabel label={label} props={[prop]} busy={busy} onProvenance={onProvenance} />
   }
   return (
     <FieldLabel
@@ -855,6 +865,7 @@ function PopLabel({ label, prop, read, busy, clearProp, onProvenance, onSelectSe
       disabled={busy}
       onReset={onClear ?? (() => clearProp(prop))}
       resetLabel="Clear"
+      tooltip={<PropTip props={[prop]} />}
       title={d.overridden ? `Overridden by ${d.winnerSelector}` : undefined}
       menuNote={(close) => <ProvenanceList contributors={resolved?.contributors ?? []} prop={prop} onSelect={(sel, p) => { onSelectSelector(sel, p); close() }} />}
     >
@@ -892,7 +903,8 @@ function LenRow({ prop, label, placeholder, read, busy, setProp, clearProp, live
 
 function RuleStyleRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onProvenance' | 'onSelectSelector'>) {
   const d = displayOf(read('column-rule-style'))
-  const current = (d.present ? d.value.trim().toLowerCase() : 'none') || 'none'
+  const computed = useComputedChoice(d.present ? '' : 'column-rule-style', RULE_STYLE_SEGS.map((s) => s.value))
+  const current = (d.present ? d.value.trim().toLowerCase() : (computed || 'none')) || 'none'
   return (
     <div className="embed-editor_size-row">
       <PopLabel label="Style" prop="column-rule-style" read={read} busy={busy} clearProp={clearProp} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
@@ -913,14 +925,30 @@ function RuleStyleRow({ read, busy, setProp, clearProp, liveSetProp, onProvenanc
 function RuleColorRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onProvenance' | 'onSelectSelector'>) {
   const d = displayOf(read('column-rule-color'))
   const external = d.present ? joinImportant(d.value, d.important) : ''
-  const swatch = <ColorSwatch value={d.present ? d.value : ''} busy={busy} ariaLabel="Divider color" onChange={(c, live) => { if (live) liveSetProp('column-rule-color', c, false); else setProp('column-rule-color', c, false) }} />
+  // A live drag writes to the canvas, not to the model this row reads — so the
+  // colour it emitted is what the swatch and the field show until the model
+  // catches up. Without this the page moved under the pointer while the number
+  // beside it sat still (see live-color.ts).
+  const [shown, noteLive] = useLiveColor(external)
+  const swatch = (
+    <ColorSwatch
+      value={shown.replace(/\s*!important\s*$/i, '').trim()}
+      busy={busy}
+      ariaLabel="Divider color"
+      onChange={(c, live) => {
+        noteLive(live ? c : null)
+        if (live) liveSetProp('column-rule-color', c, false)
+        else setProp('column-rule-color', c, false)
+      }}
+    />
+  )
   return (
     <div className="embed-editor_size-row">
       <PopLabel label="Color" prop="column-rule-color" read={read} busy={busy} clearProp={clearProp} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
       <div className="embed-editor_type-field">
         {swatch}
         <LiveInput
-          value={external}
+          value={shown}
           busy={busy}
           placeholder="Set a color"
           ariaLabel="Divider color"
@@ -938,7 +966,8 @@ function RuleColorRow({ read, busy, setProp, clearProp, liveSetProp, onProvenanc
 
 function SpanRow({ read, busy, setProp, clearProp, onProvenance, onSelectSelector }: Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'onProvenance' | 'onSelectSelector'>) {
   const d = displayOf(read('column-span'))
-  const value = (d.present ? d.value.trim().toLowerCase() : 'none') === 'all' ? 'all' : 'none'
+  const computed = useComputedChoice(d.present ? '' : 'column-span', ['none', 'all'])
+  const value = (d.present ? d.value.trim().toLowerCase() : computed || 'none') === 'all' ? 'all' : 'none'
   return (
     <div className="embed-editor_size-row">
       <PopLabel label="Span" prop="column-span" read={read} busy={busy} clearProp={clearProp} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
@@ -1246,6 +1275,9 @@ function EnumSelect({ prop, ariaLabel, fallback, options: opts, forceCustom, set
   const values = new Set(opts.map(([value]) => value))
   const current = d.present ? d.value.trim().toLowerCase() : ''
   const matched = values.has(current) ? current : undefined
+  // Unset → show what the page computes for this element (an inherited value, a rule
+  // the panel's matcher can't see), and only then the CSS default.
+  const computed = useComputedChoice(matched ? '' : prop, opts.map(([value]) => value))
   const customMode = forceCustom || (d.present && !matched)
 
   const options: SelectOption<string>[] = opts.map(([value, optLabel]) => ({ value, label: optLabel }))
@@ -1278,7 +1310,7 @@ function EnumSelect({ prop, ariaLabel, fallback, options: opts, forceCustom, set
 
   return (
     <Select
-      value={customMode ? CUSTOM : (matched ?? fallback)}
+      value={customMode ? CUSTOM : (matched ?? (computed || fallback))}
       options={options}
       onChange={pick}
       onPreview={(value) => liveSetProp(prop, value === CUSTOM ? null : value, false)}
@@ -1355,7 +1387,10 @@ function WrapRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, on
 
 function TruncateRow({ read, busy, setProp, clearProp, onProvenance, onSelectSelector }: Props) {
   const d = displayOf(read('text-overflow'))
-  const current = d.present && d.value.trim().toLowerCase() === 'ellipsis' ? 'ellipsis' : 'clip'
+  const computed = useComputedChoice(d.present ? '' : 'text-overflow', ['clip', 'ellipsis'])
+  const current = d.present
+    ? (d.value.trim().toLowerCase() === 'ellipsis' ? 'ellipsis' : 'clip')
+    : (computed || 'clip')
   return (
     <div className="embed-editor_size-row">
       <PropLabel label="Truncate" prop="text-overflow" d={d} contributors={read('text-overflow')?.contributors ?? []} busy={busy} onClear={() => clearProp('text-overflow')} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
@@ -1417,22 +1452,24 @@ function ShadowEditor({ shadow, busy, onChange }: { shadow: Shadow; busy: boolea
 
 function TextShadowsRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Props) {
   const d = displayOf(read('text-shadow'))
-  const shadows = parseShadows(d.present ? d.value : '')
+  const rows = parseHideable(d.present ? d.value : '', ',', parseShadows)
+  const shadows = rows.map((r) => r.item)
   const [openIdx, setOpenIdx] = useState<number | null>(null)
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
-  const write = (next: Shadow[], live: boolean) => {
-    const value = serializeShadows(next)
+  const write = (next: Array<Hideable<Shadow>>, live: boolean) => {
+    const value = serializeHideable(next, ',', serializeShadows)
     if (live) { if (value) liveSetProp('text-shadow', value, false); return }
     if (value) setProp('text-shadow', value, false); else clearProp('text-shadow')
   }
-  const add = () => { const next = [...shadows, blankShadow()]; write(next, false); setOpenIdx(next.length - 1) }
-  const remove = (i: number) => { write(shadows.filter((_, j) => j !== i), false); setOpenIdx((cur) => (cur === i ? null : cur != null && cur > i ? cur - 1 : cur)) }
+  const add = () => { const next = [...rows, { item: blankShadow(), hidden: false }]; write(next, false); setOpenIdx(next.length - 1) }
+  const remove = (i: number) => { write(rows.filter((_, j) => j !== i), false); setOpenIdx((cur) => (cur === i ? null : cur != null && cur > i ? cur - 1 : cur)) }
   const reorder = (from: number, to: number) => {
     if (from === to) return
-    const next = [...shadows]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); write(next, false)
+    const next = [...rows]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); write(next, false)
     setOpenIdx((cur) => (cur === from ? to : cur))
   }
-  const patch = (i: number, p: Partial<Shadow>, live: boolean) => write(shadows.map((s, j) => (j === i ? { ...s, ...p } : s)), live)
+  const patch = (i: number, p: Partial<Shadow>, live: boolean) => write(rows.map((r, j) => (j === i ? { ...r, item: { ...r.item, ...p } } : r)), live)
+  const toggle = (i: number) => write(rows.map((r, j) => (j === i ? { ...r, hidden: !r.hidden } : r)), false)
 
   return (
     <div className="embed-editor_type-shadows">
@@ -1444,9 +1481,11 @@ function TextShadowsRow({ read, busy, setProp, clearProp, liveSetProp, onProvena
         count={shadows.length}
         busy={busy}
         ariaLabel="Text shadows"
-        onOpen={(i, el) => { setOpenIdx(i); setAnchorEl(el) }}
+        onOpen={(i, el) => { setOpenIdx((cur) => (cur === i ? null : i)); setAnchorEl(el) }}
         onReorder={reorder}
         onRemove={remove}
+        isHidden={(i) => rows[i]?.hidden ?? false}
+        onToggleHidden={toggle}
         renderRow={(i) => ({
           preview: <span className="embed-editor_bg-layer-preview" style={{ background: `linear-gradient(${shadows[i].color}, ${shadows[i].color}), conic-gradient(#8883 25%, transparent 0 50%, #8883 0 75%, transparent 0) 0 0 / 10px 10px` }} aria-hidden="true" />,
           label: shadowLabel(shadows[i]),

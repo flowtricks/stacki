@@ -52,6 +52,11 @@ function parseNormalized(s: string): RGBA | null {
 
 // A minimal fallback for non-DOM contexts (tests) — hex + rgb/rgba only.
 function parseColorFallback(value: string): RGBA | null {
+  // The one keyword worth knowing without a canvas: it is what an unset colour
+  // is written as all over this panel, and a browser normalizes it to exactly
+  // this. Left out, the fallback answers "not a colour" for the value the panel
+  // shows most often.
+  if (value.toLowerCase() === 'transparent') return { r: 0, g: 0, b: 0, a: 0 }
   const hex = /^#([0-9a-f]{3,8})$/i.exec(value)
   if (hex) {
     let h = hex[1]

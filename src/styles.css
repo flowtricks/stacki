@@ -62,7 +62,14 @@ button {
   justify-content: center;
   gap: 6px;
 }
-button:hover:not(:disabled) { background: var(--bg-active); }
+/* Not inside the style panel: that panel styles its own controls, and this
+   rule was quietly winning over them. It is more specific than a panel rule
+   like `.u-select-button:hover` (a type selector's worth more), and it sets the
+   background shorthand — so a dropdown's own opaque colour was thrown away on
+   hover and replaced by a faint white wash over the panel *behind* it, which
+   lands darker than the control. Hovering made things dimmer.
+   `:where()` keeps the exclusion from changing what this rule beats elsewhere. */
+button:hover:not(:disabled):where(:not(.style-panel-host *)) { background: var(--bg-active); }
 button:disabled { opacity: 0.4; cursor: default; }
 button.primary { background: var(--accent); color: white; font-weight: 600; }
 button.primary:hover:not(:disabled) { background: #24a8ff; }
@@ -82,7 +89,11 @@ input, select, textarea {
   width: 100%;
   transition: border-color 0.1s, background 0.1s;
 }
-input:hover, select:hover, textarea:hover { background: rgba(255, 255, 255, 0.08); }
+/* No hover on a field. A button lights up because pressing it does something;
+   a field just sits there holding a value, and lighting it under the pointer
+   made the panel twitch on the way past. Focus is where a field changes — see
+   below. (This used to paint every input, the style panel's included, which is
+   why the panel's fields flickered on the way to a control.) */
 input:focus, select:focus, textarea:focus {
   border-color: var(--accent);
   background: var(--bg-input);
@@ -90,6 +101,20 @@ input:focus, select:focus, textarea:focus {
 input[type='checkbox'] {
   width: auto;
   accent-color: var(--accent);
+}
+
+/* Focus, in this app's colour.
+   Left to the browser, the ring is drawn in whatever Chromium takes from the
+   system — which is not this interface's blue, and here came out orange on
+   every row, button and field that took focus. Replaced rather than removed:
+   the ring is how anyone working from the keyboard knows where they are, and a
+   window with no focus indicator is a window you can get lost in. Controls that
+   draw their own ring (the style panel's fields, which use an inset shadow so
+   the ring hugs the control) still do — they set `outline: none` themselves and
+   are more specific than this. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none; }
 
@@ -1424,6 +1449,13 @@ body > .embed-editor_provenance {
    internal — panel vs app order is then decided here, in app terms. Its
    popovers are unaffected: every one of them portals to <body>. */
 .style-panel-host { flex: 1; min-height: 0; display: flex; flex-direction: column; isolation: isolate; }
+/* While a popup is open the panel under it doesn't scroll: a menu or a colour
+   picker is positioned against its anchor at the moment it opens, so scrolling
+   the field out from under it leaves the two in different places. The gutter
+   below is `stable`, so losing the scrollbar costs no layout — the panel simply
+   stops moving. A popup with a list of its own still scrolls, since the pointer
+   is over it rather than over this. */
+.style-panel-host.is-locked > * { overflow-y: hidden; }
 .style-panel-host > * {
   flex: 1;
   min-width: 0;
@@ -3238,6 +3270,10 @@ body > .embed-editor_provenance {
 }
 .spacing-band.is-padding { --band: #ec4899; }
 .spacing-band.is-margin { --band: #3b82f6; }
+/* Gap is a third thing, so it gets a third colour: padding is inside one box,
+   margin is around one box, and gap is between two of them. Sharing a colour
+   with either would say they were the same kind of space. */
+.spacing-band.is-gap { --band: #a855f7; }
 .spacing-band-label {
   padding: 1px 5px 2px;
   border-radius: 4px;
@@ -4675,7 +4711,11 @@ body > .embed-editor_provenance {
    so the variable chips inside it stay chips. */
 .var-custom {
   position: fixed;
-  z-index: 420;
+  /* Above the style panel's modals, which run from 1000 up on their own scale:
+     this opens FROM a field inside one (a grid track, the whole track list), so
+     opening behind it is the one place it must never be. Still under the
+     tooltip layer. */
+  z-index: 1100;
   width: 440px;
   max-width: calc(100vw - 24px);
   display: flex;

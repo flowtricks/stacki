@@ -43,6 +43,74 @@ export function serializeTrackList(tracks: string[]): string {
   return tracks.length ? tracks.map((t) => t.trim()).filter(Boolean).join(' ') : ''
 }
 
+// Two ways of writing the same grid.
+//
+//   repeat(2, minmax(0, 1fr))        the count, said once
+//   minmax(0, 1fr) minmax(0, 1fr)    the tracks, written out
+//
+// Nothing chooses between them for the reader: the first is shorter and says
+// "these are all the same", the second is what you want in front of you when
+// one of them is about to stop being the same. Both are the same grid, so this
+// is a way of writing, not a change to the layout — and the panel's own
+// controls pick one each: the count stepper writes repeat(), and editing a
+// track in the grid settings writes them all out.
+
+/**
+ * How a track list is written: a single `repeat()`, tracks written out that
+ * could be a repeat(), tracks that differ (so they could not), or nothing.
+ */
+export function trackForm(value: string): 'repeat' | 'list' | 'mixed' | 'none' {
+  const v = value.trim()
+  if (!v || v.toLowerCase() === 'none') return 'none'
+  const top = splitTracks(v).filter((x) => !x.startsWith('['))
+  if (top.length === 1) {
+    // `repeat(3, 1fr)` — a count and one track. `repeat(auto-fit, …)` is not a
+    // count and has its own control, so it is left alone here.
+    const rep = top[0].match(/^repeat\(\s*\d+\s*,(.*)\)$/is)
+    if (rep && splitTracks(rep[1]).filter((x) => !x.startsWith('[')).length === 1) return 'repeat'
+  }
+  const tracks = parseTrackList(v)
+  if (tracks.length > 1 && tracks.every((x) => x === tracks[0])) return 'list'
+  return 'mixed'
+}
+
+/** The same tracks written out one by one, or '' if there is nothing to write. */
+export function asTrackList(value: string): string {
+  return serializeTrackList(parseTrackList(value))
+}
+
+/**
+ * Whether the track list controls can hold this value — that is, whether it is
+ * a list of tracks at all.
+ *
+ * `!important`, a CSS-wide keyword, `subgrid`, or a variable standing in for
+ * the whole list are all values a grid can have and the track editors cannot:
+ * shown as tracks they would read as one track with a strange name, and the
+ * first edit would write that reading back over what was there. So the panel
+ * keeps those in the expression field and says the tracks are not available.
+ */
+export function canEditAsTracks(value: string): boolean {
+  const v = value.trim()
+  if (!v) return true
+  if (/!\s*important/i.test(v)) return false
+  const lower = v.toLowerCase()
+  if (/^(inherit|initial|unset|revert|revert-layer)$/.test(lower)) return false
+  if (/\b(subgrid|masonry)\b/.test(lower)) return false
+  const tracks = parseTrackList(v)
+  if (!tracks.length) return lower === 'none'
+  // A variable in place of ONE track is a track — the editors hold it fine. One
+  // in place of the whole list only looks like a track.
+  if (tracks.length === 1 && /^var\(/i.test(tracks[0])) return false
+  return true
+}
+
+/** The same tracks as a `repeat()`, or '' when they differ and it cannot say them. */
+export function asRepeat(value: string): string {
+  const tracks = parseTrackList(value)
+  if (tracks.length < 2 || !tracks.every((x) => x === tracks[0])) return ''
+  return `repeat(${tracks.length}, ${tracks[0]})`
+}
+
 export type TrackSize =
   | { mode: 'default'; value: string }
   | { mode: 'minmax'; min: string; max: string }

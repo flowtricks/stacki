@@ -18,8 +18,10 @@ export type HostNode = {
 /** Which sides of which box the spacing control is pointing at, and what each
  *  one says — the label is the authored value ("4.8rem"), not the pixels. */
 export type SpacingHover = {
-  kind: 'padding' | 'margin'
-  sides: Array<'top' | 'right' | 'bottom' | 'left'>
+  /** 'gap' lights the space BETWEEN children rather than around one element. */
+  kind: 'padding' | 'margin' | 'gap'
+  /** Edges for padding and margin; axes for gap. */
+  sides: Array<'top' | 'right' | 'bottom' | 'left' | 'row' | 'column'>
   labels: Record<string, string>
 }
 
@@ -54,6 +56,9 @@ export type HostState = {
    * resolved to. Empty when nothing is selected or the node isn't rendered.
    */
   renderedClasses: string[]
+  /** Every class name used anywhere in the project (the same list the Settings
+   *  panel's class field autocompletes from), for the selector input's suggestions. */
+  projectClasses: string[]
   /** Write a <style> node's CSS back into the page model. `immediate` saves the page
    *  right away (a committed edit) instead of coalescing like a typing burst. */
   /** Writes a <style> node's text into the open file's model. Returns false when
@@ -102,6 +107,7 @@ const state: HostState = {
   astroFiles: [],
   openFilePath: null,
   renderedClasses: [],
+  projectClasses: [],
   writeStyleNode: null,
   selectNode: null,
   recordUndo: null,
@@ -138,6 +144,22 @@ export function onModifiers(fn: (held: Modifiers) => void) {
 
 const listeners = new Set<() => void>()
 
+// Listeners are told on a microtask, not inline: the panel sets the host DURING its
+// render (see StylePanel, which has to, so children don't mount against an empty
+// bridge), and calling a subscriber there updates one component while another is
+// rendering — exactly what React warns about. The state itself is written
+// synchronously, so anything reading getHost() still sees it at once. Coalesced, so a
+// render that patches several fields wakes subscribers once.
+let notifying = false
+function notifyHost() {
+  if (notifying) return
+  notifying = true
+  queueMicrotask(() => {
+    notifying = false
+    for (const fn of listeners) fn()
+  })
+}
+
 export function setHost(patch: Partial<HostState>) {
   let changed = false
   for (const [k, v] of Object.entries(patch)) {
@@ -146,7 +168,7 @@ export function setHost(patch: Partial<HostState>) {
       changed = true
     }
   }
-  if (changed) for (const fn of listeners) fn()
+  if (changed) notifyHost()
 }
 
 export function getHost(): HostState {

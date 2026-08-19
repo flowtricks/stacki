@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import Select, { type SelectOption } from './components/Select'
+import { GroupLabel } from './TypographySection'
+import type { ResolvedProp } from './lib/resolved'
+import { useComputedChoice } from './lib/computed-style'
+import { commitInPlace } from './lib/commit-in-place'
 
 // Webflow's flex-alignment control: a live preview grid on the left (3×3 click
 // targets under a real-flex bar preview) plus the X / Y axis dropdowns. The X axis
 // is the horizontal screen direction, Y the vertical — each maps to justify-content
 // or align-items depending on the flex-direction (main axis). All writes target the
-// picked selector via `onSet`; the row's "Align" label owns clear / provenance.
+// picked selector via `onSet`; each axis's own X / Y label owns clear / provenance for
+// the one property it drives, so the two can be reset independently.
 
 type Props = {
   /** Effective justify-content value (raw, '' when unset). */
@@ -16,10 +21,14 @@ type Props = {
   /** flex-direction is column / column-reverse (main axis is vertical). */
   column: boolean
   busy: boolean
+  /** Resolved model, for the X / Y labels' blue / orange / clear states. */
+  read: (prop: string) => ResolvedProp | undefined
   onSet: (prop: string, value: string) => void
   /** Live preview; `null` = drop the preview and restore the committed value. */
   onLive: (prop: string, value: string | null) => void
   onClear: (prop: string) => void
+  onProvenance: (prop: string, anchor: DOMRect) => void
+  onSelectSelector: (selector: string, prop?: string) => void
 }
 
 const CUSTOM = '__custom__'
@@ -140,7 +149,7 @@ function CustomInput({ value, busy, ariaLabel, autoFocus, onCommit, onLive, onCl
       onChange={(event) => { setDraft(event.target.value); scheduleLive(event.target.value) }}
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; cancelLive(); commit() }}
-      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+      onKeyDown={(event) => { if (event.key === 'Enter') commitInPlace(event.currentTarget) }}
       disabled={busy}
       spellCheck={false}
       placeholder="unset"
@@ -154,7 +163,7 @@ function CustomInput({ value, busy, ariaLabel, autoFocus, onCommit, onLive, onCl
 // align-items, per direction); `fallback` is the CSS default shown when unset. The
 // last option is always "Custom", which seeds `unset` and reveals a free-text field
 // for any other value.
-function AxisSelect({ axis, label, prop, value, values, fallback, busy, onSet, onLive, onClear }: {
+function AxisSelect({ axis, label, prop, value, values, fallback, busy, read, onSet, onLive, onClear, onProvenance, onSelectSelector }: {
   axis: 'x' | 'y'
   label: string
   prop: string
@@ -162,16 +171,23 @@ function AxisSelect({ axis, label, prop, value, values, fallback, busy, onSet, o
   values: string[]
   fallback: string
   busy: boolean
+  read: (prop: string) => ResolvedProp | undefined
   onSet: (prop: string, value: string) => void
   /** Live preview; `null` = drop the preview and restore the committed value. */
   onLive: (prop: string, value: string | null) => void
   onClear: (prop: string) => void
+  onProvenance: (prop: string, anchor: DOMRect) => void
+  onSelectSelector: (selector: string, prop?: string) => void
 }) {
   const [forceCustom, setForceCustom] = useState(false)
   const ariaLabel = axis === 'x' ? 'Horizontal alignment' : 'Vertical alignment'
   const present = Boolean(value.trim())
   const n = norm(value)
   const known = values.includes(n)
+  // Unset → what the page computes for this element, which catches a rule the
+  // panel's matcher can't see; `normal` and friends aren't options, so those fall
+  // through to the CSS default below.
+  const computed = useComputedChoice(present ? '' : prop, values)
   const customMode = forceCustom || (present && !known)
   const options: SelectOption<string>[] = values.map((v) => ({ value: v, label: axisLabel(v, axis), icon: iconFor(v, prop, axis) }))
   options.push({ value: CUSTOM, label: 'Custom' })
@@ -188,9 +204,19 @@ function AxisSelect({ axis, label, prop, value, values, fallback, busy, onSet, o
 
   return (
     <div className="embed-editor_align-axis">
-      <span className="embed-editor_align-axis-label">{label}</span>
+      {/* The axis label — not the row's "Align" caption — carries this property's
+          blue / orange state and its clear menu, so X and Y reset independently. */}
+      <GroupLabel
+        label={label}
+        props={[prop]}
+        read={read}
+        busy={busy}
+        onClear={() => onClear(prop)}
+        onProvenance={onProvenance}
+        onSelectSelector={onSelectSelector}
+      />
       <Select
-        value={customMode ? CUSTOM : (present ? n : fallback)}
+        value={customMode ? CUSTOM : (present ? n : (computed || fallback))}
         options={options}
         ariaLabel={ariaLabel}
         disabled={busy}
@@ -272,7 +298,7 @@ function AlignBox({ justify, align, column, busy, onSet }: Pick<Props, 'justify'
   )
 }
 
-export default function AlignControl({ justify, align, column, busy, onSet, onLive, onClear }: Props) {
+export default function AlignControl({ justify, align, column, busy, read, onSet, onLive, onClear, onProvenance, onSelectSelector }: Props) {
   // X = horizontal screen axis, Y = vertical. In a column layout the main axis is
   // vertical, so justify/align swap which screen axis they drive.
   const xProp = column ? 'align-items' : 'justify-content'
@@ -288,8 +314,8 @@ export default function AlignControl({ justify, align, column, busy, onSet, onLi
     <div className="embed-editor_align">
       <AlignBox justify={justify} align={align} column={column} busy={busy} onSet={onSet} />
       <div className="embed-editor_align-axes">
-        <AxisSelect axis="x" label="X" prop={xProp} value={xValue} values={xValues} fallback={xFallback} busy={busy} onSet={onSet} onLive={onLive} onClear={onClear} />
-        <AxisSelect axis="y" label="Y" prop={yProp} value={yValue} values={yValues} fallback={yFallback} busy={busy} onSet={onSet} onLive={onLive} onClear={onClear} />
+        <AxisSelect axis="x" label="X" prop={xProp} value={xValue} values={xValues} fallback={xFallback} busy={busy} read={read} onSet={onSet} onLive={onLive} onClear={onClear} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
+        <AxisSelect axis="y" label="Y" prop={yProp} value={yValue} values={yValues} fallback={yFallback} busy={busy} read={read} onSet={onSet} onLive={onLive} onClear={onClear} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
       </div>
     </div>
   )

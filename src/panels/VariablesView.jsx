@@ -11,6 +11,7 @@ import EasingEditor, { MiniCurve } from '../style-panel/EasingEditor';
 import { easingToBezier, isEasing } from '../style-panel/lib/transition';
 import { setHost } from '../style-panel/lib/host';
 import { popupBox, POPUP_GAP } from '../ui/Dropdown.jsx';
+import CustomValue, { doesNotFit, isLong, withBinding } from '../ui/CustomValueEditor.jsx';
 import '../style-panel/utilities.css';
 
 // The variables sheet: one group of a stylesheet, as tables.
@@ -49,188 +50,15 @@ async function bridge(name, payload) {
   }
 }
 
-// Past this, a value is taken as too long for its column even when nothing can
-// be measured — a headless render, or a field that has not been laid out yet.
-// Measurement is the real test (see doesNotFit): what decides is whether the
-// field can show the value, and a value drawn with chips in it runs wider than
-// its own text, so counting characters alone let plenty of unreadable cells
-// pass for readable.
-const LONG_VALUE = 34;
-const isLong = (value) => String(value).length > LONG_VALUE || String(value).includes('\n');
 
-// One custom-value box at a time. Each cell owns its own, so the sheet holds a
-// pointer to whichever is open: opening another calls this first, and it closes
-// the same way pressing outside does, keeping what was typed. The press that
-// opens the new one is stopped at its own cell (so the chip under it does
-// nothing), and that stop is also what keeps it from reaching the open box's
-// outside-press handler — hence this rather than relying on the press.
-let closeOpenCustom = null;
 
 // And one curve editor, for the same reason: each cell owns its own, so the
 // sheet holds the pointer and opening another closes the one before it —
 // keeping whatever that one had been dragged to.
 let closeOpenCurve = null;
 
-/** Is the value wider than the field showing it? */
-function doesNotFit(cell, value) {
-  // The token editor first, and only then the input: with a code field the
-  // input is always in the DOM, hidden behind the editor, and a comma selector
-  // would have measured that one — the wrong element, and in the sheet always
-  // the invisible one.
-  const field =
-    cell.querySelector('.embed-editor_varconnect-editor') || cell.querySelector('.var-input');
-  // clientWidth is 0 before layout (and in jsdom); fall back to the count.
-  if (!field || !field.clientWidth) return isLong(value);
-  return field.scrollWidth > field.clientWidth + 1 || isLong(value);
-}
 
-// The whole value, in a box big enough to read it. A long value is usually a
-// long expression — a clamp() of four variables, a calc() of three — and the
-// thing that makes it editable is seeing all of it at once, with the chips
-// where they fall.
-//
-// The field inside is the same one the cell uses, so a chip is still a chip:
-// click it to swap the variable, type around it. Opened by clicking a long
-// value, or by pressing "=" in any field.
-function CustomValue({ cell, anchor, onCancel, onSave }) {
-  const [draft, setDraft] = useState(cell.value);
-  const [pos, setPos] = useState(null);
-  const boxRef = useRef(null);
-  const fieldRef = useRef(null);
 
-  useLayoutEffect(() => {
-    if (!anchor) return;
-    const wanted = boxRef.current?.offsetHeight || 190;
-    const box = popupBox(anchor, wanted, window.innerHeight);
-    setPos({
-      left: Math.max(8, Math.min(anchor.left, window.innerWidth - 460)),
-      top: box.top,
-      bottom: box.bottom,
-      maxHeight: box.maxHeight,
-    });
-  }, [anchor]);
-
-  // Whatever is in the box right now, for the two ways it can be closed from
-  // outside itself: another box opening, and a press elsewhere.
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
-
-  useEffect(() => {
-    const close = () => onSave(draftRef.current);
-    closeOpenCustom?.(); // never two at once
-    closeOpenCustom = close;
-    return () => {
-      if (closeOpenCustom === close) closeOpenCustom = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Nothing behind the box moves while it is open. It is anchored to the cell
-  // it came from, so a panel scrolling underneath would slide that cell out
-  // from under it — and the box is where the editing is happening anyway.
-  // Every scroller in the app is covered by refusing the gesture itself,
-  // rather than by hunting down each one and locking its overflow.
-  useEffect(() => {
-    const onWheel = (e) => {
-      if (!boxRef.current?.contains(e.target)) e.preventDefault();
-    };
-    document.addEventListener('wheel', onWheel, { passive: false, capture: true });
-    document.addEventListener('touchmove', onWheel, { passive: false, capture: true });
-    return () => {
-      document.removeEventListener('wheel', onWheel, { capture: true });
-      document.removeEventListener('touchmove', onWheel, { capture: true });
-    };
-  }, []);
-
-  useEffect(() => {
-    const onDown = (e) => {
-      if (boxRef.current && !boxRef.current.contains(e.target)) onSave(draft);
-    };
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onCancel();
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [draft, onCancel, onSave]);
-
-  // It opened because you meant to edit this value, so it arrives focused with
-  // the caret at the end. The field you can see is the rich one — the textarea
-  // behind it only carries the value — so focus THAT; selecting the hidden one
-  // left the box looking focused while every keystroke went nowhere.
-  //
-  // Every render, not just on mount — but a no-op the moment the caret is
-  // anywhere inside the popup, so it never fights the caret as you type. The
-  // rich field is redrawn when the variables it names resolve, and a redrawn
-  // node is a new node: focus put on the old one goes to the document, and the
-  // popup that opened because you meant to type in it sits there taking
-  // nothing.
-  useEffect(() => {
-    if (boxRef.current?.contains(document.activeElement)) return undefined;
-    const t = setTimeout(() => {
-      const rich = boxRef.current?.querySelector('.embed-editor_varconnect-editor');
-      if (!rich) {
-        fieldRef.current?.select();
-        return;
-      }
-      rich.focus();
-      const range = document.createRange();
-      range.selectNodeContents(rich);
-      range.collapse(false); // the end: a long expression is edited, not replaced
-      const selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }, 0);
-    return () => clearTimeout(t);
-  });
-
-  return createPortal(
-    <div
-      ref={boxRef}
-      className="var-custom"
-      style={{ left: pos?.left ?? -9999, top: pos?.top, bottom: pos?.bottom, maxHeight: pos?.maxHeight }}
-    >
-      <div className="var-custom-head">
-        <span>Custom value</span>
-        <span className="var-custom-name">{cell.name}</span>
-      </div>
-      <VariableConnect className="is-multiline" code onPick={(binding) => setDraft(withBinding(draft, binding))}>
-        <textarea
-          ref={fieldRef}
-          className="var-custom-input"
-          value={draft}
-          spellCheck={false}
-          rows={4}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            // A CSS value has no need for a line break, so Enter is "done".
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              onSave(e.currentTarget.value);
-            }
-          }}
-        />
-      </VariableConnect>
-      <div className="var-custom-foot">
-        <span>Enter to save · Escape to cancel</span>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-// Swapping a variable keeps the expression around it: picking a new one inside
-// `calc(var(--a) + 10px)` replaces the reference, not the calc.
-function withBinding(value, binding) {
-  const existing = String(value).match(/var\(\s*--[A-Za-z0-9_-]+[^)]*\)/i);
-  return existing ? value.replace(existing[0], binding) : binding;
-}
 
 // Every value is an editable field, and a value that references another
 // variable draws that reference as a purple chip inside the field — the same
@@ -453,7 +281,8 @@ function Cell({ cell, onSave, fluidOf, onDraft }) {
       <FluidBadge fluid={fluidOf ? fluidOf(cell) : cell.fluid} />
       {custom && (
         <CustomValue
-          cell={{ ...cell, value }}
+          value={value}
+          label={cell.name}
           anchor={custom}
           onCancel={() => {
             setCustom(null);

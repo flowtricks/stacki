@@ -43,10 +43,11 @@ export function hasCanvas() {
   return !!frame;
 }
 
-// Ask the page about one node: what it renders as, and which of `selectors`
-// target it. Resolves null when the canvas can't answer — the caller then
-// falls back rather than treating silence as "no".
-export function queryCanvas(path, selectors = [], compute = []) {
+// Ask the page about one node: what it renders as, which of `selectors` target
+// it, what `compute` values resolve to on it, and its computed style for `props`.
+// Resolves null when the canvas can't answer — the caller then falls back rather
+// than treating silence as "no".
+export function queryCanvas(path, selectors = [], compute = [], props = []) {
   if (!frame || typeof path !== 'string') return Promise.resolve(null);
   const id = nextId++;
   return new Promise((resolve) => {
@@ -57,7 +58,7 @@ export function queryCanvas(path, selectors = [], compute = []) {
     const entry = {
       resolve,
       timer,
-      message: { type: 'avb:query', id, path, selectors, compute },
+      message: { type: 'avb:query', id, path, selectors, compute, props },
       held: false,
     };
     pending.set(id, entry);
@@ -95,6 +96,13 @@ export function receiveCanvasReply(data) {
   clearTimeout(entry.timer);
   pending.delete(data.id);
   entry.resolve(
-    data.found ? { identity: data.identity, matched: data.matched || {}, computed: data.computed || {} } : null
+    data.found
+      ? {
+          identity: data.identity,
+          matched: data.matched || {},
+          computed: data.computed || {},
+          computedProps: data.computedProps || {},
+        }
+      : null
   );
 }

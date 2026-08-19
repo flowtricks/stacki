@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { HoverTooltip } from './components/SegmentedControl'
 import { handleArrowStep } from './lib/number-step'
 import { isNonNegative } from './lib/css-properties'
+import { hasOwnedPopup, inOwnedPopup } from './lib/popup-layer'
 import ProvenanceList from './ProvenanceList'
 import VariableConnect, { useSharedVars } from './VariableConnect'
 import type { ProjectVariable } from './lib/webflow'
@@ -623,8 +624,13 @@ export function SpacingLabel({
     if (tooltipTimer.current != null) { window.clearTimeout(tooltipTimer.current); tooltipTimer.current = null }
   }
   useEffect(() => clearTooltipTimer, [])
+  // A side with nothing set already reads "Auto" / "0" on its face; a tooltip saying
+  // the same thing is noise over every empty side of the box. Only a value worth
+  // spelling out — one that's authored, a variable's full name, an override — gets one.
+  const hasValue = override != null || d.present
   const openTooltip = () => {
     clearTooltipTimer()
+    if (!hasValue) return
     tooltipTimer.current = window.setTimeout(() => { tooltipTimer.current = null; setShowTooltip(true) }, 350)
   }
   const closeTooltip = () => { clearTooltipTimer(); setShowTooltip(false) }
@@ -664,7 +670,7 @@ export function SpacingLabel({
         onMouseLeave={closeTooltip}
         onPointerEnter={hover.onEnter(side)}
         onPointerLeave={hover.onLeave}
-        onFocus={() => setShowTooltip(true)}
+        onFocus={() => { if (hasValue) setShowTooltip(true) }}
         onBlur={closeTooltip}
         onPointerDown={(event) => { closeTooltip(); onPointerDown(side)(event) }}
         onPointerMove={(event) => { hover.onOver(event); onPointerMove(event) }}
@@ -679,7 +685,7 @@ export function SpacingLabel({
       >
         {variable?.name ?? labelFor(value, emptyLabel)}
       </button>
-      {showTooltip && buttonRef.current ? (
+      {showTooltip && hasValue && buttonRef.current ? (
         <HoverTooltip anchor={buttonRef.current}>
           <span className="embed-editor_spacing-tooltip">
             <span className={variableFullName ? 'embed-editor_spacing-tooltip-meta' : 'embed-editor_spacing-tooltip-value'}>
@@ -739,7 +745,23 @@ export function SpacingEditor({
 
   const setDraftValue = (text: string) => { draftRef.current = text; setDraft(text) }
 
-  useEffect(() => { inputRef.current?.focus(); inputRef.current?.select() }, [])
+  // Opened to be typed in: focus the field it actually shows. With a variable in the
+  // value that is the rich editor, and focusing the <input> hidden behind it left the
+  // popup looking focused while the caret was nowhere.
+  useEffect(() => {
+    const rich = rootRef.current?.querySelector<HTMLElement>('.embed-editor_varconnect-editor')
+    if (rich) {
+      rich.focus()
+      const range = document.createRange()
+      range.selectNodeContents(rich)
+      const sel = window.getSelection()
+      sel?.removeAllRanges()
+      sel?.addRange(range)
+      return
+    }
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [])
 
   const cancelLive = () => {
     if (liveTimer.current != null) { window.clearTimeout(liveTimer.current); liveTimer.current = null }
@@ -792,6 +814,9 @@ export function SpacingEditor({
   useEffect(() => {
     const onDocDown = (event: PointerEvent) => {
       if (rootRef.current?.contains(event.target as Node)) return
+      // The variable picker opens from the dot in this popover but portals to the
+      // body, so a press in it is a press in here — see lib/popup-layer.
+      if (inOwnedPopup(event.target as Node, rootRef.current)) return
       // Pressing this side's own label should net to a close (not reopen): flag it
       // so the label's click doesn't re-open the popover we're about to close.
       const labelProp = (event.target as Element).closest?.('.embed-editor_spacing-label')?.getAttribute('data-prop')
@@ -808,24 +833,66 @@ export function SpacingEditor({
       className="embed-editor_spacing-popover"
       ref={rootRef}
       // Keep the input focused when pressing anywhere in the popover other than the
-      // input itself, so an inside click never blurs → commits → closes.
-      onMouseDown={(event) => { if (event.target !== inputRef.current) event.preventDefault() }}
+      // field itself, so an inside click never blurs → commits → closes. The field is
+      // not always the <input>: a value with a variable in it draws the rich token
+      // editor instead, and preventing that press left the value looking editable and
+      // refusing the caret.
+      onMouseDown={(event) => {
+        const t = event.target
+        if (t === inputRef.current) return
+        if (t instanceof Element && t.closest('.embed-editor_varconnect')) return
+        event.preventDefault()
+      }}
+      // Which sides the pending commit writes is decided HERE rather than on the
+      // field: the rich editor answers Enter itself (it blurs, and that blur is what
+      // commits), so the <input>'s own key handler never runs in code mode. Captured
+      // so it is recorded before either field acts on the key.
+      onKeyDownCapture={(event) => {
+        if (event.key === 'Enter') {
+          commitRequested.current = true
+          commitProps.current = siblingProps(prop, side, affectedSides(side, event))
+          return
+        }
+        if (event.key === 'Escape') { cancelLive(); closed.current = true; onClose(); return }
+        // A modifier only applies to the Enter that carries it.
+        commitProps.current = [prop]
+      }}
     >
       <div className="embed-editor_spacing-popover-row">
         <span className="embed-editor_spacing-popover-label">{humanLabel(prop)}</span>
-        <VariableConnect ariaLabel={`Connect ${humanLabel(prop)} to a variable`} disabled={false} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
+        <VariableConnect
+          code
+          stepMin={isNonNegative(prop) ? 0 : undefined}
+          ariaLabel={`Connect ${humanLabel(prop)} to a variable`}
+          disabled={false}
+          prop={prop}
+          onPick={(binding) => setProp(prop, binding, false)}
+        >
           <input
             ref={inputRef}
             className={`u-input embed-editor_spacing-editor`}
             value={draft}
             placeholder={placeholder}
             onChange={(event) => { setDraftValue(event.target.value); scheduleLive(event.target.value) }}
-            onBlur={close}
+            // Losing focus to a popup this field opened — the variable picker takes
+            // focus for its search box, the big value editor takes it outright — is
+            // not leaving the editor. Closing there took the popup down with it
+            // before anything could be chosen. Checked a tick later because during a
+            // blur the focus has left one element and not yet reached the next.
+            onBlur={() => {
+              window.setTimeout(() => {
+                if (hasOwnedPopup(rootRef.current)) return
+                if (inOwnedPopup(document.activeElement, rootRef.current)) return
+                close()
+              }, 0)
+            }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.preventDefault()
                 commitRequested.current = true
                 commitProps.current = siblingProps(prop, side, affectedSides(side, event))
+                // This field's blur closes the editor — Enter is done with it, so
+                // it leaves rather than staying focused like a panel field.
                 event.currentTarget.blur()
                 return
               }

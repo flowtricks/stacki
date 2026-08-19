@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 import FieldLabel from './components/FieldLabel'
+import { PropTip, ProvenanceLabel } from './components/PropTip'
 import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl'
 import Select from './components/Select'
 import { handleArrowStep } from './lib/number-step'
@@ -16,7 +17,9 @@ import { srcCandidates } from '../ui/AssetThumb.jsx'
 import { getHost } from './lib/host'
 import GradientEditor from './GradientEditor'
 import ColorSwatch from './components/ColorSwatch'
+import { useLiveColor } from './lib/live-color'
 import type { Contributor, ResolvedProp } from './lib/resolved'
+import { commitInPlace } from './lib/commit-in-place'
 
 // The Backgrounds section — Webflow parity. `background` is a stack of layers
 // (images + gradients) painted over a single background-color. The layer list
@@ -71,11 +74,7 @@ function BgLabel({ label, prop, d, contributors, busy, onClear, onProvenance, on
   onSelectSelector: (selector: string, prop?: string) => void
 }) {
   if (d.present && !d.isSelected) {
-    return (
-      <button type="button" className="embed-editor_size-label embed-editor_prop-orange" disabled={busy} title="Set through another selector — click to see all" onClick={(event) => onProvenance(prop, event.currentTarget.getBoundingClientRect())}>
-        {label}
-      </button>
-    )
+    return <ProvenanceLabel label={label} props={[prop]} busy={busy} onProvenance={onProvenance} />
   }
   return (
     <FieldLabel
@@ -84,6 +83,7 @@ function BgLabel({ label, prop, d, contributors, busy, onClear, onProvenance, on
       disabled={busy}
       onReset={onClear}
       resetLabel="Clear"
+      tooltip={<PropTip props={[prop]} />}
       title={d.overridden ? `Overridden by ${d.winnerSelector}` : undefined}
       menuNote={(close) => <ProvenanceList contributors={contributors} prop={prop} onSelect={(sel, p) => { onSelectSelector(sel, p); close() }} />}
     >
@@ -93,15 +93,19 @@ function BgLabel({ label, prop, d, contributors, busy, onClear, onProvenance, on
 }
 
 // A live text field bound to one property (Color, and inside the layer editor).
-function BgField({ prop, label, placeholder, prefix, read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: {
+function BgField({ prop, label, placeholder, prefix, swatchLabel, read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: {
   prop: string
   label: string
   placeholder: string
   prefix?: ReactNode
+  /** Render a colour swatch before the field, editing this same property. Owned
+   *  here rather than passed in as `prefix` so a drag on it shows in the field. */
+  swatchLabel?: string
 } & Props) {
   const d = displayOf(read(prop))
   const external = d.present ? (d.important ? `${d.value} !important` : d.value) : ''
   const [draft, setDraft] = useState(external)
+  const [shown, noteLive] = useLiveColor(draft)
   const focused = useRef(false)
   const liveTimer = useRef<number | null>(null)
 
@@ -126,16 +130,16 @@ function BgField({ prop, label, placeholder, prefix, read, busy, setProp, clearP
   }
 
   const input = (
-    <VariableConnect ariaLabel={`Connect ${label} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
+    <VariableConnect code ariaLabel={`Connect ${label} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
     <input
       className="u-input embed-editor_size-input"
       data-prop={prop}
-      value={draft}
-      onChange={(event) => { setDraft(event.target.value); scheduleLive(event.target.value) }}
+      value={shown}
+      onChange={(event) => { noteLive(null); setDraft(event.target.value); scheduleLive(event.target.value) }}
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; cancelLive(); commit() }}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') { event.currentTarget.blur(); return }
+        if (event.key === 'Enter') { commitInPlace(event.currentTarget); return }
         const stepped = handleArrowStep(event)
         if (!stepped) return
         event.preventDefault()
@@ -153,10 +157,27 @@ function BgField({ prop, label, placeholder, prefix, read, busy, setProp, clearP
     </VariableConnect>
   )
 
+  const swatch = swatchLabel ? (
+    <ColorSwatch
+      value={shown}
+      busy={busy}
+      ariaLabel={swatchLabel}
+      onChange={(color, live) => {
+        // Show the drag in the field as it happens; the model only hears about it
+        // when the drag ends, and only then is `shown` handed back to it.
+        noteLive(live ? color : null)
+        if (live) { liveSetProp(prop, color, false); return }
+        setDraft(color)
+        setProp(prop, color, false)
+      }}
+    />
+  ) : null
+  const before = swatch ?? prefix
+
   return (
     <>
       <BgLabel label={label} prop={prop} d={d} contributors={read(prop)?.contributors ?? []} busy={busy} onClear={() => clearProp(prop)} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
-      {prefix ? <div className="embed-editor_bg-inline">{prefix}{input}</div> : input}
+      {before ? <div className="embed-editor_bg-inline">{before}{input}</div> : input}
     </>
   )
 }
@@ -223,7 +244,7 @@ function LayerLonghandField({ layers, index, field, prop, label, placeholder, bu
   }
 
   return (
-    <VariableConnect ariaLabel={`Connect ${label} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
+    <VariableConnect code ariaLabel={`Connect ${label} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
     <input
       className="u-input embed-editor_size-input"
       value={draft}
@@ -231,7 +252,7 @@ function LayerLonghandField({ layers, index, field, prop, label, placeholder, bu
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; commit(false) }}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') { event.currentTarget.blur(); return }
+        if (event.key === 'Enter') { commitInPlace(event.currentTarget); return }
         const stepped = handleArrowStep(event)
         if (!stepped) return
         event.preventDefault()
@@ -327,7 +348,7 @@ function BgPartInput({ value, placeholder, label, busy, disabled, onLive, onComm
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; onCommit(draft.trim()) }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') { e.currentTarget.blur(); return }
+        if (e.key === 'Enter') { commitInPlace(e.currentTarget); return }
         const stepped = handleArrowStep(e)
         if (!stepped) return
         e.preventDefault()
@@ -591,7 +612,7 @@ function LayerColorField({ layers, index, busy, setProp, liveSetProp }: {
         onChange={(event) => { setDraft(event.target.value); commit(true) }}
         onFocus={() => { focused.current = true }}
         onBlur={() => { focused.current = false; commit(false) }}
-        onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+        onKeyDown={(event) => { if (event.key === 'Enter') commitInPlace(event.currentTarget) }}
         disabled={busy}
         spellCheck={false}
         placeholder="rgba(0, 0, 0, 0.5)"
@@ -828,7 +849,7 @@ export default function BackgroundSection(props: Props) {
         count={layers.length}
         busy={busy}
         ariaLabel="Background layers"
-        onOpen={(i) => setOpenLayer(i)}
+        onOpen={(i) => setOpenLayer((cur) => (cur === i ? null : i))}
         onReorder={reorder}
         onRemove={removeLayer}
         renderRow={(i) => ({
@@ -867,7 +888,7 @@ export default function BackgroundSection(props: Props) {
 
       {/* Colour — painted behind every layer. */}
       <div className="embed-editor_size-row">
-        <BgField {...props} prop="background-color" label="Color" placeholder="transparent" prefix={<ColorSwatch value={val('background-color')} busy={busy} ariaLabel="Background color" onChange={(c, live) => { if (live) props.liveSetProp('background-color', c, false); else props.setProp('background-color', c, false) }} />} />
+        <BgField {...props} prop="background-color" label="Color" placeholder="transparent" swatchLabel="Background color" />
       </div>
 
       {/* Clipping — background-clip. "None" writes border-box explicitly. */}

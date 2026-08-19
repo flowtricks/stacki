@@ -5,6 +5,7 @@ import { isNonNegative } from './lib/css-properties'
 import VariableConnect from './VariableConnect'
 import type { ResolvedProp } from './lib/resolved'
 import { splitTopLevelSpaces } from './lib/background'
+import { useGapHover, type GapAxis } from './lib/gap-hover'
 
 // The Gap control for the Layout section: a lock toggle plus one field (linked →
 // both gaps equal) or two fields (unlinked → separate row/column).
@@ -104,11 +105,20 @@ function UnlockedIcon() {
 }
 
 // A length field: live-as-you-type updates, commit on blur, ↑/↓ number stepping.
-function GapInput({ prop, value, busy, ariaLabel, onLive, onCommit }: {
+// Which axes a field is responsible for: the linked field is both, the split
+// ones are one each. Hovering says which spaces on the page this number holds
+// open, the same way hovering a padding side does.
+function axesFor(prop: string, linked: boolean): GapAxis[] {
+  if (linked) return ['row', 'column']
+  return prop === COL ? ['column'] : ['row']
+}
+
+function GapInput({ prop, value, busy, ariaLabel, axes, onLive, onCommit }: {
   prop: string
   value: string
   busy: boolean
   ariaLabel: string
+  axes: GapAxis[]
   onLive: (value: string) => void
   onCommit: (value: string) => void
 }) {
@@ -122,14 +132,17 @@ function GapInput({ prop, value, busy, ariaLabel, onLive, onCommit }: {
     cancelLive()
     liveTimer.current = window.setTimeout(() => { liveTimer.current = null; onLive(text) }, 100)
   }
+  const gapHover = useGapHover(axes, draft || value)
+
   return (
-    <VariableConnect className="is-fill" ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => onCommit(binding)}>
+    <VariableConnect code className="is-fill" ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => onCommit(binding)}>
     <input
       className="u-input embed-editor_size-input"
       value={draft}
-      onChange={(event) => { setDraft(event.target.value); scheduleLive(event.target.value) }}
-      onFocus={() => { focused.current = true }}
-      onBlur={() => { focused.current = false; cancelLive(); onCommit(draft) }}
+      onChange={(event) => { setDraft(event.target.value); scheduleLive(event.target.value); gapHover.onValue(event.target.value) }}
+      {...gapHover.handlers}
+      onFocus={() => { focused.current = true; gapHover.onFocus() }}
+      onBlur={() => { focused.current = false; gapHover.onBlur(); cancelLive(); onCommit(draft) }}
       onKeyDown={(event) => {
         if (event.key === 'Enter') { event.currentTarget.blur(); return }
         // A gap has no negative side to step onto.
@@ -211,11 +224,11 @@ export default function GapControl({ show, read, busy, setProp, clearProp, liveS
       />
       <div className="embed-editor_gap">
         {linked ? (
-          <GapInput prop={ROW} value={row} busy={busy} ariaLabel="Gap" onLive={(v) => writeBoth(v, true)} onCommit={(v) => writeBoth(v, false)} />
+          <GapInput prop={ROW} value={row} busy={busy} ariaLabel="Gap" axes={axesFor(ROW, true)} onLive={(v) => writeBoth(v, true)} onCommit={(v) => writeBoth(v, false)} />
         ) : (
           <>
             <div className="embed-editor_gap-cell">
-              <GapInput prop={COL} value={col} busy={busy} ariaLabel="Column gap" onLive={(v) => writeAxis(colAxis, COL, v, true)} onCommit={(v) => writeAxis(colAxis, COL, v, false)} />
+              <GapInput prop={COL} value={col} busy={busy} ariaLabel="Column gap" axes={axesFor(COL, false)} onLive={(v) => writeAxis(colAxis, COL, v, true)} onCommit={(v) => writeAxis(colAxis, COL, v, false)} />
               <PropLabel
                 label="Columns"
                 prop={COL}
@@ -228,7 +241,7 @@ export default function GapControl({ show, read, busy, setProp, clearProp, liveS
               />
             </div>
             <div className="embed-editor_gap-cell">
-              <GapInput prop={ROW} value={row} busy={busy} ariaLabel="Row gap" onLive={(v) => writeAxis(rowAxis, ROW, v, true)} onCommit={(v) => writeAxis(rowAxis, ROW, v, false)} />
+              <GapInput prop={ROW} value={row} busy={busy} ariaLabel="Row gap" axes={axesFor(ROW, false)} onLive={(v) => writeAxis(rowAxis, ROW, v, true)} onCommit={(v) => writeAxis(rowAxis, ROW, v, false)} />
               <PropLabel
                 label="Rows"
                 prop={ROW}

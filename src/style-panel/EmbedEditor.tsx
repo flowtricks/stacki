@@ -3,9 +3,10 @@ import { createPortal } from 'react-dom'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 import { CodeEditor } from './components/CodeEditor'
 import FieldLabel from './components/FieldLabel'
+import { PropTip, ProvenanceLabel } from './components/PropTip'
 import Select, { type SelectOption } from './components/Select'
 import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl'
-import DisplayControl from './DisplayControl'
+import DisplayControl, { DISPLAY_VALUES } from './DisplayControl'
 import DirectionControl from './DirectionControl'
 import AlignControl from './AlignControl'
 import ElementTokenPicker from './ElementTokenPicker'
@@ -14,6 +15,7 @@ import { handleArrowStep } from './lib/number-step'
 import { hslaToRgba } from './lib/color'
 import { clampNonNegative, filterCssProperties } from './lib/css-properties'
 import { panelSpan } from './lib/panel-box'
+import { forgetComputedStyles, useComputedChoice } from './lib/computed-style'
 import SizeSection from './SizeSection'
 import GapControl from './GapControl'
 import GridControls from './GridControls'
@@ -55,7 +57,7 @@ import {
   splitRuleSelectorAt,
 } from './lib/css'
 import { canonicalCompound, compareSpecificity, formatSpecificity, parseSelectorList, type MatchTarget } from './lib/selectors'
-import { getHost, onHostChange } from './lib/host'
+import { findNode, getHost, onHostChange, propText } from './lib/host'
 import {
   applyNativePropertyAt,
   applyNativeToNewBaseClass,
@@ -859,8 +861,10 @@ function ResolvedRow({ prop, resolved, busy, setProp, clearProp, liveSetProp, on
 }
 
 // The Display control is always shown (Webflow parity), even when no selector
-// sets `display`. In that case we assume the browser default (block) so there's
-// always a value to edit; the label stays dim to signal it isn't set yet.
+// sets `display`. In that case it shows what the PAGE computes for the element —
+// a `<span>` reads inline, a flex child of a component-authored rule reads what
+// that rule says — falling back to `block` when there's no canvas to ask. The
+// label stays dim either way, to signal it isn't set here.
 function DisplayRow({ resolved, busy, setProp, clearProp, onProvenance, onSelectSelector }: {
   resolved: ResolvedProp | undefined
   busy: boolean
@@ -870,13 +874,14 @@ function DisplayRow({ resolved, busy, setProp, clearProp, onProvenance, onSelect
   onSelectSelector: (selector: string, prop?: string) => void
 }) {
   const isSelected = resolved?.source === 'selected'
+  const computed = useComputedChoice(resolved ? '' : 'display', DISPLAY_VALUES)
   const current = resolved
     ? (isSelected && resolved.selectedValue ? resolved.selectedValue : { value: resolved.winner.value, important: resolved.winner.important })
-    : { value: 'block', important: false }
+    : { value: computed || 'block', important: false }
   return (
     <div className="embed-editor_size-row">
       {!resolved ? (
-        <FieldLabel className="embed-editor_size-label" active={false} disabled={busy} onReset={() => {}}>Display</FieldLabel>
+        <FieldLabel className="embed-editor_size-label" active={false} disabled={busy} onReset={() => {}} tooltip={<PropTip props={['display']} />}>Display</FieldLabel>
       ) : isSelected ? (
         <FieldLabel
           className="embed-editor_size-label"
@@ -884,20 +889,19 @@ function DisplayRow({ resolved, busy, setProp, clearProp, onProvenance, onSelect
           disabled={busy}
           onReset={() => clearProp('display')}
           resetLabel="Remove property"
+          tooltip={<PropTip props={['display']} />}
           menuNote={(close) => <ProvenanceList contributors={resolved.contributors} prop="display" onSelect={(sel, p) => { onSelectSelector(sel, p); close() }} />}
         >
           Display
         </FieldLabel>
       ) : (
-        <button
-          type="button"
-          className="embed-editor_size-label embed-editor_prop-orange"
-          disabled={busy}
-          title={`Set by ${resolved.winner.selectorText} — click to see all selectors`}
-          onClick={(event) => onProvenance('display', event.currentTarget.getBoundingClientRect())}
-        >
-          Display
-        </button>
+        <ProvenanceLabel
+          label="Display"
+          props={['display']}
+          busy={busy}
+          onProvenance={onProvenance}
+          note={`Set by ${resolved.winner.selectorText} — click to see all selectors`}
+        />
       )}
       <DisplayControl value={current.value} important={current.important} busy={busy} onCommit={(value, important) => setProp('display', value, important)} />
     </div>
@@ -951,7 +955,7 @@ function VerticalAlignRow({ resolved, dimmed, busy, setProp, clearProp, onProven
       title={dimmed ? 'Align Y applies when Display is inline or table-cell' : undefined}
     >
       {!resolved ? (
-        <FieldLabel className="embed-editor_size-label" active={false} disabled={busy} onReset={() => {}}>Align Y</FieldLabel>
+        <FieldLabel className="embed-editor_size-label" active={false} disabled={busy} onReset={() => {}} tooltip={<PropTip props={[prop]} />}>Align Y</FieldLabel>
       ) : isSelected ? (
         <FieldLabel
           className={`embed-editor_size-label ${overridden ? 'is-overridden' : ''}`}
@@ -959,21 +963,20 @@ function VerticalAlignRow({ resolved, dimmed, busy, setProp, clearProp, onProven
           disabled={busy}
           onReset={() => clearProp(prop)}
           resetLabel="Remove property"
+          tooltip={<PropTip props={[prop]} />}
           title={overridden ? `Overridden by ${resolved.winner.selectorText}` : undefined}
           menuNote={(close) => <ProvenanceList contributors={resolved.contributors} prop={prop} onSelect={(sel, p) => { onSelectSelector(sel, p); close() }} />}
         >
           Align Y
         </FieldLabel>
       ) : (
-        <button
-          type="button"
-          className="embed-editor_size-label embed-editor_prop-orange"
-          disabled={busy}
-          title={`Set by ${resolved.winner.selectorText} — click to see all selectors`}
-          onClick={(event) => onProvenance(prop, event.currentTarget.getBoundingClientRect())}
-        >
-          Align Y
-        </button>
+        <ProvenanceLabel
+          label="Align Y"
+          props={[prop]}
+          busy={busy}
+          onProvenance={onProvenance}
+          note={`Set by ${resolved.winner.selectorText} — click to see all selectors`}
+        />
       )}
       <Select
         value={matched ?? (raw || 'baseline')}
@@ -1112,7 +1115,8 @@ function DirectionRow({ read, busy, setProp, clearProp, onProvenance, onSelectSe
 
 // The flex Align control — only rendered when `display` is flex. Its X / Y dropdowns
 // write `justify-content` / `align-items` (mapped to the screen axis via the current
-// flex-direction); the combined "Align" label clears both.
+// flex-direction), and each carries its own clearable label so the two axes reset
+// independently; the row's "Align" caption is inert.
 const ALIGN_PROPS = new Set(['justify-content', 'align-items'])
 // Grid props owned by the dedicated GridControls block (and the "Configure grid"
 // panel) — kept out of the generic fall-through rows when the element is a grid
@@ -1135,23 +1139,19 @@ function AlignRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, o
   const column = currentFlexFlow(read).startsWith('column')
   return (
     <div className="embed-editor_size-row embed-editor_align-row">
-      <GroupLabel
-        label="Align"
-        props={['justify-content', 'align-items']}
-        read={read}
-        busy={busy}
-        onClear={() => clearProp(['justify-content', 'align-items'])}
-        onProvenance={onProvenance}
-        onSelectSelector={onSelectSelector}
-      />
+      {/* Inert caption — the X / Y labels own clear / provenance per axis. */}
+      <FieldLabel className="embed-editor_size-label" active={false} disabled={busy} onReset={() => {}} tooltip={<PropTip props={['justify-content', 'align-items']} />}>Align</FieldLabel>
       <AlignControl
         justify={effectiveValue(read('justify-content'))}
         align={effectiveValue(read('align-items'))}
         column={column}
         busy={busy}
+        read={read}
         onSet={(prop, value) => setProp(prop, value, false)}
         onLive={(prop, value) => liveSetProp(prop, value, false)}
         onClear={(prop) => clearProp(prop)}
+        onProvenance={onProvenance}
+        onSelectSelector={onSelectSelector}
       />
     </div>
   )
@@ -1268,6 +1268,25 @@ type SourceOption = {
 // its tag, each class, each data attribute (presence then valued), and its combo
 // class chains.
 type SelectorSuggestion = { selector: string; kind: 'tag' | 'class' | 'attribute' | 'attribute-value' | 'combo' }
+
+// Every class in the project, kept in step with the app (the same list the Settings
+// panel's class field autocompletes from).
+function useProjectClasses(): string[] {
+  const [list, setList] = useState<string[]>(() => getHost().projectClasses ?? [])
+  useEffect(() => {
+    const sync = () => setList((prev) => {
+      const next = getHost().projectClasses ?? []
+      return next.length === prev.length && next.every((c, i) => c === prev[i]) ? prev : next
+    })
+    sync()
+    return onHostChange(sync)
+  }, [])
+  return list
+}
+// How many project-wide classes the suggestion list will show for one query — enough
+// to pick from, few enough that the list stays a list.
+const PROJECT_CLASS_LIMIT = 30
+
 const SUGGESTION_KIND_LABEL: Record<SelectorSuggestion['kind'], string> = {
   tag: 'tag', class: 'class', attribute: 'attribute', 'attribute-value': 'attribute', combo: 'combo',
 }
@@ -1290,7 +1309,7 @@ function isGlobalSelector(text: string): boolean {
 // input offers an autocomplete list of the element's targetable selectors:
 // ↑/↓ move, Enter applies the highlighted one (or the typed text), Tab fills it
 // into the input to keep typing.
-function SelectorPicker({ selectors, suggestions, activeSelector, activePicked, busy, onSelect, onDeselect, onAdd }: {
+export function SelectorPicker({ selectors, suggestions, activeSelector, activePicked, busy, loading, onSelect, onDeselect, onAdd }: {
   selectors: MatchedSelector[]
   suggestions: SelectorSuggestion[]
   activeSelector: string
@@ -1298,6 +1317,8 @@ function SelectorPicker({ selectors, suggestions, activeSelector, activePicked, 
    *  the panel's auto-composed default. */
   activePicked: boolean
   busy: boolean
+  /** Still scanning — the chips that will fill this well are on their way. */
+  loading: boolean
   onSelect: (selector: string) => void
   onDeselect: () => void
   onAdd: (selector: string) => void
@@ -1336,11 +1357,33 @@ function SelectorPicker({ selectors, suggestions, activeSelector, activePicked, 
     [selectors, showGlobals, activeSelector, activePicked],
   )
 
+  const projectClasses = useProjectClasses()
   const q = draft.trim().toLowerCase()
-  const filtered = useMemo(
-    () => suggestions.filter((s) => !q || s.selector.toLowerCase().includes(q)),
-    [suggestions, q],
-  )
+  // The element's own tokens first — they're what you're usually reaching for — then,
+  // once you've typed something, every other class in the project (the Settings
+  // panel's list), so styling a class this element doesn't carry yet is a matter of
+  // typing its first letters. They're held back while the box is empty: a project's
+  // whole class list would bury the handful that describe this element.
+  // Selectors already in the well aren't suggestions — picking one would just be the
+  // chip that's already sitting above the input.
+  const chipKeys = useMemo(() => new Set(selectors.map((sel) => selectorKey(sel.text))), [selectors])
+  const filtered = useMemo(() => {
+    const own = suggestions.filter(
+      (s) => (!q || s.selector.toLowerCase().includes(q)) && !chipKeys.has(selectorKey(s.selector)),
+    )
+    if (!q) return own
+    const taken = new Set(own.map((s) => s.selector))
+    const extra: SelectorSuggestion[] = []
+    for (const cls of projectClasses) {
+      const selector = `.${cls}`
+      if (taken.has(selector) || chipKeys.has(selectorKey(selector))) continue
+      if (!cls.toLowerCase().includes(q.replace(/^\./, ''))) continue
+      taken.add(selector)
+      extra.push({ selector, kind: 'class' })
+      if (extra.length >= PROJECT_CLASS_LIMIT) break
+    }
+    return [...own, ...extra]
+  }, [suggestions, projectClasses, q, chipKeys])
   const showList = open && filtered.length > 0
 
   // Keep the highlighted row visible while arrowing through a long list.
@@ -1406,6 +1449,17 @@ function SelectorPicker({ selectors, suggestions, activeSelector, activePicked, 
       {/* One grey well wraps the selector tags; clicking empty space reveals the add
           input at its bottom (the input has no chrome of its own). */}
       <div className="embed-editor_selector-well" onMouseDown={onWellMouseDown}>
+        {/* Nothing to show yet and the scan still running: the well would read as
+            "this element has no selectors", which is a different (and wrong) answer
+            than "not counted yet". A spinner where the first chip will land says
+            which one it is, and holds the box's height so nothing jumps when the
+            chips arrive. */}
+        {loading && !shownSelectors.length ? (
+          <div className="embed-editor_selector-loading" aria-live="polite">
+            <SpinnerIcon />
+            <span className="u-sr-only">Finding the selectors that style this element…</span>
+          </div>
+        ) : null}
         {shownSelectors.length ? (
           <div className="embed-editor_selector-chips">
             {shownSelectors.map((sel) => {
@@ -1446,11 +1500,15 @@ function SelectorPicker({ selectors, suggestions, activeSelector, activePicked, 
               // selector, so the panel drops back to showing all winners read-only. Stash
               // the previously-active selector to restore if you leave without adding one.
               onFocus={() => { restoreRef.current = activeSelector || null; onDeselect(); setOpen(true) }}
-              // On blur: collapse the empty input, and if no new selector was added,
-              // re-select whatever was active before (rather than leaving it deselected).
+              // On blur the half-typed selector is abandoned: clicking away from it is
+              // not a way of adding one (Enter and the suggestion list are), and text
+              // left sitting in a collapsed-looking field reads as applied. Clear it,
+              // collapse the input, and re-select whatever was active before focus.
               onBlur={() => {
                 setOpen(false)
-                if (!draft.trim()) setInputOpen(false)
+                setDraft('')
+                setHighlight(-1)
+                setInputOpen(false)
                 if (restoreRef.current) { onSelect(restoreRef.current); restoreRef.current = null }
               }}
               onChange={(event) => { setDraft(event.target.value); setOpen(true); setHighlight(-1) }}
@@ -1679,6 +1737,7 @@ function StyleCard({
   sourceNote,
   nativeStyleName,
   loading,
+  resolving,
   busy,
   pending,
   setProp,
@@ -1716,6 +1775,9 @@ function StyleCard({
   nativeStyleName: string | null
   /** Still fetching embeds — show a spinner in place of the source picker. */
   loading: boolean
+  /** Still working out which selectors style this element — the well says so
+   *  rather than reading as "none". */
+  resolving: boolean
   busy: boolean
   pending: boolean
   setProp: (prop: string, value: string, important: boolean) => void
@@ -1815,6 +1877,7 @@ function StyleCard({
         activeSelector={activeSelector}
         activePicked={activePicked}
         busy={busy}
+        loading={resolving}
         onSelect={onSelectActive}
         onDeselect={onDeselect}
         onAdd={onAddSelector}
@@ -2022,6 +2085,12 @@ type Content = {
 
 // Re-read every embed no more than this often when just switching selection.
 const BG_REFRESH_THROTTLE_MS = 4000
+
+/** Which stylesheets the host is offering, as a comparable string. */
+function sheetSignature(): string {
+  const host = getHost()
+  return [...host.files, ...host.astroFiles].map((f) => f.path).join('|')
+}
 // How often to poll the Designer for out-of-app edits (classes / attributes /
 // native styles). The API has no change events, so we re-read on this cadence and
 // apply only when a signature actually differs.
@@ -2137,6 +2206,91 @@ let persistedScan: {
   scanAt: number
 } | null = null
 
+// The last RESOLVED view — the matched model and the element snapshot the selector
+// chips are drawn from. persistedScan above keeps the parsed stylesheets; this keeps
+// what they resolved to for the selected element. The panel is unmounted whenever the
+// right tab isn't Style — and removing a class happens in Settings, which is exactly
+// that — so without this, coming back blanks the selector well until a full re-resolve
+// (a canvas round trip plus a re-match of every rule) lands. Restored only while the
+// same element is still selected; a background refresh reconciles it either way.
+let persistedView: {
+  /** Node id + the file it belongs to: ids are per-page, so the file has to match too. */
+  hostId: string
+  filePath: string | null
+  elementKey: string
+  scan: ScanState
+  quick: ElementSnapshot | null
+} | null = null
+
+const viewKeyMatches = (view: typeof persistedView) => {
+  const host = getHost()
+  return !!view && !!host.selectedId && view.hostId === host.selectedId && view.filePath === host.openFilePath
+}
+
+// The selected node's authored classes, straight from the page model. A `class` set by
+// an expression has no literal text to read, and reports none.
+function authoredClasses(): string[] {
+  const host = getHost()
+  const node = host.selectedId ? findNode(host.nodes, host.selectedId) : null
+  return propText(node, 'class').trim().split(/\s+/).filter(Boolean)
+}
+
+/**
+ * Classes the page model has just lost.
+ *
+ * The panel's snapshot unions the authored classes with the ones the PREVIEW last
+ * reported (so classes added at runtime still show), and the preview goes on
+ * reporting a removed class until the dev server re-renders the page. Left alone, a
+ * class you just deleted sits in the selector well for that whole round trip — and
+ * a re-scan in between puts it back. Anything that drops out of the authored list is
+ * hidden from that moment; it returns if the class does, and is forgotten once the
+ * preview stops reporting it too.
+ */
+export function useRemovedClasses(): ReadonlySet<string> {
+  const [removed, setRemoved] = useState<ReadonlySet<string>>(EMPTY_CLASSES)
+  const prevRef = useRef<string[]>(authoredClasses())
+  const nodeRef = useRef<string | null>(getHost().selectedId)
+  useEffect(() => {
+    const sync = () => {
+      const host = getHost()
+      const now = authoredClasses()
+      const prev = prevRef.current
+      prevRef.current = now
+      // A different element: nothing carries over.
+      if (host.selectedId !== nodeRef.current) {
+        nodeRef.current = host.selectedId
+        setRemoved((old) => (old.size ? EMPTY_CLASSES : old))
+        return
+      }
+      setRemoved((old) => {
+        const next = new Set(old)
+        for (const cls of prev) if (!now.includes(cls)) next.add(cls)
+        for (const cls of now) next.delete(cls)
+        // Once the preview has caught up there is nothing left to hide.
+        const rendered = host.renderedClasses || []
+        for (const cls of [...next]) if (!rendered.includes(cls)) next.delete(cls)
+        if (next.size === old.size && [...next].every((c) => old.has(c))) return old
+        return next
+      })
+    }
+    sync()
+    return onHostChange(sync)
+  }, [])
+  return removed
+}
+
+const EMPTY_CLASSES: ReadonlySet<string> = new Set()
+
+// The same snapshot without the classes that have just been removed — what the
+// element is now, rather than what the preview last saw.
+export function withoutClasses(snapshot: ElementSnapshot | undefined, hidden: ReadonlySet<string>): ElementSnapshot | undefined {
+  if (!snapshot || !hidden.size) return snapshot
+  const classes = snapshot.classes.filter((c) => !hidden.has(c))
+  const classList = snapshot.classList.filter((c) => !hidden.has(c))
+  if (classes.length === snapshot.classes.length && classList.length === snapshot.classList.length) return snapshot
+  return { ...snapshot, classes, classList, attributes: { ...snapshot.attributes, class: classList.join(' ') } }
+}
+
 // Cache the component embed SOURCES (the expensive part: the per-component tree
 // DFS to find embeds) at module scope, reused across page switches and reopens.
 // The CODE is re-read on every build, so external edits to a component embed are
@@ -2152,10 +2306,15 @@ const nativeModelCache = new Map<string, NativeModel>()
 
 export default function EmbedEditor() {
   const selectedRef = useRef<unknown>(null)
+  // The view this panel had when it was last unmounted, if the same element is still
+  // selected — the chips render from it on the first paint instead of an empty well.
+  const restoredRef = useRef(viewKeyMatches(persistedView) ? persistedView : null)
   // Identity of the last element we reset the selection for — so a NEW element clears
   // the previous one's picked selector (the token signature isn't reliable: distinct
   // elements can share it, especially when classes aren't readable in a component).
-  const selectedElementKeyRef = useRef('')
+  // Seeded from the restored view, so returning to the SAME element doesn't read as a
+  // change and blank everything.
+  const selectedElementKeyRef = useRef(restoredRef.current?.elementKey ?? '')
   // The panel root — used to focus a specific property's field by [data-prop].
   const rootRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<Content | null>(persistedScan?.content ?? null)
@@ -2201,11 +2360,13 @@ export default function EmbedEditor() {
   useEffect(() => () => { if (busyTimerRef.current != null) window.clearTimeout(busyTimerRef.current) }, [])
 
   const [phase, setPhase] = useState<Phase>('idle')
-  const [scan, setScan] = useState<ScanState | null>(null)
+  const [scan, setScan] = useState<ScanState | null>(restoredRef.current?.scan ?? null)
   // A fast, scan-independent snapshot (tag + classes) read straight off the
   // selected element so the chips appear immediately, before the embed scan's
   // fuller rootSnapshot arrives.
-  const [quickSnapshot, setQuickSnapshot] = useState<ElementSnapshot | null>(null)
+  const [quickSnapshot, setQuickSnapshot] = useState<ElementSnapshot | null>(restoredRef.current?.quick ?? null)
+  // Classes removed since the panel last resolved — hidden from the chips at once.
+  const removedClasses = useRemovedClasses()
   const [status, setStatus] = useState('Select an element to inspect its embed styles.')
   const [busy, setBusy] = useState(false)
   // Last save failure (surfaced by the header save indicator, not as body text).
@@ -2615,7 +2776,7 @@ export default function EmbedEditor() {
     }
   }, [])
 
-  const refresh = useCallback(async (element: unknown | null, opts: { force?: boolean } = {}) => {
+  const resolveSelection = useCallback(async (element: unknown | null, opts: { force?: boolean } = {}) => {
     const seq = ++seqRef.current
     selectedRef.current = element
 
@@ -2715,6 +2876,47 @@ export default function EmbedEditor() {
     }
   }, [applyResolve, backgroundRefresh, rebuildAndStore])
 
+  // Whether the panel is still working out what styles the selected element.
+  //
+  // The chips are blanked the moment the selection changes (another element's
+  // selectors are worse than none) and refilled from canvas round trips, so in
+  // between, the selector well is empty — and an empty well otherwise says "nothing
+  // styles this". The wait needs to be able to say it is a wait. Counted rather than
+  // flagged: reselecting starts a second pass before the first has unwound, and the
+  // first one finishing does not mean the panel is settled.
+  const [resolving, setResolving] = useState(false)
+  const resolvingRef = useRef(0)
+
+  const refresh = useCallback(async (element: unknown | null, opts: { force?: boolean } = {}) => {
+    resolvingRef.current += 1
+    setResolving(true)
+    try {
+      await resolveSelection(element, opts)
+    } finally {
+      resolvingRef.current -= 1
+      if (resolvingRef.current === 0) setResolving(false)
+    }
+  }, [resolveSelection])
+
+  // The project's stylesheets are listed asynchronously (style:listFiles and the
+  // Astro global-block scan), and the panel is usually mounted and finished
+  // scanning before that list lands: it reads no files, matches nothing, and
+  // calls itself ready with an empty well. It used to stay that way until the
+  // next background refresh came round — throttled to 4s, which is exactly how
+  // long the well sat empty on a layout. Rescan as soon as the list changes
+  // instead.
+  const sheetSigRef = useRef(sheetSignature())
+  useEffect(
+    () =>
+      onHostChange(() => {
+        const sig = sheetSignature()
+        if (sig === sheetSigRef.current) return
+        sheetSigRef.current = sig
+        void refresh(selectedRef.current, { force: true })
+      }),
+    [refresh]
+  )
+
   useEffect(() => {
     const api = webflowApi()
     if (!api?.getSelectedElement) {
@@ -2761,6 +2963,17 @@ export default function EmbedEditor() {
   }, [phase, syncFromDesigner, backgroundRefresh])
 
   const refreshDerived = useCallback(async () => {
+    // The page's computed values were measured against the CSS as it was a
+    // moment ago, and an edit is exactly what changes them. They used to be
+    // forgotten only when the canvas re-walked its markers — which a CSS-only
+    // edit never makes it do, because the dev server delivers CSS by swapping a
+    // <style> in <head> rather than re-rendering the page.
+    //
+    // A control that shows a COMPUTED value while nothing declares its property
+    // therefore went on showing the value from before the edit: clear
+    // `text-align` and the segment for the old alignment stayed lit, while the
+    // canvas behind it had already gone back to the inherited one.
+    forgetComputedStyles()
     const rules = rebuildRules(docsRef.current)
     if (contentRef.current) contentRef.current.rules = rules
     const target = targetRef.current
@@ -3037,9 +3250,29 @@ export default function EmbedEditor() {
     setRawRuleId((cur) => (cur === ruleId ? null : ruleId))
   }, [])
 
+  // Keep the resolved view at module scope so the next mount starts from it (see
+  // persistedView). Written as it changes rather than on unmount, which React skips
+  // when the whole tree goes.
+  useEffect(() => {
+    const host = getHost()
+    if (!host.selectedId || !scan) return
+    persistedView = {
+      hostId: host.selectedId,
+      filePath: host.openFilePath,
+      elementKey: selectedElementKeyRef.current,
+      scan,
+      quick: quickSnapshot,
+    }
+  }, [scan, quickSnapshot])
+
   // Prefer the scan's full rootSnapshot; fall back to the fast quick snapshot so
-  // the chips show while the scan is still running.
-  const snapshot = scan?.rootSnapshot ?? quickSnapshot ?? undefined
+  // the chips show while the scan is still running. Either can still carry a class
+  // the element has just lost (both union in what the preview last reported), so
+  // those are taken out here rather than waited out.
+  const snapshot = useMemo(
+    () => withoutClasses(scan?.rootSnapshot ?? quickSnapshot ?? undefined, removedClasses),
+    [scan, quickSnapshot, removedClasses],
+  )
 
   const model = scan?.model
   const tokens = useMemo(() => snapshotTokens(snapshot), [snapshot])
@@ -3513,7 +3746,15 @@ export default function EmbedEditor() {
     // them — so switching queries keeps the full list visible instead of dropping
     // selectors that only have styles elsewhere.
     const ownTokens = new Set(tokens.map((t) => t.name))
-    const list = styledSelectorsFor(model, nativeModel, currentContext)
+    // A chip is a selector that targets THIS element. One that hangs off a class the
+    // element no longer has doesn't any more — drop it now instead of leaving it in
+    // the well until the next resolve. Complex selectors are left to that resolve:
+    // the class may be an ancestor's, which this can't tell apart.
+    const list = styledSelectorsFor(model, nativeModel, currentContext).filter((sel) => {
+      if (!removedClasses.size) return true
+      const canon = canonicalCompound(sel.text)
+      return !(canon.simple && canon.tokens.some((tok) => removedClasses.has(tok)))
+    })
     // Show the active selector as a pending (dashed/outlined) chip while it has no rule
     // yet, so a freshly typed/picked selector stays visible until its first property
     // lands (then it becomes a solid styled chip). We show it for a complex/typed
@@ -3546,7 +3787,7 @@ export default function EmbedEditor() {
         const inQuery = !!currentContext.embedAtContext && s.inContext !== false && !!s.queryDisplay
         return inQuery ? { ...s, display: s.queryDisplay } : s
       })
-  }, [model, nativeModel, currentContext, activeSelector, selectedSelectorText, tokens, snapshot])
+  }, [model, nativeModel, currentContext, activeSelector, selectedSelectorText, tokens, snapshot, removedClasses])
 
   // Per-context dropdown info: embed hasStyles/combos (for the dot + auto-highlight)
   // plus whether the breakpoint carries native values.
@@ -3863,7 +4104,15 @@ export default function EmbedEditor() {
     if (r?.source === 'selected' && r.selectedOrigin) return r.selectedOrigin
     return canNative ? 'native' : 'embed'
   }
+  // Webflow's native API rejects hsl()/hsla(), so a value on its way THERE is
+  // normalized to rgb. Only there: this used to run on every write, which meant
+  // CSS written to a file or an embed — everything, in this app, where native
+  // styling is not available at all — could never come out as `hsl(…)`. Picking
+  // HSL in the colour picker changed the numbers on screen and left `rgb(224, 4,
+  // 4)` in the file, because the notation was converted back out on the way
+  // past.
   const nativeSetOrFallback = (index: number, prop: string, value: string, important: boolean) => {
+    value = hslaToRgba(value)
     void runNativeOp(async () => {
       let applied = false
       let reason = ''
@@ -3904,6 +4153,7 @@ export default function EmbedEditor() {
   // Webflow, write the property, then refresh (subsequent edits use the normal
   // native path once the style resolves). Falls back to an embed if creation fails.
   const nativeCreateAndSet = (className: string, prop: string, value: string, important: boolean) => {
+    value = hslaToRgba(value) // see nativeSetOrFallback
     void runNativeOp(async () => {
       let applied = false
       let created = false
@@ -3965,9 +4215,7 @@ export default function EmbedEditor() {
     return null
   }
   const setProp = (prop: string, value: string, important: boolean) => {
-    // Webflow's native API rejects hsl()/hsla() — normalize every write to rgb/rgba.
-    value = hslaToRgba(value)
-    // …and a gap or a padding cannot go below zero. Here rather than in the fields
+    // A gap or a padding cannot go below zero. Here rather than in the fields
     // themselves: a value reaches this point from a typed edit, an arrow step, a
     // drag, a variable pick and the add-property row, and a rule enforced in one
     // field is a rule the other four ways around it don't have.
@@ -4009,8 +4257,6 @@ export default function EmbedEditor() {
     // the hover-scrub's counterpart (a dropdown closed without picking, a field's edit
     // cancelled). Nothing to undo if no live write happened.
     if (value === null) { revertProp(prop); return }
-    // Normalize hsl()/hsla() → rgb/rgba first (Webflow's native API rejects hsl*).
-    value = hslaToRgba(value)
     value = clampNonNegative(prop, value)
     // Don't push half-typed / invalid values live: Webflow's native API errors on
     // them and gets stuck. Keep the last valid value applied until a complete valid
@@ -4022,13 +4268,13 @@ export default function EmbedEditor() {
       const route = autoSelectForEdit()
       if (route && 'native' in route) {
         const handle = nativeModelRef.current?.styles[route.native]?.style
-        if (handle) nativeLiveSet(handle, prop, value, optionsFor(currentContext, stateKey))
+        if (handle) nativeLiveSet(handle, prop, hslaToRgba(value), optionsFor(currentContext, stateKey))
       }
       return
     }
     if (propLayer(prop) === 'native') {
       const handle = nativeHandle()
-      if (handle) { nativeLiveSet(handle, prop, value, optionsFor(currentContext, stateKey)); return }
+      if (handle) { nativeLiveSet(handle, prop, hslaToRgba(value), optionsFor(currentContext, stateKey)); return }
     }
     if (selectedRule) onLiveSetProp(selectedRule, prop, value, important)
   }
@@ -4167,6 +4413,7 @@ export default function EmbedEditor() {
               sourceNote={sourceNote}
               nativeStyleName={nativeStyleName}
               loading={phase === 'scanning' || scanningMore}
+              resolving={resolving}
               busy={busy}
               pending={selectedRule ? pendingKeys.has(selectedRule.embedKey) : false}
               setProp={setProp}

@@ -6,6 +6,8 @@ import { setHost } from '../style-panel/lib/host.ts';
 import '../style-panel/tokens.css';
 import '../style-panel/utilities.css';
 import '../style-panel/embed-editor.css';
+import { clickNote } from '../ui/sound.js';
+import usePopupOpen from '../ui/usePopupOpen.js';
 
 // Host for the style panel.
 //
@@ -29,6 +31,7 @@ export default function StylePanel({
   onAddClass,
   onSpacingHover,
   renderedClasses,
+  projectClasses,
   historyTick,
   openFilePath,
 }) {
@@ -81,6 +84,7 @@ export default function StylePanel({
     addClass: onAddClass || null,
     onSpacingHover: onSpacingHover || null,
     renderedClasses: renderedClasses || [],
+    projectClasses: projectClasses || [],
     historyTick: historyTick || 0,
   };
   setHost(hostPatch);
@@ -88,7 +92,7 @@ export default function StylePanel({
   useEffect(() => {
     setHost(hostPatch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.path, model, node?.id, device, files, astroFiles, openFilePath, onWriteStyleNode, onSelectNode, onRecordUndo, onAddClass, onSpacingHover, renderedClasses, historyTick]);
+  }, [project?.path, model, node?.id, device, files, astroFiles, openFilePath, onWriteStyleNode, onSelectNode, onRecordUndo, onAddClass, onSpacingHover, renderedClasses, projectClasses, historyTick]);
 
   // The panel's popups (clip path, transitions, background, grid) are portaled
   // to <body> and were written for moden, where the panel filled the window —
@@ -116,10 +120,29 @@ export default function StylePanel({
     };
   }, []);
 
+  // A popup is placed against its anchor when it opens and stays where it was
+  // put; scrolling the panel underneath it moves the field away and leaves the
+  // popup behind, pointing at nothing. So while one is open the panel holds
+  // still. `scrollbar-gutter: stable` on the scroller means the bar going away
+  // costs no layout.
+  const popupOpen = usePopupOpen(hostRef);
+
   if (!project) return null;
 
   return (
-    <div className="style-panel-host" ref={hostRef}>
+    // Every button in the panel, in one place rather than in each of them. A
+    // popover portals to <body>, but React sends its events up the tree that
+    // rendered it, so the colour picker and the modals are covered here too —
+    // and nothing outside this panel is, since they hang off other trees.
+    // Silent unless the setting is on.
+    <div
+      className={`style-panel-host ${popupOpen ? 'is-locked' : ''}`}
+      ref={hostRef}
+      onClick={(event) => {
+        const button = event.target instanceof Element ? event.target.closest('button') : null;
+        if (button && !button.disabled) clickNote();
+      }}
+    >
       {!node ? (
         <div className="props-empty">Select an element to style it.</div>
       ) : (

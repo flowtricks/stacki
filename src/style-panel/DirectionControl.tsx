@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import SegmentPill from './components/SegmentPill'
+import { commitInPlace } from './lib/commit-in-place'
 
 // The flex Direction / flow control — shown only when `display` is flex. Two fixed
 // segments (→ single row, ↓ single column) plus a third slot that shows whichever
@@ -143,7 +145,7 @@ function CustomField({ value, important, busy, inputRef, onCommit }: {
       onChange={(event) => setDraft(event.target.value)}
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; commit() }}
-      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+      onKeyDown={(event) => { if (event.key === 'Enter') commitInPlace(event.currentTarget) }}
       disabled={busy}
       spellCheck={false}
       aria-label="Direction value"
@@ -240,6 +242,7 @@ export default function DirectionControl({ value, rawDirection, important, busy,
         <CustomField value={rawDirection} important={important} busy={busy} inputRef={inputRef} onCommit={onCommitCustom} />
       ) : (
         <>
+          <SegmentPill />
           {seg(ROW, current === ROW.value)}
           {seg(COLUMN, current === COLUMN.value)}
           {seg(third, !!thirdMatch)}

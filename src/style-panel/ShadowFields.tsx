@@ -3,6 +3,7 @@ import DragSlider from './components/DragSlider'
 import ColorSwatch from './components/ColorSwatch'
 import VariableConnect from './VariableConnect'
 import { handleArrowStep } from './lib/number-step'
+import { useLiveColor } from './lib/live-color'
 
 // Shared building blocks for the shadow editors (text-shadow + box-shadow): a labelled
 // length row (drag slider + number field) and the full-width popup modal. Both editors
@@ -51,7 +52,7 @@ function ShadowTextInput({ value, busy, ariaLabel, placeholder, className, prop,
   const live = (text: string) => { cancel(); timer.current = window.setTimeout(() => { const t = text.trim(); if (t) onLive(t) }, 100) }
   const commit = () => { const t = draft.trim(); if (!t) { onClear(); return } onCommit(t) }
   return (
-    <VariableConnect ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} className="is-fill" prop={prop} onPick={(binding) => onCommit(binding)}>
+    <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} className="is-fill" prop={prop} onPick={(binding) => onCommit(binding)}>
       <input
         className={className}
         value={draft}
@@ -125,18 +126,30 @@ export function ShadowNum({ label, value, busy, onCommit, onLive, range, default
 }
 
 // The Color row shared by both shadow editors: a swatch beside a live text field.
+//
+// A drag in the picker writes to the canvas, not to the model this row reads —
+// the model is rebuilt from the stylesheets, and rebuilding it per pointer move
+// would be absurd. So the row shows the colour it last emitted until the model
+// catches up: otherwise the page moves under the pointer while the swatch and
+// the number sit on the colour the drag started from (see live-color.ts).
 export function ShadowColorRow({ color, busy, onChange }: {
   color: string
   busy: boolean
   onChange: (color: string, live: boolean) => void
 }) {
+  const [shown, noteLive] = useLiveColor(color)
   return (
     <div className="embed-editor_size-row">
       <span className="embed-editor_size-label embed-editor_bg-caption">Color</span>
       <div className="embed-editor_type-field">
-        <ColorSwatch value={color} busy={busy} ariaLabel="Shadow color" onChange={(c, live) => onChange(c, live)} />
-        <ShadowTextInput value={color} busy={busy} ariaLabel="Shadow color" placeholder="rgba(0, 0, 0, 0.2)" className="u-input embed-editor_size-input" prop="color"
-          onCommit={(c) => onChange(c, false)} onLive={(c) => onChange(c, true)} onClear={() => onChange('', false)} />
+        <ColorSwatch
+          value={shown}
+          busy={busy}
+          ariaLabel="Shadow color"
+          onChange={(c, live) => { noteLive(live ? c : null); onChange(c, live) }}
+        />
+        <ShadowTextInput value={shown} busy={busy} ariaLabel="Shadow color" placeholder="rgba(0, 0, 0, 0.2)" className="u-input embed-editor_size-input" prop="color"
+          onCommit={(c) => { noteLive(null); onChange(c, false) }} onLive={(c) => onChange(c, true)} onClear={() => { noteLive(null); onChange('', false) }} />
       </div>
     </div>
   )

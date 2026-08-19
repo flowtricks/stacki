@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { useComputedChoice } from './lib/computed-style'
 import type { ReactNode } from 'react'
+import SegmentPill from './components/SegmentPill'
 
 // A segmented button-list with a trailing dropdown arrow whose menu offers a
 // "Custom" escape hatch (writes `unset` and reveals a focused text field), and —
@@ -65,11 +67,14 @@ function CustomField({ value, important, busy, inputRef, onCommit }: {
   )
 }
 
-export default function SegmentedField({ value, important, options, fallback, busy, onCommit, ariaLabel }: {
+export default function SegmentedField({ value, important, options, prop, fallback, busy, onCommit, ariaLabel }: {
   value: string
   important: boolean
   options: readonly SegOption[]
-  /** Value selected/shown when the property is unset (e.g. `none`, `auto`). */
+  /** The CSS property this bar edits — when nothing is authored, the page's own
+   *  computed value is highlighted (inherited, a `*` rule, a UA default). */
+  prop?: string
+  /** Value selected/shown when the property is unset and the page can't be asked. */
   fallback: string
   busy: boolean
   onCommit: (value: string, important: boolean) => void
@@ -79,7 +84,8 @@ export default function SegmentedField({ value, important, options, fallback, bu
   const supported = new Set(options.map((o) => o.value))
   // The bar represents a listed value with no !important; anything else is custom.
   const customMode = !((supported.has(current) || !current) && !important)
-  const active = current || fallback
+  const computed = useComputedChoice(current || !prop ? '' : prop, options.map((o) => o.value))
+  const active = current || computed || fallback
 
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -109,6 +115,7 @@ export default function SegmentedField({ value, important, options, fallback, bu
 
   return (
     <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label={ariaLabel}>
+      <SegmentPill />
       {customMode ? (
         <CustomField value={value} important={important} busy={busy} inputRef={inputRef} onCommit={onCommit} />
       ) : (

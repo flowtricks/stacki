@@ -1,14 +1,20 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { parseHideable, serializeHideable, type Hideable } from './lib/hideable'
+import TransformSettings from './TransformSettings'
+import { takeSelfPerspective, withSelfPerspective } from './lib/transform-settings'
 import { createPortal } from 'react-dom'
 import FieldLabel from './components/FieldLabel'
+import { PropTip, ProvenanceLabel } from './components/PropTip'
 import Select, { type SelectOption } from './components/Select'
 import DragSlider from './components/DragSlider'
 import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl'
 import SegmentedField, { type SegOption } from './SegmentedField'
 import ColorSwatch from './components/ColorSwatch'
+import { useLiveColor } from './lib/live-color'
 import LayerList from './LayerList'
 import LayerPopover from './LayerPopover'
 import { CURSOR_ICONS } from './cursor-icons'
+import { useComputedChoice } from './lib/computed-style'
 import { ShadowNum, ShadowColorRow } from './ShadowFields'
 import { parseBoxShadows, serializeBoxShadows, blankBoxShadow, boxShadowLabel, type BoxShadow } from './lib/box-shadow'
 import { handleArrowStep } from './lib/number-step'
@@ -21,6 +27,7 @@ import EasingEditor from './EasingEditor'
 import { parseTransitions, serializeTransitions, blankTransition, transitionLabel, easingToBezier, TRANSITION_GROUPS, type Transition } from './lib/transition'
 import { parseFilters, serializeFilters, blankFilter, filterLabel, type Filter } from './lib/filter'
 import FilterEditor from './FilterFields'
+import { commitInPlace } from './lib/commit-in-place'
 
 // The Effects section (Webflow parity): blending, opacity, outline, box shadows,
 // transforms, transitions, filters, backdrop filters, cursor, and pointer-events.
@@ -65,11 +72,7 @@ function EffLabel({ label, prop, props }: { label: string; prop: string; props: 
   const d = displayOf(read(prop))
   const contributors: Contributor[] = read(prop)?.contributors ?? []
   if (d.present && !d.isSelected) {
-    return (
-      <button type="button" className="embed-editor_size-label embed-editor_prop-orange" disabled={busy} title="Set through another selector — click to see all" onClick={(e) => onProvenance(prop, e.currentTarget.getBoundingClientRect())}>
-        {label}
-      </button>
-    )
+    return <ProvenanceLabel label={label} props={[prop]} busy={busy} onProvenance={onProvenance} />
   }
   return (
     <FieldLabel
@@ -78,6 +81,7 @@ function EffLabel({ label, prop, props }: { label: string; prop: string; props: 
       disabled={busy}
       onReset={() => clearProp(prop)}
       resetLabel="Clear"
+      tooltip={<PropTip props={[prop]} />}
       title={d.overridden ? `Overridden by ${d.winnerSelector}` : undefined}
       menuNote={(close) => <ProvenanceList contributors={contributors} prop={prop} onSelect={(sel, p) => { onSelectSelector(sel, p); close() }} />}
     >
@@ -86,11 +90,36 @@ function EffLabel({ label, prop, props }: { label: string; prop: string; props: 
   )
 }
 
+// The outline's colour: the swatch and the field beside it, both showing a drag
+// as it happens. The drag writes to the canvas, not to the model the field
+// reads, so without this the page moves under the pointer while the number
+// sits still (see live-color.ts).
+function OutlineColor({ props, value }: { props: Props; value: string }) {
+  const { busy, setProp, liveSetProp } = props
+  const [shown, noteLive] = useLiveColor(value)
+  return (
+    <>
+      <ColorSwatch
+        value={shown}
+        busy={busy}
+        ariaLabel="Outline color"
+        onChange={(c, live) => {
+          noteLive(live ? c : null)
+          if (live) liveSetProp('outline-color', c, false)
+          else setProp('outline-color', c, false)
+        }}
+      />
+      <LiveText prop="outline-color" placeholder="currentColor" props={props} dragging={shown === value ? undefined : shown} />
+    </>
+  )
+}
+
 // A live text field bound to one property (raw CSS value editors).
-function LiveText({ prop, placeholder, props }: { prop: string; placeholder: string; props: Props }) {
+function LiveText({ prop, placeholder, props, dragging }: { prop: string; placeholder: string; props: Props; dragging?: string }) {
   const { read, busy, setProp, clearProp, liveSetProp } = props
   const d = displayOf(read(prop))
-  const external = d.present ? (d.important ? `${d.value} !important` : d.value) : ''
+  // `dragging` is what a swatch beside this field is showing mid-drag.
+  const external = dragging ?? (d.present ? (d.important ? `${d.value} !important` : d.value) : '')
   const [draft, setDraft] = useState(external)
   const focused = useRef(false)
   const timer = useRef<number | null>(null)
@@ -108,7 +137,7 @@ function LiveText({ prop, placeholder, props }: { prop: string; placeholder: str
     setProp(prop, p.value, p.important)
   }
   return (
-    <VariableConnect className="is-fill" ariaLabel={`Connect ${prop} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
+    <VariableConnect code className="is-fill" ariaLabel={`Connect ${prop} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
     <input
       className="u-input embed-editor_size-input embed-editor_eff-value"
       data-prop={prop}
@@ -117,7 +146,7 @@ function LiveText({ prop, placeholder, props }: { prop: string; placeholder: str
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; cancel(); commit() }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') { e.currentTarget.blur(); return }
+        if (e.key === 'Enter') { commitInPlace(e.currentTarget); return }
         const stepped = handleArrowStep(e)
         if (!stepped) return
         e.preventDefault()
@@ -217,7 +246,7 @@ function CustomInput({ prop, value, placeholder, busy, autoFocus, setProp, liveS
       onChange={(e) => { setDraft(e.target.value); live(e.target.value) }}
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; cancel(); commit() }}
-      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+      onKeyDown={(e) => { if (e.key === 'Enter') commitInPlace(e.currentTarget) }}
       disabled={busy}
       spellCheck={false}
       placeholder={placeholder}
@@ -244,6 +273,9 @@ function PresetSelectRow({ prop, label, options, presets, fallback, placeholder,
   const { read, busy, setProp, liveSetProp, clearProp } = props
   const d = displayOf(read(prop))
   const current = d.present ? d.value.trim() : ''
+  // Nothing authored → highlight what the page actually computes for this element,
+  // falling back to the CSS initial value when there's no canvas to ask.
+  const computed = useComputedChoice(current ? '' : prop, options.map((o) => o.value))
   const isPreset = !current || presets.has(current)
   const [forceCustom, setForceCustom] = useState(false)
   const customMode = allowCustom && (forceCustom || (d.present && !isPreset))
@@ -262,7 +294,7 @@ function PresetSelectRow({ prop, label, options, presets, fallback, placeholder,
     <div className="embed-editor_size-row">
       <EffLabel label={label} prop={prop} props={props} />
       <Select
-        value={customMode ? CUSTOM : (current || fallback)}
+        value={customMode ? CUSTOM : (current || computed || fallback)}
         options={selectOptions}
         onChange={pick}
         onPreview={(v) => liveSetProp(prop, v === CUSTOM ? null : v, false)}
@@ -323,7 +355,7 @@ function OpacityRow({ props }: { props: Props }) {
             onChange={(e) => { setText(e.target.value); const n = parse(e.target.value); if (n != null) live(n) }}
             onBlur={() => { focused.current = false; const n = parse(text); if (n != null) commit(n); else setText(String(pct)) }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.currentTarget.blur(); return }
+              if (e.key === 'Enter') { commitInPlace(e.currentTarget); return }
               const stepped = handleArrowStep(e)
               if (!stepped) return
               e.preventDefault()
@@ -350,6 +382,9 @@ const TRANSFORM_TYPES: ReadonlyArray<SegmentedOption<TransformType>> = [
   { value: 'skew', label: 'Skew' },
 ]
 
+const MoreIcon = () => (
+  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="4" cy="8" r="1.15" fill="currentColor" /><circle cx="8" cy="8" r="1.15" fill="currentColor" /><circle cx="12" cy="8" r="1.15" fill="currentColor" /></svg>
+)
 const TransformPlusIcon = () => (<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>)
 
 const FilterGlyph = () => (
@@ -363,22 +398,25 @@ const FilterGlyph = () => (
 function FiltersRow({ prop, label, props }: { prop: string; label: string; props: Props }) {
   const { read, busy, setProp, clearProp, liveSetProp } = props
   const d = displayOf(read(prop))
-  const layers = parseFilters(d.present ? d.value : '')
+  // Shared by Filters and Backdrop filters, so both get the eye from here.
+  const rows = parseHideable(d.present ? d.value : '', ' ', parseFilters)
+  const layers = rows.map((r) => r.item)
   const [openIdx, setOpenIdx] = useState<number | null>(null)
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
-  const write = (next: Filter[], live: boolean) => {
-    const value = serializeFilters(next)
+  const write = (next: Array<Hideable<Filter>>, live: boolean) => {
+    const value = serializeHideable(next, ' ', serializeFilters)
     if (live) { if (value) liveSetProp(prop, value, false); return }
     if (value) setProp(prop, value, false); else clearProp(prop)
   }
-  const add = () => { const next = [...layers, blankFilter()]; write(next, false); setOpenIdx(next.length - 1) }
-  const remove = (i: number) => { write(layers.filter((_, j) => j !== i), false); setOpenIdx((cur) => (cur === i ? null : cur != null && cur > i ? cur - 1 : cur)) }
+  const add = () => { const next = [...rows, { item: blankFilter(), hidden: false }]; write(next, false); setOpenIdx(next.length - 1) }
+  const remove = (i: number) => { write(rows.filter((_, j) => j !== i), false); setOpenIdx((cur) => (cur === i ? null : cur != null && cur > i ? cur - 1 : cur)) }
   const reorder = (from: number, to: number) => {
     if (from === to) return
-    const next = [...layers]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); write(next, false)
+    const next = [...rows]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); write(next, false)
     setOpenIdx((cur) => (cur === from ? to : cur))
   }
-  const patch = (i: number, next: Filter, live: boolean) => write(layers.map((f, j) => (j === i ? next : f)), live)
+  const patch = (i: number, next: Filter, live: boolean) => write(rows.map((r, j) => (j === i ? { ...r, item: next } : r)), live)
+  const toggle = (i: number) => write(rows.map((r, j) => (j === i ? { ...r, hidden: !r.hidden } : r)), false)
   return (
     <div className="embed-editor_type-shadows">
       <div className="embed-editor_bg-layers-head">
@@ -389,9 +427,11 @@ function FiltersRow({ prop, label, props }: { prop: string; label: string; props
         count={layers.length}
         busy={busy}
         ariaLabel={label}
-        onOpen={(i, el) => { setOpenIdx(i); setAnchorEl(el) }}
+        onOpen={(i, el) => { setOpenIdx((cur) => (cur === i ? null : i)); setAnchorEl(el) }}
         onReorder={reorder}
         onRemove={remove}
+        isHidden={(i) => rows[i]?.hidden ?? false}
+        onToggleHidden={toggle}
         renderRow={(i) => ({ preview: <FilterGlyph />, label: filterLabel(layers[i]) })}
       />
       {openIdx != null && anchorEl && layers[openIdx] ? (
@@ -408,7 +448,10 @@ function FiltersRow({ prop, label, props }: { prop: string; label: string; props
 // `scale` (0–2) runs in hundredths for sub-integer precision; the number field always
 // allows a precise value outside the range.
 const AXIS_CFG: Record<TransformType, { unit: string; min: number; max: number; steps: number }> = {
-  move: { unit: 'px', min: -100, max: 100, steps: 1 },
+  // Move is in rem unless the value itself says otherwise — `steps` is how many
+  // slider notches make one unit, so 100 gives hundredths of a rem across a
+  // range wide enough to push something off its own width.
+  move: { unit: 'rem', min: -20, max: 20, steps: 100 },
   scale: { unit: '', min: 0, max: 2, steps: 100 },
   rotate: { unit: 'deg', min: -180, max: 180, steps: 1 },
   skew: { unit: 'deg', min: -90, max: 90, steps: 1 },
@@ -468,7 +511,7 @@ function AxisInput({ type, label, value, placeholder, busy, onPreview, onLive, o
           onFocus={() => { focused.current = true }}
           onBlur={() => { focused.current = false; cancel(); commit() }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') { e.currentTarget.blur(); return }
+            if (e.key === 'Enter') { commitInPlace(e.currentTarget); return }
             const stepped = handleArrowStep(e)
             if (!stepped) return
             e.preventDefault()
@@ -559,40 +602,79 @@ function TransformEditor({ layer, busy, onChange }: { layer: Transform; busy: bo
 function TransformsRow({ props }: { props: Props }) {
   const { read, busy, setProp, clearProp, liveSetProp } = props
   const d = displayOf(read('transform'))
-  const layers = parseTransforms(d.present ? d.value : '')
+  // A self perspective lives in this same value, as a perspective() function,
+  // and parseTransforms drops every function it doesn't recognise — so lift it
+  // out before the layers are read and put it back in front on the way out, or
+  // it vanishes the next time any layer is touched. See lib/transform-settings.
+  const { distance: selfPerspective, rest } = takeSelfPerspective(d.present ? d.value : '')
+  // Rows rather than bare layers: a hidden one is still in the list and still
+  // in the CSS, commented out (see lib/hideable.ts).
+  const rows = parseHideable(rest, ' ', parseTransforms)
+  const layers = rows.map((r) => r.item)
   const [openIdx, setOpenIdx] = useState<number | null>(null)
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
-  const write = (next: Transform[], live: boolean) => {
-    const value = serializeTransforms(next)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsRef = useRef<HTMLButtonElement>(null)
+  const put = (next: Array<Hideable<Transform>>, distance: string, live: boolean) => {
+    const value = withSelfPerspective(serializeHideable(next, ' ', serializeTransforms), distance)
     if (live) { if (value) liveSetProp('transform', value, false); return }
     if (value) setProp('transform', value, false); else clearProp('transform')
   }
-  const add = () => { const next = [...layers, blankTransform()]; write(next, false); setOpenIdx(next.length - 1) }
-  const remove = (i: number) => { write(layers.filter((_, j) => j !== i), false); setOpenIdx((cur) => (cur === i ? null : cur != null && cur > i ? cur - 1 : cur)) }
+  const write = (next: Array<Hideable<Transform>>, live: boolean) => put(next, selfPerspective, live)
+  const setSelfPerspective = (distance: string, live: boolean) => put(rows, distance, live)
+  const add = () => { const next = [...rows, { item: blankTransform(), hidden: false }]; write(next, false); setOpenIdx(next.length - 1) }
+  const remove = (i: number) => { write(rows.filter((_, j) => j !== i), false); setOpenIdx((cur) => (cur === i ? null : cur != null && cur > i ? cur - 1 : cur)) }
   const reorder = (from: number, to: number) => {
     if (from === to) return
-    const next = [...layers]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); write(next, false)
+    const next = [...rows]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); write(next, false)
     setOpenIdx((cur) => (cur === from ? to : cur))
   }
-  const patch = (i: number, p: Partial<Transform>, live: boolean) => write(layers.map((s, j) => (j === i ? { ...s, ...p } : s)), live)
+  const patch = (i: number, p: Partial<Transform>, live: boolean) => write(rows.map((r, j) => (j === i ? { ...r, item: { ...r.item, ...p } } : r)), live)
+  const toggle = (i: number) => write(rows.map((r, j) => (j === i ? { ...r, hidden: !r.hidden } : r)), false)
   return (
     <div className="embed-editor_type-shadows">
       <div className="embed-editor_bg-layers-head">
         <EffLabel label="2D & 3D transforms" prop="transform" props={props} />
+        <div className="embed-editor_bg-layers-actions">
+        <button
+          type="button"
+          ref={settingsRef}
+          className={`embed-editor_icon-btn ${settingsOpen ? 'is-active' : ''}`}
+          onClick={() => setSettingsOpen((o) => !o)}
+          disabled={busy}
+          title="Transform settings"
+          aria-label="Transform settings"
+          aria-expanded={settingsOpen}
+        ><MoreIcon /></button>
         <button type="button" className="embed-editor_icon-btn" onClick={add} disabled={busy} title="Add a transform" aria-label="Add a transform"><TransformPlusIcon /></button>
+        </div>
       </div>
       <LayerList
         count={layers.length}
         busy={busy}
         ariaLabel="Transforms"
-        onOpen={(i, el) => { setOpenIdx(i); setAnchorEl(el) }}
+        onOpen={(i, el) => { setOpenIdx((cur) => (cur === i ? null : i)); setAnchorEl(el) }}
         onReorder={reorder}
         onRemove={remove}
+        isHidden={(i) => rows[i]?.hidden ?? false}
+        onToggleHidden={toggle}
         renderRow={(i) => ({ preview: transformTypeIcon(layers[i].type), label: transformLabel(layers[i]) })}
       />
       {openIdx != null && anchorEl && layers[openIdx] ? (
         <LayerPopover anchorEl={anchorEl} ariaLabel="Transform" onClose={() => setOpenIdx(null)}>
           <TransformEditor layer={layers[openIdx]} busy={busy} onChange={(p, live) => patch(openIdx!, p, live)} />
+        </LayerPopover>
+      ) : null}
+      {settingsOpen && settingsRef.current ? (
+        <LayerPopover anchorEl={settingsRef.current} ariaLabel="Transform settings" onClose={() => setSettingsOpen(false)}>
+          <TransformSettings
+            read={read}
+            busy={busy}
+            setProp={setProp}
+            clearProp={clearProp}
+            selfPerspective={selfPerspective}
+            onSelfPerspective={setSelfPerspective}
+          />
         </LayerPopover>
       ) : null}
     </div>
@@ -647,7 +729,7 @@ function DurationField({ value, busy, onCommit, onLive }: { value: string; busy:
         onChange={(e) => setDraft(e.target.value)}
         onFocus={() => { focused.current = true }}
         onBlur={() => { focused.current = false; onCommit(draft.trim() || '0ms') }}
-        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        onKeyDown={(e) => { if (e.key === 'Enter') commitInPlace(e.currentTarget) }}
       />
     </div>
   )
@@ -674,7 +756,7 @@ function EasingField({ value, busy, onCommit, onEditEasing }: { value: string; b
         onChange={(e) => setDraft(e.target.value)}
         onFocus={() => { focused.current = true }}
         onBlur={() => { focused.current = false; onCommit(draft.trim() || 'ease') }}
-        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        onKeyDown={(e) => { if (e.key === 'Enter') commitInPlace(e.currentTarget) }}
       />
     </div>
   )
@@ -699,7 +781,6 @@ function TransitionEditor({ transition, busy, onChange, onEditEasing }: { transi
         <span className="embed-editor_size-label embed-editor_bg-caption">Easing</span>
         <EasingField value={transition.timing} busy={busy} onCommit={(v) => onChange({ timing: v }, false)} onEditEasing={onEditEasing} />
       </div>
-      <p className="embed-editor_trans-note">Transitions write to custom code (the embed). Webflow has no API for its native Transitions panel, so they apply as CSS but won’t appear there.</p>
     </div>
   )
 }
@@ -707,23 +788,26 @@ function TransitionEditor({ transition, busy, onChange, onEditEasing }: { transi
 function TransitionsRow({ props }: { props: Props }) {
   const { read, busy, setProp, clearProp, liveSetProp } = props
   const d = displayOf(read('transition'))
-  const list = parseTransitions(d.present ? d.value : '')
+  // `transition` is comma-separated, unlike transform and filter.
+  const rows = parseHideable(d.present ? d.value : '', ',', parseTransitions)
+  const list = rows.map((r) => r.item)
   const [openIdx, setOpenIdx] = useState<number | null>(null)
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const [easingOpen, setEasingOpen] = useState(false)
-  const write = (next: Transition[], live: boolean) => {
-    const value = serializeTransitions(next)
+  const write = (next: Array<Hideable<Transition>>, live: boolean) => {
+    const value = serializeHideable(next, ',', serializeTransitions)
     if (live) { if (value) liveSetProp('transition', value, false); return }
     if (value) setProp('transition', value, false); else clearProp('transition')
   }
-  const add = () => { const next = [...list, blankTransition()]; write(next, false); setOpenIdx(next.length - 1) }
-  const remove = (i: number) => { write(list.filter((_, j) => j !== i), false); setOpenIdx((cur) => (cur === i ? null : cur != null && cur > i ? cur - 1 : cur)) }
+  const add = () => { const next = [...rows, { item: blankTransition(), hidden: false }]; write(next, false); setOpenIdx(next.length - 1) }
+  const remove = (i: number) => { write(rows.filter((_, j) => j !== i), false); setOpenIdx((cur) => (cur === i ? null : cur != null && cur > i ? cur - 1 : cur)) }
   const reorder = (from: number, to: number) => {
     if (from === to) return
-    const next = [...list]; const [m] = next.splice(from, 1); next.splice(to, 0, m); write(next, false)
+    const next = [...rows]; const [m] = next.splice(from, 1); next.splice(to, 0, m); write(next, false)
     setOpenIdx((cur) => (cur === from ? to : cur))
   }
-  const patch = (i: number, p: Partial<Transition>, live: boolean) => write(list.map((t, j) => (j === i ? { ...t, ...p } : t)), live)
+  const patch = (i: number, p: Partial<Transition>, live: boolean) => write(rows.map((r, j) => (j === i ? { ...r, item: { ...r.item, ...p } } : r)), live)
+  const toggle = (i: number) => write(rows.map((r, j) => (j === i ? { ...r, hidden: !r.hidden } : r)), false)
   const cur = openIdx != null ? list[openIdx] : null
 
   return (
@@ -736,9 +820,11 @@ function TransitionsRow({ props }: { props: Props }) {
         count={list.length}
         busy={busy}
         ariaLabel="Transitions"
-        onOpen={(i, el) => { setOpenIdx(i); setAnchorEl(el) }}
+        onOpen={(i, el) => { setOpenIdx((cur) => (cur === i ? null : i)); setAnchorEl(el) }}
         onReorder={reorder}
         onRemove={remove}
+        isHidden={(i) => rows[i]?.hidden ?? false}
+        onToggleHidden={toggle}
         renderRow={(i) => ({
           preview: <span className="embed-editor_trans-clock" aria-hidden="true"><ClockIcon /></span>,
           label: transitionLabel(list[i]),
@@ -786,22 +872,24 @@ function BoxShadowEditor({ shadow, busy, onChange }: { shadow: BoxShadow; busy: 
 function BoxShadowsRow({ props }: { props: Props }) {
   const { read, busy, setProp, clearProp, liveSetProp } = props
   const d = displayOf(read('box-shadow'))
-  const shadows = parseBoxShadows(d.present ? d.value : '')
+  const rows = parseHideable(d.present ? d.value : '', ',', parseBoxShadows)
+  const shadows = rows.map((r) => r.item)
   const [openIdx, setOpenIdx] = useState<number | null>(null)
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
-  const write = (next: BoxShadow[], live: boolean) => {
-    const value = serializeBoxShadows(next)
+  const write = (next: Array<Hideable<BoxShadow>>, live: boolean) => {
+    const value = serializeHideable(next, ',', serializeBoxShadows)
     if (live) { if (value) liveSetProp('box-shadow', value, false); return }
     if (value) setProp('box-shadow', value, false); else clearProp('box-shadow')
   }
-  const add = () => { const next = [...shadows, blankBoxShadow()]; write(next, false); setOpenIdx(next.length - 1) }
-  const remove = (i: number) => { write(shadows.filter((_, j) => j !== i), false); setOpenIdx((cur) => (cur === i ? null : cur != null && cur > i ? cur - 1 : cur)) }
+  const add = () => { const next = [...rows, { item: blankBoxShadow(), hidden: false }]; write(next, false); setOpenIdx(next.length - 1) }
+  const remove = (i: number) => { write(rows.filter((_, j) => j !== i), false); setOpenIdx((cur) => (cur === i ? null : cur != null && cur > i ? cur - 1 : cur)) }
   const reorder = (from: number, to: number) => {
     if (from === to) return
-    const next = [...shadows]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); write(next, false)
+    const next = [...rows]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); write(next, false)
     setOpenIdx((cur) => (cur === from ? to : cur))
   }
-  const patch = (i: number, p: Partial<BoxShadow>, live: boolean) => write(shadows.map((s, j) => (j === i ? { ...s, ...p } : s)), live)
+  const patch = (i: number, p: Partial<BoxShadow>, live: boolean) => write(rows.map((r, j) => (j === i ? { ...r, item: { ...r.item, ...p } } : r)), live)
+  const toggle = (i: number) => write(rows.map((r, j) => (j === i ? { ...r, hidden: !r.hidden } : r)), false)
   return (
     <div className="embed-editor_type-shadows">
       <div className="embed-editor_bg-layers-head">
@@ -812,9 +900,11 @@ function BoxShadowsRow({ props }: { props: Props }) {
         count={shadows.length}
         busy={busy}
         ariaLabel="Box shadows"
-        onOpen={(i, el) => { setOpenIdx(i); setAnchorEl(el) }}
+        onOpen={(i, el) => { setOpenIdx((cur) => (cur === i ? null : i)); setAnchorEl(el) }}
         onReorder={reorder}
         onRemove={remove}
+        isHidden={(i) => rows[i]?.hidden ?? false}
+        onToggleHidden={toggle}
         renderRow={(i) => ({
           preview: <span className="embed-editor_bg-layer-preview" style={{ background: `linear-gradient(${shadows[i].color}, ${shadows[i].color}), conic-gradient(#8883 25%, transparent 0 50%, #8883 0 75%, transparent 0) 0 0 / 10px 10px` }} aria-hidden="true" />,
           label: boxShadowLabel(shadows[i]),
@@ -872,10 +962,10 @@ function clipPathType(value: string): string {
   return 'Custom'
 }
 
-// The editor in a full-panel modal, portaled to <body> and re-applying the panel's
-// 0.75 zoom (a body-portaled node escapes .app_body's zoom) so it renders exactly as
-// it did as a standalone tool. The editor's clip-path writes are routed to the panel's
-// selected selector via setProp/clearProp (so its own class picker is hidden).
+// The editor in a full-panel modal, portaled to <body> and rendered at the panel's
+// own scale (it used to re-apply moden's compact zoom — see embed-editor.css). The
+// editor's clip-path writes are routed to the panel's selected selector via
+// setProp/clearProp (so its own class picker is hidden).
 function ClipPathModal({ props, onClose }: { props: Props; onClose: () => void }) {
   const { setProp, liveSetProp, clearProp } = props
   const pending = useRef<string | null>(null)
@@ -964,6 +1054,7 @@ export default function EffectsSection(props: Props) {
           value={outline.present ? outline.value : ''}
           important={outline.important}
           options={OUTLINE_OPTS}
+          prop="outline-style"
           fallback="none"
           busy={busy}
           onCommit={(v, imp) => setProp('outline-style', v, imp)}
@@ -981,8 +1072,7 @@ export default function EffectsSection(props: Props) {
       <div className="embed-editor_size-row">
         <EffLabel label="Color" prop="outline-color" props={props} />
         <div className="embed-editor_bg-inline">
-          <ColorSwatch value={outlineColor.present ? outlineColor.value : ''} busy={busy} ariaLabel="Outline color" onChange={(c, live) => { if (live) liveSetProp('outline-color', c, false); else setProp('outline-color', c, false) }} />
-          <LiveText prop="outline-color" placeholder="currentColor" props={props} />
+          <OutlineColor props={props} value={outlineColor.present ? outlineColor.value : ''} />
         </div>
       </div>
 
@@ -1002,6 +1092,7 @@ export default function EffectsSection(props: Props) {
           value={events.present ? events.value : ''}
           important={events.important}
           options={EVENTS_OPTS}
+          prop="pointer-events"
           fallback="auto"
           busy={busy}
           onCommit={(v, imp) => setProp('pointer-events', v, imp)}

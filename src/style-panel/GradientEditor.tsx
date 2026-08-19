@@ -4,6 +4,8 @@ import ColorSwatch from './components/ColorSwatch'
 import VariableConnect from './VariableConnect'
 import { handleArrowStep } from './lib/number-step'
 import { angleToDegrees, degreesToAngle, gradientCenter, serializeGradient, stopPercent, stopsBarCss, type Gradient, type GradientStop } from './lib/gradient'
+import { commitInPlace } from './lib/commit-in-place'
+import { PositionGrid, NumField } from './components/PositionGrid'
 
 // Webflow-style visual gradient editor: a position grid + size presets (radial),
 // an angle dial (linear/conic), a draggable stops bar, a repeat toggle, and the
@@ -112,77 +114,6 @@ function RadialSizeControl({ value, busy, onChange }: { value: string; busy: boo
           <span className="u-segmented-tooltip-arrow" aria-hidden="true" />
         </div>
       ) : null}
-    </div>
-  )
-}
-
-// 3×3 position picker: pick a corner/edge/center; the active cell is filled.
-function PositionGrid({ x, y, busy, onPick }: { x: string; y: string; busy: boolean; onPick: (px: string, py: string) => void }) {
-  const cells = ['0%', '50%', '100%']
-  const activeX = cells.indexOf(x)
-  const activeY = cells.indexOf(y)
-  return (
-    <div className="embed-editor_grad-grid" role="group" aria-label="Gradient position">
-      {cells.map((py, yi) => cells.map((px, xi) => {
-        const active = xi === activeX && yi === activeY
-        return (
-          <button
-            key={`${xi}-${yi}`}
-            type="button"
-            className={`embed-editor_grad-grid-cell ${active ? 'is-active' : ''}`}
-            disabled={busy}
-            aria-label={`Position ${px} ${py}`}
-            aria-pressed={active}
-            onClick={() => onPick(px, py)}
-          >
-            <span className="embed-editor_grad-grid-dot" />
-          </button>
-        )
-      }))}
-    </div>
-  )
-}
-
-// A number field with a unit suffix (used for Left/Top and a stop's position).
-function NumField({ value, unit, label, busy, onLive, onCommit }: {
-  value: string
-  unit: string
-  label: string
-  busy: boolean
-  onLive: (v: string) => void
-  onCommit: (v: string) => void
-}) {
-  const num = value.replace(/[a-z%]+$/i, '').trim()
-  const [text, setText] = useState(num)
-  const focused = useRef(false)
-  useEffect(() => { if (!focused.current) setText(num) }, [num])
-  const withUnit = (t: string) => { const s = t.trim(); return s === '' ? '' : /[a-z%]$/i.test(s) ? s : `${s}${unit}` }
-  return (
-    <div className="embed-editor_grad-num">
-      <VariableConnect ariaLabel={`Connect ${label} to a variable`} disabled={busy} className="is-fill" prop="left" onPick={(binding) => onCommit(binding)}>
-        <input
-          className="u-input embed-editor_grad-num-input"
-          value={text}
-          inputMode="decimal"
-          spellCheck={false}
-          disabled={busy}
-          aria-label={label}
-          onChange={(e) => { setText(e.target.value); onLive(withUnit(e.target.value)) }}
-          onFocus={() => { focused.current = true }}
-          onBlur={() => { focused.current = false; onCommit(withUnit(text)) }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') { e.currentTarget.blur(); return }
-            const stepped = handleArrowStep(e)
-            if (!stepped) return
-            e.preventDefault()
-            e.currentTarget.value = stepped.text
-            e.currentTarget.setSelectionRange(stepped.caret, stepped.caret)
-            setText(stepped.text)
-            onLive(withUnit(stepped.text))
-          }}
-        />
-      </VariableConnect>
-      <span className="embed-editor_grad-num-unit">{unit}</span>
     </div>
   )
 }
@@ -350,14 +281,20 @@ export default function GradientEditor({ gradient, busy, onChange }: Props) {
             <div className="embed-editor_grad-pos">
               <PositionGrid x={center.x} y={center.y} busy={busy} onPick={(px, py) => patch({ posX: px, posY: py })} />
               <div className="embed-editor_grad-pos-fields">
-                <label className="embed-editor_grad-pos-field"><span>Left</span>
+                {/* A <div>, not a <label>: the field here is VariableConnect's contenteditable
+              editor, and the plain input behind it is opacity:0 / pointer-events:none.
+              A <label> forwards a press to its labelable control — which is that
+              invisible input — so clicking the field you can see moved the caret
+              into one you cannot. The caption is decorative; the input carries its
+              own aria-label. */}
+                <div className="embed-editor_grad-pos-field"><span>Left</span>
                   <NumField value={center.x} unit="%" label="Position left" busy={busy}
                     onLive={(v) => patch({ posX: v }, true)} onCommit={(v) => patch({ posX: v })} />
-                </label>
-                <label className="embed-editor_grad-pos-field"><span>Top</span>
+                </div>
+                <div className="embed-editor_grad-pos-field"><span>Top</span>
                   <NumField value={center.y} unit="%" label="Position top" busy={busy}
                     onLive={(v) => patch({ posY: v }, true)} onCommit={(v) => patch({ posY: v })} />
-                </label>
+                </div>
               </div>
             </div>
           </div>
@@ -436,7 +373,7 @@ export default function GradientEditor({ gradient, busy, onChange }: Props) {
             onFocus={() => { editing.current = true }}
             onChange={(e) => setStop(sel, { color: e.target.value }, true)}
             onBlur={() => { editing.current = false; setStop(sel, { color: current.color }) }}
-            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+            onKeyDown={(e) => { if (e.key === 'Enter') commitInPlace(e.currentTarget) }}
           />
           <NumField value={current.pos || `${Math.round(stopPercent(stops, sel))}%`} unit="%" label="Stop position" busy={busy}
             onLive={(v) => setStop(sel, { pos: v }, true)} onCommit={(v) => { setStop(sel, { pos: v }); sortStops(sel) }} />

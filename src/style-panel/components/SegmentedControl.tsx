@@ -172,9 +172,16 @@ export function HoverTooltip({ anchor, children }: { anchor: HTMLElement; childr
       setStyle({ position: 'fixed', top, left, visibility: 'visible' })
     }
     place()
+    // Re-place whenever the tooltip's own size changes. A property tooltip grows a
+    // line once the page answers what it computes for that property (see PropTip),
+    // and a box placed ABOVE its anchor grows downward — over the very label it
+    // describes — unless it's measured again.
+    const ro = typeof ResizeObserver !== 'undefined' && ref.current ? new ResizeObserver(() => place()) : null
+    if (ref.current) ro?.observe(ref.current)
     window.addEventListener('scroll', place, true)
     window.addEventListener('resize', place)
     return () => {
+      ro?.disconnect()
       window.removeEventListener('scroll', place, true)
       window.removeEventListener('resize', place)
     }

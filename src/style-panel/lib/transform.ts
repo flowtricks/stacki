@@ -10,7 +10,12 @@ export type TransformType = 'move' | 'scale' | 'rotate' | 'skew'
 export type Transform = { type: TransformType; x: string; y: string; z: string }
 
 /** The identity (no-op) value for a type's axis — also the blank default. */
-export const IDENTITY: Record<TransformType, string> = { move: '0px', scale: '1', rotate: '0deg', skew: '0deg' }
+// A move is a length, and this project's lengths are rem: type sizes, spacing
+// and the rest of the scale are all set in it, so a translate written in px is
+// the one value on the element that stops moving when the root size changes.
+// px is still one keystroke away — type it and the field keeps it (see
+// parseAxis, which reads the unit off the value before falling back to this).
+export const IDENTITY: Record<TransformType, string> = { move: '0rem', scale: '1', rotate: '0deg', skew: '0deg' }
 const LABEL: Record<TransformType, string> = { move: 'Move', scale: 'Scale', rotate: 'Rotate', skew: 'Skew' }
 
 /** Whether a type exposes a Z axis (skew is 2D only). */
