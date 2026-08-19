@@ -15,6 +15,14 @@ export type HostNode = {
   inner?: string
 }
 
+/** Which sides of which box the spacing control is pointing at, and what each
+ *  one says — the label is the authored value ("4.8rem"), not the pixels. */
+export type SpacingHover = {
+  kind: 'padding' | 'margin'
+  sides: Array<'top' | 'right' | 'bottom' | 'left'>
+  labels: Record<string, string>
+}
+
 export type HostState = {
   projectPath: string | null
   /** The page (or open component) being edited. */
@@ -31,6 +39,14 @@ export type HostState = {
   /** Absolute path of the file being edited — its own <style> blocks come from
    *  the model, so it must not also be read off disk. */
   openFilePath: string | null
+  /**
+   * Bumped by the app whenever undo or redo runs. The panel reads its rules
+   * from files and from the page model, and an undo rewrites both behind its
+   * back: without a nudge it kept showing what it had cached until its own
+   * background refresh came round (throttled to seconds), so the canvas moved
+   * and the panel followed late.
+   */
+  historyTick: number
   /**
    * Classes the SELECTED element actually carries on the page, reported by the
    * preview. `class:list={[…]}` and `class={expr}` are expressions — the source
@@ -51,6 +67,10 @@ export type HostState = {
    *  box should land it on the element, the way a class field would — a rule
    *  for a class the element doesn't carry would never apply. */
   addClass: ((className: string) => void) | null
+  /** What the spacing box is pointing at, for the canvas to draw over the
+   *  selected element: hovering `padding-top` lights the strip of the page that
+   *  padding-top holds open. Null when the pointer leaves it. */
+  onSpacingHover: ((hover: SpacingHover | null) => void) | null
   /**
    * A node's path in the rendered page (`0.1.2`), which is how the canvas
    * addresses elements. Lets the panel ask the real DOM about the selected
@@ -76,6 +96,7 @@ const state: HostState = {
   nodes: [],
   selectedId: null,
   pathOf: null,
+  historyTick: 0,
   device: 'desktop',
   files: [],
   astroFiles: [],
@@ -85,6 +106,7 @@ const state: HostState = {
   selectNode: null,
   recordUndo: null,
   addClass: null,
+  onSpacingHover: null,
 }
 
 const listeners = new Set<() => void>()

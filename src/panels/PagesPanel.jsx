@@ -50,6 +50,8 @@ const dirOf = (rel) => rel.split('/').slice(0, -1).join('/');
 export default function PagesPanel({
   scan,
   currentPage,
+  injectedRoutes = [],
+  onSelectRoute,
   onSelect,
   onCreate,
   onDelete,
@@ -308,8 +310,40 @@ export default function PagesPanel({
         ) : (
           <>
             {renderChildren(tree, '', 0)}
-            {scan.pages.length === 0 && (scan.pageFolders || []).length === 0 && (
+            {scan.pages.length === 0 && (scan.pageFolders || []).length === 0 && !injectedRoutes.length && (
               <div className="props-empty">No pages yet. Create one with +.</div>
+            )}
+            {/* Routes the dev server serves that this project has no file for:
+                an integration injected them, and their source lives inside a
+                dependency. They can be previewed, and deliberately nothing
+                else — renaming or deleting a page you do not own is not a
+                thing the editor should offer. */}
+            {injectedRoutes.length > 0 && (
+              <div className="vars-table pages-injected">
+                <h3 className="list-item folder pages-injected-head">
+                  <span className="icon">
+                    <FolderIcon size={13} />
+                  </span>
+                  <span className="label">
+                    From {injectedRoutes[0].from ? injectedRoutes[0].from : 'integrations'}
+                  </span>
+                  <span className="sub">preview only</span>
+                </h3>
+                {injectedRoutes.map((r) => (
+                  <div
+                    key={r.route}
+                    className={`list-item ${currentPage?.route === r.route ? 'active' : ''}`}
+                    style={{ paddingLeft: 22 }}
+                    title={`${r.route}${r.entrypoint ? `\n${r.entrypoint}` : ''}`}
+                    onClick={() => onSelectRoute?.(r)}
+                  >
+                    <span className="icon">
+                      <FileIcon size={13} />
+                    </span>
+                    <span className="label">{r.route}</span>
+                  </div>
+                ))}
+              </div>
             )}
           </>
         )}

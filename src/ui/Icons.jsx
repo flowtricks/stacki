@@ -494,6 +494,20 @@ export const BranchIcon = (p) => (
   </I>
 );
 
+// The reverse of BranchIcon: a side branch curving back into the trunk. The
+// arrowhead is what tells the two apart at 12px — without it a merge and a
+// branch are the same three dots and a curve.
+export const MergeIcon = (p) => (
+  <I {...p}>
+    <circle cx="4.5" cy="3.5" r="1.6" />
+    <circle cx="4.5" cy="12.5" r="1.6" />
+    <circle cx="11.5" cy="3.5" r="1.6" />
+    <path d="M4.5 5.1v5.8" />
+    <path d="M11.5 5.1c0 2.6-2.6 3.4-5.4 4.1" />
+    <path d="M8.2 9.8 6.1 9.2l1.6-1.5" />
+  </I>
+);
+
 export const ExternalIcon = (p) => (
   <I {...p}>
     <path d="M12.5 9.5v3.5a.5.5 0 0 1-.5.5H3.5a.5.5 0 0 1-.5-.5V4.5a.5.5 0 0 1 .5-.5H7" />

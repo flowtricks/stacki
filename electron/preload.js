@@ -365,6 +365,15 @@ if (!process.isMainFrame) {
   };
 
   const collectRegions = () => {
+    // Runs that have left the document go first. A patched page collects
+    // again, and what it collected last time is either the same nodes (the
+    // patch morphed them in place) or nodes that are gone — never a second
+    // copy of the node, however many times the page is edited.
+    for (const [p, runs] of regions) {
+      const live = runs.filter(isLive);
+      if (live.length) regions.set(p, live);
+      else regions.delete(p);
+    }
     // One pass in document order over both marker forms — the deeper path has
     // to be seen last so that it wins the tag on an element they share.
     // Walked by hand rather than with a TreeWalker: this runs in the preload's
@@ -394,7 +403,15 @@ if (!process.isMainFrame) {
         if (n.nodeType === 1 && n.tagName !== 'TEMPLATE') addPath(n, p);
       }
       if (!regions.has(p)) regions.set(p, []);
-      regions.get(p).push(run);
+      const runs = regions.get(p);
+      // The same place, collected again: it replaces itself. Appending would
+      // make one node look like many — the same box drawn over and over (and
+      // the overlays are translucent, so a node hovered after fourteen edits
+      // was painted fourteen times, an opaque wash over the page), and every
+      // count of "which copy" off by however many edits had been made.
+      const again = runs.findIndex((r) => r.some((n) => run.includes(n)));
+      if (again >= 0) runs[again] = run;
+      else runs.push(run);
     }
     for (const n of markers) n.remove();
     focusCache = undefined; // new runs — the focused instance may be among them
@@ -466,7 +483,6 @@ if (!process.isMainFrame) {
   };
 
   const rectsForPath = (p) => {
-    const all = regions.get(p);
     const runs = runsOf(p);
     if (!runs) {
       // No marker pair — a slotted element carries its path as an attribute
@@ -490,7 +506,7 @@ if (!process.isMainFrame) {
     // the rest of it lives in clones. Union every tagged piece back into one
     // box. Repeated occurrences (a loop child, once per item) are meant to
     // stay separate boxes, so they keep the per-run rects above.
-    if (all.length === 1) {
+    if (runs.length === 1) {
       let acc = (runs[0] || []).reduce(addNode, null);
       for (const el of elementsWithPath(p)) acc = addNode(acc, el);
       // Nothing measurable: fall through to the children (see below).
@@ -537,15 +553,44 @@ if (!process.isMainFrame) {
     return out;
   };
 
+  // The element's own spacing, in px, for the box the style panel draws over the
+  // canvas: hovering `padding-top` there lights the strip of this element that
+  // padding-top actually occupies. Read from the computed style rather than the
+  // authored value, because that is the question being asked — where is it on
+  // the page, not what was typed.
+  const SIDES = ['top', 'right', 'bottom', 'left'];
+  const spacingForPath = (p) => {
+    const out = [];
+    for (const run of runsOf(p) || []) {
+      const el = run.find((n) => n.nodeType === 1 && n.tagName !== 'TEMPLATE');
+      if (el) out.push(el);
+    }
+    if (!out.length) out.push(...elementsWithPath(p));
+    return out.map((el) => {
+      try {
+        const cs = window.getComputedStyle(el);
+        const box = (kind) =>
+          Object.fromEntries(SIDES.map((s) => [s, parseFloat(cs.getPropertyValue(`${kind}-${s}`)) || 0]));
+        return { padding: box('padding'), margin: box('margin') };
+      } catch {
+        // Whatever went wrong measuring one element, the boxes everything else
+        // depends on still have to be reported.
+        return null;
+      }
+    });
+  };
+
   const sendRects = () => {
     if (!trackedPaths.length) return;
     const rects = {};
     const classes = {};
+    const spacing = {};
     for (const p of trackedPaths) {
       rects[p] = rectsForPath(p);
       classes[p] = classesForPath(p);
+      spacing[p] = spacingForPath(p);
     }
-    window.parent.postMessage({ type: 'avb:rects', rects, classes }, '*');
+    window.parent.postMessage({ type: 'avb:rects', rects, classes, spacing }, '*');
   };
 
   // Nodes that put nothing on the page: a component that returns null for the
@@ -654,6 +699,19 @@ if (!process.isMainFrame) {
       sendRendered();
       sendClasses();
     });
+  };
+
+  // Measure on the next frame, and once more a moment later. The second pass is
+  // for changes whose effect lands after the change itself: a stylesheet swapped
+  // into <head> by the dev server is applied, then the page relayouts, and a box
+  // read in between is the box from before. Dragging a padding value writes CSS
+  // several times a second, so a measurement one beat behind is an outline that
+  // never catches up.
+  let settleTimer = null;
+  const remeasure = () => {
+    queueRects();
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(queueRects, 120);
   };
 
   // Which rendered copy of a node the target sits in. A node inside a loop
@@ -796,13 +854,28 @@ if (!process.isMainFrame) {
     announceMapped();
     if (!regions.size) return;
     window.addEventListener('scroll', queueRects, true);
-    window.addEventListener('resize', queueRects);
-    new MutationObserver(queueRects).observe(document.body || document.documentElement, {
+    window.addEventListener('resize', remeasure);
+    // The whole document, not just the body: styling something writes CSS, and
+    // the dev server delivers CSS by swapping a <style> in <head>. Watching the
+    // body alone meant the element moved under an outline that had no idea
+    // anything had happened — the outline only caught up when something else
+    // (a scroll, an edit to the markup) asked for a fresh measurement.
+    new MutationObserver(remeasure).observe(document.documentElement, {
       childList: true,
       subtree: true,
       attributes: true,
       characterData: true,
     });
+    // A layout that changed without changing the DOM at all — a rule edited
+    // through the CSSOM, a font finishing loading, a container query flipping.
+    // Nothing to observe there but the boxes themselves.
+    try {
+      const ro = new ResizeObserver(remeasure);
+      ro.observe(document.documentElement);
+      if (document.body) ro.observe(document.body);
+    } catch {
+      /* no ResizeObserver: the observers above still cover the common cases */
+    }
     document.addEventListener('mousemove', (e) => {
       const { path: p, occurrence } = nodeAtEvent(e);
       if (p !== lastHoverPath || occurrence !== lastHoverOcc) {
@@ -919,6 +992,34 @@ if (!process.isMainFrame) {
     if (d?.type === 'avb:query' && typeof d.id === 'number') {
       const els = typeof d.path === 'string' ? elementsForPath(d.path) : [];
       const matched = {};
+      // What a value actually resolves to ON THIS ELEMENT. `var(--background)`
+      // means nothing in the app's own document — the panel painted it there
+      // and got transparent — and it can mean different things on two elements
+      // of the same page (a theme class, a container query, a colour scheme).
+      // Only the page can say, so it is asked: a throwaway span in the element
+      // inherits its custom properties, takes the value as a colour, and the
+      // engine hands back the computed one.
+      const computed = {};
+      const wanted = Array.isArray(d.compute) ? d.compute : [];
+      if (wanted.length && els[0]) {
+        const probe = document.createElement('span');
+        probe.setAttribute('style', 'position:absolute;width:0;height:0;visibility:hidden');
+        els[0].appendChild(probe);
+        for (const value of wanted) {
+          try {
+            // A sentinel first: assigning a value the engine rejects leaves the
+            // previous one in place, and reading that back would report a
+            // colour the value never had.
+            probe.style.color = 'rgb(1, 2, 3)';
+            probe.style.color = value;
+            computed[value] =
+              probe.style.color === 'rgb(1, 2, 3)' ? null : getComputedStyle(probe).color;
+          } catch {
+            computed[value] = null;
+          }
+        }
+        probe.remove();
+      }
       for (const sel of d.selectors || []) {
         try {
           // Any of the element's occurrences matching counts — a loop child is
@@ -934,6 +1035,7 @@ if (!process.isMainFrame) {
           id: d.id,
           ready: mapped,
           found: els.length > 0,
+          computed,
           identity: els[0] ? identityOf(els[0]) : null,
           matched,
         },
@@ -1111,6 +1213,7 @@ contextBridge.exposeInMainWorld('avb', {
   deletePageFolder: invoke('pagefolder:delete'),
   importPathFor: invoke('page:importPathFor'),
   dynamicPaths: invoke('page:dynamicPaths'),
+  injectedRoutes: invoke('project:injectedRoutes'),
   sampleEntry: invoke('content:sampleEntry'),
 
   // Dev server
@@ -1129,6 +1232,8 @@ contextBridge.exposeInMainWorld('avb', {
   ghStatus: invoke('git:ghStatus'),
   gitInit: invoke('git:init'),
   gitCheckout: invoke('git:checkout'),
+  gitMerge: invoke('git:merge'),
+  gitDeleteBranch: invoke('git:deleteBranch'),
   gitCommit: invoke('git:commit'),
   gitPush: invoke('git:push'),
   gitPublish: invoke('git:publish'),

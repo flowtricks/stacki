@@ -46,7 +46,7 @@ export function hasCanvas() {
 // Ask the page about one node: what it renders as, and which of `selectors`
 // target it. Resolves null when the canvas can't answer — the caller then
 // falls back rather than treating silence as "no".
-export function queryCanvas(path, selectors = []) {
+export function queryCanvas(path, selectors = [], compute = []) {
   if (!frame || typeof path !== 'string') return Promise.resolve(null);
   const id = nextId++;
   return new Promise((resolve) => {
@@ -54,7 +54,12 @@ export function queryCanvas(path, selectors = []) {
       pending.delete(id);
       resolve(null);
     }, TIMEOUT_MS);
-    const entry = { resolve, timer, message: { type: 'avb:query', id, path, selectors }, held: false };
+    const entry = {
+      resolve,
+      timer,
+      message: { type: 'avb:query', id, path, selectors, compute },
+      held: false,
+    };
     pending.set(id, entry);
     if (!send(entry)) {
       clearTimeout(timer);
@@ -89,5 +94,7 @@ export function receiveCanvasReply(data) {
   }
   clearTimeout(entry.timer);
   pending.delete(data.id);
-  entry.resolve(data.found ? { identity: data.identity, matched: data.matched || {} } : null);
+  entry.resolve(
+    data.found ? { identity: data.identity, matched: data.matched || {}, computed: data.computed || {} } : null
+  );
 }

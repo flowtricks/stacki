@@ -2,10 +2,12 @@ import { useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { HoverTooltip } from './components/SegmentedControl'
 import { handleArrowStep } from './lib/number-step'
+import { isNonNegative } from './lib/css-properties'
 import ProvenanceList from './ProvenanceList'
 import VariableConnect, { useSharedVars } from './VariableConnect'
 import type { ProjectVariable } from './lib/webflow'
 import { selectorsMatch, type ResolvedProp } from './lib/resolved'
+import { getHost } from './lib/host'
 
 // Shared "spacing box" primitives: Webflow's masked-SVG frame with draggable side
 // handles, click-to-edit value labels, and a popover editor. Used by SpacingSection
@@ -180,35 +182,79 @@ type FillProps = {
   onLiveEnd: () => void
 }
 
-// Each trapezoid is also a drag handle: hovering brightens it (CSS), and dragging
-// along its axis grows/shrinks that side's value. The value keeps the unit already
-// in the field (rem when the field is empty or unitless). Live-set on every rAF
-// while dragging, committed once on release.
-export function SpacingFill({ frame, propFor, inward = false, read, busy, setProp, liveSetProp, onLive, onLiveEnd }: FillProps) {
-  const f = FRAMES[frame]
-  const maskId = 'sp-' + useId().replace(/:/g, '')
+// Dragging a side, wherever the press lands: the band around it or the number
+// written on it. Both are the same gesture — press, move along the side's axis,
+// let go — so both run this. The value keeps the unit already in the field (rem
+// when the field is empty or unitless), the canvas is written on every rAF, and
+// the file once on release.
+//
+// `threshold` is what tells a drag from a press. The bands are nothing but drag
+// handles, so they start at once; a number is also a button that opens the
+// editor, so it waits a few pixels before it becomes a drag, and reports
+// afterwards whether it did (`wasDrag`) so the click that follows can be
+// ignored.
+type SideDragOptions = {
+  propFor: (side: Side) => string
+  inward: boolean
+  read: Read
+  busy: boolean
+  setProp: SetProp
+  liveSetProp: LiveSetProp
+  onLive: (props: string[], display: string) => void
+  onLiveEnd: () => void
+  threshold?: number
+}
+
+function useSideDrag({
+  propFor,
+  inward,
+  read,
+  busy,
+  setProp,
+  liveSetProp,
+  onLive,
+  onLiveEnd,
+  threshold = 0,
+}: SideDragOptions) {
   const drag = useRef<
     | null
     | {
-        // All props the drag writes (dragged side alone, ± opposite, or all four).
+        side: Side
+        /** The props being written right now — the modifiers decide, and they
+         *  are free to change halfway through. */
         props: string[]
+        /** Every prop this drag has written live, so one that stops being
+         *  affected can be put back. */
+        written: Set<string>
         unit: string
         startNum: number
         axis: 'x' | 'y'
         sign: 1 | -1
         startX: number
         startY: number
+        /** Where the pointer is now, so a modifier pressed without moving still
+         *  has somewhere to apply. */
+        x: number
+        y: number
+        shiftKey: boolean
+        altKey: boolean
         important: boolean
+        /** Past the threshold — this is a drag now, not a press. */
+        active: boolean
       }
   >(null)
   const raf = useRef<number | null>(null)
   const pending = useRef<string | null>(null)
+  const dragged = useRef(false)
 
-  useEffect(() => () => { if (raf.current != null) cancelAnimationFrame(raf.current) }, [])
+  const cancelFrame = () => {
+    if (raf.current != null) { cancelAnimationFrame(raf.current); raf.current = null }
+  }
+  useEffect(() => cancelFrame, [])
 
-  const valueAt = (event: React.PointerEvent) => {
+  const valueAt = () => {
     const d = drag.current!
-    const px = (d.axis === 'x' ? event.clientX - d.startX : event.clientY - d.startY) * d.sign
+    const px = (d.axis === 'x' ? d.x - d.startX : d.y - d.startY) * d.sign
     let next = d.startNum + (px * DRAG_SENSITIVITY) / pxPerUnit(d.unit)
     if (inward && next < 0) next = 0 // padding can't go negative; insets/margins can
     return formatLength(next, d.unit)
@@ -220,50 +266,229 @@ export function SpacingFill({ frame, propFor, inward = false, read, busy, setPro
     if (d && pending.current != null) d.props.forEach((prop) => liveSetProp(prop, pending.current!, d.important))
   }
 
-  const onDown = (side: Side) => (event: React.PointerEvent) => {
+  // Everything the drag does on any change — the pointer moving, or a modifier
+  // going down or up under a pointer that is standing still.
+  const apply = () => {
+    const d = drag.current
+    if (!d || !d.active) return
+    dragged.current = true
+    const next = affectedSides(d.side, d).map((s) => propFor(s))
+    // A side the modifier just dropped goes back to what it was. It was only
+    // ever previewed — nothing has been written to the file yet — so putting it
+    // back is undoing the live write, not another edit.
+    for (const prop of d.written) {
+      if (!next.includes(prop)) {
+        liveSetProp(prop, null, d.important)
+        d.written.delete(prop)
+      }
+    }
+    d.props = next
+    for (const prop of next) d.written.add(prop)
+    const value = valueAt()
+    // Update the labels every time (cheap setState); throttle the canvas write to rAF.
+    onLive(d.props, d.important ? `${value} !important` : value)
+    pending.current = value
+    if (raf.current == null) raf.current = requestAnimationFrame(flush)
+  }
+
+  // While a drag is live, Shift and Option are read as they are pressed rather
+  // than as they were at the start: reach for one mid-drag and the other sides
+  // join in from that moment.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const d = drag.current
+      if (!d) return
+      // Read off any key event, not just the modifiers themselves — see the
+      // hover hook below for why.
+      if (d.shiftKey === event.shiftKey && d.altKey === event.altKey) return
+      d.shiftKey = event.shiftKey
+      d.altKey = event.altKey
+      apply()
+    }
+    window.addEventListener('keydown', onKey, true)
+    window.addEventListener('keyup', onKey, true)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('keyup', onKey, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const onPointerDown = (side: Side) => (event: React.PointerEvent) => {
     if (busy) return
-    event.preventDefault()
+    // A band has nothing else to be, so it takes the press outright. A number is
+    // a button: leave it its focus and its click until the pointer moves.
+    if (threshold === 0) event.preventDefault()
     const shown = displayOf(read(propFor(side)))
     const { num, unit } = parseNumUnit(shown.value)
     const a = SIDE_AXIS[side]
     // Outward grows away from centre; inward (padding) drags the opposite way
     // (Webflow flips the resize cursors to match).
     const sign = (inward ? -a.sign : a.sign) as 1 | -1
-    // Modifier (read at press) fixes which sides this drag equalises.
-    const sides = affectedSides(side, event)
     drag.current = {
-      props: sides.map((s) => propFor(s)),
+      side,
+      props: [],
+      written: new Set(),
       unit: unit || 'rem',
       startNum: num,
       axis: a.axis,
       sign,
       startX: event.clientX,
       startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
       important: shown.important,
+      active: threshold === 0,
     }
-    event.currentTarget.setPointerCapture(event.pointerId)
+    dragged.current = false
+    event.currentTarget.setPointerCapture?.(event.pointerId)
   }
 
-  const onMove = (event: React.PointerEvent) => {
+  const onPointerMove = (event: React.PointerEvent) => {
     const d = drag.current
     if (!d) return
-    const value = valueAt(event)
-    // Update the labels every move (cheap setState); throttle the canvas write to rAF.
-    onLive(d.props, d.important ? `${value} !important` : value)
-    pending.current = value
-    if (raf.current == null) raf.current = requestAnimationFrame(flush)
+    d.x = event.clientX
+    d.y = event.clientY
+    d.shiftKey = event.shiftKey
+    d.altKey = event.altKey
+    if (!d.active) {
+      const far =
+        Math.abs(event.clientX - d.startX) >= threshold || Math.abs(event.clientY - d.startY) >= threshold
+      if (!far) return
+      d.active = true
+    }
+    apply()
   }
 
-  const onUp = (event: React.PointerEvent) => {
+  const onPointerUp = (event: React.PointerEvent) => {
     const d = drag.current
     if (!d) return
-    if (raf.current != null) { cancelAnimationFrame(raf.current); raf.current = null }
-    const value = valueAt(event)
+    cancelFrame()
+    if (d.active) {
+      d.x = event.clientX
+      d.y = event.clientY
+      d.shiftKey = event.shiftKey
+      d.altKey = event.altKey
+      // One last apply: the sides the modifiers name at the moment of release
+      // are the sides that get written.
+      apply()
+      cancelFrame()
+    }
+    const value = d.active ? valueAt() : null
+    const props = d.props
+    const important = d.important
     drag.current = null
     pending.current = null
+    // Pressed and let go without moving: that was a click, and the click handler
+    // is the one that should hear about it.
+    if (value == null) return
     onLiveEnd()
-    d.props.forEach((prop) => setProp(prop, value, d.important))
+    props.forEach((prop) => setProp(prop, value, important))
   }
+
+  return { onPointerDown, onPointerMove, onPointerUp, wasDrag: () => dragged.current }
+}
+
+// Pointing at a side, as opposed to changing it. The canvas draws what the
+// pointer is over — the strip of the page that side is holding open — so the
+// panel has to say which sides those are, and keep saying it while Shift or
+// Option change the answer under a pointer that hasn't moved.
+function useSideHover({ propFor, kind, read }: { propFor: (side: Side) => string; kind: 'padding' | 'margin'; read: Read }) {
+  const over = useRef<null | { side: Side; shiftKey: boolean; altKey: boolean }>(null)
+
+  const report = () => {
+    const o = over.current
+    if (!o) { getHost().onSpacingHover?.(null); return }
+    const sides = affectedSides(o.side, o)
+    const labels: Record<string, string> = {}
+    for (const s of sides) {
+      try {
+        const shown = displayOf(read(propFor(s)))
+        labels[s] = shown.present ? shown.value : '0'
+      } catch {
+        // A value that can't be read is a missing label, not a missing band.
+      }
+    }
+    getHost().onSpacingHover?.({ kind, sides, labels })
+  }
+  // The listener below is registered once; this keeps it calling the current
+  // one, which reads the values as they are now rather than as they were when
+  // the panel first rendered.
+  const reportRef = useRef(report)
+  reportRef.current = report
+
+  useEffect(() => {
+    // Every key event, not only the modifier keys themselves: what is wanted is
+    // the state of Shift and Option right now, and reading it off whatever
+    // event just happened means a missed keyup (the window lost focus for a
+    // moment, a shortcut ate the event) is corrected by the next one rather
+    // than leaving the canvas lit up for a modifier nobody is holding.
+    const follow = (shiftKey: boolean, altKey: boolean) => {
+      const o = over.current
+      if (!o || (o.shiftKey === shiftKey && o.altKey === altKey)) return
+      o.shiftKey = shiftKey
+      o.altKey = altKey
+      reportRef.current()
+    }
+    const onKey = (event: KeyboardEvent) => follow(event.shiftKey, event.altKey)
+    // Nobody is holding anything the app cannot see: a modifier let go of while
+    // another window had focus never reaches this one.
+    const onBlur = () => follow(false, false)
+    // Captured rather than bubbled: a field in the panel that stops a key event
+    // from travelling must not stop the canvas from following the modifier.
+    window.addEventListener('keydown', onKey, true)
+    window.addEventListener('keyup', onKey, true)
+    window.addEventListener('blur', onBlur)
+    // Leaving the panel entirely (or unmounting mid-hover) must not leave the
+    // canvas lit up with nothing pointing at it.
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('keyup', onKey, true)
+      window.removeEventListener('blur', onBlur)
+      if (over.current) { over.current = null; getHost().onSpacingHover?.(null) }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return {
+    onEnter: (side: Side) => (event: React.MouseEvent | React.PointerEvent) => {
+      over.current = { side, shiftKey: event.shiftKey, altKey: event.altKey }
+      report()
+    },
+    onLeave: () => {
+      if (!over.current) return
+      over.current = null
+      report()
+    },
+    /** Follow a modifier held while the pointer moves within the same side. */
+    onOver: (event: React.MouseEvent | React.PointerEvent) => {
+      const o = over.current
+      if (!o || (o.shiftKey === event.shiftKey && o.altKey === event.altKey)) return
+      o.shiftKey = event.shiftKey
+      o.altKey = event.altKey
+      report()
+    },
+  }
+}
+
+// Each trapezoid is also a drag handle: hovering brightens it (CSS), and dragging
+// along its axis grows/shrinks that side's value.
+export function SpacingFill({ frame, propFor, inward = false, read, busy, setProp, liveSetProp, onLive, onLiveEnd }: FillProps) {
+  const f = FRAMES[frame]
+  const maskId = 'sp-' + useId().replace(/:/g, '')
+  const { onPointerDown, onPointerMove, onPointerUp } = useSideDrag({
+    propFor,
+    inward,
+    read,
+    busy,
+    setProp,
+    liveSetProp,
+    onLive,
+    onLiveEnd,
+  })
+  const hover = useSideHover({ propFor, kind: inward ? 'padding' : 'margin', read })
 
   return (
     <svg
@@ -282,10 +507,12 @@ export function SpacingFill({ frame, propFor, inward = false, read, busy, setPro
             key={side}
             className={`embed-editor_spacing-tri is-${side}`}
             d={f.paths[side]}
-            onPointerDown={onDown(side)}
-            onPointerMove={onMove}
-            onPointerUp={onUp}
-            onPointerCancel={onUp}
+            onPointerDown={onPointerDown(side)}
+            onPointerMove={(event) => { hover.onOver(event); onPointerMove(event) }}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            onPointerEnter={hover.onEnter(side)}
+            onPointerLeave={hover.onLeave}
           />
         ))}
       </g>
@@ -324,8 +551,10 @@ function humanLabel(prop: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
-// The always-visible value: a clickable label (not an input). Click opens the
-// editor popover; Alt/Option-click clears the side. Mirrors an in-flight drag.
+// The always-visible value: a label you can click or drag. Click opens the
+// editor popover; Alt/Option-click clears the side; dragging it adjusts the
+// value, the same gesture as dragging the band behind it — which is where most
+// presses land, since the number sits on top of the band.
 export function SpacingLabel({
   prop,
   side,
@@ -337,6 +566,10 @@ export function SpacingLabel({
   onEdit,
   variables,
   variableLabels = false,
+  setProp,
+  liveSetProp,
+  onLive,
+  onLiveEnd,
 }: {
   prop: string
   side: Side
@@ -348,6 +581,10 @@ export function SpacingLabel({
   onEdit: (prop: string, side: Side) => void
   variables: ProjectVariable[]
   variableLabels?: boolean
+  setProp: SetProp
+  liveSetProp: LiveSetProp
+  onLive: (props: string[], display: string) => void
+  onLiveEnd: () => void
 }) {
   const resolved = read(prop)
   const d = displayOf(resolved)
@@ -380,6 +617,29 @@ export function SpacingLabel({
   }
   const closeTooltip = () => { clearTooltipTimer(); setShowTooltip(false) }
 
+  // The number drags like the band it sits on: `padding-top` → `padding-left`
+  // and friends, so Shift and Alt reach the other sides from here too. A few
+  // pixels of travel separate a drag from the click that opens the editor.
+  const propForSide = (s: Side) => siblingProps(prop, side, [s])[0]
+  const { onPointerDown, onPointerMove, onPointerUp, wasDrag } = useSideDrag({
+    propFor: propForSide,
+    inward: prop.startsWith('padding'),
+    read,
+    busy,
+    setProp,
+    liveSetProp,
+    onLive,
+    onLiveEnd,
+    threshold: 3,
+  })
+  // `padding-top` → padding, `margin-top` → margin, a bare inset (`top`) → the
+  // box it is drawn in, which is the margin frame.
+  const hover = useSideHover({
+    propFor: propForSide,
+    kind: prop.startsWith('padding') ? 'padding' : 'margin',
+    read,
+  })
+
   return (
     <>
       <button
@@ -390,10 +650,17 @@ export function SpacingLabel({
         disabled={busy}
         onMouseEnter={openTooltip}
         onMouseLeave={closeTooltip}
+        onPointerEnter={hover.onEnter(side)}
+        onPointerLeave={hover.onLeave}
         onFocus={() => setShowTooltip(true)}
         onBlur={closeTooltip}
+        onPointerDown={(event) => { closeTooltip(); onPointerDown(side)(event) }}
+        onPointerMove={(event) => { hover.onOver(event); onPointerMove(event) }}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         onClick={(event) => {
           closeTooltip()
+          if (wasDrag()) return // that press was a drag; it has already been applied
           if (event.altKey) { clearProp(prop); return } // Alt/Option-click removes the value
           onEdit(prop, side)
         }}
@@ -553,7 +820,9 @@ export function SpacingEditor({
               // A modifier only applies to the Enter that carries it.
               commitProps.current = [prop]
               if (event.key === 'Escape') { cancelLive(); closed.current = true; onClose(); return }
-              const stepped = handleArrowStep(event)
+              // Padding stops at 0; a margin or an inset is free to go negative,
+              // which is the whole point of pulling something out of its box.
+              const stepped = handleArrowStep(event, isNonNegative(prop) ? 0 : undefined)
               if (!stepped) return
               event.preventDefault()
               const el = event.currentTarget
@@ -645,6 +914,10 @@ export function useSpacingBox(shared: SharedProps, options?: { emptyLabel?: stri
       onEdit={onEdit}
       variables={variables}
       variableLabels={options?.variableLabels}
+      setProp={shared.setProp}
+      liveSetProp={shared.liveSetProp}
+      onLive={onLive}
+      onLiveEnd={onLiveEnd}
     />
   )
 

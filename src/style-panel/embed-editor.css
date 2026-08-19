@@ -572,6 +572,15 @@
 }
 .embed-editor_spacing-label:disabled { cursor: default; }
 
+/* The number is a drag handle as much as a button — it sits on top of the band
+   for its side, and that is where a press to adjust the value lands. The cursor
+   says so, along the axis that side moves on. */
+.embed-editor_spacing-label.embed-editor_spacing-top:not(:disabled),
+.embed-editor_spacing-label.embed-editor_spacing-bottom:not(:disabled) { cursor: ns-resize; }
+.embed-editor_spacing-label.embed-editor_spacing-left:not(:disabled),
+.embed-editor_spacing-label.embed-editor_spacing-right:not(:disabled) { cursor: ew-resize; }
+.embed-editor_spacing-label { touch-action: none; }
+
 /* Unset ("0") — dim with a faint neutral hover so it still reads as clickable. */
 .embed-editor_spacing-label:hover:not(:disabled) {
   background: var(--color-bg-active);
@@ -2346,6 +2355,17 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_display-seg:not(.is-selected):hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-text-primary) 14%, transparent);
   color: var(--color-text-primary);
+}
+/* The chosen one keeps its own surface under the pointer: it is the answer, not
+   an offer. Stated rather than left alone because the app's blanket
+   `button:hover` (src/styles.css) outweighs a class-only background and was
+   repainting it — the same reason the shared segmented control below needs a
+   hover of its own. */
+.embed-editor_display-seg.is-selected:hover:not(:disabled) {
+  background: var(--surface-control);
+}
+.embed-editor_border-side.is-active:hover:not(:disabled) {
+  background: var(--surface-control);
 }
 
 /* The dropdown arrow is its own button, sitting next to the 4th value segment. */

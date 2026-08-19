@@ -6,49 +6,113 @@ import {
   placeholder as cmPlaceholder,
   Decoration,
   ViewPlugin,
+  WidgetType,
 } from '@codemirror/view';
 import { EditorState, StateEffect, StateField } from '@codemirror/state';
 import { javascript } from '@codemirror/lang-javascript';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { appTheme, appHighlight } from './CodeEditor.jsx';
 
-// The part of the expression that names where the data comes from, drawn as a
-// chip. It is a mark, not a widget: the text underneath stays text, so the
-// value is always exactly what is typed and everything after it — `.filter(…)`,
-// `[1]`, `.slice(0, 3)` — is ordinary code in an ordinary field. Clicking it
-// opens whatever picker the caller gave it.
-const setChip = StateEffect.define();
+// The data inside an expression, drawn as chips. They are marks, not widgets:
+// the text underneath stays text, so the value is always exactly what is typed
+// and everything around a chip — `.filter(…)`, `[1]`, a whole ternary — is
+// ordinary code in an ordinary field. Clicking one opens whatever picker the
+// caller gave it.
+//
+// Which text is a chip is the caller's to say: a loop's Data field marks the
+// name at the front (the list being looped over), a prop's code field marks
+// every `${…}` hole in it. So what arrives here is a function from the text to
+// the ranges, re-run on every edit rather than mapped through it — a chip whose
+// name is typed away stops being a chip, which is the honest answer.
+const setChips = StateEffect.define();
 
 const chipMark = Decoration.mark({ class: 'cm-chip' });
 
-const chipField = StateField.define({
-  create: () => Decoration.none,
-  update(value, tr) {
-    for (const effect of tr.effects) {
-      if (!effect.is(setChip)) continue;
-      const text = effect.value;
-      const doc = tr.state.doc.toString();
-      const at = text ? doc.indexOf(text) : -1;
-      return at < 0 ? Decoration.none : Decoration.set([chipMark.range(at, at + text.length)]);
-    }
-    if (!tr.docChanged) return value;
-    // The text moved: find it again rather than mapping, so a chip whose text
-    // was edited away stops being a chip.
-    const text = tr.state.field(chipTextField);
-    const doc = tr.state.doc.toString();
-    const at = text ? doc.indexOf(text) : -1;
-    return at < 0 ? Decoration.none : Decoration.set([chipMark.range(at, at + text.length)]);
-  },
-  provide: (field) => EditorView.decorations.from(field),
-});
+// A chip drawn INSTEAD of its text, for a range that is more than the name it
+// means: `${maxWidth}` is one value, and the `${`/`}` around it is the syntax
+// that puts it in a template, not part of what it names. It wears `expr-chip`,
+// the class every other chip in the app wears, so it is the same object rather
+// than something that resembles one.
+//
+// The text stays in the document underneath — the value written to the file is
+// still `${maxWidth}` — and the range is atomic, so the caret steps over the
+// chip as one thing instead of into the middle of a name.
+class ChipWidget extends WidgetType {
+  constructor(label) {
+    super();
+    this.label = label;
+  }
+  eq(other) {
+    return other.label === this.label;
+  }
+  toDOM() {
+    const span = document.createElement('span');
+    span.className = 'expr-chip';
+    span.textContent = this.label;
+    return span;
+  }
+  // The press has to reach the editor's own handler, which is what opens the
+  // picker.
+  ignoreEvent() {
+    return false;
+  }
+}
 
-const chipTextField = StateField.define({
-  create: () => '',
+// The function itself, kept in state so the decorations can be rebuilt from any
+// transaction — including ones that only changed the document.
+const chipFnField = StateField.define({
+  create: () => null,
   update(value, tr) {
-    for (const effect of tr.effects) if (effect.is(setChip)) return effect.value || '';
+    for (const effect of tr.effects) if (effect.is(setChips)) return effect.value || null;
     return value;
   },
 });
+
+// Two kinds, decided by the range itself. A range whose text IS the path stays
+// a mark over live text: that is a loop's source, where what follows the name is
+// typed right next to it and the name has to stay typeable. A range carrying
+// syntax around the path is drawn as the path alone, the way a chip is drawn
+// everywhere else.
+function chipSets(state) {
+  const ranges = state.field(chipFnField);
+  if (!ranges) return { deco: Decoration.none, atomic: Decoration.none };
+  const doc = state.doc.toString();
+  const deco = [];
+  const atomic = [];
+  for (const range of ranges(doc) || []) {
+    const { from, to, path } = range;
+    // A range that no longer fits the document is one the text moved out from
+    // under; dropping it is better than throwing.
+    if (!(from >= 0 && to > from && to <= doc.length)) continue;
+    if (doc.slice(from, to) === path) {
+      deco.push(chipMark.range(from, to));
+      continue;
+    }
+    const replace = Decoration.replace({ widget: new ChipWidget(path) });
+    deco.push(replace.range(from, to));
+    atomic.push(replace.range(from, to));
+  }
+  return { deco: Decoration.set(deco, true), atomic: Decoration.set(atomic, true) };
+}
+
+const chipField = StateField.define({
+  create: (state) => chipSets(state),
+  update(value, tr) {
+    if (!tr.docChanged && !tr.effects.some((effect) => effect.is(setChips))) return value;
+    return chipSets(tr.state);
+  },
+  provide: (field) => EditorView.decorations.from(field, (sets) => sets.deco),
+});
+
+// The facet wants a function of the view, not a set — so it can't come from
+// `provide` above, which hands over the value itself.
+const chipsAreAtomic = EditorView.atomicRanges.of((view) => view.state.field(chipField).atomic);
+
+/** Ranges for a single piece of text — what a field with one chip in it wants. */
+const findOne = (text) => (doc) => {
+  const at = text ? doc.indexOf(text) : -1;
+  return at < 0 ? [] : [{ from: at, to: at + text.length, path: text }];
+};
 
 // A field that holds JavaScript — highlighted, but shaped like an input:
 // it grows with its content and Enter commits instead of adding a line.
@@ -70,9 +134,13 @@ export default function ExprInput({
   // where Enter has to mean a new line.
   multiline = false,
   className = '',
-  // The leading part of the value that names its source, drawn as a chip, and
-  // what to do when it is clicked.
+  // What to draw as chips, either way round: `chip` is one piece of text to
+  // find (a loop's source), `chipsOf` a function from the whole value to the
+  // ranges (every `${…}` hole in a prop's code). `chipsOf` wins when both are
+  // given. onChipClick receives the chip that was pressed — its text and where
+  // it sits — so the caller can repoint that one rather than the field.
   chip = '',
+  chipsOf,
   onChipClick,
   // Set to {insert} while the field is mounted, so a bind handle beside it can
   // drop a path in at the caret.
@@ -118,19 +186,26 @@ export default function ExprInput({
                 ]
           ),
           javascript(),
-          chipTextField,
+          chipFnField,
           chipField,
+          chipsAreAtomic,
           appTheme,
           appHighlight,
           EditorView.lineWrapping,
           cmPlaceholder(placeholder),
           EditorView.domEventHandlers({
-            mousedown: (event) => {
-              if (!(event.target instanceof Element) || !event.target.closest('.cm-chip')) return false;
+            mousedown: (event, view) => {
+              if (!(event.target instanceof Element) || !event.target.closest('.cm-chip, .expr-chip'))
+                return false;
               // The chip is a control, not text: pressing it opens the picker
               // rather than putting the caret in the middle of a name.
               event.preventDefault();
-              onChipClickRef.current?.();
+              // Which chip — a field can have several, and the picker has to
+              // repoint the one that was pressed.
+              const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+              const ranges = view.state.field(chipFnField)?.(view.state.doc.toString()) || [];
+              const hit = pos == null ? null : ranges.find((r) => pos >= r.from && pos <= r.to);
+              onChipClickRef.current?.(hit || null);
               return true;
             },
             focus: () => {
@@ -163,6 +238,16 @@ export default function ExprInput({
   useEffect(() => {
     if (!apiRef) return undefined;
     apiRef.current = {
+      /** Swap one range for other text — repointing a chip. */
+      replaceRange(from, to, text) {
+        const view = viewRef.current;
+        if (!view) return null;
+        view.dispatch({
+          changes: { from, to, insert: text },
+          selection: { anchor: from + text.length },
+        });
+        return view.state.doc.toString();
+      },
       insert(text) {
         const view = viewRef.current;
         if (!view) return null;
@@ -181,10 +266,12 @@ export default function ExprInput({
     };
   });
 
-  // The chip follows whatever the caller says the source is.
+  // The chips follow whatever the caller says they are. `syncValue` is in the
+  // deps because an outside edit replaces the document, and the ranges are read
+  // from the document.
   useEffect(() => {
-    viewRef.current?.dispatch({ effects: setChip.of(chip || '') });
-  }, [chip, syncValue]);
+    viewRef.current?.dispatch({ effects: setChips.of(chipsOf || (chip ? findOne(chip) : null)) });
+  }, [chip, chipsOf, syncValue]);
 
   // Apply outside edits (undo, file reload, the Code field below).
   useEffect(() => {

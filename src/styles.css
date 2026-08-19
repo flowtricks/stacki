@@ -2455,6 +2455,15 @@ body > .embed-editor_provenance {
 .git-chip:hover { background: var(--bg-active); color: var(--text); }
 .git-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
 .git-chip .dot.dirty { background: var(--amber); }
+
+/* Why a typed branch name can't be used. Not an error box — nothing has failed
+   yet, and nothing will: the field simply won't act on Enter until it reads. */
+.git-hint {
+  padding: 2px 10px 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--amber);
+}
 /* While an action runs the chip states it, so there's feedback even with the
    dropdown closed (publishing can take a while). */
 .git-chip.busy { color: var(--text); }
@@ -2990,6 +2999,41 @@ body > .embed-editor_provenance {
   box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.55);
   outline: 1px solid var(--green);
   outline-offset: -1px;
+}
+
+/* Spacing bands — what the style panel's spacing box is pointing at, drawn on
+   the page. Padding is pink and margin blue, the way every builder that draws
+   the box model colours them, so which one is being changed is answered before
+   the number is read. Hatched rather than filled: the content underneath has to
+   stay legible, since the point is to see what the space is doing to it. */
+.spacing-band {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background-color: color-mix(in srgb, var(--band) 14%, transparent);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--band) 42%, transparent) 0 1px,
+    transparent 1px 6px
+  );
+  outline: 1px solid color-mix(in srgb, var(--band) 45%, transparent);
+  outline-offset: -1px;
+}
+.spacing-band.is-padding { --band: #ec4899; }
+.spacing-band.is-margin { --band: #3b82f6; }
+.spacing-band-label {
+  padding: 1px 5px 2px;
+  border-radius: 4px;
+  background: var(--band);
+  color: white;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 /* ------------------------------------------------------------------ */
@@ -4087,6 +4131,16 @@ body > .embed-editor_provenance {
 .var-input:focus { border-color: var(--accent); }
 
 /* A branch holding work that was set aside on the way out. */
+/* Merging is not a destructive act, so it does not get the red the other row
+   actions turn on hover — a branch row would otherwise say "danger" twice and
+   mean it once. */
+.list-item .row-action.merge:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+.list-item .row-action:disabled { opacity: 0.35; cursor: default; }
+.list-item:hover .row-action:disabled { opacity: 0.35; }
+
 .branch-parked {
   margin-left: auto;
   font-size: 10px;

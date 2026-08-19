@@ -12,7 +12,7 @@ import ElementTokenPicker from './ElementTokenPicker'
 import { loadEmbedSource, saveEmbedSource } from './shared/tool-prefs'
 import { handleArrowStep } from './lib/number-step'
 import { hslaToRgba } from './lib/color'
-import { filterCssProperties } from './lib/css-properties'
+import { clampNonNegative, filterCssProperties } from './lib/css-properties'
 import { panelSpan } from './lib/panel-box'
 import SizeSection from './SizeSection'
 import GapControl from './GapControl'
@@ -55,6 +55,7 @@ import {
   splitRuleSelectorAt,
 } from './lib/css'
 import { canonicalCompound, compareSpecificity, formatSpecificity, parseSelectorList, type MatchTarget } from './lib/selectors'
+import { getHost, onHostChange } from './lib/host'
 import {
   applyNativePropertyAt,
   applyNativeToNewBaseClass,
@@ -2525,9 +2526,12 @@ export default function EmbedEditor() {
 
   // Rebuild content in the background (coalesced + throttled) to pick up embed
   // edits, then re-resolve the current selection — without blocking the UI.
-  const backgroundRefresh = useCallback(async () => {
+  const backgroundRefresh = useCallback(async ({ now = false }: { now?: boolean } = {}) => {
     if (refreshingRef.current || busyRef.current) return
-    if (Date.now() - lastScanAtRef.current < BG_REFRESH_THROTTLE_MS) return
+    // `now` skips the throttle: something rewrote the files or the model out
+    // from under the panel (an undo), and waiting out a polling interval to
+    // notice is what made the panel trail the canvas.
+    if (!now && Date.now() - lastScanAtRef.current < BG_REFRESH_THROTTLE_MS) return
     refreshingRef.current = true
     setRefreshing(true)
     try {
@@ -2730,6 +2734,21 @@ export default function EmbedEditor() {
       unsubBreakpoint?.()
     }
   }, [refresh])
+
+  // Undo and redo rewrite the stylesheets and the page model directly, so the
+  // panel's cached docs are stale the moment they run. The app bumps a counter;
+  // re-read as soon as it moves rather than on the next poll.
+  const historyRef = useRef(getHost().historyTick)
+  useEffect(
+    () =>
+      onHostChange(() => {
+        const tick = getHost().historyTick
+        if (tick === historyRef.current) return
+        historyRef.current = tick
+        void backgroundRefresh({ now: true })
+      }),
+    [backgroundRefresh]
+  )
 
   // While an element is shown, poll for out-of-app edits and keep the panel in sync.
   useEffect(() => {
@@ -3948,6 +3967,11 @@ export default function EmbedEditor() {
   const setProp = (prop: string, value: string, important: boolean) => {
     // Webflow's native API rejects hsl()/hsla() — normalize every write to rgb/rgba.
     value = hslaToRgba(value)
+    // …and a gap or a padding cannot go below zero. Here rather than in the fields
+    // themselves: a value reaches this point from a typed edit, an arrow step, a
+    // drag, a variable pick and the add-property row, and a rule enforced in one
+    // field is a rule the other four ways around it don't have.
+    value = clampNonNegative(prop, value)
     // A commit is the new baseline: whatever a live write overwrote on the way here is
     // no longer what "revert" should restore.
     liveOriginRef.current.delete(prop)
@@ -3987,6 +4011,7 @@ export default function EmbedEditor() {
     if (value === null) { revertProp(prop); return }
     // Normalize hsl()/hsla() → rgb/rgba first (Webflow's native API rejects hsl*).
     value = hslaToRgba(value)
+    value = clampNonNegative(prop, value)
     // Don't push half-typed / invalid values live: Webflow's native API errors on
     // them and gets stuck. Keep the last valid value applied until a complete valid
     // one is typed; the blur commit still runs authoritatively.

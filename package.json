@@ -11,6 +11,12 @@
     "build": "vite build",
     "test:markers": "node test/markers.js",
     "test:bridge": "node test/bridge.js",
+    "test:outlines": "node test/outlines.js",
+    "test:navigator": "node test/navigator.js",
+    "test:classattr": "node test/class-attr.js",
+    "test:spacing": "node test/spacing.js",
+    "test:branchname": "node test/branch-name.js",
+    "test:gitbranches": "node test/git-branches.js",
     "test:starter": "node test/starter.js",
     "test:content": "node test/content-config.js",
     "test:entries": "node test/content-entries.js",
@@ -19,7 +25,9 @@
     "test:view": "node test/content-view.js",
     "test:panel": "node test/cms-panel.js",
     "test:dropdown": "node test/dropdown.js",
+    "test:injectedroutes": "node test/injected-routes.js",
     "test:csscode": "node test/css-code.js",
+    "test:computedcolor": "node test/computed-color.js",
     "test:styletarget": "node test/style-target.js",
     "test:thumbs": "electron test/thumbs.js",
     "test:welcome": "node test/welcome.js",
@@ -34,7 +42,7 @@
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
     "dist:mac:unsigned": "npm run build && electron-builder --mac -c.mac.forceCodeSigning=false -c.mac.notarize=false -c.mac.identity=null",
-    "test": "npm run test:markers && npm run test:bridge && npm run test:starter && npm run test:content && npm run test:entries && npm run test:refs && npm run test:fields && npm run test:view && npm run test:panel && npm run test:dropdown && npm run test:csscode && npm run test:styletarget && npm run test:thumbs && npm run test:welcome && npm run test:cssvars && npm run test:fluid && npm run test:varsview && npm run test:varspanel && npm run test:binding && npm run test:loopsource"
+    "test": "npm run test:markers && npm run test:bridge && npm run test:outlines && npm run test:navigator && npm run test:classattr && npm run test:spacing && npm run test:branchname && npm run test:gitbranches && npm run test:starter && npm run test:content && npm run test:entries && npm run test:refs && npm run test:fields && npm run test:view && npm run test:panel && npm run test:dropdown && npm run test:injectedroutes && npm run test:csscode && npm run test:computedcolor && npm run test:styletarget && npm run test:thumbs && npm run test:welcome && npm run test:cssvars && npm run test:fluid && npm run test:varsview && npm run test:varspanel && npm run test:binding && npm run test:loopsource"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",

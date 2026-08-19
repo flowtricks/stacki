@@ -41,9 +41,11 @@ const { importersOf, resolveImport } = require('./cmsRefs');
 const { readContentConfig, validateEntry, stopAllServices } = require('./contentConfig');
 const thumbs = require('./thumbs');
 const cssVars = require('./cssVars');
+const { readInjectedRoutes } = require('./injectedRoutes.js');
 const { createStarter } = require('./starter');
 const { listEntries, writeEntry, countEntries, coveredPaths } = require('./contentEntries');
 const { planRename, applyRename } = require('./contentRefs');
+const { mergeBranch, deleteBranch } = require('./gitBranches');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow = null;
@@ -2378,6 +2380,15 @@ function fillRoute(pattern, params) {
   return filled.replace(/\/{2,}/g, '/').replace(/(.)\/$/, '$1');
 }
 
+// Routes the project serves that are NOT files under src/pages — pages an
+// integration injected (issue #7). The site's own repo may have none of its
+// own at all, in which case these are the only pages there are. Preview only:
+// their source lives inside a dependency, so nothing here is editable, and
+// they are deliberately kept out of the page list the editor writes through.
+ipcMain.handle('project:injectedRoutes', async (_e, { projectPath }) => ({
+  routes: readInjectedRoutes(projectPath),
+}));
+
 // The concrete URLs a dynamic page stands for, by asking the dev server to run
 // its getStaticPaths. Returns [] for a static page, and for any failure — a
 // page that can't answer is previewed at its own pattern, exactly as before.
@@ -2820,6 +2831,7 @@ function writeMarkerConfig(projectPath) {
     // Stale until this run's astro:config:done writes it again; until then the
     // config's own text is the better answer.
     fs.rmSync(path.join(dir, 'resolved.json'), { force: true });
+    fs.rmSync(path.join(dir, 'routes.json'), { force: true });
     const userCfg = ['astro.config.mjs', 'astro.config.js', 'astro.config.ts'].find((f) =>
       fs.existsSync(path.join(projectPath, f))
     );
@@ -3063,6 +3075,33 @@ const avbPreviewRoute = {
         );
       } catch {
         /* the app falls back to reading the config's text */
+      }
+    },
+    // Every route this project will serve, as Astro resolved it — the files
+    // under src/pages AND anything an integration injected. A site whose pages
+    // come from a package has nothing on disk for the app to find (issue #7),
+    // and this list is the only place they exist. Written beside resolved.json
+    // rather than served: the app already reads that directory, and a file
+    // needs no route of its own to fetch it through.
+    'astro:routes:resolved': ({ routes }) => {
+      try {
+        writeFileSync(
+          new URL('./routes.json', import.meta.url),
+          JSON.stringify(
+            (routes || [])
+              .filter((r) => r && r.pattern && !String(r.pattern).startsWith('/__avb'))
+              .map((r) => ({
+                pattern: r.pattern,
+                // 'project' is a file under src/pages, 'external' came from an
+                // integration, 'internal' is Astro's own (404, and friends).
+                origin: r.origin || null,
+                entrypoint: r.entrypoint || null,
+                params: r.params || [],
+              }))
+          )
+        );
+      } catch {
+        /* an Astro without this hook simply never calls it */
       }
     },
     'astro:config:setup': ({ injectRoute }) => {
@@ -3782,10 +3821,16 @@ ipcMain.handle('git:info', async (_e, projectPath) => {
     info.branch = '(no commits yet)';
   }
   try {
-    info.branches = (await git(projectPath, ['branch', '--format=%(refname:short)'])).stdout
+    const listed = (await git(projectPath, ['branch', '--format=%(refname:short)'])).stdout
       .split('\n')
       .map((s) => s.trim())
       .filter(Boolean);
+    // Git lists branches alphabetically, which puts the trunk wherever its
+    // name happens to fall. But the trunk is not one branch among many — it
+    // is the one you came from and the one you go back to, so it goes first
+    // and the rest keep the order git gave them.
+    const trunk = ['main', 'master'].find((b) => listed.includes(b));
+    info.branches = trunk ? [trunk, ...listed.filter((b) => b !== trunk)] : listed;
   } catch {
     /* empty repo */
   }
@@ -3966,6 +4011,14 @@ async function currentBranch(projectPath) {
     return null;
   }
 }
+
+ipcMain.handle('git:merge', async (_e, { projectPath, branch }) =>
+  mergeBranch(git, { projectPath, branch })
+);
+
+ipcMain.handle('git:deleteBranch', async (_e, { projectPath, branch, force }) =>
+  deleteBranch(git, { projectPath, branch, force })
+);
 
 ipcMain.handle('git:commit', async (_e, { projectPath, message }) => {
   await git(projectPath, ['add', '-A']);

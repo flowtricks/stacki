@@ -1,7 +1,14 @@
-// Everything the app asks the main process for, against everything the preload
-// actually offers.
+// Everything the app asks for, against everything that answers.
 //
 //   node test/bridge.js
+//
+// Two wirings, one failure mode. The renderer reaches the main process through
+// `window.avb`, and it hands its panels their callbacks as props; either one
+// can be misspelled, renamed or attached to the wrong thing, and nothing says
+// so. A prop passed to a panel that never destructures it is the same silence
+// as a missing bridge method: the button is there, the handler runs, and it
+// lands in a component that was never listening. Typing a class in the style
+// panel did nothing for exactly that reason — `onAddClass` was on <AssetsPanel>.
 //
 // The renderer reaches the main process through one object — `window.avb`,
 // assembled in electron/preload.js — and a call to something that is not on it
@@ -87,9 +94,87 @@ for (const [method, channel] of [...channels].sort()) {
   );
 }
 
+// --- what the app hands its panels ------------------------------------------
+// A prop is only wired if the component takes it. Components that spread the
+// rest of their props (`{...ctx}`) forward what they aren't named, so they are
+// not checked; nor is anything whose props aren't destructured in its
+// signature, which is what "declared" means here.
+const stripComments = (text) =>
+  text
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map((line) => (/^\s*\/\//.test(line) ? '' : line))
+    .join('\n');
+
+// The props an opening tag passes, read by walking to the end of the tag so a
+// value containing `>` (an arrow function, a comparison) doesn't end it early.
+const propsPassed = (text, from) => {
+  let depth = 0;
+  let quote = null;
+  let head = '';
+  for (let i = from; i < text.length; i++) {
+    const c = text[i];
+    if (quote) {
+      if (c === quote && text[i - 1] !== '\\') quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') { quote = c; continue; }
+    if (c === '{') depth++;
+    else if (c === '}') depth--;
+    else if (depth === 0 && (c === '>' || (c === '/' && text[i + 1] === '>'))) break;
+    if (depth === 0) head += c;
+  }
+  return [...head.matchAll(/(?:^|\s)([a-zA-Z_$][\w$]*)=/g)].map((m) => m[1]);
+};
+
+// The props a component destructures in its signature, or null when it takes
+// them whole (or forwards a rest).
+const propsDeclared = (base) => {
+  for (const ext of ['.jsx', '.tsx', '.js', '.ts', '']) {
+    const file = base + ext;
+    if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) continue;
+    const text = stripComments(fs.readFileSync(file, 'utf8'));
+    const m =
+      text.match(/export default function\s+[\w$]*\s*\(\s*\{([\s\S]*?)\}\s*\)/) ||
+      text.match(/function\s+[\w$]+\(\s*\{([\s\S]*?)\}\s*\)\s*\{/);
+    if (!m || m[1].includes('...')) return null;
+    return new Set([...m[1].matchAll(/(?:^|,|\s)([a-zA-Z_$][\w$]*)\s*(?=[,:=}]|$)/g)].map((x) => x[1]));
+  }
+  return null;
+};
+
+let wired = 0;
+for (const file of sources) {
+  if (!/\.(jsx|tsx)$/.test(file)) continue;
+  const text = stripComments(fs.readFileSync(file, 'utf8'));
+  const imported = new Map();
+  for (const m of text.matchAll(/^import\s+([A-Za-z_$][\w$]*)\s+from\s+'(\.[^']+)';/gm)) {
+    imported.set(m[1], path.resolve(path.dirname(file), m[2]));
+  }
+  for (const m of text.matchAll(/<([A-Z][\w$]*)[\s>]/g)) {
+    const target = imported.get(m[1]);
+    if (!target) continue;
+    const declared = propsDeclared(target);
+    if (!declared) continue;
+    const where = `${path.relative(root, file)}:${text.slice(0, m.index).split('\n').length}`;
+    for (const prop of propsPassed(text, m.index + m[0].length - 1)) {
+      if (prop === 'key' || prop === 'ref') continue;
+      wired++;
+      check(
+        `<${m[1]} ${prop}> is a prop it takes`,
+        declared.has(prop),
+        `${where} passes ${prop}, which ${path.relative(root, target)} never reads — it goes nowhere`
+      );
+    }
+  }
+}
+check('the panels are wired to something', wired > 100, `${wired} props`);
+
 if (failures.length) {
   console.error(`\nbridge: ${failures.length} failed, ${checked - failures.length} passed\n`);
   console.error(failures.join('\n') + '\n');
   process.exit(1);
 }
-console.log(`bridge: ${checked} passed  [${used.size} methods called, ${exposed.size} exposed]`);
+console.log(
+  `bridge: ${checked} passed  [${used.size} methods called, ${exposed.size} exposed, ${wired} props wired]`
+);

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { cleanError } from '../App.jsx';
-import { BranchIcon, CheckIcon, ExternalIcon, CloseIcon } from '../ui/Icons.jsx';
+import { BranchIcon, CheckIcon, ExternalIcon, CloseIcon, MergeIcon, TrashIcon } from '../ui/Icons.jsx';
+import { branchNameError, sanitizeBranchName } from '../branchName.js';
 
 // owner/repo out of any GitHub remote form (https or ssh), for display.
 const repoSlug = (url) => {
@@ -116,6 +117,53 @@ export default function GitChip({ project, showToast, flushSave, onWorktreeChang
     );
   };
 
+  // Merging names the branch being folded in, the way git does: this row's
+  // branch goes into the one you are on. The confirm says both names, because
+  // the direction is the whole decision and an icon on a row cannot show it.
+  const mergeBranch = (branch) => {
+    if (!confirm(`Merge "${branch}" into "${info.branch}"?`)) return;
+    act(
+      async () => {
+        const r = await window.avb.gitMerge({ projectPath: project.path, branch });
+        // Said here rather than through the success message below, which has
+        // no way to know whether anything actually moved.
+        showToast(
+          r?.changed ? `Merged ${branch} into ${r.into}` : `${info.branch} already has everything from ${branch}`,
+          'success'
+        );
+      },
+      null,
+      'Merging…'
+    );
+  };
+
+  // Deleting asks once, and again only when git refuses — the second question
+  // is a different one ("these commits exist nowhere else") and deserves to be
+  // asked in those terms rather than folded into the first.
+  const deleteBranch = (branch) => {
+    const parked = (info.parked || []).includes(branch);
+    if (
+      !confirm(
+        `Delete the branch "${branch}"?` +
+          (parked ? '\n\nChanges are waiting on it. They stay parked and will not be deleted, but nothing will bring them back once the branch is gone.' : '')
+      )
+    ) {
+      return;
+    }
+    act(
+      async () => {
+        const r = await window.avb.gitDeleteBranch({ projectPath: project.path, branch });
+        if (r?.unmerged) {
+          if (!confirm(`${r.message}\n\nDelete it anyway?`)) return;
+          await window.avb.gitDeleteBranch({ projectPath: project.path, branch, force: true });
+        }
+        showToast(`Deleted ${branch}`, 'success');
+      },
+      null,
+      'Deleting branch…'
+    );
+  };
+
   const commitThenSwitch = (branch, message) => {
     const from = info.branch;
     return act(
@@ -194,6 +242,9 @@ export default function GitChip({ project, showToast, flushSave, onWorktreeChang
       ? `Push ${info.ahead} commit${info.ahead === 1 ? '' : 's'}`
       : 'Everything pushed';
   const canPush = info.hasUpstream ? info.ahead > 0 : true;
+  // Why this name can't be created, or null. Checked against the branches that
+  // exist, so "already taken" is caught here rather than by git.
+  const branchError = branchNameError(newBranch, info.branches || []);
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
@@ -245,15 +296,51 @@ export default function GitChip({ project, showToast, flushSave, onWorktreeChang
                   changes waiting
                 </span>
               )}
+              {/* Only on the other branches. Neither action means anything on
+                  the one you are standing on — git refuses both — and an icon
+                  that is always there to be refused is worse than no icon. */}
+              {b !== info.branch && (
+                <>
+                  <button
+                    className="row-action merge"
+                    title={`Merge ${b} into ${info.branch}`}
+                    disabled={working}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      mergeBranch(b);
+                    }}
+                  >
+                    <MergeIcon size={12} />
+                  </button>
+                  <button
+                    className="row-action"
+                    title={`Delete ${b}`}
+                    disabled={working}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteBranch(b);
+                    }}
+                  >
+                    <TrashIcon size={12} />
+                  </button>
+                </>
+              )}
             </div>
           ))}
+          {/* The rules git checks are checked here instead, where the name is
+              being typed: a character it refuses never lands in the field, and
+              what's left — the shape of the whole name, a name already taken —
+              is said before Enter does anything. Sending it and reporting back
+              "fatal: 'my branch' is not a valid branch name" loses the name and
+              explains it in git's words. */}
           <div className="dropdown-row">
             <input
               placeholder="new-branch-name"
               value={newBranch}
-              onChange={(e) => setNewBranch(e.target.value)}
+              aria-invalid={!!branchError}
+              onChange={(e) => setNewBranch(sanitizeBranchName(e.target.value))}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && newBranch.trim()) {
+                if (e.key === 'Enter' && newBranch.trim() && !branchError) {
                   const name = newBranch.trim();
                   setNewBranch('');
                   act(
@@ -270,6 +357,7 @@ export default function GitChip({ project, showToast, flushSave, onWorktreeChang
               }}
             />
           </div>
+          {branchError && <div className="git-hint">{branchError}</div>}
 
           <div className="divider" />
           <h3>Commit</h3>

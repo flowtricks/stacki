@@ -438,7 +438,11 @@
   transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
 }
 .u-segmented.is-hug .u-segmented-button { flex: 0 0 auto; }
-.u-segmented-button:hover { color: var(--color-text-primary); }
+/* Hover lifts the text only: the chosen segment is drawn by the indicator
+   behind these buttons, so a background here would paint over it — and the
+   app's blanket `button:hover` (src/styles.css) does exactly that unless this
+   states otherwise. */
+.u-segmented-button:hover:not(:disabled) { background: none; color: var(--color-text-primary); }
 /* Light text/icon on the grey active pill. */
 .u-segmented-button.is-selected { color: var(--color-text-primary); }
 .u-segmented-button:focus-visible {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { displayOf, GroupLabel, PropLabel } from './TypographySection'
 import { handleArrowStep } from './lib/number-step'
+import { isNonNegative } from './lib/css-properties'
 import VariableConnect from './VariableConnect'
 import type { ResolvedProp } from './lib/resolved'
 import { splitTopLevelSpaces } from './lib/background'
@@ -131,7 +132,8 @@ function GapInput({ prop, value, busy, ariaLabel, onLive, onCommit }: {
       onBlur={() => { focused.current = false; cancelLive(); onCommit(draft) }}
       onKeyDown={(event) => {
         if (event.key === 'Enter') { event.currentTarget.blur(); return }
-        const stepped = handleArrowStep(event)
+        // A gap has no negative side to step onto.
+        const stepped = handleArrowStep(event, isNonNegative(prop) ? 0 : undefined)
         if (!stepped) return
         event.preventDefault()
         const el = event.currentTarget

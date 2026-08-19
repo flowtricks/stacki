@@ -33,7 +33,7 @@ const check = (what, condition, detail) => {
     stdin: {
       contents: `
         export { resolveTarget } from './lib/webflow'
-        export { setHost } from './lib/host'
+        export { setHost, onHostChange, getHost } from './lib/host'
         export { matchSelectorList } from './lib/selectors'
       `,
       resolveDir: path.join(__dirname, '..', 'src', 'style-panel'),
@@ -52,7 +52,7 @@ const check = (what, condition, detail) => {
   global.document = dom.window.document;
   dom.window.avb = {};
 
-  const { resolveTarget, setHost, matchSelectorList } = require(bundlePath);
+  const { resolveTarget, setHost, onHostChange, getHost, matchSelectorList } = require(bundlePath);
   setHost({ nodes: [], projectPath: '/project', files: [], astroFiles: [] });
 
   // A layout: a component call in the source, `<html class="theme-dark">` on
@@ -121,6 +121,27 @@ const check = (what, condition, detail) => {
     check('with no answer the snapshot is the source one', seen?.tag == null, JSON.stringify(seen?.tag));
     check('an unverifiable tag selector does not match', !(await matches(target, 'html')));
     check('the classes it does know still match', await matches(target, '.theme-dark'));
+  }
+
+  // --- the panel hears about undo ------------------------------------------
+  {
+    // Undo rewrites the stylesheets and the page model directly. The panel
+    // reads both, so it is told when that happens — otherwise it keeps showing
+    // what it cached until its own refresh comes round, and trails the canvas.
+    let notified = 0;
+    const off = onHostChange(() => { notified += 1; });
+    const before = getHost().historyTick;
+    check('the host carries a history tick', typeof before === 'number', typeof before);
+    setHost({ historyTick: before + 1 });
+    check('moving it notifies', notified === 1, `${notified} notifications`);
+    check('and it reads back', getHost().historyTick === before + 1, `${getHost().historyTick}`);
+    const after = notified;
+    setHost({ historyTick: before + 1 });
+    check('setting the same value again says nothing', notified === after, `${notified} vs ${after}, tick=${getHost().historyTick}`);
+    const beforeOff = notified;
+    off();
+    setHost({ historyTick: before + 2 });
+    check('and nothing after unsubscribing', notified === beforeOff, `${notified} vs ${beforeOff}`);
   }
 
   if (failures.length) {

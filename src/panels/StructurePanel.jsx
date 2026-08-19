@@ -4,6 +4,7 @@ import { isDataBound } from '../bindings.js';
 import { setDrag, clearDrag, getDrag } from '../dragState.js';
 import { elementLabel } from '../classNames.js';
 import { isContentOnlyChild, noteText } from '../treeSelection.js';
+import { soleThen, rowChildren, rowHost } from '../branches.js';
 import {
   LayoutIcon,
   ElementComponentIcon,
@@ -34,6 +35,7 @@ import {
 //  - collapse/expand for nodes with children
 export default function StructurePanel({
   pageState,
+  currentPage,
   layouts,
   currentLayoutName,
   selectedId,
@@ -103,15 +105,14 @@ export default function StructurePanel({
       else if (e.key === 'ArrowUp') next = parent;
       else if (
         e.key === 'ArrowDown' &&
-        Array.isArray(node.children) &&
-        node.children.length > 0 &&
+        rowChildren(node).length > 0 &&
         // Content-only children aren't shown in the navigator — don't
         // descend into rows that don't exist.
-        !node.children.every(isContentOnlyChild)
+        !rowChildren(node).every(isContentOnlyChild)
       ) {
         const collapsed = toggled.has(node.id) ? toggled.get(node.id) : defaultCollapsed(node);
         if (collapsed) setToggled((prev) => new Map(prev).set(node.id, false));
-        next = node.children[0];
+        next = rowChildren(node)[0];
       }
       if (next) onSelect(next.id);
     };
@@ -130,7 +131,7 @@ export default function StructurePanel({
           chain.push(...trail);
           return true;
         }
-        if (Array.isArray(n.children) && walk(n.children, [...trail, n])) return true;
+        if (walk(rowChildren(n), [...trail, n])) return true;
       }
       return false;
     };
@@ -173,12 +174,27 @@ export default function StructurePanel({
   }, [revealTick, selectedId]);
 
   if (!pageState) {
+    // A route with no file in this project: an integration injected it, and its
+    // source lives in a dependency. It previews, and that is all — saying so
+    // beats an empty panel that reads as something being broken.
+    const injected = currentPage?.kind === 'route';
     return (
       <div className="panel-section grow">
         <div className="panel-header">
           <h2>Navigator</h2>
         </div>
-        <div className="props-empty">Select a page to edit.</div>
+        <div className="props-empty">
+          {injected ? (
+            <>
+              <strong>{currentPage.route}</strong> comes from{' '}
+              {currentPage.from ? <code>{currentPage.from}</code> : 'an integration'}, not from this
+              project — it can be previewed here, but its markup lives in a dependency and isn’t
+              editable.
+            </>
+          ) : (
+            'Select a page to edit.'
+          )}
+        </div>
       </div>
     );
   }
@@ -233,9 +249,9 @@ export default function StructurePanel({
     const map = new Map();
     const walk = (list) =>
       list.forEach((n) => {
-        if (Array.isArray(n.children) && n.children.length > 0) {
+        if (rowChildren(n).length > 0) {
           map.set(n.id, collapsed);
-          walk(n.children);
+          walk(rowChildren(n));
         }
       });
     walk(model.nodes);
@@ -517,17 +533,24 @@ function TreeNode({ node, note, parentId, index, depth, ...ctx }) {
 
   // Reported by the page: this node's markers wrap nothing.
   const rendersNothing = !!ctx.emptyNodeIds?.has(node.id);
-  const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+  // An `if` with no `else` shows what is inside it directly — see branches.js.
+  // `host` is the node those children really belong to, which is what a drop
+  // has to name.
+  const kids = rowChildren(node);
+  const host = rowHost(node);
+  const hasChildren = kids.length > 0;
   // Pure text (plus simple {expr} interpolations) is edited via the Content
   // field — showing those as rows is noise until real tags are involved.
-  const showChildren = hasChildren && !node.children.every(isContentOnlyChild);
+  const showChildren = hasChildren && !kids.every(isContentOnlyChild);
   const canHostChildren =
     node.kind === 'component' ||
     node.kind === 'element' ||
     node.kind === 'chunk-group' ||
     node.kind === 'map' ||
-    // A condition holds nothing directly; each of its branches does.
-    node.kind === 'branch';
+    // A condition holds nothing directly; each of its branches does — unless
+    // the only branch is a then, whose row the `if` is standing in for.
+    node.kind === 'branch' ||
+    !!soleThen(node);
   const nodeCollapsed = isCollapsed(node);
   const isDropInto = dropTarget?.intoId === node.id;
 
@@ -573,10 +596,7 @@ function TreeNode({ node, note, parentId, index, depth, ...ctx }) {
         }}
         onDrop={(e) => {
           if (canHostChildren && acceptsDrag(node)) {
-            performDrop(e, {
-              parentId: node.id,
-              index: Array.isArray(node.children) ? node.children.length : 0,
-            });
+            performDrop(e, { parentId: host.id, index: kids.length });
           }
         }}
         onClick={(e) => {
@@ -643,22 +663,22 @@ function TreeNode({ node, note, parentId, index, depth, ...ctx }) {
       </div>
 
       {showChildren && !nodeCollapsed && (
-        <NodeList nodes={node.children} parentId={node.id} depth={depth + 1} {...ctx} />
+        <NodeList nodes={kids} parentId={host.id} depth={depth + 1} {...ctx} />
       )}
     </>
   );
 }
 
 // Locates a node plus its parent, sibling list, and index — the context the
-// arrow-key navigation needs.
+// arrow-key navigation needs. Walked the way the tree is drawn, so ↑ from
+// inside a lone then reaches the `if` the reader can see rather than the
+// branch row standing behind it.
 function findWithParent(nodes, id, parent) {
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i];
     if (n.id === id) return { node: n, parent, siblings: nodes, index: i };
-    if (Array.isArray(n.children)) {
-      const found = findWithParent(n.children, id, n);
-      if (found) return found;
-    }
+    const found = findWithParent(rowChildren(n), id, n);
+    if (found) return found;
   }
   return null;
 }
@@ -668,7 +688,7 @@ function findWithParent(nodes, id, parent) {
 // Everything starts collapsed; expanding is always an explicit action
 // (chevron, expand-all, arrow-down navigation, or selection reveal).
 function defaultCollapsed(node) {
-  return Array.isArray(node.children) && node.children.length > 0;
+  return rowChildren(node).length > 0;
 }
 
 // The row's icon already says what kind a node is, so no trailing kind badge

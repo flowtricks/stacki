@@ -130,7 +130,7 @@ function withSource(value, path) {
   // expression itself.
   const expr = require('fs').readFileSync(path.join(__dirname, '..', 'src', 'ui', 'ExprInput.jsx'), 'utf8');
   check('the chip is a mark, not a widget', /Decoration\.mark\(\{ class: 'cm-chip' \}\)/.test(expr));
-  check('and clicking it is handled', /closest\('\.cm-chip'\)/.test(expr));
+  check('and clicking it is handled', /closest\('\.cm-chip, \.expr-chip'\)/.test(expr));
   check(
     'a chip whose text is edited away stops being one',
     /stops being a chip/.test(expr),

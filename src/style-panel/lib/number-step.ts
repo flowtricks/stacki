@@ -32,8 +32,14 @@ function snapStep(value: number, step: number, dir: 1 | -1): number {
   return Math.round(raw * 1e5) / 1e5 // shed float dust (0.1 + 0.2 …)
 }
 
-/** Step the number whose number-or-unit the caret sits inside/touches; null if none. */
-export function stepNumberAtCaret(text: string, caret: number, dir: 1 | -1, mode: StepMode): { text: string; caret: number } | null {
+/**
+ * Step the number whose number-or-unit the caret sits inside/touches; null if none.
+ *
+ * `min` is a floor the step stops at — for a field whose property refuses to go
+ * below it. Stepping past a floor and letting the write clamp it would leave the
+ * field showing a number the page never took.
+ */
+export function stepNumberAtCaret(text: string, caret: number, dir: 1 | -1, mode: StepMode, min?: number): { text: string; caret: number } | null {
   NUMBER_UNIT_RE.lastIndex = 0
   let hit: { start: number; numEnd: number; raw: string; unit: string } | null = null
   let match: RegExpExecArray | null
@@ -47,7 +53,8 @@ export function stepNumberAtCaret(text: string, caret: number, dir: 1 | -1, mode
   if (!hit) return null
   const num = Number.parseFloat(hit.raw)
   if (!Number.isFinite(num)) return null
-  const nextStr = String(snapStep(num, stepSizeFor(mode, hit.unit.toLowerCase()), dir))
+  const stepped = snapStep(num, stepSizeFor(mode, hit.unit.toLowerCase()), dir)
+  const nextStr = String(min != null && stepped < min ? min : stepped)
   // Keep the caret where it was: end of the new number if it was in the number,
   // else shift it along with the unit by the number's length change.
   const nextCaret = caret <= hit.numEnd ? hit.start + nextStr.length : caret + (nextStr.length - hit.raw.length)
@@ -61,9 +68,10 @@ export function stepNumberAtCaret(text: string, caret: number, dir: 1 | -1, mode
  */
 export function handleArrowStep(
   event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+  min?: number,
 ): { text: string; caret: number } | null {
   if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return null
   const el = event.currentTarget
   const mode: StepMode = event.shiftKey ? 'ten' : event.altKey ? 'fine' : 'whole'
-  return stepNumberAtCaret(el.value, el.selectionStart ?? el.value.length, event.key === 'ArrowUp' ? 1 : -1, mode)
+  return stepNumberAtCaret(el.value, el.selectionStart ?? el.value.length, event.key === 'ArrowUp' ? 1 : -1, mode, min)
 }

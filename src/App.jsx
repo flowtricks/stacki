@@ -25,9 +25,12 @@ import CmsView from './panels/CmsView.jsx';
 import ContentView from './panels/ContentView.jsx';
 import VariablesPanel from './panels/VariablesPanel.jsx';
 import VariablesView from './panels/VariablesView.jsx';
-import { getElementSchema, GLOBAL_ATTRS, canContainTag, HTML_TAGS } from './elementSchemas.js';
+import { getElementSchema, GLOBAL_ATTRS, canContainTag, HTML_TAGS, VOID_TAGS } from './elementSchemas.js';
+import { isInlineOnly } from './ui/RichContent.jsx';
 import { onAssetRequest, clearAssetRequest } from './assetPick.js';
 import { isDataBound } from './bindings.js';
+import { soleThen } from './branches.js';
+import { hasClass, withClass } from './classAttr.js';
 import { elementLabel } from './classNames.js';
 import {
   autoQueryName,
@@ -537,6 +540,18 @@ function stripLostBindings(node, vars) {
   return removed;
 }
 
+// Whether the props panel would offer this node a Content field — the rich
+// inline editor over its words. The same test PropsPanel makes: children that
+// are all text and simple inline tags, or an element still empty and able to
+// hold text. Kept in step with it by hand; the two disagreeing would mean a
+// double-click that focuses a field which isn't there.
+function holdsInlineText(node) {
+  if (!node || node.kind !== 'element') return false;
+  if (VOID_TAGS.has(String(node.name).toLowerCase())) return false;
+  const kids = node.children;
+  return isInlineOnly(kids) || !Array.isArray(kids) || kids.length === 0;
+}
+
 export default function App() {
   const [project, setProject] = useState(null); // {path, name}
   const [scan, setScan] = useState({ pages: [], layouts: [], components: [] });
@@ -569,6 +584,10 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   // Concrete paths behind a dynamic route, and which one the canvas is showing.
   const [dynamicPaths, setDynamicPaths] = useState([]);
+  // Routes the dev server serves that aren't files here — pages an integration
+  // injected. A project can consist entirely of these (a site whose pages ship
+  // in a package), in which case they are the only pages there are to show.
+  const [injectedRoutes, setInjectedRoutes] = useState([]);
   // One sampled entry per collection the open file reads by name, for the
   // binding picker. Keyed by collection; a name present with a null value has
   // been asked for and has no answer, which stops it being asked again.
@@ -609,6 +628,7 @@ export default function App() {
   // ⌘Enter asks the props panel to open Settings and take the caret into the
   // class field — a counter, so pressing it again re-focuses.
   const [classFocus, setClassFocus] = useState(0);
+  const [contentFocus, setContentFocus] = useState(0);
   // Sliding highlight behind the active Style/Settings tab, measured from the
   // buttons so it tracks their real geometry (and any panel resize).
   const rightTabRefs = useRef({});
@@ -852,6 +872,20 @@ export default function App() {
       await openFile({ ...page, kind: 'page' });
     },
     [openFile]
+  );
+
+  // An injected route has no file in this project to open — its source lives
+  // in a dependency — so this points the canvas at it and leaves the editor
+  // empty rather than pretending there is a model behind it.
+  const selectRoute = useCallback(
+    async (entry) => {
+      await flushSave();
+      setEditStack([]);
+      setCurrentPage({ kind: 'route', name: entry.route, route: entry.route, from: entry.from });
+      setPageState(null);
+      setSelectedId(null);
+    },
+    [flushSave]
   );
 
   // Enter in the URL bar. A route names a page file, so this switches the
@@ -1101,7 +1135,13 @@ export default function App() {
 
   const scheduleSaveRef = useRef(null);
 
+  // Undo and redo rewrite files and the page model under whatever is reading
+  // them; bumping this tells the style panel to re-read rather than wait for
+  // its own polling to notice.
+  const [historyTick, setHistoryTick] = useState(0);
+
   const undo = useCallback(async () => {
+    setHistoryTick((n) => n + 1);
     const h = historyRef.current;
     if (!h.past.length) return;
     h.lastKey = null;
@@ -1123,6 +1163,7 @@ export default function App() {
   }, [applySnapshot, showToast]);
 
   const redo = useCallback(async () => {
+    setHistoryTick((n) => n + 1);
     const h = historyRef.current;
     if (!h.future.length) return;
     h.lastKey = null;
@@ -1732,15 +1773,18 @@ export default function App() {
       } else if (item.type === 'cond') {
         // `true` until a real test is typed: the then branch renders, so the
         // condition is visible on the canvas the moment it lands.
+        //
+        // Just the then. Most conditions never want an else, and one that does
+        // is a switch away in the props panel — where turning it back off
+        // brings the markup home rather than dropping it. Until then there is
+        // nothing to choose between, so the tree shows what is inside the
+        // condition directly (see branches.js) instead of a row saying "then".
         node = {
           id,
           kind: 'cond',
-          op: '?',
+          op: '&&',
           test: 'true',
-          children: [
-            { id: newId(), kind: 'branch', name: 'then', children: [] },
-            { id: newId(), kind: 'branch', name: 'else', children: [] },
-          ],
+          children: [{ id: newId(), kind: 'branch', name: 'then', children: [] }],
         };
       } else if (item.type === 'comment') {
         node = { id, kind: 'comment', value: ' Comment ' };
@@ -1996,6 +2040,24 @@ export default function App() {
     return () => document.removeEventListener('keydown', onKey);
   }, [inPreview, editStack.length, closeComponent]);
 
+  // The route list is written by the dev server as it resolves its routes, so
+  // it is read once the server is up — and again after a rescan, since adding
+  // a page of your own changes what the list holds.
+  useEffect(() => {
+    if (!project || devStatus !== 'on') {
+      setInjectedRoutes([]);
+      return;
+    }
+    let live = true;
+    window.avb
+      .injectedRoutes({ projectPath: project.path })
+      .then((r) => live && setInjectedRoutes(r?.routes || []))
+      .catch(() => live && setInjectedRoutes([]));
+    return () => {
+      live = false;
+    };
+  }, [project, devStatus, scan.pages.length]);
+
   // A dynamic page ([slug].astro) has a route pattern, not a URL. Ask the dev
   // server which concrete paths its getStaticPaths produces, so the canvas can
   // show one of them instead of a 404. Static pages never reach the fetch.
@@ -2188,25 +2250,33 @@ export default function App() {
 
   // Typing a bare class in the style panel's selector box puts it on the
   // element too — a rule for a class the element doesn't carry would never
-  // apply. Only a plain class="" is safe to extend: class:list and expression
-  // values are code we'd have to rewrite, so those are left alone.
+  // apply. Where it goes depends on how the element's classes are written: a
+  // plain `class`, a `class:list`, a template literal (see classAttr.js). An
+  // element whose class is some other expression is code we would have to
+  // understand to extend, so that one is said out loud rather than dropped.
   const addClassToNode = useCallback(
     (nodeId, className) => {
       const clean = String(className || '').trim();
       if (!nodeId || !clean) return;
+      let refused = false;
       mutateModel((model) => {
         const node = findNodeById(model.nodes, nodeId);
         if (!node) return model;
-        const cls = node.props?.class;
-        if (cls && cls.type !== 'string') return model;
-        const existing = cls ? cls.value.trim().split(/\s+/).filter(Boolean) : [];
-        if (existing.includes(clean)) return model;
+        if (hasClass(node.props, clean)) return model;
+        const edit = withClass(node.props, clean);
+        if (!edit) {
+          refused = true;
+          return model;
+        }
         if (!node.props) node.props = {};
-        node.props.class = { type: 'string', value: [...existing, clean].join(' ') };
+        node.props[edit.key] = edit.value;
         return model;
       }, true);
+      if (refused) {
+        showToast(`Add ${clean} to this element yourself — its class comes from code Stacki can't edit safely.`);
+      }
     },
-    [mutateModel]
+    [mutateModel, showToast]
   );
 
   const setProp = useCallback(
@@ -3216,13 +3286,24 @@ export default function App() {
     setNodeClasses(null);
   }, [model]);
 
+  // What the spacing box is pointing at, drawn over the selected element on the
+  // canvas — see spacingBands.js.
+  const [spacingHover, setSpacingHover] = useState(null);
+
   const crumbs = [];
   if (currentPage) crumbs.push({ id: null, label: currentPage.name.replace(/\.(astro|md)$/i, '') });
   if (model && selectedId === 'frontmatter') {
     crumbs.push({ id: 'frontmatter', label: 'Frontmatter' });
   } else if (model && selectedId) {
     const chain = ancestorChain(model.nodes, selectedId) || [];
-    crumbs.push(...chain.map((n) => ({ id: n.id, label: crumbLabel(n) })));
+    // An `if` with no `else` doesn't show its branch in the navigator, so the
+    // trail doesn't name it either — "if command › then › hero-command" said
+    // "then" to no one (see branches.js).
+    crumbs.push(
+      ...chain
+        .filter((n, i) => n !== soleThen(chain[i - 1]))
+        .map((n) => ({ id: n.id, label: crumbLabel(n) }))
+    );
   }
 
   // Canvas outlines: nodes are addressed by their index path in the tree
@@ -3390,7 +3471,12 @@ export default function App() {
           }
         : null,
   };
-  const pageRoute = dynamicEntry ? dynamicEntry.route : patternRoute;
+  // With no page selected and none to select — a project whose routes all come
+  // from an integration, before one is picked — the dev server is still serving
+  // a site. Show its root rather than an empty canvas: something running should
+  // look like it is running.
+  const rootFallback = !patternRoute && !scan.pages.length && devStatus === 'on' ? '/' : null;
+  const pageRoute = dynamicEntry ? dynamicEntry.route : patternRoute || rootFallback;
   const pageUrlPath = pageRoute ? routeToPath(pageRoute, trailingSlash) : null;
   livePathRef.current = pageUrlPath;
   const liveUrl = devUrl && pageUrlPath ? devUrl + pageUrlPath : null;
@@ -3503,6 +3589,8 @@ export default function App() {
               <PagesPanel
                 scan={scan}
                 currentPage={currentPage}
+                injectedRoutes={injectedRoutes}
+                onSelectRoute={selectRoute}
                 onSelect={selectPage}
                 onCreate={createPage}
                 onDelete={deletePage}
@@ -3516,6 +3604,7 @@ export default function App() {
             {leftTab === 'navigator' && (
               <StructurePanel
                 pageState={pageState}
+                currentPage={currentPage}
                 layouts={scan.layouts}
                 currentLayoutName={currentLayoutName}
                 selectedId={selectedId}
@@ -3585,7 +3674,6 @@ export default function App() {
                 pick={assetPick}
                 onPickCancel={endAssetPick}
                 onRecordUndo={pushCommand}
-                onAddClass={(name) => addClassToNode(selectedId, name)}
               />
             )}
           </div>
@@ -3593,6 +3681,7 @@ export default function App() {
 
         <div className="center">
           <PreviewPane
+            spacingHover={spacingHover}
             devUrl={devUrl}
             devStatus={devStatus}
             devLog={devLog}
@@ -3668,8 +3757,22 @@ export default function App() {
                 return;
               }
               const n = model && nodeAtPath(model.nodes, trailOf(p));
+              if (!n) return;
               // astro:assets components have no file behind them to open.
-              if (n?.kind === 'component' && !n.astroAsset) openComponent(n.name, p, occ);
+              if (n.kind === 'component' && !n.astroAsset) {
+                openComponent(n.name, p, occ);
+                return;
+              }
+              // Nothing to drill into. But a double-click on a paragraph asks
+              // to edit its words — that's what the gesture means everywhere
+              // else — so it goes where the words are: Settings, caret in
+              // Content. Only where that field exists; on a wrapper full of
+              // elements the double-click has nothing to offer and does
+              // nothing, rather than opening a panel to say so.
+              if (holdsInlineText(n)) {
+                setRightTab('settings');
+                setContentFocus((t) => t + 1);
+              }
             }}
           />
 
@@ -3757,8 +3860,11 @@ export default function App() {
                 }}
                 onSelectNode={setSelectedId}
                 onRecordUndo={pushCommand}
+                onAddClass={(name) => addClassToNode(selectedId, name)}
+                onSpacingHover={setSpacingHover}
                 pathOf={pathFor}
                 renderedClasses={selectedClasses}
+                historyTick={historyTick}
                 openFilePath={editStack[editStack.length - 1]?.path || currentPage?.path || null}
               />
             )}
@@ -3766,6 +3872,7 @@ export default function App() {
             <PropsPanel
               node={selectedNode}
               focusClass={classFocus}
+              focusContent={contentFocus}
               isLayout={selectedId === 'layout'}
               layouts={scan.layouts}
               currentLayoutName={currentLayoutName}

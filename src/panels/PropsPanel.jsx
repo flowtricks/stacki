@@ -15,7 +15,13 @@ import { dataTree, findDeclaration, findImportOf, listsOnly } from '../dataSugge
 import LinkField from '../ui/LinkField.jsx';
 import DataPicker from '../ui/DataPicker.jsx';
 import BindInput from '../ui/BindInput.jsx';
-import { partsFromValue, resolvePick, valueFromParts, valueModeOf } from '../bindings.js';
+import {
+  partsFromValue,
+  resolvePick,
+  templateHoles,
+  valueFromParts,
+  valueModeOf,
+} from '../bindings.js';
 import {
 
   ResetIcon,
@@ -45,10 +51,25 @@ import {
 // Edits the props of the selected node. Fields come from the component's
 // prop schema (interface Props / Astro.props destructure), plus any props
 // already set on the node that aren't in the schema.
+// A click anywhere in a <label onClick={noLabelActivation}> is forwarded to the first control inside it.
+// These labels hold no field — the input is their sibling — but they do hold
+// the bind dot and the `{}` toggle, so a press on the empty space beside a
+// prop's name, or on the name itself, was silently pressing a button. On a
+// field showing an expression that button means "use the control instead",
+// which drops a value no control can hold: clicking next to the label cleared
+// the prop. The label has nothing to activate, so it activates nothing.
+//
+// The Attributes row below solves the same problem by not being a <label onClick={noLabelActivation}> at
+// all; these keep the tag, since the panel's styling hangs off it.
+const noLabelActivation = (event) => event.preventDefault();
+
+
 export default function PropsPanel({
   node,
   /** Bumped by ⌘Enter — open Settings and focus the class field. */
   focusClass,
+  /** Bumped by a canvas double-click on text — focus the Content field. */
+  focusContent,
   isLayout,
   layouts,
   currentLayoutName,
@@ -132,7 +153,7 @@ export default function PropsPanel({
           <h2>Expression</h2>
         </div>
         <div className="props-field" style={{ marginTop: 8 }}>
-          <label>
+          <label onClick={noLabelActivation}>
             <span className="prop-label">Code</span>
           </label>
           <ExprInput
@@ -157,7 +178,7 @@ export default function PropsPanel({
           <h2>{isDoctype ? 'Doctype' : 'Source line'}</h2>
         </div>
         <div className="props-field" style={{ marginTop: 8 }}>
-          <label>
+          <label onClick={noLabelActivation}>
             <span className="prop-label">
               <CodeIcon size={12} className="prop-label-icon" />
               Line
@@ -210,7 +231,7 @@ export default function PropsPanel({
           <h2>Condition</h2>
         </div>
         <div className="props-field" style={{ marginTop: 8 }}>
-          <label>
+          <label onClick={noLabelActivation}>
             <span className="prop-label">
               <BranchIcon size={12} className="prop-label-icon" />
               Show when
@@ -273,7 +294,7 @@ export default function PropsPanel({
           <h2>Comment</h2>
         </div>
         <div className="props-field" style={{ marginTop: 8 }}>
-          <label>
+          <label onClick={noLabelActivation}>
             <span className="prop-label">
               <CommentIcon size={12} className="prop-label-icon" />
               Comment
@@ -335,7 +356,7 @@ export default function PropsPanel({
           <h2>Text</h2>
         </div>
         <div className="props-field" style={{ marginTop: 8 }}>
-          <label>
+          <label onClick={noLabelActivation}>
             <span className="prop-label">
               <VariableTextSizeIcon size={12} className="prop-label-icon" />
               Content
@@ -625,6 +646,28 @@ export default function PropsPanel({
     input.closest('.props-field')?.scrollIntoView({ block: 'nearest' });
   }, [wantClassFocus, settingsOpen]);
 
+  // Double-clicking text on the canvas, forwarded the same way: caret in the
+  // Content field, at the end of what's already written. No group to open
+  // first — Content sits at the top of the panel — but still an effect, so
+  // the field belongs to the node that was double-clicked and not the one
+  // that was selected a render ago.
+  useEffect(() => {
+    if (!focusContent) return;
+    const field = rootRef.current?.querySelector('.rich-content');
+    if (!field) return;
+    field.focus();
+    // Land after the last character rather than at the top: the gesture means
+    // "let me write here", and a caret parked before the first word makes
+    // typing insert in front of the sentence.
+    const range = document.createRange();
+    range.selectNodeContents(field);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+    field.closest('.props-field')?.scrollIntoView({ block: 'nearest' });
+  }, [focusContent]);
+
   const classField =
     schema.find((f) => f.name === 'class' && appliesNow(f)) ||
     (node.props?.class !== undefined ? { name: 'class', type: 'string' } : null);
@@ -704,7 +747,7 @@ export default function PropsPanel({
 
         {showContentField && (
           <div className="props-field" key="content">
-            <label>
+            <label onClick={noLabelActivation}>
               <span className="prop-label">
                 <VariableTextSizeIcon size={12} className="prop-label-icon" />
                 {isSlot ? 'Fallback' : 'Content'}
@@ -759,7 +802,7 @@ export default function PropsPanel({
         )}
         {showLooseTextField && (
           <div className="props-field" key="loose-text">
-            <label>
+            <label onClick={noLabelActivation}>
               <span className={`prop-label${looseText ? ' set' : ''}`}>
                 <VariableTextSizeIcon size={12} className="prop-label-icon" />
                 Content
@@ -942,7 +985,7 @@ function CommentField({ value, onCommit }) {
   };
   return (
     <div className="props-field props-comment">
-      <label>
+      <label onClick={noLabelActivation}>
         <span className="prop-label">
           <CommentIcon size={12} className="prop-label-icon" />
           Comment
@@ -992,7 +1035,7 @@ function AttributesSection({ node, names, projectPath, onSetProp, onSetProps, on
 
   return (
     <div className="props-field" ref={listRef}>
-      {/* Not a <label>: a click anywhere inside one activates the control it
+      {/* Not a <label onClick={noLabelActivation}>: a click anywhere inside one activates the control it
           holds, so the whole row — icon, word and all — acted as the button. */}
       <div className="props-label-row">
         <span className="prop-label">
@@ -1575,7 +1618,7 @@ function MapEditor({ node, loopContext, bindCtx, dataCtx, onSetText }) {
       {parseableNow ? (
         <>
           <div className="props-field" style={{ marginTop: 8 }} ref={dataRef}>
-            <label>
+            <label onClick={noLabelActivation}>
               <span className="prop-label">Data</span>
               <BindHandle
                 active={insertAt?.field === 'data'}
@@ -1631,7 +1674,7 @@ function MapEditor({ node, loopContext, bindCtx, dataCtx, onSetText }) {
             )}
           </div>
           <div className="props-field">
-            <label>
+            <label onClick={noLabelActivation}>
               <span className="prop-label">Item name</span>
             </label>
             <input
@@ -1645,7 +1688,7 @@ function MapEditor({ node, loopContext, bindCtx, dataCtx, onSetText }) {
             />
           </div>
           <div className="props-field">
-            <label>
+            <label onClick={noLabelActivation}>
               <span className="prop-label">Index name</span>
               <span className="type-tag">optional</span>
             </label>
@@ -1669,7 +1712,7 @@ function MapEditor({ node, loopContext, bindCtx, dataCtx, onSetText }) {
         </div>
       )}
       <div className="props-field" style={{ marginTop: parseableNow ? 2 : 0 }} ref={codeRef}>
-        <label>
+        <label onClick={noLabelActivation}>
           <span className="prop-label">
             <CodeIcon size={12} className="prop-label-icon" />
             Code
@@ -1826,7 +1869,7 @@ function TagField({ tag, options, onChangeTag }) {
 
   return (
     <div className="props-field" ref={wrapRef}>
-      <label>
+      <label onClick={noLabelActivation}>
         <span className="prop-label">
           <TagIcon size={12} className="prop-label-icon" />
           Tag
@@ -2109,6 +2152,8 @@ function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef, onChan
   const wrapRef = useRef(null);
   const inputRef = useRef(null);
   const [menu, setMenu] = useState(null); // {left, top, width, chip}
+  // The code editor, so a chip pressed inside it can be repointed in place.
+  const exprApiRef = useRef(null);
   const [raw, setRaw] = useState(false);
   // Typing must not move the field out from under the caret: an expression
   // half-way to becoming a call reads as code the moment the bracket lands,
@@ -2145,6 +2190,15 @@ function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef, onChan
     const path = resolvePick(rawPath, query, bindCtx);
     setMenu(null);
     if (!showInput) {
+      // A hole in the code was pressed: repoint THAT hole and leave the program
+      // around it alone. Replacing the whole expression — which is what a pick
+      // used to do, since the code editor holds one — would throw away the
+      // ternary the hole was written inside.
+      if (chip && typeof chip.from === 'number') {
+        const next = exprApiRef.current?.replaceRange(chip.from, chip.to, `\${${path}}`);
+        if (next != null) onChange({ type: 'expr', value: next }, true);
+        return;
+      }
       // The code editor holds one expression, so a pick replaces it.
       setRaw(false);
       onChange({ type: 'expr', value: path }, true);
@@ -2157,7 +2211,11 @@ function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef, onChan
   useEffect(() => {
     if (!menu) return undefined;
     const close = (e) => {
-      if (e.target.closest?.('.bind-menu, .bind-pick, .expr-chip')) return;
+      // `.cm-chip` for the same reason as the rest: a chip opens this picker on
+      // mousedown, and this listener is live before that mousedown has finished
+      // reaching document — so a chip missing from the list opens the picker and
+      // closes it in the one press.
+      if (e.target.closest?.('.bind-menu, .bind-pick, .expr-chip, .cm-chip')) return;
       setMenu(null);
     };
     const onKey = (e) => e.key === 'Escape' && setMenu(null);
@@ -2190,7 +2248,9 @@ function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef, onChan
           and a snapshot would go on showing the entry you stepped away from. */}
       <DataPicker
         tree={dataTree(bindCtx || {})}
-        current={menu.chip ? menu.chip.getAttribute('data-expr') : showInput ? null : expr}
+        current={
+          menu.chip?.path ?? (menu.chip ? menu.chip.getAttribute('data-expr') : showInput ? null : expr)
+        }
         entries={bindCtx?.entryNav}
         onPick={pick}
         onExpand={(node) => node.query && bindCtx?.onNeedSample?.(node.query.collection)}
@@ -2237,10 +2297,18 @@ function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef, onChan
 
   return (
     <div className="prop-expr-row" ref={wrapRef}>
+      {/* Code, with the data in it still shown as data: an expression this
+          field can't hold as chips and text — a ternary, a template, a call —
+          keeps the editor, and every `${…}` hole naming a plain path is drawn
+          as a chip inside it. Pressing one repoints that hole and leaves the
+          program around it exactly as written. */}
       <ExprInput
         value={expr}
         syncValue={expr}
         placeholder={placeholder || ''}
+        apiRef={exprApiRef}
+        chipsOf={templateHoles}
+        onChipClick={(hit) => open(hit)}
         onChange={(v) => onChange({ type: 'expr', value: v })}
         onCommit={(v) => v !== expr && onChange({ type: 'expr', value: v }, true)}
       />
@@ -2610,7 +2678,7 @@ function PropField({
     />
   );
   const labelEl = (
-    <label>
+    <label onClick={noLabelActivation}>
       {pill}
       {/* The prop's own documentation — the comment above it in the
           component's `interface Props`. */}

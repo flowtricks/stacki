@@ -1,6 +1,9 @@
 import React from 'react';
 import CanvasView from './CanvasView.jsx';
 import { setCanvasFrame, receiveCanvasReply, noteCanvasReady } from '../canvasQuery.js';
+import { forgetComputedColors } from '../style-panel/lib/computed-color';
+import { onePerPlace } from '../outlineBoxes.js';
+import { spacingBands } from '../spacingBands.js';
 import {
   DesktopIcon,
   TabletIcon,
@@ -76,6 +79,7 @@ export function deviceForWidth(px) {
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
 export default function PreviewPane({
+  spacingHover,
   devUrl,
   devStatus,
   devLog,
@@ -133,6 +137,9 @@ export default function PreviewPane({
   // overlay in the frame, never inside the page itself.
   const iframeRef = React.useRef(null);
   const [rects, setRects] = React.useState({});
+  // The selected element's own padding/margin in px, as the page measures it —
+  // what the spacing box's hover is drawn from.
+  const [spacing, setSpacing] = React.useState({});
   const [canvasHover, setCanvasHover] = React.useState(null);
 
   // Set by a click on the page, so the scroll-into-view below can skip it.
@@ -186,6 +193,7 @@ export default function PreviewPane({
       const d = e.data;
       if (d?.type === 'avb:rects') {
         setRects(d.rects || {});
+        setSpacing(d.spacing || {});
         // The rendered classes of the selected instance, for the style panel:
         // an expression-valued class attribute has no text in the model, so
         // this is the only place the applied classes are knowable. Rects
@@ -220,8 +228,10 @@ export default function PreviewPane({
         onSelectPath(d.path || null);
       } else if (d?.type === 'avb:canvas-ready') {
         // The page has walked its markers — anything asked too early can be
-        // asked again now (see canvasQuery.js).
+        // asked again now (see canvasQuery.js). It has also just re-rendered,
+        // so what a variable resolves to may have moved with it.
         noteCanvasReady();
+        forgetComputedColors();
       } else if (d?.type === 'avb:query-result') {
         // An answer from the page about what it really renders — see
         // canvasQuery.js. Routed here because this is the component that
@@ -505,12 +515,33 @@ export default function PreviewPane({
                   nothing. */}
               {focusPath &&
                 !focusWhole &&
-                (rects[focusPath] || []).map((r, i) => (
+                onePerPlace(rects[focusPath]).map((r, i) => (
                   <div
                     key={`focus-${i}`}
                     className="node-focus"
                     style={{ left: r.x, top: r.y, width: r.w, height: r.h }}
                   />
+                ))}
+              {/* What the style panel's spacing box is pointing at: the strip of
+                  the page that side is holding open, in the colour of the box it
+                  belongs to. Under the outlines, over the page. */}
+              {spacingHover &&
+                selPath &&
+                spacingBands(
+                  (rects[selPath] || [])[selOcc] || (rects[selPath] || [])[0],
+                  (spacing[selPath] || [])[selOcc] || (spacing[selPath] || [])[0],
+                  spacingHover.kind,
+                  spacingHover.sides
+                ).map((b) => (
+                  <div
+                    key={`sp-${b.side}`}
+                    className={`spacing-band is-${spacingHover.kind}`}
+                    style={{ left: b.x, top: b.y, width: b.w, height: b.h }}
+                  >
+                    <span className="spacing-band-label">
+                      {spacingHover.labels?.[b.side] || `${Math.round(b.side === 'left' || b.side === 'right' ? b.w : b.h)}px`}
+                    </span>
+                  </div>
                 ))}
               {[
                 hoverPath && hoverPath !== selPath
@@ -527,9 +558,11 @@ export default function PreviewPane({
                   const info = overlayInfo ? overlayInfo(o.path) : null;
                   if (!all || !info) return [];
                   // One box, not one per loop item, unless the hover came from
-                  // the navigator (which points at the node, not an instance).
+                  // the navigator (which points at the node, not an instance) —
+                  // and then one per place, since the same place reported twice
+                  // would paint the fill twice (see onePerPlace).
                   const list =
-                    o.occ == null ? all : all[o.occ] ? [all[o.occ]] : all.slice(0, 1);
+                    o.occ == null ? onePerPlace(all) : all[o.occ] ? [all[o.occ]] : all.slice(0, 1);
                   return list.map((r, i) => (
                     <div
                       key={`${o.type}-${i}`}
@@ -560,6 +593,11 @@ export default function PreviewPane({
                 <div className="spinner" />
                 <div>Starting Astro dev server…</div>
               </>
+            ) : devStatus === 'on' ? (
+              // The server is up; there is simply no page to show. Saying
+              // "offline" here — with a button that restarts a healthy server —
+              // sent at least one person debugging Astro for an hour (issue #7).
+              <div className="offline-title">Nothing selected to preview. Pick a page on the left.</div>
             ) : (
               <DevOffline devLog={devLog} devDiag={devDiag} onRestart={onRestart} />
             )}

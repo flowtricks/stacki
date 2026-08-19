@@ -20,6 +20,41 @@ export function isDataBound(node) {
 export const BIND_PATH_RE =
   /^[A-Za-z_$][\w$]*(?:\[\d+\])*(?:\.[A-Za-z_$][\w$]*(?:\[\d+\])*)*$/;
 
+/**
+ * The `${…}` holes in a piece of code that name plain data, as ranges into the
+ * text. What the code editor draws as chips: an expression like
+ * ``maxWidth ? `--_mw: ${maxWidth}ch;` : undefined`` is a program — it keeps
+ * the code editor rather than becoming a field of chips — but the data inside
+ * it is still data, and reading it as one purple word among the code is the
+ * whole reason chips exist.
+ *
+ * Only holes holding a plain path. `${a + 1}` is an expression whose value no
+ * picker could choose, so it stays code, coloured like the rest of it.
+ */
+export function templateHoles(text) {
+  const src = String(text ?? '');
+  const out = [];
+  let i = 0;
+  while (i < src.length) {
+    // `\${x}` is the characters, not a hole — the same escape partsFromValue
+    // honours when it splits a template.
+    if (src[i] === '\\') {
+      i += 2;
+      continue;
+    }
+    if (src[i] !== '$' || src[i + 1] !== '{') {
+      i += 1;
+      continue;
+    }
+    const close = src.indexOf('}', i + 2);
+    if (close === -1) break;
+    const path = src.slice(i + 2, close).trim();
+    if (BIND_PATH_RE.test(path)) out.push({ from: i, to: close + 1, path });
+    i = close + 1;
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // A prop value as PARTS: the text someone typed, and the data they dropped
 // into it. `date={post.data.pubDate}` is one part; ``label={`Posted
