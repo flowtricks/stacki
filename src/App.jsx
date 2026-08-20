@@ -305,6 +305,30 @@ function collectUsedNames(model) {
   return used;
 }
 
+// Which components this page puts on screen, and how many times each.
+//
+// The palette's "N instances" is counted by reading every .astro file on disk,
+// so it goes stale the moment a page is saved: the app marks its own writes,
+// the watcher never reports them, and nothing asks for a fresh count. Both
+// halves of the component work showed it — a component created read 0
+// instances, one detached went on reading 1 — and so does simply deleting a
+// tag, which has always been true here.
+//
+// Rescanning after every save would read the whole project between keystrokes.
+// The counts only move when a component tag appears or disappears, so that is
+// what is compared, and a scan follows only when it changed.
+function componentUsage(model) {
+  const names = [];
+  const walk = (list) => {
+    for (const node of list || []) {
+      if (node.kind === 'component' && node.name) names.push(node.name);
+      if (Array.isArray(node.children)) walk(node.children);
+    }
+  };
+  walk(model?.nodes);
+  return names.sort().join(',');
+}
+
 // Everything in the file that is code rather than markup: the frontmatter, a
 // loop's head, a condition's test, an expression node, and any prop whose
 // value is an expression. An imported name can be used in any of them without
@@ -845,6 +869,9 @@ export default function App() {
   // Page loading & saving
   // ----------------------------------------------------------------
 
+  // What the page put on screen at the last scan. See componentUsage.
+  const componentUseRef = useRef('');
+
   const flushSave = useCallback(async () => {
     clearTimeout(saveTimer.current);
     const { currentPage: page, pageState: state } = pageStateRef.current;
@@ -855,7 +882,16 @@ export default function App() {
       await window.avb.writePageRaw({ pagePath: page.path, source: state.source });
     }
     setPageState((s) => (s ? { ...s, dirty: false } : s));
-  }, []);
+    // The file on disk is what the scan reads, so this comes after the write.
+    if (state.editable) {
+      const usage = componentUsage(state.model);
+      if (usage !== componentUseRef.current) {
+        componentUseRef.current = usage;
+        const projectPath = projectRef.current?.path;
+        if (projectPath) rescan(projectPath).catch(() => {});
+      }
+    }
+  }, [rescan]);
 
   // Opens any .astro file for editing — a page, or a component drilled into.
   // `currentPage` is simply whatever is being edited, so saving, undo, the
@@ -867,6 +903,9 @@ export default function App() {
       setSelectedId(null);
       const result = await window.avb.readPage(entry.path);
       setPageState({ ...result, dirty: false });
+      // What is on this page now is what the last scan counted, so a save that
+      // changes nothing about it asks for no scan.
+      componentUseRef.current = componentUsage(result?.model);
       // Whatever opens, opens on something rather than nothing: a component on
       // its <body> when it has one, else the first element it renders; a page
       // on its outermost node, which is the layout wrapper when it has one.
@@ -1690,22 +1729,9 @@ export default function App() {
       }, true);
       setSelectedId(instanceId);
 
-      // The palette counts instances by reading the .astro files on disk, and
-      // the scan that followed the handler's fs:changed ran before this page's
-      // own save did. It counted the page as it was a moment earlier, so a
-      // component that has just been placed reads "0 instances" — which is
-      // exactly what a failed extraction would look like.
-      //
-      // So it is counted again, after the page is written. The zero timeout is
-      // the one scheduleSave uses for the same reason: React has to commit the
-      // mutation above before flushSave can see the model it is to write.
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      await flushSave();
-      await rescan(projectPath);
-
       showToast(`Created src/components/${name}.astro`, 'success');
     },
-    [insertables, mutateModel, resolveImportPath, showToast, flushSave, rescan]
+    [insertables, mutateModel, resolveImportPath, showToast]
   );
 
   // Detaching one instance: the page keeps the markup, the component keeps its
