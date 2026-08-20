@@ -123,10 +123,14 @@ export default function PalettePanel({ project, components, devUrl, onInsert, on
       input: {
         label: 'Folder name',
         placeholder: 'marketing',
+        // Refused rather than quietly corrected. Typing "Marketing" and getting
+        // a folder called something else is a surprise; being told the rule as
+        // you type is not, and it is the same rule every time.
         validate: (v) => {
           if (!v) return 'A folder needs a name.';
-          if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v)) {
-            return 'Letters, digits, dashes and underscores.';
+          if (/[A-Z]/.test(v)) return 'Folder names are lowercase.';
+          if (!/^[a-z0-9][a-z0-9._-]*$/.test(v)) {
+            return 'Lowercase letters, digits, dashes and underscores.';
           }
           if (taken.has(v)) return `There is already a ${v} folder — use Move to ${v}.`;
           return null;

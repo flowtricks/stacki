@@ -1805,7 +1805,10 @@ body > .embed-editor_provenance {
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
+  /* Lowercase, not uppercase: a folder is a folder on disk, and shouting it
+     made "marketing" and "Marketing" look like the same decision. New ones are
+     held to lowercase when they are named, so the row and the directory agree. */
+  text-transform: lowercase;
   color: var(--text-faint);
   cursor: pointer;
   user-select: none;

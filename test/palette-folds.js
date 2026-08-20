@@ -275,15 +275,30 @@ const comp = (name, folder = '') => ({ name, folder, path: `/p/src/components/${
     dom.window.document.querySelector('.confirm-field-problem')?.textContent
   );
 
-  await act(async () => {
-    const el = field();
-    const setter = Object.getOwnPropertyDescriptor(
-      dom.window.HTMLInputElement.prototype,
-      'value'
-    ).set;
-    setter.call(el, 'blog');
-    el.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-  });
+  const typeName = async (value) => {
+    await act(async () => {
+      const el = field();
+      const setter = Object.getOwnPropertyDescriptor(
+        dom.window.HTMLInputElement.prototype,
+        'value'
+      ).set;
+      setter.call(el, value);
+      el.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    });
+  };
+
+  // Held to lowercase at the point of naming, so the row in the panel and the
+  // directory on disk say the same thing. Refused out loud rather than
+  // corrected behind the typing.
+  await typeName('Blog');
+  check('a capital is refused', confirmBtn()?.disabled === true);
+  check(
+    'and says why',
+    /lowercase/i.test(dom.window.document.querySelector('.confirm-field-problem')?.textContent || ''),
+    dom.window.document.querySelector('.confirm-field-problem')?.textContent
+  );
+
+  await typeName('blog');
   check('a new one is not', confirmBtn()?.disabled === false);
 
   await act(async () => confirmBtn().dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
