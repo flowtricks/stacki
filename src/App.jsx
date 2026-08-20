@@ -19,6 +19,7 @@ import {
   componentNamesIn,
   suggestedComponentName,
 } from './componentExtract.js';
+import { planUnlink } from './componentUnlink.js';
 import { mergeBranchAction, deleteBranchAction } from './gitActions.js';
 import LeftRail from './ui/LeftRail.jsx';
 import CodeWindow from './ui/CodeWindow.jsx';
@@ -1705,6 +1706,135 @@ export default function App() {
       showToast(`Created src/components/${name}.astro`, 'success');
     },
     [insertables, mutateModel, resolveImportPath, showToast, flushSave, rescan]
+  );
+
+  // Detaching one instance: the page keeps the markup, the component keeps its
+  // file, and every other page that uses it is untouched.
+  //
+  // planUnlink does the reading and the refusing (src/componentUnlink.js). What
+  // is left here is the part that needs the project: re-aiming the imports that
+  // came with the markup, and noticing when one of them would collide with a
+  // name this page already uses for something else — which is the one way this
+  // can go wrong without anything on screen saying so.
+  const unlinkComponent = useCallback(
+    async (nodeId) => {
+      const state = pageStateRef.current.pageState;
+      const projectPath = projectRef.current?.path;
+      const page = pageStateRef.current.currentPage;
+      if (!state?.editable || !projectPath || !page) return;
+      const model = state.model;
+      const node = findNodeById(model.nodes, nodeId);
+      if (!node || node.kind !== 'component') return;
+
+      const refuse = (why) => showToast(`Can’t detach ${node.name}: ${why}`, 'error');
+      if (node.dynamicTag) return refuse('it is a dynamic tag, not a component.');
+      if (node.astroAsset) return refuse('it comes from Astro rather than this project.');
+      if (node.id === 'layout') return refuse('a layout wraps the page rather than sitting on it.');
+
+      const def = insertables.find((c) => c.name === node.name);
+      if (!def?.path) return refuse('there is no file for it in this project.');
+
+      const read = await window.avb.readPage(def.path).catch(() => null);
+      if (!read?.editable) {
+        return refuse('its own markup is too complex for the editor to inline.');
+      }
+
+      const plan = planUnlink({
+        instance: node,
+        component: read.model,
+        schema: def.schema || [],
+        newId,
+      });
+      if (plan.problems) return refuse(`${plan.problems.join('; ')}.`);
+
+      // A name this page already uses for a different file. Adding the import
+      // would be refused as a duplicate and the markup would quietly render the
+      // page's component instead of the one it was written against.
+      for (const imp of plan.imports) {
+        const clash = model.imports.find((i) => i.name === imp.name);
+        if (!clash) continue;
+        const [mine, theirs] = await Promise.all([
+          window.avb.resolveImport({ projectPath, fromFile: page.path, spec: clash.path }),
+          window.avb.resolveImport({ projectPath, fromFile: def.path, spec: imp.path }),
+        ]);
+        if (mine?.path && theirs?.path && mine.path !== theirs.path) {
+          return refuse(`this page already uses the name ${imp.name} for something else.`);
+        }
+      }
+
+      // Its <style> holds rules scoped to it. Left behind they stay in a file
+      // this page no longer imports, and the markup lands unstyled — so the
+      // choice is put where the decision is made rather than discovered after.
+      let keepStyles = true;
+      if (plan.styleCount) {
+        const answer = await confirmDialog({
+          title: `Detach ${node.name}?`,
+          body: (
+            <>
+              Its markup becomes part of this page. <strong>{node.name}</strong> keeps its own
+              file, and every other page using it is unaffected.
+            </>
+          ),
+          confirmLabel: 'Detach',
+          checkbox: {
+            label: 'Bring its styles into this page',
+            defaultChecked: true,
+            hint: 'Its <style> rules only apply where its markup is. Without them this copy renders unstyled.',
+          },
+        });
+        if (!answer) return;
+        keepStyles = answer.checked;
+      }
+
+      const final = keepStyles
+        ? plan
+        : planUnlink({
+            instance: node,
+            component: read.model,
+            schema: def.schema || [],
+            newId,
+            keepStyles: false,
+          });
+
+      const carried = [];
+      for (const imp of final.imports) {
+        if (model.imports.some((i) => i.name === imp.name)) continue;
+        // `at` placed it in the component's frontmatter and means nothing here.
+        const { at, ...rest } = imp;
+        if (!String(imp.path).startsWith('.')) {
+          carried.push(rest);
+          continue;
+        }
+        const resolved = await window.avb
+          .resolveImport({ projectPath, fromFile: def.path, spec: imp.path })
+          .catch(() => null);
+        if (!resolved?.path) {
+          carried.push(rest); // unresolvable: better a path to fix than no import
+          continue;
+        }
+        const paths = await window.avb.importPathFor({
+          pagePath: page.path,
+          targetPath: resolved.path,
+          projectPath,
+        });
+        carried.push({ ...rest, path: chooseImportPath(model, paths) });
+      }
+
+      mutateModel((m) => {
+        const found = findParentList(m, nodeId);
+        if (!found) return m;
+        found.list.splice(found.index, 1, ...final.nodes);
+        for (const imp of carried) {
+          if (!m.imports.some((i) => i.name === imp.name)) m.imports.push(imp);
+        }
+        // The instance was the last thing holding its own import here.
+        pruneImports(m);
+        return m;
+      }, true);
+      setSelectedId(final.nodes[0]?.id ?? null);
+      showToast(`Detached ${node.name}`, 'success');
+    },
+    [insertables, mutateModel, showToast]
   );
 
   // Pastes into the current selection when it can host children (a non-void
@@ -3900,6 +4030,7 @@ export default function App() {
                 onDuplicateNode={duplicateNode}
                 onPasteNode={pasteNode}
                 onCreateComponent={createComponentFromNode}
+                onUnlinkComponent={unlinkComponent}
                 hasClipboard={() => !!nodeClipboardRef.current}
                 onRawChange={setRawSource}
               />

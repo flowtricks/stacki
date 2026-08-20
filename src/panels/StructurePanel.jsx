@@ -53,6 +53,7 @@ export default function StructurePanel({
   onDuplicateNode,
   onPasteNode,
   onCreateComponent,
+  onUnlinkComponent,
   hasClipboard,
   onRawChange,
 }) {
@@ -346,6 +347,7 @@ export default function StructurePanel({
         <ContextMenu
           pos={ctxMenu}
           canPaste={hasClipboard ? hasClipboard() : false}
+          canUnlink={isUnlinkable(findNodeIn(model.nodes, ctxMenu.nodeId))}
           onClose={() => setCtxMenu(null)}
           onAction={(action) => {
             setCtxMenu(null);
@@ -353,6 +355,7 @@ export default function StructurePanel({
             else if (action === 'duplicate') onDuplicateNode(ctxMenu.nodeId);
             else if (action === 'paste') onPasteNode();
             else if (action === 'component') onCreateComponent?.(ctxMenu.nodeId);
+            else if (action === 'unlink') onUnlinkComponent?.(ctxMenu.nodeId);
             else if (action === 'delete') onRemoveNode(ctxMenu.nodeId);
           }}
         />
@@ -362,7 +365,7 @@ export default function StructurePanel({
 }
 
 // Right-click menu for navigator nodes.
-function ContextMenu({ pos, canPaste, onClose, onAction }) {
+function ContextMenu({ pos, canPaste, canUnlink, onClose, onAction }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -414,6 +417,7 @@ function ContextMenu({ pos, canPaste, onClose, onAction }) {
       {/* Its own group: copy, paste and duplicate all leave the page as it is,
           and this one takes a piece of it out to somewhere else. */}
       <Item action="component" label="Create Component…" />
+      {canUnlink && <Item action="unlink" label="Unlink Component" />}
       <div className="ctx-divider" />
       <Item action="delete" label="Delete" shortcut="⌫" />
     </div>
@@ -467,6 +471,12 @@ function NodeList({ nodes, parentId, depth, ...ctx }) {
       {nodes.length > 0 && <Gap parentId={parentId} index={nodes.length} depth={depth} {...ctx} />}
     </>
   );
+}
+
+// Only a real component instance can be detached: a dynamic tag has no file
+// behind it, and one of Astro's own belongs to Astro rather than this project.
+function isUnlinkable(node) {
+  return !!node && node.kind === 'component' && !node.dynamicTag && !node.astroAsset;
 }
 
 function findNodeIn(nodes, id) {
