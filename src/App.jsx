@@ -1635,6 +1635,13 @@ export default function App() {
         showToast('Pick an element or a component — text on its own has nothing to become.', 'error');
         return;
       }
+      // Wrapping one component in another named file gains nothing, and the
+      // menu greys it out for that reason — this is the same rule for anything
+      // that reaches here another way.
+      if (node.kind === 'component' && !node.dynamicTag && !node.astroAsset) {
+        showToast(`${node.name} is already a component.`, 'error');
+        return;
+      }
 
       const code = codeInSubtree(node);
       const needs = externalNeeds({

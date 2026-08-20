@@ -418,8 +418,11 @@ function ContextMenu({ pos, canPaste, canUnlink, onClose, onAction }) {
       <Item action="duplicate" label="Duplicate" shortcut="⌘D" />
       <div className="ctx-divider" />
       {/* Its own group: copy, paste and duplicate all leave the page as it is,
-          and this one takes a piece of it out to somewhere else. */}
-      <Item action="component" label="Create Component…" shortcut="⇧⌘A" />
+          and these two move a piece of it between the page and a file.
+          Only ever one of them at a time — they share a key, and an instance
+          that offered both would be advertising ⇧⌘A for something the key does
+          not do. Making a component of a component would only wrap it. */}
+      <Item action="component" label="Create Component…" shortcut="⇧⌘A" disabled={canUnlink} />
       {canUnlink && <Item action="unlink" label="Unlink Component" shortcut="⇧⌘A" />}
       <div className="ctx-divider" />
       <Item action="delete" label="Delete" shortcut="⌫" />
