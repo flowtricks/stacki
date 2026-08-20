@@ -317,6 +317,32 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 }
 .confirm-check input { margin: 1px 0 0; flex-shrink: 0; }
 .confirm-check-hint { display: block; margin-top: 2px; color: var(--text-faint); font-style: normal; font-size: 11px; }
+
+/* The same, for a question whose answer is a word. */
+.confirm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+.confirm-field > span {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.confirm-field input { width: 100%; }
+.confirm-field-problem {
+  color: var(--red);
+  font-size: 11px;
+  font-style: normal;
+}
+
+/* The files a move is about to rewrite. */
+.move-files {
+  margin: 6px 0;
+  padding-left: 16px;
+  color: var(--text-dim);
+}
+.move-files li { margin: 2px 0; }
 /* Destructive confirms are red and do NOT answer to Return — the button has to
    be chosen on purpose. */
 .modal-footer button.danger {
@@ -1772,14 +1798,34 @@ body > .embed-editor_provenance {
 
 /* Folder heading in the components list (layouts, component subfolders). */
 .palette-folder {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   padding: 10px 8px 4px;
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.04em;
+  /* Shouted here, lowercase on disk. The two are not the same decision: this is
+     a section heading and reads as one, while the directory it names is held to
+     lowercase where folders are created, so a project never ends up with a
+     marketing/ and a Marketing/ that only differ on a case-sensitive machine. */
   text-transform: uppercase;
   color: var(--text-faint);
+  cursor: pointer;
+  user-select: none;
 }
 .palette-folder:first-child { padding-top: 2px; }
+.palette-folder:hover { color: var(--text-dim); }
+.palette-folder:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.palette-fold-chevron { display: flex; align-items: center; }
+.palette-folder-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* What is inside, since folding it shut is the point of the row. */
+.palette-folder-count {
+  margin-left: auto;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-faint);
+}
 
 .palette-item {
   display: flex;

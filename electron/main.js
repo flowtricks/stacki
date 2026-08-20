@@ -43,6 +43,7 @@ const { readContentConfig, validateEntry, stopAllServices } = require('./content
 const thumbs = require('./thumbs');
 const cssVars = require('./cssVars');
 const { readInjectedRoutes } = require('./injectedRoutes.js');
+const { planMove, applyMove } = require('./moveComponent.js');
 const { createStarter } = require('./starter');
 const { openingBounds } = require('./windowBounds');
 const { listEntries, writeEntry, countEntries, coveredPaths } = require('./contentEntries');
@@ -2444,6 +2445,50 @@ ipcMain.handle('page:create', async (_e, { projectPath, name, layout }) => {
   markSelfWrite(pagePath);
   fs.writeFileSync(pagePath, serializePage(model), 'utf8');
   return { pagePath };
+});
+
+// Moving a component into a folder under src/components.
+//
+// Planned and applied as two calls, the way content renames already are: the
+// plan says how many other files have to be rewritten so the question can be
+// asked with that number in it, rather than the number turning up in git after.
+const COMPONENT_FOLDER_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
+
+function componentMoveTarget(projectPath, componentPath, folder) {
+  const from = assertInProject(path.resolve(componentPath));
+  const root = path.join(projectPath, 'src', 'components');
+  if (!(from + path.sep).startsWith(root + path.sep) || !/\.astro$/i.test(from)) {
+    throw new Error('Only a component under src/components can be moved here.');
+  }
+  const clean = String(folder || '').replace(/^\/+|\/+$/g, '');
+  if (clean && !COMPONENT_FOLDER_RE.test(clean)) {
+    throw new Error('A folder name holds letters, digits, dashes and underscores.');
+  }
+  const to = path.resolve(root, clean, path.basename(from));
+  if (!(to + path.sep).startsWith(root + path.sep)) throw new Error('Invalid folder.');
+  if (path.resolve(from) === to) throw new Error('It is already there.');
+  if (fs.existsSync(to)) {
+    throw new Error(`There is already a ${path.basename(from)} in ${clean || 'src/components'}.`);
+  }
+  return { from, to };
+}
+
+ipcMain.handle('component:movePlan', async (_e, { projectPath, componentPath, folder }) => {
+  const { from, to } = componentMoveTarget(projectPath, componentPath, folder);
+  const plan = planMove(projectPath, from, to);
+  return { rewritten: plan.files.map((h) => h.rel), bare: plan.bare };
+});
+
+ipcMain.handle('component:move', async (_e, { projectPath, componentPath, folder }) => {
+  const { from, to } = componentMoveTarget(projectPath, componentPath, folder);
+  // Re-planned rather than carried over from the plan call: the files were read
+  // to answer that one, and anything could have been saved since.
+  const plan = planMove(projectPath, from, to);
+  const result = applyMove(projectPath, from, to, plan, markSelfWrite);
+  // Every write here is invisible to the watcher, so the app is told directly —
+  // an open page holding a rewritten import has to reload.
+  send('fs:changed', { files: [to, from, ...plan.files.map((h) => h.file)] });
+  return result;
 });
 
 ipcMain.handle('page:delete', async (_e, pagePath) => {

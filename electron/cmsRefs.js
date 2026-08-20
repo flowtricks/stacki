@@ -147,4 +147,14 @@ function resolveImport(projectPath, fromFile, spec) {
   return null;
 }
 
-module.exports = { importersOf, boundNames, resolveSpec, resolveImport, aliasMap };
+module.exports = {
+  importersOf,
+  boundNames,
+  resolveSpec,
+  resolveImport,
+  aliasMap,
+  // Shared with moveComponent.js, which asks the same question of the same
+  // files and must not answer it from a second copy of these.
+  walkCodeFiles,
+  IMPORT_RE,
+};

@@ -1262,6 +1262,8 @@ contextBridge.exposeInMainWorld('avb', {
   moveAsset: invoke('assets:move'),
   renameAsset: invoke('assets:rename'),
   mkdirAssets: invoke('assets:mkdir'),
+  componentMovePlan: invoke('component:movePlan'),
+  moveComponent: invoke('component:move'),
   readAssetText: invoke('assets:readText'),
   writeAssetText: invoke('assets:writeText'),
   // The source file an imported symbol is defined in — data files, consts,

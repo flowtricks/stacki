@@ -1571,6 +1571,69 @@ export default function App() {
     [mutateModel]
   );
 
+  // Filing a component into a folder.
+  //
+  // The move rewrites every import that points at it, which is the part worth
+  // announcing: a drag that quietly edits nine files is a drag nobody can
+  // account for afterwards. So the plan is asked for first and the count goes
+  // in the question, and the move is only made once that is answered.
+  const moveComponentToFolder = useCallback(
+    async (comp, folder) => {
+      const projectPath = projectRef.current?.path;
+      if (!projectPath || !comp?.path) return;
+      const where = folder || 'src/components';
+      try {
+        const plan = await window.avb.componentMovePlan({
+          projectPath,
+          componentPath: comp.path,
+          folder,
+        });
+        const count = plan.rewritten?.length || 0;
+        if (count || plan.bare?.length) {
+          const ok = await confirmDialog({
+            title: `Move ${comp.name} to ${where}?`,
+            body: (
+              <>
+                {count > 0 && (
+                  <>
+                    {count === 1 ? '1 file imports it' : `${count} files import it`} and will be
+                    rewritten to follow:
+                    <ul className="move-files">
+                      {plan.rewritten.slice(0, 6).map((f) => (
+                        <li key={f}>{f}</li>
+                      ))}
+                      {count > 6 && <li>…and {count - 6} more</li>}
+                    </ul>
+                  </>
+                )}
+                {plan.bare?.length > 0 && (
+                  <>
+                    <strong>{plan.bare.join(', ')}</strong> reaches it through a path alias that
+                    names the file itself. That one is in <code>tsconfig.json</code> and has to be
+                    changed by hand.
+                  </>
+                )}
+              </>
+            ),
+            confirmLabel: 'Move',
+          });
+          if (!ok) return;
+        }
+        await window.avb.moveComponent({ projectPath, componentPath: comp.path, folder });
+        await rescan(projectPath);
+        showToast(
+          count
+            ? `Moved ${comp.name} to ${where} — ${count === 1 ? '1 import' : `${count} imports`} updated`
+            : `Moved ${comp.name} to ${where}`,
+          'success'
+        );
+      } catch (err) {
+        showToast(`Couldn’t move ${comp.name}: ${cleanError(err)}`, 'error');
+      }
+    },
+    [rescan, showToast]
+  );
+
   // Pastes into the current selection when it can host children (a non-void
   // element, or a component with a default slot), otherwise after it (same
   // parent), or at the end of the page. Imports for components in the pasted
@@ -3769,10 +3832,12 @@ export default function App() {
             )}
             {leftTab === 'components' && (
               <PalettePanel
+                project={project}
                 components={insertables}
                 devUrl={devUrl}
                 onInsert={(name) => addComponent(name, null)}
                 onDragBegin={() => setLeftTab('navigator')}
+                onMove={moveComponentToFolder}
               />
             )}
             {leftTab === 'cms' && (
