@@ -1688,9 +1688,23 @@ export default function App() {
         return m;
       }, true);
       setSelectedId(instanceId);
+
+      // The palette counts instances by reading the .astro files on disk, and
+      // the scan that followed the handler's fs:changed ran before this page's
+      // own save did. It counted the page as it was a moment earlier, so a
+      // component that has just been placed reads "0 instances" — which is
+      // exactly what a failed extraction would look like.
+      //
+      // So it is counted again, after the page is written. The zero timeout is
+      // the one scheduleSave uses for the same reason: React has to commit the
+      // mutation above before flushSave can see the model it is to write.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await flushSave();
+      await rescan(projectPath);
+
       showToast(`Created src/components/${name}.astro`, 'success');
     },
-    [insertables, mutateModel, resolveImportPath, showToast]
+    [insertables, mutateModel, resolveImportPath, showToast, flushSave, rescan]
   );
 
   // Pastes into the current selection when it can host children (a non-void
