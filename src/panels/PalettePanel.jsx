@@ -86,16 +86,33 @@ export default function PalettePanel({ project, components, devUrl, onInsert, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [components, q]);
 
-  // The root of src/components has no header to click, so it is never one of
-  // these — it is the ungrouped remainder rather than a folder.
-  const namedFolders = groups.map(([folder]) => folder).filter(Boolean);
-  const allFolded = namedFolders.length > 0 && namedFolders.every((f) => folded.has(f));
+  // Read off every component, not off the ones a search left standing.
+  //
+  // A control that comes and goes as you type moves the rows under the pointer
+  // by the height it takes with it — and neither question it answers was ever
+  // about the search: which folders exist, and where a component can be filed.
+  //
+  // The root of src/components is never one of these. It has no header to
+  // click; it is the ungrouped remainder rather than a folder.
+  const allFolders = React.useMemo(
+    () => [...new Set((components || []).map((c) => c.folder).filter(Boolean))].sort(),
+    [components]
+  );
+  // Where a component may go is not the same list. "layouts" is a group in this
+  // panel but it is src/layouts, and filing a component there would make a
+  // src/components/layouts beside it — a folder nobody asked for, holding a
+  // component that is not a layout.
+  const componentFolders = React.useMemo(
+    () => [...new Set((components || []).filter((c) => !c.isLayout).map((c) => c.folder).filter(Boolean))].sort(),
+    [components]
+  );
+  const allFolded = allFolders.length > 0 && allFolders.every((f) => folded.has(f));
 
   // Where a component could go: every folder that already exists, minus the one
   // it is in. A layout is left out of this — moving one is a different job,
   // since src/layouts is what makes it a layout.
   const foldersFor = (comp) =>
-    namedFolders.filter((f) => f !== comp.folder && !comp.isLayout);
+    comp.isLayout ? [] : componentFolders.filter((f) => f !== comp.folder);
 
   const openMenu = (comp) => (e) => {
     if (comp.isLayout) return; // nothing to offer
@@ -111,7 +128,7 @@ export default function PalettePanel({ project, components, devUrl, onInsert, on
 
   const moveToNewFolder = async (comp) => {
     setCtx(null);
-    const taken = new Set(namedFolders);
+    const taken = new Set(componentFolders);
     const answer = await confirmDialog({
       title: `Move ${prettyName(comp.name)} into a new folder`,
       body: (
@@ -157,15 +174,25 @@ export default function PalettePanel({ project, components, devUrl, onInsert, on
     <div className="panel-section grow">
       <div className="panel-header">
         <h2>Components</h2>
-        {namedFolders.length > 0 && (
-          <button
-            className="ghost"
-            title={allFolded ? 'Expand all' : 'Collapse all'}
-            onClick={() => setFolds(allFolded ? new Set() : new Set(namedFolders))}
-          >
-            {allFolded ? <ExpandVerticalIcon size={14} /> : <CollapseVerticalIcon size={14} />}
-          </button>
-        )}
+        {/* Always here, greyed when there is nothing to fold — a button that
+            vanishes takes its own height out of the header and shifts what is
+            under it, which is worse than a button that is plainly unavailable. */}
+        <button
+          className="ghost"
+          disabled={!allFolders.length || !!q}
+          title={
+            !allFolders.length
+              ? 'No folders in src/components yet'
+              : q
+                ? 'Everything is open while you search'
+                : allFolded
+                  ? 'Expand all'
+                  : 'Collapse all'
+          }
+          onClick={() => setFolds(allFolded ? new Set() : new Set(allFolders))}
+        >
+          {allFolded ? <ExpandVerticalIcon size={14} /> : <CollapseVerticalIcon size={14} />}
+        </button>
       </div>
 
       <div style={{ padding: '0 12px 8px' }}>

@@ -82,6 +82,7 @@ const comp = (name, folder = '') => ({ name, folder, path: `/p/src/components/${
     comp('Hero', 'marketing/'),
     comp('Pricing', 'marketing/'),
     comp('Field', 'forms/'),
+    { name: 'Base', folder: 'layouts', isLayout: true, path: '/p/src/layouts/Base.astro' },
   ];
   // The folder each one reports is the group key, not the path it was built from.
   components[2].folder = 'marketing';
@@ -133,9 +134,9 @@ const comp = (name, folder = '') => ({ name, folder, path: `/p/src/components/${
 
   await render();
 
-  check('every folder gets a header', headers().length === 2, String(headers().length));
+  check('every folder gets a header', headers().length === 3, String(headers().length));
   check('saying how many are in it', headerFor('marketing')?.querySelector('.palette-folder-count')?.textContent === '2');
-  check('and everything starts open', names().length === 5, names().join(','));
+  check('and everything starts open', names().length === 6, names().join(','));
 
   await click(headerFor('marketing'));
   check('folding one hides its components', !names().some((n) => /Hero|Pricing/.test(n)), names().join(','));
@@ -170,7 +171,7 @@ const comp = (name, folder = '') => ({ name, folder, path: `/p/src/components/${
   check('collapse-all folds every folder', names().length === 2, names().join(','));
   check('leaving the ungrouped files alone', names().join(',') === 'Header,Footer', names().join(','));
   await click(allButton());
-  check('and opens them again', names().length === 5, names().join(','));
+  check('and opens them again', names().length === 6, names().join(','));
 
   // A corrupt value is not a reason to fail to draw a panel.
   await act(async () => root.unmount());
@@ -183,7 +184,29 @@ const comp = (name, folder = '') => ({ name, folder, path: `/p/src/components/${
     threw = err;
   }
   check('a corrupt stored value is ignored, not thrown', !threw, String(threw));
-  check('and everything shows', names().length === 5, names().join(','));
+  check('and everything shows', names().length === 6, names().join(','));
+
+  // --- the header control stays put ----------------------------------------
+  //
+  // It used to be rendered only while a folder was visible, so a search that
+  // matched nothing took it out of the header and everything under it jumped by
+  // its height. Whether folders exist is not a question about the search.
+
+  await act(async () => root.unmount());
+  dom.window.localStorage.clear();
+  root = createRoot(container);
+  await render();
+
+  const foldAll = () => dom.window.document.querySelector('.panel-header button');
+  check('the control is in the header', !!foldAll());
+  check('and live, with folders to fold', foldAll().disabled === false);
+
+  await type('aa'); // matches nothing at all
+  check('a search that finds nothing keeps it there', !!foldAll(), 'the header lost its button');
+  check('greyed rather than gone', foldAll().disabled === true);
+  check('saying why', /while you search/.test(foldAll().title), foldAll().title);
+  await type('');
+  check('and live again once the search is over', foldAll().disabled === false);
 
   // --- filing a component into a folder ------------------------------------
 
@@ -209,6 +232,13 @@ const comp = (name, folder = '') => ({ name, folder, path: `/p/src/components/${
     menu().join(' | ')
   );
   check('with a new folder always available', menu().includes('New folder…'), menu().join(' | '));
+  // src/layouts is a group in this panel, not a folder under src/components:
+  // filing a component "into layouts" would make a src/components/layouts.
+  check(
+    'but the layouts group is not somewhere to file a component',
+    !menu().includes('Move to layouts'),
+    menu().join(' | ')
+  );
 
   await act(async () =>
     dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
