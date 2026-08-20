@@ -2446,6 +2446,51 @@ ipcMain.handle('page:create', async (_e, { projectPath, name, layout }) => {
   return { pagePath };
 });
 
+// Turning a piece of a page into a component of its own.
+//
+// The model arrives already cut down by the renderer — the subtree, and only
+// the imports that subtree still needs, with their paths already rewritten for
+// where this file is about to sit. All that is left here is the two things the
+// renderer cannot do: serialize (the parser lives in this process) and refuse.
+//
+// It refuses a name that is not a component name, and it refuses to write over
+// a file that exists. The second one matters more than it looks: a component
+// is the one thing in this app that several pages point at, and overwriting
+// one from a context menu would edit pages nobody had open.
+ipcMain.handle('component:create', async (_e, { projectPath, name, pagePath, model }) => {
+  const clean = String(name || '').trim();
+  if (!/^[A-Z][A-Za-z0-9]*$/.test(clean)) {
+    throw new Error('A component name starts with a capital and holds only letters and digits.');
+  }
+  const dir = path.join(projectPath, 'src', 'components');
+  const abs = path.join(dir, `${clean}.astro`);
+  if (fs.existsSync(abs)) {
+    throw new Error(`src/components/${clean}.astro already exists — pick another name.`);
+  }
+  fs.mkdirSync(dir, { recursive: true });
+  // The imports came off a page and are written from where that page sits.
+  // The new file sits somewhere else, so a relative one has to be re-aimed at
+  // the same target from here — done in this process, where the separator and
+  // the resolution rules are Node's rather than a guess made from a string.
+  //
+  // Anything not relative is left exactly as written: an alias ('@/…', '~/…')
+  // and a bare module ('astro:assets') mean the same thing from any file, and
+  // rewriting one would only replace a project's own convention with ours.
+  const imports = (model.imports || []).map((imp) => {
+    if (!String(imp.path).startsWith('.')) return imp;
+    const target = path.resolve(path.dirname(pagePath), imp.path);
+    const rel = toPosix(path.relative(dir, target));
+    return { ...imp, path: rel.startsWith('.') ? rel : `./${rel}` };
+  });
+  const source = serializePage({ ...model, imports });
+  markSelfWrite(abs);
+  fs.writeFileSync(abs, source, 'utf8');
+  // Written behind the watcher's back, so the palette is told directly —
+  // a component that isn't in the scan can't be dropped onto the next page.
+  send('fs:changed', { files: [abs] });
+  return { ok: true, path: abs };
+});
+
 ipcMain.handle('page:delete', async (_e, pagePath) => {
   markSelfWrite(pagePath);
   fs.rmSync(pagePath);

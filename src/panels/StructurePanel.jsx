@@ -52,6 +52,7 @@ export default function StructurePanel({
   onCopyNode,
   onDuplicateNode,
   onPasteNode,
+  onCreateComponent,
   hasClipboard,
   onRawChange,
 }) {
@@ -351,6 +352,7 @@ export default function StructurePanel({
             if (action === 'copy') onCopyNode(ctxMenu.nodeId);
             else if (action === 'duplicate') onDuplicateNode(ctxMenu.nodeId);
             else if (action === 'paste') onPasteNode();
+            else if (action === 'component') onCreateComponent?.(ctxMenu.nodeId);
             else if (action === 'delete') onRemoveNode(ctxMenu.nodeId);
           }}
         />
@@ -408,6 +410,10 @@ function ContextMenu({ pos, canPaste, onClose, onAction }) {
       <Item action="copy" label="Copy" shortcut="⌘C" />
       <Item action="paste" label="Paste" shortcut="⌘V" disabled={!canPaste} />
       <Item action="duplicate" label="Duplicate" shortcut="⌘D" />
+      <div className="ctx-divider" />
+      {/* Its own group: copy, paste and duplicate all leave the page as it is,
+          and this one takes a piece of it out to somewhere else. */}
+      <Item action="component" label="Create Component…" />
       <div className="ctx-divider" />
       <Item action="delete" label="Delete" shortcut="⌫" />
     </div>

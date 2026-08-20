@@ -11,6 +11,14 @@ import PreviewPane from './panels/PreviewPane.jsx';
 import GitChip from './panels/GitChip.jsx';
 import HistoryPanel, { relativeTime } from './panels/HistoryPanel.jsx';
 import { ConfirmHost, confirmDialog } from './ui/ConfirmDialog.jsx';
+import {
+  readsVar,
+  stripComments,
+  codeInSubtree,
+  externalNeeds,
+  componentNamesIn,
+  suggestedComponentName,
+} from './componentExtract.js';
 import { mergeBranchAction, deleteBranchAction } from './gitActions.js';
 import LeftRail from './ui/LeftRail.jsx';
 import CodeWindow from './ui/CodeWindow.jsx';
@@ -296,15 +304,6 @@ function collectUsedNames(model) {
   return used;
 }
 
-// Comments in the frontmatter are prose about the page, and prose names the
-// things the page is built from — `// Hero copy` is talk about <Hero>, not a
-// use of it. Only whole-line `//` comments go: a trailing one can't be told
-// from the `//` inside a URL without really parsing, and cutting a string in
-// half there would hide a reference that is real.
-function stripComments(code) {
-  return code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
-}
-
 // Everything in the file that is code rather than markup: the frontmatter, a
 // loop's head, a condition's test, an expression node, and any prop whose
 // value is an expression. An imported name can be used in any of them without
@@ -407,11 +406,6 @@ function parseLoopHead(head) {
   );
   return m ? { data: m[1].trim(), item: m[2], index: m[3] || '' } : null;
 }
-
-// Whether `expr` reads from the variable `v` (`service`, `service.tags`) —
-// not merely contains its letters (`services`, `x.service`).
-const readsVar = (expr, v) =>
-  new RegExp(`(^|[^\\w$.])${v}\\b`).test(String(expr || ''));
 
 // Switching a loop's data source orphans any loop beneath it that reads from
 // the item — `service.tags.map(...)` under `services.map((service) => …)`
@@ -1569,6 +1563,134 @@ export default function App() {
       setSelectedId(clone.id);
     },
     [mutateModel]
+  );
+
+  // Turning a block of the page into a component of its own.
+  //
+  // The piece leaves the page, so the first question is whether it can: a block
+  // that reads a loop's item, a const from the frontmatter, or Astro.props is
+  // finished by the page around it, and the same markup in a file of its own
+  // renders undefined. Those references could be passed in as props instead —
+  // that is the next version of this. Until then the block is not extracted and
+  // the refusal names what is holding it, which is the part a user can act on.
+  //
+  // What does travel with it: the markup, and the imports it still needs. What
+  // is left behind is a single <Name /> in its place, plus the imports the page
+  // no longer uses now that the block is gone.
+  const createComponentFromNode = useCallback(
+    async (nodeId) => {
+      const state = pageStateRef.current.pageState;
+      const projectPath = projectRef.current?.path;
+      const page = pageStateRef.current.currentPage;
+      if (!state?.editable || !projectPath || !page) return;
+      const model = state.model;
+      const node = findNodeById(model.nodes, nodeId);
+      if (!node) return;
+
+      if (node.kind === 'chunk-group' || node.chunkFile) {
+        showToast('A chunk section is already a file of its own.', 'error');
+        return;
+      }
+      if (!['element', 'component', 'map', 'cond'].includes(node.kind)) {
+        showToast('Pick an element or a component — text on its own has nothing to become.', 'error');
+        return;
+      }
+
+      const code = codeInSubtree(node);
+      const needs = externalNeeds({
+        node,
+        code,
+        loopVars: loopVarsAt(model.nodes, nodeId),
+        frontmatter: model.extraFrontmatter,
+      });
+      if (needs.length) {
+        const list =
+          needs.length === 1
+            ? needs[0]
+            : `${needs.slice(0, -1).join(', ')} and ${needs[needs.length - 1]}`;
+        showToast(
+          `This block reads ${list} from the page around it, so it can’t stand alone yet.`,
+          'error'
+        );
+        return;
+      }
+
+      const taken = new Set(insertables.map((c) => c.name));
+      const answer = await confirmDialog({
+        title: 'Create a component',
+        body: (
+          <>
+            The block moves into <code>src/components/</code> and a single tag takes its place
+            on this page.
+          </>
+        ),
+        confirmLabel: 'Create',
+        input: {
+          label: 'Component name',
+          defaultValue: suggestedComponentName(node),
+          placeholder: 'HeroCard',
+          validate: (v) => {
+            if (!v) return 'A component needs a name.';
+            if (!/^[A-Z][A-Za-z0-9]*$/.test(v)) {
+              return 'Starts with a capital, then letters and digits only.';
+            }
+            if (taken.has(v)) return `There is already a component called ${v}.`;
+            return null;
+          },
+        },
+      });
+      if (!answer) return;
+      const name = answer.value;
+
+      // Only what the block itself refers to. `readsVar` rather than a bare
+      // substring so an import called `Card` isn't dragged along by a block
+      // that merely mentions `CardList`.
+      const placed = componentNamesIn(node);
+      const carried = model.imports.filter(
+        (i) => placed.has(i.name) || readsVar(code, i.name)
+      );
+
+      let created;
+      try {
+        created = await window.avb.createComponent({
+          projectPath,
+          name,
+          pagePath: page.path,
+          model: {
+            imports: structuredClone(carried),
+            nodes: [structuredClone(node)],
+            hadFrontmatter: carried.length > 0,
+          },
+        });
+      } catch (err) {
+        showToast(`Couldn’t create ${name}: ${cleanError(err)}`, 'error');
+        return;
+      }
+
+      const paths = await resolveImportPath(created.path);
+      const instanceId = newId();
+      mutateModel((m) => {
+        const found = findParentList(m, nodeId);
+        if (!found) return m;
+        found.list.splice(found.index, 1, {
+          id: instanceId,
+          kind: 'component',
+          name,
+          props: {},
+          children: null,
+        });
+        if (!m.imports.some((i) => i.name === name)) {
+          m.imports.push({ name, path: chooseImportPath(m, paths) });
+        }
+        // The block took its imports with it; the page keeps only what it
+        // still puts on screen.
+        pruneImports(m);
+        return m;
+      }, true);
+      setSelectedId(instanceId);
+      showToast(`Created src/components/${name}.astro`, 'success');
+    },
+    [insertables, mutateModel, resolveImportPath, showToast]
   );
 
   // Pastes into the current selection when it can host children (a non-void
@@ -3763,6 +3885,7 @@ export default function App() {
                 onCopyNode={copyNode}
                 onDuplicateNode={duplicateNode}
                 onPasteNode={pasteNode}
+                onCreateComponent={createComponentFromNode}
                 hasClipboard={() => !!nodeClipboardRef.current}
                 onRawChange={setRawSource}
               />
