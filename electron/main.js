@@ -43,6 +43,7 @@ const { readContentConfig, validateEntry, stopAllServices } = require('./content
 const thumbs = require('./thumbs');
 const cssVars = require('./cssVars');
 const { readInjectedRoutes } = require('./injectedRoutes.js');
+const { componentUsers, isDeletableComponent } = require('./componentUsers.js');
 const { createStarter } = require('./starter');
 const { openingBounds } = require('./windowBounds');
 const { listEntries, writeEntry, countEntries, coveredPaths } = require('./contentEntries');
@@ -2457,6 +2458,38 @@ ipcMain.handle('page:create', async (_e, { projectPath, name, layout }) => {
 // a file that exists. The second one matters more than it looks: a component
 // is the one thing in this app that several pages point at, and overwriting
 // one from a context menu would edit pages nobody had open.
+ipcMain.handle('component:usage', async (_e, { projectPath, componentPath }) => ({
+  files: componentUsers(projectPath, assertInProject(componentPath)),
+}));
+
+// Deleting a component from the palette.
+//
+// Trashed rather than unlinked, like every other delete here: a component is
+// somebody's work, and the Finder is a better undo than none.
+//
+// It refuses while anything still uses it. Not as a courtesy — a page whose
+// import points at a file that is gone does not render a gap, it fails to
+// build, and the failure names the import rather than the component you deleted
+// three screens ago. Detach or remove the instances first and the count in the
+// palette says when it is safe.
+ipcMain.handle('component:delete', async (_e, { projectPath, componentPath }) => {
+  const abs = assertInProject(componentPath);
+  if (!isDeletableComponent(projectPath, abs)) {
+    throw new Error('Only a component or layout file can be deleted here.');
+  }
+  const users = componentUsers(projectPath, abs);
+  if (users.length) {
+    const shown = users.slice(0, 3).join(', ');
+    throw new Error(
+      `Still used by ${users.length === 1 ? shown : `${users.length} files (${shown}${users.length > 3 ? ', …' : ''})`}.`
+    );
+  }
+  markSelfWrite(abs);
+  await shell.trashItem(abs);
+  send('fs:changed', { files: [abs] });
+  return { ok: true };
+});
+
 ipcMain.handle('component:create', async (_e, { projectPath, name, pagePath, model }) => {
   const clean = String(name || '').trim();
   if (!/^[A-Z][A-Za-z0-9]*$/.test(clean)) {

@@ -1822,6 +1822,20 @@ body > .embed-editor_provenance {
   margin-top: 1px;
 }
 
+/* Only on the row the pointer is on: a trash can beside every component reads
+   as a panel that wants things deleted. It appears only where the count is
+   zero, so it is never offered for something in use. */
+.palette-delete {
+  margin-left: auto;
+  padding: 3px;
+  border-radius: 5px;
+  opacity: 0;
+  flex-shrink: 0;
+}
+.palette-item:hover .palette-delete,
+.palette-delete:focus-visible { opacity: 1; }
+.palette-delete:hover { color: var(--red); }
+
 /* Component hover preview card */
 .comp-preview {
   position: fixed;

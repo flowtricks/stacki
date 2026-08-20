@@ -1734,6 +1734,34 @@ export default function App() {
     [insertables, mutateModel, resolveImportPath, showToast]
   );
 
+  // Deleting a component from the palette.
+  //
+  // The refusal that matters is the handler's, not this one's: a page whose
+  // import points at a file that is gone does not render a gap, it fails to
+  // build, and the error names the import rather than the thing deleted three
+  // screens ago. So the files are read again there, at the moment of deleting,
+  // rather than trusting a count taken at the last scan.
+  const deleteComponent = useCallback(
+    async (comp) => {
+      const projectPath = projectRef.current?.path;
+      if (!projectPath || !comp?.path) return;
+      // Deleting what is open would leave the editor holding a file that is no
+      // longer there.
+      if (pageStateRef.current.currentPage?.path === comp.path) {
+        showToast(`${comp.name} is open — close it first.`, 'error');
+        return;
+      }
+      try {
+        await window.avb.deleteComponent({ projectPath, componentPath: comp.path });
+        await rescan(projectPath);
+        showToast(`Deleted ${comp.name}`, 'success');
+      } catch (err) {
+        showToast(`Couldn’t delete ${comp.name}: ${cleanError(err)}`, 'error');
+      }
+    },
+    [rescan, showToast]
+  );
+
   // Detaching one instance: the page keeps the markup, the component keeps its
   // file, and every other page that uses it is untouched.
   //
@@ -4086,6 +4114,7 @@ export default function App() {
                 devUrl={devUrl}
                 onInsert={(name) => addComponent(name, null)}
                 onDragBegin={() => setLeftTab('navigator')}
+                onDelete={deleteComponent}
               />
             )}
             {leftTab === 'cms' && (
