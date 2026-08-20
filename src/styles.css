@@ -1805,10 +1805,11 @@ body > .embed-editor_provenance {
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  /* Lowercase, not uppercase: a folder is a folder on disk, and shouting it
-     made "marketing" and "Marketing" look like the same decision. New ones are
-     held to lowercase when they are named, so the row and the directory agree. */
-  text-transform: lowercase;
+  /* Shouted here, lowercase on disk. The two are not the same decision: this is
+     a section heading and reads as one, while the directory it names is held to
+     lowercase where folders are created, so a project never ends up with a
+     marketing/ and a Marketing/ that only differ on a case-sensitive machine. */
+  text-transform: uppercase;
   color: var(--text-faint);
   cursor: pointer;
   user-select: none;
