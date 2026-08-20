@@ -72,6 +72,7 @@ const comp = (name, folder = '') => ({ name, folder, path: `/p/src/components/${
   components[3].folder = 'marketing';
   components[4].folder = 'forms';
 
+  const moved = [];
   const container = dom.window.document.getElementById('root');
   let root = createRoot(container);
   const render = async (project = { path: '/p' }) => {
@@ -83,6 +84,7 @@ const comp = (name, folder = '') => ({ name, folder, path: `/p/src/components/${
           devUrl: null,
           onInsert: () => {},
           onDragBegin: () => {},
+          onMove: (comp, folder) => moved.push([comp.name, folder]),
         })
       )
     );
@@ -161,6 +163,49 @@ const comp = (name, folder = '') => ({ name, folder, path: `/p/src/components/${
   }
   check('a corrupt stored value is ignored, not thrown', !threw, String(threw));
   check('and everything shows', names().length === 5, names().join(','));
+
+  // --- filing a component into a folder ------------------------------------
+
+  await act(async () => root.unmount());
+  dom.window.localStorage.clear();
+  root = createRoot(container);
+  await render();
+
+  const rowFor = (name) =>
+    $('.palette-item').find((el) => el.querySelector('.label')?.textContent.trim().startsWith(name));
+  const rightClick = async (el) => {
+    await act(async () =>
+      el.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+    );
+  };
+  const menu = () => $('.ctx-menu .ctx-menu-item').map((el) => el.textContent.trim());
+
+  await rightClick(rowFor('Header'));
+  check('a root component is offered every folder', menu().includes('Move to marketing') && menu().includes('Move to forms'), menu().join(' | '));
+  check(
+    'and not a move to where it already is',
+    !menu().includes('Move to Components'),
+    menu().join(' | ')
+  );
+  check('with a new folder always available', menu().includes('New folder…'), menu().join(' | '));
+
+  await act(async () =>
+    dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  );
+  check('Escape closes it', $('.ctx-menu').length === 0);
+
+  await rightClick(rowFor('Hero'));
+  check('one already in a folder can come back out', menu().includes('Move to Components'), menu().join(' | '));
+  check('and go sideways', menu().includes('Move to forms'), menu().join(' | '));
+  check('but is not offered its own folder', !menu().includes('Move to marketing'), menu().join(' | '));
+
+  await act(async () =>
+    $('.ctx-menu .ctx-menu-item')
+      .find((el) => el.textContent.trim() === 'Move to forms')
+      .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }))
+  );
+  check('choosing one asks for the move', JSON.stringify(moved) === '[["Hero","forms"]]', JSON.stringify(moved));
+  check('and closes the menu', $('.ctx-menu').length === 0);
 
   if (failures.length) {
     console.error(`palette-folds: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);

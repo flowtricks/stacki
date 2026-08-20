@@ -8,6 +8,8 @@ import {
   CollapseVerticalIcon,
 } from '../ui/Icons.jsx';
 import { setDrag, clearDrag } from '../dragState.js';
+import { confirmDialog } from '../ui/ConfirmDialog.jsx';
+import useDismiss from '../ui/useDismiss.js';
 
 // PascalCase → spaced display name (ButtonArrow → Button Arrow).
 const prettyName = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
@@ -43,9 +45,10 @@ const writeFolds = (projectPath, folds) => {
   }
 };
 
-export default function PalettePanel({ project, components, devUrl, onInsert, onDragBegin }) {
+export default function PalettePanel({ project, components, devUrl, onInsert, onDragBegin, onMove }) {
   const [query, setQuery] = useState('');
   const [preview, setPreview] = useState(null); // {name, left, top}
+  const [ctx, setCtx] = useState(null); // {x, y, comp}
   const hoverTimer = useRef(null);
   useEffect(() => () => clearTimeout(hoverTimer.current), []);
 
@@ -87,6 +90,51 @@ export default function PalettePanel({ project, components, devUrl, onInsert, on
   // these — it is the ungrouped remainder rather than a folder.
   const namedFolders = groups.map(([folder]) => folder).filter(Boolean);
   const allFolded = namedFolders.length > 0 && namedFolders.every((f) => folded.has(f));
+
+  // Where a component could go: every folder that already exists, minus the one
+  // it is in. A layout is left out of this — moving one is a different job,
+  // since src/layouts is what makes it a layout.
+  const foldersFor = (comp) =>
+    namedFolders.filter((f) => f !== comp.folder && !comp.isLayout);
+
+  const openMenu = (comp) => (e) => {
+    if (comp.isLayout) return; // nothing to offer
+    e.preventDefault();
+    cancelPreview();
+    setCtx({ x: e.clientX, y: e.clientY, comp });
+  };
+
+  const move = async (comp, folder) => {
+    setCtx(null);
+    onMove?.(comp, folder);
+  };
+
+  const moveToNewFolder = async (comp) => {
+    setCtx(null);
+    const taken = new Set(namedFolders);
+    const answer = await confirmDialog({
+      title: `Move ${prettyName(comp.name)} into a new folder`,
+      body: (
+        <>
+          The folder is made under <code>src/components/</code> when the file lands in it.
+        </>
+      ),
+      confirmLabel: 'Move',
+      input: {
+        label: 'Folder name',
+        placeholder: 'marketing',
+        validate: (v) => {
+          if (!v) return 'A folder needs a name.';
+          if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v)) {
+            return 'Letters, digits, dashes and underscores.';
+          }
+          if (taken.has(v)) return `There is already a ${v} folder — use Move to ${v}.`;
+          return null;
+        },
+      },
+    });
+    if (answer) onMove?.(comp, answer.value);
+  };
 
   const schedulePreview = (comp) => (e) => {
     clearTimeout(hoverTimer.current);
@@ -175,6 +223,7 @@ export default function PalettePanel({ project, components, devUrl, onInsert, on
             }}
             onDragEnd={clearDrag}
             onDoubleClick={() => onInsert(comp.name)}
+            onContextMenu={openMenu(comp)}
           >
             <span className="icon">
               {comp.isLayout ? <LayoutIcon size={14} /> : <ElementComponentIcon size={14} />}
@@ -205,6 +254,17 @@ export default function PalettePanel({ project, components, devUrl, onInsert, on
         )}
       </div>
 
+      {ctx && (
+        <MoveMenu
+          pos={ctx}
+          comp={ctx.comp}
+          folders={foldersFor(ctx.comp)}
+          onClose={() => setCtx(null)}
+          onMove={move}
+          onNewFolder={moveToNewFolder}
+        />
+      )}
+
       {preview && devUrl && (
         <div className="comp-preview" style={{ left: preview.left, top: preview.top }}>
           <div className="comp-preview-title">{prettyName(preview.name)}</div>
@@ -214,6 +274,42 @@ export default function PalettePanel({ project, components, devUrl, onInsert, on
           />
         </div>
       )}
+    </div>
+  );
+}
+
+// Where a component can be filed. A flat list rather than a submenu: a project
+// with enough folders to need nesting has bigger problems than this menu.
+function MoveMenu({ pos, comp, folders, onClose, onMove, onNewFolder }) {
+  const ref = useRef(null);
+  useDismiss(ref, true, onClose);
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const rows = folders.length + (comp.folder ? 1 : 0) + 1;
+  const width = 220;
+  const height = rows * 27 + 12 + (rows > 1 ? 11 : 0);
+  const left = Math.min(pos.x, window.innerWidth - width - 8);
+  const top = Math.min(pos.y, window.innerHeight - height - 8);
+
+  return (
+    <div ref={ref} className="ctx-menu" style={{ left, top, minWidth: width }}>
+      {comp.folder && (
+        <div className="ctx-menu-item" onClick={() => onMove(comp, '')}>
+          <span>Move to Components</span>
+        </div>
+      )}
+      {folders.map((folder) => (
+        <div key={folder} className="ctx-menu-item" onClick={() => onMove(comp, folder)}>
+          <span>Move to {folder}</span>
+        </div>
+      ))}
+      {(folders.length > 0 || comp.folder) && <div className="ctx-divider" />}
+      <div className="ctx-menu-item" onClick={() => onNewFolder(comp)}>
+        <span>New folder…</span>
+      </div>
     </div>
   );
 }

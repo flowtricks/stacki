@@ -317,6 +317,14 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 }
 .confirm-check input { margin: 1px 0 0; flex-shrink: 0; }
 .confirm-check-hint { display: block; margin-top: 2px; color: var(--text-faint); font-style: normal; font-size: 11px; }
+
+/* The files a move is about to rewrite. */
+.move-files {
+  margin: 6px 0;
+  padding-left: 16px;
+  color: var(--text-dim);
+}
+.move-files li { margin: 2px 0; }
 /* Destructive confirms are red and do NOT answer to Return — the button has to
    be chosen on purpose. */
 .modal-footer button.danger {
