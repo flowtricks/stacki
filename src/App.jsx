@@ -11,6 +11,15 @@ import PreviewPane from './panels/PreviewPane.jsx';
 import GitChip from './panels/GitChip.jsx';
 import HistoryPanel, { relativeTime } from './panels/HistoryPanel.jsx';
 import { ConfirmHost, confirmDialog } from './ui/ConfirmDialog.jsx';
+import {
+  readsVar,
+  stripComments,
+  codeInSubtree,
+  externalNeeds,
+  componentNamesIn,
+  suggestedComponentName,
+} from './componentExtract.js';
+import { planUnlink } from './componentUnlink.js';
 import { mergeBranchAction, deleteBranchAction } from './gitActions.js';
 import LeftRail from './ui/LeftRail.jsx';
 import CodeWindow from './ui/CodeWindow.jsx';
@@ -296,13 +305,28 @@ function collectUsedNames(model) {
   return used;
 }
 
-// Comments in the frontmatter are prose about the page, and prose names the
-// things the page is built from — `// Hero copy` is talk about <Hero>, not a
-// use of it. Only whole-line `//` comments go: a trailing one can't be told
-// from the `//` inside a URL without really parsing, and cutting a string in
-// half there would hide a reference that is real.
-function stripComments(code) {
-  return code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+// Which components this page puts on screen, and how many times each.
+//
+// The palette's "N instances" is counted by reading every .astro file on disk,
+// so it goes stale the moment a page is saved: the app marks its own writes,
+// the watcher never reports them, and nothing asks for a fresh count. Both
+// halves of the component work showed it — a component created read 0
+// instances, one detached went on reading 1 — and so does simply deleting a
+// tag, which has always been true here.
+//
+// Rescanning after every save would read the whole project between keystrokes.
+// The counts only move when a component tag appears or disappears, so that is
+// what is compared, and a scan follows only when it changed.
+function componentUsage(model) {
+  const names = [];
+  const walk = (list) => {
+    for (const node of list || []) {
+      if (node.kind === 'component' && node.name) names.push(node.name);
+      if (Array.isArray(node.children)) walk(node.children);
+    }
+  };
+  walk(model?.nodes);
+  return names.sort().join(',');
 }
 
 // Everything in the file that is code rather than markup: the frontmatter, a
@@ -407,11 +431,6 @@ function parseLoopHead(head) {
   );
   return m ? { data: m[1].trim(), item: m[2], index: m[3] || '' } : null;
 }
-
-// Whether `expr` reads from the variable `v` (`service`, `service.tags`) —
-// not merely contains its letters (`services`, `x.service`).
-const readsVar = (expr, v) =>
-  new RegExp(`(^|[^\\w$.])${v}\\b`).test(String(expr || ''));
 
 // Switching a loop's data source orphans any loop beneath it that reads from
 // the item — `service.tags.map(...)` under `services.map((service) => …)`
@@ -850,6 +869,9 @@ export default function App() {
   // Page loading & saving
   // ----------------------------------------------------------------
 
+  // What the page put on screen at the last scan. See componentUsage.
+  const componentUseRef = useRef('');
+
   const flushSave = useCallback(async () => {
     clearTimeout(saveTimer.current);
     const { currentPage: page, pageState: state } = pageStateRef.current;
@@ -860,7 +882,16 @@ export default function App() {
       await window.avb.writePageRaw({ pagePath: page.path, source: state.source });
     }
     setPageState((s) => (s ? { ...s, dirty: false } : s));
-  }, []);
+    // The file on disk is what the scan reads, so this comes after the write.
+    if (state.editable) {
+      const usage = componentUsage(state.model);
+      if (usage !== componentUseRef.current) {
+        componentUseRef.current = usage;
+        const projectPath = projectRef.current?.path;
+        if (projectPath) rescan(projectPath).catch(() => {});
+      }
+    }
+  }, [rescan]);
 
   // Opens any .astro file for editing — a page, or a component drilled into.
   // `currentPage` is simply whatever is being edited, so saving, undo, the
@@ -872,6 +903,9 @@ export default function App() {
       setSelectedId(null);
       const result = await window.avb.readPage(entry.path);
       setPageState({ ...result, dirty: false });
+      // What is on this page now is what the last scan counted, so a save that
+      // changes nothing about it asks for no scan.
+      componentUseRef.current = componentUsage(result?.model);
       // Whatever opens, opens on something rather than nothing: a component on
       // its <body> when it has one, else the first element it renders; a page
       // on its outermost node, which is the layout wrapper when it has one.
@@ -1571,6 +1605,299 @@ export default function App() {
     [mutateModel]
   );
 
+  // Turning a block of the page into a component of its own.
+  //
+  // The piece leaves the page, so the first question is whether it can: a block
+  // that reads a loop's item, a const from the frontmatter, or Astro.props is
+  // finished by the page around it, and the same markup in a file of its own
+  // renders undefined. Those references could be passed in as props instead —
+  // that is the next version of this. Until then the block is not extracted and
+  // the refusal names what is holding it, which is the part a user can act on.
+  //
+  // What does travel with it: the markup, and the imports it still needs. What
+  // is left behind is a single <Name /> in its place, plus the imports the page
+  // no longer uses now that the block is gone.
+  const createComponentFromNode = useCallback(
+    async (nodeId) => {
+      const state = pageStateRef.current.pageState;
+      const projectPath = projectRef.current?.path;
+      const page = pageStateRef.current.currentPage;
+      if (!state?.editable || !projectPath || !page) return;
+      const model = state.model;
+      const node = findNodeById(model.nodes, nodeId);
+      if (!node) return;
+
+      if (node.kind === 'chunk-group' || node.chunkFile) {
+        showToast('A chunk section is already a file of its own.', 'error');
+        return;
+      }
+      if (!['element', 'component', 'map', 'cond'].includes(node.kind)) {
+        showToast('Pick an element or a component — text on its own has nothing to become.', 'error');
+        return;
+      }
+      // Wrapping one component in another named file gains nothing, and the
+      // menu greys it out for that reason — this is the same rule for anything
+      // that reaches here another way.
+      if (node.kind === 'component' && !node.dynamicTag && !node.astroAsset) {
+        showToast(`${node.name} is already a component.`, 'error');
+        return;
+      }
+
+      const code = codeInSubtree(node);
+      const needs = externalNeeds({
+        node,
+        code,
+        loopVars: loopVarsAt(model.nodes, nodeId),
+        frontmatter: model.extraFrontmatter,
+      });
+      if (needs.length) {
+        const list =
+          needs.length === 1
+            ? needs[0]
+            : `${needs.slice(0, -1).join(', ')} and ${needs[needs.length - 1]}`;
+        showToast(
+          `This block reads ${list} from the page around it, so it can’t stand alone yet.`,
+          'error'
+        );
+        return;
+      }
+
+      const taken = new Set(insertables.map((c) => c.name));
+      const answer = await confirmDialog({
+        title: 'Create a component',
+        body: (
+          <>
+            The block moves into <code>src/components/</code> and a single tag takes its place
+            on this page.
+          </>
+        ),
+        confirmLabel: 'Create',
+        input: {
+          label: 'Component name',
+          defaultValue: suggestedComponentName(node),
+          placeholder: 'HeroCard',
+          validate: (v) => {
+            if (!v) return 'A component needs a name.';
+            if (!/^[A-Z][A-Za-z0-9]*$/.test(v)) {
+              return 'Starts with a capital, then letters and digits only.';
+            }
+            if (taken.has(v)) return `There is already a component called ${v}.`;
+            return null;
+          },
+        },
+      });
+      if (!answer) return;
+      const name = answer.value;
+
+      // Only what the block itself refers to. `readsVar` rather than a bare
+      // substring so an import called `Card` isn't dragged along by a block
+      // that merely mentions `CardList`.
+      const placed = componentNamesIn(node);
+      const carried = model.imports.filter(
+        (i) => placed.has(i.name) || readsVar(code, i.name)
+      );
+
+      let created;
+      try {
+        created = await window.avb.createComponent({
+          projectPath,
+          name,
+          pagePath: page.path,
+          model: {
+            imports: structuredClone(carried),
+            nodes: [structuredClone(node)],
+            hadFrontmatter: carried.length > 0,
+          },
+        });
+      } catch (err) {
+        showToast(`Couldn’t create ${name}: ${cleanError(err)}`, 'error');
+        return;
+      }
+
+      const paths = await resolveImportPath(created.path);
+      const instanceId = newId();
+      mutateModel((m) => {
+        const found = findParentList(m, nodeId);
+        if (!found) return m;
+        found.list.splice(found.index, 1, {
+          id: instanceId,
+          kind: 'component',
+          name,
+          props: {},
+          children: null,
+        });
+        if (!m.imports.some((i) => i.name === name)) {
+          m.imports.push({ name, path: chooseImportPath(m, paths) });
+        }
+        // The block took its imports with it; the page keeps only what it
+        // still puts on screen.
+        pruneImports(m);
+        return m;
+      }, true);
+      setSelectedId(instanceId);
+
+      showToast(`Created src/components/${name}.astro`, 'success');
+    },
+    [insertables, mutateModel, resolveImportPath, showToast]
+  );
+
+  // Deleting a component from the palette.
+  //
+  // The refusal that matters is the handler's, not this one's: a page whose
+  // import points at a file that is gone does not render a gap, it fails to
+  // build, and the error names the import rather than the thing deleted three
+  // screens ago. So the files are read again there, at the moment of deleting,
+  // rather than trusting a count taken at the last scan.
+  const deleteComponent = useCallback(
+    async (comp) => {
+      const projectPath = projectRef.current?.path;
+      if (!projectPath || !comp?.path) return;
+      // Deleting what is open would leave the editor holding a file that is no
+      // longer there.
+      if (pageStateRef.current.currentPage?.path === comp.path) {
+        showToast(`${comp.name} is open — close it first.`, 'error');
+        return;
+      }
+      try {
+        await window.avb.deleteComponent({ projectPath, componentPath: comp.path });
+        await rescan(projectPath);
+        showToast(`Deleted ${comp.name}`, 'success');
+      } catch (err) {
+        showToast(`Couldn’t delete ${comp.name}: ${cleanError(err)}`, 'error');
+      }
+    },
+    [rescan, showToast]
+  );
+
+  // Detaching one instance: the page keeps the markup, the component keeps its
+  // file, and every other page that uses it is untouched.
+  //
+  // planUnlink does the reading and the refusing (src/componentUnlink.js). What
+  // is left here is the part that needs the project: re-aiming the imports that
+  // came with the markup, and noticing when one of them would collide with a
+  // name this page already uses for something else — which is the one way this
+  // can go wrong without anything on screen saying so.
+  const unlinkComponent = useCallback(
+    async (nodeId) => {
+      const state = pageStateRef.current.pageState;
+      const projectPath = projectRef.current?.path;
+      const page = pageStateRef.current.currentPage;
+      if (!state?.editable || !projectPath || !page) return;
+      const model = state.model;
+      const node = findNodeById(model.nodes, nodeId);
+      if (!node || node.kind !== 'component') return;
+
+      const refuse = (why) => showToast(`Can’t detach ${node.name}: ${why}`, 'error');
+      if (node.dynamicTag) return refuse('it is a dynamic tag, not a component.');
+      if (node.astroAsset) return refuse('it comes from Astro rather than this project.');
+      if (node.id === 'layout') return refuse('a layout wraps the page rather than sitting on it.');
+
+      const def = insertables.find((c) => c.name === node.name);
+      if (!def?.path) return refuse('there is no file for it in this project.');
+
+      const read = await window.avb.readPage(def.path).catch(() => null);
+      if (!read?.editable) {
+        return refuse('its own markup is too complex for the editor to inline.');
+      }
+
+      const plan = planUnlink({
+        instance: node,
+        component: read.model,
+        schema: def.schema || [],
+        newId,
+      });
+      if (plan.problems) return refuse(`${plan.problems.join('; ')}.`);
+
+      // A name this page already uses for a different file. Adding the import
+      // would be refused as a duplicate and the markup would quietly render the
+      // page's component instead of the one it was written against.
+      for (const imp of plan.imports) {
+        const clash = model.imports.find((i) => i.name === imp.name);
+        if (!clash) continue;
+        const [mine, theirs] = await Promise.all([
+          window.avb.resolveImport({ projectPath, fromFile: page.path, spec: clash.path }),
+          window.avb.resolveImport({ projectPath, fromFile: def.path, spec: imp.path }),
+        ]);
+        if (mine?.path && theirs?.path && mine.path !== theirs.path) {
+          return refuse(`this page already uses the name ${imp.name} for something else.`);
+        }
+      }
+
+      // Its <style> holds rules scoped to it. Left behind they stay in a file
+      // this page no longer imports, and the markup lands unstyled — so the
+      // choice is put where the decision is made rather than discovered after.
+      let keepStyles = true;
+      if (plan.styleCount) {
+        const answer = await confirmDialog({
+          title: `Detach ${node.name}?`,
+          body: (
+            <>
+              Its markup becomes part of this page. <strong>{node.name}</strong> keeps its own
+              file, and every other page using it is unaffected.
+            </>
+          ),
+          confirmLabel: 'Detach',
+          checkbox: {
+            label: 'Bring its styles into this page',
+            defaultChecked: true,
+            hint: 'Its <style> rules only apply where its markup is. Without them this copy renders unstyled.',
+          },
+        });
+        if (!answer) return;
+        keepStyles = answer.checked;
+      }
+
+      const final = keepStyles
+        ? plan
+        : planUnlink({
+            instance: node,
+            component: read.model,
+            schema: def.schema || [],
+            newId,
+            keepStyles: false,
+          });
+
+      const carried = [];
+      for (const imp of final.imports) {
+        if (model.imports.some((i) => i.name === imp.name)) continue;
+        // `at` placed it in the component's frontmatter and means nothing here.
+        const { at, ...rest } = imp;
+        if (!String(imp.path).startsWith('.')) {
+          carried.push(rest);
+          continue;
+        }
+        const resolved = await window.avb
+          .resolveImport({ projectPath, fromFile: def.path, spec: imp.path })
+          .catch(() => null);
+        if (!resolved?.path) {
+          carried.push(rest); // unresolvable: better a path to fix than no import
+          continue;
+        }
+        const paths = await window.avb.importPathFor({
+          pagePath: page.path,
+          targetPath: resolved.path,
+          projectPath,
+        });
+        carried.push({ ...rest, path: chooseImportPath(model, paths) });
+      }
+
+      mutateModel((m) => {
+        const found = findParentList(m, nodeId);
+        if (!found) return m;
+        found.list.splice(found.index, 1, ...final.nodes);
+        for (const imp of carried) {
+          if (!m.imports.some((i) => i.name === imp.name)) m.imports.push(imp);
+        }
+        // The instance was the last thing holding its own import here.
+        pruneImports(m);
+        return m;
+      }, true);
+      setSelectedId(final.nodes[0]?.id ?? null);
+      showToast(`Detached ${node.name}`, 'success');
+    },
+    [insertables, mutateModel, showToast]
+  );
+
   // Pastes into the current selection when it can host children (a non-void
   // element, or a component with a default slot), otherwise after it (same
   // parent), or at the end of the page. Imports for components in the pasted
@@ -1963,6 +2290,25 @@ export default function App() {
       const selId = selectedIdRef.current;
       const hasNodeSel = !!selId && selId !== 'frontmatter';
 
+      // ⌘⇧A both ways, chosen by what is selected: a component instance is
+      // given back to the page, anything else becomes a component. Webflow's
+      // key for the same gesture, and the two directions are never both
+      // available for one node, so there is nothing to disambiguate.
+      //
+      // Whichever runs does its own refusing — a dynamic tag falls through to
+      // extraction, which names why it can't leave the page.
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'a') {
+        if (!hasNodeSel) return;
+        e.preventDefault();
+        const node = findNodeById(state.model.nodes, selId);
+        if (node?.kind === 'component' && !node.dynamicTag && !node.astroAsset) {
+          unlinkComponent(selId);
+        } else {
+          createComponentFromNode(selId);
+        }
+        return;
+      }
+
       // Enter opens the floating editor for a selection that has one
       // (frontmatter, <style>, <script>) — same as its "Edit code" button.
       // Not gated on hasNodeSel: frontmatter is exactly one of these.
@@ -2009,7 +2355,7 @@ export default function App() {
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [removeNode, copyNode, duplicateNode, pasteNode, undo, redo]);
+  }, [removeNode, copyNode, duplicateNode, pasteNode, undo, redo, createComponentFromNode, unlinkComponent]);
 
   // Application-menu shortcuts: on macOS the native menu consumes ⌘Z/⌘C/⌘V
   // before the DOM sees them, so those arrive here via IPC instead. Copy and
@@ -3763,6 +4109,8 @@ export default function App() {
                 onCopyNode={copyNode}
                 onDuplicateNode={duplicateNode}
                 onPasteNode={pasteNode}
+                onCreateComponent={createComponentFromNode}
+                onUnlinkComponent={unlinkComponent}
                 hasClipboard={() => !!nodeClipboardRef.current}
                 onRawChange={setRawSource}
               />
@@ -3773,6 +4121,7 @@ export default function App() {
                 devUrl={devUrl}
                 onInsert={(name) => addComponent(name, null)}
                 onDragBegin={() => setLeftTab('navigator')}
+                onDelete={deleteComponent}
               />
             )}
             {leftTab === 'cms' && (

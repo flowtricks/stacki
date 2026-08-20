@@ -52,6 +52,8 @@ export default function StructurePanel({
   onCopyNode,
   onDuplicateNode,
   onPasteNode,
+  onCreateComponent,
+  onUnlinkComponent,
   hasClipboard,
   onRawChange,
 }) {
@@ -345,12 +347,15 @@ export default function StructurePanel({
         <ContextMenu
           pos={ctxMenu}
           canPaste={hasClipboard ? hasClipboard() : false}
+          canUnlink={isUnlinkable(findNodeIn(model.nodes, ctxMenu.nodeId))}
           onClose={() => setCtxMenu(null)}
           onAction={(action) => {
             setCtxMenu(null);
             if (action === 'copy') onCopyNode(ctxMenu.nodeId);
             else if (action === 'duplicate') onDuplicateNode(ctxMenu.nodeId);
             else if (action === 'paste') onPasteNode();
+            else if (action === 'component') onCreateComponent?.(ctxMenu.nodeId);
+            else if (action === 'unlink') onUnlinkComponent?.(ctxMenu.nodeId);
             else if (action === 'delete') onRemoveNode(ctxMenu.nodeId);
           }}
         />
@@ -360,7 +365,7 @@ export default function StructurePanel({
 }
 
 // Right-click menu for navigator nodes.
-function ContextMenu({ pos, canPaste, onClose, onAction }) {
+function ContextMenu({ pos, canPaste, canUnlink, onClose, onAction }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -386,10 +391,13 @@ function ContextMenu({ pos, canPaste, onClose, onAction }) {
     };
   }, [onClose]);
 
-  // Keep the menu on-screen.
-  const width = 200;
-  const itemCount = 4;
-  const height = itemCount * 26 + 18;
+  // Keep the menu on-screen. Measured against the stylesheet rather than
+  // guessed: a row is 27px, a divider 11px with its margins, and the menu
+  // itself 12px of padding and border. The count has to follow the items —
+  // it was fixed at four, and the item that falls off the bottom is Delete.
+  const width = 216;
+  const rows = 5 + (canUnlink ? 1 : 0); // copy, paste, duplicate, create, delete
+  const height = rows * 27 + 2 * 11 + 12;
   const left = Math.min(pos.x, window.innerWidth - width - 8);
   const top = Math.min(pos.y, window.innerHeight - height - 8);
 
@@ -408,6 +416,14 @@ function ContextMenu({ pos, canPaste, onClose, onAction }) {
       <Item action="copy" label="Copy" shortcut="⌘C" />
       <Item action="paste" label="Paste" shortcut="⌘V" disabled={!canPaste} />
       <Item action="duplicate" label="Duplicate" shortcut="⌘D" />
+      <div className="ctx-divider" />
+      {/* Its own group: copy, paste and duplicate all leave the page as it is,
+          and these two move a piece of it between the page and a file.
+          Only ever one of them at a time — they share a key, and an instance
+          that offered both would be advertising ⇧⌘A for something the key does
+          not do. Making a component of a component would only wrap it. */}
+      <Item action="component" label="Create Component…" shortcut="⇧⌘A" disabled={canUnlink} />
+      {canUnlink && <Item action="unlink" label="Unlink Component" shortcut="⇧⌘A" />}
       <div className="ctx-divider" />
       <Item action="delete" label="Delete" shortcut="⌫" />
     </div>
@@ -461,6 +477,12 @@ function NodeList({ nodes, parentId, depth, ...ctx }) {
       {nodes.length > 0 && <Gap parentId={parentId} index={nodes.length} depth={depth} {...ctx} />}
     </>
   );
+}
+
+// Only a real component instance can be detached: a dynamic tag has no file
+// behind it, and one of Astro's own belongs to Astro rather than this project.
+function isUnlinkable(node) {
+  return !!node && node.kind === 'component' && !node.dynamicTag && !node.astroAsset;
 }
 
 function findNodeIn(nodes, id) {

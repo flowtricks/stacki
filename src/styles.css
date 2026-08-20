@@ -317,6 +317,24 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 }
 .confirm-check input { margin: 1px 0 0; flex-shrink: 0; }
 .confirm-check-hint { display: block; margin-top: 2px; color: var(--text-faint); font-style: normal; font-size: 11px; }
+
+/* The same, for a question whose answer is a word. */
+.confirm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+.confirm-field > span {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.confirm-field input { width: 100%; }
+.confirm-field-problem {
+  color: var(--red);
+  font-size: 11px;
+  font-style: normal;
+}
 /* Destructive confirms are red and do NOT answer to Return — the button has to
    be chosen on purpose. */
 .modal-footer button.danger {
@@ -1803,6 +1821,20 @@ body > .embed-editor_provenance {
   color: var(--text-faint);
   margin-top: 1px;
 }
+
+/* Only on the row the pointer is on: a trash can beside every component reads
+   as a panel that wants things deleted. It appears only where the count is
+   zero, so it is never offered for something in use. */
+.palette-delete {
+  margin-left: auto;
+  padding: 3px;
+  border-radius: 5px;
+  opacity: 0;
+  flex-shrink: 0;
+}
+.palette-item:hover .palette-delete,
+.palette-delete:focus-visible { opacity: 1; }
+.palette-delete:hover { color: var(--red); }
 
 /* Component hover preview card */
 .comp-preview {

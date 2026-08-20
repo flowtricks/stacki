@@ -1264,6 +1264,9 @@ contextBridge.exposeInMainWorld('avb', {
   mkdirAssets: invoke('assets:mkdir'),
   readAssetText: invoke('assets:readText'),
   writeAssetText: invoke('assets:writeText'),
+  createComponent: invoke('component:create'),
+  componentUsage: invoke('component:usage'),
+  deleteComponent: invoke('component:delete'),
   // The source file an imported symbol is defined in — data files, consts,
   // anything the page pulls values from.
   readSymbolSource: invoke('src:readSymbol'),

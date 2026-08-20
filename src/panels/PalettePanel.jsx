@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ElementComponentIcon, LayoutIcon } from '../ui/Icons.jsx';
+import { ElementComponentIcon, LayoutIcon, TrashIcon } from '../ui/Icons.jsx';
 import { setDrag, clearDrag } from '../dragState.js';
+import { confirmDialog } from '../ui/ConfirmDialog.jsx';
 
 // PascalCase → spaced display name (ButtonArrow → Button Arrow).
 const prettyName = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
 
-export default function PalettePanel({ components, devUrl, onInsert, onDragBegin }) {
+export default function PalettePanel({ components, devUrl, onInsert, onDragBegin, onDelete }) {
   const [query, setQuery] = useState('');
   const [preview, setPreview] = useState(null); // {name, left, top}
   const hoverTimer = useRef(null);
@@ -29,6 +30,27 @@ export default function PalettePanel({ components, devUrl, onInsert, onDragBegin
     return [...byFolder.entries()].sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [components, q]);
+
+  // A component with nothing pointing at it can go. The count comes from the
+  // scan and is what the row already shows, so the button agrees with the line
+  // above it — and the handler asks the files again before anything is trashed,
+  // because a scan is always a moment behind the last edit.
+  const askDelete = (comp) => async (e) => {
+    e.stopPropagation();
+    cancelPreview();
+    const ok = await confirmDialog({
+      title: `Delete ${prettyName(comp.name)}?`,
+      body: (
+        <>
+          Nothing on the site uses it. The file goes to the Trash, so you can put it back from
+          there.
+        </>
+      ),
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (ok) onDelete?.(comp);
+  };
 
   const schedulePreview = (comp) => (e) => {
     clearTimeout(hoverTimer.current);
@@ -96,6 +118,18 @@ export default function PalettePanel({ components, devUrl, onInsert, onDragBegin
                 </div>
               )}
             </span>
+            {onDelete && comp.instances === 0 && (
+              <button
+                className="ghost palette-delete"
+                title={`Delete ${prettyName(comp.name)}`}
+                onMouseDown={(e) => e.stopPropagation()}
+                onDragStart={(e) => e.preventDefault()}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onClick={askDelete(comp)}
+              >
+                <TrashIcon size={12} />
+              </button>
+            )}
           </div>
             ))}
           </React.Fragment>
