@@ -3769,6 +3769,7 @@ export default function App() {
             )}
             {leftTab === 'components' && (
               <PalettePanel
+                project={project}
                 components={insertables}
                 devUrl={devUrl}
                 onInsert={(name) => addComponent(name, null)}

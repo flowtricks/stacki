@@ -1772,14 +1772,30 @@ body > .embed-editor_provenance {
 
 /* Folder heading in the components list (layouts, component subfolders). */
 .palette-folder {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   padding: 10px 8px 4px;
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-faint);
+  cursor: pointer;
+  user-select: none;
 }
 .palette-folder:first-child { padding-top: 2px; }
+.palette-folder:hover { color: var(--text-dim); }
+.palette-folder:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.palette-fold-chevron { display: flex; align-items: center; }
+.palette-folder-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* What is inside, since folding it shut is the point of the row. */
+.palette-folder-count {
+  margin-left: auto;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-faint);
+}
 
 .palette-item {
   display: flex;

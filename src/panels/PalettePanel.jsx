@@ -1,15 +1,68 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ElementComponentIcon, LayoutIcon } from '../ui/Icons.jsx';
+import {
+  ElementComponentIcon,
+  LayoutIcon,
+  ChevronRightIcon,
+  ChevronDownIcon,
+  ExpandVerticalIcon,
+  CollapseVerticalIcon,
+} from '../ui/Icons.jsx';
 import { setDrag, clearDrag } from '../dragState.js';
 
 // PascalCase → spaced display name (ButtonArrow → Button Arrow).
 const prettyName = (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
 
-export default function PalettePanel({ components, devUrl, onInsert, onDragBegin }) {
+// Which folders are folded shut, remembered per project.
+//
+// The panel unmounts whenever another left tab is opened, so in-component state
+// would forget the fold on the way to Assets and back — which is most of the
+// point of folding one. Per project, because a folder called "marketing" in one
+// site says nothing about another.
+const FOLD_KEY = 'stacki.paletteFolds';
+
+const readFolds = (projectPath) => {
+  try {
+    const all = JSON.parse(localStorage.getItem(FOLD_KEY) || '{}');
+    const mine = all?.[projectPath];
+    return new Set(Array.isArray(mine) ? mine.filter((f) => typeof f === 'string') : []);
+  } catch {
+    // A corrupt value is not a reason to fail to draw a panel.
+    return new Set();
+  }
+};
+
+const writeFolds = (projectPath, folds) => {
+  try {
+    const all = JSON.parse(localStorage.getItem(FOLD_KEY) || '{}');
+    const next = { ...(all && typeof all === 'object' ? all : {}) };
+    if (folds.size) next[projectPath] = [...folds];
+    else delete next[projectPath];
+    localStorage.setItem(FOLD_KEY, JSON.stringify(next));
+  } catch {
+    /* best effort — the fold is a convenience, not state worth an error */
+  }
+};
+
+export default function PalettePanel({ project, components, devUrl, onInsert, onDragBegin }) {
   const [query, setQuery] = useState('');
   const [preview, setPreview] = useState(null); // {name, left, top}
   const hoverTimer = useRef(null);
   useEffect(() => () => clearTimeout(hoverTimer.current), []);
+
+  const projectPath = project?.path || '';
+  const [folded, setFolded] = useState(() => readFolds(projectPath));
+  useEffect(() => setFolded(readFolds(projectPath)), [projectPath]);
+
+  const setFolds = (next) => {
+    setFolded(next);
+    if (projectPath) writeFolds(projectPath, next);
+  };
+  const toggleFold = (folder) => {
+    const next = new Set(folded);
+    if (next.has(folder)) next.delete(folder);
+    else next.add(folder);
+    setFolds(next);
+  };
 
   const q = query.trim().toLowerCase();
   const list = components.filter(
@@ -30,6 +83,11 @@ export default function PalettePanel({ components, devUrl, onInsert, onDragBegin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [components, q]);
 
+  // The root of src/components has no header to click, so it is never one of
+  // these — it is the ungrouped remainder rather than a folder.
+  const namedFolders = groups.map(([folder]) => folder).filter(Boolean);
+  const allFolded = namedFolders.length > 0 && namedFolders.every((f) => folded.has(f));
+
   const schedulePreview = (comp) => (e) => {
     clearTimeout(hoverTimer.current);
     const rect = e.currentTarget.getBoundingClientRect();
@@ -47,6 +105,15 @@ export default function PalettePanel({ components, devUrl, onInsert, onDragBegin
     <div className="panel-section grow">
       <div className="panel-header">
         <h2>Components</h2>
+        {namedFolders.length > 0 && (
+          <button
+            className="ghost"
+            title={allFolded ? 'Expand all' : 'Collapse all'}
+            onClick={() => setFolds(allFolded ? new Set() : new Set(namedFolders))}
+          >
+            {allFolded ? <ExpandVerticalIcon size={14} /> : <CollapseVerticalIcon size={14} />}
+          </button>
+        )}
       </div>
 
       <div style={{ padding: '0 12px 8px' }}>
@@ -59,10 +126,34 @@ export default function PalettePanel({ components, devUrl, onInsert, onDragBegin
       </div>
 
       <div className="panel-body" onMouseLeave={cancelPreview}>
-        {groups.map(([folder, items]) => (
+        {groups.map(([folder, items]) => {
+          // A search that hid its own results inside a folded folder would look
+          // like it found nothing, so filtering opens everything for as long as
+          // it lasts — the folds are remembered, not lost.
+          const shut = !!folder && !q && folded.has(folder);
+          return (
           <React.Fragment key={folder || '__root'}>
-            {folder && <div className="palette-folder">{folder}</div>}
-            {items.map((comp) => (
+            {folder && (
+              <div
+                className="palette-folder"
+                role="button"
+                tabIndex={0}
+                onClick={() => toggleFold(folder)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleFold(folder);
+                  }
+                }}
+              >
+                <span className="palette-fold-chevron">
+                  {shut ? <ChevronRightIcon size={9} /> : <ChevronDownIcon size={9} />}
+                </span>
+                <span className="palette-folder-name">{folder}</span>
+                <span className="palette-folder-count">{items.length}</span>
+              </div>
+            )}
+            {!shut && items.map((comp) => (
           <div
             key={comp.path}
             className="palette-item"
@@ -99,7 +190,8 @@ export default function PalettePanel({ components, devUrl, onInsert, onDragBegin
           </div>
             ))}
           </React.Fragment>
-        ))}
+          );
+        })}
         {list.length === 0 && (
           <div className="props-empty">
             {components.length === 0 ? (
