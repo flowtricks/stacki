@@ -391,10 +391,13 @@ function ContextMenu({ pos, canPaste, canUnlink, onClose, onAction }) {
     };
   }, [onClose]);
 
-  // Keep the menu on-screen.
-  const width = 200;
-  const itemCount = 4;
-  const height = itemCount * 26 + 18;
+  // Keep the menu on-screen. Measured against the stylesheet rather than
+  // guessed: a row is 27px, a divider 11px with its margins, and the menu
+  // itself 12px of padding and border. The count has to follow the items —
+  // it was fixed at four, and the item that falls off the bottom is Delete.
+  const width = 216;
+  const rows = 5 + (canUnlink ? 1 : 0); // copy, paste, duplicate, create, delete
+  const height = rows * 27 + 2 * 11 + 12;
   const left = Math.min(pos.x, window.innerWidth - width - 8);
   const top = Math.min(pos.y, window.innerHeight - height - 8);
 
@@ -416,8 +419,8 @@ function ContextMenu({ pos, canPaste, canUnlink, onClose, onAction }) {
       <div className="ctx-divider" />
       {/* Its own group: copy, paste and duplicate all leave the page as it is,
           and this one takes a piece of it out to somewhere else. */}
-      <Item action="component" label="Create Component…" />
-      {canUnlink && <Item action="unlink" label="Unlink Component" />}
+      <Item action="component" label="Create Component…" shortcut="⇧⌘A" />
+      {canUnlink && <Item action="unlink" label="Unlink Component" shortcut="⇧⌘A" />}
       <div className="ctx-divider" />
       <Item action="delete" label="Delete" shortcut="⌫" />
     </div>

@@ -2255,6 +2255,25 @@ export default function App() {
       const selId = selectedIdRef.current;
       const hasNodeSel = !!selId && selId !== 'frontmatter';
 
+      // ⌘⇧A both ways, chosen by what is selected: a component instance is
+      // given back to the page, anything else becomes a component. Webflow's
+      // key for the same gesture, and the two directions are never both
+      // available for one node, so there is nothing to disambiguate.
+      //
+      // Whichever runs does its own refusing — a dynamic tag falls through to
+      // extraction, which names why it can't leave the page.
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'a') {
+        if (!hasNodeSel) return;
+        e.preventDefault();
+        const node = findNodeById(state.model.nodes, selId);
+        if (node?.kind === 'component' && !node.dynamicTag && !node.astroAsset) {
+          unlinkComponent(selId);
+        } else {
+          createComponentFromNode(selId);
+        }
+        return;
+      }
+
       // Enter opens the floating editor for a selection that has one
       // (frontmatter, <style>, <script>) — same as its "Edit code" button.
       // Not gated on hasNodeSel: frontmatter is exactly one of these.
@@ -2301,7 +2320,7 @@ export default function App() {
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [removeNode, copyNode, duplicateNode, pasteNode, undo, redo]);
+  }, [removeNode, copyNode, duplicateNode, pasteNode, undo, redo, createComponentFromNode, unlinkComponent]);
 
   // Application-menu shortcuts: on macOS the native menu consumes ⌘Z/⌘C/⌘V
   // before the DOM sees them, so those arrive here via IPC instead. Copy and
