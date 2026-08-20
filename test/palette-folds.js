@@ -32,8 +32,23 @@ const comp = (name, folder = '') => ({ name, folder, path: `/p/src/components/${
   const buildDir = path.join(__dirname, '..', 'node_modules', '.stacki-test');
   fs.mkdirSync(buildDir, { recursive: true });
   const bundlePath = path.join(buildDir, 'palette.bundle.js');
+  // The panel and the dialog host go in one bundle, because the panel asks a
+  // question through a module-level handle the host installs — two bundles are
+  // two copies of that module and the question is asked of nobody. Which is
+  // exactly how "New folder…" shipped broken: `confirmDialog` with no host
+  // answers no, and a test rendering only the panel never noticed.
+  const entry = path.join(buildDir, 'palette-entry.jsx');
+  fs.writeFileSync(
+    entry,
+    "export { default } from '" +
+      path.join(__dirname, '..', 'src', 'panels', 'PalettePanel.jsx') +
+      "';\nexport { ConfirmHost } from '" +
+      path.join(__dirname, '..', 'src', 'ui', 'ConfirmDialog.jsx') +
+      "';\n",
+    'utf8'
+  );
   await esbuild.build({
-    entryPoints: [path.join(__dirname, '..', 'src', 'panels', 'PalettePanel.jsx')],
+    entryPoints: [entry],
     outfile: bundlePath,
     bundle: true,
     format: 'cjs',
@@ -59,6 +74,7 @@ const comp = (name, folder = '') => ({ name, folder, path: `/p/src/components/${
   const { createRoot } = require('react-dom/client');
   const { act } = require('react');
   const PalettePanel = require(bundlePath).default;
+  const { ConfirmHost } = require(bundlePath);
 
   const components = [
     comp('Header'),
@@ -78,14 +94,19 @@ const comp = (name, folder = '') => ({ name, folder, path: `/p/src/components/${
   const render = async (project = { path: '/p' }) => {
     await act(async () =>
       root.render(
-        React.createElement(PalettePanel, {
+        React.createElement(
+          React.Fragment,
+          null,
+          React.createElement(ConfirmHost),
+          React.createElement(PalettePanel, {
           project,
           components,
           devUrl: null,
           onInsert: () => {},
           onDragBegin: () => {},
           onMove: (comp, folder) => moved.push([comp.name, folder]),
-        })
+          })
+        )
       )
     );
   };
@@ -206,6 +227,72 @@ const comp = (name, folder = '') => ({ name, folder, path: `/p/src/components/${
   );
   check('choosing one asks for the move', JSON.stringify(moved) === '[["Hero","forms"]]', JSON.stringify(moved));
   check('and closes the menu', $('.ctx-menu').length === 0);
+
+  // --- naming a new folder ---------------------------------------------------
+  //
+  // The whole point of the menu: with no folders yet, this is the ONLY way to
+  // make one, so a dialog that does not ask for a name leaves the panel with a
+  // feature that cannot be used at all.
+
+  moved.length = 0;
+  await rightClick(rowFor('Header'));
+  await act(async () =>
+    $('.ctx-menu .ctx-menu-item')
+      .find((el) => el.textContent.trim() === 'New folder…')
+      .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }))
+  );
+
+  const field = () => dom.window.document.querySelector('.confirm-field input');
+  const confirmBtn = () => dom.window.document.querySelector('.modal-footer button.primary');
+
+  // Everything below types into that field, so a missing one is reported as the
+  // one failure it is rather than thrown as a TypeError five lines later. This
+  // is how it shipped: the dialog rendered its title, its body and its buttons,
+  // and no way to answer.
+  check(
+    'a field is what it asks with',
+    !!field(),
+    `the dialog rendered: ${dom.window.document.querySelector('.modal')?.textContent}`
+  );
+  if (!field()) {
+    check('…so the rest of this cannot be checked', false, 'no input to type a folder name into');
+  } else {
+  check('and it holds the focus', dom.window.document.activeElement === field());
+  check('with nothing typed, it cannot be confirmed', confirmBtn()?.disabled === true);
+
+  await act(async () => {
+    const el = field();
+    const setter = Object.getOwnPropertyDescriptor(
+      dom.window.HTMLInputElement.prototype,
+      'value'
+    ).set;
+    setter.call(el, 'marketing');
+    el.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  });
+  check(
+    'a name that is already a folder is refused',
+    confirmBtn()?.disabled === true,
+    dom.window.document.querySelector('.confirm-field-problem')?.textContent
+  );
+
+  await act(async () => {
+    const el = field();
+    const setter = Object.getOwnPropertyDescriptor(
+      dom.window.HTMLInputElement.prototype,
+      'value'
+    ).set;
+    setter.call(el, 'blog');
+    el.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  });
+  check('a new one is not', confirmBtn()?.disabled === false);
+
+  await act(async () => confirmBtn().dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  check(
+    'and confirming moves it there under the name that was typed',
+    JSON.stringify(moved) === '[["Header","blog"]]',
+    JSON.stringify(moved)
+  );
+  }
 
   if (failures.length) {
     console.error(`palette-folds: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);

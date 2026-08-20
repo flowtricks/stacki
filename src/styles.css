@@ -318,6 +318,24 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 .confirm-check input { margin: 1px 0 0; flex-shrink: 0; }
 .confirm-check-hint { display: block; margin-top: 2px; color: var(--text-faint); font-style: normal; font-size: 11px; }
 
+/* The same, for a question whose answer is a word. */
+.confirm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+.confirm-field > span {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.confirm-field input { width: 100%; }
+.confirm-field-problem {
+  color: var(--red);
+  font-size: 11px;
+  font-style: normal;
+}
+
 /* The files a move is about to rewrite. */
 .move-files {
   margin: 6px 0;

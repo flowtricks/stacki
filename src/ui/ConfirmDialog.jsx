@@ -33,6 +33,13 @@ let open = null; // set by the host below while it is mounted
  * decision that belongs WITH the question rather than after it. Given one, the
  * answer resolves as `{ checked }` instead of `true`, which is still truthy,
  * so `if (!(await confirmDialog(…))) return;` reads the same either way.
+ *
+ * `input` — `{ label, defaultValue, placeholder, validate }` — the same idea
+ * for a question whose answer is a word rather than a yes. Naming the thing
+ * you are about to make is part of deciding to make it, not a second dialog
+ * afterwards. `validate(value)` returns a sentence to show and to hold the
+ * confirm button closed with, or nothing when the value will do. The answer
+ * carries `{ value }`, alongside `{ checked }` when both are asked at once.
  */
 export function confirmDialog({
   title,
@@ -41,6 +48,7 @@ export function confirmDialog({
   cancelLabel = 'Cancel',
   danger = false,
   checkbox = null,
+  input = null,
 } = {}) {
   return new Promise((resolve) => {
     if (!open) {
@@ -51,7 +59,7 @@ export function confirmDialog({
       resolve(false);
       return;
     }
-    open({ title, body, confirmLabel, cancelLabel, danger, checkbox, resolve });
+    open({ title, body, confirmLabel, cancelLabel, danger, checkbox, input, resolve });
   });
 }
 
@@ -59,12 +67,19 @@ export function confirmDialog({
 export function ConfirmHost() {
   const [ask, setAsk] = useState(null);
   const [checked, setChecked] = useState(false);
+  const [text, setText] = useState('');
   const confirmRef = useRef(null);
   const cancelRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
-    if (ask) setChecked(ask.checkbox?.defaultChecked ?? false);
+    if (!ask) return;
+    setChecked(ask.checkbox?.defaultChecked ?? false);
+    setText(ask.input?.defaultValue ?? '');
   }, [ask]);
+
+  // Whatever is wrong with what has been typed, or nothing.
+  const problem = ask?.input ? ask.input.validate?.(text.trim()) || null : null;
 
   useEffect(() => {
     open = setAsk;
@@ -77,6 +92,13 @@ export function ConfirmHost() {
   // confirm something unrecoverable by accident.
   useEffect(() => {
     if (!ask) return;
+    // A question with a field is answered in the field — focusing a button
+    // there would ask for a name and put the caret somewhere else.
+    if (ask.input) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+      return;
+    }
     const el = ask.danger ? cancelRef.current : confirmRef.current;
     el?.focus();
   }, [ask]);
@@ -88,9 +110,10 @@ export function ConfirmHost() {
         e.preventDefault();
         e.stopPropagation();
         answer(false);
-      } else if (e.key === 'Enter' && !ask.danger) {
+      } else if (e.key === 'Enter' && !ask.danger && !problem) {
         // Only where the answer is recoverable. On a destructive question
-        // Return does nothing, and the button has to be chosen deliberately.
+        // Return does nothing, and the button has to be chosen deliberately —
+        // and a field the dialog is refusing is not an answer yet either.
         e.preventDefault();
         answer(true);
       }
@@ -103,8 +126,14 @@ export function ConfirmHost() {
 
   const answer = (value) => {
     if (!ask) return;
-    // With a tick box the answer is not just yes or no — it is yes-and-what.
-    ask.resolve(value && ask.checkbox ? { checked } : value);
+    // With a tick box or a field the answer is not just yes or no — it is
+    // yes-and-what. Both can be asked at once, so the two ride together.
+    const asked = ask.checkbox || ask.input;
+    const extras = {
+      ...(ask.checkbox ? { checked } : {}),
+      ...(ask.input ? { value: text.trim() } : {}),
+    };
+    ask.resolve(value && asked ? extras : value);
     setAsk(null);
   };
 
@@ -117,9 +146,24 @@ export function ConfirmHost() {
     >
       <div className="modal confirm-dialog" role="alertdialog" aria-modal="true">
         <div className="modal-header">{ask.title}</div>
-        {(ask.body || ask.checkbox) && (
+        {(ask.body || ask.checkbox || ask.input) && (
           <div className="modal-body confirm-body">
             {ask.body}
+            {ask.input && (
+              <label className="confirm-field">
+                {ask.input.label && <span>{ask.input.label}</span>}
+                <input
+                  ref={inputRef}
+                  value={text}
+                  spellCheck={false}
+                  placeholder={ask.input.placeholder || ''}
+                  onChange={(e) => setText(e.target.value)}
+                />
+                {/* Held open once something has been typed, so the rule is not
+                    an error thrown at an empty field the moment it appears. */}
+                {problem && text.trim() ? <em className="confirm-field-problem">{problem}</em> : null}
+              </label>
+            )}
             {ask.checkbox && (
               <label className="confirm-check">
                 <input
@@ -142,6 +186,7 @@ export function ConfirmHost() {
           <button
             ref={confirmRef}
             className={ask.danger ? 'danger' : 'primary'}
+            disabled={!!problem}
             onClick={() => answer(true)}
           >
             {ask.confirmLabel}
