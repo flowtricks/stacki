@@ -88,12 +88,52 @@ const stacked = (n, a = 0.14) => 1 - (1 - a) ** n;
   check('an empty box is not drawn', onePerPlace([box(10, 10, 0, 0), hero]).length === 1);
   check('nothing at all is nothing', onePerPlace(undefined).length === 0);
 
+  // --- hovering a sibling in the same loop ------------------------------------
+  // A loop renders one path once per item, so the cards in it share a path and
+  // differ only by which copy they are. The overlay drew no hover outline when
+  // the hovered path matched the selected one — which meant that selecting one
+  // card made every other card in that loop unhoverable, and nothing lit up as
+  // the pointer moved across them.
+  const { hoverIsSelection } = require(bundlePath);
+  const at = (path, occ) => ({ path, occ });
+  check(
+    'hovering the copy that is selected draws no second outline',
+    hoverIsSelection(at('0.1', 1), at('0.1', 1))
+  );
+  check(
+    'hovering another copy of it does',
+    !hoverIsSelection(at('0.1', 0), at('0.1', 1)),
+    'a sibling in the loop is unhoverable'
+  );
+  check('and so does another node entirely', !hoverIsSelection(at('0.2', 0), at('0.1', 0)));
+  check(
+    'the first copy is the one a selection with no occurrence means',
+    hoverIsSelection(at('0.1', 0), { path: '0.1' })
+  );
+  // The navigator points at the NODE — every copy — so it is about the
+  // selection whichever copy is selected.
+  check(
+    'a navigator hover on the selected node draws nothing extra',
+    hoverIsSelection({ path: '0.1', occ: null }, at('0.1', 2))
+  );
+  check(
+    'a navigator hover on another node still draws',
+    !hoverIsSelection({ path: '0.1', occ: null }, at('0.2', 0))
+  );
+  check('nothing hovered is not the selection', !hoverIsSelection(null, at('0.1', 0)));
+  check('and nothing selected leaves the hover alone', !hoverIsSelection(at('0.1', 0), null));
+
   // --- the overlay uses it ---------------------------------------------------
   const pane = fs.readFileSync(path.join(__dirname, '..', 'src', 'panels', 'PreviewPane.jsx'), 'utf8');
   check(
     'a navigator hover draws one box per place',
     /o\.occ == null \? onePerPlace\(all\)/.test(pane),
     'the hover outlines are back to one box per run'
+  );
+  check(
+    'the overlay asks it rather than comparing paths',
+    /!hoverIsSelection\(\{ path: hoverPath, occ: hoverOccUsed \}/.test(pane),
+    'the hover outline is back to comparing paths, which a loop breaks'
   );
   check(
     'and so does the dimming around a component being edited',
@@ -112,6 +152,10 @@ const stacked = (n, a = 0.14) => 1 - (1 - a) ** n;
       ${marked('0.1', '<section data-box="section"><h1 data-box="heading">Hi</h1></section>')}
       ${marked('0.2', '<article data-box="one">one</article>')}
       ${marked('0.2', '<article data-box="two">two</article>')}
+      <h2 data-box="head">
+        <div class="split-line"><strong data-avb-p="0.3" data-box="hollow"></strong> Human-centric</div>
+        <div class="split-line"><strong data-avb-p="0.3" data-box="word">strategies</strong> to cut</div>
+      </h2>
     </body>`,
     { url: 'http://localhost:4321/#avb-design', pretendToBeVisual: true }
   );
@@ -125,6 +169,11 @@ const stacked = (n, a = 0.14) => 1 - (1 - a) ** n;
     heading: [10, 120, 400, 60],
     one: [0, 900, 400, 200],
     two: [0, 1120, 400, 200],
+    head: [0, 1400, 600, 120],
+    // What a line splitter leaves behind: the original element, emptied. Zero
+    // wide and a line tall — a box, but not a place.
+    hollow: [0, 1400, 0, 50],
+    word: [0, 1460, 172, 50],
   };
   window.Element.prototype.getBoundingClientRect = function () {
     const [x, y, w, h] = boxes[this.getAttribute('data-box')] || [0, 0, 0, 0];
@@ -168,6 +217,25 @@ const stacked = (n, a = 0.14) => 1 - (1 - a) ** n;
     const last = sent.filter((m) => m.type === 'avb:rects').pop();
     return (last?.rects || {})[p] || [];
   };
+  // --- a heading a line splitter has rebuilt ---------------------------------
+  // GSAP's SplitText (and every library like it) rebuilds a heading into one
+  // element per line and leaves the original inline elements behind, empty. The
+  // empty one still carries the path tag and still has a box — zero wide and a
+  // line tall — so the node that WAS a word reported two places: a hollow one
+  // and the real one. The hollow one comes first in the document, which made it
+  // occurrence 0: selecting `strong` drew a 1px bar against the left edge of
+  // the line instead of an outline around the word.
+  {
+    const boxes3 = boxesFor('0.3');
+    check('the word is what gets measured', boxes3.length === 1, JSON.stringify(boxes3));
+    check(
+      'and the box is the word, not a bar beside it',
+      boxes3[0]?.w === 172 && boxes3[0]?.h === 50,
+      JSON.stringify(boxes3[0])
+    );
+    check('at the line the word is on', boxes3[0]?.y === 1460, JSON.stringify(boxes3[0]));
+  }
+
   // A patch: the page is re-rendered around the nodes that are already there,
   // markers and all, and the app is told the document moved.
   const patch = (p) => {

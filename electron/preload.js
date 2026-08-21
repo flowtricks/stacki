@@ -531,18 +531,36 @@ if (!process.isMainFrame) {
     return acc ? [toRect(acc)] : null;
   };
 
+  // A box with no width or no height, sitting beside boxes that have both.
+  //
+  // A line-splitter (GSAP's SplitText, Splitting.js) rebuilds a heading into
+  // one element per line and leaves the original inline elements behind, empty.
+  // Emptied, they still carry the path tag and still have a box — zero wide and
+  // a line tall — so the node that WAS a word now reported two places: a hollow
+  // one and the real one. The hollow one is first in the document, so it is the
+  // one an outline drew: a 1px bar against the left edge of the line.
+  //
+  // Kept when it is all there is: an element that genuinely renders nothing wide
+  // should still show where it sits.
+  const withoutHollow = (list) => {
+    const real = list.filter((r) => r.w > 0 && r.h > 0);
+    return real.length ? real : list;
+  };
+
   const rectsForPath = (p) => {
     const runs = runsOf(p);
     if (!runs) {
-      // No marker pair — a slotted element carries its path as an attribute
-      // instead, because a marker beside it would render into the wrong slot.
-      // One box per tagged element, in document order.
+      // No marker pair — a slotted element, or a word inside an inline run,
+      // carries its path as an attribute instead: a marker beside either would
+      // land in the wrong slot or add a space between words. One box per tagged
+      // element, in document order, which is the order occurrences count in.
       const only = [];
       for (const el of elementsWithPath(p)) {
         const acc = addNode(null, el);
         if (acc) only.push(toRect(acc));
       }
-      return only.length ? only : rectsFromDescendants(p);
+      const real = withoutHollow(only);
+      return real.length ? real : rectsFromDescendants(p);
     }
     const out = [];
     for (const run of runs) {
@@ -575,7 +593,8 @@ if (!process.isMainFrame) {
         const acc = addNode(null, el);
         if (acc) out.push(toRect(acc));
       }
-      if (out.length) return out;
+      const real = withoutHollow(out);
+      if (real.length) return real;
     }
     // A region that exists but contains nothing with a box — the layout case:
     // its start marker is orphaned in <head>, so the walk collected the head's

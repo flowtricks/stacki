@@ -211,6 +211,7 @@ const RichContent = function RichContent({ nodes, onChange, bindCtx, insertRef }
       s = {};
     }
     s.code = inTag('code');
+    s.span = inTag('span');
     s.link = inTag('a');
     return s;
   };
@@ -329,14 +330,53 @@ const RichContent = function RichContent({ nodes, onChange, bindCtx, insertRef }
     setStates(readStates());
   };
 
-  // No execCommand for <code> — wrap the selection manually.
-  const wrapCode = () => {
+  // Take the selection out of the nearest `tag` around it, leaving its text
+  // where it was. The button is a toggle — pressing one that is already lit has
+  // to turn it off, and for a <span> that is the only way back: a span with no
+  // attributes on it yet is invisible, so one added by mistake could otherwise
+  // only be removed by editing the file.
+  const unwrapTag = (tag) => {
+    const host = hostRef.current;
+    const sel = window.getSelection();
+    const anchor =
+      sel && sel.anchorNode
+        ? sel.anchorNode.nodeType === 1
+          ? sel.anchorNode
+          : sel.anchorNode.parentElement
+        : null;
+    const el = anchor && host && host.contains(anchor) ? anchor.closest(tag) : null;
+    if (!el || !host.contains(el) || el === host) return false;
+    const parent = el.parentNode;
+    const first = el.firstChild;
+    const last = el.lastChild;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    // Keep the text selected, so the bubble stays up and the next press acts on
+    // the same words.
+    if (first && last) {
+      const r = document.createRange();
+      r.setStartBefore(first);
+      r.setEndAfter(last);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+    return true;
+  };
+
+  // No execCommand for <code> or <span> — wrap the selection manually.
+  const wrapTag = (tag) => {
     hostRef.current?.focus();
     restoreSelection();
+    // Already inside one: the press means "stop".
+    if (unwrapTag(tag)) {
+      emit();
+      setStates(readStates());
+      return;
+    }
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
     const range = sel.getRangeAt(0);
-    const el = document.createElement('code');
+    const el = document.createElement(tag);
     try {
       range.surroundContents(el);
     } catch {
@@ -515,7 +555,11 @@ const RichContent = function RichContent({ nodes, onChange, bindCtx, insertRef }
                 () => exec('subscript'),
                 states.subscript
               )}
-              {btn(<span className="mono">{'</>'}</span>, 'Code', wrapCode, states.code)}
+              {btn(<span className="mono">{'</>'}</span>, 'Code', () => wrapTag('code'), states.code)}
+              {/* A span is the hook for everything else: wrap some words, then
+                  give that node a class and style it like any other. Nothing is
+                  written on it here — an empty span IS the useful result. */}
+              {btn(<span className="mono">span</span>, 'Wrap in a span', () => wrapTag('span'), states.span)}
               {btn('🔗', 'Link', () => setLinkMode(true), states.link)}
             </>
           )}

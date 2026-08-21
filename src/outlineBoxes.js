@@ -39,4 +39,23 @@ export function onePerPlace(boxes) {
   return list.filter((b) => kept.includes(b));
 }
 
+/**
+ * Whether a hover is on the thing already outlined as selected — in which case
+ * there is no second outline to draw.
+ *
+ * The same PATH is not the same thing. A loop renders one path once per item,
+ * so with one card selected, its siblings share its path and comparing paths
+ * alone made every other card in the loop unhoverable. It takes the same copy
+ * of it too.
+ *
+ * A hover with no occurrence came from the navigator, which points at the node
+ * rather than at one copy of it — that one is about the selection whichever
+ * copy is selected.
+ */
+export function hoverIsSelection(hover, selection) {
+  if (!hover?.path || !selection?.path) return false;
+  if (hover.path !== selection.path) return false;
+  return hover.occ == null || hover.occ === (selection.occ ?? 0);
+}
+
 export default onePerPlace;

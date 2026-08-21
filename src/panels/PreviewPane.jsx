@@ -3,7 +3,7 @@ import CanvasView from './CanvasView.jsx';
 import { setCanvasFrame, receiveCanvasReply, noteCanvasReady } from '../canvasQuery.js';
 import { forgetComputedColors } from '../style-panel/lib/computed-color';
 import { forgetComputedStyles } from '../style-panel/lib/computed-style';
-import { onePerPlace } from '../outlineBoxes.js';
+import { hoverIsSelection, onePerPlace } from '../outlineBoxes.js';
 import { spacingBands } from '../spacingBands.js';
 import { setModifiers } from '../style-panel/lib/host.ts';
 import {
@@ -570,7 +570,10 @@ export default function PreviewPane({
                   </div>
                 ))}
               {[
-                hoverPath && hoverPath !== selPath
+                // No second outline on the thing already outlined as selected —
+                // the same node AND the same copy of it (see hoverIsSelection).
+                hoverPath &&
+                !hoverIsSelection({ path: hoverPath, occ: hoverOccUsed }, { path: selPath, occ: selOcc })
                   ? { path: hoverPath, type: 'hover', occ: hoverOccUsed }
                   : null,
                 selPath ? { path: selPath, type: 'sel', occ: selOcc } : null,

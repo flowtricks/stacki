@@ -432,6 +432,32 @@ function makeBranch(name, children) {
   return { id: makeId(), kind: 'branch', name, children };
 }
 
+// Whether a branch renders markup, as opposed to a value.
+const branchIsMarkup = (kids) =>
+  (kids || []).some((k) => k.kind !== 'expr' && k.kind !== 'text');
+
+// The other side of a conditional whose one side is markup: a plain value, as
+// an expression child.
+//
+// `{href ? (<a …>{heading}</a>) : (heading)}` — the LinkCard pattern — used to
+// be code in the navigator, whole, because one of its branches was a bare name
+// rather than a tag. Which meant a conditional around an anchor read as a wall
+// of JSX, and neither the anchor nor the fallback could be selected.
+//
+// Written with braces, like every other expression node: it lands in JSX
+// context on the canvas (inside the branch's Fragment). The writer takes them
+// off again for the file, where a branch's parens are JS.
+function exprBranch(raw) {
+  let t = String(raw).trim();
+  while (t.startsWith('(') && findMatchingParen(t, 0) === t.length - 1) {
+    t = t.slice(1, -1).trim();
+  }
+  // Markup that failed to parse is not a value — sending it back as an opaque
+  // expression would hide a real bail behind a node that looks fine.
+  if (!t || t.startsWith('<')) return null;
+  return [{ id: makeId(), kind: 'expr', value: `{${t}}` }];
+}
+
 // `test ? ( … ) : ( … )` and `test && ( … )` as a structural node. Returns null
 // for anything whose branches aren't markup (a ternary picking between two
 // strings, say) — those stay code.
@@ -445,8 +471,17 @@ function parseCondSource(src) {
     if (!colon) return null;
     const test = text.slice(0, ternary.at).trim();
     if (!test) return null;
-    const thenKids = branchNodes(text.slice(ternary.at + 1, colon.at));
-    const elseKids = branchNodes(text.slice(colon.at + 1));
+    const thenRaw = text.slice(ternary.at + 1, colon.at);
+    const elseRaw = text.slice(colon.at + 1);
+    let thenKids = branchNodes(thenRaw);
+    let elseKids = branchNodes(elseRaw);
+    // One side is markup and the other is a value — the common shape of "wrap
+    // this in a link when there's somewhere to go". The value side becomes an
+    // expression child rather than sending the whole conditional back to code.
+    // Both sides being values (`a ? "x" : "y"`) is a value, not markup, and
+    // stays as it was.
+    if (thenKids && !elseKids && branchIsMarkup(thenKids)) elseKids = exprBranch(elseRaw);
+    else if (elseKids && !thenKids && branchIsMarkup(elseKids)) thenKids = exprBranch(thenRaw);
     if (!thenKids || !elseKids) return null;
     return {
       id: makeId(),
@@ -1126,9 +1161,20 @@ function serializeCondBody(node, indent, lines) {
   // the same thing a hand-written conditional does.
   const tail = elseKids === null ? '' : chained ? ' :' : elseKids.length ? ' : (' : ' : null';
   const head = `${node.test} ${node.op === '&&' ? '&&' : '?'} `;
+  // A branch's parens are JS, not JSX: an expression goes in there as itself.
+  // `{heading}` would be a block, and `{ a: 1 }` an object — neither is what
+  // the author wrote.
+  const branchOut = (kids, at) => {
+    if (kids.length === 1 && kids[0].kind === 'expr') {
+      const raw = String(kids[0].value ?? '').trim().replace(/^\{/, '').replace(/\}$/, '');
+      raw.split('\n').forEach((line, i) => lines.push(i === 0 ? at + line : line));
+      return;
+    }
+    for (const child of kids) serializeNode(child, at, lines);
+  };
   if (thenKids.length) {
     lines.push(indent + head + '(');
-    for (const child of thenKids) serializeNode(child, indent + '  ', lines);
+    branchOut(thenKids, indent + '  ');
     lines.push(indent + ')' + tail);
   } else {
     lines.push(indent + head + 'null' + tail);
@@ -1136,7 +1182,7 @@ function serializeCondBody(node, indent, lines) {
   if (chained) {
     serializeCondBody(chained, indent, lines);
   } else if (elseKids && elseKids.length) {
-    for (const child of elseKids) serializeNode(child, indent + '  ', lines);
+    branchOut(elseKids, indent + '  ');
     lines.push(indent + ')');
   }
 }
