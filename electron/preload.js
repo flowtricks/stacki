@@ -416,16 +416,32 @@ if (!process.isMainFrame) {
       }
     };
     visit(document);
+    // What each path was found to hold this pass, so a tag left on an element
+    // the region no longer contains can be taken off again (below).
+    const collected = new Map();
     for (const s of starts) {
       const p = markerPath(s, 's');
-      const run = [];
+      // The run ends at the matching close marker, and a run with no close
+      // marker among its siblings is EMPTY — never "everything after it".
+      // Both markers are written as siblings around the node, so a start
+      // whose end isn't there has lost it, and the honest reading of that is
+      // that the region holds nothing. Swallowing instead put the following
+      // element inside the region, which then answered for clicks on it: the
+      // docs footer reported a comment when its fine print was clicked.
+      let end = null;
       for (let n = s.nextSibling; n; n = n.nextSibling) {
-        if (markerPath(n, 'e') === p) break;
+        if (markerPath(n, 'e') === p) { end = n; break }
+      }
+      const run = [];
+      for (let n = s.nextSibling; n && n !== end; n = n.nextSibling) {
+        if (!end) break;
         run.push(n);
         // A chunk group's run contains its members, which are marked too —
         // document order puts the deeper path last, so it wins the tag.
         if (n.nodeType === 1 && n.tagName !== 'TEMPLATE') addPath(n, p);
       }
+      if (!collected.has(p)) collected.set(p, new Set());
+      for (const n of run) collected.get(p).add(n);
       if (!regions.has(p)) regions.set(p, []);
       const runs = regions.get(p);
       // The same place, collected again: it replaces itself. Appending would
@@ -436,6 +452,15 @@ if (!process.isMainFrame) {
       const again = runs.findIndex((r) => r.some((n) => run.includes(n)));
       if (again >= 0) runs[again] = run;
       else runs.push(run);
+    }
+    // A tag is only good while the region still holds the element. They used to
+    // accumulate and never come off, so one bad pass — a marker briefly out of
+    // place — left an element permanently answering to a path it wasn't in.
+    for (const el of document.querySelectorAll(`[${PATH_ATTR}]`)) {
+      const kept = pathsOf(el).filter((p) => !collected.has(p) || collected.get(p).has(el));
+      if (kept.length === pathsOf(el).length) continue;
+      if (kept.length) el.setAttribute(PATH_ATTR, kept.join(' '));
+      else el.removeAttribute(PATH_ATTR);
     }
     for (const n of markers) n.remove();
     focusCache = undefined; // new runs — the focused instance may be among them
@@ -738,10 +763,49 @@ if (!process.isMainFrame) {
       if (!inFocus(el)) continue;
       for (const p of pathsOf(el)) if (inScope(p) && !rendered.includes(p)) rendered.push(p);
     }
+    sendStates(rendered);
     const key = rendered.join('\n');
     if (key === lastRenderedKey) return;
     lastRenderedKey = key;
     window.parent.postMessage({ type: 'avb:rendered-nodes', paths: rendered }, '*');
+  };
+
+  // Nodes that are on the page but not taking part in it: `display: none` (there
+  // and not drawn) and `pointer-events: none` (drawn and not clickable). Both
+  // are true of the element as the page computes it — they can arrive from any
+  // rule in any stylesheet, so the source cannot answer and the navigator has
+  // no way to ask per row.
+  //
+  // Read in the same pass, and only for nodes that put an element on the page:
+  // a computed style is cheap to read one at a time and not free by the
+  // hundred, so this rides the walk that already happens rather than adding
+  // one of its own.
+  let lastStatesKey = '';
+  const firstElementFor = (p) => {
+    for (const run of runsOf(p) || []) {
+      const el = run.find((n) => n.nodeType === 1 && n.tagName !== 'TEMPLATE');
+      if (el && el.isConnected) return el;
+    }
+    return elementsWithPath(p)[0] || null;
+  };
+  const sendStates = (rendered) => {
+    const hidden = [];
+    const inert = [];
+    for (const p of rendered) {
+      const el = firstElementFor(p);
+      if (!el) continue;
+      try {
+        const cs = window.getComputedStyle(el);
+        if (cs.display === 'none') hidden.push(p);
+        if (cs.pointerEvents === 'none') inert.push(p);
+      } catch {
+        /* an element that cannot be measured says nothing about itself */
+      }
+    }
+    const key = `${hidden.join(' ')}|${inert.join(' ')}`;
+    if (key === lastStatesKey) return;
+    lastStatesKey = key;
+    window.parent.postMessage({ type: 'avb:node-states', hidden, inert }, '*');
   };
 
   // The classes each node actually ended up with. `class:list={[...]}` and
@@ -1300,6 +1364,11 @@ contextBridge.exposeInMainWorld('avb', {
   setCssVariable: invoke('css:setVariable'),
   moveCssVariables: invoke('css:moveVariables'),
   addCssVariables: invoke('css:addVariables'),
+  renameCssVariables: invoke('css:renameVariables'),
+  setCssSectionTitle: invoke('css:setSectionTitle'),
+  removeCssSection: invoke('css:removeSection'),
+  addCssSection: invoke('css:addSection'),
+  moveCssHeading: invoke('css:moveHeading'),
   onCssChanged: (cb) => {
     const listener = () => cb();
     ipcRenderer.on('css:changed', listener);
@@ -1342,6 +1411,8 @@ contextBridge.exposeInMainWorld('avb', {
   renamePageFolder: invoke('pagefolder:rename'),
   deletePageFolder: invoke('pagefolder:delete'),
   importPathFor: invoke('page:importPathFor'),
+  createComponent: invoke('component:create'),
+  componentUsage: invoke('component:usage'),
   dynamicPaths: invoke('page:dynamicPaths'),
   injectedRoutes: invoke('project:injectedRoutes'),
   sampleEntry: invoke('content:sampleEntry'),
@@ -1350,6 +1421,7 @@ contextBridge.exposeInMainWorld('avb', {
   startDevServer: invoke('dev:start'),
   stopDevServer: invoke('dev:stop'),
   diagnoseDev: invoke('dev:diagnose'),
+  probeDevPage: invoke('dev:probe'),
 
   // Style panel targets
   listStyleFiles: invoke('style:listFiles'),
@@ -1384,6 +1456,11 @@ contextBridge.exposeInMainWorld('avb', {
   openExternal: invoke('shell:openExternal'),
 
   // Events
+  onPageMaybeChanged: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on('page:maybe-changed', listener);
+    return () => ipcRenderer.removeListener('page:maybe-changed', listener);
+  },
   onDevLog: (cb) => {
     const listener = (_e, data) => cb(data);
     ipcRenderer.on('dev:log', listener);

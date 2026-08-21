@@ -866,7 +866,19 @@ export function SpacingEditor({
           ariaLabel={`Connect ${humanLabel(prop)} to a variable`}
           disabled={false}
           prop={prop}
-          onPick={(binding) => setProp(prop, binding, false)}
+          onPick={(binding) => {
+            // The pick has to land in the field as well as on the element. This
+            // popover seeds its draft once, when it opens, and does not follow the
+            // model afterwards — so picking a variable styled the element while the
+            // field it was picked in stayed empty, until the popover was closed and
+            // opened again and the draft was seeded afresh.
+            setDraftValue(binding)
+            // And it must not be written a second time on the way out: `close()`
+            // commits whenever the draft differs from what the popover opened with,
+            // and the pick is already written by the setProp below.
+            originalRef.current = binding
+            setProp(prop, binding, false)
+          }}
         >
           <input
             ref={inputRef}

@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import Select, { type SelectOption } from './components/Select'
 import { GroupLabel } from './TypographySection'
 import type { ResolvedProp } from './lib/resolved'
-import { useComputedChoice } from './lib/computed-style'
+import { useHighlight } from './lib/computed-style'
 import { commitInPlace } from './lib/commit-in-place'
 
 // Webflow's flex-alignment control: a live preview grid on the left (3×3 click
@@ -187,7 +187,7 @@ function AxisSelect({ axis, label, prop, value, values, fallback, busy, read, on
   // Unset → what the page computes for this element, which catches a rule the
   // panel's matcher can't see; `normal` and friends aren't options, so those fall
   // through to the CSS default below.
-  const computed = useComputedChoice(present ? '' : prop, values)
+  const shownComputed = useHighlight('', present ? '' : prop, values, fallback)
   const customMode = forceCustom || (present && !known)
   const options: SelectOption<string>[] = values.map((v) => ({ value: v, label: axisLabel(v, axis), icon: iconFor(v, prop, axis) }))
   options.push({ value: CUSTOM, label: 'Custom' })
@@ -216,7 +216,7 @@ function AxisSelect({ axis, label, prop, value, values, fallback, busy, read, on
         onSelectSelector={onSelectSelector}
       />
       <Select
-        value={customMode ? CUSTOM : (present ? n : (computed || fallback))}
+        value={customMode ? CUSTOM : (present ? n : shownComputed)}
         options={options}
         ariaLabel={ariaLabel}
         disabled={busy}

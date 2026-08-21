@@ -12,7 +12,7 @@
 // use it to HIGHLIGHT an option — never to claim the property is set, which stays the
 // resolved model's call (the label is dim either way).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { hasCanvas, queryCanvas } from '../../canvasQuery.js'
 import { findNode, getHost, onHostChange } from './host'
 
@@ -90,40 +90,68 @@ function request(path: string, prop: string) {
   if (flushing == null) flushing = window.setTimeout(() => flush(path), 0)
 }
 
+/** An answer from the page: what it said, and whether it is still being asked. */
+type Answer = { value: string; pending: boolean; path: string | null }
+
+/**
+ * What the page has already said about `prop`, read straight from the store.
+ *
+ * Read during render rather than kept in state. State is a render behind: the
+ * moment a property is cleared, the control re-renders asking about a property
+ * it was not asking about before, and a `pending` flag living in state still
+ * says `false` for that first render — long enough to fall through to the
+ * fallback and, worse, to record the fallback as "what was showing". The store
+ * is the truth and it is synchronous, so it is read synchronously.
+ */
+function answeredNow(prop: string): Answer {
+  if (!prop) return { value: '', pending: false, path: null }
+  // `hasCanvas` is checked HERE, not once on mount: the panel can render before
+  // the preview frame registers, and that first pass must not opt out for good.
+  const path = hasCanvas() ? pathOfSelection() : null
+  // Nothing to ask — so nothing is pending either. No answer is ever coming, and
+  // a control waiting forever would never show anything.
+  if (!path) return { value: '', pending: false, path: null }
+  const known = answers.get(path)?.[prop]
+  return { value: known ?? '', pending: known == null, path }
+}
+
+// `pending` is the part worth having. '' means two different things — "the page
+// says nothing" and "the page has not been asked yet" — and a control that can't
+// tell them apart has to guess during the wait. See useHighlight.
+function useComputedAnswer(prop: string): Answer {
+  const [, bump] = useState(0)
+
+  useEffect(() => {
+    if (!prop) return undefined
+    const sync = () => bump((n) => n + 1)
+    listeners.add(sync)
+    // The selection moves, or the page re-renders under it: ask for the element
+    // that's selected now.
+    const off = onHostChange(sync)
+    return () => {
+      listeners.delete(sync)
+      off()
+    }
+  }, [prop])
+
+  const answer = answeredNow(prop)
+  // Asking is a side effect, so it waits until after the render that noticed the
+  // answer was missing. `request` is idempotent — already answered, or already
+  // queued for this flush, and it does nothing.
+  useEffect(() => {
+    if (answer.pending && answer.path) request(answer.path, prop)
+  })
+
+  return answer
+}
+
 /**
  * The selected element's computed value for `prop` — '' until the page answers (or
  * forever, when there's no canvas to ask). Pass '' to skip asking entirely, so a
  * control that already has an authored value costs nothing.
  */
 export function useComputedValue(prop: string): string {
-  const [value, setValue] = useState('')
-
-  useEffect(() => {
-    if (!prop) { setValue(''); return undefined }
-    let live = true
-    const sync = () => {
-      if (!live) return
-      // `hasCanvas` is checked HERE, not once on mount: the panel can render before
-      // the preview frame registers, and that first pass must not opt out for good.
-      const path = hasCanvas() ? pathOfSelection() : null
-      if (!path) { setValue(''); return }
-      const known = answers.get(path)?.[prop]
-      if (known != null) setValue(known)
-      else { setValue(''); request(path, prop) }
-    }
-    sync()
-    listeners.add(sync)
-    // The selection moves, or the page re-renders under it: ask for the element
-    // that's selected now.
-    const off = onHostChange(sync)
-    return () => {
-      live = false
-      listeners.delete(sync)
-      off()
-    }
-  }, [prop])
-
-  return value
+  return useComputedAnswer(prop).value
 }
 
 /**
@@ -149,4 +177,40 @@ export function useComputedMeta(prop: string): { value: string; tag: string; mis
 export function useComputedChoice(prop: string, values: readonly string[]): string {
   const computed = useComputedValue(prop).toLowerCase()
   return computed && values.includes(computed) ? computed : ''
+}
+
+/**
+ * Which option a control should highlight: the authored value, else what the page
+ * computes, else `fallback` — and, while the page is still being asked, whatever
+ * was being highlighted a moment ago.
+ *
+ * That last clause is the whole point. Clearing a property drops the cached
+ * computed values (an edit is exactly what changes them, see EmbedEditor), so the
+ * control goes from "authored" straight to "asked, no answer yet" with a round
+ * trip to the canvas in between. Filling that gap with `fallback` is a guess, and
+ * a wrong one whenever the value came from somewhere else — an element inheriting
+ * `pointer-events: none` from a parent would jump to Auto and then, a beat later,
+ * slide back to None. The sliding pill made every wrong guess a visible move.
+ *
+ * Holding the previous highlight costs nothing when the guess would have been
+ * right, and stops the control announcing an answer it doesn't have yet. It only
+ * holds while an answer is actually coming: with no canvas to ask, `fallback` is
+ * the best there is and it is used immediately.
+ */
+export function useHighlight(
+  authored: string,
+  prop: string,
+  values: readonly string[],
+  fallback: string
+): string {
+  const answer = useComputedAnswer(authored || !prop ? '' : prop)
+  const computed = answer.value.toLowerCase()
+  const known = computed && values.includes(computed) ? computed : ''
+  const settled = authored || known || (answer.pending ? '' : fallback)
+  // Seeded with the fallback: on the very first render there is nothing else to
+  // have been showing.
+  const last = useRef(settled || fallback)
+  const shown = settled || last.current
+  useEffect(() => { last.current = shown }, [shown])
+  return shown
 }

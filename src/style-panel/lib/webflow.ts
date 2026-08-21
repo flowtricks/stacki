@@ -854,14 +854,21 @@ async function readAllProjectCss(): Promise<Array<{ label: string; css: string }
       files = []
     }
   }
-  for (const f of files) {
-    try {
-      const res = await window.avb.readStyleFile(f.path)
-      out.push({ label: f.rel, css: res?.css ?? '' })
-    } catch {
-      /* unreadable — skip it rather than fail the whole scan */
-    }
-  }
+  // All at once. These were read one after another, which on a project with a
+  // dozen stylesheets is a dozen round trips end to end — and this runs while the
+  // panel is doing its own cold scan, so the two were queueing behind each other.
+  // Promise.all keeps the order, so the cascade still reads as it does on disk.
+  const read = await Promise.all(
+    files.map(async (f) => {
+      try {
+        const res = await window.avb.readStyleFile(f.path)
+        return { label: f.rel, css: res?.css ?? '' }
+      } catch {
+        return null // unreadable — skip it rather than fail the whole scan
+      }
+    }),
+  )
+  for (const entry of read) if (entry) out.push(entry)
   // Variables are just as often declared in a component's global block as in a
   // stylesheet, so the picker has to read those too.
   let astro = host.astroFiles
@@ -873,14 +880,20 @@ async function readAllProjectCss(): Promise<Array<{ label: string; css: string }
       astro = []
     }
   }
-  for (const f of astro) {
-    try {
-      const res = await window.avb.readStyleFile(f.path)
-      for (const region of splitEmbed(res?.css ?? '').regions) {
-        if (isGlobalRegion(region)) out.push({ label: f.name, css: region.css })
+  const readAstro = await Promise.all(
+    astro.map(async (f) => {
+      try {
+        const res = await window.avb.readStyleFile(f.path)
+        return { name: f.name, css: res?.css ?? '' }
+      } catch {
+        return null // unreadable — skip it rather than fail the whole scan
       }
-    } catch {
-      /* unreadable — skip it rather than fail the whole scan */
+    }),
+  )
+  for (const entry of readAstro) {
+    if (!entry) continue
+    for (const region of splitEmbed(entry.css).regions) {
+      if (isGlobalRegion(region)) out.push({ label: entry.name, css: region.css })
     }
   }
   walkNodes(host.nodes, (n) => {

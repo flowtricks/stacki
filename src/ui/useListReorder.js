@@ -88,10 +88,16 @@ export default function useListReorder({ count, onMove, disabled = false }) {
     },
     onPointerDown: (e) => {
       if (disabled || e.button !== 0) return;
-      // Buttons and fields inside the row keep their own behaviour.
-      if (e.target instanceof Element && e.target.closest('button, input, textarea, select, a')) {
-        return;
-      }
+      // Buttons and fields inside the row keep their own behaviour — unless they
+      // say otherwise. A control marked `data-drag-through` is one that is also
+      // the natural place to grab the row: the variable sheet's names are
+      // buttons (a click opens a rename field) and they are the whole width of
+      // the row, so a drag that refused to start on them was a drag that
+      // refused to start. Nothing is taken away from the control: the gesture
+      // only becomes a drag once the pointer moves, and a click that followed a
+      // drag is swallowed below.
+      const control = e.target instanceof Element ? e.target.closest('button, input, textarea, select, a') : null;
+      if (control && !control.hasAttribute('data-drag-through')) return;
       start.current = { index, y: e.clientY };
       setTo(index);
     },
@@ -101,6 +107,15 @@ export default function useListReorder({ count, onMove, disabled = false }) {
         e.preventDefault();
         e.stopPropagation();
       }
+    },
+  });
+
+  // A slot that is measured but not dragged: the "add" line at the end of a
+  // group, which is where a row is dropped to land in that group when the group
+  // has no rows of its own to aim at.
+  const slotProps = (index) => ({
+    ref: (el) => {
+      rows.current[index] = el;
     },
   });
 
@@ -115,5 +130,5 @@ export default function useListReorder({ count, onMove, disabled = false }) {
     return marks.join(' ');
   };
 
-  return { dragIndex: from, dropIndex: to, rowProps, rowClass };
+  return { dragIndex: from, dropIndex: to, rowProps, slotProps, rowClass };
 }

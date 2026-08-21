@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useComputedChoice } from './lib/computed-style'
+import { useHighlight } from './lib/computed-style'
 import type { ReactNode } from 'react'
 import SegmentPill from './components/SegmentPill'
 
@@ -84,8 +84,7 @@ export default function SegmentedField({ value, important, options, prop, fallba
   const supported = new Set(options.map((o) => o.value))
   // The bar represents a listed value with no !important; anything else is custom.
   const customMode = !((supported.has(current) || !current) && !important)
-  const computed = useComputedChoice(current || !prop ? '' : prop, options.map((o) => o.value))
-  const active = current || computed || fallback
+  const active = useHighlight(current, prop ?? '', options.map((o) => o.value), fallback)
 
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)

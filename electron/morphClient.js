@@ -63,6 +63,21 @@ function syncAnchors(liveRoot, serverRoot) {
   collect(liveRoot);
   for (const n of gone) n.remove();
 
+  // Whitespace is not content, and is never matched.
+  //
+  // It used to be: any text node stood for any other. Two renderings of the
+  // same page hardly ever have the same number of blank text nodes — the diff
+  // above keeps whichever ones it can — so one server blank could be matched
+  // against a live blank on the far side of an element, and the cursor came out
+  // PAST that element. Every anchor after it then landed a node too late, and
+  // when the cursor ran off the end they were appended to the parent instead:
+  // a closing marker after the very element it was supposed to close, and a
+  // region that swallowed its next sibling whole. On the docs footer that made
+  // a clicked line report the comment above it.
+  const blank = (n) => n.nodeType === 3 && !n.data.trim();
+  const sameKind = (a, b) =>
+    a.nodeType === b.nodeType && (b.nodeType !== 1 || a.tagName === b.tagName);
+
   const walk = (live, server) => {
     let l = live.firstChild;
     for (let sv = server.firstChild; sv; sv = sv.nextSibling) {
@@ -70,10 +85,9 @@ function syncAnchors(liveRoot, serverRoot) {
         live.insertBefore(document.createComment(sv.data), l);
         continue;
       }
+      if (blank(sv)) continue;
       let t = l;
-      while (t && !(t.nodeType === sv.nodeType && (sv.nodeType !== 1 || t.tagName === sv.tagName))) {
-        t = t.nextSibling;
-      }
+      while (t && (blank(t) || !sameKind(t, sv))) t = t.nextSibling;
       if (!t) continue;
       if (t.nodeType === 1) walk(t, sv);
       l = t.nextSibling;

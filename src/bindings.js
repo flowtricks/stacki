@@ -108,8 +108,7 @@ export function codeParts(src) {
       i += 1;
       continue;
     }
-    // `.title` after a path is part of it, not the start of another.
-    if (!/[A-Za-z_$]/.test(c) || text[i - 1] === '.') {
+    if (!/[A-Za-z_$]/.test(c)) {
       i += 1;
       continue;
     }
@@ -123,9 +122,26 @@ export function codeParts(src) {
       j += 1;
       word();
     }
-    const name = text.slice(i, j);
-    if (!CODE_WORDS.has(name.split('.')[0])) {
-      if (i > last) out.push({ text: text.slice(last, i) });
+    // `.title` after a path is part of THAT path, not the start of another —
+    // and the whole of it is stepped over, not one character of it. Stepping
+    // over one left the rest of the word to be read as a value of its own:
+    // `featured?.data.title` came out as `featured` · "?.d" · `ata.title`,
+    // a chip beginning in the middle of a name.
+    //
+    // A `?` breaks the path in two. It is punctuation — it says how the value
+    // is reached, not what it is — so it belongs to neither chip, and the
+    // property it guards is a chip of its own, dot and all:
+    // `featured` · "?" · `.data.title`.
+    const optional = text[i - 1] === '.' && text[i - 2] === '?';
+    if (text[i - 1] === '.' && !optional) {
+      i = j;
+      continue;
+    }
+    // The dot goes INSIDE that chip, so the text still reads as it was written.
+    const from = optional ? i - 1 : i;
+    const name = text.slice(from, j);
+    if (!CODE_WORDS.has(name.replace(/^\./, '').split('.')[0])) {
+      if (from > last) out.push({ text: text.slice(last, from) });
       out.push({ expr: name });
       last = j;
     }

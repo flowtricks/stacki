@@ -1,7 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
-import VariableConnect from '../VariableConnect'
-import { handleArrowStep } from '../lib/number-step'
-import { commitInPlace } from '../lib/commit-in-place'
+import LiveInput from './LiveInput'
 
 // Two controls that turn up wherever a point on a box is being set: the gradient
 // centre, a transform origin, a perspective origin. Shared so those stay the same
@@ -35,6 +32,8 @@ export function PositionGrid({ x, y, busy, ariaLabel = 'Position', onPick }: { x
 }
 
 // A number field with a unit suffix (used for Left/Top and a stop's position).
+// The value carries its unit in the CSS but not in the field — you type `50`,
+// not `50%` — so the unit is put back on the way out.
 export function NumField({ value, unit, label, busy, prop = 'left', onLive, onCommit }: {
   value: string
   unit: string
@@ -46,36 +45,18 @@ export function NumField({ value, unit, label, busy, prop = 'left', onLive, onCo
   onCommit: (v: string) => void
 }) {
   const num = value.replace(/[a-z%]+$/i, '').trim()
-  const [text, setText] = useState(num)
-  const focused = useRef(false)
-  useEffect(() => { if (!focused.current) setText(num) }, [num])
   const withUnit = (t: string) => { const s = t.trim(); return s === '' ? '' : /[a-z%]$/i.test(s) ? s : `${s}${unit}` }
   return (
-    <div className="embed-editor_grad-num">
-      <VariableConnect code ariaLabel={`Connect ${label} to a variable`} disabled={busy} className="is-fill" prop={prop} onPick={(binding) => onCommit(binding)}>
-        <input
-          className="u-input embed-editor_grad-num-input"
-          value={text}
-          inputMode="decimal"
-          spellCheck={false}
-          disabled={busy}
-          aria-label={label}
-          onChange={(e) => { setText(e.target.value); onLive(withUnit(e.target.value)) }}
-          onFocus={() => { focused.current = true }}
-          onBlur={() => { focused.current = false; onCommit(withUnit(text)) }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') { commitInPlace(e.currentTarget); return }
-            const stepped = handleArrowStep(e)
-            if (!stepped) return
-            e.preventDefault()
-            e.currentTarget.value = stepped.text
-            e.currentTarget.setSelectionRange(stepped.caret, stepped.caret)
-            setText(stepped.text)
-            onLive(withUnit(stepped.text))
-          }}
-        />
-      </VariableConnect>
-      <span className="embed-editor_grad-num-unit">{unit}</span>
-    </div>
+    <LiveInput
+      value={num}
+      busy={busy}
+      ariaLabel={label}
+      prop={prop}
+      suffix={unit}
+      wrapClassName="embed-editor_field embed-editor_grad-num"
+      onLive={(v) => onLive(withUnit(v))}
+      onCommit={(v) => onCommit(withUnit(v))}
+      onVariablePick={(binding) => onCommit(binding)}
+    />
   )
 }

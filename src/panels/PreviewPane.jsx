@@ -100,6 +100,7 @@ export default function PreviewPane({
   onOpenPath,
   onSelectedClasses,
   onRenderedPaths,
+  onNodeStates,
   onNodeClasses,
   focusPath,
   focusOcc,
@@ -165,6 +166,8 @@ export default function PreviewPane({
   onSelectedClassesRef.current = onSelectedClasses;
   const onRenderedPathsRef = React.useRef(onRenderedPaths);
   onRenderedPathsRef.current = onRenderedPaths;
+  const onNodeStatesRef = React.useRef(onNodeStates);
+  onNodeStatesRef.current = onNodeStates;
   const onNodeClassesRef = React.useRef(onNodeClasses);
   onNodeClassesRef.current = onNodeClasses;
   // Last reported class string, so repeated rect sends stay quiet.
@@ -224,6 +227,10 @@ export default function PreviewPane({
       } else if (d?.type === 'avb:rendered-nodes') {
         // Which nodes actually reached the page — the navigator marks the rest.
         onRenderedPathsRef.current?.(d.paths || []);
+      } else if (d?.type === 'avb:node-states') {
+        // On the page but not taking part in it: display:none, pointer-events:
+        // none. The navigator marks those rows — see StructurePanel.
+        onNodeStatesRef.current?.({ hidden: d.hidden || [], inert: d.inert || [] });
       } else if (d?.type === 'avb:modifiers') {
         // Keys pressed while the canvas has focus never reach the app's own
         // listeners — the frame forwards them so the panels can still read

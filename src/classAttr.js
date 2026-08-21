@@ -20,7 +20,7 @@ const LIST = 'class:list';
 const quoted = (name) => `"${name}"`;
 
 /** Every class name the attribute mentions literally. */
-function namesIn(prop) {
+export function namesIn(prop) {
   if (!prop) return [];
   if (prop.type === 'string') return String(prop.value).trim().split(/\s+/).filter(Boolean);
   const text = String(prop.value || '');

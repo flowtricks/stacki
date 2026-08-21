@@ -209,7 +209,12 @@
   height: var(--size-input);
   padding: 0 var(--space-4);
   border-radius: var(--radius-input);
-  background: var(--surface-inset);
+  /* Whatever colour a field ends up, it is THIS variable — anything overriding it
+     sets the variable, not the background. The focus rule below then restates the
+     same colour rather than a different one, which is what made a field lighten
+     the moment you clicked into it. */
+  --u-input-bg: var(--surface-inset);
+  background: var(--u-input-bg);
   color: var(--color-text-primary);
   border: 0;
   font-family: var(--font-family-sans);
@@ -221,6 +226,11 @@
 .u-input:focus::placeholder { color: transparent; }
 .u-input:focus  {
   outline: none;
+  /* The ring is the whole of the focus state. The app's blanket `input:focus`
+     (src/styles.css) also repaints the background, which on a panel field reads as
+     the control changing colour when you click into it — so the field's own colour
+     is restated here, where a class beats that type selector. */
+  background: var(--u-input-bg);
   box-shadow: 0 0 0 var(--border-width-default) var(--color-border-focus);
 }
 .u-input.is-invalid {
@@ -945,6 +955,32 @@
   background: var(--color-warning);
 }
 .u-select-option.is-selected .u-select-dot { background: var(--color-accent); }
+
+/* A control that acts ON the row (edit, say) rather than picking it. Kept out of
+   sight until the row is under the pointer, so a list of options reads as a list
+   of options; the gutter it occupies is held open either way so the labels don't
+   shift as the highlight moves down. */
+.u-select-action {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+}
+/* The dot is pinned right by its own auto margin; with an action beside it the
+   action takes that job and the dot sits just inside it. */
+.u-select-dot + .u-select-action { margin-left: var(--space-2); }
+.u-select-option.is-active .u-select-action { opacity: 1; }
+.u-select-action:hover { background: var(--color-bg-active); color: var(--color-text-primary); }
 
 /* ─────────────────────── Field label + reset menu (FieldLabel.tsx) ─────────────────────── */
 /* Dim caption when the field is empty; a blue pill button that opens a reset

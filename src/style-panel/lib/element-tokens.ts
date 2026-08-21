@@ -64,6 +64,27 @@ export function selectorToClassTokens(selectorText: string, tokens: ClassToken[]
   return matched.size === wanted.size && picked.length ? picked : null
 }
 
+/**
+ * Which tokens a newly selected element is styled through, before anyone picks:
+ * its FIRST class, else its last data attribute, else its tag.
+ *
+ * The first class, not all of them. Every class joined is Webflow's model, where
+ * a combo is itself a thing to style — but writing CSS to a file it means the
+ * first property set on an element creates
+ * `.layout.card.theme-dark.flex-grow.theme-brand { … }`, and since the combo
+ * then counts as a styled selector, everything after it lands there too: a rule
+ * of five classes that nothing else can reuse, assembled a property at a time
+ * from a default nobody chose. A combo is a deliberate act; it takes picking
+ * that chip.
+ */
+export function defaultSelectorTokens(tokens: ClassToken[]): string[] {
+  const classes = tokens.filter((token) => token.kind === 'class')
+  if (classes.length) return [classes[0].name]
+  const attrs = tokens.filter((token) => token.kind === 'attribute')
+  if (attrs.length) return [attrs[attrs.length - 1].name]
+  return tokens.length ? [tokens[0].name] : []
+}
+
 /** Compose a CSS selector from selected token names, honoring token order. */
 export function tokensToSelector(selectedNames: string[], tokens: ClassToken[]): string {
   let selector = ''

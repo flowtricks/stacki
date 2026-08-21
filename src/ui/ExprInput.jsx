@@ -11,6 +11,7 @@ import {
 import { EditorState, StateEffect, StateField } from '@codemirror/state';
 import { javascript } from '@codemirror/lang-javascript';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
+import { autocompletion, completionKeymap, closeCompletion } from '@codemirror/autocomplete';
 import { appTheme, appHighlight } from './CodeEditor.jsx';
 
 // The data inside an expression, drawn as chips. They are marks, not widgets:
@@ -133,6 +134,10 @@ export default function ExprInput({
   // places that hold a whole statement instead (a data declaration's source),
   // where Enter has to mean a new line.
   multiline = false,
+  // One-line fields wrap, because there is nowhere to scroll to. A box opened to
+  // read code is the other way round: wrapping breaks the indentation that says
+  // what is nested in what, so it scrolls sideways instead.
+  wrap = true,
   className = '',
   // What to draw as chips, either way round: `chip` is one piece of text to
   // find (a loop's source), `chipsOf` a function from the whole value to the
@@ -145,7 +150,18 @@ export default function ExprInput({
   // Set to {insert} while the field is mounted, so a bind handle beside it can
   // drop a path in at the caret.
   apiRef,
+  // What this field can name: the values in scope where it sits — the file's
+  // props, its frontmatter consts, the item of any loop around it. Typing
+  // offers them, so a name doesn't have to be remembered (or spelled) to be
+  // used. Each is {label, detail?, info?}; the caller decides what is in scope,
+  // since only it knows where the field is.
+  completions,
 }) {
+  // Read through a ref: CodeMirror's extensions are built once, and the scope
+  // arrives (and changes) after that — a captured array would go stale the
+  // moment the frontmatter gains a const.
+  const completionsRef = useRef(completions);
+  completionsRef.current = completions;
   const hostRef = useRef(null);
   const viewRef = useRef(null);
   // Whether the caret in the state is one the user put there. CodeMirror keeps
@@ -186,12 +202,43 @@ export default function ExprInput({
                 ]
           ),
           javascript(),
+          // Only what's in scope: a JS field with the language's own completions
+          // would offer `Array`, `decodeURIComponent` and every other global,
+          // which buries the six names that are actually about this page.
+          autocompletion({
+            override: [
+              (ctx) => {
+                const list = completionsRef.current;
+                if (!list?.length) return null;
+                // After a dot, complete the property rather than the whole path:
+                // `post.` offers `data`, not `post.data`.
+                const before = ctx.matchBefore(/[\w$.]*/);
+                if (!before || (before.from === before.to && !ctx.explicit)) return null;
+                const typed = before.text;
+                const dot = typed.lastIndexOf('.');
+                const prefix = dot >= 0 ? typed.slice(0, dot + 1) : '';
+                const options = list
+                  .filter((c) => c.label.startsWith(prefix) && c.label !== prefix)
+                  .map((c) => ({
+                    label: c.label.slice(prefix.length),
+                    detail: c.detail || undefined,
+                    info: c.info || undefined,
+                    type: c.type || 'variable',
+                  }));
+                if (!options.length) return null;
+                return { from: before.from + prefix.length, options, validFor: /^[\w$]*$/ };
+              },
+            ],
+            icons: false,
+            defaultKeymap: false,
+          }),
+          keymap.of(completionKeymap),
           chipFnField,
           chipField,
           chipsAreAtomic,
           appTheme,
           appHighlight,
-          EditorView.lineWrapping,
+          ...(wrap ? [EditorView.lineWrapping] : []),
           cmPlaceholder(placeholder),
           EditorView.domEventHandlers({
             mousedown: (event, view) => {

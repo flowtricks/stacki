@@ -39,6 +39,9 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
       `export { stepNumberAtCaret } from ${JSON.stringify(
         path.join(__dirname, '..', 'src', 'style-panel', 'lib', 'number-step.ts')
       )};\n` +
+      `export { sectionOf } from ${JSON.stringify(
+        path.join(__dirname, '..', 'src', 'style-panel', 'lib', 'sections.ts')
+      )};\n` +
       `export { spacingBands } from ${JSON.stringify(
         path.join(__dirname, '..', 'src', 'spacingBands.js')
       )};\n` +
@@ -86,6 +89,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     spacingBands,
     setHost,
     setModifiers,
+    sectionOf,
   } = require(bundlePath);
 
   const container = dom.window.document.getElementById('root');
@@ -707,6 +711,30 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     check('padding still works', spacingBands(box, spacing, 'padding', ['top']).length === 1);
     check('and margin still returns nothing when there is none', spacingBands(box, spacing, 'margin', ['top']).length === 0);
   }
+
+  // --- a shorthand the box has no field for -------------------------------------
+  //
+  // `padding: var(--space-1) var(--space-2)` is one declaration; the box edits
+  // one side at a time and has a field for each longhand and none for the
+  // shorthand. A property listed in a section is a property routed to that
+  // section's control, so listing the shorthand routed it to nothing: it
+  // rendered in no field at all, while still applying on the page — and it was
+  // kept out of the catch-all at the bottom too, because that only receives what
+  // no section claims.
+  //
+  // So the section claims the sides and not the shorthand, and the shorthand
+  // shows at the bottom with everything else the panel has no control for.
+  for (const side of ['top', 'right', 'bottom', 'left']) {
+    check(`padding-${side} belongs to the box`, sectionOf(`padding-${side}`) === 'spacing', sectionOf(`padding-${side}`));
+    check(`margin-${side} too`, sectionOf(`margin-${side}`) === 'spacing', sectionOf(`margin-${side}`));
+  }
+  check('the padding shorthand does not', sectionOf('padding') === 'other', sectionOf('padding'));
+  check('nor the margin one', sectionOf('margin') === 'other', sectionOf('margin'));
+  // The logical longhands have no field either — same rule, same place.
+  check('and neither does a longhand with no field', sectionOf('padding-inline') === 'other', sectionOf('padding-inline'));
+  // A shorthand whose control DOES read it stays where it is: the Gap control
+  // reads `gap` itself, so it is not homeless.
+  check('a shorthand with a control keeps its section', sectionOf('gap') === 'layout', sectionOf('gap'));
 
   if (failures.length) {
     console.error(`\nspacing: ${failures.length} failed, ${checked - failures.length} passed\n`);

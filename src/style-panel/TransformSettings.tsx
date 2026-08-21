@@ -4,7 +4,7 @@ import DragSlider from './components/DragSlider'
 import { PositionGrid, NumField } from './components/PositionGrid'
 import FieldLabel from './components/FieldLabel'
 import { PropTip, useHoverTip } from './components/PropTip'
-import { useComputedChoice } from './lib/computed-style'
+import { useHighlight } from './lib/computed-style'
 import { handleArrowStep } from './lib/number-step'
 import { commitInPlace } from './lib/commit-in-place'
 import { parseOrigin, serializeOrigin, type Origin } from './lib/transform-settings'
@@ -186,7 +186,7 @@ export default function TransformSettings({ read, busy, setProp, clearProp, self
   // the real answer is always one or the other — backface-visibility has no unset
   // state at render time, it is `visible` until something says otherwise.
   const childDistance = val(read, 'perspective')
-  const computedBackface = useComputedChoice(backface ? '' : 'backface-visibility', ['visible', 'hidden'])
+  const shownBackface = useHighlight(backface, 'backface-visibility', ['visible', 'hidden'], 'visible')
 
   const writeOrigin = (prop: string, next: Origin) => {
     const value = serializeOrigin(next)
@@ -216,7 +216,7 @@ export default function TransformSettings({ read, busy, setProp, clearProp, self
         <div className="embed-editor_size-row">
           <span className="embed-editor_size-label embed-editor_bg-caption">Backface</span>
           <SegmentedControl
-            value={backface || computedBackface || 'visible'}
+            value={shownBackface}
             options={BACKFACE}
             onChange={(v) => setProp('backface-visibility', v, false)}
             ariaLabel="Backface visibility"

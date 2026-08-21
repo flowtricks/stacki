@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CloseIcon, CheckIcon, DragIcon, EaseIcon, PlusIcon } from '../ui/Icons.jsx';
+import { CloseIcon, CheckIcon, CopyIcon, DragIcon, EaseIcon, MoreIcon, PencilIcon, PlusIcon, TrashIcon } from '../ui/Icons.jsx';
 import useListReorder from '../ui/useListReorder.js';
+import useDismiss from '../ui/useDismiss.js';
 import VariableTypeIcon from '../ui/VariableTypeIcon.jsx';
 import FluidBadge from '../ui/FluidBadge.jsx';
 import { fluidCheck, resolveValue } from '../fluid.js';
@@ -38,15 +39,33 @@ const SAVE_ON = ['Enter', 'Tab'];
 // started is simply not there. Left alone, that throws inside an async handler
 // and looks exactly like a feature that does nothing: pressing the button, and
 // nothing happening, with nothing said. It says so instead.
+const RESTART = 'Stacki needs to be restarted before this can be used.';
+
+/**
+ * What went wrong, in words that say what to do about it.
+ *
+ * There are two ways a call can be missing, and they look nothing alike. The
+ * bridge is built when the app starts, so a method added since is simply not
+ * there — that one is caught before calling. The other is worse: reloading the
+ * window rebuilds the bridge but NOT the main process behind it, so the method
+ * exists, the call goes out, and the answer is "No handler registered for
+ * 'css:moveHeading'" — which reads like a bug in the feature rather than an app
+ * that is half a version behind itself. Same cause, same remedy.
+ */
+export function friendlyError(err) {
+  const text = String(err?.message || err).replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '');
+  return /No handler registered/i.test(text) ? RESTART : text;
+}
+
 async function bridge(name, payload) {
   const call = window.avb?.[name];
   if (typeof call !== 'function') {
-    return { ok: false, error: 'Stacki needs to be restarted before this can be used.' };
+    return { ok: false, error: RESTART };
   }
   try {
     return (await call(payload)) || { ok: true };
   } catch (err) {
-    return { ok: false, error: String(err?.message || err).replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '') };
+    return { ok: false, error: friendlyError(err) };
   }
 }
 
@@ -298,7 +317,7 @@ function Cell({ cell, onSave, fluidOf, onDraft }) {
   );
 }
 
-export default function VariablesView({ project, selected, hidden, onClose, showToast }) {
+export default function VariablesView({ project, selected, hidden, onClose, showToast, onRecordUndo }) {
   const [files, setFiles] = useState([]);
   const [values, setValues] = useState({});
   const [saved, setSaved] = useState(false);
@@ -308,6 +327,11 @@ export default function VariablesView({ project, selected, hidden, onClose, show
   // three rows further down the same table — so the badge has to be recomputed
   // from the draft, not from the file.
   const [drafts, setDrafts] = useState({});
+  // `move` is defined above the point where the selected file is worked out, and
+  // a drop needs to know which file it is writing to — so it reads it from here.
+  const fileRef = useRef(null);
+  const firstSelectorRef = useRef(':root');
+
 
   const refresh = useCallback(async () => {
     const result = await window.avb.cssVariables(project.path);
@@ -331,6 +355,49 @@ export default function VariablesView({ project, selected, hidden, onClose, show
 
   const file = files.find((f) => f.rel === selected?.file);
   const group = file?.groups?.[selected?.index];
+  fileRef.current = file || null;
+  firstSelectorRef.current = group?.columns?.[0]?.selector || ':root';
+
+  // Undo, for the things this sheet writes.
+  //
+  // These edits do not go through the page model — they rewrite stylesheets on
+  // disk — so ⌘Z would step straight past them to the last layout change unless
+  // each one hands the app a way back. Deleting a group in particular is one
+  // keystroke away from being gone, and it was.
+  //
+  // A single-file edit remembers the file as it was and as it became: writing
+  // either one back IS the undo (and the redo), which is exact and needs no
+  // second implementation of the edit to run backwards.
+  const fileText = useCallback(
+    async (rel) => {
+      const result = await bridge('readStyleFile', `${project.path}/${rel}`);
+      return typeof result?.css === 'string' ? result.css : null;
+    },
+    [project.path]
+  );
+  const putFileText = useCallback(
+    async (rel, css) => {
+      await bridge('writeStyleFile', { filePath: `${project.path}/${rel}`, css });
+      await refresh();
+    },
+    [project.path, refresh]
+  );
+  /** Run a one-file edit and put it on the undo stack. `run` returns false to skip. */
+  const writeWithUndo = useCallback(
+    async (rel, label, run) => {
+      const before = rel ? await fileText(rel) : null;
+      const ok = await run();
+      if (ok === false || before == null) return;
+      const after = await fileText(rel);
+      if (after == null || after === before) return;
+      onRecordUndo?.({
+        label,
+        undo: () => putFileText(rel, before),
+        redo: () => putFileText(rel, after),
+      });
+    },
+    [fileText, putFileText, onRecordUndo]
+  );
 
   const save = useCallback(
     async (cell, value) => {
@@ -356,30 +423,39 @@ export default function VariablesView({ project, selected, hidden, onClose, show
 
   // Dragging a row moves the declaration inside its rule — a row in a table of
   // modes is one name in several rules, so it moves in each of them.
+  // A drop is either variables moving between groups, or a heading moving
+  // between variables — which is the same file in both cases, so the same undo.
   const move = useCallback(
-    async (rows, from, to) => {
-      const target = to > from ? rows[to] : rows[to] ?? null; // land in front of this row
-      const source = rows[from];
-      if (!source || source === target) return;
-      const moves = [];
-      source.cells.forEach((cell, index) => {
-        if (!cell) return;
-        const landing = target ? target.cells[index] : null;
-        moves.push({
-          file: cell.file,
-          selector: cell.selector,
-          name: cell.name,
-          // Moving down lands after the row it passed, which is the same as
-          // landing in front of the one after it — or at the end.
-          target: landing ? landing.name : null,
+    async (slots, from, to) => {
+      const plan = dropPlan(slots, from, to);
+      if (!plan) return;
+      if (plan.kind === 'rows') {
+        if (!plan.moves.length) return;
+        await writeWithUndo(plan.moves[0].file, 'the move', async () => {
+          const result = await bridge('moveCssVariables', { projectPath: project.path, moves: plan.moves });
+          if (!result.ok) showToast?.(result.error || 'Could not move that.', 'error');
+          await refresh();
+          return result.ok;
         });
+        return;
+      }
+      const anchor = plan.block.rows.map((row) => row.cells.find(Boolean)).find(Boolean);
+      await writeWithUndo(fileRef.current?.rel, 'the group', async () => {
+        const result = await bridge('moveCssHeading', {
+          projectPath: project.path,
+          file: fileRef.current?.rel,
+          selector: anchor?.selector || firstSelectorRef.current,
+          start: plan.block.titleStart,
+          end: plan.block.titleEnd,
+          expect: plan.block.title,
+          before: plan.before,
+        });
+        if (!result.ok) showToast?.(result.error || 'Could not move that.', 'error');
+        await refresh();
+        return result.ok;
       });
-      if (!moves.length) return;
-      const result = await bridge('moveCssVariables', { projectPath: project.path, moves });
-      if (!result.ok) showToast?.(result.error || 'Could not move that.', 'error');
-      await refresh();
     },
-    [project.path, refresh, showToast]
+    [project.path, refresh, showToast, writeWithUndo]
   );
 
   // Dragging a group moves everything under its heading — the comment included
@@ -432,6 +508,115 @@ export default function VariablesView({ project, selected, hidden, onClose, show
       await refresh();
     },
     [project.path, refresh, showToast]
+  );
+
+  // Renaming a variable — or a group of them, which is the same thing done to
+  // every member at once. A name is not held anywhere but in the text that
+  // declares and reads it, so this is one call that rewrites all of it; the
+  // panel reloads from the files afterwards either way.
+  const rename = useCallback(
+    async (renames) => {
+      if (!renames?.length) return true;
+      const result = await bridge('renameCssVariables', { projectPath: project.path, renames });
+      if (!result.ok) {
+        showToast?.(result.error || 'Could not rename that.', 'error');
+        await refresh();
+        return false;
+      }
+      // A rename reaches as many files as mention the name, so its inverse is
+      // not a file to put back — it is the same rename read backwards.
+      const back = renames.map(({ from, to }) => ({ from: to, to: from }));
+      const apply = async (list) => {
+        await bridge('renameCssVariables', { projectPath: project.path, renames: list });
+        await refresh();
+      };
+      onRecordUndo?.({
+        label: renames.length > 1 ? 'the group rename' : 'the rename',
+        undo: () => apply(back),
+        redo: () => apply(renames),
+      });
+      await refresh();
+      return true;
+    },
+    [project.path, refresh, showToast, onRecordUndo]
+  );
+
+  // A heading that is a comment in the file rather than a name its rows share.
+  // Renaming it writes those words; nothing else in the project refers to them,
+  // so unlike a variable's name this reaches exactly one place.
+  const retitleOnce = useCallback(
+    async (block, title) => {
+      const result = await bridge('setCssSectionTitle', {
+        projectPath: project.path,
+        file: file?.rel,
+        start: block.titleStart,
+        end: block.titleEnd,
+        expect: block.title,
+        title,
+      });
+      if (!result.ok) {
+        showToast?.(result.error || 'Could not rename that.', 'error');
+        await refresh();
+        return false;
+      }
+      await refresh();
+      return true;
+    },
+    [project.path, file?.rel, refresh, showToast]
+  );
+
+  const retitle = useCallback(
+    async (block, title) => {
+      let ok = true;
+      await writeWithUndo(file?.rel, 'the heading', async () => {
+        ok = await retitleOnce(block, title);
+        return ok;
+      });
+      return ok;
+    },
+    [file?.rel, writeWithUndo, retitleOnce]
+  );
+
+  // Another heading, written directly above this one — so the new group starts
+  // empty, with nothing of this one's in it. Its variables are the ones you put
+  // there afterwards, which is what an empty group is for.
+  const duplicateSection = useCallback(
+    async (block) => {
+      const anchor = block.rows.map((row) => row.cells.find(Boolean)).find(Boolean);
+      await writeWithUndo(file?.rel, 'the group', async () => {
+        const result = await bridge('addCssSection', {
+          projectPath: project.path,
+          file: file?.rel,
+          selector: anchor?.selector,
+          title: `${block.title} copy`,
+          at: block.titleStart,
+        });
+        if (!result.ok) showToast?.(result.error || 'Could not duplicate that.', 'error');
+        await refresh();
+        return result.ok;
+      });
+    },
+    [project.path, file?.rel, refresh, showToast, writeWithUndo]
+  );
+
+  // Deleting a heading deletes the comment and nothing else: its variables join
+  // the group above, which is what removing a line between two runs does.
+  const deleteSection = useCallback(
+    async (block) => {
+      await writeWithUndo(file?.rel, 'deleting the group', async () => {
+        const result = await bridge('removeCssSection', {
+          projectPath: project.path,
+          file: file?.rel,
+          start: block.titleStart,
+          end: block.titleEnd,
+          expect: block.title,
+        });
+        if (!result.ok) showToast?.(result.error || 'Could not delete that.', 'error');
+        await refresh();
+        return result.ok;
+      });
+    },
+    [project.path, file?.rel, refresh, showToast, writeWithUndo]
   );
 
   // What the accessibility check makes of a value right now — the file's values
@@ -506,6 +691,10 @@ export default function VariablesView({ project, selected, hidden, onClose, show
             onMove={move}
             onMoveGroup={moveGroup}
             onAdd={add}
+            onRename={rename}
+            onRetitle={retitle}
+            onDuplicateSection={duplicateSection}
+            onDeleteSection={deleteSection}
             fluidOf={fluidOf}
             onDraft={noteDraft}
           />
@@ -577,10 +766,249 @@ function stemOf(block) {
   return row.name.slice(0, row.name.length - row.label.length) || '--';
 }
 
-function Sheet({ blocks, group, onSave, onMove, onMoveGroup, onAdd, fluidOf, onDraft }) {
-  const sections = useListReorder({
-    count: blocks.length,
-    onMove: (from, to) => onMoveGroup?.(blocks, from, to),
+// The heading's own menu.
+//
+// A heading is a comment in the stylesheet, and the three things you can do to
+// a comment are all here: change the words, put another one below (which splits
+// the run of variables under it into two groups), and take it away — which
+// leaves its variables where they are and folds them into the group above.
+//
+// Portaled and positioned against the button, because the sheet scrolls in both
+// directions and a menu inside it would be cropped by whichever edge it met.
+function SectionMenu({ onRename, onDuplicate, onDelete }) {
+  const [open, setOpen] = useState(false);
+  const [box, setBox] = useState(null);
+  const buttonRef = useRef(null);
+  const menuRef = useRef(null);
+  useDismiss(menuRef, open, () => setOpen(false));
+
+  const show = () => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const place = popupBox(rect, 130, window.innerHeight);
+    setBox({ left: rect.right - 150, ...place });
+    setOpen(true);
+  };
+  const run = (action) => () => { setOpen(false); action?.(); };
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        className={`vars-section-menu ${open ? 'is-open' : ''}`}
+        title="Group options"
+        aria-label="Group options"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(e) => { e.stopPropagation(); if (open) setOpen(false); else show(); }}
+      >
+        <MoreIcon size={13} />
+      </button>
+      {open && box
+        ? createPortal(
+            <div
+              ref={menuRef}
+              className="vars-menu"
+              role="menu"
+              style={{ position: 'fixed', left: box.left, top: box.top, bottom: box.bottom, maxHeight: box.maxHeight }}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <button type="button" role="menuitem" className="vars-menu-item" onClick={run(onRename)}>
+                <PencilIcon size={13} /> Rename
+              </button>
+              <button type="button" role="menuitem" className="vars-menu-item" onClick={run(onDuplicate)}>
+                <CopyIcon size={13} /> Duplicate
+              </button>
+              <button type="button" role="menuitem" className="vars-menu-item is-danger" onClick={run(onDelete)}>
+                <TrashIcon size={13} /> Delete
+              </button>
+            </div>,
+            document.body
+          )
+        : null}
+    </>
+  );
+}
+
+// What a drop means, as file edits.
+//
+// `slots` is every row in the sheet with a slot at the end of each group (see
+// Sheet); `from` is the row being dragged and `to` is where the pointer let go.
+// A row lands IN FRONT OF the next real row at or after that point — which is
+// what carries it into another group, since a group is only the run of lines
+// between two comments. Past the last row of all, it lands at the end of the
+// rule, which is inside the last group.
+//
+// One move per column: a row in a table of modes is one name declared in
+// several rules, and it has to move in each of them or the modes fall out of
+// step with each other.
+export function dropPlan(slots, from, to) {
+  const source = slots?.[from];
+  if (!source) return null;
+  // Where it lands: in front of the next real row at or after the drop point.
+  let landing = null;
+  for (let at = to; at < slots.length; at++) {
+    if (slots[at].kind === 'row') { landing = slots[at]; break; }
+  }
+  if (source.kind === 'heading') {
+    // A heading that has not actually moved: it is already the thing directly
+    // above `landing`.
+    const here = slots.indexOf(source);
+    if (to === here || to === here + 1) return null;
+    return { kind: 'heading', block: source.block, before: landing ? landing.row.name : null };
+  }
+  if (source.kind !== 'row') return null;
+  return { kind: 'rows', moves: movesForDrop(slots, from, to) };
+}
+
+export function movesForDrop(slots, from, to) {
+  const source = slots?.[from];
+  if (!source || source.kind !== 'row') return [];
+  // The next thing in the sheet that is a line in the file: a variable, or a
+  // HEADING. Headings count, and this is the whole of the bug they fix — a group
+  // ends at its next comment, so a drop at the end of a group that lands "in
+  // front of the next variable" steps over that comment and into the group
+  // after it. Dropped into an empty group, the variable went somewhere else
+  // entirely.
+  let landing = null;
+  for (let at = to; at < slots.length; at++) {
+    if (slots[at].kind === 'row' || slots[at].kind === 'heading') { landing = slots[at]; break; }
+  }
+  if (landing?.kind === 'row' && landing.row === source.row) return [];
+  return source.row.cells
+    .map((cell, index) => {
+      if (!cell) return null;
+      // A heading is a place in the text rather than a name to land in front of.
+      // Only a heading the panel read out of a comment HAS such a place; the
+      // headings of a modes table are shared name prefixes, and a run there is
+      // bounded by declarations, so the name is the right answer.
+      if (landing?.kind === 'heading') {
+        if (typeof landing.block.titleStart === 'number') {
+          return { file: cell.file, selector: cell.selector, name: cell.name, at: landing.block.titleStart };
+        }
+        const firstRow = landing.block.rows.find((row) => row.cells[index]);
+        return { file: cell.file, selector: cell.selector, name: cell.name, target: firstRow ? firstRow.cells[index].name : null };
+      }
+      const target = landing ? landing.row.cells[index] : null;
+      // Landing in front of nothing is the end of the rule.
+      return { file: cell.file, selector: cell.selector, name: cell.name, target: target ? target.name : null };
+    })
+    .filter(Boolean);
+}
+
+// A name you can rename by clicking it.
+//
+// A variable's name and a group's heading are both text on a row that also
+// drags, so a press has two meanings and the field has to pick one: a click
+// opens it, and once open the drag handlers are out of the way. It selects what
+// is there because a rename usually replaces the name rather than tweaking it,
+// and Escape puts back what it started with.
+function EditableName({ value, onRename, className, title, openSignal, children }) {
+  const [editing, setEditing] = useState(false);
+  // The menu's Rename opens the same field the label does: it bumps a counter,
+  // and the field takes that as "open now" rather than owning a second way in.
+  const seen = useRef(openSignal);
+  useEffect(() => {
+    if (openSignal === seen.current) return;
+    seen.current = openSignal;
+    setText(value);
+    setEditing(true);
+  }, [openSignal, value]);
+  const [text, setText] = useState(value);
+  const inputRef = useRef(null);
+  const done = useRef(false);
+
+  useEffect(() => {
+    if (!editing) return undefined;
+    done.current = false;
+    const el = inputRef.current;
+    el?.focus();
+    el?.select();
+    return undefined;
+  }, [editing]);
+
+  const commit = async () => {
+    if (done.current) return;
+    done.current = true;
+    const next = text.trim();
+    setEditing(false);
+    if (!next || next === value) { setText(value); return; }
+    // Put the old name back if the rename is refused — the sheet reloads from
+    // the file either way, but the field would otherwise sit there showing a
+    // name the project does not have.
+    const ok = await onRename?.(next);
+    if (!ok) setText(value);
+  };
+  const cancel = () => { done.current = true; setEditing(false); setText(value); };
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className={`vars-rename ${className || ''}`}
+        // The name fills the row, so it is also where a drag starts. Press and
+        // move to drag the row; press and release to rename it.
+        data-drag-through=""
+        title={title ? `${title} — drag to move, click to rename` : 'Click to rename'}
+        onClick={() => { setText(value); setEditing(true); }}
+      >
+        {children ?? value}
+      </button>
+    );
+  }
+  return (
+    <input
+      ref={inputRef}
+      className={`vars-rename-input ${className || ''}`}
+      value={text}
+      spellCheck={false}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (SAVE_ON.includes(e.key)) { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+      }}
+    />
+  );
+}
+
+function Sheet({ blocks, group, onSave, onMove, onMoveGroup, onAdd, onRename, onRetitle, onDuplicateSection, onDeleteSection, fluidOf, onDraft }) {
+  // Dragging a variable is one gesture across the whole sheet rather than one
+  // per group. A group is a run of lines between two comments in the same rule,
+  // so moving a variable INTO a group is the same file edit as moving it within
+  // one — but a drag confined to its own table could only ever land in the table
+  // it started in, and a drop anywhere else fell through to "the end".
+  //
+  // Each group contributes its rows plus one slot at its end (the "New variable"
+  // line), so a group with no rows of its own is still somewhere you can drop.
+  // A heading is in the list too, and drags on its own: moving a comment up
+  // past three variables is how those three come to be under it. So the slots
+  // are, per group: its heading, its rows, and one at its end.
+  const slots = useMemo(() => {
+    const list = [];
+    blocks.forEach((block, bi) => {
+      if (block.title != null) list.push({ kind: 'heading', block, bi });
+      block.rows.forEach((row) => list.push({ kind: 'row', block, row, bi }));
+      list.push({ kind: 'end', block, bi });
+    });
+    return list;
+  }, [blocks]);
+  // Where each group's slots begin, and where its rows begin inside that.
+  const slotOffsets = useMemo(() => {
+    const out = [];
+    let at = 0;
+    blocks.forEach((block) => {
+      const head = block.title != null ? 1 : 0;
+      out.push({ head: at, rows: at + head });
+      at += head + block.rows.length + 1;
+    });
+    return out;
+  }, [blocks]);
+  const rowsDrag = useListReorder({
+    count: slots.length,
+    onMove: (from, to) => onMove?.(slots, from, to),
   });
   // Owned here rather than by any one table, for the same reason the section
   // drag is: what it coordinates is the tables against each other.
@@ -645,8 +1073,17 @@ function Sheet({ blocks, group, onSave, onMove, onMoveGroup, onAdd, fluidOf, onD
           group={group}
           onSave={onSave}
           onMove={onMove}
-          sectionDrag={{ props: sections.rowProps(index), className: sections.rowClass(index) }}
+          sectionDrag={{
+            props: block.title != null ? rowsDrag.rowProps(slotOffsets[index].head) : {},
+            className: block.title != null ? rowsDrag.rowClass(slotOffsets[index].head) : '',
+          }}
           onAdd={onAdd}
+          onRename={onRename}
+          onRetitle={onRetitle}
+          onDuplicateSection={onDuplicateSection}
+          onDeleteSection={onDeleteSection}
+          rowsDrag={rowsDrag}
+          slotOffset={slotOffsets[index].rows}
           fluidOf={fluidOf}
           onDraft={onDraft}
           scrollSync={scrollSync}
@@ -664,7 +1101,7 @@ function Sheet({ blocks, group, onSave, onMove, onMoveGroup, onAdd, fluidOf, onD
 // it is in — a new row under `line-height` is `--line-height-<what you type>`,
 // under `h1…h6` it is that property on every one of them — so what gets typed
 // here is the part that is not already decided.
-function NewVariable({ block, columns, onAdd, template }) {
+function NewVariable({ block, columns, onAdd, template, slotProps, dropping }) {
   const [typing, setTyping] = useState(false);
   const [word, setWord] = useState('');
   const inputRef = useRef(null);
@@ -682,7 +1119,7 @@ function NewVariable({ block, columns, onAdd, template }) {
 
   if (!typing) {
     return (
-      <div className="vars-row vars-add" style={{ gridTemplateColumns: template }}>
+      <div className={`vars-row vars-add ${dropping ? 'drop-before' : ''}`} style={{ gridTemplateColumns: template }} {...(slotProps || {})}>
         <span />
         <button className="vars-add-btn" onClick={() => setTyping(true)}>
           <PlusIcon size={11} /> New variable
@@ -692,7 +1129,7 @@ function NewVariable({ block, columns, onAdd, template }) {
   }
 
   return (
-    <div className="vars-row vars-add" style={{ gridTemplateColumns: template }}>
+    <div className={`vars-row vars-add ${dropping ? 'drop-before' : ''}`} style={{ gridTemplateColumns: template }} {...(slotProps || {})}>
       <span />
       <span className="vars-add-field">
         <span className="vars-add-stem">{block.kind === 'matrix' ? '…-' : stemOf(block)}</span>
@@ -720,7 +1157,38 @@ function NewVariable({ block, columns, onAdd, template }) {
   );
 }
 
-function Table({ block, group, onSave, onMove, onAdd, fluidOf, onDraft, sectionDrag, scrollSync, showHead = true }) {
+// The prefix a group's heading stands for, or null when the heading is not a
+// prefix at all. A file with one rule takes its headings from the comments in
+// it — `/* Radius */` is a note above some lines, not part of their names — and
+// renaming that is editing a comment, which is a different thing from renaming
+// a variable. Only a heading every row is actually named after can be renamed
+// here.
+function sectionPrefix(block) {
+  const title = block.title;
+  if (!title || block.kind === 'matrix') return null;
+  const rows = block.rows.filter((r) => r.name);
+  if (!rows.length) return null;
+  return rows.every((r) => r.name.startsWith(`--${title}-`)) ? title : null;
+}
+
+// Renaming one row: in a table of modes the row is one name declared in several
+// rules, so it is a single rename; in a matrix the row is one property of every
+// column (`--h1-size`, `--h2-size`), so it is one rename per column.
+function rowRenames(block, row, typed) {
+  const next = typed.trim().replace(/^--/, '');
+  if (!next) return [];
+  if (block.kind === 'matrix') {
+    return row.cells
+      .filter(Boolean)
+      .map((cell) => ({ from: cell.name, to: `--${cell.name.slice(2, cell.name.length - row.label.length - 1)}-${next}` }))
+      .filter((r) => r.from !== r.to);
+  }
+  if (!row.name) return [];
+  const to = `${stemOf(block)}${next}`;
+  return to === row.name ? [] : [{ from: row.name, to }];
+}
+
+function Table({ block, group, onSave, onAdd, onRename, onRetitle, onDuplicateSection, onDeleteSection, fluidOf, onDraft, sectionDrag, scrollSync, rowsDrag, slotOffset = 0, showHead = true }) {
   // A matrix carries its own columns (the family's prefixes); everything else
   // uses the group's (one per rule).
   const columns = block.kind === 'matrix' ? block.columns : group.columns;
@@ -742,10 +1210,11 @@ function Table({ block, group, onSave, onMove, onAdd, fluidOf, onDraft, sectionD
   // panel's edge and its rule runs edge to edge.
   const labelTemplate = LABEL_TRACKS;
   const valueTemplate = valueTracks(columns.length);
-  const reorder = useListReorder({
-    count: block.rows.length,
-    onMove: (from, to) => onMove?.(block.rows, from, to),
-  });
+  // This table's slice of the sheet-wide drag (see Sheet).
+  const reorder = {
+    rowProps: (index) => rowsDrag.rowProps(slotOffset + index),
+    rowClass: (index) => rowsDrag.rowClass(slotOffset + index),
+  };
   // A row is two elements now, so hovering one has to light the other: :hover
   // can't reach across, and the highlight is what ties a name to its values.
   const [hovered, setHovered] = useState(null);
@@ -759,6 +1228,11 @@ function Table({ block, group, onSave, onMove, onAdd, fluidOf, onDraft, sectionD
     () => scrollSync?.register(columns.length, rowsRef.current),
     [scrollSync, columns.length]
   );
+  // Whether this table's heading is a name its rows share (renameable) or a
+  // comment above them (not — see sectionPrefix).
+  const prefix = sectionPrefix(block);
+  // Bumped by the menu's Rename, which opens the field the heading already has.
+  const [renameSignal, setRenameSignal] = useState(0);
   const rowProps = (index) => ({
     className: `vars-row ${reorder.rowClass(index)} ${hovered === index ? 'is-hover' : ''}`,
     onMouseEnter: () => setHovered(index),
@@ -783,7 +1257,37 @@ function Table({ block, group, onSave, onMove, onAdd, fluidOf, onDraft, sectionD
             <span className="vars-grip" title="Drag to reorder">
               <DragIcon size={11} />
             </span>
-            <span className="vars-section-text">{block.title}</span>
+            {prefix ? (
+              // A heading its rows are named after: renaming it renames them.
+              <EditableName
+                className="vars-section-text"
+                value={prefix}
+                title={prefix}
+                onRename={(next) => onRename?.(block.rows
+                  .filter((row) => row.name)
+                  .map((row) => ({ from: row.name, to: `--${next.trim().replace(/^--/, '')}-${row.label}` })))}
+              />
+            ) : block.titleStart != null ? (
+              // A heading that is a comment above the names: renaming it writes
+              // the comment, and the names underneath are its own business. Its
+              // menu carries the two things that are not renaming.
+              <>
+                <EditableName
+                  className="vars-section-text"
+                  value={block.title}
+                  title={block.title}
+                  openSignal={renameSignal}
+                  onRename={(next) => onRetitle?.(block, next)}
+                />
+                <SectionMenu
+                  onRename={() => setRenameSignal((n) => n + 1)}
+                  onDuplicate={() => onDuplicateSection?.(block)}
+                  onDelete={() => onDeleteSection?.(block)}
+                />
+              </>
+            ) : (
+              <span className="vars-section-text">{block.title}</span>
+            )}
           </h3>
         )}
         {showHead && (
@@ -808,11 +1312,24 @@ function Table({ block, group, onSave, onMove, onAdd, fluidOf, onDraft, sectionD
             </span>
             <div className="vars-name" title={row.name || row.label}>
               <VariableTypeIcon kind={(row.cells.find(Boolean) || {}).kind} />
-              <span className="vars-name-text">{row.label}</span>
+              <EditableName
+                className="vars-name-text"
+                value={row.label}
+                title={row.name || row.label}
+                onRename={(next) => onRename?.(rowRenames(block, row, next))}
+              />
             </div>
           </div>
         ))}
-        <NewVariable block={block} columns={columns} onAdd={onAdd} template={labelTemplate} />
+        {/* Also the drop slot for the end of this group — see Sheet. */}
+        <NewVariable
+          block={block}
+          columns={columns}
+          onAdd={onAdd}
+          template={labelTemplate}
+          slotProps={rowsDrag.slotProps(slotOffset + block.rows.length)}
+          dropping={rowsDrag.dropIndex === slotOffset + block.rows.length}
+        />
       </div>
 
       <div className="vars-scroll">

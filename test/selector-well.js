@@ -205,6 +205,41 @@ const check = (what, condition, detail) => {
   check('the well fills once the answer (or its absence) lands', panelChips().length === 1, panelChips().map((c) => c.textContent).join(','));
   check('and stops spinning', panelSpinner() == null);
 
+  // --- the well doesn't rearrange itself when the scan lands ------------------
+  //
+  // Loading and loaded have to occupy the same box: the spinner stands as tall as
+  // the chips it stands in for, and the globals checkbox holds its row whether or
+  // not there is anything to reveal. Both used to appear/grow on arrival, which
+  // moved everything under them just as the panel became usable.
+  {
+    const css = fs.readFileSync(
+      path.join(__dirname, '..', 'src', 'style-panel', 'embed-editor.css'),
+      'utf8'
+    );
+    const chipHeight = /--embed-editor_chip-h:/.test(css);
+    check('a chip row has one stated height', chipHeight);
+    const loading = css.slice(css.indexOf('.embed-editor_selector-loading {'));
+    check(
+      'the spinner row is exactly that tall',
+      /min-height: var\(--embed-editor_chip-h\)/.test(loading.slice(0, loading.indexOf('}'))),
+      loading.slice(0, loading.indexOf('}'))
+    );
+    const src = fs.readFileSync(
+      path.join(__dirname, '..', 'src', 'style-panel', 'EmbedEditor.tsx'),
+      'utf8'
+    );
+    const check_ = src.slice(src.indexOf('embed-editor_globals-check'));
+    check(
+      'the globals checkbox is not conditional on having any',
+      !/\{globals\.length \? \(/.test(src),
+      'it still renders only when there are globals'
+    );
+    check(
+      'it disables itself instead when there are none',
+      /disabled=\{busy \|\| !globals\.length\}/.test(check_)
+    );
+  }
+
   if (failures.length) {
     console.error(`selector-well: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);

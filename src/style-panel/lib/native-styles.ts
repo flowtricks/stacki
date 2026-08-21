@@ -146,6 +146,10 @@ export function buildStyleContexts(
   /** Embed at-contexts where the selected element actually has styles. Custom
    *  queries and up-breakpoints only appear in the list when they're in here. */
   styledEmbedContexts: ReadonlySet<string> = new Set(),
+  /** At-contexts belonging to the file being written into — the open component's
+   *  own queries. They lead the custom-query group; ones reaching this element
+   *  from somewhere else in the project follow. */
+  ownContexts: ReadonlySet<string> = new Set(),
 ): StyleContext[] {
   const list: StyleContext[] = []
   const usedBp = new Set<BreakpointId>()
@@ -189,14 +193,18 @@ export function buildStyleContexts(
 
   return list
     .map((context, index) => ({ context, index }))
-    .sort((a, b) => rank(a.context) - rank(b.context) || a.index - b.index)
+    .sort((a, b) => rank(a.context, ownContexts) - rank(b.context, ownContexts) || a.index - b.index)
     .map((entry) => entry.context)
 }
 
-function rank(context: StyleContext): number {
+function rank(context: StyleContext, ownContexts: ReadonlySet<string>): number {
   if (context.key === '') return -1
   if (context.breakpoint) return BREAKPOINTS.findIndex((bp) => bp.id === context.breakpoint)
-  return 100 // non-breakpoint embed contexts (@container, custom @media) last
+  // Non-breakpoint embed contexts (@container, custom @media) come last — and
+  // among those, the open component's own queries come first. They're the ones
+  // being worked on; a query reaching this element from a project-wide stylesheet
+  // is further away in every sense.
+  return ownContexts.has(context.embedAtContext ?? '') ? 100 : 101
 }
 
 /**

@@ -38,16 +38,19 @@ const {
   writeGeneral,
   GENERAL,
 } = require('./jsCollections');
-const { importersOf, resolveImport } = require('./cmsRefs');
+const { aliasMap, importersOf, resolveImport } = require('./cmsRefs');
 const { readContentConfig, validateEntry, stopAllServices } = require('./contentConfig');
 const thumbs = require('./thumbs');
 const cssVars = require('./cssVars');
 const { readInjectedRoutes } = require('./injectedRoutes.js');
 const { createStarter } = require('./starter');
 const { openingBounds } = require('./windowBounds');
+const { componentFile } = require('./componentFile');
+const { componentUsage, instancesIn } = require('./componentUsage');
 const { listEntries, writeEntry, countEntries, coveredPaths } = require('./contentEntries');
 const { planRename, applyRename } = require('./contentRefs');
 const { mergeBranch, deleteBranch, switchBranch, resolveMerge } = require('./gitBranches');
+const { probeUrl } = require('./devProbe');
 const gitHistory = require('./gitHistory');
 const gitSnapshot = require('./gitSnapshot');
 const previewWorktree = require('./previewWorktree');
@@ -1310,18 +1313,30 @@ ipcMain.handle('project:scan', async (_e, projectPath) => {
 
   // Instance counts: how often each component is used across every .astro
   // file in src (pages, layouts, and other components).
-  const allSources = listAstroFiles(src).map((f) => {
+  const allSources = listAstroFiles(src).map((file) => {
     try {
-      return fs.readFileSync(f, 'utf8');
+      return { file, text: fs.readFileSync(file, 'utf8') };
     } catch {
-      return '';
+      return { file, text: '' };
     }
   });
   // Layouts are counted too: they show up in the palette alongside
   // components, so the instance line has to mean the same thing for both.
+  // Counted by the same function the "where is it used" list counts with —
+  // when the number and the list disagree, nothing says which one is wrong.
+  // That function counts under the name each FILE imports it as: a layout
+  // imported as `Layout` is never written `<BaseLayout>`, and counting the
+  // filename found none of them.
+  const importAliases = aliasMap(projectPath);
   for (const comp of [...components, ...layouts]) {
-    const re = new RegExp(`<${comp.name}[\\s/>]`, 'g');
-    comp.instances = allSources.reduce((n, s) => n + (s.match(re) || []).length, 0);
+    comp.instances = allSources.reduce(
+      (n, { file, text }) =>
+        n +
+        (path.resolve(file) === path.resolve(comp.path)
+          ? 0 // a file is not one of its own users
+          : instancesIn(text, { file, targetPath: comp.path, name: comp.name, aliases: importAliases })),
+      0
+    );
   }
 
   return { pages, layouts, components, pageFolders, trailingSlash: readTrailingSlash(projectPath) };
@@ -1570,8 +1585,21 @@ function resolveIdentifierDefaults(schema, source, filePath, projectPath) {
 let watcher = null;
 const selfWrites = new Map(); // absolute path -> timestamp of app-made write
 
+// A compile error replaces the site with the dev server's own error screen, and
+// that screen carries no HMR client — so when the mistake is fixed, nothing in
+// the preview hears about it and it sits on the error until someone presses
+// refresh. The app's own writes are deliberately invisible to the watcher
+// below, so this is the one place that sees every one of them: say that the
+// site may have changed, and let the renderer go and ask (see `dev:probe`).
+let pageChangeTimer = null;
+function notePageMayHaveChanged() {
+  clearTimeout(pageChangeTimer);
+  pageChangeTimer = setTimeout(() => send('page:maybe-changed', {}), 200);
+}
+
 function markSelfWrite(p) {
   selfWrites.set(path.resolve(p), Date.now());
+  notePageMayHaveChanged();
 }
 
 ipcMain.handle('watch:start', async (_e, projectPath) => {
@@ -1617,6 +1645,7 @@ ipcMain.handle('watch:start', async (_e, projectPath) => {
       if (wrote && Date.now() - wrote < 1000) return;
       clearTimeout(cssTimer);
       cssTimer = setTimeout(() => send('css:changed', {}), 200);
+      notePageMayHaveChanged();
       return;
     }
     if (!/\.(astro|md|mdx|html)$/i.test(name)) return;
@@ -1625,6 +1654,10 @@ ipcMain.handle('watch:start', async (_e, projectPath) => {
     const wrote = selfWrites.get(path.resolve(full));
     if (wrote && Date.now() - wrote < 1000) return;
     pending.add(full);
+    // Fixed in an editor rather than in here — the error screen's own "Open in
+    // editor" link leads straight there — so the preview needs the same nudge
+    // an in-app write gives it.
+    notePageMayHaveChanged();
     // The site changed, so its picture is out of date — but not urgently, and
     // not while the user is still typing.
     scheduleThumb(projectPath, 60000);
@@ -2205,6 +2238,47 @@ ipcMain.handle('css:moveVariables', async (_e, { projectPath, moves }) => {
   return last;
 });
 
+// A heading that is a comment rather than a shared name: renaming it rewrites
+// the comment, in place, the same way a value is written.
+ipcMain.handle('css:setSectionTitle', async (_e, { projectPath, ...edit }) => {
+  markSelfWrite(path.resolve(projectPath, edit.file));
+  const result = cssVars.setSectionTitle(projectPath, edit);
+  if (result.ok) send('css:changed', {});
+  return result;
+});
+
+// A heading is a line between declarations: removing it joins the runs either
+// side, and adding one splits them.
+ipcMain.handle('css:removeSection', async (_e, { projectPath, ...edit }) => {
+  markSelfWrite(path.resolve(projectPath, edit.file));
+  const result = cssVars.removeSection(projectPath, edit);
+  if (result.ok) send('css:changed', {});
+  return result;
+});
+
+ipcMain.handle('css:moveHeading', async (_e, { projectPath, ...edit }) => {
+  markSelfWrite(path.resolve(projectPath, edit.file));
+  const result = cssVars.moveHeading(projectPath, edit);
+  if (result.ok) send('css:changed', {});
+  return result;
+});
+
+ipcMain.handle('css:addSection', async (_e, { projectPath, ...edit }) => {
+  markSelfWrite(path.resolve(projectPath, edit.file));
+  const result = cssVars.addSection(projectPath, edit);
+  if (result.ok) send('css:changed', {});
+  return result;
+});
+
+// Renaming reaches every file that mentions the name, so it is one call rather
+// than one per file: the panel says which names become which, and either all of
+// them move or none does.
+ipcMain.handle('css:renameVariables', async (_e, { projectPath, renames }) => {
+  const result = cssVars.renameVariables(projectPath, { renames, markWrite: markSelfWrite });
+  if (result.ok) send('css:changed', {});
+  return result;
+});
+
 // One value, replaced where it sits. The old value is sent back with the new
 // one: if the file no longer says what the panel was showing, somebody else has
 // edited it and the offsets are meaningless.
@@ -2584,6 +2658,22 @@ ipcMain.handle('content:sampleEntry', async (_e, { devUrl, name, id }) => {
     return { entry: null, error: String(err?.message || err) };
   }
 });
+
+// Turn a piece of a page into a component of its own. The file is worked out
+// in componentFile.js; writing it belongs here, with every other write.
+ipcMain.handle('component:create', async (_e, opts) => {
+  const { path: target, rel, text } = componentFile(opts);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  markSelfWrite(target);
+  fs.writeFileSync(target, text, 'utf8');
+  return { path: target, rel, name: opts.name };
+});
+
+// Which files hold instances of a component — the list behind the palette's
+// "23 instances".
+ipcMain.handle('component:usage', async (_e, { projectPath, name, exclude }) =>
+  componentUsage({ projectPath, name, exclude })
+);
 
 ipcMain.handle('page:importPathFor', async (_e, { pagePath, targetPath, projectPath }) => {
   const rel = toPosix(path.relative(path.dirname(pagePath), targetPath));
@@ -3902,6 +3992,8 @@ function nodeVersionOf(bin) {
     return null;
   }
 }
+
+ipcMain.handle('dev:probe', (_e, url) => probeUrl(url));
 
 ipcMain.handle('dev:diagnose', async (_e, projectPath) => {
   const nodePath = resolveNodeBin();

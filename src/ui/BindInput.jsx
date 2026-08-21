@@ -15,13 +15,34 @@ import { deleteChipAtCaret } from './chipKeys.js';
 const esc = (text) =>
   String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-const chipHtml = (path) =>
-  `<span class="expr-chip" contenteditable="false" data-expr="${esc(path)}">${esc(path)}</span>`;
+// `data-expr` is what the chip WRITES; `data-full` is what it MEANS. They are
+// the same for an ordinary chip, and differ for one reached through a `?`:
+// `featured?.data.title` is drawn as `featured` · "?" · `.data.title`, and that
+// last chip writes `.data.title` while standing for `featured.data.title`. The
+// picker needs the second one to know which value is the current one.
+const chipHtml = (path, full) =>
+  `<span class="expr-chip" contenteditable="false" data-expr="${esc(path)}"${
+    full && full !== path ? ` data-full="${esc(full)}"` : ''
+  }>${esc(path)}</span>`;
 
-const partsToHtml = (parts) =>
-  (parts || [])
-    .map((p) => (p.expr !== undefined ? chipHtml(p.expr) : esc(p.text)))
+const partsToHtml = (parts) => {
+  // The path the chip before this one stood for, so a `.field` tail can be
+  // read as the whole thing it names.
+  let last = null;
+  let afterQuestion = false;
+  return (parts || [])
+    .map((p) => {
+      if (p.expr === undefined) {
+        afterQuestion = last !== null && p.text === '?';
+        return esc(p.text);
+      }
+      const full = afterQuestion && p.expr.startsWith('.') ? last + p.expr : p.expr;
+      last = full;
+      afterQuestion = false;
+      return chipHtml(p.expr, full);
+    })
     .join('');
+};
 
 // What is in the field now. Chips report the path they hold rather than the
 // text they show, and everything else is text.
@@ -116,6 +137,34 @@ const BindInput = forwardRef(function BindInput(
     // rather than replaced, so the text around it never moves.
     replace(chip, path) {
       if (!chip) return;
+      const full = chip.getAttribute('data-full');
+      if (full) {
+        // A chip reached through a `?` writes only its tail. Repointing it
+        // somewhere under the same value keeps the chain — the `?` is how the
+        // author chose to reach it and isn't ours to remove.
+        const base = full.slice(0, full.length - (chip.getAttribute('data-expr') || '').length);
+        if (path.startsWith(`${base}.`)) {
+          const tail = path.slice(base.length);
+          chip.setAttribute('data-expr', tail);
+          chip.setAttribute('data-full', path);
+          chip.textContent = tail;
+          emit();
+          return;
+        }
+        // Somewhere else entirely: the chain it was reached through goes with
+        // it, or the field would read `featured?other.thing`.
+        const punct = chip.previousSibling;
+        const baseChip = punct?.previousSibling;
+        if (
+          punct?.nodeType === Node.TEXT_NODE &&
+          (punct.nodeValue || '').trim() === '?' &&
+          baseChip?.classList?.contains('expr-chip')
+        ) {
+          punct.remove();
+          baseChip.remove();
+        }
+      }
+      chip.removeAttribute('data-full');
       chip.setAttribute('data-expr', path);
       chip.textContent = path;
       emit();

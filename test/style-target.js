@@ -35,6 +35,7 @@ const check = (what, condition, detail) => {
         export { resolveTarget } from './lib/webflow'
         export { setHost, onHostChange, getHost } from './lib/host'
         export { matchSelectorList } from './lib/selectors'
+        export { defaultSelectorTokens, tokensToSelector } from './lib/element-tokens'
       `,
       resolveDir: path.join(__dirname, '..', 'src', 'style-panel'),
       loader: 'ts',
@@ -52,7 +53,8 @@ const check = (what, condition, detail) => {
   global.document = dom.window.document;
   dom.window.avb = {};
 
-  const { resolveTarget, setHost, onHostChange, getHost, matchSelectorList } = require(bundlePath);
+  const { resolveTarget, setHost, onHostChange, getHost, matchSelectorList, defaultSelectorTokens, tokensToSelector } =
+    require(bundlePath);
   setHost({ nodes: [], projectPath: '/project', files: [], astroFiles: [] });
 
   // A layout: a component call in the source, `<html class="theme-dark">` on
@@ -150,6 +152,61 @@ const check = (what, condition, detail) => {
     setHost({ historyTick: before + 2 });
     await settle();
     check('and nothing after unsubscribing', notified === beforeOff, `${notified} vs ${beforeOff}`);
+  }
+
+  // ── What a newly selected element is styled through ──────────────────────────
+  //
+  // Before anyone picks a chip, the panel has to target something. It used to be
+  // every class the element has, joined: Webflow's model, where a combo is itself
+  // a thing to style. Writing CSS to a file it meant the first property set on an
+  // element created `.layout.card.theme-dark.flex-grow.theme-brand { … }` — and
+  // because the combo then counted as a styled selector, everything after it
+  // landed there too. A five-class rule nothing can reuse, assembled one property
+  // at a time from a default nobody chose.
+  {
+    const tag = (name) => ({ name: `tag:${name}`, label: name, kind: 'tag' });
+    const cls = (name) => ({ name: `class:${name}`, label: name, kind: 'class' });
+    const attr = (name) => ({ name: `attr:${name}`, label: name, kind: 'attribute' });
+    const target = (tokens) => tokensToSelector(defaultSelectorTokens(tokens), tokens);
+
+    const lumos = [tag('div'), cls('layout'), cls('card'), cls('theme-dark'), cls('flex-grow'), cls('theme-brand')];
+    check(
+      'an element with five classes is styled through the first',
+      target(lumos) === '.layout',
+      target(lumos)
+    );
+    check('one class is that class', target([tag('div'), cls('hero')]) === '.hero', target([tag('div'), cls('hero')]));
+    check(
+      'a combo is never the default — it takes picking one',
+      !target(lumos).includes('.card'),
+      target(lumos)
+    );
+
+    // The rest of the ladder, unchanged: no classes falls to the last data
+    // attribute, then to the tag, and an element with nothing has nothing.
+    const dataOnly = [tag('section'), attr('data-theme'), attr('data-variant')];
+    check('no classes falls to the last data attribute', target(dataOnly) === '[data-variant]', target(dataOnly));
+    check('and then to the tag', target([tag('section')]) === 'section', target([tag('section')]));
+    check('nothing at all targets nothing', target([]) === '', JSON.stringify(target([])));
+
+    // A component instance renders markup this side can't see, so it has no tag
+    // — its classes are all there is.
+    const noTag = [cls('card_component'), cls('is-featured')];
+    check('a tagless element still targets its first class', target(noTag) === '.card_component', target(noTag));
+
+    // …and the panel actually asks.
+    const editor = fs.readFileSync(
+      path.join(__dirname, '..', 'src', 'style-panel', 'EmbedEditor.tsx'),
+      'utf8'
+    );
+    check('the panel defaults through it', /const next = defaultSelectorTokens\(tokens\)/.test(editor));
+    // The upgrade that follows looks for a class that is already styled — across
+    // every class, not just the defaulted one, or an element whose first class
+    // has no rules would fall through to a selector picked by specificity.
+    check(
+      'and the upgrade still searches every class',
+      /const primaryStyled = tokens[\s\S]{0,120}kind === 'class'/.test(editor)
+    );
   }
 
   if (failures.length) {

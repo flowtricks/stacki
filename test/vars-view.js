@@ -103,6 +103,8 @@ const STYLESHEET = `/* =========================================================
   global.HTMLInputElement = dom.window.HTMLInputElement;
 
   const toasts = [];
+  // What the sheet hands the app to undo with.
+  const commands = [];
   dom.window.avb = {
     cssVariables: async () => cssVars.readVariables(dir),
     addCssVariables: async ({ adds }) => {
@@ -120,12 +122,20 @@ const STYLESHEET = `/* =========================================================
       }
       return last;
     },
+    renameCssVariables: async ({ renames }) => cssVars.renameVariables(dir, { renames }),
+    setCssSectionTitle: async ({ projectPath, ...edit }) => cssVars.setSectionTitle(dir, edit),
+    removeCssSection: async ({ projectPath, ...edit }) => cssVars.removeSection(dir, edit),
+    addCssSection: async ({ projectPath, ...edit }) => cssVars.addSection(dir, edit),
+    moveCssHeading: async ({ projectPath, ...edit }) => cssVars.moveHeading(dir, edit),
+    writeStyleFile: async ({ filePath, css }) => { fs.writeFileSync(String(filePath), css); return { ok: true }; },
     onCssChanged: () => () => {},
     // What the style panel's variable picker reads. The sheet borrows that
     // control for its fields, so the chip only resolves if this answers.
     listStyleFiles: async () => ({ files: [{ path: file, rel: 'src/styles/tokens.css', name: 'tokens.css' }] }),
     listAstroStyleFiles: async () => ({ files: [] }),
-    readStyleFile: async () => ({ css: fs.readFileSync(file, 'utf8') }),
+    // The picker asks for the stylesheet it knows about; the undo path asks for
+    // whichever file an edit touched, by path.
+    readStyleFile: async (p) => ({ css: fs.readFileSync(typeof p === 'string' ? p : file, 'utf8') }),
   };
 
   const React = require('react');
@@ -150,6 +160,7 @@ const STYLESHEET = `/* =========================================================
           hidden: false,
           onClose: () => {},
           showToast: (m) => toasts.push(m),
+          onRecordUndo: (cmd) => commands.push(cmd),
         })
       );
       await settle(40);
@@ -714,41 +725,6 @@ const STYLESHEET = `/* =========================================================
       heads.map((h) => h.textContent).join('|')
     );
 
-    // Swatches sits above Heading styles; drag it below.
-    const swatches = heads.find((h) => h.textContent.includes('Swatches'));
-    const headings = heads.find((h) => h.textContent.includes('Heading styles'));
-    const box = (node, top) => {
-      node.getBoundingClientRect = () => ({ top, bottom: top + 20, height: 20, left: 0, right: 300, width: 300 });
-    };
-    box(swatches, 100);
-    box(headings, 200);
-
-    await act(async () => {
-      swatches.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientY: 106 }));
-      await settle(10);
-    });
-    await act(async () => {
-      dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { bubbles: true, clientY: 150 }));
-      dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { bubbles: true, clientY: 260 }));
-      await settle(10);
-    });
-    await act(async () => {
-      dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, clientY: 260 }));
-      await settle(90);
-    });
-
-    const written = fs.readFileSync(file, 'utf8');
-    check(
-      'the group moves below the one it was dragged past',
-      written.indexOf('/* Swatches */') > written.indexOf('/* Heading styles */'),
-      written
-    );
-    check('its heading goes with it', (written.match(/\/\* Swatches \*\//g) || []).length === 1);
-    check(
-      'and so does every variable under it',
-      written.indexOf('--light-100') > written.indexOf('--h1-margin-top'),
-      written
-    );
   }
 
   // --- adding a variable to a group ------------------------------------------
@@ -839,6 +815,296 @@ const STYLESHEET = `/* =========================================================
     await settle(30);
   });
   check('search narrows to matching rows', rowNames().join('|') === 'background|text', rowNames().join('|'));
+
+  // --- renaming -------------------------------------------------------------
+  //
+  // A name in this sheet is a name in the file, and the file is what other rules
+  // read. So renaming one here is renaming it everywhere — and what these check
+  // is the whole way through: the click that turns a label into a field, and the
+  // file afterwards.
+  // The search above is still narrowing the sheet; renaming needs all of it.
+  await act(async () => {
+    const search = find('.vars-search');
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
+    setter.call(search, '');
+    search.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    await settle(30);
+  });
+  await show(0);
+  const clickName = async (label) => {
+    const button = all('.vars-name .vars-rename').find((b) => b.textContent === label);
+    if (!button) return null;
+    await act(async () => {
+      button.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await settle(20);
+    });
+    return find('.vars-name .vars-rename-input');
+  };
+  const typeInto = async (input, text, key = 'Enter') => {
+    // A missing field is a failure to report, not a crash to read a stack from:
+    // every check after it would otherwise be lost.
+    if (!input) { check(`there is a field to type "${text}" into`, false); return; }
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
+      setter.call(input, text);
+      input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+      input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      await settle(60);
+    });
+  };
+
+  {
+    const field = await clickName('line-height');
+    check('clicking a name opens a field', !!field, container.innerHTML.includes('vars-rename-input') ? 'somewhere else' : 'no field');
+    check('with the name in it', field?.value === 'line-height', field?.value);
+
+    await typeInto(field, 'leading');
+    const css = fs.readFileSync(file, 'utf8');
+    check('the file takes the new name', css.includes('--h1-leading: 1;'), css.match(/--h1-[a-z-]+: 1;/)?.[0]);
+    check('every column of the row is renamed', css.includes('--h2-leading: 1.1;'), css.match(/--h2-[a-z-]+: 1.1;/)?.[0]);
+    check('and the sheet shows it', rowNames().includes('leading'), rowNames().join('|'));
+    check('the old name is gone', !css.includes('--h1-line-height'), css);
+  }
+
+  {
+    // A name that is already taken: refused, said so, and nothing written.
+    const before = fs.readFileSync(file, 'utf8');
+    const field = await clickName('margin-top');
+    await typeInto(field, 'leading');
+    check('a name already in use is refused', toasts.some((t) => /already exists/i.test(t)), toasts.join('|'));
+    check('and the file is untouched', fs.readFileSync(file, 'utf8') === before);
+    check('and the sheet still shows the old name', rowNames().includes('margin-top'), rowNames().join('|'));
+  }
+
+  {
+    // Escape leaves everything as it was.
+    const before = fs.readFileSync(file, 'utf8');
+    const field = await clickName('leading');
+    await typeInto(field, 'nope', 'Escape');
+    check('escape closes the field', !find('.vars-name .vars-rename-input'));
+    check('and renames nothing', fs.readFileSync(file, 'utf8') === before);
+  }
+
+  {
+    // The heading's menu: the two things that are not renaming. A heading is a
+    // line between runs of variables, so one of them splits a group and the
+    // other joins it back.
+    const openMenu = async (title) => {
+      const head = all('.vars-section').find((h) => h.textContent.includes(title));
+      const dots = head?.querySelector('.vars-section-menu');
+      if (!dots) return null;
+      await act(async () => {
+        dots.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await settle(20);
+      });
+      return [...dom.window.document.querySelectorAll('.vars-menu-item')];
+    };
+    // A missing menu or field is a failure to report rather than a stack to read:
+    // the checks after it are worth more than the crash.
+    const clickItem = async (items, at, what) => {
+      if (!items?.[at]) { check(`the menu offers ${what}`, false, JSON.stringify(items?.map((i) => i.textContent))); return false; }
+      await act(async () => {
+        items[at].dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await settle(80);
+      });
+      return true;
+    };
+    const items = await openMenu('Heading styles');
+    check('a heading has a menu', !!items, container.innerHTML.includes('vars-section-menu') ? 'no menu opened' : 'no button');
+    check('offering rename, duplicate and delete', items?.map((i) => i.textContent.trim()).join('|') === 'Rename|Duplicate|Delete', items?.map((i) => i.textContent.trim()).join('|'));
+
+    // Rename opens the same field clicking the name does.
+    await clickItem(items, 0, 'rename');
+    const field = find('.vars-section .vars-rename-input');
+    check('rename opens the heading field', field?.value === 'Heading styles', field?.value);
+    if (field) {
+      await act(async () => {
+        field.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await settle(20);
+      });
+    }
+
+    // Duplicate: a second heading, with the run's last variable under it.
+    const headings = () => all('.vars-fixed .vars-section').map((h) => h.textContent.trim());
+    const before = headings().length;
+    const dupItems = await openMenu('Swatches');
+    await clickItem(dupItems, 1, 'duplicate');
+    const css = fs.readFileSync(file, 'utf8');
+    check('duplicate writes another heading', css.includes('/* Swatches copy */'), css.slice(0, 300));
+    check('and the sheet grows a group', headings().length === before + 1, `${before} → ${headings().length}: ${headings().join('|')}`);
+    check('named after the one it came from', headings().includes('Swatches copy'), headings().join('|'));
+    // Above the group it came from, and empty: its variables are the ones you
+    // put in it, not a copy of somebody else's.
+    check('sitting above that group', headings().indexOf('Swatches copy') === headings().indexOf('Swatches') - 1, headings().join('|'));
+    const newTable = all('.vars-table').find((t) => t.textContent.includes('Swatches copy'));
+    check('with no variables in it', newTable?.querySelectorAll('.vars-name').length === 0, `${newTable?.querySelectorAll('.vars-name').length} rows`);
+    check('but a way to add one', !!newTable?.querySelector('.vars-add-btn'), newTable?.textContent?.slice(0, 60));
+    const originalTable = all('.vars-table').find((t) => t !== newTable && t.textContent.includes('Swatches'));
+    check('and the group it came from keeps its own', (originalTable?.querySelectorAll('.vars-name').length ?? 0) > 0, `${originalTable?.querySelectorAll('.vars-name').length} rows in ${originalTable?.textContent?.slice(0, 40)}`);
+
+    // Delete: the comment goes, its variables stay.
+    const delItems = await openMenu('Swatches copy');
+    await clickItem(delItems, 2, 'delete');
+    const after = fs.readFileSync(file, 'utf8');
+    check('delete takes the comment away', !after.includes('/* Swatches copy */'), after.slice(0, 300));
+    check('and leaves the variables alone', after.includes('--light-100: #ffffff'), after.slice(0, 600));
+    check('the sheet is back to what it was', headings().length === before, `${headings().join('|')} vs ${before}`);
+  }
+
+  {
+    // Undo, for the group operations.
+    //
+    // None of this goes through the page model — it rewrites the stylesheet —
+    // so unless the sheet hands the app a way back, ⌘Z steps over it to the last
+    // layout change and the group is simply gone. What the app is handed is
+    // checked by running it.
+    const openMenu = async (title) => {
+      const head = all('.vars-section').find((h) => h.textContent.includes(title));
+      const dots = head?.querySelector('.vars-section-menu');
+      if (!dots) return null;
+      await act(async () => {
+        dots.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await settle(20);
+      });
+      return [...dom.window.document.querySelectorAll('.vars-menu-item')];
+    };
+
+    const was = fs.readFileSync(file, 'utf8');
+    const before = commands.length;
+    const items = await openMenu('Curves');
+    if (items) {
+      await act(async () => {
+        items[2].dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await settle(80);
+      });
+    }
+    check('deleting a group is recorded', commands.length === before + 1, `${commands.length - before} commands`);
+    check('and it says what it was', /group/i.test(commands[commands.length - 1]?.label || ''), commands[commands.length - 1]?.label);
+    check('the heading is gone', !fs.readFileSync(file, 'utf8').includes('/* Curves */'), fs.readFileSync(file, 'utf8').slice(0, 200));
+
+    await act(async () => { await commands[commands.length - 1].undo(); await settle(60); });
+    check('undo brings the group back', fs.readFileSync(file, 'utf8') === was, fs.readFileSync(file, 'utf8').slice(0, 300));
+    check('and the sheet shows it again', texts('.vars-section').includes('Curves'), texts('.vars-section').join('|'));
+
+    await act(async () => { await commands[commands.length - 1].redo(); await settle(60); });
+    check('redo takes it away again', !fs.readFileSync(file, 'utf8').includes('/* Curves */'), fs.readFileSync(file, 'utf8').slice(0, 200));
+    await act(async () => { await commands[commands.length - 1].undo(); await settle(60); });
+    check('and undo puts it back once more', fs.readFileSync(file, 'utf8') === was);
+
+    // A rename reaches files this one does not, so its inverse is the rename
+    // backwards rather than a file put back.
+    const renameBefore = commands.length;
+    const field = await clickName('margin-top');
+    await typeInto(field, 'gap');
+    check('renaming is recorded too', commands.length === renameBefore + 1, `${commands.length - renameBefore}`);
+    check('the file has the new name', fs.readFileSync(file, 'utf8').includes('--h1-gap'), fs.readFileSync(file, 'utf8').slice(0, 400));
+    await act(async () => { await commands[commands.length - 1].undo(); await settle(60); });
+    const undone = fs.readFileSync(file, 'utf8');
+    check('undoing a rename puts the old name back', undone.includes('--h1-margin-top') && !undone.includes('--h1-gap'), undone.slice(0, 400));
+  }
+
+  {
+    // The other kind of heading: a comment above some names. Most of a
+    // single-rule file's headings are these, and they were the ones that could
+    // not be clicked — the check that sent me looking was the user's, not mine.
+    const heading = all('.vars-section .vars-rename').find((b) => b.textContent === 'Swatches');
+    check('a comment heading can be clicked too', !!heading, texts('.vars-section').join('|'));
+    if (heading) {
+      await act(async () => {
+        heading.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await settle(20);
+      });
+      const field = find('.vars-section .vars-rename-input');
+      check('it opens with the heading in it', field?.value === 'Swatches', field?.value);
+      await typeInto(field, 'Palette');
+      const css = fs.readFileSync(file, 'utf8');
+      check('the comment is rewritten', css.includes('/* Palette */'), css.slice(0, 120));
+      check('and the names under it are untouched', css.includes('--light-100: #ffffff'), css.slice(0, 200));
+      check('the sheet shows the new heading', texts('.vars-section').includes('Palette'), texts('.vars-section').join('|'));
+    }
+  }
+
+  {
+    // A group heading that is a shared prefix renames every member under it.
+    await show(1); // the light/dark modes group, whose `selection` names form a section
+    const heading = all('.vars-section .vars-rename').find((b) => b.textContent === 'selection');
+    check('a prefix heading is renamable', !!heading, texts('.vars-section').join('|'));
+    if (heading) {
+      await act(async () => {
+        heading.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await settle(20);
+      });
+      const field = find('.vars-section .vars-rename-input');
+      check('the heading opens a field too', !!field, container.innerHTML.slice(0, 120));
+      await typeInto(field, 'highlight');
+      const css = fs.readFileSync(file, 'utf8');
+      check('every member takes the new prefix', css.includes('--highlight-background') && css.includes('--highlight-text'), css.match(/--(selection|highlight)-\w+/g)?.join('|'));
+      check('and none of the old prefix is left', !css.includes('--selection-'), css);
+    }
+  }
+
+  await show(0);
+
+  // --- dragging a heading ----------------------------------------------------
+  //
+  // A heading moves on its own: the variables do not travel with it, and the
+  // ones that end up below it are the ones it now heads. Last, because it
+  // rearranges the file under anything that would follow it.
+  await show(0);
+  {
+    // Whichever headings the sheet has by now — earlier checks have renamed and
+    // added some, and this is about what dragging one does, not which one.
+    const heads = all('.vars-fixed .vars-section');
+    const swatches = heads[0];
+    const headings = heads[1];
+    const title = swatches?.textContent.trim();
+    const firstName = () => (fs.readFileSync(file, 'utf8').match(/--[\w-]+:/) || [''])[0].replace(':', '');
+    check('there are headings to drag', !!swatches && !!headings, heads.map((h) => h.textContent.trim()).join('|'));
+    if (!swatches || !headings) return;
+    // jsdom measures nothing, so the two headings are given boxes and the drop
+    // lands past everything — the end of the rule.
+    const box = (node, top) => {
+      node.getBoundingClientRect = () => ({ top, bottom: top + 20, height: 20, left: 0, right: 300, width: 300 });
+    };
+    box(swatches, 100);
+    box(headings, 200);
+
+    const namesBefore = (fs.readFileSync(file, 'utf8').match(/--[\w-]+:/g) || []).join('|');
+
+    await act(async () => {
+      swatches.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientY: 106 }));
+      await settle(10);
+    });
+    await act(async () => {
+      dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { bubbles: true, clientY: 150 }));
+      dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { bubbles: true, clientY: 260 }));
+      await settle(10);
+    });
+    await act(async () => {
+      dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, clientY: 260 }));
+      await settle(90);
+    });
+
+    const written = fs.readFileSync(file, 'utf8');
+    check(
+      'dragging a heading moves the heading',
+      written.indexOf(`/* ${title} */`) > written.indexOf(`${firstName()}:`),
+      written.slice(0, 400)
+    );
+    check('there is still only one of it', (written.match(new RegExp(`\\/\\* ${title} \\*\\/`, 'g')) || []).length === 1, written.slice(0, 400));
+    // The whole point: the variables did not travel with it. What changed is
+    // which side of the comment they are on.
+    check(
+      'and every variable stays exactly where it was',
+      (written.match(/--[\w-]+:/g) || []).join('|') === namesBefore,
+      `${(written.match(/--[\w-]+:/g) || []).slice(0, 6).join('|')} vs ${namesBefore.split('|').slice(0, 6).join('|')}`
+    );
+    check(
+      'so the variables it left behind are not in it any more',
+      !all('.vars-table').find((t) => t.textContent.includes(title))?.textContent.includes(firstName().replace('--', '')),
+      all('.vars-table').find((t) => t.textContent.includes(title))?.textContent.slice(0, 80)
+    );
+  }
 
   await act(async () => reactRoot.unmount());
   fs.rmSync(dir, { recursive: true, force: true });

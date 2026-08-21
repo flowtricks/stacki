@@ -8,7 +8,7 @@ import SegmentedControl, { HoverTooltip, type SegmentedOption } from './componen
 import GridSettings from './GridSettings'
 import VariableConnect from './VariableConnect'
 import type { ResolvedProp } from './lib/resolved'
-import { useComputedChoice } from './lib/computed-style'
+import { useHighlight } from './lib/computed-style'
 import { commitInPlace } from './lib/commit-in-place'
 
 // The grid controls in the Layout section (shown when Display is grid). Mirrors
@@ -405,7 +405,7 @@ function GridContentControl({ value, prop, vertical, ariaLabel, busy, onSet, onC
   onCommitCustom: (value: string, important: boolean) => void
 }) {
   const cur = gridKeyword(value.trim().toLowerCase())
-  const computed = gridKeyword(useComputedChoice(cur ? '' : prop, [...GRID_CONTENT, ...Object.keys(GRID_SYNONYMS)]))
+  const shownContent = gridKeyword(useHighlight('', cur ? '' : prop, [...GRID_CONTENT, ...Object.keys(GRID_SYNONYMS)], 'stretch'))
   const [forceCustom, setForceCustom] = useState(false)
   const customMode = forceCustom || (!!cur && !GRID_CONTENT.includes(cur))
   const [open, setOpen] = useState(false)
@@ -437,7 +437,7 @@ function GridContentControl({ value, prop, vertical, ariaLabel, busy, onSet, onC
   const pickPreset = (v: string) => { setOpen(false); setForceCustom(false); onSet(v) }
   const commitCustom = () => { const p = parseImportant(draft); if (p.value) onCommitCustom(p.value, p.important) }
   // Unset → show stretch selected (grid's default); a known value shows itself.
-  const segValue = cur ? (GRID_CONTENT.includes(cur) ? cur : '') : (computed || 'stretch')
+  const segValue = cur ? (GRID_CONTENT.includes(cur) ? cur : '') : shownContent
 
   return (
     <div ref={rootRef} className={`embed-editor_grid-dir-bar ${customMode ? 'is-custom' : ''}`}>
@@ -624,7 +624,7 @@ function GridAlignAxis({ axis, prop, value, busy, read, onSet, onPreview, onClea
   const customMode = forceCustom || (present && !known)
   // Unset → what the page computes for this element before falling back to grid's
   // own `stretch` default.
-  const computed = useComputedChoice(present ? '' : prop, GRID_ITEM_ALIGN)
+  const shownAlign = useHighlight('', present ? '' : prop, GRID_ITEM_ALIGN, 'stretch')
   const labels = axis === 'X' ? X_ALIGN_LABELS : Y_ALIGN_LABELS
   const icons = axis === 'X' ? X_ALIGN_ICONS : Y_ALIGN_ICONS
   const options: SelectOption<string>[] = GRID_ITEM_ALIGN.map((v) => ({ value: v, label: labels[v], icon: <GridAlignIcon paths={icons[v]} /> }))
@@ -648,7 +648,7 @@ function GridAlignAxis({ axis, prop, value, busy, read, onSet, onPreview, onClea
       {/* Grid's initial justify-items / align-items behave as stretch, so an unset axis
           shows Stretch (Webflow's default). Clear via this axis's X / Y label. */}
       <Select
-        value={customMode ? AXIS_CUSTOM : (known ? shown : (computed || 'stretch'))}
+        value={customMode ? AXIS_CUSTOM : (known ? shown : shownAlign)}
         options={options}
         ariaLabel={`Align ${axis}`}
         disabled={busy}

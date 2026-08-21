@@ -9,9 +9,17 @@ import CodeEditor from '../ui/CodeEditor.jsx';
 import StyleEditor, { collapseDeclarations } from '../ui/StyleEditor.jsx';
 import ExprInput from '../ui/ExprInput.jsx';
 import RichContent, { isInlineOnly } from '../ui/RichContent.jsx';
+import { checkStatement } from '../jsCheck.js';
 import AssetField from '../ui/AssetField.jsx';
 import { looksLikeAssetPath, mediaKindFor } from '../ui/AssetThumb.jsx';
-import { dataTree, findDeclaration, findImportOf, listsOnly } from '../dataSuggest.js';
+import {
+  dataTree,
+  findDeclaration,
+  findImportOf,
+  listsOnly,
+  scopeChips,
+  scopeCompletions,
+} from '../dataSuggest.js';
 import LinkField from '../ui/LinkField.jsx';
 import DataPicker from '../ui/DataPicker.jsx';
 import BindInput from '../ui/BindInput.jsx';
@@ -64,6 +72,10 @@ import {
 const noLabelActivation = (event) => event.preventDefault();
 
 
+// Whether the Settings group is open, remembered across selections. See where it
+// is read, below.
+let settingsGroupOpen = false;
+
 export default function PropsPanel({
   node,
   /** Bumped by ⌘Enter — open Settings and focus the class field. */
@@ -103,6 +115,14 @@ export default function PropsPanel({
   projectPath,
   filePath,
 }) {
+  // What an expression field here can name — this file's props, its frontmatter
+  // values, the item of any loop around the selection. Offered as you type, so a
+  // name doesn't have to be remembered (or spelled right) to be used.
+  const scope = scopeCompletions(bindContext || loopContext || {});
+  // The same names, as a set: what an expression field draws as purple chips.
+  const scopeNames = new Set(scope.map((c) => c.label.split('.')[0]));
+  const chipsInScope = (text) => scopeChips(text, scopeNames);
+
   // Where the data a field points at can be edited: declarations in this
   // file's frontmatter, imports (which live in another file), and the two ways
   // of getting at them.
@@ -160,6 +180,7 @@ export default function PropsPanel({
             key={node.id}
             value={node.value}
             syncValue={node.value}
+            completions={scope}
             onCommit={(v) => v !== node.value && onSetText(v)}
           />
         </div>
@@ -237,12 +258,13 @@ export default function PropsPanel({
               Show when
             </span>
           </label>
-          <ExprInput
+          <ConditionField
             key={node.id}
-            value={node.test}
-            syncValue={node.test}
-            placeholder="e.g. logo.src"
-            onCommit={(v) => v.trim() && v !== node.test && onSetText(v.trim())}
+            test={node.test}
+            scope={scope}
+            chipsOf={chipsInScope}
+            bindCtx={bindContext || loopContext}
+            onSetText={onSetText}
           />
           <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.5 }}>
             True renders <strong>then</strong>
@@ -311,7 +333,13 @@ export default function PropsPanel({
   }
 
   // <style>/<script> nodes get their content in a CodeMirror editor, with
-  // any attributes (is:global, type, …) editable above it.
+  // their attributes editable above it — the same section an element gets.
+  //
+  // These tags carry the attributes that decide what they DO: `is:global` and
+  // `define:vars` on a style, `is:inline`, `type` and `src` on a script. The
+  // panel could show the ones already written but had no way to add one, so
+  // the only route to a global stylesheet was to go and type the attribute
+  // into the file by hand — in an app whose whole point is not having to.
   if (node.kind === 'raw') {
     const language = node.name === 'style' ? 'css' : 'javascript';
     const attrs = Object.keys(node.props || {});
@@ -321,20 +349,21 @@ export default function PropsPanel({
           <CodeIcon size={14} className="props-title-icon" />
           {`<${node.name}>`}
         </div>
-        {attrs.length > 0 && (
-          <div style={{ flexShrink: 0 }}>
-            {attrs.map((name) => (
-              <PropField
-                key={name}
-                nodeKey={node.id}
-                bindCtx={bindContext || loopContext}
-                field={{ name, type: 'other' }}
-                value={node.props[name]}
-                onChange={(v, immediate) => onSetProp(name, v, immediate)}
-              />
-            ))}
-          </div>
-        )}
+        <div style={{ flexShrink: 0 }}>
+          {/* `class` is not filtered out the way it is for an element: an
+              element keeps a dedicated class field (the selector well drives
+              its styling), and these have no such field — so here it is an
+              attribute like any other, and adding one is how you get it. */}
+          <AttributesSection
+            node={node}
+            names={attrs}
+            projectPath={projectPath}
+            bindCtx={bindContext || loopContext}
+            onSetProp={onSetProp}
+            onSetProps={onSetProps}
+            onRenameProp={onRenameProp}
+          />
+        </div>
         <div className="props-field" style={{ marginTop: 4 }}>
           <button className="primary" style={{ width: '100%' }} onClick={onOpenCode}>
             <CodeIcon size={13} /> Edit code
@@ -624,8 +653,16 @@ export default function PropsPanel({
   const contentInsertRef = useRef(null);
 
   // The folded "Settings" group at the foot of the panel. Kept on the panel
-  // (not per node) so opening it once keeps it open as you move around.
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // (not per node) so opening it once keeps it open as you move around — and
+  // kept at MODULE scope, because "as you move around" includes elements that
+  // have no settings at all. The panel returns early for those (a condition, a
+  // text node), and a render that calls no hooks throws away the hook state of
+  // the ones that did: the group came back closed after every such visit.
+  const [settingsOpen, setSettingsOpenState] = useState(settingsGroupOpen);
+  const setSettingsOpen = (next) => {
+    settingsGroupOpen = typeof next === 'function' ? next(settingsGroupOpen) : next;
+    setSettingsOpenState(settingsGroupOpen);
+  };
 
   // ⌘Enter, forwarded from App as a counter: open Settings and put the caret
   // in the class field. Two steps, because the field doesn't exist to focus
@@ -928,6 +965,7 @@ export default function PropsPanel({
             node={node}
             names={attrNames}
             projectPath={projectPath}
+            bindCtx={bindContext || loopContext}
             onSetProp={onSetProp}
             onSetProps={onSetProps}
             onRenameProp={onRenameProp}
@@ -1019,7 +1057,7 @@ const encodeAttr = (text) => {
 
 // Free-form attribute list for elements and ...rest components: + adds,
 // hover-trash deletes, clicking a row opens a name/value editor.
-function AttributesSection({ node, names, projectPath, onSetProp, onSetProps, onRenameProp }) {
+function AttributesSection({ node, names, projectPath, bindCtx, onSetProp, onSetProps, onRenameProp }) {
   const [editor, setEditor] = useState(null); // {attr: string|null, top}
   const listRef = useRef(null);
 
@@ -1079,6 +1117,8 @@ function AttributesSection({ node, names, projectPath, onSetProp, onSetProps, on
           key={editor.attr ?? '__new'}
           pos={editor}
           projectPath={projectPath}
+          bindCtx={bindCtx}
+          dataCtx={bindCtx}
           name={editor.attr ?? ''}
           value={editor.attr ? decodeAttr(node.props[editor.attr]) : ''}
           isNew={editor.attr === null}
@@ -1154,10 +1194,21 @@ function parseAttrPaste(text) {
 }
 
 // Floating name/value editor for one attribute.
-function AttrEditor({ pos, name, value, isNew, projectPath, onCommitName, onCommitPair, onCommitMany, onChangeValue, onClose }) {
+function AttrEditor({ pos, name, value, isNew, projectPath, bindCtx, dataCtx, onCommitName, onCommitPair, onCommitMany, onChangeValue, onClose }) {
   const [draftName, setDraftName] = useState(name);
   const [draftValue, setDraftValue] = useState(value);
   const ref = useRef(null);
+  // Where the purple dot's picker sits, and the field's own insert-at-the-caret
+  // handle — the same pair every schema-driven field uses (see PropField).
+  const [insertAt, setInsertAt] = useState(null);
+  // Where the bigger value editor sits, when `=` has asked for one.
+  const [bigAt, setBigAt] = useState(null);
+  // What this value can name, for the completions and the chips — the same list
+  // the picker beside the field offers.
+  const scope = scopeCompletions(bindCtx || {});
+  const scopeNames = new Set(scope.map((c) => c.label.split('.')[0]));
+  const chipsInScope = (text) => scopeChips(text, scopeNames);
+  const bindApiRef = useRef(null);
 
   // Whether the value is an {expression} is settled when the popover opens,
   // so the field can't change shape halfway through typing one. The name is
@@ -1266,18 +1317,97 @@ function AttrEditor({ pos, name, value, isNew, projectPath, onCommitName, onComm
             />
           </div>
         ) : (
-          <input
-            autoFocus={focusValue}
-            value={draftValue}
-            placeholder="value or {expression}"
-            spellCheck={false}
-            onChange={(e) => {
-              setDraftValue(e.target.value);
-              onChangeValue(e.target.value);
+          // The same field a schema-driven prop gets: text with data in it shown
+          // as chips, and real code edited as code — JavaScript, highlighted. A
+          // hand-added attribute used to be the one value in the panel typed into
+          // a bare box, with `{expression}` as a placeholder and no way to reach
+          // the data it would name. The editor round-trips text, so the value
+          // object is made on the way in and unmade on the way out.
+          <div
+            className="attr-value-field"
+            // Captured: what's inside is CodeMirror (or a contenteditable), and both
+            // would take the key first. `=` is a character a JS value can want —
+            // typing `a === b` inline is the trade — but the box this opens is where
+            // an expression that needs one is worth writing anyway.
+            onKeyDownCapture={(e) => {
+              if (e.key !== '=' || e.metaKey || e.ctrlKey || e.altKey || bigAt) return;
+              e.preventDefault();
+              e.stopPropagation();
+              // Kept on screen: the field sits deep in a right-hand panel, so a box
+              // wider than it and anchored to its left edge runs off the window.
+              const r = e.currentTarget.getBoundingClientRect();
+              const width = Math.min(Math.max(r.width, 320), window.innerWidth - 16);
+              setBigAt({
+                left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)),
+                top: Math.max(8, Math.min(r.top, window.innerHeight - 320)),
+                width,
+              });
             }}
-            onKeyDown={(e) => e.key === 'Enter' && onClose()}
+          >
+          <BindField
+            // An empty attribute is `{type:'bare'}`, which as a VALUE reads as no
+            // value at all rather than an empty one — the field would show the word
+            // "undefined". Empty text is an empty string here; encodeAttr still
+            // stores it as bare on the way out.
+            value={draftValue === '' ? { type: 'string', value: '' } : encodeAttr(draftValue)}
+            placeholder="Type, or insert data"
+            bindCtx={bindCtx}
+            dataCtx={dataCtx}
+            apiRef={bindApiRef}
+            onChange={(next) => {
+              const text = decodeAttr(next);
+              setDraftValue(text);
+              onChangeValue(text);
+            }}
           />
+          {/* The dot belongs to the FIELD, and lives inside its box: hanging it off
+              the row put it above the row's own edge, so hovering it left the row —
+              which hid it, which put the pointer back on the row, which showed it
+              again. A dot that flickers under the pointer. */}
+          <BindHandle
+            active={!!insertAt}
+            onOpen={(host) => {
+              if (insertAt) { setInsertAt(null); return; }
+              const r = (host || ref.current)?.getBoundingClientRect();
+              if (!r) return;
+              setInsertAt({
+                left: r.left,
+                top: Math.min(r.bottom + 4, Math.max(60, window.innerHeight - 340)),
+                width: Math.max(r.width, 240),
+              });
+            }}
+          />
+          </div>
         )}
+        {bigAt ? (
+          <ValueCodeEditor
+            pos={bigAt}
+            name={draftName || 'value'}
+            value={draftValue}
+            scope={scope}
+            chipsOf={chipsInScope}
+            bindCtx={bindCtx}
+            onChange={(text) => { setDraftValue(text); onChangeValue(text); }}
+            onClose={() => setBigAt(null)}
+          />
+        ) : null}
+        {insertAt ? (
+          <FieldDataPicker
+            pos={insertAt}
+            bindCtx={bindCtx}
+            onPick={(path) => {
+              setInsertAt(null);
+              // Into the caret when the field has one, so a chip lands beside
+              // what is already typed; otherwise this is the value's first
+              // binding and it becomes the whole of it.
+              if (bindApiRef.current?.insert) { bindApiRef.current.insert(path); return; }
+              const text = `{${path}}`;
+              setDraftValue(text);
+              onChangeValue(text);
+            }}
+            onClose={() => setInsertAt(null)}
+          />
+        ) : null}
         <button
           className={`attr-asset-toggle ${assetMode ? 'on' : ''}`}
           title={assetMode ? 'Edit as a plain value' : 'Choose a file from public/'}
@@ -1350,7 +1480,7 @@ const encodeRaw = (text) => {
 // Attributes-object props (containerAttrs = {} etc.): entries edit like
 // element attributes and serialize back to a shallow { key: value } literal.
 // Removing the last row resets the prop to its default.
-function ObjectAttrsField({ pill, menu, entries, onCommit }) {
+function ObjectAttrsField({ pill, menu, entries, bindCtx, projectPath, onCommit }) {
   const [editor, setEditor] = useState(null); // {index: number|null, top, left, width}
   const listRef = useRef(null);
 
@@ -1406,6 +1536,8 @@ function ObjectAttrsField({ pill, menu, entries, onCommit }) {
           key={editor.index ?? '__new'}
           pos={editor}
           projectPath={projectPath}
+          bindCtx={bindCtx}
+          dataCtx={bindCtx}
           name={editor.index != null ? entries[editor.index]?.key ?? '' : ''}
           value={editor.index != null ? decodeRaw(entries[editor.index]?.raw ?? '') : ''}
           isNew={editor.index == null}
@@ -2068,6 +2200,72 @@ function ExprValueField({ value, placeholder, dataCtx, onChange }) {
   );
 }
 
+// The condition an `if` renders on, as the values it names rather than as a line
+// of text: each one in scope is a purple chip, pressing one opens the list to swap
+// it, and the dot inserts another at the caret.
+//
+// Its own component because it holds state, and PropsPanel returns early for every
+// node kind above this one — a hook in that body runs for some selections and not
+// others, which is what "Rendered fewer hooks than expected" means. A child's hooks
+// are its own, so nothing above it has to change.
+function ConditionField({ test, scope, chipsOf, bindCtx, onSetText }) {
+  const [pick, setPick] = useState(null); // {chip, pos}
+  const apiRef = useRef(null);
+  const wrapRef = useRef(null);
+
+  const open = (chip) => {
+    const r = wrapRef.current?.getBoundingClientRect();
+    if (!r) return;
+    setPick({
+      chip: chip || null,
+      pos: {
+        left: r.left,
+        top: Math.min(r.bottom + 4, Math.max(60, window.innerHeight - 340)),
+        width: Math.max(r.width, 240),
+      },
+    });
+  };
+
+  return (
+    <>
+      <div className="props-cond-field attr-value-field" ref={wrapRef}>
+        <ExprInput
+          value={test}
+          syncValue={test}
+          placeholder="e.g. logo.src"
+          completions={scope}
+          apiRef={apiRef}
+          // The values a condition names, drawn as the same purple chips the rest
+          // of the panel shows data in — and pressing one opens the list to swap
+          // it, rather than retyping a name inside a boolean.
+          chipsOf={chipsOf}
+          onChipClick={(chip) => open(chip)}
+          onCommit={(v) => v.trim() && v !== test && onSetText(v.trim())}
+        />
+        {/* And the way a new one gets in: the same purple dot every bindable field
+            has, inserting at the caret. */}
+        <BindHandle active={!!pick} onOpen={() => (pick ? setPick(null) : open(null))} />
+      </div>
+      {pick ? (
+        <FieldDataPicker
+          pos={pick.pos}
+          bindCtx={bindCtx}
+          current={pick.chip?.path ?? null}
+          onPick={(path) => {
+            const chip = pick.chip;
+            setPick(null);
+            const next = chip
+              ? apiRef.current?.replaceRange(chip.from, chip.to, path)
+              : apiRef.current?.insert(path);
+            if (next != null) onSetText(next);
+          }}
+          onClose={() => setPick(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
 // The way data gets into a field: nothing until the field is hovered, then a
 // small purple dot on its top-left corner — the same purple a binding is shown
 // in, so what it does is legible before it is read. Hovering the dot itself
@@ -2146,15 +2344,54 @@ function FieldDataPicker({ pos, bindCtx, current, tree, onPick, onWrite, onClose
 // binding that took the field over — so a value can be part typed and part
 // bound, and either half changed without touching the other.
 //
-// Clicking a chip repoints it. The braces button drops a new one in at the
-// caret. Both open the same picker, which is where the data itself is.
-function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef, onChange }) {
+// The expression a chip stands for. Two kinds reach here: the ones in the
+// chips-and-text field are DOM nodes carrying it in an attribute, and the holes
+// in the code editor are `{from, to, path}` objects. Both name a value, and
+// that name is what the picker's Edit row goes and opens.
+function chipExpr(chip) {
+  if (!chip) return '';
+  if (typeof chip.path === 'string') return chip.path;
+  if (typeof chip.getAttribute === 'function') return chip.getAttribute('data-expr') || '';
+  return '';
+}
+
+// What the chip STANDS FOR, which is not always what it writes: a chip reached
+// through a `?` (`featured` · "?" · `.data.title`) writes the tail and means the
+// whole path. The picker marks the current value by this, so opening that chip
+// shows `title` ticked rather than nothing at all.
+function chipPath(chip) {
+  if (chip && typeof chip.getAttribute === 'function') {
+    return chip.getAttribute('data-full') || chip.getAttribute('data-expr') || '';
+  }
+  return chipExpr(chip);
+}
+
+// Clicking a chip repoints it — or, through the same menu, opens whatever
+// defines it. The pencil that used to sit beside the field could only ever mean
+// ONE value, so a field holding two bindings had a button that silently spoke
+// for the first; per chip, the question has an answer every time.
+// The braces button drops a new chip in at the caret. All of it opens the same
+// picker, which is where the data itself is.
+export function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef, onChange }) {
   const wrapRef = useRef(null);
   const inputRef = useRef(null);
   const [menu, setMenu] = useState(null); // {left, top, width, chip}
+  // Editing a `const` from this file happens right under the field, the way the
+  // pencil used to open it — it is the menu that asks for it now.
+  const [src, setSrc] = useState(null); // {name, top, left, width}
   // The code editor, so a chip pressed inside it can be repointed in place.
   const exprApiRef = useRef(null);
   const [raw, setRaw] = useState(false);
+  // What the code editor draws as chips: every `${…}` hole naming a path, plus
+  // every value in scope the code names outright.
+  const scopeNames = new Set(scopeCompletions(bindCtx || {}).map((c) => c.label.split('.')[0]));
+  const codeChips = (text) => {
+    const holes = templateHoles(text);
+    const taken = (from, to) => holes.some((h) => from < h.to && to > h.from);
+    return [...holes, ...scopeChips(text, scopeNames).filter((c) => !taken(c.from, c.to))].sort(
+      (a, b) => a.from - b.from,
+    );
+  };
   // Typing must not move the field out from under the caret: an expression
   // half-way to becoming a call reads as code the moment the bracket lands,
   // and swapping in the code editor mid-word would take the text with it.
@@ -2185,6 +2422,27 @@ function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef, onChan
     });
   };
 
+  // What the menu's Edit row does, for the chip it was opened on. Null when the
+  // menu wasn't opened on a chip, or when nothing in reach defines that name —
+  // and then the row isn't drawn at all, rather than drawn and inert.
+  const editName = referencedName(chipExpr(menu?.chip));
+  const editTarget = symbolTarget(editName, dataCtx);
+  const editChip = () => {
+    setMenu(null);
+    if (editTarget === 'file') {
+      dataCtx.onOpenSymbol(editName);
+      return;
+    }
+    const r = wrapRef.current?.getBoundingClientRect();
+    const width = Math.max(r?.width ?? 240, 260);
+    setSrc({
+      name: editName,
+      top: Math.min((r?.bottom ?? 200) + 6, Math.max(60, window.innerHeight - 240)),
+      left: Math.min(r?.left ?? 0, window.innerWidth - width - 12),
+      width,
+    });
+  };
+
   const pick = (rawPath, query) => {
     const chip = menu?.chip;
     const path = resolvePick(rawPath, query, bindCtx);
@@ -2211,11 +2469,15 @@ function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef, onChan
   useEffect(() => {
     if (!menu) return undefined;
     const close = (e) => {
+      if (e.target.closest?.('.bind-menu, .bind-pick')) return;
       // `.cm-chip` for the same reason as the rest: a chip opens this picker on
       // mousedown, and this listener is live before that mousedown has finished
       // reaching document — so a chip missing from the list opens the picker and
-      // closes it in the one press.
-      if (e.target.closest?.('.bind-menu, .bind-pick, .expr-chip, .cm-chip')) return;
+      // closes it in the one press. Only a chip in THIS field, though: pressing
+      // one somewhere else is how you move on, and leaving both open left two
+      // pickers over the panel, one of them about a value nobody was looking at.
+      const chip = e.target.closest?.('.expr-chip, .cm-chip');
+      if (chip && wrapRef.current?.contains(chip)) return;
       setMenu(null);
     };
     const onKey = (e) => e.key === 'Escape' && setMenu(null);
@@ -2248,18 +2510,28 @@ function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef, onChan
           and a snapshot would go on showing the entry you stepped away from. */}
       <DataPicker
         tree={dataTree(bindCtx || {})}
-        current={
-          menu.chip?.path ?? (menu.chip ? menu.chip.getAttribute('data-expr') : showInput ? null : expr)
-        }
+        current={menu.chip?.path ?? (menu.chip ? chipPath(menu.chip) : showInput ? null : expr)}
         entries={bindCtx?.entryNav}
         onPick={pick}
         onExpand={(node) => node.query && bindCtx?.onNeedSample?.(node.query.collection)}
+        onEdit={editTarget ? editChip : undefined}
+        editLabel={editTarget === 'file' ? `Open where ${editName} is defined` : `Edit ${editName}`}
         onWrite={() => {
           setMenu(null);
           setRaw(true);
         }}
       />
     </div>
+  );
+
+  const srcEditor = src && (
+    <VarSourceEditor
+      pos={src}
+      name={src.name}
+      code={dataCtx?.frontmatter || ''}
+      onChangeCode={dataCtx?.onSetFrontmatter}
+      onClose={() => setSrc(null)}
+    />
   );
 
   // The field's handle inserts through here, so one picker serves both the
@@ -2285,12 +2557,8 @@ function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef, onChan
           onFocus={() => setEditing(true)}
           onBlur={() => setEditing(false)}
         />
-        <SourceEditButton
-          name={parts.length === 1 && parts[0].expr ? referencedName(parts[0].expr) : ''}
-          dataCtx={dataCtx}
-          anchorRef={wrapRef}
-        />
         {list}
+        {srcEditor}
       </div>
     );
   }
@@ -2307,13 +2575,20 @@ function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef, onChan
         syncValue={expr}
         placeholder={placeholder || ''}
         apiRef={exprApiRef}
-        chipsOf={templateHoles}
+        // Both kinds of data in one field: a `${…}` hole in a template, and a
+        // value named outright — `variantClasses` in a class list is as much a
+        // binding as `${post.title}` in a sentence, and only one of them used to
+        // look like one.
+        chipsOf={codeChips}
         onChipClick={(hit) => open(hit)}
+        // Code keeps its shape: wrapping an array across the panel's width throws
+        // away the indentation that says what belongs to what. It scrolls instead.
+        wrap={false}
         onChange={(v) => onChange({ type: 'expr', value: v })}
         onCommit={(v) => v !== expr && onChange({ type: 'expr', value: v }, true)}
       />
-      <SourceEditButton name={referencedName(expr)} dataCtx={dataCtx} anchorRef={wrapRef} />
       {list}
+      {srcEditor}
     </div>
   );
 }
@@ -2321,15 +2596,104 @@ function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef, onChan
 // Edits one declaration's source in place: the statement is spliced back into
 // the frontmatter on every keystroke, so the canvas updates as you type, the
 // rest of the file is untouched, and ⌘Z behaves like any other edit.
+// The value, in a box big enough to write in. A one-line field is the wrong place
+// to write an array across six lines, which is what an attribute like `class:list`
+// usually is — so `=` opens this, the same key the style panel's fields use for the
+// same thing. It edits the value as TEXT, braces and all, because that is what the
+// attribute editor round-trips.
+function ValueCodeEditor({ pos, name, value, scope, chipsOf, bindCtx, onChange, onClose }) {
+  const ref = useRef(null);
+  const apiRef = useRef(null);
+  const [pick, setPick] = useState(null); // {chip, pos}
+  useEffect(() => {
+    const onDown = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) onClose();
+    };
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="attr-editor var-src"
+      style={{ top: pos.top, left: pos.left, width: pos.width }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
+      }}
+    >
+      <div className="var-src-head">
+        <CodeIcon size={12} />
+        <span className="var-src-name">{name}</span>
+        <span style={{ flex: 1 }} />
+        <button className="ghost" title="Close" onClick={onClose}>
+          <CloseIcon size={12} />
+        </button>
+      </div>
+      <ExprInput
+        multiline
+        autoFocus
+        // Code opened to be read keeps its shape: the indentation says what is
+        // nested in what, and wrapping every long line throws that away.
+        wrap={false}
+        className="var-src-code"
+        value={value}
+        syncValue={value}
+        completions={scope}
+        apiRef={apiRef}
+        chipsOf={chipsOf}
+        onChipClick={(chip) => {
+          const r = ref.current?.getBoundingClientRect();
+          if (!r) return;
+          setPick({
+            chip: chip || null,
+            pos: {
+              left: r.left,
+              top: Math.min(r.bottom + 4, Math.max(60, window.innerHeight - 340)),
+              width: Math.max(r.width, 240),
+            },
+          });
+        }}
+        onChange={onChange}
+      />
+      {pick ? (
+        <FieldDataPicker
+          pos={pick.pos}
+          bindCtx={bindCtx}
+          current={pick.chip?.path ?? null}
+          onPick={(path) => {
+            const chip = pick.chip;
+            setPick(null);
+            const next = chip
+              ? apiRef.current?.replaceRange(chip.from, chip.to, path)
+              : apiRef.current?.insert(path);
+            if (next != null) onChange(next);
+          }}
+          onClose={() => setPick(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function VarSourceEditor({ pos, name, code, onChangeCode, onClose }) {
   const ref = useRef(null);
   const codeRef = useRef(code);
   codeRef.current = code;
   const [draft, setDraft] = useState(() => findDeclaration(code, name)?.statement ?? '');
+  // What is wrong with the draft, once there has been a reason to say. Empty
+  // until the first commit: a statement is unfinished for most of the time it
+  // takes to type one, and going red at every keystroke would be nagging about
+  // a mistake that hasn't been made yet.
+  const [error, setError] = useState('');
   const rangeRef = useRef(null);
 
   const apply = (text) => {
-    setDraft(text);
     const src = codeRef.current;
     // Re-locate on every write: the surrounding code can shift under us (an
     // undo, an edit elsewhere). Renaming the variable inside this editor is
@@ -2341,12 +2705,34 @@ function VarSourceEditor({ pos, name, code, onChangeCode, onClose }) {
     onChangeCode(src.slice(0, range.start) + text + src.slice(range.end));
   };
 
+  // Nothing is written while typing. This is code being spliced into a file the
+  // site is compiled from, so every keystroke used to be compiled — and the
+  // half-finished shape of a statement is a build error, which replaced the
+  // preview with a stack trace you then had to wait out. It goes in when you
+  // leave the field, and only if it parses.
+  const commit = (text) => {
+    if (text === draft && error) return false;
+    const verdict = checkStatement(text);
+    if (!verdict.ok) {
+      setError(verdict.message);
+      return false;
+    }
+    setError('');
+    if (text !== (findDeclaration(codeRef.current, name)?.statement ?? '')) apply(text);
+    return true;
+  };
+
   // Capture phase: what's inside is CodeMirror and what's around it is the
   // panel's own pointer/key handling, either of which can stop an event before
   // a bubbling listener on the document would see it.
   useEffect(() => {
     const onDown = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) onClose();
+      if (!ref.current || ref.current.contains(e.target)) return;
+      // A press outside commits, the way leaving any field does — and if that
+      // fails, the popup stays up holding the message. Closing on the press
+      // that produced the error would be showing it to nobody. Escape and the
+      // × still close, so this is a reason to stay, not a trap.
+      if (commit(draftRef.current)) onClose();
     };
     const onKey = (e) => {
       if (e.key === 'Escape') onClose();
@@ -2357,7 +2743,12 @@ function VarSourceEditor({ pos, name, code, onChangeCode, onClose }) {
       document.removeEventListener('pointerdown', onDown, true);
       document.removeEventListener('keydown', onKey, true);
     };
-  }, [onClose]);
+  });
+
+  // Read by the document listener above, which is registered once per render
+  // and must not close over a stale draft.
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
 
   // Outside edits (undo) reach the editor as a changed statement; our own
   // writes come back identical, so typing isn't fought.
@@ -2391,8 +2782,20 @@ function VarSourceEditor({ pos, name, code, onChangeCode, onClose }) {
         className="var-src-code"
         value={draft}
         syncValue={external ?? draft}
-        onChange={apply}
+        invalid={!!error}
+        onChange={(text) => {
+          setDraft(text);
+          // Only once it has already gone red: then it is a correction being
+          // watched for, not a running commentary on an unfinished line.
+          if (error) setError(checkStatement(text).ok ? '' : error);
+        }}
+        onCommit={commit}
       />
+      {error ? (
+        <div className="var-src-error" role="alert">
+          {error}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2825,6 +3228,8 @@ function PropField({
           pill={pill}
           menu={menu}
           entries={entries}
+          bindCtx={bindCtx}
+          projectPath={assetCtx?.projectPath}
           onCommit={(next) =>
             next.length
               ? onChange({ type: 'expr', value: serializeObjectLiteral(next) }, true)

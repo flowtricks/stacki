@@ -14,7 +14,7 @@ import { useLiveColor } from './lib/live-color'
 import LayerList from './LayerList'
 import LayerPopover from './LayerPopover'
 import { CURSOR_ICONS } from './cursor-icons'
-import { useComputedChoice } from './lib/computed-style'
+import { useComputedValue, useHighlight } from './lib/computed-style'
 import { ShadowNum, ShadowColorRow } from './ShadowFields'
 import { parseBoxShadows, serializeBoxShadows, blankBoxShadow, boxShadowLabel, type BoxShadow } from './lib/box-shadow'
 import { handleArrowStep } from './lib/number-step'
@@ -275,7 +275,7 @@ function PresetSelectRow({ prop, label, options, presets, fallback, placeholder,
   const current = d.present ? d.value.trim() : ''
   // Nothing authored → highlight what the page actually computes for this element,
   // falling back to the CSS initial value when there's no canvas to ask.
-  const computed = useComputedChoice(current ? '' : prop, options.map((o) => o.value))
+  const shown = useHighlight(current, prop, options.map((o) => o.value), fallback)
   const isPreset = !current || presets.has(current)
   const [forceCustom, setForceCustom] = useState(false)
   const customMode = allowCustom && (forceCustom || (d.present && !isPreset))
@@ -294,7 +294,7 @@ function PresetSelectRow({ prop, label, options, presets, fallback, placeholder,
     <div className="embed-editor_size-row">
       <EffLabel label={label} prop={prop} props={props} />
       <Select
-        value={customMode ? CUSTOM : (current || computed || fallback)}
+        value={customMode ? CUSTOM : shown}
         options={selectOptions}
         onChange={pick}
         onPreview={(v) => liveSetProp(prop, v === CUSTOM ? null : v, false)}
@@ -315,23 +315,38 @@ function OpacityRow({ props }: { props: Props }) {
   const { read, busy, setProp, liveSetProp } = props
   const d = displayOf(read('opacity'))
   const raw = d.present ? d.value.trim() : ''
-  const pctOf = (v: string) => {
-    if (!v) return 100
-    const n = parseFloat(v)
-    if (Number.isNaN(n)) return 100
-    return Math.round(v.includes('%') ? n : n * 100)
+  /** The percentage a value reads as, or null when it isn't a number at all. */
+  const pctOf = (v: string): number | null => {
+    const t = v.trim()
+    if (!t) return null
+    const n = parseFloat(t)
+    if (Number.isNaN(n) || !/^[-+]?[\d.]+%?$/.test(t)) return null
+    return Math.round(t.includes('%') ? n : n * 100)
   }
-  const pct = pctOf(raw)
+  const authored = pctOf(raw)
+  // `opacity: var(--fade)` is a number the panel can't read — but the page can, and
+  // a slider parked at 100% while the element is half faded is just wrong. Ask for
+  // the computed value in that case (only then: a plain `0.4` needs no round trip).
+  const computed = pctOf(useComputedValue(authored == null && raw ? 'opacity' : ''))
+  const pct = authored ?? computed ?? 100
+  // A value the panel can't express as a number stays in the field as it was
+  // written, so the variable chip shows and editing around it doesn't flatten it.
+  const asNumber = authored != null || !raw
   const toCss = (p: number) => (p >= 100 ? '1' : p <= 0 ? '0' : String(Math.round(p) / 100))
   const clamp = (p: number) => Math.min(100, Math.max(0, Math.round(p)))
   // Drag previews live (DragSlider already throttles the writes); release commits.
   const live = (p: number) => liveSetProp('opacity', toCss(clamp(p)), false)
   const commit = (p: number) => setProp('opacity', toCss(clamp(p)), false)
 
-  // The number field's local draft: typing previews live; blur / Enter commits.
-  const [text, setText] = useState(String(pct))
+  // The number field's local draft: typing previews live; blur / Enter commits. The
+  // unit is part of the value the field shows — `100%`, the way it reads in CSS —
+  // rather than a chip pinned beside it. Typing the % (or leaving it off) both work:
+  // the parse only wants the number.
+  const shown = (p: number) => `${p}%`
+  const fieldText = asNumber ? shown(pct) : raw
+  const [text, setText] = useState(fieldText)
   const focused = useRef(false)
-  useEffect(() => { if (!focused.current) setText(String(pct)) }, [pct])
+  useEffect(() => { if (!focused.current) setText(fieldText) }, [fieldText])
   const parse = (t: string) => { const n = parseFloat(t); return Number.isNaN(n) ? null : clamp(n) }
 
   return (
@@ -339,21 +354,31 @@ function OpacityRow({ props }: { props: Props }) {
       <EffLabel label="Opacity" prop="opacity" props={props} />
       <div className="embed-editor_shadow-field">
         <DragSlider value={pct} min={0} max={100} disabled={busy} ariaLabel="Opacity"
-          onPreview={(p) => { if (!focused.current) setText(String(p)) }}
+          onPreview={(p) => { if (!focused.current) setText(shown(p)) }}
           onInput={live}
-          onCommit={(p) => { if (!focused.current) setText(String(p)); commit(p) }} />
-        <div className="embed-editor_grad-num embed-editor_opacity-num">
+          onCommit={(p) => { if (!focused.current) setText(shown(p)); commit(p) }} />
+        <div className="embed-editor_field embed-editor_grad-num embed-editor_opacity-num">
           <VariableConnect className="is-fill" ariaLabel="Connect Opacity to a variable" disabled={busy} prop="opacity" onPick={(binding) => setProp('opacity', binding, false)}>
           <input
-            className="u-input embed-editor_grad-num-input"
+            className="u-input embed-editor_size-input"
             value={text}
             inputMode="decimal"
             spellCheck={false}
             disabled={busy}
             aria-label="Opacity percent"
             onFocus={() => { focused.current = true }}
-            onChange={(e) => { setText(e.target.value); const n = parse(e.target.value); if (n != null) live(n) }}
-            onBlur={() => { focused.current = false; const n = parse(text); if (n != null) commit(n); else setText(String(pct)) }}
+            onChange={(e) => { setText(e.target.value); const n = pctOf(e.target.value); if (n != null) live(n) }}
+            onBlur={() => {
+              focused.current = false
+              const t = text.trim()
+              if (t === fieldText) return // untouched — a var()/expression stays as it is
+              const n = pctOf(t)
+              // A number becomes an opacity; anything else (a var(), a calc()) is
+              // written as it stands, so a variable typed in here survives.
+              if (n != null) { commit(n); setText(shown(clamp(n))) }
+              else if (t) setProp('opacity', t, false)
+              else setText(fieldText)
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') { commitInPlace(e.currentTarget); return }
               const stepped = handleArrowStep(e)
@@ -366,7 +391,6 @@ function OpacityRow({ props }: { props: Props }) {
             }}
           />
           </VariableConnect>
-          <span className="embed-editor_grad-num-unit">%</span>
         </div>
       </div>
     </div>

@@ -15,7 +15,7 @@ import { handleArrowStep } from './lib/number-step'
 import { hslaToRgba } from './lib/color'
 import { clampNonNegative, filterCssProperties } from './lib/css-properties'
 import { panelSpan } from './lib/panel-box'
-import { forgetComputedStyles, useComputedChoice } from './lib/computed-style'
+import { forgetComputedStyles, useHighlight } from './lib/computed-style'
 import SizeSection from './SizeSection'
 import GapControl from './GapControl'
 import GridControls from './GridControls'
@@ -30,7 +30,7 @@ import ProvenanceList, { ProvenanceEmbedNav } from './ProvenanceList'
 import VariableConnect from './VariableConnect'
 import { computeRuleModel, type DeclStatus, type MatchedRule, type RuleModel } from './lib/cascade'
 import { groupDeclarations, groupProps } from './lib/sections'
-import { selectorToClassTokens, snapshotTokens, tokensToSelector } from './lib/element-tokens'
+import { defaultSelectorTokens, selectorToClassTokens, snapshotTokens, tokensToSelector } from './lib/element-tokens'
 import { resolveStyle, indexContexts, contextKeyOf, listMatchedSelectors, selectorKey, selectorsMatch, stateForSelector, STATES, type ContextInfo, type ContextKey, type MatchedSelector, type ResolvedProp, type ResolvedStyle, type SourceKey, type StateKey, type StyleContext } from './lib/resolved'
 import { breakpointTier, buildStyleContexts, mediaParamsForBreakpoint, nativeContribsFor, nativeHasValues, nativeSelectorChips, optionsFor, selectedNativeIndexFor, type NativeStyleOptions } from './lib/native-styles'
 import type { AtRule, Declaration } from 'postcss'
@@ -51,6 +51,10 @@ import {
   removeDeclaration,
   removeRule,
   removeRuleIfEmpty,
+  renameAtRuleQuery,
+  atRuleQueryText,
+  queryKey,
+  splitQuery,
   reorderDeclarations,
   replaceRuleCss,
   setDeclarationValue,
@@ -691,7 +695,7 @@ function AddPropertyRow({ busy, onAdd }: { busy: boolean; onAdd: (prop: string, 
 
 // A collapsible section header (Webflow's chevron + label) wrapping a group of
 // controls. Open by default; collapse state is local to the block.
-function SectionBlock({ label, headerAction, defaultOpen = true, children }: { label: string; headerAction?: ReactNode; defaultOpen?: boolean; children: ReactNode }) {
+function SectionBlock({ label, headerAction, defaultOpen = true, mark = null, children }: { label: string; headerAction?: ReactNode; defaultOpen?: boolean; mark?: 'own' | 'other' | null; children: ReactNode }) {
   const [open, setOpen] = useState(defaultOpen)
   const toggle = () => setOpen((value) => !value)
   return (
@@ -703,6 +707,20 @@ function SectionBlock({ label, headerAction, defaultOpen = true, children }: { l
           <span className="embed-editor_section-title">{label}</span>
         </button>
         {headerAction}
+        {/* Only while closed, and beside the chevron rather than the label, so the
+            right edge of every header reads as one column: what is in here, then
+            open/closed. Open, the property labels inside are already saying it in
+            these same two colours — orange for anything reaching the element at
+            all, blue once the picked selector is one of the things setting it —
+            and the dot would only be repeating them. */}
+        {!open && mark ? (
+          <span
+            className={`embed-editor_section-dot ${mark === 'own' ? 'is-own' : ''}`}
+            role="img"
+            aria-label={mark === 'own' ? `${label} has styles on this selector` : `${label} has styles from another selector`}
+            title={mark === 'own' ? 'Set on this selector' : 'Set on another selector'}
+          />
+        ) : null}
         <button
           type="button"
           className="embed-editor_section-chevron-btn"
@@ -874,10 +892,12 @@ function DisplayRow({ resolved, busy, setProp, clearProp, onProvenance, onSelect
   onSelectSelector: (selector: string, prop?: string) => void
 }) {
   const isSelected = resolved?.source === 'selected'
-  const computed = useComputedChoice(resolved ? '' : 'display', DISPLAY_VALUES)
+  // Nothing declared → what the page renders as, held steady while it is asked
+  // rather than guessed at (see useHighlight).
+  const shown = useHighlight('', resolved ? '' : 'display', DISPLAY_VALUES, 'block')
   const current = resolved
     ? (isSelected && resolved.selectedValue ? resolved.selectedValue : { value: resolved.winner.value, important: resolved.winner.important })
-    : { value: computed || 'block', important: false }
+    : { value: shown, important: false }
   return (
     <div className="embed-editor_size-row">
       {!resolved ? (
@@ -1539,23 +1559,32 @@ export function SelectorPicker({ selectors, suggestions, activeSelector, activeP
         ) : null}
       </div>
     </div>
-    {/* Outside the well's box — a view option, not one of the selectors. */}
-    {globals.length ? (
-      <label
-        className="embed-editor_check embed-editor_globals-check"
-        title="Selectors like :target, :focus-visible and * match nearly every element on the page"
-      >
-        <input
-          type="checkbox"
-          checked={showGlobals}
-          disabled={busy}
-          onChange={(event) => setShowGlobals(event.target.checked)}
-        />
-        <span>Show global selectors ({globals.length})</span>
-      </label>
-    ) : null}
+    {/* Outside the well's box — a view option, not one of the selectors. Always
+        here, even with none to show: appearing when the scan lands moved everything
+        under it down a row, so the panel rearranged itself under the pointer just as
+        it became usable. With nothing to reveal it sits inert instead. */}
+    <label
+      className={`embed-editor_check embed-editor_globals-check ${globals.length ? '' : 'is-empty'}`}
+      title="Selectors like :target, :focus-visible and * match nearly every element on the page"
+    >
+      <input
+        type="checkbox"
+        checked={showGlobals && globals.length > 0}
+        disabled={busy || !globals.length}
+        onChange={(event) => setShowGlobals(event.target.checked)}
+      />
+      <span>Show global selectors ({globals.length})</span>
+    </label>
     </>
   )
+}
+
+// What somebody typed, as a query. A bare condition is the common shorthand and
+// means @media — `(width < 40em)` and `width < 40em` both do.
+function asQuery(raw: string): string {
+  const trimmed = raw.trim()
+  if (trimmed.startsWith('@')) return trimmed
+  return trimmed.startsWith('(') ? `@media ${trimmed}` : `@media (${trimmed})`
 }
 
 // Sentinel option value for the "Add query" row in the context dropdown — a real
@@ -1597,43 +1626,53 @@ const COMMON_QUERIES: QuerySuggestion[] = [
   { query: '@supports (display: grid)', kind: 'supports' },
 ]
 
-// Inline form to add a custom query (@media/@container/@supports) to the current
-// selector, choosing whether it WRAPS the selector (a new at-rule block) or NESTS
-// inside the selector's existing rule (CSS nesting). Nesting needs a picked selector.
-// The controls sit ABOVE the input so the suggestion list (opened below it) can't
-// cover them; the input pre-fills `@` and offers project + common queries.
-function AddQueryForm({ canNest, suggestions, onAdd, onCancel }: {
-  canNest: boolean
-  suggestions: QuerySuggestion[]
-  onAdd: (query: string, mode: 'wrap' | 'nest') => void
+// A query field: type anything, with every query in the project (and a curated set
+// of common ones) offered underneath. Free text is the point — the list is a
+// shortcut, never a menu of the only allowed answers — so submitting takes what
+// is typed unless a suggestion is explicitly highlighted.
+function QueryCombo({ draft, setDraft, onSubmit, onCancel, suggestions, ariaLabel, initial = '', selectOnFocus = false }: {
+  draft: string
+  setDraft: (next: string) => void
+  onSubmit: (query: string) => void
   onCancel: () => void
+  suggestions: QuerySuggestion[]
+  ariaLabel: string
+  /** The query the field opened on, if it opened on one — a whole query rather
+   *  than the start of one being typed. */
+  initial?: string
+  /** Select the whole value on mount (editing) instead of parking the caret at
+   *  the end of it (adding, where the value so far is just `@`). */
+  selectOnFocus?: boolean
 }) {
-  const [draft, setDraft] = useState('@')
-  const [mode, setMode] = useState<'wrap' | 'nest'>('nest')
   const [open, setOpen] = useState(true)
   const [highlight, setHighlight] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  // Focus with the caret after the pre-filled `@`.
   useEffect(() => {
     const el = inputRef.current
     if (!el) return
     el.focus()
-    el.setSelectionRange(el.value.length, el.value.length)
-  }, [])
+    if (selectOnFocus) el.select()
+    else el.setSelectionRange(el.value.length, el.value.length)
+  }, [selectOnFocus])
 
   const q = draft.trim().toLowerCase()
-  const filtered = useMemo(
-    () => suggestions.filter((s) => !q || q === '@' || s.query.toLowerCase().includes(q)),
-    [suggestions, q],
-  )
+  // Filtering is for narrowing a query being typed. A field holding a WHOLE query
+  // — the one being renamed, or a suggestion just picked — has nothing left to
+  // narrow: matching it against itself leaves a list of one, hiding the very
+  // queries you opened the field to switch to. So a complete query shows them all.
+  const filtered = useMemo(() => {
+    const whole = q === initial.trim().toLowerCase() || suggestions.some((s) => s.query.toLowerCase() === q)
+    if (!q || q === '@' || whole) return suggestions
+    return suggestions.filter((s) => s.query.toLowerCase().includes(q))
+  }, [suggestions, q, initial])
   const showList = open && filtered.length > 0
   useEffect(() => {
     if (!showList || highlight < 0) return
     ;(listRef.current?.children[highlight] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' })
   }, [highlight, showList])
 
-  const submit = (text: string) => { const t = text.trim(); if (t && t !== '@') onAdd(t, canNest ? mode : 'wrap') }
+  const submit = (text: string) => { const t = text.trim(); if (t && t !== '@') onSubmit(t) }
   const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
       event.preventDefault(); setOpen(true); setHighlight((h) => Math.min(h + 1, filtered.length - 1))
@@ -1651,6 +1690,61 @@ function AddQueryForm({ canNest, suggestions, onAdd, onCancel }: {
       else onCancel()
     }
   }
+
+  return (
+    <div className="embed-editor_add-query-field">
+      <input
+        ref={inputRef}
+        className="u-input embed-editor_add-query-input"
+        value={draft}
+        placeholder="@media (width < 50em)"
+        spellCheck={false}
+        role="combobox"
+        aria-expanded={showList}
+        aria-autocomplete="list"
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onChange={(event) => { setDraft(event.target.value); setOpen(true); setHighlight(-1) }}
+        onKeyDown={onKeyDown}
+        aria-label={ariaLabel}
+      />
+      {showList ? (
+        <div className="embed-editor_selector-suggest" ref={listRef} role="listbox" aria-label="Query suggestions">
+          {filtered.map((s, i) => (
+            <button
+              key={`${s.kind}:${s.query}`}
+              type="button"
+              role="option"
+              aria-selected={i === highlight}
+              className={`embed-editor_suggest-item ${i === highlight ? 'is-active' : ''}`}
+              onMouseDown={(event) => event.preventDefault()}
+              onMouseMove={() => setHighlight(i)}
+              onClick={() => submit(s.query)}
+            >
+              <span className="embed-editor_suggest-sel">{s.query}</span>
+              <span className="embed-editor_suggest-kind">{s.kind}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+// Inline form to add a custom query (@media/@container/@supports) to the current
+// selector, choosing whether it WRAPS the selector (a new at-rule block) or NESTS
+// inside the selector's existing rule (CSS nesting). Nesting needs a picked selector.
+// The controls sit ABOVE the input so the suggestion list (opened below it) can't
+// cover them; the input pre-fills `@` and offers project + common queries.
+function AddQueryForm({ canNest, suggestions, onAdd, onCancel }: {
+  canNest: boolean
+  suggestions: QuerySuggestion[]
+  onAdd: (query: string, mode: 'wrap' | 'nest') => void
+  onCancel: () => void
+}) {
+  const [draft, setDraft] = useState('@')
+  const [mode, setMode] = useState<'wrap' | 'nest'>('nest')
+  const submit = (text: string) => onAdd(text, canNest ? mode : 'wrap')
 
   return (
     <div className="embed-editor_add-query">
@@ -1672,42 +1766,55 @@ function AddQueryForm({ canNest, suggestions, onAdd, onCancel }: {
       {!canNest ? (
         <p className="embed-editor_add-query-note">Pick a selector to nest inside it.</p>
       ) : null}
-      <div className="embed-editor_add-query-field">
-        <input
-          ref={inputRef}
-          className="u-input embed-editor_add-query-input"
-          value={draft}
-          placeholder="@media (width < 50em)"
-          spellCheck={false}
-          role="combobox"
-          aria-expanded={showList}
-          aria-autocomplete="list"
-          onFocus={() => setOpen(true)}
-          onBlur={() => setOpen(false)}
-          onChange={(event) => { setDraft(event.target.value); setOpen(true); setHighlight(-1) }}
-          onKeyDown={onKeyDown}
-          aria-label="Query to add"
-        />
-        {showList ? (
-          <div className="embed-editor_selector-suggest" ref={listRef} role="listbox" aria-label="Query suggestions">
-            {filtered.map((s, i) => (
-              <button
-                key={`${s.kind}:${s.query}`}
-                type="button"
-                role="option"
-                aria-selected={i === highlight}
-                className={`embed-editor_suggest-item ${i === highlight ? 'is-active' : ''}`}
-                onMouseDown={(event) => event.preventDefault()}
-                onMouseMove={() => setHighlight(i)}
-                onClick={() => submit(s.query)}
-              >
-                <span className="embed-editor_suggest-sel">{s.query}</span>
-                <span className="embed-editor_suggest-kind">{s.kind}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
+      <QueryCombo
+        draft={draft}
+        setDraft={setDraft}
+        onSubmit={submit}
+        onCancel={onCancel}
+        suggestions={suggestions}
+        ariaLabel="Query to add"
+      />
+    </div>
+  )
+}
+
+// Rename a query wherever this stylesheet spells it. A breakpoint is one idea
+// written in several places — this component's four `@media (width >= 64rem)`
+// blocks are one breakpoint — so editing it here rewrites every one of them, and
+// the count says how many before you commit to it.
+function EditQueryForm({ query, uses, sourceLabel, suggestions, onRename, onCancel }: {
+  query: string
+  uses: number
+  sourceLabel: string
+  suggestions: QuerySuggestion[]
+  onRename: (from: string, to: string) => void
+  onCancel: () => void
+}) {
+  const [draft, setDraft] = useState(query)
+  const changed = draft.trim() !== '' && draft.trim() !== '@' && draft.trim() !== query
+  const submit = (text: string) => { const t = text.trim(); if (t && t !== '@' && t !== query) onRename(query, t) }
+
+  return (
+    <div className="embed-editor_add-query is-rename">
+      <div className="embed-editor_add-query-controls">
+        <span className="embed-editor_add-query-count" title={`${uses === 1 ? '1 block' : `${uses} blocks`} in ${sourceLabel}`}>
+          {uses === 1 ? '1 block' : `${uses} blocks`} in {sourceLabel}
+        </span>
+        <div className="embed-editor_add-query-actions">
+          <button type="button" className="u-button is-ghost is-small" onClick={onCancel}>Cancel</button>
+          <button type="button" className="u-button is-primary is-small" onClick={() => submit(draft)} disabled={!changed}>Rename</button>
+        </div>
       </div>
+      <QueryCombo
+        draft={draft}
+        setDraft={setDraft}
+        onSubmit={submit}
+        onCancel={onCancel}
+        suggestions={suggestions}
+        ariaLabel="Query"
+        initial={query}
+        selectOnFocus
+      />
     </div>
   )
 }
@@ -1724,6 +1831,9 @@ function StyleCard({
   context,
   onContext,
   onAddQuery,
+  onRenameQuery,
+  queryUses,
+  sourceLabel,
   querySuggestions,
   selectors,
   suggestions,
@@ -1761,6 +1871,11 @@ function StyleCard({
   context: ContextKey
   onContext: (context: ContextKey) => void
   onAddQuery: (query: string, mode: 'wrap' | 'nest') => void
+  onRenameQuery: (from: string, to: string) => void
+  /** How many blocks in the source stylesheet each query is written in — the
+   *  queries it's possible to rename from here, and how much a rename touches. */
+  queryUses: Map<string, number>
+  sourceLabel: string
   querySuggestions: QuerySuggestion[]
   selectors: MatchedSelector[]
   suggestions: SelectorSuggestion[]
@@ -1793,6 +1908,8 @@ function StyleCard({
   const selectedRule = resolved.selectedRule
   // Whether the "Add query" form is open (below the context dropdown).
   const [addingQuery, setAddingQuery] = useState(false)
+  // The query being renamed, if any — same slot as the add form, one at a time.
+  const [editingQuery, setEditingQuery] = useState<string | null>(null)
   // The open provenance popover: which prop + the clicked label's rect (so the
   // popover anchors to the bottom of that label, not a fixed corner of the card).
   const [provenance, setProvenance] = useState<{ prop: string; rect: DOMRect } | null>(null)
@@ -1834,15 +1951,27 @@ function StyleCard({
             className="embed-editor_context-select"
             value={context}
             options={[
-              ...contexts.map((ctx) => ({
-                value: ctx.key,
-                label: ctx.label,
-                icon: breakpointIcon(ctx.breakpoint),
-                marked: contextInfos.find((info) => info.key === ctx.key)?.hasStyles ?? false,
-              })),
+              ...contexts.map((ctx) => {
+                // Editable when this stylesheet is where the query is written. A
+                // row can be here for a query held in some other file (or for a
+                // native breakpoint, which is no at-rule at all) — nothing to
+                // rename there, so no pencil. A nested chain's own query is its
+                // last link; the ones before it are rows of their own.
+                const query = (ctx.embedAtContext || '').split(' › ').pop() || ''
+                const uses = queryUses.get(queryKey(query)) ?? 0
+                return {
+                  value: ctx.key,
+                  label: ctx.label,
+                  icon: breakpointIcon(ctx.breakpoint),
+                  marked: contextInfos.find((info) => info.key === ctx.key)?.hasStyles ?? false,
+                  action: uses > 0
+                    ? { icon: <PencilIcon />, label: `Edit ${query}`, onSelect: () => { setAddingQuery(false); setEditingQuery(query) } }
+                    : undefined,
+                }
+              }),
               { value: ADD_QUERY, label: 'Add query', icon: <PlusIcon /> },
             ]}
-            onChange={(next) => { if (next === ADD_QUERY) setAddingQuery(true); else onContext(next) }}
+            onChange={(next) => { if (next === ADD_QUERY) { setEditingQuery(null); setAddingQuery(true) } else onContext(next) }}
             ariaLabel="Style context"
           />
         ) : null}
@@ -1853,6 +1982,16 @@ function StyleCard({
           suggestions={querySuggestions}
           onCancel={() => setAddingQuery(false)}
           onAdd={(query, mode) => { setAddingQuery(false); onAddQuery(query, mode) }}
+        />
+      ) : null}
+      {editingQuery ? (
+        <EditQueryForm
+          query={editingQuery}
+          uses={queryUses.get(queryKey(editingQuery)) ?? 0}
+          sourceLabel={sourceLabel}
+          suggestions={querySuggestions}
+          onCancel={() => setEditingQuery(null)}
+          onRename={(from, to) => { setEditingQuery(null); onRenameQuery(from, to) }}
         />
       ) : null}
       <div className="embed-editor_selector">
@@ -1950,6 +2089,13 @@ function StyleCard({
               key={group.def.id}
               label={group.def.label}
               defaultOpen={group.def.id !== 'flex-child'}
+              // A dot whenever anything in the section reaches the element, and
+              // blue once the picked selector is one of the things setting it —
+              // `source === 'selected'` is the same test every property label in
+              // here makes.
+              mark={group.props.some((prop) => read(prop)?.source === 'selected')
+                ? 'own'
+                : (group.props.length ? 'other' : null)}
               headerAction={group.def.id === 'spacing'
                 ? <SpacingCenterButton read={read} busy={busy} setProp={setProp} clearProp={clearProp} />
                 : undefined}
@@ -2952,6 +3098,26 @@ export default function EmbedEditor() {
     [backgroundRefresh]
   )
 
+  // A class added to (or taken off) the selected element changes which selectors
+  // target it — and nothing tells the panel. It used to find out on its next poll,
+  // up to 1.5s later, which is the whole of that wait: the stylesheets are already
+  // parsed in memory, so re-resolving is one canvas round trip and a re-match, no
+  // disk. Nudge it the moment the model changes. The background rebuild that re-reads
+  // the files still runs on its own throttle, for edits made outside the app.
+  const classSigRef = useRef('')
+  useEffect(() => {
+    const onClasses = () => {
+      const host = getHost()
+      const sig = `${authoredClasses().join(' ')}|${(host.renderedClasses || []).join(' ')}`
+      if (sig === classSigRef.current) return
+      const first = classSigRef.current === ''
+      classSigRef.current = sig
+      if (!first) void syncFromDesigner()
+    }
+    onClasses()
+    return onHostChange(onClasses)
+  }, [syncFromDesigner])
+
   // While an element is shown, poll for out-of-app edits and keep the panel in sync.
   useEffect(() => {
     if (phase !== 'ready') return
@@ -3302,22 +3468,23 @@ export default function EmbedEditor() {
     return out
   }, [tokens, snapshot])
 
-  // Re-default the picked selector when the element changes: all classes (the full
-  // combo chain, like Webflow's default) → else last data attribute → else the tag.
-  // Also reset context/state.
+  // Re-default the picked selector when the element changes: the element's FIRST
+  // class → else last data attribute → else the tag. Also reset context/state.
+  //
+  // It used to be every class the element has, joined — Webflow's model, where
+  // a combo IS the thing being styled. Here it meant the first property written
+  // created `.layout.card.theme-dark.flex-grow.theme-brand { … }`, and because
+  // the combo then counted as "already styled", the upgrade below kept it and
+  // every property after it landed there too. A five-class rule nothing else can
+  // reuse, built one property at a time, from a default nobody chose.
+  //
+  // The primary class is what a class system is authored against; a combo is a
+  // deliberate act, so it takes picking that chip.
   useEffect(() => {
     const identity = tokens.map((token) => token.name).join('|')
     if (identity === tokenIdentityRef.current) return
     tokenIdentityRef.current = identity
-    const classes = tokens.filter((token) => token.kind === 'class')
-    const attrs = tokens.filter((token) => token.kind === 'attribute')
-    const next = classes.length
-      ? classes.map((token) => token.name)
-      : attrs.length
-        ? [attrs[attrs.length - 1].name]
-        : tokens.length
-          ? [tokens[0].name]
-          : []
+    const next = defaultSelectorTokens(tokens)
     setSelectedTokens(next)
     setSelectedSelectorText(null)
     defaultTokensRef.current = next
@@ -3498,9 +3665,7 @@ export default function EmbedEditor() {
   const onAddQuery = (raw: string, mode: 'wrap' | 'nest') => {
     const trimmed = raw.trim()
     if (!trimmed) return
-    const query = trimmed.startsWith('@')
-      ? trimmed
-      : trimmed.startsWith('(') ? `@media ${trimmed}` : `@media (${trimmed})`
+    const query = asQuery(trimmed)
     if (mode === 'nest' && activeSelector) {
       const nestedInput = `${activeSelector} { ${query} }`
       addTypedSelector(nestedInput)
@@ -3548,27 +3713,102 @@ export default function EmbedEditor() {
     })
     return () => cancelAnimationFrame(raf)
   }, [focusProp])
+  // The stylesheet a new rule would land in: the user's pick, or the first embed
+  // in page order — the same default `effectiveSourceSel` settles on below, worked
+  // out here because the queries dropdown needs it before that line runs.
+  const sourceDoc = useMemo<EmbedDoc | null>(() => {
+    if (sourceSel && docByKey.has(sourceSel)) return docByKey.get(sourceSel) ?? null
+    return [...docByKey.values()].sort((a, b) => a.source.order - b.source.order)[0] ?? null
+  }, [sourceSel, docByKey])
+  // How many blocks in that stylesheet each query is written in. Drives the edit
+  // pencil in the query dropdown (a query this file doesn't hold can't be renamed
+  // from here) and the "3 blocks in ContentWrapper" count on the rename form.
+  const queryUses = useMemo(() => {
+    const uses = new Map<string, number>()
+    if (!sourceDoc) return uses
+    for (const region of sourceDoc.regions) {
+      region.root?.walkAtRules((at) => {
+        const name = at.name.toLowerCase()
+        if (name !== 'media' && name !== 'supports' && name !== 'container') return
+        // Keyed so two spellings of one query count as one — the pencil on
+        // either row then reports, and renames, both.
+        const text = queryKey(atRuleQueryText(at))
+        uses.set(text, (uses.get(text) ?? 0) + 1)
+      })
+    }
+    return uses
+  }, [sourceDoc])
+  // Rename a query everywhere the source stylesheet spells it. A breakpoint lives
+  // in a file as several identical `@media` lines — changing one of them by hand
+  // splits the breakpoint in two — so this rewrites all of them in one write, and
+  // the panel follows the query it was showing to its new name.
+  const onRenameQuery = (from: string, to: string) => {
+    const doc = sourceDoc
+    if (!doc) return
+    const next = asQuery(to)
+    if (!splitQuery(next)) { setStatus('A query starts with @ — @media, @container or @supports.'); return }
+    if (next === from) return
+    void (async () => {
+      setBusyBoth(true)
+      setStatus('Renaming query…')
+      // try/finally so a throw mid-rename can't leave every button disabled.
+      try {
+        let n = 0
+        for (const region of doc.regions) n += renameAtRuleQuery(region, from, next)
+        if (!n) { setStatus('That query isn’t in this file any more.'); return }
+        await refreshDerived()
+        const res = await writeEmbedDoc(doc)
+        if (!res.ok) {
+          if (inComponentRef.current && !doc.source.fromComponent) {
+            markPending(doc.source.key)
+            setStatus('Held — this query lives in the page, so the canvas shows it once you leave the component.')
+            return
+          }
+          setSaveError(res.error)
+          return
+        }
+        clearPending(doc.source.key)
+        // The context key is the at-rule chain; only the renamed link changes, so
+        // a nested context stays selected too.
+        const swap = (key: ContextKey) => key.split(' › ').map((part) => (part === from ? next : part)).join(' › ')
+        setTypedContexts((prev) => prev.map(swap))
+        setContext((prev) => swap(prev))
+        setStatus(n === 1 ? `Renamed to ${next}.` : `Renamed ${n} blocks to ${next}.`)
+      } finally {
+        setBusyBoth(false)
+      }
+    })()
+  }
   // Every embed query the picked element could switch to: Base + each
   // @media/@container block in the embeds whose rules match this element.
   const allContextKeys = useMemo<ContextKey[]>(() => {
     const keys: ContextKey[] = ['']
     const seen = new Set<ContextKey>([''])
+    const take = (doc: EmbedDoc) => {
+      for (const region of doc.regions) {
+        for (const block of listAtRuleBlocks(region)) {
+          const ctx = block.atContext.join(' › ')
+          if (!seen.has(ctx)) { seen.add(ctx); keys.push(ctx) }
+        }
+      }
+    }
     if (model) {
       const matchedDocKeys = new Set([...model.base, ...model.conditional].map((m) => m.rule.embedKey))
       for (const [key, doc] of docByKey) {
         if (!matchedDocKeys.has(key)) continue
-        for (const region of doc.regions) {
-          for (const block of listAtRuleBlocks(region)) {
-            const ctx = block.atContext.join(' › ')
-            if (!seen.has(ctx)) { seen.add(ctx); keys.push(ctx) }
-          }
-        }
+        take(doc)
       }
     }
+    // Every query the file being written into already uses, whether or not this
+    // element has a rule in one. That dropdown is where a query is chosen to
+    // write into, and a stylesheet's own queries are the ones worth offering: a
+    // component with a `prefers-reduced-motion` block should offer it on every
+    // element in that component, not only on the ones already inside it.
+    if (sourceDoc) take(sourceDoc)
     // Queries typed into the add-selector field (may not exist in any embed yet).
     for (const ctx of typedContexts) { if (!seen.has(ctx)) { seen.add(ctx); keys.push(ctx) } }
     return keys
-  }, [model, docByKey, typedContexts])
+  }, [model, docByKey, typedContexts, sourceDoc])
 
   // Suggestions for the "Add query" form: every @media/@container/@supports already
   // used ANYWHERE in the project's embeds (labeled "used"), then a curated set of
@@ -3585,35 +3825,60 @@ export default function EmbedEditor() {
     }
     for (const doc of docByKey.values()) {
       for (const region of doc.regions) {
-        for (const block of listAtRuleBlocks(region)) add(block.atContext.join(' › '), 'used')
+        // Each LINK of a nesting chain, not the chain — `@media A › @supports B`
+        // is how the panel names a context, but only `@media A` and `@supports B`
+        // are queries somebody can write into a file.
+        for (const block of listAtRuleBlocks(region)) for (const part of block.atContext) add(part, 'used')
       }
     }
     for (const c of COMMON_QUERIES) add(c.query, c.kind)
-    return out
+    // Size first. Breakpoints are what this list is reached for nearly every time
+    // — a layout has several and they get edited together — while hover, pointer
+    // and the prefers-* queries are set once and left. Sorting is stable, so
+    // within each group the file's own queries still come before the suggested
+    // ones, in the order the file has them.
+    const bySize = (query: string) => (/@container\b/.test(query) || /\b(width|height)\b/.test(query) ? 0 : 1)
+    return out.sort((a, b) => bySize(a.query) - bySize(b.query))
   }, [docByKey])
 
   // Embed queries where THIS element actually has styles — so custom @media /
   // @container (and up-breakpoints) only appear in the dropdown when used. The
   // current context is kept so viewing an empty query doesn't hide itself.
+  // The at-contexts the file being written into holds — the component's own
+  // queries, as opposed to ones reaching this element from a page stylesheet.
+  const sourceContexts = useMemo(() => {
+    const set = new Set<string>()
+    if (sourceDoc) {
+      for (const region of sourceDoc.regions) {
+        for (const block of listAtRuleBlocks(region)) set.add(block.atContext.join(' › '))
+      }
+    }
+    return set
+  }, [sourceDoc])
   const styledEmbedContexts = useMemo(() => {
     const set = new Set<string>()
     if (model) for (const info of indexContexts(model, allContextKeys)) if (info.hasStyles) set.add(info.key)
     if (context) set.add(context)
+    // …plus the queries the file being written into already uses. Those are
+    // offered for any element in it: the dropdown is how you get INTO a query
+    // to write the first rule there, so hiding a query until something is
+    // already in it is a door that only opens from the far side.
+    for (const key of sourceContexts) set.add(key)
     return set
-  }, [model, allContextKeys, context])
+  }, [model, allContextKeys, context, sourceContexts])
 
   // The unified context list: Base + the default Webflow breakpoints (always) +
   // breakpoints/queries the element uses. Drives the dropdown and which breakpoint
   // native reads/writes target.
   const styleContexts = useMemo<StyleContext[]>(() => {
-    const list = buildStyleContexts(allContextKeys, nativeModel, currentBreakpoint, styledEmbedContexts)
+    const list = buildStyleContexts(allContextKeys, nativeModel, currentBreakpoint, styledEmbedContexts, sourceContexts)
     // Keep the manually-selected query available on any element — even one with no
     // styles there yet — so switching elements stays on it and you can add a style.
     // Only needed for custom @media/@container (breakpoints are always built).
     const sticky = stickyContextRef.current
     if (context && sticky && sticky.key === context && !list.some((c) => c.key === context)) list.push(sticky)
     return list
-  }, [allContextKeys, nativeModel, currentBreakpoint, styledEmbedContexts, context])
+  }, [allContextKeys, nativeModel, currentBreakpoint, styledEmbedContexts, sourceContexts, context])
   const currentContext = useMemo<StyleContext>(
     () => styleContexts.find((entry) => entry.key === context)
       ?? styleContexts[0]
@@ -3856,7 +4121,13 @@ export default function EmbedEditor() {
     // Fall back to the FIRST applied class that has styles (the primary block class in
     // Lumos) rather than styled[last] — utility classes (u-*) sort last by name and
     // shouldn't win the default just because their specificity ties the base class.
-    const primaryStyled = defaultTokensRef.current
+    //
+    // Every class, not just the defaulted one: the default is now the first class
+    // alone, and if THAT one has no styles the next one along is still a better
+    // answer than a selector picked by specificity.
+    const primaryStyled = tokens
+      .filter((token) => token.kind === 'class')
+      .map((token) => token.name)
       .flatMap((tok) => {
         const found = local.find((s) => selectorsMatch(s.text, tokensToSelector([tok], tokens)))
         return found ? [found] : []
@@ -4400,6 +4671,11 @@ export default function EmbedEditor() {
               context={context}
               onContext={onContextChange}
               onAddQuery={onAddQuery}
+              onRenameQuery={onRenameQuery}
+              queryUses={queryUses}
+              // The name the source pill below shows for the same file, so the
+              // two lines agree on what "ContentWrapper" is called.
+              sourceLabel={(sourceDoc && embedLabelByKey.get(sourceDoc.source.key)) ?? sourceDoc?.source.label ?? 'this file'}
               querySuggestions={querySuggestions}
               selectors={selectorChips}
               suggestions={selectorSuggestions}

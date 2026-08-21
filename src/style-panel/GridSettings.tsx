@@ -324,7 +324,6 @@ function RepeatSwitch({ on, can, why, busy, title, onChange }: {
         aria-label={`Use repeat() for ${title.toLowerCase()}`}
         onChange={(e) => onChange(e.target.checked)}
       />
-      <span className="embed-editor_switch-track" aria-hidden="true"><span className="embed-editor_switch-knob" /></span>
       <span className="embed-editor_switch-label">repeat()</span>
     </label>
   )
@@ -734,7 +733,7 @@ function Modal({ onClose, children }: { onClose: () => void; children: ReactNode
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
   return createPortal(
-    <div className="embed-editor_bg-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+    <div className="embed-editor_bg-modal-backdrop style-panel-surface" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="embed-editor_grid-modal u-surface-surface" role="dialog" aria-modal="true" aria-label="Grid settings">
         <div className="embed-editor_grid-modal-head">
           <span className="embed-editor_grid-modal-title">Grid settings</span>

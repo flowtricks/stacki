@@ -63,9 +63,16 @@ export const SECTIONS: readonly SectionDef[] = [
   {
     id: 'spacing',
     label: 'Spacing',
+    // The sides only. The box edits one side at a time, so it has a field for
+    // each longhand and none for `padding: a b` — and a property listed in a
+    // section is a property routed to that section's control, which for the
+    // shorthand meant routed to nothing: it rendered in no field at all while
+    // still applying on the page. Left out, it falls through to the catch-all
+    // at the bottom, where every declaration the panel has no control for is
+    // shown and can be edited as written.
     order: [
-      'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
-      'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+      'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+      'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
     ],
   },
   {

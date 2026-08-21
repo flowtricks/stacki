@@ -7,12 +7,12 @@ import ColorSwatch from './components/ColorSwatch'
 import { useLiveColor } from './lib/live-color'
 import ProvenanceList from './ProvenanceList'
 import VariableConnect from './VariableConnect'
-import { handleArrowStep } from './lib/number-step'
 import type { ResolvedProp } from './lib/resolved'
 import { splitTopLevelSpaces } from './lib/background'
-import { useComputedChoice } from './lib/computed-style'
+import { useHighlight } from './lib/computed-style'
 import SegmentPill from './components/SegmentPill'
 import { commitInPlace } from './lib/commit-in-place'
+import SharedLiveInput from './components/LiveInput'
 
 // The Borders section: a corner-radius control (linked / per-corner) and a border
 // control scoped to a side (all / top / right / bottom / left) with style, width,
@@ -102,58 +102,11 @@ function PropLabel({ label, prop, clearProps, className = '', read, busy, clearP
 
 // ─────────────────── Live value field ───────────────────
 
-export function LiveInput({ value, busy, readOnly = false, ariaLabel, placeholder, prop, onLive, onCommit, onVariablePick }: {
-  value: string
-  busy: boolean
-  readOnly?: boolean
-  ariaLabel: string
-  placeholder?: string
-  /** The CSS property being edited — filters the variable picker (border-color →
-   *  Color only; radius / width → no color/font). */
-  prop: string
-  onLive: (value: string) => void
-  onCommit: (value: string) => void
-  onVariablePick?: (binding: string) => void
-}) {
-  const [draft, setDraft] = useState(value)
-  const focused = useRef(false)
-  const liveTimer = useRef<number | null>(null)
-  useEffect(() => { if (!focused.current) setDraft(value) }, [value])
-  const cancelLive = () => { if (liveTimer.current != null) { window.clearTimeout(liveTimer.current); liveTimer.current = null } }
-  useEffect(() => cancelLive, [])
-  const scheduleLive = (text: string) => {
-    cancelLive()
-    liveTimer.current = window.setTimeout(() => { liveTimer.current = null; onLive(text) }, 100)
-  }
-  return (
-    <div className="embed-editor_border-field">
-      <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => (onVariablePick ?? onCommit)(binding)}>
-      <input
-        className="u-input embed-editor_size-input"
-        value={draft}
-        onChange={(event) => { setDraft(event.target.value); scheduleLive(event.target.value) }}
-        onFocus={() => { focused.current = true }}
-        onBlur={() => { focused.current = false; cancelLive(); onCommit(draft) }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') { commitInPlace(event.currentTarget); return }
-          const stepped = handleArrowStep(event)
-          if (!stepped) return
-          event.preventDefault()
-          const el = event.currentTarget
-          el.value = stepped.text
-          el.setSelectionRange(stepped.caret, stepped.caret)
-          setDraft(stepped.text)
-          scheduleLive(stepped.text)
-        }}
-        disabled={busy}
-        readOnly={readOnly}
-        spellCheck={false}
-        placeholder={placeholder ?? '0'}
-        aria-label={ariaLabel}
-      />
-      </VariableConnect>
-    </div>
-  )
+// The panel's shared field (components/LiveInput), in this section's own box —
+// the border rows lay their fields out beside a swatch, so the wrapper is theirs
+// while the field itself is the same one every other row uses.
+export function LiveInput(props: Omit<Parameters<typeof SharedLiveInput>[0], 'wrapClassName'>) {
+  return <SharedLiveInput wrapClassName="embed-editor_field embed-editor_border-field" {...props} />
 }
 
 // ─────────────────────────── Icons ───────────────────────────
@@ -395,8 +348,7 @@ function StyleControl({ value, prop, busy, write, clear }: {
   const lower = value.trim().toLowerCase()
   // Unset → what the page draws: its computed border style, or `none` (the initial
   // value) when there's no canvas to ask.
-  const computed = useComputedChoice(lower ? '' : prop, STYLE_OPTIONS.map((o) => o.value))
-  const shown = lower || computed || 'none'
+  const shown = useHighlight(lower, prop, STYLE_OPTIONS.map((o) => o.value), 'none')
   const customMode = !!lower && !STYLE_VALUES.has(lower)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)

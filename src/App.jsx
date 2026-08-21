@@ -5,6 +5,7 @@ import PalettePanel from './panels/PalettePanel.jsx';
 import StructurePanel from './panels/StructurePanel.jsx';
 import { isInlineRun, noteIndexAbove, noteText, noteValue, selectionAfterDelete } from './treeSelection.js';
 import { setSoundEnabled } from './ui/sound.js';
+import { createPreviewWatch } from './previewRecovery.js';
 import PropsPanel from './panels/PropsPanel.jsx';
 import StylePanel from './panels/StylePanel.jsx';
 import PreviewPane from './panels/PreviewPane.jsx';
@@ -34,7 +35,9 @@ import { isInlineOnly } from './ui/RichContent.jsx';
 import { onAssetRequest, clearAssetRequest } from './assetPick.js';
 import { isDataBound } from './bindings.js';
 import { soleThen } from './branches.js';
-import { hasClass, withClass } from './classAttr.js';
+import { hasClass, namesIn, withClass } from './classAttr.js';
+import { toComponentName } from './componentName.js';
+import { propsForExtraction } from './extractProps.js';
 import { elementLabel } from './classNames.js';
 import {
   autoQueryName,
@@ -98,6 +101,21 @@ function findNodeById(nodes, id) {
 }
 
 // Returns {list, index} of the array containing the node.
+// Whether a subtree reads anything from the file it currently sits in — an
+// expression, a conditional, a loop, or a prop written as code. Moved into a
+// component, those names aren't in scope any more: `{title}` in a page reads
+// the page's `title`, and in Card.astro it reads nothing at all. Not something
+// to refuse over (the fix is a prop, and only the author knows its name) but
+// very much something to say out loud.
+function usesPageScope(node) {
+  if (!node || typeof node !== 'object') return false;
+  if (['expr', 'cond', 'map', 'branch'].includes(node.kind)) return true;
+  for (const value of Object.values(node.props || {})) {
+    if (value && value.type === 'expr') return true;
+  }
+  return (node.children || []).some(usesPageScope);
+}
+
 function findParentList(model, id) {
   const search = (list) => {
     const index = list.findIndex((n) => n.id === id);
@@ -579,6 +597,9 @@ export default function App() {
   // Paths the page reports as having actually rendered something. Null until
   // the page has said anything, which is not the same as "nothing rendered".
   const [renderedPaths, setRenderedPaths] = useState(null);
+  // Nodes the page says are there but taking no part: display:none, and
+  // pointer-events:none. Marked in the navigator (see StructurePanel).
+  const [nodeStates, setNodeStates] = useState(null);
   // path -> the classes that node rendered with, for labelling rows whose
   // class is an expression the source can't resolve.
   const [nodeClasses, setNodeClasses] = useState(null);
@@ -655,6 +676,8 @@ export default function App() {
   // opening a window over the canvas.
   const [assetPick, setAssetPick] = useState(null);
   const tabBeforePick = useRef(null);
+  // Bumped by ⌘⇧A: the Components panel opens its naming dialog when it changes.
+  const [createRequest, setCreateRequest] = useState(0);
 
   // A layout is just a component that lives in src/layouts — it can be
   // placed on a page like any other. Every lookup that answers "what do we
@@ -771,6 +794,40 @@ export default function App() {
       offLog();
     };
   }, []);
+
+  // ----------------------------------------------------------------
+  // Recovering the preview after a compile error
+  // ----------------------------------------------------------------
+  //
+  // See src/previewRecovery.js for what this is for and why it asks the server
+  // rather than reading the error screen or the log.
+  //
+  // The route is read through `livePathRef` rather than named as a dependency:
+  // it is assigned far below this hook, so a dep array mentioning it reads it
+  // before its declaration and the whole app throws (see test/app-renders.js,
+  // which is here because that has happened before). The ref is current by the
+  // time a probe actually runs, and the watch has no reason to be rebuilt just
+  // because the route changed.
+  useEffect(() => {
+    if (!devUrl) return undefined;
+    // Both of these arrive with the main process, which does not reload when the
+    // renderer does (see VITE_DEV_SERVER_URL): a renderer newer than the bridge
+    // would call undefined and take the app down with it. Absent means there is
+    // nothing to ask, which is the same answer as having no dev server.
+    if (typeof window.avb.probeDevPage !== 'function' || typeof window.avb.onPageMaybeChanged !== 'function') {
+      return undefined;
+    }
+    const watch = createPreviewWatch({
+      probe: () => window.avb.probeDevPage(devUrl + (livePathRef.current || '/')),
+      onRecover: () => setRefreshKey((k) => k + 1),
+    });
+    // Every write the app makes, plus every change made outside it.
+    const offWrite = window.avb.onPageMaybeChanged(() => watch.poke());
+    return () => {
+      offWrite();
+      watch.stop();
+    };
+  }, [devUrl]);
 
   // ----------------------------------------------------------------
   // Project lifecycle
@@ -980,14 +1037,23 @@ export default function App() {
   // stack remembers what to come back to (pages and components alike, so
   // nesting works to any depth).
   const openComponent = useCallback(
-    async (name, hostPath, hostOcc = 0) => {
+    async (name, hostPath, hostOcc = 0, filePath = null) => {
       // A tag is only a local binding — `import Layout from
       // '@/layouts/BaseLayout.astro'` renders as <Layout> — so follow the
       // page's own import first, and fall back to matching by filename.
       const { currentPage: host, pageState: state } = pageStateRef.current;
       const spec = (state?.model?.imports || []).find((i) => i.name === name)?.path;
       let comp = null;
-      if (spec && host?.path) {
+      // A caller that already knows the file means THAT file — the instances
+      // popup names a component by where it lives, and two folders can hold
+      // the same basename.
+      if (filePath) {
+        comp =
+          scan.components.find((c) => c.path === filePath) ||
+          scan.layouts.find((l) => l.path === filePath) ||
+          { name, path: filePath };
+      }
+      if (!comp && spec && host?.path) {
         const { path: file } = await window.avb.resolveImport({
           projectPath: projectRef.current.path,
           fromFile: host.path,
@@ -1412,6 +1478,123 @@ export default function App() {
       setSelectedId(id);
     },
     [insertables, mutateModel, resolveImportPath]
+  );
+
+  // The page values a subtree reads — the props it would need once it's a file
+  // of its own. Asked twice (once to show in the dialog, once to act on) and
+  // both times of the live model, so nothing can drift between them.
+  const propsNeededFor = useCallback((model, node) => {
+    if (!model || !node) return [];
+    const scope = namesInScope(model.extraFrontmatter || '', model.imports || []);
+    for (const v of loopVarsAt(model.nodes, node.id)) scope.add(v);
+    // An imported component is carried across as an import, not passed as a prop.
+    for (const imp of model.imports || []) scope.delete(imp.name);
+    return propsForExtraction(node, scope);
+  }, []);
+
+  // Where a component is used, for the palette's instance count. Asked of the
+  // project (not the open file) so it covers pages and components alike; the
+  // component's own file is left out — a file is not one of its own users.
+  const componentUsage = useCallback(async (comp) => {
+    if (!projectRef.current?.path) return { files: [] };
+    try {
+      return await window.avb.componentUsage({
+        projectPath: projectRef.current.path,
+        name: comp.name,
+        exclude: comp.path,
+      });
+    } catch (err) {
+      // Reported, never swallowed into an empty list: "we couldn't look" and
+      // "it isn't used anywhere" are opposite answers, and the second one is
+      // the sort of thing somebody acts on.
+      return { error: cleanError(err) };
+    }
+  }, []);
+
+  // The instances in the file that's already open — those a click can select
+  // rather than navigate to.
+  const pageInstancesOf = useCallback(
+    (name) => {
+      const model = pageStateRef.current.pageState?.model;
+      if (!model) return [];
+      const out = [];
+      const walk = (list) => {
+        for (const n of list || []) {
+          if (n.kind === 'component' && n.name === name) out.push({ id: n.id });
+          if (Array.isArray(n.children)) walk(n.children);
+        }
+      };
+      walk(model.nodes);
+      return out;
+    },
+    []
+  );
+
+  // Turn what's selected into a component of its own: write the file, then
+  // replace the element in the page with an instance of it. The markup MOVES —
+  // the page ends up with `<Card />` where the element was — so this is one
+  // edit to two files, and the component file is written first: a page that
+  // imports a file that isn't there yet is a broken page, however briefly.
+  const createComponentFromSelection = useCallback(
+    async (name, { withProps = true } = {}) => {
+      const page = pageStateRef.current.currentPage;
+      const model = pageStateRef.current.pageState?.model;
+      const node = model && selectedIdRef.current ? findNodeById(model.nodes, selectedIdRef.current) : null;
+      if (!page || !model || !node) return;
+      const props = withProps ? propsNeededFor(model, node) : [];
+      let created;
+      try {
+        created = await window.avb.createComponent({
+          projectPath: projectRef.current?.path,
+          pagePath: page.path,
+          name,
+          nodes: [node],
+          imports: model.imports || [],
+          props,
+        });
+      } catch (err) {
+        showToast(cleanError(err), 'error');
+        return;
+      }
+      const paths = await window.avb.importPathFor({
+        pagePath: page.path,
+        targetPath: created.path,
+        projectPath: projectRef.current?.path,
+      });
+      const id = newId();
+      mutateModel((m) => {
+        const found = findParentList(m, node.id);
+        if (!found) return m;
+        if (!m.imports.some((i) => i.name === name)) {
+          m.imports.push({ name, path: chooseImportPath(m, paths) });
+        }
+        // The instance passes each value straight back in under its own name.
+        // That's what reconnects it: `title` meant the page's title where this
+        // markup used to sit, and it still does, one level out.
+        found.list[found.index] = {
+          id,
+          kind: 'component',
+          name,
+          props: Object.fromEntries(props.map((p) => [p, { type: 'expr', value: p }])),
+          children: null,
+        };
+        return m;
+      }, true);
+      setSelectedId(id);
+      await rescan(projectRef.current.path);
+      // Anything left reading the page's scope can't be reconnected on its own
+      // — an expression naming something that isn't a value the page holds, or
+      // props turned off. The person who just moved it knows what it needs.
+      const stranded = usesPageScope(node) && !props.length;
+      showToast(
+        stranded
+          ? `Created ${created.rel} — it reads page data, so it will need props.`
+          : props.length
+            ? `Created ${created.rel} with ${props.length} prop${props.length === 1 ? '' : 's'}.`
+            : `Created ${created.rel}`
+      );
+    },
+    [mutateModel, propsNeededFor, rescan, showToast]
   );
 
   const moveNode = useCallback(
@@ -1935,6 +2118,21 @@ export default function App() {
         if (el instanceof HTMLElement && el.closest('.cm-editor')) return;
         e.preventDefault();
         setInsertOpen(true);
+        return;
+      }
+
+      // ⌘⇧A makes a component out of the selection: the Components panel opens
+      // with the naming dialog up, the same thing its create button does.
+      // Before the "am I typing" guard, so it works wherever focus happens to
+      // be — it acts on the selected element, not on the field.
+      if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'a') {
+        if (!pageStateRef.current.pageState?.editable) return;
+        if (!selectedIdRef.current || selectedIdRef.current === 'frontmatter') return;
+        const el = e.target;
+        if (el instanceof HTMLElement && el.closest('.cm-editor')) return;
+        e.preventDefault();
+        setLeftTab('components');
+        setCreateRequest((n) => n + 1);
         return;
       }
 
@@ -3049,6 +3247,31 @@ export default function App() {
         ? { id: 'frontmatter', kind: 'frontmatter', value: frontmatterCode }
         : findNodeById(model.nodes, selectedId)
       : null;
+  // What the Components panel's create button would act on: the name to suggest
+  // for the selected element, or why there's nothing to make a component from.
+  const createFrom = useMemo(() => {
+    if (!pageState?.editable) return { reason: 'Open a page to make components from it.' };
+    if (!selectedNode) return { reason: 'Select an element on the canvas first.' };
+    const node = selectedNode;
+    if (node.kind === 'text' || node.kind === 'expr') {
+      return { reason: 'Select the element around this, not the text itself.' };
+    }
+    if (node.kind === 'frontmatter') return { reason: 'Select an element on the canvas first.' };
+    if (node.id === 'layout') return { reason: 'A layout is already a component of its own.' };
+    if (node.kind !== 'element' && node.kind !== 'component') {
+      return { reason: 'Select an element on the canvas first.' };
+    }
+    // Its first class is the name it already goes by — `.project-card` is a
+    // better guess at a component name than `Div`. The tag is the fallback.
+    const first = namesIn(node.props?.class)[0] || namesIn(node.props?.['class:list'])[0] || '';
+    return {
+      name: toComponentName(first) || toComponentName(node.name) || 'Component',
+      label: `<${node.name}>`,
+      // The page values it reads, which the new component can take as props.
+      props: propsNeededFor(model, node),
+    };
+  }, [pageState?.editable, selectedNode, model, propsNeededFor]);
+
   // Rendered classes describe one element, and the canvas can only say what the
   // NEW selection's are a frame or two later. Two ways to spend that gap, and
   // both used to be wrong in one direction:
@@ -3409,6 +3632,7 @@ export default function App() {
   // and said so again — a marker on the wrong row is worse than none.
   useEffect(() => {
     setRenderedPaths(null);
+    setNodeStates(null);
     setNodeClasses(null);
   }, [model]);
 
@@ -3474,6 +3698,33 @@ export default function App() {
     walk(model.nodes, [], false);
     return ids;
   }, [renderedPaths, model, editedRel]);
+
+  // The reported paths as node ids, so the navigator can mark rows without
+  // knowing anything about index paths.
+  const stateIds = React.useMemo(() => {
+    const empty = { hidden: new Set(), inert: new Set() };
+    if (!nodeStates || !model) return empty;
+    const prefix = editedRel ? `${editedRel}|` : '';
+    const local = (p) => (prefix && p.startsWith(prefix) ? p.slice(prefix.length) : p);
+    const byPath = new Map();
+    const walk = (list, trail) => {
+      list.forEach((n, i) => {
+        const t = [...trail, i];
+        byPath.set(t.join('.'), n.id);
+        if (Array.isArray(n.children)) walk(n.children, t);
+      });
+    };
+    walk(model.nodes, []);
+    const ids = (paths) => {
+      const set = new Set();
+      for (const p of paths || []) {
+        const id = byPath.get(local(p));
+        if (id) set.add(id);
+      }
+      return set;
+    };
+    return { hidden: ids(nodeStates.hidden), inert: ids(nodeStates.inert) };
+  }, [nodeStates, model, editedRel]);
 
   const pathFor = (id) => {
     if (!model || !id) return null;
@@ -3751,6 +4002,8 @@ export default function App() {
                 currentLayoutName={currentLayoutName}
                 selectedId={selectedId}
                 emptyNodeIds={emptyNodeIds}
+                hiddenNodeIds={stateIds.hidden}
+                inertNodeIds={stateIds.inert}
                 liveClassesById={liveClassesById}
                 revealTick={revealTick}
                 onSelect={setSelectedId}
@@ -3773,6 +4026,20 @@ export default function App() {
                 devUrl={devUrl}
                 onInsert={(name) => addComponent(name, null)}
                 onDragBegin={() => setLeftTab('navigator')}
+                createFrom={createFrom}
+                createRequest={createRequest}
+                onCreateComponent={createComponentFromSelection}
+                onUsage={componentUsage}
+                pageInstances={pageInstancesOf}
+                onSelectInstance={(id) => { setLeftTab('navigator'); setSelectedId(id) }}
+                onOpenUsage={(entry) => {
+                  // A page is opened as a page; a component or layout is drilled
+                  // into, the same as opening one from the canvas.
+                  const page = scan.pages.find((p) => p.path === entry.path);
+                  if (page) { void selectPage(page); return }
+                  const name = entry.rel.split('/').pop().replace(/\.astro$/, '');
+                  void openComponent(name, undefined, 0, entry.path);
+                }}
               />
             )}
             {leftTab === 'cms' && (
@@ -4029,6 +4296,7 @@ export default function App() {
             }}
             onSelectedClasses={receiveClasses}
             onRenderedPaths={setRenderedPaths}
+            onNodeStates={setNodeStates}
             onNodeClasses={setNodeClasses}
             onOpenPath={(p, occ) => {
               // Double-clicking a component on the canvas drills into it. With no
@@ -4067,6 +4335,7 @@ export default function App() {
               selected={varsGroup}
               hidden={leftTab !== 'variables'}
               showToast={showToast}
+              onRecordUndo={pushCommand}
               onClose={() => setVarsGroup(null)}
             />
           )}

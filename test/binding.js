@@ -265,6 +265,58 @@ const check = (what, condition, detail) => {
     }).every((n) => n.section !== 'collections')
   );
 
+  // One entry OF a list is one of whatever the list holds. The picker knew
+  // `portfolio` was a list of entries and could open it, and knew nothing about
+  // the entry the page is built around — `featured` was offered as a bare value
+  // with no fields under it, so the one thing you most wanted a title out of was
+  // the one thing you could not pick from.
+  {
+    const entry = {
+      id: 'bloomcraft',
+      collection: 'portfolio',
+      data: { title: 'Bloomcraft', order: 1 },
+    };
+    const picked = (decl) =>
+      dataTree({
+        frontmatter: `const portfolio = await getCollection("portfolio");\n${decl}`,
+        collectionSamples: { portfolio: entry },
+      }).find((n) => n.path === 'featured');
+
+    const found = picked('const featured = portfolio.find((p) => p.data.featured) ?? portfolio[0];');
+    check('an entry picked out of a list opens', !!found?.children, J(found));
+    check(
+      'onto the fields of one entry',
+      (found?.children || []).map((c) => c.key).join(',') === 'id,collection,data',
+      J((found?.children || []).map((c) => c.key))
+    );
+    check(
+      'with paths that name it, not the list it came from',
+      (found?.children || []).every((c) => c.path.startsWith('featured.')),
+      J((found?.children || []).map((c) => c.path))
+    );
+    check(
+      'and its fields go as deep as the entry does',
+      J((found?.children?.find((c) => c.key === 'data')?.children || []).map((c) => c.path)) ===
+        J(['featured.data.title', 'featured.data.order']),
+      J(found?.children?.find((c) => c.key === 'data')?.children)
+    );
+    check('it reads as one of them, not all of them', found?.preview === 'portfolio entry', found?.preview);
+    check('an index picks one too', !!picked('const featured = portfolio[0];')?.children);
+    check('and so does .at()', !!picked('const featured = portfolio.at(-1);')?.children);
+    check(
+      'while a narrowed list is still a list',
+      dataTree({
+        frontmatter:
+          'const portfolio = await getCollection("portfolio");\nconst some = portfolio.filter(Boolean);',
+        collectionSamples: { portfolio: entry },
+      }).find((n) => n.path === 'some')?.kind === 'list'
+    );
+    check(
+      'a value that picks from nothing known stays a plain value',
+      !picked('const featured = mystery.find((p) => p);')?.children
+    );
+  }
+
   // Inside a loop, the item leads: it is what the markup in there is for.
   const inLoop = dataTree({
     frontmatter: 'const { post } = Astro.props;\nconst rows = [{ name: "a" }];',
@@ -350,7 +402,10 @@ const check = (what, condition, detail) => {
     require('path').join(__dirname, '..', 'src', 'panels', 'PropsPanel.jsx'),
     'utf8'
   );
-  check('the code field marks its holes', /chipsOf=\{templateHoles\}/.test(panel));
+  // The holes are half of it now: the field also chips a value the code names
+  // outright (`variantClasses` in a class list), so what it marks is the union.
+  check('the code field marks its holes', /const holes = templateHoles\(text\)/.test(panel));
+  check('and the values the code names', /scopeChips\(text, scopeNames\)/.test(panel));
   check('a press on one opens the picker', /onChipClick=\{\(hit\) => open\(hit\)\}/.test(panel));
   check(
     'and the pick rewrites that hole, not the expression',
@@ -358,7 +413,117 @@ const check = (what, condition, detail) => {
   );
   check(
     'with the press surviving its own mousedown',
-    /'\.bind-menu, \.bind-pick, \.expr-chip, \.cm-chip'/.test(panel)
+    /closest\?\.\('\.expr-chip, \.cm-chip'\)/.test(panel)
+  );
+
+  // ── A chip that writes a tail ─────────────────────────────────────────────
+  // `featured?.data.title` is drawn as three pieces, and the last of them
+  // writes `.data.title` while STANDING FOR `featured.data.title`. The picker
+  // marks the current value by what a chip means, not by what it writes — with
+  // only the tail to go on it matched nothing, and opening the chip for a title
+  // showed a list with nothing ticked in it.
+  {
+    const { JSDOM: JSDOM3 } = require('jsdom');
+    const page = new JSDOM3('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+    const priorTail = { window: global.window, document: global.document };
+    global.window = page.window;
+    global.document = page.window.document;
+    global.Node = page.window.Node;
+    global.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const out = path.join(buildDir, 'bindinput.bundle.js');
+    await esbuild.build({
+      stdin: {
+        contents: "export { default as BindInput } from './src/ui/BindInput.jsx'",
+        resolveDir: path.join(__dirname, '..'),
+        loader: 'jsx',
+      },
+      outfile: out,
+      bundle: true,
+      format: 'cjs',
+      platform: 'node',
+      jsx: 'automatic',
+      external: ['react', 'react-dom', 'react/jsx-runtime'],
+      loader: { '.jsx': 'jsx' },
+      logLevel: 'silent',
+    });
+    const React = require('react');
+    const { createRoot } = require('react-dom/client');
+    const { act } = React;
+    const { BindInput } = require(out);
+
+    const api = { current: null };
+    const root = createRoot(page.window.document.getElementById('root'));
+    const draw = async (value) => {
+      await act(async () => {
+        root.render(
+          React.createElement(BindInput, {
+            ref: (r) => { api.current = r },
+            parts: partsFromValue(expr(value)),
+            onChange: () => {},
+          })
+        );
+      });
+      await act(async () => {});
+    };
+    const chipsNow = () =>
+      [...page.window.document.querySelectorAll('.expr-chip')].map((c) => ({
+        text: c.textContent,
+        expr: c.getAttribute('data-expr'),
+        full: c.getAttribute('data-full'),
+      }));
+    const written = () => page.window.document.querySelector('[contenteditable]').textContent;
+
+    await draw('featured?.data.title');
+    check(
+      'the tail chip writes the tail',
+      J(chipsNow().map((c) => c.expr)) === J(['featured', '.data.title']),
+      J(chipsNow())
+    );
+    check(
+      'and stands for the whole path',
+      chipsNow()[1].full === 'featured.data.title',
+      J(chipsNow()[1])
+    );
+    check('a chip that is a whole path in itself needs no second reading', chipsNow()[0].full === null);
+
+    // Repointed somewhere under the same value: the `?` is how the author chose
+    // to reach it, and is not ours to take away.
+    await act(async () => {
+      api.current.replace(page.window.document.querySelectorAll('.expr-chip')[1], 'featured.data.description');
+    });
+    check('repointing under the same value keeps the chain', written() === 'featured?.data.description', written());
+    check(
+      'and the chip still knows what it means',
+      chipsNow()[1]?.full === 'featured.data.description',
+      J(chipsNow())
+    );
+
+    // Repointed somewhere else: the chain goes with it, or the field would read
+    // `featured?posts[0].title`.
+    await draw('featured?.data.title');
+    await act(async () => {
+      api.current.replace(page.window.document.querySelectorAll('.expr-chip')[1], 'posts[0].title');
+    });
+    check('repointing elsewhere takes the chain with it', written() === 'posts[0].title', written());
+    check('leaving one chip, standing for itself', J(chipsNow()) === J([{ text: 'posts[0].title', expr: 'posts[0].title', full: null }]), J(chipsNow()));
+
+    await act(async () => { root.unmount() });
+    global.window = priorTail.window;
+    global.document = priorTail.document;
+  }
+
+  // The picker is told what the chip MEANS, and a press on a chip in another
+  // field puts this one away rather than leaving two pickers open at once.
+  check(
+    'the picker marks the current value by what the chip means',
+    /current=\{menu\.chip\?\.path \?\? \(menu\.chip \? chipPath\(menu\.chip\)/.test(panel),
+    'the picker is reading the chip\'s written text again'
+  );
+  check(
+    'a chip in another field closes this one',
+    /const chip = e\.target\.closest\?\.\('\.expr-chip, \.cm-chip'\)[\s\S]{0,120}wrapRef\.current\?\.contains\(chip\)/.test(panel),
+    'any chip anywhere keeps this picker open'
   );
 
   // ── The chip as it is actually drawn ────────────────────────────────────────
@@ -496,6 +661,47 @@ const check = (what, condition, detail) => {
       .dispatchEvent(new page.window.MouseEvent('click', { bubbles: true, cancelable: true }));
     check('while a press on the button itself still counts', pressed === 1, String(pressed));
   }
+  // ── A value reached the careful way ───────────────────────────────────────
+  // The path scanner knew only `.`, so it stopped at the question mark and then
+  // started again one character INTO the next word: `featured?.data.title` came
+  // out as `featured`, the text "?.d", and a second chip reading `ata.title` —
+  // a chip beginning in the middle of a name.
+  //
+  // A `?` is punctuation: it says how the value is reached, not what it is. So
+  // it belongs to no chip, and the property it guards is a chip of its own —
+  // dot and all, so the line still reads as it was written.
+  check(
+    'a question mark breaks the path into two chips',
+    J(partsFromValue(expr('featured?.data.title'))) ===
+      J([{ expr: 'featured' }, { text: '?' }, { expr: '.data.title' }]),
+    J(partsFromValue(expr('featured?.data.title')))
+  );
+  check(
+    'a path reached the ordinary way stays one',
+    J(partsFromValue(expr('featured.data.title'))) === J([{ expr: 'featured.data.title' }])
+  );
+  check(
+    'every question mark in it breaks it again',
+    J(partsFromValue(expr('post?.data.seo?.title'))) ===
+      J([{ expr: 'post' }, { text: '?' }, { expr: '.data.seo' }, { text: '?' }, { expr: '.title' }]),
+    J(partsFromValue(expr('post?.data.seo?.title')))
+  );
+  check(
+    'with the code around it kept as written',
+    J(partsFromValue(expr('a?.b + 1'))) ===
+      J([{ expr: 'a' }, { text: '?' }, { expr: '.b' }, { text: ' + 1' }]),
+    J(partsFromValue(expr('a?.b + 1')))
+  );
+  // The parts are what gets written back, so they have to add up to the value
+  // they came from — a chip that swallowed or dropped a character would edit
+  // the file just by being looked at.
+  for (const src of ['featured?.data.title', 'post?.data.seo?.title ?? post.data.title', 'a?.b + 1'])
+    check(
+      `${src} survives being split into chips`,
+      valueFromParts(partsFromValue(expr(src)), { mode: 'code' })?.value === src,
+      J(valueFromParts(partsFromValue(expr(src)), { mode: 'code' }))
+    );
+
   // …so every label in the panel carries the guard. A new one without it opens
   // the hole again, silently.
   const labels = (panel.match(/<label[ >]/g) || []).length;

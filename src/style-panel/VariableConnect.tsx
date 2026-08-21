@@ -445,7 +445,7 @@ function tokenChipHtml(chip: Chip): string {
 // it sits at the start/end of the value — browsers won't let you type in front of a
 // leading, or behind a trailing, non-editable node (so without the leading one you can't
 // type `calc(` before a variable that IS the whole value). serializeTokens strips them.
-function buildTokenHtml(value: string, chips: Chip[], code = false): string {
+export function buildTokenHtml(value: string, chips: Chip[], code = false): string {
   const write = code ? highlightCss : escapeHtml
   if (!chips.length) return write(value)
   let out = ''
@@ -453,14 +453,30 @@ function buildTokenHtml(value: string, chips: Chip[], code = false): string {
   chips.forEach((chip, index) => {
     const idx = value.indexOf(chip.text, at)
     if (idx < 0) return
-    let before = write(value.slice(at, idx))
+    let before = spaceRun(write(value.slice(at, idx)))
     if (before === '' && index === 0) before = '\u200B'
     out += before + tokenChipHtml(chip)
     at = idx + chip.text.length
   })
-  let after = write(value.slice(at))
+  let after = spaceRun(write(value.slice(at)))
   if (after === '') after = '\u200B'
   return out + after
+}
+
+// The space in `var(--space-1) var(--space-2)`, wrapped so it survives.
+//
+// The single-line field is a flex container (it centres the chip in a 26px row),
+// and a flex container drops any run of text between two elements that is only
+// whitespace: it never becomes a flex item, so the space had no width and — worse
+// — no caret position. Two chips sat welded together with nowhere to click
+// between them. Inside an element it is an item like any other.
+//
+// Only whitespace-only runs: text with anything else in it is a flex item
+// already, and the serializer reads text nodes wherever they are, so nothing
+// about the value changes either way.
+function spaceRun(html: string): string {
+  if (html === '' || html.trim() !== '') return html
+  return `<span class="embed-editor_varconnect-space">${html}</span>`
 }
 
 // The field's text with the chip standing in as a single character — what the
@@ -510,7 +526,7 @@ function paint(root: HTMLElement, text: string, at: number | null, chips: Chip[]
 // variable stays linked whether it's lone (`var(--x)`) or wrapped (`calc(var(--x) + 10px)`)
 // — writing the plain variable NAME instead would make Webflow store a custom value and
 // unlink it. The two params stay distinct for callers that want a different lone form.
-function serializeTokens(root: HTMLElement, bare: string, varForm: string): string {
+export function serializeTokens(root: HTMLElement, bare: string, varForm: string): string {
   let out = ''
   let hasText = false
   // Each chip's own variable, in the order they appear — a value can hold several,
@@ -623,7 +639,17 @@ function TokenField({
     const el = editorRef.current
     if (!el || value === synced.current) return
     synced.current = value
+    // Rebuilding replaces every node in here, and the caret — with the focus — goes
+    // with them. That is fine for a field nobody is in, and it is what happens on
+    // every keystroke otherwise: a live-writing field (an object-position offset,
+    // say) writes as you type, the value comes back normalised a beat later, and the
+    // field you are typing in is torn out from under you. So carry the caret across.
+    const focused = el.ownerDocument.activeElement === el
+    const at = focused ? caretOffset(el) : null
     el.innerHTML = buildTokenHtml(value, chips, code)
+    if (!focused) return
+    el.focus()
+    if (at != null) setCaretOffset(el, Math.min(at, fieldText(el).length))
   }, [value, chipKey(chips), code, editorRef])
 
   // Refresh the chip label if it resolves later (async variable load) — but only while

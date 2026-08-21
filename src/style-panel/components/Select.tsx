@@ -26,6 +26,10 @@ export type SelectOption<T extends string> = {
   /** Opaque tone token exposed on the trigger as `data-tone` when this option is
    *  selected, so the consumer can color the trigger per option (via its CSS). */
   tone?: string
+  /** A control on the row itself — an edit pencil, say. Pressing it closes the
+   *  menu and runs `onSelect` WITHOUT choosing the option: it acts on the option
+   *  rather than picking it. Shown on the hovered/active row only. */
+  action?: { icon: ReactNode; label: string; onSelect: () => void }
 }
 
 type Props<T extends string> = {
@@ -575,6 +579,30 @@ export default function Select<T extends string>({
                   {option.icon != null ? <span className="u-select-icon">{option.icon}</span> : null}
                   <span className="u-select-label">{option.label}</span>
                   {option.marked ? <span className="u-select-dot" aria-hidden="true" /> : null}
+                  {option.action ? (
+                    <button
+                      type="button"
+                      className="u-select-action"
+                      title={option.action.label}
+                      aria-label={option.action.label}
+                      // The listbox owns arrow-key focus; this is reached with the
+                      // pointer (and by name from a screen reader), not by tabbing
+                      // out of the list mid-navigation.
+                      tabIndex={-1}
+                      // The menu closes on an outside pointerdown and picks on click;
+                      // this row is inside it, so only the click needs stopping — and
+                      // it has to stop before `choose` runs, or acting on an option
+                      // would also select it.
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        const run = option.action!.onSelect
+                        cancelMenu()
+                        run()
+                      }}
+                    >
+                      {option.action.icon}
+                    </button>
+                  ) : null}
                 </div>
               )
             })

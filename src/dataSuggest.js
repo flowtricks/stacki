@@ -632,6 +632,102 @@ export function namesInScope(frontmatter, imports) {
 }
 
 /**
+ * The names an expression field can offer while it is typed, for the scope it
+ * sits in: this file's props, its frontmatter values, the item of any loop
+ * around it — the same things the data picker lists, flattened into labels and
+ * carrying their preview as the note beside each one.
+ *
+ * Frontmatter names the tree leaves out (functions, imported components) come
+ * after them: the picker can't offer those because they aren't data, but a
+ * condition or an expression is free to name any of them.
+ */
+export function scopeCompletions(context = {}) {
+  const out = [];
+  const seen = new Set();
+  const add = (label, detail) => {
+    if (!label || seen.has(label)) return;
+    seen.add(label);
+    out.push({ label, detail });
+  };
+  const walk = (nodes, depth) => {
+    for (const node of nodes || []) {
+      add(node.path, node.preview ? String(node.preview).slice(0, 40) : node.section || '');
+      // One level in is the useful depth: `post.data` earns its place, every
+      // field of every collection does not — the picker is for browsing.
+      if (depth < 2 && Array.isArray(node.children)) walk(node.children, depth + 1);
+    }
+  };
+  try {
+    walk(dataTree(context), 0);
+  } catch {
+    /* a half-written frontmatter parses to nothing; the names below still do */
+  }
+  for (const name of namesInScope(context.frontmatter || '', context.imports || [])) {
+    add(name, 'frontmatter');
+  }
+  return out;
+}
+
+/**
+ * The names an expression NAMES, as ranges, so a field can draw them as chips.
+ *
+ * `render && (content || background)` is three values and some punctuation; the
+ * three are what the reader is looking for, and until now they were the same
+ * grey as the `&&` between them. Only names that are actually in scope count —
+ * anything else is an ordinary identifier (a method, a global, a typo), and
+ * drawing it as a value would say it is one.
+ *
+ * Strings are skipped: `"content"` is a word, not the prop of that name.
+ */
+export function scopeChips(text, names) {
+  const src = String(text ?? '');
+  const inScope = names instanceof Set ? names : new Set(names || []);
+  if (!inScope.size) return [];
+  const out = [];
+  let i = 0;
+  while (i < src.length) {
+    const ch = src[i];
+    // Skip over a string whole — quotes, escapes and all.
+    if (ch === '"' || ch === "'" || ch === '`') {
+      i += 1;
+      while (i < src.length && src[i] !== ch) i += src[i] === '\\' ? 2 : 1;
+      i += 1;
+      continue;
+    }
+    if (!/[A-Za-z_$]/.test(ch)) {
+      i += 1;
+      continue;
+    }
+    // A name, plus any `.field` chain hanging off it: `post.data.title` is one
+    // value, not three.
+    let j = i;
+    while (j < src.length && /[\w$]/.test(src[j])) j += 1;
+    while (src[j] === '.' && /[A-Za-z_$]/.test(src[j + 1] || '')) {
+      j += 1;
+      while (j < src.length && /[\w$]/.test(src[j])) j += 1;
+    }
+    let path = src.slice(i, j);
+    let end = j;
+    // A call is the method, not the value: in `items.map(…)` the value is
+    // `items`, so the chip stops before `.map`. `fn(…)` on its own chips nothing.
+    if (src.slice(j).trimStart().startsWith('(')) {
+      const cut = path.lastIndexOf('.');
+      if (cut <= 0) { i = j; continue; }
+      end = i + cut;
+      path = path.slice(0, cut);
+    }
+    // Not a property of something else — the `data` in `post.data` is part of
+    // that chip, not one of its own.
+    const before = src.slice(0, i).trimEnd();
+    if (!before.endsWith('.') && inScope.has(path.split('.')[0])) {
+      out.push({ from: i, to: end, path });
+    }
+    i = j;
+  }
+  return out;
+}
+
+/**
  * What to call the query for a collection: `blog` → `blogEntries`,
  * `case-studies` → `caseStudiesEntries`. Named for what it holds rather than
  * after the collection alone, so it doesn't read like a single entry — and
@@ -694,6 +790,14 @@ function shapeNode(name, fields) {
 // Whatever `headings` turned out to be, `toc` is that too, so the fields under
 // one belong under the other.
 const KEEPS_SHAPE = /^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\.\s*(filter|slice|sort|reverse|concat|toSorted|toReversed|flat)\s*\(/;
+
+// `const featured = portfolio.find(…) ?? portfolio[0]` — ONE of the same thing.
+// The picker knew `portfolio` was a list of entries and could open it, and knew
+// nothing at all about `featured`: it offered it as a bare value with no fields
+// under it, so the one entry the page is actually built around was the one
+// thing you couldn't pick a title out of.
+const PICKS_ONE =
+  /^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*(?:\.\s*(?:find|at|pop|shift)\s*\(|\[\s*\d+\s*\])/;
 
 /**
  * Everything in scope at the selection that a prop can be bound to, as a tree.
@@ -822,12 +926,28 @@ export function dataTree(context) {
   for (const [name, value] of decls) {
     const node = byName.get(name);
     if (!node || node.children) continue;
-    const m = String(value).trim().match(KEEPS_SHAPE);
+    const src = String(value).trim();
+    const m = src.match(KEEPS_SHAPE);
     const base = m && byName.get(m[1]);
-    if (!base?.children) continue;
-    node.kind = base.kind;
-    node.preview = base.preview;
-    node.children = rebase(base.children, base.path, name);
+    if (base?.children) {
+      node.kind = base.kind;
+      node.preview = base.preview;
+      node.children = rebase(base.children, base.path, name);
+      continue;
+    }
+    // One OF a list is one of whatever the list holds, so the fields to show
+    // are the item's — `featured` opens onto the same fields as `portfolio`'s
+    // first entry, because that is what it is.
+    const one = src.match(PICKS_ONE);
+    const from = one && byName.get(one[1]);
+    const item = from?.kind === 'list' && from.children?.length === 1 ? from.children[0] : null;
+    if (!item?.children) continue;
+    node.kind = item.kind;
+    // "portfolio entries" describes the list; this is one of them.
+    node.preview = /\bentries$/.test(from.preview || '')
+      ? from.preview.replace(/\bentries$/, 'entry')
+      : item.preview || '';
+    node.children = rebase(item.children, item.path, name);
   }
 
   // 4. Every other collection in the project, whether or not this page reads

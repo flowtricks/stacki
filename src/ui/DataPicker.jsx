@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRightIcon, ChevronLeftIcon, CheckIcon, CodeIcon, SearchIcon } from './Icons.jsx';
+import { ChevronRightIcon, ChevronLeftIcon, CheckIcon, CodeIcon, SearchIcon, PencilIcon } from './Icons.jsx';
 
 // The data behind the page, as something you can look through rather than
 // something you have to already know. Every row is a value that is in scope
@@ -80,6 +80,10 @@ export default function DataPicker({
   onPick,
   onExpand,
   onWrite,
+  /** Opens whatever defines the value this picker was opened ON. Absent when
+   *  the picker wasn't opened on anything, or when nothing findable defines it. */
+  onEdit,
+  editLabel = 'Edit',
   footer = true,
 }) {
   const [query, setQuery] = useState('');
@@ -252,6 +256,16 @@ export default function DataPicker({
           </div>
         )}
       </div>
+      {/* Above "Write an expression…", because it is about the thing already
+          bound rather than about replacing it. Only ever rendered for a picker
+          opened on a specific chip — the field's own handle opens this on
+          nothing in particular, and there is no "the" value to edit then. */}
+      {onEdit && (
+        <div className="dp-foot" onMouseDown={(e) => e.preventDefault()} onClick={onEdit}>
+          <PencilIcon size={11} />
+          {editLabel}
+        </div>
+      )}
       {footer && (
         <div className="dp-foot" onMouseDown={(e) => e.preventDefault()} onClick={onWrite}>
           <CodeIcon size={11} />

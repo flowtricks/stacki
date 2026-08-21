@@ -76,7 +76,17 @@ function readDeclarations(text) {
     const entries = [];
     for (const node of rule.nodes || []) {
       if (node.type === 'comment') {
-        entries.push({ kind: 'comment', text: node.text.trim() });
+        // Where the words are, inside the `/*` and the spacing postcss keeps in
+        // raws: a heading in a single-rule file IS this comment, so renaming it
+        // means writing here.
+        const open = node.source?.start?.offset ?? 0;
+        const textStart = open + 2 + (node.raws?.left?.length ?? 0);
+        entries.push({
+          kind: 'comment',
+          text: node.text.trim(),
+          textStart,
+          textEnd: textStart + node.text.length,
+        });
         continue;
       }
       if (node.type !== 'decl' || !node.prop.startsWith('--')) continue;
@@ -482,13 +492,17 @@ function buildGroup(members, file) {
   let current = { title: null, names: [] };
   for (const entry of rule.entries) {
     if (entry.kind === 'comment') {
-      if (current.names.length) sections.push(current);
-      current = { title: entry.text, names: [] };
+      // A heading with nothing under it is kept. It used to be dropped, which
+      // was tidy right up until the panel grew a way to MAKE one: a new group
+      // starts empty, and a group you cannot see is one you cannot fill.
+      // (Untitled runs with no names are still nothing at all.)
+      if (current.names.length || current.title != null) sections.push(current);
+      current = { title: entry.text, titleStart: entry.textStart, titleEnd: entry.textEnd, names: [] };
       continue;
     }
     current.names.push(entry.name);
   }
-  if (current.names.length) sections.push(current);
+  if (current.names.length || current.title != null) sections.push(current);
 
   for (const section of sections) {
     const { families, used } = findFamilies(section.names);
@@ -512,15 +526,18 @@ function buildGroup(members, file) {
       blocks.push({
         kind: 'matrix',
         title: section.title,
+        titleStart: section.titleStart,
+        titleEnd: section.titleEnd,
         columns: family.prefixes.map((p) => ({ id: p, label: p })),
         rows: rows.filter((r) => r.cells.some(Boolean)),
       });
     }
     const leftovers = section.names.filter((n) => !claimed.has(n) && !used.has(n));
-    if (leftovers.length) {
+    if (leftovers.length || (!families.length && section.title != null)) {
       blocks.push({
         kind: 'rows',
         title: families.length ? null : section.title,
+        ...(families.length ? {} : { titleStart: section.titleStart, titleEnd: section.titleEnd }),
         rows: leftovers.map((n) => ({ label: shortLabel(n), name: n, cells: [cellFor(byName[0], n, file, '0')] })),
       });
     }
@@ -638,6 +655,170 @@ function setVariable(projectPath, { file, valueStart, valueEnd, expect, value })
 }
 
 /**
+ * Renames a heading that is a comment.
+ *
+ * A file with one rule takes its headings from the comments in it, so the
+ * heading is not a property of anything — it is those words, and renaming it is
+ * writing them. Like a value, it is written back only if the file still says
+ * what the panel read.
+ */
+function setSectionTitle(projectPath, { file, start, end, expect, title }) {
+  const next = String(title ?? '').trim();
+  if (!next) return { ok: false, error: 'A heading needs a name.' };
+  // The words live inside a comment, and `*/` would end it early — the rest of
+  // the rule would become the comment's text and the variables under it would
+  // stop existing.
+  if (next.includes('*/')) return { ok: false, error: 'A heading cannot contain "*/".' };
+
+  const abs = path.resolve(projectPath, file);
+  const text = fs.readFileSync(abs, 'utf8');
+  const current = text.slice(start, end);
+  if (expect !== undefined && current !== expect) {
+    return { ok: false, stale: true, error: 'This file changed since the panel read it.' };
+  }
+  fs.writeFileSync(abs, text.slice(0, start) + next + text.slice(end), 'utf8');
+  return { ok: true };
+}
+
+/**
+ * Removes a heading that is a comment.
+ *
+ * The variables under it do not go anywhere — they join the section above,
+ * which is what a heading meant in the first place: a line drawn between two
+ * runs of declarations. Rubbing the line out leaves both runs.
+ *
+ * Takes the same range as a rename (where the WORDS are) and grows outwards to
+ * the `/*` and `*\/` around them, then to the whole line when the comment has
+ * one to itself — a heading removed by cutting the words alone would leave an
+ * empty comment behind.
+ */
+function removeSection(projectPath, { file, start, end, expect }) {
+  const abs = path.resolve(projectPath, file);
+  const text = fs.readFileSync(abs, 'utf8');
+  if (expect !== undefined && text.slice(start, end) !== expect) {
+    return { ok: false, stale: true, error: 'This file changed since the panel read it.' };
+  }
+  const open = text.lastIndexOf('/*', start);
+  const close = text.indexOf('*/', end);
+  if (open === -1 || close === -1) return { ok: false, error: 'That heading is no longer a comment.' };
+  let from = open;
+  let to = close + 2;
+  // A line of its own goes with it; a comment sharing a line with something
+  // else leaves that something else where it is.
+  const lineStart = text.lastIndexOf('\n', from - 1) + 1;
+  const lineEnd = text.indexOf('\n', to);
+  const before = text.slice(lineStart, from);
+  const after = text.slice(to, lineEnd === -1 ? text.length : lineEnd);
+  if (!before.trim() && !after.trim()) {
+    from = lineStart;
+    to = lineEnd === -1 ? text.length : lineEnd + 1;
+  }
+  fs.writeFileSync(abs, text.slice(0, from) + text.slice(to), 'utf8');
+  return { ok: true };
+}
+
+/**
+ * Moves a heading, and only the heading.
+ *
+ * The variables do not travel with it, because they were never inside it: a
+ * group is the run of lines between one comment and the next, so dragging a
+ * comment up past three variables is how those three variables come to be under
+ * it. Moving the run wholesale is a different gesture (moveSection) and a
+ * different intent.
+ *
+ * `before` is the declaration it should sit above; null puts it after the last
+ * one, where it heads whatever is added next.
+ */
+function moveHeading(projectPath, { file, selector, start, end, expect, before }) {
+  const abs = path.resolve(projectPath, file);
+  const text = fs.readFileSync(abs, 'utf8');
+  if (expect !== undefined && text.slice(start, end) !== expect) {
+    return { ok: false, stale: true, error: 'This file changed since the panel read it.' };
+  }
+  const open = text.lastIndexOf('/*', start);
+  const close = text.indexOf('*/', end);
+  if (open === -1 || close === -1) return { ok: false, error: 'That heading is no longer a comment.' };
+
+  const comment = text.slice(open, close + 2);
+  let from = open;
+  let to = close + 2;
+  const lineStart = text.lastIndexOf('\n', from - 1) + 1;
+  const lineEnd = text.indexOf('\n', to);
+  if (!text.slice(lineStart, from).trim() && !text.slice(to, lineEnd === -1 ? text.length : lineEnd).trim()) {
+    from = lineStart;
+    to = lineEnd === -1 ? text.length : lineEnd + 1;
+  }
+  const cut = text.slice(0, from) + text.slice(to);
+
+  const root = postcss.parse(cut);
+  let rule = null;
+  root.walkRules((candidate) => {
+    if (!rule && candidate.selector === selector) rule = candidate;
+  });
+  if (!rule) return { ok: false, error: `${selector} is no longer in ${file}.` };
+
+  const decls = (rule.nodes || []).filter((n) => n.type === 'decl');
+  const anchorDecl = before ? decls.find((d) => d.prop === before) : null;
+  let at;
+  if (anchorDecl) {
+    at = cut.lastIndexOf('\n', anchorDecl.source.start.offset - 1) + 1;
+  } else {
+    // After everything: the line following the last declaration, or just inside
+    // the brace when the rule has none left.
+    const last = decls[decls.length - 1];
+    if (last) {
+      const nl = cut.indexOf('\n', last.source.end.offset);
+      at = nl === -1 ? cut.length : nl + 1;
+    } else {
+      at = cut.indexOf('{', rule.source.start.offset) + 2;
+    }
+  }
+  const indent = cut.slice(cut.lastIndexOf('\n', at - 1) + 1, at).match(/^\s*/)[0] || '  ';
+  fs.writeFileSync(abs, `${cut.slice(0, at)}${indent}${comment}\n${cut.slice(at)}`, 'utf8');
+  return { ok: true };
+}
+
+/**
+ * Writes another heading into the rule.
+ *
+ * A heading is a line between declarations, so a second one is how a run of
+ * variables becomes two runs — and an empty one, written directly above another
+ * heading, is a group waiting to be filled.
+ *
+ * `at` puts it on the line holding that offset (above an existing heading);
+ * `before` puts it above a named declaration. Either way it takes the
+ * indentation of the line it lands on.
+ */
+function addSection(projectPath, { file, selector, title, before, at }) {
+  const next = String(title ?? '').trim();
+  if (!next) return { ok: false, error: 'A heading needs a name.' };
+  if (next.includes('*/')) return { ok: false, error: 'A heading cannot contain "*/".' };
+
+  const abs = path.resolve(projectPath, file);
+  const text = fs.readFileSync(abs, 'utf8');
+
+  let offset = at;
+  if (typeof offset !== 'number') {
+    const root = postcss.parse(text);
+    let rule = null;
+    root.walkRules((candidate) => {
+      if (!rule && candidate.selector === selector) rule = candidate;
+    });
+    if (!rule) return { ok: false, error: `${selector} is no longer in ${file}.` };
+    const decls = (rule.nodes || []).filter((n) => n.type === 'decl');
+    const anchorDecl = (before && decls.find((d) => d.prop === before)) || decls[decls.length - 1];
+    if (!anchorDecl) return { ok: false, error: `${selector} has nothing to head.` };
+    offset = anchorDecl.source.start.offset;
+  }
+  if (offset < 0 || offset > text.length) return { ok: false, error: 'That place is no longer in the file.' };
+
+  const lineStart = text.lastIndexOf('\n', offset - 1) + 1;
+  const indent = text.slice(lineStart, offset).match(/^\s*/)[0];
+  fs.writeFileSync(abs, `${text.slice(0, lineStart)}${indent}/* ${next} */\n${text.slice(lineStart)}`, 'utf8');
+  return { ok: true, title: next };
+}
+
+/**
  * Moves one declaration to sit before another inside the same rule. The panel
  * reorders rows; the file is what actually holds the order, so a row that moves
  * moves the line — indentation, trailing comment and all — rather than being
@@ -645,7 +826,7 @@ function setVariable(projectPath, { file, valueStart, valueEnd, expect, value })
  *
  * `target` is the name to land in front of; null means the end of the rule.
  */
-function moveVariable(projectPath, { file, selector, name, target }) {
+function moveVariable(projectPath, { file, selector, name, target, at: landAt }) {
   const abs = path.resolve(projectPath, file);
   const text = fs.readFileSync(abs, 'utf8');
   const root = postcss.parse(text);
@@ -678,9 +859,16 @@ function moveVariable(projectPath, { file, selector, name, target }) {
 
   const span = lineSpan(moved);
   const line = text.slice(span.from, span.to);
-  const at = before
-    ? lineSpan(before).from
-    : lineSpan((rule.nodes || []).filter((n) => n.type === 'decl').pop()).to;
+  // Landing in front of a declaration is not enough on its own: a group ends at
+  // a COMMENT, and "in front of the next declaration" steps over that comment
+  // and into the next group. So a drop at the end of a group says where it
+  // means, as an offset — the start of the line the variable should land above,
+  // comment or not.
+  const at = typeof landAt === 'number'
+    ? text.lastIndexOf('\n', Math.max(0, Math.min(landAt, text.length)) - 1) + 1
+    : before
+      ? lineSpan(before).from
+      : lineSpan((rule.nodes || []).filter((n) => n.type === 'decl').pop()).to;
 
   // Cut first, then insert at a position corrected for the cut.
   const withoutLine = text.slice(0, span.from) + text.slice(span.to);
@@ -807,8 +995,164 @@ function addVariable(projectPath, { file, selector, name, value = '', after }) {
   return { ok: true, name };
 }
 
+
+// --- renaming ----------------------------------------------------------------
+//
+// A custom property's name is not kept anywhere but in the text: it is the
+// declaration `--brand: …` and every `var(--brand)` that reads it, spread across
+// however many stylesheets and components the project has. So a rename is one
+// substitution over all of them, and it either happens everywhere or the name is
+// silently broken somewhere the panel cannot show.
+//
+// Groups are not stored either — the panel derives them from shared name
+// prefixes (see prefixSections), so renaming a group is renaming each of its
+// members. Both arrive here as a list of renames applied in a single pass, which
+// is also what makes a swap (`a`→`b`, `b`→`a`) come out right instead of
+// collapsing into one name.
+
+// Where a name can be written. CSS files hold most of them; an Astro component
+// keeps its rules in a `<style>` block, and a `style="--x: 1"` can sit in markup
+// or a template — a token spelled `--x` in any of these is that variable.
+const RENAME_EXTS = /\.(css|s[ac]ss|less|pcss|postcss|astro|html|htm|md|mdx|mdoc|svelte|vue|jsx|tsx|[cm]?[jt]s)$/i;
+
+/**
+ * Every file in the project that could spell a variable's name.
+ *
+ * The panel READS variables from `src`, `public` and `styles` — that is where a
+ * project keeps its stylesheets. References are not so tidy: a `style` attribute
+ * in a layout, a `--x` in a Tailwind or Astro config at the root, a themed
+ * string in a helper module. So this walks the project rather than those three
+ * roots, and skips only what is not the project's own text (dependencies, build
+ * output, version control, caches).
+ *
+ * Broad on purpose. A missed reference is a variable that silently stops
+ * resolving somewhere the panel cannot see, which is the failure that has no
+ * symptom until someone looks at the page.
+ */
+function findRenameTargets(projectPath) {
+  const found = [];
+  const walk = (dir, depth) => {
+    if (depth > 10) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      // Dotted directories are caches and version control; a dotted FILE at the
+      // root can still be a config that names a variable (`.postcssrc`), so the
+      // skip is for directories only.
+      if (entry.isDirectory()) {
+        if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
+        walk(path.join(dir, entry.name), depth + 1);
+      } else if (RENAME_EXTS.test(entry.name)) {
+        found.push(path.join(dir, entry.name));
+      }
+    }
+  };
+  walk(projectPath, 0);
+  return [...new Set(found)].sort();
+}
+
+/** A custom property name, as a name and not as a prefix of a longer one. */
+const NAME_RE = /^--[^\s:;{}()'"\\,]+$/;
+// `--space` must not match inside `--space-2` or `--x--space`, in either
+// direction — the parts of a name are separated by hyphens, so a hyphen on
+// either side is part of a longer name rather than a boundary.
+const EDGE = '[-\\w\\u00a0-\\uffff]';
+
+/**
+ * Renames custom properties across the project — declarations and references
+ * alike, in one pass.
+ *
+ * `renames` is [{ from, to }]; `markWrite` is called with each file about to be
+ * written. Everything is checked before anything is written:
+ * a rename that would land on a name already in use, or that is not a name at
+ * all, takes the whole batch down rather than leaving a group half renamed.
+ */
+function renameVariables(projectPath, { renames, markWrite }) {
+  const list = (renames || []).filter((r) => r && r.from !== r.to);
+  if (!list.length) return { ok: true, files: 0, occurrences: 0 };
+
+  const froms = new Set();
+  const tos = new Set();
+  for (const { from, to } of list) {
+    if (!NAME_RE.test(String(from || ''))) return { ok: false, error: `${from} is not a variable name.` };
+    if (!NAME_RE.test(String(to || ''))) {
+      return { ok: false, error: `"${String(to || '').replace(/^--/, '')}" cannot be a variable name.` };
+    }
+    if (froms.has(from)) return { ok: false, error: `${from} is renamed twice in one go.` };
+    if (tos.has(to)) return { ok: false, error: `Two variables would both be called ${to}.` };
+    froms.add(from);
+    tos.add(to);
+  }
+
+  // Taken names, minus the ones this batch is freeing up: renaming a group means
+  // every member moves at once, and a swap within it is legitimate.
+  const declared = new Set();
+  for (const abs of findStylesheets(projectPath)) {
+    let text;
+    try {
+      text = fs.readFileSync(abs, 'utf8');
+    } catch {
+      continue;
+    }
+    for (const m of text.matchAll(/(^|[;{}\s])(--[^\s:;{}()'"\\,]+)\s*:/g)) declared.add(m[2]);
+  }
+  for (const to of tos) {
+    if (declared.has(to) && !froms.has(to)) {
+      return { ok: false, error: `${to} already exists.` };
+    }
+  }
+
+  const by = new Map(list.map(({ from, to }) => [from, to]));
+  // One alternation over every name being renamed, longest first — so that with
+  // both `--a` and `--a-b` in the batch, `--a-b` is the one that matches.
+  const alternation = [...by.keys()]
+    .sort((a, b) => b.length - a.length)
+    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+  const re = new RegExp(`(?<!${EDGE})(${alternation})(?!${EDGE})`, 'g');
+
+  const writes = [];
+  let occurrences = 0;
+  for (const abs of findRenameTargets(projectPath)) {
+    let text;
+    try {
+      if (fs.statSync(abs).size > MAX_BYTES) continue;
+      text = fs.readFileSync(abs, 'utf8');
+    } catch {
+      continue;
+    }
+    let hits = 0;
+    const next = text.replace(re, (match) => {
+      hits += 1;
+      return by.get(match) ?? match;
+    });
+    if (!hits) continue;
+    occurrences += hits;
+    writes.push([abs, next]);
+  }
+
+  // Written only once every file has been read and rewritten in memory: a
+  // half-applied rename is worse than a refused one. Each file is announced as
+  // the app's own write just before it happens, so the watcher does not read it
+  // back as somebody editing the project from outside.
+  for (const [abs, next] of writes) {
+    markWrite?.(abs);
+    fs.writeFileSync(abs, next, 'utf8');
+  }
+  return { ok: true, files: writes.length, occurrences };
+}
+
 module.exports = {
   readVariables,
+  renameVariables,
+  setSectionTitle,
+  removeSection,
+  addSection,
+  moveHeading,
   setVariable,
   moveVariable,
   moveSection,

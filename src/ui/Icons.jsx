@@ -155,6 +155,18 @@ export const ElementComponentIcon = (p) => (
   </I>
 );
 
+// Make a component out of what's selected — the component cube with a plus.
+export const ComponentPlusIcon = (p) => (
+  <I {...p} filled>
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M7.52148 1.69129C7.81982 1.52868 8.18018 1.52868 8.47852 1.69129L13.4785 4.41883C13.7998 4.59406 14 4.93082 14 5.29676V7.99988H13V5.84168L8.5 8.29676V14.2968L8.47852 14.3085C8.18027 14.471 7.81973 14.471 7.52148 14.3085L2.52148 11.5809C2.20027 11.4057 2.00005 11.0689 2 10.703V5.29676C2 4.93082 2.20022 4.59406 2.52148 4.41883L7.52148 1.69129ZM3 10.703L7.5 13.1571V8.29676L3 5.84168V10.703ZM3.54395 4.99988L8 7.43055L12.4561 4.99988L8 2.56922L3.54395 4.99988Z"
+    />
+    <path d="M13 10.9999H15V11.9999H13V13.9999H12V11.9999H10V10.9999H12V8.99988H13V10.9999Z" />
+  </I>
+);
+
 export const ElementSlotIcon = (p) => (
   <I {...p} filled>
     <path
@@ -470,6 +482,19 @@ export const HideIcon = (p) => (
   </I>
 );
 
+// Struck-through pointer: this node is drawn but takes no clicks
+// (`pointer-events: none`). Filled, like the eye above it.
+export const PointerEventsNoneIcon = (p) => (
+  <I {...p} filled>
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M11.5 7.00049C13.9853 7.00049 16 9.01521 16 11.5005C15.9997 13.9855 13.9851 16.0005 11.5 16.0005C9.01488 16.0005 7.00026 13.9855 7 11.5005C7 9.01521 9.01472 7.00049 11.5 7.00049ZM9.4043 14.3032C9.98854 14.7407 10.7139 15.0005 11.5 15.0005C13.4328 15.0005 14.9997 13.4333 15 11.5005C15 10.7143 14.7403 9.9881 14.3027 9.40381L9.4043 14.3032ZM11.5 8.00049C9.567 8.00049 8 9.56749 8 11.5005C8.00011 12.2865 8.25975 13.012 8.69727 13.5962L13.5957 8.69678C13.0115 8.25929 12.2861 8.00049 11.5 8.00049Z"
+    />
+    <path d="M7 5.99951H4.25977L5.71289 9.46045L4.42969 9.99951L2.97168 6.52783L1 8.49951V-0.000488281L7 5.99951Z" />
+  </I>
+);
+
 export const CheckIcon = (p) => (
   <I {...p} strokeWidth={1.6}>
     <path d="m3.5 8.5 3 3 6-7" />
@@ -674,6 +699,15 @@ export const CanvasIcon = (p) => (
     <rect x="1.75" y="3" width="7" height="10" rx="1" />
     <rect x="10.75" y="4.75" width="3.5" height="6.5" rx="0.8" />
   </I>
+);
+
+// Three dots: the row's own menu, shown on hover.
+export const MoreIcon = (p) => (
+  <svg viewBox="0 0 16 16" width={p?.size || 14} height={p?.size || 14} fill="currentColor" aria-hidden="true">
+    <circle cx="3.5" cy="8" r="1.3" />
+    <circle cx="8" cy="8" r="1.3" />
+    <circle cx="12.5" cy="8" r="1.3" />
+  </svg>
 );
 
 export const CopyIcon = (p) => (

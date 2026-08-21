@@ -14,6 +14,7 @@ import {
   CodeIcon,
   ChevronRightIcon,
   HideIcon,
+  PointerEventsNoneIcon,
   ChevronDownIcon,
   DragIcon,
   FileIcon,
@@ -40,6 +41,8 @@ export default function StructurePanel({
   currentLayoutName,
   selectedId,
   emptyNodeIds,
+  hiddenNodeIds,
+  inertNodeIds,
   liveClassesById,
   revealTick,
   onSelect,
@@ -305,6 +308,8 @@ export default function StructurePanel({
           depth={0}
           selectedId={selectedId}
           emptyNodeIds={emptyNodeIds}
+          hiddenNodeIds={hiddenNodeIds}
+          inertNodeIds={inertNodeIds}
           liveClassesById={liveClassesById}
           currentLayoutName={currentLayoutName}
           onChangeLayout={onChangeLayout}
@@ -533,6 +538,12 @@ function TreeNode({ node, note, parentId, index, depth, ...ctx }) {
 
   // Reported by the page: this node's markers wrap nothing.
   const rendersNothing = !!ctx.emptyNodeIds?.has(node.id);
+  // Also reported by the page, and different from the above: these DID render.
+  // `display: none` is there and not drawn; `pointer-events: none` is drawn and
+  // takes no clicks. Neither is readable from the source — the rule can come
+  // from any stylesheet — so the row says it.
+  const hidden = !!ctx.hiddenNodeIds?.has(node.id);
+  const inert = !!ctx.inertNodeIds?.has(node.id);
   // An `if` with no `else` shows what is inside it directly — see branches.js.
   // `host` is the node those children really belong to, which is what a drop
   // has to name.
@@ -652,12 +663,23 @@ function TreeNode({ node, note, parentId, index, depth, ...ctx }) {
             {hint}
           </span>
         )}
-        {rendersNothing && (
-          <span
-            className="node-empty"
-            title="Renders nothing on the page with its current props"
-          >
-            <HideIcon size={13} />
+        {(rendersNothing || hidden || inert) && (
+          <span className="node-empty">
+            {rendersNothing ? (
+              <span title="Renders nothing on the page with its current props">
+                <HideIcon size={13} />
+              </span>
+            ) : null}
+            {hidden && !rendersNothing ? (
+              <span title="display: none — on the page, not drawn">
+                <HideIcon size={13} />
+              </span>
+            ) : null}
+            {inert ? (
+              <span title="pointer-events: none — drawn, but takes no clicks">
+                <PointerEventsNoneIcon size={13} />
+              </span>
+            ) : null}
           </span>
         )}
       </div>

@@ -2,6 +2,7 @@ import ReactCodeMirror from '@uiw/react-codemirror'
 import { useMemo } from 'react'
 import { css } from '@codemirror/lang-css'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { search } from '@codemirror/search'
 import { Decoration, EditorView } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
 import './CodeEditor.css'
@@ -56,6 +57,20 @@ const codeEditorTheme = EditorView.theme({
   '.cm-selectionBackground, &.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': {
     backgroundColor: 'var(--selection)',
   },
+  // Find results: a quiet wash on every hit, amber on the current one. Set here
+  // rather than in CSS because CodeMirror's defaults for these live in a base
+  // theme, which only a theme reliably outranks.
+  '.cm-searchMatch': {
+    backgroundColor: 'rgba(0, 153, 255, 0.22)',
+    borderRadius: '2px',
+  },
+  '.cm-searchMatch.cm-searchMatch-selected': {
+    backgroundColor: 'rgba(255, 214, 10, 0.16)',
+    // A ring rather than a heavier fill: CodeMirror also SELECTS the current
+    // match, and two washes over each other came out a muddy third colour.
+    outline: '1px solid rgba(255, 214, 10, 0.9)',
+    outlineOffset: '-1px',
+  },
   '.cm-content ::selection': {
     color: 'var(--selection-text)',
     backgroundColor: 'var(--selection)',
@@ -64,7 +79,9 @@ const codeEditorTheme = EditorView.theme({
 }, { dark: true })
 
 const codeEditorExtensions = {
-  css: [css(), EditorView.lineWrapping, syntaxHighlighting(codeEditorHighlightStyle), codeEditorTheme],
+  // ⌘F opens at the top: this editor is short, and a panel at the bottom covers
+  // the end of the file — which is where a search that has run leaves you.
+  css: [css(), search({ top: true }), EditorView.lineWrapping, syntaxHighlighting(codeEditorHighlightStyle), codeEditorTheme],
 }
 
 const codeEditorBasicSetup = {

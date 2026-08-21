@@ -5,6 +5,7 @@ import { css } from '@codemirror/lang-css';
 import { javascript } from '@codemirror/lang-javascript';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { syntaxHighlighting, HighlightStyle, LanguageDescription } from '@codemirror/language';
+import { search } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
 
 // CodeMirror 6 wrapper themed to match the app. Controlled-ish: `value` in,
@@ -35,6 +36,22 @@ export const appTheme = EditorView.theme(
       { backgroundColor: 'var(--selection)' },
     '.cm-content ::selection': { backgroundColor: 'var(--selection)', color: 'var(--selection-text)' },
     '.cm-activeLine': { backgroundColor: 'rgba(255, 255, 255, 0.03)' },
+    // Find results. Every hit gets a quiet blue wash; the one you're ON gets
+    // amber with an edge, so running through matches is a colour changing
+    // places rather than a list of identical highlights to count through.
+    // In the theme (not the app stylesheet) because CodeMirror's own default
+    // for these ships in a base theme, which only a theme reliably outranks.
+    '.cm-searchMatch': {
+      backgroundColor: 'rgba(0, 153, 255, 0.22)',
+      borderRadius: '2px',
+    },
+    '.cm-searchMatch.cm-searchMatch-selected': {
+      backgroundColor: 'rgba(255, 214, 10, 0.16)',
+      // A ring rather than a heavier fill: CodeMirror also SELECTS the current
+      // match, and two washes over each other came out a muddy third colour.
+      outline: '1px solid rgba(255, 214, 10, 0.9)',
+      outlineOffset: '-1px',
+    },
     '.cm-gutters': {
       backgroundColor: 'transparent',
       color: 'var(--text-faint)',
@@ -121,6 +138,10 @@ export default function CodeEditor({ value, language, onChange, revealLine }) {
         doc: value ?? '',
         extensions: [
           basicSetup,
+          // ⌘F opens at the TOP of the editor. The panel takes a couple of rows
+          // wherever it goes; at the bottom it lands over the end of the file,
+          // which is where a search that has run puts you.
+          search({ top: true }),
           lang,
           appTheme,
           appHighlight,

@@ -18,7 +18,7 @@ import ProvenanceList from './ProvenanceList'
 import VariableConnect from './VariableConnect'
 import type { Contributor, ResolvedProp } from './lib/resolved'
 import { splitTopLevelSpaces } from './lib/background'
-import { useComputedChoice } from './lib/computed-style'
+import { useComputedChoice, useHighlight } from './lib/computed-style'
 import SegmentPill from './components/SegmentPill'
 import { commitInPlace } from './lib/commit-in-place'
 
@@ -688,8 +688,7 @@ function AlignRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, o
   const d = displayOf(read('text-align'))
   // Nothing set here → what the page computes for this element (text-align inherits,
   // so that's usually a parent's), falling back to `left` (start, LTR).
-  const computed = useComputedChoice(d.present ? '' : 'text-align', ALIGN_SEGS.map((s) => s.value))
-  const current = (d.present ? d.value.trim().toLowerCase() : (computed || 'left')) || 'left'
+  const current = useHighlight(d.present ? d.value.trim().toLowerCase() : '', 'text-align', ALIGN_SEGS.map((s) => s.value), 'left')
   return (
     <div className="embed-editor_size-row">
       <PropLabel label="Align" prop="text-align" d={d} contributors={read('text-align')?.contributors ?? []} busy={busy} onClear={() => clearProp('text-align')} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
@@ -784,8 +783,7 @@ function SegCell({ prop, label, ariaLabel, segs, fallback, read, busy, setProp, 
   fallback: string
 } & Props) {
   const d = displayOf(read(prop))
-  const computed = useComputedChoice(d.present ? '' : prop, segs.map((s) => s.value))
-  const current = (d.present ? d.value.trim().toLowerCase() : (computed || fallback)) || fallback
+  const current = useHighlight(d.present ? d.value.trim().toLowerCase() : '', prop, segs.map((s) => s.value), fallback)
   return (
     <div className="embed-editor_type-cell">
       <SegBar
@@ -903,8 +901,7 @@ function LenRow({ prop, label, placeholder, read, busy, setProp, clearProp, live
 
 function RuleStyleRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onProvenance' | 'onSelectSelector'>) {
   const d = displayOf(read('column-rule-style'))
-  const computed = useComputedChoice(d.present ? '' : 'column-rule-style', RULE_STYLE_SEGS.map((s) => s.value))
-  const current = (d.present ? d.value.trim().toLowerCase() : (computed || 'none')) || 'none'
+  const current = useHighlight(d.present ? d.value.trim().toLowerCase() : '', 'column-rule-style', RULE_STYLE_SEGS.map((s) => s.value), 'none')
   return (
     <div className="embed-editor_size-row">
       <PopLabel label="Style" prop="column-rule-style" read={read} busy={busy} clearProp={clearProp} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
@@ -966,8 +963,7 @@ function RuleColorRow({ read, busy, setProp, clearProp, liveSetProp, onProvenanc
 
 function SpanRow({ read, busy, setProp, clearProp, onProvenance, onSelectSelector }: Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'onProvenance' | 'onSelectSelector'>) {
   const d = displayOf(read('column-span'))
-  const computed = useComputedChoice(d.present ? '' : 'column-span', ['none', 'all'])
-  const value = (d.present ? d.value.trim().toLowerCase() : computed || 'none') === 'all' ? 'all' : 'none'
+  const value = useHighlight(d.present ? d.value.trim().toLowerCase() : '', 'column-span', ['none', 'all'], 'none') === 'all' ? 'all' : 'none'
   return (
     <div className="embed-editor_size-row">
       <PopLabel label="Span" prop="column-span" read={read} busy={busy} clearProp={clearProp} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
@@ -1277,7 +1273,7 @@ function EnumSelect({ prop, ariaLabel, fallback, options: opts, forceCustom, set
   const matched = values.has(current) ? current : undefined
   // Unset → show what the page computes for this element (an inherited value, a rule
   // the panel's matcher can't see), and only then the CSS default.
-  const computed = useComputedChoice(matched ? '' : prop, opts.map(([value]) => value))
+  const shownComputed = useHighlight('', matched ? '' : prop, opts.map(([value]) => value), fallback)
   const customMode = forceCustom || (d.present && !matched)
 
   const options: SelectOption<string>[] = opts.map(([value, optLabel]) => ({ value, label: optLabel }))
@@ -1310,7 +1306,7 @@ function EnumSelect({ prop, ariaLabel, fallback, options: opts, forceCustom, set
 
   return (
     <Select
-      value={customMode ? CUSTOM : (matched ?? (computed || fallback))}
+      value={customMode ? CUSTOM : (matched ?? shownComputed)}
       options={options}
       onChange={pick}
       onPreview={(value) => liveSetProp(prop, value === CUSTOM ? null : value, false)}
@@ -1387,10 +1383,10 @@ function WrapRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, on
 
 function TruncateRow({ read, busy, setProp, clearProp, onProvenance, onSelectSelector }: Props) {
   const d = displayOf(read('text-overflow'))
-  const computed = useComputedChoice(d.present ? '' : 'text-overflow', ['clip', 'ellipsis'])
+  const shownOverflow = useHighlight('', d.present ? '' : 'text-overflow', ['clip', 'ellipsis'], 'clip')
   const current = d.present
     ? (d.value.trim().toLowerCase() === 'ellipsis' ? 'ellipsis' : 'clip')
-    : (computed || 'clip')
+    : shownOverflow
   return (
     <div className="embed-editor_size-row">
       <PropLabel label="Truncate" prop="text-overflow" d={d} contributors={read('text-overflow')?.contributors ?? []} busy={busy} onClear={() => clearProp('text-overflow')} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />

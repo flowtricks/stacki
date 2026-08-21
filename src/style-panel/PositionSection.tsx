@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import Select from './components/Select'
 import FieldLabel from './components/FieldLabel'
 import { PropTip, ProvenanceLabel } from './components/PropTip'
-import { useComputedChoice } from './lib/computed-style'
+import { useHighlight } from './lib/computed-style'
 import ProvenanceList from './ProvenanceList'
 import VariableConnect from './VariableConnect'
 import { SpacingFill, useSpacingBox } from './SpacingBox'
@@ -192,7 +192,7 @@ function PositionControl({ read, busy, setProp, liveSetProp }: { read: Read; bus
   const isPreset = POSITION_PRESET_VALUES.has(current)
   // Unset → what the page computes (a `*` rule the panel can't see, a UA default),
   // then `static`.
-  const computed = useComputedChoice(current ? '' : 'position', POSITION_PRESETS.map((p) => p.value))
+  const shownPosition = useHighlight(current, 'position', POSITION_PRESETS.map((p) => p.value), 'static')
   // Custom whenever position is a free value (var()/unset/…) or !important, or the user
   // explicitly entered custom (kept until a preset is picked).
   const [forceCustom, setForceCustom] = useState(false)
@@ -204,7 +204,7 @@ function PositionControl({ read, busy, setProp, liveSetProp }: { read: Read; bus
   return (
     <Select
       className="embed-editor_position-select"
-      value={custom ? CUSTOM : (current || computed || 'static')}
+      value={custom ? CUSTOM : shownPosition}
       options={[
         ...POSITION_PRESETS.map((p) => ({ value: p.value, label: p.label, icon: p.icon })),
         { value: CUSTOM, label: 'Custom' },
