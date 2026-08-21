@@ -6,7 +6,9 @@ import {
   ChevronRightIcon,
   FileIcon,
   CodeIcon,
+  TrashIcon,
 } from '../ui/Icons.jsx';
+import { confirmDialog } from '../ui/ConfirmDialog.jsx';
 
 import AssetThumb, { TEXT_EXT } from '../ui/AssetThumb.jsx';
 
@@ -47,6 +49,7 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
   const [renaming, setRenaming] = useState(null); // rel of entry being renamed
   const [newFolder, setNewFolder] = useState(false);
   const [dragTarget, setDragTarget] = useState(null); // folder rel or '' (cwd)
+  const [query, setQuery] = useState('');
   const cwdRef = useRef('');
   cwdRef.current = cwd;
 
@@ -99,10 +102,22 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickKey, entries]);
 
-  const folders = entries.filter((e) => e.isDir && e.parent === cwd);
+  // A search looks through the whole project, not the folder you happen to be
+  // standing in — the reason to type a file name is that you don't know where
+  // it lives. The breadcrumb stays put so leaving the search puts you back.
+  const q = query.trim().toLowerCase();
+  const matches = (e) => e.name.toLowerCase().includes(q) || e.rel.toLowerCase().includes(q);
+
+  const folders = entries.filter((e) => e.isDir && (q ? matches(e) : e.parent === cwd));
   const files = entries
-    .filter((e) => !e.isDir && e.parent === cwd)
+    .filter((e) => !e.isDir && (q ? matches(e) : e.parent === cwd))
     .filter((e) => !pick || kindMatches(pick.mediaKind, e.name));
+
+  // A folder goes only when it is empty, and public/ and src/ never go at all —
+  // the guard is in the handler, and this is the same rule said in the UI so
+  // the button is never offered for something that would be refused.
+  const holdsFiles = (folder) =>
+    entries.some((e) => !e.isDir && e.rel.startsWith(`${folder.rel}/`));
 
   const act = async (fn) => {
     try {
@@ -184,6 +199,46 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
     });
   };
 
+  // --- Delete ----------------------------------------------------------
+
+  // Asked with the answer already in hand: the scan runs first so the question
+  // can name the pages that would lose the file, rather than asking whether
+  // the user happens to remember.
+  const askDelete = async (entry) => {
+    let used = [];
+    try {
+      const res = await window.avb.assetUsage({ projectPath: project.path, rel: entry.rel });
+      used = res?.files || [];
+    } catch {
+      // A scan that fails is not a reason to block the delete — the confirm
+      // just loses the extra sentence.
+    }
+    const ok = await confirmDialog({
+      title: `Delete ${entry.name}?`,
+      body: used.length ? (
+        <>
+          {entry.isDir ? 'This folder' : 'This file'} is named in{' '}
+          {used.length === 1 ? '1 file' : `${used.length} files`}:
+          <ul className="asset-usage">
+            {used.slice(0, 6).map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+            {used.length > 6 && <li>…and {used.length - 6} more</li>}
+          </ul>
+          Deleting it will leave those references pointing at nothing.
+        </>
+      ) : entry.isDir ? (
+        'The folder is empty. It goes to the Trash, so you can put it back from there.'
+      ) : (
+        'It goes to the Trash, so you can put it back from there.'
+      ),
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+    act(() => window.avb.deleteAsset({ projectPath: project.path, rel: entry.rel }));
+  };
+
   // --- Breadcrumb ------------------------------------------------------
 
   // '' is above both roots now, so it can't be called "public".
@@ -252,6 +307,16 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
             <UploadCloudIcon size={14} />
           </button>
         </div>
+      </div>
+
+      <div style={{ padding: '0 12px 8px' }}>
+        <input
+          value={query}
+          placeholder="Search assets"
+          spellCheck={false}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+        />
       </div>
 
       {pick && (
@@ -340,7 +405,27 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
             {renaming === folder.rel ? (
               <RenameInput entry={folder} onCommit={commitRename} />
             ) : (
-              <span className="asset-folder-name">{folder.name}</span>
+              <span className="asset-folder-name">
+                {folder.name}
+                {q && folder.parent ? <span className="asset-where">{folder.parent}/</span> : null}
+              </span>
+            )}
+            {!pick && !folder.isRoot && (
+              <button
+                className="ghost asset-delete"
+                title={
+                  holdsFiles(folder)
+                    ? 'Delete the files inside it first'
+                    : `Delete ${folder.name}`
+                }
+                disabled={holdsFiles(folder)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  askDelete(folder);
+                }}
+              >
+                <TrashIcon size={12} />
+              </button>
             )}
             <span className="crumb-sep">
               <ChevronRightIcon size={9} />
@@ -373,18 +458,33 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
               // files, whose thumb would otherwise open the code editor.
               onClick={pick ? () => pick.onPick(file.rel, file) : undefined}
             >
-              <AssetThumb
-                file={file}
-                className={editable && !pick ? 'editable' : ''}
-                onClick={() =>
-                  !pick && editable && onOpenFile?.({ rel: file.rel, name: file.name })
-                }
-              />
+              <div className="asset-thumb-wrap">
+                <AssetThumb
+                  file={file}
+                  className={editable && !pick ? 'editable' : ''}
+                  onClick={() =>
+                    !pick && editable && onOpenFile?.({ rel: file.rel, name: file.name })
+                  }
+                />
+                {!pick && (
+                  <button
+                    className="ghost asset-delete"
+                    title={`Delete ${file.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      askDelete(file);
+                    }}
+                  >
+                    <TrashIcon size={12} />
+                  </button>
+                )}
+              </div>
               {renaming === file.rel ? (
                 <RenameInput entry={file} onCommit={commitRename} />
               ) : (
                 <div className="asset-name" onDoubleClick={() => setRenaming(file.rel)}>
                   {file.name}
+                  {q && file.parent ? <div className="asset-where">{file.parent}/</div> : null}
                 </div>
               )}
             </div>
@@ -394,7 +494,9 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
 
         {folders.length === 0 && files.length === 0 && !newFolder && (
           <div className="props-empty">
-            Empty folder. Drop files here or use the upload button.
+            {q
+              ? `No assets match “${query.trim()}”.`
+              : 'Empty folder. Drop files here or use the upload button.'}
           </div>
         )}
       </div>

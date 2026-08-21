@@ -1910,6 +1910,137 @@ ipcMain.handle('assets:mkdir', async (_e, { projectPath, parentRel, name }) => {
   return { ok: true };
 });
 
+// Deleting an asset.
+//
+// An image is only ever referenced from somewhere else, so unlike a page there
+// is nothing on screen to say whether removing it breaks anything. The scan
+// below answers that before the question is asked, matched on the FILE NAME
+// rather than the path: the same file is written `/hero.png` from public/,
+// `../assets/hero.png` from a component, and `~/assets/hero.png` through an
+// alias, and a path match would miss two of the three. Loose in the other
+// direction — a name that reads as a word matches prose — which is the right
+// way for a warning to be wrong.
+const relOf = (projectPath, abs) => path.relative(projectPath, abs).split(path.sep).join('/');
+
+const REF_EXT = /\.(astro|md|mdx|html|json|css|[jt]sx?)$/i;
+const REF_SKIP = new Set(['node_modules', 'dist', '.git', '.astro', 'release']);
+
+function filesReferencing(projectPath, names) {
+  if (!names.length) return [];
+  const hits = [];
+  const walk = (dir) => {
+    let items;
+    try {
+      items = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const item of items) {
+      if (REF_SKIP.has(item.name)) continue;
+      const abs = path.join(dir, item.name);
+      if (item.isDirectory()) {
+        walk(abs);
+        continue;
+      }
+      if (!REF_EXT.test(item.name)) continue;
+      let text;
+      try {
+        text = fs.readFileSync(abs, 'utf8');
+      } catch {
+        continue;
+      }
+      if (names.some((n) => text.includes(n))) hits.push(relOf(projectPath, abs));
+    }
+  };
+  walk(path.join(projectPath, 'src'));
+  return hits;
+}
+
+// Every media file at or under `rel` — one name for a file, the folder's whole
+// contents for a folder, so deleting a folder is checked as what it holds.
+function assetNamesUnder(abs) {
+  let stat;
+  try {
+    stat = fs.statSync(abs);
+  } catch {
+    return [];
+  }
+  if (!stat.isDirectory()) return [path.basename(abs)];
+  const names = [];
+  const walk = (dir) => {
+    let items;
+    try {
+      items = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const item of items) {
+      if (item.isDirectory()) walk(path.join(dir, item.name));
+      else names.push(item.name);
+    }
+  };
+  walk(abs);
+  return names;
+}
+
+ipcMain.handle('assets:usage', async (_e, { projectPath, rel }) => {
+  const abs = assetAbs(projectPath, rel);
+  return { files: filesReferencing(projectPath, assetNamesUnder(abs)) };
+});
+
+// Does this folder still hold a file, anywhere below it?
+//
+// Dotfiles are skipped the way the listing skips them. A folder holding
+// nothing but a .DS_Store reads as empty in the panel, and a refusal the panel
+// can't explain is worse than the stray file it is protecting.
+function holdsAnyFile(abs) {
+  let items;
+  try {
+    items = fs.readdirSync(abs, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  for (const item of items) {
+    if (item.name.startsWith('.')) continue;
+    if (item.isDirectory()) {
+      if (holdsAnyFile(path.join(abs, item.name))) return true;
+    } else {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Trashed rather than unlinked: the panel's other destructive-looking actions
+// (rename, move) are all undoable, and a delete that only the Finder can undo
+// is still a delete you can undo.
+//
+// Two things it refuses outright. public/ and src/ are where an Astro project
+// keeps everything — removing one isn't an edit, it's the end of the project.
+// And a folder goes only when it is empty: one click that takes an unknown
+// number of files with it is the one delete no Trash makes comfortable, so the
+// files are deleted first and seen while they go.
+ipcMain.handle('assets:delete', async (_e, { projectPath, rel }) => {
+  const abs = assetAbs(projectPath, rel);
+  const clean = String(rel || '').replace(/^\/+/, '');
+  if (!clean.includes('/') || abs === path.resolve(projectPath, rootOfRel(clean))) {
+    throw new Error('public/ and src/ are part of the project itself — they can’t be deleted here.');
+  }
+  let stat;
+  try {
+    stat = fs.statSync(abs);
+  } catch {
+    throw new Error('That file is already gone.');
+  }
+  if (stat.isDirectory() && holdsAnyFile(abs)) {
+    throw new Error('That folder still has files in it. Delete those first, then the folder.');
+  }
+  markSelfWrite(abs);
+  await shell.trashItem(abs);
+  send('assets:changed', {});
+  return { ok: true };
+});
+
 // ---------------------------------------------------------------------------
 // CMS — JSON data files under src/ edited as collections
 // ---------------------------------------------------------------------------
