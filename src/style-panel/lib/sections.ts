@@ -168,8 +168,26 @@ export const PROPERTY_ORDER: ReadonlyMap<string, number> = (() => {
   return map
 })()
 
+// Properties a section names for ORDERING but has no control for. A section's
+// order is where a property sorts when it's rendered; it is not a claim that it
+// is. `inset: 0` sorted next to top/right/bottom/left and was then rendered by
+// nothing — the inset box asks for each side separately — so it was in the file
+// and nowhere in the panel: not in Position, not in Custom properties, not
+// anywhere. A property with no control belongs in Custom properties, where it
+// can at least be read and edited as text.
+//
+// Every one of these is a shorthand whose longhands DO have controls. Adding a
+// control for one is what takes it off this list.
+const NO_CONTROL: ReadonlySet<string> = new Set([
+  'inset',
+  'outline',
+  'border-top', 'border-right', 'border-bottom', 'border-left',
+  'columns', 'column-rule',
+])
+
 /** The section a property belongs to, or 'other' when unclassified. */
 export function sectionOf(prop: string): SectionId {
+  if (NO_CONTROL.has(prop)) return 'other'
   return PROPERTY_SECTION.get(prop) ?? 'other'
 }
 

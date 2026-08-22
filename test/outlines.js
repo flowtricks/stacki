@@ -123,6 +123,28 @@ const stacked = (n, a = 0.14) => 1 - (1 - a) ** n;
   check('nothing hovered is not the selection', !hoverIsSelection(null, at('0.1', 0)));
   check('and nothing selected leaves the hover alone', !hoverIsSelection(at('0.1', 0), null));
 
+  // --- stepping within the copy you are looking at ---------------------------
+  // Which copy of a looped node is selected rides beside the path, because the
+  // path is identical for every copy. A canvas click says which one it means;
+  // anything else meant "the node" and went back to the first — including ↑,
+  // which selects the parent of the copy you are looking at. Pressing it from
+  // the second link in a list threw the outline to the top of the list.
+  const { sameCopy } = require(bundlePath);
+  check('↑ to the parent stays in the copy', sameCopy('0.1.2.0', '0.1.2'));
+  check('↓ into a child does too', sameCopy('0.1.2', '0.1.2.0'));
+  check('and → to a sibling', sameCopy('0.1.2', '0.1.3'));
+  check('however deep it is', sameCopy('0.1.2.3.4', '0.1.2.3.5'));
+  check(
+    'a jump somewhere else starts at the first copy again',
+    !sameCopy('0.1.2.0', '0.9.0'),
+    'an unrelated node kept an occurrence that means nothing there'
+  );
+  check("a cousin is somewhere else too", !sameCopy('0.1.2.0', '0.1.3.0'));
+  check('and so is the same path in another file', !sameCopy('src/A.astro|0.1', 'src/B.astro|0.1'));
+  check('within one file it still counts', sameCopy('src/A.astro|0.1.0', 'src/A.astro|0.1'));
+  check('nothing selected before is not a step', !sameCopy(null, '0.1'));
+  check('and neither is standing still', !sameCopy('0.1', '0.1'));
+
   // --- the overlay uses it ---------------------------------------------------
   const pane = fs.readFileSync(path.join(__dirname, '..', 'src', 'panels', 'PreviewPane.jsx'), 'utf8');
   check(
@@ -134,6 +156,11 @@ const stacked = (n, a = 0.14) => 1 - (1 - a) ** n;
     'the overlay asks it rather than comparing paths',
     /!hoverIsSelection\(\{ path: hoverPath, occ: hoverOccUsed \}/.test(pane),
     'the hover outline is back to comparing paths, which a loop breaks'
+  );
+  check(
+    'a step within a copy keeps it',
+    /if \(sameCopy\(previous, selPath\)\) return;/.test(pane),
+    'every selection outside the canvas is back to meaning the first copy'
   );
   check(
     'and so does the dimming around a component being edited',
@@ -156,6 +183,11 @@ const stacked = (n, a = 0.14) => 1 - (1 - a) ** n;
         <div class="split-line"><strong data-avb-p="0.3" data-box="hollow"></strong> Human-centric</div>
         <div class="split-line"><strong data-avb-p="0.3" data-box="word">strategies</strong> to cut</div>
       </h2>
+      <ul data-box="links">
+        ${marked('0.4.0', '<li data-box="li-one"><a data-avb-p="0.4.0.0" data-box="link-one">Instagram</a></li>')}
+        ${marked('0.4.0', '<li data-box="li-two"><a data-avb-p="0.4.0.0" data-box="link-two">YouTube</a></li>')}
+        ${marked('0.4.0', '<li data-box="li-three"><a data-avb-p="0.4.0.0" data-box="link-three">LinkedIn</a></li>')}
+      </ul>
     </body>`,
     { url: 'http://localhost:4321/#avb-design', pretendToBeVisual: true }
   );
@@ -174,6 +206,13 @@ const stacked = (n, a = 0.14) => 1 - (1 - a) ** n;
     // wide and a line tall — a box, but not a place.
     hollow: [0, 1400, 0, 50],
     word: [0, 1460, 172, 50],
+    links: [0, 1600, 600, 40],
+    'li-one': [0, 1600, 120, 40],
+    'li-two': [130, 1600, 120, 40],
+    'li-three': [260, 1600, 120, 40],
+    'link-one': [0, 1600, 100, 20],
+    'link-two': [130, 1600, 100, 20],
+    'link-three': [260, 1600, 100, 20],
   };
   window.Element.prototype.getBoundingClientRect = function () {
     const [x, y, w, h] = boxes[this.getAttribute('data-box')] || [0, 0, 0, 0];
@@ -187,6 +226,9 @@ const stacked = (n, a = 0.14) => 1 - (1 - a) ** n;
   global.location = window.location;
   global.navigator = window.navigator;
   global.MutationObserver = window.MutationObserver;
+  global.Element = window.Element;
+  global.Node = window.Node;
+  global.MouseEvent = window.MouseEvent;
   global.requestAnimationFrame = window.requestAnimationFrame.bind(window);
 
   const sent = [];
@@ -234,6 +276,49 @@ const stacked = (n, a = 0.14) => 1 - (1 - a) ** n;
       JSON.stringify(boxes3[0])
     );
     check('at the line the word is on', boxes3[0]?.y === 1460, JSON.stringify(boxes3[0]));
+  }
+
+  // --- the second copy of something written as part of a sentence -----------
+  // A link inside a list item is an inline run: markers between the words would
+  // render as spaces, so the link carries its path as a tag instead. It has no
+  // marker runs at all — and the click that picks one counted runs, of which
+  // there are none, so every link in the list reported "the first one" and the
+  // first one lit up however far down the list you clicked.
+  {
+    const boxes = boxesFor('0.4.0.0');
+    check('each copy of the link is a box', boxes.length === 3, JSON.stringify(boxes));
+    check(
+      'in the order they are down the page',
+      boxes.map((b) => b.x).join(',') === '0,130,260',
+      JSON.stringify(boxes.map((b) => b.x))
+    );
+    // What the click reports, from the same list the boxes came from.
+    const clickOn = (box) => {
+      const el = document.querySelector(`[data-box="${box}"]`);
+      sent.length = 0;
+      el.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+      return sent.filter((m) => m.type === 'avb:click-node').pop();
+    };
+    const design = new window.MessageEvent('message', { data: { type: 'avb:design', on: true } });
+    Object.defineProperty(design, 'source', { value: window.parent });
+    window.dispatchEvent(design);
+
+    check('clicking the first link says so', clickOn('link-one')?.occurrence === 0, JSON.stringify(clickOn('link-one')));
+    check(
+      'clicking the second says the second',
+      clickOn('link-two')?.occurrence === 1,
+      JSON.stringify(clickOn('link-two'))
+    );
+    check(
+      'and the third the third',
+      clickOn('link-three')?.occurrence === 2,
+      JSON.stringify(clickOn('link-three'))
+    );
+    check(
+      'all of them naming the same node',
+      clickOn('link-three')?.path === '0.4.0.0',
+      JSON.stringify(clickOn('link-three'))
+    );
   }
 
   // A patch: the page is re-rendered around the nodes that are already there,

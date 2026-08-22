@@ -3,6 +3,7 @@ import DataPicker from './DataPicker.jsx';
 import { dataTree } from '../dataSuggest.js';
 import { BIND_PATH_RE, resolvePick } from '../bindings.js';
 import { deleteChipAtCaret } from './chipKeys.js';
+import { ElementLinkIcon } from './Icons.jsx';
 
 // Rich inline-content editor for the props panel: a contentEditable field
 // showing a node's inline children (text + <strong>/<em>/<sup>/… tags) with a
@@ -560,7 +561,10 @@ const RichContent = function RichContent({ nodes, onChange, bindCtx, insertRef }
                   give that node a class and style it like any other. Nothing is
                   written on it here — an empty span IS the useful result. */}
               {btn(<span className="mono">span</span>, 'Wrap in a span', () => wrapTag('span'), states.span)}
-              {btn('🔗', 'Link', () => setLinkMode(true), states.link)}
+              {/* The app's own link icon, not the emoji: an emoji is drawn by
+                  the system in its own colours and at its own weight, so it sat
+                  in this row as the one thing that hadn't been designed. */}
+              {btn(<ElementLinkIcon size={14} />, 'Link', () => setLinkMode(true), states.link)}
             </>
           )}
         </div>

@@ -53,7 +53,8 @@ function selectedTag(): string | null {
   return /^[a-z][a-z0-9-]*$/.test(name) ? name : null
 }
 
-/** The element the page measured, per path — surfaced in the label tooltips. */
+/** The element the page measured, per path. Kept to check an answer against the
+ *  node it was asked about, below — not shown anywhere. */
 const measured = new Map<string, string>()
 
 function flush(path: string) {
@@ -152,20 +153,6 @@ function useComputedAnswer(prop: string): Answer {
  */
 export function useComputedValue(prop: string): string {
   return useComputedAnswer(prop).value
-}
-
-/**
- * What the page says about `prop`, for the label tooltip: its computed value, the tag
- * of the element that was measured, and whether that element is the one selected.
- * A tooltip mounts fresh on hover, so reading the path here rather than subscribing
- * is enough.
- */
-export function useComputedMeta(prop: string): { value: string; tag: string; mismatch: boolean } {
-  const value = useComputedValue(prop)
-  const path = pathOfSelection()
-  const tag = (path && measured.get(path)) || ''
-  const expected = selectedTag()
-  return { value, tag, mismatch: Boolean(tag && expected && tag !== expected) }
 }
 
 /**

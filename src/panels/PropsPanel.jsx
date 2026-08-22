@@ -634,6 +634,34 @@ export default function PropsPanel({
     // than hide the fields needed to fix it.
     return fits.length ? fits : union.branches;
   });
+  // A prop whose fallback differs per branch has no single answer for the
+  // field — `label` reads Play on a play control and Close on a close one —
+  // but the branch in force has one, and the panel already knows which branch
+  // that is. Only claimed when every branch still standing agrees: with the
+  // variant unset, several fit, and the field would otherwise show whichever
+  // was declared first.
+  const branchDefault = (name) => {
+    let found;
+    for (const [i, union] of unions.entries()) {
+      if (!union.names.includes(name)) continue;
+      for (const b of liveBranches[i]) {
+        // A branch may answer with a rule rather than a value: "Next, or
+        // Previous when direction is back" turns on a prop this panel is
+        // already holding, so it can be weighed rather than only shown.
+        const rule = b.rules?.[name];
+        const v = rule
+          ? effective(rule.prop) === rule.is
+            ? rule.then
+            : rule.otherwise
+          : b.defaults?.[name];
+        if (v === undefined) continue;
+        if (found !== undefined && found !== v) return undefined;
+        found = v;
+      }
+    }
+    return found;
+  };
+
   const appliesNow = (field) => {
     for (const [i, union] of unions.entries()) {
       if (!union.names.includes(field.name)) continue;
@@ -863,6 +891,7 @@ export default function PropsPanel({
             nodeKey={node.id}
             bindCtx={bindContext || loopContext}
             field={field}
+            branchDefault={branchDefault(field.name)}
             value={node.props[field.name]}
             slotOptions={slotOptions}
             projectClasses={projectClasses}
@@ -2918,6 +2947,8 @@ function SegSwitch({ options, current, onPick }) {
 
 function PropField({
   field,
+  /** What this prop falls back to under the union branch now in force. */
+  branchDefault,
   value,
   /** The node this field is editing — a different one resets the custom
       switch, since the same component instance edits both. */
@@ -2948,6 +2979,7 @@ function PropField({
   // isn't there.
   const placeholderFor = (field) => {
     if (field.default !== undefined) return String(field.default);
+    if (branchDefault !== undefined) return String(branchDefault);
     const dims = assetCtx?.srcDims;
     if (dims) {
       const isW = /^width$/i.test(field.name);

@@ -3,8 +3,8 @@ import { canContainTag } from '../elementSchemas.js';
 import { isDataBound } from '../bindings.js';
 import { setDrag, clearDrag, getDrag } from '../dragState.js';
 import { elementLabel } from '../classNames.js';
-import { isContentOnlyChild, noteText } from '../treeSelection.js';
-import { soleThen, rowChildren, rowHost } from '../branches.js';
+import { hidesChildRows, noteText } from '../treeSelection.js';
+import { thenBranch, rowChildren, rowHost } from '../branches.js';
 import {
   LayoutIcon,
   ElementComponentIcon,
@@ -109,9 +109,8 @@ export default function StructurePanel({
       else if (
         e.key === 'ArrowDown' &&
         rowChildren(node).length > 0 &&
-        // Content-only children aren't shown in the navigator — don't
-        // descend into rows that don't exist.
-        !rowChildren(node).every(isContentOnlyChild)
+        // Children left to the Content field have no rows to descend into.
+        !hidesChildRows(node, rowChildren(node))
       ) {
         const collapsed = toggled.has(node.id) ? toggled.get(node.id) : defaultCollapsed(node);
         if (collapsed) setToggled((prev) => new Map(prev).set(node.id, false));
@@ -544,24 +543,24 @@ function TreeNode({ node, note, parentId, index, depth, ...ctx }) {
   // from any stylesheet — so the row says it.
   const hidden = !!ctx.hiddenNodeIds?.has(node.id);
   const inert = !!ctx.inertNodeIds?.has(node.id);
-  // An `if` with no `else` shows what is inside it directly — see branches.js.
-  // `host` is the node those children really belong to, which is what a drop
-  // has to name.
+  // An `if` shows what is inside its then directly — see branches.js. `host` is
+  // the node those children really belong to, which is what a drop has to name.
   const kids = rowChildren(node);
   const host = rowHost(node);
   const hasChildren = kids.length > 0;
   // Pure text (plus simple {expr} interpolations) is edited via the Content
-  // field — showing those as rows is noise until real tags are involved.
-  const showChildren = hasChildren && !kids.every(isContentOnlyChild);
+  // field — showing those as rows is noise until real tags are involved. Only
+  // where there is such a field, though: see hidesChildRows.
+  const showChildren = hasChildren && !hidesChildRows(node, kids);
   const canHostChildren =
     node.kind === 'component' ||
     node.kind === 'element' ||
     node.kind === 'chunk-group' ||
     node.kind === 'map' ||
-    // A condition holds nothing directly; each of its branches does — unless
-    // the only branch is a then, whose row the `if` is standing in for.
+    // A condition holds nothing directly; each of its branches does — and the
+    // `if` row stands in for the then, whose row is never drawn.
     node.kind === 'branch' ||
-    !!soleThen(node);
+    !!thenBranch(node);
   const nodeCollapsed = isCollapsed(node);
   const isDropInto = dropTarget?.intoId === node.id;
 

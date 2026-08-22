@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "vite build",
-    "test:markers": "node test/markers.js",
+    "test:markers": "node test/markers.js && node test/slot-markers.js && node test/slot-api.js && node test/insert-target.js",
     "test:bridge": "node test/bridge.js",
     "test:outlines": "node test/outlines.js",
     "test:navigator": "node test/navigator.js",
@@ -33,6 +33,7 @@
     "test:popupscroll": "node test/popup-scroll.js",
     "test:focus": "node test/focus.js",
     "test:tokenfield": "node test/token-field.js",
+    "test:canvasclick": "node test/canvas-click.js",
     "test:gitbranches": "node test/git-branches.js",
     "test:conflicts": "node test/conflicts.js",
     "test:githistory": "node test/git-history.js",
@@ -90,12 +91,15 @@
     "test:componentcreate": "node test/component-create.js",
     "test:commentregion": "node test/comment-region.js",
     "test:condbranches": "node test/cond-branches.js",
+    "test:instanceprops": "node test/instance-props.js",
+    "test:panelsections": "node test/panel-sections.js",
+    "test:htmltext": "node test/html-text.js",
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
     "dist:mac:unsigned": "npm run build && electron-builder --mac -c.mac.forceCodeSigning=false -c.mac.notarize=false -c.mac.identity=null",
-    "test": "npm run test:markers && npm run test:apprenders && npm run test:bridge && npm run test:outlines && npm run test:navigator && npm run test:classattr && npm run test:gridtracks && npm run test:windowbounds && npm run test:transformunits && npm run test:popoverdismiss && npm run test:nodestates && npm run test:spacing && npm run test:gapbands && npm run test:gaphover && npm run test:popoverdropdown && npm run test:panelfield && npm run test:branchname && npm run test:sound && npm run test:segmented && npm run test:coloralpha && npm run test:colorlive && npm run test:enterstays && npm run test:popupscroll && npm run test:focus && npm run test:tokenfield && npm run test:gitbranches && npm run test:conflicts && npm run test:githistory && npm run test:historypanel && npm run test:filebrowser && npm run test:gradient && npm run test:gitsnapshot && npm run test:previewworktree && npm run test:starter && npm run test:content && npm run test:entries && npm run test:refs && npm run test:fields && npm run test:view && npm run test:panel && npm run test:dropdown && npm run test:injectedroutes && npm run test:csscode && npm run test:computedcolor && npm run test:styletarget && npm run test:thumbs && npm run test:welcome && npm run test:cssvars && npm run test:cssvarsrename && npm run test:fluid && npm run test:varsview && npm run test:varsrowheight && npm run test:varsdrop && npm run test:customvalue && npm run test:insertbinding && npm run test:varconnectopen && npm run test:insetpresets && npm run test:hideable && npm run test:transformsettings && npm run test:fieldfocus && npm run test:panelsurface && npm run test:computedhold && npm run test:sectiondot && npm run test:previewrecovery && npm run test:chipedit && npm run test:jsguard && npm run test:spacingpick && npm run test:rawattrs && npm run test:richspan && npm run test:varspanel && npm run test:binding && npm run test:loopsource && npm run test:selectorslive && npm run test:selectorwell && npm run test:popuplayers && npm run test:scopecompletions && npm run test:querylist && npm run test:codesearch && npm run test:componentcreate && npm run test:commentregion && npm run test:condbranches"
+    "test": "npm run test:markers && npm run test:apprenders && npm run test:bridge && npm run test:outlines && npm run test:navigator && npm run test:classattr && npm run test:gridtracks && npm run test:windowbounds && npm run test:transformunits && npm run test:popoverdismiss && npm run test:nodestates && npm run test:spacing && npm run test:gapbands && npm run test:gaphover && npm run test:popoverdropdown && npm run test:panelfield && npm run test:branchname && npm run test:sound && npm run test:segmented && npm run test:coloralpha && npm run test:colorlive && npm run test:enterstays && npm run test:popupscroll && npm run test:focus && npm run test:tokenfield && npm run test:canvasclick && npm run test:gitbranches && npm run test:conflicts && npm run test:githistory && npm run test:historypanel && npm run test:filebrowser && npm run test:gradient && npm run test:gitsnapshot && npm run test:previewworktree && npm run test:starter && npm run test:content && npm run test:entries && npm run test:refs && npm run test:fields && npm run test:view && npm run test:panel && npm run test:dropdown && npm run test:injectedroutes && npm run test:csscode && npm run test:computedcolor && npm run test:styletarget && npm run test:thumbs && npm run test:welcome && npm run test:cssvars && npm run test:cssvarsrename && npm run test:fluid && npm run test:varsview && npm run test:varsrowheight && npm run test:varsdrop && npm run test:customvalue && npm run test:insertbinding && npm run test:varconnectopen && npm run test:insetpresets && npm run test:hideable && npm run test:transformsettings && npm run test:fieldfocus && npm run test:panelsurface && npm run test:computedhold && npm run test:sectiondot && npm run test:previewrecovery && npm run test:chipedit && npm run test:jsguard && npm run test:spacingpick && npm run test:rawattrs && npm run test:richspan && npm run test:varspanel && npm run test:binding && npm run test:loopsource && npm run test:selectorslive && npm run test:selectorwell && npm run test:popuplayers && npm run test:scopecompletions && npm run test:querylist && npm run test:codesearch && npm run test:componentcreate && npm run test:commentregion && npm run test:condbranches && npm run test:instanceprops && npm run test:panelsections && npm run test:htmltext"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",

@@ -11,6 +11,21 @@ export function isContentOnlyChild(c) {
   );
 }
 
+/**
+ * Whether the tree leaves a node's children to the Content field instead of
+ * drawing rows for them.
+ *
+ * Only where there IS a Content field: an element or a component can be given
+ * its words in the panel, which is why showing them twice is noise. A branch
+ * cannot — its panel says what the branch is for and nothing else — so an
+ * `else` holding `{heading}` drew as an empty row, with the value it renders
+ * reachable from nowhere at all. Same for a condition and a loop.
+ */
+export function hidesChildRows(node, kids) {
+  const covered = node?.kind === 'element' || node?.kind === 'component';
+  return covered && kids.length > 0 && kids.every(isContentOnlyChild);
+}
+
 // Tags the serializer keeps on one line with the words around them.
 const INLINE_TAGS = new Set([
   'strong', 'em', 'b', 'i', 'sup', 'sub', 'code', 'a', 'span', 'br',

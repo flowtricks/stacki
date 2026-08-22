@@ -1450,9 +1450,14 @@
   max-height: none;
 }
 
-/* Aspect-ratio custom W:H — two number fields with a colon, captions beneath. */
+/* Aspect-ratio custom W:H — two number fields with a colon, captions beneath.
+   Offset past the fixed label column so the pair sits under the dropdown it
+   belongs to, the same way the Sizing customize panel does. Running the full
+   width of the panel, past the label column, it read as a row of its own rather
+   than as the rest of the Ratio answer. */
 .embed-editor_ratio-custom {
   padding-top: var(--space-2);
+  margin-left: calc(var(--embed-editor_size-label-w) + var(--space-3));
 }
 .embed-editor_ratio-pair {
   display: grid;
@@ -4217,12 +4222,18 @@ textarea.embed-editor_value-input.is-expanded {
   gap: var(--space-4);
   padding: var(--space-4);
 }
+/* Slider then field. The slider is given a width of its own — it is a thing you
+   drag, and a track that shrinks to whatever the value leaves over is a track
+   you cannot aim at (a variable's name in the field left about four pixels of
+   it). The field takes what is left. */
 .embed-editor_trans-duration { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
-.embed-editor_trans-duration > :first-child { flex: 1 1 auto; min-width: 0; }
+.embed-editor_trans-duration > .u-drag-slider { flex: 0 0 96px; min-width: 96px; }
+.embed-editor_trans-duration > .embed-editor_field { flex: 1 1 auto; min-width: 0; }
 /* The same size as every other field in the panel — these were a step smaller
    for no reason the popup gives, and a popup is where a value is being read
    most carefully. */
-.embed-editor_trans-dur-input { flex: none; width: 82px; text-align: right; font-family: var(--font-family-mono); font-size: var(--font-size-md); }
+/* The value reads right-aligned against the slider beside it. */
+.embed-editor_trans-duration .u-input { text-align: right; }
 .embed-editor_trans-easing {
   flex: 1 1 auto;
   min-width: 0;
@@ -4247,7 +4258,7 @@ textarea.embed-editor_value-input.is-expanded {
 }
 .embed-editor_trans-easing-btn:hover:not(:disabled) { border-color: var(--color-border-focus); }
 .embed-editor_trans-easing-btn:disabled { cursor: default; opacity: 0.5; }
-.embed-editor_trans-easing-input { flex: 1 1 auto; min-width: 0; font-family: var(--font-family-mono); font-size: var(--font-size-md); }
+.embed-editor_trans-easing > .embed-editor_field { flex: 1 1 auto; min-width: 0; }
 
 /* Easing editor dialog. Designer panels are ~300px wide, so this is a full-panel-
    width sheet (a wide centered card would overflow and collapse the curve). Single

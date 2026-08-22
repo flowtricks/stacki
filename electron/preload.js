@@ -380,10 +380,20 @@ if (!process.isMainFrame) {
     list.push(p);
     el.setAttribute(PATH_ATTR, list.join(' '));
   };
-  const elementsWithPath = (p) =>
-    [...document.querySelectorAll(`[${PATH_ATTR}]`)].filter(
+  // The elements a path is on, one per copy — outermost only. A path can land
+  // on an element AND on something inside it: inside slot content the marker
+  // is written onto the markup (see serializeNodeMarked), and a component that
+  // spreads its rest props puts it on whatever element it spreads onto, which
+  // may sit inside the one the collector tagged. Those are one copy addressed
+  // twice, and counting them as two made a node with a single instance report
+  // "copy 2" for a click in the wrong half of itself — and the classes and
+  // spacing lists, which are one entry per occurrence, disagree with the boxes.
+  const elementsWithPath = (p) => {
+    const all = [...document.querySelectorAll(`[${PATH_ATTR}]`)].filter(
       (el) => pathsOf(el).includes(p) && inFocus(el)
     );
+    return all.filter((el) => !all.some((other) => other !== el && other.contains(el)));
+  };
 
   // The path a node marks, or null when it isn't a marker. `kind` is 's'/'e'.
   const markerPath = (n, kind) => {
@@ -555,20 +565,35 @@ if (!process.isMainFrame) {
     return real.length ? real : list;
   };
 
+  // The tagged elements that are really PLACES, each with its box.
+  //
+  // No marker pair — a slotted element, or a word inside an inline run, carries
+  // its path as an attribute instead: a marker beside either would land in the
+  // wrong slot or add a space between words. Inside a loop that means one
+  // tagged element per item, and they are the occurrences of that node.
+  //
+  // One list, read by the boxes AND by the click that picks one of them, so
+  // "the second copy" means the same thing to both. It didn't: the outlines
+  // counted tagged elements and the click counted marker runs, of which a
+  // tagged node has none — so clicking the second link in a list reported
+  // occurrence 0 and the first one lit up.
+  const taggedPlaces = (p) => {
+    const out = [];
+    for (const el of elementsWithPath(p)) {
+      const acc = addNode(null, el);
+      if (acc) out.push({ el, rect: toRect(acc) });
+    }
+    // A line splitter leaves hollow copies of an element behind; they are not
+    // places, and counting them would shift every occurrence after them.
+    const real = out.filter((e) => e.rect.w > 0 && e.rect.h > 0);
+    return real.length ? real : out;
+  };
+
   const rectsForPath = (p) => {
     const runs = runsOf(p);
     if (!runs) {
-      // No marker pair — a slotted element, or a word inside an inline run,
-      // carries its path as an attribute instead: a marker beside either would
-      // land in the wrong slot or add a space between words. One box per tagged
-      // element, in document order, which is the order occurrences count in.
-      const only = [];
-      for (const el of elementsWithPath(p)) {
-        const acc = addNode(null, el);
-        if (acc) only.push(toRect(acc));
-      }
-      const real = withoutHollow(only);
-      return real.length ? real : rectsFromDescendants(p);
+      const places = taggedPlaces(p);
+      return places.length ? places.map((e) => e.rect) : rectsFromDescendants(p);
     }
     const out = [];
     for (const run of runs) {
@@ -912,11 +937,24 @@ if (!process.isMainFrame) {
   // is recorded once per item, so the runs are the instances in order.
   const occurrenceOf = (path, target) => {
     const runs = runsOf(path);
-    if (!runs || runs.length < 2) return 0;
-    for (let i = 0; i < runs.length; i++) {
-      for (const n of runs[i]) {
-        if (!n.isConnected) continue;
-        if (n === target || (n.nodeType === 1 && n.contains(target))) return i;
+    if (runs && runs.length > 1) {
+      for (let i = 0; i < runs.length; i++) {
+        for (const n of runs[i]) {
+          if (!n.isConnected) continue;
+          if (n === target || (n.nodeType === 1 && n.contains(target))) return i;
+        }
+      }
+      return 0;
+    }
+    // A node addressed by its tag rather than by markers has no runs at all —
+    // a link inside a list item is written as part of an inline run, and a
+    // marker between the words would render as a space. Its copies are the
+    // tagged elements, counted in the same order the boxes are measured in.
+    const places = taggedPlaces(path);
+    if (places.length > 1) {
+      for (let i = 0; i < places.length; i++) {
+        const el = places[i].el;
+        if (el === target || el.contains(target)) return i;
       }
     }
     return 0;

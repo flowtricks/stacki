@@ -3,7 +3,7 @@ import CanvasView from './CanvasView.jsx';
 import { setCanvasFrame, receiveCanvasReply, noteCanvasReady } from '../canvasQuery.js';
 import { forgetComputedColors } from '../style-panel/lib/computed-color';
 import { forgetComputedStyles } from '../style-panel/lib/computed-style';
-import { hoverIsSelection, onePerPlace } from '../outlineBoxes.js';
+import { hoverIsSelection, onePerPlace, sameCopy } from '../outlineBoxes.js';
 import { spacingBands } from '../spacingBands.js';
 import { setModifiers } from '../style-panel/lib/host.ts';
 import {
@@ -191,12 +191,21 @@ export default function PreviewPane({
   // node", so it falls back to the first instance. The click marker is
   // consumed here so coming back to the same node later starts at the first
   // instance again.
+  //
+  // Except a step WITHIN what is already selected: ↑ from the second link in a
+  // list means its parent, and the parent of the second one — the copy being
+  // looked at (see sameCopy). Falling back to the first instance there jumped
+  // the outline to the top of the list on every press.
+  const cameFromRef = React.useRef(null);
   React.useEffect(() => {
+    const previous = cameFromRef.current;
+    cameFromRef.current = selPath;
     if (lastClickRef.current?.path === selPath) {
       lastClickRef.current = null;
       return;
     }
     lastClickRef.current = null;
+    if (sameCopy(previous, selPath)) return;
     setSelOcc(0);
   }, [selPath]);
 

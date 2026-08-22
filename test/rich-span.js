@@ -76,6 +76,13 @@ const check = (what, condition, detail) => {
     // three, and reaching for `firstChild` after that selects the wrong piece.
     field.normalize();
     const textNode = [...field.childNodes].find((n) => n.nodeType === 3 && n.textContent.includes('through the noise'));
+    // Guarded: when a regression leaves the words buried inside a tag, there is
+    // no top-level text node to select — a FAILURE to report, not a stack trace
+    // that hides which case broke.
+    if (!textNode) {
+      check('the words are selectable at the top level', false, field.innerHTML);
+      return false;
+    }
     const at = textNode.textContent.indexOf('through the noise');
     const range = dom.window.document.createRange();
     range.setStart(textNode, at);
@@ -87,6 +94,7 @@ const check = (what, condition, detail) => {
       field.dispatchEvent(new dom.window.Event('mouseup', { bubbles: true }));
       dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
     });
+    return true;
   };
   await selectTail();
 
@@ -97,6 +105,22 @@ const check = (what, condition, detail) => {
       btn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
   };
+
+  // Every button in the row is the app's own drawing. An emoji is drawn by the
+  // system — its own colours, its own weight, its own idea of the baseline — so
+  // one in here is the only thing in the bubble nobody designed.
+  {
+    const buttons = [...host.querySelectorAll('.rich-bubble button')];
+    const emoji = buttons.filter((b) => /\p{Extended_Pictographic}/u.test(b.textContent || ''));
+    check(
+      'no button in the bubble is an emoji',
+      emoji.length === 0,
+      emoji.map((b) => `${b.getAttribute('title')}: ${b.textContent}`).join(', ')
+    );
+    const link = bubbleBtn('Link');
+    check('the link button is there', !!link, buttons.map((b) => b.getAttribute('title')).join(', '));
+    check('and it is drawn, not typed', !!link?.querySelector('svg'), link?.innerHTML);
+  }
 
   const spanBtn = bubbleBtn('Wrap in a span');
   check('the bubble offers a span', !!spanBtn, [...host.querySelectorAll('.rich-bubble button')].map((b) => b.getAttribute('title')).join(' | ') || 'no bubble');

@@ -15,6 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { decodeEntities, encodeText } = require('./htmlText');
 
 const IMPORT_RE = /import\s+(\w+)\s+from\s+(['"])([^'"]+)\2;?/g;
 // `import { Image, Picture } from 'astro:assets'` — Astro's own components come
@@ -580,11 +581,13 @@ function parseTemplate(str) {
       if (nodes.length) gaps.push(nodes.length);
     }
     if (text.trim()) {
-      // `source` only when the slice spans lines, because that is the only
-      // case where the collapsed value isn't the whole truth. The serializer
-      // hands those lines back if nothing has edited the node since.
+      // `source` when the collapsed value isn't the whole truth: a slice that
+      // spans lines (the serializer hands those lines back if nothing has
+      // edited the node since), and one written with entities in it — `&copy;`
+      // and `©` are the same character to a reader and not to a diff, and the
+      // file's own spelling is the file's to keep.
       const node = { id: makeId(), kind: 'text', value: textValue(text) };
-      if (text.includes('\n')) node.source = text;
+      if (text.includes('\n') || /&[#a-zA-Z]/.test(text)) node.source = text;
       emit(node);
     }
     if (next === -1) break;
@@ -756,15 +759,27 @@ function collapseWhitespace(text) {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-// What a text node holds: the words, with every run of whitespace inside them
-// squeezed to one space, and a single space kept at either end where the
-// source had any — a newline-and-indent boundary renders as one space, and
-// "people <strong>Acme</strong>" would otherwise lose the gap. Shared with the
-// serializer, which recomputes it to tell an edited node from an untouched one.
-function textValue(raw) {
+// The words, with every run of whitespace inside them squeezed to one space,
+// and a single space kept at either end where the source had any — a
+// newline-and-indent boundary renders as one space, and "people
+// <strong>Acme</strong>" would otherwise lose the gap. The source's own
+// spelling is kept: entities are still entities here.
+function collapseText(raw) {
   return (
     (/^\s/.test(raw) ? ' ' : '') + collapseWhitespace(raw) + (/\s$/.test(raw) ? ' ' : '')
   );
+}
+
+// What a text node HOLDS: the characters, not the file's spelling of them.
+// `&copy;&#160;` is one character and a space, and a panel over a rendered page
+// has to say what the page says. Decoded after the whitespace above, not
+// before: `&#160;` is a space to `\s`, and collapsing it away would delete the
+// very character it was written to insist on.
+//
+// Shared with the serializer, which recomputes it to tell an edited node from
+// an untouched one.
+function textValue(raw) {
+  return decodeEntities(collapseText(raw));
 }
 
 // ---------------------------------------------------------------------------
@@ -1033,7 +1048,10 @@ function isInlineRun(nodes) {
 function inlineString(nodes) {
   let out = '';
   for (const n of nodes) {
-    if (n.kind === 'text') out += n.value;
+    // Same rule as a text node on its own (see the 'text' case in
+    // serializeNode): the file keeps its own spelling of a character until
+    // somebody edits the words, and then the characters are what there is.
+    if (n.kind === 'text') out += textOut(n);
     else if (n.kind === 'expr') out += n.value;
     else if (n.children === null) {
       out += n.name === 'br' ? '<br />' : `<${n.name}${serializeAttrs(n.props)} />`;
@@ -1081,6 +1099,19 @@ function textAsWritten(node) {
   return textValue(node.source) === node.value ? node.source : null;
 }
 
+// A text node on its way into the file. Untouched, the file keeps its own
+// spelling of a character — `&copy;` goes back as `&copy;`, not as the © it was
+// read as, which would be the editor rewriting a page it was only asked to
+// open. Edited (or never read from a file at all), the characters are what
+// there is, and the three that would otherwise be markup — plus the spaces a
+// source file cannot show — become entities again.
+function textOut(node) {
+  const source = node.source;
+  return source != null && textValue(source) === node.value
+    ? collapseText(source)
+    : encodeText(node.value);
+}
+
 // Whitespace inside an inline run is collapsed by the renderer, so the run can
 // be shifted to a new indent without changing a thing about the page. Worth
 // doing: an element that has been moved, or whose ancestor was re-indented,
@@ -1119,7 +1150,11 @@ function inlineRunUnchanged(node) {
   return (
     !!node.source &&
     node.source.includes('\n') &&
-    squash(textValue(node.source)) === squash(inlineString(node.children))
+    // Compared in the file's own spelling on both sides: inlineString writes
+    // `&rsquo;` back as `&rsquo;` for a node nobody has touched, and decoding
+    // one side would call every hand-wrapped run with an entity in it changed
+    // — reflowing the paragraph onto one line for having been looked at.
+    squash(collapseText(node.source)) === squash(inlineString(node.children))
   );
 }
 
@@ -1204,7 +1239,7 @@ function serializeNode(node, indent, lines) {
       // takes the tree's, the way a multi-line expression does.
       const written = textAsWritten(node);
       if (written === null || !written.includes('\n')) {
-        lines.push(indent + node.value);
+        lines.push(indent + textOut(node));
         return;
       }
       const body = written.replace(/^[ \t]*\r?\n/, '').replace(/\s+$/, '');
@@ -1406,7 +1441,38 @@ const markerFor = (path, kind, inSlotContent) =>
     ? `<Fragment set:html={${JSON.stringify(`<!--avb-${kind}:${path}-->`)}} />`
     : `<!--avb-${kind}:${path}-->`;
 
-// `inSlot` says this node is a direct child of a component, i.e. slot content.
+// `inSlot` says this node is a direct child of a component, i.e. slot content —
+// which decides how the marker has to be written, since Astro's compiler drops
+// a plain html comment there.
+//
+// Every element and component also carries its path as an attribute, which is
+// the marker that survives what happens to the page after Astro is done with
+// it. A component doesn't have to render `<slot />` and leave it at that: it
+// can render the slot to a string and put the string back with `set:html`,
+// which is how it asks "did my slot render anything?" — and the usual way to
+// answer is to drop html comments before looking, since a comment is content
+// that isn't:
+//
+//   const content = await slots.render('default');
+//   return content.replace(/<!--[\s\S]*?-->/g, '').trim();  // ← markers gone
+//
+// Nothing on the page then answers to those paths. The navigator reported
+// every row inside such a component as rendering nothing, on a page where they
+// were plainly on screen, and nothing in there could be clicked or outlined.
+//
+// It can't be narrowed to slot content, either: what is being scrubbed is
+// everything the slot rendered, which includes the output of every component
+// inside it. <Tabs> written at the top of its own file, its markers a page
+// away from any slot, still lost every one of them for being placed inside a
+// <Section>. So the path rides on the markup everywhere — as the same
+// `data-avb-p` the collector writes at runtime, and invisible to :nth-child,
+// :first-child, + and ~ in a way a marker node could never be.
+//
+// On a component the attribute is a prop, and only reaches the DOM if that
+// component spreads its rest props — most do, and where one doesn't this is
+// no worse than the comment that was being dropped. The markers stay either
+// way: they are what works when nothing interferes, they say where a node
+// ENDS, and they carry the nodes an attribute can't (text, a loop, a branch).
 function serializeNodeMarked(node, indent, lines, path, inSlot = false) {
   if (node.kind === 'chunk-group') return; // synthetic, not in page source
   // A slotted node can't be wrapped: a marker beside it lands in the default
@@ -1432,10 +1498,36 @@ function serializeNodeMarked(node, indent, lines, path, inSlot = false) {
         : indent + markerFor(path, 's', inSlot)
     );
   }
-  // Serialized with the path attribute already on it, in that one case.
-  const markedProps = tagInPlace
-    ? { ...node.props, 'data-avb-p': { type: 'string', value: path } }
-    : node.props;
+  // Serialized with the path attribute already on it (see above). <Fragment>
+  // and <slot> are left out: neither puts an element on the page, so there is
+  // nothing for the attribute to ride on.
+  const carryPath =
+    (node.kind === 'element' || node.kind === 'component') &&
+    node.name !== 'Fragment' &&
+    node.name !== 'slot';
+  // Where the node forwards its rest props, the caller's path for this
+  // instance arrives inside the spread, and both want the same attribute. So
+  // the one written here names BOTH — its own path and whatever came in on
+  // Astro.props — and then has to be the one that survives.
+  //
+  // Which side of the spread that is depends on what the spread is. An
+  // element's attributes are text: two `data-avb-p=` land in the tag and an
+  // html parser keeps the FIRST, so this one goes before the spread. A
+  // component's are an object: the later key overwrites, so this one goes
+  // after it. Getting that backwards is silent — the tag is there, holding
+  // the wrong file's path. With <Tabs> open, its root div kept the page's
+  // path and a click on it resolved to nothing, which is how the canvas says
+  // "you're done in here": the component closed itself the moment you clicked
+  // inside it.
+  const forwards = Object.keys(node.props || {}).some((k) => k.startsWith('...'));
+  const pathProp = forwards
+    ? { type: 'expr', value: `[${JSON.stringify(path)}, Astro.props["data-avb-p"]].filter(Boolean).join(" ")` }
+    : { type: 'string', value: path };
+  const markedProps = !carryPath
+    ? node.props
+    : forwards && node.kind === 'element'
+      ? { 'data-avb-p': pathProp, ...node.props }
+      : { ...node.props, 'data-avb-p': pathProp };
   if (
     (node.kind === 'component' || node.kind === 'element') &&
     !node.chunkFile &&
@@ -1528,7 +1620,7 @@ function serializeNodeMarked(node, indent, lines, path, inSlot = false) {
       serializeNodeMarked(child, indent, lines, `${path}.${i}`, inSlot)
     );
   } else {
-    const base = tagInPlace ? { ...node, props: markedProps } : node;
+    const base = carryPath ? { ...node, props: markedProps } : node;
     const inlineKids =
       (node.kind === 'component' || node.kind === 'element') &&
       !node.chunkFile &&
@@ -1594,6 +1686,74 @@ function explodeMembers(block) {
 // component is free to write `type Props = SeoProps` with SeoProps in
 // types.ts, and without the declaration text there is nothing to read — the
 // panel would show a component with no props at all. The caller (which has
+// What a doc comment promises about a prop's fallback. Returns a value when it
+// names exactly one, a hint when it names several, and nothing when it is
+// prose. Used twice: once for the field itself, and once per union branch,
+// where a prop written in several branches has a different answer in each.
+function statedDefault(doc) {
+  if (!doc) return {};
+  const stated =
+    doc.match(/defaults?\s*(?:to|:)\s*\`([^\`]+)\`/i) ||
+    doc.match(/defaults?\s*(?:to|:)\s*([^\`.,;]+)/i);
+  if (!stated) return {};
+
+  // "Defaults to `webp`, or `svg` for SVG sources" is TWO answers, and which
+  // one applies depends on a prop only the component can weigh. Asserting the
+  // first would have the panel show `webp` while the build emits `svg`.
+  //
+  // Naming a second value is the tell, whatever word joins them. Asking for
+  // "for", "when", "if" or "on" as well let "Defaults to `Play`, or `Pause`
+  // while pressed" through as a plain default of Play, and the panel offered
+  // Play on a close button. A list of joining words is always one word short;
+  // two backticked values in one clause cannot be anything but two answers.
+  // Prose still needs those words, having no second value to count.
+  const clause =
+    (doc.match(/defaults?\s*(?:to|:)\s*((?:`[^`]*`|[^.])+)/i) || [])[1] || '';
+  const named = clause.match(/`[^`]+`/g) || [];
+  const conditional =
+    named.length > 1 ||
+    (/\bor\b/i.test(clause) &&
+      /\b(?:for|when|if|on|while|unless|with|without|depending)\b/i.test(clause));
+  if (conditional) {
+    const hint = clause
+      .replace(/`/g, '')
+      .replace(/\s+/g, ' ')
+      .replace(/\s*passthrough\s*/i, ' ')
+      .trim();
+
+    // A clause that names the prop it turns on can be answered rather than
+    // only reported: "Defaults to `Next`, or `Previous` when direction is
+    // `back`" is a rule the panel can weigh, because direction is a prop it
+    // already has. The bare form — "or `Pause` when pressed" — reads a
+    // boolean prop being true.
+    const rule =
+      clause.match(
+        /^\s*`([^`]+)`.*?\bor\b\s*`([^`]+)`\s*(?:when|while|if)\s+([A-Za-z_$][\w$]*)\s+(?:is|=|===)\s*`?([^`\s.,]+)`?/i
+      ) ||
+      clause.match(
+        /^\s*`([^`]+)`.*?\bor\b\s*`([^`]+)`\s*(?:when|while|if)\s+([A-Za-z_$][\w$]*)\s*$/i
+      );
+    if (rule) {
+      return {
+        hint,
+        when: {
+          prop: rule[3],
+          is: rule[4] === undefined ? 'true' : String(rule[4]),
+          then: rule[2],
+          otherwise: rule[1],
+        },
+      };
+    }
+    return hint ? { hint } : {};
+  }
+
+  const text = stated[1].trim().replace(/^["']|["']$/g, '');
+  if (text && text.length <= 24 && !/\s(the|a|an|whatever|sensible)\s/i.test(` ${text} `)) {
+    return { value: /^-?\d+(\.\d+)?$/.test(text) ? Number(text) : text };
+  }
+  return {};
+}
+
 // file access; this doesn't) resolves and reads them.
 function parsePropSchema(source, prelude = '') {
   const fm = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
@@ -1760,12 +1920,62 @@ function parsePropSchema(source, prelude = '') {
     return out;
   };
   const unions = [];
+  const memberDocs = (block) => {
+    const out = new Map();
+    let doc = [];
+    let inBlock = false;
+    for (const raw of explodeMembers(block).split('\n')) {
+      const line = raw.trim();
+      if (inBlock) {
+        const end = line.indexOf('*/');
+        doc.push((end === -1 ? line : line.slice(0, end)).replace(/^\*+\s?/, ''));
+        if (end !== -1) inBlock = false;
+        continue;
+      }
+      if (line.startsWith('/*')) {
+        const end = line.indexOf('*/');
+        doc.push((end === -1 ? line.slice(2) : line.slice(2, end)).replace(/^\*+\s?/, ''));
+        inBlock = end === -1;
+        continue;
+      }
+      if (line.startsWith('//')) {
+        doc.push(line.slice(2).trim());
+        continue;
+      }
+      if (!line) {
+        doc = [];
+        continue;
+      }
+      const m = line.match(/^(?:readonly\s+)?([\w$]+)\??\s*:\s*([^;\n]+?)[;,]?\s*$/);
+      if (m) {
+        const text = doc.join(' ').replace(/\s+/g, ' ').trim();
+        if (text) out.set(m[1], text);
+        doc = [];
+      }
+    }
+    return out;
+  };
+
   for (const branchBlocks of unionTables) {
     const maps = branchBlocks.map(memberEntries);
+    const docMaps = branchBlocks.map(memberDocs);
     const names = new Set(maps.flatMap((m) => [...m.keys()]));
-    const branches = maps.map((m) => {
+    const branches = maps.map((m, at) => {
       const forbids = [];
       const pins = {};
+      // What this branch's own doc comments say a prop falls back to. A label
+      // that reads Play in the play branch and Close in the close one has no
+      // single answer for the field, but it has one per branch — and the
+      // branch is decided by props the panel already knows.
+      const defaults = {};
+      const rules = {};
+      const docs = {};
+      for (const [name, doc] of docMaps[at]) {
+        docs[name] = doc;
+        const said = statedDefault(doc);
+        if (said.value !== undefined) defaults[name] = said.value;
+        if (said.when) rules[name] = said.when;
+      }
       for (const name of names) {
         const t = m.get(name);
         if (!t) continue;
@@ -1789,11 +1999,50 @@ function parsePropSchema(source, prelude = '') {
           pins[name] = parts.map((x) => (/^['"`]/.test(x) ? x.slice(1, -1) : x));
         }
       }
-      return { forbids, pins };
+      return { forbids, pins, defaults, rules, docs };
     });
     // A union that forbids nothing and pins nothing tells the panel nothing.
-    if (branches.some((b) => b.forbids.length || Object.keys(b.pins).length)) {
+    if (
+      branches.some(
+        (b) =>
+          b.forbids.length ||
+          Object.keys(b.pins).length ||
+          Object.keys(b.defaults).length ||
+          Object.keys(b.rules).length
+      )
+    ) {
       unions.push({ names: [...names], branches });
+    }
+  }
+
+  // A prop written in several branches has a doc in each, and they differ
+  // exactly where the branches do — the play control's label falls back to
+  // Play, the close one's to Close. The schema keeps the first it meets, so
+  // the tip beside a close button's label read "Defaults to Play".
+  //
+  // What every branch says is what is true of the prop itself, so the tip
+  // shows their common opening and stops at the last sentence they share.
+  // Where they part is the fallback, which the field already answers with a
+  // placeholder for the branch in force.
+  const sharedDoc = new Map();
+  {
+    const perName = new Map();
+    for (const u of unions) {
+      for (const b of u.branches) {
+        for (const [name, doc] of Object.entries(b.docs || {})) {
+          if (!perName.has(name)) perName.set(name, new Set());
+          perName.get(name).add(doc);
+        }
+      }
+    }
+    for (const [name, docs] of perName) {
+      if (docs.size < 2) continue;
+      const all = [...docs];
+      let i = 0;
+      while (i < all[0].length && all.every((d) => d[i] === all[0][i])) i++;
+      const cut = all[0].slice(0, i).lastIndexOf('.');
+      const common = cut === -1 ? '' : all[0].slice(0, cut + 1).trim();
+      if (common) sharedDoc.set(name, common);
     }
   }
 
@@ -1915,7 +2164,7 @@ function parsePropSchema(source, prelude = '') {
       numeric,
       optional: rec.optional,
       default: undefined,
-      doc: noted.get(name),
+      doc: sharedDoc.get(name) ?? noted.get(name),
       // Range and step, for the fields that can be typed into freely. A list
       // of literals already can't take a wrong value.
       ...(type === 'number' ? numberRules(noted.get(name)) : {}),
@@ -1972,6 +2221,23 @@ function parsePropSchema(source, prelude = '') {
     }
   }
 
+  // A prop written in several branches can promise a different fallback in
+  // each. There is no single answer for the field, and reading the first
+  // branch's doc would have it claim Play on a close button — the same lie
+  // the conditional clause above refuses to tell. The branch tables carry
+  // the per-branch answers; the field claims none.
+  const splitFallback = new Set();
+  for (const u of unions) {
+    for (const name of u.names) {
+      const seen = new Set();
+      for (const b of u.branches) {
+        if (b.defaults?.[name] !== undefined) seen.add(b.defaults[name]);
+        if (b.rules?.[name]) seen.add(`rule:${name}`);
+      }
+      if (seen.size > 1) splitFallback.add(name);
+    }
+  }
+
   // A prop's fallback isn't always a destructure default. Two more places it
   // is stated plainly, both worth showing as a field's placeholder so the
   // panel can say what happens when you leave it alone:
@@ -2004,34 +2270,16 @@ function parsePropSchema(source, prelude = '') {
     // "Defaults to `webp`", "Default: 2", "Defaults to `[1, 2]`". The
     // backticked form is tried first and taken whole — a value like `[1, 2]`
     // contains the comma the bare form has to stop at.
-    const stated =
-      (field.doc && field.doc.match(/defaults?\s*(?:to|:)\s*\`([^\`]+)\`/i)) ||
-      (field.doc && field.doc.match(/defaults?\s*(?:to|:)\s*([^\`.,;]+)/i));
-    if (stated) {
-      const text = stated[1].trim().replace(/^["']|["']$/g, '');
-      // Only when it names a value, not a sentence about one.
-      // "Defaults to `webp`, or `svg` for SVG sources" is TWO answers, and
-      // which one applies depends on the value of another prop — something
-      // only the component can work out. Asserting the first would have the
-      // panel show `webp` while the build emits `svg`. So a conditional
-      // default is reported as the whole clause, for the field to show as a
-      // hint, and no single value is claimed.
-      const conditional = /defaults?\s*(?:to|:)\s*[^.]*?\bor\b[^.]*?\b(?:for|when|if|on)\b/i.test(field.doc);
-      if (conditional) {
-        const clause = field.doc.match(/defaults?\s*(?:to|:)\s*([^.]+)/i);
-        if (clause) {
-          field.hint = clause[1]
-            .replace(/`/g, '')
-            .replace(/\s+/g, ' ')
-            .replace(/\s*passthrough\s*/i, ' ')
-            .trim();
-        }
-        continue;
-      }
-      if (text && text.length <= 24 && !/\s(the|a|an|whatever|sensible)\s/i.test(` ${text} `)) {
-        field.default = /^-?\d+(\.\d+)?$/.test(text) ? Number(text) : text;
-        continue;
-      }
+    if (splitFallback.has(field.name)) continue;
+
+    const said = statedDefault(field.doc);
+    if (said.value !== undefined) {
+      field.default = said.value;
+      continue;
+    }
+    if (said.hint) {
+      field.hint = said.hint;
+      continue;
     }
 
     // Some fallbacks are a behaviour rather than a value — "it is inferred",
@@ -2059,8 +2307,92 @@ function parsePropSchema(source, prelude = '') {
   return [...schema.values()];
 }
 
+// The slot a use of `Astro.slots` is about, and the const it was read into.
+//
+// A component does not have to render `<slot />` to take slot content. It can
+// read the slot itself — which is the only way to ask whether the slot
+// rendered anything, and so the usual shape for a component that draws nothing
+// when it is empty:
+//
+//   const content = await Astro.slots.render('default');
+//   const column2 = await slotContent(Astro.slots, 'column2');
+//
+// Read from the call around it: `.render(x)` / `.has(x)` name their slot
+// outright, and where `Astro.slots` is handed to a helper the string beside it
+// is the name. No string means the default slot — which is also the answer for
+// `render(someVariable)`, where nothing in the file says which slot it is.
+//
+// Scans forward from the reference to the end of the call it sits in, so a
+// second call further down the file can't lend it a name.
+function slotApiUses(source) {
+  const text = withoutComments(source);
+  const uses = [];
+  const re = /Astro\s*\.\s*slots\b(\s*\.\s*(?:render|has)\s*\()?/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    // Either we just consumed the opening paren of `.render(` / `.has(`, or
+    // the reference is an argument in a call whose paren is behind us. Both
+    // are one level in, and both end at the ')' that closes it.
+    let depth = 1;
+    let name = null;
+    for (let i = m.index + m[0].length; i < text.length; i++) {
+      const c = text[i];
+      if (c === '"' || c === "'" || c === '`') {
+        const close = text.indexOf(c, i + 1);
+        const quoted = text.slice(i + 1, close === -1 ? text.length : close);
+        if (name === null && /^[\w-]*$/.test(quoted)) name = quoted;
+        if (close === -1) break;
+        i = close;
+        continue;
+      }
+      if (c === '(' || c === '[' || c === '{') depth++;
+      else if (c === ')' || c === ']' || c === '}') {
+        depth--;
+        if (depth === 0) break;
+      } else if (depth === 1 && c === ';') break;
+    }
+    // `const content = await slotContent(...)` — the name that now holds it,
+    // which is what the template puts back with `set:html`.
+    const decl = text
+      .slice(0, m.index)
+      .match(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?[^;\n]*$/);
+    uses.push({ slot: name || 'default', varName: decl ? decl[1] : null });
+  }
+  return uses;
+}
+
+// The source with what it says ABOUT itself blanked out, character for
+// character so every index still points where it did. A frontmatter comment
+// explaining how the component consumes its slots reads exactly like code
+// that consumes them — three files in two projects grew a slot called "0"
+// from a sentence about `Astro.slots.render()`.
+//
+// Only frontmatter takes `//` and `/* */`: in the template body a `//` is far
+// more likely to be the middle of a URL than the start of a comment. Html
+// comments are blanked wherever they are.
+function withoutComments(source) {
+  const fm = source.match(/^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/);
+  const chars = [...source];
+  const blank = (from, to) => {
+    for (let i = from; i < to && i < chars.length; i++) {
+      if (chars[i] !== '\n') chars[i] = ' ';
+    }
+  };
+  const end = fm ? fm[0].length : 0;
+  for (let i = 0; i < end; i++) {
+    const skipped = skipStringOrComment(source, i);
+    if (skipped === i) continue;
+    if (source[i] === '/') blank(i, skipped);
+    i = skipped - 1;
+  }
+  for (const m of source.matchAll(/<!--[\s\S]*?-->/g)) blank(m.index, m.index + m[0].length);
+  return chars.join('');
+}
+
 // Slot names a component's template exposes: 'default' for <slot>/<slot />,
-// plus any <slot name="x">. Default first, then named in appearance order.
+// plus any <slot name="x">, plus any slot the frontmatter reads through
+// `Astro.slots` (see slotApiUses). Default first, then named in appearance
+// order.
 function parseSlots(source) {
   const fm = source.match(/^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/);
   const body = fm ? source.slice(fm[0].length) : source;
@@ -2071,6 +2403,7 @@ function parseSlots(source) {
     const nameMatch = m[1].match(/\bname\s*=\s*(?:"([^"]*)"|'([^']*)')/);
     found.add(nameMatch ? nameMatch[1] ?? nameMatch[2] : 'default');
   }
+  for (const use of slotApiUses(source)) found.add(use.slot);
   const named = [...found].filter((s) => s !== 'default');
   return found.has('default') ? ['default', ...named] : named;
 }
@@ -2154,19 +2487,32 @@ function rootTag(source) {
 // Whether a component's default <slot /> sits somewhere text belongs, so a
 // freshly inserted one can arrive with a word in it instead of empty. False
 // for a slot that isn't wrapped at all, or wrapped in something structural.
+//
+// A component that read its slot itself puts it back with `set:html`, and that
+// is the same placeholder under another name — `<Fragment set:html={content}/>`
+// inside a <Tag> is where the default slot renders. Which const holds it comes
+// from slotApiUses.
 function defaultSlotInline(source) {
   const fm = source.match(/^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/);
   const frontmatter = fm ? fm[0] : '';
   const body = fm ? source.slice(fm[0].length) : source;
+  const heldBy = new Set(
+    slotApiUses(source)
+      .filter((u) => u.slot === 'default' && u.varName)
+      .map((u) => u.varName)
+  );
   const stack = [];
   const re = /<(\/?)([A-Za-z][\w.-]*)\b((?:[^>"'{]|"[^"]*"|'[^']*'|\{[^}]*\})*?)(\/?)>/g;
   let m;
   while ((m = re.exec(body)) !== null) {
     const [, closing, tag, attrs, selfClosing] = m;
-    if (tag.toLowerCase() === 'slot') {
-      if (closing) continue;
-      if (/\bname\s*=/.test(attrs)) continue;
-      const parent = stack[stack.length - 1];
+    const html = !closing && attrs.match(/\bset:html\s*=\s*\{\s*([A-Za-z_$][\w$]*)\s*\}/);
+    const isSlot = tag.toLowerCase() === 'slot' && !closing && !/\bname\s*=/.test(attrs);
+    // A <Fragment> renders nothing of its own, so what wraps the content is
+    // the tag above it. Anything else IS the wrapper.
+    const placeholder = isSlot || (html && heldBy.has(html[1]));
+    if (placeholder) {
+      const parent = isSlot || tag === 'Fragment' ? stack[stack.length - 1] : tag;
       if (!parent) return false;
       if (TEXT_TAGS.has(parent.toLowerCase())) return true;
       if (!/^[A-Z]/.test(parent)) return false;

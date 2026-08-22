@@ -31,13 +31,15 @@ import CmsView from './panels/CmsView.jsx';
 import ContentView from './panels/ContentView.jsx';
 import VariablesPanel from './panels/VariablesPanel.jsx';
 import VariablesView from './panels/VariablesView.jsx';
-import { getElementSchema, GLOBAL_ATTRS, canContainTag, HTML_TAGS, VOID_TAGS } from './elementSchemas.js';
+import { getElementSchema, GLOBAL_ATTRS, HTML_TAGS, VOID_TAGS } from './elementSchemas.js';
+import { insertTargetFor as placeInsert } from './insertTarget.js';
 import { isInlineOnly } from './ui/RichContent.jsx';
 import { onAssetRequest, clearAssetRequest } from './assetPick.js';
 import { isDataBound } from './bindings.js';
-import { soleThen } from './branches.js';
+import { thenBranch } from './branches.js';
 import { hasClass, namesIn, withClass } from './classAttr.js';
 import { toComponentName } from './componentName.js';
+import { resolveInstanceProps } from './instanceProps.js';
 import { propsForExtraction } from './extractProps.js';
 import { elementLabel } from './classNames.js';
 import {
@@ -1894,89 +1896,11 @@ export default function App() {
     };
   }, []);
 
-  // What a component renders as. Fixed for most (<Section> is a <section>);
-  // decided by a prop for the ones that take a `tag` (<Heading tag="h1">),
-  // in which case an instance's own value wins over the component's default.
-  // Null when it can't be told — several possible tags, or no root element.
-  const tagOfComponent = (comp, node) => {
-    const rt = comp?.renderTag;
-    if (!rt) return null;
-    if (rt.prop && node) {
-      const set = node.props?.[rt.prop];
-      const v = set && set.type !== 'expr' ? String(set.value || '') : '';
-      if (v) return v.toLowerCase();
-    }
-    return rt.tag || null;
-  };
-
-  // Where a new node goes: inside the selection when it accepts children,
-  // otherwise right after it; with no selection, at the end of the page.
+  // Where a new node goes — see insertTarget.js. The rule lives there so the
+  // "why did that land next to the section instead of in it?" answer can be
+  // read, and tested, without a running app.
   const insertTargetFor = useCallback(
-    (model, selId, item) => {
-      // The tag being inserted. A component counts too: <Paragraph> renders a
-      // <p>, and a <p> is no more allowed inside a heading for being wrapped
-      // in a component. Unknown when the tag depends on values only the page
-      // knows (`const Tag = isLink ? "a" : "button"`), and unknown means
-      // allowed — a wrong refusal is worse than a wrong nesting.
-      const childTag =
-        item && item.type === 'element'
-          ? item.tag
-          : item && item.type === 'component'
-            ? tagOfComponent(insertables.find((c) => c.name === item.name))
-            : null;
-      const acceptsChildren = (n) => {
-        if (n.id === 'layout') return true;
-        if (n.kind === 'element') {
-          const tag = String(n.name).toLowerCase();
-          if (VOID_ELEMENTS.has(tag)) return false;
-          // A <p> inside an <h1> is invalid HTML the browser would reparent —
-          // insert alongside instead of inside.
-          return childTag ? canContainTag(tag, childTag) : true;
-        }
-        // A condition holds nothing itself — its branches do.
-        if (n.kind === 'map' || n.kind === 'chunk-group' || n.kind === 'branch') return true;
-        if (n.kind === 'component') {
-          const comp = insertables.find((c) => c.name === n.name);
-          if (!(comp?.slots || []).includes('default')) return false;
-          // …and what it renders as still has to be able to hold the child.
-          const tag = tagOfComponent(comp, n);
-          return tag && childTag ? canContainTag(tag, childTag) : true;
-        }
-        return false;
-      };
-      const findParentOf = (nodes, id, parentId = null) => {
-        for (let i = 0; i < nodes.length; i++) {
-          const n = nodes[i];
-          if (n.id === id) return { parentId, index: i };
-          if (Array.isArray(n.children)) {
-            const r = findParentOf(n.children, id, n.id);
-            if (r) return r;
-          }
-        }
-        return null;
-      };
-      if (selId && selId !== 'frontmatter') {
-        const sel = findNodeById(model.nodes, selId);
-        if (sel && acceptsChildren(sel)) {
-          return { parentId: sel.id, index: Array.isArray(sel.children) ? sel.children.length : 0 };
-        }
-        // Otherwise drop in as a sibling — climbing out of any ancestor that
-        // can't legally hold it either (a <div> next to a <span> inside a <p>
-        // still isn't valid, so it lands after the <p>).
-        let childId = selId;
-        for (let depth = 0; depth < 50; depth++) {
-          const fp = findParentOf(model.nodes, childId);
-          if (!fp) break;
-          if (fp.parentId === null) return { parentId: null, index: fp.index + 1 };
-          const parent = findNodeById(model.nodes, fp.parentId);
-          if (!parent || acceptsChildren(parent)) {
-            return { parentId: fp.parentId, index: fp.index + 1 };
-          }
-          childId = fp.parentId;
-        }
-      }
-      return { parentId: null, index: model.nodes.length };
-    },
+    (model, selId, item) => placeInsert(model, selId, item, insertables),
     [insertables]
   );
 
@@ -3391,6 +3315,47 @@ export default function App() {
         }
       : null;
 
+  // What the instance being edited is given.
+  //
+  // A component opened from the canvas is being looked at in one place, with
+  // one set of props — and the panel knew them only by name and type, so a
+  // field showing `{heading}` could not say what heading was. The instance
+  // says: it is in the file this one was opened from, at the focused path, and
+  // the page's own scope is what its expressions come to.
+  const [instanceProps, setInstanceProps] = useState(null);
+  const focusOf = currentPage?.kind === 'component' ? currentPage.focusPath : null;
+  const hostFile = editStack.length > 1 ? editStack[0] : null;
+  useEffect(() => {
+    if (!focusOf || !hostFile?.path) { setInstanceProps(null); return undefined }
+    let dropped = false;
+    void (async () => {
+      try {
+        const read = await window.avb.readPage(hostFile.path);
+        const hostModel = read?.model;
+        if (dropped || !hostModel) return;
+        const trail = String(focusOf).split('|').pop().split('.').map(Number);
+        const instance = nodeAtPath(hostModel.nodes, trail);
+        if (!instance) { setInstanceProps(null); return }
+        // The scope at the instance: the file's frontmatter, and the loops
+        // around it — `project` inside `projects.map(…)` is what its props are
+        // written against.
+        const chain = ancestorChain(hostModel.nodes, instance.id) || [];
+        setInstanceProps(
+          resolveInstanceProps(instance, {
+            frontmatter: hostModel.extraFrontmatter || '',
+            imports: hostModel.imports || [],
+            ancestorHeads: chain.slice(0, -1).filter((n) => n.kind === 'map').map((n) => n.head),
+            collectionSamples,
+            collections,
+          })
+        );
+      } catch {
+        if (!dropped) setInstanceProps(null);
+      }
+    })();
+    return () => { dropped = true };
+  }, [focusOf, hostFile?.path, collectionSamples, collections]);
+
   // Link settings (href fields): pages to link to and the ids on this page
   // that anchor links can target.
   const sectionIds = [];
@@ -3647,12 +3612,12 @@ export default function App() {
     crumbs.push({ id: 'frontmatter', label: 'Frontmatter' });
   } else if (model && selectedId) {
     const chain = ancestorChain(model.nodes, selectedId) || [];
-    // An `if` with no `else` doesn't show its branch in the navigator, so the
-    // trail doesn't name it either — "if command › then › hero-command" said
-    // "then" to no one (see branches.js).
+    // A then has no row in the navigator, so the trail doesn't name it either —
+    // "if command › then › hero-command" said "then" to no one (see
+    // branches.js).
     crumbs.push(
       ...chain
-        .filter((n, i) => n !== soleThen(chain[i - 1]))
+        .filter((n, i) => n !== thenBranch(chain[i - 1]))
         .map((n) => ({ id: n.id, label: crumbLabel(n) }))
     );
   }
@@ -3683,6 +3648,13 @@ export default function App() {
     // the frontmatter row or a doctype line never renders and saying so on
     // every one of them would be noise.
     const MARKABLE = new Set(['element', 'component', 'map']);
+    // …and neither <Fragment> nor <slot> ever puts an element on the page, so
+    // there is nothing for the page to report about them and nothing to carry
+    // their path. What they hold answers for them: children of either are
+    // marked, and a live child makes its ancestors live. `<Fragment set:html>`
+    // has no children to speak up, which is exactly the case where the panel
+    // cannot tell — and saying "renders nothing" is the wrong half to guess.
+    const answers = (n) => MARKABLE.has(n.kind) && n.name !== 'Fragment' && n.name !== 'slot';
     const ids = new Set();
     // An inline run — words with <a>, <strong>, <span> among them — is written
     // as one line, and markers inside it would render as spaces, so nothing in
@@ -3692,7 +3664,7 @@ export default function App() {
     const walk = (list, trail, unmarked) => {
       list.forEach((n, i) => {
         const t = [...trail, i];
-        if (!unmarked && MARKABLE.has(n.kind) && !live.has(t.join('.'))) ids.add(n.id);
+        if (!unmarked && answers(n) && !live.has(t.join('.'))) ids.add(n.id);
         if (Array.isArray(n.children)) walk(n.children, t, unmarked || isInlineRun(n.children));
       });
     };
@@ -3822,8 +3794,10 @@ export default function App() {
   const bindContext = loopContext && {
     ...loopContext,
     // A component's frontmatter is not the page's, so the page's entry is not
-    // its data — only the file the canvas is actually rendering as a page.
-    propsSample: currentPage?.kind === 'component' ? null : dynamicEntry?.props || null,
+    // its data. What it does have is the instance it was opened from, whose
+    // props are its Astro.props — the values it is rendering with right now.
+    propsSample:
+      currentPage?.kind === 'component' ? instanceProps : dynamicEntry?.props || null,
     propsSchema: schemaFor(editedEntry),
     collectionSamples,
     collections,

@@ -36,6 +36,7 @@ const check = (what, condition, detail) => {
     import { createRoot } from 'react-dom/client'
     import { NumField } from './src/style-panel/components/PositionGrid'
     import SizeSection from './src/style-panel/SizeSection'
+    import EffectsSection from './src/style-panel/EffectsSection'
     import { setHost } from './src/style-panel/lib/host'
     import './src/style-panel/tokens.css'
     import './src/style-panel/utilities.css'
@@ -48,6 +49,13 @@ const check = (what, condition, detail) => {
       busy: false, setProp: () => {}, clearProp: () => {}, liveSetProp: () => {},
       onProvenance: () => {}, onSelectSelector: () => {},
     }
+    // A transition, so its editor's Duration and Easing can be measured against
+    // the panel's own fields — they are in a popover, which is exactly how they
+    // came to be different in the first place.
+    // Two of them: one plain, one whose duration and easing are variables. The
+    // second is the case that squeezed the slider to nothing — a variable's name
+    // is long — and the one that has to show chips.
+    const fx = { ...props, read: (p) => (p === 'transition' ? resolved('opacity 200ms ease, transform var(--open-duration) var(--open-ease)') : undefined) }
     createRoot(document.getElementById('root')).render(
       <div className="embed-editor_root" style={{ width: 320, padding: 12 }}>
         <div className="embed-editor_rule">
@@ -55,6 +63,7 @@ const check = (what, condition, detail) => {
             <NumField value="50%" unit="%" label="Position left" busy={false} onLive={() => {}} onCommit={() => {}} />
           </div>
           <SizeSection {...props} />
+          <EffectsSection {...fx} />
         </div>
       </div>
     )
@@ -95,8 +104,34 @@ const check = (what, condition, detail) => {
        // the animation.
        await js("(() => { const s = document.createElement('style'); s.textContent = '* { transition: none !important }'; document.head.appendChild(s); return true })()");
 
+       // Open the transition's editor — a real press, because the row opens on one.
+       const clickAt = async (x, y) => {
+         win.webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+         win.webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+         await new Promise((r) => setTimeout(r, 150));
+       };
+       // The effects section is long; the row has to be on screen before a press
+       // at its coordinates means anything.
+       const rowAt = (n) => js("(() => { const rows = [...document.querySelectorAll('.embed-editor_transitions .embed-editor_bg-layer-main')]; const r = rows[" + n + "]; if (!r) return null; r.scrollIntoView({ block: 'center' }); const b = r.getBoundingClientRect(); return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) } })()");
+       const layerRow = await rowAt(1);
+       await new Promise((r) => setTimeout(r, 120));
+       if (layerRow) await clickAt(layerRow.x, layerRow.y);
+       const opening = { open: await js("!!document.querySelector('.embed-editor_layer-popover')"), foundRow: !!layerRow, sections: await js("[...document.querySelectorAll('.embed-editor_transitions')].length"), rows: await js("[...document.querySelectorAll('.embed-editor_bg-layer-main')].map((n) => n.textContent).join('|')") };
+
        const shape = (sel) => js("(() => { const el = document.querySelector('" + sel + "'); const r = el.getBoundingClientRect(); const c = getComputedStyle(el); return { h: Math.round(r.height), font: c.fontSize, family: c.fontFamily.split(',')[0].replace(/[\\"']/g, ''), padding: c.padding, radius: c.borderRadius } })()");
-       const out = {};
+       const out = { opening };
+       // One line and double-quoted: this whole probe is itself a template
+       // literal, so a backtick or an interpolation in here would belong to the
+       // wrong one.
+       out.varFields = await js("(() => { const pop = document.querySelector('.embed-editor_layer-popover'); if (!pop) return null; const shape = (el) => { const c = getComputedStyle(el); const r = el.getBoundingClientRect(); return { h: Math.round(r.height), font: c.fontSize, w: Math.round(r.width) } }; const dur = pop.querySelector('.embed-editor_trans-duration .embed-editor_field'); const ease = pop.querySelector('.embed-editor_trans-easing .embed-editor_field'); const slider = pop.querySelector('.u-drag-slider'); return { sharedField: !!dur && !!ease, input: dur && shape(dur.querySelector('input')), dots: [dur, ease].map((f) => !!(f && f.querySelector('.embed-editor_varconnect-dot'))), chips: [dur, ease].map((f) => !!(f && f.querySelector('.embed-editor_varconnect-token-name'))), code: [dur, ease].map((f) => !!(f && f.querySelector('[contenteditable]'))), slider: slider && Math.round(slider.getBoundingClientRect().width) } })()");
+       // Close the open one first — it is drawn over the rows, so a press aimed at
+       // another row would land on the popover instead.
+       win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+       win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+       await new Promise((r) => setTimeout(r, 150));
+       const plainRow = await rowAt(0);
+       if (plainRow) await clickAt(plainRow.x, plainRow.y);
+       out.plainFields = await js("(() => { const pop = document.querySelector('.embed-editor_layer-popover'); if (!pop) return null; const shape = (el) => { const c = getComputedStyle(el); const r = el.getBoundingClientRect(); return { h: Math.round(r.height), font: c.fontSize, w: Math.round(r.width) } }; const dur = pop.querySelector('.embed-editor_trans-duration .embed-editor_field'); const ease = pop.querySelector('.embed-editor_trans-easing .embed-editor_field'); const slider = pop.querySelector('.u-drag-slider'); return { sharedField: !!dur && !!ease, input: dur && shape(dur.querySelector('input')), dots: [dur, ease].map((f) => !!(f && f.querySelector('.embed-editor_varconnect-dot'))), chips: [dur, ease].map((f) => !!(f && f.querySelector('.embed-editor_varconnect-token-name'))), code: [dur, ease].map((f) => !!(f && f.querySelector('[contenteditable]'))), slider: slider && Math.round(slider.getBoundingClientRect().width) } })()");
        out.popup = await shape('#popupfield input');
        out.panel = await shape('input[data-prop=\\"max-width\\"]');
        out.focus = await js("(() => { const f = document.querySelector('#popupfield .embed-editor_field'); const i = f.querySelector('[contenteditable]') || f.querySelector('input'); i.focus(); const fs = getComputedStyle(f), is = getComputedStyle(f.querySelector('input')), es = getComputedStyle(i); const fr = f.getBoundingClientRect(), sr = f.querySelector('.embed-editor_field-suffix').getBoundingClientRect(); return { onBox: fs.boxShadow, onInput: is.boxShadow, onVisible: es.boxShadow, suffixInside: sr.left >= fr.left && sr.right <= fr.right, focusWithin: f.matches(':focus-within') } })()");
@@ -125,11 +160,26 @@ const check = (what, condition, detail) => {
     check('and not round the input inside it', out.focus.onInput === 'none', out.focus.onInput);
     check('nor round the visible half of it', out.focus.onVisible === 'none', out.focus.onVisible);
     check('so the unit is inside the ring', out.focus.suffixInside === true);
+
+    // The transition editor's own two fields, which are in a popover and had
+    // grown their own plain inputs: no way to reach a variable, and a slider
+    // squeezed to nothing beside them.
+    check('the transition editor opens', out.opening?.open === true, JSON.stringify(out.opening));
+    check('the transition editor uses the panel field', out.varFields?.sharedField === true, JSON.stringify(out.varFields));
+    check('at the same height as the panel', out.varFields?.input?.h === out.panel.h, `${out.varFields?.input?.h} vs ${out.panel.h}`);
+    check('and the same type', out.varFields?.input?.font === out.panel.font, `${out.varFields?.input?.font} vs ${out.panel.font}`);
+    check('a variable in either field reads as a chip', out.varFields?.chips?.every(Boolean) === true, JSON.stringify(out.varFields?.chips));
+    check('and the value is drawn as code', out.varFields?.code?.every(Boolean) === true, JSON.stringify(out.varFields?.code));
+    // A track you cannot aim at is not a control. Beside a variable's name it
+    // had about four pixels of it.
+    check('the duration slider is still wide enough to drag', out.varFields?.slider >= 80, `${out.varFields?.slider}px`);
+    // And on a plain value, the way in to the picker is the dot.
+    check('a plain value offers the variable dot instead', out.plainFields?.dots?.every(Boolean) === true, JSON.stringify(out.plainFields));
   }
 
   if (failures.length) {
     console.error(`panel-field: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
-  console.log(`panel-field: ${checked} passed  [popup field vs panel field, ring on the box]`);
+  console.log(`panel-field: ${checked} passed  [popup fields vs panel fields, ring on the box]`);
 })();

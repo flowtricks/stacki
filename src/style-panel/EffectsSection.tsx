@@ -7,6 +7,7 @@ import FieldLabel from './components/FieldLabel'
 import { PropTip, ProvenanceLabel } from './components/PropTip'
 import Select, { type SelectOption } from './components/Select'
 import DragSlider from './components/DragSlider'
+import LiveInput from './components/LiveInput'
 import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl'
 import SegmentedField, { type SegOption } from './SegmentedField'
 import ColorSwatch from './components/ColorSwatch'
@@ -738,22 +739,30 @@ function fmtDuration(ms: number, unit: 'ms' | 's'): string {
 function DurationField({ value, busy, onCommit, onLive }: { value: string; busy: boolean; onCommit: (v: string) => void; onLive: (v: string) => void }) {
   const ms = durationToMs(value)
   const unit = durationUnit(value)
-  const [draft, setDraft] = useState(value)
-  const focused = useRef(false)
-  useEffect(() => { if (!focused.current) setDraft(value) }, [value])
+  // While the slider is being dragged the field shows where it is; the rest of
+  // the time it shows what is set. The field is the panel's own (components/
+  // LiveInput), so a duration can be a variable here like anywhere else.
+  const [preview, setPreview] = useState<string | null>(null)
   return (
     <div className="embed-editor_trans-duration">
-      <DragSlider value={ms} min={0} max={2000} disabled={busy} ariaLabel="Duration" onPreview={(n) => { if (!focused.current) setDraft(fmtDuration(n, unit)) }} onInput={(n) => onLive(fmtDuration(n, unit))} onCommit={(n) => onCommit(fmtDuration(n, unit))} />
-      <input
-        className="u-input embed-editor_trans-dur-input"
-        value={draft}
-        spellCheck={false}
+      <DragSlider
+        value={ms}
+        min={0}
+        max={2000}
         disabled={busy}
-        aria-label="Duration"
-        onChange={(e) => setDraft(e.target.value)}
-        onFocus={() => { focused.current = true }}
-        onBlur={() => { focused.current = false; onCommit(draft.trim() || '0ms') }}
-        onKeyDown={(e) => { if (e.key === 'Enter') commitInPlace(e.currentTarget) }}
+        ariaLabel="Duration"
+        onPreview={(n) => setPreview(fmtDuration(n, unit))}
+        onInput={(n) => onLive(fmtDuration(n, unit))}
+        onCommit={(n) => { setPreview(null); onCommit(fmtDuration(n, unit)) }}
+      />
+      <LiveInput
+        value={preview ?? value}
+        busy={busy}
+        ariaLabel="Duration"
+        placeholder="0ms"
+        prop="transition-duration"
+        onLive={(v) => onLive(v.trim() || '0ms')}
+        onCommit={(v) => onCommit(v.trim() || '0ms')}
       />
     </div>
   )
@@ -762,25 +771,19 @@ function DurationField({ value, busy, onCommit, onLive }: { value: string; busy:
 // The easing control: a curve-icon button opens the visual editor, and the text
 // input takes any CSS timing value — keywords, cubic-bezier(), or inherit/unset/var().
 function EasingField({ value, busy, onCommit, onEditEasing }: { value: string; busy: boolean; onCommit: (v: string) => void; onEditEasing: () => void }) {
-  const [draft, setDraft] = useState(value)
-  const focused = useRef(false)
-  useEffect(() => { if (!focused.current) setDraft(value) }, [value])
   return (
     <div className="embed-editor_trans-easing">
       <button type="button" className="embed-editor_trans-easing-btn" onClick={onEditEasing} disabled={busy} title="Edit easing" aria-label="Edit easing">
         <EaseCurveIcon timing={value} />
       </button>
-      <input
-        className="u-input embed-editor_trans-easing-input"
-        value={draft}
+      <LiveInput
+        value={value}
+        busy={busy}
+        ariaLabel="Easing"
         placeholder="ease"
-        spellCheck={false}
-        disabled={busy}
-        aria-label="Easing"
-        onChange={(e) => setDraft(e.target.value)}
-        onFocus={() => { focused.current = true }}
-        onBlur={() => { focused.current = false; onCommit(draft.trim() || 'ease') }}
-        onKeyDown={(e) => { if (e.key === 'Enter') commitInPlace(e.currentTarget) }}
+        prop="transition-timing-function"
+        onLive={() => {}}
+        onCommit={(v) => onCommit(v.trim() || 'ease')}
       />
     </div>
   )

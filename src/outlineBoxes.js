@@ -58,4 +58,45 @@ export function hoverIsSelection(hover, selection) {
   return hover.occ == null || hover.occ === (selection.occ ?? 0);
 }
 
+/**
+ * Whether a new selection is near enough to the old one to still mean the same
+ * COPY of it.
+ *
+ * A loop renders one path many times, and which copy you are looking at is
+ * carried beside the path as an occurrence — the path itself is identical for
+ * every copy. A selection made from the canvas says which copy it means; any
+ * other route means "the node", and falls back to the first.
+ *
+ * That is right for a jump across the tree and wrong for a step within it.
+ * Pressing ↑ from the second link in a list selects its parent — and the parent
+ * of the SECOND one, which is the copy the reader is looking at. Stepping down
+ * into a child, or across to a sibling, is the same move. So a step to an
+ * ancestor, a descendant or a sibling keeps the copy; anything further away
+ * starts again at the first.
+ *
+ * Paths are index trails, so all three are answered by comparing them. A path
+ * carrying a file namespace (`src/Card.astro|0.1`) belongs to that file: a step
+ * into another file's markup is not a step within a copy.
+ */
+export function sameCopy(from, to) {
+  if (!from || !to || from === to) return false;
+  const split = (p) => {
+    const text = String(p);
+    const bar = text.lastIndexOf('|');
+    return {
+      file: bar === -1 ? '' : text.slice(0, bar),
+      trail: text.slice(bar + 1).split('.'),
+    };
+  };
+  const a = split(from);
+  const b = split(to);
+  if (a.file !== b.file) return false;
+  const shorter = Math.min(a.trail.length, b.trail.length);
+  // A sibling differs only in its last step; an ancestor or descendant agrees
+  // the whole way down the shorter of the two.
+  const common = a.trail.length === b.trail.length ? shorter - 1 : shorter;
+  for (let i = 0; i < common; i++) if (a.trail[i] !== b.trail[i]) return false;
+  return true;
+}
+
 export default onePerPlace;

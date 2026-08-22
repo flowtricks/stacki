@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { HoverTooltip } from './SegmentedControl'
-import { useComputedMeta } from '../lib/computed-style'
 
 // The style panel's labels are friendly names ("Align", "Gap", "Y") for CSS
 // properties. Hovering one for a beat shows which property (or properties) it
@@ -10,22 +9,20 @@ import { useComputedMeta } from '../lib/computed-style'
 
 const TIP_DELAY_MS = 500
 
-// What the page computes for one property, under its name. This is the value an
-// unset control highlights, so seeing it here says where that highlight came from —
-// and names the element it was read off when that isn't the one selected.
-function OnThePage({ prop }: { prop: string }) {
-  const { value, tag, mismatch } = useComputedMeta(prop)
-  if (mismatch) return <div className="u-prop-tip-note">the page resolves this node to &lt;{tag}&gt; — ignoring its computed values</div>
-  if (!value) return null
-  return <div className="u-prop-tip-note">on the page: {value}{tag ? ` (<${tag}>)` : ''}</div>
-}
-
-/** The tooltip body: the CSS property names, plus an optional note beneath them. */
+/**
+ * The tooltip body: the CSS property names, and a note only where one says
+ * something about the control itself (an orange label opens a popover, and has
+ * to say so).
+ *
+ * It used to carry what the page computed for each property underneath — "on
+ * the page: 16px (<div>)". That is the value the control already shows, said
+ * again in smaller type, and it turned a two-word answer into a paragraph. The
+ * question a label's tooltip answers is which property this is.
+ */
 export function PropTip({ props, note }: { props: readonly string[]; note?: ReactNode }) {
   return (
     <>
       <span className="u-prop-tip">{props.join(', ')}</span>
-      {props.map((prop) => <OnThePage key={prop} prop={prop} />)}
       {note ? <div className="u-prop-tip-note">{note}</div> : null}
     </>
   )
