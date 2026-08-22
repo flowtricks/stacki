@@ -4,6 +4,22 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 // don't expose the app API to the previewed site — just report the page's
 // content height to the app so the canvas view can size frames to the page.
 if (!process.isMainFrame) {
+  // Which frame the page is in, as a class on <html>, so a project can style
+  // for the editor: `stacki-designer` in the canvas, `stacki-preview` in the
+  // interactive preview. Read from the frame's own URL rather than waited for
+  // over a message — the page paints before the app can say anything, and a
+  // canvas that started out looking like the preview would flash.
+  //
+  // The patcher leaves it alone: it applies the classes the SERVER's two
+  // renderings disagree about, and neither of them has ever heard of these.
+  const stackiMode = location.hash.includes('avb-design') ? 'stacki-designer' : 'stacki-preview';
+  const markMode = () => document.documentElement?.classList.add(stackiMode);
+  markMode(); // <html> exists by the time a preload runs, but not always in a
+  // frame that is still being created — so try again at the first two moments
+  // it certainly does.
+  document.addEventListener('readystatechange', markMode);
+  window.addEventListener('DOMContentLoaded', markMode);
+
   // Design-mode frames (canvas + editor preview) are marked with #avb-design.
   // They get an editor cursor (no I-beam over text) and links/forms are
   // inert — navigation only happens in the interactive preview mode.
@@ -640,15 +656,22 @@ if (!process.isMainFrame) {
   // `class:list={[...]}` and `class={expr}` are expressions, so the authored
   // source has no class text to read — only the rendered element knows what
   // the expression evaluated to for THIS instance.
+  // The classes this file puts on the page itself, which the app must never see
+  // among the element's own: they would show up in the class picker, in the
+  // selector well, and in the navigator's labels as if the project had written
+  // them.
+  const STACKI_CLASSES = new Set(['stacki-opened', 'stacki-designer', 'stacki-preview']);
+  const ownClasses = (el) => [...el.classList].filter((c) => !STACKI_CLASSES.has(c));
+
   const classesForPath = (p) => {
     const out = [];
     for (const run of runsOf(p) || []) {
       const el = run.find((n) => n.nodeType === 1 && n.tagName !== 'TEMPLATE');
-      if (el) out.push([...el.classList]);
+      if (el) out.push(ownClasses(el));
     }
     if (!out.length) {
       for (const el of elementsWithPath(p)) {
-        out.push([...el.classList]);
+        out.push(ownClasses(el));
       }
     }
     return out;
@@ -876,9 +899,10 @@ if (!process.isMainFrame) {
     }
     // Slotted nodes have no marker pair, so they never appear above.
     for (const el of document.querySelectorAll(`[${PATH_ATTR}]`)) {
-      if (!el.classList.length || !inFocus(el)) continue;
+      const own = ownClasses(el);
+      if (!own.length || !inFocus(el)) continue;
       for (const p of pathsOf(el)) {
-        if (inScope(p) && !out[p]) out[p] = [...el.classList];
+        if (inScope(p) && !out[p]) out[p] = own;
       }
     }
     const key = JSON.stringify(out);
@@ -906,6 +930,24 @@ if (!process.isMainFrame) {
     window.scrollTo({ top: Math.max(0, window.scrollY + r.y - offset), behavior: 'smooth' });
   };
 
+  // `stacki-opened` on the instance being edited — the one that was actually
+  // double-clicked, not every copy of the component. It goes on the element(s)
+  // the instance rendered at its top level, which for a component with one root
+  // is that root; a component that renders two siblings marks both, because it
+  // has no single root to speak of.
+  //
+  // Painted from focusRoots(), so it means exactly what the outline, the hit
+  // testing and the scroll-to mean by "the open instance" — one place decides,
+  // and a component used inside a loop marks the card that was opened.
+  let openedEls = [];
+  const paintOpened = () => {
+    const roots = focusRoots();
+    const next = roots ? roots.filter((n) => n.nodeType === 1 && n.tagName !== 'TEMPLATE') : [];
+    for (const el of openedEls) if (!next.includes(el)) el.classList.remove('stacki-opened');
+    for (const el of next) el.classList.add('stacki-opened');
+    openedEls = next;
+  };
+
   let rectsQueued = false;
   const queueRects = () => {
     thinCache = null; // scrolled, resized or rebuilt — every box moved
@@ -914,6 +956,7 @@ if (!process.isMainFrame) {
     rectsQueued = true;
     requestAnimationFrame(() => {
       rectsQueued = false;
+      paintOpened();
       sendRects();
       sendRendered();
       sendClasses();
@@ -1221,7 +1264,7 @@ if (!process.isMainFrame) {
   const identityOf = (el) => ({
     tag: el.tagName.toLowerCase(),
     id: el.id || null,
-    classes: [...el.classList],
+    classes: ownClasses(el),
     attributes: Object.fromEntries(
       [...el.attributes]
         .filter((a) => a.name !== PATH_ATTR)
@@ -1323,6 +1366,7 @@ if (!process.isMainFrame) {
       thinCache = null; // scope decides what's hit-testable
       lastRenderedKey = ''; // scope decides which nodes are even asked about
       lastClassKey = '';
+      paintOpened();
       sendRects();
       sendRendered();
       sendClasses();
