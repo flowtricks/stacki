@@ -247,7 +247,9 @@ export default function PreviewPane({
         // selected node still moves the outline.
         lastClickRef.current = { path: d.path || null, occ: d.occurrence || 0 };
         setSelOcc(d.occurrence || 0);
-        onSelectPath(d.path || null);
+        // `outside` distinguishes a click the canvas could place somewhere this
+        // file doesn't own from one it couldn't place at all — see canvasClick.
+        onSelectPath(d.path || null, { outside: !!d.outside });
       } else if (d?.type === 'avb:canvas-ready') {
         // The page has walked its markers — anything asked too early can be
         // asked again now (see canvasQuery.js). It has also just re-rendered,

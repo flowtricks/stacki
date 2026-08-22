@@ -4,6 +4,7 @@ import PagesPanel from './panels/PagesPanel.jsx';
 import PalettePanel from './panels/PalettePanel.jsx';
 import StructurePanel from './panels/StructurePanel.jsx';
 import { isInlineRun, noteIndexAbove, noteText, noteValue, selectionAfterDelete } from './treeSelection.js';
+import { canvasClickAction } from './canvasClick.js';
 import { setSoundEnabled } from './ui/sound.js';
 import { createPreviewWatch } from './previewRecovery.js';
 import PropsPanel from './panels/PropsPanel.jsx';
@@ -4251,48 +4252,28 @@ export default function App() {
             focusWhole={focusWhole}
             device={device}
             onDevice={setDevice}
-            onSelectPath={(p) => {
-              // Editing a component: the canvas still shows the whole page,
-              // but the open file's own markup is marked in its namespace, so
-              // a click on it addresses a node in the file being edited —
-              // select that. A click on the lit instance itself stays put, and
-              // one in the dimmed page (or on nothing) means "I'm done in
-              // here" and backs out.
-              if (focusPath) {
-                const scope = editedRel ? `${editedRel}|` : '';
-                if (scope && p && p.startsWith(scope)) {
-                  const inner = model && nodeAtPath(model.nodes, trailOf(p));
-                  if (inner) {
-                    setSelectedId(inner.id);
-                    setLeftTab('navigator');
-                    setRevealTick((t) => t + 1);
-                  }
-                  return;
-                }
-                const inside = p && (p === focusPath || p.startsWith(focusPath + '.'));
-                if (!inside) closeComponent();
-                return;
-              }
-              // Chrome the layout renders itself — header, footer, anything
-              // outside the page's <slot> — carries no page-model marker, so a
-              // click there arrives with no path. The layout owns that markup,
-              // so select it instead of doing nothing.
-              if (!p) {
-                const layout = model && findNodeById(model.nodes, 'layout');
-                if (layout) {
-                  setSelectedId(layout.id);
-                  setLeftTab('navigator');
-                  setRevealTick((t) => t + 1);
-                }
-                return;
-              }
-              const n = model && nodeAtPath(model.nodes, trailOf(p));
-              if (n) {
-                setSelectedId(n.id);
+            onSelectPath={(p, info) => {
+              // What the click MEANT — see canvasClick.js. The canvas answers
+              // with a path or with null, and null has two causes that want
+              // opposite things: a click the open file doesn't own, and a click
+              // on something inside it the canvas couldn't name.
+              const reveal = (node) => {
+                if (!node) return;
+                setSelectedId(node.id);
                 // Selecting from the canvas jumps to the node in the tree.
                 setLeftTab('navigator');
                 setRevealTick((t) => t + 1);
-              }
+              };
+              const { kind } = canvasClickAction({
+                path: p,
+                outside: !!info?.outside,
+                focusPath,
+                scope: editedRel ? `${editedRel}|` : '',
+              });
+              if (kind === 'nothing') return;
+              if (kind === 'close') { closeComponent(); return; }
+              if (kind === 'layout') { reveal(model && findNodeById(model.nodes, 'layout')); return; }
+              reveal(model && nodeAtPath(model.nodes, trailOf(p)));
             }}
             onSelectedClasses={receiveClasses}
             onRenderedPaths={setRenderedPaths}

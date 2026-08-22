@@ -312,10 +312,18 @@ if (!process.isMainFrame) {
     focusCache = null;
     if (focusPath) {
       const runs = (regions.get(focusPath) || []).filter(isLive);
-      // One instance is every instance — nothing to narrow. Narrowing when the
-      // region was never found at all (a layout, whose marker pair can't
-      // survive the parser) would hide the whole page instead.
-      if (runs.length > 1) focusCache = runs[focusOcc] || runs[0];
+      // Any run at all is the instance that was opened, and everything below —
+      // outlines, hit testing, what a scroll-to aims at — should mean THAT one.
+      // This used to require two: with `<Button/>` written three times in a
+      // page, each has its own path, so the one that was opened has a single
+      // run, no narrowing happened, and the component's own paths resolved to
+      // all three instances at once — three outlines on screen, and a scroll
+      // that went to whichever came first in the document.
+      //
+      // Zero runs still doesn't narrow: a layout's marker pair is split across
+      // <head> and <body> and never pairs up, and narrowing to nothing would
+      // hide the page.
+      if (runs.length) focusCache = runs[focusOcc] || runs[0];
     }
     return focusCache;
   };
@@ -973,6 +981,12 @@ if (!process.isMainFrame) {
     while (tagged && !(inFocus(tagged) && pathsOf(tagged).some(inScope))) {
       tagged = tagged.parentElement ? tagged.parentElement.closest(`[${PATH_ATTR}]`) : null;
     }
+    // Whether anything at all was under the pointer, focus aside. `null` means
+    // the canvas could not place the click; `outside` means it could, somewhere
+    // this file/instance doesn't own — and only the second is somebody looking
+    // away from what they are editing. The app needs them apart: it backs out
+    // of a component on one and must sit still for the other.
+    const anyTag = target instanceof Element ? target.closest(`[${PATH_ATTR}]`) : null;
     let best = tagged ? pathsOf(tagged).find(inScope) ?? null : null;
     let bestDepth = best ? best.split('.').length : -1;
     for (const p of regions.keys()) {
@@ -999,11 +1013,15 @@ if (!process.isMainFrame) {
     // node that did win: a zero-height child of it takes precedence.
     if (x !== null) {
       const thin = thinAt(x, y, best);
-      if (thin) return { path: thin.path, occurrence: occurrenceOf(thin.path, thin.el) };
+      if (thin) return { path: thin.path, occurrence: occurrenceOf(thin.path, thin.el), outside: false };
     }
     // Resolved separately from the search above: when the winning path came
     // from the tag, its own runs were never scanned.
-    return { path: best, occurrence: best ? occurrenceOf(best, target) : 0 };
+    return {
+      path: best,
+      occurrence: best ? occurrenceOf(best, target) : 0,
+      outside: !best && !!anyTag,
+    };
   };
 
   // What the pointer is actually over. A page script that calls
@@ -1108,11 +1126,12 @@ if (!process.isMainFrame) {
         if (!designMode) return;
         e.preventDefault();
         e.stopPropagation();
-        // A click that hits no marked node still reports (path null) — the
-        // app uses empty clicks to back out of component editing.
-        const { path: p, occurrence } = nodeAtEvent(e);
+        // A click that hits no marked node still reports (path null), with
+        // `outside` saying whether it landed on something the open file simply
+        // doesn't own — which is what the app backs out of a component on.
+        const { path: p, occurrence, outside } = nodeAtEvent(e);
         window.parent.postMessage(
-          { type: 'avb:click-node', path: p || null, occurrence },
+          { type: 'avb:click-node', path: p || null, occurrence, outside: !!outside },
           '*'
         );
       },
