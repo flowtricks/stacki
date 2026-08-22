@@ -168,6 +168,29 @@ const check = (what, condition, detail) => {
     check('leaving the text whole', field.textContent === START[0].value, JSON.stringify(field.textContent));
   }
 
+  // Twice in the same tick — a double-press, or just a fast one. The toggle
+  // used to read the selection it had SAVED, and refreshing that was left to
+  // `selectionchange`, which browsers (and jsdom) fire from a queued task. A
+  // second press landing before that task ran acted on the range from before
+  // the first one, which the wrap had meanwhile dragged out to point at the
+  // <code> from the outside — so the toggle saw nothing around it and wrapped
+  // again. Pressing in separate ticks let the event land first, which is why
+  // this only ever showed up as the odd failed run.
+  await selectTail();
+  if (bubbleBtn('Code')) {
+    const fire = () => {
+      const b = bubbleBtn('Code');
+      b.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
+      b.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    };
+    await act(async () => {
+      fire();
+      fire();
+    });
+    check('two presses in one tick still leave no code', field.querySelectorAll('code').length === 0, field.innerHTML);
+    check('and the words still whole', field.textContent === START[0].value, JSON.stringify(field.textContent));
+  }
+
   await act(async () => { root.unmount() });
 
   if (failures.length) {

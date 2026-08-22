@@ -189,17 +189,32 @@ const RichContent = function RichContent({ nodes, onChange, bindCtx, insertRef }
     onChange(next);
   };
 
+  // The wrapper of `tag` the whole selection sits inside, or null. Both ends
+  // are resolved down to the node they point AT, rather than reading
+  // sel.anchorNode: a range can select an element from its parent — start
+  // (parent, i), end (parent, i+1) — and that is exactly what surrounding the
+  // selection leaves behind, so asking the anchor (the parent) whether it is
+  // inside `tag` answers no about the tag it just made.
+  const tagAround = (tag) => {
+    const host = hostRef.current;
+    const sel = window.getSelection();
+    if (!host || !sel || sel.rangeCount === 0) return null;
+    const r = sel.getRangeAt(0);
+    const at = (container, offset) => {
+      const n = container.nodeType === 1 ? container.childNodes[offset] || container : container;
+      const el = n.nodeType === 1 ? n : n.parentElement;
+      return el ? el.closest(tag) : null;
+    };
+    // The end boundary points just PAST its node, so step back one.
+    const start = at(r.startContainer, r.startOffset);
+    const end = at(r.endContainer, r.endOffset - (r.endContainer.nodeType === 1 ? 1 : 0));
+    const el = start && start === end ? start : null;
+    return el && host.contains(el) && el !== host ? el : null;
+  };
+
   // Formatting state at the current selection, for highlighting buttons.
   const readStates = () => {
-    const el = hostRef.current;
-    const sel = window.getSelection();
-    const anchorEl =
-      sel && sel.anchorNode
-        ? sel.anchorNode.nodeType === 1
-          ? sel.anchorNode
-          : sel.anchorNode.parentElement
-        : null;
-    const inTag = (tag) => !!(anchorEl && el && el.contains(anchorEl) && anchorEl.closest(tag));
+    const inTag = (tag) => !!tagAround(tag);
     let s = {};
     try {
       s = {
@@ -315,12 +330,29 @@ const RichContent = function RichContent({ nodes, onChange, bindCtx, insertRef }
     setPos({ left, top, below, arrowX });
   }, [bubble, linkMode]);
 
+  // Snapshot the live selection as the range the next press restores.
+  // Every action below re-reads it rather than leaving that to the
+  // `selectionchange` listener, because that event is fired from a queued
+  // task: a second press landing in the same task would otherwise act on the
+  // range from before the first one, which by then has been dragged along by
+  // the DOM edit and no longer means what it did. That is how pressing Code
+  // twice quickly used to nest a <code> inside a <code>.
+  const saveSelection = () => {
+    const host = hostRef.current;
+    const sel = window.getSelection();
+    if (!host || !sel || sel.rangeCount === 0) return;
+    const r = sel.getRangeAt(0);
+    if (host.contains(r.commonAncestorContainer)) savedRangeRef.current = r.cloneRange();
+  };
+
   const restoreSelection = () => {
     const r = savedRangeRef.current;
     if (!r) return;
     const sel = window.getSelection();
     sel.removeAllRanges();
-    sel.addRange(r);
+    // A clone: addRange can adopt the very range it is handed, and then
+    // surroundContents below would rewrite the saved one as a side effect.
+    sel.addRange(r.cloneRange());
   };
 
   const exec = (command, value = null) => {
@@ -328,6 +360,7 @@ const RichContent = function RichContent({ nodes, onChange, bindCtx, insertRef }
     restoreSelection();
     document.execCommand(command, false, value);
     emit();
+    saveSelection();
     setStates(readStates());
   };
 
@@ -337,16 +370,9 @@ const RichContent = function RichContent({ nodes, onChange, bindCtx, insertRef }
   // attributes on it yet is invisible, so one added by mistake could otherwise
   // only be removed by editing the file.
   const unwrapTag = (tag) => {
-    const host = hostRef.current;
     const sel = window.getSelection();
-    const anchor =
-      sel && sel.anchorNode
-        ? sel.anchorNode.nodeType === 1
-          ? sel.anchorNode
-          : sel.anchorNode.parentElement
-        : null;
-    const el = anchor && host && host.contains(anchor) ? anchor.closest(tag) : null;
-    if (!el || !host.contains(el) || el === host) return false;
+    const el = tagAround(tag);
+    if (!el) return false;
     const parent = el.parentNode;
     const first = el.firstChild;
     const last = el.lastChild;
@@ -371,6 +397,7 @@ const RichContent = function RichContent({ nodes, onChange, bindCtx, insertRef }
     // Already inside one: the press means "stop".
     if (unwrapTag(tag)) {
       emit();
+      saveSelection();
       setStates(readStates());
       return;
     }
@@ -390,6 +417,7 @@ const RichContent = function RichContent({ nodes, onChange, bindCtx, insertRef }
     r.selectNodeContents(el);
     sel.addRange(r);
     emit();
+    saveSelection();
     setStates(readStates());
   };
 
@@ -402,6 +430,7 @@ const RichContent = function RichContent({ nodes, onChange, bindCtx, insertRef }
     restoreSelection();
     document.execCommand('createLink', false, url);
     emit();
+    saveSelection();
     setStates(readStates());
   };
 
