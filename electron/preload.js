@@ -939,10 +939,31 @@ if (!process.isMainFrame) {
   // Painted from focusRoots(), so it means exactly what the outline, the hit
   // testing and the scroll-to mean by "the open instance" — one place decides,
   // and a component used inside a loop marks the card that was opened.
+  //
+  // Where the instance IS depends on how it was addressed. Most have a marker
+  // pair, and the run between it is them. A component whose root is a
+  // conditional has none: `{render && heading && (<details/>)}` renders the
+  // branch's own element and the serializer puts the path on that element
+  // rather than wrapping it — a marker beside it would land outside the branch,
+  // where it would mark the instance whether the branch rendered or not. Same
+  // for a component rendered into another one's slot. The element carrying the
+  // path is the instance, so that is what gets marked, and the occurrence picks
+  // the copy that was opened exactly as the click that opened it did.
+  // A component's region holds its <script> and <style> too. They are elements,
+  // and they are not what anyone means by the root of the component.
+  const UNRENDERED = new Set(['TEMPLATE', 'SCRIPT', 'STYLE', 'LINK', 'META', 'TITLE']);
+  const openedRoots = () => {
+    const run = focusRoots();
+    if (run) return run.filter((n) => n.nodeType === 1 && !UNRENDERED.has(n.tagName));
+    if (!focusPath) return [];
+    const places = taggedPlaces(focusPath);
+    const one = places[focusOcc] || places[0];
+    return one ? [one.el] : [];
+  };
+
   let openedEls = [];
   const paintOpened = () => {
-    const roots = focusRoots();
-    const next = roots ? roots.filter((n) => n.nodeType === 1 && n.tagName !== 'TEMPLATE') : [];
+    const next = openedRoots();
     for (const el of openedEls) if (!next.includes(el)) el.classList.remove('stacki-opened');
     for (const el of next) el.classList.add('stacki-opened');
     openedEls = next;

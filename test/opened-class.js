@@ -46,12 +46,35 @@ const frame = (url) => {
       </ul>
       ${marked('0.2', '<div class="promo">promo</div>')}
       ${marked('0.3', '<h2 class="pair-head">head</h2><p class="pair-body">body</p>')}
+      ${marked('0.4', '<div class="widget">widget</div><script>var x = 1</script>')}
+      <!-- A component whose root is a conditional has no marker pair: a marker
+           beside the branch would sit outside it, and would mark the instance
+           whether the branch rendered or not. The path rides on the element the
+           branch rendered instead. -->
+      <section>
+        <details data-avb-p="src/components/AccordionItem.astro|0.0.0 0.5.0" class="accordion_item">first</details>
+        <details data-avb-p="src/components/AccordionItem.astro|0.0.0 0.5.1" class="accordion_item">second</details>
+      </section>
+      <!-- The same, in a loop: one page path, one tagged element per item. -->
+      <ul>
+        <li data-avb-p="src/components/Row.astro|0.0.0 0.6.0" class="row">a</li>
+        <li data-avb-p="src/components/Row.astro|0.0.0 0.6.0" class="row">b</li>
+        <li data-avb-p="src/components/Row.astro|0.0.0 0.6.0" class="row">c</li>
+      </ul>
     </body>`,
     { url, pretendToBeVisual: true }
   );
   const { window } = dom;
   const NO_BOX = { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
-  window.Element.prototype.getBoundingClientRect = () => NO_BOX;
+  // jsdom lays nothing out, and a node with no box is not a place — which is
+  // how the canvas tells a real occurrence from a hollow leftover. Give every
+  // element that renders a box of its own, stacked down the page.
+  let top = 0;
+  window.Element.prototype.getBoundingClientRect = function () {
+    if (['SCRIPT', 'STYLE', 'TEMPLATE', 'LINK', 'META', 'TITLE', 'HEAD'].includes(this.tagName)) return NO_BOX;
+    const y = (top += 50);
+    return { x: 0, y, width: 200, height: 40, left: 0, top: y, right: 200, bottom: y + 40 };
+  };
   window.Range.prototype.getBoundingClientRect = () => NO_BOX;
 
   global.window = window;
@@ -85,7 +108,13 @@ const frame = (url) => {
   // instance, and which copy of it.
   const track = (focus, focusOcc = 0) => {
     const ev = new window.MessageEvent('message', {
-      data: { type: 'avb:track', paths: ['0.1', '0.2', '0.3'], scope: '', focus, focusOcc },
+      data: {
+        type: 'avb:track',
+        paths: ['0.1', '0.2', '0.3', '0.4', '0.5.0', '0.5.1', '0.6.0'],
+        scope: '',
+        focus,
+        focusOcc,
+      },
     });
     Object.defineProperty(ev, 'source', { value: window.parent });
     window.dispatchEvent(ev);
@@ -133,6 +162,32 @@ const frame = (url) => {
   // A component that renders two siblings has no single root, so both are it.
   canvas.track('0.3', 0);
   check('a component with two roots marks both', canvas.opened().join() === 'head,body', canvas.opened().join());
+
+  // --- a component whose root is a conditional -------------------------------------
+  //
+  // `{render && heading && content && (<details/>)}` — the details IS the
+  // instance, and it carries the path rather than being wrapped in a pair.
+  // Marking what the branch rendered is the only thing there is to mark.
+  canvas.track('0.5.0', 0);
+  check('an instance addressed by attribute is marked', canvas.opened().join() === 'first', canvas.opened().join());
+  canvas.track('0.5.1', 0);
+  check('and its neighbour is a different one', canvas.opened().join() === 'second', canvas.opened().join());
+
+  // The same component inside a loop: one path, one tagged element per item,
+  // and the occurrence is the copy that was double-clicked — the same list the
+  // click that opened it counted.
+  canvas.track('0.6.0', 1);
+  check('a conditional root inside a loop marks the copy that was opened', canvas.opened().join() === 'b', canvas.opened().join());
+  canvas.track('0.6.0', 2);
+  check('and the next copy along', canvas.opened().join() === 'c', canvas.opened().join());
+  check('one copy at a time', canvas.opened().length === 1, canvas.opened().join());
+
+  // --- what is not a root ------------------------------------------------------------
+  //
+  // A component's region holds its <script> and <style> too. They are elements
+  // and they are not what anyone means by the root of the component.
+  canvas.track('0.4', 0);
+  check('the script in a component is not marked', canvas.opened().join() === 'widget', canvas.opened().join());
 
   // --- and leaving ----------------------------------------------------------------
   canvas.track('', 0);
@@ -203,10 +258,19 @@ const frame = (url) => {
     raw.length === 1 && /ownClasses/.test(raw[0]),
     raw.join('\n    ')
   );
+  // Both halves come from the lists everything else in the canvas already uses,
+  // so "the open instance" and "which copy" mean one thing across the outline,
+  // the hit testing, the scroll-to and this.
+  const roots = source.slice(source.indexOf('const openedRoots'), source.indexOf('let openedEls'));
   check(
-    'the open instance is painted from the same run everything else narrows to',
-    /const roots = focusRoots\(\);/.test(source.slice(source.indexOf('const paintOpened'))),
-    'paintOpened works out the instance for itself'
+    'the marked instance is the one the rest of the canvas narrows to',
+    /focusRoots\(\)/.test(roots),
+    'openedRoots works the instance out for itself'
+  );
+  check(
+    'and an instance with no marker pair counts copies the way the click does',
+    /taggedPlaces\(focusPath\)/.test(roots) && /places\[focusOcc\]/.test(roots),
+    roots
   );
 
   if (failures.length) {
