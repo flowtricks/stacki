@@ -2505,9 +2505,17 @@ export function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef,
   // expression with data in it. The value decides, so a field never changes
   // the meaning of what it was opened on.
   const mode = valueModeOf(value);
+  // Written as an expression rather than as text. Booleans and numbers are the
+  // obvious ones — `cols={3}` — and a prop that takes an array or an object is
+  // the same thing: typing `["Designer", "Developer"]` into it has to write
+  // `options={["Designer", "Developer"]}`, not `options="[\"Designer\", …]"`,
+  // which is a string the component then calls .map on. It also cost the field
+  // its own editor: a string is text, so the panel showed the array in a plain
+  // box with no highlighting, and there was no way to type one that stayed code.
   const numeric =
     field?.type === 'number' ||
     field?.type === 'boolean' ||
+    field?.type === 'code' ||
     (field?.type === 'enum' && field?.numeric);
 
   const open = (chip) => {
@@ -2653,7 +2661,12 @@ export function BindField({ value, field, placeholder, bindCtx, dataCtx, apiRef,
           ref={inputRef}
           parts={parts}
           placeholder={placeholder || 'Type, or insert data'}
-          onChange={(next) => onChange(valueFromParts(next, { numeric, mode }))}
+          // A code prop's parts join as code: text beside a chip is an
+          // expression with a value in it, not a sentence with one quoted into
+          // it, so `[...items, other]` stays what was typed.
+          onChange={(next) =>
+            onChange(valueFromParts(next, { numeric, mode: field?.type === 'code' ? 'code' : mode }))
+          }
           onChipClick={(chip) => open(chip)}
           onFocus={() => setEditing(true)}
           onBlur={() => setEditing(false)}
