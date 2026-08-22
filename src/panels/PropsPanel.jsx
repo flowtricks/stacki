@@ -681,12 +681,42 @@ export default function PropsPanel({
   // A branch that fixes nothing allows everything, and a value already in the
   // markup stays in the list whatever the branch says — hiding it would leave
   // markup the panel disagrees with and no way to see it, let alone fix it.
+  //
+  // The prop that CHOOSES the branch is the exception, and it has to be: the
+  // props a branch allows are its consequences, not its conditions. `pressed`
+  // exists only on a play control, so a paused one has it set — and the close
+  // and arrow branches forbid it, which left the variant list offering main and
+  // play and no way to reach the other two. Nothing was wrong with the markup
+  // and nothing said so; the switch was simply not on offer. It is a switch the
+  // panel already knows how to make: setPropCascading clears what the new
+  // branch forbids and hands it back on the way in.
+  //
+  // A prop chooses the branch when its pinned values name at most one branch
+  // each — pick one and the branch is settled. `emphasis` is pinned in every
+  // branch too, and its sets overlap (primary is allowed on all four variants),
+  // so choosing it settles nothing and it narrows as before.
+  const choosesBranch = (union, name) => {
+    const seen = new Set();
+    let pinning = 0;
+    for (const b of union.branches) {
+      const pinned = b.pins?.[name];
+      if (!pinned) continue;
+      pinning++;
+      for (const v of pinned) {
+        if (seen.has(v)) return false;
+        seen.add(v);
+      }
+    }
+    return pinning > 1;
+  };
+
   const narrowOptions = (field) => {
     if (!field.options?.length) return field;
     let allowed;
     const fitting = branchesFitting(field.name);
     for (const [i, union] of unions.entries()) {
       if (!union.names.includes(field.name)) continue;
+      if (choosesBranch(union, field.name)) continue;
       for (const b of fitting[i]) {
         const pinned = b.pins?.[field.name];
         if (!pinned) return field;
