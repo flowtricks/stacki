@@ -619,21 +619,31 @@ export default function PropsPanel({
     const f = schema.find((x) => x.name === name);
     return f?.default === undefined ? undefined : String(f.default);
   };
-  const liveBranches = unions.map((union) => {
-    const fits = union.branches.filter((b) => {
-      // A branch is out if something set on the node is forbidden there…
-      for (const name of b.forbids) if (node.props?.[name] !== undefined) return false;
-      // …or if it fixes a prop to a value the node doesn't have.
-      for (const [name, want] of Object.entries(b.pins)) {
-        const have = effective(name);
-        if (have !== undefined && !want.includes(String(have))) return false;
-      }
-      return true;
+  // Which branches still fit what is set. One prop can be left out of the
+  // test: asking what a prop may be set to cannot be answered by the branches
+  // its own current value already chose — that reasoning ends with the
+  // variant dropdown offering the variant it is on, and no way back.
+  const branchesFitting = (ignore) =>
+    unions.map((union) => {
+      const fits = union.branches.filter((b) => {
+        // A branch is out if something set on the node is forbidden there…
+        for (const name of b.forbids) {
+          if (name !== ignore && node.props?.[name] !== undefined) return false;
+        }
+        // …or if it fixes a prop to a value the node doesn't have.
+        for (const [name, want] of Object.entries(b.pins)) {
+          if (name === ignore) continue;
+          const have = effective(name);
+          if (have !== undefined && !want.includes(String(have))) return false;
+        }
+        return true;
+      });
+      // No branch fits (the markup is already invalid) — show everything
+      // rather than hide the fields needed to fix it.
+      return fits.length ? fits : union.branches;
     });
-    // No branch fits (the markup is already invalid) — show everything rather
-    // than hide the fields needed to fix it.
-    return fits.length ? fits : union.branches;
-  });
+
+  const liveBranches = branchesFitting(null);
   // A prop whose fallback differs per branch has no single answer for the
   // field — `label` reads Play on a play control and Close on a close one —
   // but the branch in force has one, and the panel already knows which branch
@@ -674,9 +684,10 @@ export default function PropsPanel({
   const narrowOptions = (field) => {
     if (!field.options?.length) return field;
     let allowed;
+    const fitting = branchesFitting(field.name);
     for (const [i, union] of unions.entries()) {
       if (!union.names.includes(field.name)) continue;
-      for (const b of liveBranches[i]) {
+      for (const b of fitting[i]) {
         const pinned = b.pins?.[field.name];
         if (!pinned) return field;
         allowed = allowed ? [...new Set([...allowed, ...pinned])] : [...pinned];

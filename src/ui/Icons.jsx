@@ -863,6 +863,19 @@ export const SearchIcon = (p) => (
   </I>
 );
 
+export const TerminalIcon = (p) => (
+  <I {...p}>
+    <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" />
+    <path d="m4.75 6.5 2 1.75-2 1.75M8.5 10.25h3" />
+  </I>
+);
+
+export const ArrowDownIcon = (p) => (
+  <I {...p}>
+    <path d="M8 3v10M4.25 9.25 8 13l3.75-3.75" />
+  </I>
+);
+
 export function elementIcon(tag, size = 12, className) {
   const Icon = TAG_ICONS[String(tag).toLowerCase()] || CustomElementIcon;
   return <Icon size={size} className={className} />;

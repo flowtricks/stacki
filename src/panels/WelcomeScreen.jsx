@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { cleanError } from '../App.jsx';
+import { cleanError } from '../cleanError.js';
 import { LayersIcon, CloseIcon } from '../ui/Icons.jsx';
 import StackiLogo from '../ui/StackiLogo.jsx';
 import WelcomeBackground from '../ui/WelcomeBackground.jsx';

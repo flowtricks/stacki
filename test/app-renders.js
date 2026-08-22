@@ -164,8 +164,14 @@ const check = (what, condition, detail) => {
   {
     const bundle = fs.readFileSync(bundlePath, 'utf8');
     // The app's own code, not the libraries it pulls in — CodeMirror and
-    // friends have their own reasons.
-    const ours = bundle.split('\n').filter((l) => !/node_modules/.test(l)).join('\n');
+    // friends have their own reasons. esbuild puts each module under a banner
+    // naming its file, so the split is by module rather than by line: xterm
+    // ships a `confirm()` before opening a link from terminal output, minified
+    // onto lines that say nothing about where they came from.
+    const ours = bundle
+      .split(/^(?=\/\/ \S+\n)/m)
+      .filter((chunk) => !/^\/\/ node_modules\//.test(chunk))
+      .join('\n');
     const native = [...ours.matchAll(/(?<![.\w])(?:window\.)?(confirm|alert)\s*\(/g)]
       .map((m) => m[0])
       // confirmDialog / confirmLabel are ours and read the same to a regex.

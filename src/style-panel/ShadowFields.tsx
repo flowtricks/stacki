@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import DragSlider from './components/DragSlider'
 import ColorSwatch from './components/ColorSwatch'
+import useScrub from './components/useScrub'
 import VariableConnect from './VariableConnect'
 import { handleArrowStep } from './lib/number-step'
 import { useLiveColor } from './lib/live-color'
@@ -49,11 +50,20 @@ function ShadowTextInput({ value, busy, ariaLabel, placeholder, className, prop,
   useEffect(() => { if (!focused.current) setDraft(value) }, [value])
   const cancel = () => { if (timer.current != null) { window.clearTimeout(timer.current); timer.current = null } }
   useEffect(() => cancel, [])
-  const live = (text: string) => { cancel(); timer.current = window.setTimeout(() => { const t = text.trim(); if (t) onLive(t) }, 100) }
-  const commit = () => { const t = draft.trim(); if (!t) { onClear(); return } onCommit(t) }
+  const liveNow = (text: string) => { const t = text.trim(); if (t) onLive(t) }
+  const live = (text: string) => { cancel(); timer.current = window.setTimeout(() => liveNow(text), 100) }
+  const commit = (text = draft) => { const t = text.trim(); if (!t) { onClear(); return } onCommit(t) }
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy,
+    onPreview: setDraft,
+    onInput: liveNow,
+    onCommit: (text) => { setDraft(text); commit(text) },
+  })
   return (
     <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} className="is-fill" prop={prop} onPick={(binding) => onCommit(binding)}>
       <input
+        {...scrub.input}
         className={className}
         value={draft}
         onChange={(e) => { setDraft(e.target.value); live(e.target.value) }}

@@ -237,6 +237,15 @@
   box-shadow: 0 0 0 var(--border-width-thick) var(--color-danger-border);
 }
 
+/* While a value is being scrubbed (useScrub.ts) the pointer is captured, so it can be
+   anywhere on screen — the resize cursor and the selection lock have to be global, and
+   have to out-specify whatever it passes over. */
+body.is-scrubbing,
+body.is-scrubbing * {
+  cursor: ew-resize !important;
+  user-select: none !important;
+}
+
 .u-textarea {
   min-height: 96px;
   height: auto;

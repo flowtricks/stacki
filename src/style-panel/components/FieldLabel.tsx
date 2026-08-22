@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 import { panelBounds } from '../lib/panel-box'
 import { useHoverTip } from './PropTip'
+import type { ScrubHandlers } from './useScrub'
 
 type Props = {
   children: ReactNode
@@ -22,6 +23,11 @@ type Props = {
   /** Forwarded to the label so it can double as a drag handle (a drag suppresses
    *  the click, so mousedown-to-drag and click-to-open-menu coexist). */
   onMouseDown?: (event: MouseEvent<HTMLElement>) => void
+  /** Pointer handlers from useScrub, making the label a drag handle for the number in
+   *  the field it captions. Same coexistence rule as onMouseDown: a drag eats the click,
+   *  a press that stays put still opens the reset menu. Inert while the field is empty —
+   *  the dim caption doesn't take pointer events, and there'd be nothing to drag. */
+  scrubProps?: ScrubHandlers
   className?: string
   /** Shown in a hover tooltip after a short delay, in every state (blue or dim) —
    *  the panel uses it to name the CSS property this label writes. When given, it
@@ -35,7 +41,7 @@ type Props = {
  * to reset the field; Option/Alt-clicking it resets immediately. Reusable across
  * tools for any "clearable" input.
  */
-export default function FieldLabel({ children, active, onReset, resetLabel = 'Reset', disabled = false, title, menuNote, onMouseDown, className, tooltip }: Props) {
+export default function FieldLabel({ children, active, onReset, resetLabel = 'Reset', disabled = false, title, menuNote, onMouseDown, scrubProps, className, tooltip }: Props) {
   const [open, setOpen] = useState(false)
   const [dropUp, setDropUp] = useState(false)
   const rootRef = useRef<HTMLSpanElement | null>(null)
@@ -105,11 +111,13 @@ export default function FieldLabel({ children, active, onReset, resetLabel = 'Re
     return (
       // A dim caption is normally click-through (it can sit over the field it
       // labels); one with a tooltip takes pointer events so it can be hovered.
+      // `scrubProps` is the drag that changes the value it labels.
       <span
         ref={hoverTip.ref}
         className={['u-field-label', tooltip ? 'is-hoverable' : '', className].filter(Boolean).join(' ')}
         title={nativeTitle}
         onMouseDown={onMouseDown}
+        {...scrubProps}
         {...hoverTip.hoverProps}
       >
         {children}
@@ -150,6 +158,7 @@ export default function FieldLabel({ children, active, onReset, resetLabel = 'Re
         disabled={disabled}
         title={nativeTitle}
         onMouseDown={onMouseDown}
+        {...scrubProps}
         onClick={onLabelClick}
       >
         {children}

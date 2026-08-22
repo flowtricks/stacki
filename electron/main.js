@@ -9,6 +9,7 @@ const {
   protocol,
   net: enet,
   nativeImage,
+  clipboard,
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -19,6 +20,7 @@ const { spawn, spawnSync, execFile, execFileSync } = require('child_process');
 
 const {
   parsePage,
+  locateSelection,
   serializePage,
   parseTemplate,
   serializeNodes,
@@ -54,10 +56,43 @@ const { probeUrl } = require('./devProbe');
 const gitHistory = require('./gitHistory');
 const gitSnapshot = require('./gitSnapshot');
 const previewWorktree = require('./previewWorktree');
+const { registerTerminalHandlers, cleanupTerminals } = require('./terminal');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow = null;
 let devServer = null; // {proc, url, projectPath}
+
+// --- Dev reload ------------------------------------------------------------
+// Only the renderer hot-reloads on its own (Vite). preload.js is re-read from
+// disk on a window reload, but main.js and astroParser.js are bound into this
+// process at require time and can only be picked up by starting over — which
+// is what "Reload All Code" does. So the app relaunches itself, leaving the
+// open project in a file for the next process to pick up (the supervisor
+// re-spawns us with the same argv, so there's nothing to hand forward there),
+// landing back where you were instead of on the welcome screen.
+const isDev = !!process.env.VITE_DEV_SERVER_URL;
+// Exiting with this asks scripts/dev-electron.mjs to start us again. Not
+// app.relaunch(): `npm run dev` runs us under `concurrently -k`, so quitting
+// would take the Vite server down with us and the new process would load a
+// dead localhost:5173.
+const RELAUNCH_CODE = 42;
+const reopenFile = () => path.join(app.getPath('userData'), 'dev-reopen.json');
+
+function relaunchApp() {
+  try {
+    // openProjectRoot is set whenever a project's watcher starts, i.e. on open.
+    if (openProjectRoot) {
+      fs.writeFileSync(reopenFile(), JSON.stringify({ path: openProjectRoot }), 'utf8');
+    }
+  } catch {
+    /* worst case the reload lands on the welcome screen */
+  }
+  // app.exit skips before-quit, so take the Astro dev server down by hand —
+  // otherwise it keeps the port and the next process adopts a server still
+  // running the previously generated config.
+  stopDevServer();
+  app.exit(RELAUNCH_CODE);
+}
 
 const isWin = process.platform === 'win32';
 
@@ -217,14 +252,72 @@ function buildMenu() {
         { label: 'Paste', accelerator: 'CmdOrCtrl+V', click: () => send('menu:paste') },
         { role: 'selectAll' },
         { type: 'separator' },
+        {
+          label: 'Copy Selection',
+          accelerator: 'Shift+CmdOrCtrl+C',
+          click: () => send('menu:copySelection'),
+        },
         { label: 'Insert Element…', accelerator: 'CmdOrCtrl+E', click: () => send('menu:insert') },
       ],
     },
-    { role: 'viewMenu' },
+    // In dev ⌘R has to mean "restart the process". main.js, astroParser.js and
+    // the rest of this side are bound in at require time, so the stock reload
+    // repaints the renderer while silently going on running the old code —
+    // the failure mode is an edit that appears to do nothing. The plain window
+    // reload keeps its usual behaviour one item down. A packaged build has no
+    // supervisor to restart it and no source to pick up, so it keeps the stock
+    // menu.
+    isDev
+      ? {
+          label: 'View',
+          submenu: [
+            { label: 'Reload All Code', accelerator: 'CmdOrCtrl+R', click: () => relaunchApp() },
+            {
+              label: 'Reload Window Only',
+              accelerator: 'Shift+CmdOrCtrl+R',
+              click: () => mainWindow?.webContents.reload(),
+            },
+            { type: 'separator' },
+            { role: 'toggleDevTools' },
+            { type: 'separator' },
+            { role: 'resetZoom' },
+            { role: 'zoomIn' },
+            { role: 'zoomOut' },
+            { type: 'separator' },
+            { role: 'togglefullscreen' },
+          ],
+        }
+      : { role: 'viewMenu' },
     { role: 'windowMenu' },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
+
+// The project to reopen when the renderer mounts in dev, or null on a cold
+// start (which still lands on the welcome screen).
+//
+// Two ways the renderer can come back without the project it had:
+//   - it reloaded but this process didn't — a Vite full page reload, or
+//     "Reload Window Only". openProjectRoot is still in memory, so use it.
+//   - the whole process restarted ("Reload All Code"), and memory is gone —
+//     relaunchApp left the path in a file. Consumed on read, so a later cold
+//     start doesn't silently skip the welcome screen.
+ipcMain.handle('dev:reopen', () => {
+  if (!isDev) return null;
+  if (openProjectRoot && fs.existsSync(openProjectRoot)) return openProjectRoot;
+  let p = null;
+  try {
+    p = JSON.parse(fs.readFileSync(reopenFile(), 'utf8'))?.path || null;
+  } catch {
+    return null;
+  }
+  try {
+    fs.rmSync(reopenFile(), { force: true });
+  } catch {
+    /* non-fatal */
+  }
+  return p && fs.existsSync(p) ? p : null;
+});
 
 // Native clipboard actions on the focused element, requested by the renderer
 // when a menu Copy/Paste lands while a text field has focus.
@@ -245,6 +338,9 @@ app.whenReady().then(() => {
   buildMenu();
   createWindow();
   startAutoUpdateChecks();
+  // Terminals open in the project the app has open — same reach as the asset
+  // protocol, which is what `openProjectRoot` already scopes.
+  registerTerminalHandlers({ send, projectRoot: () => openProjectRoot });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -257,6 +353,9 @@ app.on('window-all-closed', () => {
   // taking a picture.
   if (mainWindow && !mainWindow.isDestroyed()) return;
   stopDevServer();
+  // The pty ids are keyed to the window that opened them, so a surviving shell
+  // could never be reached again — and on macOS the app stays running.
+  cleanupTerminals();
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -267,6 +366,8 @@ app.on('before-quit', () => stopAllServices());
 // The preview checkouts live inside the user's projects, so leaving one behind
 // leaves a stray folder in a place they will notice.
 app.on('before-quit', () => stopAllPreviews());
+// A pty outlives the window that opened it unless it is killed.
+app.on('before-quit', () => cleanupTerminals());
 
 // ---------------------------------------------------------------------------
 // Auto update
@@ -2689,6 +2790,48 @@ ipcMain.handle('page:importPathFor', async (_e, { pagePath, targetPath, projectP
 });
 
 // ---------------------------------------------------------------------------
+// Copy Selection (⇧⌘C)
+//
+// What the canvas has selected, as the editing-hierarchy trail that leads to
+// it: the page, then the instance of each component drilled into, then the
+// node itself — each entry a `<file>:<lines>` pointer. Pasted into an AI chat
+// that can read the project, that trail is the one thing it can't work out for
+// itself.
+//
+// Resolved on demand from the keys the renderer hands over, so nothing is
+// stored here and nothing is written to the user's project.
+// ---------------------------------------------------------------------------
+
+// Turns "<file>#<path>" node keys into "<file>:<line>" / "<file>:<from>-<to>"
+// pointers, project-relative. Returns null when there's nothing to point at.
+function selectionTrail(state) {
+  if (!state || !state.projectPath || !Array.isArray(state.keys)) return null;
+  const root = path.resolve(state.projectPath);
+  const trail = [];
+  for (const key of state.keys) {
+    const hash = typeof key === 'string' ? key.indexOf('#') : -1;
+    if (hash === -1) continue;
+    // The key's file half is renderer input; keep it inside the project.
+    const abs = path.resolve(root, key.slice(0, hash));
+    if (abs !== root && !abs.startsWith(root + path.sep)) continue;
+    const at = locateSelection(abs, key.slice(hash + 1));
+    if (!at) continue;
+    const file = toPosix(path.relative(root, at.file));
+    if (at.startLine == null) trail.push(file);
+    else if (at.startLine === at.endLine) trail.push(`${file}:${at.startLine}`);
+    else trail.push(`${file}:${at.startLine}-${at.endLine}`);
+  }
+  return trail.length ? trail : null;
+}
+
+ipcMain.handle('selection:copy', async (_e, state) => {
+  const trail = selectionTrail(state);
+  if (!trail) return { ok: false };
+  clipboard.writeText(trail.join('\n'));
+  return { ok: true, count: trail.length };
+});
+
+// ---------------------------------------------------------------------------
 // Dev server IPC
 // ---------------------------------------------------------------------------
 
@@ -3208,15 +3351,15 @@ const avbMarkers = {
     const query = qi === -1 ? '' : id.slice(qi + 1);
     // A <Fragment set:html={x} /> renders from an imported HTML string, so
     // the page's own markers can't reach inside it. serializePageMarked tags
-    // the ?raw import with the Fragment's path; mark the chunk here so its
+    // the ?raw import with the Fragment's key; mark the chunk here so its
     // nodes outline like any other. Runs before vite:asset's own ?raw load.
     if (query) {
-      const m = /(?:^|&)avb=([\\d.]+)/.exec(query);
+      const m = /(?:^|&)avb=([^&]+)/.exec(query);
       if (!m) return null;
       try {
         const marked = markChunkHtml(
           readFileSync(file, 'utf8'),
-          m[1],
+          decodeURIComponent(m[1]),
           /(?:^|&)avbg=1(?:&|$)/.test(query)
         );
         return marked == null ? null : 'export default ' + JSON.stringify(marked) + ';';

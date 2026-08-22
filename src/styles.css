@@ -5360,3 +5360,128 @@ textarea::selection {
   font-size: 11.5px;
   line-height: 1.4;
 }
+/* ------------------------------------------------------------------ */
+/* Terminal dock                                                       */
+/* ------------------------------------------------------------------ */
+
+/* Sits below `.main`, spanning the full window. Height is driven from React
+   (0 when closed) so the flex column above simply reclaims the space. */
+.term-dock {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+}
+/* Closed: the border would still hold a 1px strip of dead space, and nothing
+   inside should take focus or a click. */
+.term-dock:not(.on) { border-top-width: 0; visibility: hidden; }
+
+/* Grab strip straddling the top edge — a few px taller than it looks, because
+   a 1px target is a 1px target. */
+.term-resize {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  z-index: 3;
+  cursor: ns-resize;
+}
+.term-resize:hover, .term-resize.on { background: var(--accent); }
+
+.term-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 10px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.term-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.term-tabs::-webkit-scrollbar { display: none; }
+
+.term-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 7px;
+  flex-shrink: 0;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+.term-tab:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
+.term-tab.on { background: var(--bg-active); color: var(--text); }
+.term-tab-label { font-family: var(--mono); font-size: 11px; }
+.term-tab-x {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  color: var(--text-faint);
+  opacity: 0.7;
+}
+.term-tab-x:hover { opacity: 1; background: var(--bg-active); color: var(--text); }
+.term-add { flex-shrink: 0; }
+
+.term-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+/* Overrides .dd-trigger's full-width, panel-sized default — this one sits in a
+   dense toolbar, not a properties row. */
+.term-launch {
+  width: 128px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+.term-custom {
+  width: 170px;
+  height: 24px;
+  padding: 0 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.term-panes { flex: 1; min-height: 0; position: relative; }
+.term-pane-wrap { height: 100%; }
+.term-pane { position: relative; height: 100%; }
+/* xterm measures its host, so the padding lives here rather than on .xterm —
+   padding on the terminal element itself would be counted as usable columns
+   and the last one would be clipped. */
+.term-host { height: 100%; padding: 6px 4px 6px 10px; }
+.term-host .xterm { height: 100%; }
+.term-host .xterm-viewport { background-color: transparent !important; }
+
+.term-scroll-btn {
+  position: absolute;
+  right: 18px;
+  bottom: 12px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+}
+.term-scroll-btn:hover:not(:disabled) { background: var(--bg-active); color: var(--text); }

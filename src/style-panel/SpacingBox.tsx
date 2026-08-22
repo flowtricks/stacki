@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { HoverTooltip } from './components/SegmentedControl'
+import useScrub from './components/useScrub'
 import { handleArrowStep } from './lib/number-step'
 import { isNonNegative } from './lib/css-properties'
 import { hasOwnedPopup, inOwnedPopup } from './lib/popup-layer'
@@ -768,16 +769,27 @@ export function SpacingEditor({
   }
   useEffect(() => cancelLive, [])
 
+  // Undelayed live write for the scrub, which throttles its own — see useScrub.
+  const liveNow = (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const parsed = parseImportant(trimmed)
+    liveSetProp(prop, parsed.value, parsed.important)
+  }
+
   const scheduleLive = (text: string) => {
     cancelLive()
-    liveTimer.current = window.setTimeout(() => {
-      liveTimer.current = null
-      const trimmed = text.trim()
-      if (!trimmed) return
-      const parsed = parseImportant(trimmed)
-      liveSetProp(prop, parsed.value, parsed.important)
-    }, 100)
+    liveTimer.current = window.setTimeout(() => { liveTimer.current = null; liveNow(text) }, 100)
   }
+
+  // A scrub only moves the draft: this popover's authoritative write happens when it
+  // closes (see `close`), which is also what typing in it does.
+  const scrub = useScrub({
+    value: draft,
+    onPreview: setDraftValue,
+    onInput: liveNow,
+    onCommit: setDraftValue,
+  })
 
   // Commit the latest draft (via ref, so the document listener's stale closure
   // still reads it) and close — guarded so blur + outside-click can't double-fire.
@@ -859,7 +871,7 @@ export function SpacingEditor({
       }}
     >
       <div className="embed-editor_spacing-popover-row">
-        <span className="embed-editor_spacing-popover-label">{humanLabel(prop)}</span>
+        <span className="embed-editor_spacing-popover-label" {...scrub.label}>{humanLabel(prop)}</span>
         <VariableConnect
           code
           stepMin={isNonNegative(prop) ? 0 : undefined}
@@ -881,6 +893,7 @@ export function SpacingEditor({
           }}
         >
           <input
+            {...scrub.input}
             ref={inputRef}
             className={`u-input embed-editor_spacing-editor`}
             value={draft}

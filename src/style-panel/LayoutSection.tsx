@@ -3,6 +3,7 @@ import { useGapHover, type GapAxis } from './lib/gap-hover'
 import FieldLabel from './components/FieldLabel'
 import Select, { type SelectOption } from './components/Select'
 import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl'
+import useScrub from './components/useScrub'
 import DisplayControl from './DisplayControl'
 import VariableConnect from './VariableConnect'
 import { handleArrowStep } from './lib/number-step'
@@ -147,9 +148,17 @@ function GapInput({ value, busy, ariaLabel, axes, onLive, onCommit }: {
     liveTimer.current = window.setTimeout(() => { liveTimer.current = null; onLive(text) }, 100)
   }
   const gapHover = useGapHover(axes, draft || value)
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy,
+    onPreview: setDraft,
+    onInput: onLive,
+    onCommit: (text) => { setDraft(text); onCommit(text) },
+  })
   return (
     <VariableConnect ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} className="is-fill" prop="gap" onPick={(binding) => onCommit(binding)}>
       <input
+        {...scrub.input}
         className="u-input embed-editor_size-input"
         value={draft}
         onChange={(event) => { setDraft(event.target.value); scheduleLive(event.target.value); gapHover.onValue(event.target.value) }}

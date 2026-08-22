@@ -1,0 +1,32 @@
+{
+  "_comment": [
+    "Per-fixture expectations for the round-trip gate (test/roundtrip.test.js).",
+    "Any corpus file NOT listed here must be editable and must round-trip byte-identically.",
+    "",
+    "A file listed with identity:'fail' is a KNOWN defect. The gate asserts it still fails,",
+    "so fixing the parser forces an update here — that is the point. When a fix lands,",
+    "delete the entry and the file becomes a permanent regression test.",
+    "",
+    "severity:'corruption' means the emitted file is not equivalent to the input —",
+    "it changes meaning or is invalid Astro. Those are bugs, not formatting drift.",
+    "severity:'formatting' means the output is semantically the same file, reformatted."
+  ],
+  "interleaved-frontmatter.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "corruption",
+    "note": "Imports are hoisted above frontmatter statements that originally preceded them. If a hoisted import's module has side effects, or a const is used in a later import path, hoisting changes evaluation order."
+  },
+  "frontmatter-blank-lines.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "Leading and trailing blank lines inside the frontmatter are lost to extraFrontmatter.trim() (astroParser.js:298)."
+  },
+  "four-space-indent.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "serializeNode re-indents the whole tree at two spaces per level, so a project using four-space indentation has every page reformatted on first save."
+  }
+}

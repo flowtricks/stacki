@@ -1,0 +1,9 @@
+---
+const user = { name: 'Ada' };
+const count = 3;
+---
+<section data-count={count}>
+  <h2>{user.name}</h2>
+  <p>{count > 1 ? 'many' : 'one'}</p>
+  <div class:list={['card', { active: count > 0 }]}>Card</div>
+</section>

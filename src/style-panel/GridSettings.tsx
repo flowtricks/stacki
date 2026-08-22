@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl'
+import useScrub from './components/useScrub'
 import VariableConnect from './VariableConnect'
 import { GroupLabel } from './TypographySection'
 import { handleArrowStep } from './lib/number-step'
@@ -81,9 +82,18 @@ function TrackInput({ value, placeholder, ariaLabel, busy, onCommit }: {
   const [text, setText] = useState(value)
   const focused = useRef(false)
   useEffect(() => { if (!focused.current) setText(value) }, [value])
+  // No onInput: a track list has no preview channel, only the real write, so the drag
+  // moves the field's text and writes once on release rather than at pointer speed.
+  const scrub = useScrub({
+    value: text,
+    disabled: busy,
+    onPreview: setText,
+    onCommit: (next) => { setText(next); onCommit(next.trim()) },
+  })
   return (
     <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} className="is-fill" prop="grid-template-columns" onPick={(binding) => onCommit(binding)}>
     <input
+      {...scrub.input}
       className="u-input embed-editor_size-input"
       value={text}
       spellCheck={false}

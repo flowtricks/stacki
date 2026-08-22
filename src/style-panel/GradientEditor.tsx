@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import ColorSwatch from './components/ColorSwatch'
+import useScrub from './components/useScrub'
 import VariableConnect from './VariableConnect'
 import { handleArrowStep } from './lib/number-step'
 import { angleToDegrees, degreesToAngle, gradientCenter, serializeGradient, stopPercent, stopsBarCss, type Gradient, type GradientStop } from './lib/gradient'

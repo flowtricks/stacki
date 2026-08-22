@@ -66,7 +66,20 @@ for (const m of bridgeText.matchAll(/^\s{2}([A-Za-z_$][\w$]*)\s*:/gm)) exposed.a
 // --- what the main process handles ------------------------------------------
 const main = fs.readFileSync(path.join(root, 'electron', 'main.js'), 'utf8');
 const handled = new Set();
-for (const m of main.matchAll(/ipcMain\.handle\(\s*['"]([^'"]+)['"]/g)) handled.add(m[1]);
+// A handler counts wherever it is registered, as long as the main process
+// loads the module that registers it — the terminal keeps its own (and its
+// pty bookkeeping) in electron/terminal.js rather than in main.js.
+const mainSide = [main];
+for (const m of main.matchAll(/require\(\s*'\.\/([\w.-]+?)(?:\.js)?'\s*\)/g)) {
+  try {
+    mainSide.push(fs.readFileSync(path.join(root, 'electron', `${m[1]}.js`), 'utf8'));
+  } catch {
+    /* not a file of ours */
+  }
+}
+for (const text of mainSide) {
+  for (const m of text.matchAll(/ipcMain\.handle\(\s*['"]([^'"]+)['"]/g)) handled.add(m[1]);
+}
 
 // The channel each exposed method invokes, so a method that is exposed but has
 // no handler is caught too — that fails at runtime with "no handler registered".

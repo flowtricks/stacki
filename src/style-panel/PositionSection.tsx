@@ -4,6 +4,7 @@ import Select from './components/Select'
 import FieldLabel from './components/FieldLabel'
 import { PropTip, ProvenanceLabel } from './components/PropTip'
 import { useHighlight } from './lib/computed-style'
+import useScrub from './components/useScrub'
 import ProvenanceList from './ProvenanceList'
 import VariableConnect from './VariableConnect'
 import { SpacingFill, useSpacingBox } from './SpacingBox'
@@ -102,25 +103,34 @@ function LiveField({ prop, placeholder, ariaLabel, read, busy, setProp, clearPro
   useEffect(() => { if (!focused.current) setDraft(external) }, [external])
   const cancel = () => { if (timer.current != null) { window.clearTimeout(timer.current); timer.current = null } }
   useEffect(() => cancel, [])
+  // Undelayed live write for the scrub, which throttles its own — see useScrub.
+  const liveNow = (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const parsed = parseImportant(trimmed)
+    liveSetProp(prop, parsed.value, parsed.important)
+  }
   const live = (text: string) => {
     cancel()
-    timer.current = window.setTimeout(() => {
-      timer.current = null
-      const trimmed = text.trim()
-      if (!trimmed) return
-      const parsed = parseImportant(trimmed)
-      liveSetProp(prop, parsed.value, parsed.important)
-    }, 100)
+    timer.current = window.setTimeout(() => { timer.current = null; liveNow(text) }, 100)
   }
-  const commit = () => {
-    const trimmed = draft.trim()
+  const commit = (text = draft) => {
+    const trimmed = text.trim()
     if (!trimmed) { clearProp(prop); return }
     const parsed = parseImportant(trimmed)
     setProp(prop, parsed.value, parsed.important)
   }
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy,
+    onPreview: setDraft,
+    onInput: liveNow,
+    onCommit: (text) => { setDraft(text); commit(text) },
+  })
   return (
     <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
     <input
+      {...scrub.input}
       className="u-input embed-editor_position-input"
       value={draft}
       placeholder={placeholder}

@@ -6,6 +6,7 @@ import Select, { type SelectOption } from './components/Select'
 import SegmentedControl from './components/SegmentedControl'
 import ColorSwatch from './components/ColorSwatch'
 import { useLiveColor } from './lib/live-color'
+import useScrub from './components/useScrub'
 import { ShadowNum, ShadowColorRow } from './ShadowFields'
 import { handleArrowStep } from './lib/number-step'
 import { panelBounds } from './lib/panel-box'
@@ -223,27 +224,37 @@ export function LiveInput({ value, busy, placeholder, ariaLabel, className, data
   const cancelLive = () => { if (liveTimer.current != null) { window.clearTimeout(liveTimer.current); liveTimer.current = null } }
   useEffect(() => cancelLive, [])
 
+  // Undelayed live write for the scrub, which throttles its own — see useScrub.
+  const liveNow = (text: string) => {
+    if (!onLiveCommit) return
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const parsed = parseImportant(trimmed)
+    onLiveCommit(parsed.value, parsed.important)
+  }
   const scheduleLive = (text: string) => {
     if (!onLiveCommit) return
     cancelLive()
-    liveTimer.current = window.setTimeout(() => {
-      liveTimer.current = null
-      const trimmed = text.trim()
-      if (!trimmed) return
-      const parsed = parseImportant(trimmed)
-      onLiveCommit(parsed.value, parsed.important)
-    }, 100)
+    liveTimer.current = window.setTimeout(() => { liveTimer.current = null; liveNow(text) }, 100)
   }
-  const commit = () => {
-    const trimmed = draft.trim()
+  const commit = (text = draft) => {
+    const trimmed = text.trim()
     if (!trimmed) { onClear(); return }
     const parsed = parseImportant(trimmed)
     onCommit(parsed.value, parsed.important)
   }
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy,
+    onPreview: setDraft,
+    onInput: liveNow,
+    onCommit: (text) => { setDraft(text); commit(text) },
+  })
 
   return (
     <VariableConnect code ariaLabel={`Connect ${ariaLabel || 'value'} to a variable`} disabled={busy} prop={prop} onPick={(binding) => onCommit(binding, false)}>
       <input
+        {...scrub.input}
         ref={inputRef}
         className={className}
         data-prop={dataProp}

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { cleanError } from '../App.jsx';
+import { cleanError } from '../cleanError.js';
 import { BranchIcon, CheckIcon, ExternalIcon, CloseIcon, MergeIcon, TrashIcon } from '../ui/Icons.jsx';
 import { branchNameError, sanitizeBranchName } from '../branchName.js';
 import { mergeBranchAction, deleteBranchAction, tidyUp } from '../gitActions.js';

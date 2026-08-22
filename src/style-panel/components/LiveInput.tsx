@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import VariableConnect from '../VariableConnect'
 import { handleArrowStep } from '../lib/number-step'
 import { commitInPlace } from '../lib/commit-in-place'
+import useScrub from './useScrub'
 
 // The panel's value field.
 //
@@ -12,6 +13,11 @@ import { commitInPlace } from '../lib/commit-in-place'
 // property it edits. That behaviour was written out per section, and the copies
 // drifted — the one in the position popup ended up on smaller type and tighter
 // padding than the field two rows above it. This is the one of them.
+//
+// Numbers in the field can also be dragged (components/useScrub): Alt or Shift
+// drag on the input grabs the number under the pointer. Living here means every
+// row that uses this field has it, rather than each section wiring its own — the
+// LABEL drag is separate, and stays with the section that renders the label.
 //
 // A field can carry a `suffix` (a unit that is part of the field rather than
 // part of the value: `%`, `DEG`). The focus ring then belongs to the box around
@@ -51,10 +57,18 @@ export default function LiveInput({
     cancelLive()
     liveTimer.current = window.setTimeout(() => { liveTimer.current = null; onLive(text) }, 100)
   }
+  const scrub = useScrub({
+    value: draft,
+    disabled: busy || readOnly,
+    onPreview: setDraft,
+    onInput: onLive,
+    onCommit: (text) => { setDraft(text); onCommit(text) },
+  })
   return (
     <div className={wrapClassName}>
       <VariableConnect code className="is-fill" ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => (onVariablePick ?? onCommit)(binding)}>
         <input
+          {...scrub.input}
           className="u-input embed-editor_size-input"
           value={draft}
           onChange={(event) => { setDraft(event.target.value); scheduleLive(event.target.value) }}
