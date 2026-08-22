@@ -396,6 +396,80 @@ if (!process.isMainFrame) {
   // whose root is a conditional — and those belong to the file. The ones added
   // here are bookkeeping, and only bookkeeping is ours to withdraw.
   const ourTags = new WeakMap();
+  // The shortest path this element carries in each component file — a marker
+  // run tags every element it holds, so one element can carry several paths in
+  // the same file, and the shortest of them is the highest node it stands for.
+  const nsOf = (el) => {
+    const out = new Map();
+    for (const p of pathsOf(el)) {
+      const bar = p.indexOf('|');
+      if (bar === -1) continue;
+      const file = p.slice(0, bar + 1);
+      const inner = p.slice(bar + 1);
+      const had = out.get(file);
+      if (had === undefined || inner.length < had.length) out.set(file, inner);
+    }
+    return out;
+  };
+
+  // The nearest ancestor that stands for a node this one is nested UNDER, in
+  // the same file. Null means this element is where that file's rendering
+  // begins — the root of a component instance.
+  const nsParent = (el, file, inner) => {
+    let up = el.parentElement ? el.parentElement.closest(`[${PATH_ATTR}]`) : null;
+    while (up) {
+      const theirs = nsOf(up).get(file);
+      if (theirs !== undefined && inner.startsWith(`${theirs}.`)) return up;
+      up = up.parentElement ? up.parentElement.closest(`[${PATH_ATTR}]`) : null;
+    }
+    return null;
+  };
+
+  // What the page calls a component instance belongs on the element the
+  // instance rendered as its root. It does not always land there: the
+  // serializer hands the page's path to the component as a prop, and the
+  // component decides where its `...rest` goes. A form field forwards it to the
+  // <select>, so a FormSelect was named on the control and not on the <label>
+  // around it — and everything downstream meant the control. The outline drew
+  // around the box and left the field's own label outside it, and a click on
+  // that label reached past the component to whatever contained it.
+  //
+  // Only for an element that is inside a component's rendering and is not the
+  // root of any of them. An element that IS a root already answers for its own
+  // instance, and its page path is its own name: a page section is the root of
+  // Section.astro and sits inside the layout's slot, so it carries a path in
+  // the layout's namespace too — climbing that would put the section's name on
+  // <body>.
+  //
+  // The path is added to the root rather than moved off the element the
+  // component put it on: that element still answers to it in the component's
+  // own file, and the outermost of the two is what the boxes and the hit
+  // testing already prefer.
+  const promoteInstanceTags = () => {
+    for (const el of [...document.querySelectorAll(`[${PATH_ATTR}]`)]) {
+      const page = pathsOf(el).filter((p) => !p.includes('|'));
+      if (!page.length) continue;
+      const ns = nsOf(el);
+      if (!ns.size) continue;
+      let file = null;
+      for (const [f, inner] of ns) {
+        if (!nsParent(el, f, inner)) { file = null; break } // a root: leave it alone
+        if (!file) file = f;
+      }
+      if (!file) continue;
+      let at = el;
+      for (;;) {
+        const up = nsParent(at, file, nsOf(at).get(file));
+        if (!up) break;
+        at = up;
+      }
+      if (at === el) continue;
+      const have = pathsOf(at);
+      const add = page.filter((p) => !have.includes(p));
+      if (add.length) at.setAttribute(PATH_ATTR, [...have, ...add].join(' '));
+    }
+  };
+
   const addPath = (el, p) => {
     const list = pathsOf(el);
     if (list.includes(p)) return;
@@ -520,6 +594,7 @@ if (!process.isMainFrame) {
       else el.removeAttribute(PATH_ATTR);
     }
     for (const n of markers) n.remove();
+    promoteInstanceTags();
     focusCache = undefined; // new runs — the focused instance may be among them
   };
 
