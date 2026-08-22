@@ -330,6 +330,52 @@ const WORDS = el('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{heading}'
     check('and no else until one is asked for', !/name: 'else'/.test(insert));
   }
 
+  // --- a folded comment, on whatever row it belongs to --------------------------
+  //
+  // A note sits inside its node's row, and a component's row is green. A flat
+  // grey can't lift with the background under it: #666 read 3.1:1 against the
+  // panel and 2.1:1 against a selected component row, which is where it looked
+  // muddy. White thinned by alpha composites over each of them instead, so what
+  // is checked here is the contrast it ends up with — not the colour it is
+  // written as.
+  {
+    const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'styles.css'), 'utf8');
+    const rule = css.slice(css.indexOf('.node-note {'));
+    const note = /color:\s*rgba\(([^)]+)\)/.exec(rule.slice(0, rule.indexOf('}')));
+    check('the note is written as a colour with alpha', !!note, rule.slice(0, rule.indexOf('}')));
+    const [r, g, b, a] = (note?.[1] ?? '0,0,0,1').split(',').map((n) => parseFloat(n));
+
+    const over = (fg, alpha, bg) => fg.map((f, i) => f * alpha + bg[i] * (1 - alpha));
+    const lum = (c) => {
+      const [rl, gl, bl] = c.map((v) => {
+        const n = v / 255;
+        return n <= 0.03928 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * rl + 0.7152 * gl + 0.0722 * bl;
+    };
+    const ratio = (x, y) => {
+      const [hi, lo] = [lum(x), lum(y)].sort((p, q) => q - p);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    // The two rows a note can sit on: the panel, and a selected component row
+    // (--component-green-soft over --bg).
+    const panel = [25, 25, 25];
+    const greenRow = over([121, 224, 156], 0.16, panel);
+    const on = (bg) => ratio(over([r, g, b], a, bg), bg);
+
+    check('it reads on the panel', on(panel) > 4, on(panel).toFixed(2));
+    check('and on a green component row', on(greenRow) > 3.5, on(greenRow).toFixed(2));
+    // …and is still a note: a label at full strength would be ~15:1 here.
+    check('while staying quieter than the label beside it', on(panel) < 8, on(panel).toFixed(2));
+    // The old grey, for the record: this is the case it failed.
+    const grey = (bg) => ratio(over([102, 102, 102], 1, bg), bg);
+    check(
+      'better on green than the flat grey it replaced',
+      on(greenRow) > grey(greenRow),
+      `${on(greenRow).toFixed(2)} vs ${grey(greenRow).toFixed(2)}`
+    );
+  }
+
   if (failures.length) {
     console.error(`\nnavigator: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');

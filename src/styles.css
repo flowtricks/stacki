@@ -996,8 +996,13 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 }
 .asset-tile:hover .asset-badge { opacity: 0; }
 /* A folded-in HTML comment beside a node's name in the navigator. */
+/* White, thinned — not a grey. A folded comment sits on whatever row it belongs
+   to, and a component's row is green: #666 against the panel is 3.1:1 and
+   against the selected green row only 2.1:1, because a flat grey can't lift
+   with the background under it. White at 45% composites over each of them and
+   holds ~4.5:1 and ~3.8:1, staying a note rather than a label either way. */
 .node-note {
-  color: var(--text-faint);
+  color: rgba(255, 255, 255, 0.45);
   font-weight: 400;
   overflow: hidden;
   text-overflow: ellipsis;
