@@ -189,6 +189,22 @@ const frame = (url) => {
   canvas.track('0.4', 0);
   check('the script in a component is not marked', canvas.opened().join() === 'widget', canvas.opened().join());
 
+  // --- painting it twice ------------------------------------------------------------
+  //
+  // The canvas re-measures on any mutation, and measuring repaints this. So a
+  // repaint that changes nothing must WRITE nothing: setting the class again
+  // with the same value is still a write, and it scheduled the next repaint,
+  // once a frame, for as long as the component stayed open.
+  {
+    canvas.track('0.1', 1);
+    const watch = new canvas.window.MutationObserver(() => {});
+    watch.observe(canvas.doc.documentElement, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    canvas.track('0.1', 1);
+    const wrote = watch.takeRecords();
+    watch.disconnect();
+    check('painting the same instance again writes nothing', wrote.length === 0, `${wrote.length} class writes`);
+  }
+
   // --- and leaving ----------------------------------------------------------------
   canvas.track('', 0);
   check('backing out takes the mark off', canvas.opened().length === 0, canvas.opened().join());

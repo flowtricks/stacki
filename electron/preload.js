@@ -390,11 +390,20 @@ if (!process.isMainFrame) {
   // component that renders the slot addresses that same element by its own
   // path. Whichever file is open picks its namespace out of the list.
   const pathsOf = (el) => (el.getAttribute(PATH_ATTR) || '').split(' ').filter(Boolean);
+  // Which tags this file put on an element itself, as opposed to the ones the
+  // page arrived with. The serializer writes a tag into the markup wherever a
+  // marker pair can't go — a slotted node, a word in an inline run, a component
+  // whose root is a conditional — and those belong to the file. The ones added
+  // here are bookkeeping, and only bookkeeping is ours to withdraw.
+  const ourTags = new WeakMap();
   const addPath = (el, p) => {
     const list = pathsOf(el);
     if (list.includes(p)) return;
     list.push(p);
     el.setAttribute(PATH_ATTR, list.join(' '));
+    let mine = ourTags.get(el);
+    if (!mine) ourTags.set(el, (mine = new Set()));
+    mine.add(p);
   };
   // The elements a path is on, one per copy — outermost only. A path can land
   // on an element AND on something inside it: inside slot content the marker
@@ -487,12 +496,26 @@ if (!process.isMainFrame) {
       if (again >= 0) runs[again] = run;
       else runs.push(run);
     }
-    // A tag is only good while the region still holds the element. They used to
-    // accumulate and never come off, so one bad pass — a marker briefly out of
-    // place — left an element permanently answering to a path it wasn't in.
+    // A tag WE added is only good while the region still holds the element. They
+    // used to accumulate and never come off, so one bad pass — a marker briefly
+    // out of place — left an element permanently answering to a path it wasn't
+    // in.
+    //
+    // The tags the markup came with are not ours to withdraw, and taking them
+    // meant a click landing nowhere. Five buttons on a page all carry
+    // `Button.astro|0.0.0` — the component's own root, the same path in every
+    // instance — and only the ones a marker pair happened to wrap counted as
+    // collected, so the rest lost the tag. Open Button.astro, click one of
+    // those, and the canvas could not place the click at all: no path in the
+    // open file, but something under the pointer, which reads as "looked away"
+    // and closed the component you were editing.
     for (const el of document.querySelectorAll(`[${PATH_ATTR}]`)) {
-      const kept = pathsOf(el).filter((p) => !collected.has(p) || collected.get(p).has(el));
+      const mine = ourTags.get(el);
+      const kept = pathsOf(el).filter(
+        (p) => !mine?.has(p) || !collected.has(p) || collected.get(p).has(el)
+      );
       if (kept.length === pathsOf(el).length) continue;
+      for (const p of pathsOf(el)) if (!kept.includes(p)) mine?.delete(p);
       if (kept.length) el.setAttribute(PATH_ATTR, kept.join(' '));
       else el.removeAttribute(PATH_ATTR);
     }
@@ -964,6 +987,11 @@ if (!process.isMainFrame) {
   let openedEls = [];
   const paintOpened = () => {
     const next = openedRoots();
+    // Only when it actually moved. Writing the class again with the same value
+    // is still a write, and the canvas re-measures on any mutation — so a
+    // repaint that changed nothing scheduled the next repaint, once a frame,
+    // for as long as the component stayed open.
+    if (next.length === openedEls.length && next.every((el, i) => el === openedEls[i])) return;
     for (const el of openedEls) if (!next.includes(el)) el.classList.remove('stacki-opened');
     for (const el of next) el.classList.add('stacki-opened');
     openedEls = next;
