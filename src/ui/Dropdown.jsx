@@ -1,4 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { endDragNotes, hoverNote } from './sound.js';
+import { useSoundHere } from './soundScope.jsx';
 import { ChevronDownIcon, CheckIcon } from './Icons.jsx';
 
 // Where a popup of `wanted` pixels goes, given the trigger's box and the
@@ -50,6 +52,7 @@ export default function Dropdown({
   searchable = false,
   searchPlaceholder = 'Search…',
 }) {
+  const sounds = useSoundHere();
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
   const [query, setQuery] = useState('');
@@ -156,6 +159,33 @@ export default function Dropdown({
       window.removeEventListener('resize', onResize);
     };
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The highlight moving is a sound, pitched by how far down the list it is —
+  // the same note the style panel's menus play, and from the same place: the
+  // highlight, not the pointer, so arrowing through a menu sounds like running
+  // down it with the mouse.
+  //
+  // Not on the way in. Opening a menu parks the highlight on the selected row,
+  // and a note for a highlight nobody moved would be the menu answering a
+  // question that was not asked. And the last note is forgotten only on the way
+  // CLOSED: every render of every closed dropdown would otherwise wipe what the
+  // open one just played, and the open one would sound the same row twice.
+  const placedRef = useRef(false);
+  useEffect(() => {
+    if (!sounds) return;
+    if (!open) {
+      if (placedRef.current) {
+        placedRef.current = false;
+        endDragNotes(); // the next menu sounds its first row, wherever it opens
+      }
+      return;
+    }
+    if (!placedRef.current) {
+      placedRef.current = true;
+      return;
+    }
+    if (visible[highlight]) hoverNote(highlight, visible.length);
+  }, [sounds, open, highlight, visible]);
 
   // Keep the highlighted option in view while navigating with arrows.
   useEffect(() => {

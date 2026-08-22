@@ -6,6 +6,8 @@ import AutoTextarea from '../ui/AutoTextarea.jsx';
 import PropTip from '../ui/PropTip.jsx';
 import ClassInput from '../ui/ClassInput.jsx';
 import CodeEditor from '../ui/CodeEditor.jsx';
+import { clickNote } from '../ui/sound.js';
+import { SoundHere } from '../ui/soundScope.jsx';
 import StyleEditor, { collapseDeclarations } from '../ui/StyleEditor.jsx';
 import ExprInput from '../ui/ExprInput.jsx';
 import RichContent, { isInlineOnly } from '../ui/RichContent.jsx';
@@ -864,7 +866,23 @@ export default function PropsPanel({
   };
 
   return (
-    <div className="panel-section grow" ref={rootRef} style={{ flex: '1 1 50%', overflow: 'hidden' }}>
+    // Every button in the panel taps, and every dropdown under it sounds its
+    // highlight — the same two the style panel makes, wired the same way. The
+    // click handler sits here rather than on each button because a popover
+    // portals to <body> and React still sends its events up the tree that
+    // rendered it; SoundHere is what carries the same fact to the menus, which
+    // cannot be reached by a DOM ancestor at all. Silent unless the setting is
+    // on.
+    <SoundHere>
+    <div
+      className="panel-section grow"
+      ref={rootRef}
+      style={{ flex: '1 1 50%', overflow: 'hidden' }}
+      onClick={(event) => {
+        const button = event.target instanceof Element ? event.target.closest('button') : null;
+        if (button && !button.disabled) clickNote();
+      }}
+    >
       <div className="props-title">
         {node.kind === 'element' ? (
           elementIcon(node.name, 16, 'props-title-icon')
@@ -1102,6 +1120,7 @@ export default function PropsPanel({
           )}
       </div>
     </div>
+    </SoundHere>
   );
 }
 

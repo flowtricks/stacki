@@ -7,6 +7,7 @@ import '../style-panel/tokens.css';
 import '../style-panel/utilities.css';
 import '../style-panel/embed-editor.css';
 import { clickNote } from '../ui/sound.js';
+import { SoundHere } from '../ui/soundScope.jsx';
 import usePopupOpen from '../ui/usePopupOpen.js';
 
 // Host for the style panel.
@@ -135,6 +136,7 @@ export default function StylePanel({
     // rendered it, so the colour picker and the modals are covered here too —
     // and nothing outside this panel is, since they hang off other trees.
     // Silent unless the setting is on.
+    <SoundHere>
     <div
       className={`style-panel-host ${popupOpen ? 'is-locked' : ''}`}
       ref={hostRef}
@@ -149,5 +151,6 @@ export default function StylePanel({
         <EmbedEditor />
       )}
     </div>
+    </SoundHere>
   );
 }
