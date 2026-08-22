@@ -1,0 +1,37 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Card from '../components/Card.astro';
+
+const year = 2026;
+const SITE_NAME = 'Lumos';
+const stats = [{ label: 'Pages', value: 12 }];
+---
+<Layout title={`Home — ${SITE_NAME}`}>
+  <!-- hero -->
+  <section class="hero">
+    <h1>Build <em>fast</em> sites</h1>
+    <p>We&rsquo;re <strong>{SITE_NAME}</strong>, and we&rsquo;ve shipped {stats.length} things since {`${year - 1}`}.</p>
+    <p class="copyright">&copy; {`${year} ${SITE_NAME}`}. All rights reserved.</p>
+    <img src="/hero.png" alt="" />
+    <Card title="One" />
+  </section>
+  <ul>
+    {
+      stats.map((stat) => (
+        <li class="stat"><span>{stat.value}</span></li>
+      ))
+    }
+  </ul>
+  <div class="notice">
+    Read the docs
+    <div class="badge">new</div>
+  </div>
+</Layout>
+<style>
+  .hero {
+    display: grid;
+  }
+</style>
+<script>
+  console.log('hi');
+</script>

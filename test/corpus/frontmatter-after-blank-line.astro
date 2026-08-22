@@ -1,0 +1,13 @@
+
+---
+const { href = "/" } = Astro.props;
+---
+<a href={href} class="text-5xl">
+    <slot />
+</a>
+
+<style is:global>
+    a {
+        color: red;
+    }
+</style>

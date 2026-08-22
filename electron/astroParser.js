@@ -1272,7 +1272,15 @@ function serializeNode(node, indent, lines) {
       // takes the tree's, the way a multi-line expression does.
       const written = textAsWritten(node);
       if (written === null || !written.includes('\n')) {
-        lines.push(indent + textOut(node));
+        // The space at either end of the value is the boundary space — the one
+        // a browser renders where the source had any whitespace. On a line of
+        // its own the line breaks either side already ARE that whitespace, and
+        // writing it as well made saving twice differ from saving once: the
+        // first save moved `>Join our Discord <svg` onto separate lines with
+        // the space still on the words' line, and the second save, reading its
+        // own output, dropped it. The value is unchanged either way — that is
+        // what makes the space the layout's to draw rather than the text's.
+        lines.push(indent + textOut(node).replace(/^ +| +$/g, ''));
         return;
       }
       const body = written.replace(/^[ \t]*\r?\n/, '').replace(/\s+$/, '');

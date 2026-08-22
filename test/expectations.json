@@ -28,5 +28,35 @@
     "identity": "fail",
     "severity": "formatting",
     "note": "serializeNode re-indents the whole tree at two spaces per level, so a project using four-space indentation has every page reformatted on first save."
+  },
+  "copyright-as-authored.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "A paragraph of text with an expression in it — `&copy; {`${year} ${SITE_NAME}`}. All rights reserved.` — is written back on three lines, one per node. isInlineRun (astroParser.js) counts elements as inline but not expr nodes, so a run holding one is not recognised as a run and each child gets its own line. Renders the same (the breaks collapse to spaces); the diff is the problem."
+  },
+  "full-page.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "Same cause as copyright-as-authored, in a page-sized file: `<p>We&rsquo;re <strong>{SITE_NAME}</strong>, and we&rsquo;ve shipped {stats.length} things since …</p>` becomes one line per node. Kept as a fixture because it also exercises entities, a map loop, a component, a style block and a script in the same file."
+  },
+  "text-beside-block-element.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "The hanging-bracket style — `<a href={href}` / `\\t\\t>Join our Discord <svg …` — is reflowed: tabs become the serializer's two-space indent and each tag gets its own line. The text's own boundary space survives the reflow now (that was the double-save bug); what is left is the indentation style, which the serializer does not preserve."
+  },
+  "empty-frontmatter-dashes-in-body.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "`---\\n---\\n--- these dashes are body text` — an empty fence followed by a body line that starts with dashes. The body's `---` is read as frontmatter code (model.extraFrontmatter === '---') and written back on a line of its own, splitting the sentence in two. Renders the same; the file is rewritten."
+  },
+  "frontmatter-after-blank-line.astro": {
+    "editable": true,
+    "identity": "fail",
+    "severity": "formatting",
+    "note": "A blank line before the `---` fence, which Astro does not accept as frontmatter either — so the block is body text, and `const { href = \"/\" } = Astro.props;` parses as text, an expression and more text, landing on three lines. Astro renders both the same. The fixture is here because this is what a half-written file looks like mid-edit."
   }
 }
