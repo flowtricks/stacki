@@ -662,6 +662,37 @@ export default function PropsPanel({
     return found;
   };
 
+  // A branch may allow fewer values than the prop as a whole: emphasis is
+  // primary, secondary or link on the main button, and only the first two on
+  // a mark, which has no line of text to draw a rule under. The union says so
+  // already and the panel knows which branch is in force, so the list offered
+  // is that branch's rather than the sum of all of them.
+  //
+  // A branch that fixes nothing allows everything, and a value already in the
+  // markup stays in the list whatever the branch says — hiding it would leave
+  // markup the panel disagrees with and no way to see it, let alone fix it.
+  const narrowOptions = (field) => {
+    if (!field.options?.length) return field;
+    let allowed;
+    for (const [i, union] of unions.entries()) {
+      if (!union.names.includes(field.name)) continue;
+      for (const b of liveBranches[i]) {
+        const pinned = b.pins?.[field.name];
+        if (!pinned) return field;
+        allowed = allowed ? [...new Set([...allowed, ...pinned])] : [...pinned];
+      }
+    }
+    if (!allowed) return field;
+    const set = node.props?.[field.name];
+    const keep = set && set.type !== 'expr' ? String(set.value ?? '') : undefined;
+    const options = field.options.filter(
+      (o) => allowed.includes(o) || o === keep
+    );
+    return options.length && options.length < field.options.length
+      ? { ...field, options }
+      : field;
+  };
+
   const appliesNow = (field) => {
     for (const [i, union] of unions.entries()) {
       if (!union.names.includes(field.name)) continue;
@@ -890,7 +921,7 @@ export default function PropsPanel({
             key={field.name}
             nodeKey={node.id}
             bindCtx={bindContext || loopContext}
-            field={field}
+            field={narrowOptions(field)}
             branchDefault={branchDefault(field.name)}
             value={node.props[field.name]}
             slotOptions={slotOptions}

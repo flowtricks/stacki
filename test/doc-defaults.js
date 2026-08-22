@@ -191,6 +191,31 @@ check(
   JSON.stringify(only.doc)
 );
 
+// A branch can allow fewer values than the prop as a whole. The alias naming
+// them is as much a fixed set as the literals written out, so the panel can
+// offer the branch's list rather than the sum of every branch's.
+const narrowed = parsePropSchema(
+  [
+    '---',
+    'type Emphasis = "primary" | "secondary";',
+    'type Props =',
+    '  | { variant?: "main"; emphasis?: Emphasis | "link" }',
+    '  | { variant: "close"; emphasis?: Emphasis };',
+    'const { variant, emphasis } = Astro.props;',
+    '---',
+    '<button>{variant}{emphasis}</button>',
+  ].join('\n')
+);
+const emphasis = [...narrowed.values()].find((f) => f.name === 'emphasis') || {};
+const emTable = (emphasis.unions || []).find((u) => u.names.includes('emphasis'));
+const pinFor = (v) =>
+  (emTable?.branches || []).find((b) => (b.pins.variant || []).includes(v))?.pins?.emphasis;
+
+check('every value is still offered by the prop', (emphasis.options || []).length === 3, JSON.stringify(emphasis.options));
+check('an alias behind a branch still pins it', !!pinFor('close'), JSON.stringify(pinFor('close')));
+check('the narrow branch drops link', pinFor('close') && !pinFor('close').includes('link'), JSON.stringify(pinFor('close')));
+check('the wide branch keeps link', (pinFor('main') || []).includes('link'), JSON.stringify(pinFor('main')));
+
 if (failures.length) {
   console.error(`\ndoc-defaults: ${failures.length} failed, ${checked - failures.length} passed\n`);
   console.error(failures.join('\n') + '\n');

@@ -1802,6 +1802,14 @@ function parsePropSchema(source, prelude = '') {
     aliases.set(dm[2], body.trim());
   }
 
+  // An alias standing in for a union of literals, expanded to those literals.
+  const expandAlias = (part, seen = new Set()) => {
+    const body = aliases.get(part);
+    if (!body || seen.has(part) || /[{}]/.test(body)) return [part];
+    seen.add(part);
+    return splitTypeTop(body, '|').flatMap((p) => expandAlias(p.trim(), seen));
+  };
+
   // Which type describes the props. `Astro.props as X` names it outright;
   // otherwise it's Props. Both are consulted when both exist — a component can
   // export a strict discriminated `Props` and destructure through a widened
@@ -1991,6 +1999,7 @@ function parsePropSchema(source, prelude = '') {
           continue;
         }
         const parts = splitTypeTop(t, '|')
+          .flatMap((x) => expandAlias(x.trim()))
           .map((x) => x.trim())
           .filter((x) => x && x !== 'undefined' && x !== 'null');
         const isLiteral = (x) =>
@@ -2056,12 +2065,6 @@ function parsePropSchema(source, prelude = '') {
   // An alias standing in for a union of literals, expanded to those literals.
   // Only for alias bodies that are plain unions — one holding an object shape
   // describes members, not values, and exploding it would be nonsense.
-  const expandAlias = (part, seen = new Set()) => {
-    const body = aliases.get(part);
-    if (!body || seen.has(part) || /[{}]/.test(body)) return [part];
-    seen.add(part);
-    return splitTypeTop(body, '|').flatMap((p) => expandAlias(p.trim(), seen));
-  };
 
   for (const block of blocks) {
     // Walked line by line rather than matched in one pass, so the comment
