@@ -340,6 +340,27 @@ if (!process.isMainFrame) {
       // <head> and <body> and never pairs up, and narrowing to nothing would
       // hide the page.
       if (runs.length) focusCache = runs[focusOcc] || runs[0];
+      else {
+        // No marker pair at all: the instance is addressed by attribute — a
+        // component rendered into another one's slot, or one whose root is a
+        // conditional. Its places are the tagged elements, and the occurrence
+        // picks the one that was opened, exactly as the click that opened it
+        // counted them.
+        //
+        // Without this, nothing narrowed while such a component was open, and
+        // every path inside it meant every instance on the page: 53 elements
+        // answer to Button's `button_text`, so its outline was the union of all
+        // of them — a box a thousand pixels tall — and the button itself
+        // reported four boxes, one per copy, with the selected one among them
+        // only by luck.
+        //
+        // The nested reads inside taggedPlaces ask focusRoots again; the cache
+        // is already null by then, so they narrow to nothing and this decides
+        // the answer, rather than recurring.
+        const places = taggedPlaces(focusPath);
+        const one = places[focusOcc] || places[0];
+        if (one) focusCache = [one.el];
+      }
     }
     return focusCache;
   };
@@ -1050,14 +1071,8 @@ if (!process.isMainFrame) {
   // A component's region holds its <script> and <style> too. They are elements,
   // and they are not what anyone means by the root of the component.
   const UNRENDERED = new Set(['TEMPLATE', 'SCRIPT', 'STYLE', 'LINK', 'META', 'TITLE']);
-  const openedRoots = () => {
-    const run = focusRoots();
-    if (run) return run.filter((n) => n.nodeType === 1 && !UNRENDERED.has(n.tagName));
-    if (!focusPath) return [];
-    const places = taggedPlaces(focusPath);
-    const one = places[focusOcc] || places[0];
-    return one ? [one.el] : [];
-  };
+  const openedRoots = () =>
+    (focusRoots() || []).filter((n) => n.nodeType === 1 && !UNRENDERED.has(n.tagName));
 
   let openedEls = [];
   const paintOpened = () => {

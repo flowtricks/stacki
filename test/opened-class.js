@@ -283,10 +283,14 @@ const frame = (url) => {
     /focusRoots\(\)/.test(roots),
     'openedRoots works the instance out for itself'
   );
+  // And that narrowing is one rule for the whole canvas — the outline, the hit
+  // testing and the scroll-to read it too, so an instance with no marker pair
+  // has to count its copies there rather than here.
+  const focus = source.slice(source.indexOf('const focusRoots'), source.indexOf('const inFocus'));
   check(
-    'and an instance with no marker pair counts copies the way the click does',
-    /taggedPlaces\(focusPath\)/.test(roots) && /places\[focusOcc\]/.test(roots),
-    roots
+    'an instance with no marker pair counts copies the way the click does',
+    /taggedPlaces\(focusPath\)/.test(focus) && /places\[focusOcc\]/.test(focus),
+    focus
   );
 
   if (failures.length) {

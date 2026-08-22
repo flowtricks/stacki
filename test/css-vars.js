@@ -40,6 +40,28 @@ const columnLabels = (block, group) =>
   (block.kind === 'matrix' ? block.columns : group.columns).map((c) => c.label);
 const findBlock = (group, title) => group.blocks.find((b) => b.title === title);
 
+// Every stylesheet under a project, for reading a declaration back out of the
+// source the parse came from.
+const cssFiles = (root) => {
+  const out = [];
+  const walk = (dir) => {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (e.name.endsWith('.css')) out.push(full);
+    }
+  };
+  walk(path.join(root, 'src'));
+  return out;
+};
+
 // --- a stylesheet written by hand, with the shapes the real one lacks -------
 {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-css-'));
@@ -254,8 +276,35 @@ if (!fs.existsSync(path.join(source, 'src', 'styles'))) {
   // Colours resolve through the chain; the ones that cannot say so.
   const themeRows = theme.blocks[0].rows;
   const background = themeRows.find((r) => r.label === 'background');
-  check('a swatch resolves through its reference', background.cells[0].color === '#ebebeb', JSON.stringify(background.cells[0]));
-  check('per mode', background.cells[1].color === '#1f1d1e' && background.cells[2].color === '#c6fb50');
+  // Against the stylesheet itself rather than against a colour written down
+  // here: this fixture is a real project someone is working in, and its palette
+  // is theirs to change. What is being checked is that the swatch followed the
+  // reference — `--background: var(--light-300)` shows what --light-300 IS —
+  // and the hex it lands on is the project's business.
+  const declaredColor = (name) => {
+    for (const f of cssFiles(source)) {
+      const text = fs.readFileSync(f, 'utf8');
+      const hits = [...text.matchAll(new RegExp(`${name}\\s*:\\s*([^;{}]+);`, 'g'))];
+      const last = hits[hits.length - 1];
+      if (last && /^#[0-9a-f]{3,8}$/i.test(last[1].trim())) return last[1].trim().toLowerCase();
+    }
+    return null;
+  };
+  const through = (cell) => {
+    if (!cell?.ref) return null;
+    const want = declaredColor(cell.ref);
+    return want ? cell.color?.toLowerCase() === want : null;
+  };
+  check(
+    'a swatch resolves through its reference',
+    through(background.cells[0]) === true,
+    JSON.stringify(background.cells[0])
+  );
+  check(
+    'per mode',
+    through(background.cells[1]) === true && through(background.cells[2]) === true,
+    JSON.stringify([background.cells[1], background.cells[2]])
+  );
   const border = themeRows.find((r) => r.label === 'border');
   check('a colour nothing can compute says so', border.cells[0].unknownColor === true && !border.cells[0].color);
 

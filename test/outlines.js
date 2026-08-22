@@ -183,6 +183,18 @@ const stacked = (n, a = 0.14) => 1 - (1 - a) ** n;
         <div class="split-line"><strong data-avb-p="0.3" data-box="hollow"></strong> Human-centric</div>
         <div class="split-line"><strong data-avb-p="0.3" data-box="word">strategies</strong> to cut</div>
       </h2>
+      <!-- Two copies of a component with no marker pair of its own: rendered
+           into another one's slot, so the serializer can only tag it. Both carry
+           the same path in the component's OWN file — inside Card they are one
+           node — and one page path each. -->
+      <div>
+        <article data-avb-p="src/components/Card.astro|0.0.0 0.6.0" data-box="card-one">
+          <span data-avb-p="src/components/Card.astro|0.0.0.1" data-box="card-one-text">a</span>
+        </article>
+        <article data-avb-p="src/components/Card.astro|0.0.0 0.6.1" data-box="card-two">
+          <span data-avb-p="src/components/Card.astro|0.0.0.1" data-box="card-two-text">b</span>
+        </article>
+      </div>
       <ul data-box="links">
         ${marked('0.4.0', '<li data-box="li-one"><a data-avb-p="0.4.0.0" data-box="link-one">Instagram</a></li>')}
         ${marked('0.4.0', '<li data-box="li-two"><a data-avb-p="0.4.0.0" data-box="link-two">YouTube</a></li>')}
@@ -206,6 +218,10 @@ const stacked = (n, a = 0.14) => 1 - (1 - a) ** n;
     // wide and a line tall — a box, but not a place.
     hollow: [0, 1400, 0, 50],
     word: [0, 1460, 172, 50],
+    'card-one': [0, 2000, 300, 100],
+    'card-one-text': [10, 2010, 200, 20],
+    'card-two': [0, 2200, 300, 100],
+    'card-two-text': [10, 2210, 200, 20],
     links: [0, 1600, 600, 40],
     'li-one': [0, 1600, 120, 40],
     'li-two': [130, 1600, 120, 40],
@@ -438,6 +454,44 @@ const stacked = (n, a = 0.14) => 1 - (1 - a) ** n;
     boxes[key] = [0, 100, 1200, 760]; // the browser gets round to it
     await new Promise((resolve) => setTimeout(resolve, 200));
     check('a layout that settles late is measured again', lastSent()?.h === 760, JSON.stringify(lastSent()));
+  }
+
+  // --- inside a component that has no marker pair -------------------------------
+  //
+  // Open one card and the paths inside Card mean THAT card. Both copies answer
+  // to `Card.astro|0.0.0.1`, so without narrowing the outline was every copy at
+  // once — on a real page 53 elements answer to a button's label, and the box
+  // drawn around them was a thousand pixels tall, while the button's own root
+  // reported one box per copy and lit whichever came first.
+  {
+    const inside = (path, focus, occ = 0) => {
+      const ev = new window.MessageEvent('message', {
+        data: {
+          type: 'avb:track',
+          paths: [path],
+          scope: 'src/components/Card.astro|',
+          focus,
+          focusOcc: occ,
+        },
+      });
+      Object.defineProperty(ev, 'source', { value: window.parent });
+      window.dispatchEvent(ev);
+      const last = sent.filter((m) => m.type === 'avb:rects').pop();
+      return (last?.rects || {})[path] || [];
+    };
+    const TEXT = 'src/components/Card.astro|0.0.0.1';
+
+    const second = inside(TEXT, '0.6.1');
+    check('a path inside the open card is one box', second.length === 1, JSON.stringify(second));
+    check('and it is the card that was opened', second[0]?.y === 2210, JSON.stringify(second[0]));
+
+    const first = inside(TEXT, '0.6.0');
+    check('opening the other card moves it', first[0]?.y === 2010, JSON.stringify(first[0]));
+    check('still one box', first.length === 1, JSON.stringify(first));
+
+    const root = inside('src/components/Card.astro|0.0.0', '0.6.1');
+    check('the component root is one box too', root.length === 1, JSON.stringify(root));
+    check('around the open card', root[0]?.y === 2200 && root[0]?.h === 100, JSON.stringify(root[0]));
   }
 
   if (failures.length) {

@@ -130,8 +130,8 @@ const ROOT_PATH = `${SCOPE}0.0.0`;
     el.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
     return sent.filter((m) => m.type === 'avb:click-node').pop();
   };
-  const actionFor = (msg) =>
-    msg ? canvasClickAction({ path: msg.path, outside: !!msg.outside, focusPath: '0.2', scope: SCOPE }).kind : '(nothing reported)';
+  const actionFor = (msg, focusPath = '0.2') =>
+    msg ? canvasClickAction({ path: msg.path, outside: !!msg.outside, focusPath, scope: SCOPE }).kind : '(nothing reported)';
 
   // --- the report ---------------------------------------------------------------
   {
@@ -141,18 +141,24 @@ const ROOT_PATH = `${SCOPE}0.0.0`;
     check('so the click selects rather than closes', actionFor(msg) === 'inner', actionFor(msg));
   }
 
-  // The instance a marker pair DID wrap always worked; it still does.
+  // The instance a marker pair DID wrap works the same way when it is the one
+  // that was opened.
   {
+    open('0.1');
     const msg = clickOn(buttons[0]);
     check('the instance with a marker pair is placed too', msg?.path === ROOT_PATH, JSON.stringify(msg));
-    check('and selects', actionFor(msg) === 'inner', actionFor(msg));
+    check('and selects', actionFor(msg, '0.1') === 'inner', actionFor(msg, '0.1'));
+    open('0.2');
   }
 
-  // Every instance is the same node in the component's file, so clicking any of
-  // them selects that node. None of them is a way out of the component.
+  // A DIFFERENT copy is a different matter. The canvas narrows to the instance
+  // that was opened — its siblings are as dim on screen as the rest of the page
+  // — so clicking one is looking away from what is being edited, and the app
+  // leaves. That is the same answer it gives for anything else outside the
+  // instance, and it is what the dimming has been saying all along.
   {
     const msg = clickOn(buttons[2]);
-    check('another copy of the component is not a way out', actionFor(msg) !== 'close', JSON.stringify(msg));
+    check('a click on another copy leaves the component', actionFor(msg) === 'close', JSON.stringify(msg));
   }
 
   // The tag has to still be ON the element — this is what was being taken away.
