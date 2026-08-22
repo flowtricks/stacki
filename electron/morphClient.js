@@ -188,14 +188,34 @@ function Ambiguous(what) {
 // client added — that is the whole point — and over the editor's own markers,
 // which are put back separately.
 //
-// A key is taken at its word. Without one, an identical class is the best
-// evidence, but it is only evidence: client code changes classes all the time,
-// and refusing to match on that alone would send a page that merely added
-// `is-visible` to something straight back to reloading. So a same-tag node is
-// remembered and used if nothing better turns up. That fallback is safe here
-// in a way it would not have been before: the diff has already decided this
-// node persists, and all that is left is finding it — it is not being asked
-// which node this is.
+// A key is taken at its word. Without one, class is evidence — but the test is
+// whether the live node still carries the classes the SERVER gave it, not
+// whether the two lists are identical. Client code adds classes constantly, and
+// that is the one thing this must not read as a different element: a tablist
+// marks its open tab `is-active`, so `tabs_link is-active` stopped matching the
+// server's `tabs_link`, the scan ran on to the next tab — which still had the
+// pristine class — and matched THAT. Two tabs were patched as each other and
+// the third had nothing left to match, so the page reloaded, which is the
+// flicker this whole file exists to avoid.
+//
+// Order is the stronger signal, because the diff has already decided which
+// nodes persist and in what order. So the first candidate that isn't
+// contradicted wins, and scanning past one for a "better" match is exactly the
+// mistake. A same-tag node is still remembered as a last resort, for the case
+// where client code took one of the server's own classes away.
+const classesOf = (n) => (n.getAttribute('class') || '').split(/\s+/).filter(Boolean);
+
+// Every class the server put on the node is still on the live one. A node the
+// server gave no class to has to have none either — otherwise the test is
+// vacuous and would match anything, including a node the client inserted.
+function keepsClassesOf(live, serverNode) {
+  const want = classesOf(serverNode);
+  const have = classesOf(live);
+  if (!want.length) return !have.length;
+  for (const c of want) if (have.indexOf(c) === -1) return false;
+  return true;
+}
+
 function findLive(from, serverNode) {
   let loose = null;
   for (let n = from; n; n = n.nextSibling) {
@@ -209,7 +229,7 @@ function findLive(from, serverNode) {
     if (n.tagName !== serverNode.tagName) continue;
     const ks = keyOf(serverNode);
     if (ks !== null && keyOf(n) === ks) return n;
-    if (ks === null && n.getAttribute('class') === serverNode.getAttribute('class')) return n;
+    if (ks === null && keepsClassesOf(n, serverNode)) return n;
     // Same tag, weaker evidence. Kept in case nothing better turns up: the
     // diff has already decided this node persists, so the only question left
     // is which one it is, and a same-tag sibling beats giving up and reloading.
