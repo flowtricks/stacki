@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { HTML_TAGS } from '../elementSchemas.js';
+import { rankInsertItems } from '../insertRank.js';
 import { ASTRO_ASSETS } from '../astroAssets.js';
 import {
   elementIcon,
@@ -83,24 +84,11 @@ export default function InsertSearch({ components, allowSlot, onInsert, onClose 
     return [...comps, ...assets, ...tags, ...other];
   }, [components, allowSlot]);
 
+  // The words, and where they land: see src/insertRank.js. The trailing space
+  // is meaningful, so the query is not trimmed on the way in.
   const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    let items = allItems.filter((i) => tab === 'all' || i.cat === tab);
-    if (q) {
-      const scored = [];
-      for (const item of items) {
-        const hay = (item.search || item.label).toLowerCase();
-        const sub = (item.sub || '').toLowerCase();
-        let score = -1;
-        if (hay.startsWith(q)) score = 0;
-        else if (hay.includes(q)) score = 1;
-        else if (sub.includes(q)) score = 2;
-        if (score >= 0) scored.push({ item, score });
-      }
-      scored.sort((a, b) => a.score - b.score);
-      items = scored.map((s) => s.item);
-    }
-    return items.slice(0, 60);
+    const items = allItems.filter((i) => tab === 'all' || i.cat === tab);
+    return rankInsertItems(items, query).slice(0, 60);
   }, [allItems, query, tab]);
 
   useEffect(() => setHighlight(0), [query, tab]);
