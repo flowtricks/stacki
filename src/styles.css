@@ -673,7 +673,11 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
   display: block;
   line-height: 30px;
 }
-.list-field-text:hover { background: none; }
+/* Written through the row so it outweighs the base `button:hover` — which is a
+   type selector plus two pseudo-classes, and beats a lone class. Without that,
+   hovering a row filled the label with the pressed-button colour: a pill inside
+   the row, offset from it, reading as a control inside a control. */
+.list-field-row .list-field-text:hover { background: none; }
 .list-field-blank { color: var(--text-faint); }
 .list-field-row.is-open { background: var(--bg-hover); }
 
@@ -703,9 +707,13 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 }
 .list-field-row:hover .list-field-remove { opacity: 1; }
 .list-field-remove:hover { color: var(--red); background: var(--bg-active); }
+/* A button, so it arrives centred from the base rule — which reads as a
+   caption under the list rather than the next row of it. It is the row after
+   the last one, and rows start at the left. */
 .list-field-add {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
   width: 100%;
   height: 30px;
