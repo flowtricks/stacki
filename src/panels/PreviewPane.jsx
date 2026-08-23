@@ -151,10 +151,15 @@ export default function PreviewPane({
   // — that still selects something, just not the path that was clicked, so the
   // skip can't be a path comparison.
   const clickedPathRef = React.useRef(undefined);
-  // Which instance of a repeated node is outlined. Canvas clicks pick the one
-  // under the pointer; selections from anywhere else fall back to the first.
+  // Which instance of a repeated node is outlined. A canvas click picks the one
+  // under the pointer; every other route to a selection — the navigator, the
+  // arrow keys, an edit — means the NODE, and null says so: the node is
+  // wherever it is on the page, so all of it is outlined. It used to fall back
+  // to the first copy, which read as the page ignoring the rest of them: a
+  // marquee renders its strip twice, and selecting an icon in the navigator
+  // outlined the copy in the first panel whichever one you were looking at.
   const lastClickRef = React.useRef(null);
-  const [selOcc, setSelOcc] = React.useState(0);
+  const [selOcc, setSelOcc] = React.useState(null);
   const [hoverOcc, setHoverOcc] = React.useState(0);
   // Read by the message handler, which is bound once — refs keep it looking at
   // the current selection instead of the one it closed over.
@@ -188,9 +193,8 @@ export default function PreviewPane({
   // Canvas clicks set the instance directly (below) — including when they
   // land on another instance of the node that's already selected, where
   // selPath never changes. Any other route to a new selection means "the
-  // node", so it falls back to the first instance. The click marker is
-  // consumed here so coming back to the same node later starts at the first
-  // instance again.
+  // node", so it goes back to meaning every copy of it. The click marker is
+  // consumed here so coming back to the same node later means the node again.
   //
   // Except a step WITHIN what is already selected: ↑ from the second link in a
   // list means its parent, and the parent of the second one — the copy being
@@ -206,7 +210,7 @@ export default function PreviewPane({
     }
     lastClickRef.current = null;
     if (sameCopy(previous, selPath)) return;
-    setSelOcc(0);
+    setSelOcc(null);
   }, [selPath]);
 
   React.useEffect(() => {
@@ -222,7 +226,7 @@ export default function PreviewPane({
         // re-send on scroll/resize, so only report an actual change.
         if (d.classes) {
           const runs = d.classes[selPathRef.current] || [];
-          const list = runs[selOccRef.current] || runs[0] || [];
+          const list = runs[selOccRef.current ?? 0] || runs[0] || [];
           const key = list.join(' ');
           if (key !== selClassesRef.current) {
             selClassesRef.current = key;
@@ -562,8 +566,8 @@ export default function PreviewPane({
               {spacingHover &&
                 selPath &&
                 spacingBands(
-                  (rects[selPath] || [])[selOcc] || (rects[selPath] || [])[0],
-                  (spacing[selPath] || [])[selOcc] || (spacing[selPath] || [])[0],
+                  (rects[selPath] || [])[selOcc ?? 0] || (rects[selPath] || [])[0],
+                  (spacing[selPath] || [])[selOcc ?? 0] || (spacing[selPath] || [])[0],
                   spacingHover.kind,
                   spacingHover.sides
                 ).map((b, i) => (

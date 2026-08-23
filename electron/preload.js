@@ -902,6 +902,10 @@ if (!process.isMainFrame) {
     });
   };
 
+  // The boxes as last reported, so the watcher below can tell whether the page
+  // has moved since — see `followMotion`.
+  let lastSentRects = {};
+
   const sendRects = () => {
     if (!trackedPaths.length) return;
     const rects = {};
@@ -912,7 +916,78 @@ if (!process.isMainFrame) {
       classes[p] = classesForPath(p);
       spacing[p] = spacingForPath(p);
     }
+    lastSentRects = rects;
     window.parent.postMessage({ type: 'avb:rects', rects, classes, spacing }, '*');
+  };
+
+  // --- a page that moves by itself ------------------------------------------
+  //
+  // Every measurement above is triggered by something that HAPPENED: a scroll,
+  // a mutation, a resize, an element changing size. A CSS animation is none of
+  // those. A marquee translates its track sixty times a second with the DOM
+  // untouched, the elements the same size and the page not scrolled — so a box
+  // was measured once, at the moment the node was selected, and then stood
+  // still while the thing it was drawn around travelled out from under it.
+  //
+  // A strip that renders its content twice makes that unreadable rather than
+  // merely wrong: the copy the outline was measured on moves away, the other
+  // copy arrives where it was, and the box looks like it is stuck on the first
+  // copy however far along you click.
+  //
+  // Nothing announces this, so the only way to know is to look. Measure the
+  // tracked boxes every so often, and when they have moved with nothing having
+  // happened, follow them frame by frame until they settle again.
+  const MOVE_SLACK = 0.5; // sub-pixel drift is not movement
+  const STILL_FRAMES = 20; // …and a third of a second of stillness is a stop
+  const LOOK_EVERY = 200; // ms between looks while the page is holding still
+
+  const boxesMoved = (before, now) => {
+    if (!before || !now || before.length !== now.length) return true;
+    for (let i = 0; i < now.length; i++) {
+      for (const k of ['x', 'y', 'w', 'h']) {
+        if (Math.abs((before[i]?.[k] ?? 0) - (now[i]?.[k] ?? 0)) > MOVE_SLACK) return true;
+      }
+    }
+    return false;
+  };
+
+  const trackedMoved = () => {
+    for (const p of trackedPaths) {
+      // Never reported yet is not movement: the send that reports it is
+      // already on its way.
+      if (!lastSentRects[p]) continue;
+      if (boxesMoved(lastSentRects[p], rectsForPath(p))) return true;
+    }
+    return false;
+  };
+
+  let following = false;
+  let stillFor = 0;
+  const followMotion = () => {
+    if (!trackedPaths.length) {
+      following = false;
+      return;
+    }
+    if (trackedMoved()) {
+      stillFor = 0;
+      // The measurements that go stale with the boxes. Not the `stacki-opened`
+      // class: painting it writes to the DOM, and a write on every frame of an
+      // animation is a mutation storm answered by another measurement.
+      thinCache = null;
+      focusCache = undefined;
+      sendRects();
+    } else if (++stillFor >= STILL_FRAMES) {
+      following = false;
+      return;
+    }
+    requestAnimationFrame(followMotion);
+  };
+
+  const watchMotion = () => {
+    if (following || !trackedPaths.length || !trackedMoved()) return;
+    following = true;
+    stillFor = 0;
+    requestAnimationFrame(followMotion);
   };
 
   // Nodes that put nothing on the page: a component that returns null for the
@@ -1300,6 +1375,15 @@ if (!process.isMainFrame) {
     } catch {
       /* no ResizeObserver: the observers above still cover the common cases */
     }
+    // And a page that moves with nothing happening at all — an animation, a
+    // transition, anything that only changes where things are. Nothing above
+    // fires for that; see followMotion.
+    const look = setInterval(watchMotion, LOOK_EVERY);
+    // A repeating timer is the one thing here that would hold a Node process
+    // open — the suites run this file in jsdom, and a page's heartbeat is not
+    // a reason for `node test/…` never to come back. In the browser the handle
+    // is a number and this does nothing.
+    look?.unref?.();
     document.addEventListener('mousemove', (e) => {
       const { path: p, occurrence } = nodeAtEvent(e);
       if (p !== lastHoverPath || occurrence !== lastHoverOcc) {

@@ -48,14 +48,15 @@ export function onePerPlace(boxes) {
  * alone made every other card in the loop unhoverable. It takes the same copy
  * of it too.
  *
- * A hover with no occurrence came from the navigator, which points at the node
- * rather than at one copy of it — that one is about the selection whichever
- * copy is selected.
+ * No occurrence on either side means the node rather than one copy of it, and
+ * the node is every copy: a hover from the navigator is about the selection
+ * whichever copy is selected, and a selection from the navigator — which
+ * outlines all of them — already covers whichever copy is hovered.
  */
 export function hoverIsSelection(hover, selection) {
   if (!hover?.path || !selection?.path) return false;
   if (hover.path !== selection.path) return false;
-  return hover.occ == null || hover.occ === (selection.occ ?? 0);
+  return hover.occ == null || selection.occ == null || hover.occ === selection.occ;
 }
 
 /**
@@ -65,7 +66,7 @@ export function hoverIsSelection(hover, selection) {
  * A loop renders one path many times, and which copy you are looking at is
  * carried beside the path as an occurrence — the path itself is identical for
  * every copy. A selection made from the canvas says which copy it means; any
- * other route means "the node", and falls back to the first.
+ * other route means "the node", which is every copy of it.
  *
  * That is right for a jump across the tree and wrong for a step within it.
  * Pressing ↑ from the second link in a list selects its parent — and the parent
