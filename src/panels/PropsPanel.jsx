@@ -6,6 +6,8 @@ import AutoTextarea from '../ui/AutoTextarea.jsx';
 import PropTip from '../ui/PropTip.jsx';
 import ClassInput from '../ui/ClassInput.jsx';
 import CodeEditor from '../ui/CodeEditor.jsx';
+import ListField from './ListField.jsx';
+import { arrayItems } from '../arrayValue.js';
 import { clickNote } from '../ui/sound.js';
 import { SoundHere } from '../ui/soundScope.jsx';
 import StyleEditor, { collapseDeclarations } from '../ui/StyleEditor.jsx';
@@ -2987,6 +2989,10 @@ function isBoundValue(field, value) {
   if (field.type === 'boolean') return !/^(true|false)$/.test(src);
   if (field.type === 'number') return !/^[-+]?(\d+\.?\d*|\.\d+)$/.test(src);
   if (field.type === 'enum') return !(field.options || []).includes(src);
+  // A list of plain items is a list, and the list control writes exactly that.
+  // Anything else an array prop can hold — a name, a spread, an object per item
+  // — is a program, and the code editor is the only field that can show one.
+  if (field.type === 'code') return arrayItems(src) === null;
   return true;
 }
 
@@ -3011,6 +3017,9 @@ function valueFromExpr(field, raw) {
     return (field.options || []).includes(src)
       ? { type: field.numeric ? 'expr' : 'string', value: src }
       : undefined;
+  // An array of plain items survives the trip: the list can show it, so going
+  // back to the control keeps the value rather than dropping the prop.
+  if (field.type === 'code' && arrayItems(src)) return { type: 'expr', value: src };
   return undefined;
 }
 
@@ -3018,6 +3027,7 @@ function valueFromExpr(field, raw) {
 // as a type — "Use the toggle" beats "switch to boolean".
 function controlWord(field) {
   if (field.type === 'boolean') return 'toggle';
+  if (field.type === 'code') return 'list';
   if (field.type === 'enum' && field.options?.length) return 'options list';
   if (field.type === 'style') return 'CSS editor';
   if (isMediaName(field.name)) return 'asset picker';
@@ -3702,6 +3712,26 @@ function PropField({
           name={name}
           assetCtx={assetCtx}
           onChange={onChange}
+        />
+      </div>
+    );
+  }
+
+  // A prop that takes a list of plain items is a list of rows: drag one to
+  // reorder, click one to change it, the bin to drop it. `{}` is the way to the
+  // code editor, for the arrays this cannot show and for putting a name where
+  // an array was.
+  //
+  // An unset one shows the empty list rather than a code field: the prop takes
+  // items, and the first thing to do with it is add one.
+  if (type === 'code' && !showExpr && (value === undefined || arrayItems(str))) {
+    return (
+      <div className="props-field">
+        {label}
+        <ListField
+          value={str}
+          placeholder={placeholderFor(field)}
+          onChange={(text) => onChange({ type: 'expr', value: text }, true)}
         />
       </div>
     );
