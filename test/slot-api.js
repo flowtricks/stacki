@@ -151,21 +151,44 @@ check(
 
 // ── The files this came from ────────────────────────────────────────────────
 const LUMOS = '/Users/timothyricks/Documents/Projects/lumos-framework/src/components';
+// By name, from wherever it sits. This is somebody's working project: the
+// components were in one folder when this was written and are in a tree of
+// them now, and a moved file should not read as a broken parser — or, as it
+// did, as a crash that takes the rest of the suite with it.
+const findComponent = (dir, name) => {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const hit = findComponent(full, name);
+      if (hit) return hit;
+    } else if (entry.name === `${name}.astro`) {
+      return fs.readFileSync(full, 'utf8');
+    }
+  }
+  return null;
+};
 if (fs.existsSync(LUMOS)) {
-  const read = (n) => fs.readFileSync(path.join(LUMOS, `${n}.astro`), 'utf8');
-  check('the real <Paragraph> takes content', JSON.stringify(parseSlots(read('Paragraph'))) === '["default"]', JSON.stringify(parseSlots(read('Paragraph'))));
-  check('and it takes words', defaultSlotInline(read('Paragraph')) === true);
-  check(
-    'the real <ContentWrapper> offers its second column',
-    JSON.stringify(parseSlots(read('ContentWrapper'))) === '["default","column2"]',
-    JSON.stringify(parseSlots(read('ContentWrapper')))
-  );
-  check('while it takes blocks, not words', defaultSlotInline(read('ContentWrapper')) === false);
-  check(
-    'a component with no slots still reports none',
-    JSON.stringify(parseSlots(read('Img'))) === '[]',
-    JSON.stringify(parseSlots(read('Img')))
-  );
+  const read = (n) => findComponent(LUMOS, n);
+  const onceReal = (what, name, run) => {
+    const source = read(name);
+    if (source == null) return; // that component is not in this project any more
+    run(source, what);
+  };
+  onceReal('the real <Paragraph> takes content', 'Paragraph', (src) => {
+    check('the real <Paragraph> takes content', JSON.stringify(parseSlots(src)) === '["default"]', JSON.stringify(parseSlots(src)));
+    check('and it takes words', defaultSlotInline(src) === true);
+  });
+  onceReal('the real <ContentWrapper>', 'ContentWrapper', (src) => {
+    check(
+      'the real <ContentWrapper> offers its second column',
+      JSON.stringify(parseSlots(src)) === '["default","column2"]',
+      JSON.stringify(parseSlots(src))
+    );
+    check('while it takes blocks, not words', defaultSlotInline(src) === false);
+  });
+  onceReal('a component with no slots', 'Img', (src) => {
+    check('a component with no slots still reports none', JSON.stringify(parseSlots(src)) === '[]', JSON.stringify(parseSlots(src)));
+  });
 }
 
 // ── The field it was all for ────────────────────────────────────────────────

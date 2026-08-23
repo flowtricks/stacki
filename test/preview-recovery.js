@@ -18,6 +18,12 @@
 //   almost always lands while the error is still there; a watch that doesn't
 //   come back leaves the preview stuck exactly as before.
 //
+//   Never ask at all. The poll only starts once a probe has FAILED, so
+//   something has to ask the first question — and the app said "the site may
+//   have changed" only for the file kinds it edits itself. Break a .ts a
+//   component imports, in an editor, and the preview goes to the error screen
+//   with nothing that will ever ask again.
+//
 // The probe half is checked against a real HTTP server, because the thing being
 // relied on is what a 500 and an unreachable port actually do.
 
@@ -191,6 +197,37 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await sleep(120);
     check('stopping ends the polling', t.asked.length === seen, `${seen} → ${t.asked.length} asks after stop`);
     check('and a poke afterwards does nothing', (t.watch.poke(), await sleep(40), t.asked.length === seen), `${t.asked.length} asks`);
+  }
+
+  // --- who asks the first question -------------------------------------------
+  //
+  // The watcher is fs.watch inside main.js, wired to an ipc handler; standing
+  // one up here would be testing the harness. What is checked is the shape of
+  // the rule: every change under src/ says so, before any of the branches that
+  // return for the kinds this app does not edit.
+  {
+    const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
+    const at = main.indexOf('watcher = fs.watch(srcDir');
+    const handler = main.slice(at, main.indexOf("// Watch public/ too", at));
+    check('the src watcher is still there', at !== -1);
+    const poke = handler.indexOf('notePageMayHaveChanged()');
+    const firstBranchReturn = handler.indexOf('return;', handler.indexOf('.json$'));
+    check('a change under src says the site may have changed', poke !== -1, handler.slice(0, 300));
+    check(
+      'before anything decides the kind is not interesting',
+      poke !== -1 && firstBranchReturn !== -1 && poke < firstBranchReturn,
+      `poke at ${poke}, first return at ${firstBranchReturn}`
+    );
+    check(
+      'and not for the app’s own writes, which say it themselves',
+      /if \(!\(mine && Date\.now\(\) - mine < 1000\)\) notePageMayHaveChanged\(\);/.test(handler),
+      handler.slice(0, 400)
+    );
+    check(
+      'a write the app makes says it through markSelfWrite',
+      /function markSelfWrite\(p\) \{[\s\S]{0,160}notePageMayHaveChanged\(\);/.test(main),
+      'an in-app write would go unannounced'
+    );
   }
 
   if (failures.length) {

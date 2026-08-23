@@ -131,14 +131,29 @@ const check = (what, condition, detail) => {
   // The table above is only right if the scan really reports that, which is
   // the half that broke.
   const LUMOS = '/Users/timothyricks/Documents/Projects/lumos-framework/src/components';
+  // By name, from wherever it sits: this is somebody's working project, and a
+  // component moved into a folder should not read as a broken scan — or, as it
+  // did, as a crash that takes the rest of the suite with it.
+  const findComponent = (dir, name) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        const hit = findComponent(full, name);
+        if (hit) return hit;
+      } else if (entry.name === `${name}.astro`) {
+        return fs.readFileSync(full, 'utf8');
+      }
+    }
+    return null;
+  };
   if (fs.existsSync(LUMOS)) {
-    const read = (n) => fs.readFileSync(path.join(LUMOS, `${n}.astro`), 'utf8');
     for (const [name, slots, tag] of [
       ['Section', true, 'section'],
       ['ContentWrapper', true, 'div'],
       ['Img', false, null],
     ]) {
-      const src = read(name);
+      const src = findComponent(LUMOS, name);
+      if (src == null) continue; // not in this project any more
       check(
         `the real <${name}> ${slots ? 'takes' : 'takes no'} default content`,
         parseSlots(src).includes('default') === slots,

@@ -1732,6 +1732,19 @@ ipcMain.handle('watch:start', async (_e, projectPath) => {
   watcher = fs.watch(srcDir, { recursive: true }, (_event, filename) => {
     if (!filename) return;
     const name = filename.toString();
+    // ANYTHING under src/ can be the difference between a page and the dev
+    // server's error screen: a .ts a component imports, a JSON file it reads,
+    // an image an import points at. This used to be said only for the file
+    // kinds the app itself edits, so breaking a .ts in an editor and fixing it
+    // there left the preview on the error screen with nothing to nudge it —
+    // the poll that gets it back only starts once a probe has failed, and no
+    // probe was ever asked for.
+    //
+    // The app's own writes say it through markSelfWrite instead, which is why
+    // they are skipped here.
+    const changed = path.join(srcDir, name);
+    const mine = selfWrites.get(path.resolve(changed));
+    if (!(mine && Date.now() - mine < 1000)) notePageMayHaveChanged();
     // JSON data files feed the CMS panel, not the page model.
     if (/\.json$/i.test(name)) {
       const full = path.join(srcDir, name);
@@ -1757,7 +1770,6 @@ ipcMain.handle('watch:start', async (_e, projectPath) => {
       if (wrote && Date.now() - wrote < 1000) return;
       clearTimeout(cssTimer);
       cssTimer = setTimeout(() => send('css:changed', {}), 200);
-      notePageMayHaveChanged();
       return;
     }
     if (!/\.(astro|md|mdx|html)$/i.test(name)) return;
@@ -1766,10 +1778,6 @@ ipcMain.handle('watch:start', async (_e, projectPath) => {
     const wrote = selfWrites.get(path.resolve(full));
     if (wrote && Date.now() - wrote < 1000) return;
     pending.add(full);
-    // Fixed in an editor rather than in here — the error screen's own "Open in
-    // editor" link leads straight there — so the preview needs the same nudge
-    // an in-app write gives it.
-    notePageMayHaveChanged();
     // The site changed, so its picture is out of date — but not urgently, and
     // not while the user is still typing.
     scheduleThumb(projectPath, 60000);
