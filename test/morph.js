@@ -46,6 +46,15 @@ const { patchChildren, findLive } = new Function(
   `${source.slice(start, end)}\nreturn { patchChildren, findLive };`
 )(dom.window.document);
 
+// The other half of the same decision: whether to patch at all. Lifted the same
+// way, from the comment that introduces it to the fetch below it.
+const sigStart = source.indexOf("// A component's <style> is delivered as a MODULE");
+const sigEnd = source.indexOf('function fetchDoc');
+const { scriptSignature, isStyleModule, loadStyles } = new Function(
+  'document',
+  `${source.slice(sigStart, sigEnd)}\nreturn { scriptSignature, isStyleModule, loadStyles };`
+)(dom.window.document);
+
 // Every patch here goes through this: a throw is the failure mode under test
 // (the client turns it into location.reload()), so it is reported as one rather
 // than ending the run with a stack trace that says nothing about which case it
@@ -198,9 +207,60 @@ const LIVE_TABS = (labels, active) =>
   );
 }
 
+// --- switching a variant is a different set of stylesheets -------------------
+//
+// The flicker at the top of this file had a second cause, found the same way:
+// the page reloaded. Not because the locator gave up this time — because the
+// page's SCRIPTS had changed, and any change there means reload.
+//
+// They had changed because Astro serves a component's <style> as a module: one
+// script tag per styled component that renders. Switching a variant renders a
+// different handful of components, so the list differs, so the page reloaded —
+// for a stylesheet, which is the one thing a patch handles well.
+{
+  const head = (scripts) => new JSDOM(`<!doctype html><html><head>${scripts}</head><body></body></html>`).window.document;
+  const style = (name) => `<script type="module" src="/src/components/${name}.astro?astro&type=style&index=0&lang.css"></script>`;
+  const script = (name) => `<script type="module" src="/src/components/${name}.astro?astro&type=script&index=0&lang.ts"></script>`;
+
+  check('an Astro style module is recognised', isStyleModule('/src/components/Card.astro?astro&type=style&index=0&lang.css'));
+  check('and so is a plain stylesheet import', isStyleModule('/src/styles/global.css'));
+  check('a component script is not one', !isStyleModule('/src/components/Nav.astro?astro&type=script&index=0&lang.ts'));
+  check('and neither is the module runtime', !isStyleModule('/@vite/client'));
+
+  const before = head(style('Card') + script('Nav'));
+  const withIcon = head(style('Card') + style('Icon') + script('Nav'));
+  check(
+    'a stylesheet appearing does not force a reload',
+    scriptSignature(before) === scriptSignature(withIcon),
+    `${JSON.stringify(scriptSignature(before))} vs ${JSON.stringify(scriptSignature(withIcon))}`
+  );
+  const withoutCard = head(style('Icon') + script('Nav'));
+  check('nor one disappearing', scriptSignature(before) === scriptSignature(withoutCard));
+
+  // What the rule is actually for is untouched: a script that appears has to
+  // run, and patching cannot make it run.
+  const withFooter = head(style('Card') + script('Nav') + script('Footer'));
+  check('a script appearing still forces one', scriptSignature(before) !== scriptSignature(withFooter));
+  const changed = head(style('Card') + '<script type="module">console.log(1)</script>');
+  check('and so does one whose code changed', scriptSignature(before) !== scriptSignature(changed));
+
+  // Not reloading is only half of it: the new component's CSS has to arrive.
+  // The patch cannot bring it — a <script> cloned from a fetched document is
+  // inert, so it is loaded by hand, with an element that runs.
+  const live = dom.window.document;
+  const wanted = '/src/components/Icon.astro?astro&type=style&index=0&lang.css';
+  loadStyles(withIcon);
+  const loaded = () => [...live.querySelectorAll('script[src]')].map((n) => n.getAttribute('src'));
+  check('a stylesheet the page has just started using is loaded', loaded().includes(wanted), loaded().join('|'));
+  const count = loaded().length;
+  loadStyles(withIcon);
+  check('and not loaded twice', loaded().length === count, `${loaded().length} vs ${count}`);
+  check('a real script is never loaded this way', !loaded().some((src) => /type=script/.test(src)), loaded().join('|'));
+}
+
 if (failures.length) {
   console.error(`\nmorph: ${failures.length} failed, ${checked - failures.length} passed\n`);
   console.error(failures.join('\n') + '\n');
   process.exit(1);
 }
-console.log(`morph: ${checked} passed  [patching a page whose own JS marks things]`);
+console.log(`morph: ${checked} passed  [patching a page whose own JS marks things; stylesheets are not scripts]`);

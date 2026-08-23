@@ -825,18 +825,12 @@ export default function App() {
     if (typeof window.avb.probeDevPage !== 'function' || typeof window.avb.onPageMaybeChanged !== 'function') {
       return undefined;
     }
-    // TEMP DIAGNOSTIC — remove.
-    const beacon = (what, extra = '') => { void fetch(`http://localhost:8932/${what}?t=${Date.now()}${extra}`).catch(() => {}); };
     const watch = createPreviewWatch({
-      probe: async () => {
-        const answer = await window.avb.probeDevPage(devUrl + (livePathRef.current || '/'));
-        beacon('probe', `&ok=${answer?.ok}&status=${answer?.status ?? ''}`);
-        return answer;
-      },
-      onRecover: () => { beacon('recover'); setRefreshKey((k) => k + 1); },
+      probe: () => window.avb.probeDevPage(devUrl + (livePathRef.current || '/')),
+      onRecover: () => setRefreshKey((k) => k + 1),
     });
     // Every write the app makes, plus every change made outside it.
-    const offWrite = window.avb.onPageMaybeChanged(() => { beacon('write'); watch.poke(); });
+    const offWrite = window.avb.onPageMaybeChanged(() => watch.poke());
     return () => {
       offWrite();
       watch.stop();

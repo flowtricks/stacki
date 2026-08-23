@@ -309,6 +309,21 @@ function patchChildren(liveParent, prevParent, nextParent) {
 const describe = (n) =>
   n.nodeType === 1 ? '<' + n.tagName.toLowerCase() + '>' : n.nodeType === 8 ? 'marker ' + n.data : 'text';
 
+// A component's <style> is delivered as a MODULE in dev — one
+// `<script type="module" src="…?astro&type=style…">` per styled component that
+// renders. So the page's list of scripts changes whenever the SET of rendered
+// components changes, and that is exactly what switching a variant does: one
+// card becomes another, an icon appears, and the page carries a different
+// handful of stylesheets.
+//
+// Which made the rule below reload the page for a stylesheet — the flicker this
+// file exists to avoid, on the one edit most likely to be made over and over.
+// Style modules are held apart from real scripts and patched like anything
+// else.
+function isStyleModule(src) {
+  return /[?&]astro&type=style|\.(css|s[ac]ss|less|pcss|styl)(\?|$)/.test(src || '');
+}
+
 // A script that appears, disappears or changes cannot be patched in: inserting
 // one re-runs it, and rewriting one does not run it at all. Both are wrong, so
 // the page reloads — which is what a changed script needs anyway. Rare next to
@@ -318,9 +333,42 @@ function scriptSignature(doc) {
   const list = doc.getElementsByTagName('script');
   for (let i = 0; i < list.length; i++) {
     const s = list[i];
-    out.push((s.getAttribute('src') || '') + ' | ' + (s.getAttribute('type') || '') + ' | ' + s.textContent);
+    const src = s.getAttribute('src') || '';
+    if (isStyleModule(src)) continue;
+    out.push(src + ' | ' + (s.getAttribute('type') || '') + ' | ' + s.textContent);
   }
   return out.join('\n@@\n');
+}
+
+// The stylesheets a rendering asks for, loaded for real.
+//
+// The patch cannot do this itself: a <script> cloned out of a fetched document
+// is inert — the parser that made it had no browsing context, so inserting it
+// into this one runs nothing (measured; see test/morph.js). An element made
+// here does run, and running one of these modules is what injects its CSS.
+//
+// A stylesheet whose component is no longer rendered is left loaded. Its rules
+// match nothing now, and it is already in hand for the moment the variant is
+// switched back.
+const loadedStyles = new Set();
+function noteStyles(doc) {
+  const list = doc.getElementsByTagName('script');
+  for (let i = 0; i < list.length; i++) {
+    const src = list[i].getAttribute('src');
+    if (isStyleModule(src)) loadedStyles.add(src);
+  }
+}
+function loadStyles(doc) {
+  const list = doc.getElementsByTagName('script');
+  for (let i = 0; i < list.length; i++) {
+    const src = list[i].getAttribute('src');
+    if (!isStyleModule(src) || loadedStyles.has(src)) continue;
+    loadedStyles.add(src);
+    const el = document.createElement('script');
+    el.type = 'module';
+    el.src = src;
+    document.head.appendChild(el);
+  }
 }
 
 function fetchDoc() {
@@ -344,7 +392,7 @@ function fetchDoc() {
 // for server output would delete it on the first patch.
 let prevDoc = null;
 const ready = fetchDoc().then(
-  (d) => { prevDoc = d.clean; },
+  (d) => { prevDoc = d.clean; noteStyles(d.clean); },
   () => { prevDoc = null; }
 );
 
@@ -366,6 +414,9 @@ async function update() {
     patchChildren(document.head, prevDoc.head, next.clean.head);
     patchChildren(document.body, prevDoc.body, next.clean.body);
     prevDoc = next.clean;
+    // After the patch, so a component that has just appeared is styled by the
+    // time anything measures it.
+    loadStyles(next.clean);
     syncAnchors(document.body, next.withAnchors.body);
     document.dispatchEvent(new CustomEvent('avb:morphed'));
   } catch (err) {
