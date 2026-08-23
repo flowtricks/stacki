@@ -39,7 +39,11 @@ function wordsOf(text) {
 const FIELDS = [
   { of: (item) => item.search || item.label || item.name, base: 0 },
   { of: (item) => item.label || item.name, base: 0 },
-  { of: (item) => item.sub, base: 4 },
+  // `sub` in the palette, `folder` on a component record straight off the
+  // scan — the components panel searches the same list without dressing it up
+  // first. A folder is a path (`Form/Fields/Advanced`), and its words are its
+  // segments, so any one of them can be typed.
+  { of: (item) => item.sub || item.folder, base: 4 },
 ];
 
 /**

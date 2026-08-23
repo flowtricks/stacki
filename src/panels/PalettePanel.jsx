@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CloseIcon, ComponentPlusIcon, ElementComponentIcon, FileIcon, LayoutIcon } from '../ui/Icons.jsx';
+import { rankInsertItems } from '../insertRank.js';
 import { setDrag, clearDrag } from '../dragState.js';
 import { componentNameError, toComponentName } from '../componentName.js';
 import useDismiss from '../ui/useDismiss.js';
@@ -84,10 +85,13 @@ export default function PalettePanel({
   const hoverTimer = useRef(null);
   useEffect(() => () => clearTimeout(hoverTimer.current), []);
 
-  const q = query.trim().toLowerCase();
-  const list = components.filter(
-    (c) => !q || c.name.toLowerCase().includes(q) || (c.folder || '').toLowerCase().includes(q)
-  );
+  // The same rule the insert palette searches by (src/insertRank.js): words,
+  // each landing on a name or on a folder, so `form input` is the Input in the
+  // Form folder and a folder inside a folder can be typed a segment at a time.
+  // The order it comes back in is not used — the panel groups by folder, and
+  // that is what it is for — but which items answer is the same question in
+  // both places, and it should not have two answers.
+  const list = rankInsertItems(components, query);
 
   // Grouped by the folder each file sits in, so layouts land under "layouts"
   // and component subfolders group under their own name. Anything at the
@@ -101,7 +105,7 @@ export default function PalettePanel({
     }
     return [...byFolder.entries()].sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [components, q]);
+  }, [components, query]);
 
   const schedulePreview = (comp) => (e) => {
     clearTimeout(hoverTimer.current);
