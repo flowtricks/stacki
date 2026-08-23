@@ -1676,6 +1676,7 @@ contextBridge.exposeInMainWorld('avb', {
   renamePageFolder: invoke('pagefolder:rename'),
   deletePageFolder: invoke('pagefolder:delete'),
   importPathFor: invoke('page:importPathFor'),
+  rebaseImport: invoke('page:rebaseImport'),
   createComponent: invoke('component:create'),
   componentUsage: invoke('component:usage'),
   dynamicPaths: invoke('page:dynamicPaths'),

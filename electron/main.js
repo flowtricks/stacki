@@ -2821,6 +2821,22 @@ ipcMain.handle('page:importPathFor', async (_e, { pagePath, targetPath, projectP
   return { relative, srcRelative };
 });
 
+// The same import, written for another page.
+//
+// A relative specifier says where a file is FROM WHERE IT IS WRITTEN, so
+// `../assets/hero.png` copied from src/pages/index.astro into
+// src/pages/blog/post.astro points at nothing. Anything else — an alias, a bare
+// package, `astro:content` — means the same thing wherever it is written, and
+// is handed back untouched.
+ipcMain.handle('page:rebaseImport', async (_e, { fromPagePath, toPagePath, spec }) => {
+  const text = String(spec || '');
+  if (!text.startsWith('.')) return { path: text };
+  if (!fromPagePath || !toPagePath) return { path: text };
+  const abs = path.resolve(path.dirname(fromPagePath), text);
+  const rel = toPosix(path.relative(path.dirname(toPagePath), abs));
+  return { path: rel.startsWith('.') ? rel : './' + rel };
+});
+
 // ---------------------------------------------------------------------------
 // Copy Selection (⇧⌘C)
 //

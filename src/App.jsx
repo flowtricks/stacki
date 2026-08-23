@@ -37,6 +37,14 @@ import { isInlineOnly } from './ui/RichContent.jsx';
 import { onAssetRequest, clearAssetRequest } from './assetPick.js';
 import { isDataBound } from './bindings.js';
 import { thenBranch } from './branches.js';
+import { keepsSlot } from './slotAttr.js';
+import {
+  namesUsedIn,
+  neededFrontmatter,
+  unusedDeclarations,
+  withStatements,
+  withoutDeclarations,
+} from './frontmatterMove.js';
 import { hasClass, namesIn, withClass } from './classAttr.js';
 import { toComponentName } from './componentName.js';
 import { resolveInstanceProps } from './instanceProps.js';
@@ -1663,18 +1671,14 @@ export default function App() {
           if (landed) landed.list.splice(landed.index, 0, note);
         }
 
-        // `slot` names a slot of the component the node used to sit in —
-        // carried into a plain element, or into a component without that
-        // slot, it renders nothing at all. Drop it, unless the new host's
-        // definition is one we never scanned (then we can't say it's wrong).
+        // `slot` is a word addressed to the component the node sat inside, and
+        // means nothing anywhere else (src/slotAttr.js).
         const slot = node.props?.slot;
         const slotName = slot?.type === 'string' ? slot.value : null;
         if (slotName) {
           const host = slotHostOf(model, nodeId);
-          const def = host ? definitionOf(model, host, insertables) : null;
-          if (!host || (def && !(def.slots || []).includes(slotName))) {
-            delete node.props.slot;
-          }
+          const definition = host ? definitionOf(model, host, insertables) : null;
+          if (!keepsSlot({ slotName, host, definition })) delete node.props.slot;
         }
 
         // Left a loop? Anything still reading its item would throw.
@@ -1692,6 +1696,11 @@ export default function App() {
     },
     [insertables, mutateModel, showToast]
   );
+
+  // What the last delete took out of the frontmatter, to say so once the model
+  // has settled — a toast raised inside a mutation would fire twice under
+  // StrictMode and once per retry.
+  const droppedRef = useRef(null);
 
   const removeNode = useCallback(
     (nodeId) => {
@@ -1713,8 +1722,29 @@ export default function App() {
           else found.list.splice(noteAt, 2);
         }
         pruneImports(model);
+        // The code the deleted markup was the only reader of goes with it: a
+        // `const jobs = […]` nothing lists any more is left behind otherwise,
+        // and a page collects them one deletion at a time. Only what nothing
+        // else mentions — another declaration included — and never an export,
+        // which is the page's own interface to Astro.
+        const dead = unusedDeclarations(model);
+        if (dead.length) {
+          model.extraFrontmatter = withoutDeclarations(
+            model.extraFrontmatter,
+            dead.map((d) => d.name)
+          );
+          droppedRef.current = dead.map((d) => d.name);
+        }
         return model;
       }, true);
+      if (droppedRef.current?.length) {
+        const names = droppedRef.current;
+        droppedRef.current = null;
+        showToast(
+          `Also removed ${names.map((n) => `\`${n}\``).join(', ')} from the frontmatter — nothing was reading ${names.length === 1 ? 'it' : 'them'} any more.`,
+          'info'
+        );
+      }
       // Only the selection that just vanished moves — deleting some other row
       // (navigator menu, canvas) leaves what you were working on alone.
       setSelectedId((id) => (id === nodeId ? nextId : id));
@@ -1749,6 +1779,13 @@ export default function App() {
         // The loop variables this subtree may reference; pasting somewhere
         // they don't exist has to drop those bindings.
         vars: loopVarsAt(state.model.nodes, nodeId),
+        // And the code behind it. A `<Card options={jobs}/>` is not just its
+        // markup: `jobs` is a const on the page it was copied from, and pasted
+        // into another page it names nothing at all. Taken now rather than at
+        // paste time, because by then this page may not even be open.
+        frontmatter: state.model.extraFrontmatter || '',
+        imports: (state.model.imports || []).map((i) => ({ name: i.name, path: i.path })),
+        pagePath: pageStateRef.current.currentPage?.path || null,
       };
       showToast(`Copied ${node.name || 'text'}`, 'success');
     },
@@ -1786,19 +1823,47 @@ export default function App() {
     const state = pageStateRef.current.pageState;
     if (!clip || !state?.editable) return;
 
-    const names = new Set();
-    (function walk(n) {
-      if (n.kind === 'component' && n.name) names.add(n.name);
-      if (Array.isArray(n.children)) n.children.forEach(walk);
-    })(clip.node);
-    const missing = [...names].filter(
-      (nm) => !state.model.imports.some((i) => i.name === nm)
-    );
+    // Everything the subtree reads: the components it renders and every name in
+    // the code hanging off it — `options={jobs}`, a loop's `posts.map`, a
+    // condition's test.
+    const names = namesUsedIn([clip.node]);
+    const knows = (nm) =>
+      state.model.imports.some((i) => i.name === nm) ||
+      new RegExp(`\\b${nm.replace(/\$/g, '\\$')}\\b`).test(state.model.extraFrontmatter || '');
+    const missing = [...names].filter((nm) => !knows(nm));
+    // A component this project has is imported from where it actually lives,
+    // whatever the page it was copied from called it.
     const resolved = [];
+    const byScan = new Set();
     for (const nm of missing) {
-      const target =
-        insertables.find((c) => c.name === nm);
-      if (target) resolved.push({ name: nm, paths: await resolveImportPath(target.path) });
+      const target = insertables.find((c) => c.name === nm);
+      if (target) {
+        byScan.add(nm);
+        resolved.push({ name: nm, paths: await resolveImportPath(target.path) });
+      }
+    }
+
+    // And what is left is the page's own code: an import of something that is
+    // not a component (an image, `getCollection`), or a `const` it declared.
+    // Both come across, and a declaration brings whatever it reads in turn.
+    const carried = neededFrontmatter({
+      names: missing.filter((nm) => !byScan.has(nm)),
+      frontmatter: clip.frontmatter || '',
+      imports: clip.imports || [],
+      has: knows,
+    });
+    const carriedImports = [];
+    for (const imp of carried.imports) {
+      // A relative path means something different from another page's folder.
+      const rebased =
+        clip.pagePath && String(imp.path || '').startsWith('.')
+          ? await window.avb.rebaseImport({
+              fromPagePath: clip.pagePath,
+              toPagePath: pageStateRef.current.currentPage?.path,
+              spec: imp.path,
+            })
+          : { path: imp.path };
+      carriedImports.push({ name: imp.name, path: rebased?.path || imp.path });
     }
 
     const clone = cloneWithNewIds(clip.node);
@@ -1816,6 +1881,12 @@ export default function App() {
         if (!model.imports.some((i) => i.name === r.name)) {
           model.imports.push({ name: r.name, path: chooseImportPath(model, r.paths) });
         }
+      }
+      for (const imp of carriedImports) {
+        if (!model.imports.some((i) => i.name === imp.name)) model.imports.push(imp);
+      }
+      if (carried.statements.length) {
+        model.extraFrontmatter = withStatements(model.extraFrontmatter, carried.statements);
       }
       if (selId) {
         const sel = findNodeById(model.nodes, selId);
@@ -1850,7 +1921,14 @@ export default function App() {
       return model;
     }, true);
     setSelectedId(clone.id);
-  }, [mutateModel, scan, resolveImportPath]);
+    const brought = [...carriedImports.map((i) => i.name), ...carried.statements.map((s) => s.name)];
+    if (brought.length) {
+      showToast(
+        `Brought ${brought.map((n) => `\`${n}\``).join(', ')} across from the page it was copied from.`,
+        'info'
+      );
+    }
+  }, [mutateModel, insertables, resolveImportPath, showToast]);
 
   // ----------------------------------------------------------------
   // Insert palette (⌘F / ⌘E) — quick-add components, tags, loops, …
