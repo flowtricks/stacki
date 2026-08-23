@@ -1,19 +1,71 @@
 // An array a list can edit.
 //
 // `options={["Designer", "Developer"]}` is a list of things, and a list of
-// things is a list of rows: drag one to reorder, click one to change it, press
-// the bin to drop it. That only works while every item is a value a row can
-// SHOW — a word or a number. `[...defaults, other]`, `[{ value, label }]`, a
-// name standing for a list somewhere else: those are programs, and a row that
+// things is a list of rows: drag one to reorder, click one to open it, press
+// the bin to drop it. An item can be a word, a number, or an object with a
+// field or two — `{ value: "us", label: "United States" }` — which is a row
+// with several things in it and a popup to edit them in.
+//
+// That only works while every value is one a field can SHOW. `[...defaults,
+// other]`, `[getOptions()]`, a name standing for a list somewhere else, an
+// object with another object inside it: those are programs, and a row that
 // pretended otherwise would lose what it could not draw.
 //
 // So this reads an array literal and answers with its items, or with null,
 // which is the field's cue to stay in the code editor.
 
-/** A quoted string, a number, or nothing this can show. */
+// `{ value: "a", label: "A" }` — an object whose every value is a word or a
+// number. That is a thing with several fields, which a row can name and a popup
+// can edit; an object with a call or another object inside it is not.
+function objectFrom(src) {
+  const body = src.trim().slice(1, -1);
+  const parts = splitTop(body);
+  if (!parts) return null;
+  const fields = [];
+  for (const [i, part] of parts.entries()) {
+    if (!part.trim()) {
+      if (i === parts.length - 1) continue; // a trailing comma
+      return null;
+    }
+    const colon = topColon(part);
+    if (colon === -1) return null; // shorthand `{ value }` names something else
+    const rawKey = part.slice(0, colon).trim();
+    const key = /^(['"`])(.*)\1$/.test(rawKey) ? rawKey.slice(1, -1) : rawKey;
+    const keyQuote = rawKey[0] === '"' || rawKey[0] === "'" ? rawKey[0] : null;
+    if (!/^[A-Za-z_$][\w$]*$/.test(key)) return null;
+    const value = itemFrom(part.slice(colon + 1));
+    // A field holds a word or a number. An object inside an object is a shape
+    // with no depth of fields to show it in, and the popup would have nowhere
+    // to put it.
+    if (!value || value.fields) return null;
+    fields.push({ key, keyQuote, text: value.text, quote: value.quote });
+  }
+  return fields.length ? { fields } : null;
+}
+
+/** The first colon that separates a key from its value, at the top level. */
+function topColon(part) {
+  let depth = 0;
+  for (let i = 0; i < part.length; i++) {
+    const c = part[i];
+    if (c === '"' || c === "'" || c === '`') {
+      const quote = c;
+      i++;
+      while (i < part.length && part[i] !== quote) i += part[i] === '\\' ? 2 : 1;
+      continue;
+    }
+    if (c === '[' || c === '(' || c === '{') depth++;
+    else if (c === ']' || c === ')' || c === '}') depth--;
+    else if (c === ':' && depth === 0) return i;
+  }
+  return -1;
+}
+
+/** A quoted string, a number, an object of those, or nothing this can show. */
 function itemFrom(src) {
   const text = src.trim();
   if (!text) return null;
+  if (text[0] === '{' && text[text.length - 1] === '}') return objectFrom(text);
   const quote = text[0];
   if (quote === '"' || quote === "'" || quote === '`') {
     if (text.length < 2 || text[text.length - 1] !== quote) return null;
@@ -63,12 +115,14 @@ function splitTop(body) {
 
 /**
  * The items of a simple array literal, or null when the value is anything else
- * — including a name, an array with a spread or an object in it, or no value at
- * all. An empty array is an empty list, which is not the same as null: one is a
- * list with nothing in it, the other is not a list.
+ * — a name, an array with a spread or a call in it, or no value at all. An
+ * empty array is an empty list, which is not the same as null: one is a list
+ * with nothing in it, the other is not a list.
  *
  * @param {string} src
- * @returns {{text: string, quote: string|null}[] | null}
+ * @returns {({text: string, quote: string|null}
+ *          | {fields: {key: string, keyQuote: string|null, text: string, quote: string|null}[]})[]
+ *          | null}
  */
 export function arrayItems(src) {
   const text = String(src ?? '').trim();
@@ -108,8 +162,51 @@ function quoted(item, fallback) {
  */
 export function arrayText(items) {
   const list = items || [];
-  const fallback = list.find((i) => i.quote)?.quote || '"';
-  return `[${list.map((i) => (i.quote === null ? String(i.text) : quoted(i, fallback))).join(', ')}]`;
+  const fallback =
+    list.find((i) => i.quote)?.quote ||
+    list.flatMap((i) => i.fields || []).find((f) => f.quote)?.quote ||
+    '"';
+  const one = (item) => {
+    if (item.fields) {
+      const inner = item.fields
+        .map((f) => `${f.keyQuote ? `${f.keyQuote}${f.key}${f.keyQuote}` : f.key}: ${
+          f.quote === null ? String(f.text) : quoted(f, fallback)
+        }`)
+        .join(', ');
+      return `{ ${inner} }`;
+    }
+    return item.quote === null ? String(item.text) : quoted(item, fallback);
+  };
+  return `[${list.map(one).join(', ')}]`;
+}
+
+// What a row calls an item. An object is named by the field a person would read
+// it by — its label, its name, its title — and falls back to the first field it
+// has, because a row with nothing written on it is a row nobody can aim at.
+const NAMES = ['label', 'name', 'title', 'text', 'value'];
+export function itemLabel(item) {
+  if (!item) return '';
+  if (!item.fields) return String(item.text);
+  for (const want of NAMES) {
+    const field = item.fields.find((f) => f.key === want && String(f.text).trim());
+    if (field) return String(field.text);
+  }
+  return String(item.fields[0]?.text ?? '');
+}
+
+/**
+ * An empty item shaped like the ones already in the list: the same fields for a
+ * list of objects, a plain word for a list of words. A list of objects that
+ * offered a bare word as its next item would write an array the component
+ * cannot read.
+ */
+export function blankLike(items) {
+  const shape = (items || []).find((i) => i.fields);
+  const quote = (items || []).find((i) => i.quote)?.quote || '"';
+  if (!shape) return { text: '', quote };
+  return {
+    fields: shape.fields.map((f) => ({ key: f.key, keyQuote: f.keyQuote, text: '', quote: f.quote ?? quote })),
+  };
 }
 
 /**

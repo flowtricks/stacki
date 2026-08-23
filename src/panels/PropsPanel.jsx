@@ -3731,7 +3731,7 @@ function PropField({
         <ListField
           value={str}
           placeholder={placeholderFor(field)}
-          onChange={(text) => onChange({ type: 'expr', value: text }, true)}
+          onChange={(text, immediate) => onChange({ type: 'expr', value: text }, immediate)}
         />
       </div>
     );

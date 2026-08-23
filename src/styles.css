@@ -653,6 +653,9 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
   flex-shrink: 0;
 }
 .list-field-row:hover .list-field-grip { opacity: 1; }
+/* A button, so `justify-content: center` and the filled background come with
+   it from the base rule — neither of which a row of text wants. The row draws
+   its own hover; a second one inside it reads as a control inside a control. */
 .list-field-text {
   flex: 1;
   min-width: 0;
@@ -660,20 +663,37 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
   border: 0;
   padding: 0 4px;
   height: 100%;
+  justify-content: flex-start;
   text-align: left;
   color: var(--text);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: text;
+  display: block;
+  line-height: 30px;
 }
-.list-field-input {
-  flex: 1;
-  min-width: 0;
-  height: 22px;
+.list-field-text:hover { background: none; }
+.list-field-blank { color: var(--text-faint); }
+.list-field-row.is-open { background: var(--bg-hover); }
+
+/* One item's fields, in the same box the attribute editor uses. */
+.list-item-editor { padding-bottom: 8px; }
+.list-item-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
   font-size: 12px;
 }
+.list-item-field > span {
+  width: 74px;
+  flex-shrink: 0;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.list-item-field > input { flex: 1; min-width: 0; }
 .list-field-remove {
   opacity: 0;
   padding: 3px;

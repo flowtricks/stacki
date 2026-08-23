@@ -3,9 +3,13 @@
 //   node test/list-field.js
 //
 // `options={["Designer", "Developer"]}` is a list of things, so the field is a
-// list of rows: drag one to reorder, click one to change it, the bin to drop
-// it, the last row to add one. Each of those writes the WHOLE array back,
-// because that is what the file holds — one value, not a list of values.
+// list of rows: drag one to reorder, the bin to drop one, the last row to add
+// one, and a click to open one. Opening is a popup, because an item is not
+// always a single thing — `{ value: "us", label: "United States" }` is a row
+// with two fields, and there is no room beside the row's name for either.
+//
+// Each of those writes the WHOLE array back, because that is what the file
+// holds — one value, not a list of values.
 //
 // The code editor is still one press of `{}` away, and it is the only field
 // that can hold an array this cannot show: a spread, an object per item, a name
@@ -78,39 +82,54 @@ const check = (what, condition, detail) => {
     document.getElementById('root').appendChild(host);
     const root = createRoot(host);
     const wrote = [];
-    const render = async (v) => {
+    // The app's own second argument: false while a value is being typed (the
+    // canvas keeps up), true for the edit itself (one undo step).
+    const immediate = [];
+    // The field is controlled — the panel hands it back what was written, and a
+    // second edit has to build on the first. A harness that kept showing the
+    // original value would test a field nothing is listening to.
+    let current = value;
+    const render = async () => {
       await act(async () => {
         root.render(
           React.createElement(ListField, {
-            value: v,
+            value: current,
             placeholder: '',
-            onChange: (text) => wrote.push(text),
+            onChange: (text, now) => { wrote.push(text); immediate.push(now); current = text },
           })
         );
       });
     };
-    await render(value);
+    await render();
     const rows = () => [...host.querySelectorAll('.list-field-row')];
     const labels = () => [...host.querySelectorAll('.list-field-text')].map((b) => b.textContent);
     const press = async (el) => {
       await act(async () => {
         el.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
       });
+      await render();
     };
-    const typeInto = async (text) => {
-      const input = host.querySelector('.list-field-input');
+    // The popup, and its fields by the name the file gives them.
+    const popup = () => document.querySelector('.list-item-editor');
+    const fieldNames = () => [...document.querySelectorAll('.list-item-field > span')].map((s) => s.textContent);
+    const typeInto = async (text, at = 0) => {
+      const input = document.querySelectorAll('.list-item-editor input')[at];
       if (!input) return false;
       await act(async () => {
         const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
         setter.call(input, text);
         input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
       });
-      // React listens for focusout, not blur: the one that bubbles is the one
-      // it can delegate.
-      await act(async () => {
-        input.dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true }));
-      });
+      await render();
       return true;
+    };
+    // Anywhere else: the popup closes on a press outside it, which is when the
+    // edit lands.
+    const clickAway = async () => {
+      await act(async () => {
+        document.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true }));
+      });
+      await render();
     };
     // A drag from one row to a point inside another: the y decides which gap.
     const dragTo = async (from, to, half) => {
@@ -136,14 +155,18 @@ const check = (what, condition, detail) => {
     return {
       host,
       wrote,
+      immediate,
       rows,
       labels,
       render,
       press,
       typeInto,
+      popup,
+      fieldNames,
+      clickAway,
       dragTo,
       add: () => press(host.querySelector('.list-field-add')),
-      input: () => host.querySelector('.list-field-input'),
+      input: () => document.querySelector('.list-item-editor input'),
       done: async () => { await act(async () => root.unmount()) },
     };
   };
@@ -156,33 +179,47 @@ const check = (what, condition, detail) => {
     await m.done();
   }
 
-  // --- clicking one to change it ------------------------------------------------------
+  // --- clicking one to open it ------------------------------------------------------
   {
     const m = await mount('["Designer", "Developer"]');
     await m.press(m.host.querySelectorAll('.list-field-text')[1]);
-    check('a row opens for editing', !!m.input(), m.host.innerHTML.slice(0, 200));
+    check('a row opens a popup', !!m.popup(), m.host.innerHTML.slice(0, 200));
+    check('with one field, called what a word is', m.fieldNames().join() === 'value', m.fieldNames().join());
     await m.typeInto('Engineer');
-    check('and the whole array is written back', m.wrote.pop() === '["Designer", "Engineer"]', JSON.stringify(m.wrote));
+    check('typing shows on the canvas as it goes', m.wrote.pop() === '["Designer", "Engineer"]', JSON.stringify(m.wrote));
+    check('but not as the edit yet', m.immediate.pop() === false, JSON.stringify(m.immediate));
+    await m.clickAway();
+    check('closing it is the edit', m.immediate.pop() === true, JSON.stringify(m.immediate));
+    check('and the popup is gone', !m.popup());
     await m.done();
   }
 
-  // Nothing is written for an edit that changed nothing — clicking a row and
-  // clicking away should not touch the file.
+  // An item with several fields is what the popup is for: a row cannot show
+  // two things beside its own name.
   {
-    const m = await mount('["Designer"]');
-    await m.press(m.host.querySelector('.list-field-text'));
-    await m.typeInto('Designer');
-    check('an edit that changed nothing writes nothing', m.wrote.length === 0, JSON.stringify(m.wrote));
+    const m = await mount('[{ value: "us", label: "United States" }, { value: "ca", label: "Canada" }]');
+    check('a row per object', m.rows().length === 2, String(m.rows().length));
+    check('named by the field a person reads', m.labels().join() === 'United States,Canada', m.labels().join());
+    await m.press(m.host.querySelectorAll('.list-field-text')[1]);
+    check('and its fields are the object’s own', m.fieldNames().join() === 'value,label', m.fieldNames().join());
+    await m.typeInto('mx', 0);
+    await m.typeInto('Mexico', 1);
+    check(
+      'each one writes its own key',
+      m.wrote.pop() === '[{ value: "us", label: "United States" }, { value: "mx", label: "Mexico" }]',
+      JSON.stringify(m.wrote.slice(-2))
+    );
     await m.done();
   }
 
-  // An item emptied is an item removed: `""` in the array would put an empty
-  // option on the page.
+  // An item emptied is an item left empty — a word with nothing in it still
+  // takes its place in the array, and the bin is how a row is removed.
   {
     const m = await mount('["Designer", "Developer"]');
     await m.press(m.host.querySelector('.list-field-text'));
-    await m.typeInto('  ');
-    check('emptying a row removes it', m.wrote.pop() === '["Developer"]', JSON.stringify(m.wrote));
+    await m.typeInto('');
+    check('an emptied word is written as one', m.wrote.pop() === '["", "Developer"]', JSON.stringify(m.wrote));
+    await m.clickAway();
     await m.done();
   }
 
@@ -190,10 +227,12 @@ const check = (what, condition, detail) => {
   {
     const m = await mount('["Designer"]');
     await m.add();
-    check('the new row is waiting for a word', !!m.input(), m.host.innerHTML.slice(0, 200));
+    check('the new item opens a popup', !!m.popup(), m.host.innerHTML.slice(0, 200));
     check('and nothing is written yet', m.wrote.length === 0, JSON.stringify(m.wrote));
     await m.typeInto('Producer');
-    check('the word is added to the list', m.wrote.pop() === '["Designer", "Producer"]', JSON.stringify(m.wrote));
+    check('still nothing while it is being typed', m.wrote.length === 0, JSON.stringify(m.wrote));
+    await m.clickAway();
+    check('the word is added when the popup closes', m.wrote.pop() === '["Designer", "Producer"]', JSON.stringify(m.wrote));
     await m.done();
   }
 
@@ -203,7 +242,25 @@ const check = (what, condition, detail) => {
     check('an unset prop is an empty list', m.rows().length === 0, String(m.rows().length));
     await m.add();
     await m.typeInto('First');
+    await m.clickAway();
     check('and the first item makes the array', m.wrote.pop() === '["First"]', JSON.stringify(m.wrote));
+    await m.done();
+  }
+
+  // A new item in a list of objects has the same fields, so what it writes is
+  // an item the component can read.
+  {
+    const m = await mount('[{ value: "us", label: "United States" }]');
+    await m.add();
+    check('a new item is shaped like the list', m.fieldNames().join() === 'value,label', m.fieldNames().join());
+    await m.typeInto('ca', 0);
+    await m.typeInto('Canada', 1);
+    await m.clickAway();
+    check(
+      'and lands as an object',
+      m.wrote.pop() === '[{ value: "us", label: "United States" }, { value: "ca", label: "Canada" }]',
+      JSON.stringify(m.wrote)
+    );
     await m.done();
   }
 
@@ -211,7 +268,7 @@ const check = (what, condition, detail) => {
   {
     const m = await mount('["Designer"]');
     await m.add();
-    await m.typeInto('');
+    await m.clickAway();
     check('an empty new row writes nothing', m.wrote.length === 0, JSON.stringify(m.wrote));
     await m.done();
   }
@@ -249,6 +306,7 @@ const check = (what, condition, detail) => {
     const m = await mount("['a', 'b']");
     await m.add();
     await m.typeInto('c');
+    await m.clickAway();
     check(
       'a project that writes single quotes keeps them',
       m.wrote.pop() === "['a', 'b', 'c']",

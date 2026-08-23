@@ -36,7 +36,9 @@ const check = (what, condition, detail) => {
     platform: 'node',
     logLevel: 'silent',
   });
-  const { arrayItems, arrayText, moveItem } = await import(`file://${out}?v=${Date.now()}`);
+  const { arrayItems, arrayText, blankLike, itemLabel, moveItem } = await import(
+    `file://${out}?v=${Date.now()}`
+  );
 
   const texts = (src) => (arrayItems(src) || []).map((i) => i.text);
 
@@ -60,7 +62,9 @@ const check = (what, condition, detail) => {
   const refuses = (src, why) => check(`refuses ${why}`, arrayItems(src) === null, JSON.stringify(arrayItems(src)));
   refuses('jobs', 'a name standing for a list');
   refuses('[...defaults, "other"]', 'a spread');
-  refuses('[{ value: "a", label: "A" }]', 'an object per item');
+  refuses('[{ value, label }]', 'an object that names things instead of saying them');
+  refuses('[{ value: "a", label: pretty(a) }]', 'an object with a call in it');
+  refuses('[{ value: { deep: 1 } }]', 'an object inside an object');
   refuses('["a", other]', 'an item that is a name');
   refuses('[items.map((i) => i.name)]', 'a call');
   refuses('[`${prefix} one`]', 'a template with a hole in it');
@@ -69,6 +73,51 @@ const check = (what, condition, detail) => {
   refuses('["a"', 'an unclosed array');
   refuses('', 'nothing at all');
   refuses('"a"', 'a value that is not an array');
+
+  // --- an item with more than one thing in it ---------------------------------------
+  //
+  // `{ value: "us", label: "United States" }` is a row with two fields, which is
+  // what the popup is for.
+  {
+    const items = arrayItems('[{ value: "us", label: "United States" }, { value: "ca", label: "Canada" }]');
+    check('an object per item is a list of rows', items?.length === 2, JSON.stringify(items));
+    check(
+      'with its fields, in the order they were written',
+      items?.[0].fields.map((f) => `${f.key}=${f.text}`).join() === 'value=us,label=United States',
+      JSON.stringify(items?.[0])
+    );
+    check('a row is named by the field a person reads', itemLabel(items[0]) === 'United States', itemLabel(items[0]));
+    check(
+      'and it goes back as it came',
+      arrayText(items) === '[{ value: "us", label: "United States" }, { value: "ca", label: "Canada" }]',
+      arrayText(items)
+    );
+  }
+  {
+    const items = arrayItems("[{ 'value': 1, name: 'One' }]");
+    check('a quoted key keeps its quotes', arrayText(items) === "[{ 'value': 1, name: 'One' }]", arrayText(items));
+    check('and a number value stays a number', items[0].fields[0].quote === null, JSON.stringify(items[0]));
+  }
+  check(
+    'an object with nothing to read by falls back to its first field',
+    itemLabel(arrayItems('[{ id: "x-1" }]')[0]) === 'x-1',
+    itemLabel(arrayItems('[{ id: "x-1" }]')[0])
+  );
+  check('a word names itself', itemLabel({ text: 'Designer', quote: '"' }) === 'Designer');
+
+  // The next item is shaped like the ones already there: a list of objects that
+  // offered a bare word would write an array the component cannot read.
+  {
+    const shaped = blankLike(arrayItems('[{ value: "us", label: "United States" }]'));
+    check(
+      'a new item takes the shape of the list',
+      shaped.fields?.map((f) => f.key).join() === 'value,label',
+      JSON.stringify(shaped)
+    );
+    check('with nothing in it yet', shaped.fields.every((f) => f.text === ''), JSON.stringify(shaped));
+    check('and in a list of words it is a word', blankLike(arrayItems('["a"]')).text === '', JSON.stringify(blankLike(arrayItems('["a"]'))));
+    check('an empty list starts with a word', blankLike([]).text === '', JSON.stringify(blankLike([])));
+  }
 
   // --- putting it back ---------------------------------------------------------------
   check('a list comes back as it went in', arrayText(arrayItems('["a", "b"]')) === '["a", "b"]');
