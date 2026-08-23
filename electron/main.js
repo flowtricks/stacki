@@ -1993,6 +1993,19 @@ ipcMain.handle('assets:rename', async (_e, { projectPath, rel, newName }) => {
   return { ok: true };
 });
 
+// To the system's bin, not to nothing. An asset is somebody's photograph as
+// often as it is a placeholder, references to it live in files this does not
+// read, and the app has no copy of it — so "gone" has to mean somewhere they
+// can get it back from without us.
+ipcMain.handle('assets:delete', async (_e, { projectPath, rel }) => {
+  const abs = assetAbs(projectPath, rel);
+  if (!fs.existsSync(abs)) return { ok: false };
+  markSelfWrite(abs);
+  await shell.trashItem(abs);
+  send('assets:changed', {});
+  return { ok: true };
+});
+
 // Text assets (css/js/json/svg/…) are editable in the floating code window.
 const MAX_EDITABLE_BYTES = 5 * 1024 * 1024;
 

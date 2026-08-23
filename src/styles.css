@@ -4567,7 +4567,37 @@ body > .embed-editor_provenance {
 .vars-section-menu.is-open { background: rgba(255, 255, 255, 0.09); color: var(--text); }
 
 /* The menu itself — portaled, so it is styled from here rather than inherited. */
-.vars-menu {
+/* The `⋯` menu (src/ui/MoreMenu.jsx), wherever it is opened from. The old
+   .vars-* names are kept beside the new ones: the variables sheet had this
+   first, and its own rows are still styled by them. */
+.more-menu-item:disabled { opacity: 0.4; cursor: default; }
+
+/* On a tile, and only while the pointer is on it — an asset grid is a wall of
+   pictures, and a button in the corner of every one of them is a wall of
+   buttons. Focus shows it too, so it can be reached without a pointer. */
+.asset-tile { position: relative; }
+.asset-tile-menu {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  background: rgba(20, 20, 20, 0.72);
+  border: 1px solid var(--border);
+  color: var(--text);
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.asset-tile:hover .asset-tile-menu,
+.asset-tile-menu:focus-visible,
+.asset-tile-menu.is-open { opacity: 1; }
+.asset-tile-menu:hover:not(:disabled) { background: rgba(20, 20, 20, 0.9); }
+
+.vars-menu,
+.more-menu {
   z-index: 60;
   min-width: 150px;
   padding: 4px;
@@ -4576,7 +4606,8 @@ body > .embed-editor_provenance {
   background: var(--panel-raised, #2a2a2a);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
-.vars-menu-item {
+.vars-menu-item,
+.more-menu-item {
   display: flex;
   align-items: center;
   /* The app centres bare buttons (see the `button` rule at the top of this
@@ -4594,9 +4625,12 @@ body > .embed-editor_provenance {
   text-align: left;
   cursor: pointer;
 }
-.vars-menu-item:hover:not(:disabled) { background: rgba(255, 255, 255, 0.09); }
-.vars-menu-item > svg { color: var(--text-dim); flex: none; }
-.vars-menu-item.is-danger:hover:not(:disabled) { background: rgba(255, 90, 90, 0.16); color: #ff9b9b; }
+.vars-menu-item:hover:not(:disabled),
+.more-menu-item:hover:not(:disabled) { background: rgba(255, 255, 255, 0.09); }
+.vars-menu-item > svg,
+.more-menu-item > svg { color: var(--text-dim); flex: none; }
+.vars-menu-item.is-danger:hover:not(:disabled),
+.more-menu-item.is-danger:hover:not(:disabled) { background: rgba(255, 90, 90, 0.16); color: #ff9b9b; }
 .vars-menu-item.is-danger:hover > svg { color: #ff9b9b; }
 /* A row is a grid of its own — a label row in the fixed stack, a value row in
    the scrolling one — with fixed tracks, so the two stacks line up with each

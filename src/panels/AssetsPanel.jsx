@@ -6,9 +6,12 @@ import {
   ChevronRightIcon,
   FileIcon,
   CodeIcon,
+  TrashIcon,
 } from '../ui/Icons.jsx';
 
 import AssetThumb, { TEXT_EXT } from '../ui/AssetThumb.jsx';
+import MoreMenu from '../ui/MoreMenu.jsx';
+import { confirmDialog } from '../ui/ConfirmDialog.jsx';
 
 const parentOf = (rel) => (rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '');
 
@@ -181,6 +184,29 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
         undo: () => rename(toRel, entry.name),
         redo: () => rename(entry.rel, clean),
       });
+    });
+  };
+
+  // --- Delete ----------------------------------------------------------
+
+  // To the system's bin, so it can be got back — which is the only reason this
+  // is offered at all. An asset is somebody's photograph as often as it is a
+  // placeholder; the app holds no copy of it and cannot put it back itself,
+  // and the pages that point at it are files this panel never reads. So it
+  // asks first, and says where the file went.
+  const remove = (file) => {
+    act(async () => {
+      const yes = await confirmDialog({
+        title: `Delete ${file.name}?`,
+        body:
+          'The file moves to your Bin. Anything on the site still pointing at ' +
+          '/' + file.rel + ' will stop finding it.',
+        confirmLabel: 'Delete',
+        danger: true,
+      });
+      if (!yes) return;
+      const result = await window.avb.deleteAsset({ projectPath: project.path, rel: file.rel });
+      if (result?.ok === false) showToast(`${file.name} was already gone.`, 'error');
     });
   };
 
@@ -386,6 +412,24 @@ export default function AssetsPanel({ project, showToast, onOpenFile, pick, onPi
                 <div className="asset-name" onDoubleClick={() => setRenaming(file.rel)}>
                   {file.name}
                 </div>
+              )}
+              {/* Only while the pointer is on the tile, and never while
+                  picking: choosing an asset for a prop is the whole gesture
+                  then, and a menu in the corner of it is a way to lose the file
+                  instead. */}
+              {!pick && (
+                <MoreMenu
+                  className="asset-tile-menu"
+                  title={`Options for ${file.name}`}
+                  items={[
+                    {
+                      label: 'Delete',
+                      icon: <TrashIcon size={13} />,
+                      danger: true,
+                      onSelect: () => remove(file),
+                    },
+                  ]}
+                />
               )}
             </div>
             );

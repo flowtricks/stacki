@@ -897,7 +897,7 @@ const STYLESHEET = `/* =========================================================
         dots.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
         await settle(20);
       });
-      return [...dom.window.document.querySelectorAll('.vars-menu-item')];
+      return [...dom.window.document.querySelectorAll('.more-menu-item')];
     };
     // A missing menu or field is a failure to report rather than a stack to read:
     // the checks after it are worth more than the crash.
@@ -966,13 +966,14 @@ const STYLESHEET = `/* =========================================================
         dots.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
         await settle(20);
       });
-      return [...dom.window.document.querySelectorAll('.vars-menu-item')];
+      return [...dom.window.document.querySelectorAll('.more-menu-item')];
     };
 
     const was = fs.readFileSync(file, 'utf8');
     const before = commands.length;
     const items = await openMenu('Curves');
-    if (items) {
+    check('the group menu has rows in it', items?.length >= 3, `${items?.length ?? 0} rows`);
+    if (items?.length >= 3) {
       await act(async () => {
         items[2].dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
         await settle(80);

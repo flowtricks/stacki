@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { CloseIcon, CheckIcon, CopyIcon, DragIcon, EaseIcon, MoreIcon, PencilIcon, PlusIcon, TrashIcon } from '../ui/Icons.jsx';
 import useListReorder from '../ui/useListReorder.js';
 import useDismiss from '../ui/useDismiss.js';
+import MoreMenu from '../ui/MoreMenu.jsx';
 import VariableTypeIcon from '../ui/VariableTypeIcon.jsx';
 import FluidBadge from '../ui/FluidBadge.jsx';
 import { fluidCheck, resolveValue } from '../fluid.js';
@@ -816,59 +817,20 @@ function stemOf(block) {
 //
 // Portaled and positioned against the button, because the sheet scrolls in both
 // directions and a menu inside it would be cropped by whichever edge it met.
+// The group's own `⋯`, from the app's one menu (src/ui/MoreMenu.jsx). This
+// panel had the first one; the assets panel wanted the same thing, and two of
+// them is one too many.
 function SectionMenu({ onRename, onDuplicate, onDelete }) {
-  const [open, setOpen] = useState(false);
-  const [box, setBox] = useState(null);
-  const buttonRef = useRef(null);
-  const menuRef = useRef(null);
-  useDismiss(menuRef, open, () => setOpen(false));
-
-  const show = () => {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const place = popupBox(rect, 130, window.innerHeight);
-    setBox({ left: rect.right - 150, ...place });
-    setOpen(true);
-  };
-  const run = (action) => () => { setOpen(false); action?.(); };
-
   return (
-    <>
-      <button
-        ref={buttonRef}
-        type="button"
-        className={`vars-section-menu ${open ? 'is-open' : ''}`}
-        title="Group options"
-        aria-label="Group options"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={(e) => { e.stopPropagation(); if (open) setOpen(false); else show(); }}
-      >
-        <MoreIcon size={13} />
-      </button>
-      {open && box
-        ? createPortal(
-            <div
-              ref={menuRef}
-              className="vars-menu"
-              role="menu"
-              style={{ position: 'fixed', left: box.left, top: box.top, bottom: box.bottom, maxHeight: box.maxHeight }}
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <button type="button" role="menuitem" className="vars-menu-item" onClick={run(onRename)}>
-                <PencilIcon size={13} /> Rename
-              </button>
-              <button type="button" role="menuitem" className="vars-menu-item" onClick={run(onDuplicate)}>
-                <CopyIcon size={13} /> Duplicate
-              </button>
-              <button type="button" role="menuitem" className="vars-menu-item is-danger" onClick={run(onDelete)}>
-                <TrashIcon size={13} /> Delete
-              </button>
-            </div>,
-            document.body
-          )
-        : null}
-    </>
+    <MoreMenu
+      className="vars-section-menu"
+      title="Group options"
+      items={[
+        { label: 'Rename', icon: <PencilIcon size={13} />, onSelect: onRename },
+        { label: 'Duplicate', icon: <CopyIcon size={13} />, onSelect: onDuplicate },
+        { label: 'Delete', icon: <TrashIcon size={13} />, danger: true, onSelect: onDelete },
+      ]}
+    />
   );
 }
 

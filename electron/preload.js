@@ -1586,6 +1586,7 @@ contextBridge.exposeInMainWorld('avb', {
   uploadAssets: invoke('assets:upload'),
   moveAsset: invoke('assets:move'),
   renameAsset: invoke('assets:rename'),
+  deleteAsset: invoke('assets:delete'),
   mkdirAssets: invoke('assets:mkdir'),
   readAssetText: invoke('assets:readText'),
   writeAssetText: invoke('assets:writeText'),
