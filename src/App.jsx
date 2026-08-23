@@ -825,12 +825,18 @@ export default function App() {
     if (typeof window.avb.probeDevPage !== 'function' || typeof window.avb.onPageMaybeChanged !== 'function') {
       return undefined;
     }
+    // TEMP DIAGNOSTIC — remove.
+    const beacon = (what, extra = '') => { void fetch(`http://localhost:8932/${what}?t=${Date.now()}${extra}`).catch(() => {}); };
     const watch = createPreviewWatch({
-      probe: () => window.avb.probeDevPage(devUrl + (livePathRef.current || '/')),
-      onRecover: () => setRefreshKey((k) => k + 1),
+      probe: async () => {
+        const answer = await window.avb.probeDevPage(devUrl + (livePathRef.current || '/'));
+        beacon('probe', `&ok=${answer?.ok}&status=${answer?.status ?? ''}`);
+        return answer;
+      },
+      onRecover: () => { beacon('recover'); setRefreshKey((k) => k + 1); },
     });
     // Every write the app makes, plus every change made outside it.
-    const offWrite = window.avb.onPageMaybeChanged(() => watch.poke());
+    const offWrite = window.avb.onPageMaybeChanged(() => { beacon('write'); watch.poke(); });
     return () => {
       offWrite();
       watch.stop();
@@ -2184,11 +2190,32 @@ export default function App() {
       );
     };
     const offs = [
+      // ⌘Z is a menu accelerator, so the key never reaches the page: whatever
+      // this decides is the only undo there is.
+      //
+      // Typing has its own, and the field is the only thing that knows what was
+      // typed — a rename half-finished in a text box is not an entry on the
+      // app's stack. So a field gets its own undo handed back to it.
+      //
+      // Everything else is the app's. It used to run only while a page was open
+      // and the CMS was closed, which left every view that ISN'T a page unable
+      // to undo anything it had recorded: the variables panel, the assets
+      // panel, the CMS itself. A command carries its own inverse and needs no
+      // page — and a snapshot without one is dropped rather than applied, which
+      // undo already does.
       window.avb.onMenu('undo', () => {
-        if (pageStateRef.current.pageState && !cmsOpenRef.current) undo();
+        if (inEditable()) {
+          window.avb.nativeUndo?.();
+          return;
+        }
+        undo();
       }),
       window.avb.onMenu('redo', () => {
-        if (pageStateRef.current.pageState && !cmsOpenRef.current) redo();
+        if (inEditable()) {
+          window.avb.nativeRedo?.();
+          return;
+        }
+        redo();
       }),
       window.avb.onMenu('copy', () => {
         if (inEditable() || String(window.getSelection() || '')) {

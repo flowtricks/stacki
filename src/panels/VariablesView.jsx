@@ -375,50 +375,80 @@ export default function VariablesView({ project, selected, hidden, onClose, show
     },
     [project.path]
   );
-  const putFileText = useCallback(
-    async (rel, css) => {
-      await bridge('writeStyleFile', { filePath: `${project.path}/${rel}`, css });
+  const putFiles = useCallback(
+    async (texts) => {
+      for (const [rel, css] of Object.entries(texts)) {
+        if (css == null) continue;
+        await bridge('writeStyleFile', { filePath: `${project.path}/${rel}`, css });
+      }
       await refresh();
     },
     [project.path, refresh]
   );
-  /** Run a one-file edit and put it on the undo stack. `run` returns false to skip. */
+  /**
+   * Run an edit and put it on the undo stack, as the text of the files it
+   * touched before and after. A rename reaches every file that mentions the
+   * name and a group can straddle two stylesheets, so the unit is a set of
+   * files rather than one — and reading them back is the only inverse that
+   * doesn't need a second implementation of the edit to run backwards.
+   *
+   * `run` returns false to skip. `coalesceKey` collapses a burst into one step:
+   * typing a value is one edit however many keystrokes it took.
+   */
   const writeWithUndo = useCallback(
-    async (rel, label, run) => {
-      const before = rel ? await fileText(rel) : null;
+    async (rels, label, run, coalesceKey = null) => {
+      const list = [...new Set((Array.isArray(rels) ? rels : [rels]).filter(Boolean))];
+      const read = async () =>
+        Object.fromEntries(await Promise.all(list.map(async (rel) => [rel, await fileText(rel)])));
+      const before = list.length ? await read() : {};
       const ok = await run();
-      if (ok === false || before == null) return;
-      const after = await fileText(rel);
-      if (after == null || after === before) return;
+      if (ok === false || !list.length) return;
+      const after = await read();
+      const changed = list.filter(
+        (rel) => before[rel] != null && after[rel] != null && before[rel] !== after[rel]
+      );
+      if (!changed.length) return;
+      const only = (texts) => Object.fromEntries(changed.map((rel) => [rel, texts[rel]]));
       onRecordUndo?.({
         label,
-        undo: () => putFileText(rel, before),
-        redo: () => putFileText(rel, after),
+        coalesceKey,
+        undo: () => putFiles(only(before)),
+        redo: () => putFiles(only(after)),
       });
     },
-    [fileText, putFileText, onRecordUndo]
+    [fileText, putFiles, onRecordUndo]
   );
 
   const save = useCallback(
     async (cell, value) => {
-      const result = await bridge('setCssVariable', {
-        projectPath: project.path,
-        file: cell.file,
-        valueStart: cell.valueStart,
-        valueEnd: cell.valueEnd,
-        expect: cell.value,
-        value,
-      });
-      if (!result.ok) {
-        showToast?.(result.error || 'Could not write that value.', 'error');
-        await refresh();
-        return;
-      }
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1200);
-      await refresh();
+      // One step per value, not per keystroke: the field writes as it is typed
+      // and the burst collapses on the key.
+      await writeWithUndo(
+        cell.file,
+        'the value',
+        async () => {
+          const result = await bridge('setCssVariable', {
+            projectPath: project.path,
+            file: cell.file,
+            valueStart: cell.valueStart,
+            valueEnd: cell.valueEnd,
+            expect: cell.value,
+            value,
+          });
+          if (!result.ok) {
+            showToast?.(result.error || 'Could not write that value.', 'error');
+            await refresh();
+            return false;
+          }
+          setSaved(true);
+          setTimeout(() => setSaved(false), 1200);
+          await refresh();
+          return true;
+        },
+        `var:${cell.file}:${cell.name}`
+      );
     },
-    [project.path, refresh, showToast]
+    [project.path, refresh, showToast, writeWithUndo]
   );
 
   // Dragging a row moves the declaration inside its rule — a row in a table of
@@ -431,7 +461,10 @@ export default function VariablesView({ project, selected, hidden, onClose, show
       if (!plan) return;
       if (plan.kind === 'rows') {
         if (!plan.moves.length) return;
-        await writeWithUndo(plan.moves[0].file, 'the move', async () => {
+        // Every file the plan names, not just the first: one name can be
+        // declared in two stylesheets, and putting back half of a move is
+        // worse than not putting it back at all.
+        await writeWithUndo(plan.moves.map((m) => m.file), 'the move', async () => {
           const result = await bridge('moveCssVariables', { projectPath: project.path, moves: plan.moves });
           if (!result.ok) showToast?.(result.error || 'Could not move that.', 'error');
           await refresh();
@@ -475,11 +508,16 @@ export default function VariablesView({ project, selected, hidden, onClose, show
         moves.push({ file: anchor.file, selector: anchor.selector, names, target: landing ? landing.name : null });
       }
       if (!moves.length) return;
-      const result = await bridge('moveCssVariables', { projectPath: project.path, moves });
-      if (!result.ok) showToast?.(result.error || 'Could not move that.', 'error');
-      await refresh();
+      // A group can be declared in more than one stylesheet, so the edit is
+      // whatever files its moves name.
+      await writeWithUndo(moves.map((m) => m.file), 'the group', async () => {
+        const result = await bridge('moveCssVariables', { projectPath: project.path, moves });
+        if (!result.ok) showToast?.(result.error || 'Could not move that.', 'error');
+        await refresh();
+        return result.ok;
+      });
     },
-    [project.path, refresh, showToast]
+    [project.path, refresh, showToast, writeWithUndo]
   );
 
   // Adding a variable to a group. What the name is depends on the shape of the
@@ -503,11 +541,14 @@ export default function VariablesView({ project, selected, hidden, onClose, show
         adds.push({ file: anchor.file, selector: anchor.selector, name, value: '', after: anchor.name });
       });
       if (!adds.length) return;
-      const result = await bridge('addCssVariables', { projectPath: project.path, adds });
-      if (!result.ok) showToast?.(result.error || 'Could not add that.', 'error');
-      await refresh();
+      await writeWithUndo(adds.map((a) => a.file), 'the variable', async () => {
+        const result = await bridge('addCssVariables', { projectPath: project.path, adds });
+        if (!result.ok) showToast?.(result.error || 'Could not add that.', 'error');
+        await refresh();
+        return result.ok;
+      });
     },
-    [project.path, refresh, showToast]
+    [project.path, refresh, showToast, writeWithUndo]
   );
 
   // Renaming a variable — or a group of them, which is the same thing done to

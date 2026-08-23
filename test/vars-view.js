@@ -991,6 +991,56 @@ const STYLESHEET = `/* =========================================================
     await act(async () => { await commands[commands.length - 1].undo(); await settle(60); });
     check('and undo puts it back once more', fs.readFileSync(file, 'utf8') === was);
 
+    // --- the edits that had no undo at all -----------------------------------
+    //
+    // Typing a value is the commonest thing anyone does in this panel, and it
+    // was the one thing that never reached the stack: ⌘Z in the variables sheet
+    // did nothing, whatever you had just changed.
+    {
+      const valueBefore = commands.length;
+      const wasFile = fs.readFileSync(file, 'utf8');
+      const cell = all('.var-cell').find((c) => c.querySelector('input.var-input')?.value === 'linear');
+      const rich = cell?.querySelector('.embed-editor_varconnect-editor');
+      if (!rich) {
+        check('there is a value field to type into', false, 'no rich editor over a value');
+      } else {
+        await act(async () => {
+          rich.textContent = 'ease-in';
+          rich.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+          await settle(20);
+          rich.dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true }));
+          await settle(80);
+        });
+        check('the value is written', fs.readFileSync(file, 'utf8').includes('ease-in'), fs.readFileSync(file, 'utf8').slice(0, 200));
+        check('and editing a value is recorded', commands.length > valueBefore, `${commands.length - valueBefore} commands`);
+        await act(async () => { await commands[commands.length - 1].undo(); await settle(60) });
+        check('undo puts the old value back', fs.readFileSync(file, 'utf8') === wasFile, fs.readFileSync(file, 'utf8').slice(0, 200));
+        await act(async () => { await commands[commands.length - 1].redo(); await settle(60) });
+        check('and redo writes it again', fs.readFileSync(file, 'utf8').includes('ease-in'));
+        await act(async () => { await commands[commands.length - 1].undo(); await settle(60) });
+      }
+    }
+
+    // Adding a variable, which was the other silent one.
+    {
+      const addBefore = commands.length;
+      const wasFile = fs.readFileSync(file, 'utf8');
+      // The row is a button until it is pressed, and a field after that.
+      const adder = all('.vars-add-btn')[0];
+      if (adder) {
+        await act(async () => {
+          adder.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+          await settle(20);
+        });
+        await typeInto(find('.vars-add-field input'), 'extra');
+        check('adding a variable is recorded', commands.length > addBefore, `${commands.length - addBefore} commands`);
+        await act(async () => { await commands[commands.length - 1].undo(); await settle(60) });
+        check('and undo takes it out again', fs.readFileSync(file, 'utf8') === wasFile, fs.readFileSync(file, 'utf8').slice(0, 300));
+      } else {
+        check('there is a way to add a variable', false, 'no add row on the sheet');
+      }
+    }
+
     // A rename reaches files this one does not, so its inverse is the rename
     // backwards rather than a file put back.
     const renameBefore = commands.length;

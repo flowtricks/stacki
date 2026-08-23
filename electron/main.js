@@ -329,6 +329,17 @@ ipcMain.handle('native:paste', () => {
   mainWindow?.webContents.paste();
   return { ok: true };
 });
+// Undo INSIDE a field. ⌘Z is a menu accelerator, so the key never reaches the
+// page and a text field's own undo never runs — this is the app handing it
+// back when that is what the shortcut meant.
+ipcMain.handle('native:undo', () => {
+  mainWindow?.webContents.undo();
+  return { ok: true };
+});
+ipcMain.handle('native:redo', () => {
+  mainWindow?.webContents.redo();
+  return { ok: true };
+});
 
 app.whenReady().then(() => {
   // Before the menu, which draws the sound item's tick from it.

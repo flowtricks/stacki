@@ -1793,4 +1793,6 @@ contextBridge.exposeInMainWorld('avb', {
   },
   nativeCopy: invoke('native:copy'),
   nativePaste: invoke('native:paste'),
+  nativeUndo: invoke('native:undo'),
+  nativeRedo: invoke('native:redo'),
 });
