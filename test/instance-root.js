@@ -43,7 +43,7 @@ const BUTTON = 'src/components/Button.astro|';
 
 (async () => {
   const dom = new JSDOM(
-    `<!doctype html><body data-avb-p="${LAYOUT}1.1">
+    `<!doctype html><body class="page" data-avb-p="${LAYOUT}1.1">
       <main data-avb-p="${LAYOUT}1.1.2">
         <!--avb-s:0.1-->
         <!-- the layout's namespace first, as the collector leaves it: the order
@@ -63,6 +63,18 @@ const BUTTON = 'src/components/Button.astro|';
           </div>
         </section>
         <!--avb-e:0.1-->
+        <!-- What a page written without components looks like: the layout has
+             a wrapper of its own, and the page's own <section> is slotted into
+             it. Nothing here says LAYOUT on the section — the collector adds
+             that at run time, because the section sits inside the wrapper's
+             marked run, exactly as a real page arrives. -->
+        <!--avb-s:${LAYOUT}1.1.3-->
+        <!--avb-s:0.2-->
+        <section class="plain" data-avb-p="0.2">
+          <p class="plain_text" data-avb-p="0.2.0">Making a difference</p>
+        </section>
+        <!--avb-e:0.2-->
+        <!--avb-e:${LAYOUT}1.1.3-->
       </main>
     </body>`,
     { url: 'http://localhost:4321/#avb-design', pretendToBeVisual: true }
@@ -79,6 +91,12 @@ const BUTTON = 'src/components/Button.astro|';
     'button': [0, 200, 100, 40],
     'container': [0, 50, 400, 400],
     'section': [0, 0, 400, 500],
+    // The layout's own elements are the whole page tall; the section inside
+    // them is one screen, so an outline that climbed out of the section
+    // measures as something nobody could mistake for it.
+    'page': [0, 0, 400, 4000],
+    'plain': [0, 600, 400, 300],
+    'plain_text': [20, 620, 200, 30],
   };
   const NO_BOX = { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
   window.Element.prototype.getBoundingClientRect = function () {
@@ -172,6 +190,46 @@ const BUTTON = 'src/components/Button.astro|';
     check('and measures as itself', box && box.h === 40, JSON.stringify(box));
   }
 
+  // --- a page with no components in it ------------------------------------------------
+  //
+  // The section is the page's own markup, slotted into the layout. It carries a
+  // path in the layout's namespace because the collector tags everything inside
+  // a marked run, and it is not the root of that namespace — so the climb had
+  // nothing to stop it and ran to the top of the layout. On a Webflow export
+  // that is nine sections all naming themselves on <html>, and selecting any
+  // one of them outlined the whole page.
+  check(
+    'the layout is not given the page’s name for a section',
+    !carries(q('body'), '0.2'),
+    q('body').getAttribute('data-avb-p')
+  );
+  check(
+    'and neither is anything else on the way up',
+    !carries(q('main'), '0.2'),
+    q('main').getAttribute('data-avb-p')
+  );
+  check(
+    'the section did pick up the layout’s namespace, which is what tempted it',
+    (q('section.plain').getAttribute('data-avb-p') || '').includes(LAYOUT),
+    q('section.plain').getAttribute('data-avb-p')
+  );
+  check(
+    'the section it belongs to still has it',
+    carries(q('section.plain'), '0.2'),
+    q('section.plain').getAttribute('data-avb-p')
+  );
+  {
+    const box = boxFor('0.2');
+    check('so the outline hugs the section', box && box.y === 600 && box.h === 300, JSON.stringify(box));
+    check('rather than the page around it', !(box && box.h >= 4000), JSON.stringify(box));
+  }
+  {
+    sent.length = 0;
+    q('p.plain_text').dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    const msg = sent.filter((m) => m.type === 'avb:click-node').pop();
+    check('and a click inside it reaches what is inside it', msg?.path === '0.2.0', JSON.stringify(msg));
+  }
+
   // --- said once ---------------------------------------------------------------------
   const source = fs.readFileSync(PRELOAD, 'utf8');
   check(
@@ -183,6 +241,11 @@ const BUTTON = 'src/components/Button.astro|';
     'and it refuses to climb out of a root',
     /a root: leave it alone/.test(source),
     'nothing stops the climb at a component that names itself'
+  );
+  check(
+    'and only moves a name that arrived on a spread',
+    /rodeIn\(el, p\)/.test(source),
+    'an element the page named itself can still be climbed away from'
   );
 
   if (failures.length) {

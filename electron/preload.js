@@ -466,9 +466,32 @@ if (!process.isMainFrame) {
   // component put it on: that element still answers to it in the component's
   // own file, and the outermost of the two is what the boxes and the hit
   // testing already prefer.
+  // Whether a page path on this element ARRIVED here — the caller's name for an
+  // instance, riding in on `{...rest}` — as opposed to being the element's own
+  // name.
+  //
+  // The serializer writes an element's own path first and whatever came in on
+  // the spread after it, and the tags this file adds are known (`ourTags`), so
+  // what is left is what the page was served with. A page path at the head of
+  // that list is the element's own name: the page wrote `<section>` and the
+  // serializer tagged that very element, and there is nothing to work out.
+  //
+  // Without this, a plain section slotted into a layout was promoted — it
+  // carries a path in the LAYOUT's namespace, because the collector tags
+  // everything inside a marker run, and it is not the root of that namespace,
+  // so the climb ran all the way to <html>. A Webflow export is exactly that
+  // shape: nine sections, all nine names ending up on <html>, and selecting
+  // any one of them outlined the entire page.
+  const rodeIn = (el, path) => {
+    const mine = ourTags.get(el);
+    const written = pathsOf(el).filter((p) => !mine?.has(p));
+    const at = written.indexOf(path);
+    return at > 0 && written.slice(0, at).some((p) => p.includes('|'));
+  };
+
   const promoteInstanceTags = () => {
     for (const el of [...document.querySelectorAll(`[${PATH_ATTR}]`)]) {
-      const page = pathsOf(el).filter((p) => !p.includes('|'));
+      const page = pathsOf(el).filter((p) => !p.includes('|') && rodeIn(el, p));
       if (!page.length) continue;
       const ns = nsOf(el);
       if (!ns.size) continue;
@@ -485,9 +508,7 @@ if (!process.isMainFrame) {
         at = up;
       }
       if (at === el) continue;
-      const have = pathsOf(at);
-      const add = page.filter((p) => !have.includes(p));
-      if (add.length) at.setAttribute(PATH_ATTR, [...have, ...add].join(' '));
+      for (const p of page) addPath(at, p);
     }
   };
 
