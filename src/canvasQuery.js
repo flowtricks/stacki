@@ -43,6 +43,16 @@ export function hasCanvas() {
   return !!frame;
 }
 
+/** Say something to the canvas that needs no answer. */
+export function tellCanvas(message) {
+  try {
+    frame?.postMessage(message, '*');
+    return !!frame;
+  } catch {
+    return false;
+  }
+}
+
 // Ask the page about one node: what it renders as, which of `selectors` target
 // it, what `compute` values resolve to on it, and its computed style for `props`.
 // Resolves null when the canvas can't answer — the caller then falls back rather

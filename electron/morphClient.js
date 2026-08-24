@@ -431,4 +431,19 @@ async function update() {
   if (again) { again = false; update(); }
 }
 
+// Two ways the news arrives, because one of them is not reliable enough on its
+// own. HMR is the fast path: the dev server saw the file change and said so.
+// But that message rides a WebSocket the page opened when it loaded, and a
+// socket has ways of going quiet — a dev server restarted under a canvas that
+// stayed open, a laptop that slept, a reconnect that landed on something else
+// listening on the same port. Nothing tells the page it has stopped hearing;
+// it simply never updates again, and the only way to see an edit is to press
+// refresh.
+//
+// The app watches the file system itself, for its own reasons, so it knows
+// about every change either way — and it can say so straight to this frame.
+// Patching twice for one edit costs a fetch and a diff that finds nothing.
 if (import.meta.hot) import.meta.hot.on('avb:page-changed', update);
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'avb:patch-now') update();
+});

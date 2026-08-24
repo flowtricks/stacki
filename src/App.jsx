@@ -7,6 +7,7 @@ import { isInlineRun, noteIndexAbove, noteText, noteValue, selectionAfterDelete 
 import { canvasClickAction } from './canvasClick.js';
 import { setSoundEnabled } from './ui/sound.js';
 import { createPreviewWatch } from './previewRecovery.js';
+import { tellCanvas } from './canvasQuery.js';
 import PropsPanel from './panels/PropsPanel.jsx';
 import StylePanel from './panels/StylePanel.jsx';
 import PreviewPane from './panels/PreviewPane.jsx';
@@ -838,7 +839,16 @@ export default function App() {
       onRecover: () => setRefreshKey((k) => k + 1),
     });
     // Every write the app makes, plus every change made outside it.
-    const offWrite = window.avb.onPageMaybeChanged(() => watch.poke());
+    const offWrite = window.avb.onPageMaybeChanged((d) => {
+      watch.poke();
+      // A change from outside the app — an editor, a script, a checkout. The
+      // canvas normally hears about it over the dev server's HMR socket, and
+      // when that socket has gone quiet (a dev server restarted under a canvas
+      // that stayed open, a machine that slept) nothing says so: the page just
+      // stops updating and the only way to see an edit is the refresh button.
+      // The app's own watcher saw this change, so it says it directly too.
+      if (d?.external) tellCanvas({ type: 'avb:patch-now' });
+    });
     return () => {
       offWrite();
       watch.stop();

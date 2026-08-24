@@ -1766,10 +1766,22 @@ const selfWrites = new Map(); // absolute path -> timestamp of app-made write
 // refresh. The app's own writes are deliberately invisible to the watcher
 // below, so this is the one place that sees every one of them: say that the
 // site may have changed, and let the renderer go and ask (see `dev:probe`).
+// `external` — the change came from outside the app: an editor, a script, a
+// git checkout. The canvas hears about the app's own writes through the dev
+// server's HMR socket and patches itself; an outside change reaches it the
+// same way, when that socket is still listening. This flag is what lets the
+// app tell the canvas directly as well, so a socket that has gone quiet is no
+// longer the difference between seeing your edit and pressing refresh.
 let pageChangeTimer = null;
-function notePageMayHaveChanged() {
+let pageChangeExternal = false;
+function notePageMayHaveChanged(external = false) {
+  pageChangeExternal = pageChangeExternal || external;
   clearTimeout(pageChangeTimer);
-  pageChangeTimer = setTimeout(() => send('page:maybe-changed', {}), 200);
+  pageChangeTimer = setTimeout(() => {
+    const wasExternal = pageChangeExternal;
+    pageChangeExternal = false;
+    send('page:maybe-changed', { external: wasExternal });
+  }, 200);
 }
 
 function markSelfWrite(p) {
@@ -1807,7 +1819,7 @@ ipcMain.handle('watch:start', async (_e, projectPath) => {
     // they are skipped here.
     const changed = path.join(srcDir, name);
     const mine = selfWrites.get(path.resolve(changed));
-    if (!(mine && Date.now() - mine < 1000)) notePageMayHaveChanged();
+    if (!(mine && Date.now() - mine < 1000)) notePageMayHaveChanged(true);
     // JSON data files feed the CMS panel, not the page model.
     if (/\.json$/i.test(name)) {
       const full = path.join(srcDir, name);

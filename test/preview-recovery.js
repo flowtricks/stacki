@@ -210,7 +210,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const at = main.indexOf('watcher = fs.watch(srcDir');
     const handler = main.slice(at, main.indexOf("// Watch public/ too", at));
     check('the src watcher is still there', at !== -1);
-    const poke = handler.indexOf('notePageMayHaveChanged()');
+    // `(true)` — the watcher only ever hears about changes the app did not
+    // make, and saying which kind it was is what lets the canvas be told
+    // directly (see test/outside-edit.js).
+    const poke = handler.indexOf('notePageMayHaveChanged(true)');
     const firstBranchReturn = handler.indexOf('return;', handler.indexOf('.json$'));
     check('a change under src says the site may have changed', poke !== -1, handler.slice(0, 300));
     check(
@@ -220,7 +223,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     );
     check(
       'and not for the app’s own writes, which say it themselves',
-      /if \(!\(mine && Date\.now\(\) - mine < 1000\)\) notePageMayHaveChanged\(\);/.test(handler),
+      /if \(!\(mine && Date\.now\(\) - mine < 1000\)\) notePageMayHaveChanged\(true\);/.test(handler),
       handler.slice(0, 400)
     );
     check(
