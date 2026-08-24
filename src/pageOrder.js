@@ -19,6 +19,16 @@ export function comparePageNames(a, b) {
   return pageRank(an) - pageRank(bn) || collator.compare(an, bn);
 }
 
+// Whether a page comes before the folders at its level rather than after
+// them. `index.astro` is not a page inside the folder — it IS the folder:
+// /about is that page and /about/story is a page beneath it, and the site's
+// home page is the one at the root. Listed after the folders, as everything
+// used to be, a site's front door sat underneath every other page on the
+// site, which is the one place nobody looks for it.
+export function leadsFolders(name) {
+  return pageRank(name) === 0;
+}
+
 // A route with a bracketed segment — `[id].astro`, `[...slug].astro`, or a
 // page under a `[lang]/` folder — isn't a page someone wrote one of: Astro
 // generates it once per entry from a collection. Listed with the collection

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { comparePageNames, isCollectionRoute } from '../pageOrder.js';
+import { comparePageNames, isCollectionRoute, leadsFolders } from '../pageOrder.js';
 import Dropdown from '../ui/Dropdown.jsx';
 import {
   FileIcon,
@@ -220,19 +220,24 @@ export default function PagesPanel({
     );
   };
 
-  const renderChildren = (node, rel, depth) => (
-    <>
-      {[...node.dirs.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([name, child]) =>
-          renderFolder(name, child, rel ? `${rel}/${name}` : name, depth)
-        )}
-      {node.pages
-        .slice()
-        .sort((a, b) => comparePageNames(a.base, b.base))
-        .map((p) => renderPage(p, depth))}
-    </>
-  );
+  const renderChildren = (node, rel, depth) => {
+    const pages = node.pages.slice().sort((a, b) => comparePageNames(a.base, b.base));
+    // The folder's own page goes above the folders — see leadsFolders. The
+    // rest sit below them, which is where a page under a folder belongs.
+    const lead = pages.filter((p) => leadsFolders(p.base));
+    const rest = pages.filter((p) => !leadsFolders(p.base));
+    return (
+      <>
+        {lead.map((p) => renderPage(p, depth))}
+        {[...node.dirs.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([name, child]) =>
+            renderFolder(name, child, rel ? `${rel}/${name}` : name, depth)
+          )}
+        {rest.map((p) => renderPage(p, depth))}
+      </>
+    );
+  };
 
   const searchResults = q
     ? scan.pages
