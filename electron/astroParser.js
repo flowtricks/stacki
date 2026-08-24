@@ -1500,7 +1500,10 @@ function serializePageMarked(model, prefix = '') {
     return mark ? `${imp.path}&avb=${mark.path}${mark.group ? '&avbg=1' : ''}` : imp.path;
   });
   lines.push('---');
-  model.nodes.forEach((node, i) => serializeNodeMarked(node, '', lines, `${prefix}${i}`));
+  // The file's own roots: what a caller sees of this file is whatever these
+  // put on the page, so they are where a caller's name for this instance
+  // belongs (see `atRoot`).
+  model.nodes.forEach((node, i) => serializeNodeMarked(node, '', lines, `${prefix}${i}`, false, true));
   return lines.join('\n') + '\n';
 }
 
@@ -1545,12 +1548,19 @@ const markerFor = (path, kind, inSlotContent) =>
 // `data-avb-p` the collector writes at runtime, and invisible to :nth-child,
 // :first-child, + and ~ in a way a marker node could never be.
 //
-// On a component the attribute is a prop, and only reaches the DOM if that
-// component spreads its rest props — most do, and where one doesn't this is
-// no worse than the comment that was being dropped. The markers stay either
-// way: they are what works when nothing interferes, they say where a node
-// ENDS, and they carry the nodes an attribute can't (text, a loop, a branch).
-function serializeNodeMarked(node, indent, lines, path, inSlot = false) {
+// On a component the attribute is a prop, and reaching the DOM is then up to
+// that component — which is why every file's own ROOT elements carry whatever
+// name they were called by, alongside their own (`atRoot`). Waiting for the
+// author to spread `{...rest}` was not good enough: a slider written without
+// one, placed in a <Section> that scrubs comments, had no marker left and no
+// attribute either, so nothing on the page answered to it. The navigator
+// showed it as rendering nothing while it was plainly on screen, it drew no
+// outline, and it could not be clicked.
+//
+// The markers stay either way: they are what works when nothing interferes,
+// they say where a node ENDS, and they carry the nodes an attribute can't
+// (text, a loop, a branch).
+function serializeNodeMarked(node, indent, lines, path, inSlot = false, atRoot = false) {
   if (node.kind === 'chunk-group') return; // synthetic, not in page source
   // A slotted node can't be wrapped: a marker beside it lands in the default
   // slot while the node itself renders in the named one, so the pair ends up
@@ -1597,7 +1607,12 @@ function serializeNodeMarked(node, indent, lines, path, inSlot = false) {
   // "you're done in here": the component closed itself the moment you clicked
   // inside it.
   const forwards = Object.keys(node.props || {}).some((k) => k.startsWith('...'));
-  const pathProp = forwards
+  // A root carries its caller's name whether or not the author asked for it:
+  // this element IS what the caller placed, so the caller's path for it has
+  // nowhere better to be. On a page the same expression reads undefined and
+  // falls away, since a page has no caller.
+  const carriesCaller = forwards || atRoot;
+  const pathProp = carriesCaller
     ? { type: 'expr', value: `[${JSON.stringify(path)}, Astro.props["data-avb-p"]].filter(Boolean).join(" ")` }
     : { type: 'string', value: path };
   const markedProps = !carryPath
@@ -1676,7 +1691,9 @@ function serializeNodeMarked(node, indent, lines, path, inSlot = false) {
       // Slot content of that Fragment, so the markers must be the `set:html`
       // form — a plain comment directly inside a component is dropped, which
       // left everything in a branch unoutlinable.
-      if (branch) serializeNodeMarked(branch, inner + '  ', lines, `${path}.${i}`, true);
+      // A root written as a condition — `{render && (<div/>)}` — is still the
+      // root: what the branch renders is what the caller placed.
+      if (branch) serializeNodeMarked(branch, inner + '  ', lines, `${path}.${i}`, true, atRoot);
       lines.push(inner + '</Fragment>');
     };
     lines.push(indent + '{');
@@ -1694,7 +1711,7 @@ function serializeNodeMarked(node, indent, lines, path, inSlot = false) {
     // No markup of its own — just its contents, wrapped by the marker pair
     // this function already emits around every node.
     (node.children || []).forEach((child, i) =>
-      serializeNodeMarked(child, indent, lines, `${path}.${i}`, inSlot)
+      serializeNodeMarked(child, indent, lines, `${path}.${i}`, inSlot, atRoot)
     );
   } else {
     const base = carryPath ? { ...node, props: markedProps } : node;

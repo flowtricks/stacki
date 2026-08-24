@@ -83,8 +83,54 @@ const { parsePage, serializePageMarked } = require('../electron/astroParser.js')
   // slot, still loses every marker for being placed inside one. So the tag is
   // on the markup wherever it is.
   const plain = serializePageMarked(parsePage('---\n---\n<section>\n  <p>hi</p>\n</section>\n').model);
-  check('the top level of a file carries it too', /<section data-avb-p="0">/.test(plain), plain);
+  check('the top level of a file carries it too', /<section data-avb-p=\{\["0", /.test(plain), plain);
   check('and so does what is inside it', /<p data-avb-p="0\.0">/.test(plain), plain);
+
+  // ── A file's own roots carry whatever they were called by ──────────────────
+  //
+  // The attribute on a component is a prop, and it only reaches the DOM if
+  // that component puts it there. Waiting for `{...rest}` was not good enough:
+  // a slider written without one, placed inside a <Section> that scrubs
+  // comments before checking whether its slot rendered anything, had no marker
+  // left and no attribute either. Nothing on the page answered to it — no
+  // outline, no click, and the navigator wore the crossed-out eye on a row
+  // that was plainly on screen.
+  //
+  // So a root says both names: its own, and whatever the caller called it.
+  {
+    const noSpread = serializePageMarked(
+      parsePage('---\nconst { slides } = Astro.props;\n---\n<div class="slider">{slides.length}</div>\n').model,
+      'src/components/Slider.astro|'
+    );
+    check(
+      'a root that never asked for rest props still carries the caller’s name',
+      /data-avb-p=\{\["src\/components\/Slider\.astro\|0", Astro\.props\["data-avb-p"\]\]/.test(noSpread),
+      noSpread
+    );
+
+    // The common shape for a component that can decline to render: the root is
+    // a condition, and what the branch renders is what the caller placed.
+    const conditional = serializePageMarked(
+      parsePage(
+        '---\nconst { render = true, slides } = Astro.props;\n---\n{\n  render && slides.length > 0 && (\n    <div class="slider">x</div>\n  )\n}\n'
+      ).model,
+      'src/components/Slider.astro|'
+    );
+    check(
+      'a root written as a condition carries it too',
+      /<div class="slider" data-avb-p=\{\["src\/components\/Slider\.astro\|0\.0\.0", Astro\.props\["data-avb-p"\]\]/.test(conditional),
+      conditional
+    );
+
+    // Only the roots. An element deeper in the file is not what the caller
+    // placed, and naming it after the caller would put the page's name for the
+    // whole component on some div inside it.
+    check(
+      'nothing deeper in the file does',
+      !/<p data-avb-p=\{/.test(plain),
+      plain
+    );
+  }
 
   // The two that render no element of their own: there is nothing for an
   // attribute to ride on, and their markers are what address them.
@@ -125,10 +171,11 @@ const { parsePage, serializePageMarked } = require('../electron/astroParser.js')
   check('a component writes it after', comp.indexOf('{...rest}') < comp.indexOf('data-avb-p'), comp);
   // Everything else stays the plain attribute — no expression, nothing to
   // evaluate, nothing to go wrong in a file that never mentions Astro.props.
+  const nested = serializePageMarked(parsePage('---\n---\n<div><span>x</span></div>\n').model);
   check(
-    'a node with no spread gets the plain attribute',
-    /<span data-avb-p="0">/.test(serializePageMarked(parsePage('---\n---\n<span>x</span>\n').model)),
-    serializePageMarked(parsePage('---\n---\n<span>x</span>\n').model)
+    'a node that is neither a root nor a spread gets the plain attribute',
+    /<span data-avb-p="0\.0">/.test(nested),
+    nested
   );
 }
 
