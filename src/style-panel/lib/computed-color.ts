@@ -48,9 +48,13 @@ export function forgetComputedColors(): void {
   inFlight.clear()
 }
 
-function pathOfSelection(): string | null {
+// The element to resolve against: whatever is selected, and the page itself
+// when nothing is — which is where `:root`'s custom properties are declared.
+// The variables panel has no selection to speak of and its swatches are as
+// answerable as any other.
+function pathOfSelection(): string {
   const host = getHost()
-  return host.selectedId ? host.pathOf?.(host.selectedId) ?? null : null
+  return (host.selectedId ? host.pathOf?.(host.selectedId) : null) ?? ''
 }
 
 async function resolve(path: string, value: string): Promise<string | null> {
@@ -85,10 +89,6 @@ export function useResolvedColor(value: string): string {
     let live = true
     const ask = () => {
       const path = pathOfSelection()
-      if (!path) {
-        setResolved(null)
-        return
-      }
       void resolve(path, raw).then((color) => {
         if (live) setResolved(color)
       })

@@ -34,6 +34,9 @@ const STYLESHEET = `/* =========================================================
   --light-100: #ffffff;
   --dark-900: #1f1d1e;
   --brand-500: #c6fb50;
+  /* The ordinary way to write a tint: a colour that is knowable and is not a
+     literal. */
+  --tint-100: color-mix(in srgb, var(--brand-500), white 80%);
 
   /* Fluid */
   --too-steep: clamp(var(--too-steep-min) / 16 * 1rem, ((var(--too-steep-min) - ((var(--too-steep-max) - var(--too-steep-min)) / (1440 - 320) * 320)) / 16 * 1rem + ((var(--too-steep-max) - var(--too-steep-min)) / (1440 - 320)) * 100vw), var(--too-steep-max) / 16 * 1rem);
@@ -177,6 +180,39 @@ const STYLESHEET = `/* =========================================================
     all('.u-color-swatch-fill').some((n) => /255, 255, 255|#ffffff/.test(n.getAttribute('style') || '')),
     all('.u-color-swatch-fill').map((n) => n.getAttribute('style')).join(' | ')
   );
+  // A mix of known ingredients is a colour, and the swatch used to be handed
+  // the word "transparent" for it — which is a colour, so it painted that: a
+  // chequerboard beside a row whose colour is perfectly knowable.
+  {
+    // Names and values are two columns of the same table, paired by position.
+    const swatchFor = (name) => {
+      const named = all('.vars-fixed .vars-name-text').find((n) => n.textContent === name);
+      const table = named?.closest('.vars-table');
+      if (!table) return null;
+      const at = [...table.querySelectorAll('.vars-fixed .vars-name-text')].findIndex(
+        (n) => n.textContent === name
+      );
+      const valueRows = table.querySelectorAll('.vars-scroll .vars-row:not(.is-head):not(.vars-section)');
+      return valueRows[at]?.querySelector('.u-color-swatch-fill') || null;
+    };
+    const fill = swatchFor('tint-100');
+    const painted = fill?.getAttribute('style') || '';
+    check('a colour written as a mix gets a swatch', !!fill, rowNames().join('|'));
+    check(
+      'and the swatch is the mix, not a chequerboard',
+      /color-mix\(/.test(painted) && !/transparent/.test(painted),
+      painted
+    );
+    check(
+      // Whichever way the engine spells it back: what matters is that the
+      // variable is no longer a name the panel's own document has never heard
+      // of, which is what made it paint nothing.
+      'with the variable it mixes already substituted',
+      /#c6fb50|198,\s*251,\s*80/i.test(painted),
+      painted
+    );
+  }
+
   check(
     'the swatch is beside the field, not inside it',
     all('.var-cell').every((cell) => !cell.querySelector('input .u-color-swatch'))

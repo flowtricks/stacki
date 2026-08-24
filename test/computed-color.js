@@ -57,6 +57,29 @@ const check = (what, condition, detail) => {
 
   // --- the resolving, against a page that themes its variables --------------
   //
+  // The replica below is a copy of what the preload runs; these two check that
+  // the real one still asks the same question, and that the app still asks it
+  // when there is no selection to ask about — which is the variables panel's
+  // whole situation.
+  {
+    const preload = fs.readFileSync(path.join(__dirname, '..', 'electron', 'preload.js'), 'utf8');
+    check(
+      'with no element named, the page answers about itself',
+      /const host = els\[0\] \|\| document\.documentElement;/.test(preload),
+      'a value with nothing selected gets no answer at all'
+    );
+    const lib = fs.readFileSync(
+      path.join(__dirname, '..', 'src', 'style-panel', 'lib', 'computed-color.ts'),
+      'utf8'
+    );
+    check(
+      'and the app asks even with nothing selected',
+      /function pathOfSelection\(\): string \{/.test(lib) &&
+        !/if \(!path\) \{[\s\S]{0,80}setResolved\(null\)/.test(lib),
+      'the ask is abandoned when nothing is selected'
+    );
+  }
+
   // The probe the preload uses: a throwaway span inside the element, which
   // inherits its custom properties, given the value as a colour. jsdom does not
   // compute colours, so this runs in the browser jsdom cannot be — it is the
@@ -109,6 +132,11 @@ const check = (what, condition, detail) => {
          dark: await win.webContents.executeJavaScript(compute('#dark', 'var(--background)')),
          mixed: await win.webContents.executeJavaScript(compute('#dark', 'color-mix(in srgb, var(--brand) 50%, black)')),
          inherited: await win.webContents.executeJavaScript(compute('#a', 'currentcolor')),
+         // Nothing selected: the page answers about itself, which is where
+         // :root's custom properties are declared. This is the variables
+         // panel's question — a value is the same colour wherever it is
+         // written — and without it every swatch there stayed a chequerboard.
+         atRoot: await win.webContents.executeJavaScript(compute(':root', 'color-mix(in srgb, var(--brand), white 80%)')),
          nonsense: await win.webContents.executeJavaScript(compute('#light', 'not-a-color')),
          leftClean: await win.webContents.executeJavaScript("document.querySelectorAll('span').length"),
        };
@@ -128,6 +156,11 @@ const check = (what, condition, detail) => {
     // rather than `rgb(…)`. Either paints; what matters is that it resolved.
     check('a colour-mix of a variable resolves too', /^(?:rgb|rgba|color)\(/.test(out.mixed || ''), out.mixed);
     check('currentcolor resolves to the inherited colour', out.inherited === 'rgb(10, 20, 30)', out.inherited);
+    check(
+      'a mix resolves against the page root, with nothing selected',
+      /^(?:rgb|rgba|color)\(/.test(out.atRoot || ''),
+      out.atRoot
+    );
     check('a value that is not a colour reports nothing', out.nonsense === null, JSON.stringify(out.nonsense));
     check('the probe leaves no trace in the page', out.leftClean === 2, `${out.leftClean} spans`);
   }

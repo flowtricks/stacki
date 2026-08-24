@@ -1531,10 +1531,17 @@ if (!process.isMainFrame) {
       // engine hands back the computed one.
       const computed = {};
       const wanted = Array.isArray(d.compute) ? d.compute : [];
-      if (wanted.length && els[0]) {
+      // No element named, or none found: the question is about the page rather
+      // than about a node. That is what the variables panel asks — a value is
+      // the same colour wherever it is written, and the custom properties it
+      // leans on are declared on :root, which is this element. Only `compute`
+      // takes this: the reads below are ABOUT a node, and answering them from
+      // the root would be answering a different question.
+      const host = els[0] || document.documentElement;
+      if (wanted.length && host) {
         const probe = document.createElement('span');
         probe.setAttribute('style', 'position:absolute;width:0;height:0;visibility:hidden');
-        els[0].appendChild(probe);
+        host.appendChild(probe);
         for (const value of wanted) {
           try {
             // A sentinel first: assigning a value the engine rejects leaves the

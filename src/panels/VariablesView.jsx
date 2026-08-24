@@ -222,7 +222,19 @@ function Cell({ cell, onSave, fluidOf, onDraft }) {
       )}
       {isColor && (
         <ColorSwatch
-          value={cell.color || 'transparent'}
+          // The colour, not the word "transparent". `cell.color` is a literal
+          // the app can paint on its own; everything else is a value that
+          // refers to something — `color-mix(in srgb, var(--brand-500), white
+          // 80%)` is the ordinary way to write a tint — and those were handed
+          // over as the string "transparent", which is a colour, so the swatch
+          // painted it: a chequerboard beside a row whose colour is perfectly
+          // knowable.
+          //
+          // Handed the value instead, the swatch resolves it the way every
+          // other swatch in the app does (see computed-color): substituted text
+          // paints anywhere, and a reference that leads outside this file is
+          // answered by the page.
+          value={cell.color || cell.resolved || value}
           ariaLabel={`Choose the colour for ${cell.name}`}
           // Dragging in the picker fires live updates; only the settled value
           // is written, or a drag would be a hundred edits to the file.
