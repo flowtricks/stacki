@@ -1827,7 +1827,8 @@ contextBridge.exposeInMainWorld('avb', {
   openExternal: invoke('shell:openExternal'),
 
   // Dev only: the project to reopen after a "Reload All Code" relaunch.
-  devReopen: invoke('dev:reopen'),
+  pendingProject: invoke('project:pending'),
+  closeProject: invoke('project:close'),
 
   // Terminal (node-pty). Keystrokes and render acks are `send`, not `invoke`:
   // they're high-frequency and one-way, so they shouldn't pay for a round trip.

@@ -207,6 +207,14 @@ function createWindow() {
     shell.openExternal(url);
     return { action: 'deny' };
   });
+
+  // Somebody closed the window. Whatever was open is over: the next window is a
+  // fresh start and belongs on the welcome screen, not back in the project this
+  // one had. (A reload doesn't come through here, which is the difference the
+  // reopen above is asking about.)
+  mainWindow.on('closed', () => {
+    openProjectRoot = null;
+  });
 }
 
 // Custom menu: on macOS the native menu consumes ⌘Z/⌘C/⌘V before the page
@@ -234,6 +242,21 @@ function buildMenu() {
             writeSettings();
             send('menu:sound', item.checked);
           },
+        },
+        { type: 'separator' },
+        // Until now the only way out of a project was to close the app, and on
+        // macOS closing the app is not what people think it is: the window goes
+        // and the process stays, so coming back lands on the same project and
+        // there is nothing to press that says otherwise.
+        {
+          label: 'Open Project…',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => send('menu:openProject'),
+        },
+        {
+          label: 'Close Project',
+          accelerator: 'Shift+CmdOrCtrl+W',
+          click: () => send('menu:closeProject'),
         },
         { type: 'separator' },
         { label: 'Check for Updates…', click: () => void checkForUpdatesFromMenu() },
@@ -293,16 +316,30 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// The project to reopen when the renderer mounts in dev, or null on a cold
-// start (which still lands on the welcome screen).
+// A project the app has been asked to open in the window it is about to load —
+// set by `project:close` when somebody picks a different project, since letting
+// go of one is done by reloading the window and the choice has to outlive that.
+// Consumed on read.
+let pendingProject = null;
+
+// The project the renderer should pick up as it mounts, or null — which is the
+// welcome screen, and is what a cold start gets.
 //
-// Two ways the renderer can come back without the project it had:
+// Three ways a renderer can come up wanting a project:
+//   - it was told to: somebody chose one from the menu, and the window was
+//     reloaded to let go of the last one (`pendingProject`).
 //   - it reloaded but this process didn't — a Vite full page reload, or
-//     "Reload Window Only". openProjectRoot is still in memory, so use it.
+//     "Reload Window Only" in dev. openProjectRoot is still in memory, so use
+//     it. A window that a PERSON closed clears that memory (see createWindow),
+//     because closing a window is not reloading it: the next one is a fresh
+//     start and must land on the welcome screen.
 //   - the whole process restarted ("Reload All Code"), and memory is gone —
 //     relaunchApp left the path in a file. Consumed on read, so a later cold
 //     start doesn't silently skip the welcome screen.
-ipcMain.handle('dev:reopen', () => {
+ipcMain.handle('project:pending', () => {
+  const asked = pendingProject;
+  pendingProject = null;
+  if (asked && fs.existsSync(asked)) return asked;
   if (!isDev) return null;
   if (openProjectRoot && fs.existsSync(openProjectRoot)) return openProjectRoot;
   let p = null;
@@ -355,6 +392,32 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+// Everything a project had running, let go of. The window reloads after this,
+// which is the only way to be sure nothing of the last project is still being
+// held — a page half-loaded, an undo stack, a watcher, a shell — and none of
+// this survives the reload on its own: a pty outlives the window that opened
+// it, and the dev server outlives everything.
+ipcMain.handle('project:close', async (_e, next) => {
+  pendingProject = typeof next === 'string' && next ? next : null;
+  stopDevServer();
+  stopAllServices();
+  stopAllPreviews();
+  cleanupTerminals();
+  if (watcher) {
+    watcher.close();
+    watcher = null;
+  }
+  // Nothing is open, so nothing is in reach: the asset protocol and the
+  // terminals both scope themselves to this.
+  openProjectRoot = null;
+  // The window starts over. Done here rather than in the renderer because it
+  // is the same act as the teardown above — the renderer holds a page, an undo
+  // stack and forty pieces of state that belong to the project just closed, and
+  // none of it should be in the window that opens the next one.
+  mainWindow?.webContents.reload();
+  return { ok: true };
 });
 
 app.on('window-all-closed', () => {

@@ -919,19 +919,20 @@ export default function App() {
     [rescan, startPreview] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  // "Reload All Code" (dev, ⌘R) restarts the whole process to pick up main and
-  // preload changes, leaving the open project behind for the new one. Reopen it
-  // so the reload lands where you were instead of on the welcome screen. Returns
-  // null on a normal launch and in packaged builds, so nothing else changes.
+  // A window can come up owing a project: one was picked from the menu and the
+  // window reloaded to let go of the last one, or (in dev) the code was reloaded
+  // under a project that was open. Null on a cold start and after a window
+  // somebody closed, both of which belong on the welcome screen.
   const reopenedRef = useRef(false);
   useEffect(() => {
-    if (reopenedRef.current || !window.avb.devReopen) return;
+    if (reopenedRef.current || !window.avb.pendingProject) return;
     reopenedRef.current = true;
     window.avb
-      .devReopen()
+      .pendingProject()
       .then((p) => p && loadProject(p))
       .catch(() => {});
   }, [loadProject]);
+
 
   // ----------------------------------------------------------------
   // Page loading & saving
@@ -948,6 +949,42 @@ export default function App() {
     }
     setPageState((s) => (s ? { ...s, dirty: false } : s));
   }, []);
+
+  // Leaving a project. Main lets go of everything the project had running and
+  // starts the window over — forty pieces of state, an undo stack, a canvas
+  // holding a page, a watcher and a dev server all belong to the project that
+  // was open, and a fresh renderer is the only way to be certain none of it is
+  // still here when the next one opens. `next` is the project to open after,
+  // which main holds for the window that comes back: a choice made before a
+  // reload has to survive it. Anything unsaved goes to disk first.
+  const leaveProject = useCallback(
+    async (next = null) => {
+      await flushSave();
+      await window.avb.closeProject(next);
+    },
+    [flushSave]
+  );
+
+  useEffect(() => {
+    const offClose = window.avb.onMenu('closeProject', () => {
+      if (projectRef.current) void leaveProject(null);
+    });
+    const offOpen = window.avb.onMenu('openProject', async () => {
+      const picked = await window.avb.openProjectDialog();
+      const next = picked?.projectPath || picked?.path || null;
+      if (!next) return;
+      // Nothing open yet: this IS the welcome screen's own button.
+      if (!projectRef.current) {
+        loadProject(next);
+        return;
+      }
+      void leaveProject(next);
+    });
+    return () => {
+      offClose?.();
+      offOpen?.();
+    };
+  }, [leaveProject, loadProject]);
 
   // Opens any .astro file for editing — a page, or a component drilled into.
   // `currentPage` is simply whatever is being edited, so saving, undo, the
