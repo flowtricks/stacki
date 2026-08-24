@@ -1,0 +1,29 @@
+---
+const title = "Brand Guide";
+---
+
+<main id="main" class="page_main">
+  <section class="u-section">
+    <div class="dot_wrap">
+      <canvas class="dot_canvas"></canvas>
+      <script is:inline>
+        document.querySelectorAll(".dot_wrap").forEach((component) => {
+          /* Find the closest parent <section> for hover events */
+          const section = component.closest("section");
+          const hover = section || component;
+          hover.dataset.markup = "<section> is text in here, and so is </section>";
+        });
+      </script>
+    </div>
+    <!-- The <section> below is the one that holds the copy. -->
+    <section class="u-section is-inner">
+      <h1>{title}</h1>
+      <style>
+        /* a <section> in a stylesheet comment is text too */
+        .u-section {
+          padding: 4rem;
+        }
+      </style>
+    </section>
+  </section>
+</main>

@@ -758,19 +758,45 @@ function parseTemplate(str, base = null) {
 
 // Index of the close tag matching an already-consumed open tag, handling
 // nested same-name tags.
+//
+// Text inside a <script>, a <style> or a comment is not markup, and counting
+// it as markup loses the whole page. A Webflow export had a script with
+// `/* Find the closest parent <section> for hover events */` in it: seven
+// `<section`s to this scan and six closes, so the section that really did
+// close never balanced, and a page with nothing wrong with it opened as code
+// with "an unclosed <section> tag" over it. The same words in an HTML comment
+// did the same thing.
+//
+// So those three are stepped over rather than read. A run that never ends is
+// not treated as fatal here — it is only text this scan can't use — so the
+// scan carries on past the opener and whatever is really wrong with the page
+// is reported by the parse itself.
 function findMatchingClose(str, from, name) {
+  const tag = escapeRe(name);
   const re = new RegExp(
-    `<${escapeRe(name)}(?=[\\s/>])(?:[^>"']|"[^"]*"|'[^']*')*?(/?)>|</${escapeRe(name)}\\s*>`,
+    `<!--|<(script|style)(?=[\\s/>])|<${tag}(?=[\\s/>])(?:[^>"']|"[^"]*"|'[^']*')*?(/?)>|</${tag}\\s*>`,
     'g'
   );
   re.lastIndex = from;
   let depth = 1;
   let m;
   while ((m = re.exec(str)) !== null) {
-    if (m[0].startsWith('</')) {
+    const [full, raw, selfClose] = m;
+    if (full === '<!--') {
+      const end = str.indexOf('-->', m.index + 4);
+      re.lastIndex = end === -1 ? m.index + 4 : end + 3;
+      continue;
+    }
+    if (raw) {
+      const end = str.indexOf(`</${raw}`, m.index + full.length);
+      const after = end === -1 ? -1 : str.indexOf('>', end);
+      re.lastIndex = after === -1 ? m.index + full.length : after + 1;
+      continue;
+    }
+    if (full.startsWith('</')) {
       depth--;
       if (depth === 0) return m.index;
-    } else if (m[1] !== '/') {
+    } else if (selfClose !== '/') {
       depth++;
     }
   }
@@ -1376,12 +1402,22 @@ function serializeNode(node, indent, lines) {
       lines.push(indent + node.value);
       return;
     case 'raw': {
-      lines.push(`${indent}<${node.name}${serializeAttrs(node.props)}>`);
+      const open = `${indent}<${node.name}${serializeAttrs(node.props)}>`;
       // Keep raw inner verbatim. Only the line break that ends the last line
       // goes, since the closing tag supplies its own — trimming all trailing
       // whitespace also took away a blank line the author left in the CSS.
       const inner = node.inner.replace(/^\r?\n/, '').replace(/\r?\n[ \t]*$/, '');
-      if (inner) for (const line of inner.split('\n')) lines.push(line);
+      // A block with nothing in it is one tag: `<script src="…"></script>`.
+      // Putting the close on its own line made the block a line taller on
+      // every save — the next parse reads that line as content, keeps it, and
+      // adds another — so a Webflow export's three library <script>s grew by
+      // three lines each time the page was opened and saved.
+      if (!inner.trim()) {
+        lines.push(`${open}</${node.name}>`);
+        return;
+      }
+      lines.push(open);
+      for (const line of inner.split('\n')) lines.push(line);
       lines.push(`${indent}</${node.name}>`);
       return;
     }
