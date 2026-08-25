@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # thumbs.js opens a real Electron window, so the Linux runner needs a
+      # display, and Ubuntu 24.04's AppArmor blocks Electron's unprivileged
+      # user-namespace sandbox unless the restriction is lifted.
+      - name: Test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo sysctl -q kernel.apparmor_restrict_unprivileged_userns=0
+          xvfb-run -a npm test
+      - name: Test
+        if: runner.os != 'Linux'
+        run: npm test
