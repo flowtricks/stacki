@@ -2711,9 +2711,21 @@ ipcMain.handle('page:writeRaw', async (_e, { pagePath, source }) => {
 ipcMain.handle('page:create', async (_e, { projectPath, name, layout }) => {
   const pagesDir = path.join(projectPath, 'src', 'pages');
   let fileName = name.trim().replace(/\.astro$/i, '');
-  fileName = fileName.replace(/[^a-zA-Z0-9/_-]+/g, '-');
+  // Keeps the characters Astro routes with — `[slug]`, `[...rest]` — so a
+  // dynamic route can be created here at all, and `/` so a page can be made
+  // inside a folder. Allowing dots means `..` is now spellable, so where the
+  // name lands is checked rather than assumed.
+  fileName = fileName
+    .replace(/[^a-zA-Z0-9/_\-[\].]+/g, '-')
+    .split('/')
+    .map((seg) => seg.replace(/^[.\-]+/, ''))
+    .filter(Boolean)
+    .join('/');
   if (!fileName) throw new Error('Invalid page name');
   const pagePath = path.join(pagesDir, fileName + '.astro');
+  if (!path.resolve(pagePath).startsWith(pagesDir + path.sep)) {
+    throw new Error('Invalid page name');
+  }
   if (fs.existsSync(pagePath)) throw new Error('A page with that name already exists.');
   fs.mkdirSync(path.dirname(pagePath), { recursive: true });
 

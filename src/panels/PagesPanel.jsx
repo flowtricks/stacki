@@ -44,6 +44,20 @@ const stripExt = (base) => base.replace(/\.(astro|mdx?)$/i, '');
 const extOf = (base) => (base.match(/\.(astro|mdx?)$/i) || ['.astro'])[0];
 const dirOf = (rel) => rel.split('/').slice(0, -1).join('/');
 
+// Astro's routing lives in the filename. The brackets of `[slug]` and the dots
+// of `[...rest]` are what make a route dynamic; strip them and the page is a
+// static one, which means Astro stops consulting `getStaticPaths` — so a page
+// held back by returning `[]` from it quietly starts shipping. The sanitizer
+// therefore keeps what Astro routes with and drops the rest: separators, so a
+// rename stays one segment, and any leading dot or dash, so what comes back is
+// a name rather than `..` or a hidden file.
+const sanitizeSegment = (text) =>
+  text
+    .trim()
+    .replace(/[/\\]+/g, '-')
+    .replace(/[^\w\-[\].]+/g, '-')
+    .replace(/^[.\-]+/, '');
+
 // Webflow-style pages tree: folders (create, rename, delete, collapse with
 // page counts), pages (select, rename, delete), drag pages between folders,
 // and a search field over names and routes.
@@ -99,19 +113,30 @@ export default function PagesPanel({
     onDrop: (e) => dropInto(e, dirRel),
   });
 
+  // The "did it change?" question is asked of what was typed, before any
+  // sanitizing: confirming the name a page already has is a no-op whatever
+  // characters it is spelled with. Comparing the sanitized candidate instead
+  // meant a bracketed route could never match itself, so committing the
+  // untouched field — a click away from it is enough — renamed the file.
   const commitPageRename = (page, text) => {
     setEditing(null);
-    const base = text.trim().replace(/\.(astro|md)$/i, '').replace(/[^\w-]+/g, '-');
-    if (!base || base === stripExt(page.base)) return;
+    const current = stripExt(page.base);
+    const typed = text.trim().replace(/\.(astro|mdx?)$/i, '');
+    if (typed === current) return;
+    const base = sanitizeSegment(typed);
+    if (!base || base === current) return;
     const dir = dirOf(page.name);
     onMovePage(page, `${dir ? dir + '/' : ''}${base}${extOf(page.base)}`);
   };
 
   const commitFolderRename = (rel, text) => {
     setEditing(null);
-    const name = text.trim().replace(/[^\w-]+/g, '-');
     const parts = rel.split('/');
-    if (!name || name === parts[parts.length - 1]) return;
+    const current = parts[parts.length - 1];
+    const typed = text.trim();
+    if (typed === current) return;
+    const name = sanitizeSegment(typed);
+    if (!name || name === current) return;
     onRenameFolder(rel, [...parts.slice(0, -1), name].join('/'));
   };
 
@@ -146,7 +171,11 @@ export default function PagesPanel({
           {collection ? <CollectionIcon size={13} /> : <FileIcon size={13} />}
         </span>
         {isEditing ? (
-          <RenameInput initial={stripExt(page.base)} onCommit={(t) => commitPageRename(page, t)} />
+          <RenameInput
+            initial={stripExt(page.base)}
+            onCommit={(t) => commitPageRename(page, t)}
+            onCancel={() => setEditing(null)}
+          />
         ) : (
           <span className="label">{stripExt(page.base)}</span>
         )}
@@ -195,6 +224,7 @@ export default function PagesPanel({
             <RenameInput
               initial={name}
               onCommit={(t) => commitFolderRename(rel, t)}
+              onCancel={() => setEditing(null)}
             />
           ) : (
             <span className="label">{name}</span>
@@ -369,13 +399,24 @@ export default function PagesPanel({
 }
 
 // Inline rename input: commits on Enter/blur, cancels on Escape.
-function RenameInput({ initial, onCommit }) {
+//
+// Escape used to cancel by committing the name it started with, which is only
+// a no-op if a round trip through the sanitizer leaves that name alone. It
+// doesn't for a dynamic route, so backing out of a rename you never meant to
+// start was itself a rename. It closes the field now and touches nothing.
+function RenameInput({ initial, onCommit, onCancel }) {
   const [text, setText] = useState(initial);
   const ref = useRef(null);
+  const settled = useRef(false);
   useEffect(() => {
     ref.current?.focus();
     ref.current?.select();
   }, []);
+  const finish = (fn) => {
+    if (settled.current) return;
+    settled.current = true;
+    fn();
+  };
   return (
     <input
       ref={ref}
@@ -385,10 +426,10 @@ function RenameInput({ initial, onCommit }) {
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
       onChange={(e) => setText(e.target.value)}
-      onBlur={() => onCommit(text)}
+      onBlur={() => finish(() => onCommit(text))}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') onCommit(text);
-        else if (e.key === 'Escape') onCommit(initial);
+        if (e.key === 'Enter') finish(() => onCommit(text));
+        else if (e.key === 'Escape') finish(onCancel);
       }}
     />
   );
