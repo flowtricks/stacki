@@ -324,10 +324,22 @@ function isStyleModule(src) {
   return /[?&]astro&type=style|\.(css|s[ac]ss|less|pcss|styl)(\?|$)/.test(src || '');
 }
 
-// A script that appears, disappears or changes cannot be patched in: inserting
-// one re-runs it, and rewriting one does not run it at all. Both are wrong, so
-// the page reloads — which is what a changed script needs anyway. Rare next to
-// the editing this exists for.
+// A script that CHANGED, or one that is GONE, cannot be patched in: rewriting
+// one does not run it, and nothing can un-run one. Both are wrong, so the page
+// reloads.
+//
+// A script that only APPEARED is a different matter, and it is the common one.
+// Switching a variant is how a component starts rendering something it wasn't:
+// a slider, a marquee, anything with behaviour, and in dev Astro hands each of
+// those out as its own module — so the new rendering asks for a module the page
+// has not run yet. Reloading for that threw away the scroll position, every
+// running animation and whatever was open, on a page whose markup this had
+// just finished patching in place. Worse where it hurts most: hovering down a
+// list of variants reloaded the page per option.
+//
+// So a new module is loaded rather than reloaded around — the same thing
+// loadStyles does for a stylesheet, for the same reason: an element made here
+// runs, a cloned one does not.
 function scriptSignature(doc) {
   const out = [];
   const list = doc.getElementsByTagName('script');
@@ -338,6 +350,57 @@ function scriptSignature(doc) {
     out.push(src + ' | ' + (s.getAttribute('type') || '') + ' | ' + s.textContent);
   }
   return out.join('\n@@\n');
+}
+
+// One line per script, the same way scriptSignature writes them.
+function scriptLines(doc) {
+  const sig = scriptSignature(doc);
+  return sig ? sig.split('\n@@\n') : [];
+}
+
+/**
+ * What the new rendering adds, or null when it does anything else to the
+ * scripts — which is the reload.
+ *
+ * Only a module with a `src` can be added this way. An inline script has to run
+ * where it sits, and this cannot put it there: the copy the patch inserted is
+ * inert and replacing it is a different job. So an inline arrival still reloads.
+ */
+function addedScripts(prevDoc, nextDoc) {
+  const before = scriptLines(prevDoc);
+  const after = scriptLines(nextDoc);
+  const had = new Set(before);
+  const has = new Set(after);
+  for (const line of before) {
+    if (!has.has(line)) return null; // something changed or went away
+  }
+  const added = after.filter((line) => !had.has(line));
+  // `src | type | text` — a module is the part before the first separator.
+  if (added.some((line) => !line.split(' | ')[0])) return null; // an inline one
+  return added.map((line) => {
+    const [src, type] = line.split(' | ');
+    return { src, type };
+  });
+}
+
+// The modules a rendering asks for that this page has never run. Made here, not
+// cloned, so they run.
+const loadedScripts = new Set();
+function noteScripts(doc) {
+  for (const line of scriptLines(doc)) {
+    const src = line.split(' | ')[0];
+    if (src) loadedScripts.add(src);
+  }
+}
+function runScripts(added) {
+  for (const { src, type } of added) {
+    if (!src || loadedScripts.has(src)) continue;
+    loadedScripts.add(src);
+    const el = document.createElement('script');
+    if (type) el.type = type;
+    el.src = src;
+    document.head.appendChild(el);
+  }
 }
 
 // The stylesheets a rendering asks for, loaded for real.
@@ -392,7 +455,7 @@ function fetchDoc() {
 // for server output would delete it on the first patch.
 let prevDoc = null;
 const ready = fetchDoc().then(
-  (d) => { prevDoc = d.clean; noteStyles(d.clean); },
+  (d) => { prevDoc = d.clean; noteStyles(d.clean); noteScripts(d.clean); },
   () => { prevDoc = null; }
 );
 
@@ -406,7 +469,8 @@ async function update() {
     await ready;
     if (!prevDoc) throw new Error('no baseline rendering to compare against');
     const next = await fetchDoc();
-    if (scriptSignature(prevDoc) !== scriptSignature(next.clean)) {
+    const added = addedScripts(prevDoc, next.clean);
+    if (added === null) {
       location.reload();
       return;
     }
@@ -415,8 +479,9 @@ async function update() {
     patchChildren(document.body, prevDoc.body, next.clean.body);
     prevDoc = next.clean;
     // After the patch, so a component that has just appeared is styled by the
-    // time anything measures it.
+    // time anything measures it — and running by the time anything clicks it.
     loadStyles(next.clean);
+    runScripts(added);
     syncAnchors(document.body, next.withAnchors.body);
     document.dispatchEvent(new CustomEvent('avb:morphed'));
   } catch (err) {

@@ -40,7 +40,7 @@ global.document = dom.window.document;
 // half is lifted out rather than imported, as in test/comment-region.js.
 const source = fs.readFileSync(path.join(__dirname, '..', 'electron', 'morphClient.js'), 'utf8');
 const start = source.indexOf('const isAnchor =');
-const end = source.indexOf('// A script that appears, disappears or changes');
+const end = source.indexOf('// A script that CHANGED, or one that is GONE');
 const { patchChildren, findLive } = new Function(
   'document',
   `${source.slice(start, end)}\nreturn { patchChildren, findLive };`
@@ -50,9 +50,9 @@ const { patchChildren, findLive } = new Function(
 // way, from the comment that introduces it to the fetch below it.
 const sigStart = source.indexOf("// A component's <style> is delivered as a MODULE");
 const sigEnd = source.indexOf('function fetchDoc');
-const { scriptSignature, isStyleModule, loadStyles } = new Function(
+const { scriptSignature, isStyleModule, loadStyles, addedScripts, runScripts } = new Function(
   'document',
-  `${source.slice(sigStart, sigEnd)}\nreturn { scriptSignature, isStyleModule, loadStyles };`
+  `${source.slice(sigStart, sigEnd)}\nreturn { scriptSignature, isStyleModule, loadStyles, addedScripts, runScripts };`
 )(dom.window.document);
 
 // Every patch here goes through this: a throw is the failure mode under test
@@ -237,12 +237,26 @@ const LIVE_TABS = (labels, active) =>
   const withoutCard = head(style('Icon') + script('Nav'));
   check('nor one disappearing', scriptSignature(before) === scriptSignature(withoutCard));
 
-  // What the rule is actually for is untouched: a script that appears has to
-  // run, and patching cannot make it run.
+  // A script that appears is a module the page has not run yet, and running one
+  // is something this can do. Switching a variant is how a component starts
+  // rendering a slider, a marquee, anything with behaviour — and in dev each of
+  // those is its own module, so reloading for it meant reloading for most
+  // variant switches, one per option while hovering down the list.
   const withFooter = head(style('Card') + script('Nav') + script('Footer'));
-  check('a script appearing still forces one', scriptSignature(before) !== scriptSignature(withFooter));
+  const added = addedScripts(before, withFooter);
+  check('a script appearing is something to run, not to reload for', Array.isArray(added), JSON.stringify(added));
+  check('and it is the one that appeared', added?.length === 1 && /Footer/.test(added[0].src), JSON.stringify(added));
+  check('a rendering asking for nothing new adds nothing', addedScripts(before, withIcon)?.length === 0, JSON.stringify(addedScripts(before, withIcon)));
+
+  // What the rule is actually for: a script that changed cannot be rewritten
+  // into a page, and one that is gone cannot be un-run.
   const changed = head(style('Card') + '<script type="module">console.log(1)</script>');
-  check('and so does one whose code changed', scriptSignature(before) !== scriptSignature(changed));
+  check('a script whose code changed still reloads', addedScripts(before, changed) === null);
+  const withoutNav = head(style('Card'));
+  check('and so does one that went away', addedScripts(before, withoutNav) === null);
+  // An inline script has to run where it sits, which this cannot arrange.
+  const withInline = head(style('Card') + script('Nav') + '<script>console.log(2)</script>');
+  check('an inline arrival reloads too', addedScripts(before, withInline) === null);
 
   // Not reloading is only half of it: the new component's CSS has to arrive.
   // The patch cannot bring it — a <script> cloned from a fetched document is
@@ -256,6 +270,17 @@ const LIVE_TABS = (labels, active) =>
   loadStyles(withIcon);
   check('and not loaded twice', loaded().length === count, `${loaded().length} vs ${count}`);
   check('a real script is never loaded this way', !loaded().some((src) => /type=script/.test(src)), loaded().join('|'));
+
+  // Running one means an element made here, not the inert copy a patch inserts.
+  {
+    const ran = () => [...dom.window.document.querySelectorAll('script[src*="Footer"]')];
+    // A reload verdict has nothing to run, and saying so is the failure — not
+    // a stack trace from handing null to a loop.
+    runScripts(Array.isArray(added) ? added : []);
+    check('the module the variant needs is put in the page', ran().length === 1, `${ran().length} tags`);
+    runScripts(Array.isArray(added) ? added : []);
+    check('and not put there twice', ran().length === 1, `${ran().length} tags`);
+  }
 }
 
 if (failures.length) {
