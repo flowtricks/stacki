@@ -52,6 +52,7 @@ import { toComponentName } from './componentName.js';
 import { resolveInstanceProps } from './instanceProps.js';
 import { propsForExtraction } from './extractProps.js';
 import TerminalDock from './panels/TerminalDock.jsx';
+import ErrorBoundary from './ErrorBoundary.jsx';
 import { cleanError, stripAnsi } from './cleanError.js';
 import { elementLabel } from './classNames.js';
 import {
@@ -790,6 +791,26 @@ export default function App() {
     clearTimeout(showToast._t);
     showToast._t = setTimeout(() => setToast(null), 5000);
   }, []);
+
+  // Errors nothing caught — a throw in an event handler, a promise nobody
+  // awaited. React unmounts nothing for these (that's what the boundaries
+  // are for), so the app is still standing; the failure just went to the
+  // console where nobody is looking. Route it to the same toast the dev
+  // server's failures use, and leave the console entry for the stack.
+  useEffect(() => {
+    const onError = (e) => {
+      // A resource that failed to load fires `error` with no `error` in it —
+      // nothing to say beyond what the console already shows.
+      if (e.error) showToast(cleanError(e.error), 'error');
+    };
+    const onRejection = (e) => showToast(cleanError(e.reason), 'error');
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection);
+    };
+  }, [showToast]);
 
   useEffect(() => {
     const offProgress = window.avb.onProgress(({ message }) => setBusy(message || null));
@@ -3984,7 +4005,9 @@ export default function App() {
         <div className="titlebar">
           <span className="spacer" />
         </div>
-        <WelcomeScreen onOpen={loadProject} setBusy={setBusy} showToast={showToast} />
+        <ErrorBoundary label="the start screen">
+          <WelcomeScreen onOpen={loadProject} setBusy={setBusy} showToast={showToast} />
+        </ErrorBoundary>
         {busy && <BusyOverlay message={busy} />}
         {toast && <Toast toast={toast} />}
         <ConfirmHost />
@@ -4181,6 +4204,12 @@ export default function App() {
 
         {leftTab && (
           <div className="panel left">
+            {/* Keyed on the tab: switching to another panel is itself the way
+                out of a crashed one, not a view of its wreckage. */}
+            <ErrorBoundary
+              key={leftTab}
+              label={`the ${leftTab === 'cms' ? 'CMS' : leftTab} panel`}
+            >
             {leftTab === 'pages' && (
               <PagesPanel
                 scan={scan}
@@ -4429,10 +4458,12 @@ export default function App() {
                 onRecordUndo={pushCommand}
               />
             )}
+            </ErrorBoundary>
           </div>
         )}
 
         <div className="center">
+          <ErrorBoundary label="the canvas">
           <PreviewPane
             spacingHover={spacingHover}
             devUrl={devUrl}
@@ -4551,6 +4582,7 @@ export default function App() {
               onClose={() => setCmsRel(null)}
             />
           )}
+          </ErrorBoundary>
         </div>
 
         {inPreview && previewSrc && (
@@ -4600,6 +4632,7 @@ export default function App() {
               ))}
             </div>
             {rightTab === 'style' && (
+              <ErrorBoundary label="the style panel">
               <StylePanel
                 project={project}
                 model={model}
@@ -4625,8 +4658,12 @@ export default function App() {
                 historyTick={historyTick}
                 openFilePath={editStack[editStack.length - 1]?.path || currentPage?.path || null}
               />
+              </ErrorBoundary>
             )}
             <div style={{ display: rightTab === 'settings' ? 'contents' : 'none' }}>
+            {/* Its own boundary, not the style panel's: the two tabs are both
+                mounted, so a crash in one must not blank the other. */}
+            <ErrorBoundary label="the settings panel">
             <PropsPanel
               node={selectedNode}
               focusClass={classFocus}
@@ -4691,6 +4728,7 @@ export default function App() {
               projectPath={project.path}
               filePath={editStack[editStack.length - 1]?.path || currentPage?.path || null}
             />
+            </ErrorBoundary>
             </div>
           </div>
         )}
@@ -4700,13 +4738,16 @@ export default function App() {
           by the panels. Always mounted but inert until opened: it spawns no
           shell until then, and once open it hides rather than unmounting, so
           toggling it doesn't discard the scrollback — see TerminalDock. */}
-      <TerminalDock
-        projectPath={project.path}
-        open={termOpen}
-        onClose={() => setTermOpen(false)}
-      />
+      <ErrorBoundary label="the terminal">
+        <TerminalDock
+          projectPath={project.path}
+          open={termOpen}
+          onClose={() => setTermOpen(false)}
+        />
+      </ErrorBoundary>
 
       {codeWin && codeWinValue !== null && (
+        <ErrorBoundary label="the code window">
         <CodeWindow
           title={codeWin.title}
           language={codeWin.language}
@@ -4722,6 +4763,7 @@ export default function App() {
           }
           onClose={() => setCodeWin(null)}
         />
+        </ErrorBoundary>
       )}
 
       {insertOpen && (

@@ -3455,6 +3455,40 @@ body > .embed-editor_provenance {
 .toast.error { color: var(--red); }
 .toast.success { color: var(--green); }
 
+/* An ErrorBoundary's fallback — sized by whatever region it guards, so the
+   same box reads as a panel notice on the left and a full-window notice at
+   the root. */
+.crash {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.crash-root { height: 100%; }
+.crash-title {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 13px;
+}
+.crash-message {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--red);
+  max-width: 100%;
+  max-height: 40%;
+  overflow: auto;
+  user-select: text;
+  word-break: break-word;
+}
+.crash-retry { margin-top: 8px; }
+
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
