@@ -3332,6 +3332,31 @@ function parsesAsModule(file) {
   }
 }
 
+// A syntax check passes on a config that still cannot load: the generated
+// config requires the parser out of app.asar.unpacked, and if a sibling the
+// parser itself requires was left packed inside app.asar, that require throws
+// only at runtime — Astro fails to start and the preview silently drops to a
+// bare server with no markers (no outlines, no canvas selection). Loading the
+// parser the same way the dev server will catches that here instead. We load
+// only the parser — our own code, no load-time side effects — deliberately not
+// the generated config, whose `import userConfig` would pull in the project's
+// astro config (possibly TS or side-effectful) and could fail where Astro would
+// not, dropping a preview that would otherwise have worked.
+function requireLoads(file) {
+  try {
+    const bin = resolveNodeBin();
+    if (!bin) return true; // nothing to check with — let Astro have its say
+    const out = spawnSync(bin, ['-e', `require(${JSON.stringify(file)})`], {
+      encoding: 'utf8',
+      timeout: 10000,
+    });
+    if (out.error || out.status === null) return true; // check could not run
+    return out.status === 0;
+  } catch {
+    return true;
+  }
+}
+
 function writeMarkerConfig(projectPath) {
   try {
     const dir = path.join(projectPath, 'node_modules', '.avb');
@@ -3665,9 +3690,9 @@ export default {
     // will and say no rather than hand over something that cannot load: the
     // caller falls back to a plain dev server, which costs the outlines and
     // the live patching and keeps everything else working.
-    if (!parsesAsModule(cfgPath)) {
+    if (!parsesAsModule(cfgPath) || !requireLoads(parserPath)) {
       pushDevLog(
-        '\n[stacki] the generated preview config did not parse; starting the dev ' +
+        '\n[stacki] the generated preview config could not be loaded; starting the dev ' +
           'server without it. Outlines and live updates are off for this session.\n'
       );
       return null;
