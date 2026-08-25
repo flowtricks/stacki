@@ -234,6 +234,49 @@ const check = (what, condition, detail) => {
     seen(folderRenames)
   );
 
+  // --- and the same syntax has to be typeable in the first place -------------
+  //
+  // The New Page field sanitized with `[^a-zA-Z0-9/_-]+`, which meant a
+  // dynamic route could never be CREATED here either — the other half of the
+  // same blind spot. This exercises the rule the handler actually calls, not a
+  // copy of it.
+  const { pageFileName } = require(path.join(__dirname, '..', 'electron', 'pageName.js'));
+  const saved = (typed, want) =>
+    check(
+      `"${typed}" is created as ${want || 'nothing'}`,
+      pageFileName(typed) === want,
+      pageFileName(typed)
+    );
+
+  saved('[...path]', '[...path]');
+  saved('[slug]', '[slug]');
+  saved('blog/[slug]', 'blog/[slug]');
+  saved('[lang]/index', '[lang]/index');
+  saved('[...slug].astro', '[...slug]');
+  saved('about', 'about');
+  saved('my page!', 'my-page-');
+  saved('../../evil', 'evil');
+  saved('..', '');
+  saved('////', '');
+  saved('.hidden', 'hidden');
+
+  // The name keeps `/`, so where it lands is checked rather than assumed.
+  const mainSrc = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
+  const createHandler = mainSrc.slice(
+    mainSrc.indexOf("ipcMain.handle('page:create'"),
+    mainSrc.indexOf("ipcMain.handle('page:delete'")
+  );
+  check(
+    'creation goes through that one rule',
+    /pageFileName\(name\)/.test(createHandler),
+    createHandler.slice(0, 300)
+  );
+  check(
+    'and a page can only be written inside src/pages',
+    /startsWith\(pagesDir \+ path\.sep\)/.test(createHandler),
+    createHandler.slice(0, 400)
+  );
+
   if (failures.length) {
     console.error(`\nroute-syntax: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');

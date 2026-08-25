@@ -45,6 +45,7 @@ const { readContentConfig, validateEntry, stopAllServices } = require('./content
 const thumbs = require('./thumbs');
 const cssVars = require('./cssVars');
 const { readInjectedRoutes } = require('./injectedRoutes.js');
+const { pageFileName } = require('./pageName');
 const { createStarter } = require('./starter');
 const { openingBounds } = require('./windowBounds');
 const { componentFile } = require('./componentFile');
@@ -2710,19 +2711,11 @@ ipcMain.handle('page:writeRaw', async (_e, { pagePath, source }) => {
 
 ipcMain.handle('page:create', async (_e, { projectPath, name, layout }) => {
   const pagesDir = path.join(projectPath, 'src', 'pages');
-  let fileName = name.trim().replace(/\.astro$/i, '');
-  // Keeps the characters Astro routes with — `[slug]`, `[...rest]` — so a
-  // dynamic route can be created here at all, and `/` so a page can be made
-  // inside a folder. Allowing dots means `..` is now spellable, so where the
-  // name lands is checked rather than assumed.
-  fileName = fileName
-    .replace(/[^a-zA-Z0-9/_\-[\].]+/g, '-')
-    .split('/')
-    .map((seg) => seg.replace(/^[.\-]+/, ''))
-    .filter(Boolean)
-    .join('/');
+  const fileName = pageFileName(name);
   if (!fileName) throw new Error('Invalid page name');
   const pagePath = path.join(pagesDir, fileName + '.astro');
+  // The name keeps `/` so a page can be made inside a folder, so where it
+  // lands is checked rather than assumed.
   if (!path.resolve(pagePath).startsWith(pagesDir + path.sep)) {
     throw new Error('Invalid page name');
   }
