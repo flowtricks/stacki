@@ -1,0 +1,30 @@
+---
+const { render = true, show = true } = Astro.props;
+const links = [{ name: "Care", href: "/care" }];
+---
+
+{
+  render && (
+    <section class="care">
+      <h2>We're here for you</h2>
+      <ul>
+        {links.map((link) => (
+          <li>
+            <a href={link.href} title={link.name}>{link.name}</a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+{show && (<p>Read more at https://example.com/care {links.length}</p>)}
+
+<style>
+  /* The next apostrophe is down here, in a comment — which is where the
+     scanner's "string" used to end: everything between, including the braces
+     that closed the expression above, was swallowed as if it were quoted. */
+  .care {
+    display: grid;
+  }
+</style>

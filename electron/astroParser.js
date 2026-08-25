@@ -109,7 +109,9 @@ const TAG_RE = /<([A-Za-z][\w.-]*)((?:[^>"'{]|"[^"]*"|'[^']*'|\{(?:[^{}]|\{[^{}]
 // and the whole page is declared unrepresentable.
 function skipStringOrComment(str, i) {
   const ch = str[i];
-  if (ch === '"' || ch === "'" || ch === '`') {
+  // A template literal is the one quote that spans lines, so it is followed
+  // wherever it goes.
+  if (ch === '`') {
     i++;
     while (i < str.length && str[i] !== ch) {
       if (str[i] === '\\') i++;
@@ -117,7 +119,27 @@ function skipStringOrComment(str, i) {
     }
     return i + 1;
   }
+  if (ch === '"' || ch === "'") {
+    // A quote that does not close on its own line is not a string. What it
+    // usually is, is an apostrophe: `<Heading>We're here for you</Heading>`.
+    // Read as a string opener, it swallowed everything up to the next
+    // apostrophe — three hundred lines later, in a CSS comment — and with it
+    // the braces that closed the expression it sat inside. The page fell back
+    // to code view saying "an unclosed { … } expression", which is exactly what
+    // it looked like from in here.
+    //
+    // Nothing is lost by the rule: a JavaScript string cannot contain a raw
+    // line break, and neither can an HTML attribute value in any markup this
+    // has to read.
+    let j = i + 1;
+    while (j < str.length && str[j] !== ch && str[j] !== '\n') {
+      j += str[j] === '\\' ? 2 : 1;
+    }
+    return str[j] === ch ? j + 1 : i;
+  }
   if (ch === '/' && str[i + 1] === '/') {
+    // `https://…` is not a comment, wherever it is written.
+    if (str[i - 1] === ':') return i;
     const nl = str.indexOf('\n', i + 2);
     return nl === -1 ? str.length : nl; // leave the newline itself unconsumed
   }
@@ -415,11 +437,22 @@ function topLevelOps(src) {
 
 // One side of a conditional, as child nodes. `null` means "this isn't markup",
 // which sends the whole expression back to being opaque code.
-function branchNodes(raw) {
-  let t = String(raw).trim();
+// `base` is where `raw` starts in the file, or null when nobody is asking for
+// offsets. Trimming and peeling move that start, so it is advanced as they go —
+// without it every node inside a conditional came back unplaced, and a
+// component written as `{render && ( … )}` (which is most of them) could not
+// turn a selection into a line range at all.
+function branchNodes(raw, base = null) {
+  const text = String(raw);
+  let t = text.trimStart();
+  let at = base === null ? null : base + (text.length - t.length);
+  t = t.trimEnd();
   // Peel the wrapping parens the JSX convention adds: `? ( <img/> ) :`.
   while (t.startsWith('(') && findMatchingParen(t, 0) === t.length - 1) {
-    t = t.slice(1, -1).trim();
+    const inner = t.slice(1, -1);
+    const trimmed = inner.trimStart();
+    if (at !== null) at += 1 + (inner.length - trimmed.length);
+    t = trimmed.trimEnd();
   }
   // The ways of writing "render nothing here".
   if (t === '' || /^(null|undefined|false|''|"")$/.test(t)) return [];
@@ -427,14 +460,14 @@ function branchNodes(raw) {
     // A failed probe must not claim the page's bail message — the caller
     // falls back to an expression node and the page still parses.
     const saved = lastBail;
-    const parsed = parseTemplate(t);
+    const parsed = parseTemplate(t, at);
     if (parsed.clean) return parsed.nodes;
     lastBail = saved;
     return null;
   }
   // `a ? (…) : b ? (…) : (…)` — an else-if chain, which reads as a condition
   // nested in the else branch.
-  const nested = parseCondSource(t);
+  const nested = parseCondSource(t, at);
   return nested ? [nested] : null;
 }
 
@@ -457,23 +490,36 @@ const branchIsMarkup = (kids) =>
 // Written with braces, like every other expression node: it lands in JSX
 // context on the canvas (inside the branch's Fragment). The writer takes them
 // off again for the file, where a branch's parens are JS.
-function exprBranch(raw) {
-  let t = String(raw).trim();
+function exprBranch(raw, base = null) {
+  const text = String(raw);
+  let t = text.trimStart();
+  let at = base === null ? null : base + (text.length - t.length);
+  t = t.trimEnd();
   while (t.startsWith('(') && findMatchingParen(t, 0) === t.length - 1) {
-    t = t.slice(1, -1).trim();
+    const inner = t.slice(1, -1);
+    const trimmed = inner.trimStart();
+    if (at !== null) at += 1 + (inner.length - trimmed.length);
+    t = trimmed.trimEnd();
   }
   // Markup that failed to parse is not a value — sending it back as an opaque
   // expression would hide a real bail behind a node that looks fine.
   if (!t || t.startsWith('<')) return null;
-  return [{ id: makeId(), kind: 'expr', value: `{${t}}` }];
+  const node = { id: makeId(), kind: 'expr', value: `{${t}}` };
+  if (at !== null) {
+    node.start = at;
+    node.end = at + t.length;
+  }
+  return [node];
 }
 
 // `test ? ( … ) : ( … )` and `test && ( … )` as a structural node. Returns null
 // for anything whose branches aren't markup (a ternary picking between two
 // strings, say) — those stay code.
-function parseCondSource(src) {
-  const text = String(src).trim();
+function parseCondSource(src, base = null) {
+  const raw = String(src);
+  const text = raw.trim();
   if (!text) return null;
+  const from = base === null ? null : base + (raw.length - raw.trimStart().length);
   const ops = topLevelOps(text);
   const ternary = ops.find((o) => o.op === '?');
   if (ternary) {
@@ -483,15 +529,18 @@ function parseCondSource(src) {
     if (!test) return null;
     const thenRaw = text.slice(ternary.at + 1, colon.at);
     const elseRaw = text.slice(colon.at + 1);
-    let thenKids = branchNodes(thenRaw);
-    let elseKids = branchNodes(elseRaw);
+    let thenKids = branchNodes(thenRaw, from === null ? null : from + ternary.at + 1);
+    let elseKids = branchNodes(elseRaw, from === null ? null : from + colon.at + 1);
     // One side is markup and the other is a value — the common shape of "wrap
     // this in a link when there's somewhere to go". The value side becomes an
     // expression child rather than sending the whole conditional back to code.
     // Both sides being values (`a ? "x" : "y"`) is a value, not markup, and
     // stays as it was.
-    if (thenKids && !elseKids && branchIsMarkup(thenKids)) elseKids = exprBranch(elseRaw);
-    else if (elseKids && !thenKids && branchIsMarkup(elseKids)) thenKids = exprBranch(thenRaw);
+    if (thenKids && !elseKids && branchIsMarkup(thenKids)) {
+      elseKids = exprBranch(elseRaw, from === null ? null : from + colon.at + 1);
+    } else if (elseKids && !thenKids && branchIsMarkup(elseKids)) {
+      thenKids = exprBranch(thenRaw, from === null ? null : from + ternary.at + 1);
+    }
     if (!thenKids || !elseKids) return null;
     return {
       id: makeId(),
@@ -507,7 +556,7 @@ function parseCondSource(src) {
   if (!and) return null;
   const test = text.slice(0, and.at).trim();
   if (!test) return null;
-  const kids = branchNodes(text.slice(and.at + 2));
+  const kids = branchNodes(text.slice(and.at + 2), from === null ? null : from + and.at + 2);
   if (!kids || !kids.length) return null; // `x && null` is not worth a node
   return {
     id: makeId(),
@@ -527,8 +576,8 @@ function tryParseMapWithSource(exprText, base = null) {
   return node;
 }
 
-function tryParseCond(exprText) {
-  const node = parseCondSource(exprText.slice(1, -1));
+function tryParseCond(exprText, base = null) {
+  const node = parseCondSource(exprText.slice(1, -1), base === null ? null : base + 1);
   // The text it was written as. A condition that has not been edited is
   // written back exactly, rather than reflowed onto the shape this file would
   // choose — `{x && <p/>}` is not improved by becoming four lines.
@@ -636,7 +685,8 @@ function parseTemplate(str, base = null) {
         continue;
       }
       const structural =
-        tryParseMapWithSource(exprText, base === null ? null : base + br) || tryParseCond(exprText);
+        tryParseMapWithSource(exprText, base === null ? null : base + br) ||
+        tryParseCond(exprText, base === null ? null : base + br);
       emit(at(structural || { id: makeId(), kind: 'expr', value: exprText }, br, close + 1));
       pos = close + 1;
       continue;
@@ -2928,7 +2978,18 @@ function locateSelection(absPath, indexPath) {
     if (!node) return { file };
     list = node.children;
   }
-  if (typeof node.start !== 'number') return { file };
+  // A branch has no markup of its own. `{render && ( … )}` writes one brace, a
+  // condition and then the contents — so nothing in the file is the branch, and
+  // it was the one kind of node a selection could not be turned into a line
+  // range. What it stands for is what is inside it.
+  let span = node;
+  if (typeof span.start !== 'number' && Array.isArray(node.children)) {
+    const placed = node.children.filter((c) => typeof c.start === 'number');
+    if (placed.length) {
+      span = { start: placed[0].start, end: placed[placed.length - 1].end };
+    }
+  }
+  if (typeof span.start !== 'number') return { file };
 
   let text = source;
   if (file !== absPath) {
@@ -2941,8 +3002,8 @@ function locateSelection(absPath, indexPath) {
   // Text nodes run from the end of the previous tag, so their range starts and
   // ends in whitespace on lines that hold nothing else. Tighten it to the
   // lines the content is actually on.
-  let start = node.start;
-  let end = Math.min(node.end, text.length);
+  let start = span.start;
+  let end = Math.min(span.end, text.length);
   while (start < end && /\s/.test(text[start])) start++;
   while (end > start && /\s/.test(text[end - 1])) end--;
   return { file, startLine: lineOf(text, start), endLine: lineOf(text, end - 1) };
