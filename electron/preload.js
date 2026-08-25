@@ -1156,6 +1156,15 @@ if (!process.isMainFrame) {
   // when the node is actually out of sight — re-selecting something already
   // on screen shouldn't move the page under the user.
   const SCROLL_MARGIN = 24;
+  // Where the page has to go for a box to be on screen, along one axis: the
+  // scroll position it already has when the box is comfortably inside, and
+  // otherwise enough to bring it in. A box longer than the viewport is aligned
+  // to its start rather than centred, which would push the beginning of it out.
+  const revealAlong = (start, length, viewport, at) => {
+    if (start >= SCROLL_MARGIN && start + length <= viewport - SCROLL_MARGIN) return at;
+    const offset = length >= viewport - SCROLL_MARGIN * 2 ? SCROLL_MARGIN : (viewport - length) / 2;
+    return Math.max(0, at + start - offset);
+  };
   const scrollPathIntoView = (p, occ) => {
     const rects = rectsForPath(p);
     if (!rects || !rects.length) return;
@@ -1164,11 +1173,16 @@ if (!process.isMainFrame) {
     // happens to come first in the document.
     const r = rects[occ] || rects[0]; // viewport-relative
     const vh = window.innerHeight || document.documentElement.clientHeight;
-    if (r.y >= SCROLL_MARGIN && r.y + r.h <= vh - SCROLL_MARGIN) return;
-    // Taller than the viewport (a full section) — align its top rather than
-    // centering, which would push the start of it off-screen.
-    const offset = r.h >= vh - SCROLL_MARGIN * 2 ? SCROLL_MARGIN : (vh - r.h) / 2;
-    window.scrollTo({ top: Math.max(0, window.scrollY + r.y - offset), behavior: 'smooth' });
+    const vw = window.innerWidth || document.documentElement.clientWidth;
+    const top = revealAlong(r.y, r.h, vh, window.scrollY);
+    // Sideways too. A site can be wider than the frame — full-bleed sliders,
+    // a track of cards, a decorative circle hanging off the edge — and once the
+    // canvas is scrolled across, everything on it reads as having slipped off
+    // to the left with no scrollbar to say otherwise. Selecting something is
+    // how you ask to see it, so it is also how you get back.
+    const left = revealAlong(r.x, r.w, vw, window.scrollX);
+    if (top === window.scrollY && left === window.scrollX) return;
+    window.scrollTo({ top, left, behavior: 'smooth' });
   };
 
   // `stacki-opened` on the instance being edited — the one that was actually

@@ -41,7 +41,7 @@ async function frame(hash) {
   const dom = new JSDOM(
     `<!doctype html><body>
       <!--avb-s:0--><section data-box="hero">
-        <a href="/care" class="clickable_link" data-box="link">A card</a>
+        <a href="#care" class="clickable_link" data-box="link">A card</a>
       </section><!--avb-e:0-->
     </body>`,
     { url: `http://localhost:4321/${hash}`, pretendToBeVisual: true }
@@ -111,6 +111,43 @@ const press = (window, target, init = {}) => {
     const click = new window.MouseEvent('click', { bubbles: true, cancelable: true });
     link.dispatchEvent(click);
     check('and the click with it', !click.defaultPrevented, 'links would not work in the preview');
+  }
+
+  // --- and asking for something is how you get back -----------------------------
+  //
+  // A press no longer travels, but a page can be scrolled sideways all the same
+  // — a trackpad, a slider's own script, a site that is simply wider than the
+  // frame. There is no scrollbar in the canvas to say so, so the way back has
+  // to be the thing you would do anyway: select what you want to look at.
+  {
+    const { window } = await frame('#avb-design');
+    const scrolls = [];
+    window.scrollTo = (opts) => scrolls.push(opts);
+    Object.defineProperty(window, 'innerWidth', { value: 1000, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true });
+    Object.defineProperty(window, 'scrollX', { value: 1200, writable: true, configurable: true });
+    Object.defineProperty(window, 'scrollY', { value: 0, writable: true, configurable: true });
+    // A section off to the left of the frame, as it looks once the canvas has
+    // been scrolled across: its box starts well before the viewport does.
+    window.Element.prototype.getBoundingClientRect = () => ({
+      x: -900, y: 100, width: 600, height: 300, left: -900, top: 100, right: -300, bottom: 400,
+    });
+    const ev = new window.MessageEvent('message', { data: { type: 'avb:track', paths: ['0'], scope: '', focus: '', focusOcc: 0 } });
+    Object.defineProperty(ev, 'source', { value: window.parent });
+    window.dispatchEvent(ev);
+    await settle(30);
+    const go = new window.MessageEvent('message', { data: { type: 'avb:scroll-to', path: '0', occ: 0 } });
+    Object.defineProperty(go, 'source', { value: window.parent });
+    window.dispatchEvent(go);
+    await settle(30);
+    const last = scrolls[scrolls.length - 1];
+    check('asking for a node off to the side scrolls sideways to it', last && typeof last.left === 'number', JSON.stringify(scrolls));
+    check(
+      'far enough to put it on screen',
+      last && last.left < 1200 && last.left >= 0,
+      JSON.stringify(last)
+    );
+    check('and it says where vertically too, in the same move', last && typeof last.top === 'number', JSON.stringify(last));
   }
 
   const source = fs.readFileSync(PRELOAD, 'utf8');
