@@ -1026,6 +1026,9 @@ if (!process.isMainFrame) {
   // full node list, so it takes this set and treats the rest as unrendered.
   //
   // Structural only, no measuring, so it can cover every node in the file.
+  // The scope and instance the page-wide answers were last worked out for.
+  // `undefined` until the first track, so the first one always answers.
+  let lastQuestion;
   let lastRenderedKey = '';
   const sendRendered = () => {
     const rendered = [];
@@ -1183,18 +1186,39 @@ if (!process.isMainFrame) {
     openedEls = next;
   };
 
+  // The canvas answers two different questions, and only one of them is asked
+  // by a pointer.
+  //
+  //   where the tracked nodes ARE — a box each, for the two or three paths the
+  //   app is watching. Changes when the page scrolls, when something moves, and
+  //   when the app watches a different node.
+  //
+  //   what the page IS — which nodes put anything on it, and what each one's
+  //   classes came out as. Those are facts about the whole file: they cost a
+  //   walk of every marked node, five thousand of them on a page of any size,
+  //   and they can only change when the DOM does.
+  //
+  // Both were sent together, so moving the pointer to a new node re-walked the
+  // page. On a large one that walk is most of a second, and it is the wait
+  // before an outline appears.
   let rectsQueued = false;
-  const queueRects = () => {
+  let pageQueued = false;
+  const queueRects = (pageToo = false) => {
     thinCache = null; // scrolled, resized or rebuilt — every box moved
     focusCache = undefined; // …including the instance being edited
+    pageQueued = pageQueued || pageToo;
     if (rectsQueued) return;
     rectsQueued = true;
     requestAnimationFrame(() => {
       rectsQueued = false;
+      const page = pageQueued;
+      pageQueued = false;
       paintOpened();
       sendRects();
-      sendRendered();
-      sendClasses();
+      if (page) {
+        sendRendered();
+        sendClasses();
+      }
     });
   };
 
@@ -1206,9 +1230,11 @@ if (!process.isMainFrame) {
   // never catches up.
   let settleTimer = null;
   const remeasure = () => {
-    queueRects();
+    // Something changed the document — which nodes rendered, and what their
+    // classes resolved to, are both back in question.
+    queueRects(true);
     clearTimeout(settleTimer);
-    settleTimer = setTimeout(queueRects, 120);
+    settleTimer = setTimeout(() => queueRects(true), 120);
   };
 
   // Which rendered copy of a node the target sits in. A node inside a loop
@@ -1365,7 +1391,7 @@ if (!process.isMainFrame) {
     document.addEventListener('avb:morphed', () => {
       collectRegions();
       announceMapped();
-      queueRects();
+      queueRects(true);
     });
     collectRegions();
     // Said even when the page has no markers at all: "nothing here" is a real
@@ -1615,12 +1641,23 @@ if (!process.isMainFrame) {
       focusOcc = typeof d.focusOcc === 'number' ? d.focusOcc : 0;
       focusCache = undefined;
       thinCache = null; // scope decides what's hit-testable
-      lastRenderedKey = ''; // scope decides which nodes are even asked about
-      lastClassKey = '';
       paintOpened();
       sendRects();
-      sendRendered();
-      sendClasses();
+      // The page-wide answers, but only when the QUESTION changed. Tracking a
+      // different node does not change which nodes rendered — and the app
+      // tracks a new node on every hover, so answering that here walked the
+      // whole page each time the pointer moved.
+      //
+      // The scope and the focused instance do change it: both decide which
+      // nodes are asked about at all.
+      const question = `${activeScope}|${focusPath}|${focusOcc}`;
+      if (question !== lastQuestion) {
+        lastQuestion = question;
+        lastRenderedKey = '';
+        lastClassKey = '';
+        sendRendered();
+        sendClasses();
+      }
     }
     if (d?.type === 'avb:scroll-to' && typeof d.path === 'string') {
       scrollPathIntoView(d.path, typeof d.occ === 'number' ? d.occ : 0);
