@@ -116,7 +116,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   })();
 
   // A stand-in dev server whose answer is set by the test.
-  const makeWatch = (answers) => {
+  const makeWatch = (answers, extra = {}) => {
     const asked = [];
     let reloads = 0;
     const watch = createPreviewWatch({
@@ -128,6 +128,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       onRecover: () => { reloads++ },
       retryMs: 20,
       settleMs: 5,
+      quietMs: 120,
+      ...extra,
     });
     return { watch, asked, reloads: () => reloads };
   };
@@ -142,6 +144,45 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     // Repeatedly, because this is what every keystroke does.
     for (let i = 0; i < 5; i++) { t.watch.poke(); await sleep(15) }
     check('and stays un-reloaded across many edits', t.reloads() === 0, `${t.reloads()} reloads`);
+    t.watch.stop();
+  }
+
+  // --- Asking costs a page --------------------------------------------------
+  //
+  // The only way to ask "is the dev server serving a page" is to request the
+  // page, which makes the server render the whole thing for a status code. On
+  // a big page that is a third of a second of the server's attention, and it
+  // was spent on every write the app made — so the canvas waited behind a
+  // render nobody wanted to see, to be shown the one it did. A variant hovered
+  // in a dropdown paid for two renders and showed one.
+  {
+    const t = makeWatch([{ ok: true }]);
+    for (let i = 0; i < 6; i++) { t.watch.poke(); await sleep(10) }
+    await sleep(60);
+    check('a healthy preview is asked about once, not once per edit', t.asked.length === 1, `${t.asked.length} asks`);
+    // …but not never: it is how a breakage is noticed at all.
+    await sleep(140);
+    t.watch.poke();
+    await sleep(40);
+    check('and again once the quiet spell is over', t.asked.length === 2, `${t.asked.length} asks`);
+    t.watch.stop();
+  }
+  {
+    // A broken preview is a different matter: nothing is being rendered but an
+    // error screen, and the answer is the whole point. The retry is held off
+    // here so that what is measured is the poke and not the loop.
+    const t = makeWatch([{ ok: false }], { retryMs: 5000 });
+    t.watch.poke();
+    await sleep(40);
+    const first = t.asked.length;
+    check('a broken preview is asked about', first === 1, `${first} asks`);
+    t.watch.poke();
+    await sleep(40);
+    check(
+      'and asked again on the next edit, quiet spell or not',
+      t.asked.length === 2,
+      `${first} → ${t.asked.length}`
+    );
     t.watch.stop();
   }
 

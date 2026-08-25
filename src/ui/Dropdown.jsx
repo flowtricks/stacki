@@ -104,10 +104,17 @@ export default function Dropdown({
   };
 
   const pick = (option) => {
+    // The live preview has usually applied this already — you hover the option
+    // and then click it — and asking for it a second time is not free: the app
+    // writes the page again, the dev server renders it again, and the canvas
+    // fetches a rendering identical to the one it is showing. On a big page
+    // that is a third of a second of nothing happening, right at the moment
+    // the choice is made.
+    const applied = previewedRef.current ?? committedRef.current;
     committedRef.current = option.value;
     previewedRef.current = null;
     setOpen(false);
-    onChange(option.value);
+    if (option.value !== applied) onChange(option.value);
     triggerRef.current?.focus();
   };
 
