@@ -5,6 +5,7 @@ import PalettePanel from './panels/PalettePanel.jsx';
 import StructurePanel from './panels/StructurePanel.jsx';
 import { isInlineRun, noteIndexAbove, noteText, noteValue, selectionAfterDelete } from './treeSelection.js';
 import { canvasClickAction } from './canvasClick.js';
+import { liveClassesById as classesByNodeId, rendersOwnElement } from './liveClasses.js';
 import { setSoundEnabled } from './ui/sound.js';
 import { createPreviewWatch } from './previewRecovery.js';
 import { tellCanvas } from './canvasQuery.js';
@@ -3761,21 +3762,13 @@ export default function App() {
 
   // The reported classes, keyed by node id — same walk as the render report,
   // so a path only has to be resolved once.
-  const liveClassesById = React.useMemo(() => {
-    if (!nodeClasses || !model) return null;
-    const prefix = editedRel ? `${editedRel}|` : '';
-    const byId = new Map();
-    const walk = (list, trail) => {
-      list.forEach((n, i) => {
-        const t = [...trail, i];
-        const hit = nodeClasses[prefix + t.join('.')];
-        if (hit && hit.length) byId.set(n.id, hit);
-        if (Array.isArray(n.children)) walk(n.children, t);
-      });
-    };
-    walk(model.nodes, []);
-    return byId;
-  }, [nodeClasses, model, editedRel]);
+  const liveClassesById = React.useMemo(
+    () =>
+      nodeClasses && model
+        ? classesByNodeId(nodeClasses, model.nodes, editedRel ? `${editedRel}|` : '')
+        : null,
+    [nodeClasses, model, editedRel]
+  );
 
   // The file being edited, relative to src/ — how the CMS addresses a page's
   // own data (`pages/index.astro#rotatingWords`).
@@ -3850,7 +3843,7 @@ export default function App() {
     // marked, and a live child makes its ancestors live. `<Fragment set:html>`
     // has no children to speak up, which is exactly the case where the panel
     // cannot tell — and saying "renders nothing" is the wrong half to guess.
-    const answers = (n) => MARKABLE.has(n.kind) && n.name !== 'Fragment' && n.name !== 'slot';
+    const answers = (n) => MARKABLE.has(n.kind) && rendersOwnElement(n);
     const ids = new Set();
     // An inline run — words with <a>, <strong>, <span> among them — is written
     // as one line, and markers inside it would render as spaces, so nothing in
