@@ -47,6 +47,29 @@ if (!process.isMainFrame) {
       true
     );
     window.addEventListener('submit', (e) => e.preventDefault(), true);
+    // A press on the canvas is a selection, not an interaction — and left to
+    // the browser, a press focuses whatever is under the pointer. Focusing
+    // something REVEALS it: the page scrolls to bring it into view, sideways
+    // as well as down.
+    //
+    // A card in a slider is covered by a full-bleed link and half of them sit
+    // past the right edge, so selecting one scrolled the canvas across. The
+    // page it came from is 3399px wide against a 1280px frame, so there is a
+    // long way to travel and nothing on screen to say what happened: the site
+    // simply looks as though it has slipped off to the left.
+    //
+    // The frame still takes focus itself — that is what carries the modifiers
+    // above, and what a page's own keyboard handlers listen from. It is the
+    // ELEMENT focus, and the scroll that comes with it, that goes.
+    window.addEventListener(
+      'mousedown',
+      (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        window.focus();
+      },
+      true
+    );
     // Which modifiers are held, forwarded for the same reason as the shortcuts
     // below: clicking an element on the canvas puts keyboard focus in here, so
     // every key after that is delivered to this frame and never reaches the
