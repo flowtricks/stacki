@@ -1422,7 +1422,12 @@ if (!process.isMainFrame) {
     // timeout.
     announceMapped();
     if (!regions.size) return;
-    window.addEventListener('scroll', queueRects, true);
+    // Wrapped, not passed straight in: a listener is handed the Event, and
+    // queueRects reads its first argument as "the page may have changed too".
+    // An Event is not false, so every scroll asked for the whole-page walk —
+    // half a second of it on a page of any size, sixty times a second while
+    // the wheel is moving.
+    window.addEventListener('scroll', () => queueRects(), true);
     window.addEventListener('resize', remeasure);
     // The whole document, not just the body: styling something writes CSS, and
     // the dev server delivers CSS by swapping a <style> in <head>. Watching the
