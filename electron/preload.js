@@ -1353,6 +1353,30 @@ if (!process.isMainFrame) {
     // tag is the only way to reach them — without this, clicking a split
     // paragraph would select its parent instead.
     let tagged = target instanceof Element ? target.closest(`[${PATH_ATTR}]`) : null;
+    // What lights up has to contain the pointer.
+    //
+    // A page's own scripts are free to put a child's box outside its parent's,
+    // and text animation does it as a matter of course: GSAP's SplitText gives
+    // every word a line box taller than the line, so a word hangs thirteen
+    // pixels above the component holding it — measured, on the page this came
+    // from. The pointer in the space above a heading is over one of those
+    // words; the browser says so, truthfully; and what got picked was a node
+    // whose outline starts BELOW the pointer. Which reads, fairly, as the
+    // margin above a thing being treated as part of the thing.
+    //
+    // So an element only answers for a point its own box holds. One that
+    // doesn't hands the question to the element above it, which is what the
+    // person was pointing at.
+    const EDGE = 1; // the outline is drawn on the boundary; that pixel counts
+    const holdsPoint = (el) => {
+      const b = el.getBoundingClientRect();
+      // No box at all — a <template>, something display:none — cannot answer.
+      if (b.width === 0 && b.height === 0) return true;
+      return x >= b.left - EDGE && x <= b.right + EDGE && y >= b.top - EDGE && y <= b.bottom + EDGE;
+    };
+    while (x !== null && tagged && !holdsPoint(tagged)) {
+      tagged = tagged.parentElement ? tagged.parentElement.closest(`[${PATH_ATTR}]`) : null;
+    }
     // Walk out of any nested namespace until the tag belongs to the open file
     // — and, while an instance is focused, until it belongs to that instance:
     // a click on one of its siblings resolves to nothing, which is how the app
@@ -1382,6 +1406,9 @@ if (!process.isMainFrame) {
           }
         }
         if (hit) {
+          // Same rule for a node addressed by markers rather than by a tag:
+          // its run has to be where the pointer is.
+          if (x !== null && !run.some((n) => n.nodeType === 1 && holdsPoint(n))) break;
           best = p;
           bestDepth = depth;
           break;
