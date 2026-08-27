@@ -152,6 +152,53 @@ const settle = (ms = 120) => new Promise((r) => setTimeout(r, ms));
     `${pageAnswers() - beforeScroll} page answers for a scroll`
   );
 
+  // Counting the messages is not enough, and believing it cost half a second a
+  // frame on a real page: the page-wide answers are only SENT when they have
+  // changed, and a scroll changes nothing — so the walk can run in full, find
+  // the same answer, say nothing, and look like a fix.
+  //
+  // What it costs is the walk, so the walk is what is counted. Every one of
+  // them asks the document for its tagged elements, over and over; measuring
+  // the boxes of one tracked node asks once or twice.
+  const asksOf = async (what) => {
+    const real = window.document.querySelectorAll.bind(window.document);
+    let asked = 0;
+    window.document.querySelectorAll = (...args) => {
+      asked++;
+      return real(...args);
+    };
+    try {
+      await what();
+    } finally {
+      window.document.querySelectorAll = real;
+    }
+    return asked;
+  };
+
+  const forScroll = await asksOf(async () => {
+    window.dispatchEvent(new window.Event('scroll'));
+    await settle(60);
+  });
+  // What re-measuring costs on its own: the app asking for the same node's
+  // boxes again, which is exactly what a scroll has to do.
+  const forTrack = await asksOf(async () => {
+    await track(['0']);
+  });
+  const forEdit = await asksOf(async () => {
+    window.document.querySelector('[data-box="hero"]').classList.add('is-touched');
+    await settle(200);
+  });
+  check(
+    'a scroll costs what re-measuring costs, and nothing more',
+    forScroll <= forTrack,
+    `${forScroll} document queries for a scroll against ${forTrack} for a re-measure — the scroll is walking the page`
+  );
+  check(
+    'while a change to the page really does walk it',
+    forEdit > forTrack,
+    `${forEdit} for an edit against ${forTrack} for a re-measure`
+  );
+
   if (failures.length) {
     console.error(`\nhover-cost: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');

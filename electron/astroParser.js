@@ -2048,7 +2048,14 @@ function parsePropSchema(source, prelude = '') {
     // Line by line first — that reads members written one per line, including
     // several separated by commas rather than semicolons.
     for (const line of explodeMembers(block).split('\n')) {
-      const m = line.trim().match(/^(?:readonly\s+)?([\w$]+)\??\s*:\s*([^;\n]+?)[;,]?\s*$/);
+      // The separator this member ended with, if any — explodeMembers has
+      // already cut the top-level ones, so whatever is left inside the type is
+      // the type's own. Refusing a `;` there cost every prop written the way
+      // TypeScript writes an object: `items?: { title: string; text: string }[]`
+      // matched nothing at all, so the prop fell through to the destructuring
+      // — where it has no type — and a list of rows came out as raw code.
+      const text = line.trim().replace(/[;,]\s*$/, '');
+      const m = text.match(/^(?:readonly\s+)?([\w$]+)\??\s*:\s*([\s\S]+)$/);
       if (m) out.set(m[1], m[2].trim());
     }
     // …then whole members, for a type that spans lines:
@@ -2214,7 +2221,13 @@ function parsePropSchema(source, prelude = '') {
     // Walked line by line rather than matched in one pass, so the comment
     // above a prop can be carried onto it — that's the prop's documentation,
     // and the panel shows it as the field's help text.
-    const entryRe = /^\s*(?:readonly\s+)?([\w$]+)(\?)?\s*:\s*([^;\n]+?)[;,]?\s*$/;
+    // The type runs to the end of the member — explodeMembers has already cut
+    // the top-level semicolons, so a `;` still in there belongs to the type.
+    // Refusing one cost every prop written the way TypeScript writes an object:
+    // `items?: { title: string; text: string }[]` matched nothing at all, the
+    // prop fell through to the destructuring — where it has no type — and a
+    // list of rows came out as a code field instead of the list control.
+    const entryRe = /^\s*(?:readonly\s+)?([\w$]+)(\?)?\s*:\s*([\s\S]+?)[;,]?\s*$/;
     let doc = [];
     let inBlock = false;
     const lines = explodeMembers(block).split('\n');
