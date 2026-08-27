@@ -875,7 +875,24 @@ function run(cmd, args, cwd, opts = {}) {
   // after the first call (memoized).
   ensureToolPath();
   return new Promise((resolve, reject) => {
-    execFile(cmd, args, { cwd, timeout: opts.timeout || 60000, ...opts }, (err, stdout, stderr) => {
+    const options = { cwd, timeout: opts.timeout || 60000, ...opts };
+    // git is translated, and this app reads what git says.
+    //
+    // gitBranches.js recognises a refusal by its words — "would be overwritten",
+    // "not fully merged" — and turns each one into a sentence that says what to
+    // do, or into the question the UI asks instead. On a French machine git
+    // answers "Veuillez valider ou remiser vos modifications", none of those
+    // patterns match, and the whole layer falls through to the raw porcelain it
+    // exists to replace: no offer to park the changes, no "force?" on an
+    // unmerged branch. Nothing appears broken — the app just quietly stops
+    // being helpful in every language but one.
+    //
+    // So the answers arrive in the language the code reads. LC_ALL wins over
+    // LANG and LC_MESSAGES both, which is the point: whatever the user's shell
+    // is set to, this one call is not subject to it. Only the messages are
+    // affected — paths and commit text are bytes git passes through either way.
+    options.env = { ...(opts.env || process.env), LC_ALL: 'C' };
+    execFile(cmd, args, options, (err, stdout, stderr) => {
       if (err) {
         err.stdout = stdout;
         err.stderr = stderr;
