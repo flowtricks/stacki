@@ -47,6 +47,29 @@ if (!process.isMainFrame) {
       true
     );
     window.addEventListener('submit', (e) => e.preventDefault(), true);
+    // A press on the canvas is a selection, not an interaction — and left to
+    // the browser, a press focuses whatever is under the pointer. Focusing
+    // something REVEALS it: the page scrolls to bring it into view, sideways
+    // as well as down.
+    //
+    // A card in a slider is covered by a full-bleed link and half of them sit
+    // past the right edge, so selecting one scrolled the canvas across. The
+    // page it came from is 3399px wide against a 1280px frame, so there is a
+    // long way to travel and nothing on screen to say what happened: the site
+    // simply looks as though it has slipped off to the left.
+    //
+    // The frame still takes focus itself — that is what carries the modifiers
+    // above, and what a page's own keyboard handlers listen from. It is the
+    // ELEMENT focus, and the scroll that comes with it, that goes.
+    window.addEventListener(
+      'mousedown',
+      (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        window.focus();
+      },
+      true
+    );
     // Which modifiers are held, forwarded for the same reason as the shortcuts
     // below: clicking an element on the canvas puts keyboard focus in here, so
     // every key after that is delivered to this frame and never reaches the
@@ -1133,6 +1156,15 @@ if (!process.isMainFrame) {
   // when the node is actually out of sight — re-selecting something already
   // on screen shouldn't move the page under the user.
   const SCROLL_MARGIN = 24;
+  // Where the page has to go for a box to be on screen, along one axis: the
+  // scroll position it already has when the box is comfortably inside, and
+  // otherwise enough to bring it in. A box longer than the viewport is aligned
+  // to its start rather than centred, which would push the beginning of it out.
+  const revealAlong = (start, length, viewport, at) => {
+    if (start >= SCROLL_MARGIN && start + length <= viewport - SCROLL_MARGIN) return at;
+    const offset = length >= viewport - SCROLL_MARGIN * 2 ? SCROLL_MARGIN : (viewport - length) / 2;
+    return Math.max(0, at + start - offset);
+  };
   const scrollPathIntoView = (p, occ) => {
     const rects = rectsForPath(p);
     if (!rects || !rects.length) return;
@@ -1141,11 +1173,16 @@ if (!process.isMainFrame) {
     // happens to come first in the document.
     const r = rects[occ] || rects[0]; // viewport-relative
     const vh = window.innerHeight || document.documentElement.clientHeight;
-    if (r.y >= SCROLL_MARGIN && r.y + r.h <= vh - SCROLL_MARGIN) return;
-    // Taller than the viewport (a full section) — align its top rather than
-    // centering, which would push the start of it off-screen.
-    const offset = r.h >= vh - SCROLL_MARGIN * 2 ? SCROLL_MARGIN : (vh - r.h) / 2;
-    window.scrollTo({ top: Math.max(0, window.scrollY + r.y - offset), behavior: 'smooth' });
+    const vw = window.innerWidth || document.documentElement.clientWidth;
+    const top = revealAlong(r.y, r.h, vh, window.scrollY);
+    // Sideways too. A site can be wider than the frame — full-bleed sliders,
+    // a track of cards, a decorative circle hanging off the edge — and once the
+    // canvas is scrolled across, everything on it reads as having slipped off
+    // to the left with no scrollbar to say otherwise. Selecting something is
+    // how you ask to see it, so it is also how you get back.
+    const left = revealAlong(r.x, r.w, vw, window.scrollX);
+    if (top === window.scrollY && left === window.scrollX) return;
+    window.scrollTo({ top, left, behavior: 'smooth' });
   };
 
   // `stacki-opened` on the instance being edited — the one that was actually
@@ -1316,6 +1353,30 @@ if (!process.isMainFrame) {
     // tag is the only way to reach them — without this, clicking a split
     // paragraph would select its parent instead.
     let tagged = target instanceof Element ? target.closest(`[${PATH_ATTR}]`) : null;
+    // What lights up has to contain the pointer.
+    //
+    // A page's own scripts are free to put a child's box outside its parent's,
+    // and text animation does it as a matter of course: GSAP's SplitText gives
+    // every word a line box taller than the line, so a word hangs thirteen
+    // pixels above the component holding it — measured, on the page this came
+    // from. The pointer in the space above a heading is over one of those
+    // words; the browser says so, truthfully; and what got picked was a node
+    // whose outline starts BELOW the pointer. Which reads, fairly, as the
+    // margin above a thing being treated as part of the thing.
+    //
+    // So an element only answers for a point its own box holds. One that
+    // doesn't hands the question to the element above it, which is what the
+    // person was pointing at.
+    const EDGE = 1; // the outline is drawn on the boundary; that pixel counts
+    const holdsPoint = (el) => {
+      const b = el.getBoundingClientRect();
+      // No box at all — a <template>, something display:none — cannot answer.
+      if (b.width === 0 && b.height === 0) return true;
+      return x >= b.left - EDGE && x <= b.right + EDGE && y >= b.top - EDGE && y <= b.bottom + EDGE;
+    };
+    while (x !== null && tagged && !holdsPoint(tagged)) {
+      tagged = tagged.parentElement ? tagged.parentElement.closest(`[${PATH_ATTR}]`) : null;
+    }
     // Walk out of any nested namespace until the tag belongs to the open file
     // — and, while an instance is focused, until it belongs to that instance:
     // a click on one of its siblings resolves to nothing, which is how the app
@@ -1345,6 +1406,9 @@ if (!process.isMainFrame) {
           }
         }
         if (hit) {
+          // Same rule for a node addressed by markers rather than by a tag:
+          // its run has to be where the pointer is.
+          if (x !== null && !run.some((n) => n.nodeType === 1 && holdsPoint(n))) break;
           best = p;
           bestDepth = depth;
           break;
@@ -1399,7 +1463,12 @@ if (!process.isMainFrame) {
     // timeout.
     announceMapped();
     if (!regions.size) return;
-    window.addEventListener('scroll', queueRects, true);
+    // Wrapped, not passed straight in: a listener is handed the Event, and
+    // queueRects reads its first argument as "the page may have changed too".
+    // An Event is not false, so every scroll asked for the whole-page walk —
+    // half a second of it on a page of any size, sixty times a second while
+    // the wheel is moving.
+    window.addEventListener('scroll', () => queueRects(), true);
     window.addEventListener('resize', remeasure);
     // The whole document, not just the body: styling something writes CSS, and
     // the dev server delivers CSS by swapping a <style> in <head>. Watching the

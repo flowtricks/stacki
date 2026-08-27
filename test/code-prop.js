@@ -166,6 +166,68 @@ const check = (what, condition, detail) => {
     await m.done();
   }
 
+  // --- the type has to be read before any of this can happen ------------------------
+  //
+  // All of the above is decided by the prop's TYPE, and a prop only has one if
+  // the schema could read its declaration. The reader refused a `;` inside the
+  // type — which is how TypeScript writes an object —
+  //
+  //   items?: { title: string; text: string }[]
+  //
+  // so that line matched nothing at all. The prop fell through to the
+  // destructuring, where there is no type to read, and came back as `other`:
+  // no expression, no list control, a page of JSON in a text box.
+  {
+    const { parsePropSchema } = require(path.join(__dirname, '..', 'electron', 'astroParser.js'));
+    const withType = (decl) => {
+      const src = `---\ninterface Props {\n  ${decl}\n}\nconst { items } = Astro.props;\n---\n<div/>\n`;
+      return (parsePropSchema(src).find((p) => p.name === 'items') || {}).type;
+    };
+    check(
+      'an array of objects, written the way TypeScript writes one',
+      withType('items?: { title: string; text: string }[];') === 'code',
+      withType('items?: { title: string; text: string }[];')
+    );
+    check(
+      'and with commas, which always worked',
+      withType('items?: { title: string, text: string }[];') === 'code',
+      withType('items?: { title: string, text: string }[];')
+    );
+    check('a named array is still code', withType('items?: Item[];') === 'code', withType('items?: Item[];'));
+    check('and so is a plain one', withType('items?: string[];') === 'code', withType('items?: string[];'));
+    // The semicolons inside a Record are the same case, and it is still a bag
+    // of attributes rather than a list.
+    check(
+      'a Record with a shape in it is still attributes',
+      withType('items?: Record<string, { a: string; b: number }>;') === 'attrs',
+      withType('items?: Record<string, { a: string; b: number }>;')
+    );
+    // What the semicolon rule must not eat: the ordinary members beside it.
+    const many = `---\ninterface Props {\n  /** The rows. */\n  items?: { title: string; text: string }[];\n  variant?: "stack" | "row";\n  count?: number;\n}\nconst { items } = Astro.props;\n---\n<div/>\n`;
+    const schema = parsePropSchema(many);
+    const type = (n) => (schema.find((p) => p.name === n) || {}).type;
+    check('the prop after it is still read', type('variant') === 'enum', type('variant'));
+    check('and the one after that', type('count') === 'number', type('count'));
+    check(
+      'and the note above it is still its own',
+      /The rows/.test((schema.find((p) => p.name === 'items') || {}).doc || ''),
+      JSON.stringify((schema.find((p) => p.name === 'items') || {}).doc)
+    );
+  }
+
+  // The same reading happens a second time, for a union of shapes: which props
+  // a branch offers. A member it cannot read is a prop that branch does not
+  // know it has.
+  {
+    const { parsePropSchema } = require(path.join(__dirname, '..', 'electron', 'astroParser.js'));
+    const src = `---\ntype Props =\n  | { variant: "list"; items: { title: string; text: string }[] }\n  | { variant: "plain"; text: string };\nconst { variant } = Astro.props as Props;\n---\n<div/>\n`;
+    const schema = parsePropSchema(src);
+    const union = (schema.find((p) => p.unions) || {}).unions || [];
+    const names = union[0] ? union[0].names : [];
+    check('a branch knows the array member it declares', names.includes('items'), JSON.stringify(names));
+    check('beside the ones it always knew', names.includes('variant') && names.includes('text'), JSON.stringify(names));
+  }
+
   // --- the rule, where it lives ---------------------------------------------------
   const panel = fs.readFileSync(
     path.join(__dirname, '..', 'src', 'panels', 'PropsPanel.jsx'),
