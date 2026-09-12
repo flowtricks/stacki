@@ -32,9 +32,12 @@ const check = (what, condition, detail) => {
   if (!condition) failures.push(`  ${what}${detail ? `\n    ${detail}` : ''}`);
 };
 
+// LC_ALL as main.js's runner sets it: git is translated, and both this test and
+// the code it exercises read git's words. Without it the suite passes or fails
+// by the locale of whoever runs it.
 const git = (cwd, args) =>
   new Promise((resolve, reject) => {
-    execFile('git', args, { cwd, maxBuffer: 1 << 24 }, (err, stdout, stderr) => {
+    execFile('git', args, { cwd, maxBuffer: 1 << 24, env: { ...process.env, LC_ALL: 'C' } }, (err, stdout, stderr) => {
       if (err) {
         err.stdout = stdout;
         err.stderr = stderr;

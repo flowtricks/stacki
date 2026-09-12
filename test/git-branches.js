@@ -31,9 +31,12 @@ const check = (what, condition, detail) => {
 
 // The runner the module takes, without main.js's PATH repair — nothing here
 // runs from a packaged app.
+// LC_ALL as main.js's runner sets it: git is translated, and both this test and
+// the code it exercises read git's words. Without it the suite passes or fails
+// by the locale of whoever runs it.
 const git = (cwd, args) =>
   new Promise((resolve, reject) => {
-    execFile('git', args, { cwd }, (err, stdout, stderr) => {
+    execFile('git', args, { cwd, env: { ...process.env, LC_ALL: 'C' } }, (err, stdout, stderr) => {
       if (err) {
         err.stdout = stdout;
         err.stderr = stderr;
@@ -622,6 +625,21 @@ const caught = async (fn) => {
     check(
       'with the work in progress on it',
       fs.readFileSync(path.join(dir, 'a.txt'), 'utf8') === 'started something\n'
+    );
+  }
+
+  // Everything above runs git under LC_ALL=C, the way the app does. That makes
+  // the suite locale-proof and, in the same move, blind to the app losing it:
+  // strip the env from main.js's runner and every check here still passes while
+  // a French machine gets none of this module's sentences. So the runner itself
+  // is read, and the one line that guarantees the rest is asserted directly.
+  {
+    const mainSrc = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
+    const runner = mainSrc.slice(mainSrc.indexOf('function run(cmd, args, cwd'));
+    check(
+      "main.js runs git in the language this module's patterns are written in",
+      /LC_ALL:\s*'C'/.test(runner.slice(0, runner.indexOf('\n}'))),
+      'run() no longer forces a locale — git will answer in the user’s language'
     );
   }
 
