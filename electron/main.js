@@ -183,7 +183,15 @@ function createWindow() {
   // person is looking.
   let bounds;
   try {
-    bounds = openingBounds(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea);
+    // The display the pointer is on — but never ask the pointer on Linux:
+    // screen.getCursorScreenPoint() round-trips Wayland synchronously and
+    // never comes back, hanging startup with no window and no error. The
+    // primary display always answers, on X11 and Wayland alike.
+    const display =
+      process.platform === 'linux'
+        ? screen.getPrimaryDisplay()
+        : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    bounds = openingBounds(display.workArea);
   } catch {
     // No display to ask about (a headless run, an unusual session): a laptop
     // sized window is a fine thing to fall back to.

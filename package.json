@@ -135,6 +135,7 @@
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
     "dist:mac:unsigned": "npm run build && electron-builder --mac -c.mac.forceCodeSigning=false -c.mac.notarize=false -c.mac.identity=null",
+    "dist:linux": "npm run build && electron-builder --linux",
     "test": "node scripts/run-tests.js",
     "test:docdefaults": "node test/doc-defaults.js",
     "test:querycache": "node test/query-cache.js",
@@ -244,6 +245,18 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "icon": "resources/icon.png",
+      "category": "Development",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     }
   },
   "exports": {
