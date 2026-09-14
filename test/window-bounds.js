@@ -57,8 +57,13 @@ const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 
 check('the window is opened with these bounds', /\.\.\.bounds,/.test(main), 'the window still opens at its own size');
 check(
   'measured from the display the pointer is on',
-  /screen\.getDisplayNearestPoint\(screen\.getCursorScreenPoint\(\)\)\.workArea/.test(main),
+  /screen\.getDisplayNearestPoint\(screen\.getCursorScreenPoint\(\)\)/.test(main),
   'a second display would open the window on the first'
+);
+check(
+  'but Linux opens on the primary display without asking the pointer',
+  /process\.platform === 'linux'[\s\S]{0,200}screen\.getPrimaryDisplay\(\)/.test(main),
+  'getCursorScreenPoint() hangs Wayland startup with no window and no error'
 );
 check(
   'and a display it cannot ask about still opens one',
