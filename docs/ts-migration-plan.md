@@ -188,11 +188,12 @@ refactors (AGENTS.md change rule).
 Mutating modules (`loopBindings`, `dataSuggest`, the panels' in-place tree
 edits) convert with **minimal fidelity** — local mutable mirrors, no deep
 identity design. The mutable-tree write path is scheduled for replacement by
-the diff-mapping editor core (`docs/diff-mapping-editor-core.md`), which lands
-after this plan behind its own corpus gate; do not build a `LiveModel` type
-family or version counters the intent processor will delete. One rename is
-owed first: the diff-mapping plan's projection concept is `shared/page-node.ts`
-— unify the names before its `shared/projection.ts` appears.
+the editor core (`docs/stacki-editor-core-plan.md`, tracked in
+`docs/editor-core-tracker.md`), which lands after this plan behind its own
+corpus gate; do not build a `LiveModel` type family or version counters the
+intent processor will delete. One rename is owed first: the core plan's
+projection concept is `shared/page-node.ts` — unify the names before its
+`shared/projection.ts` appears.
 
 ### Phase 4 — AI-assistant contract surface (ongoing)
 

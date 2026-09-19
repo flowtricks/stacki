@@ -85,7 +85,7 @@ Four cooperating processes, each with one job:
 ```
 
 - **Main** (`electron/`, Node.js, CommonJS): owns everything that touches the
-  OS. `main.ts` (emits `main.js`, 111 invoke channels) is a registry of
+  OS. `main.ts` (emits `main.js`, 113 invoke channels) is a registry of
   capabilities; leaf modules do the work (`astroParser`, `frontmatter`,
   `htmlText`, `assetRefs`, `cssVars`, `gitBranches`, `gitHistory`,
   `projectWatcher`, `terminal` via node-pty, `previewWorktree`,
@@ -238,22 +238,23 @@ found the architecture fundamentally right — the round-trip design, the
 batching, the zero dead code — with four gaps that account for most measured
 pain, in priority order:
 
-1. **The IPC protocol lives in three places, hand-maintained.** 111 channels
+1. **The IPC protocol lives in three places, hand-maintained.** 113 channels
    in `main.js`, mirrored in `preload.js`'s dispatch, mirrored at every
    renderer call site; co-change data shows renderer files driving preload
    and main edits at 0.8–1.0 confidence with no static link. **Main conversion
-   addressed the inventory:** all 115 invoke channels now have shared payload
+   addressed the inventory:** all 117 invoke channels now have shared payload
    parsers and result types; main, terminal, and preload use those channel types.
    Remaining renderer conversions can adopt those payload/result types directly.
 2. **One mutable tree wears two hats.** The live editor model is mutated in
    place (`loopBindings` even rewrites node `kind`s), while the boundary
    contract is `readonly`; saves ack by `WeakSet` identity as a workaround
    for "which version of the file is this?". **Superseded by
-   `docs/diff-mapping-editor-core.md`**: the long-term fix is diff-mapping
-   with edit intents (the file is the only state; identity is a span mapped
-   through a diff at apply time), which removes the ack machinery entirely
-   rather than polishing it. Until that lands, mutating modules convert with
-   minimal-fidelity local mirrors.
+   `docs/stacki-editor-core-plan.md`** (tracked in
+   `docs/editor-core-tracker.md`): the long-term fix is the editor core —
+   edit intents over expected-bytes witnesses (the file is the only state;
+   identity is a span mapped through a diff at apply time), which removes the
+   ack machinery entirely rather than polishing it. Until that lands,
+   mutating modules convert with minimal-fidelity local mirrors.
 3. **The style-panel sections are one abstraction written six times.**
    Layout/Size/Typography/Grid/Gap/Background/Embed co-change at ~1.0 with no
    static link — parallel hand-rolled field rows over `css.ts` (the clone

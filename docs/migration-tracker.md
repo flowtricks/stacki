@@ -12,7 +12,7 @@ and `scripts/` contain no authored `.js` or `.jsx` files; the four remaining
 Electron `.mjs` files are runtime worker assets. `allowJs` and `checkJs` are
 gone from the root compiler configuration, all 44 legacy style-panel
 `@ts-nocheck` headers are removed, and the ratchet baseline is zero.
-The invoke inventory remains complete: **111 main channels + 4 terminal
+The invoke inventory remains complete: **113 main channels + 4 terminal
 channels**, with parsed inputs and compile-checked handler results.
 
 `src/App.tsx` is now checked under the strict root configuration. Its IPC calls
@@ -650,21 +650,23 @@ the sole source-run script because it removes `dist` before compilation.
 - `AGENTS.md` names `shared/` as the cross-process contract surface.
 - `.github/workflows/check.yml` runs the full gate for main and pull requests.
 
-## Post-Phase-3 target — Diff-mapping editor core ⬜
+## Post-Phase-3 target — Editor core ⬜
 
-`docs/diff-mapping-editor-core.md` is adopted: identity = span mapped through
-one pure function `(lastKnownBytes, currentBytes, edit) → newText |
-rejected-stale`; file is the only state. Corpus gate (multi-span, kind-changing,
+`docs/stacki-editor-core-plan.md` is the adopted, consolidated plan; it
+supersedes `docs/diff-mapping-editor-core.md` (removed with the merge). Tracked
+item by item in `docs/editor-core-tracker.md`. Identity = a span mapped through
+one pure function `(lastKnownBytes, currentBytes, edit)`; the file is the
+only state; splices carry expected-bytes witnesses; the write protocol is
+atomic with checksum verification. Corpus gate (multi-span, kind-changing,
 multi-file CSS, frontmatter slots). During Phase 3, mutating modules convert
-with **minimal fidelity** — the intent processor deletes that layer later.
-Open questions: threshold timing, lastKnownBytes chaining, undo, morph
-move-blindness.
+with **minimal fidelity** — the intent processor deletes that layer later
+(tracker step 9).
 
 ## Pending tasks (not file conversions)
 
 | Task                                                                 | State                                                  |
 | -------------------------------------------------------------------- | ------------------------------------------------------ |
-| Complete `IpcContract` invoke inventory (115 channels)               | ✅ with `main.ts`                                      |
+| Complete `IpcContract` invoke inventory (117 channels)               | ✅ with `main.ts`                                      |
 | Fix conditional-hook bugs in PropsPanel / VariablesView              | ✅ PropsPanel and VariablesView cell transitions fixed |
 | Delete stray `electron/scratch2-7.js` (tracked tsc-emit leftovers)   | ✅ standalone cleanup commit                           |
 | `release.sh` → TypeScript (`scripts/*.ts`, per AGENTS §17)           | ✅ `scripts/release.ts`; parsed semver and checked steps |
