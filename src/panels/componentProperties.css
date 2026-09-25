@@ -33,111 +33,14 @@
   background: var(--component-green-soft);
   overflow-wrap: anywhere;
 }
-.property-list {
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-}
-.property-row {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-.property-row + .property-row {
-  border-top: 1px solid var(--border);
-}
-.property-row:first-child {
-  border-top-left-radius: 5px;
-  border-top-right-radius: 5px;
-}
-.property-row:last-child {
-  border-bottom-left-radius: 5px;
-  border-bottom-right-radius: 5px;
-}
-.property-row:hover {
-  background: var(--bg-active);
-}
-/* Keep the row highlight continuous, with separate feedback for the delete action. */
-.component-properties .property-row > button:where(:not(.property-remove)):hover:not(:disabled) {
-  background: transparent;
-}
-.property-row-main {
-  flex: 1;
-  justify-content: flex-start;
-  text-align: left;
-  background: transparent;
-  min-width: 0;
-  padding: 10px 7px;
-  gap: 8px;
-}
-.property-type-icon {
-  color: var(--text-dim);
-  width: 18px;
-  flex-shrink: 0;
-  text-align: center;
-}
-.property-row-label {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-.property-row-label > span {
-  overflow-wrap: anywhere;
-}
-.property-row-label small {
-  color: var(--text-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .property-required {
   color: var(--collection-purple);
 }
-.component-properties .property-grip,
-.component-properties .property-remove {
-  flex-shrink: 0;
-  width: 24px;
-  min-width: 24px;
-  padding: 3px;
-  align-self: stretch;
-  color: var(--text-dim);
-  background: transparent;
-}
-.component-properties .property-grip {
-  cursor: grab;
-  touch-action: none;
-}
-.component-properties .property-grip:active {
-  cursor: grabbing;
-}
-.component-properties .property-remove {
-  width: 32px;
-  min-width: 32px;
-  min-height: 32px;
-  margin: 4px;
-  border-radius: 4px;
-}
-.property-grip svg,
-.property-remove svg {
-  opacity: 0;
-}
-.property-row:hover svg,
-.property-row:focus-within svg {
-  opacity: 1;
-}
-.property-row.is-dragging {
-  background: var(--bg-panel-2);
-  opacity: 0.65;
-}
 .property-row.drop-before {
-  box-shadow: inset 0 2px 0 var(--accent);
+  box-shadow: inset 0 1px 0 var(--accent);
 }
 .property-row.drop-after {
-  box-shadow: inset 0 -2px 0 var(--accent);
-}
-.component-properties .property-remove:hover:not(:disabled),
-.component-properties .property-remove:focus-visible:not(:disabled) {
-  color: var(--red);
-  background: var(--bg-active);
+  box-shadow: inset 0 -1px 0 var(--accent);
 }
 .property-help {
   color: var(--text-dim);
@@ -185,6 +88,30 @@
 .property-editor textarea {
   resize: vertical;
 }
+.property-readonly-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.property-editor-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.property-editor header .property-declaration-info {
+  padding: 2px;
+  color: var(--text-dim);
+  cursor: help;
+}
+.property-conditions {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.property-conditions ul {
+  margin: 6px 0 0;
+  padding-left: 16px;
+}
 .property-editor .property-code {
   font-family: var(--mono);
   line-height: 1.5;
@@ -209,17 +136,11 @@
   gap: 6px;
   color: var(--text-dim);
 }
-.property-default-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.property-default-title small {
-  padding-top: 4px;
-}
-.property-default-title > span {
-  margin-bottom: 6px;
-  color: var(--text-dim);
+.property-options .list-field-items {
+  /* Keep six rows visible while leaving the add button outside the scrolling region. */
+  max-height: min(180px, 30vh);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 .property-actions {
   display: flex;
@@ -254,19 +175,31 @@
   background: transparent;
   color: var(--text-dim);
 }
-.property-type {
+.property-type,
+.property-default {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.property-type-heading {
+.property-type-heading,
+.property-default-title {
   display: flex;
   align-items: center;
   color: var(--text-dim);
 }
-.property-type:hover .prop-expr-toggle:not(.on) {
+.property-type:hover .prop-expr-toggle:not(.on),
+.property-default:hover .prop-expr-toggle:not(.on) {
   color: var(--text-dim);
 }
-.property-type .dd-trigger {
+.property-type .dd-trigger,
+.property-default .dd-trigger {
   width: 100%;
+}
+.property-expression-binding {
+  display: flex;
+  width: 100%;
+}
+.property-expression-binding > .expr-input {
+  flex: 1;
+  min-width: 0;
 }

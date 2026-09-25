@@ -32,4 +32,6 @@ export const LIMITS = {
   saveDrainMax: 256,
   /** Length of one IPC payload string field. */
   ipcFieldCharsMax: 10_000_000,
+  /** TextMate highlighting is synchronous CPU work after grammar startup. */
+  syntaxHighlightCharsMax: 1_000_000,
 } as const satisfies Record<string, number>;

@@ -9,6 +9,7 @@ import { rankInsertItems } from '../insertRank';
 import {
   componentPreviewURL,
   groupPaletteComponents,
+  parseComponentPreviewMessage,
   parseComponentUsage,
   prettyComponentName,
 } from '../paletteModel';
@@ -380,14 +381,53 @@ function PalettePopups({
         />
       )}
       {preview && props.devUrl && (
-        <div className="comp-preview" style={{ left: preview.left, top: preview.top }}>
-          <div className="comp-preview-title">{prettyComponentName(preview.component.name)}</div>
-          <iframe
-            src={componentPreviewURL(props.devUrl, preview.component, props.trailingSlash)}
-            title={`${preview.component.name} preview`}
-          />
-        </div>
+        <ComponentPreviewPopup
+          key={preview.component.path}
+          preview={preview}
+          devURL={props.devUrl}
+          trailingSlash={props.trailingSlash}
+        />
       )}
     </>
+  );
+}
+
+function ComponentPreviewPopup({
+  preview,
+  devURL,
+  trailingSlash,
+}: {
+  readonly preview: NonNullable<ReturnType<typeof useComponentPreview>['value']>;
+  readonly devURL: string;
+  readonly trailingSlash: TrailingSlash;
+}) {
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const receive = (event: MessageEvent<unknown>): void => {
+      if (event.source !== frameRef.current?.contentWindow) {
+        return;
+      }
+      const message = parseComponentPreviewMessage(event.data);
+      if (message) {
+        setReady(message.status === 'ready');
+      }
+    };
+    window.addEventListener('message', receive);
+    return () => window.removeEventListener('message', receive);
+  }, []);
+  return (
+    <div
+      className="comp-preview"
+      style={{ left: preview.left, top: preview.top, visibility: ready ? 'visible' : 'hidden' }}
+      aria-hidden={!ready}
+    >
+      <div className="comp-preview-title">{prettyComponentName(preview.component.name)}</div>
+      <iframe
+        ref={frameRef}
+        src={componentPreviewURL(devURL, preview.component, trailingSlash)}
+        title={`${preview.component.name} preview`}
+      />
+    </div>
   );
 }

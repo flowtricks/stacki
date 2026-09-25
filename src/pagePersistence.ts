@@ -15,19 +15,22 @@ interface CurrentSnapshot<State extends PageStateHandle> {
   readonly pageState?: State | null;
 }
 
-interface PageSaverDeps<State extends PageStateHandle> {
+interface PageSaverDeps<State extends PageStateHandle, Acknowledgement> {
   readonly readCurrent: () => CurrentSnapshot<State>;
-  readonly write: (path: string, pageState: State) => Promise<void>;
-  readonly markSaved: (pageState: State) => void;
+  readonly write: (path: string, pageState: State) => Promise<Acknowledgement>;
+  readonly markSaved: (
+    pageState: State,
+    acknowledgement: Acknowledgement | undefined,
+  ) => void;
 }
 
-export function createPageSaver<State extends PageStateHandle>({
+export function createPageSaver<State extends PageStateHandle, Acknowledgement>({
   readCurrent,
   write,
   markSaved,
-}: PageSaverDeps<State>): () => Promise<void> {
+}: PageSaverDeps<State, Acknowledgement>): () => Promise<void> {
   let pending: Promise<void> = Promise.resolve();
-  const saved = new WeakSet<State>();
+  const saved = new WeakMap<State, Acknowledgement>();
   const flush = async (): Promise<void> => {
     const path = readCurrent().currentPage?.path;
     if (!path) {
@@ -46,10 +49,10 @@ export function createPageSaver<State extends PageStateHandle>({
         return;
       }
       if (!saved.has(pageState)) {
-        await write(path, pageState);
-        saved.add(pageState);
+        const acknowledgement = await write(path, pageState);
+        saved.set(pageState, acknowledgement);
       }
-      markSaved(pageState);
+      markSaved(pageState, saved.get(pageState));
       if (readCurrent().pageState === pageState) {
         return;
       }

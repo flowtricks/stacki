@@ -608,6 +608,13 @@ html[data-platform='win32'] .titlebar { padding-right: 148px; }
 .attr-row + .attr-row { border-top: 1px solid var(--border); }
 .attr-row:hover, .attr-row.editing { background: var(--bg-hover); }
 .attr-row .attr-name { color: var(--text-dim); flex-shrink: 0; }
+.attr-row.spread .attr-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .attr-row .attr-eq { color: var(--text-faint); flex-shrink: 0; }
 .attr-row .attr-value {
   color: var(--text);
@@ -698,12 +705,28 @@ html[data-platform='win32'] .titlebar { padding-right: 148px; }
 .list-field-row.is-after { box-shadow: inset 0 -1px 0 0 var(--accent); }
 .list-field-grip {
   display: flex;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--text-faint);
   opacity: 0;
   cursor: grab;
   flex-shrink: 0;
+  touch-action: none;
 }
-.list-field-row:hover .list-field-grip { opacity: 1; }
+.list-field-row:hover .list-field-grip,
+.list-field-row:focus-within .list-field-grip { opacity: 1; }
+.list-field-row .list-field-grip:hover { background: none; }
+.list-field-grip:active { cursor: grabbing; }
+.list-field-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  margin-right: 8px;
+  vertical-align: middle;
+  color: var(--text-dim);
+}
 /* A button, so `justify-content: center` and the filled background come with
    it from the base rule — neither of which a row of text wants. The row draws
    its own hover; a second one inside it reads as a control inside a control. */
@@ -756,7 +779,8 @@ html[data-platform='win32'] .titlebar { padding-right: 148px; }
   border-radius: 4px;
   flex-shrink: 0;
 }
-.list-field-row:hover .list-field-remove { opacity: 1; }
+.list-field-row:hover .list-field-remove,
+.list-field-row:focus-within .list-field-remove { opacity: 1; }
 .list-field-remove:hover { color: var(--red); background: var(--bg-active); }
 /* A button, so it arrives centred from the base rule — which reads as a
    caption under the list rather than the next row of it. It is the row after
@@ -872,10 +896,12 @@ html[data-platform='win32'] .titlebar { padding-right: 148px; }
 .attr-editor-row:has(.cm-editor) > span {
   padding-top: 6px;
 }
-.attr-editor-row > .attr-asset-toggle { align-self: flex-start; }
+.attr-editor-row > .attr-asset-toggle,
+.attr-editor-row > .attr-expand-toggle { align-self: flex-start; }
 
-/* Always present, never in the way: switches the value to the file picker. */
-.attr-asset-toggle {
+/* Compact actions beside the value: expand its code or switch it to a file. */
+.attr-asset-toggle,
+.attr-expand-toggle {
   flex-shrink: 0;
   width: 22px;
   height: 26px;
@@ -884,7 +910,8 @@ html[data-platform='win32'] .titlebar { padding-right: 148px; }
   color: var(--text-faint);
   border-radius: 6px;
 }
-.attr-asset-toggle:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
+.attr-asset-toggle:hover:not(:disabled),
+.attr-expand-toggle:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
 .attr-asset-toggle.on { color: var(--accent); }
 
 .style-editor {
@@ -1482,7 +1509,69 @@ html[data-platform='win32'] .titlebar { padding-right: 148px; }
   min-height: 0;
 }
 .panel.left { width: 260px; flex-shrink: 0; }
+.panel.left.code-panel-shell {
+  width: clamp(360px, 34vw, 620px);
+  background: #111111;
+}
 .panel.right { width: 322px; flex-shrink: 0; border-right: none; border-left: 1px solid var(--border); }
+
+.code-panel {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.code-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px 0 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  user-select: none;
+}
+.code-panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.code-panel-path {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.code-panel-lines {
+  flex-shrink: 0;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--bg-active);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+.code-panel-editor,
+.code-panel-editor .cm-host,
+.code-panel-editor .cm-editor { height: 100%; min-height: 0; }
+.code-panel-editor { flex: 1; overflow: hidden; }
+.code-panel-editor .cm-scroller { overflow: auto; }
+.code-panel-editor .cm-code-muted { opacity: 0.24; }
+.code-panel-editor .cm-component-link { transition: color 0.1s ease; }
+.code-panel-editor .cm-meta-held .cm-component-link:hover {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 .panel-section { display: flex; flex-direction: column; min-height: 0; }
 .panel-section + .panel-section { border-top: 1px solid var(--border); }

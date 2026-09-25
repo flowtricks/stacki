@@ -8,7 +8,7 @@
 
 import postcss, { type Root, type Rule, type AtRule, type ChildNode, type Declaration } from 'postcss'
 import type { ParsedDeclaration, ParsedRule, StyleRegion } from './types'
-import { parseSelectorList } from './selectors'
+import { parseSelectorList, selectorListMembers } from './selectors'
 import { selectorKey } from './resolved'
 
 // A direct child rule of `container` whose selector is the SAME target as `selector`
@@ -124,24 +124,7 @@ type WalkContext = {
 
 /** Split a selector list on top-level commas (ignoring commas inside `()`/`[]`). */
 function splitTopLevelCommas(text: string): string[] {
-  const parts: string[] = []
-  let paren = 0
-  let bracket = 0
-  let start = 0
-  for (let i = 0; i < text.length; i += 1) {
-    const c = text[i]
-    if (c === '(') {paren += 1}
-    else if (c === ')') {paren = Math.max(0, paren - 1)}
-    else if (c === '[') {bracket += 1}
-    else if (c === ']') {bracket = Math.max(0, bracket - 1)}
-    else if (c === ',' && paren === 0 && bracket === 0) {
-      parts.push(text.slice(start, i).trim())
-      start = i + 1
-    }
-  }
-  const last = text.slice(start).trim()
-  if (last) {parts.push(last)}
-  return parts.filter(Boolean)
+  return selectorListMembers(text).map((member) => member.text)
 }
 
 /** Combine one parent selector with one nested selector per CSS nesting rules:

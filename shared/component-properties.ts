@@ -1,5 +1,5 @@
 // Source text is the revision token: edits cannot overwrite a newer disk revision.
-import { boolean, list, object, text } from './boundary';
+import { boolean, count, list, object, optional, text } from './boundary';
 import { LIMITS } from './limits';
 import { toRecord } from './record';
 import type { Result } from './result';
@@ -21,6 +21,22 @@ export interface ComponentProperty {
   readonly readonly: boolean;
   readonly defaultValue: string;
   readonly description: string;
+  readonly origin?: PropertyOrigin;
+  readonly editing?: PropertyEditing;
+  readonly conditions?: readonly string[];
+}
+export type PropertyEditing =
+  | { readonly kind: 'editable' }
+  | { readonly kind: 'override'; readonly reason: string }
+  | { readonly kind: 'restricted'; readonly reason: string };
+export interface PropertySource {
+  readonly label: string;
+  readonly expression: string;
+  readonly line: number;
+}
+export interface PropertyOrigin {
+  readonly declarations: readonly PropertySource[];
+  readonly defaultValue?: PropertySource;
 }
 export interface ComponentProperties {
   readonly source: string;
@@ -28,10 +44,20 @@ export interface ComponentProperties {
   readonly frontmatter: string;
   readonly advanced: boolean;
 }
+export interface PropertyOptionRename {
+  readonly from: string;
+  readonly to: string;
+}
 export type PropertyChange =
-  | { readonly kind: 'save'; readonly originalName: string; readonly property: ComponentProperty }
+  | {
+      readonly kind: 'save';
+      readonly originalName: string;
+      readonly property: ComponentProperty;
+      readonly optionRenames?: readonly PropertyOptionRename[];
+    }
   | { readonly kind: 'remove'; readonly name: string }
   | { readonly kind: 'order'; readonly names: readonly string[] }
+  | { readonly kind: 'options'; readonly name: string; readonly type: string }
   | { readonly kind: 'source'; readonly frontmatter: string };
 
 export function propertyText(input: unknown): string {
@@ -66,7 +92,46 @@ export function parseComponentProperty(input: unknown): ComponentProperty {
     readonly: boolean,
     defaultValue: propertyText,
     description: propertyText,
+    origin: optional(parsePropertyOrigin),
+    editing: optional(parsePropertyEditing),
+    conditions: optional((value) => propertyList(value, propertyText)),
   })(input);
+}
+
+function parsePropertyEditing(input: unknown): PropertyEditing {
+  const value = toRecord(input);
+  if (value?.['kind'] === 'editable') {
+    return { kind: 'editable' };
+  }
+  if (value?.['kind'] === 'override' || value?.['kind'] === 'restricted') {
+    const reason = propertyText(value['reason']);
+    if (reason.trim()) {
+      return { kind: value['kind'], reason };
+    }
+  }
+  throw new Error('Invalid property editing permission');
+}
+
+function parsePropertyOrigin(input: unknown): PropertyOrigin {
+  return object({
+    declarations: (value) => propertyList(value, parsePropertySource),
+    defaultValue: optional(parsePropertySource),
+  })(input);
+}
+
+function parsePropertySource(input: unknown): PropertySource {
+  const source = object({
+    label: propertyText,
+    expression: propertyText,
+    line: count,
+  })(input);
+  if (!source.label.trim()) {
+    throw new Error('Property source label must be nonempty');
+  }
+  if (source.line < 1 || source.line > PROPERTY_LIMITS.sourceCharsMax) {
+    throw new Error('Property source line is out of bounds');
+  }
+  return source;
 }
 export function propertyList<T>(input: unknown, parse: (input: unknown) => T): readonly T[] {
   const values = list(parse)(input);
@@ -78,20 +143,51 @@ export function propertyList<T>(input: unknown, parse: (input: unknown) => T): r
 export function parsePropertyChange(input: unknown): PropertyChange {
   const value = toRecord(input);
   switch (value?.['kind']) {
-    case 'save':
-      return {
+    case 'save': {
+      const saved = {
         kind: 'save',
-        ...object({ originalName: propertyText, property: parseEditableProperty })(input),
-      };
+        ...object({
+          originalName: propertyText,
+          property: parseEditableProperty,
+        })(input),
+      } as const;
+      const optionRenames = optional((item) => propertyList(item, parsePropertyOptionRename))(
+        value['optionRenames']
+      );
+      return optionRenames === undefined ? saved : { ...saved, optionRenames };
+    }
     case 'remove':
       return { kind: 'remove', name: propertyName(value['name']) };
     case 'order':
-      return { kind: 'order', names: propertyList(value['names'], propertyName) };
+      return {
+        kind: 'order',
+        names: propertyList(value['names'], propertyName),
+      };
+    case 'options':
+      return {
+        kind: 'options',
+        name: propertyName(value['name']),
+        type: propertyText(value['type']),
+      };
     case 'source':
-      return { kind: 'source', frontmatter: propertySource(value['frontmatter']) };
+      return {
+        kind: 'source',
+        frontmatter: propertySource(value['frontmatter']),
+      };
     default:
       throw new Error('Unknown component property change');
   }
+}
+
+function parsePropertyOptionRename(input: unknown): PropertyOptionRename {
+  const rename = object({ from: propertyText, to: propertyText })(input);
+  if (!rename.from.trim() || !rename.to.trim()) {
+    throw new Error('Property option rename values must be nonempty');
+  }
+  if (rename.from === rename.to) {
+    throw new Error('Property option rename must change the value');
+  }
+  return rename;
 }
 export function parseComponentProperties(input: unknown): ComponentProperties {
   return object({

@@ -8,6 +8,8 @@ import { DevOffline } from './DevOffline';
 import { PreviewOverlays } from './PreviewOverlays';
 import { PreviewToolbar, deviceForWidth, deviceWidth } from './PreviewToolbar';
 import { usePreviewRuntime } from './previewRuntime';
+import { PREVIEW_WIDTH_LIMITS, previewViewport } from './previewViewport';
+import './previewViewport.css';
 
 export { deviceForWidth } from './PreviewToolbar';
 
@@ -60,6 +62,16 @@ export default function PreviewPane(props: PreviewPaneProps) {
         {...(props.onCrumb === undefined ? {} : { onCrumb: props.onCrumb })}
         activeDevice={sizing.activeDevice}
         onDevice={props.onDevice}
+        {...(props.device === 'canvas'
+          ? {}
+          : {
+              sizing: {
+                width: sizing.viewport.width,
+                scale: sizing.viewport.scale,
+                onWidth: sizing.setWidth,
+                onFit: () => props.onDevice('desktop'),
+              },
+            })}
       />
       <div className="preview-frame-wrap" ref={sizing.wrapRef}>
         <PreviewContent props={props} url={url} runtime={runtime} sizing={sizing} />
@@ -107,7 +119,12 @@ function DesignPreview({
     <div
       ref={sizing.frameRef}
       className={`frame-sized ${width ? '' : 'full'} ${sizing.resizing ? 'resizing' : ''}`}
-      style={frameStyle(width, sizing.wrapWidth, sizing.customHeight)}
+      style={{
+        width: sizing.viewport.width,
+        height: sizing.viewport.height,
+        bottom: 'auto',
+        transform: `translateX(-50%) scale(${sizing.viewport.scale})`,
+      }}
     >
       <div className="frame-clip">
         <iframe
@@ -179,11 +196,11 @@ function usePreviewSizing(device: PreviewDevice, onDevice: (device: PreviewDevic
   const startDrag = usePointerDrag();
   const wrapRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
-  const [wrapWidth, setWrapWidth] = useState<number | null>(null);
+  const [available, setAvailable] = useState({ width: 0, height: 0 });
   const [customWidth, setCustomWidth] = useState<number | null>(null);
   const [customHeight, setCustomHeight] = useState<number | null>(null);
   const [resizing, setResizing] = useState(false);
-  useMeasuredWidth(wrapRef, setWrapWidth);
+  useMeasuredSize(wrapRef, setAvailable);
   useDeviceShortcuts(onDevice);
   useEffect(() => {
     if (device !== 'custom') {
@@ -194,8 +211,12 @@ function usePreviewSizing(device: PreviewDevice, onDevice: (device: PreviewDevic
     }
   }, [device]);
   const width = customWidth ?? deviceWidth(device);
-  const shownWidth = Math.min(width ?? Infinity, wrapWidth ?? Infinity);
-  const activeDevice = device === 'canvas' ? 'canvas' : (deviceForWidth(shownWidth) ?? device);
+  const viewport = previewViewport(width, available, customHeight);
+  const activeDevice = device === 'canvas' ? 'canvas' : deviceForWidth(viewport.width) ?? device;
+  const setWidth = (next: number): void => {
+    setCustomWidth(next);
+    onDevice('custom');
+  };
   const startResize = useResizeHandler({
     wrapRef,
     frameRef,
@@ -204,11 +225,14 @@ function usePreviewSizing(device: PreviewDevice, onDevice: (device: PreviewDevic
     setCustomWidth,
     setCustomHeight,
     setResizing,
+    scale: viewport.scale,
   });
   return {
     wrapRef,
     frameRef,
-    wrapWidth,
+    wrapWidth: available.width,
+    viewport,
+    setWidth,
     customHeight,
     resizing,
     width,
@@ -217,21 +241,22 @@ function usePreviewSizing(device: PreviewDevice, onDevice: (device: PreviewDevic
   };
 }
 
-function useMeasuredWidth(
+function useMeasuredSize(
   ref: React.RefObject<HTMLDivElement>,
-  setWidth: React.Dispatch<React.SetStateAction<number | null>>,
+  setSize: React.Dispatch<React.SetStateAction<{ width: number; height: number }>>,
 ): void {
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) {
       return;
     }
-    const measure = (): void => setWidth(element.clientWidth);
+    const measure = (): void =>
+      setSize({ width: element.clientWidth, height: element.clientHeight });
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [ref, setWidth]);
+  }, [ref, setSize]);
 }
 
 function useDeviceShortcuts(onDevice: (device: PreviewDevice) => void): void {
@@ -275,6 +300,7 @@ function deviceFromKey(key: string): PreviewDevice | undefined {
 }
 
 interface ResizeContext {
+  readonly scale: number;
   readonly wrapRef: React.RefObject<HTMLDivElement>;
   readonly frameRef: React.RefObject<HTMLDivElement>;
   readonly startDrag: ReturnType<typeof usePointerDrag>;
@@ -329,26 +355,15 @@ function resizeFrame(
   context: ResizeContext,
 ): void {
   if (edge === 's') {
-    const height = Math.round(start.height + event.clientY - start.y);
-    context.setCustomHeight(clamp(height, 160, Math.max(160, wrap.clientHeight - 32)));
+    const height = Math.round(start.height + (event.clientY - start.y) / context.scale);
+    const maximum = Math.max(160, (wrap.clientHeight - 32) / context.scale);
+    context.setCustomHeight(clamp(height, 160, maximum));
     return;
   }
   const direction = edge === 'e' ? 2 : -2;
-  const width = Math.round(start.width + direction * (event.clientX - start.x));
-  context.setCustomWidth(clamp(width, 280, Math.max(280, wrap.clientWidth - 24)));
+  const width = Math.round(start.width + (direction * (event.clientX - start.x)) / context.scale);
+  context.setCustomWidth(clamp(width, PREVIEW_WIDTH_LIMITS.minimum, PREVIEW_WIDTH_LIMITS.maximum));
   context.onDevice('custom');
-}
-
-function frameStyle(
-  width: number | null | undefined,
-  wrapWidth: number | null,
-  customHeight: number | null,
-): React.CSSProperties {
-  return {
-    width: width ?? wrapWidth ?? '100%',
-    maxWidth: width ? 'calc(100% - 24px)' : '100%',
-    ...(customHeight === null ? {} : { height: customHeight, bottom: 'auto' }),
-  };
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

@@ -1,0 +1,48 @@
+/* Keep viewport controls with the preview so global input styles cannot expand them. */
+.preview-toolbar .device-btns { flex-shrink: 0; }
+.preview-toolbar .preview-size-controls {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.preview-size-controls .preview-width-field {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 3px;
+}
+.preview-width-field input {
+  width: 42px;
+  min-width: 0;
+  flex: 0 0 42px;
+  padding: 3px 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: right;
+}
+.preview-width-field input:focus-visible { outline: 1px solid var(--accent); }
+.preview-size-controls output {
+  min-width: 38px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+  text-align: center;
+}
+.preview-size-controls button { padding: 3px 6px; background: transparent; font-size: inherit; }
+
+/* The iframe and overlays share a top-aligned scale; width must change atomically
+   with that scale so the page never animates through the wrong breakpoint. */
+.preview-frame-wrap > .frame-sized {
+  transform-origin: top center;
+  transition-property: top, bottom, border-radius;
+}

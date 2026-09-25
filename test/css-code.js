@@ -29,14 +29,29 @@ const same = (what, got, want) =>
   fs.mkdirSync(buildDir, { recursive: true });
   const bundlePath = path.join(buildDir, 'css-code.bundle.js');
   await esbuild.build({
-    entryPoints: [path.join(__dirname, '..', 'src', 'style-panel', 'lib', 'css-code.ts')],
+    stdin: {
+      contents: `
+        export * from './css-code'
+        export * from './css-rule-view'
+      `,
+      resolveDir: path.join(__dirname, '..', 'src', 'style-panel', 'lib'),
+      loader: 'ts',
+    },
     outfile: bundlePath,
     bundle: true,
     format: 'cjs',
     platform: 'node',
     logLevel: 'silent',
   });
-  const { cssTokens, highlightCss, stepNumberAt, stepSize, caretOffset, setCaretOffset } = require(bundlePath);
+  const {
+    buildCssRuleView,
+    cssTokens,
+    highlightCss,
+    stepNumberAt,
+    stepSize,
+    caretOffset,
+    setCaretOffset,
+  } = require(bundlePath);
 
   // --- colouring ------------------------------------------------------------
   //
@@ -70,6 +85,77 @@ const same = (what, got, want) =>
   same('function before its paren', cssTokens('clamp(').map((t) => t.kind), ['fn', 'plain']);
   same('custom property', cssTokens('--space-1').map((t) => t.kind), ['prop']);
   check('markup escapes', !highlightCss('a < b & c').includes('<b'), highlightCss('a < b & c'));
+
+  // --- matched-rule view ----------------------------------------------------
+  const matchedRule = ({
+    selector,
+    specificity,
+    order,
+    value,
+    winning,
+    atContext = [],
+    matchedSelector = selector,
+  }) => ({
+    rule: {
+      ruleId: selector,
+      selectorText: selector,
+      order,
+      embedLabel: 'src/styles/base.css',
+      atContext,
+      declarations: [{ declId: `${selector}:color`, prop: 'color', value, important: false }],
+    },
+    matchedSelectors: [{ text: matchedSelector, specificity }],
+    declStatus: {
+      [`${selector}:color`]: {
+        winning,
+        overriddenBy: winning ? null : '.specific',
+      },
+    },
+  });
+  const ruleView = buildCssRuleView([
+    matchedRule({ selector: '.general', specificity: [0, 1, 0], order: 0, value: 'red', winning: false }),
+    matchedRule({ selector: '.specific', specificity: [0, 2, 0], order: 1, value: 'blue', winning: true }),
+  ]);
+  check('the most specific selector is shown first', ruleView.code.startsWith('.specific {'));
+  check('every matching selector remains in the code view', ruleView.code.includes('.general {'));
+  const struckText = ruleView.highlights.map((range) => ruleView.code.slice(range.from, range.to));
+  same('overridden declarations are highlighted for strikethrough', struckText, ['  color: red;']);
+
+  const headingGroup = 'p,\nh1,\nh2,\nh3,\nh4,\nh5,\nh6';
+  const headingView = buildCssRuleView([
+    matchedRule({
+      selector: headingGroup,
+      specificity: [0, 0, 1],
+      order: 2,
+      value: 'break-word',
+      winning: true,
+      matchedSelector: 'h1',
+    }),
+  ]);
+  same(
+    'only the matching member of a multiline selector is highlighted',
+    headingView.selectors.map((range) => headingView.code.slice(range.from, range.to)),
+    ['h1']
+  );
+  same(
+    'the complete multiline selector stays identifiable for neutral syntax',
+    headingView.selectorLists.map((range) => headingView.code.slice(range.from, range.to)),
+    [headingGroup]
+  );
+
+  const queryView = buildCssRuleView([
+    matchedRule({
+      selector: '.card',
+      specificity: [0, 1, 0],
+      order: 2,
+      value: 'green',
+      winning: true,
+      atContext: ['@media (width > 40rem)'],
+    }),
+  ]);
+  check('query context is preserved around its rule',
+    queryView.code === '@media (width > 40rem) {\n  .card {\n    color: green;\n  }\n}'
+  );
 
   // --- stepping -------------------------------------------------------------
   same('alt is a tenth', stepSize({ altKey: true }), 0.1);

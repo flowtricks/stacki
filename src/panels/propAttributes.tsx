@@ -11,7 +11,7 @@ import StyleEditor, { collapseDeclarations } from '../ui/StyleEditor';
 import AssetField from '../ui/AssetField';
 import { looksLikeAssetPath, mediaKindFor } from '../ui/AssetThumb';
 import { BindField, BindHandle, FieldDataPicker, ValueCodeEditor } from './propBindings';
-import { BracesIcon, PlusIcon, TrashIcon, ElementImageIcon } from '../ui/Icons';
+import { BracesIcon, PlusIcon, TrashIcon, ElementImageIcon, MaximizeIcon } from '../ui/Icons';
 
 interface AttributeNode {
   readonly id: string;
@@ -48,6 +48,7 @@ interface AttrEditorProps extends ContextProps {
   readonly pos: FieldPosition;
   readonly name: string;
   readonly value: string;
+  readonly syntax: 'pair' | 'spread';
   readonly isNew: boolean;
   readonly dataCtx?: SourceContext | null | undefined;
   readonly onCommitName: (name: string) => void;
@@ -65,6 +66,9 @@ interface ObjectAttrsFieldProps extends ContextProps {
 
 const decodeAttr = (v: Attr | null | undefined) =>
   v == null || v.type === 'bare' ? '' : v.type === 'expr' ? `{${v.value}}` : String(v.value);
+
+const attributeDisplayName = (name: string, value: Attr | undefined): string =>
+  value?.type === 'spread' ? `{...${value.value}}` : name;
 
 const encodeAttr = (text: string): Attr => {
   if (text === '') {
@@ -97,30 +101,38 @@ export function AttributesSection(props: AttributesSectionProps) {
 
       {names.length > 0 && (
         <div className="attrs-list">
-          {names.map((name) => (
-            <div
-              key={name}
-              className={`attr-row ${editor?.attr === name ? 'editing' : ''}`}
-              onClick={() => openEditor(name)}
-            >
-              <span className="attr-name">{name}</span>
-              <span className="attr-eq">=</span>
-              <span className="attr-value">{decodeAttr(node.props?.[name])}</span>
-              <button
-                className="row-action"
-                title="Delete attribute"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (editor?.attr === name) {
-                    setEditor(null);
-                  }
-                  onSetProp(name, undefined, true);
-                }}
+          {names.map((name) => {
+            const value = node.props?.[name];
+            const syntax = value?.type === 'spread' ? 'spread' : 'pair';
+            return (
+              <div
+                key={name}
+                className={`attr-row ${syntax} ${editor?.attr === name ? 'editing' : ''}`}
+                onClick={() => openEditor(name)}
               >
-                <TrashIcon size={12} />
-              </button>
-            </div>
-          ))}
+                <span className="attr-name">{attributeDisplayName(name, value)}</span>
+                {syntax === 'pair' && (
+                  <>
+                    <span className="attr-eq">=</span>
+                    <span className="attr-value">{decodeAttr(value)}</span>
+                  </>
+                )}
+                <button
+                  className="row-action"
+                  title="Delete attribute"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (editor?.attr === name) {
+                      setEditor(null);
+                    }
+                    onSetProp(name, undefined, true);
+                  }}
+                >
+                  <TrashIcon size={12} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -153,6 +165,8 @@ function AttributesSectionPopup({ state }: { readonly state: AttributesState }) 
   if (!editor) {
     return null;
   }
+  const value = editor.attr ? node.props?.[editor.attr] : undefined;
+  const syntax = value?.type === 'spread' ? 'spread' : 'pair';
   return (
     <AttrEditor
       key={editor.attr ?? '__new'}
@@ -160,8 +174,9 @@ function AttributesSectionPopup({ state }: { readonly state: AttributesState }) 
       projectPath={projectPath ?? null}
       bindCtx={bindCtx}
       dataCtx={bindCtx}
-      name={editor.attr ?? ''}
-      value={editor.attr ? decodeAttr(node.props?.[editor.attr]) : ''}
+      name={attributeDisplayName(editor.attr ?? '', value)}
+      value={syntax === 'pair' ? decodeAttr(value) : ''}
+      syntax={syntax}
       isNew={editor.attr === null}
       onCommitName={(newName) => {
         const clean = newName.trim();
@@ -252,7 +267,7 @@ export function parseAttrPaste(text: string): readonly AttributePair[] {
 
 function AttrEditor(props: AttrEditorProps) {
   const state = useAttrEditor(props);
-  const { ref, pos, isStyleValue, assetMode, setAssetMode } = state;
+  const { ref, pos, syntax, isStyleValue, assetMode, setAssetMode } = state;
 
   return (
     <div
@@ -264,24 +279,26 @@ function AttrEditor(props: AttrEditorProps) {
       {/* The field sits beside its label like the name row, whichever kind it
           is; `top` just stops the label and toggle from centring against a
           tall field. */}
-      <div className={`attr-editor-row ${isStyleValue || assetMode ? 'top' : ''}`}>
-        <span>Value</span>
-        <AttributeValue state={state} />
-        <AttributePopups state={state} />
-        <button
-          className={`attr-asset-toggle ${assetMode ? 'on' : ''}`}
-          title={assetMode ? 'Edit as a plain value' : 'Choose a file from public/'}
-          onClick={() => setAssetMode((v) => !v)}
-        >
-          <ElementImageIcon size={12} />
-        </button>
-      </div>
+      {syntax === 'pair' && (
+        <div className={`attr-editor-row ${isStyleValue || assetMode ? 'top' : ''}`}>
+          <span>Value</span>
+          <AttributeValue state={state} />
+          <AttributePopups state={state} />
+          <button
+            className={`attr-asset-toggle ${assetMode ? 'on' : ''}`}
+            title={assetMode ? 'Edit as a plain value' : 'Choose a file from public/'}
+            onClick={() => setAssetMode((v) => !v)}
+          >
+            <ElementImageIcon size={12} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 function useAttrEditor(props: AttrEditorProps) {
-  const { name, value, isNew, bindCtx, onCommitName, onClose } = props;
+  const { name, value, syntax, isNew, bindCtx, onCommitName, onClose } = props;
   const [draftName, setDraftName] = useState(name);
   const [draftValue, setDraftValue] = useState(value);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -320,7 +337,11 @@ function useAttrEditor(props: AttrEditorProps) {
   }, []);
   const focusValue = !isNew && !mounted.current;
 
-  const commitName = () => onCommitName(draftName);
+  const commitName = () => {
+    if (syntax === 'pair') {
+      onCommitName(draftName);
+    }
+  };
 
   useAttrEditorDismiss(ref, onClose);
   return {
@@ -366,17 +387,29 @@ function useAttrEditorDismiss(ref: RefObject<HTMLElement>, onClose: () => void) 
   }, [onClose, ref]);
 }
 function AttributeName({ state }: { readonly state: AttributeState }) {
-  const { isNew, draftName, setDraftName, setDraftValue, onCommitPair, onCommitMany, commitName } =
-    state;
+  const {
+    syntax,
+    isNew,
+    draftName,
+    setDraftName,
+    setDraftValue,
+    onCommitPair,
+    onCommitMany,
+    commitName,
+  } = state;
   return (
     <div className="attr-editor-row">
       <span>Name</span>
       <input
         autoFocus={isNew}
         value={draftName}
+        readOnly={syntax === 'spread'}
         placeholder="data-attribute"
         spellCheck={false}
         onPaste={(e) => {
+          if (syntax === 'spread') {
+            return;
+          }
           const text = e.clipboardData.getData('text');
           // Only when it actually looks like markup — a plain name paste
           // must keep behaving like a paste into a text box.
@@ -462,73 +495,79 @@ function AttributeBinding({ state }: { readonly state: AttributeState }) {
     insertAt,
     setInsertAt,
     ref,
-    bigAt,
     setBigAt,
   } = state;
+  const valueRef = useRef<HTMLDivElement | null>(null);
   return (
-    <div
-      className="attr-value-field"
-      // Captured: what's inside is CodeMirror (or a contenteditable), and both
-      // would take the key first. `=` is a character a JS value can want —
-      // typing `a === b` inline is the trade — but the box this opens is where
-      // an expression that needs one is worth writing anyway.
-      onKeyDownCapture={(e) => {
-        if (e.key !== '=' || e.metaKey || e.ctrlKey || e.altKey || bigAt) {
-          return;
-        }
-        e.preventDefault();
-        e.stopPropagation();
-        // Kept on screen: the field sits deep in a right-hand panel, so a box
-        // wider than it and anchored to its left edge runs off the window.
-        const r = e.currentTarget.getBoundingClientRect();
-        const width = Math.min(Math.max(r.width, 320), window.innerWidth - 16);
-        setBigAt({
-          left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)),
-          top: Math.max(8, Math.min(r.top, window.innerHeight - 320)),
-          width,
-        });
-      }}
-    >
-      <BindField
-        // An empty attribute is `{type:'bare'}`, which as a VALUE reads as no
-        // value at all rather than an empty one — the field would show the word
-        // "undefined". Empty text is an empty string here; encodeAttr still
-        // stores it as bare on the way out.
-        value={draftValue === '' ? { type: 'string', value: '' } : encodeAttr(draftValue)}
-        placeholder="Type, or insert data"
-        bindCtx={bindCtx}
-        dataCtx={dataCtx}
-        apiRef={bindApiRef}
-        onChange={(next) => {
-          const text = decodeAttr(next);
-          setDraftValue(text);
-          onChangeValue(text);
-        }}
-      />
-      {/* The dot belongs to the FIELD, and lives inside its box: hanging it off
-              the row put it above the row's own edge, so hovering it left the row —
-              which hid it, which put the pointer back on the row, which showed it
-              again. A dot that flickers under the pointer. */}
-      <BindHandle
-        active={!!insertAt}
-        onOpen={(host) => {
-          if (insertAt) {
-            setInsertAt(null);
-            return;
+    <>
+      <div ref={valueRef} className="attr-value-field">
+        <BindField
+          // An empty attribute is `{type:'bare'}`, which as a VALUE reads as no
+          // value at all rather than an empty one — the field would show the word
+          // "undefined". Empty text is an empty string here; encodeAttr still
+          // stores it as bare on the way out.
+          value={draftValue === '' ? { type: 'string', value: '' } : encodeAttr(draftValue)}
+          placeholder="Type, or insert data"
+          bindCtx={bindCtx}
+          dataCtx={dataCtx}
+          wrapCode
+          apiRef={bindApiRef}
+          onChange={(next) => {
+            const text = decodeAttr(next);
+            setDraftValue(text);
+            onChangeValue(text);
+          }}
+        />
+        {/* The dot belongs to the FIELD, and lives inside its box: hanging it off
+                the row put it above the row's own edge, so hovering it left the row —
+                which hid it, which put the pointer back on the row, which showed it
+                again. A dot that flickers under the pointer. */}
+        <BindHandle
+          active={!!insertAt}
+          onOpen={(host) => {
+            if (insertAt) {
+              setInsertAt(null);
+              return;
+            }
+            const r = (host || ref.current)?.getBoundingClientRect();
+            if (!r) {
+              return;
+            }
+            setInsertAt({
+              left: r.left,
+              top: Math.min(r.bottom + 4, Math.max(60, window.innerHeight - 340)),
+              width: Math.max(r.width, 240),
+            });
+          }}
+        />
+      </div>
+      <button
+        type="button"
+        className="attr-expand-toggle"
+        title="Expand value"
+        aria-label="Expand value"
+        onClick={() => {
+          const host = valueRef.current;
+          if (host) {
+            setBigAt(expandedAttributeEditorPosition(host));
           }
-          const r = (host || ref.current)?.getBoundingClientRect();
-          if (!r) {
-            return;
-          }
-          setInsertAt({
-            left: r.left,
-            top: Math.min(r.bottom + 4, Math.max(60, window.innerHeight - 340)),
-            width: Math.max(r.width, 240),
-          });
         }}
-      />
-    </div>
+      >
+        <MaximizeIcon size={12} />
+      </button>
+    </>
   );
+}
+
+function expandedAttributeEditorPosition(host: HTMLElement): FieldPosition {
+  const rectangle = host.getBoundingClientRect();
+  const viewportWidth = Math.max(window.innerWidth, 32);
+  const width = Math.min(Math.max(rectangle.width, 760), viewportWidth - 16);
+  return {
+    left: Math.max(8, Math.min(rectangle.left, viewportWidth - width - 8)),
+    top: Math.max(8, Math.min(rectangle.top, window.innerHeight - 320)),
+    width,
+  };
 }
 function AttributePopups({ state }: { readonly state: AttributeState }) {
   const {
@@ -734,6 +773,7 @@ function ObjectAttrsFieldPopup({ state }: { readonly state: ObjectAttributesStat
       dataCtx={bindCtx}
       name={editor.index != null ? (entries[editor.index]?.key ?? '') : ''}
       value={editor.index != null ? decodeRaw(entries[editor.index]?.raw ?? '') : ''}
+      syntax="pair"
       isNew={editor.index == null}
       onCommitName={(newName) => {
         const clean = newName.trim();

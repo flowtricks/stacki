@@ -98,6 +98,7 @@ export type LeftTab =
   | 'assets'
   | 'cms'
   | 'variables'
+  | 'code'
   | 'history'
   | null;
 export type RightTab = 'style' | 'settings';

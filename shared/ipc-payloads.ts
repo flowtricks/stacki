@@ -180,6 +180,7 @@ export const IPC_PAYLOADS = {
     projectPath: maybePath,
   }),
   'page:move': object({ ...project, from: pathText, to: pathText }),
+  'page:parse': object({ pagePath: pathText, source: text }),
   'page:read': pathText,
   'page:rebaseImport': object({ fromPagePath: maybePath, toPagePath: maybePath, spec: text }),
   'page:write': object({ pagePath: pathText, model: (input: unknown) => input }),

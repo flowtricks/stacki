@@ -59,7 +59,11 @@ const staticGates: readonly GateCommand[] = [
   [
     'build:clean',
     node,
-    ['--experimental-transform-types', path.join(root, 'scripts', 'clean-build.ts')],
+    [
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      path.join(root, 'scripts', 'clean-build.mts'),
+    ],
   ],
   ['build:contracts', node, [typeScript, '-p', path.join('shared', 'tsconfig.json')]],
   ['build:electron', node, [typeScript, '-p', path.join('electron', 'tsconfig.json')]],

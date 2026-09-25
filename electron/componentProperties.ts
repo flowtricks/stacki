@@ -6,11 +6,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assert } from '../shared/assert';
 import { PROPERTY_LIMITS } from '../shared/component-properties';
-import type { ComponentProperties, PropertyChange } from '../shared/component-properties';
+import type {
+  ComponentProperties,
+  PropertyChange,
+  PropertyOptionRename,
+} from '../shared/component-properties';
 import { err, ok, type Result } from '../shared/result';
+import { literalOptions } from '../shared/property-options';
 import { sameFilesystemPath } from './platform';
 import { editPropertyDefinition, readComponentProperties } from './propertyDefinitions';
-import { renameComponentReferences } from './propertyRename';
+import { renameComponentOptionValues, renameComponentReferences } from './propertyRename';
 
 interface PropertyLocation {
   readonly projectPath: string;
@@ -100,37 +105,43 @@ function planPropertyChanges(
   if (change.kind === 'remove') {
     return planPropertyRemoval(request, first, change.name);
   }
-  if (
-    change.kind !== 'save' ||
-    !change.originalName ||
-    change.originalName === change.property.name
-  ) {
+  const propertyRename = propertyRenameForChange(change);
+  const optionRenames = change.kind === 'save' ? change.optionRenames ?? [] : [];
+  if (!propertyRename && optionRenames.length === 0) {
     return ok([first]);
+  }
+  if (change.kind !== 'save' || !change.originalName) {
+    return err({
+      code: 'option',
+      message: 'Only an existing property can rename options.',
+    });
+  }
+  const valid = validateOptionRenames(request.source, source, change, optionRenames);
+  if (!valid.ok) {
+    return valid;
   }
   const consumers = readPropertyConsumers(request);
   if (!consumers.ok) {
     return consumers;
   }
-  const rename = { from: change.originalName, to: change.property.name };
   const changes: FileChange[] = [];
   for (const consumer of consumers.value) {
     const { file, names } = consumer;
     const own = sameFilesystemPath(file, request.file);
     const original = own ? source : consumer.source;
-    const result = renameComponentReferences(
-      original,
-      names,
-      rename,
-      own ? 'definition' : 'consumer'
-    );
-    if (!result.ok) {
+    const changed = planConsumerChange(original, names, change, propertyRename, optionRenames, own);
+    if (!changed.ok) {
       return err({
-        code: result.error.code,
-        message: `${path.relative(request.projectPath, file)}: ${result.error.message}`,
+        code: changed.error.code,
+        message: `${path.relative(request.projectPath, file)}: ${changed.error.message}`,
       });
     }
-    if (own || result.value !== original) {
-      changes.push({ file, before: own ? request.source : original, after: result.value });
+    if (own || changed.value !== original) {
+      changes.push({
+        file,
+        before: own ? request.source : original,
+        after: changed.value,
+      });
     }
   }
   assert(
@@ -138,6 +149,68 @@ function planPropertyChanges(
     'Rename plan includes the definition'
   );
   return ok(changes);
+}
+
+function propertyRenameForChange(
+  change: PropertyChange
+): { readonly from: string; readonly to: string } | undefined {
+  if (change.kind !== 'save' || !change.originalName) {
+    return undefined;
+  }
+  return change.originalName === change.property.name
+    ? undefined
+    : { from: change.originalName, to: change.property.name };
+}
+
+function planConsumerChange(
+  source: string,
+  names: ReadonlySet<string>,
+  change: Extract<PropertyChange, { readonly kind: 'save' }>,
+  propertyRename: { readonly from: string; readonly to: string } | undefined,
+  optionRenames: readonly PropertyOptionRename[],
+  own: boolean
+): Result<string> {
+  const renamed = propertyRename
+    ? renameComponentReferences(source, names, propertyRename, own ? 'definition' : 'consumer')
+    : ok(source);
+  if (!renamed.ok || optionRenames.length === 0) {
+    return renamed;
+  }
+  return renameComponentOptionValues(renamed.value, names, change.property.name, optionRenames);
+}
+
+function validateOptionRenames(
+  beforeSource: string,
+  afterSource: string,
+  change: Extract<PropertyChange, { readonly kind: 'save' }>,
+  renames: readonly PropertyOptionRename[]
+): Result<void> {
+  if (renames.length === 0) {
+    return ok(undefined);
+  }
+  const before = readComponentProperties(beforeSource).properties.find(
+    (property) => property.name === change.originalName
+  );
+  const after = readComponentProperties(afterSource).properties.find(
+    (property) => property.name === change.property.name
+  );
+  const beforeOptions = before ? literalOptions(before.type) : undefined;
+  const afterOptions = after ? literalOptions(after.type) : undefined;
+  if (!beforeOptions || !afterOptions) {
+    return err({
+      code: 'option',
+      message: 'Option renames require an editable literal union.',
+    });
+  }
+  for (const rename of renames) {
+    if (!beforeOptions.includes(rename.from) || !afterOptions.includes(rename.to)) {
+      return err({
+        code: 'option',
+        message: 'An option rename does not match the saved union.',
+      });
+    }
+  }
+  return ok(undefined);
 }
 
 function commitPropertyChanges(
@@ -196,7 +269,10 @@ function rollbackPropertyChanges(
       message: `Save failed and recovery failed for: ${failed.join(', ')}. ${String(reason)}`,
     });
   }
-  return err({ code: 'filesystem', message: `Save failed; changes restored. ${String(reason)}` });
+  return err({
+    code: 'filesystem',
+    message: `Save failed; changes restored. ${String(reason)}`,
+  });
 }
 
 function planPropertyRemoval(

@@ -123,6 +123,14 @@ const check = (what, condition, detail) => {
     );
   const dotOn = (label) => !!sectionNamed(label)?.querySelector('.embed-editor_section-dot');
   const collapsed = (label) => !!sectionNamed(label)?.classList.contains('is-collapsed');
+  const collapsedLabels = () => [...panel.querySelectorAll('.embed-editor_section-block')]
+    .filter((section) => section.classList.contains('is-collapsed'))
+    .map((section) => section.querySelector('.embed-editor_section-title')?.textContent?.trim());
+  const clickSection = async ({ label, shiftKey = false }) => {
+    const button = sectionNamed(label)?.querySelector('.embed-editor_section-toggle');
+    button?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, shiftKey }));
+    await wait(120);
+  };
 
   const dotOf = (label) => {
     const dot = sectionNamed(label)?.querySelector('.embed-editor_section-dot');
@@ -133,6 +141,35 @@ const check = (what, condition, detail) => {
   await select('n1');
   check('the panel mounts with its sections', !!sectionNamed('Flex/Grid Child'), [...panel.querySelectorAll('.embed-editor_section-title')].map((t) => t.textContent).join(' | '));
   check('and Flex/Grid Child starts collapsed', collapsed('Flex/Grid Child'), 'it is open, so the collapsed case is not being tested');
+
+  // Shift applies the clicked section's next state to every peer. An open
+  // section therefore closes all; any closed section then opens all. A plain
+  // click still changes only its own section.
+  await clickSection({ label: 'Spacing', shiftKey: true });
+  check(
+    'Shift-clicking an open header closes every section',
+    collapsedLabels().length === panel.querySelectorAll('.embed-editor_section-block').length,
+    collapsedLabels().join(' | ')
+  );
+  await clickSection({ label: 'Size', shiftKey: true });
+  check(
+    'Shift-clicking a closed header opens every section',
+    collapsedLabels().length === 0,
+    collapsedLabels().join(' | ')
+  );
+  await clickSection({ label: 'Size' });
+  check(
+    'a plain click still changes only one section',
+    collapsedLabels().join(' | ') === 'Size',
+    collapsedLabels().join(' | ')
+  );
+  await clickSection({ label: 'Size' });
+  await clickSection({ label: 'Flex/Grid Child' });
+  check(
+    'the initial mixed state can still be restored',
+    collapsedLabels().join(' | ') === 'Flex/Grid Child',
+    collapsedLabels().join(' | ')
+  );
 
   // `.card { order: 3 }` — the picked selector is one of the things styling this
   // section, so the dot is blue.

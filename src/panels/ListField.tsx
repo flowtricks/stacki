@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { Item } from '../arrayValue';
 import { assert } from '../../shared/assert';
 import { LIMITS } from '../../shared/limits';
-import { DragIcon, PlusIcon, TrashIcon, CloseIcon } from '../ui/Icons.jsx';
+import { PlusIcon, CloseIcon } from '../ui/Icons.jsx';
+import ListFieldRow from '../ui/ListFieldRow';
 import { arrayItems, arrayText, blankLike, itemLabel, moveItem } from '../arrayValue.js';
 
 // A prop that takes a list, edited as a list.
@@ -176,9 +177,13 @@ export default function ListField(props: ListFieldProps) {
   return (
     <div className="list-field" onDragOver={(event) => event.preventDefault()} onDrop={state.drop}>
       {state.items.length === 0 && note ? <div className="list-field-empty">{note}</div> : null}
-      {state.items.map((item, index) => (
-        <ListRow key={index} item={item} index={index} state={state} />
-      ))}
+      {state.items.length > 0 && (
+        <div className="list-field-items" onScroll={() => closeListRowEditor(state)}>
+          {state.items.map((item, index) => (
+            <ListRow key={index} item={item} index={index} state={state} />
+          ))}
+        </div>
+      )}
       <button
         type="button"
         className="list-field-add"
@@ -335,51 +340,38 @@ function ListRow({
   const gap = drag.kind === 'dragging' ? drag.gap : null;
   const open = editor.kind === 'existing' && editor.index === index;
   return (
-    <div
-      className={`list-field-row ${dragging === index ? 'is-dragging' : ''} ${
-        gap === index ? 'is-before' : ''
-      } ${gap === index + 1 ? 'is-after' : ''} ${open ? 'is-open' : ''}`}
-      draggable={!state.disabled}
-      onDragStart={(event) => startListDrag(event, state, index)}
-      onDragEnd={() => setDrag({ kind: 'idle' })}
-      onDragOver={(event) => {
-        if (drag.kind === 'idle') {
-          return;
-        }
-        event.preventDefault();
-        const box = event.currentTarget.getBoundingClientRect();
-        const gap = event.clientY - box.top < box.height / 2 ? index : index + 1;
-        setDrag({ ...drag, gap });
+    <ListFieldRow
+      className={`${dragging === index ? 'is-dragging' : ''} ${gap === index ? 'is-before' : ''} ${
+        gap === index + 1 ? 'is-after' : ''
+      } ${open ? 'is-open' : ''}`}
+      rowProps={{
+        draggable: !state.disabled,
+        onDragStart: (event) => startListDrag(event, state, index),
+        onDragEnd: () => setDrag({ kind: 'idle' }),
+        onDragOver: (event) => {
+          if (drag.kind === 'idle') {
+            return;
+          }
+          event.preventDefault();
+          const box = event.currentTarget.getBoundingClientRect();
+          const gap = event.clientY - box.top < box.height / 2 ? index : index + 1;
+          setDrag({ ...drag, gap });
+        },
+        onDrop: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          drop();
+        },
       }}
-      onDrop={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        drop();
-      }}
+      expanded={open}
+      disabled={state.disabled}
+      removeDisabled={state.disabled || state.items.length <= state.itemsMin}
+      removeLabel={`Remove ${itemLabel(item) || 'item'}`}
+      onOpen={(event) => toggleListRow(event, state, index, item)}
+      onRemove={() => remove(index)}
     >
-      <span className="list-field-grip" aria-hidden="true">
-        <DragIcon size={12} />
-      </span>
-      <button
-        type="button"
-        className="list-field-text"
-        aria-expanded={open}
-        disabled={state.disabled}
-        onClick={(event) => toggleListRow(event, state, index, item)}
-      >
-        {itemLabel(item) || <span className="list-field-blank">Empty</span>}
-      </button>
-      <button
-        type="button"
-        className="ghost list-field-remove"
-        title="Remove"
-        aria-label={`Remove ${itemLabel(item) || 'item'}`}
-        disabled={state.disabled || state.items.length <= state.itemsMin}
-        onClick={() => remove(index)}
-      >
-        <TrashIcon size={12} />
-      </button>
-    </div>
+      {itemLabel(item) || <span className="list-field-blank">Empty</span>}
+    </ListFieldRow>
   );
 }
 
@@ -438,13 +430,7 @@ function ListEditor({ state }: { readonly state: ListState }) {
               }
             )
           }
-          onClose={() => {
-            write(items, {
-              immediate: true,
-              change: { kind: 'edit', index: editor.index },
-            });
-            setEditor({ kind: 'closed' });
-          }}
+          onClose={() => closeListRowEditor(state)}
         />
       );
     }
@@ -464,5 +450,16 @@ function ListEditor({ state }: { readonly state: ListState }) {
       const exhaustive: never = editor;
       return exhaustive;
     }
+  }
+}
+
+function closeListRowEditor(state: ListState): void {
+  if (state.editor.kind === 'existing') {
+    // Commit before dismissing so scrolling cannot leave a popup detached from its row.
+    state.write(state.items, {
+      immediate: true,
+      change: { kind: 'edit', index: state.editor.index },
+    });
+    state.setEditor({ kind: 'closed' });
   }
 }

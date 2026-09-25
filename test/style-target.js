@@ -11,6 +11,8 @@
 // to target the very element the panel was calling `html.theme-dark`, and the
 // class selectors sitting in the same rule matched perfectly well — so the
 // styles looked half-read rather than unread, which is a hard thing to spot.
+// It also checks that a style node keeps the page/component identity of its open
+// file, because the model shape alone cannot distinguish those two sources.
 
 const fs = require('fs');
 const path = require('path');
@@ -32,7 +34,7 @@ const check = (what, condition, detail) => {
     // own directory so its imports resolve the way they do in the app.
     stdin: {
       contents: `
-        export { resolveTarget } from './lib/webflow'
+        export { resolveTarget, scanPage } from './lib/webflow'
         export { setHost, onHostChange, getHost } from './lib/host'
         export { matchSelectorList } from './lib/selectors'
         export { defaultSelectorTokens, tokensToSelector } from './lib/element-tokens'
@@ -53,9 +55,45 @@ const check = (what, condition, detail) => {
   global.document = dom.window.document;
   dom.window.avb = {};
 
-  const { resolveTarget, setHost, onHostChange, getHost, matchSelectorList, defaultSelectorTokens, tokensToSelector } =
-    require(bundlePath);
+  const {
+    resolveTarget,
+    scanPage,
+    setHost,
+    onHostChange,
+    getHost,
+    matchSelectorList,
+    defaultSelectorTokens,
+    tokensToSelector,
+  } = require(bundlePath);
   setHost({ nodes: [], projectPath: '/project', files: [], astroFiles: [] });
+
+  {
+    const styleNode = {
+      id: 'styles',
+      kind: 'raw',
+      name: 'style',
+      inner: '.card { color: green }',
+    };
+    setHost({
+      nodes: [styleNode],
+      openFilePath: '/project/src/components/Card.astro',
+      openFileKind: 'component',
+    });
+    const componentSource = (await scanPage()).pageEmbeds[0];
+    check(
+      'a style tag in an open component is component-authored',
+      componentSource?.fromComponent === true
+    );
+    check('and carries the component name', componentSource?.componentName === 'Card');
+
+    setHost({ openFilePath: '/project/src/pages/index.astro', openFileKind: 'page' });
+    const pageSource = (await scanPage()).pageEmbeds[0];
+    check(
+      'the same style shape in a page stays page-authored',
+      pageSource?.fromComponent === false
+    );
+    setHost({ nodes: [], openFilePath: null, openFileKind: null });
+  }
 
   // A layout: a component call in the source, `<html class="theme-dark">` on
   // the page. Nothing in the model says "html".

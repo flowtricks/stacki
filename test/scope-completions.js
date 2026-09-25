@@ -103,6 +103,15 @@ const year = new Date().getFullYear();`;
     chipped('content === "content"').length === 1,
     JSON.stringify(chipped('content === "content"'))
   );
+  const typedNames = new Set(['src', 'as', 'string']);
+  const typedChips = scopeChips('src as string', typedNames).map((chip) =>
+    'src as string'.slice(chip.from, chip.to)
+  );
+  check(
+    'a TypeScript assertion chips only its runtime value',
+    typedChips.join(',') === 'src',
+    JSON.stringify(typedChips)
+  );
   check('nothing in scope, nothing chipped', scopeChips('render && content', new Set()).length === 0);
 
   if (failures.length) {

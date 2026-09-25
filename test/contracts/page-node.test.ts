@@ -29,7 +29,7 @@ const element = (id: string, name: string, children: readonly unknown[] | null):
 
 test('every kind round-trips through the parser', () => {
   const good: readonly unknown[] = [
-    { kind: 'text', id: 'n1', value: 'hello' },
+    { kind: 'text', id: 'n1', value: 'hello', start: 4, end: 9 },
     { kind: 'expr', id: 'n2', value: '{count}' },
     { kind: 'raw-line', id: 'n3', value: '<hr>' },
     { kind: 'comment', id: 'n4', value: 'note', jsx: true },
@@ -109,6 +109,14 @@ test('negative space: every wrong shape fails with a pinned message', () => {
   assert.throws(
     () => parsePageNode({ kind: 'map', id: 'n1', head: 'x.map((i) => (', children: [], bare: 'yes' }),
     /bare: expected boolean/,
+  );
+  assert.throws(
+    () => parsePageNode({ kind: 'text', id: 'n1', value: 'x', start: 4 }),
+    /source range: expected safe integer offsets/,
+  );
+  assert.throws(
+    () => parsePageNode({ kind: 'text', id: 'n1', value: 'x', start: 4, end: 3 }),
+    /source range: end must not precede start/,
   );
 });
 

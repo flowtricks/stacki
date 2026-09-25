@@ -404,6 +404,14 @@ function patchAttrs(live: Element, prev: Element, next: Element): void {
 }
 
 function patchNode(live: Node, prev: Node, next: Node): void {
+  // An unchanged server subtree has no patch to contribute. Client code is
+  // free to reorder, remove, or clone anything inside it, so descending into
+  // that live subtree is both wasted work and actively unsafe: a slider or nav
+  // can no longer resemble its server rendering even though the edit happened
+  // somewhere else on the page.
+  if (prev.isEqualNode(next)) {
+    return;
+  }
   if (live.nodeType === 3 || live.nodeType === 8) {
     // Only when the server changed it, and only if the live copy still says
     // what the server last said — client code that rewrote this text keeps it.

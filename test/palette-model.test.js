@@ -24,6 +24,24 @@ test('preview URLs respect the project slash policy and preserve encoded file id
   }
 });
 
+test('component preview messages accept only known status updates', () => {
+  for (const status of ['empty', 'ready']) {
+    assert.deepEqual(
+      model.parseComponentPreviewMessage({ type: 'avb:component-preview', status }),
+      { status },
+    );
+  }
+  for (const value of [
+    null,
+    {},
+    { type: 'other', status: 'ready' },
+    { type: 'avb:component-preview' },
+    { type: 'avb:component-preview', status: 'unknown' },
+  ]) {
+    assert.equal(model.parseComponentPreviewMessage(value), undefined);
+  }
+});
+
 test('component usage parser preserves success and operating-error variants', () => {
   assert.deepEqual(model.parseComponentUsage({ files: [file], total: 2 }), {
     kind: 'ready',

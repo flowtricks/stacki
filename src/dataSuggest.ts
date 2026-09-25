@@ -908,6 +908,16 @@ export interface ScopeChip {
   readonly path: string;
 }
 
+const TYPE_OPERATORS = new Set(['as', 'satisfies']);
+
+function isTypeSyntaxIdentifier(source: string, from: number, root: string): boolean {
+  if (TYPE_OPERATORS.has(root)) {
+    return true;
+  }
+  const before = source.slice(0, from).trimEnd();
+  return /(?:^|[^\w$])(?:as|satisfies)$/.test(before);
+}
+
 /**
  * The names an expression NAMES, as ranges, so a field can draw them as chips.
  *
@@ -970,7 +980,8 @@ export function scopeChips(text: unknown, names: Iterable<string> | Set<string> 
     // Not a property of something else — the `data` in `post.data` is part of
     // that chip, not one of its own.
     const before = src.slice(0, i).trimEnd();
-    if (!before.endsWith('.') && inScope.has(path.split('.')[0] ?? '')) {
+    const root = path.split('.')[0] ?? '';
+    if (!before.endsWith('.') && inScope.has(root) && !isTypeSyntaxIdentifier(src, i, root)) {
       out.push({ from: i, to: end, path });
     }
     i = j;

@@ -25,6 +25,8 @@ const STYLESHEET = `/* =========================================================
    ========================================================================== */
 
 :root {
+  --_panel-private: #ff00ff;
+
   /* Curves */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-linear: linear;
@@ -172,6 +174,11 @@ const STYLESHEET = `/* =========================================================
   // --- the :root group: a comment section and a family table ----------------
   await show(0);
   check('the sheet renders', !!find('.vars-table'), container.innerHTML.slice(0, 200));
+  check(
+    'private variables are absent from the sheet',
+    !rowNames().some((name) => name.includes('_panel-private')),
+    rowNames().join('|'),
+  );
   check('a comment becomes a heading', texts('.vars-section').includes('Swatches'), texts('.vars-section').join());
   check('swatch names are rows', rowNames().includes('light-100'), rowNames().join('|'));
   check('a colour gets a swatch', all('.u-color-swatch').length >= 3, `${all('.u-color-swatch').length}`);

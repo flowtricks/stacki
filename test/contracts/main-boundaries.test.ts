@@ -47,7 +47,7 @@ test('the complete channel inventory matches real main and terminal registration
   const terminalChannels = [...terminal.matchAll(/ipcMain\.handle\(['"]([^'"]+)['"]/g)].map(
     (match) => match[1],
   );
-  assert.equal(harness.handlers.size, 113);
+  assert.equal(harness.handlers.size, 114);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual(
     [...Object.keys(IPC_PAYLOADS)].sort(),
@@ -71,11 +71,24 @@ test('malformed writes fail before altering disk; valid writes still work', asyn
   );
   await assert.rejects(harness.invoke('page:write', { pagePath: file, model: { nodes: false } }));
   assert.equal(fs.readFileSync(file, 'utf8'), '<h1>Before</h1>\n');
-  await harness.invoke('page:writeRaw', { pagePath: file, source: '<h1>After</h1>\n' });
+  const written = toRecord(
+    await harness.invoke('page:writeRaw', { pagePath: file, source: '<h1>After</h1>\n' }),
+  );
   assert.equal(fs.readFileSync(file, 'utf8'), '<h1>After</h1>\n');
+  assert.equal(written?.['source'], '<h1>After</h1>\n');
   const result = toRecord(await harness.invoke('page:read', file));
   assert.equal(result?.['editable'], true);
   assert.equal(result?.['source'], '<h1>After</h1>\n');
+  const parsed = toRecord(
+    await harness.invoke('page:parse', { pagePath: file, source: '<main>Draft</main>\n' }),
+  );
+  assert.equal(parsed?.['editable'], true);
+  assert.equal(parsed?.['source'], '<main>Draft</main>\n');
+  assert.equal(
+    fs.readFileSync(file, 'utf8'),
+    '<h1>After</h1>\n',
+    'parsing a code draft has no disk side effect',
+  );
 });
 
 test('Markdown boundary preserves source metadata and rejects corrupted fields', () => {

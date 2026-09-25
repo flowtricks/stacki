@@ -2,56 +2,55 @@ import { useState } from 'react';
 import type { ComponentProperty } from '../../shared/component-properties';
 import { PROPERTY_LIMITS } from '../../shared/component-properties';
 import { literalOptions } from '../propertyOptions';
+import Dropdown from '../ui/Dropdown';
+import { BracesIcon } from '../ui/Icons';
+import { ExpressionBindingField } from './propBindings';
 
 interface DefaultProps {
   readonly property: ComponentProperty;
+  readonly frontmatter: string;
   readonly onChange: (value: string) => void;
 }
-export function PropertyDefault({ property, onChange }: DefaultProps) {
+export function PropertyDefault({ property, frontmatter, onChange }: DefaultProps) {
   const simple =
     ['string', 'number', 'boolean'].includes(property.type) ||
     literalOptions(property.type) !== undefined;
   const [mode, setMode] = useState<'value' | 'expression'>(
     simple && isLiteralDefault(property) ? 'value' : 'expression'
   );
+  const expression = mode === 'expression';
+  const action = expression ? 'Use the default value control' : 'Write a default expression';
   return (
-    <div className="property-default">
+    <div className="property-default" role="group" aria-label="Default value">
       <div className="property-default-title">
         <span>Default value</span>
         {simple && (
           <button
-            className="ghost"
-            title="Toggle expression editor"
+            type="button"
+            className={`prop-expr-toggle${expression ? ' on' : ''}`}
+            title={action}
+            aria-label={action}
+            aria-pressed={expression}
             onClick={() => setMode((current) => (current === 'value' ? 'expression' : 'value'))}
           >
-            {mode === 'value' ? '{ }' : 'Value'}
+            <BracesIcon size={12} />
           </button>
         )}
       </div>
       {mode === 'value' && simple ? (
-        <DefaultControl property={property} onChange={onChange} />
+        <DefaultControl property={property} frontmatter={frontmatter} onChange={onChange} />
       ) : (
-        <textarea
-          aria-label="Default expression"
-          className="property-code"
+        <ExpressionBindingField
           value={property.defaultValue}
-          spellCheck={false}
-          rows={2}
-          maxLength={PROPERTY_LIMITS.textCharsMax}
+          bindCtx={{ frontmatter }}
           placeholder={'"Hello", 42, true, [], {…}'}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(value) => {
+            if (value.length <= PROPERTY_LIMITS.textCharsMax) {
+              onChange(value);
+            }
+          }}
         />
       )}
-      <div className="property-default-title">
-        <small className="property-help">
-          {property.defaultValue
-            ? 'Used when a value is omitted or undefined.'
-            : 'No default value.'}
-        </small>
-        <button className="ghost" disabled={!property.defaultValue} onClick={() => onChange('')}>
-          Clear
-        </button>
-      </div>
     </div>
   );
 }
@@ -60,18 +59,20 @@ function DefaultControl({ property, onChange }: DefaultProps) {
   if (options || property.type === 'boolean') {
     const choices = [...new Set(options ?? ['true', 'false'])];
     return (
-      <select
-        aria-label="Default option"
+      <Dropdown
         value={defaultChoice(choices, property.defaultValue)}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        <option value="">No default</option>
-        {choices.map((choice) => (
-          <option key={choice} value={choice}>
-            {propertyDefaultText(choice) ?? choice}
-          </option>
-        ))}
-      </select>
+        options={[
+          { value: '', label: 'No default' },
+          ...choices.map((choice) => ({
+            value: choice,
+            label: propertyDefaultText(choice) ?? choice,
+          })),
+        ]}
+        onChange={onChange}
+        livePreview={false}
+        searchable
+        searchPlaceholder="Search defaults…"
+      />
     );
   }
   if (property.type === 'number') {

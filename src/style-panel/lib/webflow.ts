@@ -238,6 +238,9 @@ function styleSources(): EmbedSource[] {
   const host = getHost()
   const out: EmbedSource[] = []
   let order = 0
+  const openComponentName = host.openFileKind === 'component'
+    ? host.openFilePath?.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, '') ?? null
+    : null
 
   for (const f of host.files) {
     out.push({
@@ -279,8 +282,8 @@ function styleSources(): EmbedSource[] {
       key: `node:${n.id}`,
       label: isGlobal ? '<style is:global>' : '<style>',
       classNames: [],
-      fromComponent: false,
-      componentName: null,
+      fromComponent: host.openFileKind === 'component',
+      componentName: openComponentName,
       order: order++,
       element: n.id,
       origin: { kind: 'node', nodeId: n.id },

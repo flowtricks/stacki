@@ -25,9 +25,8 @@ test('component navigation keeps the real iframe and inspector mounted while loa
         // Keep both preview components real: a mocked pane cannot reveal frame
         // replacement, navigation, or an inspector vanishing beside the frame.
         if (
-          ['PreviewPane', 'CanvasView', 'DevOffline', 'PreviewOverlays', 'PreviewToolbar'].includes(
-            name,
-          )
+          ['PreviewPane', 'CanvasView', 'DevOffline', 'PreviewOverlays', 'PreviewToolbar',
+            'PreviewSizeControls'].includes(name)
         ) {
           return;
         }
@@ -152,6 +151,11 @@ test('component navigation keeps the real iframe and inspector mounted while loa
     assert.equal(writes.at(-1).pagePath, card.path);
     assert.equal(writes.at(-1).model.nodes[0].props.title.value, 'card edit during return');
     assert.equal(outgoing.filter((message) => message.type === 'avb:track').at(-1).scope, '');
+    assert.equal(
+      __componentPanels.PropsPanel.node.name,
+      'Card',
+      'closing a component selects the instance that opened it',
+    );
 
     const failedRead = hold(card.path);
     await openCard();
@@ -219,7 +223,11 @@ test('component navigation keeps the real iframe and inspector mounted while loa
       assert.equal(track.focus, '0.0', `${fixture.label}: the original page instance retains focus`);
       await back();
       unchanged();
-      assert.equal(__componentPanels.PropsPanel.node.name, 'main', `${fixture.label}: the page still opens on its outermost node`);
+      assert.equal(
+        __componentPanels.PropsPanel.node.name,
+        'Card',
+        `${fixture.label}: closing selects the component instance`,
+      );
     }
     for (const fixture of [
       { source: '---\nconst render = true;\n---\n{render && (<>Text only</>)}', kind: 'cond' },
@@ -236,7 +244,7 @@ test('component navigation keeps the real iframe and inspector mounted while loa
       assert.deepEqual(track.paths, fixture.kind ? ['src/components/Card.astro|0', '0.0'] : ['0.0']);
       await back();
       unchanged();
-      assert.equal(__componentPanels.PropsPanel.node.name, 'main');
+      assert.equal(__componentPanels.PropsPanel.node.name, 'Card');
     }
   } finally {
     await act(async () => root.unmount());

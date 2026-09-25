@@ -20,6 +20,7 @@ import {
 } from '../shared/boundary';
 import { parseIpcPayload } from '../shared/ipc-payloads';
 import { parseOkResult } from '../shared/ipc';
+import { parsePageReadResult, type ParsePageResult } from '../shared/page-node';
 
 export interface PageChangeEvent {
   readonly external: boolean;
@@ -105,14 +106,32 @@ export function watchProject(projectPath: string): Promise<boolean> {
   return window.avb.watchProject(payload).then((input) => boolean(record(input)['ok']));
 }
 
-export function writeProjectPage(pagePath: string, model: unknown): Promise<void> {
+export function writeProjectPage(
+  pagePath: string,
+  model: unknown,
+): Promise<(ParsePageResult & { readonly source: string }) | undefined> {
   const payload = parseIpcPayload('page:write', { pagePath, model });
-  return window.avb.writePage(payload).then((input) => void parseOkResult(input));
+  return window.avb.writePage(payload).then(parseWrittenPage);
 }
 
-export function writeProjectPageRaw(pagePath: string, source: string): Promise<void> {
+export function writeProjectPageRaw(
+  pagePath: string,
+  source: string,
+): Promise<(ParsePageResult & { readonly source: string }) | undefined> {
   const payload = parseIpcPayload('page:writeRaw', { pagePath, source });
-  return window.avb.writePageRaw(payload).then((input) => void parseOkResult(input));
+  return window.avb.writePageRaw(payload).then(parseWrittenPage);
+}
+
+function parseWrittenPage(
+  input: unknown,
+): (ParsePageResult & { readonly source: string }) | undefined {
+  parseOkResult(input);
+  if (typeof input !== 'object' || input === null || !('source' in input)) {
+    // Older development bridges only acknowledge the write. The production
+    // bridge returns the parsed file so source ranges stay current.
+    return undefined;
+  }
+  return parsePageReadResult(input);
 }
 
 export function closeProject(nextProjectPath: string | null): Promise<void> {

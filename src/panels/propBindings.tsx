@@ -72,6 +72,11 @@ interface ConditionFieldProps extends BindingContextProps {
   readonly chipsOf: ChipsOf;
   readonly onSetText: (value: string) => void;
 }
+interface ExpressionBindingFieldProps extends BindingContextProps {
+  readonly value: string;
+  readonly placeholder?: string;
+  readonly onChange: (value: string) => void;
+}
 interface BindHandleProps {
   readonly active: boolean;
   readonly onOpen: (host: Element | null) => void;
@@ -88,6 +93,7 @@ interface BindFieldProps extends BindingContextProps {
   readonly value?: Attr | null | undefined;
   readonly field?: FieldDefinition;
   readonly placeholder?: string | undefined;
+  readonly wrapCode?: boolean;
   readonly apiRef?: MutableRefObject<InsertAPI | null>;
   readonly onChange: ValueChange;
 }
@@ -251,6 +257,70 @@ export function ConditionField({ test, scope, chipsOf, bindCtx, onSetText }: Con
               : apiRef.current?.insert(path);
             if (next != null) {
               onSetText(next);
+            }
+          }}
+          onClose={() => setPick(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+export function ExpressionBindingField({
+  value,
+  placeholder,
+  bindCtx,
+  onChange,
+}: ExpressionBindingFieldProps) {
+  const [pick, setPick] = useState<ChipPick | null>(null);
+  const apiRef = useRef<ExprInputAPI | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const scope = scopeCompletions(bindCtx || {});
+  const scopeNames = new Set(scope.map((item) => item.label.split('.')[0] ?? ''));
+  const chipsOf = (text: string) => scopeChips(text, scopeNames);
+  const open = (chip: TemplateHole | null): void => {
+    const rectangle = wrapRef.current?.getBoundingClientRect();
+    if (!rectangle) {
+      return;
+    }
+    setPick({
+      chip,
+      pos: {
+        left: rectangle.left,
+        top: Math.min(rectangle.bottom + 4, Math.max(60, window.innerHeight - 340)),
+        width: Math.max(rectangle.width, 240),
+      },
+    });
+  };
+  return (
+    <>
+      <div className="property-expression-binding attr-value-field" ref={wrapRef}>
+        <ExprInput
+          value={value}
+          syncValue={value}
+          {...definedFields({ placeholder })}
+          multiline
+          wrap={false}
+          completions={scope}
+          apiRef={apiRef}
+          chipsOf={chipsOf}
+          onChipClick={open}
+          onChange={onChange}
+        />
+        <BindHandle active={!!pick} onOpen={() => (pick ? setPick(null) : open(null))} />
+      </div>
+      {pick ? (
+        <FieldDataPicker
+          pos={pick.pos}
+          bindCtx={bindCtx}
+          current={pick.chip?.path ?? null}
+          onPick={(path) => {
+            const chip = pick.chip;
+            setPick(null);
+            if (chip) {
+              apiRef.current?.replaceRange(chip.from, chip.to, path);
+            } else {
+              apiRef.current?.insert(path);
             }
           }}
           onClose={() => setPick(null)}
@@ -638,6 +708,7 @@ function BindFieldView({ state }: { readonly state: BindingViewState }) {
     expr,
     exprApiRef,
     codeChips,
+    wrapCode,
   } = state;
   const list = <BindFieldMenu state={state} />;
   const srcEditor = <BindFieldSource state={state} />;
@@ -684,9 +755,9 @@ function BindFieldView({ state }: { readonly state: BindingViewState }) {
         // look like one.
         chipsOf={codeChips}
         onChipClick={(hit) => open(hit)}
-        // Code keeps its shape: wrapping an array across the panel's width throws
-        // away the indentation that says what belongs to what. It scrolls instead.
-        wrap={false}
+        // Expanded editors keep authored line structure. Compact inline callers
+        // can opt into wrapping so the whole value remains readable in the panel.
+        wrap={wrapCode ?? false}
         onChange={(v) => onChange({ type: 'expr', value: v })}
         onCommit={(v) => v !== expr && onChange({ type: 'expr', value: v }, true)}
       />

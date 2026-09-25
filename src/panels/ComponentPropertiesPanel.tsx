@@ -7,7 +7,9 @@ import type {
   PropertyChange,
 } from '../../shared/component-properties';
 import useListReorder from '../ui/useListReorder';
-import { TrashIcon } from '../ui/Icons';
+import { literalOptions } from '../propertyOptions';
+import ListFieldRow from '../ui/ListFieldRow';
+import { ComponentPropertiesIcon, FieldNumberIcon, FieldSwitchIcon } from '../ui/Icons';
 import { PropertyGrip, movePropertyItem } from './PropertyReorder';
 import { PropertiesIcon } from '../ui/PropertiesIcon';
 import { PropertyEditor } from './PropertyEditor';
@@ -69,7 +71,9 @@ function PropertyPanelContent({ data, busy, save }: PropertyContentProps) {
         <button
           className="property-add"
           aria-label="Add property"
-          title="Add property"
+          title={
+            data.advanced ? 'Add declarations to this combined type in source' : 'Add property'
+          }
           disabled={data.advanced || busy}
           onClick={() =>
             setSelection({
@@ -94,12 +98,6 @@ function PropertyPanelContent({ data, busy, save }: PropertyContentProps) {
               onChange={save}
             />
           </>
-        )}
-        {data.advanced && (
-          <p className="property-help">
-            This component imports or combines its prop contract. Declare fields in Props to edit
-            them.
-          </p>
         )}
         <PropertySelectionEditor
           selection={selection}
@@ -130,13 +128,17 @@ function PropertySelectionEditor({
           key={selection.originalName}
           property={selection.value}
           originalName={selection.originalName}
-          disabled={busy || data.advanced}
+          frontmatter={data.frontmatter}
+          access={
+            busy ? 'saving' : propertyIsEditable(selection.value, data) ? 'editable' : 'readonly'
+          }
           onClose={onClose}
           onSave={async (change) => {
             if (await save(change)) {
               onClose();
             }
           }}
+          onCommit={save}
         />
       )}
     </>
@@ -159,61 +161,67 @@ function PropertyList({ data, busy, onSelect, onChange }: PropertyListProps) {
   };
   const reorder = useListReorder({ count: data.properties.length, onMove: move, disabled });
   return (
-    <div className="property-list">
+    <div className="property-list list-field">
       {data.properties.length === 0 && (
         <p className="property-help">
           No properties yet. Add a property to define what each instance can customize.
         </p>
       )}
       {data.properties.map((property, index) => (
-        <div
-          className={`property-row ${reorder.rowClass(index)}`}
+        <ListFieldRow
           key={property.name}
-          {...reorder.rowProps(index)}
+          className={`property-row ${reorder.rowClass(index)}`}
+          rowProps={reorder.rowProps(index)}
+          triggerClassName="property-row-main"
+          icon={<PropertyTypeIcon type={property.type} />}
+          grip={
+            <PropertyGrip
+              label={property.name}
+              index={index}
+              count={data.properties.length}
+              disabled={disabled}
+              onMove={move}
+            />
+          }
+          disabled={busy}
+          removeDisabled={busy || !propertyIsRemovable(property, data)}
+          removeLabel={`Delete ${property.name}`}
+          onOpen={() => onSelect(property)}
+          onRemove={() => void onChange({ kind: 'remove', name: property.name })}
         >
-          <PropertyGrip
-            label={property.name}
-            index={index}
-            count={data.properties.length}
-            disabled={disabled}
-            onMove={move}
-          />
-          <button className="property-row-main" disabled={busy} onClick={() => onSelect(property)}>
-            <span className="property-type-icon" aria-hidden="true">
-              {property.type.includes('|')
-                ? '◇'
-                : property.type === 'boolean'
-                ? '◉'
-                : property.type === 'number'
-                ? '#'
-                : property.type === 'string'
-                ? 'T'
-                : '{}'}
+          {property.name}
+          {property.required && (
+            <span title="Required" className="property-required">
+              {' '}
+              *
             </span>
-            <span className="property-row-label">
-              <span>
-                {property.name}
-                {property.required && (
-                  <span title="Required" className="property-required">
-                    {' '}
-                    *
-                  </span>
-                )}
-              </span>
-              <small>{property.type}</small>
-            </span>
-          </button>
-          <button
-            className="property-remove"
-            aria-label={`Delete ${property.name}`}
-            title="Delete property"
-            disabled={disabled}
-            onClick={() => void onChange({ kind: 'remove', name: property.name })}
-          >
-            <TrashIcon size={12} />
-          </button>
-        </div>
+          )}
+        </ListFieldRow>
       ))}
     </div>
   );
+}
+
+function PropertyTypeIcon({ type }: { readonly type: string }) {
+  if (literalOptions(type)) {
+    return <ComponentPropertiesIcon size={14} />;
+  }
+  switch (type) {
+    case 'boolean':
+      return <FieldSwitchIcon size={14} />;
+    case 'number':
+      return <FieldNumberIcon size={14} />;
+    case 'string':
+      return 'T';
+    default:
+      return '{}';
+  }
+}
+
+function propertyIsEditable(property: ComponentProperty, data: ComponentProperties): boolean {
+  return property.editing ? property.editing.kind !== 'restricted' : !data.advanced;
+}
+
+function propertyIsRemovable(property: ComponentProperty, data: ComponentProperties): boolean {
+  return property.editing ? property.editing.kind === 'editable' : !data.advanced;
 }

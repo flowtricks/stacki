@@ -94,6 +94,52 @@ export function parseSelectorList(selectorText: string): SelectorInfo[] {
   }))
 }
 
+export type SelectorListMember = {
+  readonly text: string
+  readonly from: number
+  readonly to: number
+}
+
+/** Locate top-level selector-list members without splitting commas in functions,
+ *  attributes, or quoted attribute values. Offsets refer to the original text. */
+export function selectorListMembers(selectorText: string): readonly SelectorListMember[] {
+  const members: SelectorListMember[] = []
+  let bracketDepth = 0
+  let parenthesisDepth = 0
+  let quote: '"' | "'" | null = null
+  let escaped = false
+  let start = 0
+  const append = (end: number) => {
+    const raw = selectorText.slice(start, end)
+    const leadingLength = raw.length - raw.trimStart().length
+    const text = raw.trim()
+    if (text.length === 0) {return}
+    const from = start + leadingLength
+    members.push({ text, from, to: from + text.length })
+  }
+
+  for (let index = 0; index < selectorText.length; index += 1) {
+    const character = selectorText[index] ?? ''
+    if (quote) {
+      if (escaped) {escaped = false; continue}
+      if (character === '\\') {escaped = true; continue}
+      if (character === quote) {quote = null}
+      continue
+    }
+    if (character === '"' || character === "'") {quote = character; continue}
+    if (character === '(') {parenthesisDepth += 1; continue}
+    if (character === ')') {parenthesisDepth = Math.max(0, parenthesisDepth - 1); continue}
+    if (character === '[') {bracketDepth += 1; continue}
+    if (character === ']') {bracketDepth = Math.max(0, bracketDepth - 1); continue}
+    if (character === ',' && parenthesisDepth === 0 && bracketDepth === 0) {
+      append(index)
+      start = index + 1
+    }
+  }
+  append(selectorText.length)
+  return members
+}
+
 /**
  * A single selector's subject compound projected into the element-token namespace
  * (`tag:div` / `class:a` / `attr:data-x`), matching snapshotTokens. `simple` is
@@ -156,6 +202,14 @@ export function canonicalCompound(selectorText: string): CanonicalCompound {
     tokens.push(attr.operator && attr.value != null ? `attr:${attr.name}${attr.operator}"${attr.value}"` : `attr:${attr.name}`)
   })
   return { simple, oneCompound, tokens, pseudoClasses, pseudoElement, splittable, universal: subject.universal }
+}
+
+/** True when the selector's subject is qualified by a parent or ancestor. */
+export function selectorDependsOnAncestor(selectorText: string): boolean {
+  const selectors = compileSelectorList(selectorText)
+  return selectors.some((selector) =>
+    selector.combinators.some((combinator) => combinator === ' ' || combinator === '>'),
+  )
 }
 
 /** Normalize a pseudo-element to its `::name` form (handles legacy `:before`), or ''. */

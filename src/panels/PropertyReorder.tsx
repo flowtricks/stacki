@@ -42,7 +42,7 @@ export function PropertyGrip({
   return (
     <button
       type="button"
-      className="property-grip"
+      className="list-field-grip"
       data-drag-through
       aria-label={`Reorder ${label}`}
       title="Drag to reorder (or use arrow keys)"

@@ -30,7 +30,9 @@ import FlexChildSection from './FlexChildSection'
 import EffectsSection from './EffectsSection'
 import ProvenanceList, { ProvenanceEmbedNav } from './ProvenanceList'
 import VariableConnect, { useSharedVars } from './VariableConnect'
-import { computeRuleModel, type RuleModel } from './lib/cascade'
+import { computeRuleModel, type MatchedRule, type RuleModel } from './lib/cascade'
+import { cssTokens } from './lib/css-code'
+import { buildCssRuleView, type CssRuleRange, type CssRuleView } from './lib/css-rule-view'
 import { groupProps } from './lib/sections'
 import { defaultSelectorTokens, selectorToClassTokens, snapshotTokens, tokensToSelector } from './lib/element-tokens'
 import { resolveStyle, indexContexts, contextKeyOf, listMatchedSelectors, selectorKey, selectorsMatch, stateForSelector, STATES, type ContextInfo, type ContextKey, type MatchedSelector, type ResolvedProp, type ResolvedStyle, type SourceKey, type StateKey, type StyleContext } from './lib/resolved'
@@ -59,7 +61,13 @@ import {
   replaceRuleCss,
   splitRuleSelectorAt,
 } from './lib/css'
-import { canonicalCompound, compareSpecificity, parseSelectorList, type MatchTarget } from './lib/selectors'
+import {
+  canonicalCompound,
+  compareSpecificity,
+  parseSelectorList,
+  selectorDependsOnAncestor,
+  type MatchTarget,
+} from './lib/selectors'
 import { findNode, getHost, onHostChange, propText } from './lib/host'
 import {
   applyNativePropertyAt,
@@ -608,17 +616,57 @@ function AddPropertyRow({ busy, onAdd }: { busy: boolean; onAdd: (prop: string, 
 
 // ─────────────────────────── Section block ───────────────────────────
 
+type SectionToggleRequest = {
+  readonly id: string
+  readonly ids: readonly string[]
+  readonly next: 'open' | 'closed'
+  readonly scope: 'one' | 'all'
+}
+
+function useSectionVisibility(): readonly [
+  ReadonlySet<string>,
+  (request: SectionToggleRequest) => void,
+] {
+  const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set(['flex-child']))
+  const toggle = useCallback((request: SectionToggleRequest) => {
+    setClosed((previous) => {
+      if (request.scope === 'all') {
+        return request.next === 'open' ? new Set() : new Set(request.ids)
+      }
+      const next = new Set(previous)
+      if (request.next === 'open') {
+        next.delete(request.id)
+      } else {
+        next.add(request.id)
+      }
+      return next
+    })
+  }, [])
+  return [closed, toggle]
+}
+
 // A collapsible section header (Webflow's chevron + label) wrapping a group of
-// controls. Open by default; collapse state is local to the block.
-function SectionBlock({ label, headerAction, defaultOpen = true, mark = null, children }: { label: string; headerAction?: ReactNode; defaultOpen?: boolean; mark?: 'own' | 'other' | null; children: ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen)
-  const toggle = () => setOpen((value) => !value)
+// controls. Visibility is owned by the card so Shift-click can apply one
+// header's next state to every section without a document-wide event channel.
+function SectionBlock({ label, headerAction, open, mark = null, onToggle, children }: {
+  readonly label: string
+  readonly headerAction?: ReactNode
+  readonly open: boolean
+  readonly mark?: 'own' | 'other' | null
+  readonly onToggle: (event: ReactMouseEvent<HTMLButtonElement>) => void
+  readonly children: ReactNode
+}) {
   return (
     <div className={`embed-editor_section-block ${open ? '' : 'is-collapsed'}`}>
       {/* A row (not one big button) so an optional action can sit next to the chevron
           without nesting a button inside a button. */}
       <div className="embed-editor_section-header">
-        <button type="button" className="embed-editor_section-toggle" aria-expanded={open} onClick={toggle}>
+        <button
+          type="button"
+          className="embed-editor_section-toggle"
+          aria-expanded={open}
+          onClick={onToggle}
+        >
           <span className="embed-editor_section-title">{label}</span>
         </button>
         {headerAction}
@@ -641,10 +689,17 @@ function SectionBlock({ label, headerAction, defaultOpen = true, mark = null, ch
           className="embed-editor_section-chevron-btn"
           aria-expanded={open}
           aria-label={`${open ? 'Collapse' : 'Expand'} ${label}`}
-          onClick={toggle}
+          onClick={onToggle}
         >
           <svg className="embed-editor_section-chevron" viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M4.2 6.2 8 10l3.8-3.8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M4.2 6.2 8 10l3.8-3.8"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </button>
       </div>
@@ -1226,15 +1281,37 @@ const SUGGESTION_KIND_LABEL: Record<SelectorSuggestion['kind'], string> = {
   tag: 'tag', class: 'class', attribute: 'attribute', 'attribute-value': 'attribute', combo: 'combo',
 }
 
-// A selector that says nothing about *this* element — `:target`, `:focus-visible`,
-// `*`, `::selection`, `body > *`. They match almost everything on the page, so a
-// project with a couple of them tacks them onto every element's chip list and
-// buries the selectors that actually describe what's selected. Kept behind a
-// toggle instead. A class, id or attribute anywhere in the selector (including
-// inside `:is(...)`) makes it specific enough to show.
+// A selector made only from tags, universal selectors, and pseudos describes a
+// project-wide group rather than this element's identity. A class, id, or attribute
+// anywhere in the selector (including inside `:is(...)`) makes it specific.
 function isGlobalSelector(text: string): boolean {
-  if (/[.#[]/.test(text)) {return false}
-  return canonicalCompound(text).tokens.length === 0
+  return !/[.#[]/.test(text)
+}
+
+type ClassifiedSelector = {
+  readonly selector: MatchedSelector
+  readonly global: boolean
+  readonly inherited: boolean
+}
+
+function classifySelector(selector: MatchedSelector): ClassifiedSelector {
+  const inherited = selectorDependsOnAncestor(selector.text)
+  return {
+    selector,
+    // Parent-qualified selectors have the more useful category when the two
+    // definitions overlap, so each reveal control owns a disjoint list.
+    global: !inherited && isGlobalSelector(selector.text),
+    inherited,
+  }
+}
+
+function selectorAccessibleLabel(entry: ClassifiedSelector, label: string): string {
+  const categories: string[] = []
+  if (entry.global) {categories.push('global')}
+  if (entry.inherited) {categories.push('inherited')}
+  if (entry.selector.fromComponent) {categories.push('component')}
+  if (categories.length === 0) {return label}
+  return `${label}, ${categories.join(' and ')} selector`
 }
 
 // The selector picker: a chip per selector that styles the element (its own
@@ -1244,7 +1321,7 @@ function isGlobalSelector(text: string): boolean {
 // input offers an autocomplete list of the element's targetable selectors:
 // ↑/↓ move, Enter applies the highlighted one (or the typed text), Tab fills it
 // into the input to keep typing.
-export function SelectorPicker({ selectors, suggestions, activeSelector, activePicked, busy, loading, onSelect, onDeselect, onAdd }: {
+type SelectorPickerProps = {
   selectors: MatchedSelector[]
   suggestions: SelectorSuggestion[]
   activeSelector: string
@@ -1257,12 +1334,27 @@ export function SelectorPicker({ selectors, suggestions, activeSelector, activeP
   onSelect: (selector: string) => void
   onDeselect: () => void
   onAdd: (selector: string) => void
-}) {
+  onVisibleSelectorsChange?: (selectors: readonly string[]) => void
+}
+
+export function SelectorPicker({
+  selectors,
+  suggestions,
+  activeSelector,
+  activePicked,
+  busy,
+  loading,
+  onSelect,
+  onDeselect,
+  onAdd,
+  onVisibleSelectorsChange,
+}: SelectorPickerProps) {
   const [draft, setDraft] = useState('')
   const [open, setOpen] = useState(false)
   const [highlight, setHighlight] = useState(-1)
   const [inputOpen, setInputOpen] = useState(false)
   const [showGlobals, setShowGlobals] = useState(false)
+  const [showInherited, setShowInherited] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const wantFocus = useRef(false)
@@ -1275,22 +1367,28 @@ export function SelectorPicker({ selectors, suggestions, activeSelector, activeP
   // as just the black well (with its min-height) rather than an add-selector field.
   const showInput = inputOpen
 
-  // Global selectors are folded away behind a count chip. The one exception is a
-  // global the user PICKED — it has to stay on screen for the panel below it to
-  // make sense. A global that is merely the current default target stays hidden,
-  // so the checkbox means what it says.
-  const globals = useMemo(() => selectors.filter((sel) => isGlobalSelector(sel.text)), [selectors])
+  // Broad selectors are folded away behind category toggles. A selector the user
+  // picked stays visible so the editor below always has an understandable target.
+  const classified = useMemo(() => selectors.map(classifySelector), [selectors])
+  const globals = useMemo(() => classified.filter((entry) => entry.global), [classified])
+  const inherited = useMemo(() => classified.filter((entry) => entry.inherited), [classified])
   const shownSelectors = useMemo(
     () =>
-      showGlobals
-        ? selectors
-        : selectors.filter(
-            (sel) =>
-              !isGlobalSelector(sel.text) ||
-              (activePicked && selectorsMatch(sel.text, activeSelector)),
-          ),
-    [selectors, showGlobals, activeSelector, activePicked],
+      classified.filter((entry) => {
+        const picked = activePicked && selectorsMatch(entry.selector.text, activeSelector)
+        const globalVisible = !entry.global || showGlobals
+        const inheritedVisible = !entry.inherited || showInherited
+        return picked || (globalVisible && inheritedVisible)
+      }),
+    [classified, showGlobals, showInherited, activeSelector, activePicked],
   )
+  const visibleSelectorTexts = useMemo(
+    () => shownSelectors.map((entry) => entry.selector.text),
+    [shownSelectors],
+  )
+  useEffect(() => {
+    onVisibleSelectorsChange?.(visibleSelectorTexts)
+  }, [onVisibleSelectorsChange, visibleSelectorTexts])
 
   const projectClasses = useProjectClasses()
   const q = draft.trim().toLowerCase()
@@ -1399,21 +1497,40 @@ export function SelectorPicker({ selectors, suggestions, activeSelector, activeP
         ) : null}
         {shownSelectors.length ? (
           <div className="embed-editor_selector-chips">
-            {shownSelectors.map((sel) => {
+            {shownSelectors.map((entry) => {
+              const sel = entry.selector
               const active = selectorsMatch(sel.text, activeSelector)
               const dimmed = sel.inContext === false
               // Nested rules show their nesting (`.hero { .title }`); selection/matching
               // still uses the resolved selector (sel.text).
               const label = sel.display ?? sel.text
+              const className = [
+                'embed-editor_selector-chip',
+                active && 'is-active',
+                sel.pending && 'is-pending',
+                sel.fromComponent && 'is-component',
+                entry.global && 'is-global',
+                entry.inherited && 'is-inherited',
+                dimmed && 'is-dimmed',
+              ].filter(Boolean).join(' ')
+              const title = active
+                ? `${label} — click to deselect`
+                : dimmed
+                  ? `${label} — styled in another query`
+                  : sel.pending
+                    ? `${label} — no styles yet`
+                    : label
               return (
                 <button
                   key={sel.key}
                   type="button"
-                  className={`embed-editor_selector-chip ${active ? 'is-active' : ''} ${sel.pending ? 'is-pending' : ''} ${dimmed ? 'is-dimmed' : ''}`}
+                  className={className}
                   disabled={busy}
+                  aria-pressed={active}
+                  aria-label={selectorAccessibleLabel(entry, label)}
                   // Click the active chip again to deselect (show all winners read-only).
                   onClick={() => (active ? onDeselect() : onSelect(sel.text))}
-                  title={active ? `${label} — click to deselect` : dimmed ? `${label} — styled in another query` : sel.pending ? `${label} — no styles yet` : label}
+                  title={title}
                 >
                   {label}
                 </button>
@@ -1481,8 +1598,8 @@ export function SelectorPicker({ selectors, suggestions, activeSelector, activeP
         under it down a row, so the panel rearranged itself under the pointer just as
         it became usable. With nothing to reveal it sits inert instead. */}
     <label
-      className={`embed-editor_check embed-editor_globals-check ${globals.length ? '' : 'is-empty'}`}
-      title="Selectors like :target, :focus-visible and * match nearly every element on the page"
+      className={`embed-editor_check embed-editor_selector-filter ${globals.length ? '' : 'is-empty'}`}
+      title="Tags, universal selectors, and broad states can match many elements"
     >
       <input
         type="checkbox"
@@ -1491,6 +1608,18 @@ export function SelectorPicker({ selectors, suggestions, activeSelector, activeP
         onChange={(event) => setShowGlobals(event.target.checked)}
       />
       <span>Show global selectors ({globals.length})</span>
+    </label>
+    <label
+      className={`embed-editor_check embed-editor_selector-filter ${inherited.length ? '' : 'is-empty'}`}
+      title="Selectors that apply because this element is inside a matching parent or ancestor"
+    >
+      <input
+        type="checkbox"
+        checked={showInherited && inherited.length > 0}
+        disabled={busy || !inherited.length}
+        onChange={(event) => setShowInherited(event.target.checked)}
+      />
+      <span>Show inherited styles ({inherited.length})</span>
     </label>
     </>
   )
@@ -1737,10 +1866,261 @@ function EditQueryForm({ query, uses, sourceLabel, suggestions, onRename, onCanc
   )
 }
 
+function cssRuleMatchesSelector(matched: MatchedRule, selector: string): boolean {
+  if (selectorsMatch(matched.rule.selectorText, selector)) {return true}
+  return matched.matchedSelectors.some((entry) => selectorsMatch(entry.text, selector))
+}
+
+function cssRuleMatchesVisibleSelector(
+  matched: MatchedRule,
+  visibleSelectors: readonly string[],
+): boolean {
+  return visibleSelectors.some((selector) => cssRuleMatchesSelector(matched, selector))
+}
+
+function cssSelectorLine(
+  line: string,
+  lineFrom: number,
+  matchedRanges: readonly CssRuleRange[],
+): ReactNode {
+  const segments: ReactNode[] = []
+  let cursor = 0
+  for (const range of matchedRanges) {
+    const from = Math.max(0, range.from - lineFrom)
+    const to = Math.min(line.length, range.to - lineFrom)
+    if (to <= from) {continue}
+    if (from > cursor) {
+      segments.push(
+        <span key={`plain:${cursor}`} className="embed-editor_css-code-selector-unmatched">
+          {line.slice(cursor, from)}
+        </span>,
+      )
+    }
+    segments.push(
+      <span key={`matched:${from}`} className="embed-editor_css-code-selector">
+        {line.slice(from, to)}
+      </span>,
+    )
+    cursor = to
+  }
+  if (cursor < line.length) {
+    segments.push(
+      <span key={`plain:${cursor}`} className="embed-editor_css-code-selector-unmatched">
+        {line.slice(cursor)}
+      </span>,
+    )
+  }
+  return segments
+}
+
+function cssCodeLine(
+  line: string,
+  lineFrom: number,
+  selectorList: boolean,
+  matchedRanges: readonly CssRuleRange[],
+): ReactNode {
+  if (selectorList) {return cssSelectorLine(line, lineFrom, matchedRanges)}
+  const declaration = line.match(/^(\s*)([-\w]+)(:\s*)(.*?)(;?)$/)
+  if (declaration) {
+    const [, spacing = '', property = '', colon = '', value = '', semicolon = ''] = declaration
+    return (
+      <>
+        {spacing}<span className="embed-editor_css-code-property">{property}</span>
+        <span className="embed-editor_css-code-punctuation">{colon}</span>
+        {cssTokens(value).map((token, index) => (
+          <span key={`${index}:${token.kind}`} className={`cx-${token.kind}`}>{token.text}</span>
+        ))}
+        <span className="embed-editor_css-code-punctuation">{semicolon}</span>
+      </>
+    )
+  }
+  const brace = line.lastIndexOf('{')
+  if (brace >= 0) {
+    const selectorClass = line.trimStart().startsWith('@')
+      ? 'embed-editor_css-code-context'
+      : 'embed-editor_css-code-selector'
+    return (
+      <>
+        <span className={selectorClass}>{line.slice(0, brace)}</span>
+        <span className="embed-editor_css-code-punctuation">{'{'}</span>
+      </>
+    )
+  }
+  return <span className="embed-editor_css-code-punctuation">{line || ' '}</span>
+}
+
+function CssCodePreview({ view, ariaLabel }: { view: CssRuleView; ariaLabel: string }) {
+  let offset = 0
+  return (
+    <pre className="embed-editor_css-code-preview" aria-label={ariaLabel} tabIndex={0}>
+      {view.code.split('\n').map((line, index) => {
+        const from = offset
+        const to = from + line.length
+        offset = to + 1
+        const overridden = view.highlights.some((range) => range.from < to && range.to > from)
+        const selectorList = view.selectorLists.some(
+          (range) => range.from < to && range.to > from,
+        )
+        const matchedRanges = view.selectors.filter(
+          (range) => range.from < to && range.to > from,
+        )
+        return (
+          <span
+            key={`${index}:${line}`}
+            className={`embed-editor_css-code-line ${overridden ? 'is-overridden' : ''}`}
+          >
+            {cssCodeLine(line, from, selectorList, matchedRanges)}
+          </span>
+        )
+      })}
+    </pre>
+  )
+}
+
+function EditableCssRule({ rule, busy, onSave }: {
+  readonly rule: ParsedRule
+  readonly busy: boolean
+  readonly onSave: (rule: ParsedRule, css: string) => void
+}) {
+  const sourceCss = rule.node.toString()
+  const [draft, setDraft] = useState(sourceCss)
+  const attemptedDraftRef = useRef<string | null>(null)
+  const previousSourceRef = useRef(sourceCss)
+
+  // External style-panel edits replace a clean draft, while text currently being
+  // authored stays untouched. After our own autosave, draft already equals sourceCss.
+  useEffect(() => {
+    setDraft((current) => current === previousSourceRef.current ? sourceCss : current)
+    previousSourceRef.current = sourceCss
+  }, [sourceCss])
+
+  // A short pause is the commit boundary. Busy saves serialize naturally: if a
+  // newer draft arrives during one write, busy clearing schedules that latest text.
+  useEffect(() => {
+    if (draft === sourceCss) {attemptedDraftRef.current = null; return}
+    if (busy) {return}
+    if (draft === attemptedDraftRef.current) {return}
+    const timer = window.setTimeout(() => {
+      attemptedDraftRef.current = draft
+      onSave(rule, draft)
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [busy, draft, onSave, rule, sourceCss])
+
+  return (
+    <CodeEditor
+      value={draft}
+      language="css"
+      ariaLabel={`Editable CSS for ${rule.selectorText}; changes save automatically`}
+      minHeight="100px"
+      onChange={setDraft}
+      className="embed-editor_css-code-editor"
+    />
+  )
+}
+
+type CssCodeSectionProps = {
+  readonly model: RuleModel
+  readonly activeSelector: string
+  readonly visibleSelectors: readonly string[]
+  readonly editableRule: ParsedRule | null
+  readonly busy: boolean
+  readonly open: boolean
+  readonly onToggle: () => void
+  readonly onSave: (rule: ParsedRule, css: string) => void
+}
+
+function CssCodeHeader({ open, sourceLabel, onToggle }: {
+  readonly open: boolean
+  readonly sourceLabel: string
+  readonly onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className="embed-editor_css-code-header embed-editor_css-code-toggle"
+      aria-expanded={open}
+      aria-label={`${open ? 'Collapse' : 'Expand'} CSS Code`}
+      onClick={onToggle}
+    >
+      <span className="embed-editor_css-code-title">CSS Code</span>
+      {sourceLabel ? (
+        <span className="embed-editor_css-code-source" title={sourceLabel}>{sourceLabel}</span>
+      ) : null}
+      <span className="embed-editor_css-code-chevron" aria-hidden="true">
+        <svg className="embed-editor_section-chevron" viewBox="0 0 16 16" aria-hidden="true">
+          <path
+            d="M4.2 6.2 8 10l3.8-3.8"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+    </button>
+  )
+}
+
+function CssCodeSection({
+  model,
+  activeSelector,
+  visibleSelectors,
+  editableRule,
+  busy,
+  open,
+  onToggle,
+  onSave,
+}: CssCodeSectionProps) {
+  const rules = useMemo(() => {
+    const visible = [...model.base, ...model.conditional]
+      .filter((rule) => cssRuleMatchesVisibleSelector(rule, visibleSelectors))
+    if (!activeSelector) {return visible}
+    return visible.filter((rule) => cssRuleMatchesSelector(rule, activeSelector))
+  }, [model, activeSelector, visibleSelectors])
+  const view = useMemo(() => buildCssRuleView(rules), [rules])
+  const sources = useMemo(
+    () => [...new Set(rules.map((entry) => entry.rule.embedLabel))],
+    [rules],
+  )
+  const sourceLabel = activeSelector
+    ? (editableRule?.embedLabel ?? sources.join(', '))
+    : ''
+
+  return (
+    <section className={`embed-editor_css-code ${open ? 'is-open' : 'is-collapsed'}`}>
+      <CssCodeHeader open={open} sourceLabel={sourceLabel} onToggle={onToggle} />
+      {open ? (
+        <div className="embed-editor_css-code-body">
+          {activeSelector && editableRule ? (
+            <EditableCssRule
+              key={editableRule.ruleId}
+              rule={editableRule}
+              busy={busy}
+              onSave={onSave}
+            />
+          ) : view.code ? (
+            <CssCodePreview
+              view={view}
+              ariaLabel="CSS matching this element"
+            />
+          ) : (
+            <p className="embed-editor_css-code-empty">No matching CSS rules.</p>
+          )}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 function StyleCard({
   snapshot,
   selectedNames,
   activePicked,
+  cssCodeOpen,
+  onToggleCssCode,
+  model,
   onSelectNames,
   resolved,
   contexts,
@@ -1771,14 +2151,15 @@ function StyleCard({
   liveSetProp,
   onSelectSelector,
   onAdd,
-  rawOpen,
-  onToggleRaw,
-  onSaveRaw,
+  onSaveCssRule,
 }: {
   snapshot: ElementSnapshot | undefined
   selectedNames: string[]
   selectedSelector: string
   activePicked: boolean
+  cssCodeOpen: boolean
+  onToggleCssCode: () => void
+  model: RuleModel
   onSelectNames: (names: string[]) => void
   resolved: ResolvedStyle
   contexts: StyleContext[]
@@ -1815,9 +2196,7 @@ function StyleCard({
   liveSetProp: (prop: string, value: string | null, important: boolean) => void
   onSelectSelector: (selector: string, prop?: string) => void
   onAdd: (prop: string, value: string, important: boolean) => void
-  rawOpen: boolean
-  onToggleRaw: () => void
-  onSaveRaw: (rule: ParsedRule, css: string) => void
+  onSaveCssRule: (rule: ParsedRule, css: string) => void
   onRemoveRule: (rule: ParsedRule) => void
 }) {
   const selectedRule = resolved.selectedRule
@@ -1839,11 +2218,20 @@ function StyleCard({
   }, [])
   const closeProvenance = useCallback(() => setProvenance(null), [])
   const suppressProvenanceReopen = useCallback((prop: string) => { suppressProvenance.current = prop }, [])
-  const [rawDraft, setRawDraft] = useState('')
+  const [visibleSelectors, setVisibleSelectors] = useState<readonly string[]>([])
+  const rememberVisibleSelectors = useCallback((next: readonly string[]) => {
+    setVisibleSelectors((previous) => {
+      const same = next.length === previous.length
+        && next.every((selector, index) => selector === previous[index])
+      return same ? previous : [...next]
+    })
+  }, [])
 
   // Always show Layout + Size so the panel is consistent across elements, not
   // only those that already set a property in that section.
   const groups = groupProps([...resolved.props.keys()], ['flex-child', 'layout', 'position', 'spacing', 'size', 'typography', 'backgrounds', 'borders', 'effects', 'other'])
+  const sectionIds = groups.map((group) => group.def.id)
+  const [closedSectionIds, toggleSection] = useSectionVisibility()
   const read = (prop: string) => resolved.props.get(prop)
 
 
@@ -1929,6 +2317,7 @@ function StyleCard({
         onSelect={onSelectActive}
         onDeselect={onDeselect}
         onAdd={onAddSelector}
+        onVisibleSelectorsChange={rememberVisibleSelectors}
       />
       {/* Where edits go, as a compact text link: the Webflow class style or a
           specific embed (page embeds listed in cascade order). Sits under the
@@ -1976,28 +2365,32 @@ function StyleCard({
       </div>
       {sourceNote ? <p className="embed-editor_source-note">{sourceNote}</p> : null}
 
-      {rawOpen && selectedRule ? (
-        <div className="embed-editor_rule-edit">
-          <CodeEditor
-            value={rawDraft}
-            language="css"
-            ariaLabel={`CSS for ${selectedRule.selectorText}`}
-            minHeight="90px"
-            onChange={setRawDraft}
-            className="embed-editor_rule-code"
-          />
-          <div className="embed-editor_rule-actions">
-            <button className="u-button is-ghost is-small" type="button" onClick={onToggleRaw} disabled={busy}>Cancel</button>
-            <button className="u-button is-primary is-small" type="button" onClick={() => onSaveRaw(selectedRule, rawDraft)} disabled={busy}>Save rule</button>
-          </div>
-        </div>
-      ) : (
-        <div className="embed-editor_decls">
+      <CssCodeSection
+        model={model}
+        activeSelector={activeSelector}
+        visibleSelectors={visibleSelectors}
+        editableRule={selectedRule}
+        busy={busy}
+        open={cssCodeOpen}
+        onToggle={onToggleCssCode}
+        onSave={onSaveCssRule}
+      />
+
+      <div className="embed-editor_decls">
           {groups.map((group) => (
             <SectionBlock
               key={group.def.id}
               label={group.def.label}
-              defaultOpen={group.def.id !== 'flex-child'}
+              open={!closedSectionIds.has(group.def.id)}
+              onToggle={(event) => {
+                const open = !closedSectionIds.has(group.def.id)
+                toggleSection({
+                  id: group.def.id,
+                  ids: sectionIds,
+                  next: open ? 'closed' : 'open',
+                  scope: event.shiftKey ? 'all' : 'one',
+                })
+              }}
               // A dot whenever anything in the section reaches the element, and
               // blue once the picked selector is one of the things setting it —
               // `source === 'selected'` is the same test every property label in
@@ -2111,8 +2504,7 @@ function StyleCard({
               })()}
             </SectionBlock>
           ))}
-        </div>
-      )}
+      </div>
 
       <div className="embed-editor_rule-foot">
         <AddPropertyRow busy={busy} onAdd={onAdd} />
@@ -2241,7 +2633,15 @@ function styledSelectorsFor(
     const existing = byKey.get(key)
     if (existing) { if (inContext) {existing.inContext = true;} continue }
     const specificity: Specificity = [0, ns.classDepth, 0]
-    byKey.set(key, { text: ns.text, specificity, state: ns.state, simple: true, key, inContext })
+    byKey.set(key, {
+      text: ns.text,
+      specificity,
+      state: ns.state,
+      simple: true,
+      key,
+      inContext,
+      fromComponent: false,
+    })
   }
   return [...byKey.values()].sort(
     (a, b) => compareSpecificity(a.specificity, b.specificity) || a.text.localeCompare(b.text),
@@ -2433,7 +2833,9 @@ export default function EmbedEditor() {
   const [, setRefreshing] = useState(false)
   // True between showing page-level rules and the component embeds finishing.
   const [scanningMore, setScanningMore] = useState(false)
-  const [rawRuleId, setRawRuleId] = useState<string | null>(null)
+  // Starts closed for each panel session, then stays as the user left it while
+  // element changes rebuild the card beneath this persistent editor state.
+  const [cssCodeOpen, setCssCodeOpen] = useState(false)
   // The tokens (tag / classes / attrs) chosen in the header ClassPicker, defaulted
   // to the element's classes and re-defaulted when the selected element changes.
   const [selectedTokens, setSelectedTokens] = useState<string[]>([])
@@ -2923,7 +3325,6 @@ export default function EmbedEditor() {
       }, opts.force)
       if (seq !== seqRef.current) {return}
       await applyResolve(element, content, seq)
-      setRawRuleId(null)
     } catch (error) {
       if (seq !== seqRef.current) {return}
       setPhase('ready')
@@ -3239,11 +3640,10 @@ export default function EmbedEditor() {
   const onRemoveRule = useCallback((rule: ParsedRule) => {
     void applyEdit(rule, () => removeRule(splitForEdit(rule).rule))
   }, [applyEdit, splitForEdit])
-  const onSaveRaw = useCallback((rule: ParsedRule, css: string) => {
+  const onSaveCssRule = useCallback((rule: ParsedRule, css: string) => {
     void applyEdit(rule, () => {
       const result = replaceRuleCss(rule, css)
       if (!result.ok) { setSaveError(`Invalid CSS: ${result.error}`); return false }
-      setRawRuleId(null)
       return true
     })
   }, [applyEdit])
@@ -3258,10 +3658,6 @@ export default function EmbedEditor() {
       if (!res.ok) {setStatus(`Couldn't open it on the canvas: ${res.error}`)}
     })
   }, [docByKey])
-
-  const toggleRaw = useCallback((ruleId: string) => {
-    setRawRuleId((cur) => (cur === ruleId ? null : ruleId))
-  }, [])
 
   // Keep the resolved view at module scope so the next mount starts from it (see
   // persistedView). Written as it changes rather than on unmount, which React skips
@@ -3880,7 +4276,16 @@ export default function EmbedEditor() {
       const canon = canonicalCompound(activeSelector)
       const own = canon.simple && canon.tokens.every((tok) => ownTokens.has(tok))
       if (!own || selectedSelectorText != null) {
-        list.push({ text: activeSelector, specificity: [0, 0, 0], state: stateForSelector(activeSelector), simple: canon.simple, key: `active:${activeSelector}`, pending: true, inContext: true })
+        list.push({
+          text: activeSelector,
+          specificity: [0, 0, 0],
+          state: stateForSelector(activeSelector),
+          simple: canon.simple,
+          key: `active:${activeSelector}`,
+          pending: true,
+          inContext: true,
+          fromComponent: false,
+        })
       }
     }
     // Order for readability: tag → base class + pseudos → applied combo chain + pseudos
@@ -4518,6 +4923,9 @@ export default function EmbedEditor() {
               selectedNames={selectedTokens}
               selectedSelector={activeSelector}
               activePicked={selectedSelectorText != null}
+              cssCodeOpen={cssCodeOpen}
+              onToggleCssCode={() => setCssCodeOpen((open) => !open)}
+              model={model ?? EMPTY_RULE_MODEL}
               onSelectNames={selectTokens}
               resolved={resolved ?? EMPTY_RESOLVED}
               contexts={styleContexts}
@@ -4551,9 +4959,7 @@ export default function EmbedEditor() {
               liveSetProp={liveSetProp}
               onSelectSelector={onSelectSelector}
               onAdd={setProp}
-              rawOpen={selectedRule != null && rawRuleId === selectedRule.ruleId}
-              onToggleRaw={() => selectedRule && toggleRaw(selectedRule.ruleId)}
-              onSaveRaw={onSaveRaw}
+              onSaveCssRule={onSaveCssRule}
               onRemoveRule={onRemoveRule}
             />
           </div>

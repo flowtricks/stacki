@@ -25,6 +25,7 @@ interface StylePanelProps {
   readonly projectClasses?: readonly string[] | undefined;
   readonly historyTick?: number;
   readonly openFilePath?: string | null;
+  readonly openFileKind?: HostState['openFileKind'];
 }
 
 type StyleFiles = HostState['files'];
@@ -103,6 +104,7 @@ function hostState(
     files,
     astroFiles,
     openFilePath: props.openFilePath ?? null,
+    openFileKind: props.openFileKind ?? null,
     writeStyleNode: props.onWriteStyleNode ?? null,
     selectNode: props.onSelectNode ?? null,
     recordUndo: props.onRecordUndo ?? null,

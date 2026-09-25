@@ -9,15 +9,26 @@ const fs = require('node:fs');
 const path = require('node:path');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
-const { parsePage } = require('../dist/electron/astroParser.js');
+const { parsePage, serializePage } = require('../dist/electron/astroParser.js');
 
 const PANEL_PATHS = [
-  './panels/PropsPanel', './panels/StylePanel', './ui/CodeWindow',
-  './panels/CmsPanel', './panels/CmsView', './panels/ContentView',
-  './panels/VariablesPanel', './panels/VariablesView',
+  './panels/PropsPanel',
+  './panels/StylePanel',
+  './ui/CodeWindow',
+  './panels/CmsPanel',
+  './panels/CmsView',
+  './panels/ContentView',
+  './panels/VariablesPanel',
+  './panels/VariablesView',
+  './panels/CodePanel',
 ];
 const REAL_PREVIEW = new Set([
-  'PreviewPane', 'CanvasView', 'DevOffline', 'PreviewOverlays', 'PreviewToolbar',
+  'PreviewPane',
+  'CanvasView',
+  'DevOffline',
+  'PreviewOverlays',
+  'PreviewToolbar',
+  'PreviewSizeControls',
 ]);
 const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -32,11 +43,15 @@ test('all optional editors load without hiding the app or replacing its preview'
   const { createRoot } = require('react-dom/client');
   const App = require(bundle).default;
   const root = createRoot(document.getElementById('root'));
-  const act = (action) => React.act(async () => { await action(); await settle(); });
+  const act = (action) =>
+    React.act(async () => {
+      await action();
+      await settle();
+    });
   try {
-    await act(() => root.render(
-      React.createElement(React.Suspense, { fallback: null }, React.createElement(App)),
-    ));
+    await act(() =>
+      root.render(React.createElement(React.Suspense, { fallback: null }, React.createElement(App)))
+    );
     await act(() => __lazyPanels.WelcomeScreen.onOpen('/project'));
     const stable = captureEditor();
     const context = { act, gates, stable };
@@ -47,6 +62,7 @@ test('all optional editors load without hiding the app or replacing its preview'
     await releasePanel(context, 'PropsPanel');
     await checkVariables(context);
     await checkCMS(context);
+    await checkCodePanel(context);
     await checkCodeWindow(context);
     assert.equal(gates.requested.size, PANEL_PATHS.length, 'Every lazy editor was exercised');
   } finally {
@@ -61,12 +77,64 @@ async function checkVariables(context) {
   await context.act(() => railButton(5).click());
   assertPending(context, 'VariablesPanel');
   await releasePanel(context, 'VariablesPanel');
-  await context.act(() => __lazyPanels.VariablesPanel.onSelect({
-    file: 'src/styles/tokens.css', index: 0,
-  }));
+  await context.act(() =>
+    __lazyPanels.VariablesPanel.onSelect({
+      file: 'src/styles/tokens.css',
+      index: 0,
+    })
+  );
   assertPending(context, 'VariablesView');
   await releasePanel(context, 'VariablesView');
   assert.equal(__lazyPanels.VariablesView.selected.file, 'src/styles/tokens.css');
+}
+
+async function checkCodePanel(context) {
+  await context.act(() => railButton(6).click());
+  assertPending(context, 'CodePanel');
+  await releasePanel(context, 'CodePanel');
+  assert.equal(__lazyPanels.CodePanel.relativePath, 'src/pages/index.astro');
+  assert.match(__lazyPanels.CodePanel.source, /<main>Content<\/main>/);
+  await context.act(() => {
+    const frame = document.querySelector('.frame-clip iframe');
+    assert.ok(frame, 'The preview frame is available for a canvas click');
+    window.dispatchEvent(
+      new window.MessageEvent('message', {
+        data: {
+          type: 'avb:click-node',
+          path: '0',
+          occurrence: 0,
+          outside: false,
+        },
+        source: frame.contentWindow,
+      })
+    );
+  });
+  assert.ok(
+    document.querySelector('[data-test-panel="CodePanel"]'),
+    'canvas selection keeps the code panel open'
+  );
+  const changed = __lazyPanels.CodePanel.source.replace(
+    '<main>Content</main>',
+    '<main><h1>Changed</h1></main>'
+  );
+  await context.act(async () => {
+    await __lazyPanels.CodePanel.onChange(changed, changed.indexOf('<h1>') + 2);
+  });
+  assert.equal(__lazyPanels.PropsPanel.node.name, 'h1', 'code selection reaches the inspector');
+  assert.equal(
+    document.querySelector('.property-saving-overlay'),
+    null,
+    'visual edits are enabled'
+  );
+  await context.act(() => new Promise((resolve) => setTimeout(resolve, 200)));
+  await context.act(() => __lazyPanels.PropsPanel.onSetContent('Visual edit'));
+  await context.act(() => new Promise((resolve) => setTimeout(resolve, 350)));
+  assert.match(
+    __lazyPanels.CodePanel.source,
+    /<h1>Visual edit<\/h1>/,
+    'visual edits serialize back into the code panel'
+  );
+  context.stable();
 }
 
 async function checkCMS(context) {
@@ -143,7 +211,7 @@ function createImportGates() {
       const name = path.basename(modulePath);
       assert.equal(requested.has(name), false, `${name} should request its module once`);
       requested.add(name);
-      // Eight fixed entries bound the queue, and release owns its only mutation.
+      // Nine fixed entries bound the queue, and release owns its only mutation.
       return new Promise((resolve) => pending.set(name, () => resolve(load())));
     },
     release(name) {
@@ -168,25 +236,30 @@ async function buildApp() {
     external: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime'],
     loader: { '.css': 'empty', '.svg': 'empty', '.png': 'empty' },
     logLevel: 'silent',
-    plugins: [{ name: 'deferred-panel-imports', setup(build) {
-      build.onLoad({ filter: /\/src\/App\.tsx$/ }, ({ path: filename }) => {
-        const source = fs.readFileSync(filename, 'utf8');
-        const contents = PANEL_PATHS.reduce((code, name) => {
-          const expression = `import('${name}')`;
-          assert.ok(code.includes(expression), `${name} remains a real lazy import`);
-          const deferredImport = `globalThis.__loadTestPanel('${name}', () => ${expression})`;
-          return code.replace(expression, deferredImport);
-        }, source);
-        return { contents, loader: 'tsx' };
-      });
-      build.onLoad({ filter: /\/src\/(?:panels\/[^/]+|ui\/CodeWindow)\.tsx$/ }, (args) => {
-        const name = path.basename(args.path, '.tsx');
-        if (REAL_PREVIEW.has(name)) {
-          return undefined;
-        }
-        return { contents: panelStub(name), loader: 'tsx' };
-      });
-    } }],
+    plugins: [
+      {
+        name: 'deferred-panel-imports',
+        setup(build) {
+          build.onLoad({ filter: /\/src\/App\.tsx$/ }, ({ path: filename }) => {
+            const source = fs.readFileSync(filename, 'utf8');
+            const contents = PANEL_PATHS.reduce((code, name) => {
+              const expression = `import('${name}')`;
+              assert.ok(code.includes(expression), `${name} remains a real lazy import`);
+              const deferredImport = `globalThis.__loadTestPanel('${name}', () => ${expression})`;
+              return code.replace(expression, deferredImport);
+            }, source);
+            return { contents, loader: 'tsx' };
+          });
+          build.onLoad({ filter: /\/src\/(?:panels\/[^/]+|ui\/CodeWindow)\.tsx$/ }, (args) => {
+            const name = path.basename(args.path, '.tsx');
+            if (REAL_PREVIEW.has(name)) {
+              return undefined;
+            }
+            return { contents: panelStub(name), loader: 'tsx' };
+          });
+        },
+      },
+    ],
   });
   return bundle;
 }
@@ -204,11 +277,17 @@ function panelStub(name) {
 
 function installDOM() {
   const dom = new JSDOM('<!doctype html><div id="root"></div>', {
-    url: 'http://localhost/', pretendToBeVisual: true,
+    url: 'http://localhost/',
+    pretendToBeVisual: true,
   });
   global.window = dom.window;
   const browserGlobals = [
-    'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'MutationObserver',
+    'document',
+    'navigator',
+    'HTMLElement',
+    'Element',
+    'Node',
+    'MutationObserver',
   ];
   for (const name of browserGlobals) {
     global[name] = dom.window[name];
@@ -216,25 +295,47 @@ function installDOM() {
   global.getComputedStyle = dom.window.getComputedStyle;
   global.requestAnimationFrame = (callback) => setTimeout(callback, 0);
   global.cancelAnimationFrame = clearTimeout;
-  global.ResizeObserver = class { observe() {} disconnect() {} };
+  global.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+  };
   dom.window.ResizeObserver = global.ResizeObserver;
   dom.window.matchMedia = () => ({
-    matches: false, addEventListener() {}, removeEventListener() {},
+    matches: false,
+    addEventListener() {},
+    removeEventListener() {},
   });
   global.IS_REACT_ACT_ENVIRONMENT = true;
   return dom;
 }
 
 function createBridge() {
-  const page = { name: 'index.astro', path: '/project/src/pages/index.astro', route: '/' };
+  const page = {
+    name: 'index.astro',
+    path: '/project/src/pages/index.astro',
+    route: '/',
+  };
   const source = '---\nconst title = "Home";\n---\n<main>Content</main>';
   const bridge = {
     pendingProject: async () => null,
-    scanProject: async () => ({ pages: [page], pageFolders: [], components: [], layouts: [] }),
+    scanProject: async () => ({
+      pages: [page],
+      pageFolders: [],
+      components: [],
+      layouts: [],
+    }),
     hasNodeModules: async () => true,
     startDevServer: async () => ({ url: 'http://localhost:4321' }),
     listProjectClasses: async () => [],
-    readPage: async () => ({ ...parsePage(source), source }),
+    readPage: async () => ({ ...parsePage(source, { locs: true }), source }),
+    parsePageSource: async ({ source: next }) => ({
+      ...parsePage(next, { locs: true }),
+      source: next,
+    }),
+    writePage: async ({ model }) => {
+      const next = serializePage(model);
+      return { ok: true, ...parsePage(next, { locs: true }), source: next };
+    },
     gitInfo: async () => ({ isRepo: false }),
     onCssChanged: () => () => {},
   };

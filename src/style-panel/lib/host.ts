@@ -41,6 +41,9 @@ export type HostState = {
   /** Absolute path of the file being edited — its own <style> blocks come from
    *  the model, so it must not also be read off disk. */
   openFilePath: string | null
+  /** Whether the open editable file is a page or a component. Style nodes have
+   *  the same model shape in both, so their provenance must be carried separately. */
+  openFileKind: 'page' | 'component' | null
   /**
    * Bumped by the app whenever undo or redo runs. The panel reads its rules
    * from files and from the page model, and an undo rewrites both behind its
@@ -106,6 +109,7 @@ const state: HostState = {
   files: [],
   astroFiles: [],
   openFilePath: null,
+  openFileKind: null,
   renderedClasses: [],
   projectClasses: [],
   writeStyleNode: null,

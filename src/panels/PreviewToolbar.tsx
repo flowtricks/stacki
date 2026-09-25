@@ -1,6 +1,8 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { IconProps } from '../ui/Icons';
 import { CanvasIcon, ChevronRightIcon, DesktopIcon, PhoneIcon, TabletIcon } from '../ui/Icons';
+import { PreviewSizeControls } from './PreviewSizeControls';
+import type { PreviewSizeControlsProps } from './PreviewSizeControls';
 
 export type PreviewDevice = 'desktop' | 'tablet' | 'phone' | 'canvas' | 'custom';
 type FixedDevice = Exclude<PreviewDevice, 'custom'>;
@@ -53,11 +55,13 @@ export function PreviewToolbar({
   onCrumb,
   activeDevice,
   onDevice,
+  sizing,
 }: {
   readonly crumbs: readonly PreviewCrumb[];
   readonly onCrumb?: (id: string | null) => void;
   readonly activeDevice: PreviewDevice;
   readonly onDevice: (device: PreviewDevice) => void;
+  readonly sizing?: PreviewSizeControlsProps;
 }) {
   const shownCrumbs = useFoldedCrumbs(crumbs);
   const buttonRefs = useRef<Partial<Record<FixedDevice, HTMLButtonElement | null>>>({});
@@ -92,6 +96,7 @@ export function PreviewToolbar({
           </button>
         ))}
       </div>
+      {sizing && <PreviewSizeControls {...sizing} />}
     </div>
   );
 }

@@ -186,6 +186,34 @@ const LIVE_TABS = (labels, active) =>
   check('the node is still patched', live.querySelector('p').textContent === 'b', live.innerHTML);
 }
 
+// A slider, nav, or tab script can replace an entire subtree after the server
+// renders it. If the old and new server trees agree on that subtree, there is
+// no edit to apply inside it and therefore no reason to line up its live
+// descendants. Only the changed sibling should be visited.
+{
+  const server = (text) =>
+    '<div class="runtime"><div class="item">One</div><div class="item">Two</div></div>' +
+    `<h1>${text}</h1>`;
+  const prev = tree(server('Before'));
+  const next = tree(server('After'));
+  const live = tree(
+    '<div class="runtime"><div class="client-clone">Client state</div></div>' +
+      '<h1>Before</h1>'
+  );
+  const threw = patch(live, prev, next);
+  check('an unchanged runtime-owned subtree does not force a reload', threw === null, threw);
+  check(
+    'the text beside that subtree is still patched inline',
+    live.querySelector('h1').textContent === 'After',
+    live.innerHTML
+  );
+  check(
+    'the runtime-owned subtree remains untouched',
+    live.querySelector('.client-clone').textContent === 'Client state',
+    live.innerHTML
+  );
+}
+
 // An id is still taken at its word, ahead of any class.
 {
   const prev = tree('<div id="keep" class="a">x</div>');

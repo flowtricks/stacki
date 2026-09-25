@@ -3000,19 +3000,25 @@ function writeChunks(model: ParserPageModel) {
 // Page IPC
 // ---------------------------------------------------------------------------
 
+function parsePageSource(pagePath: string, source: string): IpcResults['page:read'] {
+  if (isMarkdownPage(pagePath)) {
+    return { ...parseMarkdownPage(source, { mdx: isMdx(pagePath) }), source };
+  }
+  const parsed = parsePage(source, { locs: true });
+  if (parsed.editable) {resolveChunks(parsed.model, pagePath, { locs: true });}
+  return { ...parsed, source };
+}
+
 ipcMain.handle('page:read', async (_e, pagePath) => {
   const source = readSource(pagePath);
   // Markdown builds the same tree from a different syntax, so everything
   // downstream — navigator, props, text editing, undo — is unchanged. Only
   // the writer has to know which one it is; model.format carries that.
-  if (isMarkdownPage(pagePath)) {
-    return { ...parseMarkdownPage(source, { mdx: isMdx(pagePath) }), source };
-  }
-  const parsed = parsePage(source);
-  if (parsed.editable) {
-    resolveChunks(parsed.model, pagePath);
-  }
-  return { ...parsed, source };
+  return parsePageSource(pagePath, source);
+});
+
+ipcMain.handle('page:parse', async (_e, { pagePath, source }) => {
+  return parsePageSource(pagePath, source);
 });
 
 // Astro's dev server serves a page's <style> block ONE EDIT BEHIND: after the file
@@ -3059,18 +3065,20 @@ function writePageText(pagePath: string, text: string) {
 }
 
 ipcMain.handle('page:write', async (_e, { pagePath, model }) => {
+  let source: string;
   if (isMarkdownPage(pagePath)) {
-    writePageText(pagePath, serializeMarkdownPage(parseMarkdownModel(model)));
-    return { ok: true as const };
+    source = serializeMarkdownPage(parseMarkdownModel(model));
+  } else {
+    source = serializePage(model);
+    writeChunks(parseSerializePage(model));
   }
-  writePageText(pagePath, serializePage(model));
-  writeChunks(parseSerializePage(model));
-  return { ok: true as const };
+  writePageText(pagePath, source);
+  return { ok: true as const, ...parsePageSource(pagePath, source) };
 });
 
 ipcMain.handle('page:writeRaw', async (_e, { pagePath, source }) => {
   writePageText(pagePath, source);
-  return { ok: true as const };
+  return { ok: true as const, ...parsePageSource(pagePath, source) };
 });
 
 ipcMain.handle('page:create', async (_e, { projectPath, name, layout }) => {

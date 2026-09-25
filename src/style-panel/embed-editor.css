@@ -390,6 +390,9 @@
 .embed-editor_section-block.is-collapsed .embed-editor_section-chevron {
   transform: rotate(-90deg);
 }
+.embed-editor_css-code.is-collapsed .embed-editor_section-chevron {
+  transform: rotate(-90deg);
+}
 
 .embed-editor_section-body {
   display: flex;
@@ -2927,23 +2930,133 @@ textarea.embed-editor_value-input.is-expanded {
   cursor: not-allowed;
 }
 
-/* ── Raw rule editor ── */
+/* ── Matching CSS code ── */
 
-.embed-editor_rule-edit {
+.embed-editor_css-code {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
+  border-top: var(--border-width-thin) solid var(--color-border-default);
 }
-
-.embed-editor_rule-code {
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-page);
-}
-
-.embed-editor_rule-actions {
+.embed-editor_css-code-header {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+  padding-top: var(--space-5);
+}
+.embed-editor_css-code-toggle {
+  padding-right: 0;
+  padding-bottom: 0;
+  padding-left: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.embed-editor_css-code-toggle:hover:not(:disabled),
+.embed-editor_css-code-toggle:focus-visible:not(:disabled) {
+  background: transparent;
+}
+.embed-editor_css-code-toggle:focus-visible {
+  outline: var(--border-width-default) solid var(--color-border-focus);
+  outline-offset: var(--border-width-default);
+}
+.embed-editor_css-code-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+.embed-editor_css-code-source {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+.embed-editor_css-code-chevron {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-text-tertiary);
+}
+.embed-editor_css-code-header:hover .embed-editor_section-chevron {
+  color: var(--color-text-secondary);
+}
+.embed-editor_css-code-body {
+  padding: 0 0 var(--space-4);
+}
+.code-editor.embed-editor_css-code-editor {
+  /* The app-wide fallback editor adds 10px around every `.code-editor`.
+     This embedded surface already owns its spacing, so that padding made its
+     rounded box narrower than full-width controls such as the spacing model. */
+  padding: 0;
+}
+.embed-editor_css-code-editor .cm-scroller {
+  max-height: min(36vh, 360px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.embed-editor_css-code-editor .cm-content {
+  min-height: 100px;
+  max-height: none;
+}
+.embed-editor_css-code-preview {
+  width: 100%;
+  min-height: 100px;
+  max-height: min(36vh, 360px);
+  margin: 0;
+  padding: var(--space-5);
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  tab-size: 2;
+}
+.embed-editor_css-code-preview:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+.embed-editor_css-code-line {
+  display: block;
+  min-height: 1lh;
+}
+.embed-editor_css-code-selector,
+.embed-editor_css-code-context {
+  color: var(--color-info);
+}
+.embed-editor_css-code-selector-unmatched {
+  color: var(--color-text-tertiary);
+}
+.embed-editor_css-code-property {
+  color: var(--color-text-primary);
+}
+.embed-editor_css-code-punctuation {
+  color: var(--color-text-secondary);
+}
+.embed-editor_css-code-line.is-overridden {
+  color: var(--color-text-tertiary);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.embed-editor_css-code-empty {
+  margin: 0;
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-surface);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
 }
 
 /* ── Empty / errors ── */
@@ -3266,7 +3379,7 @@ textarea.embed-editor_value-input.is-expanded {
   animation: embed-editor-spin 0.7s linear infinite;
 }
 /* Nothing to reveal (or not counted yet): the row holds its place, quietly. */
-.embed-editor_globals-check.is-empty {
+.embed-editor_selector-filter.is-empty {
   opacity: 0.45;
   cursor: default;
 }
@@ -3306,6 +3419,38 @@ textarea.embed-editor_value-input.is-expanded {
    element more than `.is-active`'s 0,2,0 — and would otherwise repaint it. */
 .embed-editor_selector-chip.is-active:hover:not(:disabled) {
   background: var(--color-class-tag-bg);
+}
+.embed-editor_selector-chip.is-component:not(.is-pending) {
+  background: var(--color-component-tag-bg);
+  color: var(--color-component-tag);
+}
+.embed-editor_selector-chip.is-component:not(.is-active):hover:not(:disabled) {
+  background: var(--color-component-tag-bg-hover);
+  color: var(--color-component-tag);
+}
+.embed-editor_selector-chip.is-component.is-active {
+  background: var(--color-component-tag-bg-active);
+  color: #fff;
+}
+.embed-editor_selector-chip.is-component.is-active:hover:not(:disabled) {
+  background: var(--color-component-tag-bg-active);
+}
+/* Global and ancestor-dependent selectors are supporting context, not styles
+   attached directly to the selected element. Neutral grey takes precedence over
+   source provenance (including component green), with distinct hover/active steps. */
+.embed-editor_selector-chip:is(.is-global, .is-inherited):not(.is-pending) {
+  background: var(--color-selector-context-bg);
+  color: var(--color-text-primary);
+}
+.embed-editor_selector-chip:is(.is-global, .is-inherited):not(.is-active):hover:not(:disabled) {
+  background: var(--color-selector-context-bg-hover);
+}
+.embed-editor_selector-chip:is(.is-global, .is-inherited).is-active {
+  background: var(--color-selector-context-bg-active);
+  color: #fff;
+}
+.embed-editor_selector-chip:is(.is-global, .is-inherited).is-active:hover:not(:disabled) {
+  background: var(--color-selector-context-bg-active);
 }
 .embed-editor_selector-chip.is-active.is-pending:hover:not(:disabled) {
   background: transparent;
@@ -4623,7 +4768,7 @@ textarea.embed-editor_value-input.is-expanded {
 /* Reveals the selectors that match nearly every element (:target,
    :focus-visible, *) — off by default so the list reads as what's actually on
    this element. Sits under the well, not in it: it isn't a selector to pick. */
-.embed-editor_globals-check {
+.embed-editor_selector-filter {
   margin-top: calc(var(--space-1) * -1);
   user-select: none;
 }

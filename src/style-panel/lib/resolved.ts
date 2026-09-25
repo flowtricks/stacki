@@ -209,6 +209,8 @@ export type MatchedSelector = {
   state: StateKey
   /** True for a lone tag/class/attr compound (chip-composable / native-eligible). */
   simple: boolean
+  /** True when at least one matching rule comes from a component's style tag. */
+  fromComponent: boolean
   /** Normalized identity key (also used to dedupe + compare). */
   key: string
   /** Set for the active selector when no rule exists for it yet (a freshly picked /
@@ -226,6 +228,32 @@ export type MatchedSelector = {
   /** Nested display with an `@` at the query's position (`.hero {@ .title}`), shown
    *  when viewing that query, else undefined. */
   queryDisplay?: string
+}
+
+type MatchedSelectorCandidate = Omit<MatchedSelector, 'key' | 'order'>
+
+function listMatchedSelectorsCandidate(input: {
+  readonly rule: ParsedRule
+  readonly text: string
+  readonly specificity: Specificity
+  readonly state: StateKey
+  readonly simple: boolean
+  readonly inContext: boolean
+}): MatchedSelectorCandidate {
+  return {
+    text: input.text,
+    specificity: input.specificity,
+    state: input.state,
+    simple: input.simple,
+    inContext: input.inContext,
+    fromComponent: input.rule.fromComponent,
+    ...(input.rule.nestedDisplay === undefined
+      ? {}
+      : { display: input.rule.nestedDisplay }),
+    ...(input.rule.queryDisplay === undefined
+      ? {}
+      : { queryDisplay: input.rule.queryDisplay }),
+  }
 }
 
 const normalizeSelectorText = (text: string) =>
@@ -265,29 +293,24 @@ export function listMatchedSelectors(model: RuleModel, context: ContextKey): Mat
   const all = [...model.base, ...model.conditional]
   const byKey = new Map<string, MatchedSelector>()
   let order = 0 // source-order rank, assigned on first appearance
-  const addChip = (text: string, simple: boolean, state: StateKey, specificity: Specificity, inContext: boolean, display?: string, queryDisplay?: string) => {
-    const key = selectorKey(text)
+  const addChip = (chip: MatchedSelectorCandidate) => {
+    const key = selectorKey(chip.text)
     const existing = byKey.get(key)
     if (existing) {
       // A selector styled in several contexts is one chip. When a later match lives in
       // the viewed context, adopt its in-context flag AND its query display so the `@`
       // marker attaches even though an out-of-query rule (iterated first) created it.
-      if (inContext) {
+      if (chip.inContext) {
         existing.inContext = true
-        if (queryDisplay) {existing.queryDisplay = queryDisplay}
+        if (chip.queryDisplay) {existing.queryDisplay = chip.queryDisplay}
       }
+      if (chip.fromComponent) {existing.fromComponent = true}
       return
     }
     byKey.set(key, {
-      text,
-      specificity,
-      state,
-      simple,
+      ...chip,
       key,
-      inContext,
       order: order++,
-      ...(display === undefined ? {} : { display }),
-      ...(queryDisplay === undefined ? {} : { queryDisplay }),
     })
   }
 
@@ -307,16 +330,36 @@ export function listMatchedSelectors(model: RuleModel, context: ContextKey): Mat
       // A lone universal (`*`) matches everything — too generic to be a useful chip on
       // its own. Skip it UNLESS it's part of a more specific selector (a combinator,
       // a state, or a pseudo-element makes it non-bare, so it isn't caught here).
-      if (canon.universal && canon.oneCompound && canon.tokens.length === 0 && !canon.pseudoElement && canon.pseudoClasses.length === 0) {continue}
+      if (
+        canon.universal &&
+        canon.oneCompound &&
+        canon.tokens.length === 0 &&
+        !canon.pseudoElement &&
+        canon.pseudoClasses.length === 0
+      ) {continue}
       if (canon.splittable) {
-        addChip(sel.text, canon.simple, stateOf(canon.pseudoClasses), sel.specificity, inContext, matched.rule.nestedDisplay, matched.rule.queryDisplay)
+        addChip(listMatchedSelectorsCandidate({
+          rule: matched.rule,
+          text: sel.text,
+          simple: canon.simple,
+          state: stateOf(canon.pseudoClasses),
+          specificity: sel.specificity,
+          inContext,
+        }))
       } else if (!complexSpec || compareSpecificity(sel.specificity, complexSpec) > 0) {
         complexSpec = sel.specificity
       }
     }
     if (complexSpec) {
       const canon = canonicalCompound(matched.rule.selectorText)
-      addChip(matched.rule.selectorText, false, stateOf(canon.pseudoClasses), complexSpec, inContext, matched.rule.nestedDisplay, matched.rule.queryDisplay)
+      addChip(listMatchedSelectorsCandidate({
+        rule: matched.rule,
+        text: matched.rule.selectorText,
+        simple: false,
+        state: stateOf(canon.pseudoClasses),
+        specificity: complexSpec,
+        inContext,
+      }))
     }
   }
   return [...byKey.values()].sort(

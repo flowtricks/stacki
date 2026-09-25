@@ -198,6 +198,12 @@ if (selected) {
           return isFinite(l) ? { l: l, t: t, w: r - l, h: b - t } : null;
         }
         var scheduled = false;
+        var lastStatus = '';
+        function reportStatus(status) {
+          if (status === lastStatus) return;
+          lastStatus = status;
+          window.parent.postMessage({ type: 'avb:component-preview', status: status }, '*');
+        }
         function fit() {
           scheduled = false;
           stage.style.transform = 'none';
@@ -205,6 +211,8 @@ if (selected) {
           var box = bbox(stage);
           if (!box || box.w < 1 || box.h < 1) {
             document.body.classList.add('avb-is-empty');
+            stage.style.visibility = 'hidden';
+            reportStatus('empty');
             return;
           }
           document.body.classList.remove('avb-is-empty');
@@ -216,6 +224,7 @@ if (selected) {
           stage.style.transform =
             'translate(' + tx + 'px,' + ty + 'px) scale(' + s + ')';
           stage.style.visibility = 'visible';
+          reportStatus('ready');
         }
         function refit() {
           if (scheduled) return;

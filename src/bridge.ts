@@ -37,6 +37,14 @@ export async function readPage(path: string): Promise<ParsePageResult & { readon
   return parsePageReadResult(result);
 }
 
+export async function parsePageSource(
+  path: string,
+  source: string,
+): Promise<ParsePageResult & { readonly source: string }> {
+  const result = await window.avb.parsePageSource({ pagePath: toFilePath(path), source });
+  return parsePageReadResult(result);
+}
+
 export async function readText(projectPath: string, rel: string): Promise<string> {
   const result = await window.avb.readSourceText({ projectPath: toProjectPath(projectPath), rel });
   return parseTextResult(result).text;

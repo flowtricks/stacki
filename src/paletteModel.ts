@@ -13,6 +13,26 @@ export type ComponentUsageResult =
   | { readonly kind: 'error'; readonly message: string }
   | { readonly kind: 'ready'; readonly files: readonly ComponentUsageFile[] };
 
+export interface ComponentPreviewMessage {
+  readonly status: 'empty' | 'ready';
+}
+
+export function parseComponentPreviewMessage(input: unknown): ComponentPreviewMessage | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  if (!('type' in input) || input.type !== 'avb:component-preview') {
+    return undefined;
+  }
+  if (!('status' in input)) {
+    return undefined;
+  }
+  if (input.status === 'empty' || input.status === 'ready') {
+    return { status: input.status };
+  }
+  return undefined;
+}
+
 export function parseComponentUsage(input: unknown): ComponentUsageResult {
   const value = record(input);
   const error = optional(text)(value['error']);

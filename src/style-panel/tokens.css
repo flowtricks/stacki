@@ -94,6 +94,10 @@
   --color-component-tag:        #79e09c;
   --color-component-tag-bg:     rgba(37, 157, 77, 0.25);
   --color-component-tag-bg-hover: rgba(37, 157, 77, 0.40);
+  --color-component-tag-bg-active: #16783c;
+  --color-selector-context-bg:        var(--color-bg-surface);
+  --color-selector-context-bg-hover:  var(--color-bg-surface-raised);
+  --color-selector-context-bg-active: var(--color-bg-surface-high);
   /* Provenance label — a property set through another selector (Embed Editor). */
   --color-prop-orange:          #ffbc86;
   --color-prop-orange-bg:       rgba(223, 100, 12, 0.20);

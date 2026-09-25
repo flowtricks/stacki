@@ -4,6 +4,16 @@ import type { Result } from './result';
 // Main's typed registrar checks every handler against this inventory.
 import type { Data } from './boundary';
 
+export type WirePageRead =
+  | { readonly source: string; readonly editable: true; readonly model: WireMarkdownModel }
+  | { readonly source: string; readonly editable: true; readonly model: WireParserPageModel }
+  | {
+      readonly source: string;
+      readonly editable: false;
+      readonly reason: string;
+      readonly bail: null | WireParseBail;
+    };
+
 export interface IpcResults {
   readonly 'component:properties': Result<ComponentProperties>;
   readonly 'component:editProperties': Result<ComponentProperties>;
@@ -402,32 +412,13 @@ export interface IpcResults {
   readonly 'page:move': {
     readonly newPath: string;
   };
-  readonly 'page:read':
-    | {
-        readonly source: string;
-        readonly editable: true;
-        readonly model: WireMarkdownModel;
-      }
-    | {
-        readonly source: string;
-        readonly editable: true;
-        readonly model: WireParserPageModel;
-      }
-    | {
-        readonly source: string;
-        readonly editable: false;
-        readonly reason: string;
-        readonly bail: null | WireParseBail;
-      };
+  readonly 'page:parse': WirePageRead;
+  readonly 'page:read': WirePageRead;
   readonly 'page:rebaseImport': {
     readonly path: string;
   };
-  readonly 'page:write': {
-    readonly ok: true;
-  };
-  readonly 'page:writeRaw': {
-    readonly ok: true;
-  };
+  readonly 'page:write': { readonly ok: true } & WirePageRead;
+  readonly 'page:writeRaw': { readonly ok: true } & WirePageRead;
   readonly 'pagefolder:create': {
     readonly ok: true;
   };

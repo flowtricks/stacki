@@ -162,9 +162,12 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
   await send(canvasFrame, { type: 'avb:page-height', height: Infinity });
   assert.equal(document.querySelector('.canvas-frame').style.height, '900px');
   await send(canvasFrame, { type: 'avb:page-height', height: 80000 });
-  assert.equal(document.querySelector('.canvas-frame').style.height, '30000px');
+  assert.equal(document.querySelector('.canvas-frame').style.height, '1125px');
   await send(oldFrame, { type: 'avb:page-height', height: 1000 });
-  assert.equal(document.querySelector('.canvas-frame').style.height, '30000px');
+  assert.equal(document.querySelector('.canvas-frame').style.height, '1125px');
+  const phoneFrame = document.querySelectorAll('iframe')[2].contentWindow;
+  await send(phoneFrame, { type: 'avb:page-height', height: 80000 });
+  assert.equal(document.querySelectorAll('.canvas-frame')[2].style.height, '1015px');
   await render({ refreshKey: 1 });
   assert.equal(document.querySelector('.canvas-frame').style.height, '900px');
   await act(async () => { pointer(document.querySelector('.canvas-view'), 'pointerdown'); await settle(); });
@@ -190,4 +193,81 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
   assert.equal(hasCanvas(), false);
   assert.deepEqual([767, 768, 1023, 1024, NaN, 0].map(deviceForWidth), ['phone', 'tablet', 'tablet', 'desktop', null, null]);
   dom.window.close();
+});
+
+test('custom widths preserve layout size, scale to fit, and reset with device controls', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { Simulate } = require('react-dom/test-utils');
+  const { PreviewPane } = require(path.join(dir, 'preview.js'));
+  const observers = [];
+  let containerWidth = 1_024;
+  global.ResizeObserver = class {
+    constructor(callback) { observers.push(callback); }
+    observe() {}
+    disconnect() {}
+  };
+  Object.defineProperties(dom.window.HTMLElement.prototype, {
+    clientWidth: { configurable: true, get: () => containerWidth },
+    clientHeight: { configurable: true, get: () => 700 },
+  });
+  const root = createRoot(document.getElementById('root'));
+  const act = (action) => React.act(async () => { await action(); await settle(); });
+  function Preview() {
+    const [device, onDevice] = React.useState('desktop');
+    return React.createElement(PreviewPane, { ...hoverPreviewProps(), device, onDevice });
+  }
+  const widthInput = () => document.querySelector('[aria-label="Canvas width"]');
+  const setWidth = async (value) => {
+    await act(() => {
+      widthInput().value = value;
+      Simulate.change(widthInput());
+    });
+    await act(() => Simulate.blur(widthInput()));
+  };
+  try {
+    await act(() => root.render(React.createElement(Preview)));
+    const frame = document.querySelector('iframe');
+    await setWidth('2000');
+    const sized = document.querySelector('.frame-sized');
+    assert.equal(sized.style.width, '2000px');
+    assert.equal(sized.style.height, '1336px');
+    assert.match(sized.style.transform, /scale\(0\.5\)/);
+    assert.equal(document.querySelector('[aria-label="Canvas scale"]').textContent, '50%');
+    assert.equal(document.querySelector('.device-btns button.on').title, 'Desktop — 1');
+    assert.equal(document.querySelector('iframe'), frame, 'Changing width retains the loaded page');
+    containerWidth = 824;
+    await act(() => observers.forEach((callback) => callback()));
+    assert.equal(sized.style.width, '2000px', 'Panel resize preserves the requested viewport');
+    assert.match(sized.style.transform, /scale\(0\.4\)/);
+    for (const invalid of ['', '279', '7681', 'NaN', 'Infinity', '-100', '2e3', '400.5']) {
+      await setWidth(invalid);
+      assert.equal(sized.style.width, '2000px');
+      assert.equal(widthInput().value, '2000');
+    }
+    Object.defineProperties(sized, {
+      offsetWidth: { get: () => Number.parseFloat(sized.style.width) },
+      offsetHeight: { get: () => Number.parseFloat(sized.style.height) },
+    });
+    await act(() => document.querySelector('.rz-e').dispatchEvent(
+      new window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 800 }),
+    ));
+    await act(() => window.dispatchEvent(
+      new window.MouseEvent('pointerup', { bubbles: true, button: 0, clientX: 880 }),
+    ));
+    assert.equal(sized.style.width, '2400px', 'Dragging accounts for scale without capping at the panel');
+    await act(() => document.querySelector('[title="Phone (375px) — 3"]').click());
+    assert.equal(sized.style.width, '375px');
+    assert.match(sized.style.transform, /scale\(1\)/);
+    await setWidth('7680');
+    assert.equal(sized.style.width, '7680px');
+    await act(() => document.querySelector('[title="Reset canvas to available width"]').click());
+    assert.equal(sized.style.width, '824px');
+    assert.equal(sized.style.height, '700px');
+    assert.equal(document.querySelector('iframe'), frame);
+  } finally {
+    await act(() => root.unmount());
+    dom.window.close();
+  }
 });

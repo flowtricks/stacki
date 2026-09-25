@@ -27,8 +27,18 @@ arrays, tuples, records, callbacks, and common built-in types. The braces button
 switches to a plain input for custom types such as `typeof theme` or imported
 aliases. Switching modes preserves the current type and union options; hovering
 a menu choice never changes the prop. Unsupported types open in input mode.
-Imported or composite `Props` contracts remain read-only until their editable
-fields are declared locally; clicking a prop never opens the full source editor.
+Common fields in composite `Props` contracts stay editable when their declaration
+is local and shared by the public and runtime types. Variant-dependent fields show
+their conditions and explain why source editing is needed. Imported, generic, and
+ambiguous declarations remain restricted. Add and reorder operations on composite
+contracts still require source editing. Declaration locations appear in an information
+tooltip, not as runtime binding chips. Clicking a prop never opens the full source editor.
+Renames also update indexed and picked references to local contract types.
+
+Property rows show names and type icons. Type and default choices use the shared
+custom dropdown, with matching expression toggles. Long option lists scroll after
+six rows, with Add item outside the scrolling region. Property settings close on
+outside clicks, including clicks in the canvas, and remain dismissible when read-only.
 
 The panel listens for external changes to the open component and automatically
 loads the latest properties. Stacki's own writes are filtered by the project

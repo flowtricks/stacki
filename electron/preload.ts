@@ -1998,6 +1998,7 @@ contextBridge.exposeInMainWorld('avb', {
 
   // Pages
   readPage: invoke('page:read'),
+  parsePageSource: invoke('page:parse'),
   writePage: invoke('page:write'),
   writePageRaw: invoke('page:writeRaw'),
   createPage: invoke('page:create'),

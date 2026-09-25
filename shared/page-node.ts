@@ -116,6 +116,11 @@ export interface MarkdownNodeMetadata {
   readonly mdEsm?: boolean;
 }
 
+export interface SourceNodeMetadata {
+  readonly start?: number;
+  readonly end?: number;
+}
+
 export type PageNode = (
   | PairedNode
   | RawNode
@@ -125,7 +130,7 @@ export type PageNode = (
   | CondNode
   | BranchNode
   | ChunkGroupNode
-) & MarkdownNodeMetadata;
+) & MarkdownNodeMetadata & SourceNodeMetadata;
 
 export type PageNodeList = readonly PageNode[] & { readonly mdTrailingBlanks?: number };
 
@@ -494,7 +499,28 @@ export function parsePageNode(
     fail(where, `exceeds ${LIMITS.treeNodesMax} nodes`);
   }
   const record = asRecord(input, where);
-  return { ...parseByKind(record, where, depth, context), ...markdownExtras(record, where) };
+  return {
+    ...parseByKind(record, where, depth, context),
+    ...markdownExtras(record, where),
+    ...sourceNodeMetadata(record, where),
+  };
+}
+
+function sourceNodeMetadata(
+  record: Record<string, unknown>,
+  where: string,
+): SourceNodeMetadata {
+  const start = record['start'];
+  const end = record['end'];
+  if (start === undefined && end === undefined) {return {};}
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)) {
+    fail(where, 'source range: expected safe integer offsets');
+  }
+  if (Number(start) < 0) {fail(where, 'source range: start must be nonnegative');}
+  if (Number(end) < Number(start)) {
+    fail(where, 'source range: end must not precede start');
+  }
+  return { start: Number(start), end: Number(end) };
 }
 
 /** Parse a whole tree (a page model's nodes array). */

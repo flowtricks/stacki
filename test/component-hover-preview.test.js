@@ -110,6 +110,9 @@ test('generated Astro route keeps its default slot and loads the selected source
   assert.match(template, /src\/layouts\/\*\*\/\*\.astro/);
   assert.match(template, /<C \{\.\.\.props\}>/);
   assert.match(template, /<C \{\.\.\.props\}>\{name\}<\/C>/);
+  assert.match(template, /avb:component-preview/);
+  assert.match(template, /reportStatus\('empty'\)/);
+  assert.match(template, /reportStatus\('ready'\)/);
   assert.doesNotMatch(template, /__STACKI_PREVIEW_/);
   assert.doesNotMatch(template, /require\(|componentPreview\.js|node:/,
     'edge-rendered pages cannot import the app CommonJS or Node helpers');

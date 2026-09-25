@@ -60,6 +60,7 @@ export interface VariablesSnapshot {
   readonly values: Readonly<Record<string, string>>;
 }
 export const VARIABLES_LIMITS = { entriesMax: 100_000, fileCharsMax: 1_048_576 } as const;
+const PRIVATE_VARIABLE_PREFIX = '--_';
 
 export function parseCSSVariables(input: unknown): Result<VariablesSnapshot, string> {
   const source = record(input);
@@ -85,7 +86,67 @@ export async function readCSSVariables(
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
   // Invalid wire shapes indicate a contract bug, so parsing stays outside the I/O catch.
-  return parseCSSVariables(response);
+  const result = parseCSSVariables(response);
+  return result.ok ? { ok: true, value: variablesForPanel(result.value) } : result;
+}
+
+// A leading underscore marks a private implementation token. The values map stays
+// complete because visible variables may resolve through private variables even though
+// the private declarations themselves do not belong in the panel.
+function variablesForPanel(snapshot: VariablesSnapshot): VariablesSnapshot {
+  const files = snapshot.files.map(variableFileForPanel);
+  return { files, values: snapshot.values };
+}
+
+function variableFileForPanel(file: VariableFile): VariableFile {
+  if (file.error !== undefined) {
+    return file;
+  }
+  const groups = file.groups
+    .map((group) => ({
+      ...group,
+      blocks: group.blocks
+        .map(variableBlockForPanel)
+        .filter((block): block is VariableBlock => block !== undefined),
+    }))
+    .filter((group) => variableGroupCount(group) > 0);
+  const count = groups.reduce((total, group) => total + variableGroupCount(group), 0);
+  return { ...file, groups, count };
+}
+
+function variableGroupCount(group: VariableGroup): number {
+  return group.blocks.reduce(
+    (blockTotal, block) =>
+      blockTotal +
+      block.rows.reduce(
+        (rowTotal, row) => rowTotal + row.cells.filter((cell) => cell !== null).length,
+        0,
+      ),
+    0,
+  );
+}
+
+function variableBlockForPanel(block: VariableBlock): VariableBlock | undefined {
+  const rows = block.rows
+    .map(variableRowForPanel)
+    .filter((row): row is VariableRow => row !== undefined);
+  if (block.rows.length > 0 && rows.length === 0) {
+    return undefined;
+  }
+  if (block.kind === 'matrix') {
+    return { ...block, rows };
+  }
+  return { ...block, rows };
+}
+
+function variableRowForPanel(row: VariableRow): VariableRow | undefined {
+  const cells = row.cells.map((cell) =>
+    cell?.name.startsWith(PRIVATE_VARIABLE_PREFIX) ? null : cell,
+  );
+  if (!cells.some((cell) => cell !== null)) {
+    return undefined;
+  }
+  return { ...row, cells };
 }
 
 // One budget covers all nested collections, so separate small arrays cannot evade the cap.

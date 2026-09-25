@@ -9,6 +9,7 @@ const BREAKPOINTS = [
 const GAP_PX = 120;
 const PAGE_HEIGHT_PX_MAX = 30_000;
 const PAGE_HEIGHT_PX_MIN = 200;
+const PAGE_HEIGHT_VIEWPORTS_MAX = 1.25;
 const ZOOM_MIN = 0.05;
 const ZOOM_MAX = 4;
 type BreakpointKey = (typeof BREAKPOINTS)[number]['key'];
@@ -118,10 +119,17 @@ function useCanvasPointer(
 function layoutFrames(heights: Partial<Record<BreakpointKey, number>>) {
   let x = 0;
   return BREAKPOINTS.map((breakpoint) => {
+    // The overview cannot know the eventual browser viewport, and stretching
+    // its iframe can make vh-based pages report their own new frame height.
+    // One and a quarter screens preserve context while tightly bounding that loop.
+    const heightMax = Math.min(
+      PAGE_HEIGHT_PX_MAX,
+      breakpoint.viewportHeight * PAGE_HEIGHT_VIEWPORTS_MAX,
+    );
     const height = clamp(
       heights[breakpoint.key] ?? breakpoint.viewportHeight,
       PAGE_HEIGHT_PX_MIN,
-      PAGE_HEIGHT_PX_MAX,
+      heightMax,
     );
     const frame = { ...breakpoint, x, height };
     x += breakpoint.width + GAP_PX;

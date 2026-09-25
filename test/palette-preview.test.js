@@ -1,6 +1,6 @@
 // Goal: palette hover previews identify the exact component file and cancel
 // obsolete hover requests. Methodology: mount the real palette, dispatch pointer
-// entry/exit events, and inspect the resulting iframe across duplicate names.
+// entry/exit events, inspect iframe identity, and apply validated ready/empty statuses.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -51,7 +51,17 @@ test('hover preview targets exact files and cancels obsolete delayed opens', asy
       createFrom: { kind: 'unavailable', reason: 'Select an element.' },
     })));
     await checkCancelledHover(context);
-    await checkPreviewTarget(context, 'Interactive', 'src/components/Interactive/AccordionItem.astro');
+    const interactiveFrame = await checkPreviewTarget(
+      context,
+      'Interactive',
+      'src/components/Interactive/AccordionItem.astro',
+    );
+    await sendPreviewStatus(context, interactiveFrame, 'empty');
+    assert.equal(
+      document.querySelector('.comp-preview').style.visibility,
+      'hidden',
+      'An empty component has no preview box',
+    );
     await checkPreviewTarget(context, 'Marketing', 'src/components/Marketing/AccordionItem.astro');
     await checkPreviewTarget(context, 'layouts', 'src/layouts/Base.astro');
     await React.act(async () => {
@@ -89,8 +99,33 @@ async function checkPreviewTarget(context, folder, componentPath) {
   assert.equal(url.origin, 'http://localhost:4321');
   assert.equal(url.pathname, '/__avb/preview/');
   assert.equal(url.searchParams.get('c'), name);
-  assert.equal(url.searchParams.get('p'), componentPath, 'Duplicate basenames retain file identity');
+  assert.equal(
+    url.searchParams.get('p'),
+    componentPath,
+    'Duplicate basenames retain file identity',
+  );
   assert.equal(iframe.title, `${name} preview`);
+  const preview = document.querySelector('.comp-preview');
+  assert.equal(preview.style.visibility, 'hidden', 'The box waits for rendered preview content');
+  await context.act(async () => {
+    window.dispatchEvent(new context.dom.window.MessageEvent('message', {
+      source: iframe.contentWindow,
+      data: { type: 'avb:component-preview', status: 'unknown' },
+    }));
+  });
+  assert.equal(preview.style.visibility, 'hidden', 'Malformed preview status is ignored');
+  await sendPreviewStatus(context, iframe, 'ready');
+  assert.equal(preview.style.visibility, 'visible', 'Rendered content reveals the preview box');
+  return iframe;
+}
+
+async function sendPreviewStatus(context, iframe, status) {
+  await context.act(async () => {
+    window.dispatchEvent(new context.dom.window.MessageEvent('message', {
+      source: iframe.contentWindow,
+      data: { type: 'avb:component-preview', status },
+    }));
+  });
 }
 
 async function pointerEvent({ dom, act }, item, type) {

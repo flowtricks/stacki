@@ -1,19 +1,23 @@
 import { useRef } from 'react';
 import { assert } from '../../shared/assert';
 import { PROPERTY_LIMITS } from '../../shared/component-properties';
+import type { PropertyOptionRename } from '../../shared/component-properties';
 import { arrayItems, arrayText, moveItem } from '../arrayValue';
 import { literalOptions } from '../propertyOptions';
 import ListField from './ListField';
 import type { ListFieldChange } from './ListField';
 
-export interface OptionRename {
-  readonly from: string;
-  readonly to: string;
-}
+export type PropertyOptionChange =
+  | {
+      readonly kind: 'draft';
+      readonly type: string;
+      readonly rename: PropertyOptionRename | undefined;
+    }
+  | { readonly kind: 'reorder'; readonly type: string };
 interface PropertyOptionsProps {
   readonly type: string;
   readonly disabled: boolean;
-  readonly onChange: (type: string, rename?: OptionRename) => void;
+  readonly onChange: (change: PropertyOptionChange) => void;
 }
 
 export function PropertyOptions({ type, disabled, onChange }: PropertyOptionsProps) {
@@ -37,7 +41,12 @@ export function PropertyOptions({ type, disabled, onChange }: PropertyOptionsPro
     if (immediate) {
       scalarKind.current = undefined;
     }
-    onChange(next.options.join(' | '), next.rename);
+    const nextType = next.options.join(' | ');
+    onChange(
+      change.kind === 'move'
+        ? { kind: 'reorder', type: nextType }
+        : { kind: 'draft', type: nextType, rename: next.rename }
+    );
   };
   return (
     <div className="property-options props-field">
@@ -64,7 +73,10 @@ function changePropertyOptionList(
   value: string,
   change: ListFieldChange,
   scalarKind: 'text' | 'literal'
-): { readonly options: readonly string[]; readonly rename?: OptionRename } {
+): {
+  readonly options: readonly string[];
+  readonly rename?: PropertyOptionRename;
+} {
   assert(options.length <= PROPERTY_LIMITS.fieldsMax, 'Option count is bounded');
   switch (change.kind) {
     case 'move':

@@ -25,12 +25,19 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   fs.mkdirSync(path.join(dir, 'src', 'styles'), { recursive: true });
   fs.writeFileSync(
     path.join(dir, 'src', 'styles', 'tokens.css'),
-    ':root {\n  --blue: #0af;\n  --ink: #111;\n}\n\n.light { --bg: white; }\n.dark { --bg: black; }\n'
+    ':root {\n  --blue: #0af;\n  --ink: #111;\n  --_private: #f0f;\n}\n\n' +
+      '.light { --bg: white; }\n.dark { --bg: black; }\n' +
+      '.private { --_only: hidden; }\n'
   );
-  fs.writeFileSync(path.join(dir, 'src', 'styles', 'other.css'), '.card { --lift: 2px; --shade: 4px; }\n');
+  fs.writeFileSync(
+    path.join(dir, 'src', 'styles', 'other.css'),
+    '.card { --lift: 2px; --shade: 4px; --_private: 8px; }\n'
+  );
   // One rule, so one group: there is no inside to show.
-  fs.writeFileSync(path.join(dir, 'src', 'styles', 'motion.css'), ':root { --ease: linear; --duration: 200ms; }\n');
-
+  fs.writeFileSync(
+    path.join(dir, 'src', 'styles', 'motion.css'),
+    ':root { --ease: linear; --duration: 200ms; --_private: 1; }\n'
+  );
   const esbuild = require('esbuild');
   const buildDir = path.join(__dirname, '..', 'node_modules', '.stacki-test');
   fs.mkdirSync(buildDir, { recursive: true });
@@ -89,7 +96,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   await render();
   check('stylesheets are listed', names().join('|') === 'motion.css|other.css|tokens.css', names().join('|'));
   check(
-    'with what each one holds',
+    'with counts that omit private variables',
     all('.cms-collection-count').map((n) => n.textContent).join('|') === '2 variables|2 variables|4 variables',
     all('.cms-collection-count').map((n) => n.textContent).join('|')
   );
@@ -123,14 +130,18 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   check('opening a stylesheet selects its first group', !!selected, JSON.stringify(selected));
   check('which is the first one', selected?.index === 0 && selected.file.endsWith('tokens.css'), JSON.stringify(selected));
 
-  check('and the groups inside are listed', names().join('|') === ':root|Light', names().join('|'));
+  check(
+    'and groups without visible variables are omitted',
+    names().join('|') === ':root|Light',
+    names().join('|')
+  );
   check(
     'the open one is marked',
     all('.cms-collection.on').length === 1 && all('.cms-collection.on')[0].textContent.includes(':root'),
     all('.cms-collection').map((n) => n.className).join('|')
   );
   check(
-    'a group of modes says how many',
+    'groups also omit private variables from their counts',
     all('.cms-collection-count').map((n) => n.textContent).join('|') === '2 variables|2 modes',
     all('.cms-collection-count').map((n) => n.textContent).join('|')
   );

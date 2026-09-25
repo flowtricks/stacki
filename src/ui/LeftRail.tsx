@@ -8,6 +8,7 @@ import {
   AssetManagerIcon,
   CmsIcon,
   VariableIcon,
+  CodeIcon,
   HistoryIcon,
 } from './Icons.jsx';
 
@@ -19,6 +20,7 @@ const TABS = [
   { id: 'assets', title: 'Assets', shortcut: 'J', Icon: AssetManagerIcon },
   { id: 'cms', title: 'CMS', shortcut: '⌥C', Icon: CmsIcon },
   { id: 'variables', title: 'Variables', shortcut: '⌥V', Icon: VariableIcon },
+  { id: 'code', title: 'Code', shortcut: 'C', Icon: CodeIcon },
   { id: 'history', title: 'History', shortcut: '⌥H', Icon: HistoryIcon },
 ] as const;
 export type RailTab = (typeof TABS)[number]['id'];
@@ -132,6 +134,8 @@ function useRailKeys(onSelect: (tab: RailTab) => void, componentOpen: boolean): 
         id = 'properties';
       } else if (k === 'j' && !e.shiftKey) {
         id = 'assets';
+      } else if (k === 'c' && !e.shiftKey) {
+        id = 'code';
       }
       if (id) {
         e.preventDefault();

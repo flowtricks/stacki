@@ -3,30 +3,77 @@ import { PROPERTY_LIMITS } from '../../shared/component-properties';
 import { literalOptions } from '../propertyOptions';
 import Dropdown from '../ui/Dropdown';
 import type { DropdownOption } from '../ui/Dropdown';
-import { BracesIcon } from '../ui/Icons';
+import {
+  BracesIcon,
+  CalendarIcon,
+  CloseIcon,
+  CodeIcon,
+  ComponentPropertiesIcon,
+  ElementListDefaultIcon,
+  ElementSlotIcon,
+  FieldNumberIcon,
+  FieldSwitchIcon,
+  HelpCircleIcon,
+  HistoryIcon,
+  MoreIcon,
+  PointerEventsNoneIcon,
+  SparkleIcon,
+  TagIcon,
+  TextIcon,
+} from '../ui/Icons';
 
 const UNION_TYPE = '"Option 1" | "Option 2"';
 // These are authored type expressions, not types used to bypass the app's own checking.
 const TYPE_CHOICES: readonly DropdownOption<string>[] = [
-  { value: 'string', label: 'string', hint: 'Text / link' },
-  { value: 'number', label: 'number' },
-  { value: 'boolean', label: 'boolean', hint: 'Switch' },
-  { value: UNION_TYPE, label: 'Options (union)', hint: 'Literal choices' },
-  { value: 'readonly string[]', label: 'Array', hint: 'readonly string[]' },
-  { value: 'readonly [string, number]', label: 'Tuple', hint: 'readonly [string, number]' },
-  { value: 'Record<string, unknown>', label: 'Record', hint: 'Object / attributes' },
-  { value: 'object', label: 'object' },
-  { value: '(value: string) => void', label: 'Function', hint: 'Callback' },
-  { value: 'Date', label: 'Date' },
-  { value: 'Promise<string>', label: 'Promise', hint: 'Promise<string>' },
-  { value: 'bigint', label: 'bigint' },
-  { value: 'symbol', label: 'symbol' },
-  { value: 'null', label: 'null' },
-  { value: 'undefined', label: 'undefined' },
-  { value: 'unknown', label: 'unknown' },
-  { value: 'never', label: 'never' },
-  { value: 'void', label: 'void' },
-  { value: 'any', label: 'any', hint: 'Unchecked value' },
+  { value: 'string', label: 'string', hint: 'Text / link', icon: <TextIcon size={14} /> },
+  { value: 'number', label: 'number', icon: <FieldNumberIcon size={14} /> },
+  { value: 'boolean', label: 'boolean', hint: 'Switch', icon: <FieldSwitchIcon size={14} /> },
+  {
+    value: UNION_TYPE,
+    label: 'Options (union)',
+    hint: 'Literal choices',
+    icon: <ComponentPropertiesIcon size={14} />,
+  },
+  {
+    value: 'readonly string[]',
+    label: 'Array',
+    hint: 'readonly string[]',
+    icon: <ElementListDefaultIcon size={14} />,
+  },
+  {
+    value: 'readonly [string, number]',
+    label: 'Tuple',
+    hint: 'readonly [string, number]',
+    icon: <ElementListDefaultIcon size={14} />,
+  },
+  {
+    value: 'Record<string, unknown>',
+    label: 'Record',
+    hint: 'Object / attributes',
+    icon: <BracesIcon size={14} />,
+  },
+  { value: 'object', label: 'object', icon: <BracesIcon size={14} /> },
+  {
+    value: '(value: string) => void',
+    label: 'Function',
+    hint: 'Callback',
+    icon: <CodeIcon size={14} />,
+  },
+  { value: 'Date', label: 'Date', icon: <CalendarIcon size={14} /> },
+  {
+    value: 'Promise<string>',
+    label: 'Promise',
+    hint: 'Promise<string>',
+    icon: <HistoryIcon size={14} />,
+  },
+  { value: 'bigint', label: 'bigint', icon: <FieldNumberIcon size={14} /> },
+  { value: 'symbol', label: 'symbol', icon: <TagIcon size={14} /> },
+  { value: 'null', label: 'null', icon: <CloseIcon size={14} /> },
+  { value: 'undefined', label: 'undefined', icon: <MoreIcon size={14} /> },
+  { value: 'unknown', label: 'unknown', icon: <HelpCircleIcon size={14} /> },
+  { value: 'never', label: 'never', icon: <PointerEventsNoneIcon size={14} /> },
+  { value: 'void', label: 'void', icon: <ElementSlotIcon size={14} /> },
+  { value: 'any', label: 'any', hint: 'Unchecked value', icon: <SparkleIcon size={14} /> },
 ];
 
 export function PropertyType({
@@ -89,5 +136,13 @@ function propertyTypeChoices(type: string): readonly DropdownOption<string>[] {
   );
   return choices.some((option) => option.value === type)
     ? choices
-    : [{ value: type, label: type || 'Choose a type', hint: 'Custom type' }, ...choices];
+    : [
+        {
+          value: type,
+          label: type || 'Choose a type',
+          hint: 'Custom type',
+          icon: <CodeIcon size={14} />,
+        },
+        ...choices,
+      ];
 }
