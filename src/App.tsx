@@ -101,6 +101,12 @@ import { projectRelativePath } from './projectPath.js';
 import { currentDesktopPlatform, shortcutLabel } from './shortcutLabel.js';
 import { sourceNodeAtOffset } from './codePanelModel.js'
 import {
+  codeWindowFor,
+  FRONTMATTER_SUBJECT,
+  type CodeSubject,
+  type FrontmatterSubject,
+} from './codeWindowTarget';
+import {
   cloneEditorModel,
   findEditorNodeById as findNodeById,
   findEditorParentList as findParentList,
@@ -3592,7 +3598,7 @@ export default function App() {
   };
 
   const selectedNode:
-    | EditorNode | { readonly id: 'frontmatter'; readonly kind: 'frontmatter'; readonly value: string } | null =
+    | EditorNode | (FrontmatterSubject & { readonly value: string }) | null =
     model && selectedId
       ? selectedId === 'frontmatter'
         ? { id: 'frontmatter', kind: 'frontmatter', value: frontmatterCode }
@@ -3944,29 +3950,22 @@ export default function App() {
     ? codeWinNode.inner
     : null;
 
-  // Returns whether the selection actually has a code editor, so the Enter
+  // Returns whether the subject actually has a code editor, so the Enter
   // shortcut below knows whether it handled the key.
-  const openCodeWindow = () => {
-    if (!selectedNode) {
+  const openCodeWindowFor = (subject: CodeSubject | null): boolean => {
+    const codeWindow = subject === null ? undefined : codeWindowFor(subject);
+    if (codeWindow === undefined) {
       return false;
     }
-    if (selectedNode.kind === 'frontmatter') {
-      setCodeWin({
-        targetId: 'frontmatter',
-        title: 'Frontmatter',
-        language: 'javascript',
-      });
-      return true;
-    }
-    if (selectedNode.kind === 'raw') {
-      setCodeWin({
-        targetId: selectedNode.id,
-        title: `<${selectedNode.name}>`,
-        language: selectedNode.name === 'style' ? 'css' : 'javascript',
-      });
-      return true;
-    }
-    return false;
+    setCodeWin(codeWindow);
+    return true;
+  };
+  const openCodeWindow = (): boolean => openCodeWindowFor(selectedNode);
+  // A navigator double-click names its row instead of reading `selectedNode`
+  // (see `openCode` in StructureTree). An id the tree no longer holds, a row
+  // removed between the click and the render, opens nothing.
+  const openCodeWindowById = (id: string): void => {
+    openCodeWindowFor(id === 'frontmatter' ? FRONTMATTER_SUBJECT : tree.node(id));
   };
   // Read by the keydown effect, which is set up long before this exists.
   openCodeWindowRef.current = openCodeWindow;
@@ -4619,6 +4618,7 @@ export default function App() {
                 onSelect={setSelectedId}
                 onHoverNode={setHoverNodeId}
                 onOpenComponent={(name, id) => openComponent(name, pathFor(id))}
+                onOpenCode={openCodeWindowById}
                 onChangeLayout={changeLayout}
                 onDropComponent={addComponent}
                 onMoveNode={moveNode}

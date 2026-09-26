@@ -32,6 +32,7 @@
     "test:bridge": "node test/bridge.js",
     "test:outlines": "node test/outlines.js",
     "test:navigator": "node test/navigator.js",
+    "test:navigatoropencode": "node test/navigator-open-code.js",
     "test:classattr": "node test/class-attr.js",
     "test:gridtracks": "node test/grid-tracks.js",
     "test:windowbounds": "node test/window-bounds.js",

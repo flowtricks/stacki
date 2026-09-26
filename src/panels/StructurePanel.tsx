@@ -34,6 +34,8 @@ interface StructurePanelProps {
   readonly onSelect: (id: string) => void;
   readonly onHoverNode?: (id: string | null) => void;
   readonly onOpenComponent?: (name: string, id: string) => void;
+  /** A row holding code (frontmatter, <style>, <script>) was double-clicked. */
+  readonly onOpenCode?: (id: string) => void;
   readonly onChangeLayout: (name: string) => void;
   readonly onDropComponent: (name: string, target: DropLocation) => void;
   readonly onMoveNode: (id: string, target: DropLocation) => void;
@@ -342,6 +344,7 @@ function treeContextOf(props: EditableProps, state: TreeState): StructureTreeCon
     onSelect: props.onSelect,
     ...(props.onHoverNode === undefined ? {} : { onHoverNode: props.onHoverNode }),
     ...(props.onOpenComponent === undefined ? {} : { onOpenComponent: props.onOpenComponent }),
+    ...(props.onOpenCode === undefined ? {} : { onOpenCode: props.onOpenCode }),
     toggleCollapse: (node) => {
       state.setToggled((previous) =>
         new Map(previous).set(node.id, !collapsedState(node, previous)),
@@ -445,6 +448,7 @@ function FrontmatterRow({ props }: { readonly props: EditableProps }) {
       className={`structure-node frontmatter-node ${props.selectedId === 'frontmatter' ? 'selected' : ''}`}
       style={{ paddingLeft: 6 }}
       onClick={() => props.onSelect('frontmatter')}
+      onDoubleClick={() => props.onOpenCode?.('frontmatter')}
     >
       <span className="drag-handle" style={{ visibility: 'hidden' }}>
         <DragIcon size={11} />

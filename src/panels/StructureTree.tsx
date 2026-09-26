@@ -50,6 +50,7 @@ export interface StructureTreeContext {
   readonly onSelect: (id: string) => void;
   readonly onHoverNode?: (id: string | null) => void;
   readonly onOpenComponent?: (name: string, id: string) => void;
+  readonly onOpenCode?: (id: string) => void;
   readonly toggleCollapse: (node: NavigatorNode) => void;
   readonly openContextMenu: (left: number, top: number, nodeId: string) => void;
 }
@@ -194,6 +195,7 @@ function treeContextFromRow(props: TreeNodeProps): StructureTreeContext {
     onSelect: props.onSelect,
     ...(props.onHoverNode === undefined ? {} : { onHoverNode: props.onHoverNode }),
     ...(props.onOpenComponent === undefined ? {} : { onOpenComponent: props.onOpenComponent }),
+    ...(props.onOpenCode === undefined ? {} : { onOpenCode: props.onOpenCode }),
     toggleCollapse: props.toggleCollapse,
     openContextMenu: props.openContextMenu,
   };
@@ -323,7 +325,12 @@ function treeRowHandlers(props: TreeRowProps) {
       props.onSelect(node.id);
     },
     onDoubleClick: (event: React.MouseEvent<HTMLDivElement>): void => {
-      openComponent(event, props);
+      // A <script> or <style> is code, not markup: it opens in the code editor.
+      if (node.kind === 'raw') {
+        openCode(event, props);
+      } else {
+        openComponent(event, props);
+      }
     },
     onMouseEnter: (): void => props.onHoverNode?.(node.id),
     onMouseLeave: (): void => props.onHoverNode?.(null),
@@ -333,6 +340,16 @@ function treeRowHandlers(props: TreeRowProps) {
       props.openContextMenu(event.clientX, event.clientY, node.id);
     },
   };
+}
+
+// The row's own id is passed on: its click has only just asked for the
+// selection, which still names the previous row when the double-click lands.
+function openCode(event: React.MouseEvent<HTMLDivElement>, props: TreeRowProps): void {
+  if (!props.onOpenCode) {
+    return;
+  }
+  event.stopPropagation();
+  props.onOpenCode(props.node.id);
 }
 
 function openComponent(event: React.MouseEvent<HTMLDivElement>, props: TreeRowProps): void {
