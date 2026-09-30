@@ -2380,14 +2380,18 @@ body > .embed-editor_provenance {
    gaps of every ancestor level are adjacent in the DOM — collapse all but
    the first so they don't stack into a large blank strip (each stays a
    distinct drop target for its own nesting level). */
-.nav-gap { height: 7px; }
+.nav-gap { position: relative; height: 7px; }
 .nav-gap + .nav-gap { height: 2px; }
 
 .drop-indicator {
+  /* The marker must not move the gap or become a new drag target. */
+  position: absolute;
+  inset: 50% 0 auto;
+  transform: translateY(-50%);
+  pointer-events: none;
   height: 2px;
   border-radius: 1px;
   background: var(--accent);
-  margin: 2px 0;
   box-shadow: 0 0 6px rgba(0, 153, 255, 0.6);
 }
 .drop-zone-empty {

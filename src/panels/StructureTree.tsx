@@ -63,7 +63,15 @@ interface NodeListProps extends StructureTreeContext {
 
 const ANNOTATABLE = new Set(['element', 'component']);
 
+// Decode once so native drag feedback does not obscure the drop target.
+let blankDragImage: HTMLImageElement | undefined;
 export function NodeList({ nodes, parentId, depth, ...context }: NodeListProps) {
+  useEffect(() => {
+    if (!blankDragImage) {
+      blankDragImage = document.createElement('img');
+      blankDragImage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    }
+  }, []);
   const { noteFor, folded } = foldedNotes(nodes);
   return (
     <>
@@ -299,6 +307,8 @@ function treeRowHandlers(props: TreeRowProps) {
       event.stopPropagation();
       event.dataTransfer.setData('avb/node', node.id);
       event.dataTransfer.effectAllowed = 'move';
+      if (blankDragImage) { event.dataTransfer.setDragImage(blankDragImage, 0, 0); }
+      props.onSelect(node.id);
       const tag = 'name' in node ? node.name : undefined;
       setDrag({
         kind: 'node',
@@ -307,7 +317,7 @@ function treeRowHandlers(props: TreeRowProps) {
         ...(tag === undefined ? {} : { tag }),
       });
     },
-    onDragEnd: clearDrag,
+    onDragEnd: () => { clearDrag(); props.setDropTarget(null); },
     onDragOver: (event: React.DragEvent<HTMLDivElement>): void => {
       if (props.canHostChildren && acceptsDrag(node) && props.isDndPayload(event)) {
         event.preventDefault();

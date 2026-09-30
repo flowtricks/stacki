@@ -433,7 +433,13 @@ function NavigatorBody({
 }) {
   const nodes = props.pageState.model.nodes;
   return (
-    <div className="panel-body" ref={state.bodyRef} onDragLeave={() => state.setDropTarget(null)}>
+    <div className="panel-body" ref={state.bodyRef}
+      onDragOver={() => state.setDropTarget(null)}
+      onDragLeave={(event) => {
+        if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+          state.setDropTarget(null);
+        }
+      }}>
       <FrontmatterRow props={props} />
       <NodeList nodes={nodes} parentId={null} depth={0} {...treeContext} />
       {nodes.length === 0 && <EmptyDropTarget props={props} state={state} />}
@@ -482,6 +488,7 @@ function EmptyDropTarget({
       onDragOver={(event) => {
         if (isDndPayload(event)) {
           event.preventDefault();
+          event.stopPropagation();
           state.setDropTarget({ kind: 'gap', ...location });
         }
       }}

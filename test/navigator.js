@@ -269,6 +269,45 @@ const WORDS = el('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{heading}'
     );
   }
 
+  // Moving between descendants must not erase the destination between two
+  // dragover events. Leaving the panel, hovering blank space, and cancelling
+  // a drag must still remove it.
+  {
+    const source = rowFor('hero-command');
+    const gap = rowFor('if-ternary').previousElementSibling;
+    const data = new Map();
+    const dataTransfer = {
+      types: ['avb/node'],
+      setData: (type, value) => data.set(type, value),
+      getData: (type) => data.get(type) || '',
+      setDragImage: () => {},
+    };
+    const fire = (element, type, relatedTarget = null) => act(async () => {
+      element.dispatchEvent(Object.assign(
+        new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, relatedTarget }),
+        { dataTransfer }
+      ));
+    });
+    await fire(source, 'dragstart');
+    check('dragging selects the source row', selected.at(-1) === 'hero-command');
+    check('dragging keeps the source in its original place', rowFor('hero-command') === source);
+    await fire(gap, 'dragover');
+    check('a gap shows the insertion marker', !!gap.querySelector('.drop-indicator'));
+    await fire(gap, 'dragleave', gap.querySelector('.drop-indicator'));
+    check('entering the marker does not erase it', !!gap.querySelector('.drop-indicator'));
+    await fire(rowFor('if-and'), 'dragover');
+    await fire(gap, 'dragleave', rowFor('if-and').querySelector('.label'));
+    check('entering a row preserves the new child destination', rowFor('if-and').style.borderColor !== '');
+    await fire(rowFor('if-and'), 'dragleave', document.body);
+    check('leaving the panel clears the child destination', rowFor('if-and').style.borderColor === '');
+    await fire(gap, 'dragover');
+    await fire(container.querySelector('.panel-body'), 'dragover');
+    check('blank space clears the previous marker', !container.querySelector('.drop-indicator'));
+    await fire(gap, 'dragover');
+    await fire(source, 'dragend');
+    check('cancelling clears the insertion marker', !container.querySelector('.drop-indicator'));
+  }
+
   // --- arrow keys -------------------------------------------------------------
   // They walk the tree that is drawn: a row nobody can see is not somewhere the
   // selection can land.
