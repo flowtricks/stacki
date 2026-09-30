@@ -68,3 +68,28 @@ export function componentNameError(input: unknown, taken: readonly string[] = []
   }
   return null;
 }
+
+// Where a component lives under src/components. The folder is a path of plain
+// words — the same shape the main process accepts — so the dialog can say what is
+// wrong while it is typed instead of the write failing afterwards.
+const FOLDER_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+const FOLDER_DEPTH_MAX = 5;
+
+/** What was typed as a folder, cleaned up: `Heading / Hero section` → `Heading/Hero-section`. */
+export function toFolderPath(input: unknown): string {
+  return String(input ?? '')
+    .split(/[\/]+/)
+    .map((segment) => segment.trim().replace(/\s+/g, '-'))
+    .filter(Boolean)
+    .join('/');
+}
+
+/** Why this folder can't be used, or null when it can. '' is fine: the root. */
+export function folderError(folder: string): string | null {
+  const segments = folder.split('/').filter(Boolean);
+  if (segments.length > FOLDER_DEPTH_MAX) {
+    return `At most ${FOLDER_DEPTH_MAX} levels deep.`;
+  }
+  const bad = segments.find((segment) => !FOLDER_SEGMENT.test(segment));
+  return bad ? `"${bad}" can't be a folder name — use letters, digits, - or _.` : null;
+}

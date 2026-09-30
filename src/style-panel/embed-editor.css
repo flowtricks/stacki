@@ -4858,3 +4858,50 @@ textarea.embed-editor_value-input.is-expanded {
   color: var(--color-text-tertiary);
   text-transform: uppercase; /* DEG / % — Webflow shows the unit uppercase */
 }
+
+/* State dropdown (None / Hover / Pressed / ::before …) under the selector well. */
+.embed-editor_state-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.embed-editor_state-label {
+  flex: none;
+  color: var(--text-secondary, inherit);
+  font-size: 12px;
+}
+
+.embed-editor_state-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* A tag selector (`h2`, `p`) is pink, the way Webflow marks "all <h2>" as a target
+   of its own, apart from the blue classes. */
+.embed-editor_selector-chip.is-tag {
+  --color-class-tag-bg: #c2418a;
+}
+.embed-editor_suggest-item.is-tag .embed-editor_suggest-sel,
+.embed-editor_suggest-item.is-tag .embed-editor_suggest-kind {
+  color: #ee6fb5;
+}
+.embed-editor_suggest-item.is-tag.is-active { background: #c2418a; }
+.embed-editor_suggest-item.is-tag.is-active .embed-editor_suggest-sel,
+.embed-editor_suggest-item.is-tag.is-active .embed-editor_suggest-kind { color: #fff; }
+
+/* Focusing a field is as good as hovering it for finding the variable dot. */
+.embed-editor_varconnect:focus-within .embed-editor_varconnect-dot {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.embed-editor_varpicker-create {
+  margin-top: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm, 6px);
+  background: #7c5cff;
+  color: #fff;
+}
+.embed-editor_varpicker-create:disabled { opacity: 0.6; }

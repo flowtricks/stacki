@@ -27,7 +27,10 @@ interface PalettePanelProps {
   readonly trailingSlash: TrailingSlash;
   readonly onInsert: (name: string) => void;
   readonly onDragBegin?: () => void;
-  readonly onCreateComponent: (name: string, options: { readonly withProps: boolean }) => void;
+  readonly onCreateComponent: (
+    name: string,
+    options: { readonly withProps: boolean; readonly folder: string },
+  ) => void;
   readonly onUsage?: (component: ScanComponent) => Promise<unknown>;
   readonly onOpenUsage?: (file: ComponentUsageFile) => void;
   readonly pageInstances?: (name: string) => readonly { readonly id: string }[];
@@ -357,6 +360,14 @@ function PalettePopups({
         <CreateComponentModal
           source={source}
           taken={props.components.map((component) => component.name)}
+          folders={[
+            ...new Set(
+              props.components
+                .filter((component) => !component.isLayout)
+                .map((component) => component.folder)
+                .filter(Boolean),
+            ),
+          ].sort()}
           onClose={() => setCreating(false)}
           onCreate={(name, options) => {
             setCreating(false);

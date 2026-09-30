@@ -1960,6 +1960,7 @@ contextBridge.exposeInMainWorld('avb', {
   setCssVariable: invoke('css:setVariable'),
   moveCssVariables: invoke('css:moveVariables'),
   addCssVariables: invoke('css:addVariables'),
+  createVariablesFile: invoke('css:createVariablesFile'),
   renameCssVariables: invoke('css:renameVariables'),
   setCssSectionTitle: invoke('css:setSectionTitle'),
   removeCssSection: invoke('css:removeSection'),

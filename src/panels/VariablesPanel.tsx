@@ -7,6 +7,7 @@ import type {
   VariablesSnapshot,
 } from '../variablesBridge';
 import { readCSSVariables } from '../variablesBridge';
+import { variableEdit } from './variableEdits';
 import { ChevronLeftIcon, ChevronRightIcon, VariableIcon, FileIcon } from '../ui/Icons';
 
 export interface VariablesPanelProps {
@@ -77,12 +78,39 @@ export default function VariablesPanel(props: VariablesPanelProps) {
             />
           ))}
         {error && <div className="cms-error">{error}</div>}
-        {!files.length && !error && (
-          <div className="props-empty">
-            No CSS custom properties found in this project&rsquo;s stylesheets.
-          </div>
-        )}
+        {!files.length && !error && <CreateVariablesFile projectPath={project.path} />}
       </div>
+    </div>
+  );
+}
+
+// A project with no variables has no stylesheet to add them to. One click makes
+// src/styles/variables.css and imports it, so there is somewhere to start.
+function CreateVariablesFile({ projectPath }: { readonly projectPath: string }) {
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const create = (): void => {
+    setBusy(true);
+    setFailure(null);
+    void variableEdit('createVariablesFile', projectPath).then((result) => {
+      setBusy(false);
+      if (!result.ok) {
+        setFailure(result.error || 'Couldn’t create the variables file.');
+      }
+    });
+  };
+  return (
+    <div className="props-empty">
+      No CSS custom properties found in this project&rsquo;s stylesheets.
+      <div style={{ marginTop: 10 }}>
+        <button className="primary" disabled={busy} onClick={create}>
+          Create variables file
+        </button>
+      </div>
+      <div className="hint-text" style={{ marginTop: 6 }}>
+        Adds <code>src/styles/variables.css</code> and imports it in your layout.
+      </div>
+      {failure && <div className="cms-error">{failure}</div>}
     </div>
   );
 }

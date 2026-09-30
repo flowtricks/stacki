@@ -5,13 +5,14 @@
 // (orange), which selectors contribute, and which one wins. Pure + synchronous
 // so switching selector/context/state just re-derives — no re-scan.
 
-import { compareCascade } from './cascade'
-import type { RuleModel } from './cascade'
+import { compareCascade, INHERITED_PROPERTIES } from './cascade'
+import type { MatchedRule, RuleModel } from './cascade'
 import { canonicalCompound, compareSpecificity, normalizePseudoElement } from './selectors'
+import { isViewStatePseudoClass, VIEW_STATE_PSEUDO_CLASSES, type ViewStatePseudoClass } from './states'
 import type { BreakpointId, ParsedRule, Specificity } from './types'
 
 export type ContextKey = string // '' = Base; else the joined atContext
-export type StateKey = '' | ':hover' | ':focus' | ':active'
+export type StateKey = '' | ViewStatePseudoClass
 
 /** Which layer an edit targets: the embed CSS or the native Webflow class style. */
 export type SourceKey = 'embed' | 'native'
@@ -51,11 +52,10 @@ export type NativeContribution = {
   atState: boolean
 }
 
-export const STATES: readonly StateKey[] = ['', ':hover', ':focus', ':active']
-const INTERACTION_STATES = new Set<string>([':hover', ':focus', ':active'])
+export const STATES: readonly StateKey[] = ['', ...VIEW_STATE_PSEUDO_CLASSES]
 
 function isStateKey(value: string): value is Exclude<StateKey, ''> {
-  return INTERACTION_STATES.has(value)
+  return isViewStatePseudoClass(value)
 }
 
 // Native class styles are ordered before any embed rule so embed CSS (injected
@@ -111,6 +111,9 @@ export type Contributor = {
   winning: boolean
   /** True when the selector can't be a token chip (combinator / :is / :has / …). */
   complexOnly: boolean
+  /** Set when the value is handed down by an ancestor `depth` generations up, not
+   *  set on the element: it loses to every rule that targets the element itself. */
+  inheritedDepth?: number
 }
 
 export type ResolvedProp = {
@@ -367,6 +370,71 @@ export function listMatchedSelectors(model: RuleModel, context: ContextKey): Mat
   )
 }
 
+// Whether a rule in `ruleCtx` reaches a view of `context`: the context's own rules,
+// plus the base and enclosing-query rules it builds on.
+function reachesContext(ruleCtx: ContextKey, context: ContextKey): boolean {
+  return ruleCtx === context || ruleCtx === '' || context.startsWith(`${ruleCtx} › `)
+}
+
+// One contributor per inherited property: the value from the NEAREST ancestor that
+// sets it, since that is the one the element actually inherits. An ancestor's own
+// states and pseudo-elements never reach a child, so only its resting selectors count.
+function foldInherited(model: RuleModel, context: ContextKey, byProp: Map<string, Contributor[]>): void {
+  const taken = new Set<string>()
+  for (const level of model.inherited ?? []) {
+    const atLevel = new Map<string, Contributor>()
+    for (const matched of level.rules) {
+      if (!reachesContext(contextKeyOf(matched.rule), context)) {continue}
+      const best = strongestRestingSelector(matched)
+      if (!best) {continue}
+      for (const decl of matched.rule.declarations) {
+        if (!INHERITED_PROPERTIES.has(decl.prop) || taken.has(decl.prop)) {continue}
+        const candidate: Contributor = {
+          selectorText: best.text,
+          value: decl.value,
+          important: decl.important,
+          specificity: best.specificity,
+          order: matched.rule.order,
+          ruleId: matched.rule.ruleId,
+          origin: 'embed',
+          embedKey: matched.rule.embedKey,
+          embedLabel: matched.rule.embedLabel,
+          fromComponent: matched.rule.fromComponent,
+          isSelected: false,
+          winning: false,
+          complexOnly: !best.simple,
+          inheritedDepth: level.depth,
+        }
+        const current = atLevel.get(decl.prop)
+        if (!current || compareCascade(candidate, current, candidate.order, current.order) < 0) {
+          atLevel.set(decl.prop, candidate)
+        }
+      }
+    }
+    atLevel.forEach((contributor, prop) => {
+      taken.add(prop)
+      const list = byProp.get(prop) ?? []
+      list.push(contributor)
+      byProp.set(prop, list)
+    })
+  }
+}
+
+function strongestRestingSelector(
+  matched: MatchedRule,
+): { text: string; specificity: Specificity; simple: boolean } | null {
+  let best: { text: string; specificity: Specificity; simple: boolean } | null = null
+  for (const sel of matched.matchedSelectors) {
+    if (sel.pseudoElement != null) {continue}
+    const canon = canonicalCompound(sel.text)
+    if (stateOf(canon.pseudoClasses) !== '') {continue}
+    if (!best || compareSpecificity(sel.specificity, best.specificity) > 0) {
+      best = { text: sel.text, specificity: sel.specificity, simple: canon.simple }
+    }
+  }
+  return best
+}
+
 export function resolveStyle(
   model: RuleModel,
   context: ContextKey,
@@ -468,6 +536,8 @@ export function resolveStyle(
     })
   }
 
+  foldInherited(model, context, byProp)
+
   // Fold native Webflow class-style values in as extra contributors. They carry a
   // class-chain specificity (combos outrank the base class) and sort before embed
   // rules on a cascade tie (embed CSS is injected after Webflow's stylesheet).
@@ -498,7 +568,11 @@ export function resolveStyle(
 
   const props = new Map<string, ResolvedProp>()
   byProp.forEach((list, prop) => {
-    list.sort((a, b) => compareCascade(a, b, a.order, b.order))
+    // A value handed down by an ancestor loses to any rule on the element itself,
+    // whatever its specificity or !important — inheritance is the weakest input.
+    list.sort((a, b) =>
+      Number(a.inheritedDepth !== undefined) - Number(b.inheritedDepth !== undefined) ||
+      compareCascade(a, b, a.order, b.order))
     const winner = list[0]
     if (winner === undefined) {
       throw new Error(`Resolved style invariant failed: ${prop} has no contributors`)

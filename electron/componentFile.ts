@@ -24,6 +24,60 @@ const toPosix = (p: string): string => p.split(path.sep).join('/');
 // `<card />` renders a literal <card> and the component never appears.
 const VALID_NAME = /^[A-Z][A-Za-z0-9]*$/;
 
+// A folder is a path made of plain words, so it can never point outside
+// src/components ("..", absolute paths and drive letters have no place in it),
+// and it is bounded: nobody's component tree is deeper than this.
+const FOLDER_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+const FOLDER_DEPTH_MAX = 5;
+
+function folderSegments(folder: string | undefined): readonly string[] {
+  const segments = String(folder || '')
+    .split(/[\\/]+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  if (segments.length > FOLDER_DEPTH_MAX) {
+    throw new Error(`Folders can be at most ${FOLDER_DEPTH_MAX} levels deep.`);
+  }
+  for (const segment of segments) {
+    if (!FOLDER_SEGMENT.test(segment)) {
+      throw new Error(`"${segment}" can't be a folder name — use letters, digits, - or _.`);
+    }
+  }
+  return segments;
+}
+
+// The component tree is walked whole because the name is also the import and the
+// tag: two `Eyebrow` files in different folders would be two things called the
+// same. Bounded, so a symlink loop or a huge tree cannot run away.
+const CLASH_SCAN_ENTRIES_MAX = 20000;
+
+function findNameClash(componentsDir: string, name: string): string | null {
+  const wanted = `${name.toLowerCase()}.astro`;
+  const pending = [componentsDir];
+  let seen = 0;
+  while (pending.length > 0 && seen < CLASH_SCAN_ENTRIES_MAX) {
+    const dir = pending.pop();
+    if (dir === undefined) {
+      break;
+    }
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      seen += 1;
+      if (entry.isDirectory()) {
+        pending.push(path.join(dir, entry.name));
+      } else if (entry.name.toLowerCase() === wanted) {
+        return path.basename(entry.name, '.astro');
+      }
+    }
+  }
+  return null;
+}
+
 interface ComponentImport {
   readonly name?: string;
   readonly path?: string;
@@ -33,6 +87,8 @@ interface ComponentFileArgs {
   readonly projectPath: string;
   readonly pagePath: string;
   readonly name: string;
+  /** Sub-folders under src/components, e.g. `heading` or `sections/hero`. */
+  readonly folder?: string;
   readonly nodes: readonly unknown[];
   readonly imports?: readonly ComponentImport[];
   readonly props?: readonly unknown[];
@@ -47,6 +103,7 @@ function componentFile({
   projectPath,
   pagePath,
   name,
+  folder = '',
   nodes,
   imports = [],
   props = [],
@@ -59,14 +116,13 @@ function componentFile({
   }
 
   const componentsDir = path.join(projectPath, 'src', 'components');
-  const target = path.join(componentsDir, `${name}.astro`);
+  const targetDir = path.join(componentsDir, ...folderSegments(folder));
+  const target = path.join(targetDir, `${name}.astro`);
   // Case-insensitively: on a Mac, Card.astro and card.astro are the same file,
   // and writing the second silently replaces the first.
-  const clash = fs.existsSync(componentsDir)
-    ? fs.readdirSync(componentsDir).find((f) => f.toLowerCase() === `${name.toLowerCase()}.astro`)
-    : null;
+  const clash = fs.existsSync(componentsDir) ? findNameClash(componentsDir, name) : null;
   if (clash) {
-    throw new Error(`There's already a component called ${path.basename(clash, '.astro')}.`);
+    throw new Error(`There's already a component called ${clash}.`);
   }
 
   // Which of the page's imports this piece actually uses. Matched against the
@@ -87,7 +143,7 @@ function componentFile({
     if (!spec.startsWith('.')) {
       return { ...imp };
     }
-    const rel = toPosix(path.relative(componentsDir, path.resolve(pageDir, spec)));
+    const rel = toPosix(path.relative(targetDir, path.resolve(pageDir, spec)));
     return { ...imp, path: rel.startsWith('.') ? rel : './' + rel };
   });
 

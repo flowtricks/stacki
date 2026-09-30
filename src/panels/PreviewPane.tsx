@@ -3,7 +3,7 @@ import { usePointerDrag } from '../ui/usePointerDrag';
 import CanvasView from './CanvasView';
 import type { DevDiagnosis } from './DevOffline';
 import type { OverlayInfo, SpacingHover } from './PreviewOverlays';
-import type { PreviewCrumb, PreviewDevice } from './PreviewToolbar';
+import type { CreateComponentAction, PreviewCrumb, PreviewDevice } from './PreviewToolbar';
 import { DevOffline } from './DevOffline';
 import { PreviewOverlays } from './PreviewOverlays';
 import { PreviewToolbar, deviceForWidth, deviceWidth } from './PreviewToolbar';
@@ -43,6 +43,7 @@ interface PreviewPaneProps {
   readonly focusWhole?: boolean;
   readonly device: PreviewDevice;
   readonly onDevice: (device: PreviewDevice) => void;
+  readonly createComponent?: CreateComponentAction;
 }
 
 export default function PreviewPane(props: PreviewPaneProps) {
@@ -62,6 +63,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
         {...(props.onCrumb === undefined ? {} : { onCrumb: props.onCrumb })}
         activeDevice={sizing.activeDevice}
         onDevice={props.onDevice}
+        {...(props.createComponent === undefined ? {} : { createComponent: props.createComponent })}
         {...(props.device === 'canvas'
           ? {}
           : {

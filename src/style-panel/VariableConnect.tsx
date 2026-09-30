@@ -2,6 +2,8 @@ import { cloneElement, isValidElement, useEffect, useLayoutEffect, useRef, useSt
 import type { CSSProperties, MutableRefObject, ReactElement, ReactNode, Ref } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import { streamProjectVariables, type ProjectVariable } from './lib/webflow'
+import { getHost } from './lib/host'
+import { variableEdit } from '../panels/variableEdits'
 import { panelBox, panelSpan } from './lib/panel-box'
 import { caretOffset, highlightCss, setCaretOffset, stepNumberAt, stepSize } from './lib/css-code'
 import CustomValue, { doesNotFit } from '../ui/CustomValueEditor.jsx'
@@ -132,6 +134,34 @@ function varTypeAllowed(prop: string | undefined, type: string): boolean {
   return type !== 'Color' && type !== 'FontFamily'
 }
 
+// The empty picker. With a search typed it is just "nothing matches"; with none, the
+// project has no variables at all, and the way out is the one in the Variables panel:
+// a stylesheet made for them. The list re-reads by itself when that file lands.
+function NoVariables({ searching }: { searching: boolean }) {
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
+  if (searching) {return <p className="embed-editor_varpicker-empty">No variables match.</p>}
+  const create = () => {
+    const projectPath = getHost().projectPath
+    if (!projectPath) {return}
+    setBusy(true)
+    setFailure(null)
+    void variableEdit('createVariablesFile', projectPath).then((result) => {
+      setBusy(false)
+      if (!result.ok) {setFailure(result.error || 'Couldn’t create the variables file.')}
+    })
+  }
+  return (
+    <div className="embed-editor_varpicker-empty">
+      <p>This project has no variables yet.</p>
+      <button type="button" className="embed-editor_varpicker-create" disabled={busy} onClick={create}>
+        Create variables file
+      </button>
+      {failure ? <p>{failure}</p> : null}
+    </div>
+  )
+}
+
 // Nest variables Collection → Group → variable (a group may be empty for a variable
 // that isn't in a folder). Input is pre-sorted, so map insertion order is stable.
 type VarCollection = { collection: string; groups: Array<{ group: string; items: ProjectVariable[] }> }
@@ -157,17 +187,46 @@ function byCollection(vars: ProjectVariable[]): VarCollection[] {
 let sharedVars: ProjectVariable[] = []
 let sharedDone = false
 let sharedLoading = false
+// The stylesheets changed since the list was read (a variable added, a file created):
+// what is held is out of date and is read again the next time it is asked for. Without
+// this the list was read once per session, so a project that had no variables when it
+// was first read said "No variables found" for good, however many were added after.
+let sharedStale = false
+let watchingCss = false
 const sharedListeners = new Set<() => void>()
+function watchCssChanges() {
+  if (watchingCss || typeof window.avb?.onCssChanged !== 'function') {return}
+  watchingCss = true
+  window.avb.onCssChanged(() => {
+    sharedStale = true
+    // Someone is looking at the list: read it again now rather than on their next click.
+    if (sharedListeners.size > 0) {ensureSharedVars()}
+  })
+}
 function ensureSharedVars() {
-  if (sharedDone || sharedLoading) {return}
+  watchCssChanges()
+  if (sharedLoading || (sharedDone && !sharedStale)) {return}
   sharedLoading = true
+  sharedStale = false
   const seen = new Set<string>()
+  const fresh: ProjectVariable[] = []
   void streamProjectVariables((v) => {
     if (seen.has(v.binding)) {return}
     seen.add(v.binding)
-    sharedVars = [...sharedVars, v]
+    fresh.push(v)
+    // Show progress, but never blank a list that was fine a moment ago.
+    if (!sharedDone) {
+      sharedVars = [...fresh]
+      sharedListeners.forEach((fn) => fn())
+    }
+  }, () => false).then(() => {
+    sharedVars = fresh
+    sharedDone = true
+    sharedLoading = false
     sharedListeners.forEach((fn) => fn())
-  }, () => false).then(() => { sharedDone = true; sharedLoading = false; sharedListeners.forEach((fn) => fn()) })
+    // Changed again while reading: go round once more.
+    if (sharedStale) {ensureSharedVars()}
+  })
 }
 export function useSharedVars(active: boolean): { vars: ProjectVariable[]; loading: boolean } {
   const [, force] = useState(0)
@@ -365,7 +424,7 @@ export function VariablePicker({ anchor, vars, loading, prop, selectedBinding, o
         {loading && !vars.length ? (
           <p className="embed-editor_varpicker-empty">Loading variables…</p>
         ) : !filtered.length ? (
-          <p className="embed-editor_varpicker-empty">No variables found.</p>
+          <NoVariables searching={!!query} />
         ) : (
           byCollection(filtered).map(({ collection, groups }) => {
             // A search always expands (so matches aren't hidden behind a collapsed head).

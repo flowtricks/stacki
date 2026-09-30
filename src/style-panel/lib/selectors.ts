@@ -8,6 +8,7 @@
 // It's async because element snapshots are read (and cached) on demand.
 
 import selectorParser from 'postcss-selector-parser'
+import { isViewStatePseudoClass } from './states'
 import type { ElementSnapshot, SelectorInfo, Specificity } from './types'
 
 type Combinator = ' ' | '>' | '+' | '~'
@@ -173,7 +174,6 @@ export type CanonicalCompound = {
 // combo). Any other pseudo-class — structural (:nth-child, :first-child, :nth-of-type,
 // …) or an unsupported state — must keep the compound COMPLEX so its full text is
 // preserved (embed-editable) instead of collapsing to the bare class.
-const STATE_PSEUDO_CLASSES = new Set([':hover', ':focus', ':active'])
 
 export function canonicalCompound(selectorText: string): CanonicalCompound {
   const sel = compileSelectorList(selectorText)[0]
@@ -187,7 +187,7 @@ export function canonicalCompound(selectorText: string): CanonicalCompound {
     subject.negations.length === 0 && subject.requireAny.length === 0 && subject.hasGroups.length === 0
   // Only bare state pseudos keep a compound "simple"; a structural pseudo (:nth-child …)
   // isn't a Webflow class state, so it must read as complex to keep its full text.
-  const stateOnly = pseudoClasses.every((p) => STATE_PSEUDO_CLASSES.has(p))
+  const stateOnly = pseudoClasses.every((p) => isViewStatePseudoClass(p))
   const simple = oneCompound && !pseudoElement && !subject.universal && subject.id == null && noFunctionalPseudo && stateOnly
   // Like `simple`, but a pseudo-element is allowed (it's the whole point of splitting
   // `.a::before`). A bare universal (`::before`) is never splittable — it's hidden.

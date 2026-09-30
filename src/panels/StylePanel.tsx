@@ -20,6 +20,7 @@ interface StylePanelProps {
   readonly onSelectNode?: HostState['selectNode'] | undefined;
   readonly onRecordUndo?: HostState['recordUndo'] | undefined;
   readonly onAddClass?: HostState['addClass'] | undefined;
+  readonly onEnsureStyleNode?: HostState['ensureStyleNode'] | undefined;
   readonly onSpacingHover?: HostState['onSpacingHover'] | undefined;
   readonly renderedClasses?: readonly string[] | undefined;
   readonly projectClasses?: readonly string[] | undefined;
@@ -109,6 +110,7 @@ function hostState(
     selectNode: props.onSelectNode ?? null,
     recordUndo: props.onRecordUndo ?? null,
     addClass: props.onAddClass ?? null,
+    ensureStyleNode: props.onEnsureStyleNode ?? null,
     onSpacingHover: props.onSpacingHover ?? null,
     renderedClasses: [...(props.renderedClasses ?? [])],
     projectClasses: [...(props.projectClasses ?? [])],

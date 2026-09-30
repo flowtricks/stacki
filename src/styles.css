@@ -5793,3 +5793,14 @@ textarea::selection {
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
 }
 .term-scroll-btn:hover:not(:disabled) { background: var(--bg-active); color: var(--text); }
+
+/* The cube at the toolbar's right edge: make a component of the selection. */
+.toolbar-create-component {
+  margin-left: 8px;
+  padding: 5px 7px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-faint);
+}
+.toolbar-create-component:hover:not(:disabled) { color: var(--text); }
+.toolbar-create-component:disabled { opacity: 0.4; cursor: default; }

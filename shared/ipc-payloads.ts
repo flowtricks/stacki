@@ -89,6 +89,7 @@ export const IPC_PAYLOADS = {
   'cms:write': object({ ...relative, data }),
   'component:create': object({
     ...named,
+    folder: optional(text),
     pagePath: pathText,
     nodes: list(data),
     imports: optional(list(object({ name: optional(text), path: optional(text) }))),
@@ -114,6 +115,7 @@ export const IPC_PAYLOADS = {
     before: cssTarget,
     at: optional(count),
   }),
+  'css:createVariablesFile': pathText,
   'css:addVariables': object({
     ...project,
     adds: optional(

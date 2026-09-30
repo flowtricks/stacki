@@ -44,7 +44,11 @@ interface CreateComponentInput {
   readonly projectPath: string;
   readonly pagePath: string;
   readonly name: string;
+  /** Folder under src/components ('' = the root), created when missing. */
+  readonly folder?: string;
   readonly nodes: unknown;
+  /** `<style>`/`<script>` blocks that travel with the markup. */
+  readonly assets?: readonly unknown[];
   readonly imports: readonly { readonly name?: string; readonly path?: string }[];
   readonly props: readonly string[];
 }
@@ -322,7 +326,8 @@ export function createProjectComponent(
     projectPath: input.projectPath,
     pagePath: input.pagePath,
     name: input.name,
-    nodes: [data(input.nodes)],
+    ...(input.folder ? { folder: input.folder } : {}),
+    nodes: [data(input.nodes), ...(input.assets ?? []).map(data)],
     imports: input.imports,
     props: input.props.map(data),
   });

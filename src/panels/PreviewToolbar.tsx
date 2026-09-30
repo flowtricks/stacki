@@ -1,6 +1,13 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { IconProps } from '../ui/Icons';
-import { CanvasIcon, ChevronRightIcon, DesktopIcon, PhoneIcon, TabletIcon } from '../ui/Icons';
+import {
+  CanvasIcon,
+  ChevronRightIcon,
+  ComponentPlusIcon,
+  DesktopIcon,
+  PhoneIcon,
+  TabletIcon,
+} from '../ui/Icons';
 import { PreviewSizeControls } from './PreviewSizeControls';
 import type { PreviewSizeControlsProps } from './PreviewSizeControls';
 
@@ -50,18 +57,28 @@ export function deviceWidth(device: PreviewDevice): number | null | undefined {
   return DEVICES.find((entry) => entry.key === device)?.width;
 }
 
+/** The cube button: make a component out of the selected element. */
+export interface CreateComponentAction {
+  readonly enabled: boolean;
+  /** What it does when it can, or why it can't. */
+  readonly title: string;
+  readonly onClick: () => void;
+}
+
 export function PreviewToolbar({
   crumbs,
   onCrumb,
   activeDevice,
   onDevice,
   sizing,
+  createComponent,
 }: {
   readonly crumbs: readonly PreviewCrumb[];
   readonly onCrumb?: (id: string | null) => void;
   readonly activeDevice: PreviewDevice;
   readonly onDevice: (device: PreviewDevice) => void;
   readonly sizing?: PreviewSizeControlsProps;
+  readonly createComponent?: CreateComponentAction;
 }) {
   const shownCrumbs = useFoldedCrumbs(crumbs);
   const buttonRefs = useRef<Partial<Record<FixedDevice, HTMLButtonElement | null>>>({});
@@ -97,6 +114,17 @@ export function PreviewToolbar({
         ))}
       </div>
       {sizing && <PreviewSizeControls {...sizing} />}
+      {createComponent && (
+        <button
+          className="toolbar-create-component"
+          title={createComponent.title}
+          aria-label="Create component"
+          disabled={!createComponent.enabled}
+          onClick={createComponent.onClick}
+        >
+          <ComponentPlusIcon size={15} />
+        </button>
+      )}
     </div>
   );
 }

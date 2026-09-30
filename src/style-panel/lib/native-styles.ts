@@ -42,11 +42,8 @@ function isBreakpointId(value: string): value is BreakpointId {
 // sees them, and one that does not is not asked to scroll past them.
 
 // The panel's interaction state → Webflow pseudo (null = base / noPseudo).
-const PSEUDO_FOR_STATE: Record<StateKey, string | null> = {
-  '': null,
-  ':hover': 'hover',
-  ':focus': 'focus',
-  ':active': 'active',
+function pseudoForState(state: StateKey): string | null {
+  return state === '' ? null : state.slice(1)
 }
 
 export const breakpointLabel = (id: BreakpointId): string =>
@@ -98,7 +95,7 @@ export function breakpointForAtContext(atContext: string): BreakpointId | null {
 export function readOptionsFor(breakpoint: BreakpointId, state: StateKey): NativeStyleOptions | undefined {
   const options: NativeStyleOptions = {}
   if (breakpoint !== 'main') {options.breakpoint = breakpoint}
-  const pseudo = PSEUDO_FOR_STATE[state]
+  const pseudo = pseudoForState(state)
   if (pseudo) {options.pseudo = pseudo}
   return Object.keys(options).length ? options : undefined
 }
@@ -112,7 +109,7 @@ export function readOptionsFor(breakpoint: BreakpointId, state: StateKey): Nativ
 export function optionsFor(context: StyleContext, state: StateKey): NativeStyleOptions | undefined {
   const options: NativeStyleOptions = {}
   if (context.breakpoint && context.breakpoint !== 'main') {options.breakpoint = context.breakpoint}
-  const pseudo = PSEUDO_FOR_STATE[state]
+  const pseudo = pseudoForState(state)
   if (pseudo) {options.pseudo = pseudo}
   return Object.keys(options).length ? options : undefined
 }

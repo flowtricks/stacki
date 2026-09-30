@@ -25,6 +25,7 @@ const noPayload = new Set([
   'dev:stop',
 ]);
 const pathPayload = new Set([
+  'css:createVariablesFile',
   'project:close',
   'recents:add',
   'recents:remove',

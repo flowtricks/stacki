@@ -47,7 +47,7 @@ test('the complete channel inventory matches real main and terminal registration
   const terminalChannels = [...terminal.matchAll(/ipcMain\.handle\(['"]([^'"]+)['"]/g)].map(
     (match) => match[1],
   );
-  assert.equal(harness.handlers.size, 114);
+  assert.equal(harness.handlers.size, 115);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual(
     [...Object.keys(IPC_PAYLOADS)].sort(),

@@ -280,7 +280,10 @@ function styleSources(): EmbedSource[] {
     const isGlobal = !!n.props?.['is:global']
     out.push({
       key: `node:${n.id}`,
-      label: isGlobal ? '<style is:global>' : '<style>',
+      // In a component file the block is that component's stylesheet: name it
+      // for the component, the way the person thinks of it ("HeroSection"), not
+      // for the tag it happens to be written with.
+      label: openComponentName ?? (isGlobal ? '<style is:global>' : '<style>'),
       classNames: [],
       fromComponent: host.openFileKind === 'component',
       componentName: openComponentName,

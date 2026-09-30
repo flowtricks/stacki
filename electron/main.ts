@@ -109,6 +109,7 @@ import * as starterModule from './starter';
 const { createStarter } = starterModule;
 import * as windowBoundsModule from './windowBounds';
 const { openingBounds } = windowBoundsModule;
+import { createVariablesFile } from './variablesFile';
 import * as componentFileModule from './componentFile';
 const { componentFile } = componentFileModule;
 import * as componentUsageModule from './componentUsage';
@@ -2734,6 +2735,14 @@ ipcMain.handle('css:addVariables', async (_e, { projectPath, adds }) => {
     send('css:changed', {});
   }
   return last;
+});
+
+// The first stylesheet of variables, for a project that has none — written and
+// imported, so what the panel then edits is what the page ships.
+ipcMain.handle('css:createVariablesFile', async (_e, projectPath) => {
+  const created = createVariablesFile(String(projectPath), (file) => markSelfWrite(file));
+  send('css:changed', {});
+  return { ok: true, ...created };
 });
 
 // A row dragged to a new place: the declaration moves inside its rule, which is

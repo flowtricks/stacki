@@ -25,6 +25,10 @@ const edits = {
     const payload = parseIpcPayload('css:moveVariables', input);
     return () => window.avb.moveCssVariables(payload);
   },
+  createVariablesFile(input: unknown) {
+    const payload = parseIpcPayload('css:createVariablesFile', input);
+    return () => window.avb.createVariablesFile(payload);
+  },
   addCssVariables(input: unknown) {
     const payload = parseIpcPayload('css:addVariables', input);
     return () => window.avb.addCssVariables(payload);

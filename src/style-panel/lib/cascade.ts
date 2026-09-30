@@ -9,6 +9,7 @@
 // declarations are flagged `overriddenBy` so you still see what actually applies.
 
 import { canonicalCompound, compareSpecificity, matchSelectorList, type MatchTarget } from './selectors'
+import { isViewStatePseudoClass } from './states'
 import type { ParsedRule, SelectorInfo, Specificity } from './types'
 
 export type RuleKind = 'base' | 'pseudo-class' | 'pseudo-element' | 'at-rule'
@@ -18,9 +19,8 @@ export type RuleKind = 'base' | 'pseudo-class' | 'pseudo-element' | 'at-rule'
 // a pseudo-element. Structural pseudos (`:first-child`, `:nth-child`, `:not`) and
 // pseudos on an ANCESTOR (`.u-section:first-child .u-heading`) keep it base — the
 // subject is still styled at rest — so they must NOT push it into the pseudo bucket.
-const VIEW_STATES = new Set([':hover', ':focus', ':active'])
 function subjectHasState(text: string): boolean {
-  return canonicalCompound(text).pseudoClasses.some((pseudo) => VIEW_STATES.has(pseudo))
+  return canonicalCompound(text).pseudoClasses.some((pseudo) => isViewStatePseudoClass(pseudo))
 }
 
 export type DeclStatus = {
@@ -41,11 +41,49 @@ export type MatchedRule = {
   declStatus: Record<string, DeclStatus>
 }
 
+/**
+ * The properties an element takes from its parent when no rule sets them on the
+ * element itself (CSS "inherited properties"). A `<p>` in a `.section` that sets
+ * `color` is that colour until something targets the `<p>` — and anything that
+ * does, however weak (`p`), beats what came down from the parent.
+ *
+ * Custom properties inherit too, but they are read through `var()`, where the
+ * panel already shows where the value is defined, so they are left out here.
+ */
+export const INHERITED_PROPERTIES: ReadonlySet<string> = new Set([
+  'accent-color', 'border-collapse', 'border-spacing', 'caption-side', 'caret-color',
+  'color', 'cursor', 'direction', 'empty-cells', 'fill', 'font', 'font-family',
+  'font-feature-settings', 'font-kerning', 'font-optical-sizing', 'font-size',
+  'font-stretch', 'font-style', 'font-variant', 'font-variation-settings', 'font-weight',
+  'hyphens', 'letter-spacing', 'line-height', 'list-style', 'list-style-image',
+  'list-style-position', 'list-style-type', 'orphans', 'overflow-wrap', 'pointer-events',
+  'quotes', 'stroke', 'tab-size', 'text-align', 'text-align-last', 'text-indent',
+  'text-justify', 'text-shadow', 'text-transform', 'text-underline-offset',
+  'text-underline-position', 'text-wrap', 'visibility', 'white-space', 'widows',
+  'word-break', 'word-spacing', 'writing-mode',
+])
+
+/** The rules that reach one ancestor, `depth` generations above the element. */
+export type InheritedLevel = {
+  readonly depth: number
+  readonly rules: readonly MatchedRule[]
+}
+
 export type RuleModel = {
   base: MatchedRule[]
   conditional: MatchedRule[]
   matchedRuleCount: number
+  /**
+   * What the element's ancestors are styled with, nearest first, restricted to
+   * rules that set an inherited property. Absent when no ancestor is styled that
+   * way (or none is known).
+   */
+  inherited?: readonly InheritedLevel[]
 }
+
+// Deeper than any real page; the walk stops at the root long before this. The
+// cap only exists so a corrupted parent chain (a cycle) cannot loop forever.
+const MAX_INHERITANCE_DEPTH = 64
 
 type Hit = {
   rule: ParsedRule
@@ -84,6 +122,28 @@ function strongestOf(selectors: SelectorInfo[]): { selector: SelectorInfo; speci
 }
 
 export async function computeRuleModel(rules: ParsedRule[], target: MatchTarget): Promise<RuleModel> {
+  const model = await computeRuleModelAt(rules, target)
+  const inherited = await computeInheritedLevels(rules, target)
+  return inherited.length ? { ...model, inherited } : model
+}
+
+// The same matching, run once per ancestor against only the rules that could hand
+// something down. The element's own rules are matched first and separately, so
+// this never delays the answer the panel needs to paint.
+async function computeInheritedLevels(rules: ParsedRule[], target: MatchTarget): Promise<InheritedLevel[]> {
+  const carriers = rules.filter((rule) => rule.declarations.some((decl) => INHERITED_PROPERTIES.has(decl.prop)))
+  if (!carriers.length) {return []}
+  const levels: InheritedLevel[] = []
+  let key = target.view.parentKey(target.rootKey)
+  for (let depth = 1; key != null && depth <= MAX_INHERITANCE_DEPTH; depth += 1) {
+    const model = await computeRuleModelAt(carriers, { rootKey: key, view: target.view })
+    if (model.matchedRuleCount > 0) {levels.push({ depth, rules: [...model.base, ...model.conditional] })}
+    key = target.view.parentKey(key)
+  }
+  return levels
+}
+
+async function computeRuleModelAt(rules: ParsedRule[], target: MatchTarget): Promise<RuleModel> {
   const hits: Hit[] = []
 
   for (const rule of rules) {

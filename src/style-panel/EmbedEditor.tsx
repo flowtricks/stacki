@@ -35,6 +35,8 @@ import { cssTokens } from './lib/css-code'
 import { buildCssRuleView, type CssRuleRange, type CssRuleView } from './lib/css-rule-view'
 import { groupProps } from './lib/sections'
 import { defaultSelectorTokens, selectorToClassTokens, snapshotTokens, tokensToSelector } from './lib/element-tokens'
+import StateSelect from './StateSelect'
+import { HTML_TAG_NAMES, isTagSelector, selectorFromTyped } from './lib/class-input'
 import { resolveStyle, indexContexts, contextKeyOf, listMatchedSelectors, selectorKey, selectorsMatch, stateForSelector, STATES, type ContextInfo, type ContextKey, type MatchedSelector, type ResolvedProp, type ResolvedStyle, type SourceKey, type StateKey, type StyleContext } from './lib/resolved'
 import { breakpointTier, buildStyleContexts, mediaParamsForBreakpoint, nativeContribsFor, nativeHasValues, nativeSelectorChips, optionsFor, selectedNativeIndexFor, type NativeStyleOptions } from './lib/native-styles'
 import type { AtRule, Declaration } from 'postcss'
@@ -68,7 +70,7 @@ import {
   selectorDependsOnAncestor,
   type MatchTarget,
 } from './lib/selectors'
-import { findNode, getHost, onHostChange, propText } from './lib/host'
+import { findNode, getHost, onHostChange, propText, walkNodes } from './lib/host'
 import {
   applyNativePropertyAt,
   applyNativeToNewBaseClass,
@@ -826,7 +828,9 @@ function ResolvedRow({ prop, resolved, busy, setProp, clearProp, liveSetProp, on
           type="button"
           className="embed-editor_prop-label embed-editor_prop-orange"
           disabled={busy}
-          title={`Set by ${resolved.winner.selectorText} — click to see all selectors`}
+          title={resolved.winner.inheritedDepth === undefined
+            ? `Set by ${resolved.winner.selectorText} — click to see all selectors`
+            : `Inherited from ${resolved.winner.selectorText} — click to see all selectors`}
           onClick={(event) => onProvenance(prop, event.currentTarget.getBoundingClientRect())}
         >
           {prop}
@@ -1407,6 +1411,13 @@ export function SelectorPicker({
     if (!q) {return own}
     const taken = new Set(own.map((s) => s.selector))
     const extra: SelectorSuggestion[] = []
+    // Every HTML tag that starts with what was typed: `h2` is "all h2 elements",
+    // whatever element is selected — the way Webflow offers a tag as a selector.
+    for (const tag of HTML_TAG_NAMES) {
+      if (!tag.startsWith(q) || taken.has(tag) || chipKeys.has(selectorKey(tag))) {continue}
+      taken.add(tag)
+      extra.push({ selector: tag, kind: 'tag' })
+    }
     for (const cls of projectClasses) {
       const selector = `.${cls}`
       if (taken.has(selector) || chipKeys.has(selectorKey(selector))) {continue}
@@ -1509,6 +1520,7 @@ export function SelectorPicker({
                 active && 'is-active',
                 sel.pending && 'is-pending',
                 sel.fromComponent && 'is-component',
+                isTagSelector(sel.text) && 'is-tag',
                 entry.global && 'is-global',
                 entry.inherited && 'is-inherited',
                 dimmed && 'is-dimmed',
@@ -1544,7 +1556,7 @@ export function SelectorPicker({
               ref={inputRef}
               className="u-input embed-editor_selector-add"
               value={draft}
-              placeholder="Add a selector (e.g. .card:hover)"
+              placeholder="Add a class (e.g. u-section) or selector"
               spellCheck={false}
               disabled={busy}
               role="combobox"
@@ -1577,7 +1589,7 @@ export function SelectorPicker({
                     type="button"
                     role="option"
                     aria-selected={i === highlight}
-                    className={`embed-editor_suggest-item ${i === highlight ? 'is-active' : ''}`}
+                    className={`embed-editor_suggest-item ${s.kind === 'tag' ? 'is-tag' : ''} ${i === highlight ? 'is-active' : ''}`}
                     // Keep the input focused so its blur doesn't close the list before the click.
                     onMouseDown={(event) => event.preventDefault()}
                     onMouseMove={() => setHighlight(i)}
@@ -2319,6 +2331,14 @@ function StyleCard({
         onAdd={onAddSelector}
         onVisibleSelectorsChange={rememberVisibleSelectors}
       />
+      {/* Webflow's state dropdown: the same class in another state (Hover, Pressed,
+          ::before, …). It edits the selector the chips above show. */}
+      <StateSelect
+        selectors={selectors}
+        activeSelector={activeSelector}
+        busy={busy}
+        onSelect={onSelectActive}
+      />
       {/* Where edits go, as a compact text link: the Webflow class style or a
           specific embed (page embeds listed in cascade order). Sits under the
           selector input, mirroring the reference layout. */}
@@ -2530,13 +2550,20 @@ type Content = {
   partial?: boolean
 }
 
+// How long an edit waits for a freshly added <style> block to reach the panel.
+const STYLE_BLOCK_WAIT_MS = 5000
+
 // Re-read every embed no more than this often when just switching selection.
 const BG_REFRESH_THROTTLE_MS = 4000
 
 /** Which stylesheets the host is offering, as a comparable string. */
 function sheetSignature(): string {
   const host = getHost()
-  return [...host.files, ...host.astroFiles].map((f) => f.path).join('|')
+  const styleNodes: string[] = []
+  walkNodes(host.nodes, (node) => {
+    if (node.kind === 'raw' && node.name === 'style') {styleNodes.push(node.id)}
+  })
+  return [...host.files, ...host.astroFiles].map((f) => f.path).concat(styleNodes).join('|')
 }
 // How often to poll the Designer for out-of-app edits (classes / attributes /
 // native styles). The API has no change events, so we re-read on this cadence and
@@ -3862,7 +3889,9 @@ export default function EmbedEditor() {
   // `.hero { @container (width < 50em) }`: resolve to the deepest selector + its query
   // context and select it there. A plain selector (no braces) is used as-is.
   const addTypedSelector = useCallback((input: string) => {
-    const trimmed = input.trim()
+    // A bare word is a class, the way Webflow's field reads it (`u-section` →
+    // `.u-section`); tags and real selectors stay as typed.
+    const trimmed = selectorFromTyped(input)
     if (!trimmed) {return}
     if (trimmed.includes('{')) {
       const parsed = parseNestedInput(trimmed)
@@ -4500,6 +4529,7 @@ export default function EmbedEditor() {
   // Writes target the picked selector's rule in the current context/state, and
   // create that rule on the first edit when it doesn't exist yet.
   const selectedRule = resolved?.selectedRule ?? null
+  const awaitingStyleRef = useRef<{ prop: string; value: string; important: boolean; selectorOverride: string | undefined } | null>(null)
   const createSelectedRule = (prop: string, value: string, important: boolean, selectorOverride?: string) => {
     // A Webflow-breakpoint context with no equivalent embed query yet writes into a
     // synthesized @media block; otherwise the embed's base or existing query block.
@@ -4522,7 +4552,25 @@ export default function EmbedEditor() {
     const region = anchor && doc && anchor.embedKey === doc.source.key
       ? doc.regions[anchor.regionIndex]
       : doc?.regions[0]
-    if (!doc || !region) { setStatus('No embed here to write to — add an HTML embed first.'); return }
+    if (!doc || !region) {
+      // Nowhere to write yet: ask the page for a <style> block and hold this edit
+      // until it appears in the model (see the retry effect below).
+      const ensure = getHost().ensureStyleNode
+      if (ensure && !awaitingStyleRef.current && ensure()) {
+        awaitingStyleRef.current = { prop, value, important, selectorOverride }
+        setStatus('Adding a <style> block to this page…')
+        // A page that cannot take one (nothing editable) would wait forever.
+        window.setTimeout(() => {
+          if (awaitingStyleRef.current) {
+            awaitingStyleRef.current = null
+            setStatus('Couldn’t add a <style> block to this page.')
+          }
+        }, STYLE_BLOCK_WAIT_MS)
+        return
+      }
+      setStatus('No stylesheet here to write to — open a page or add a <style> block first.')
+      return
+    }
     const fullSelector = selectorOverride ?? activeSelector
     void (async () => {
       setBusyBoth(true)
@@ -4565,6 +4613,14 @@ export default function EmbedEditor() {
       }
     })()
   }
+  // The edit that asked for a <style> block runs again once a stylesheet exists to
+  // take it — the same edit, so nothing the user typed is lost.
+  useEffect(() => {
+    const held = awaitingStyleRef.current
+    if (!held || docByKey.size === 0) {return}
+    awaitingStyleRef.current = null
+    createSelectedRule(held.prop, held.value, held.important, held.selectorOverride)
+  })
   // Add a just-typed query to the embed IMMEDIATELY as an empty block, so it persists and
   // reads back as a real context without waiting for the first property. `ctxKey` (wrap)
   // scaffolds a top-level `@query {}`; `path` (nest) scaffolds `selector { @query {} }`.

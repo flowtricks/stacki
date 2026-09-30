@@ -180,6 +180,11 @@ export interface IpcResults {
     readonly stale?: boolean;
     readonly title?: string;
   };
+  readonly 'css:createVariablesFile': {
+    readonly ok: true;
+    readonly rel: string;
+    readonly imported: ReadonlyArray<string>;
+  };
   readonly 'css:addVariables': {
     readonly ok: boolean;
     readonly error?: string;

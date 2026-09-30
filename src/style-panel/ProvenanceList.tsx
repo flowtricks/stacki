@@ -43,7 +43,9 @@ export default function ProvenanceList({ contributors, prop, onSelect }: {
       {contributors.map((c, index) => {
         const cls = `embed-editor_provenance-item ${index === activeIdx ? 'is-active' : ''}`
         const embedName = c.embedKey && nav ? nav.labelFor(c.embedKey) : null
-        const origin = c.origin === 'native'
+        const origin = c.inheritedDepth !== undefined
+          ? <span className="embed-editor_provenance-origin" title="Handed down by an ancestor">Inherited</span>
+          : c.origin === 'native'
           ? <span className="embed-editor_provenance-origin">Webflow</span>
           : c.embedKey && nav && embedName
             ? (

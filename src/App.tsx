@@ -60,6 +60,7 @@ import { hasClass, namesIn, withClass } from './classAttr.js';
 import { toComponentName } from './componentName.js';
 import { resolveInstanceProps } from './instanceProps.js';
 import { propsForExtraction } from './extractProps.js';
+import { planAssets } from './extractAssets';
 import TerminalDock from './panels/TerminalDock';
 import { cleanError, stripAnsi } from './cleanError.js';
 import { elementLabel } from './classNames.js';
@@ -1780,8 +1781,8 @@ export default function App() {
   // edit to two files, and the component file is written first: a page that
   // imports a file that isn't there yet is a broken page, however briefly.
   const createComponentFromSelection = useCallback(
-    async (name: string, options: { readonly withProps?: boolean } = {}) => {
-      const { withProps = true } = options;
+    async (name: string, options: { readonly withProps?: boolean; readonly folder?: string } = {}) => {
+      const { withProps = true, folder = '' } = options;
       const page = pageStateRef.current.currentPage;
       const state = pageStateRef.current.pageState;
       const model = state?.editable ? state.model : null;
@@ -1789,13 +1790,18 @@ export default function App() {
       const projectPath = projectRef.current?.path;
       if (!page?.path || !model || !node || !projectPath) {return;}
       const props = withProps ? propsNeededFor(model, node) : [];
+      // The page's own styles and scripts about this piece go with it, so the page
+      // is left holding the chain of components and nothing else.
+      const assets = planAssets(model.nodes, node.id, newId);
       let created;
       try {
         created = await createProjectComponent({
           projectPath,
           pagePath: page.path,
           name,
+          folder,
           nodes: node,
+          assets: assets.moved,
           imports: model.imports || [],
           props,
         });
@@ -1821,6 +1827,13 @@ export default function App() {
           props: Object.fromEntries(props.map((p) => [p, { type: 'expr', value: p }])),
           children: null,
         };
+        for (const edit of assets.edits) {
+          const holder = findParentList(m, edit.id);
+          const block = holder ? holder.list[holder.index] : null;
+          if (!holder || !block) {continue;}
+          if (edit.inner === null) {holder.list.splice(holder.index, 1);}
+          else {block.inner = edit.inner;}
+        }
         return m;
       }, true);
       setSelectedId(id);
@@ -1829,12 +1842,18 @@ export default function App() {
       // — an expression naming something that isn't a value the page holds, or
       // props turned off. The person who just moved it knows what it needs.
       const stranded = usesPageScope(node) && !props.length;
+      const moved = assets.moved.length
+        ? ` Moved ${assets.moved.length} style/script block${assets.moved.length === 1 ? '' : 's'} with it.`
+        : '';
+      const held = assets.held
+        ? ` ${assets.held} selector${assets.held === 1 ? ' was' : 's were'} kept on the page because their class is used elsewhere too.`
+        : '';
       showToast(
         stranded
-          ? `Created ${created.rel} — it reads page data, so it will need props.`
+          ? `Created ${created.rel} — it reads page data, so it will need props.${moved}${held}`
           : props.length
-            ? `Created ${created.rel} with ${props.length} prop${props.length === 1 ? '' : 's'}.`
-            : `Created ${created.rel}`
+            ? `Created ${created.rel} with ${props.length} prop${props.length === 1 ? '' : 's'}.${moved}${held}`
+            : `Created ${created.rel}.${moved}${held}`
       );
     },
     [mutateModel, propsNeededFor, rescan, showToast]
@@ -2896,6 +2915,31 @@ export default function App() {
   // plain `class`, a `class:list`, a template literal (see classAttr.js). An
   // element whose class is some other expression is code we would have to
   // understand to extend, so that one is said out loud rather than dropped.
+  // Rules for a class need a stylesheet to live in. A page with no `<style>` block
+  // (and a project with no stylesheet the panel can write to) has nowhere to put
+  // the first one, so the first edit asks for one: an unhashed `<style is:global>`
+  // at the end of the page — unhashed because the panel edits plain selectors, and
+  // Astro's scoped styles would rename them out from under it. The id is handed
+  // back at once so the panel can wait for that block to show up in the model.
+  const ensureStyleNode = useCallback((): string | null => {
+    const state = pageStateRef.current.pageState;
+    if (!state?.editable) {return null;}
+    const existing = findStyleNode(state.model.nodes);
+    if (existing) {return existing.id;}
+    const id = newId();
+    mutateModel((model) => {
+      model.nodes.push({
+        id,
+        kind: 'raw',
+        name: 'style',
+        props: { 'is:global': { type: 'bare' } },
+        inner: '\n',
+      });
+      return model;
+    }, true);
+    return id;
+  }, [mutateModel]);
+
   const addClassToNode = useCallback(
     (nodeId: string, className: string) => {
       const clean = String(className || '').trim();
@@ -4924,6 +4968,17 @@ export default function App() {
             focusWhole={focusWhole}
             device={device}
             onDevice={setDevice}
+            createComponent={{
+              enabled: createFrom.kind === 'ready',
+              title:
+                createFrom.kind === 'ready'
+                  ? `Create component from ${createFrom.label} (⇧⌘A)`
+                  : createFrom.reason,
+              onClick: () => {
+                setLeftTab('components');
+                setCreateRequest((n) => n + 1);
+              },
+            }}
             onSelectPath={(p, info) => {
               // What the click MEANT — see canvasClick.js. The canvas answers
               // with a path or with null, and null has two causes that want
@@ -5105,6 +5160,7 @@ export default function App() {
                 }}
                 onSelectNode={setSelectedId}
                 onRecordUndo={pushCommand}
+                onEnsureStyleNode={ensureStyleNode}
                 onAddClass={(name) => {
                   if (selectedId) {
                     addClassToNode(selectedId, name);
@@ -5257,6 +5313,17 @@ export default function App() {
       <ConfirmHost />
     </div>
   );
+}
+
+function findStyleNode(nodes: readonly EditorNode[]): EditorNode | null {
+  for (const node of nodes) {
+    if (node.kind === 'raw' && node.name === 'style') {return node;}
+    if (Array.isArray(node.children)) {
+      const inner = findStyleNode(node.children);
+      if (inner) {return inner;}
+    }
+  }
+  return null;
 }
 
 function insertIntoModel(model: EditorModel, node: EditorNode, target: InsertTarget | null): void {

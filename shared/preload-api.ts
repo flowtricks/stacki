@@ -43,6 +43,7 @@ interface InvokeChannels {
   readonly setCssVariable: 'css:setVariable';
   readonly moveCssVariables: 'css:moveVariables';
   readonly addCssVariables: 'css:addVariables';
+  readonly createVariablesFile: 'css:createVariablesFile';
   readonly renameCssVariables: 'css:renameVariables';
   readonly setCssSectionTitle: 'css:setSectionTitle';
   readonly removeCssSection: 'css:removeSection';

@@ -75,6 +75,10 @@ export type HostState = {
    *  box should land it on the element, the way a class field would — a rule
    *  for a class the element doesn't carry would never apply. */
   addClass: ((className: string) => void) | null
+  /** Give the open page a `<style is:global>` block to write rules into, when it
+   *  has none, and return the id of the block (new or existing). Null when no
+   *  editable page is open. */
+  ensureStyleNode: (() => string | null) | null
   /** What the spacing box is pointing at, for the canvas to draw over the
    *  selected element: hovering `padding-top` lights the strip of the page that
    *  padding-top holds open. Null when the pointer leaves it. */
@@ -116,6 +120,7 @@ const state: HostState = {
   selectNode: null,
   recordUndo: null,
   addClass: null,
+  ensureStyleNode: null,
   onSpacingHover: null,
 }
 

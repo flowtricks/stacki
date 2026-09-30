@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ComponentUsageFile } from '../paletteModel';
-import { componentNameError, toComponentName } from '../componentName';
+import { componentNameError, folderError, toComponentName, toFolderPath } from '../componentName';
 import { prettyComponentName, usageFileLabel } from '../paletteModel';
 import { CloseIcon, ElementComponentIcon, FileIcon, LayoutIcon } from '../ui/Icons';
 
@@ -37,13 +37,19 @@ export type UsagePopup =
 interface CreateComponentModalProps {
   readonly source: Extract<ComponentCreationSource, { readonly kind: 'ready' }>;
   readonly taken: readonly string[];
+  /** Folders that already hold components, offered as suggestions. */
+  readonly folders: readonly string[];
   readonly onClose: () => void;
-  readonly onCreate: (name: string, options: { readonly withProps: boolean }) => void;
+  readonly onCreate: (
+    name: string,
+    options: { readonly withProps: boolean; readonly folder: string },
+  ) => void;
 }
 
 export function CreateComponentModal(props: CreateComponentModalProps) {
   const [text, setText] = useState(props.source.name);
   const [withProps, setWithProps] = useState(true);
+  const [folderText, setFolderText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     inputRef.current?.focus();
@@ -52,9 +58,11 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
   const name = toComponentName(text);
   const error = componentNameError(text, props.taken);
   const shown = text.trim() ? error : null;
+  const folder = toFolderPath(folderText);
+  const problem = error ?? folderError(folder);
   const submit = (): void => {
-    if (!error) {
-      props.onCreate(name, { withProps });
+    if (!problem) {
+      props.onCreate(name, { withProps, folder });
     }
   };
   return (
@@ -75,7 +83,16 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
             setText={setText}
             name={name}
             error={shown}
+            folder={folder}
             source={props.source}
+            submit={submit}
+            onClose={props.onClose}
+          />
+          <FolderField
+            text={folderText}
+            setText={setFolderText}
+            folders={props.folders}
+            error={folderError(folder)}
             submit={submit}
             onClose={props.onClose}
           />
@@ -83,7 +100,7 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
         </div>
         <div className="modal-footer">
           <button onClick={props.onClose}>Cancel</button>
-          <button className="primary" disabled={Boolean(error)} onClick={submit}>
+          <button className="primary" disabled={Boolean(problem)} onClick={submit}>
             Create
           </button>
         </div>
@@ -98,6 +115,7 @@ function ComponentNameField({
   setText,
   name,
   error,
+  folder,
   source,
   submit,
   onClose,
@@ -107,6 +125,7 @@ function ComponentNameField({
   readonly setText: React.Dispatch<React.SetStateAction<string>>;
   readonly name: string;
   readonly error: string | null;
+  readonly folder: string;
   readonly source: Extract<ComponentCreationSource, { readonly kind: 'ready' }>;
   readonly submit: () => void;
   readonly onClose: () => void;
@@ -133,8 +152,59 @@ function ComponentNameField({
       ) : (
         <div className="hint-text">
           {source.label} becomes <code>&lt;{name || 'Name'} /&gt;</code>, saved as{' '}
-          <code>src/components/{name || 'Name'}.astro</code>
+          <code>
+            src/components/{folder ? `${folder}/` : ''}
+            {name || 'Name'}.astro
+          </code>
         </div>
+      )}
+    </div>
+  );
+}
+
+// The folder is optional and created on the way: the first component makes
+// src/components itself, and `heading` or `sections/hero` make theirs.
+function FolderField({
+  text,
+  setText,
+  folders,
+  error,
+  submit,
+  onClose,
+}: {
+  readonly text: string;
+  readonly setText: React.Dispatch<React.SetStateAction<string>>;
+  readonly folders: readonly string[];
+  readonly error: string | null;
+  readonly submit: () => void;
+  readonly onClose: () => void;
+}) {
+  return (
+    <div>
+      <label>Folder (optional)</label>
+      <input
+        value={text}
+        spellCheck={false}
+        list="component-folders"
+        placeholder="heading, or sections/hero"
+        onChange={(event) => setText(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            submit();
+          } else if (event.key === 'Escape') {
+            onClose();
+          }
+        }}
+      />
+      <datalist id="component-folders">
+        {folders.map((folder) => (
+          <option key={folder} value={folder} />
+        ))}
+      </datalist>
+      {error ? (
+        <div className="error-text">{error}</div>
+      ) : (
+        <div className="hint-text">Created if it doesn’t exist yet.</div>
       )}
     </div>
   );
