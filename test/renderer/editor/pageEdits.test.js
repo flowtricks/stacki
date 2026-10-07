@@ -6,7 +6,8 @@
 // cannot be stated is refused — nothing is ever saved as a whole model; a
 // transient failure sends it again, a write that may have landed never blind;
 // and every applied write leaves its undo step the inverse that restores the
-// file (several steps in one write: the newest, the rest folded).
+// file (several steps in one write: the newest, the rest folded; several
+// writes of one gesture: the step waits for every one of them).
 // Method: the real modules, bundled with esbuild, driven directly; the send
 // function is a fake for the outcome table, then main's real handlers in the
 // windowless harness for the end-to-end run, undo included, on a temporary
@@ -27,6 +28,7 @@ esbuild.buildSync({
   entryPoints: {
     pageEdits: repoPath('src/editor/pageEdits.ts'),
     editGestures: repoPath('src/editor/editGestures.ts'),
+    insertGestures: repoPath('src/editor/insertGestures.ts'),
   },
   outdir: buildDirectory,
   bundle: true,
@@ -36,6 +38,7 @@ esbuild.buildSync({
 });
 const edits = require(path.join(buildDirectory, 'pageEdits.js'));
 const gestures = require(path.join(buildDirectory, 'editGestures.js'));
+const insertGestures = require(path.join(buildDirectory, 'insertGestures.js'));
 
 const sum = (digit) => String(digit).repeat(64);
 const REF = { path: [0], kind: 'element', span: { start: 0, end: 4 } };
@@ -164,6 +167,19 @@ test('sending a gesture: every outcome, and what the answers mean', async () => 
     applied.outcome.replies.map((reply) => reply.checksum),
     [sum(2), sum(3)],
   );
+  // A gesture of two requests writes twice, and its step undoes both: the
+  // first reply settled a step owed one write, and the second was lost.
+  assert.deepEqual(
+    applied.step.outcome,
+    {
+      tag: 'applied',
+      applied: [
+        { checksum: sum(2), inverse: [] },
+        { checksum: sum(3), inverse: [] },
+      ],
+    },
+    'the undo step holds every write of the gesture',
+  );
 
   const unstated = await sent([], 1, false);
   assert.deepEqual(
@@ -181,6 +197,11 @@ test('sending a gesture: every outcome, and what the answers mean', async () => 
 
   const busy = await sent([{ ok: false, error: { code: 'backpressured', message: 'busy' } }], 2);
   assert.deepEqual(busy.outcome, { tag: 'retry', message: 'busy' }, 'never accepted: sent again');
+  assert.deepEqual(
+    busy.step.outcome,
+    { tag: 'pending', waiting: 1, applied: [] },
+    'a second request that never went out is not waited for: the retry owes it',
+  );
 
   const maybe = await sent([
     PAGE_OK(sum(2)),
@@ -339,6 +360,70 @@ test('requests reach the page as splices; the undo step restores every byte', as
     assert.ok(undone.ok);
   }
   assert.equal(fs.readFileSync(file, 'utf8'), text, 'undone on the engine, byte for byte');
+});
+
+test('a delete and the prune it leaves undo together: every import comes back', async (context) => {
+  // The shape of a real loss: deleting the wrapper that held every component
+  // (App.tsx, removeNode) removes the nodes and then, as a second request of the
+  // same gesture, the imports nothing reads any more. Undo reverts the step's
+  // writes newest first; a step that learnt only the first write's inverse put
+  // the components back and left their imports out.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-page-edits-'));
+  fs.mkdirSync(path.join(root, 'src/pages'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'user'));
+  fs.writeFileSync(path.join(root, 'package.json'), '{"dependencies":{"astro":"*"}}');
+  const { mainHarness } = await import('../../helpers/mainHarness.ts');
+  const harness = mainHarness(path.join(root, 'user'));
+  context.after(() => {
+    harness.dispose();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const file = path.join(root, 'src/pages/index.astro');
+  const text =
+    '---\n' +
+    'import Hero from "../components/Hero.astro";\n' +
+    'import Note from "../components/Note.astro";\n' +
+    '---\n' +
+    '<main>\n  <Hero />\n</main>\n<Note />\n';
+  fs.writeFileSync(file, text);
+  const read = parsePageDiskRead(await harness.invoke('page:read', file));
+  assert.ok(read.editable);
+  const origin = { checksum: read.checksum, source: read.source, model: read.model };
+  const wrapper = read.model.nodes.find((node) => node.kind === 'element' && node.name === 'main');
+  assert.ok(wrapper !== undefined);
+  const removal = insertGestures.removalGesture([wrapper.id], { urgency: true });
+  const afterRemoval = removal.apply(read.model);
+  // What the delete leaves unused: Hero's import, read by nothing now.
+  const prune = (model) => ({
+    ...model,
+    imports: model.imports.filter((member) => member.name !== 'Hero'),
+  });
+  const options = { coalesceKey: undefined, urgency: true };
+  const pruning = gestures.frontmatterGesture(afterRemoval, options, prune);
+  const gesture = gestures.sequence(removal, pruning);
+  const store = new edits.EditDrafts();
+  const step = record();
+  assert.equal(store.addGesture(file, gesture, step), 'queued');
+  const entry = store.shift(file);
+  assert.equal(entry?.tag, 'gesture');
+  const send = async (request) => parsePageEditResult(await harness.invoke('page:edit', request));
+  const outcome = await edits.sendGesture({ path: file, origin, gesture, record: step, send });
+  assert.equal(outcome.tag, 'applied');
+  assert.equal(outcome.replies.length, 2, 'the removal, then the prune');
+  const written = fs.readFileSync(file, 'utf8');
+  assert.ok(!written.includes('Hero'), 'the wrapper and the import only it needed are gone');
+  assert.ok(written.includes('import Note'), 'the import still read stays');
+  assert.equal(step.outcome.tag, 'applied');
+  assert.equal(step.outcome.applied.length, 2, 'the step waited for both writes');
+  for (const applied of [...step.outcome.applied].reverse()) {
+    const undone = await send({
+      pagePath: file,
+      authoredChecksum: applied.checksum,
+      edit: { tag: 'revert', hunks: applied.inverse },
+    });
+    assert.ok(undone.ok);
+  }
+  assert.equal(fs.readFileSync(file, 'utf8'), text, 'the nodes and their imports, byte for byte');
 });
 
 test(

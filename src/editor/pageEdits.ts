@@ -357,6 +357,28 @@ function owe(record: EditsRecord): void {
   }
 }
 
+// One more write of a gesture the step is already waiting on, or has just
+// settled (sendGesture, a later request). A record no step reads — a preview's,
+// dropped — stays dropped: it takes no answers.
+function oweAnother(record: EditsRecord): void {
+  const outcome = record.outcome;
+  switch (outcome.tag) {
+    case 'pending':
+      writeOutcome(record, { ...outcome, waiting: outcome.waiting + 1 });
+      return;
+    case 'applied':
+      writeOutcome(record, { tag: 'pending', waiting: 1, applied: outcome.applied });
+      return;
+    case 'folded':
+    case 'dropped':
+      return;
+    default: {
+      const exhaustive: never = outcome;
+      return exhaustive;
+    }
+  }
+}
+
 /** The reference main needs for a node of the origin, or undefined when the
  * node is not one main can name in the page's own bytes: not in this parse,
  * inside a chunk file, or without a source range. */
@@ -431,7 +453,17 @@ export async function sendGesture(input: {
     return { tag: 'refused', reason, diskChecksum: origin.checksum, replies: [] };
   }
   const replies: PageEdited[] = [];
-  for (const edit of requests) {
+  for (const [index, edit] of requests.entries()) {
+    // The step was owed one write when its gesture was queued (addGesture). A
+    // gesture of several requests — a removal and the frontmatter prune it
+    // leaves (`sequence`) — writes once per request, and the step must wait for
+    // every one: settled by the first reply, it would take no later inverse
+    // (recordApplied), and Undo would put the nodes back without their
+    // imports. Owed right before the request goes out, so one that never
+    // goes (a retry stops at the first) is never waited for.
+    if (index > 0) {
+      oweAnother(input.record);
+    }
     const request = { pagePath: input.path, authoredChecksum: origin.checksum, edit };
     const answer = await input.send(request);
     if (answer.ok) {
