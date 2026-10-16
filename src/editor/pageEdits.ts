@@ -358,6 +358,28 @@ function owe(record: EditsRecord): void {
   }
 }
 
+// One more write of a gesture the step is already waiting on, or has just
+// settled (sendRequests, a later request). A record no step reads — a preview's,
+// dropped — stays dropped: it takes no answers.
+function oweAnother(record: EditsRecord): void {
+  const outcome = record.outcome;
+  switch (outcome.tag) {
+    case 'pending':
+      writeOutcome(record, { ...outcome, waiting: outcome.waiting + 1 });
+      return;
+    case 'applied':
+      writeOutcome(record, { tag: 'pending', waiting: 1, applied: outcome.applied });
+      return;
+    case 'folded':
+    case 'dropped':
+      return;
+    default: {
+      const exhaustive: never = outcome;
+      return exhaustive;
+    }
+  }
+}
+
 /** The reference main needs for a node of the origin, or undefined when the
  * node is not one main can name in the page's own bytes: not in this parse,
  * inside a chunk file, or without a source range. */
@@ -469,7 +491,12 @@ async function sendRequests(
   requests: readonly Edit[],
 ): Promise<GestureSent> {
   const replies: PageEdited[] = [];
-  for (const edit of requests) {
+  for (const [index, edit] of requests.entries()) {
+    if (index > 0) {
+      // A later request of the same step: the step is owed its answer too, or
+      // Undo would hold the inverse of the first write only.
+      oweAnother(input.record);
+    }
     const request = { pagePath: input.path, authoredChecksum: input.origin.checksum, edit };
     const answer = await input.send(request);
     if (answer.ok) {
