@@ -89,6 +89,18 @@ export function useSelectPage(
       // last project isn't a choice the user made about this one.
       setDevice('desktop');
       void addRecentProject(projectPath).catch(() => {});
+      // Starting the watch records the open project in the main process, which
+      // allows file access only inside it. It goes out before the first await, so
+      // it reaches main before any panel that mounts with the project reads a file.
+      void watchProject(projectPath)
+        .then((started) => {
+          if (!started) {
+            showToast('Couldn’t watch project files. External edits may need a refresh.', 'error');
+          }
+        })
+        .catch((error: unknown) => {
+          showToast(`Couldn’t watch project files: ${cleanError(error)}`, 'error');
+        });
       const result = await rescan(projectPath);
 
       const hasDeps = await projectHasNodeModules(projectPath);
@@ -102,15 +114,6 @@ export function useSelectPage(
       }
       // startPreview reports its own failure in the preview area.
       void startPreview(projectPath);
-      void watchProject(projectPath)
-        .then((started) => {
-          if (!started) {
-            showToast('Couldn’t watch project files. External edits may need a refresh.', 'error');
-          }
-        })
-        .catch((error: unknown) => {
-          showToast(`Couldn’t watch project files: ${cleanError(error)}`, 'error');
-        });
 
       const first =
         result.pages.find((page) => page.name === 'index.astro') || result.pages[0] || undefined;
