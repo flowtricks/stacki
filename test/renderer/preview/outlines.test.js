@@ -581,6 +581,38 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
     );
   }
 
+  // --- annotating (the Feedback tab) -------------------------------------------
+  // A click reaches inside a component without drilling in, and reports the
+  // files it renders through, outermost first: the page's instance of the card,
+  // then the card's own text. The second card is the second copy of that text.
+  {
+    const track = new window.MessageEvent('message', {
+      data: { type: 'avb:track', paths: [], scope: '', annotate: true },
+    });
+    Object.defineProperty(track, 'source', { value: window.parent });
+    window.dispatchEvent(track);
+    const element = document.querySelector('[data-box="card-two-text"]');
+    sent.length = 0;
+    element.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    const annotation = sent.find((message) => message.type === 'avb:annotate-node');
+    check(
+      'an annotating click names the element inside the component',
+      annotation?.path === 'src/components/Card.astro|0.0.0.1' && annotation?.occurrence === 1,
+      JSON.stringify(annotation),
+    );
+    check(
+      'with the page instance first, then the component',
+      JSON.stringify(annotation?.chain) ===
+        JSON.stringify([
+          { file: '', path: '0.6.1' },
+          { file: 'src/components/Card.astro', path: '0.0.0.1' },
+        ]),
+      JSON.stringify(annotation?.chain),
+    );
+    check('and selects nothing', !sent.some((message) => message.type === 'avb:click-node'));
+    check('labelled by its tag', annotation?.label === 'span', JSON.stringify(annotation));
+  }
+
   if (failures.length) {
     console.error(`\noutlines: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');

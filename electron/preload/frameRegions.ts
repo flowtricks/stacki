@@ -43,6 +43,9 @@ export const inScope = (nodePath: string) =>
 // page. Its siblings stay as dim and as unclickable as the rest of it.
 export let focusPath = '';
 export let focusOcc = 0;
+// The Feedback tab is open: a click annotates whatever element is under the
+// pointer, in any file, instead of selecting within the open one.
+export let annotating = false;
 // A run whose every node has left the document isn't an instance any more:
 // a patched page collects fresh runs and leaves the old ones in the map.
 const isLive = (run: Node[]) => run.some((node) => node.isConnected);
@@ -65,11 +68,14 @@ export function setTracking(next: {
   readonly scope: string;
   readonly focus: string;
   readonly occurrence: number;
+  /** Absent from callers that never annotate, such as Stacki Studio's client. */
+  readonly annotating?: boolean;
 }): void {
   trackedPaths = next.paths;
   activeScope = next.scope;
   focusPath = next.focus;
   focusOcc = next.occurrence;
+  annotating = next.annotating ?? false;
 }
 export const focusRoots = (): Node[] | undefined => {
   if (focusCache !== undefined) {

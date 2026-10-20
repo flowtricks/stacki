@@ -2,9 +2,10 @@
 // tagged elements and the widened thin targets, and the hover, click and
 // double-click the canvas turns into selection.
 
-import { isElement } from './frameBasics';
+import { PRELOAD_LIMITS, isElement } from './frameBasics';
 import {
   PATH_ATTR,
+  annotating,
   announceMapped,
   collectRegions,
   inFocus,
@@ -174,11 +175,101 @@ const targetAt = (event: MouseEvent): Node | undefined =>
     : undefined) || (event.target instanceof window.Node ? event.target : undefined);
 
 // Same resolution for hover, click and dblclick, so what lights up under the
-// cursor is exactly what a click selects.
-const nodeAtEvent = (event: MouseEvent) =>
-  event.clientX || event.clientY
+// cursor is exactly what a click selects. While annotating, the hover is the
+// element a click would annotate.
+const nodeAtEvent = (event: MouseEvent) => {
+  if (annotating) {
+    const annotation = annotationAt(event);
+    return { path: annotation?.path, occurrence: annotation?.occurrence ?? 0, outside: false };
+  }
+  return event.clientX || event.clientY
     ? nodeAt(targetAt(event), event.clientX, event.clientY)
     : nodeAt(targetAt(event));
+};
+
+// --- Annotating (the Feedback tab) -----------------------------------------
+// Every element is reachable without drilling in: the deepest tagged element
+// under the pointer, whatever file rendered it, with the chain of files it
+// renders through — the page, each component instance, then the element.
+
+interface AnnotationStep {
+  /** The project-relative component file, or '' for the page. */
+  readonly file: string;
+  readonly path: string;
+}
+
+const annotationAt = (event: MouseEvent) => {
+  const target = targetAt(event);
+  let tagged =
+    target instanceof Element ? (target.closest(`[${PATH_ATTR}]`) ?? undefined) : undefined;
+  // A synthesised event with no coordinates keeps its target, as nodeAtEvent does.
+  const located = event.clientX || event.clientY;
+  const x = located ? event.clientX : undefined;
+  const y = located ? event.clientY : undefined;
+  while (tagged && !holdsPoint(tagged, x, y)) {
+    tagged = taggedAncestor(tagged);
+  }
+  const chain = tagged ? annotationChain(tagged) : [];
+  const leaf = chain.at(-1);
+  if (!tagged || !leaf) {
+    return undefined;
+  }
+  const path = leaf.file ? `${leaf.file}|${leaf.path}` : leaf.path;
+  return { path, occurrence: occurrenceOf(path, tagged), chain, label: labelOf(tagged) };
+};
+
+// Each file the element renders through has a deepest node around it: the
+// nearest tagged ancestor-or-self carrying one of that file's paths, its
+// deepest path there. The file whose node wraps the element most tightly is
+// the element itself; the others are outer, by how far up the document their
+// node still reaches. So a page's section slotted into a layout ends on the
+// page (the layout's slot reaches higher), and an element inside a component
+// ends on the component (its instance on the page reaches higher). Ties —
+// a component's root, which carries its instance's page path — put the page first.
+const annotationChain = (element: Element): AnnotationStep[] => {
+  const nearest = new Map<string, string>(); // file → that deepest marker path
+  const reach = new Map<string, number>(); // marker path → highest level carrying it
+  let at: Element | undefined = element;
+  for (let level = 0; at && level < PRELOAD_LIMITS.domDepthMax; level++) {
+    const here = new Map<string, string>();
+    for (const nodePath of pathsOf(at)) {
+      const file = fileOf(nodePath);
+      const had = here.get(file);
+      if (!nearest.has(file) && (had === undefined || depthOf(nodePath) > depthOf(had))) {
+        here.set(file, nodePath);
+      }
+      reach.set(nodePath, level);
+    }
+    for (const [file, nodePath] of here) {
+      nearest.set(file, nodePath);
+    }
+    at = taggedAncestor(at);
+  }
+  const steps = [...nearest].map(([file, nodePath]) => ({
+    file,
+    path: file ? nodePath.slice(file.length + 1) : nodePath,
+    reach: reach.get(nodePath) ?? 0,
+  }));
+  steps.sort(
+    (outer, inner) => inner.reach - outer.reach || pageFirst(outer.file) - pageFirst(inner.file),
+  );
+  return steps.map(({ file, path }) => ({ file, path }));
+};
+
+const depthOf = (nodePath: string): number => nodePath.split('.').length;
+const pageFirst = (file: string): number => (file === '' ? 0 : 1);
+
+const fileOf = (nodePath: string): string => {
+  const bar = nodePath.indexOf('|');
+  return bar === -1 ? '' : nodePath.slice(0, bar);
+};
+
+// What the note's row calls the element: its tag and first class, `div.hero`.
+const labelOf = (element: Element): string => {
+  const first = element.classList[0];
+  const tag = element.tagName.toLowerCase();
+  return first ? `${tag}.${first}` : tag;
+};
 
 export const startOutlines = () => {
   // A page edit now patches the document instead of reloading it, so the
@@ -287,6 +378,10 @@ const listenForPointer = () => {
       }
       event.preventDefault();
       event.stopPropagation();
+      // Annotating reaches inside components already: nothing to open.
+      if (annotating) {
+        return;
+      }
       // Report even when nothing in scope matched: markup the layout renders
       // itself (nav, footer — anything outside the page's <slot>) has no
       // in-scope marker, and the app opens the layout for those.
@@ -310,6 +405,13 @@ const listenForPointer = () => {
       }
       event.preventDefault();
       event.stopPropagation();
+      if (annotating) {
+        const annotation = annotationAt(event);
+        if (annotation) {
+          postLocated('avb:annotate-node', annotation);
+        }
+        return;
+      }
       // A click that hits no marked node still reports (no path), with
       // `outside` saying whether it landed on something the open file simply
       // doesn't own — which is what the app backs out of a component on.

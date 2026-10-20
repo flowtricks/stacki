@@ -46,12 +46,12 @@ export function useAppScope() {
   const propertyEdits = usePropertyEdits(coreState, lifecycle, history, nodeEdits);
   const pageOps = usePageOps(coreState, lifecycle, navigation, history, nodeEdits, shortcuts);
   const viewModel = useViewModel(coreState, lifecycle, shortcuts, pageOps);
-  // After the view model: it sets the selection keys this render pins notes to.
+  // After the view model: it sets the selection keys, whose first names the page.
+  const pageKey = coreState.selectionKeysRef.current[0];
   const feedback = useFeedback({
     projectPath: coreState.project?.path,
-    selectionKeys: coreState.selectionKeysRef.current,
-    editedRel: viewModel.editedRel,
-    label: viewModel.overlayInfo(viewModel.pathFor(coreState.selectedId) ?? '')?.label,
+    active: coreState.leftTab === 'feedback',
+    pageRel: pageKey === undefined ? undefined : pageKey.slice(0, pageKey.indexOf('#')),
     showToast: lifecycle.showToast,
   });
   return {

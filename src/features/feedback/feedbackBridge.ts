@@ -25,18 +25,20 @@ export function writeFeedback(projectPath: string, items: readonly FeedbackItem[
   return feedbackRequest(() => window.avb.writeFeedback(payload));
 }
 
-/** The one paste that starts the agent: the protocol, then each open item. */
-export function renderHandoff(items: readonly TrailedFeedbackItem[]): string {
+/** The one paste that starts the agent: the protocol, then each open item. The
+ * file is named absolutely, so the paste works wherever the agent was started. */
+export function renderHandoff(items: readonly TrailedFeedbackItem[], projectPath: string): string {
   const open = items.filter((item) => !item.done);
   const lines = open.map((item, index) => {
     const where = item.trail.length > 0 ? item.trail.join(' › ') : '(no source location)';
     return `${index + 1}. ${where} (${item.label}): ${item.note}`;
   });
   return [
-    `Address the open items in .stacki/feedback.json (${open.length} open). For each item, ` +
-      'open every file:line in its trail — the last entry is the element, the earlier ones ' +
-      'are the page and the component instances it sits in — make the change, then set ' +
-      'that item\'s "done" to true in the file.',
+    `Address the open items in ${projectPath}/.stacki/feedback.json (${open.length} open). ` +
+      `Trails are relative to ${projectPath}. For each item, open every file:line in its ` +
+      'trail — the last entry is the element, the earlier ones are the page and the ' +
+      'component instances it sits in — make the change, then set that item\'s "done" to ' +
+      'true in the file.',
     '',
     ...lines,
   ].join('\n');

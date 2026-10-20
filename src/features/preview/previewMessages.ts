@@ -7,9 +7,11 @@ import {
   dictionary,
   digest,
   list,
+  object,
   optional,
   pathText,
   record,
+  text,
 } from '../../../shared/core/boundary';
 import type { Digest } from '../../../shared/core/brand';
 import { parsePreviewRender, type PreviewRender } from '../../../shared/page/previewToken';
@@ -37,6 +39,7 @@ export type PreviewMessage =
   | ({ readonly kind: 'click-node'; readonly outside: boolean } & LocatedEvent)
   | ({ readonly kind: 'open-node' } & LocatedEvent)
   | ({ readonly kind: 'context-node'; readonly outside: boolean } & LocatedEvent & ContextPoint)
+  | ({ readonly kind: 'annotate-node' } & Annotation)
   | { readonly kind: 'canvas-ready' }
   /** What the column guide is drawn from (electron/preload/frameGuide.ts). */
   | { readonly kind: 'guide'; readonly metrics: GuideMetrics }
@@ -125,6 +128,14 @@ export interface LocatedEvent {
   readonly token: Digest | undefined;
 }
 
+/** A click while annotating (the Feedback tab): the element under the pointer,
+ * the files it renders through outermost first ('' is the page), and its name. */
+export type Annotation = Omit<LocatedEvent, 'path'> & {
+  readonly path: string;
+  readonly chain: readonly { readonly file: string; readonly path: string }[];
+  readonly label: string;
+};
+
 export function parsePreviewMessage(input: unknown): PreviewMessage | undefined {
   let value: Readonly<Record<string, unknown>>;
   try {
@@ -174,6 +185,14 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
       };
     case 'avb:open-node':
       return { kind: 'open-node', ...parseLocatedMessage(value) };
+    case 'avb:annotate-node':
+      return {
+        kind: 'annotate-node',
+        ...parseLocatedMessage(value),
+        path: pathText(value['path']),
+        chain: list(object({ file: pathText, path: pathText }))(value['chain']),
+        label: text(value['label']),
+      };
     case 'avb:canvas-ready':
       return { kind: 'canvas-ready' };
     case 'avb:guide':

@@ -3,7 +3,7 @@ import { usePreviewSource } from './usePreviewSource';
 import { usePreviewDimensions, usePreviewSizing } from './usePreviewSizing';
 import CanvasView from './CanvasView';
 import type { DevDiagnosis } from './DevOffline';
-import type { OverlayInfo, PinOverlay, SpacingHover } from './PreviewOverlays';
+import type { CanvasFeedback, OverlayInfo, SpacingHover } from './PreviewOverlays';
 import type { PreviewCrumb, PreviewDevice } from './PreviewToolbar';
 import { DevOffline } from './DevOffline';
 import { PreviewOverlays } from './PreviewOverlays';
@@ -40,8 +40,8 @@ interface PreviewPaneProps {
   readonly navigatorSelectionTick?: number;
   readonly navHoverPath?: string | undefined;
   readonly overlayInfo?: (path: string) => OverlayInfo | undefined;
-  readonly pins?: readonly PinOverlay[];
-  readonly onSelectPin?: (pin: PinOverlay) => void;
+  /** Present while the Feedback tab is open: the canvas annotates. */
+  readonly feedback?: CanvasFeedback | undefined;
   readonly onSelectPath?: (path: string | undefined, info: { readonly outside: boolean }) => void;
   readonly onContextPath?: NonNullable<PreviewRuntimeProps['onContextPath']>;
   readonly onOpenPath?: (path: string | undefined, occurrence: number) => void;
@@ -237,8 +237,7 @@ function OverlayLayer({
         focusPath={props.focusPath}
         focusWhole={props.focusWhole ?? false}
         {...(props.overlayInfo === undefined ? {} : { overlayInfo: props.overlayInfo })}
-        pins={props.pins}
-        onSelectPin={props.onSelectPin}
+        feedback={props.feedback}
       />
     </div>
   );

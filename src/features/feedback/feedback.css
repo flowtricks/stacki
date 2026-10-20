@@ -2,17 +2,12 @@
 .feedback-body {
   padding: 0 8px 12px;
 }
-.feedback-input {
-  width: 100%;
-  min-height: 52px;
-  resize: vertical;
+.feedback-hint {
   margin-bottom: 8px;
-  padding: 6px 8px;
-  font: 11.5px/1.4 var(--font);
-  color: var(--text);
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  padding: 0 4px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-faint);
 }
 .feedback-row {
   display: flex;

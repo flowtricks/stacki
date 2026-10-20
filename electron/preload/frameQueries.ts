@@ -360,6 +360,7 @@ const track = (data: Record<string, unknown>, paths: unknown[]) => {
     scope: typeof data['scope'] === 'string' ? data['scope'] : '',
     focus: typeof data['focus'] === 'string' ? data['focus'] : '',
     occurrence: typeof data['focusOcc'] === 'number' ? data['focusOcc'] : 0,
+    annotating: data['annotate'] === true,
   });
   resetFocusCache();
   resetThinCache(); // scope decides what's hit-testable

@@ -52,6 +52,7 @@ const LAZY_PANELS = [
   'ContentView',
   'VariablesPanel',
   'VariablesView',
+  'FeedbackPanel',
   'CodePanel',
 ];
 const LAZY_IMPORT = /lazyPanel\(\(\) => import\('([^']+)'\)\)/g;
@@ -99,6 +100,7 @@ test('all optional editors load without hiding the app or replacing its preview'
     await checkCMS(context);
     await checkCodePanel(context);
     await checkCodeWindow(context);
+    await checkFeedback(context);
     assert.equal(gates.requested.size, LAZY_PANELS.length, 'Every lazy editor was exercised');
   } finally {
     await act(() => root.unmount());
@@ -121,6 +123,12 @@ async function checkVariables(context) {
   assertPending(context, 'VariablesView');
   await releasePanel(context, 'VariablesView');
   assert.equal(__lazyPanels.VariablesView.selected.file, 'src/styles/tokens.css');
+}
+
+async function checkFeedback(context) {
+  await context.act(() => railButton(8).click());
+  assertPending(context, 'FeedbackPanel');
+  await releasePanel(context, 'FeedbackPanel');
 }
 
 async function checkCodePanel(context) {
@@ -395,6 +403,7 @@ function createBridge() {
     },
     gitInfo: async () => ({ isRepo: false }),
     onCssChanged: () => () => {},
+    readFeedback: async () => ({ items: [] }),
   };
   return new Proxy(bridge, {
     get(target, name) {

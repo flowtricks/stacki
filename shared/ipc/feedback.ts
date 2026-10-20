@@ -2,17 +2,20 @@
 // pinned to canvas selections, read and edited by Stacki and by a coding agent
 // alike. The file is the whole interface; nothing listens on a port.
 import { assert } from '../core/assert';
-import { boolean, list, object, optional, record, text } from '../core/boundary';
+import { boolean, count, list, object, optional, record, text } from '../core/boundary';
 import type { Parsed } from '../core/boundary';
 
 export const FEEDBACK_FILE_VERSION = 1;
 
-// `keys` are selection keys (`<file>#<index path>`: the page, each drilled-in
-// host, then the leaf). An agent may append its own items with `keys: []`, so
-// `createdAt` is optional for them; the trail is main's to resolve, never read.
+// `keys` are selection keys (`<file>#<index path>`: the page, each component
+// instance the element renders through, then the element). `marker` is where
+// the canvas draws the note's pin: the element's marker path and which copy of
+// it was clicked. An agent may append its own items with `keys: []` and no
+// marker or `createdAt`; the trail is main's to resolve, never read.
 export const parseFeedbackItem = object({
   id: text,
   keys: list(text),
+  marker: optional(object({ path: text, occurrence: count })),
   label: text,
   note: text,
   createdAt: optional(text),

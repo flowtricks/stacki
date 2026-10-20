@@ -42,7 +42,6 @@ import {
   CodeWindowHost,
   ConflictNotice,
   BusyOverlay,
-  selectCanvasPath,
 } from './AppPanes';
 import type { AppView, ShellView } from '../App';
 
@@ -528,13 +527,7 @@ export function FeedbackTab({ app }: { readonly app: ShellView }) {
   return (
     <FeedbackPanel
       feedback={app.feedback}
-      target={app.overlayInfo(app.pathFor(app.selectedId) ?? '')?.label}
-      selectedKey={app.selectionKeysRef.current.at(-1)}
-      onSelectPin={(pin) => {
-        selectCanvasPath(app, pin.path, { outside: false });
-        // Selecting reveals the node in the Navigator; a note's row keeps its panel.
-        app.setLeftTab('feedback');
-      }}
+      projectPath={app.project.path}
       showToast={app.showToast}
     />
   );

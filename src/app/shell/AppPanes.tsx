@@ -12,6 +12,7 @@ import type { Attr } from '../../../shared/page/pageNode';
 import { noteText } from '../../editor/treeSelection';
 import { canvasClickAction } from '../../editor/canvasClick';
 import PreviewPane from '../../features/preview/PreviewPane';
+import type { CanvasFeedback } from '../../features/preview/PreviewOverlays';
 import { relativeTime } from '../../features/history/HistoryPanel';
 import SaveConflictNotice from '../SaveConflictNotice';
 import { nodeAtPath } from '../../editor/editorTree';
@@ -59,8 +60,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         navigatorSelectionTick={app.navigatorSelectionTick}
         navHoverPath={app.pathFor(hoverNodeId)}
         overlayInfo={app.overlayInfo}
-        pins={app.feedback.pins}
-        onSelectPin={(pin) => selectCanvasPath(app, pin.path, { outside: false })}
+        feedback={app.leftTab === 'feedback' ? canvasFeedback(app) : undefined}
         focusPath={app.focusPath}
         focusOcc={app.focusOcc}
         focusWhole={app.focusWhole}
@@ -144,6 +144,22 @@ function canvasContextPosition(
   }
   selectCanvasPath(app, path, point);
   return { ...point, nodeId: node.id };
+}
+
+// The Feedback tab's hold on the canvas: clicks annotate, pins open notes.
+function canvasFeedback(app: ShellView): CanvasFeedback {
+  const { feedback } = app;
+  return {
+    pins: feedback.pins,
+    openPinId: feedback.openPinId,
+    composer: feedback.composer,
+    onAnnotate: feedback.compose,
+    onAdd: (note) => void feedback.add(note),
+    onCancel: feedback.cancel,
+    onOpenPin: feedback.setOpenPinId,
+    onDone: (id) => void feedback.toggleDone(id),
+    onRemove: (id) => void feedback.remove(id),
+  };
 }
 
 // What a click on the canvas MEANT — see canvasClick.js. The canvas answers with a

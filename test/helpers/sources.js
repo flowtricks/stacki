@@ -57,6 +57,7 @@ const PANEL_SOURCES = Object.freeze([
   'src/features/content/ContentFields.tsx',
   'src/features/content/ContentView.tsx',
   'src/features/preview/DevOffline.tsx',
+  'src/features/feedback/FeedbackPanel.tsx',
   'src/features/git/GitChip.tsx',
   'src/features/git/GitChipView.tsx',
   'src/features/history/HistoryPanel.tsx',

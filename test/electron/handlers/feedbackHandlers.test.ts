@@ -1,8 +1,10 @@
 // Goal: the Feedback file round-trips through the real main handlers, each
-// item carrying a trail resolved from disk, and a malformed file is refused.
+// item carrying a trail resolved from disk; the project's agent instructions
+// name the file once; and a malformed file is refused.
 // Methodology: register main in a windowless VM over a temporary project, write
 // two items (one on a live node, one on a dead key) through the document actor,
-// read them back, then corrupt the file and check the read throws.
+// read them back, check CLAUDE.md, then corrupt the file and check the read throws.
+// A second project keeps an AGENTS.md that CLAUDE.md imports: only AGENTS.md changes.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as fs from 'node:fs';
@@ -44,8 +46,36 @@ test('feedback writes resolve trails, create .stacki/, and read back', async (co
   );
   assert.deepEqual(trails, [['src/pages/index.astro:1-3'], ['src/pages/index.astro']]);
 
+  // An agent started in the project finds the file: CLAUDE.md names it, once.
+  const claude = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
+  assert.match(claude, /^## Stacki feedback\n/);
+  assert.match(claude, /`\.stacki\/feedback\.json`/);
+  await harness.invoke('feedback:write', { projectPath: root, items });
+  assert.equal(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), claude, 'written once');
+
   fs.writeFileSync(file, '{"version":2,"items":[]}');
   await assert.rejects(harness.invoke('feedback:read', { projectPath: root }), /version 1/);
   fs.rmSync(file);
   assert.deepEqual(await harness.invoke('feedback:read', { projectPath: root }), { items: [] });
+});
+
+test('a kept AGENTS.md gets the note, not the CLAUDE.md importing it', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-feedback-agents-'));
+  fs.mkdirSync(path.join(root, 'src/pages'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'user'));
+  fs.writeFileSync(path.join(root, 'package.json'), '{"dependencies":{"astro":"*"}}');
+  fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Rules');
+  fs.writeFileSync(path.join(root, 'CLAUDE.md'), '@AGENTS.md\n');
+  const harness = mainHarness(path.join(root, 'user'));
+  context.after(() => {
+    harness.dispose();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  await harness.invoke('project:scan', root);
+  await harness.invoke('feedback:write', { projectPath: root, items: [] });
+  assert.match(
+    fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'),
+    /^# Rules\n\n## Stacki feedback/,
+  );
+  assert.equal(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n');
 });

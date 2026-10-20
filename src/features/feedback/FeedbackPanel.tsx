@@ -1,46 +1,25 @@
-import React, { useEffect, useState } from 'react';
-import type { KeyboardEvent } from 'react';
+import React from 'react';
 import type { TrailedFeedbackItem } from '../../../shared/ipc/feedback';
 import { CheckIcon, CloseIcon } from '../../ui/Icons';
 import { renderHandoff } from './feedbackBridge';
-import type { FeedbackPin, useFeedback } from './feedbackState';
+import type { useFeedback } from './feedbackState';
 import './feedback.css';
 
 interface FeedbackPanelProps {
   readonly feedback: ReturnType<typeof useFeedback>['feedback'];
-  /** What a new note attaches to: the selected node's name, or the page. */
-  readonly target: string | undefined;
-  /** The current selection's leaf key; its rows are highlighted. */
-  readonly selectedKey: string | undefined;
-  readonly onSelectPin: (pin: FeedbackPin) => void;
+  readonly projectPath: string;
   readonly showToast: (message: string, kind: 'success' | 'error') => void;
 }
 
-// Notes pinned to canvas selections, kept in .stacki/feedback.json for a coding
-// agent: select an element, type, press Enter; Copy for agent hands them over.
+// The notes left on the canvas, kept in .stacki/feedback.json for a coding
+// agent: click an element and type; Copy for agent hands them over.
 export default function FeedbackPanel(props: FeedbackPanelProps) {
   const { feedback } = props;
-  const [draft, setDraft] = useState('');
-  const { reload } = feedback;
-  // Opening the tab catches up with what an agent changed in the file.
-  useEffect(() => void reload(), [reload]);
   const open = feedback.items.filter((item) => !item.done);
   const done = feedback.items.filter((item) => item.done);
-
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (event.key !== 'Enter' || event.shiftKey) {
-      return;
-    }
-    event.preventDefault();
-    const note = draft.trim();
-    if (note) {
-      setDraft('');
-      void feedback.add(note);
-    }
-  };
   const copy = async (): Promise<void> => {
     try {
-      await navigator.clipboard.writeText(renderHandoff(feedback.items));
+      await navigator.clipboard.writeText(renderHandoff(feedback.items, props.projectPath));
       props.showToast('Copied. Paste it into Claude Code in the project.', 'success');
     } catch {
       props.showToast('Could not copy the feedback.', 'error');
@@ -55,13 +34,7 @@ export default function FeedbackPanel(props: FeedbackPanelProps) {
         </button>
       </div>
       <div className="panel-body feedback-body">
-        <textarea
-          className="feedback-input"
-          value={draft}
-          placeholder={props.target ? `Note on ${props.target}` : 'Note on this page'}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={onKeyDown}
-        />
+        <p className="feedback-hint">Click an element on the canvas to leave a note on it.</p>
         {open.map((item, index) => (
           <FeedbackRow key={item.id} item={item} number={index + 1} {...props} />
         ))}
@@ -87,12 +60,13 @@ function FeedbackRow(
   },
 ) {
   const { item, feedback } = props;
-  const pin = feedback.pins.find((candidate) => candidate.id === item.id);
-  const selected = item.keys.at(-1) === props.selectedKey ? ' is-selected' : '';
+  // A row with a pin on this page opens it, so the note shows where it was left.
+  const pinned = feedback.pins.some((pin) => pin.id === item.id);
+  const open = feedback.openPinId === item.id ? ' is-selected' : '';
   return (
     <div
-      className={`feedback-row${item.done ? ' is-done' : ''}${selected}`}
-      onClick={() => pin && props.onSelectPin(pin)}
+      className={`feedback-row${item.done ? ' is-done' : ''}${open}`}
+      onClick={() => pinned && feedback.setOpenPinId(open ? undefined : item.id)}
     >
       <span className="feedback-number">{props.number ?? ''}</span>
       <div className="feedback-main">
