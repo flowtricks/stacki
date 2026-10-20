@@ -84,3 +84,122 @@
   pointer-events: auto;
   cursor: pointer;
 }
+
+/* A Feedback note's card, under its pin, and the box that takes a new note
+   under the element just clicked. The layer ignores the pointer; these take it. */
+.feedback-card {
+  position: absolute;
+  z-index: 2;
+  width: 240px;
+  padding: 8px;
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.4;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+}
+.feedback-pin + .feedback-card {
+  top: 14px;
+  left: 0;
+}
+.feedback-pin.is-open {
+  outline: 2px solid var(--text);
+}
+.feedback-card-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.feedback-composer textarea {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  resize: vertical;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.feedback-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+.feedback-card-actions button {
+  padding: 3px 8px;
+  color: var(--text);
+  background: var(--bg-active);
+  border-radius: 5px;
+}
+.feedback-card-actions button.is-primary {
+  color: white;
+  background: var(--accent);
+}
+.feedback-card-actions button:disabled {
+  opacity: 0.5;
+}
+
+/* A Feedback note's card under its pin, and the box that takes a new note
+   under the element just clicked. The layer ignores the pointer; these take it. */
+.feedback-card {
+  position: absolute;
+  z-index: 2;
+  width: 240px;
+  padding: 8px;
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.4;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+}
+.feedback-pin + .feedback-card {
+  top: 14px;
+  left: 0;
+}
+.feedback-pin.is-open {
+  outline: 2px solid var(--text);
+}
+.feedback-card-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.feedback-composer textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 56px;
+  resize: vertical;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.feedback-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+.feedback-card-actions button {
+  padding: 3px 8px;
+  color: var(--text);
+  background: var(--bg-active);
+  border-radius: 5px;
+}
+.feedback-card-actions button.is-primary {
+  color: white;
+  background: var(--accent);
+}
+.feedback-card-actions button:disabled {
+  opacity: 0.5;
+}

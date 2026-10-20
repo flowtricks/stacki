@@ -71,7 +71,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         onStaleEvent={app.onStaleEvent}
         onPreviewReload={app.onPreviewReload}
         onContextPath={context.open}
-        onSelectPath={(path, info) => selectCanvasPath(app, path ?? undefined, info)}
+        onSelectPath={(path, info) => onCanvasClick(app, path ?? undefined, info)}
         onSelectedClasses={app.receiveClasses}
         onRenderedPaths={app.setRenderedPaths}
         onNodeStates={app.setNodeStates}
@@ -144,6 +144,33 @@ function canvasContextPosition(
   }
   selectCanvasPath(app, path, point);
   return { ...point, nodeId: node.id };
+}
+
+// While annotating, the frame reports clicks as annotations. A click arrives
+// here only from a frame whose script predates annotating (the dev build
+// rebuilds it only on a restart): annotate the open file's node it names,
+// without reaching inside components, rather than select it.
+function onCanvasClick(
+  app: ShellView,
+  path: string | undefined,
+  info: { readonly outside: boolean },
+): void {
+  if (app.leftTab !== 'feedback') {
+    selectCanvasPath(app, path, info);
+    return;
+  }
+  if (path === undefined) {
+    return;
+  }
+  const bar = path.indexOf('|');
+  app.feedback.compose({
+    path,
+    occurrence: 0,
+    chain: [
+      bar === -1 ? { file: '', path } : { file: path.slice(0, bar), path: path.slice(bar + 1) },
+    ],
+    label: app.overlayInfo(path)?.label ?? 'element',
+  });
 }
 
 // The Feedback tab's hold on the canvas: clicks annotate, pins open notes.
