@@ -83,6 +83,16 @@
   text-align: center;
   pointer-events: auto;
   cursor: pointer;
+  transition:
+    transform 120ms ease-out,
+    background-color 120ms ease-out,
+    box-shadow 120ms ease-out;
+}
+/* Beats the app's button:hover background, which would hide the amber. */
+.preview-overlay-layer .feedback-pin:hover {
+  transform: translate(-50%, -50%) scale(1.2);
+  background: #ffe55c;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 /* A Feedback note's card, under its pin, and the box that takes a new note
@@ -136,7 +146,8 @@
   background: var(--bg-active);
   border-radius: 5px;
 }
-.feedback-card-actions button.is-primary {
+.feedback-card-actions button.is-primary,
+.preview-overlay-layer .feedback-card-actions button.is-primary:hover:not(:disabled) {
   color: white;
   background: var(--accent);
 }
