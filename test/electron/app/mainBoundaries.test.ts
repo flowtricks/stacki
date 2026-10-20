@@ -58,8 +58,9 @@ test('the complete channel inventory matches real main and terminal registration
   );
   // Step 8 retired page:writeRaw; step 9 added page:previewEdit; step 10
   // retired page:write and page:serialize, the Markdown whole-model save.
-  // Publishing, shared project settings, defaults canvases, and history add scoped handlers.
-  assert.equal(harness.handlers.size, 132);
+  // Publishing, shared project settings, defaults canvases, and history add scoped handlers;
+  // the Feedback panel added feedback:read and feedback:write.
+  assert.equal(harness.handlers.size, 134);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual(
     [...Object.keys(IPC_PAYLOADS)].sort(),

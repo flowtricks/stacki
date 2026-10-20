@@ -59,6 +59,8 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         navigatorSelectionTick={app.navigatorSelectionTick}
         navHoverPath={app.pathFor(hoverNodeId)}
         overlayInfo={app.overlayInfo}
+        pins={app.feedback.pins}
+        onSelectPin={(pin) => selectCanvasPath(app, pin.path, { outside: false })}
         focusPath={app.focusPath}
         focusOcc={app.focusOcc}
         focusWhole={app.focusWhole}

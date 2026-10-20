@@ -61,6 +61,7 @@ import { Thumbnails, registerThumbnailHandlers } from './handlers/thumbnails';
 import { registerAssetHandlers } from './handlers/assetHandlers';
 import { registerCmsHandlers } from './handlers/cmsHandlers';
 import { registerComponentHandlers } from './handlers/componentHandlers';
+import { registerFeedbackHandlers } from './handlers/feedbackHandlers';
 import { registerContentHandlers } from './handlers/contentHandlers';
 import { registerCssVariableHandlers } from './handlers/cssVariableHandlers';
 import { registerGitHandlers } from './handlers/gitHandlers';
@@ -903,6 +904,7 @@ const host: MainHost = {
 registerAssetHandlers(host);
 registerCmsHandlers(host);
 registerComponentHandlers(host);
+registerFeedbackHandlers(host);
 registerContentHandlers(host);
 registerCssVariableHandlers(host);
 registerGitHandlers(host);

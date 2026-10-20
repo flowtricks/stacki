@@ -12,6 +12,7 @@ import { parseStudioRequestId } from './studioProgress';
 import { parsePropertyChange, propertySource } from '../properties/propertyEditing';
 import { parseEdit, parseEditRequest } from '../engine/editRequest';
 import { parsePreviewRender } from '../page/previewToken';
+import { parseFeedbackItem } from './feedback';
 // Complete invoke-channel inventory. Every main-process listener receives the
 // parsed shape below; payload field names retain the existing renderer protocol.
 import {
@@ -179,6 +180,8 @@ export const IPC_PAYLOADS = {
   'dev:probe': pathText,
   'dev:start': pathText,
   'dev:stop': nothing,
+  'feedback:read': object({ ...project }),
+  'feedback:write': object({ ...project, items: list(parseFeedbackItem) }),
   'git:allFiles': object({ ...project }),
   'git:checkout': object({ ...branch, create: maybeFlag, parkFirst: maybeFlag }),
   'git:commit': object({ ...project, message: text, paths: optional(list(pathText)) }),

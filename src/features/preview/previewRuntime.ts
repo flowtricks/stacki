@@ -30,6 +30,8 @@ export interface PreviewRuntimeProps {
   readonly navigatorSelectionTick?: number;
   readonly navHoverPath?: string | undefined;
   readonly overlayInfo?: ((path: string) => OverlayInfo | undefined) | undefined;
+  /** Feedback pins: the frame measures only what it tracks. */
+  readonly pins?: readonly { readonly path: string }[] | undefined;
   readonly focusPath?: string | undefined;
   readonly focusOcc?: number | undefined;
   readonly pathScope?: string;
@@ -110,10 +112,7 @@ export function usePreviewRuntime(
   useMessageListener(iframeRef, refs, setters);
   // The frame measures only tracked paths, so both hover sources must use
   // the same active path for measurement requests and outline rendering.
-  const trackPaths = useMemo(
-    () => trackedPaths(props.selPath, hoverPath, props.focusPath, selectedBoxPath, hoverBoxPath),
-    [props.focusPath, hoverPath, hoverBoxPath, props.selPath, selectedBoxPath],
-  );
+  const trackPaths = useTrackPaths(props, [hoverPath, selectedBoxPath, hoverBoxPath]);
   const link = useFrameLink(iframeRef);
   const registerFrame = useCallback((): void => {
     const frame = iframeRef.current?.contentWindow;
@@ -534,6 +533,28 @@ function useResetOnReload(
     lastClickRef.current = undefined;
     announceRender(refs.render, undefined); // A reloaded frame announces its rendering again.
   }, [canvasMode, props.refreshKey, refs, setters, url]);
+}
+
+// The paths the frame measures: the selection, the hover, the focus, their
+// outline boxes, and the Feedback pins.
+function useTrackPaths(
+  props: PreviewRuntimeProps,
+  [hoverPath, selectedBoxPath, hoverBoxPath]: readonly (string | undefined)[],
+): readonly string[] {
+  const pinPaths = props.pins?.map((pin) => pin.path).join('\n') ?? '';
+  const { focusPath, selPath: selectionPath } = props;
+  return useMemo(
+    () =>
+      trackedPaths(
+        selectionPath,
+        hoverPath,
+        focusPath,
+        selectedBoxPath,
+        hoverBoxPath,
+        ...pinPaths.split('\n'),
+      ),
+    [focusPath, hoverPath, hoverBoxPath, selectionPath, selectedBoxPath, pinPaths],
+  );
 }
 
 function trackedPaths(...paths: readonly (string | undefined)[]): readonly string[] {

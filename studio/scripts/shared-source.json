@@ -112,6 +112,7 @@
     "shared/engine/rebase.ts",
     "shared/engine/splice.ts",
     "shared/ipc/assetConversion.ts",
+    "shared/ipc/feedback.ts",
     "shared/ipc/gitCommitDiff.ts",
     "shared/ipc/githubRepository.ts",
     "shared/ipc/ipcContract.ts",
