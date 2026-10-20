@@ -20,7 +20,10 @@ export default function FeedbackPanel(props: FeedbackPanelProps) {
   const copy = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(renderHandoff(feedback.items, props.projectPath));
-      props.showToast('Copied. Paste it into Claude Code in the project.', 'success');
+      props.showToast(
+        'Copied. Paste into any agent running locally in your project folder.',
+        'success',
+      );
     } catch {
       props.showToast('Could not copy the feedback.', 'error');
     }
