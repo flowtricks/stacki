@@ -1,5 +1,5 @@
 import type { IncomingMessage } from 'node:http';
-import { WebSocket, type RawData } from 'ws';
+import { WebSocket } from 'ws';
 
 export function reauthorizeConnection(
   request: IncomingMessage,
@@ -33,8 +33,10 @@ export function maintainConnection(
   authorize?: () => Promise<boolean>,
   options: { readonly checkEvery?: number; readonly pingEvery?: number } = {},
 ) {
-  let alive = true;
-  let supportsHeartbeat = false;
+  const pingEveryMs = options.pingEvery ?? 30_000;
+  // Allow three heartbeat intervals for browser throttling and network jitter.
+  const silenceMsMax = pingEveryMs * 3;
+  let receivedAt = Date.now();
   let lease: ReturnType<typeof setTimeout> | undefined;
   const check = async () => {
     try {
@@ -52,25 +54,23 @@ export function maintainConnection(
   if (authorize) {
     lease = setTimeout(() => void check(), options.checkEvery ?? 270_000);
   }
-  const received = (data: RawData) => {
-    alive = true;
-    if (String(data) === '{"type":"pong"}') {
-      supportsHeartbeat = true;
-    }
+  const received = () => {
+    receivedAt = Date.now();
   };
   // Protocol ping/pong terminates at Cloudflare's proxy. Application frames
-  // exercise every hop through to the editor and renew proxy activity.
+  // exercise every hop. Vite sends ping frames instead of replying with pong.
+  // Never exempt clients that have not replied: an orphaned preview otherwise
+  // renews the container's activity forever through our outgoing heartbeats.
   socket.on('message', received);
   const heartbeat = setInterval(() => {
-    if (!alive && supportsHeartbeat) {
+    if (Date.now() - receivedAt >= silenceMsMax) {
       socket.terminate();
       return;
     }
-    alive = false;
     if (socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: 'ping' }));
     }
-  }, options.pingEvery ?? 30_000);
+  }, pingEveryMs);
   socket.once('close', () => {
     clearTimeout(lease);
     clearInterval(heartbeat);

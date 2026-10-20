@@ -1,7 +1,14 @@
+// Goal: save batching and idle controls bound hosting use without dropping pending work.
+// Method: exercise persistence failures, operation completion, and idle-time boundaries.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { BatchedWriter } from '../src/features/storage/batchedWriter';
-import { beginOperation, hasPendingOperations, mayPause } from '../src/features/session/activity';
+import {
+  beginOperation,
+  hasPendingOperations,
+  mayPause,
+  onOperationsSettled,
+} from '../src/features/session/activity';
 
 test('many edits share one durable snapshot and acknowledge only after storage succeeds', async () => {
   const writes: Uint8Array[] = [];
@@ -70,6 +77,31 @@ test('idle sessions pause after five minutes, but pending work prevents pause', 
   assert.equal(mayPause(0, 600_000, hasPendingOperations()), false);
   finish();
   assert.equal(hasPendingOperations(), false);
+});
+
+test('hidden sessions can pause after the last operation without waiting for a browser timer', () => {
+  let calls = 0;
+  const stop = onOperationsSettled(() => {
+    assert.equal(hasPendingOperations(), false);
+    calls++;
+  });
+  const first = beginOperation();
+  const second = beginOperation();
+  try {
+    first();
+    assert.equal(calls, 0, 'the remaining save still prevents pause');
+    second();
+    assert.equal(calls, 1, 'settling the final operation wakes the idle check');
+    second();
+    assert.equal(calls, 1, 'repeated cleanup does not emit another completion');
+    stop();
+    beginOperation()();
+    assert.equal(calls, 1, 'unmounted sessions no longer receive completions');
+  } finally {
+    first();
+    second();
+    stop();
+  }
 });
 
 test('asset totals reject uploads before durable storage grows past the allowance', async () => {

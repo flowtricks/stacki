@@ -10,7 +10,13 @@ source distribution does not create resources or claim that an account is config
 
 - Website dependencies are installed into the deployment image and reused when the repository lockfile matches. Changed lockfiles use a cached install fallback. Ordinary cold starts restore drafts and start Astro without reinstalling packages.
 - One shared basic Container; three-minute sleep timeout after connections close.
-- The editor pauses after five minutes without interaction once saves and requests finish. Pausing removes the preview iframe and closes collaboration connections. Resume reconnects the draft and obtains a fresh preview login.
+- The editor pauses when its tab is hidden, or after five minutes without interaction,
+  once saves and requests finish. Pausing removes preview iframes and closes collaboration
+  connections before background tabs can freeze their timers. Resume reconnects the draft
+  and obtains a fresh preview login.
+- Connections without incoming application traffic expire after 90 seconds, including
+  previews and clients that never answered a heartbeat. Outgoing heartbeats cannot renew
+  their own lease and keep an abandoned container running.
 - GitHub sync checks are sequential, at most once per minute per active editor, and skipped in hidden tabs.
 - Collaboration broadcasts and local previews update immediately. Durable snapshots batch over two seconds; unchanged snapshots are not uploaded again. Saved is acknowledged only after persistence succeeds.
 - Reconnection uses exponential backoff up to a minute; edit queues are bounded.

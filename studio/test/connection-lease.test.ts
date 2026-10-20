@@ -1,3 +1,5 @@
+// Goal: live peers remain connected, while revoked and abandoned peers release compute.
+// Method: drive real WebSocket pairs with bounded heartbeat intervals and deadlines.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
@@ -77,21 +79,67 @@ async function connectedPair() {
   return { server, client, socket };
 }
 
-test('a client that stops responding is disconnected even when the transport remains open', async () => {
-  const { server, client, socket } = await connectedPair();
-  client.once('message', () => client.send(JSON.stringify({ type: 'pong' })));
-  maintainConnection(socket, undefined, { pingEvery: 15 });
-  await once(client, 'close');
-  assert.equal(client.readyState, WebSocket.CLOSED);
-  await new Promise<void>((resolve) => server.close(() => resolve()));
-});
+test(
+  'a client that stops responding is disconnected even when the transport remains open',
+  {
+    timeout: 5000,
+  },
+  async () => {
+    const { server, client, socket } = await connectedPair();
+    client.once('message', () => client.send(JSON.stringify({ type: 'pong' })));
+    maintainConnection(socket, undefined, { pingEvery: 15 });
+    await once(client, 'close');
+    assert.equal(client.readyState, WebSocket.CLOSED);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  },
+);
 
-test('an editor opened before heartbeat support can remain connected until it refreshes', async () => {
-  const { server, client, socket } = await connectedPair();
-  maintainConnection(socket, undefined, { pingEvery: 10 });
-  await delay(60);
-  assert.equal(client.readyState, WebSocket.OPEN);
-  client.close();
-  await once(client, 'close');
-  await new Promise<void>((resolve) => server.close(() => resolve()));
-});
+test(
+  'a client that never replies cannot keep a container awake indefinitely',
+  {
+    timeout: 5000,
+  },
+  async () => {
+    const { server, client, socket } = await connectedPair();
+    let pings = 0;
+    client.on('message', () => pings++);
+    try {
+      maintainConnection(socket, undefined, { pingEvery: 30 });
+      await once(client, 'close');
+      assert.equal(client.readyState, WebSocket.CLOSED);
+      assert.ok(pings <= 3, 'outgoing heartbeats cannot renew their own lease');
+    } finally {
+      client.terminate();
+      socket.terminate();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  },
+);
+
+test(
+  'Vite ping messages renew the lease without a document-style pong response',
+  {
+    timeout: 5000,
+  },
+  async () => {
+    const { server, client, socket } = await connectedPair();
+    let pings = 0;
+    client.on('message', () => {
+      pings++;
+      client.send(JSON.stringify({ type: 'ping' }));
+    });
+    try {
+      maintainConnection(socket, undefined, { pingEvery: 100 });
+      const deadline = Date.now() + 3000;
+      while (pings < 5 && Date.now() < deadline) {
+        await delay(25);
+      }
+      assert.ok(pings >= 5, 'preview traffic survives beyond the initial lease');
+      assert.equal(client.readyState, WebSocket.OPEN);
+    } finally {
+      client.terminate();
+      socket.terminate();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  },
+);
