@@ -40,12 +40,16 @@
 }
 .feedback-label {
   color: var(--text-dim);
+  overflow-wrap: anywhere;
 }
+/* A file:line on its own line, cut with an ellipsis; the row's title has it whole. */
 .feedback-where {
-  margin-left: 6px;
+  overflow: hidden;
   font-family: var(--mono);
   font-size: 10px;
   color: var(--text-faint);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .feedback-note {
   color: var(--text);
@@ -53,6 +57,7 @@
   overflow-wrap: anywhere;
 }
 .feedback-row button {
+  flex-shrink: 0;
   padding: 2px;
   color: var(--text-faint);
 }

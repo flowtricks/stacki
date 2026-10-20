@@ -70,9 +70,9 @@ function FeedbackRow(
     >
       <span className="feedback-number">{props.number ?? ''}</span>
       <div className="feedback-main">
-        <div className="feedback-label">
-          {item.label}
-          <span className="feedback-where">{item.trail.at(-1) ?? ''}</span>
+        <div className="feedback-label">{item.label}</div>
+        <div className="feedback-where" title={item.trail.join(' › ')}>
+          {item.trail.at(-1) ?? ''}
         </div>
         <div className="feedback-note">{item.note}</div>
       </div>
