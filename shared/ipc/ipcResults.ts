@@ -9,6 +9,7 @@ import type { ComponentProperties } from '../properties/propertyEditing';
 import type { PreviewVerdict } from '../page/previewToken';
 import type { Result } from '../core/result';
 import type { Data } from '../core/boundary';
+import type { TrailedFeedbackItem } from './feedback';
 import {
   type WireAssetEntry,
   type WireCmsFile,
@@ -348,6 +349,8 @@ export interface IpcResults {
   readonly 'dev:stop': {
     readonly ok: true;
   };
+  readonly 'feedback:read': { readonly items: readonly TrailedFeedbackItem[] };
+  readonly 'feedback:write': { readonly items: readonly TrailedFeedbackItem[] };
   readonly 'git:allFiles': ReadonlyArray<
     WireProjectFile &
       WireFileDescription & {

@@ -118,6 +118,16 @@ const fields = {
     stamps: [{ file: 'src/pages/index.astro', checksum: 'b'.repeat(64) }],
   },
   keys: ['src/pages/index.astro#0'],
+  items: [
+    {
+      id: 'k7f3q2',
+      keys: ['src/pages/index.astro#0.2'],
+      label: 'Button',
+      note: 'Full width under 768px',
+      createdAt: '2026-10-20T10:31:00Z',
+      done: false,
+    },
+  ],
   branch: 'feature',
   ref: 'HEAD',
   path: 'src/pages/index.astro',
@@ -222,6 +232,24 @@ test('IPC collection, string, integer, depth, and path bounds fail explicitly', 
         keys: Array.from({ length: BOUNDARY_LIMITS.itemsMax + 1 }, () => 'key'),
       }),
     /Array exceeds limit/,
+  );
+  const feedback = { projectPath: '/site', items: fields.items };
+  assert.deepEqual(parseIpcPayload('feedback:write', feedback), feedback);
+  assert.throws(
+    () =>
+      parseIpcPayload('feedback:write', {
+        projectPath: '/site',
+        items: Array.from({ length: BOUNDARY_LIMITS.itemsMax + 1 }, () => fields.items[0]),
+      }),
+    /Array exceeds limit/,
+  );
+  assert.throws(
+    () =>
+      parseIpcPayload('feedback:write', {
+        projectPath: '/site',
+        items: [{ ...fields.items[0], done: 'yes' }],
+      }),
+    /Expected boolean/,
   );
   for (const value of [-1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
     assert.throws(() => parseIpcPayload('git:log', { projectPath: '/site', limit: value }));

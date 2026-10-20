@@ -56,6 +56,7 @@ export type LeftTab =
   | 'variables'
   | 'code'
   | 'history'
+  | 'feedback'
   | undefined;
 export type RightTab = 'style' | 'settings';
 export type DevStatus = 'off' | 'starting' | 'on';

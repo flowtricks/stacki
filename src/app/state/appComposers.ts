@@ -33,6 +33,7 @@ import {
   useSelectionPaths,
   useOverlayInfo,
 } from './appViewModel';
+import { useFeedback } from '../../features/feedback/feedbackState';
 
 // Every piece of the app's state and behaviour, in the order its hooks run.
 export function useAppScope() {
@@ -45,6 +46,14 @@ export function useAppScope() {
   const propertyEdits = usePropertyEdits(coreState, lifecycle, history, nodeEdits);
   const pageOps = usePageOps(coreState, lifecycle, navigation, history, nodeEdits, shortcuts);
   const viewModel = useViewModel(coreState, lifecycle, shortcuts, pageOps);
+  // After the view model: it sets the selection keys this render pins notes to.
+  const feedback = useFeedback({
+    projectPath: coreState.project?.path,
+    selectionKeys: coreState.selectionKeysRef.current,
+    editedRel: viewModel.editedRel,
+    label: viewModel.overlayInfo(viewModel.pathFor(coreState.selectedId) ?? '')?.label,
+    showToast: lifecycle.showToast,
+  });
   return {
     ...coreState,
     ...lifecycle,
@@ -55,6 +64,7 @@ export function useAppScope() {
     ...propertyEdits,
     ...pageOps,
     ...viewModel,
+    ...feedback,
   };
 }
 

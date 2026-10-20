@@ -10,6 +10,7 @@ import {
   VariableIcon,
   CodeIcon,
   HistoryIcon,
+  CommentIcon,
 } from '../ui/Icons';
 
 const TABS = [
@@ -22,6 +23,7 @@ const TABS = [
   { id: 'variables', title: 'Variables', shortcut: '⌥V', Icon: VariableIcon },
   { id: 'code', title: 'Code', shortcut: 'C', Icon: CodeIcon },
   { id: 'history', title: 'History', shortcut: '⌥H', Icon: HistoryIcon },
+  { id: 'feedback', title: 'Feedback', shortcut: 'M', Icon: CommentIcon },
 ] as const;
 export type RailTab = (typeof TABS)[number]['id'];
 
@@ -101,7 +103,7 @@ function useRailKeys(
   { componentOpen }: { readonly componentOpen: boolean },
   onSelect: (tab: RailTab) => void,
 ): void {
-  // P / Z / ⇧A / J / ⌥C / ⌥H toggle the panels (ignored while typing in a field).
+  // P / Z / ⇧A / J / M / ⌥C / ⌥H toggle the panels (ignored while typing in a field).
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey) {
@@ -143,6 +145,8 @@ function useRailKeys(
         id = 'assets';
       } else if (key === 'c' && !event.shiftKey) {
         id = 'code';
+      } else if (key === 'm' && !event.shiftKey) {
+        id = 'feedback';
       }
       if (id) {
         event.preventDefault();

@@ -66,3 +66,21 @@
 .preview-overlay-layer.full {
   top: 0;
 }
+
+/* A Feedback note's number at its node's top-left corner. The overlay layer
+   lets clicks through to the frame; a pin takes its own. */
+.feedback-pin {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  border-radius: 9px;
+  background: var(--amber);
+  color: #111111;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: auto;
+  cursor: pointer;
+}

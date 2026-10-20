@@ -57,8 +57,9 @@ test('the complete channel inventory matches real main and terminal registration
     (match) => match[1],
   );
   // Step 8 retired page:writeRaw; step 9 added page:previewEdit; step 10
-  // retired page:write and page:serialize, the Markdown whole-model save.
-  assert.equal(harness.handlers.size, 123);
+  // retired page:write and page:serialize, the Markdown whole-model save; the
+  // Feedback panel added feedback:read and feedback:write.
+  assert.equal(harness.handlers.size, 125);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual(
     [...Object.keys(IPC_PAYLOADS)].sort(),

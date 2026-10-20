@@ -28,6 +28,14 @@ export interface OverlayInfo {
   readonly bound: boolean;
 }
 
+/** A Feedback note drawn on the canvas at its node's first box. */
+export interface PinOverlay {
+  readonly id: string;
+  readonly path: string;
+  readonly index: number;
+  readonly note: string;
+}
+
 export interface SpacingHover {
   readonly kind: 'padding' | 'margin' | 'gap';
   readonly sides?: readonly string[];
@@ -54,6 +62,8 @@ interface PreviewOverlaysProps {
   readonly focusPath: string | undefined;
   readonly focusWhole: boolean;
   readonly overlayInfo?: (path: string) => OverlayInfo | undefined;
+  readonly pins?: readonly PinOverlay[] | undefined;
+  readonly onSelectPin?: ((pin: PinOverlay) => void) | undefined;
 }
 
 export function PreviewOverlays(props: PreviewOverlaysProps) {
@@ -64,8 +74,30 @@ export function PreviewOverlays(props: PreviewOverlaysProps) {
       )}
       <SpacingOverlays {...props} />
       <NodeOutlines {...props} />
+      <PinOverlays {...props} />
     </>
   );
+}
+
+// A pin whose node reported no box (another branch, off the page) draws nothing.
+function PinOverlays(props: PreviewOverlaysProps) {
+  return (props.pins ?? []).flatMap((pin) => {
+    const box = onePerPlace(props.rects[pin.path] ?? undefined)[0];
+    if (!box) {
+      return [];
+    }
+    return [
+      <button
+        key={pin.id}
+        className="feedback-pin"
+        title={pin.note}
+        style={{ left: box.x * props.scale, top: box.y * props.scale }}
+        onClick={() => props.onSelectPin?.(pin)}
+      >
+        {pin.index}
+      </button>,
+    ];
+  });
 }
 
 function FocusOverlays({

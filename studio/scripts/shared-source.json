@@ -100,6 +100,7 @@
     "shared/engine/rebase.ts",
     "shared/engine/splice.ts",
     "shared/ipc/assetConversion.ts",
+    "shared/ipc/feedback.ts",
     "shared/ipc/githubRepository.ts",
     "shared/ipc/ipcContract.ts",
     "shared/ipc/ipcPayloads.ts",

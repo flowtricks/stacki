@@ -35,7 +35,7 @@ import type {
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { type LeftTab } from '../appTypes';
 import { openExternalURL, restoreProjectFile, restoreProjectVersion } from '../../ipc/appBridge';
-import { CmsPanel, VariablesPanel, CodePanel } from '../appPanels';
+import { CmsPanel, VariablesPanel, CodePanel, FeedbackPanel } from '../appPanels';
 import {
   CanvasPane,
   CanvasCovers,
@@ -45,6 +45,7 @@ import {
   ConflictNotice,
   BusyOverlay,
   Toast,
+  selectCanvasPath,
 } from './AppPanes';
 import type { AppView, ShellView } from '../App';
 
@@ -324,6 +325,7 @@ export function LeftPanel({ app, tab }: { readonly app: ShellView; readonly tab:
       )}
       {tab === 'code' && <CodeTab app={app} />}
       {tab === 'history' && <HistoryTab app={app} />}
+      {tab === 'feedback' && <FeedbackTab app={app} />}
       {tab === 'assets' && (
         <AssetsPanel
           project={app.project}
@@ -517,6 +519,22 @@ export function CodeTab({ app }: { readonly app: ShellView }) {
       onOpenComponent={(name, id) => {
         void app.openComponent(name, app.pathFor(id)).catch(app.reportFailure);
       }}
+    />
+  );
+}
+
+export function FeedbackTab({ app }: { readonly app: ShellView }) {
+  return (
+    <FeedbackPanel
+      feedback={app.feedback}
+      target={app.overlayInfo(app.pathFor(app.selectedId) ?? '')?.label}
+      selectedKey={app.selectionKeysRef.current.at(-1)}
+      onSelectPin={(pin) => {
+        selectCanvasPath(app, pin.path, { outside: false });
+        // Selecting reveals the node in the Navigator; a note's row keeps its panel.
+        app.setLeftTab('feedback');
+      }}
+      showToast={app.showToast}
     />
   );
 }

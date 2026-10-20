@@ -1,0 +1,75 @@
+/* The Feedback panel, after the History panel's list styles. */
+.feedback-body {
+  padding: 0 8px 12px;
+}
+.feedback-input {
+  width: 100%;
+  min-height: 52px;
+  resize: vertical;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  font: 11.5px/1.4 var(--font);
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.feedback-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.feedback-row:hover {
+  background: var(--bg-hover);
+}
+.feedback-row.is-selected {
+  background: var(--accent-soft);
+}
+.feedback-row.is-done {
+  opacity: 0.45;
+}
+.feedback-number {
+  min-width: 14px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.feedback-main {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.feedback-label {
+  color: var(--text-dim);
+}
+.feedback-where {
+  margin-left: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.feedback-note {
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.feedback-row button {
+  padding: 2px;
+  color: var(--text-faint);
+}
+.feedback-done-head,
+.feedback-path {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding: 0 4px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.feedback-path {
+  font-family: var(--mono);
+}

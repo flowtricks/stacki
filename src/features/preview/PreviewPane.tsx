@@ -2,7 +2,7 @@ import React from 'react';
 import { usePreviewDimensions, usePreviewSizing } from './usePreviewSizing';
 import CanvasView from './CanvasView';
 import type { DevDiagnosis } from './DevOffline';
-import type { OverlayInfo, SpacingHover } from './PreviewOverlays';
+import type { OverlayInfo, PinOverlay, SpacingHover } from './PreviewOverlays';
 import type { PreviewCrumb, PreviewDevice } from './PreviewToolbar';
 import { DevOffline } from './DevOffline';
 import { PreviewOverlays } from './PreviewOverlays';
@@ -35,6 +35,8 @@ interface PreviewPaneProps {
   readonly navigatorSelectionTick?: number;
   readonly navHoverPath?: string | undefined;
   readonly overlayInfo?: (path: string) => OverlayInfo | undefined;
+  readonly pins?: readonly PinOverlay[];
+  readonly onSelectPin?: (pin: PinOverlay) => void;
   readonly onSelectPath?: (path: string | undefined, info: { readonly outside: boolean }) => void;
   readonly onOpenPath?: (path: string | undefined, occurrence: number) => void;
   readonly judgeEvent: JudgeCanvasEvent;
@@ -180,31 +182,52 @@ function DesignPreview({
         </div>
         <ResizeHandles sizing={sizing} />
       </div>
-      <div
-        className={`preview-overlay-layer ${width ? '' : 'full'}`}
-        style={{
-          width: sizing.viewport.width * scale,
-          height: sizing.viewport.height * scale,
-          borderRadius: width ? 10 * scale : 0,
-        }}
-      >
-        {/* First in the layer, so the outlines and spacing bands paint over it. */}
-        {shownGuide && <GuideOverlay {...shownGuide} scale={scale} />}
-        <PreviewOverlays
-          rects={runtime.rects}
-          spacing={runtime.spacing}
-          scale={scale}
-          {...(props.spacingHover === undefined ? {} : { spacingHover: props.spacingHover })}
-          selPath={props.selPath}
-          selOcc={runtime.selOcc}
-          hoverPath={runtime.hoverPath}
-          hoverOcc={runtime.hoverOcc}
-          focusPath={props.focusPath}
-          focusWhole={props.focusWhole ?? false}
-          {...(props.overlayInfo === undefined ? {} : { overlayInfo: props.overlayInfo })}
-        />
-      </div>
+      <OverlayLayer props={props} runtime={runtime} sizing={sizing} shownGuide={shownGuide} />
     </>
+  );
+}
+
+// The outlines, spacing bands, guide and pins, in screen coordinates over the scaled frame.
+function OverlayLayer({
+  props,
+  runtime,
+  sizing,
+  shownGuide,
+}: {
+  readonly props: PreviewPaneProps;
+  readonly runtime: Runtime;
+  readonly sizing: Sizing;
+  readonly shownGuide: ShownGuide | undefined;
+}) {
+  const width = sizing.width;
+  const scale = sizing.viewport.scale;
+  return (
+    <div
+      className={`preview-overlay-layer ${width ? '' : 'full'}`}
+      style={{
+        width: sizing.viewport.width * scale,
+        height: sizing.viewport.height * scale,
+        borderRadius: width ? 10 * scale : 0,
+      }}
+    >
+      {/* First in the layer, so the outlines and spacing bands paint over it. */}
+      {shownGuide && <GuideOverlay {...shownGuide} scale={scale} />}
+      <PreviewOverlays
+        rects={runtime.rects}
+        spacing={runtime.spacing}
+        scale={scale}
+        {...(props.spacingHover === undefined ? {} : { spacingHover: props.spacingHover })}
+        selPath={props.selPath}
+        selOcc={runtime.selOcc}
+        hoverPath={runtime.hoverPath}
+        hoverOcc={runtime.hoverOcc}
+        focusPath={props.focusPath}
+        focusWhole={props.focusWhole ?? false}
+        {...(props.overlayInfo === undefined ? {} : { overlayInfo: props.overlayInfo })}
+        pins={props.pins}
+        onSelectPin={props.onSelectPin}
+      />
+    </div>
   );
 }
 

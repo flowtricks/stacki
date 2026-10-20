@@ -84,6 +84,9 @@ function projectBridge() {
 
     // ⇧⌘C — the canvas selection as file:line pointers, for an AI chat.
     copySelection: invoke('selection:copy'),
+    // The Feedback panel's .stacki/feedback.json, trails resolved by main.
+    readFeedback: invoke('feedback:read'),
+    writeFeedback: invoke('feedback:write'),
   } satisfies Partial<PreloadBridge>;
 }
 

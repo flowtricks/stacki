@@ -32,6 +32,8 @@ interface InvokeChannels {
   readonly readSourceText: 'src:readText';
   readonly writeSourceText: 'src:writeText';
   readonly copySelection: 'selection:copy';
+  readonly readFeedback: 'feedback:read';
+  readonly writeFeedback: 'feedback:write';
   readonly listCms: 'cms:list';
   readonly readCms: 'cms:read';
   readonly writeCms: 'cms:write';
