@@ -63,14 +63,18 @@ function FeedbackRow(
   },
 ) {
   const { item, feedback } = props;
-  // A row with a pin on this page opens it, so the note shows where it was left.
-  const pinned = feedback.pins.some((pin) => pin.id === item.id);
   const open = feedback.openPinId === item.id ? ' is-selected' : '';
+  // A row reveals its note where it was left, opening its page and scrolling
+  // the canvas to it; a second click closes the note again.
+  const onClick = (): void => {
+    if (open) {
+      feedback.setOpenPinId(undefined);
+    } else {
+      feedback.reveal(item.id);
+    }
+  };
   return (
-    <div
-      className={`feedback-row${item.done ? ' is-done' : ''}${open}`}
-      onClick={() => pinned && feedback.setOpenPinId(open ? undefined : item.id)}
-    >
+    <div className={`feedback-row${item.done ? ' is-done' : ''}${open}`} onClick={onClick}>
       <span className="feedback-number">{props.number ?? ''}</span>
       <div className="feedback-main">
         <div className="feedback-label">{item.label}</div>

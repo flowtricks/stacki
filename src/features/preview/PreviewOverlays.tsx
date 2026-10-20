@@ -50,6 +50,9 @@ export interface CanvasFeedback {
   readonly onAdd: (note: string) => void;
   readonly onCancel: () => void;
   readonly onOpenPin: (id: string | undefined) => void;
+  /** A pin the Feedback list asked to bring on screen, until the canvas has. */
+  readonly revealId: string | undefined;
+  readonly onRevealed: () => void;
   readonly onDone: (id: string) => void;
   readonly onRemove: (id: string) => void;
 }

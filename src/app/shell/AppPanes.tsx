@@ -184,6 +184,8 @@ function canvasFeedback(app: ShellView): CanvasFeedback {
     onAdd: (note) => void feedback.add(note),
     onCancel: feedback.cancel,
     onOpenPin: feedback.setOpenPinId,
+    revealId: feedback.revealId,
+    onRevealed: feedback.revealed,
     onDone: (id) => void feedback.toggleDone(id),
     onRemove: (id) => void feedback.remove(id),
   };

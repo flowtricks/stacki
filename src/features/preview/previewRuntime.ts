@@ -7,6 +7,7 @@ import type { PreviewMessage, PreviewReloadReason } from './previewMessages';
 import type { GuideMetrics } from './guideModel';
 import { parsePreviewMessage } from './previewMessages';
 import { outlineBoxPath, sameCopy } from './outlineBoxes';
+import { useFeedbackReveal } from './feedbackReveal';
 import { setModifiers } from '../../editor/heldModifiers';
 import { noteCanvasReady, receiveCanvasReply, setCanvasFrame } from '../../editor/canvasQuery';
 import type { Digest } from '../../../shared/core/brand';
@@ -139,6 +140,7 @@ export function usePreviewRuntime(
   useFrameRegistration(props, url, registerFrame, sendTrack);
   useSelectionScroll(props, iframeRef, refs);
   useResetOnReload(props, url, refs, setters);
+  useFeedbackReveal(props.feedback, rects, url, link.post);
   return {
     iframeRef,
     rects,

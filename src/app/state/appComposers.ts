@@ -34,6 +34,8 @@ import {
   useOverlayInfo,
 } from './appViewModel';
 import { useFeedback } from '../../features/feedback/feedbackState';
+import { projectRelativePath } from '../../lib/projectPath';
+import { assert } from '../../../shared/core/assert';
 
 // Every piece of the app's state and behaviour, in the order its hooks run.
 export function useAppScope() {
@@ -48,10 +50,20 @@ export function useAppScope() {
   const viewModel = useViewModel(coreState, lifecycle, shortcuts, pageOps);
   // After the view model: it sets the selection keys, whose first names the page.
   const pageKey = coreState.selectionKeysRef.current[0];
+  const projectPath = coreState.project?.path;
+  const relOf = (file: string): string =>
+    projectRelativePath(projectPath ?? '', file, window.avb.platform);
   const feedback = useFeedback({
-    projectPath: coreState.project?.path,
+    projectPath,
     active: coreState.leftTab === 'feedback',
     pageRel: pageKey === undefined ? undefined : pageKey.slice(0, pageKey.indexOf('#')),
+    pageRels: projectPath === undefined ? [] : coreState.scan.pages.map((page) => relOf(page.path)),
+    openPage: (pageRel) => {
+      const page = coreState.scan.pages.find((candidate) => relOf(candidate.path) === pageRel);
+      assert(page !== undefined, 'A note opens only one of the project’s pages');
+      // Opening a page reports its own failures.
+      void navigation.selectPage(page);
+    },
     showToast: lifecycle.showToast,
   });
   return {
