@@ -1,12 +1,14 @@
 // Goal: the Feedback file round-trips through the real main handlers, each
-// item carrying a trail resolved from disk; the project's agent instructions
-// name the file once; and a malformed file is refused.
+// item carrying a trail resolved from disk; Git never sees the file; the
+// project's agent instructions name the file once; and a malformed file is refused.
 // Methodology: register main in a windowless VM over a temporary project, write
 // two items (one on a live node, one on a dead key) through the document actor,
-// read them back, check CLAUDE.md, then corrupt the file and check the read throws.
+// read them back, ask Git whether it ignores the file, check CLAUDE.md, then
+// corrupt the file and check the read throws.
 // A second project keeps an AGENTS.md that CLAUDE.md imports: only AGENTS.md changes.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -28,6 +30,7 @@ test('feedback writes resolve trails, create .stacki/, and read back', async (co
   fs.mkdirSync(path.join(root, 'user'));
   fs.writeFileSync(path.join(root, 'package.json'), '{"dependencies":{"astro":"*"}}');
   fs.writeFileSync(path.join(root, 'src/pages/index.astro'), '<main>\n  <h1>Hi</h1>\n</main>\n');
+  execFileSync('git', ['init', '--quiet'], { cwd: root });
   const harness = mainHarness(path.join(root, 'user'));
   context.after(() => {
     harness.dispose();
@@ -45,6 +48,14 @@ test('feedback writes resolve trails, create .stacki/, and read back', async (co
     (entry: unknown) => toRecord(entry)?.['trail'],
   );
   assert.deepEqual(trails, [['src/pages/index.astro:1-3'], ['src/pages/index.astro']]);
+
+  // The notes are the editor's, not the site's: Git ignores them, so they never
+  // reach a commit, while the rest of `.stacki/` stays the project's to track.
+  const ignored = execFileSync('git', ['check-ignore', '.stacki/feedback.json'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.equal(ignored.trim(), '.stacki/feedback.json');
 
   // An agent started in the project finds the file: CLAUDE.md names it, once.
   const claude = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');

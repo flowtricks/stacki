@@ -1,10 +1,11 @@
 // Git's local exclude is repository bookkeeping, never website source.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-const EXCLUDE_LINES = ['.stacki/preview/', '.stacki/canvas/'];
+const EXCLUDE_LINES = ['.stacki/preview/', '.stacki/canvas/', '.stacki/feedback.json'];
 
 /**
- * Keep generated preview checkouts and defaults canvases out of project commits.
+ * Keep generated preview checkouts, defaults canvases and the editor's
+ * feedback notes out of project commits.
  *
  * Without this the preview checkout shows up as an untracked folder in the
  * user's own project — in the file picker, in the commit box, in every status
@@ -54,7 +55,7 @@ export function ensureExcluded(projectPath: string): boolean {
     const next =
       missing.length === 0
         ? current
-        : current + sep + '# Stacki previews (generated).\n' + missing.join('\n') + '\n';
+        : current + sep + '# Stacki local files (generated).\n' + missing.join('\n') + '\n';
     fs.writeFileSync(file, next);
     return true;
   } catch {
