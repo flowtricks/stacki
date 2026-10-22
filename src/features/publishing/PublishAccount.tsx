@@ -5,6 +5,7 @@ import Popup from '../../ui/Popup';
 import {
   ACCOUNT_INSTALL_TIMEOUT_MS,
   ACCOUNT_SIGN_IN_TIMEOUT_MS,
+  accountSignInPending,
   type AccountState,
 } from '../../../shared/ipc/publishAccount';
 
@@ -136,7 +137,7 @@ function useAccountSignIn(
           return;
         }
         setState(result);
-        if (!['installing', 'starting', 'waiting', 'browser'].includes(result.kind)) {
+        if (!accountSignInPending(result)) {
           return;
         }
         await new Promise<void>((resolve) => {

@@ -3,6 +3,7 @@ import { assert } from '../../shared/core/assert';
 import {
   ACCOUNT_SIGN_IN_TIMEOUT_MS,
   ACCOUNT_INSTALL_TIMEOUT_MS,
+  accountSignInPending,
   parseAccountRequest,
   parseCloudflareSignInURL,
   type AccountRequest,
@@ -219,10 +220,6 @@ export class PublishingAccount {
       stopAccountSignIn(session.process, session.provider);
     }
   }
-}
-
-function accountSignInPending(state: AccountState): boolean {
-  return ['installing', 'starting', 'waiting', 'browser'].includes(state.kind);
 }
 
 function launchAccountSignIn(

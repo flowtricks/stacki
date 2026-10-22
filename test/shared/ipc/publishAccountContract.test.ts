@@ -3,7 +3,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseIpcPayload } from '#dist/shared/ipc/ipcPayloads.js';
-import { parseAccountRequest, parseAccountState } from '#dist/shared/ipc/publishAccount.js';
+import {
+  accountSignInPending,
+  parseAccountRequest,
+  parseAccountState,
+} from '#dist/shared/ipc/publishAccount.js';
 
 const id = '00000000-0000-4000-8000-000000000000';
 test('GitHub sign-in actions and states round-trip', () => {
@@ -86,5 +90,24 @@ test('Cloudflare sign-in accepts only its bounded authorization URL and provider
     undefined,
   ]) {
     assert.throws(() => parseAccountState({ kind: 'browser', url: invalid }));
+  }
+});
+
+test('only running sign-in states are pending', () => {
+  const url = 'https://dash.cloudflare.com/oauth2/auth?client_id=test&state=nonce';
+  for (const state of [
+    { kind: 'installing' },
+    { kind: 'starting' },
+    { kind: 'waiting', code: 'ABCD-1234' },
+    { kind: 'browser', url },
+  ]) {
+    assert.equal(accountSignInPending(parseAccountState(state)), true, state.kind);
+  }
+  for (const state of [
+    { kind: 'complete' },
+    { kind: 'cancelled' },
+    { kind: 'failed', message: 'Unavailable' },
+  ]) {
+    assert.equal(accountSignInPending(parseAccountState(state)), false, state.kind);
   }
 });

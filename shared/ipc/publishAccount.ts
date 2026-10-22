@@ -64,6 +64,26 @@ export function parseAccountState(input: unknown): AccountState {
   }
 }
 
+// Whether a sign-in process is still running: the renderer keeps polling it, and the
+// service refuses a second sign-in until it ends. Adding a state must decide this here.
+export function accountSignInPending(state: AccountState): boolean {
+  switch (state.kind) {
+    case 'installing':
+    case 'starting':
+    case 'waiting':
+    case 'browser':
+      return true;
+    case 'complete':
+    case 'cancelled':
+    case 'failed':
+      return false;
+    default: {
+      const exhaustive: never = state;
+      return exhaustive;
+    }
+  }
+}
+
 export function parseCloudflareSignInURL(input: unknown): string {
   const value = text(input);
   assert(value.length <= 4096, 'Cloudflare sign-in URL stays bounded');
