@@ -11,7 +11,8 @@ import { scaffoldProject } from '../project/scaffold';
 import { createStarter } from '../project/starter';
 import { isWin, errorMessage } from '../lib/mainHelpers';
 import { ensureToolPath, run } from '../lib/nodeTools';
-import { isAstroProject, detectPackageManager } from '../project/projectFiles';
+import { isAstroProject } from '../project/projectFiles';
+import { detectPackageManager } from '../project/packageManager';
 import type { MainHost } from './mainHost';
 
 export function registerProjectHandlers(

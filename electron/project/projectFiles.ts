@@ -1,6 +1,5 @@
 // What a folder holds as an Astro project: its page, layout and component
-// files, the route a page serves, and whether its dependencies are installed
-// and with which package manager.
+// files, the route a page serves, and whether its dependencies are installed.
 
 import { MAIN_LIMITS, directoryBudget } from '../lib/mainLimits';
 import { toRecord } from '../../shared/core/record';
@@ -74,21 +73,4 @@ export function isAstroProject(directory: string) {
 export function hasDependencies(projectPath: string) {
   const binName = isWin ? 'astro.cmd' : 'astro';
   return fs.existsSync(path.join(projectPath, 'node_modules', '.bin', binName));
-}
-
-// Detects the project's package manager from its lockfile.
-export function detectPackageManager(directory: string) {
-  if (fs.existsSync(path.join(directory, 'pnpm-lock.yaml'))) {
-    return 'pnpm';
-  }
-  if (fs.existsSync(path.join(directory, 'yarn.lock'))) {
-    return 'yarn';
-  }
-  if (
-    fs.existsSync(path.join(directory, 'bun.lockb')) ||
-    fs.existsSync(path.join(directory, 'bun.lock'))
-  ) {
-    return 'bun';
-  }
-  return 'npm';
 }
