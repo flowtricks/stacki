@@ -702,12 +702,15 @@ smaller patches retain binary/rename metadata and validated hunk line numbers fo
 
 ## Project publishing
 
-`publish:account` reports `installing` while Cloudflare sign-in installs a missing project Wrangler
-with `npm install --save-dev wrangler`. Only an explicit sign-in start can trigger installation;
-discovery and status polling cannot. The same session continues to browser sign-in after a successful
-install. Cancellation, a ten-minute installation timeout, or excessive output stops the process tree
-and prevents login. Installer output is discarded, and failures expose only sanitized messages.
-Login retains its separate five-minute timeout. Existing project/workspace dependencies skip setup.
+`publish:account` reports `installing` while Cloudflare sign-in adds a missing project Wrangler as
+a development dependency with the site's package manager (package.json's `packageManager` field,
+else its lockfile, else npm). Only an explicit sign-in start can trigger installation; discovery
+and status polling cannot. The same session continues to browser sign-in after a successful
+install. Cancelling skips login but lets the package manager finish, so node_modules is never left
+half written; another sign-in is refused until it does. A ten-minute installation timeout or
+excessive output stops the process tree and prevents login. Installer output is discarded, and
+failures expose only sanitized messages. Login retains its separate five-minute timeout. Existing
+project/workspace dependencies skip setup.
 
 `.stacki/component-sources.json` registers bounded, read-only installed component roots for both
 hosts. `shared/properties/componentSources.ts` parses package names, relative directories and

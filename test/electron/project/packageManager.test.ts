@@ -8,7 +8,11 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { detectPackageManager } from '#dist/electron/project/packageManager.js';
-import { parsePackageManagerField } from '#dist/shared/properties/packageManager.js';
+import {
+  PACKAGE_MANAGERS,
+  packageManagerLabel,
+  parsePackageManagerField,
+} from '#dist/shared/properties/packageManager.js';
 
 async function project(context: TestContext, files: Readonly<Record<string, string>>) {
   const directory = await mkdtemp(path.join(tmpdir(), 'stacki-package-manager-'));
@@ -39,6 +43,13 @@ test('the packageManager field names nothing when unknown, malformed or oversize
   ]) {
     assert.equal(parsePackageManagerField(input), undefined, String(input));
   }
+});
+
+test('every package manager has the name people know it by', () => {
+  assert.deepEqual(
+    PACKAGE_MANAGERS.map((manager) => packageManagerLabel(manager)),
+    ['npm', 'pnpm', 'Yarn', 'Bun'],
+  );
 });
 
 test('the packageManager field outranks the lockfile', async (context) => {

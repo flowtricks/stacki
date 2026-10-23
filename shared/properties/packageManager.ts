@@ -6,6 +6,24 @@ export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
 
 const FIELD_CHARS_MAX = 256;
 
+// The name people know each manager by, for messages.
+export function packageManagerLabel(manager: PackageManager): string {
+  switch (manager) {
+    case 'npm':
+      return 'npm';
+    case 'pnpm':
+      return 'pnpm';
+    case 'yarn':
+      return 'Yarn';
+    case 'bun':
+      return 'Bun';
+    default: {
+      const exhaustive: never = manager;
+      return exhaustive;
+    }
+  }
+}
+
 // The manager the field names, or undefined when it is absent, malformed or names
 // one Stacki does not run, so detection falls back to the project's lockfile.
 export function parsePackageManagerField(input: unknown): PackageManager | undefined {

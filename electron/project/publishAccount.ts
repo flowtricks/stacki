@@ -9,16 +9,23 @@ import {
   type AccountRequest,
   type AccountState,
 } from '../../shared/ipc/publishAccount';
+import { packageManagerLabel, type PackageManager } from '../../shared/properties/packageManager';
 import { ensureToolPath } from '../lib/nodeTools';
+import { detectPackageManager } from './packageManager';
 import { projectHasWrangler, resolvePublishExecutable } from './publishExecutable';
 import { publishEnvironment, stopPublishProcess } from './publishCommands';
+
+// What a launched process does: install Wrangler with the site's manager, or sign in.
+export type LaunchStep =
+  | { readonly kind: 'installing'; readonly packageManager: PackageManager }
+  | { readonly kind: 'starting' };
 
 interface Session {
   readonly id: string;
   readonly root: string;
   readonly provider: 'github' | 'cloudflare';
   readonly process: ChildProcessWithoutNullStreams;
-  readonly phase: 'installing' | 'starting';
+  readonly step: LaunchStep;
   state: AccountState;
   output: string;
   outputChars: number;
@@ -29,7 +36,7 @@ const INSTALL_OUTPUT_CHARS_MAX = 1_048_576;
 type Launch = (
   root: string,
   provider: 'github' | 'cloudflare',
-  phase: Session['phase'],
+  step: LaunchStep,
 ) => ChildProcessWithoutNullStreams;
 
 // One login can own the CLI credential store at a time. Raw output never leaves this service.
@@ -39,12 +46,13 @@ export class PublishingAccount {
   constructor(
     private readonly launch: Launch = launchAccountSignIn,
     private readonly hasWrangler: (root: string) => boolean = projectHasWrangler,
+    private readonly packageManager: (root: string) => PackageManager = detectPackageManager,
   ) {}
 
   request(root: string, input: AccountRequest): AccountState {
     const request = parseAccountRequest(input);
-    const session = this.session;
     const provider = request.provider ?? 'github';
+    const session = this.session;
     if (session?.id === request.id && session.root === root && session.provider === provider) {
       if (request.action === 'cancel' && accountSignInPending(session.state)) {
         this.finish(session, { kind: 'cancelled' });
@@ -54,24 +62,52 @@ export class PublishingAccount {
     if (request.action !== 'start') {
       return { kind: 'failed', message: 'This sign-in session has ended. Please try again.' };
     }
-    if (session && accountSignInPending(session.state)) {
+    const busy = this.busy();
+    if (busy !== undefined) {
+      return busy;
+    }
+    const step: LaunchStep =
+      provider === 'cloudflare' && !this.hasWrangler(root)
+        ? { kind: 'installing', packageManager: this.packageManager(root) }
+        : { kind: 'starting' };
+    return this.start(root, request.id, provider, step);
+  }
+
+  // A pending sign-in owns the CLI credentials, and a cancelled installation still
+  // writing the site must finish before another one can start.
+  private busy(): AccountState | undefined {
+    const session = this.session;
+    if (session === undefined) {
+      return undefined;
+    }
+    if (accountSignInPending(session.state)) {
       return {
         kind: 'failed',
         message: 'Finish or cancel the account sign-in already in progress.',
       };
     }
-    const phase = provider === 'cloudflare' && !this.hasWrangler(root) ? 'installing' : 'starting';
-    return this.start(root, request.id, provider, phase);
+    if (session.step.kind === 'installing' && running(session.process)) {
+      return {
+        kind: 'failed',
+        message: 'Wrangler is still installing in the background. Try again in a moment.',
+      };
+    }
+    return undefined;
   }
 
   private start(
     root: string,
     id: string,
     provider: 'github' | 'cloudflare',
-    phase: Session['phase'],
+    step: LaunchStep,
   ): AccountState {
-    const child = this.launch(root, provider, phase);
-    const label = provider === 'github' ? 'GitHub' : 'Cloudflare';
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = this.launch(root, provider, step);
+    } catch {
+      // On Windows a missing tool is found while resolving it, before any process starts.
+      return { kind: 'failed', message: launchFailure(provider, step) };
+    }
     const stop = () => {
       stopAccountSignIn(child, provider);
     };
@@ -82,34 +118,43 @@ export class PublishingAccount {
       root,
       provider,
       process: child,
-      phase,
-      state: { kind: phase },
+      step,
+      state: { kind: step.kind },
       output: '',
       outputChars: 0,
       timer: undefined,
     };
     this.session = session;
     session.timer = setTimeout(
-      () => {
-        this.finish(session, {
-          kind: 'failed',
-          message:
-            phase === 'installing'
-              ? 'Wrangler installation timed out. Check your connection and try again.'
-              : `${label} sign-in expired. Please try again.`,
-        });
-      },
-      phase === 'installing' ? ACCOUNT_INSTALL_TIMEOUT_MS : ACCOUNT_SIGN_IN_TIMEOUT_MS,
+      () => this.expire(session),
+      step.kind === 'installing' ? ACCOUNT_INSTALL_TIMEOUT_MS : ACCOUNT_SIGN_IN_TIMEOUT_MS,
     );
     session.timer.unref();
     this.watch(session);
     return session.state;
   }
 
+  // A pending session fails at its timeout. A cancelled installation left to finish in
+  // the background is stopped at the same timeout, so it stays bounded too.
+  private expire(session: Session): void {
+    if (accountSignInPending(session.state)) {
+      const label = session.provider === 'github' ? 'GitHub' : 'Cloudflare';
+      this.finish(session, {
+        kind: 'failed',
+        message:
+          session.step.kind === 'installing'
+            ? 'Wrangler installation timed out. Check your connection and try again.'
+            : `${label} sign-in expired. Please try again.`,
+      });
+      return;
+    }
+    if (running(session.process)) {
+      stopAccountSignIn(session.process, session.provider);
+    }
+  }
+
   private watch(session: Session): void {
     const child = session.process;
-    const label = session.provider === 'github' ? 'GitHub' : 'Cloudflare';
-    const tool = session.provider === 'github' ? 'gh' : 'Wrangler';
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk: unknown) => this.read(session, chunk));
@@ -117,10 +162,7 @@ export class PublishingAccount {
     child.on('error', () =>
       this.finish(session, {
         kind: 'failed',
-        message:
-          session.phase === 'installing'
-            ? 'Could not start Wrangler installation. Install Node.js and npm, then try again.'
-            : `Could not start ${label} sign-in. Install ${tool} and try again.`,
+        message: launchFailure(session.provider, session.step),
       }),
     );
     child.on('close', (code) => this.closed(session, code ?? undefined));
@@ -130,14 +172,23 @@ export class PublishingAccount {
   }
 
   private closed(session: Session, code: number | undefined): void {
-    if (this.session !== session || !accountSignInPending(session.state)) {
+    if (this.session !== session) {
       return;
     }
-    if (session.phase === 'installing') {
+    if (!accountSignInPending(session.state)) {
+      // A cancelled installation that finished in the background needs no timeout now.
+      clearTimeout(session.timer);
+      return;
+    }
+    if (session.step.kind === 'installing') {
       if (code === 0) {
         clearTimeout(session.timer);
         // Session identity prevents late installer events from completing the subsequent login.
-        this.start(session.root, session.id, session.provider, 'starting');
+        const login = this.start(session.root, session.id, session.provider, { kind: 'starting' });
+        if (this.session === session) {
+          // Login could not launch, so no new session replaced this one.
+          this.finish(session, login);
+        }
       } else {
         this.finish(session, {
           kind: 'failed',
@@ -169,11 +220,11 @@ export class PublishingAccount {
     }
     assert(typeof chunk === 'string', 'Account sign-in streams use UTF-8 text');
     assert(session.output.length <= OUTPUT_CHARS_MAX, 'Account sign-in output stays bounded');
-    const label =
-      session.phase === 'installing'
-        ? 'Wrangler installation'
-        : `${session.provider === 'github' ? 'GitHub' : 'Cloudflare'} sign-in`;
-    const limit = session.phase === 'installing' ? INSTALL_OUTPUT_CHARS_MAX : OUTPUT_CHARS_MAX;
+    const installing = session.step.kind === 'installing';
+    const label = installing
+      ? 'Wrangler installation'
+      : `${session.provider === 'github' ? 'GitHub' : 'Cloudflare'} sign-in`;
+    const limit = installing ? INSTALL_OUTPUT_CHARS_MAX : OUTPUT_CHARS_MAX;
     if (chunk.length > limit - session.outputChars) {
       this.finish(session, {
         kind: 'failed',
@@ -183,7 +234,7 @@ export class PublishingAccount {
     }
     session.outputChars += chunk.length;
     // Installation logs can contain registry credentials; count them without retaining them.
-    if (session.phase === 'installing') {
+    if (installing) {
       return;
     }
     session.output += chunk;
@@ -214,10 +265,50 @@ export class PublishingAccount {
     assert(this.session === session, 'Only the current sign-in session can finish');
     session.state = state;
     session.output = '';
+    if (session.step.kind === 'installing') {
+      if (state.kind === 'cancelled') {
+        // Stopping a package manager mid-install can leave node_modules half written, so
+        // a cancelled installation finishes in the background, bounded by its timeout.
+        return;
+      }
+    }
     clearTimeout(session.timer);
     session.timer = undefined;
-    if (session.process.exitCode === null && session.process.signalCode === null) {
+    if (running(session.process)) {
       stopAccountSignIn(session.process, session.provider);
+    }
+  }
+}
+
+function running(child: ChildProcessWithoutNullStreams): boolean {
+  return child.exitCode === null && child.signalCode === null;
+}
+
+function launchFailure(provider: 'github' | 'cloudflare', step: LaunchStep): string {
+  if (step.kind === 'installing') {
+    const label = packageManagerLabel(step.packageManager);
+    return `Could not run ${label} to install Wrangler. Install ${label}, then try again.`;
+  }
+  return provider === 'github'
+    ? 'Could not start GitHub sign-in. Install gh and try again.'
+    : 'Could not start Cloudflare sign-in. Install Wrangler and try again.';
+}
+
+// Adds the latest Wrangler as a development dependency with the site's manager.
+export function wranglerInstallArguments(manager: PackageManager): readonly string[] {
+  switch (manager) {
+    case 'npm':
+      return ['install', '--save-dev', 'wrangler'];
+    case 'pnpm':
+      // By default `pnpm` blocks dependency build scripts and, since v11, exits with an error
+      // when it does, though Wrangler is installed. Keep them blocked; just don't fail.
+      return ['add', '--save-dev', '--config.strict-dep-builds=false', 'wrangler'];
+    case 'yarn':
+    case 'bun':
+      return ['add', '--dev', 'wrangler'];
+    default: {
+      const exhaustive: never = manager;
+      return exhaustive;
     }
   }
 }
@@ -225,10 +316,10 @@ export class PublishingAccount {
 function launchAccountSignIn(
   root: string,
   provider: 'github' | 'cloudflare',
-  phase: Session['phase'],
+  step: LaunchStep,
 ): ChildProcessWithoutNullStreams {
   if (provider === 'cloudflare') {
-    return launchCloudflareSignIn(root, phase);
+    return launchCloudflareSignIn(root, step);
   }
   ensureToolPath();
   const environment: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1', GH_PROMPT_DISABLED: '1' };
@@ -257,17 +348,18 @@ function launchAccountSignIn(
   );
 }
 
-function launchCloudflareSignIn(
-  root: string,
-  phase: Session['phase'],
-): ChildProcessWithoutNullStreams {
+function launchCloudflareSignIn(root: string, step: LaunchStep): ChildProcessWithoutNullStreams {
   ensureToolPath();
-  const command = resolvePublishExecutable(root, {
-    executable: phase === 'installing' ? 'npm' : 'wrangler',
-    arguments:
-      phase === 'installing' ? ['install', '--save-dev', 'wrangler'] : ['login', '--browser=false'],
-    environment: {},
-  });
+  const command = resolvePublishExecutable(
+    root,
+    step.kind === 'installing'
+      ? {
+          executable: step.packageManager,
+          arguments: wranglerInstallArguments(step.packageManager),
+          environment: {},
+        }
+      : { executable: 'wrangler', arguments: ['login', '--browser=false'], environment: {} },
+  );
   return spawn(command.executable, [...command.arguments], {
     cwd: root,
     env: { ...publishEnvironment(), NO_COLOR: '1', WRANGLER_SEND_METRICS: 'false' },

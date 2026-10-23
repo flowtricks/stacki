@@ -3,13 +3,15 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { record, text } from '../../shared/core/boundary';
 import type { PublishCommand } from '../../shared/properties/publishCommands';
+import type { PackageManager } from '../../shared/properties/packageManager';
 
 export function projectHasWrangler(root: string): boolean {
   const resolver = createRequire(path.join(root, 'package.json'));
   try {
     // Resolution from the site also supports dependencies hoisted by a workspace package manager.
-    resolver.resolve('wrangler/package.json');
-    return true;
+    // Node caches resolved paths for the life of the process, so a Wrangler removed since the
+    // last lookup still resolves; only a manifest that exists now counts.
+    return existsSync(resolver.resolve('wrangler/package.json'));
   } catch (error: unknown) {
     if (error instanceof Error && 'code' in error && error.code === 'MODULE_NOT_FOUND') {
       return false;
@@ -18,9 +20,14 @@ export function projectHasWrangler(root: string): boolean {
   }
 }
 
+// A publish command, or a package manager installing a publishing tool.
+export interface ExecutableCommand extends Omit<PublishCommand, 'executable'> {
+  readonly executable: PublishCommand['executable'] | PackageManager;
+}
+
 export function resolvePublishExecutable(
   root: string,
-  command: PublishCommand,
+  command: ExecutableCommand,
 ): {
   readonly executable: string;
   readonly arguments: readonly string[];
@@ -95,6 +102,10 @@ function installedPublishTool(root: string, executable: string): string | undefi
     try {
       manifest = resolver.resolve(`${executable}/package.json`, { paths: [directory] });
     } catch {
+      continue;
+    }
+    // A cached resolution can outlive a removed package; look further instead.
+    if (!existsSync(manifest)) {
       continue;
     }
     return publishEntry(path.dirname(manifest));

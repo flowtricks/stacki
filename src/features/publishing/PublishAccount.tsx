@@ -24,12 +24,18 @@ export function AddPublishAccount(props: Props) {
   const label = props.provider === 'github' ? 'GitHub' : 'Cloudflare';
   const [attempt, setAttempt] = useState(0);
   const state = useAccountSignIn(props.projectPath, props.provider, attempt);
+  // The attempt that installed Wrangler, so its later steps can say the site changed.
+  const [installedAttempt, setInstalledAttempt] = useState<number | undefined>(undefined);
   const { connected } = props;
   useEffect(() => {
     if (state.kind === 'complete') {
       connected();
     }
-  }, [state.kind, connected]);
+    if (state.kind === 'installing') {
+      setInstalledAttempt(attempt);
+    }
+  }, [state.kind, connected, attempt]);
+  const retry = () => setAttempt(attempt + 1);
   return (
     <Popup
       className="modal publish-settings publish-add-account"
@@ -41,18 +47,18 @@ export function AddPublishAccount(props: Props) {
         <>
           <div className="modal-header">Add {label} account</div>
           <div className="modal-body publish-fields" aria-live="polite">
-            {state.kind === 'installing' ? (
-              <p>
-                Installing Wrangler in this project. Cloudflare sign-in will start automatically…
-              </p>
+            {props.provider === 'cloudflare' ? (
+              <CloudflareSignIn
+                state={state}
+                installed={installedAttempt === attempt}
+                retry={retry}
+              />
             ) : state.kind === 'waiting' ? (
               <AccountDeviceCode code={state.code} />
-            ) : state.kind === 'browser' ? (
-              <AccountBrowserSignIn url={state.url} />
             ) : state.kind === 'failed' ? (
               <>
                 <ErrorToast message={state.message} />
-                <button type="button" onClick={() => setAttempt(attempt + 1)}>
+                <button type="button" onClick={retry}>
                   Try again
                 </button>
               </>
@@ -161,8 +167,15 @@ function useAccountSignIn(
   return state;
 }
 
-function AccountBrowserSignIn({ url }: { readonly url: string }) {
+// One screen for the whole Cloudflare sign-in: installing, starting, waiting and failing only
+// change the button and the status line, so nothing flashes past between steps.
+function CloudflareSignIn(props: {
+  readonly state: AccountState;
+  readonly installed: boolean;
+  readonly retry: () => void;
+}) {
   const [error, setError] = useState('');
+  const { state } = props;
   return (
     <>
       <p>Sign in to Cloudflare and approve access to connect your accounts.</p>
@@ -170,20 +183,65 @@ function AccountBrowserSignIn({ url }: { readonly url: string }) {
         To use a different login, switch accounts in Cloudflare before approving access. This
         updates the Cloudflare login used by local publishing.
       </p>
-      <button
-        type="button"
-        className="primary"
-        onClick={() => {
-          setError('');
-          void openAccountSignIn(url).catch(() => {
-            setError('Could not open Cloudflare sign-in. Please try again.');
-          });
-        }}
-      >
-        Continue in browser
-      </button>
-      <p className="hint-text">Waiting for sign-in…</p>
+      {props.installed && state.kind !== 'installing' && (
+        <p className="hint-text">Wrangler was added to this site’s development dependencies.</p>
+      )}
+      {state.kind === 'failed' ? (
+        <button type="button" className="primary" onClick={props.retry}>
+          Try again
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="primary"
+          disabled={state.kind !== 'browser'}
+          onClick={() => {
+            if (state.kind === 'browser') {
+              setError('');
+              void openAccountSignIn(state.url).catch(() => {
+                setError('Could not open Cloudflare sign-in. Please try again.');
+              });
+            }
+          }}
+        >
+          Continue in browser
+        </button>
+      )}
+      <CloudflareSignInStatus state={state} />
       {error && <ErrorToast message={error} />}
     </>
   );
+}
+
+function CloudflareSignInStatus({ state }: { readonly state: AccountState }) {
+  switch (state.kind) {
+    case 'installing':
+      return (
+        <p className="hint-text">
+          Installing Wrangler in this site… Cancelling skips sign-in but lets the installation
+          finish.
+        </p>
+      );
+    case 'starting':
+      return <p className="hint-text">Starting Cloudflare sign-in…</p>;
+    case 'waiting':
+    case 'browser':
+      return <p className="hint-text">Waiting for sign-in…</p>;
+    case 'complete':
+      return <p className="hint-text">Account connected.</p>;
+    case 'cancelled':
+      return <p className="hint-text">Sign-in cancelled.</p>;
+    case 'failed':
+      // The cause goes to the app's error toast; the screen only says sign-in stopped.
+      return (
+        <>
+          <p className="hint-text">Sign-in did not finish.</p>
+          <ErrorToast message={state.message} />
+        </>
+      );
+    default: {
+      const exhaustive: never = state;
+      return exhaustive;
+    }
+  }
 }
