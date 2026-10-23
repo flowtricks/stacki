@@ -12,7 +12,7 @@ import { createStarter } from '../project/starter';
 import { isWin, errorMessage } from '../lib/mainHelpers';
 import { ensureToolPath, run } from '../lib/nodeTools';
 import { isAstroProject } from '../project/projectFiles';
-import { detectPackageManager } from '../project/packageManager';
+import { detectPackageManager, installArguments } from '../project/packageManager';
 import type { MainHost } from './mainHost';
 
 export function registerProjectHandlers(
@@ -154,17 +154,15 @@ export async function installDependencies({ send }: Pick<MainHost, 'send'>, dire
   ensureToolPath(); // npm/pnpm/yarn are Node shims — same PATH problem as astro
   const pm = detectPackageManager(directory);
   send('progress', { message: `Installing dependencies (${pm} install)…` });
-  const args = pm === 'npm' ? ['install', '--no-audit', '--no-fund'] : ['install'];
   try {
-    await run(isWin ? `${pm}.cmd` : pm, args, directory, {
+    await run(isWin ? `${pm}.cmd` : pm, [...installArguments(pm)], directory, {
       timeout: 10 * 60 * 1000,
       shell: isWin,
     });
   } catch (error: unknown) {
     if (toRecord(error)?.['code'] === 'ENOENT') {
       throw new Error(
-        `This project uses ${pm} (found its lockfile), but ${pm} is not installed. ` +
-          'Install it and try again.',
+        `This project uses ${pm}, but ${pm} is not installed. Install it and try again.`,
       );
     }
     throw new Error(`${pm} install failed: ${gitErrorDetail(error).slice(-400)}`);

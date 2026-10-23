@@ -9,6 +9,27 @@ import {
   type PackageManager,
 } from '../../shared/properties/packageManager';
 
+// By default `pnpm` blocks dependency build scripts and, since v11, exits with an error when it
+// does, though everything else is installed. Keep them blocked; just don't fail the install.
+export const PNPM_TOLERATE_IGNORED_BUILDS = '--config.strict-dep-builds=false';
+
+// Installs a project's dependencies with its own manager.
+export function installArguments(manager: PackageManager): readonly string[] {
+  switch (manager) {
+    case 'npm':
+      return ['install', '--no-audit', '--no-fund'];
+    case 'pnpm':
+      return ['install', PNPM_TOLERATE_IGNORED_BUILDS];
+    case 'yarn':
+    case 'bun':
+      return ['install'];
+    default: {
+      const exhaustive: never = manager;
+      return exhaustive;
+    }
+  }
+}
+
 // The packageManager field in package.json names it outright; otherwise the
 // lockfile shows which one last installed; else npm.
 export function detectPackageManager(directory: string): PackageManager {

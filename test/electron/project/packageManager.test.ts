@@ -1,13 +1,14 @@
 // Goal: a project's package manager comes from package.json's packageManager field when it
-// names one Stacki runs, then from its lockfile, then npm.
+// names one Stacki runs, then from its lockfile, then npm; each installs with its own command.
 // Method: parse valid, versioned, unknown, malformed and oversized fields, then detect inside
-// temporary project folders that combine fields and lockfiles. Nothing is installed.
+// temporary project folders that combine fields and lockfiles, and pin each install command.
+// Nothing is installed.
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { detectPackageManager } from '#dist/electron/project/packageManager.js';
+import { detectPackageManager, installArguments } from '#dist/electron/project/packageManager.js';
 import {
   PACKAGE_MANAGERS,
   packageManagerLabel,
@@ -43,6 +44,13 @@ test('the packageManager field names nothing when unknown, malformed or oversize
   ]) {
     assert.equal(parsePackageManagerField(input), undefined, String(input));
   }
+});
+
+test('each package manager installs dependencies with its own command', () => {
+  assert.deepEqual(installArguments('npm'), ['install', '--no-audit', '--no-fund']);
+  assert.deepEqual(installArguments('pnpm'), ['install', '--config.strict-dep-builds=false']);
+  assert.deepEqual(installArguments('yarn'), ['install']);
+  assert.deepEqual(installArguments('bun'), ['install']);
 });
 
 test('every package manager has the name people know it by', () => {

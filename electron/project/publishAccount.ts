@@ -11,7 +11,7 @@ import {
 } from '../../shared/ipc/publishAccount';
 import { packageManagerLabel, type PackageManager } from '../../shared/properties/packageManager';
 import { ensureToolPath } from '../lib/nodeTools';
-import { detectPackageManager } from './packageManager';
+import { detectPackageManager, PNPM_TOLERATE_IGNORED_BUILDS } from './packageManager';
 import { projectHasWrangler, resolvePublishExecutable } from './publishExecutable';
 import { publishEnvironment, stopPublishProcess } from './publishCommands';
 
@@ -300,9 +300,7 @@ export function wranglerInstallArguments(manager: PackageManager): readonly stri
     case 'npm':
       return ['install', '--save-dev', 'wrangler'];
     case 'pnpm':
-      // By default `pnpm` blocks dependency build scripts and, since v11, exits with an error
-      // when it does, though Wrangler is installed. Keep them blocked; just don't fail.
-      return ['add', '--save-dev', '--config.strict-dep-builds=false', 'wrangler'];
+      return ['add', '--save-dev', PNPM_TOLERATE_IGNORED_BUILDS, 'wrangler'];
     case 'yarn':
     case 'bun':
       return ['add', '--dev', 'wrangler'];
