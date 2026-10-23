@@ -274,7 +274,6 @@ export const IPC_PAYLOADS = {
   'project:hasNodeModules': pathText,
   'project:injectedRoutes': object({ ...project }),
   'project:install': pathText,
-  'project:newDialog': nothing,
   'project:openDialog': nothing,
   'project:parentDialog': nothing,
   'project:pending': nothing,

@@ -88,11 +88,6 @@ export function chooseExistingProject() {
   return welcomeRequest(parseProjectDialog, () => window.avb.openProjectDialog(payload));
 }
 
-export function chooseNewProjectDirectory() {
-  const payload = parseIpcPayload('project:newDialog', undefined);
-  return welcomeRequest(parseProjectDialog, () => window.avb.newProjectDialog(payload));
-}
-
 export function chooseStarterParent() {
   const payload = parseIpcPayload('project:parentDialog', undefined);
   return welcomeRequest(parseParentDialog, () => window.avb.parentDialog(payload));

@@ -26,7 +26,6 @@ const noPayload = new Set([
   'recents:list',
   'git:repositories',
   'project:openDialog',
-  'project:newDialog',
   'project:parentDialog',
   'dev:stop',
 ]);

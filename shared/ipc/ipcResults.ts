@@ -572,22 +572,6 @@ export interface IpcResults {
   readonly 'project:install': {
     readonly ok: true;
   };
-  readonly 'project:newDialog':
-    | {
-        readonly canceled: true;
-        readonly error?: never;
-        readonly projectPath?: never;
-      }
-    | {
-        readonly canceled: false;
-        readonly error: string;
-        readonly projectPath?: never;
-      }
-    | {
-        readonly canceled: false;
-        readonly projectPath: string;
-        readonly error?: never;
-      };
   readonly 'project:openDialog':
     | {
         readonly canceled: true;

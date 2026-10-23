@@ -46,26 +46,6 @@ function registerProjectOpenDialogHandlers({
     }
     return { canceled: false as const, projectPath: directory };
   });
-
-  ipcMain.handle('project:newDialog', async () => {
-    const result = await showOpenDialog({
-      title: 'Choose an empty folder for the new project',
-      properties: ['openDirectory', 'createDirectory'],
-    });
-    if (result.canceled || !result.filePaths.length) {
-      return { canceled: true as const };
-    }
-    const directory = result.filePaths[0];
-    assert(directory !== undefined, 'Accepted directory dialog must have a path');
-    const entries = fs.readdirSync(directory).filter((name) => !name.startsWith('.'));
-    if (entries.length > 0) {
-      return {
-        canceled: false as const,
-        error: 'That folder is not empty. Choose or create an empty folder for the new project.',
-      };
-    }
-    return { canceled: false as const, projectPath: directory };
-  });
 }
 
 function registerProjectCreateAstroHandlers({
