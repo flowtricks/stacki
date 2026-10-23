@@ -121,27 +121,14 @@ async function createStarter({
   if (!template) {
     throw new Error(`${starter} is not a starter this app knows.`);
   }
-  if (!parentPath || !fs.existsSync(parentPath)) {
-    throw new Error('Choose where the site should go first.');
-  }
-
-  const folder = String(name || '').trim();
-  if (!folder) {
-    throw new Error('Give the site a name.');
-  }
-  if (!NAME_RE.test(folder)) {
-    throw new Error('Use letters, numbers, dashes, dots or underscores for the folder name.');
-  }
-  const directory = path.join(parentPath, folder);
-  if (fs.existsSync(directory)) {
-    throw new Error(`${folder} already exists in that folder.`);
-  }
+  const directory = newSiteDirectory(parentPath, name);
+  const folder = path.basename(directory);
 
   // `--no-install`: the app installs afterwards, where a failure is an error
   // the wizard can show rather than a line in a log that scrolled past.
   const args = ['create', template.create, folder, '--yes', '--', '--no-install'];
   onLog?.(`> npm create ${template.create} ${folder}\n\n`);
-  await run(npm || (isWin ? 'npm.cmd' : 'npm'), args, parentPath, onLog);
+  await run(npm || (isWin ? 'npm.cmd' : 'npm'), args, path.dirname(directory), onLog);
 
   if (!fs.existsSync(path.join(directory, 'package.json'))) {
     throw new Error('The starter finished but there is no package.json in it.');
@@ -195,4 +182,27 @@ async function createStarter({
   return { ok: true, projectPath: directory };
 }
 
-export { createStarter, STARTERS };
+/**
+ * The folder a new site gets, `parentPath/name`, which must not exist yet. The
+ * starter and the Astro wizard both use it, so the name rules and their
+ * messages are the same in either flow.
+ */
+function newSiteDirectory(parentPath: string | undefined, name: string | undefined): string {
+  if (!parentPath || !fs.existsSync(parentPath)) {
+    throw new Error('Choose where the site should go first.');
+  }
+  const folder = String(name || '').trim();
+  if (!folder) {
+    throw new Error('Give the site a name.');
+  }
+  if (!NAME_RE.test(folder)) {
+    throw new Error('Use letters, numbers, dashes, dots or underscores for the folder name.');
+  }
+  const directory = path.join(parentPath, folder);
+  if (fs.existsSync(directory)) {
+    throw new Error(`${folder} already exists in that folder.`);
+  }
+  return directory;
+}
+
+export { createStarter, newSiteDirectory, STARTERS };

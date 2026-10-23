@@ -9,6 +9,8 @@ import {
 } from './welcomeBridge';
 
 const CREATE_LOG_CHARS_MAX = 20_000;
+const SITE_NAME_DEFAULT = 'my-site';
+const SITE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 const TEMPLATES = [
   { value: 'basics', label: 'Basics', hint: 'A basic, helpful starter project' },
   { value: 'blog', label: 'Blog', hint: 'Content collections and post routing' },
@@ -35,11 +37,11 @@ export function StarterWizard({
   onClose,
   onDone,
 }: WizardProps & { readonly parentPath: string }) {
-  const [name, setName] = useState('my-site');
+  const [name, setName] = useState(SITE_NAME_DEFAULT);
   const [state, setState] = useState<RunState>({ kind: 'idle' });
   const log = useCreateLog();
   const cleanName = name.trim();
-  const invalid = !cleanName || !/^[A-Za-z0-9._-]+$/.test(cleanName);
+  const invalid = !siteNameValid(name);
   const running = state.kind === 'running';
   const run = async (): Promise<void> => {
     setState({ kind: 'running' });
@@ -69,25 +71,13 @@ export function StarterWizard({
         </>
       )}
     >
-      <label className="starter-field">
-        <span>Site name</span>
-        <input
-          autoFocus
-          value={name}
-          spellCheck={false}
-          disabled={running}
-          maxLength={255}
-          onChange={(event) => setName(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !invalid && !running) {
-              void run();
-            }
-          }}
-        />
-      </label>
-      <div className="new-project-dir" title={`${parentPath}/${cleanName || 'my-site'}`}>
-        {`${parentPath}/${cleanName || 'my-site'}`}
-      </div>
+      <SiteNameField
+        parentPath={parentPath}
+        name={name}
+        running={running}
+        change={setName}
+        submit={() => void run()}
+      />
       <div className="starter-note">
         Runs <code>npm create lumos@latest</code>, then starts a git history of its own — so
         publishing it later publishes your site, not a fork of the starter.
@@ -99,10 +89,11 @@ export function StarterWizard({
 }
 
 export function NewProjectWizard({
-  directory,
+  parentPath,
   onClose,
   onDone,
-}: WizardProps & { readonly directory: string }) {
+}: WizardProps & { readonly parentPath: string }) {
+  const [name, setName] = useState(SITE_NAME_DEFAULT);
   const [template, setTemplate] = useState<ProjectTemplate>('basics');
   const [install, setInstall] = useState(true);
   const [git, setGit] = useState(true);
@@ -110,12 +101,14 @@ export function NewProjectWizard({
   const [state, setState] = useState<RunState>({ kind: 'idle' });
   const log = useCreateLog();
   const running = state.kind === 'running';
+  const invalid = !siteNameValid(name);
   const run = async (): Promise<void> => {
     setState({ kind: 'running' });
     log.clear();
-    const result = await createAstroProject({ directory, template, install, git, ai });
+    const options = { parentPath, name: name.trim(), template, install, git, ai };
+    const result = await createAstroProject(options);
     if (result.ok) {
-      onDone(directory);
+      onDone(result.value.projectPath);
     } else {
       setState({ kind: 'error', message: result.error });
     }
@@ -130,15 +123,19 @@ export function NewProjectWizard({
           <button onClick={close} disabled={running}>
             {state.kind === 'error' ? 'Close' : 'Cancel'}
           </button>
-          <button className="primary" onClick={() => void run()} disabled={running}>
+          <button className="primary" onClick={() => void run()} disabled={running || invalid}>
             {running ? 'Creating…' : state.kind === 'error' ? 'Try again' : 'Create Project'}
           </button>
         </>
       )}
     >
-      <div className="new-project-dir" title={directory}>
-        {directory}
-      </div>
+      <SiteNameField
+        parentPath={parentPath}
+        name={name}
+        running={running}
+        change={setName}
+        submit={() => void run()}
+      />
       {state.kind === 'idle' && (
         <ProjectChoices
           template={template}
@@ -156,6 +153,53 @@ export function NewProjectWizard({
       )}
       {state.kind === 'error' && <ErrorToast message={state.message} />}
     </WizardFrame>
+  );
+}
+
+// The main process checks the same rules (newSiteDirectory in electron/project/starter.ts).
+function siteNameValid(name: string): boolean {
+  const cleanName = name.trim();
+  if (cleanName.length === 0) {
+    return false;
+  }
+  return SITE_NAME_PATTERN.test(cleanName);
+}
+
+// The site's name and the folder it becomes, shared by both wizards so they name sites alike.
+// Enter submits only a valid name and only while nothing is running.
+function SiteNameField(props: {
+  readonly parentPath: string;
+  readonly name: string;
+  readonly running: boolean;
+  readonly change: (name: string) => void;
+  readonly submit: () => void;
+}) {
+  const folder = `${props.parentPath}/${props.name.trim() || SITE_NAME_DEFAULT}`;
+  return (
+    <>
+      <label className="starter-field">
+        <span>Site name</span>
+        <input
+          autoFocus
+          value={props.name}
+          spellCheck={false}
+          disabled={props.running}
+          maxLength={255}
+          onChange={(event) => props.change(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') {
+              return;
+            }
+            if (siteNameValid(props.name)) {
+              props.submit();
+            }
+          }}
+        />
+      </label>
+      <div className="new-project-dir" title={folder}>
+        {folder}
+      </div>
+    </>
   );
 }
 

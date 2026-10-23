@@ -263,7 +263,8 @@ export const IPC_PAYLOADS = {
   'project:classes': pathText,
   'project:close': maybePath,
   'project:createAstro': object({
-    dir: pathText,
+    parentPath: pathText,
+    name: text,
     template: optional(text),
     install: maybeFlag,
     git: maybeFlag,

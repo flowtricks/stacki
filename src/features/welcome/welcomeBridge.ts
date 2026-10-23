@@ -20,7 +20,8 @@ export type ParentDialog =
 export type ProjectTemplate = 'basics' | 'blog' | 'starlight' | 'minimal';
 
 export interface AstroProjectOptions {
-  readonly directory: string;
+  readonly parentPath: string;
+  readonly name: string;
   readonly template: ProjectTemplate;
   readonly install: boolean;
   readonly git: boolean;
@@ -108,7 +109,8 @@ export function createStarterProject(parentPath: string, name: string) {
 
 export function createAstroProject(options: AstroProjectOptions) {
   const payload = parseIpcPayload('project:createAstro', {
-    dir: options.directory,
+    parentPath: options.parentPath,
+    name: options.name,
     template: options.template,
     install: options.install,
     git: options.git,
@@ -150,7 +152,11 @@ function parseAstroResult(input: unknown): IpcResults['project:createAstro'] {
   if (!boolean(value['ok'])) {
     throw new Error('Create Astro project: expected success');
   }
-  return { ok: true, installed: boolean(value['installed']) };
+  return {
+    ok: true,
+    installed: boolean(value['installed']),
+    projectPath: pathText(value['projectPath']),
+  };
 }
 
 async function welcomeRequest<Value>(
