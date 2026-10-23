@@ -20,7 +20,6 @@ export function registerProjectHandlers(
 ): void {
   registerProjectOpenDialogHandlers(host);
   registerProjectCreateAstroHandlers(host);
-  registerProjectHasNodeModulesHandlers(host);
 }
 
 function registerProjectOpenDialogHandlers({
@@ -147,20 +146,6 @@ function registerProjectCreateAstroHandlers({
   ipcMain.handle('project:scaffold', async (_event, { dir: directory, name }) => {
     scaffoldProject(directory, name);
     await installDependencies({ send }, directory);
-    return { ok: true as const };
-  });
-}
-
-function registerProjectHasNodeModulesHandlers({
-  ipcMain,
-  send,
-}: Pick<MainHost, 'ipcMain' | 'send'>): void {
-  ipcMain.handle('project:hasNodeModules', async (_event, projectPath) => {
-    return fs.existsSync(path.join(projectPath, 'node_modules'));
-  });
-
-  ipcMain.handle('project:install', async (_event, projectPath) => {
-    await installDependencies({ send }, projectPath);
     return { ok: true as const };
   });
 }

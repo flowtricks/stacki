@@ -39,8 +39,6 @@ const pathPayload = new Set([
   'recents:add',
   'recents:remove',
   'recents:refreshThumb',
-  'project:hasNodeModules',
-  'project:install',
   'project:scan',
   'project:classes',
   'watch:start',

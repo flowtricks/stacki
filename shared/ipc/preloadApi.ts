@@ -15,8 +15,6 @@ interface InvokeChannels {
   readonly createAstroProject: 'project:createAstro';
   readonly parentDialog: 'project:parentDialog';
   readonly createStarter: 'project:createStarter';
-  readonly hasNodeModules: 'project:hasNodeModules';
-  readonly installDeps: 'project:install';
   readonly scanProject: 'project:scan';
   readonly listProjectClasses: 'project:classes';
   readonly watchProject: 'watch:start';

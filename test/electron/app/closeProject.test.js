@@ -107,7 +107,6 @@ const settle = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
       },
       listProjectClasses: async () => [],
       startDevServer: async () => ({ url: 'http://localhost:4321' }),
-      hasNodeModules: async () => true,
       gitInfo: async () => ({ isRepo: false }),
       publishAvailability: async () => ({ github: 'unknown', hosting: 'unconfigured' }),
       gitLog: async () => ({ commits: [], atEnd: true }),

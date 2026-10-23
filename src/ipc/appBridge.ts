@@ -90,11 +90,6 @@ export function readProjectClasses(projectPath: string): Promise<readonly string
   return window.avb.listProjectClasses(payload).then(list(text));
 }
 
-export function projectHasNodeModules(projectPath: string): Promise<boolean> {
-  const payload = parseIpcPayload('project:hasNodeModules', projectPath);
-  return window.avb.hasNodeModules(payload).then(boolean);
-}
-
 export function pendingProject(): Promise<string | undefined> {
   return window.avb.pendingProject().then((input) => optional(pathText)(input));
 }
@@ -113,11 +108,6 @@ export function readAppSettings(): Promise<{ readonly sound: boolean }> {
 export function addRecentProject(projectPath: string): Promise<void> {
   const payload = parseIpcPayload('recents:add', projectPath);
   return window.avb.addRecent(payload).then((input) => void parseOkResult(input));
-}
-
-export function installProjectDependencies(projectPath: string): Promise<void> {
-  const payload = parseIpcPayload('project:install', projectPath);
-  return window.avb.installDeps(payload).then((input) => void parseOkResult(input));
 }
 
 export function watchProject(projectPath: string): Promise<boolean> {

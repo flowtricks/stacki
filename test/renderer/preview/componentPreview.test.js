@@ -138,7 +138,6 @@ test(
           layouts: [],
           pageFolders: [],
         }),
-        hasNodeModules: async () => true,
         startDevServer: async () => ({ url: 'http://localhost:4321' }),
         listProjectClasses: async () => [],
         resolveImport: async () => ({ path: card.path }),

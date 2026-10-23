@@ -141,7 +141,6 @@ test('out-of-order page reads and external reads cannot replace the current edit
         scans.push(request);
         return request.promise;
       },
-      hasNodeModules: async () => true,
       startDevServer: async () => ({ url: 'http://localhost:4321' }),
       listProjectClasses: async () => [],
       readPage: (file) => {

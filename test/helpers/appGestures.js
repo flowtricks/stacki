@@ -114,7 +114,6 @@ async function mountApp(root, files, build, options = {}) {
           input.projectPath,
           input.write,
         ),
-      hasNodeModules: async () => true,
       startDevServer: async () => ({ url: 'http://localhost:4321' }),
       listProjectClasses: async () => [],
       readPage: async (file) => read(file),

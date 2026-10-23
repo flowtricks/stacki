@@ -371,7 +371,6 @@ function createBridge() {
       components: [],
       layouts: [],
     }),
-    hasNodeModules: async () => true,
     startDevServer: async () => ({ url: 'http://localhost:4321' }),
     listProjectClasses: async () => [],
     // Disk replies carry the SHA-256 of the bytes, as main's do.

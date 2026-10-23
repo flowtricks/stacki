@@ -564,12 +564,8 @@ export interface IpcResults {
     readonly ok: boolean;
     readonly projectPath: string;
   };
-  readonly 'project:hasNodeModules': boolean;
   readonly 'project:injectedRoutes': {
     readonly routes: ReadonlyArray<WireInjectedRoute>;
-  };
-  readonly 'project:install': {
-    readonly ok: true;
   };
   readonly 'project:newDialog':
     | {
