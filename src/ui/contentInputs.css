@@ -1,0 +1,162 @@
+.html-field {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+.html-field:focus-within {
+  border-color: var(--accent);
+}
+.html-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel-2);
+}
+.html-toolbar button,
+.html-toolbar select,
+.html-link button {
+  width: auto;
+  min-height: 30px;
+  padding: 4px 8px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.html-toolbar button:hover,
+.html-toolbar select:hover {
+  color: var(--text);
+  background: var(--bg-active);
+}
+.html-toolbar button[aria-label='Bold'] {
+  font-weight: 700;
+}
+.html-toolbar button[aria-label='Italic'] {
+  font-style: italic;
+}
+.html-toolbar button[aria-label='Underline'] {
+  text-decoration: underline;
+}
+.html-toolbar .html-source-toggle {
+  margin-left: auto;
+}
+.html-toolbar button[aria-pressed='true'] {
+  color: var(--accent);
+}
+.html-content {
+  min-height: 140px;
+  max-height: 480px;
+  padding: 14px 16px;
+  overflow: auto;
+  outline: none;
+  line-height: 1.65;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.html-content > * + * {
+  margin-top: 0.8em;
+}
+.html-content ul,
+.html-content ol {
+  padding-left: 1.6em;
+}
+.html-content blockquote {
+  border-left: 3px solid var(--border-strong);
+  padding-left: 1em;
+  color: var(--text-dim);
+}
+.html-content h2 {
+  font-size: 1.4em;
+}
+.html-content h3 {
+  font-size: 1.2em;
+}
+.html-content a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.html-content img {
+  max-width: 100%;
+  height: auto;
+}
+.html-content table {
+  border-collapse: collapse;
+}
+.html-content td,
+.html-content th {
+  padding: 6px;
+  border: 1px solid var(--border);
+}
+.html-field textarea.html-source {
+  width: 100%;
+  padding: 14px;
+  border: 0;
+  border-radius: 0;
+  font: 12px/1.6 var(--mono);
+}
+.html-link {
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+}
+.html-link input {
+  flex: 1;
+  min-width: 0;
+}
+.html-notice {
+  padding: 10px 14px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.date-field {
+  width: 100%;
+  min-width: 0;
+}
+.date-field-control {
+  display: flex;
+  position: relative;
+  align-items: center;
+}
+.date-field-control input[type='date'] {
+  width: 100%;
+  min-height: 38px;
+  padding-right: 42px;
+  color-scheme: dark;
+  font: inherit;
+}
+.date-field-control input::-webkit-calendar-picker-indicator {
+  display: none;
+}
+.date-field-control .date-field-open {
+  position: absolute;
+  right: 4px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.date-field-open:hover {
+  color: var(--text);
+  background: var(--bg-active);
+}
+.date-field-time {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+}

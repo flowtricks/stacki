@@ -3,7 +3,7 @@
 //   node test/renderer/style/panelSections.test.js
 //
 // A rule holding `inset: 0` showed nothing for it. Not in Position, which is
-// where `inset` sorts; not in Custom properties, which is where everything the
+// where `inset` sorts; not in Other properties, which is where everything the
 // panel has no control for goes; nowhere. The declaration was in the file, the
 // panel drew no row, and the only way to find out it was there was to read the
 // CSS.
@@ -13,7 +13,7 @@
 // top, right, bottom and left one side at a time. They have never asked for the
 // shorthand.
 //
-// So: a property with no control belongs in Custom properties, where it can at
+// So: a property with no control belongs in Other properties, where it can at
 // least be read and changed as text. This checks both halves — the ones known
 // to have no control land there, and no property is quietly claimed by a
 // section that never draws it.
@@ -65,8 +65,8 @@ const check = (what, condition, detail) => {
   );
   check('inset is drawn', Object.values(groups).flat().includes('inset'), JSON.stringify(groups));
   check(
-    'under Custom properties, with the rest the panel has no control for',
-    (groups['Custom properties'] || []).join(',') === 'inset,content',
+    'under Other properties, with the rest the panel has no control for',
+    (groups['Other properties'] || []).join(',') === 'inset,content',
     JSON.stringify(groups),
   );
   check(
@@ -94,7 +94,7 @@ const check = (what, condition, detail) => {
     ['columns', 'column-count'],
     ['column-rule', 'column-rule-width'],
   ]) {
-    check(`${prop} goes to Custom properties`, sectionOf(prop) === 'other', sectionOf(prop));
+    check(`${prop} goes to Other properties`, sectionOf(prop) === 'other', sectionOf(prop));
     check(
       `while ${longhand} keeps its section`,
       sectionOf(longhand) !== 'other',

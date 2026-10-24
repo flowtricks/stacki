@@ -72,7 +72,7 @@ export function PublishSettings(props: Props) {
           ) : state.kind === 'loading' ? (
             <PublishSettingsSkeleton close={close} />
           ) : (
-            <div className="modal-body publish-fields">
+            <div className="modal-body publish-fields publish-settings-scroll">
               <ErrorToast message={settingsErrorMessage(state.message)} />
               <button
                 onClick={() => {
@@ -94,33 +94,40 @@ export function PublishSettings(props: Props) {
 function PublishSettingsSkeleton({ close }: Pick<Props, 'close'>) {
   return (
     <>
-      <fieldset className="modal-body publish-fields" disabled aria-busy="true" data-loading="true">
-        {[
-          { name: 'Publish button', labels: ['Main publish button action'] },
-          { name: 'GitHub', labels: ['GitHub account', 'GitHub repository'] },
-          { name: 'Hosting', labels: ['Hosting provider', 'Hosting project'] },
-        ].map((section) => (
-          <section
-            className="publish-settings-section"
-            aria-label={section.name}
-            key={section.name}
-          >
-            {section.labels.map((label) => (
-              <div className="publish-field" key={label}>
-                <span className="publish-label">{label}</span>
-                <button className="dd-trigger" aria-label={label} disabled>
-                  <span className="dd-label">Loading…</span>
-                </button>
-              </div>
-            ))}
-          </section>
-        ))}
-        <details className="publish-advanced">
-          <summary aria-disabled="true" onClick={(event) => event.preventDefault()}>
-            Advanced
-          </summary>
-        </details>
-      </fieldset>
+      <div className="publish-settings-scroll">
+        <fieldset
+          className="modal-body publish-fields"
+          disabled
+          aria-busy="true"
+          data-loading="true"
+        >
+          {[
+            { name: 'Publish button', labels: ['Main publish button action'] },
+            { name: 'GitHub', labels: ['GitHub account', 'GitHub repository'] },
+            { name: 'Hosting', labels: ['Hosting provider', 'Hosting project'] },
+          ].map((section) => (
+            <section
+              className="publish-settings-section"
+              aria-label={section.name}
+              key={section.name}
+            >
+              {section.labels.map((label) => (
+                <div className="publish-field" key={label}>
+                  <span className="publish-label">{label}</span>
+                  <button className="dd-trigger" aria-label={label} disabled>
+                    <span className="dd-label">Loading…</span>
+                  </button>
+                </div>
+              ))}
+            </section>
+          ))}
+          <details className="publish-advanced">
+            <summary aria-disabled="true" onClick={(event) => event.preventDefault()}>
+              Advanced
+            </summary>
+          </details>
+        </fieldset>
+      </div>
       <div className="modal-footer">
         <button onClick={close}>Cancel</button>
         <button className="primary" disabled>
@@ -164,36 +171,38 @@ function PublishSettingsForm({
   });
   return (
     <>
-      <fieldset className="modal-body publish-fields" disabled={saving || repositoryBusy}>
-        <PublishTargetField config={config} setConfig={setConfig} />
-        <section className="publish-settings-section" aria-label="GitHub">
-          <PublishWorkflow config={config} change={setConfig} />
-          <PublishConnections
-            projectPath={projectPath}
-            provider="github"
-            value={config.githubAccount}
-            change={(githubAccount) => setConfig({ ...config, githubAccount })}
-          />
-          <PublishRepositories
-            key={config.githubAccount}
-            projectPath={projectPath}
-            account={config.githubAccount}
-            selection={repository}
-            change={setRepository}
-            busy={setRepositoryBusy}
-          />
-        </section>
-        <section className="publish-settings-section" aria-label="Hosting">
-          <HostingFields
-            projectPath={projectPath}
-            hosting={config.hosting}
-            discoveringHosting={discoveringHosting}
-            change={changeHosting}
-          />
-        </section>
-        <AdvancedFields config={config} setConfig={setConfig} />
-        {error && <ErrorToast message={error} />}
-      </fieldset>
+      <div className="publish-settings-scroll">
+        <fieldset className="modal-body publish-fields" disabled={saving || repositoryBusy}>
+          <PublishTargetField config={config} setConfig={setConfig} />
+          <section className="publish-settings-section" aria-label="GitHub">
+            <PublishWorkflow config={config} change={setConfig} />
+            <PublishConnections
+              projectPath={projectPath}
+              provider="github"
+              value={config.githubAccount}
+              change={(githubAccount) => setConfig({ ...config, githubAccount })}
+            />
+            <PublishRepositories
+              key={config.githubAccount}
+              projectPath={projectPath}
+              account={config.githubAccount}
+              selection={repository}
+              change={setRepository}
+              busy={setRepositoryBusy}
+            />
+          </section>
+          <section className="publish-settings-section" aria-label="Hosting">
+            <HostingFields
+              projectPath={projectPath}
+              hosting={config.hosting}
+              discoveringHosting={discoveringHosting}
+              change={changeHosting}
+            />
+          </section>
+          <AdvancedFields config={config} setConfig={setConfig} />
+          {error && <ErrorToast message={error} />}
+        </fieldset>
+      </div>
       <SettingsFooter
         busy={saving || repositoryBusy}
         discoveringHosting={discoveringHosting}

@@ -116,34 +116,25 @@ For local GitHub publishing, supply `GITHUB_APP_ID`, `GITHUB_INSTALLATION_ID`, `
 
 ## Draft storage cleanup
 
-Assets → **Storage & cleanup** scans the current project's stored objects on demand. It shows
-upload, collaboration-draft, and other stored bytes. These are current object sizes, not an
-account-wide free-tier allowance or billing estimate; requests also incur usage. The scan is not
-polled in the background.
+Studio automatically removes duplicate upload copies from private R2 after a confirmed GitHub
+push. This includes nested assets in `public/` and `src/`, across every supported asset format.
+The stored bytes must match the committed snapshot before removal. The working project keeps
+its asset, and container startup restores it from GitHub. A failed or unconfirmed push never
+triggers cleanup; a newer unpublished version of an asset stays in R2.
 
-After a successful GitHub publish, Studio automatically removes stored upload copies only when
-their bytes match the committed snapshot. The asset remains in the project and can be restored
-from that GitHub revision on container startup. A failed build or commit never triggers cleanup.
-A cleanup failure does not turn a successful publish into a failed publish; it is reported so
-cleanup can be retried from Assets.
+Deleting an asset in Assets also removes its stored upload copy. Unpublished uploads are never
+removed merely because a source scan finds no references: dynamic URLs and external consumers
+can still use them. The account menu needs no storage scan or cleanup button.
 
-The manual scan also lists unpublished uploads for which no literal references were found in
-project source, root configuration, or public text files. Nothing is selected automatically.
-Review the names, then confirm before removal. Dynamic URLs and external consumers cannot be
-proven absent by a source scan. Published paths with different draft contents and files with
-detected references are retained. Repository assets that were not uploaded through Studio are
-not deletion candidates.
+Cleanup verifies the upload version, size and content digest under the project's mutation
+coordinator. It cannot delete collaboration documents or metadata. Those records preserve draft
+recovery and CRDT identities across reconnects, even after publishing. There is no age-based
+expiration of draft documents or history reset.
 
-Before removal, Studio rechecks the current GitHub baseline, project references, upload version,
-size, and content digest. Cleanup and uploads share the single project's mutation coordinator.
-An incomplete source scan or Git tree prevents cleanup. Inventory listing follows pagination
-rather than treating the first page as complete. Cleanup has no permission to delete document
-state or metadata. Collaboration documents stay in storage after publishing so reconnecting
-editors keep their CRDT identities; there is no age-based draft expiration or history reset.
-
-Local development uses the same review and cleanup behavior with local upload snapshots under
-`.studio-state/uploads`, and labels its storage accordingly. Production stores those copies in
-private R2. No additional storage service, scheduled job, or package dependency is required.
+If cleanup fails, publishing still succeeds and reports a warning. The next successful GitHub
+publish scans stored uploads again, including copies left by an earlier failed cleanup.
+Local development uses the same automatic cleanup with snapshots under `.studio-state/uploads`.
+No additional storage service, scheduled job or package dependency is required.
 
 Publishing starts a job and returns immediately; the editor checks progress with
 short requests. Repeated clicks share the running job. Temporary server failures

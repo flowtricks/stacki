@@ -55,7 +55,7 @@ export class EditorHistory {
     }
     if (getEditorRole() === 'client' && command.role !== 'client') {
       from.push(command);
-      throw new Error('Switch to Designer to undo or redo Designer changes.');
+      throw new Error('Switch to Developer to undo or redo Developer changes.');
     }
     this.restoring = true;
     try {

@@ -74,7 +74,7 @@ test('Client direct edits cannot remove/replace the layout or alter outer markup
   assert.throws(() => assertClientSourceChange('src/components/Test.astro', source, source));
   assertClientSourceChange('src/content/posts/example.md', 'Old', 'New');
 });
-test('Client undo cannot cross back into Designer history or coalesce across roles', async () => {
+test('Client undo cannot cross back into Developer history or coalesce across roles', async () => {
   const doc = new Y.Doc();
   const undo = new Y.UndoManager(doc.getText('source'));
   const history = new EditorHistory(undo);
@@ -85,7 +85,7 @@ test('Client undo cannot cross back into Designer history or coalesce across rol
     setEditorRole('client');
     history.record({ undo: () => applied.push('client'), redo: () => {}, coalesceKey: 'text' });
     await history.step('undo');
-    await assert.rejects(history.step('undo'), /Switch to Designer/);
+    await assert.rejects(history.step('undo'), /Switch to Developer/);
     assert.deepEqual(applied, ['client']);
     setEditorRole('designer');
     await history.step('undo');

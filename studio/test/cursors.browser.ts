@@ -1,3 +1,5 @@
+// Goal: verify collaborative cursors and chat from the account menu and keyboard.
+// Method: use two live browser sessions to check messages, focus and frame replacement.
 import { chromium, type Page, type FrameLocator } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
@@ -104,6 +106,7 @@ try {
   await first.clock.resume();
   await mkdir('test-results', { recursive: true });
   await second.screenshot({ path: 'test-results/cursors.png' });
+  await first.getByLabel('Stacki account menu', { exact: true }).click();
   await first.getByRole('button', { name: 'Cursor chat', exact: true }).click();
   await input.waitFor({ state: 'visible' });
   assert.equal(await input.inputValue(), 'Can we try a larger heading?');
@@ -170,6 +173,7 @@ async function replacePreviewFrame(page: Page) {
   await page.getByTitle('Desktop — 1', { exact: true }).click();
   const preview = page.frameLocator('iframe[title="Site preview"]');
   await preview.locator('#studio-live-cursors').waitFor({ state: 'attached' });
+  await page.getByLabel('Stacki account menu', { exact: true }).click();
   await page.getByRole('button', { name: 'Cursor chat', exact: true }).click();
   const input = preview.getByRole('textbox', { name: 'Cursor message' });
   await input.waitFor({ state: 'visible' });

@@ -4,7 +4,6 @@ import WelcomeSplitButton from './WelcomeSplitButton';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   chooseExistingProject,
-  chooseNewProjectDirectory,
   chooseStarterParent,
   listRecentProjects,
   refreshRecentThumbnail,
@@ -24,10 +23,10 @@ interface WelcomeScreenProps {
 export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps) {
   const [cloning, setCloning] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
-  const [newProjectDirectory, setNewProjectDirectory] = useState<string | undefined>(undefined);
+  const [newProjectParent, setNewProjectParent] = useState<string | undefined>(undefined);
   const [starterDirectory, setStarterDirectory] = useState<string | undefined>(undefined);
   const recent = useRecentProjects(showToast);
-  const actions = useWelcomeActions(onOpen, setError, setNewProjectDirectory, setStarterDirectory);
+  const actions = useWelcomeActions(onOpen, setError, setNewProjectParent, setStarterDirectory);
 
   return (
     <div className="welcome">
@@ -66,12 +65,12 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
           }}
         />
       )}
-      {newProjectDirectory && (
+      {newProjectParent && (
         <NewProjectWizard
-          directory={newProjectDirectory}
-          onClose={() => setNewProjectDirectory(undefined)}
+          parentPath={newProjectParent}
+          onClose={() => setNewProjectParent(undefined)}
           onDone={(directory) => {
-            setNewProjectDirectory(undefined);
+            setNewProjectParent(undefined);
             showToast('Project created', 'success');
             onOpen(directory);
           }}
@@ -84,7 +83,7 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
 function useWelcomeActions(
   onOpen: WelcomeScreenProps['onOpen'],
   setError: React.Dispatch<React.SetStateAction<string | undefined>>,
-  setNewProjectDirectory: React.Dispatch<React.SetStateAction<string | undefined>>,
+  setNewProjectParent: React.Dispatch<React.SetStateAction<string | undefined>>,
   setStarterDirectory: React.Dispatch<React.SetStateAction<string | undefined>>,
 ) {
   const openExisting = async (): Promise<void> => {
@@ -98,15 +97,14 @@ function useWelcomeActions(
       onOpen(result.value.projectPath);
     }
   };
+  // Both wizards ask where the site should go and name its folder themselves.
   const createNew = async (): Promise<void> => {
     setError(undefined);
-    const result = await chooseNewProjectDirectory();
+    const result = await chooseStarterParent();
     if (!result.ok) {
       setError(result.error);
-    } else if (!result.value.canceled && 'error' in result.value) {
-      setError(result.value.error);
     } else if (!result.value.canceled) {
-      setNewProjectDirectory(result.value.projectPath);
+      setNewProjectParent(result.value.parentPath);
     }
   };
   const startFromLumos = async (): Promise<void> => {

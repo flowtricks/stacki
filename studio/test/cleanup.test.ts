@@ -1,3 +1,5 @@
+// Goal: remove committed upload copies while preserving drafts and newer asset bytes.
+// Method: exercise real files, version checks and published manifests across supported paths.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm, access, symlink } from 'node:fs/promises';
@@ -6,7 +8,7 @@ import path from 'node:path';
 import { StorageCleanup } from '../src/features/storage/cleanup';
 import { saveAsset } from '../src/features/storage/assetStorage';
 import { localUploadPath, keepLocalUpload, gitBlob } from '../src/features/storage/cleanupStore';
-import { publicAssetTree } from '../src/features/storage/publicAssetTree';
+import { publishedAssetTree } from '../src/features/storage/publishedAssetTree';
 import { SerialQueue } from '../src/shared/serialQueue';
 
 async function fixture() {
@@ -152,20 +154,112 @@ test('cleanup refuses incomplete reference scans, symbolic links, and changed ba
   }
 });
 test('published asset trees fail closed on truncation and linked assets', () => {
-  assert.throws(() => publicAssetTree({ truncated: true, tree: [] }), /Incomplete/);
+  assert.throws(() => publishedAssetTree({ truncated: true, tree: [] }), /Incomplete/);
   assert.throws(
     () =>
-      publicAssetTree({
+      publishedAssetTree({
         truncated: false,
         tree: [{ path: 'public/photo.png', mode: '120000', type: 'blob', sha: 'a'.repeat(40) }],
       }),
     /Linked/,
   );
   assert.deepEqual(
-    publicAssetTree({
+    publishedAssetTree({
       truncated: false,
       tree: [{ path: 'public/photo.png', mode: '100644', type: 'blob', sha: 'a'.repeat(40) }],
     }),
     [{ file: 'public/photo.png', sha: 'a'.repeat(40) }],
+  );
+});
+
+test('published copies are removed for every supported format in nested public and source folders', async () => {
+  const { root, draft, cleanup } = await fixture();
+  const extensions = [
+    'svg',
+    'png',
+    'jpg',
+    'jpeg',
+    'gif',
+    'webp',
+    'avif',
+    'ico',
+    'bmp',
+    'tif',
+    'tiff',
+    'mp4',
+    'webm',
+    'mov',
+    'm4v',
+    'ogv',
+    'mp3',
+    'wav',
+    'ogg',
+    'm4a',
+    'flac',
+    'aac',
+    'woff',
+    'woff2',
+    'ttf',
+    'otf',
+    'eot',
+    'pdf',
+  ];
+  const files = ['public/nested', 'src/assets/nested'].flatMap((directory) =>
+    extensions.map((extension) => `${directory}/upload.${extension}`),
+  );
+  try {
+    const bytes = Buffer.from('committed');
+    for (const file of files) {
+      await saveAsset(root, file, bytes);
+    }
+    const result = await cleanup.afterPublish(
+      files.map((file) => ({
+        path: file,
+        sha: gitBlob(bytes),
+        mode: '100644',
+        size: bytes.length,
+      })),
+      'a'.repeat(40),
+    );
+    assert.equal(result.removed, files.length);
+    assert.equal(result.freedBytes, files.length * bytes.length);
+    for (const file of files) {
+      assert.equal(await readFile(path.join(root, file), 'utf8'), 'committed');
+      await assert.rejects(access(localUploadPath(root, file)));
+    }
+    assert.equal(await readFile(draft, 'utf8'), 'CRDT identity must remain');
+    assert.deepEqual((await cleanup.inspect()).candidates, []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('published manifests include nested source assets and reject unsafe paths', () => {
+  const files = ['public/fonts/body.woff2', 'src/assets/icons/logo.svg'];
+  const tree = files.map((file) => ({
+    path: file,
+    mode: '100644',
+    type: 'blob',
+    sha: 'a'.repeat(40),
+  }));
+  assert.deepEqual(
+    publishedAssetTree({ truncated: false, tree }),
+    files.map((file) => ({ file, sha: 'a'.repeat(40) })),
+  );
+  assert.throws(
+    () =>
+      publishedAssetTree({
+        truncated: false,
+        tree: [{ path: 'src/../private.png', mode: '100644', type: 'blob', sha: 'a'.repeat(40) }],
+      }),
+    /Invalid project path/,
+  );
+  assert.throws(
+    () =>
+      publishedAssetTree({
+        truncated: false,
+        tree: [{ path: 'src/assets/logo.svg', mode: '120000', type: 'blob', sha: 'a'.repeat(40) }],
+      }),
+    /Linked/,
   );
 });

@@ -3,28 +3,30 @@ import { useLayoutEffect, useRef } from 'react';
 import { flatten, type ParserNode } from '../source/source';
 import { pathFor } from '../project/previewSelection';
 import type { usePreview } from './usePreview';
+import { hasOnlyLiteralTextChanges, type TextSnapshot } from './liveTextChanges';
 // The server still owns rendering. Literal text can reach the existing text
 // region immediately while Astro compiles the authoritative page in parallel.
 export function useLiveText(
   file: string,
+  source: string,
   nodes: readonly ParserNode[],
   preview: ReturnType<typeof usePreview>,
 ) {
-  const previous = useRef<readonly ParserNode[]>([]);
+  const previous = useRef<TextSnapshot>({ source: '', nodes: [] });
   const previousFile = useRef(file);
   const send = useRef(preview.send);
   send.current = preview.send;
   useLayoutEffect(() => {
     if (previousFile.current !== file) {
-      previous.current = [];
+      previous.current = { source: '', nodes: [] };
       previousFile.current = file;
     }
-    const before = flatten(previous.current);
+    const snapshot = { source, nodes };
+    const textOnly = hasOnlyLiteralTextChanges(previous.current, snapshot);
+    const before = flatten(previous.current.nodes);
     const after = flatten(nodes);
-    previous.current = nodes;
-    const structure = (list: readonly ParserNode[]) =>
-      list.map((node) => [node.id, node.kind, node.name]);
-    if (JSON.stringify(structure(before)) !== JSON.stringify(structure(after))) {
+    previous.current = snapshot;
+    if (!textOnly) {
       send.current({ type: 'studio:live-text', reset: true, changes: [] });
       return;
     }
@@ -45,7 +47,7 @@ export function useLiveText(
     if (changes.length) {
       send.current({ type: 'studio:live-text', changes });
     }
-  }, [file, nodes]);
+  }, [file, source, nodes]);
 }
 
 function soleTextParent(nodes: readonly ParserNode[], id: string, file: string) {

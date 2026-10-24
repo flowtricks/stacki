@@ -1,6 +1,7 @@
 import React from 'react';
 import { usePreviewSource } from './usePreviewSource';
 import { PreviewFrame } from './PreviewFrame';
+import { parsePreviewMessage } from './previewMessages';
 import { usePointerDrag } from '../../ui/usePointerDrag';
 
 const BREAKPOINTS = [
@@ -11,7 +12,6 @@ const BREAKPOINTS = [
 const GAP_PX = 120;
 const PAGE_HEIGHT_PX_MAX = 30_000;
 const PAGE_HEIGHT_PX_MIN = 200;
-const PAGE_HEIGHT_VIEWPORTS_MAX = 1.25;
 const ZOOM_MIN = 0.05;
 const ZOOM_MAX = 4;
 type BreakpointKey = (typeof BREAKPOINTS)[number]['key'];
@@ -138,17 +138,12 @@ function useCanvasPointer(
 function layoutFrames(heights: FrameHeights) {
   let x = 0;
   return BREAKPOINTS.map((breakpoint) => {
-    // The overview cannot know the eventual browser viewport, and stretching
-    // its iframe can make vh-based pages report their own new frame height.
-    // One and a quarter screens preserve context while tightly bounding that loop.
-    const heightMax = Math.min(
-      PAGE_HEIGHT_PX_MAX,
-      breakpoint.viewportHeight * PAGE_HEIGHT_VIEWPORTS_MAX,
-    );
+    // The frame freezes viewport units to viewportHeight before growing. Its
+    // visible height can therefore follow the full page without enlarging heroes.
     const height = clamp(
       heights[breakpoint.key] ?? breakpoint.viewportHeight,
       PAGE_HEIGHT_PX_MIN,
-      heightMax,
+      PAGE_HEIGHT_PX_MAX,
     );
     const frame = { ...breakpoint, x, height };
     x += breakpoint.width + GAP_PX;
@@ -162,10 +157,6 @@ function useFrameHeights(
 ): void {
   React.useEffect(() => {
     const onMessage = (event: MessageEvent<unknown>): void => {
-      const height = parsePageHeight(event.data);
-      if (height === undefined) {
-        return;
-      }
       const match = Object.entries(iframesRef.current).find(
         ([, iframe]) => iframe?.contentWindow === event.source,
       );
@@ -173,11 +164,41 @@ function useFrameHeights(
       if (!isBreakpointKey(key)) {
         return;
       }
+      if (isFrameReady(event.data)) {
+        const breakpoint = BREAKPOINTS.find((entry) => entry.key === key);
+        const iframe = iframesRef.current[key];
+        if (breakpoint && iframe) {
+          // Ready precedes window.load when images are slow. Freeze before the
+          // first height report can stretch an unfrozen viewport-sized section.
+          iframe.contentWindow?.postMessage(
+            { type: 'avb:set-vh', px: breakpoint.viewportHeight },
+            new URL(iframe.src).origin,
+          );
+        }
+      }
+      const height = parsePageHeight(event.data);
+      if (height === undefined) {
+        return;
+      }
       setHeights((current) => (current[key] === height ? current : { ...current, [key]: height }));
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [iframesRef, setHeights]);
+}
+
+function isFrameReady(input: unknown): boolean {
+  if (parsePreviewMessage(input)?.kind === 'canvas-ready') {
+    return true;
+  }
+  // Studio canvas copies do not install the editable selection tracker, so
+  // their preview client announces document readiness independently.
+  return (
+    typeof input === 'object' &&
+    input !== null &&
+    'type' in input &&
+    input.type === 'studio:preview-ready'
+  );
 }
 
 export function parsePageHeight(input: unknown): number | undefined {
@@ -401,9 +422,13 @@ function CanvasControls({
 function useStudioPatches(frames: React.MutableRefObject<FrameElements>, url: string): void {
   React.useEffect(() => {
     const origin = new URL(url, window.location.href).origin;
-    const patch = () => {
+    const patch = (event?: Event) => {
+      const message =
+        event instanceof CustomEvent && event.detail === 'structure'
+          ? { type: 'avb:patch-now', immediate: true }
+          : { type: 'avb:patch-now' };
       for (const frame of Object.values(frames.current)) {
-        frame?.contentWindow?.postMessage({ type: 'avb:patch-now' }, origin);
+        frame?.contentWindow?.postMessage(message, origin);
       }
     };
     const receive = (event: MessageEvent<unknown>) => {

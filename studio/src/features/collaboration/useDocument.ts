@@ -1,6 +1,8 @@
 import { EditorHistory } from './editorHistory';
 import { SelectionIntent } from './selectionIntent';
 import { watchConnection } from './connectionWatch';
+import { SaveWatch } from './saveWatch';
+import { parseSaveSequence } from './saveProtocol';
 import { receiveSharedPublish } from '../publishing/sharedPublish';
 import { getEditorRole, subscribeRole } from '../roles/roleStore';
 import { assertClientAction, assertClientSourceChange } from '../roles/clientPolicy';
@@ -48,7 +50,9 @@ export class SharedDocument {
   private closed = false;
   private suspended = false;
   private attempts = 0;
-  private pending = 0;
+  private synchronized = false;
+  private saveRecoveries = 0;
+  private readonly saves = new SaveWatch(() => this.recoverSave());
   private reconnect?: ReturnType<typeof setTimeout>;
   private stopWatching?: () => void;
   private readonly listeners = new Set<() => void>();
@@ -105,19 +109,13 @@ export class SharedDocument {
       `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/studio/sync?file=${encodeURIComponent(this.file)}&participant=${this.participant}`,
     );
     this.socket = socket;
+    this.synchronized = false;
     this.stopWatching?.();
     this.stopWatching = watchConnection(socket, () => {
       if (this.socket !== socket || this.closed || this.suspended) {
         return;
       }
-      this.stopWatching?.();
-      // Do not wait for the broken connection to complete a close handshake.
-      this.socket = undefined;
-      socket.close();
-      this.cursors.reset();
-      this.status = 'Reconnecting…';
-      this.emit();
-      this.connect();
+      this.restartConnection();
     });
     socket.addEventListener('message', (event) => {
       if (this.socket === socket && !this.closed) {
@@ -129,6 +127,8 @@ export class SharedDocument {
         return;
       }
       this.cursors.reset();
+      this.synchronized = false;
+      this.saves.reset();
       if (event.code === 4001) {
         this.status = 'Sign-in required';
         this.error =
@@ -137,7 +137,7 @@ export class SharedDocument {
         return;
       }
       this.status = this.suspended
-        ? 'Saved'
+        ? this.status
         : navigator.onLine
           ? 'Reconnecting…'
           : 'Offline · edits pending';
@@ -148,6 +148,38 @@ export class SharedDocument {
         this.reconnect = setTimeout(() => this.connect(), delay + Math.random() * 500);
       }
     });
+  }
+  private restartConnection() {
+    this.disconnectConnection();
+    this.status = 'Reconnecting…';
+    this.emit();
+    this.connect();
+  }
+  private disconnectConnection() {
+    this.stopWatching?.();
+    this.saves.reset();
+    clearTimeout(this.reconnect);
+    // A broken proxy need not finish its close handshake before we reconnect.
+    const socket = this.socket;
+    this.socket = undefined;
+    this.synchronized = false;
+    socket?.close();
+    this.cursors.reset();
+  }
+  private recoverSave() {
+    if (this.closed || this.suspended) {
+      return;
+    }
+    if (this.saveRecoveries < 3) {
+      this.saveRecoveries++;
+      this.restartConnection();
+    } else {
+      this.disconnectConnection();
+      this.status = 'Needs attention';
+      this.error =
+        'Save confirmation did not arrive. Your local edits are preserved. Reload Studio to retry.';
+      this.emit();
+    }
   }
   private receive(event: MessageEvent) {
     try {
@@ -185,7 +217,8 @@ export class SharedDocument {
         this.applyServerUpdate(message);
         if (message['type'] === 'sync') {
           this.attempts = 0;
-          this.pending = 0;
+          this.saves.reset();
+          this.synchronized = true;
           this.ready = true;
           this.status = shouldReplay ? 'Saving' : 'Saved';
           if (shouldReplay) {
@@ -197,10 +230,9 @@ export class SharedDocument {
           }
           this.select(this.selection, this.page || this.file, this.occurrence);
         }
-        window.dispatchEvent(new CustomEvent('studio:source-updated'));
+        notifySourceUpdated(message);
       } else if (message['type'] === 'saved') {
-        this.pending = Math.max(0, this.pending - 1);
-        this.status = this.pending ? 'Saving' : 'Saved';
+        this.receiveSaved(parseSaveSequence(message['save']));
       } else if (message['type'] === 'selection') {
         this.receiveSelection(message);
       } else if (message['type'] === 'error') {
@@ -215,6 +247,16 @@ export class SharedDocument {
     } catch (error) {
       this.error = String(error);
       this.emit();
+    }
+  }
+  private receiveSaved(sequence: number | undefined) {
+    if (!this.saves.saved(sequence)) {
+      return;
+    }
+    this.status = this.saves.pending ? 'Saving' : 'Saved';
+    if (!this.saves.pending) {
+      this.saveRecoveries = 0;
+      this.error = '';
     }
   }
   private applyServerUpdate(message: Record<string, unknown>) {
@@ -343,7 +385,7 @@ export class SharedDocument {
     if ('node' in action && !this.canEdit(action.node)) {
       return;
     }
-    if (this.socket?.readyState !== WebSocket.OPEN) {
+    if (!this.synchronized || this.socket?.readyState !== WebSocket.OPEN) {
       throw new Error('Reconnect before rearranging the page');
     }
     const source = this.text.toString();
@@ -373,8 +415,19 @@ export class SharedDocument {
         'type' in data &&
         (data.type === 'update' || data.type === 'action')
       ) {
-        this.pending++;
+        // The sync handshake replays the complete local document, including edits
+        // made while the new socket was open but had not received its epoch yet.
+        if (!this.synchronized) {
+          return;
+        }
+        const save = this.saves.sent();
+        if (save === undefined) {
+          this.recoverSave();
+          return;
+        }
         this.status = 'Saving';
+        this.socket.send(JSON.stringify({ ...data, save }));
+        return;
       }
       this.socket.send(JSON.stringify(data));
     }
@@ -387,6 +440,7 @@ export class SharedDocument {
     clearTimeout(this.reconnect);
     if (suspended) {
       this.stopWatching?.();
+      this.saves.reset();
       this.socket?.close();
     } else {
       this.connect();
@@ -397,6 +451,7 @@ export class SharedDocument {
     this.stopRoleCapture();
     this.closed = true;
     this.stopWatching?.();
+    this.saves.reset();
     clearTimeout(this.reconnect);
     this.socket?.close();
     void this.persistence.destroy();
@@ -429,6 +484,14 @@ function encode(bytes: Uint8Array) {
     result += String.fromCharCode(...bytes.subarray(index, index + 8192));
   }
   return btoa(result);
+}
+function notifySourceUpdated(message: Readonly<Record<string, unknown>>): void {
+  window.dispatchEvent(
+    new CustomEvent('studio:source-updated', {
+      detail:
+        message['structural'] === true || message['ownAction'] === true ? 'structure' : undefined,
+    }),
+  );
 }
 function decode(value: string) {
   return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));

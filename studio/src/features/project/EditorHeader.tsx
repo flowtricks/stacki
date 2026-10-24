@@ -14,6 +14,7 @@ import { useComponentBack } from './useComponentBack';
 import { useEditorRole } from '../roles/useEditorRole';
 import { PreviewButton, type InteractivePreviewState } from '../preview/InteractivePreview';
 interface HeaderProps {
+  readonly cursorChat: (() => void) | undefined;
   readonly defaultsMode: boolean;
   readonly closeDefaults: () => void;
   readonly interactivePreview: InteractivePreviewState;
@@ -28,6 +29,7 @@ interface HeaderProps {
 }
 
 export function EditorHeader({
+  cursorChat,
   project,
   file,
   previewFile,
@@ -58,7 +60,11 @@ export function EditorHeader({
   return (
     <header className={`titlebar studio-titlebar ${componentOpen ? 'component-open' : ''}`}>
       <div className="studio-titlebar-start">
-        <AccountMenu saved={!defaultsMode && document?.status === 'Saved'} session={session} />
+        <AccountMenu
+          saved={!defaultsMode && document?.status === 'Saved'}
+          session={session}
+          cursorChat={cursorChat}
+        />
         <span className="project-name">{project.name}</span>
         <span className="draft-chip">{direct ? 'Local files' : 'Draft'}</span>
         {role === 'client' && <span className="client-role-badge">Client</span>}

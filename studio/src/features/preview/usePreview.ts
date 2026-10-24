@@ -97,8 +97,11 @@ function usePreviewMessages(
   const { setOutlines, setGuide } = setters;
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
-    const patch = () => {
+    const patch = (event?: Event) => {
       clearTimeout(timer);
+      if (requestStructuralPreview(event, frame.current, target?.origin)) {
+        return;
+      }
       timer = setTimeout(() => {
         if (target) {
           frame.current?.contentWindow?.postMessage({ type: 'avb:patch-now' }, target.origin);
@@ -146,6 +149,19 @@ function usePreviewMessages(
       window.removeEventListener('message', receive);
     };
   }, [target, frame, callbacks, setOutlines, setGuide]);
+}
+function requestStructuralPreview(
+  event: Event | undefined,
+  frame: HTMLIFrameElement | null,
+  origin: string | undefined,
+): boolean {
+  if (!(event instanceof CustomEvent) || event.detail !== 'structure' || !origin) {
+    return false;
+  }
+  // This notification follows the accepted disk write. Structural edits have
+  // no safe text-only stand-in; do not wait for the push grace period.
+  frame?.contentWindow?.postMessage({ type: 'avb:patch-now', immediate: true }, origin);
+  return true;
 }
 // What the page measured: the outlines it draws, and what the column guide is
 // drawn from, read through the shared parser.

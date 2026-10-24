@@ -1,106 +1,156 @@
-import { applyEdits, structuralEdits, flatten, nodesOf } from '../src/features/source/source';
-import { chromium } from 'playwright';
+// Goal: structural edits keep component labels with their variants, without a stale text flash.
+// Method: drag real navigator rows while render delivery is held, record every DOM mutation,
+// then release the real Astro result and measure warm duplicate/delete preview latency.
 import assert from 'node:assert/strict';
-import { record, string } from '../src/shared/validation';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
+import path from 'node:path';
+import { setTimeout } from 'node:timers/promises';
+import { chromium, type Page } from 'playwright';
+import { switchPage } from './pageNavigation';
 
-const url = process.env['STUDIO_URL'] ?? 'http://127.0.0.1:4360/studio';
+const root = process.env['STUDIO_FIXTURE_ROOT'];
+assert.ok(root?.includes('/.studio/'), 'An isolated draft is required');
+assert.ok(root);
+const url = process.env['STUDIO_URL'] ?? 'http://127.0.0.1:4376/studio';
+assert.equal(new URL(url).hostname, '127.0.0.1');
+const suffix = `structural-preview-${Date.now()}`;
+const file = `src/pages/${suffix}.astro`;
+const component = `src/components/${suffix}.astro`;
+const source = `---
+import Button from '../components/${suffix}.astro';
+---
+<main><Button variant="primary">Choose a campus</Button><Button variant="secondary">Plan your visit</Button></main>`;
+await writeFile(
+  path.join(root, component),
+  `---
+interface Props { variant: 'primary' | 'secondary' }
+const { variant } = Astro.props;
+---
+<button class={variant}><slot /></button>
+<style>button { padding: 20px; margin: 10px; font: 24px sans-serif; }
+.primary { background: blue; color: white; } .secondary { background: white; color: black; }
+</style>`,
+  { flag: 'wx' },
+);
+await writeFile(path.join(root, file), source, { flag: 'wx' });
 const browser = await chromium.launch({
   executablePath:
     process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
-const auth = process.env['STUDIO_STORAGE_STATE'];
-const page = await browser.newPage({
-  viewport: { width: 1440, height: 1000 },
-  ...(auth ? { storageState: auth } : {}),
-});
-page.setDefaultTimeout(20000);
-const endpoint = new URL('/studio/api/file?file=src/pages/index.astro', url).href;
-const headingText = process.env['STUDIO_TEST_HEADING'] ?? 'Style Guide';
-let original: string | undefined;
-let changed: string | undefined;
-let afterDelete: string | undefined;
-let started = 0;
-const timings: { event: string; ms: number }[] = [];
-page.on('websocket', (socket) =>
-  socket.on('framereceived', (frame) => {
-    const message = String(frame.payload);
-    if (
-      started &&
-      (message.includes('"type":"update"') ||
-        message.includes('"event":"studio:render"') ||
-        message.includes('"event":"avb:page-changed"'))
-    ) {
-      timings.push({
-        event: message.includes('"type":"update"')
-          ? 'source'
-          : message.includes('studio:render')
-            ? 'render'
-            : 'invalidation',
-        ms: Math.round(performance.now() - started),
-      });
-    }
-  }),
-);
+const page = await browser.newPage({ viewport: { width: 1920, height: 1100 } });
+page.setDefaultTimeout(20_000);
+const transport = await holdRenders(page);
 try {
-  await page.goto(url);
-  await page.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
-  const canvas = page.frameLocator('iframe[title="Site preview"]');
-  const heading = canvas.getByRole('heading', {
-    name: headingText,
-    exact: true,
-  });
-  await heading.waitFor();
-  original = await readSource();
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await switchPage(page, file);
+  const frame = page.frameLocator('iframe[title="Site preview"]');
+  await frame.getByRole('button', { name: 'Plan your visit', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Expand all', exact: true }).click();
-  await heading.click();
-  await page
-    .locator('.structure-node.selected')
-    .filter({ has: page.locator('.label', { hasText: /^Heading$/ }) })
-    .waitFor();
-  started = performance.now();
-  await page.locator('.structure-node.selected').click();
-  await page.keyboard.press('Meta+d');
-  try {
-    await heading.nth(1).waitFor();
-  } catch (error) {
-    console.log(
-      JSON.stringify({
-        timings,
-        toast: await page.locator('.studio-toast').allTextContents(),
-        unchanged: (await readSource()) === original,
-      }),
-    );
-    throw error;
-  }
-  const duplicate = Math.round(performance.now() - started);
-  changed = await readSource();
-  const duplicateNode = flatten(nodesOf(changed)).filter(
-    (node) =>
-      node.name === 'Heading' && node.children?.some((child) => child.value === headingText),
-  )[1]?.id;
-  assert.ok(duplicateNode);
-  afterDelete = applyEdits(
-    changed,
-    structuralEdits(changed, { kind: 'delete', node: duplicateNode }, 'src/pages/index.astro'),
-  );
-  started = performance.now();
-  await page.keyboard.press('Backspace');
-  await heading.nth(1).waitFor({ state: 'detached' });
-  const deleted = Math.round(performance.now() - started);
-  assert.equal(await readSource(), afterDelete);
-  console.log(JSON.stringify({ duplicate, deleted, timings }));
+  await frame.locator('body').evaluate((body) => {
+    new MutationObserver(() => {
+      for (const button of body.querySelectorAll('button')) {
+        const expected = button.textContent?.trim() === 'Choose a campus' ? 'primary' : 'secondary';
+        if (!button.classList.contains(expected)) {
+          body.ownerDocument.documentElement.dataset['variantMismatch'] = button.outerHTML;
+        }
+      }
+    }).observe(body, { subtree: true, childList: true, characterData: true, attributes: true });
+  });
+  transport.hold = true;
+  await moveSecondFirst(page);
+  await waitForSource((text) => text.indexOf('Plan your visit') < text.indexOf('Choose a campus'));
+  await setTimeout(350);
+  assert.ok(transport.held > 0, 'The real Astro render was held during the drag');
+  assert.equal(await frame.locator('html').getAttribute('data-variant-mismatch'), null);
+  transport.release();
+  await frame.locator('button.secondary:first-child').waitFor();
+  assert.equal(await frame.locator('html').getAttribute('data-variant-mismatch'), null);
+  await page.keyboard.press('ControlOrMeta+z');
+  await frame.locator('button.primary:first-child').waitFor();
+  assert.equal(await frame.locator('html').getAttribute('data-variant-mismatch'), null);
+  await measureStructuralEdits(page);
+  console.log('Drag, undo, duplicate and delete retain button variants.');
 } finally {
-  const base = await readSource();
-  if (original && changed && (base === changed || base === afterDelete)) {
-    const response = await page.request.post(new URL('/studio/api/source', url).href, {
-      headers: { Origin: new URL(url).origin },
-      data: { file: 'src/pages/index.astro', source: original, base },
-    });
-    assert.ok(response.ok());
-  }
+  transport.release();
   await browser.close();
+  await unlink(path.join(root, file));
+  await unlink(path.join(root, component));
 }
-async function readSource() {
-  return string(record(await (await page.request.get(endpoint)).json())['source']);
+
+async function moveSecondFirst(page: Page) {
+  const row = page.locator('.structure-node[data-node-id="n0.1"]');
+  const gap = page.locator('.nav-gap[data-drop-parent="n0"][data-drop-index="0"]');
+  const from = await row.boundingBox();
+  const to = await gap.boundingBox();
+  assert.ok(from && to);
+  await page.mouse.move(from.x + 5, from.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(to.x + 5, to.y + to.height / 2, { steps: 12 });
+  await page.mouse.up();
+}
+
+async function waitForSource(matches: (source: string) => boolean) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (matches(await readFile(path.join(root ?? '', file), 'utf8'))) {
+      return;
+    }
+    await setTimeout(50);
+  }
+  throw new Error('The source did not reach the expected order');
+}
+
+async function holdRenders(page: Page) {
+  let releaseFetch = () => {};
+  const gate = new Promise<void>((resolve) => {
+    releaseFetch = resolve;
+  });
+  const deliveries: (() => void)[] = [];
+  const state = {
+    hold: false,
+    held: 0,
+    release() {
+      state.hold = false;
+      for (const deliver of deliveries.splice(0)) {
+        deliver();
+      }
+      releaseFetch();
+    },
+  };
+  await page.routeWebSocket('**/*', (socket) => {
+    const server = socket.connectToServer();
+    server.onMessage((message) => {
+      if (state.hold && String(message).includes('"event":"studio:render"')) {
+        assert.ok(deliveries.length < 100, 'Held render queue stays bounded');
+        state.held++;
+        deliveries.push(() => socket.send(message));
+      } else {
+        socket.send(message);
+      }
+    });
+  });
+  await page.route('**/*', async (route) => {
+    if (
+      state.hold &&
+      route.request().resourceType() === 'fetch' &&
+      new URL(route.request().url()).pathname === '/' + suffix
+    ) {
+      await gate;
+    }
+    await route.continue();
+  });
+  return state;
+}
+
+async function measureStructuralEdits(page: Page) {
+  const frame = page.frameLocator('iframe[title="Site preview"]');
+  await page.locator('.structure-node[data-node-id="n0.1"]').click();
+  const duplicateStart = performance.now();
+  await page.keyboard.press('ControlOrMeta+d');
+  await frame.locator('button').nth(2).waitFor();
+  console.log(`Duplicate to canvas: ${Math.round(performance.now() - duplicateStart)}ms`);
+  const deleteStart = performance.now();
+  await page.keyboard.press('Delete');
+  await frame.locator('button').nth(2).waitFor({ state: 'detached' });
+  console.log(`Delete to canvas: ${Math.round(performance.now() - deleteStart)}ms`);
 }

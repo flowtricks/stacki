@@ -79,9 +79,7 @@ export default function StructurePanel(props: StructurePanelProps) {
   }
   const projection = structureProjection(props.pageState);
   if (props.clientMode && projection.tag === 'parse-error') {
-    return (
-      <ErrorToast message="This page needs a Designer to fix its source before it can be edited." />
-    );
+    return <ErrorToast message="This page needs a Developer to fix its source before editing." />;
   }
   switch (projection.tag) {
     case 'valid':

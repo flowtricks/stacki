@@ -34,7 +34,7 @@ export const studioDefaultsHost = {
   },
   save: async (snapshot: DefaultsSnapshot): Promise<DefaultsSnapshot> => {
     if (getEditorRole() === 'client') {
-      throw new Error('Component defaults are only editable in Designer mode.');
+      throw new Error('Component defaults are only editable in Developer mode.');
     }
     const stored = await writeMetadata('', {
       kind: 'components',

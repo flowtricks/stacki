@@ -141,8 +141,10 @@ let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
 
 // The hosted preview receives Astro renders on its existing socket. Keep the
 // pull path for old servers, disconnected sockets and failed pushed renders.
-function requestUpdate(): void {
-  if (!pushReady) {
+function requestUpdate(priority: 'push-first' | 'immediate' = 'push-first'): void {
+  if (priority === 'immediate' || !pushReady) {
+    clearTimeout(fallbackTimer);
+    fallbackTimer = undefined;
     void update();
   } else if (!fallbackTimer) {
     fallbackTimer = setTimeout(() => {
@@ -306,6 +308,8 @@ window.addEventListener('message', (event: MessageEvent) => {
     data['type'] === 'avb:patch-now'
   ) {
     // update() reports its own failures and reloads; nothing is left to catch.
-    requestUpdate();
+    const immediate =
+      event.source === window.parent && 'immediate' in data && data.immediate === true;
+    requestUpdate(immediate ? 'immediate' : 'push-first');
   }
 });

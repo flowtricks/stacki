@@ -40,7 +40,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
       'flex-shrink',
       'flex-basis',
       // The Position control reads column/row shorthands and line longhands.
-      // grid-area has no dedicated field; NO_CONTROL sends it to Custom properties.
+      // grid-area has no dedicated field; NO_CONTROL sends it to Other properties.
       'grid-area',
       'grid-column',
       'grid-column-start',
@@ -67,7 +67,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
       'align-content',
       'place-content',
       // Gap + its legacy `grid-*-gap` aliases — all owned by the Gap control, so they
-      // stay out of Custom properties.
+      // stay out of Other properties.
       'gap',
       'row-gap',
       'column-gap',
@@ -120,7 +120,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
       'aspect-ratio',
       'box-sizing',
       // Handled by the Size section's Image fit control (SizeSection reads them
-      // directly) — listed here so they don't fall through to Custom properties.
+      // directly) — listed here so they don't fall through to Other properties.
       'object-fit',
       'object-position',
     ],
@@ -247,7 +247,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
       'pointer-events',
     ],
   },
-  { id: 'other', label: 'Custom properties', order: [] },
+  { id: 'other', label: 'Other properties', order: [] },
 ];
 
 // Property → section, and property → its canonical index within that section. Built once
@@ -274,8 +274,8 @@ export const PROPERTY_ORDER: ReadonlyMap<string, number> = (() => {
 // order is where a property sorts when it's rendered; it is not a claim that it
 // is. `inset: 0` sorted next to top/right/bottom/left and was then rendered by
 // nothing — the inset box asks for each side separately — so it was in the file
-// and nowhere in the panel: not in Position, not in Custom properties, not
-// anywhere. A property with no control belongs in Custom properties, where it
+// and nowhere in the panel: not in Position, not in Other properties, not
+// anywhere. A property with no control belongs in Other properties, where it
 // can at least be read and edited as text.
 //
 // Every one of these is a shorthand whose longhands DO have controls. Adding a

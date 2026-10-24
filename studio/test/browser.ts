@@ -163,6 +163,7 @@ try {
   await phone.goto(url);
   phone.setDefaultTimeout(20000);
   await phone.locator('.save-state').filter({ hasText: 'Saved' }).waitFor({ state: 'attached' });
+  await phone.getByRole('button', { name: 'Navigator', exact: true }).click();
   await phone.getByRole('button', { name: 'Expand all', exact: true }).click();
   const from = await phone
     .locator('.structure-node')
@@ -208,7 +209,10 @@ try {
     return labels.indexOf('Heading') < labels.indexOf('Eyebrow');
   });
   await phone.getByLabel('Close panel').click();
-  await phone.locator('.mobile-settings-button').click();
+  await phone
+    .locator('.preview-toolbar')
+    .getByRole('button', { name: 'Settings', exact: true })
+    .click();
   await phone.locator('.studio-right.mobile-open').waitFor();
   await phone.screenshot({ path: 'test-results/mobile.png' });
   assert.equal(

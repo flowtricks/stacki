@@ -3,6 +3,8 @@
 // frame stretched to the whole page does not stretch what is measured in it.
 
 import { PRELOAD_LIMITS } from './frameBasics';
+import { freezeViewportValue, parseViewportHeight } from './frameViewportUnits';
+import { freezeInlineViewport } from './frameViewportInline';
 
 // documentElement.scrollHeight is clamped to the viewport (= the iframe),
 // so once the frame is stretched it can never report a smaller page — a
@@ -31,7 +33,6 @@ export const report = () => {
 // `avb:set-vh` with the breakpoint's real viewport height; we freeze vh by
 // copying every rule that uses vh units into an override stylesheet with
 // `Xvh` → `calc(X * var(--avb-vh))`, where --avb-vh is 1% of that height.
-const VH_RE = /(-?\d*\.?\d+)(vh|svh|lvh|dvh)\b/g;
 let overrideElement: HTMLStyleElement | undefined = undefined;
 let rewriteTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -121,17 +122,16 @@ const filterStyleRule = (rule: CSSStyleRule | CSSKeyframeRule, depth: number): s
     const prop = rule.style.item(di);
     const value = rule.style.getPropertyValue(prop);
     const prio = rule.style.getPropertyPriority(prop);
-    VH_RE.lastIndex = 0;
-    const hasVh = VH_RE.test(value);
+    const frozenValue = freezeViewportValue(value);
+    const hasVh = frozenValue !== value;
     const isFixed = prop === 'position' && /fixed/.test(value);
     if (!hasVh && !isFixed) {
       continue;
     }
-    VH_RE.lastIndex = 0;
     // position:fixed anchors to the stretched frame, so it becomes
     // absolute — headers/overlays sit at their page position instead of
     // floating mid-frame.
-    const newValue = isFixed ? 'absolute' : value.replace(VH_RE, 'calc($1 * var(--avb-vh, 1$2))');
+    const newValue = isFixed ? 'absolute' : frozenValue;
     decls += `${prop}: ${newValue}${prio ? ' !important' : ''}; `;
   }
   // Nested matches are re-emitted inside their parent, keeping the nesting
@@ -217,11 +217,16 @@ const scheduleRewrite = () => {
 
 let frozen = false;
 
-export const freezeViewportHeight = (px: number) => {
+export const freezeViewportHeight = (value: unknown) => {
+  const px = parseViewportHeight(value);
+  if (px === undefined) {
+    return;
+  }
   document.documentElement.style.setProperty('--avb-vh', px / 100 + 'px');
   if (!frozen) {
     frozen = true;
     rewriteSheets();
+    freezeInlineViewport(report);
     // Subresources — @import among them — are done by `load`, so take one
     // more pass then even if the retries above have run out.
     window.addEventListener('load', scheduleRewrite);

@@ -457,8 +457,7 @@
     opacity: 0.6;
   }
 }
-.mobile-close,
-.mobile-settings-button {
+.mobile-close {
   display: none;
 }
 @media (max-width: 1000px) {
@@ -545,9 +544,9 @@
   .preview-url {
     max-width: 80px;
   }
-  .mobile-settings-button {
-    display: inline-flex;
-    padding: 4px 8px;
+  .studio-right .right-tabs {
+    margin-right: 44px;
+    flex-shrink: 0;
   }
   .canvas-footer {
     min-height: 38px;
@@ -671,11 +670,6 @@
   background: var(--bg-panel);
   box-shadow: 0 8px 24px #0008;
 }
-.account-popover:has(.storage-total) {
-  width: min(340px, calc(100vw - 24px));
-  max-height: calc(100dvh - 64px);
-  overflow-y: auto;
-}
 .account-popover button {
   width: 100%;
   margin-top: 0;
@@ -686,16 +680,6 @@
   font-size: 10px;
   line-height: 1.5;
   color: var(--text-dim);
-}
-.account-popover > .storage-panel {
-  margin: 0;
-  padding: 0.75rem 0 0;
-  border: 0;
-  border-top: 1px solid var(--border);
-  border-radius: 0;
-}
-.account-popover .storage-toggle {
-  min-height: 2.75rem;
 }
 @media (max-width: 700px) {
   /* Give page names the flexible space so the avatar group keeps its full width. */
@@ -861,70 +845,6 @@
 .page-presence-more {
   background: var(--bg-panel);
   color: var(--text-dim);
-}
-
-.storage-panel {
-  margin: 0 12px 12px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-.storage-toggle {
-  width: 100%;
-}
-.storage-total {
-  font-size: 14px;
-  margin: 12px 0 8px;
-}
-.storage-total span,
-.storage-note,
-.storage-message,
-.cleanup-confirm p {
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--text-dim);
-}
-.storage-total span {
-  display: block;
-}
-.storage-usage {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 4px 8px;
-  font-size: 11px;
-}
-.storage-usage dd {
-  margin: 0;
-}
-.cleanup-list {
-  max-height: 230px;
-  overflow-y: auto;
-  margin: 10px 0;
-}
-.cleanup-list label {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 6px 0;
-  cursor: pointer;
-}
-.cleanup-list input {
-  width: auto;
-  flex-shrink: 0;
-  margin: 3px 0 0;
-}
-.cleanup-list strong {
-  font-size: 11px;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-.cleanup-list small {
-  display: block;
-  color: var(--text-dim);
-  font-size: 10px;
-}
-.cleanup-confirm > button {
-  margin: 0 4px 4px 0;
 }
 
 .studio-left {

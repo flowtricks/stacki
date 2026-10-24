@@ -1,7 +1,7 @@
 import './previewToolbar.css';
 import { PreviewLoading, usePreviewLoading } from './PreviewLoading';
 import { CollaboratorOutlines } from '../collaboration/CollaboratorOutlines';
-import { CursorChatButton, useCursorScale } from '../collaboration/CursorChatButton';
+import { useCursorChatShortcut, useCursorScale } from '../collaboration/cursorChat';
 import type { Peer } from '../collaboration/presence';
 import { spacingHover } from './spacingHover';
 import { useLiveValue } from '../../../vendor/stacki/src/ui/liveValue';
@@ -16,6 +16,7 @@ import type { CSSProperties } from 'react';
 import {
   PreviewToolbar,
   type PreviewDevice,
+  type PreviewInspectorActions,
 } from '../../../vendor/stacki/src/features/preview/PreviewToolbar';
 import CanvasView from '../../../vendor/stacki/src/features/preview/CanvasView';
 import { usePreviewSizing } from '../../../vendor/stacki/src/features/preview/usePreviewSizing';
@@ -41,11 +42,15 @@ interface Props {
   readonly nodes: readonly ParserNode[];
   readonly device: PreviewDevice;
   readonly onDevice: (device: PreviewDevice) => void;
-  readonly showSettings: () => void;
+  readonly inspector: PreviewInspectorActions | undefined;
 }
 export function PreviewCanvas(props: Props) {
   const sizing = usePreviewSizing(props.device, props.dimensions, props.onDevice);
   useCursorScale(props.preview, sizing.viewport.scale);
+  useCursorChatShortcut({
+    preview: props.preview,
+    disabled: props.collection || props.device === 'canvas',
+  });
   // This key locates legacy preferences; subsequent reads and saves use .stacki/guide.json.
   const columnGuide = useColumnGuide({
     projectKey: `${location.origin} ${props.projectName}`,
@@ -72,15 +77,8 @@ export function PreviewCanvas(props: Props) {
                 },
               })}
           guide={columnGuide.menu}
+          inspector={props.collection ? undefined : props.inspector}
         />
-
-        <CursorChatButton
-          preview={props.preview}
-          disabled={props.collection || props.device === 'canvas'}
-        />
-        <button className="mobile-settings-button" onClick={props.showSettings}>
-          Settings
-        </button>
       </div>
       {props.collection && props.document ? (
         <CollectionEditor document={props.document} />

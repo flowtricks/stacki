@@ -1,3 +1,7 @@
+import DateField from '../../../vendor/stacki/src/ui/DateField';
+import HtmlField from '../../../vendor/stacki/src/ui/HtmlField';
+import { calendarValue } from '../../../vendor/stacki/src/ui/dateFieldModel';
+import { containsHTML } from '../../../vendor/stacki/src/ui/htmlFieldModel';
 import { useId } from 'react';
 import {
   DndContext,
@@ -79,6 +83,16 @@ export function ValueFields({ value, change, label, depth = 0, template }: Props
         }}
       />
     );
+  }
+  return <StringField value={value} label={label} change={change} />;
+}
+function StringField({ value, label, change }: Pick<Props, 'value' | 'label' | 'change'>) {
+  const text = typeof value === 'string' ? value : '';
+  if (containsHTML(text)) {
+    return <HtmlField value={text} label={label} onChange={change} />;
+  }
+  if (calendarValue(text)) {
+    return <DateField value={text} label={label} onChange={change} />;
   }
   return (
     <textarea

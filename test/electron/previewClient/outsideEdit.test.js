@@ -125,6 +125,26 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
     window.document.getElementById('probe')?.textContent,
   );
 
+  // A subscribed socket can miss a structural render. Only the editor parent
+  // can bypass the push grace period after the source write is acknowledged.
+  window.document.dispatchEvent(new window.CustomEvent('studio:render-push', { detail: true }));
+  const beforeImmediate = fetches;
+  await say({ type: 'avb:patch-now', immediate: true });
+  check('other senders cannot request an immediate render', fetches === beforeImmediate);
+  window.dispatchEvent(
+    new window.MessageEvent('message', {
+      source: window.parent,
+      data: { type: 'avb:patch-now', immediate: true },
+    }),
+  );
+  await settle(40);
+  check('accepted structure bypasses the 1500ms push delay', fetches === beforeImmediate + 1);
+  check(
+    'the complete structural render reaches the DOM immediately',
+    window.document.getElementById('probe')?.textContent === 'probe three',
+  );
+  window.document.dispatchEvent(new window.CustomEvent('studio:render-push', { detail: false }));
+
   // --- a word to the canvas that needs no answer --------------------------------
   const queryBundle = path.join(buildDirectory, 'canvas-query.bundle.mjs');
   await esbuild.build({

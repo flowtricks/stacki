@@ -565,7 +565,7 @@ function splitSlash(value: string): [string, string] {
 
 // Build the grid-column / grid-row shorthand from a start & end line ('' when both auto).
 // `auto / span 2`, or just `2` when the end is auto. Webflow's grid-child placement reads
-// this shorthand — the *-start / *-end longhands land in Custom properties instead.
+// this shorthand — the *-start / *-end longhands land in Other properties instead.
 function buildLine(start: string, end: string): string {
   const startLine = start.trim() || 'auto';
   const endLine = end.trim() || 'auto';
@@ -619,7 +619,7 @@ function AxisRow({
 
   // Write the grid-column / grid-row SHORTHAND, combining this edit with the other axis end.
   // Webflow's grid-child placement reads the shorthand; the *-start / *-end longhands park in
-  // Custom properties instead. Live updates as you type (the shorthand replaces itself cleanly).
+  // Other properties instead. Live updates as you type (the shorthand replaces itself cleanly).
   const commit = (which: 'start' | 'end', value: string, options: CommitOptions) => {
     const { important, live } = options;
     const start = (which === 'start' ? value : startValue).trim();

@@ -91,4 +91,7 @@ test('path guards reject traversal, hidden files and unsupported sources', () =>
   }
   assert.throws(() => sourcePath('public/picture.png'));
   assert.equal(sourcePath('src/content/posts/hello.md'), 'src/content/posts/hello.md');
+  assert.equal(sourcePath('src/pages/campus/[slug].astro'), 'src/pages/campus/[slug].astro');
+  assert.equal(sourcePath('src/pages/[...path].astro'), 'src/pages/[...path].astro');
+  assert.throws(() => sourcePath('src/pages/[slug]/../../.env'));
 });

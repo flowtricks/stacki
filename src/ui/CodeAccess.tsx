@@ -6,5 +6,5 @@ export function useCodeAccess() {
   return useContext(CodeAccess);
 }
 export function ManagedValue() {
-  return <span className="panel-note">Managed by Designer</span>;
+  return <span className="panel-note">Managed by Developer</span>;
 }

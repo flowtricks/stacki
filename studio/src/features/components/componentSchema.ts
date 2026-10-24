@@ -17,7 +17,7 @@ export async function componentSchema(
       continue;
     }
     const specifier = statement.moduleSpecifier.text;
-    if (!specifier.startsWith('.') && !specifier.startsWith('@/')) {
+    if (!isDeclarationImport(specifier)) {
       continue;
     }
     const target = specifier.startsWith('@/')
@@ -73,4 +73,13 @@ export async function componentSchema(
     }
   }
   return parsePropSchema(source, prelude.join('\n'));
+}
+
+function isDeclarationImport(specifier: string): boolean {
+  // Vite asset queries are not declaration modules. Resolving them as a .ts
+  // path rejects valid projects that import SVG badges with ?url or ?raw.
+  if (/[?#]/.test(specifier)) {
+    return false;
+  }
+  return specifier.startsWith('.') || specifier.startsWith('@/');
 }

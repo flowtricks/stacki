@@ -43,7 +43,7 @@ export function RoleMenu({
           >
             <path d={roleIcons[value]} />
           </svg>
-          <strong>{value === 'designer' ? 'Designer' : 'Client'}</strong>
+          <strong>{value === 'designer' ? 'Developer' : 'Client'}</strong>
           <span className="role-menu-check" aria-hidden="true">
             {role === value ? '✓' : ''}
           </span>

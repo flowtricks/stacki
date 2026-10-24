@@ -8,6 +8,10 @@ import { labelize, memberFor, fieldIssue, hintFor } from './contentSchema';
 import type { FieldDescriptor } from './contentSchema';
 import AssetField from '../../ui/AssetField';
 import AutoTextarea from '../../ui/AutoTextarea';
+import DateField from '../../ui/DateField';
+import HtmlField from '../../ui/HtmlField';
+import { containsHTML } from '../../ui/htmlFieldModel';
+import { calendarValue } from '../../ui/dateFieldModel';
 import ExprInput from '../../ui/ExprInput';
 import { ChevronRightIcon, CloseIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import useListReorder from '../../ui/useListReorder';
@@ -512,10 +516,10 @@ function ScalarControl(props: FieldProps) {
       return <EnumField {...props} />;
     case 'date':
       return (
-        <input
-          type={String(value ?? '').includes('T') ? 'text' : 'date'}
-          value={value === null || value === undefined ? '' : String(value)}
-          onChange={(event) => onChange(event.target.value || undefined)}
+        <DateField
+          label={field.label}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(next) => onChange(next || undefined)}
         />
       );
     case 'const':
@@ -583,6 +587,25 @@ function TextField({ field, value, onChange }: FieldProps) {
 }
 
 export function FieldControl(props: FieldProps) {
+  const text = typeof props.value === 'string' ? props.value : '';
+  if (['text', 'longtext', 'unknown'].includes(props.field.control)) {
+    if (containsHTML(text)) {
+      return <HtmlField value={text} label={props.field.label} onChange={props.onChange} />;
+    }
+    if (calendarValue(text)) {
+      return (
+        <DateField
+          value={text}
+          label={props.field.label}
+          onChange={(next) => props.onChange(next || undefined)}
+        />
+      );
+    }
+  }
+  return <TypedFieldControl {...props} />;
+}
+
+function TypedFieldControl(props: FieldProps) {
   const text = typeof props.value === 'string' ? props.value : '';
   switch (props.field.control) {
     case 'image':

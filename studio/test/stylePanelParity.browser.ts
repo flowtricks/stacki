@@ -93,7 +93,7 @@ async function checkSections(page: Page) {
     'Backgrounds',
     'Borders',
     'Effects',
-    'Custom properties',
+    'Other properties',
   ]) {
     await page
       .getByRole('button', { name, exact: true })

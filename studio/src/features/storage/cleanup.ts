@@ -1,4 +1,5 @@
 import { readFile, rm, stat } from 'node:fs/promises';
+import { MEDIA_EXT } from '../assets/assetStateTypes';
 import path from 'node:path';
 import { safePath } from '../project/projectServer';
 import { record, string } from '../../shared/validation';
@@ -67,32 +68,28 @@ export class StorageCleanup {
   }
   async afterPublish(files: readonly PublishedFile[], sha: string) {
     const published = new Map(
-      files.filter((file) => file.path.startsWith('public/')).map((file) => [file.path, file.sha]),
+      files.filter((file) => MEDIA_EXT.test(file.path)).map((file) => [file.path, file.sha]),
     );
     return this.coordinator.run(async () => {
       await this.store.rememberPublished(sha, published);
       const inventory = await this.store.inventory();
-      const candidates = await this.candidates(inventory, { sha, assets: published }, true);
+      const candidates = await this.candidates(inventory, { sha, assets: published }, 'published');
       return this.remove(candidates);
     });
   }
   private async candidates(
     inventory: StorageInventory,
     baseline: AssetBaseline,
-    publishedOnly = false,
+    mode: 'review' | 'published' = 'review',
   ) {
-    const uploads = inventory.entries.filter((entry) =>
-      /^assets\/public\/[\w -]+\.(png|jpe?g|gif|webp|avif|mp4|pdf)$/i.test(entry.key),
-    );
+    // Uploads support nested public and source assets, including fonts, SVGs and audio.
+    const uploads = inventory.entries.filter((entry) => entry.key.startsWith('assets/'));
+    const uploadPaths = uploads.map((entry) => assetPath(entry.key.slice('assets/'.length)));
     if (uploads.length > 1000) {
       throw new Error('Upload inventory exceeds cleanup limit');
     }
-    const references = publishedOnly
-      ? new Set<string>()
-      : await referencedAssets(
-          this.root,
-          uploads.map((entry) => entry.key.slice(7)),
-        );
+    const references =
+      mode === 'published' ? new Set<string>() : await referencedAssets(this.root, uploadPaths);
     const candidates: CleanupCandidate[] = [];
     let total = 0;
     for (const entry of uploads) {
@@ -114,7 +111,7 @@ export class StorageCleanup {
           : !published && !references.has(file)
             ? 'unreferenced'
             : undefined;
-      if (kind && (!publishedOnly || kind === 'published')) {
+      if (kind && (mode === 'review' || kind === 'published')) {
         candidates.push({
           file,
           size: entry.size,

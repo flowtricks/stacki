@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, writeFile, rename, rm, lstat } from 'node:fs/promises';
 import path from 'node:path';
-import { record, string } from '../../shared/validation';
+import { filePath, record, string } from '../../shared/validation';
 import {
   assetPath,
   parseEntries,
@@ -141,9 +141,9 @@ function parseBaseline(value: unknown): AssetBaseline {
   const assets = new Map<string, string>();
   for (const input of entries) {
     const item = record(input);
-    const file = string(item['file'], 500);
+    const file = filePath(item['file']);
     const hash = string(item['sha'], 40);
-    if (!file.startsWith('public/') || !/^[a-f0-9]{40}$/.test(hash)) {
+    if (!/^(src|public)\//.test(file) || !/^[a-f0-9]{40}$/.test(hash)) {
       throw new Error('Invalid published asset');
     }
     assets.set(file, hash);

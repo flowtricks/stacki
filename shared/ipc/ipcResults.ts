@@ -559,6 +559,7 @@ export interface IpcResults {
   readonly 'project:createAstro': {
     readonly ok: true;
     readonly installed: boolean;
+    readonly projectPath: string;
   };
   readonly 'project:createStarter': {
     readonly ok: boolean;
@@ -567,22 +568,6 @@ export interface IpcResults {
   readonly 'project:injectedRoutes': {
     readonly routes: ReadonlyArray<WireInjectedRoute>;
   };
-  readonly 'project:newDialog':
-    | {
-        readonly canceled: true;
-        readonly error?: never;
-        readonly projectPath?: never;
-      }
-    | {
-        readonly canceled: false;
-        readonly error: string;
-        readonly projectPath?: never;
-      }
-    | {
-        readonly canceled: false;
-        readonly projectPath: string;
-        readonly error?: never;
-      };
   readonly 'project:openDialog':
     | {
         readonly canceled: true;

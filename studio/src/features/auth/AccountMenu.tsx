@@ -1,13 +1,21 @@
 import release from '../../shared/release.json';
-import { StoragePanel } from '../storage/StoragePanel';
 import type { Session } from './useSession';
+import { Avatar } from './Avatar';
 import { StackiLogo } from '../../shared/ui/StackiLogo';
 import { useRef, useState } from 'react';
 import Popup from '../../../vendor/stacki/src/ui/Popup';
+import { CommentIcon } from '../../../vendor/stacki/src/ui/Icons';
 import { RoleMenu } from '../roles/RoleMenu';
 import { SoundToggle } from '../settings/SoundToggle';
+import './accountMenu.css';
 
-export function AccountMenu({ saved, session }: { saved: boolean; session: Session | undefined }) {
+interface AccountMenuProps {
+  readonly saved: boolean;
+  readonly session: Session | undefined;
+  readonly cursorChat: (() => void) | undefined;
+}
+
+export function AccountMenu(props: AccountMenuProps) {
   const menu = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
@@ -33,30 +41,64 @@ export function AccountMenu({ saved, session }: { saved: boolean; session: Sessi
         anchor={menu.current ?? undefined}
         label="Stacki account"
       >
-        <RoleMenu saved={saved} close={close} />
-        <SoundToggle />
-        {session?.kind === 'github' && <span>Stacki Studio {release.version}</span>}
-        {session?.kind === 'github' ? (
+        {(actions) => (
           <>
-            <strong>@{session.login}</strong>
-            <form method="post" action="/studio/auth/logout">
-              <button
-                disabled={!saved}
-                title={saved ? 'Sign out of this studio' : 'Wait for your edits to finish saving'}
-              >
-                Sign out
-              </button>
-            </form>
+            <RoleMenu saved={props.saved} close={actions.close} />
+            <SoundToggle />
+            <button
+              className="account-action"
+              type="button"
+              aria-label="Cursor chat"
+              aria-keyshortcuts="/"
+              disabled={props.cursorChat === undefined}
+              title={props.cursorChat ? 'Cursor chat (/)' : 'Available in the page editing preview'}
+              onClick={() =>
+                actions.finish(() => {
+                  close();
+                  props.cursorChat?.();
+                })
+              }
+            >
+              <CommentIcon />
+              <span>Cursor chat</span>
+              <kbd aria-hidden="true">/</kbd>
+            </button>
+            <AccountIdentity saved={props.saved} session={props.session} />
+            <span className="account-version">Stacki Studio {release.version}</span>
           </>
-        ) : (
-          <span className="local-session">
-            {session?.kind === 'local'
-              ? 'Local development · no sign-in required'
-              : 'Loading account…'}
-          </span>
         )}
-        <StoragePanel refresh={() => window.dispatchEvent(new Event('studio:assets-changed'))} />
       </Popup>
+    </div>
+  );
+}
+
+function AccountIdentity({ saved, session }: Pick<AccountMenuProps, 'saved' | 'session'>) {
+  if (session?.kind !== 'github') {
+    return (
+      <span className="local-session">
+        {session?.kind === 'local' ? 'Local development · no sign-in required' : 'Loading account…'}
+      </span>
+    );
+  }
+  return (
+    <div className="account-profile">
+      <span className="account-avatar" aria-hidden="true">
+        <Avatar key={session.id} id={session.id} name={session.login} />
+      </span>
+      <div className="account-profile-name">
+        <strong title={`@${session.login}`}>@{session.login}</strong>
+        <span>GitHub account</span>
+      </div>
+      <form method="post" action="/studio/auth/logout">
+        <button
+          className="account-sign-out"
+          type="submit"
+          disabled={!saved}
+          title={saved ? 'Sign out of this studio' : 'Wait for your edits to finish saving'}
+        >
+          Sign out
+        </button>
+      </form>
     </div>
   );
 }

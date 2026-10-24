@@ -83,6 +83,9 @@ test('component schemas resolve imported aliases and skip non-source asset impor
   const source = `---
 import { ButtonContent as Content } from './schema';
 import icon from '@/assets/icon.svg';
+import badge from '@/assets/badge.svg?url';
+import raw from './template.html?raw';
+import fragment from '@/assets/icons.svg#arrow';
 type Props = Content;
 const { label, enabled = true } = Astro.props;
 ---

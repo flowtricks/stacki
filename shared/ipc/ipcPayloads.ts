@@ -263,7 +263,8 @@ export const IPC_PAYLOADS = {
   'project:classes': pathText,
   'project:close': maybePath,
   'project:createAstro': object({
-    dir: pathText,
+    parentPath: pathText,
+    name: text,
     template: optional(text),
     install: maybeFlag,
     git: maybeFlag,
@@ -271,7 +272,6 @@ export const IPC_PAYLOADS = {
   }),
   'project:createStarter': object({ starter: optional(text), parentPath: pathText, name: text }),
   'project:injectedRoutes': object({ ...project }),
-  'project:newDialog': nothing,
   'project:openDialog': nothing,
   'project:parentDialog': nothing,
   'project:pending': nothing,

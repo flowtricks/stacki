@@ -1,6 +1,7 @@
+// Goal: deleting assets also releases durable upload storage without a cleanup menu.
+// Method: upload and delete through the real editor, then inspect remaining draft storage.
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
-import { record } from '../src/shared/validation';
 import { parseReport } from '../src/features/storage/cleanupTypes';
 const browser = await chromium.launch({
   executablePath:
@@ -24,6 +25,10 @@ try {
   await page.locator('.save-state').filter({ hasText: 'Saved' }).waitFor({ timeout: 90000 });
   await page.getByRole('button', { name: 'Assets', exact: true }).click();
   await page
+    .locator('.asset-crumbs .crumb')
+    .filter({ hasText: /^Assets$/ })
+    .click();
+  await page
     .locator('.asset-folder')
     .filter({ hasText: /^public$/ })
     .click();
@@ -44,37 +49,27 @@ try {
   uploaded = true;
   await page.locator('.asset-name').filter({ hasText: name }).waitFor();
   await page.getByLabel('Stacki account menu', { exact: true }).click();
-  await page.getByRole('button', { name: 'Storage & cleanup', exact: true }).click();
-  await page.getByRole('checkbox', { name: 'Clean ' + file, exact: true }).check();
-  await page.getByRole('button', { name: 'Review cleanup (1)', exact: true }).click();
-  await page.getByText(/This permanently deletes 1 unpublished upload/).waitFor();
-  await page.screenshot({ path: 'test-results/storage-cleanup.png' });
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-  assert.equal(
-    (
-      await page.request.get(
-        new URL('/studio/api/asset?file=' + encodeURIComponent(file), page.url()).href,
-      )
-    ).status(),
-    200,
-  );
-  await page.getByRole('button', { name: 'Review cleanup (1)', exact: true }).click();
-  const cleaned = page.waitForResponse((response) =>
-    response.url().endsWith('/studio/api/storage/cleanup'),
-  );
-  await page.getByRole('button', { name: 'Confirm cleanup', exact: true }).click();
-  const response = await cleaned;
-  assert.equal(response.status(), 200);
-  const result = record(await response.json());
-  assert.equal(result['removed'], 1);
-  assert.ok(!result['warning']);
-  const report = parseReport(result['report']);
-  assert.ok(report.draftBytes > 0);
+  await page.locator('.account-popover[data-popup-phase="open"]').waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Storage & cleanup' }).count(), 0);
+  await page.keyboard.press('Escape');
+  await page.locator('.account-popover').waitFor({ state: 'detached' });
+  await page.locator('.asset-tile').filter({ hasText: name }).hover();
+  await page.getByRole('button', { name: `Options for ${name}`, exact: true }).click();
+  await page.getByText('Delete', { exact: true }).click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
   await page.locator('.asset-name').filter({ hasText: name }).waitFor({ state: 'detached' });
+  const response = await page.request.get(new URL('/studio/api/storage', page.url()).href);
+  assert.equal(response.status(), 200);
+  const report = parseReport(await response.json());
+  assert.ok(report.draftBytes > 0);
+  assert.equal(
+    report.candidates.some((candidate) => candidate.file === file),
+    false,
+  );
   uploaded = false;
   assert.deepEqual(errors, []);
   console.log(
-    `Upload, actual ${report.location} storage inspection, cancel, confirmed cleanup, and retained drafts passed.`,
+    `Asset deletion, automatic ${report.location} upload cleanup and retained drafts passed.`,
   );
 } finally {
   // Remove only this test's upload through the same checked cleanup endpoint.

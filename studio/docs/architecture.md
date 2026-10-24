@@ -16,6 +16,14 @@ Cursor presence uses a separate, ephemeral WebSocket message path, coalesced at 
 
 A project coordinator sequences accepted mutations and snapshot capture. Draft persistence is acknowledged before Saved. The filesystem powers the preview; R2 stores collaborative recovery state in hosted deployments. Browser IndexedDB preserves pending document updates. Closing a tab while offline does not constitute publication. If server draft identity is deliberately replaced, the old browser draft is retained and editing stops instead of merging unrelated histories.
 
+Durable writes normally batch for two seconds. An unacknowledged edit has a separate
+25-second deadline: socket heartbeats and subsequent typing cannot postpone it. Studio
+reconnects and replays the retained Yjs document at most three times before showing Needs
+attention. A replay retries filesystem and durable writes even when Yjs already merged it;
+an in-memory duplicate is not proof of a successful save. Edits during a reconnect handshake
+remain local until synchronization completes. Preview subscriptions request a current render
+on connection so changes made during sleep are visible without another edit.
+
 An Astro integration marks page-authored nodes in memory. The parent selects instances, and the iframe morphs the rendered DOM. HTML preview responses embed their exact initial HTML as inert, escaped JSON (bounded at 4 MB), so edits during script loading do not corrupt the comparison baseline. Component template source is edited only through an explicit code change such as an AI proposal. Preview instrumentation applies only to the dev server and is excluded from production builds.
 
 The hosted preview uses a sibling subdomain, such as `preview.example.com`, with its own audience-restricted session. GitHub credentials and the studio session secret stay in the Worker. The Container receives a narrower token for draft storage, GitHub operations, and the AI gateway. Site code and dependencies execute in that Container, so site contributors and invited editors are trusted to change application code. This is not a multi-tenant hostile-code sandbox.

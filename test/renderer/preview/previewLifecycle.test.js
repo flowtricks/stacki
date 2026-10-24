@@ -409,6 +409,7 @@ function installHoverDOM() {
     global[key] = key === 'window' ? dom.window : dom.window[key];
   }
   global.KeyboardEvent = dom.window.KeyboardEvent;
+  global.CustomEvent = dom.window.CustomEvent;
   global.requestAnimationFrame = (callback) => setTimeout(callback, 0);
   global.cancelAnimationFrame = clearTimeout;
   global.ResizeObserver = class {
@@ -459,6 +460,7 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
     'Element',
     'Node',
     'MutationObserver',
+    'CustomEvent',
   ]) {
     global[key] = key === 'window' ? window : window[key];
   }
@@ -567,17 +569,29 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
   assert.equal(await pendingQuery, undefined);
   assert.equal(document.querySelectorAll('iframe').length, 3);
   const canvasFrame = document.querySelector('iframe').contentWindow;
+  const viewportMessages = [];
+  canvasFrame.postMessage = (message) => viewportMessages.push(message);
+  for (const type of ['studio:preview-ready', 'avb:canvas-ready']) {
+    await send(canvasFrame, { type });
+    assert.deepEqual(viewportMessages.at(-1), { type: 'avb:set-vh', px: 900 });
+  }
+  window.dispatchEvent(new window.CustomEvent('studio:source-updated', { detail: 'structure' }));
+  assert.deepEqual(viewportMessages.at(-1), { type: 'avb:patch-now', immediate: true });
   await send(canvasFrame, { type: 'avb:page-height', height: NaN });
   assert.equal(document.querySelector('.canvas-frame').style.height, '900px');
   await send(canvasFrame, { type: 'avb:page-height', height: Infinity });
   assert.equal(document.querySelector('.canvas-frame').style.height, '900px');
+  await send(canvasFrame, { type: 'avb:page-height', height: 4200 });
+  assert.equal(document.querySelector('.canvas-frame').style.height, '4200px');
   await send(canvasFrame, { type: 'avb:page-height', height: 80000 });
-  assert.equal(document.querySelector('.canvas-frame').style.height, '1125px');
+  assert.equal(document.querySelector('.canvas-frame').style.height, '30000px');
   await send(oldFrame, { type: 'avb:page-height', height: 1000 });
-  assert.equal(document.querySelector('.canvas-frame').style.height, '1125px');
+  assert.equal(document.querySelector('.canvas-frame').style.height, '30000px');
+  await send(canvasFrame, { type: 'avb:page-height', height: 600 });
+  assert.equal(document.querySelector('.canvas-frame').style.height, '600px');
   const phoneFrame = document.querySelectorAll('iframe')[2].contentWindow;
   await send(phoneFrame, { type: 'avb:page-height', height: 80000 });
-  assert.equal(document.querySelectorAll('.canvas-frame')[2].style.height, '1015px');
+  assert.equal(document.querySelectorAll('.canvas-frame')[2].style.height, '30000px');
   await render({ refreshKey: 1 });
   assert.equal(document.querySelector('.canvas-frame').style.height, '900px');
   await act(async () => {
@@ -678,7 +692,10 @@ test(
       assert.equal(sized.style.height, '1336px');
       assert.match(sized.style.transform, /scale\(0\.5\)/);
       assert.equal(document.querySelector('[aria-label="Canvas scale"]').textContent, '50%');
-      assert.equal(document.querySelector('.device-btns button.on').title, 'Desktop — 1');
+      assert.equal(
+        document.querySelector('.device-btns button[aria-pressed="true"]').title,
+        'Desktop — 1',
+      );
       assert.equal(
         document.querySelector('iframe'),
         frame,

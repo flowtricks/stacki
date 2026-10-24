@@ -1,0 +1,98 @@
+.preview-toolbar {
+  position: relative;
+  min-width: 0;
+}
+.preview-toolbar-item {
+  display: flex;
+  flex: 0 0 auto;
+}
+/* Keep intrinsic widths measurable without exposing duplicate controls to focus or touch. */
+.preview-toolbar .is-overflow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.preview-toolbar-more,
+.preview-toolbar-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 8px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.preview-toolbar-action[aria-pressed='true'] {
+  background: var(--bg-active, rgba(255, 255, 255, 0.12));
+  color: var(--text);
+}
+.preview-toolbar-menu {
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  box-shadow: 0 12px 40px #0005;
+}
+.preview-toolbar-menu-item > .preview-toolbar-action {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 40px;
+}
+.preview-toolbar-menu-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  font-size: 12px;
+}
+.preview-toolbar-menu .preview-size-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+}
+.preview-toolbar-menu .preview-width-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.preview-toolbar-menu .preview-width-field input {
+  width: 64px;
+  min-height: 36px;
+}
+.preview-toolbar-menu .preview-size-controls button {
+  min-height: 36px;
+}
+@media (pointer: coarse) {
+  .preview-toolbar-more,
+  .preview-toolbar-action {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
+/* A clipped single letter conveys no location; reveal crumbs when they have usable space. */
+.preview-toolbar .crumbs {
+  container-type: inline-size;
+}
+@container (max-width: 64px) {
+  .preview-toolbar .crumb,
+  .preview-toolbar .crumb-sep {
+    visibility: hidden;
+  }
+}

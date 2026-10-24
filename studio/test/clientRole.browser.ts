@@ -1,3 +1,5 @@
+// Goal: verify Client restrictions and transitions to the Developer role.
+// Method: use a live draft to check editing, history, persistence and menu controls.
 import { chromium, type Page } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
@@ -78,13 +80,13 @@ try {
   await mkdir('test-results', { recursive: true });
   await page.screenshot({ path: 'test-results/client-role-menu.png' });
   await page.keyboard.press('Escape');
-  await switchRole('Designer');
+  await switchRole('Developer');
   await page.getByRole('button', { name: 'Code', exact: true }).waitFor();
   await page.locator('.frontmatter-node').dblclick();
   await page.getByRole('dialog', { name: 'Frontmatter', exact: true }).waitFor();
   await switchRole('Client');
   assert.equal(await page.getByRole('dialog').count(), 0);
-  await switchRole('Designer');
+  await switchRole('Developer');
   await page.getByRole('button', { name: 'Expand all', exact: true }).click();
   await row('Heading').dblclick();
   await page.locator('.comp-back').waitFor();
@@ -123,7 +125,7 @@ function row(name: string) {
 async function saved() {
   await page.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
 }
-async function switchRole(role: 'Client' | 'Designer') {
+async function switchRole(role: 'Client' | 'Developer') {
   await page.getByLabel('Stacki account menu', { exact: true }).click();
   await page.getByRole('menuitemradio', { name: new RegExp(role) }).click();
 }

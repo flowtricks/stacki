@@ -4,7 +4,7 @@ import { frontmatterRange } from '../source/frontmatter';
 export function clientLayout(source: string) {
   const layout = nodesOf(source).find((node) => node.id === 'layout' && node.kind === 'component');
   if (!layout) {
-    throw new Error('Client editing requires a page layout. Ask a designer to set one up.');
+    throw new Error('Client editing requires a page layout. Ask a developer to set one up.');
   }
   return layout;
 }

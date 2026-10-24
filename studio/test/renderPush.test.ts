@@ -5,6 +5,33 @@ import { setTimeout } from 'node:timers/promises';
 import { RenderPush } from '../src/features/preview/renderPush';
 import { renderPath } from '../src/features/preview/renderPushServer';
 
+test('a resumed subscription catches up without waiting for another source edit', async () => {
+  const delivered: unknown[] = [];
+  let html = '<section>before sleep</section>';
+  const push = new RenderPush(async () => html);
+  const target = {
+    send: (event: string, data: unknown) => {
+      if (event === 'studio:render') {
+        delivered.push(data);
+      }
+    },
+  };
+  try {
+    push.subscribe('/', target);
+    await setTimeout(10);
+    push.unsubscribe(target);
+    html = '<section class="theme-dark">after resume</section>';
+    push.invalidate();
+    await setTimeout(10);
+    delivered.length = 0;
+    push.subscribe('/', target);
+    await setTimeout(10);
+    assert.deepEqual(delivered, [{ path: '/', html }]);
+  } finally {
+    push.close();
+  }
+});
+
 test('preview subscriptions reject external and internal URLs', () => {
   for (const path of [
     'https://example.com/',

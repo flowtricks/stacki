@@ -8,7 +8,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
 import { scaffoldProject } from '../project/scaffold';
-import { createStarter } from '../project/starter';
+import { createStarter, newSiteDirectory } from '../project/starter';
 import { isWin, errorMessage } from '../lib/mainHelpers';
 import { ensureToolPath, run } from '../lib/nodeTools';
 import { isAstroProject } from '../project/projectFiles';
@@ -46,26 +46,6 @@ function registerProjectOpenDialogHandlers({
     }
     return { canceled: false as const, projectPath: directory };
   });
-
-  ipcMain.handle('project:newDialog', async () => {
-    const result = await showOpenDialog({
-      title: 'Choose an empty folder for the new project',
-      properties: ['openDirectory', 'createDirectory'],
-    });
-    if (result.canceled || !result.filePaths.length) {
-      return { canceled: true as const };
-    }
-    const directory = result.filePaths[0];
-    assert(directory !== undefined, 'Accepted directory dialog must have a path');
-    const entries = fs.readdirSync(directory).filter((name) => !name.startsWith('.'));
-    if (entries.length > 0) {
-      return {
-        canceled: false as const,
-        error: 'That folder is not empty. Choose or create an empty folder for the new project.',
-      };
-    }
-    return { canceled: false as const, projectPath: directory };
-  });
 }
 
 function registerProjectCreateAstroHandlers({
@@ -76,20 +56,21 @@ function registerProjectCreateAstroHandlers({
   // Runs the real `npm create astro@latest`, answering the questions the CLI
   // would ask interactively with the choices collected in the app's wizard.
   // Output is streamed to the renderer so the user sees the same progress the
-  // terminal would show. The chosen folder is the cwd and "." the target, so
-  // create-astro never has to guess a name from a parent directory.
+  // terminal would show. The wizard names the site, so its folder is made here,
+  // empty, and create-astro runs in it with "." as the target rather than
+  // guessing a name.
   ipcMain.handle('project:createAstro', async (_event, options) => {
     const {
-      dir: directory,
+      parentPath,
+      name,
       template = 'basics',
       install = true,
       git = true,
       ai = false,
     } = options || {};
-    if (!directory || !fs.existsSync(directory)) {
-      throw new Error('Choose a folder for the new project first.');
-    }
+    const directory = newSiteDirectory(parentPath, name);
     ensureToolPath(); // npm is a Node shim — same PATH problem as astro
+    fs.mkdirSync(directory);
 
     const args = [
       'create',
@@ -106,8 +87,8 @@ function registerProjectCreateAstroHandlers({
     ];
 
     send('create:log', `> npm ${args.join(' ')}\n\n`);
-    await runCreateAstro({ send }, directory, args);
-    return { ok: true as const, installed: install };
+    await runCreateAstroInNewFolder({ send }, directory, args);
+    return { ok: true as const, installed: install, projectPath: directory };
   });
 
   // A folder to put a new project IN, rather than the project's own folder: the
@@ -172,6 +153,24 @@ export async function installDependencies({ send }: Pick<MainHost, 'send'>, dire
 // Clears the progress line: no message (src/ipc/appBridge.ts, onAppProgress). IPC is
 // a structured clone, which keeps the absent value.
 export const PROGRESS_CLEARED = { message: undefined } as const;
+
+// A run that wrote nothing leaves no folder behind, so Try again can reuse the
+// name. Anything it did write stays for the user to inspect; nothing is deleted
+// recursively.
+async function runCreateAstroInNewFolder(
+  { send }: Pick<MainHost, 'send'>,
+  directory: string,
+  args: readonly string[],
+): Promise<void> {
+  try {
+    await runCreateAstro({ send }, directory, args);
+  } catch (error: unknown) {
+    if (fs.readdirSync(directory).length === 0) {
+      fs.rmdirSync(directory);
+    }
+    throw error;
+  }
+}
 
 // The create-astro run itself, its output streamed to the wizard's log. It
 // settles once the CLI exits and a package.json has landed in `directory`.

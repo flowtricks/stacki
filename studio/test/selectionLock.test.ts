@@ -241,8 +241,12 @@ test('structural acknowledgements select the clone and keep another editor on th
         action: { kind: 'duplicate', node: 'n0' },
       }),
     );
-    assert.equal((await firstUpdate)['selection'], 'n1');
-    assert.equal((await secondUpdate)['selection'], 'n2');
+    const own = await firstUpdate;
+    const peer = await secondUpdate;
+    assert.equal(own['selection'], 'n1');
+    assert.equal(peer['selection'], 'n2');
+    assert.equal(own['structural'], true, 'The initiator requests an immediate full render');
+    assert.equal(peer['structural'], true, 'Collaborators receive the same render priority');
     await saved;
     const deleted = response(state.first, 'update');
     state.first.send(

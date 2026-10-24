@@ -1,3 +1,4 @@
+import { isMobileEditor, useMobileEditor } from './mobileEditor';
 import { CanvasContextMenu } from '../features/navigator/CanvasContextMenu';
 import { pathFor } from '../features/project/previewSelection';
 import { isCanvasPage } from '../../vendor/stacki/shared/properties/defaultsCanvas';
@@ -54,8 +55,10 @@ export function Editor(props: EditorProps) {
     props.file,
     props.report,
     () => {
-      setMobileSettings(true);
-      setPanel((current) => (current === 'code' ? current : 'navigator'));
+      // Phone panels cover the canvas. Selection must not open an overlay.
+      if (!isMobileEditor()) {
+        setPanel((current) => (current === 'code' ? current : 'navigator'));
+      }
     },
     !session.paused,
     setCanPause,
@@ -83,6 +86,7 @@ export function Editor(props: EditorProps) {
           {...props}
           document={model.document}
           interactivePreview={interactivePreview}
+          cursorChat={cursorChatFor(model, props.view.device, interactivePreview)}
         />
         <DefaultsCanvasBar canvas={defaultsCanvas} />
         <CanvasContextMenu props={props} model={scopedModel} defaultsCanvas={defaultsCanvas} />
@@ -108,6 +112,23 @@ export function Editor(props: EditorProps) {
     </CodeAccess.Provider>
   );
 }
+function cursorChatFor(
+  model: ReturnType<typeof useEditor>,
+  device: PreviewDevice,
+  preview: ReturnType<typeof useInteractivePreview>,
+): (() => void) | undefined {
+  if (model.collection) {
+    return undefined;
+  }
+  if (device === 'canvas') {
+    return undefined;
+  }
+  if (preview.active) {
+    return undefined;
+  }
+  return () => model.preview.send({ type: 'studio:cursor-chat' });
+}
+
 function Sidebar({
   props,
   model,
@@ -160,7 +181,13 @@ function EditorContent({
   readonly mobileSettings: boolean;
   readonly setMobileSettings: (visible: boolean) => void;
 }) {
-  const { device, setDevice, setPanel } = props.view;
+  const { device, setDevice, setPanel, setTab } = props.view;
+  const mobile = useMobileEditor();
+  const openInspector = (tab: 'settings' | 'style') => {
+    setTab(tab);
+    setMobileSettings(true);
+    setPanel(undefined);
+  };
   useStyleProject();
   return (
     <div className="studio-editor-content">
@@ -172,10 +199,14 @@ function EditorContent({
         dimensions={props.view.dimensions}
         file={props.file}
         projectName={props.project.name}
-        showSettings={() => {
-          setMobileSettings(!mobileSettings);
-          setPanel(undefined);
-        }}
+        inspector={
+          mobile
+            ? {
+                settings: () => openInspector('settings'),
+                style: props.view.role === 'client' ? undefined : () => openInspector('style'),
+              }
+            : undefined
+        }
       />
       <Inspector
         props={props}
@@ -227,6 +258,7 @@ function Inspector({
   }
   return (
     <aside
+      aria-label="Element inspector"
       className={`studio-right ${visible ? 'mobile-open' : ''} ${client ? 'client-inspector' : ''}`}
     >
       <button className="mobile-close ghost" onClick={close} aria-label="Close settings">

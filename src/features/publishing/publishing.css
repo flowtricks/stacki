@@ -136,16 +136,20 @@
   padding: 20px 20px 0;
   font-size: 14px;
 }
-.publish-settings .publish-fields {
+.publish-settings .publish-settings-scroll {
+  /* Fieldsets cannot reliably scroll their anonymous content box; a wrapper owns overflow. */
   flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+.publish-settings .publish-fields {
   align-content: start;
   border: 0;
   margin: 0;
   padding: 20px;
   min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
   display: grid;
   gap: 18px;
 }
@@ -270,6 +274,7 @@
 .publish-settings .modal-footer {
   flex-shrink: 0;
   padding: 12px 20px;
+  background: inherit;
 }
 .modal.desktop-publish-status {
   width: min(420px, calc(100vw - 32px));

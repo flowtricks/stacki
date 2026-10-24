@@ -6,7 +6,7 @@ export function filePath(value: unknown): string {
     return path;
   }
   if (
-    !/^(src|public)\/[\w./ -]+$/.test(path) ||
+    !/^(src|public)\/[\w./ \[\]-]+$/.test(path) ||
     path.split('/').some((part) => part === '..' || part.startsWith('.'))
   ) {
     throw new Error('Invalid project path');

@@ -10,6 +10,10 @@ import { blankItem, contentFieldsOf, isExpr, titleOf, EXPR_KEY } from './cmsSche
 import { ChevronRightIcon, CloseIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import AssetField from '../../ui/AssetField';
 import AutoTextarea from '../../ui/AutoTextarea';
+import CalendarField from '../../ui/DateField';
+import HtmlField from '../../ui/HtmlField';
+import { containsHTML } from '../../ui/htmlFieldModel';
+import { calendarValue } from '../../ui/dateFieldModel';
 import ExprInput from '../../ui/ExprInput';
 import useListReorder from '../../ui/useListReorder';
 
@@ -25,6 +29,7 @@ interface ValueProps extends CmsFieldContext {
 }
 interface ControlProps extends ValueProps {
   readonly type: FieldType;
+  readonly label: string;
 }
 export interface CmsFieldProps extends CmsFieldContext {
   readonly label: string;
@@ -74,13 +79,19 @@ export default function CmsField({ label, type, depth = 0, ...props }: CmsFieldP
       <div className="cms-field-head">
         <label>{label}</label>
       </div>
-      <FieldControl {...props} type={shown.current} depth={depth} />
+      <FieldControl {...props} label={label} type={shown.current} depth={depth} />
     </div>
   );
 }
 
 function FieldControl(props: ControlProps) {
   const { type, value, onChange, depth, ...context } = props;
+  if (['text', 'longtext', 'empty'].includes(type)) {
+    const text = fieldText(value);
+    if (containsHTML(text)) {
+      return <HtmlField value={text} label={props.label} onChange={onChange} />;
+    }
+  }
   switch (type) {
     case 'code':
       return <CodeField value={value} onChange={onChange} />;
@@ -91,7 +102,7 @@ function FieldControl(props: ControlProps) {
     case 'image':
       return <ImageField {...props} />;
     case 'date':
-      return <DateField value={value} onChange={onChange} />;
+      return <CalendarField value={fieldText(value)} label={props.label} onChange={onChange} />;
     case 'color':
       return <ColorField value={value} onChange={onChange} />;
     case 'longtext':
@@ -222,15 +233,7 @@ function ImageField({
     />
   );
 }
-function DateField({ value, onChange }: ScalarProps) {
-  const text = fieldText(value);
-  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(text);
-  return dateOnly || !value ? (
-    <input type="date" value={text} onChange={(event) => onChange(event.target.value)} />
-  ) : (
-    <input value={text} onChange={(event) => onChange(event.target.value)} />
-  );
-}
+
 function AddressField({
   type,
   value,
@@ -273,11 +276,9 @@ function ListEditor({ value, onChange }: ListProps) {
     <div className="cms-list">
       {value.map((entry, index) => (
         <div key={index} className="cms-list-row">
-          <input
+          <ListValue
             value={fieldText(entry)}
-            maxLength={BOUNDARY_LIMITS.textLengthMax}
-            onChange={(event) => {
-              const text = event.target.value;
+            onChange={(text) => {
               const next = typeof entry === 'number' ? Number(text) : text;
               if (typeof next === 'number') {
                 if (!Number.isFinite(next)) {
@@ -306,6 +307,27 @@ function ListEditor({ value, onChange }: ListProps) {
         <PlusIcon size={11} /> Add
       </button>
     </div>
+  );
+}
+function ListValue({
+  value,
+  onChange,
+}: {
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+}) {
+  if (containsHTML(value)) {
+    return <HtmlField value={value} onChange={onChange} />;
+  }
+  if (calendarValue(value)) {
+    return <CalendarField value={value} onChange={onChange} />;
+  }
+  return (
+    <input
+      value={value}
+      maxLength={BOUNDARY_LIMITS.textLengthMax}
+      onChange={(event) => onChange(event.target.value)}
+    />
   );
 }
 function GroupEditor({ value, onChange, ...context }: GroupProps) {

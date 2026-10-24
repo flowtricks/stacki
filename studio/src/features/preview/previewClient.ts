@@ -1,3 +1,7 @@
+import {
+  freezeViewportHeight,
+  report as reportPageHeight,
+} from '../../../vendor/stacki/electron/preload/frameViewport';
 import { receiveLiveNumericStyles, applyLiveNumericStyles } from './liveNumericStyles';
 import { receiveLiveText, applyLiveText } from './liveTextClient';
 import { installCursorPresence } from '../collaboration/cursorClient';
@@ -180,6 +184,10 @@ window.addEventListener('message', (event) => {
   if (data.type === 'studio:variant' && 'command' in data) {
     variants?.receive(data.command);
   }
+  if (data.type === 'avb:set-vh' && 'px' in data) {
+    freezeViewportHeight(data.px);
+    return;
+  }
   receiveLiveText(data);
   receiveLiveNumericStyles(data);
   cursorPresence.receive(data);
@@ -189,17 +197,8 @@ window.addEventListener('message', (event) => {
       .filter((path: unknown): path is string => typeof path === 'string' && path.length <= 1000)
       .slice(0, 30);
   }
-  if (data.type === 'studio:reveal' && 'id' in data && typeof data.id === 'string') {
-    const occurrence =
-      'occurrence' in data && typeof data.occurrence === 'number' ? data.occurrence : 0;
-    const rect = rectsForPath(data.id)?.[occurrence];
-    if (rect) {
-      window.scrollBy({
-        left: rect.x - innerWidth / 2 + rect.w / 2,
-        top: rect.y - innerHeight / 2 + rect.h / 2,
-        behavior: 'instant',
-      });
-    }
+  if (data.type === 'studio:reveal') {
+    revealSelection(data);
   }
   if (data.type === 'avb:query') {
     try {
@@ -240,6 +239,21 @@ window.addEventListener('message', (event) => {
   }
   draw();
 });
+function revealSelection(data: object): void {
+  if (!('id' in data) || typeof data.id !== 'string') {
+    return;
+  }
+  const occurrence =
+    'occurrence' in data && typeof data.occurrence === 'number' ? data.occurrence : 0;
+  const rect = rectsForPath(data.id)?.[occurrence];
+  if (rect) {
+    window.scrollBy({
+      left: rect.x - innerWidth / 2 + rect.w / 2,
+      top: rect.y - innerHeight / 2 + rect.h / 2,
+      behavior: 'instant',
+    });
+  }
+}
 function focusScope(data: object) {
   setTracking({
     paths: [],
@@ -264,13 +278,18 @@ document.addEventListener('avb:morphed', (event) => {
 });
 window.addEventListener('resize', draw);
 window.addEventListener('scroll', draw, true);
-new ResizeObserver(() => {
+const pageHeightObserver = new ResizeObserver(() => {
   draw();
-  post({
-    type: 'avb:page-height',
-    height: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight),
-  });
-}).observe(document.documentElement);
+  reportPageHeight();
+});
+function observePageHeight(): void {
+  pageHeightObserver.disconnect();
+  pageHeightObserver.observe(document.documentElement);
+  pageHeightObserver.observe(document.body);
+  reportPageHeight();
+}
+observePageHeight();
+document.addEventListener('avb:morphed', observePageHeight);
 
 function occurrenceAt(id: string, x: number, y: number): number {
   const places = taggedPlaces(scope + id);

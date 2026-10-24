@@ -5,7 +5,7 @@ import type { PublishSource, PublishReceipt } from '../../shared/publishSource';
 import type { Result } from '../../../vendor/stacki/shared/core/result';
 import type { ReviewReceipt } from '../../../vendor/stacki/shared/properties/publishReview';
 import { parsePublishConnection } from '../../shared/publishConnection';
-import { publicAssetTree } from '../storage/publicAssetTree';
+import { publishedAssetTree } from '../storage/publishedAssetTree';
 import { treeChanges } from './treeChanges';
 import { independentlyDeployed } from './syncPaths';
 import { createSign } from 'node:crypto';
@@ -103,12 +103,12 @@ export class GitHubRepository {
     }
     return Buffer.from(string(result['content'], 2_000_000), 'base64').toString('utf8');
   }
-  async publicAssets(sha: string) {
+  async publishedAssets(sha: string) {
     if (!/^[a-f0-9]{40}$/.test(sha)) {
       throw new Error('Invalid published revision');
     }
     const token = await this.installationToken();
-    return publicAssetTree(
+    return publishedAssetTree(
       await this.call(`/repos/${this.config.repository}/git/trees/${sha}?recursive=1`, token),
     );
   }

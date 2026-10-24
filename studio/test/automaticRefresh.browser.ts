@@ -64,9 +64,14 @@ try {
 async function checkStorageUpdates(page: Page, suffix: string): Promise<void> {
   const origin = new URL(page.url()).origin;
   const file = `public/${suffix}.png`;
-  await page.getByLabel('Stacki account menu', { exact: true }).click();
-  await page.getByRole('button', { name: 'Storage & cleanup', exact: true }).click();
-  await page.getByRole('heading', { name: 'Storage & cleanup', exact: true }).waitFor();
+  await page
+    .locator('.asset-crumbs .crumb')
+    .filter({ hasText: /^Assets$/ })
+    .click();
+  await page
+    .locator('.asset-folder')
+    .filter({ hasText: /^public$/ })
+    .click();
   assert.equal(await page.getByRole('button', { name: /refresh/i }).count(), 0);
   try {
     const upload = await page.request.post(
@@ -79,7 +84,7 @@ async function checkStorageUpdates(page: Page, suffix: string): Promise<void> {
       },
     );
     assert.equal(upload.status(), 201);
-    const candidate = page.getByRole('checkbox', { name: `Clean ${file}`, exact: true });
+    const candidate = page.locator('.asset-name').filter({ hasText: `${suffix}.png` });
     await candidate.waitFor();
     await cleanTestUpload(page, origin, file);
     await candidate.waitFor({ state: 'detached' });
@@ -94,8 +99,8 @@ async function cleanTestUpload(page: Page, origin: string, file: string): Promis
   const report = parseReport(await response.json());
   const candidates = report.candidates.filter((candidate) => candidate.file === file);
   if (candidates.length > 0) {
-    const cleanup = await page.request.post(`${origin}/studio/api/storage/cleanup`, {
-      data: { candidates },
+    const cleanup = await page.request.post(`${origin}/studio/api/assets`, {
+      data: { kind: 'delete', rel: file },
     });
     assert.equal(cleanup.status(), 200);
   }

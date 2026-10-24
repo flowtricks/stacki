@@ -1,3 +1,5 @@
+// Goal: preserve shell navigation and asset picking across desktop and phone layouts.
+// Method: drive the running editor through real menus, keyboard shortcuts, and file controls.
 import { chromium, type Page } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
@@ -134,7 +136,10 @@ async function assetsAndPicker(page: Page) {
 
 async function mobilePicker(page: Page) {
   await page.getByLabel('Close panel').click();
-  await page.locator('.mobile-settings-button').click();
+  await page
+    .locator('.preview-toolbar')
+    .getByRole('button', { name: 'Settings', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Choose Image…', exact: true }).click();
   await page.locator('.asset-picking').waitFor();
   assert.equal(

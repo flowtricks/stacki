@@ -348,7 +348,7 @@ export class Publisher {
       return (await this.cleanup?.(files, sha))?.warning;
     } catch (error: unknown) {
       publishFailure(error);
-      return 'Published successfully. Storage cleanup could not finish; retry from Assets.';
+      return 'Published successfully. Storage cleanup will retry after the next GitHub publish.';
     }
   }
 }

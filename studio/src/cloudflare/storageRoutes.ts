@@ -36,7 +36,7 @@ export async function storageBaseline(_request: Request, environment: Environmen
     repository: environment.GITHUB_REPOSITORY,
     branch: environment.GITHUB_BRANCH,
   });
-  return Response.json({ sha, assets: await repository.publicAssets(sha) });
+  return Response.json({ sha, assets: await repository.publishedAssets(sha) });
 }
 export async function removeStoredAsset(request: Request, environment: Environment) {
   if (request.method !== 'POST') {

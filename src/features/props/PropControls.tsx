@@ -18,6 +18,10 @@ import ObjectField from './ObjectField';
 import ClassInput from './ClassInput';
 import Dropdown from '../../ui/Dropdown';
 import AutoTextarea from '../../ui/AutoTextarea';
+import HtmlField from '../../ui/HtmlField';
+import DateField from '../../ui/DateField';
+import { containsHTML } from '../../ui/htmlFieldModel';
+import { calendarValue } from '../../ui/dateFieldModel';
 import SegSwitch from './SegSwitch';
 import StyleEditor, { collapseDeclarations } from './StyleEditor';
 import { ChevronDownIcon } from '../../ui/Icons';
@@ -563,6 +567,31 @@ export function TextControl({ state }: { readonly state: PropControlState }) {
   const { field, onChange, name, valueText, placeholderFor, label } = state;
   // A bare attribute has no authored text value; preserve that absence in the input.
   const text = state.value?.type === 'bare' ? undefined : valueText;
+  const content = text ?? '';
+  if (containsHTML(content)) {
+    return (
+      <div className="props-field">
+        {label}
+        <HtmlField
+          value={content}
+          label={name}
+          onChange={(next) => onChange({ type: 'string', value: next })}
+        />
+      </div>
+    );
+  }
+  if (calendarValue(content)) {
+    return (
+      <div className="props-field">
+        {label}
+        <DateField
+          value={content}
+          label={name}
+          onChange={(next) => onChange({ type: 'string', value: next })}
+        />
+      </div>
+    );
+  }
   const long =
     String(valueText).length > 48 || /text|description|content|body|paragraph/i.test(name);
   return (

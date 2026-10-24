@@ -29,6 +29,10 @@ export class RenderPush {
     page.targets.add(target);
     this.pages.set(path, page);
     target.send('studio:render-ready', { path });
+    // Reconnecting frames may have missed invalidations while the container slept.
+    // Read current source even when no subsequent edit triggers another render.
+    page.wanted = ++this.revision;
+    this.schedule();
     return true;
   }
 
@@ -45,6 +49,10 @@ export class RenderPush {
     for (const page of this.pages.values()) {
       page.wanted = ++this.revision;
     }
+    this.schedule();
+  }
+
+  private schedule() {
     // Vite can invalidate multiple environments for the same source edit.
     this.timer ??= setTimeout(() => {
       this.timer = undefined;

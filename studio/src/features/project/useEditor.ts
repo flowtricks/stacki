@@ -33,14 +33,10 @@ export function useEditor(
   focus?: ComponentFocus,
 ) {
   const document = useDocument(file, active);
-  const documentError = document?.error;
-  useEffect(() => {
-    if (documentError) {
-      report(documentError);
-    }
-  }, [documentError, report]);
+  useDocumentError(document?.error, report);
   usePauseReadiness(document?.status === 'Saved', setCanPause);
-  const parsed = useParsed(file, document?.text.toString() ?? '');
+  const source = document?.text.toString() ?? '';
+  const parsed = useParsed(file, source);
   const nodes = parsed?.editable ? parsed.model.nodes : [];
   const enter = componentEntry({ project, file, parsed, document, open, focus, report });
   const collection = /\.(json|md|mdx)$/.test(file) && !file.startsWith('src/pages/');
@@ -55,7 +51,7 @@ export function useEditor(
     (id, occurrence) =>
       enter('', id === '0' && nodes[0]?.id === 'layout' ? 'layout' : 'n' + id, occurrence),
   );
-  useLiveText(file, nodes, preview);
+  useLiveText(file, source, nodes, preview);
   useLiveNumericStyles(file, parsed, project, preview);
   useCursorPresence(document, previewFile, preview, session);
   const selection = useEditorSelection(file, previewFile, nodes, document, preview, focus);
@@ -87,6 +83,13 @@ export function useEditor(
       insertComponent(project, file, parsed, selected, action, componentFile, location),
     editable: !!parsed?.editable,
   };
+}
+function useDocumentError(error: string | undefined, report: (error: unknown) => void) {
+  useEffect(() => {
+    if (error) {
+      report(error);
+    }
+  }, [error, report]);
 }
 function usePauseReadiness(saved: boolean, setCanPause: ((safe: boolean) => void) | undefined) {
   useEffect(() => setCanPause?.(saved), [saved, setCanPause]);

@@ -195,13 +195,13 @@ const PIXEL =
     all('[role=menuitem]')[0]?.textContent === 'Empty Astro project…',
   );
   let emptyRequests = 0;
-  dom.window.avb.newProjectDialog = async () => {
+  dom.window.avb.parentDialog = async () => {
     emptyRequests++;
     return { canceled: true };
   };
   await act(async () => all('[role=menuitem]')[0].click());
   check(
-    'the empty project option opens its folder picker and closes the menu',
+    'the empty project option asks where the site should go and closes the menu',
     emptyRequests === 1 && all('[role=menuitem]').length === 0,
   );
   await act(async () => arrows[0].click());
@@ -284,6 +284,65 @@ const PIXEL =
     });
     check(
       'and cancelling the folder shows nothing',
+      !dom.window.document.querySelector('.new-project-modal'),
+    );
+  }
+
+  // An empty Astro project is named the same way: where it goes, then its name.
+  {
+    dom.window.avb.parentDialog = async () => ({ canceled: false, parentPath: '/tmp/sites' });
+    const created = [];
+    dom.window.avb.createAstroProject = async (payload) => {
+      created.push(payload);
+      return { ok: true, installed: true, projectPath: '/tmp/sites/blog-site' };
+    };
+    await act(async () => all('.actions button')[3].click());
+    await act(async () => {
+      all('[role=menuitem]')[0].click();
+      await settle(30);
+    });
+    const wizard = dom.window.document.querySelector('.new-project-modal');
+    check(
+      'the Astro wizard opens after the folder',
+      /New Astro Project/.test(wizard?.textContent || ''),
+      wizard?.textContent?.slice(0, 80),
+    );
+    check(
+      'with the site name and the folder it becomes',
+      !!wizard?.querySelector('input') && /\/tmp\/sites\/my-site/.test(wizard?.textContent || ''),
+      wizard?.textContent?.slice(0, 200),
+    );
+    const input = wizard.querySelector('input');
+    const create = () => [...wizard.querySelectorAll('.modal-footer button')].at(-1);
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(
+        input,
+        'bad name/',
+      );
+      input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    });
+    check('a name that is not a folder name cannot be created', create().disabled === true);
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(
+        input,
+        'blog-site',
+      );
+      input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      create().click();
+      await settle(30);
+    });
+    check(
+      'creating sends the parent folder and the name, not a folder of its own',
+      created.length === 1 &&
+        created[0].parentPath === '/tmp/sites' &&
+        created[0].name === 'blog-site' &&
+        !('dir' in created[0]),
+      JSON.stringify(created),
+    );
+    check(
+      'and the wizard closes on the project it made',
       !dom.window.document.querySelector('.new-project-modal'),
     );
   }

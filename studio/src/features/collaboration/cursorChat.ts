@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { usePreview } from '../preview/usePreview';
 
-export function CursorChatButton({
+export function useCursorChatShortcut({
   preview,
   disabled,
 }: {
@@ -42,17 +42,6 @@ export function CursorChatButton({
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   }, [disabled]);
-  return (
-    <button
-      className="studio-cursor-chat"
-      title="Cursor chat (/)"
-      aria-keyshortcuts="/"
-      disabled={disabled}
-      onClick={() => preview.send({ type: 'studio:cursor-chat' })}
-    >
-      Cursor chat
-    </button>
-  );
 }
 export function useCursorScale(preview: ReturnType<typeof usePreview>, scale: number) {
   const { subscribeLoad } = preview;

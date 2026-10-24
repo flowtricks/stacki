@@ -1,5 +1,6 @@
 import { loadInsertionDefaults } from '../settings/loadDefaults';
 import { maintainConnection } from './connectionLease';
+import { parseSaveSequence } from './saveProtocol';
 import { selectionRequest } from './selectionIntent';
 import { actionSelection } from '../navigator/actionSelection';
 import { captureSelectionPositions } from './selectionPositions';
@@ -174,10 +175,21 @@ export class Room {
     if (message['epoch'] !== this.document.getMap('metadata').get('epoch')) {
       throw new Error('The draft was reset. Reload the studio before editing.');
     }
+    const save = parseSaveSequence(message['save']);
     const before = Y.encodeStateVector(this.document);
     if (message['type'] === 'update') {
       if (!this.applyUpdate(message, socket)) {
-        this.send(socket, { type: 'saved', revision: this.revision });
+        // A replay can already exist in memory after a failed disk or durable write.
+        // CRDT deduplication proves convergence, not persistence.
+        if (await this.writeSource()) {
+          // Other peers missed the edit when the first disk write failed.
+          this.broadcast({
+            type: 'update',
+            update: Buffer.from(Y.encodeStateAsUpdate(this.document)).toString('base64'),
+            revision: this.revision,
+          });
+        }
+        this.acknowledgeSave(socket, save);
         return;
       }
     } else if (message['type'] === 'action') {
@@ -194,15 +206,19 @@ export class Room {
         update,
         revision: this.revision,
         ownAction: client === socket && message['type'] === 'action',
+        structural: message['type'] === 'action',
         selection: this.clients.get(client)?.selection ?? '',
         selectionRequest: this.clients.get(client)?.selectionRequest ?? 0,
         occurrence: this.clients.get(client)?.occurrence ?? 0,
       });
     }
     this.presence();
+    this.acknowledgeSave(socket, save);
+  }
+  private acknowledgeSave(socket: WebSocket, save: number | undefined) {
     const revision = this.revision;
     void this.durable.save(Y.encodeStateAsUpdate(this.document)).then(
-      () => this.send(socket, { type: 'saved', revision }),
+      () => this.send(socket, { type: 'saved', revision, save }),
       () =>
         this.broadcast({
           type: 'error',
@@ -413,13 +429,14 @@ export class Room {
   private async writeSource() {
     const source = this.text.toString();
     if (source === this.saved) {
-      return;
+      return false;
     }
     const absolute = await preparePath(this.root, this.file);
     await writeFile(absolute + '.studio-tmp', source);
     await rename(absolute + '.studio-tmp', absolute);
     this.saved = source;
     this.live?.written?.(this.file);
+    return true;
   }
   async setSource(source: string) {
     if (source === this.text.toString()) {
