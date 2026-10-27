@@ -62,7 +62,7 @@ test('the complete channel inventory matches real main and terminal registration
   // Account sign-in adds one project-scoped channel for start, status, and cancellation.
   // Published-site discovery has its own channel so remote lookups cannot block local status.
   // Git pull and its background incoming check each have a project-scoped channel.
-  assert.equal(harness.handlers.size, 133);
+  assert.equal(harness.handlers.size, 131);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual(
     [...Object.keys(IPC_PAYLOADS)].sort(),

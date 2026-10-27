@@ -99,11 +99,9 @@ interface InvokeChannels {
   readonly previewStop: 'preview:stop';
   readonly checkPreview: 'preview:check';
   readonly gitLog: 'git:log';
-  readonly gitCommitFiles: 'git:commitFiles';
   readonly gitCommitDiff: 'git:commitDiff';
   readonly gitAllFiles: 'git:allFiles';
   readonly gitStatus: 'git:status';
-  readonly gitFileAt: 'git:fileAt';
   readonly gitWorktrees: 'git:worktrees';
   readonly gitPark: 'git:park';
   readonly gitUnpark: 'git:unpark';
@@ -159,7 +157,6 @@ export type PreloadBridge = InvokeSurface & {
   readonly onCssChanged: (callback: () => void) => () => void;
   readonly onCmsChanged: (callback: () => void) => () => void;
   readonly onPageMaybeChanged: (callback: (data: unknown) => void) => () => void;
-  readonly onThumbUpdated: (callback: (data: unknown) => void) => () => void;
   readonly onTerminalData: (callback: (data: unknown) => void) => () => void;
   readonly onTerminalExit: (callback: (data: unknown) => void) => () => void;
   readonly onTerminalProcess: (callback: (data: unknown) => void) => () => void;

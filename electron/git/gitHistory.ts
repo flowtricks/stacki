@@ -2,7 +2,7 @@
 //
 // Everything else this app does to git changes something. This is the half
 // that only looks: the log, what a commit touched, what is changed right now,
-// a file as it was, and which worktrees exist. Nothing here writes.
+// and which worktrees exist. Nothing here writes.
 //
 // It is a separate module from gitBranches.js for the same reason that one
 // exists — so it can be tested against real repositories (test/electron/git/gitHistory.test.js)
@@ -14,7 +14,7 @@
 // each one is the kind that produces a plausible wrong answer rather than an
 // error:
 //
-//   - `git show --name-status` on a MERGE commit prints NOTHING. Not an error,
+//   - `--name-status` on a MERGE commit prints NOTHING. Not an error,
 //     not a diff — an empty list, because a diff against several parents is
 //     ambiguous and git declines to pick. A history panel reading it straight
 //     would draw every merge as a commit that changed no files.
@@ -27,7 +27,6 @@
 // "Home" needs the project's routing, which lives in project/ — so that
 // translation happens at the IPC edge, and this module stays about git.
 
-import { toRecord } from '../../shared/core/record';
 import { gitErrorDetail } from './git';
 import type { Git } from './git';
 
@@ -169,21 +168,6 @@ async function log(
   return { commits, atEnd: commits.length < limit };
 }
 
-/** What one commit changed: `{status, path, from}` per file. */
-async function commitFiles(
-  git: Git,
-  { projectPath, ref }: { readonly projectPath: string; readonly ref: string },
-): Promise<FileChange[]> {
-  const { stdout } = await git(projectPath, [
-    'show',
-    '--name-status',
-    '--format=',
-    ...DIFF_FLAGS,
-    ref,
-  ]);
-  return parseNameStatus(stdout);
-}
-
 function parseNameStatus(stdout: string): FileChange[] {
   const files: FileChange[] = [];
   for (const line of stdout.split('\n')) {
@@ -318,32 +302,6 @@ async function allFiles(
       staged: change ? change.staged : false,
     };
   });
-}
-
-/** A file's contents as they were at `ref`, or undefined when it wasn't there. */
-async function fileAt(
-  git: Git,
-  {
-    projectPath,
-    ref,
-    path: filePath,
-  }: { readonly projectPath: string; readonly ref: string; readonly path: string },
-): Promise<string | undefined> {
-  try {
-    const { stdout } = await git(projectPath, ['show', `${ref}:${filePath}`]);
-    return stdout;
-  } catch (error: unknown) {
-    // Not an error worth raising: a file that did not exist yet is a normal
-    // answer to "what did this look like then", and the caller wants to say
-    // "this page didn't exist yet" rather than show a failure.
-    const stderr = toRecord(error)?.['stderr'];
-    if (
-      /does not exist|exists on disk, but not in/i.test(typeof stderr === 'string' ? stderr : '')
-    ) {
-      return undefined;
-    }
-    throw error;
-  }
 }
 
 export interface WorktreeInfo {
@@ -506,14 +464,4 @@ const describeFiles = <T extends { readonly path: string; readonly from?: string
 ): (T & FileDescription & { readonly from: string | undefined })[] =>
   (files ?? []).map((file) => ({ ...file, ...describeFile(file.path), from: file.from }));
 
-export {
-  allFiles,
-  log,
-  commitFiles,
-  status,
-  fileAt,
-  worktrees,
-  parseNameStatus,
-  describeFile,
-  describeFiles,
-};
+export { allFiles, log, status, worktrees, parseNameStatus, describeFile, describeFiles };

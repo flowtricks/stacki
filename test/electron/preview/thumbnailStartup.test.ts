@@ -40,7 +40,6 @@ test('opening a project cancels active and queued thumbnail startups', async (co
     }
   });
   const thumbnails = new Thumbnails({
-    send: () => {},
     devServers: { current: () => undefined },
     userDataPath: () => '/unused',
   });
@@ -76,7 +75,6 @@ test('closing during thumbnail port lookup prevents server startup', async (cont
     throw new Error('A cancelled thumbnail must not start a server');
   });
   const thumbnails = new Thumbnails({
-    send: () => {},
     devServers: { current: () => undefined },
     userDataPath: () => '/unused',
   });

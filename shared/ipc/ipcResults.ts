@@ -30,7 +30,6 @@ import {
   type WireFileModel,
   type WireProjectFile,
   type WireFileDescription,
-  type WireFileChange,
   type WireDeleteOutcome,
   type WireGitInfo,
   type WireCommitInfo,
@@ -392,14 +391,7 @@ export interface IpcResults {
     readonly ok: true;
     readonly files: undefined | number;
   };
-  readonly 'git:commitFiles': ReadonlyArray<
-    WireFileChange &
-      WireFileDescription & {
-        readonly from: undefined | string;
-      }
-  >;
   readonly 'git:deleteBranch': WireDeleteOutcome;
-  readonly 'git:fileAt': undefined | string;
   readonly 'git:ghStatus':
     | {
         readonly installed: false;

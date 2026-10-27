@@ -143,11 +143,6 @@ function dataBridge() {
     addRecent: invoke('recents:add'),
     removeRecent: invoke('recents:remove'),
     refreshThumb: invoke('recents:refreshThumb'),
-    onThumbUpdated: (callback: (payload: unknown) => void) => {
-      const listener = (_event: unknown, payload: unknown) => callback(payload);
-      ipcRenderer.on('recents:thumb', listener);
-      return () => ipcRenderer.removeListener('recents:thumb', listener);
-    },
   } satisfies Partial<PreloadBridge>;
 }
 
@@ -197,11 +192,9 @@ function pageBridge() {
     previewStop: invoke('preview:stop'),
     checkPreview: invoke('preview:check'),
     gitLog: invoke('git:log'),
-    gitCommitFiles: invoke('git:commitFiles'),
     gitCommitDiff: invoke('git:commitDiff'),
     gitAllFiles: invoke('git:allFiles'),
     gitStatus: invoke('git:status'),
-    gitFileAt: invoke('git:fileAt'),
     gitWorktrees: invoke('git:worktrees'),
     gitPark: invoke('git:park'),
     gitUnpark: invoke('git:unpark'),

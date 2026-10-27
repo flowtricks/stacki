@@ -18,7 +18,7 @@ import { serverAlive } from '../preview/devServerChecks';
 import type { DevServers } from './devServers';
 import type { MainHost } from './mainHost';
 
-export interface ThumbnailHost extends Pick<MainHost, 'send'> {
+export interface ThumbnailHost {
   readonly devServers: Pick<DevServers, 'current'>;
   /** Electron's userData folder, where the pictures are kept. */
   readonly userDataPath: () => string;
@@ -78,16 +78,10 @@ export class Thumbnails {
       if (!thumbs.isStale(this.host.userDataPath(), projectPath)) {
         return;
       }
-      this.capture(projectPath)
-        .then((result) => {
-          if (result?.ok) {
-            this.host.send('recents:thumb', { projectPath });
-          }
-        })
-        .catch((error: unknown) => {
-          // A background refresh: the old picture stays, and the log says why.
-          console.error('[thumbs] capture failed:', error);
-        });
+      this.capture(projectPath).catch((error: unknown) => {
+        // A background refresh: the old picture stays, and the log says why.
+        console.error('[thumbs] capture failed:', error);
+      });
     }, delay);
     if (this.thumbTimer.unref) {
       this.thumbTimer.unref();

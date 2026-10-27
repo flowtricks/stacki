@@ -6,7 +6,7 @@
 // git's output rather than a behaviour, and each one fails by producing a
 // plausible wrong answer instead of an error:
 //
-//   - `git show --name-status` on a merge commit prints nothing at all. A
+//   - `--name-status` on a merge commit prints nothing at all. A
 //     history panel reading it straight draws every merge as a commit that
 //     changed no files, and nothing anywhere reports a problem. That is the
 //     single most important case in this file.
@@ -133,17 +133,15 @@ const commit = async (directory, subject) => {
       JSON.stringify(commits[1].parents),
     );
 
-    const files = await history.commitFiles(git, { projectPath: directory, ref: commits[0].hash });
+    const listed = (await history.log(git, { projectPath: directory, withFiles: true })).commits;
+    const files = listed[0].files;
     check('a commit lists what it changed', files.length === 1, JSON.stringify(files));
     check('with the path', files[0].path === 'src/pages/about.astro', JSON.stringify(files[0]));
     check('and the letter for a new file', files[0].status === 'A', JSON.stringify(files[0]));
 
     // The root commit: no parent to diff against, and git handles it, but only
     // if the flags do not assume there is one.
-    const rootFiles = await history.commitFiles(git, {
-      projectPath: directory,
-      ref: commits[1].hash,
-    });
+    const rootFiles = listed[1].files;
     check(
       'the very first commit lists its files too',
       rootFiles.length === 1,
@@ -271,7 +269,8 @@ const commit = async (directory, subject) => {
     );
     check('so the whole history is there', commits.length === 4, String(commits.length));
 
-    const files = await history.commitFiles(git, { projectPath: directory, ref: merge.hash });
+    const listed = (await history.log(git, { projectPath: directory, withFiles: true })).commits;
+    const files = listed.find((item) => item.hash === merge.hash)?.files ?? [];
     check('a merge reports the files it brought in', files.length > 0, JSON.stringify(files));
     check(
       'namely the branch’s work',
@@ -293,7 +292,8 @@ const commit = async (directory, subject) => {
     await sh(directory, 'mv', 'src/pages/about.astro', 'src/pages/contact.astro');
     const ref = await commit(directory, 'renamed');
 
-    const files = await history.commitFiles(git, { projectPath: directory, ref });
+    const listed = (await history.log(git, { projectPath: directory, withFiles: true })).commits;
+    const files = listed.find((item) => item.hash === ref)?.files ?? [];
     check(
       'a rename is one entry, not a delete and an add',
       files.length === 1,
@@ -347,35 +347,6 @@ const commit = async (directory, subject) => {
       'and it is not marked staged',
       by['edit.txt']?.staged === false,
       JSON.stringify(by['edit.txt']),
-    );
-  }
-
-  // --- A file as it was ----------------------------------------------------
-  {
-    const directory = await repo('fileat');
-    cleanup.push(directory);
-    write(directory, 'src/pages/index.astro', 'the old words\n');
-    const first = await commit(directory, 'first');
-    write(directory, 'src/pages/index.astro', 'the new words\n');
-    await commit(directory, 'second');
-
-    const then = await history.fileAt(git, {
-      projectPath: directory,
-      ref: first,
-      path: 'src/pages/index.astro',
-    });
-    check('a file can be read as it was', then.trim() === 'the old words', JSON.stringify(then));
-    // "It did not exist yet" is a real answer to the question, and the panel
-    // wants to say so rather than show a failure.
-    const missing = await history.fileAt(git, {
-      projectPath: directory,
-      ref: first,
-      path: 'src/pages/later.astro',
-    });
-    check(
-      'a file that did not exist yet reads as undefined',
-      missing === undefined,
-      JSON.stringify(missing),
     );
   }
 

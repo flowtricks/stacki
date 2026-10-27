@@ -169,10 +169,6 @@ function registerGitGhStatusHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): vo
   ipcMain.handle('git:log', async (_event, payload) => readGitLog(payload));
   ipcMain.handle('git:commitDiff', async (_event, payload) => readCommitDiff(git, payload));
 
-  ipcMain.handle('git:commitFiles', async (_event, { projectPath, ref }) =>
-    gitHistory.describeFiles(await gitHistory.commitFiles(git, { projectPath, ref })),
-  );
-
   // Every file in the project, with what has happened to each — the file
   // browser's list, and the same status the commit picker reads.
   ipcMain.handle('git:allFiles', async (_event, { projectPath }) =>
@@ -181,10 +177,6 @@ function registerGitGhStatusHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): vo
 
   ipcMain.handle('git:status', async (_event, { projectPath }) =>
     gitHistory.describeFiles(await gitHistory.status(git, { projectPath })),
-  );
-
-  ipcMain.handle('git:fileAt', async (_event, { projectPath, ref, path: filePath }) =>
-    gitHistory.fileAt(git, { projectPath, ref, path: filePath }),
   );
 
   ipcMain.handle('git:worktrees', async (_event, { projectPath }) =>

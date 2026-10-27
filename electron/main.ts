@@ -79,7 +79,6 @@ let mainWindow: Window | undefined = undefined;
 // kept by the objects that own it (handlers/devServers.ts, thumbnails.ts).
 const devServers = new DevServers({ send });
 const thumbnails = new Thumbnails({
-  send,
   devServers,
   userDataPath: () => app.getPath('userData'),
 });
