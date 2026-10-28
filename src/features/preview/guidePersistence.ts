@@ -113,14 +113,15 @@ class ProjectGuideController {
           return;
         }
         this.source = stored.source;
+        // Without a file, only settings from app storage are written; defaults wait for a change.
+        const legacy =
+          this.source === undefined ? loadLegacyGuideSettings(this.project) : undefined;
         this.settings =
-          this.source === undefined
-            ? loadLegacyGuideSettings(this.project)
-            : guideFromSource(this.source);
+          this.source === undefined ? (legacy ?? GUIDE_DEFAULTS) : guideFromSource(this.source);
         this.status = 'ready';
         this.report('');
-        if (this.source === undefined) {
-          this.pending = this.settings;
+        if (legacy !== undefined) {
+          this.pending = legacy;
           await this.save();
         }
       })

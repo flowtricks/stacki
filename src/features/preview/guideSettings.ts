@@ -165,15 +165,16 @@ function storageKey(projectKey: string): string {
   return GUIDE_STORAGE_PREFIX + projectKey;
 }
 
-export function loadLegacyGuideSettings(projectKey: string | undefined): GuideSettings {
+// Undefined when nothing was stored, so there is nothing to migrate into the project file.
+export function loadLegacyGuideSettings(projectKey: string | undefined): GuideSettings | undefined {
   if (projectKey === undefined) {
-    return GUIDE_DEFAULTS;
+    return undefined;
   }
   const key = storageKey(projectKey);
   try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) {
-      return GUIDE_DEFAULTS;
+    const raw = localStorage.getItem(key) ?? undefined;
+    if (raw === undefined) {
+      return undefined;
     }
     if (raw.length > GUIDE_STORED_CHARS_MAX) {
       return GUIDE_DEFAULTS;
