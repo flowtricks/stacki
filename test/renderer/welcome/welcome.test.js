@@ -209,6 +209,20 @@ const PIXEL =
     document.body.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
   });
   check('an outside click closes the menu', all('[role=menuitem]').length === 0);
+  // The main half beside an open menu is part of the same control: its press is not an
+  // outside press, so the first click opens the picker instead of only closing the menu.
+  await act(async () => arrows[0].click());
+  const openFromFolder = all('.actions button')[0];
+  await act(async () => {
+    openFromFolder.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
+    openFromFolder.click();
+  });
+  check(
+    'with its menu open, Open from folder opens the picker on the first click',
+    folderRequests === 2,
+    String(folderRequests),
+  );
+  check('and closes the menu', all('[role=menuitem]').length === 0);
   check('nothing tells the user a picture is old', !/out of date/i.test(text()), text());
   check('and nothing offers to fix it', all('.recent-refresh').length === 0);
 

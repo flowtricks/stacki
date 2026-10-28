@@ -2,7 +2,10 @@ import { inOwnedPopup, isTopPopupLayer } from './popupOwnership';
 import { useEffect, type RefObject } from 'react';
 import type { PopupProps, PopupActions } from './Popup';
 import { toRecord } from '../../shared/core/record';
-interface DismissOptions extends Pick<PopupProps, 'dismissible' | 'anchor' | 'onEscape'> {
+interface DismissOptions extends Pick<
+  PopupProps,
+  'dismissible' | 'anchor' | 'within' | 'onEscape'
+> {
   readonly active: boolean;
   readonly mode: 'modal' | 'popover';
 }
@@ -11,7 +14,7 @@ export function usePopupDismiss(
   options: DismissOptions,
   { close, finish }: PopupActions,
 ): void {
-  const { active, anchor, dismissible = true, mode, onEscape } = options;
+  const { active, anchor, within, dismissible = true, mode, onEscape } = options;
   usePopupEnvironment(surface, options, close);
   useEffect(() => {
     if (!active || !dismissible) {
@@ -23,7 +26,8 @@ export function usePopupDismiss(
       !(target instanceof window.Element && target.closest('.toast-stack')) &&
       !surface.current?.contains(target) &&
       !inOwnedPopup(target, surface.current ?? undefined) &&
-      !anchor?.contains(target);
+      !anchor?.contains(target) &&
+      !within?.contains(target);
     const down = (event: MouseEvent): void => {
       outsidePress = outside(event.target);
       if (mode === 'popover' && outsidePress && popupIsTop(surface.current)) {
@@ -75,7 +79,7 @@ export function usePopupDismiss(
       document.removeEventListener('keydown', key);
       window.removeEventListener('message', message);
     };
-  }, [active, anchor, close, finish, dismissible, mode, onEscape, surface]);
+  }, [active, anchor, within, close, finish, dismissible, mode, onEscape, surface]);
 }
 
 export function popupIsTop(surface: RefObject<HTMLDivElement>['current']): boolean {

@@ -19,7 +19,13 @@ export default function WelcomeSplitButton(props: WelcomeSplitButtonProps) {
   const menuId = useId();
   return (
     <div className="welcome-split-button" ref={groupRef}>
-      <button className={props.className} onClick={props.onClick}>
+      <button
+        className={props.className}
+        onClick={() => {
+          setOpen(false);
+          props.onClick();
+        }}
+      >
         {props.icon}
         {props.label}
       </button>
@@ -45,6 +51,7 @@ export default function WelcomeSplitButton(props: WelcomeSplitButtonProps) {
         portal={false}
         open={open}
         anchor={triggerRef.current ?? undefined}
+        within={groupRef.current ?? undefined}
         onClose={() => setOpen(false)}
         className="welcome-split-menu"
         role="menu"

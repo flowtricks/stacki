@@ -36,6 +36,9 @@ export interface PopupProps extends Pick<
   readonly onEscape?: () => void;
   readonly dismissible?: boolean;
   readonly anchor?: HTMLElement | undefined;
+  // A press inside this element is not an outside press: the popup stays open and the click
+  // goes through, so a control beside the anchor (a split button's main half) acts at once.
+  readonly within?: HTMLElement | undefined;
   readonly className?: string;
   readonly style?: CSSProperties | undefined;
   readonly role?: 'dialog' | 'alertdialog' | 'menu' | 'listbox' | 'tooltip';
