@@ -50,6 +50,7 @@ function fixture(context, source) {
       },
     }),
     writeProjectMetadata: async ({ write }) => {
+      assert.equal(write.kind, 'publish');
       writes.push(JSON.parse(write.source));
       return { ok: true, value: { source: write.source } };
     },

@@ -69,35 +69,45 @@ test('guide migration, coalesced saves, and stale editor protection', async () =
   delete globalThis.CSS;
 });
 
-test('without a guide file or stored settings, the first change creates the file', async () => {
-  let source;
-  const writes = [];
-  globalThis.CSS = { supports: () => true };
-  globalThis.localStorage = { getItem: () => undefined };
-  globalThis.window = {
-    avb: {
-      projectMetadata: async () => ({ ok: true, value: source === undefined ? {} : { source } }),
-      writeProjectMetadata: async ({ write: input }) => {
-        source = input.source;
-        writes.push(input);
-        return { ok: true, value: { source } };
+for (const legacy of [
+  JSON.parse('null'),
+  undefined,
+  '{broken',
+  'null',
+  '[]',
+  '42',
+  'x'.repeat(2049),
+]) {
+  test(`guide saves on change with legacy record ${String(legacy).slice(0, 20)}`, async () => {
+    let source;
+    const writes = [];
+    globalThis.CSS = { supports: () => true };
+    globalThis.localStorage = { getItem: () => legacy };
+    globalThis.window = {
+      avb: {
+        projectMetadata: async () => ({ ok: true, value: source === undefined ? {} : { source } }),
+        writeProjectMetadata: async ({ write: input }) => {
+          source = input.source;
+          writes.push(input);
+          return { ok: true, value: { source } };
+        },
       },
-    },
-  };
-  const states = [];
-  const controller = createGuideController('/project', (state) => states.push(state));
-  controller.reload();
-  await until(() => states.at(-1)?.loading === false);
-  // Let a save that should not happen have its chance to run.
-  await delay(50);
-  assert.equal(writes.length, 0);
-  assert.equal(source, undefined);
-  controller.change((settings) => ({ ...settings, opacity: 0.15 }));
-  await until(() => writes.length === 1);
-  assert.equal(writes[0].base, undefined);
-  assert.equal(JSON.parse(source).settings.opacity, 0.15);
-  controller.close();
-  delete globalThis.window;
-  delete globalThis.localStorage;
-  delete globalThis.CSS;
-});
+    };
+    const states = [];
+    const controller = createGuideController('/project', (state) => states.push(state));
+    controller.reload();
+    await until(() => states.at(-1)?.loading === false);
+    // Let a save that should not happen have its chance to run.
+    await delay(50);
+    assert.equal(writes.length, 0);
+    assert.equal(source, undefined);
+    controller.change((settings) => ({ ...settings, opacity: 0.15 }));
+    await until(() => writes.length === 1);
+    assert.equal(writes[0].base, undefined);
+    assert.equal(JSON.parse(source).settings.opacity, 0.15);
+    controller.close();
+    delete globalThis.window;
+    delete globalThis.localStorage;
+    delete globalThis.CSS;
+  });
+}

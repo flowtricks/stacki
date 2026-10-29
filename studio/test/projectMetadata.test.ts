@@ -1,10 +1,12 @@
 // Verify project metadata through real HTTP routes, durable rooms, and source insertion.
 // Temporary projects isolate conflicts, serialization, guide validation, and publish path checks.
+// Exercise each settings file as the first save, without a guide file or metadata directory.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRooms } from '../src/features/collaboration/rooms';
@@ -14,12 +16,142 @@ import { structuralEdits } from '../src/features/source/sourceOperations';
 import { applyEdits, parsePage } from '../src/features/source/source';
 import { filePath, record } from '../src/shared/validation';
 import { metadataFiles } from '../src/features/settings/projectMetadata';
+import {
+  METADATA_FILES,
+  metadataKind,
+  parseMetadataResult,
+  type MetadataKind,
+} from '../vendor/stacki/shared/properties/projectMetadata';
+import {
+  DEFAULT_PUBLISH_CONFIG,
+  parsePublishSource,
+} from '../vendor/stacki/shared/properties/publishConfig';
+
+const firstSettings = {
+  components: {
+    version: 1,
+    components: {
+      'src/components/Wrapper.astro': {
+        children: [{ component: 'src/components/Heading.astro', props: { slot: 'aside' } }],
+      },
+    },
+  },
+  guide: {
+    version: 1,
+    settings: {
+      visible: true,
+      numbers: false,
+      color: '#888',
+      opacity: 0.1,
+      columns: { kind: 'count', count: 8 },
+    },
+  },
+  pages: { version: 1, entries: ['about/', 'index.astro'] },
+  componentSources: { version: 1, sources: [] },
+  publish: {
+    ...DEFAULT_PUBLISH_CONFIG,
+    defaultTarget: 'hosting',
+    githubAccount: 'owner',
+    githubWorkflow: { kind: 'pull-request' },
+    hosting: { provider: 'cloudflare-workers', accountId: 'account', project: 'website' },
+    buildScript: 'build-site',
+    beforePublish: ['prepare-site'],
+    afterPublish: ['verify-site'],
+  },
+} satisfies Readonly<Record<MetadataKind, unknown>>;
+
+test('Desktop and Studio exchange publish settings through the same project file', async () => {
+  const setup = await fixture();
+  try {
+    const source = JSON.stringify(firstSettings.publish);
+    const initial = desktopPublishMetadata(setup.root, { source });
+    assert.deepEqual(initial, { ok: true, value: { source } });
+    assert.equal((await setup.get('publish'))['source'], source);
+    const changed = JSON.stringify({ ...firstSettings.publish, defaultTarget: 'github' });
+    assert.equal(
+      (await setup.post({ kind: 'publish', source: changed, base: source })).status,
+      200,
+    );
+    assert.deepEqual(desktopPublishMetadata(setup.root, {}), {
+      ok: true,
+      value: { source: changed },
+    });
+    assert.deepEqual(await metadataFiles(setup.root), ['.stacki/publish.json']);
+  } finally {
+    await setup.close();
+  }
+});
+
+function desktopPublishMetadata(root: string, input: { readonly source?: string }) {
+  // Desktop's module graph is deliberately absent from the Studio bundle. Run its actual
+  // TypeScript entry point in a separate host process, without weakening Studio's imports.
+  const output = execFileSync(
+    process.execPath,
+    [
+      '--import',
+      'tsx',
+      '--eval',
+      `const { readProjectMetadata, writeProjectMetadata } =
+         require('../electron/project/projectMetadata.ts');
+       const { parseMetadataWrite } = require('../shared/properties/projectMetadata.ts');
+       const { readPublishConfig } = require('../electron/project/publishConfig.ts');
+       const root = process.argv[1];
+       const input = JSON.parse(process.argv[2]);
+       const result = input.source === undefined
+         ? readProjectMetadata(root, 'publish')
+         : writeProjectMetadata(root, parseMetadataWrite({kind: 'publish', ...input}));
+       readPublishConfig(root);
+       process.stdout.write(JSON.stringify(result));`,
+      root,
+      JSON.stringify(input),
+    ],
+    {
+      cwd: path.resolve(import.meta.dirname, '..'),
+      encoding: 'utf8',
+      timeout: 10000,
+      maxBuffer: 65536,
+    },
+  );
+  const result: unknown = JSON.parse(output);
+  return parseMetadataResult(result);
+}
+
+for (const [key, value] of Object.entries(firstSettings)) {
+  const kind = metadataKind(key);
+  test(`${kind} creates its own file on first Studio save without guide settings`, async () => {
+    const setup = await fixture();
+    try {
+      const directory = path.join(setup.root, '.stacki');
+      assert.deepEqual(await setup.get(kind), {});
+      assert.equal((await setup.post({ kind, source: '{broken' })).status, 400);
+      await assert.rejects(readdir(directory), { code: 'ENOENT' });
+      const source = JSON.stringify(value);
+      const changed = JSON.stringify(value, undefined, 2) + '\n';
+      assert.equal((await setup.post({ kind, source })).status, 200);
+      assert.deepEqual(await readdir(directory), [path.basename(METADATA_FILES[kind])]);
+      assert.equal((await setup.get(kind))['source'], source);
+      assert.equal((await setup.post({ kind, source: changed, base: source })).status, 200);
+      assert.equal((await setup.get(kind))['source'], changed);
+      assert.equal((await setup.post({ kind, source, base: source })).status, 400);
+      assert.equal(await readFile(path.join(setup.root, METADATA_FILES[kind]), 'utf8'), changed);
+      assert.deepEqual(await metadataFiles(setup.root), [METADATA_FILES[kind]]);
+      if (kind === 'publish') {
+        assert.deepEqual(parsePublishSource(changed), firstSettings.publish);
+      }
+    } finally {
+      await setup.close();
+    }
+  });
+}
 
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-metadata-'));
   await mkdir(path.join(root, 'src/components'), { recursive: true });
   await writeFile(path.join(root, 'src/components/Heading.astro'), '<h2><slot /></h2>');
-  await writeFile(path.join(root, 'src/components/Wrapper.astro'), '<section><slot /></section>');
+  await writeFile(
+    path.join(root, 'src/components/Wrapper.astro'),
+    '<section><slot /><slot name="aside" /></section>',
+  );
   const rooms = createRooms(root);
   const server = createServer((request, response) => {
     void metadataRoute(root, rooms, request, response, '/studio/api/metadata', async () => {
@@ -63,7 +195,14 @@ test('Studio saves shared recipes, rejects stale saves, and inserts the saved ne
           props: { hidden: false },
         },
         'src/components/Wrapper.astro': {
-          children: [{ component: 'src/components/Heading.astro' }],
+          children: [
+            { component: 'src/components/Heading.astro' },
+            {
+              component: 'src/components/Heading.astro',
+              props: { slot: 'aside' },
+              text: 'Sidebar default',
+            },
+          ],
         },
       },
     });
@@ -90,6 +229,8 @@ test('Studio saves shared recipes, rejects stale saves, and inserts the saved ne
     assert.match(output, /Keep this comment/);
     assert.match(output, /import Heading from/);
     assert.match(output, /hidden=\{false\}/);
+    assert.match(output, /slot="aside"/);
+    assert.match(output, /Sidebar default/);
     assert.doesNotMatch(output, /<b>/);
     assert.equal(parsePage(output).editable, true);
     const changed = source.replace('Literal', 'Updated');

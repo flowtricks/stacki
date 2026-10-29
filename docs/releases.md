@@ -15,6 +15,22 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.91 project settings
+
+Opening a project without saved guide preferences now uses in-memory defaults without creating
+`.stacki/guide.json`. The first guide edit still saves the file, and readable legacy preferences
+still migrate. Missing, corrupt and inaccessible browser storage do not create a defaults file.
+
+Settings saves remain independent: slot component defaults, publish destinations and scripts,
+page order and component sources create their own `.stacki` files when first saved. Desktop and
+Studio read and write `.stacki/publish.json`; credentials remain in host authentication storage.
+Regression tests exercise first saves without a metadata directory, named-slot insertion,
+stale-write protection and publish settings exchanged between the actual Desktop and Studio hosts.
+
+PR 66's Windows failure was the creation-event watcher assertion already corrected in 0.1.89.
+Updating the branch from main retains that regression fix and the removed variables-panel probe.
+Desktop, Studio and the starter are aligned at 0.1.91.
+
 ## 0.1.90 release validation
 
 At the user's request, remove the variables-panel layout probe because its visible Electron

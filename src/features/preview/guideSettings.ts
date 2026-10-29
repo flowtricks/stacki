@@ -165,7 +165,7 @@ function storageKey(projectKey: string): string {
   return GUIDE_STORAGE_PREFIX + projectKey;
 }
 
-// Undefined when nothing was stored, so there is nothing to migrate into the project file.
+// Missing or unreadable records cannot justify creating a project settings file on open.
 export function loadLegacyGuideSettings(projectKey: string | undefined): GuideSettings | undefined {
   if (projectKey === undefined) {
     return undefined;
@@ -177,13 +177,22 @@ export function loadLegacyGuideSettings(projectKey: string | undefined): GuideSe
       return undefined;
     }
     if (raw.length > GUIDE_STORED_CHARS_MAX) {
-      return GUIDE_DEFAULTS;
+      return undefined;
     }
     const stored: unknown = JSON.parse(raw);
+    if (typeof stored !== 'object') {
+      return undefined;
+    }
+    if (stored === null) {
+      return undefined;
+    }
+    if (Array.isArray(stored)) {
+      return undefined;
+    }
     return parseGuideSettings(stored);
   } catch {
-    // Unreadable storage or a corrupt record: the defaults, never a failed load.
-    return GUIDE_DEFAULTS;
+    // The controller uses in-memory defaults without migrating inaccessible storage.
+    return undefined;
   }
 }
 

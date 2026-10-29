@@ -668,6 +668,8 @@ recipes explicit project data. Existing page instances are never rewritten.
 against shared bounds before storage and consumption. Browser storage is consulted only
 when the project file is absent, for migration. Changes use a single pending value and
 serialized writes; conflicts stop saving until the user reloads the project settings.
+Opening a project without saved guide preferences uses defaults in memory. It does not create
+`.stacki/guide.json`; the first guide edit or migration of a readable legacy record creates it.
 
 `.stacki/pages.json` contains `{ version: 1, entries: [...] }`. Entries are relative to
 `src/pages`; folder keys end in `/`. Desktop and Studio apply the same order to sibling pages
@@ -682,6 +684,9 @@ Desktop confines them to the open project and writes through the document actors
 the supplied base. Studio exposes the same records through `/studio/api/metadata`, its
 serialized document rooms and durable draft storage. Neither endpoint permits arbitrary
 metadata paths. Settings writes reject stale bases rather than overwriting newer edits.
+Each metadata save creates `.stacki/` when needed, independently of the guide file. Saving slot
+component defaults, publish settings, page order or component sources never requires opening or
+changing the guide first. Reads and invalid writes do not create project settings files.
 These files participate in Studio publishing and GitHub sync. The legacy local `.stacki/`
 Git exclusion is narrowed to `.stacki/preview/` and `.stacki/canvas/`; user-authored ignore rules are untouched.
 
