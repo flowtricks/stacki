@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, type NativeImage, type WebContents } from 'electron';
+import { ok, err, type Result } from '../../shared/core/result';
 
 import { toRecord } from '../../shared/core/record';
 
@@ -27,6 +28,8 @@ const THUMB_WIDTH = 720;
 // still gets its picture taken.
 const SETTLE_MS = 1800;
 const LOAD_TIMEOUT = 15000;
+const CAPTURE_TIMEOUT_MS = 3000;
+const CAPTURE_RETRY_MS = 150;
 
 const thumbsDirectory = (userDataPath: string): string => path.join(userDataPath, 'thumbs');
 const keyFor = (projectPath: string): string =>
@@ -185,6 +188,31 @@ async function within<T>(promise: Promise<T>, ms: number, message: string): Prom
   }
 }
 
+async function captureImage(contents: WebContents): Promise<Result<NativeImage, string>> {
+  const first = await captureImageAttempt(contents);
+  if (first.ok) {
+    return first;
+  }
+  if (first.error !== 'UnknownVizError') {
+    return first;
+  }
+  // A cold compositor can reject its first copy even after load and animation frames.
+  // Retry only that transient error, once, without reloading or showing the window.
+  await wait(CAPTURE_RETRY_MS);
+  return captureImageAttempt(contents);
+}
+
+function captureImageAttempt(contents: WebContents): Promise<Result<NativeImage, string>> {
+  return within(
+    contents.capturePage(
+      { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height },
+      { stayHidden: false, stayAwake: false },
+    ),
+    CAPTURE_TIMEOUT_MS,
+    'the page capture did not finish',
+  ).then(ok, (error: unknown) => err(error instanceof Error ? error.message : String(error)));
+}
+
 type CaptureResult = { readonly ok: true } | { readonly ok: false; readonly error: string };
 
 /**
@@ -245,12 +273,11 @@ async function capture(
     ).catch(() => {});
     await wait(150);
 
-    const image = await win.webContents.capturePage({
-      x: 0,
-      y: 0,
-      width: VIEWPORT.width,
-      height: VIEWPORT.height,
-    });
+    const captured = await captureImage(win.webContents);
+    if (!captured.ok) {
+      return captured;
+    }
+    const image = captured.value;
     if (image.isEmpty()) {
       return { ok: false, error: 'the capture came back empty' };
     }

@@ -29,6 +29,11 @@ stale-write protection and publish settings exchanged between the actual Desktop
 
 PR 66's Windows failure was the creation-event watcher assertion already corrected in 0.1.89.
 Updating the branch from main retains that regression fix and the removed variables-panel probe.
+The refreshed Ubuntu check exposed a separate first-capture `UnknownVizError` from Electron.
+Replaying that exact rejection in the real local capture test reproduced the missing thumbnail.
+Capture now retries that error once, bounds each attempt to three seconds, and preserves the
+previous image on failure. Tests cover recovery, persistent failure, other errors and a stalled
+capture without showing the window. The native Ubuntu gate remains required for verification.
 Desktop, Studio and the starter are aligned at 0.1.91.
 
 ## 0.1.90 release validation

@@ -55,6 +55,39 @@ const PAGE = `<!doctype html>
   </script>
 </body></html>`;
 
+// Replay the compositor failure reported by Linux CI before allowing a real screenshot.
+// This makes the cold-render failure deterministic without showing a test window.
+let captureCalls = 0;
+app.once('browser-window-created', (_event, window) => {
+  const capturePage = window.webContents.capturePage.bind(window.webContents);
+  window.webContents.capturePage = (...args) => {
+    captureCalls += 1;
+    if (captureCalls === 1) {
+      return Promise.reject(new Error('UnknownVizError'));
+    }
+    return capturePage(...args);
+  };
+});
+
+async function checkCaptureFailure(userData, projectDirectory, url, message, attempts) {
+  const file = thumbs.thumbPathFor(userData, projectDirectory);
+  const previous = fs.readFileSync(file);
+  let calls = 0;
+  app.once('browser-window-created', (_event, window) => {
+    window.webContents.capturePage = () => {
+      calls += 1;
+      return message === 'timeout' ? new Promise(() => {}) : Promise.reject(new Error(message));
+    };
+  });
+  const started = Date.now();
+  const result = await thumbs.capture(userData, projectDirectory, url);
+  const expected = message === 'timeout' ? 'the page capture did not finish' : message;
+  check(`${message} is reported`, result.ok === false && result.error === expected, result.error);
+  check(`${message} has bounded attempts`, calls === attempts, String(calls));
+  check(`${message} finishes within its bound`, Date.now() - started < 15000);
+  check(`${message} preserves the previous thumbnail`, previous.equals(fs.readFileSync(file)));
+}
+
 // The pixel at (x, y) of a PNG on disk.
 function pixelAt(file, x, y) {
   const image = nativeImage.createFromPath(file);
@@ -92,6 +125,7 @@ app.whenReady().then(async () => {
   // --- the capture ---------------------------------------------------------
   const result = await thumbs.capture(userData, projectDirectory, url);
   check('the capture succeeds', result.ok === true, result.error);
+  check('a cold compositor failure retries once', captureCalls === 2, String(captureCalls));
 
   const file = thumbs.thumbPathFor(userData, projectDirectory);
   check('a file is written', fs.existsSync(file));
@@ -136,6 +170,10 @@ app.whenReady().then(async () => {
   const dead = await thumbs.capture(userData, projectDirectory, 'http://127.0.0.1:45999/');
   check('an unreachable site fails quietly', dead.ok === false && typeof dead.error === 'string');
   check('and keeps the picture it had', fs.existsSync(file));
+
+  await checkCaptureFailure(userData, projectDirectory, url, 'UnknownVizError', 2);
+  await checkCaptureFailure(userData, projectDirectory, url, 'capture unavailable', 1);
+  await checkCaptureFailure(userData, projectDirectory, url, 'timeout', 1);
 
   // --- forgetting ----------------------------------------------------------
   thumbs.forget(userData, projectDirectory);
