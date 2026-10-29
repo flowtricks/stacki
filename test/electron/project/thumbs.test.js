@@ -63,7 +63,11 @@ app.once('browser-window-created', (_event, window) => {
   window.webContents.capturePage = (...args) => {
     captureCalls += 1;
     if (captureCalls === 1) {
-      return Promise.reject(new Error('UnknownVizError'));
+      // Exercise native capture setup too: replacing it outright would leave the retry
+      // as the compositor's first real attempt and introduce a second, unrelated cold failure.
+      return capturePage(...args).then(() => {
+        throw new Error('UnknownVizError');
+      });
     }
     return capturePage(...args);
   };
