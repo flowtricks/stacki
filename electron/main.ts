@@ -39,6 +39,7 @@ import {
   net as enet,
   nativeImage,
   clipboard,
+  session,
 } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -46,6 +47,7 @@ import { pathToFileURL } from 'url';
 import { stopAllServices } from './content/contentConfig';
 import * as thumbs from './project/thumbs';
 import { openingBounds } from './app/windowBounds';
+import { isAppPage, isBrowserLink, isPrivatePermission } from './app/windowSecurity';
 import { registerTerminalHandlers, cleanupTerminals } from './terminal/terminal';
 import { watchProject } from './project/projectWatcher';
 import { autoUpdater } from 'electron-updater';
@@ -183,6 +185,30 @@ function registerAssetProtocol() {
   });
 }
 
+// Every window shares the default session, so one rule covers the app and its previews.
+function refusePrivatePermissions() {
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => {
+    callback(!isPrivatePermission(permission));
+  });
+  session.defaultSession.setPermissionCheckHandler(
+    (_contents, permission) => !isPrivatePermission(permission),
+  );
+}
+
+// The preload hands Stacki's API to whatever page this window shows, so the
+// window never leaves Stacki's own page; web links open in the browser instead.
+function keepOnAppPage(window: Window, appUrl: string) {
+  window.webContents.on('will-navigate', (event) => {
+    if (isAppPage(event.url, appUrl)) {
+      return;
+    }
+    event.preventDefault();
+    if (isBrowserLink(event.url)) {
+      openExternalLink(event.url);
+    }
+  });
+}
+
 async function serveFile(abs: string, request: Request) {
   const response = await enet.fetch(pathToFileURL(abs).toString(), { headers: request.headers });
   // The renderer is a different origin from this scheme, and font loading is
@@ -270,9 +296,15 @@ function createWindow() {
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    openExternalLink(url);
+    if (isBrowserLink(url)) {
+      openExternalLink(url);
+    }
     return { action: 'deny' };
   });
+  keepOnAppPage(
+    mainWindow,
+    process.env['VITE_DEV_SERVER_URL'] ?? pathToFileURL(RUNTIME_PATHS.rendererIndex).toString(),
+  );
 
   // Somebody closed the window. Whatever was open is over: the next window is a
   // fresh start and belongs on the welcome screen, not back in the project this
@@ -297,7 +329,7 @@ function openExternalLink(url: string) {
 }
 
 ipcMain.handle('shell:openExternal', async (_event, url) => {
-  if (/^https?:\/\//.test(url)) {
+  if (isBrowserLink(url)) {
     openExternalLink(url);
   }
   return { ok: true as const };
@@ -452,6 +484,7 @@ app.whenReady().then(
     settings = readSettings();
     setApplicationIcon();
     registerAssetProtocol();
+    refusePrivatePermissions();
     buildMenu();
     createWindow();
     autoUpdates.start();
