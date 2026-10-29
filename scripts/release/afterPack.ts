@@ -9,14 +9,14 @@ import { fixNodePtyPermissions } from '../install/fixNodePtyPermissions';
 import { verifyLinuxNativeBinding } from './linuxNativeBinding';
 import { verifyMacNativeBindings } from './macNativeBindings';
 
-function windowsArchitecture(architecture: Arch): 'arm64' | 'x64' {
+function packageArchitecture(architecture: Arch): 'arm64' | 'x64' {
   if (architecture === Arch.arm64) {
     return 'arm64';
   }
   if (architecture === Arch.x64) {
     return 'x64';
   }
-  throw new Error(`The Windows package architecture ${architecture} is not supported.`);
+  throw new Error(`The package architecture ${architecture} is not supported.`);
 }
 
 export default function afterPack(context: AfterPackContext): void {
@@ -37,7 +37,7 @@ export default function afterPack(context: AfterPackContext): void {
   }
 
   if (context.electronPlatformName === 'win32') {
-    const architecture = windowsArchitecture(context.arch);
+    const architecture = packageArchitecture(context.arch);
     const nativeBinding = path.join(
       nodePtyDirectory,
       'prebuilds',
@@ -52,7 +52,7 @@ export default function afterPack(context: AfterPackContext): void {
   }
 
   const fixed = fixNodePtyPermissions(nodePtyDirectory);
-  verifyMacNativeBindings(nodePtyDirectory);
+  verifyMacNativeBindings(nodePtyDirectory, packageArchitecture(context.arch));
   console.log(
     fixed.length > 0
       ? `  • afterPack: restored exec bit on ${fixed.length} node-pty spawn-helper(s)`

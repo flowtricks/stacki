@@ -30,7 +30,7 @@ image encoding is currently a desktop capability.
 `sharp` supplies real WebP and AVIF encoding, EXIF orientation, resizing, and
 input limits. Browser canvas cannot guarantee both output formats and Node has
 no built-in equivalent. `@img/sharp-wasm32` supplies the architecture-independent
-fallback, including both halves of the universal Mac application. The Mac package
+fallback for both Apple Silicon and Intel Mac applications. Each Mac package
 excludes architecture-specific sharp binaries to use that same fallback on Intel
 and Apple Silicon. Other desktop platforms can use their native sharp package.
 The dependencies add codec/WASM download size and CPU work; conversion is bounded

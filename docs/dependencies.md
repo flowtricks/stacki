@@ -143,9 +143,9 @@ packager. **Cost:** large tree; release-time only.
 Pinned to 26.15.3 to fix the AppImage search-path vulnerability
 [GHSA-7g7r-gx96-252g](https://github.com/advisories/GHSA-7g7r-gx96-252g).
 The signing password backport still applies to this upstream version; exact source hashes and
-real signing-function regression tests protect it. Universal Mac builds preserve node-pty's
-architecture-specific prebuilds using a narrowly scoped `x64ArchFiles` rule. Both architectures
-and executable helpers are verified before signing; node-pty chooses them using `process.arch`.
+real signing-function regression tests protect it. Separate Apple Silicon and Intel Mac builds
+avoid recompressing both Electron architectures when a code signature changes. Each package's
+node-pty bindings and executable helper are verified for its target CPU before signing.
 
 The build-time `@electron/get` dependency overrides `global-agent` to 4.1.3. Its compatible
 `bootstrap` API preserves proxy downloads while removing the obsolete logging dependency that
@@ -196,8 +196,8 @@ with pixel, byte and processing-time limits. See `docs/image-conversion.md`.
 
 ### `@img/sharp-wasm32`
 
-**Does:** portable sharp codecs, including both architectures of the universal
-Mac app. **Why not the platform:** a native codec binary cannot run on another
+**Does:** portable sharp codecs, including the Apple Silicon and Intel
+Mac apps. **Why not the platform:** a native codec binary cannot run on another
 CPU architecture. **Cost:** a bundled WASM codec and its runtime; slower than
 native encoding but bounded by the same conversion limits. Bundled licenses
 are retained; Mac packages exclude architecture-specific sharp binaries.

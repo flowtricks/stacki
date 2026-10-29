@@ -84,8 +84,9 @@ npm run dist:mac   # requires a Developer ID cert + notarization credentials
 
 Official builds are published by CI, not from anyone's laptop. Pushing a
 `v*` tag runs `.github/workflows/release.yml`, which builds a signed and
-notarized macOS universal build, a Windows installer, and Linux x64 AppImage
-and Debian packages, plus a versioned Studio source bundle. It uploads them to the `stacki-releases` repo and only
+notarized macOS builds for Apple Silicon and Intel, a Windows installer, and Linux x64
+AppImage and Debian packages, plus a versioned Studio source bundle. It uploads them to the
+`stacki-releases` repo and only
 makes the release visible once every platform has landed and the Linux
 packages pass installed-app smoke tests. Shipped apps auto-update from that feed via
 `electron-updater`.

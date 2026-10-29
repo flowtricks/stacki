@@ -1,6 +1,7 @@
 // Goal: atomic saves trigger one source change, never staging-file rebuilds.
 // Method: use Vite's real watcher to observe staging creation, completed rename,
 // ordinary outside edits and route creation/removal, with an existing ignore rule.
+// Replay Windows creation events separately: a new file may change after being added.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtemp, mkdir, writeFile, rename, rm, realpath } from 'node:fs/promises';
@@ -56,12 +57,47 @@ test('watch only completed source and preserve project ignores', { timeout: 1500
     await waitForEvent(events, 'add:new.astro');
     await rm(added);
     await waitForEvent(events, 'unlink:new.astro');
-    assert.deepEqual(events, ['change:outside.astro', 'add:new.astro', 'unlink:new.astro']);
+    assertRouteEvents(events);
   } finally {
     await server.close();
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('route events allow creation writes but reject missing, reordered and staging events', () => {
+  const ordinary = ['change:outside.astro', 'add:new.astro', 'unlink:new.astro'];
+  const windows = ['change:outside.astro', 'add:new.astro', 'change:new.astro', 'unlink:new.astro'];
+  assert.doesNotThrow(() => assertRouteEvents(ordinary));
+  assert.doesNotThrow(() => assertRouteEvents(windows));
+  for (const invalid of [
+    [],
+    ordinary.slice(1),
+    ordinary.slice(0, -1),
+    [...ordinary].reverse(),
+    ['change:outside.astro', 'add:new.astro', 'add:new.astro', 'unlink:new.astro'],
+    ['change:outside.astro', 'add:new.astro', 'change:index.astro', 'unlink:new.astro'],
+    ['change:outside.astro', 'add:new.astro', 'add:new.astro.studio-tmp', 'unlink:new.astro'],
+    ['change:outside.astro', 'add:new.astro', 'add:new.astro.project-ignore', 'unlink:new.astro'],
+    [...ordinary, 'change:new.astro'],
+    Array<string>(101).fill('change:new.astro'),
+  ]) {
+    assert.throws(() => assertRouteEvents(invalid), assert.AssertionError);
+  }
+});
+
+function assertRouteEvents(events: readonly string[]): void {
+  assert.ok(events.length >= 3, 'Every route operation must be observed');
+  assert.ok(events.length <= 100, 'Route event capture stays bounded');
+  assert.equal(events[0], 'change:outside.astro');
+  assert.equal(events[1], 'add:new.astro');
+  assert.equal(events.at(-1), 'unlink:new.astro');
+  // Windows can report creation and its data write separately. Only changes
+  // to the new route between its add and unlink are valid extra events.
+  assert.ok(
+    events.slice(2, -1).every((event) => event === 'change:new.astro'),
+    'Only creation writes may appear between route add and unlink',
+  );
+}
 
 async function waitForWatched(
   watcher: { readonly getWatched: () => Readonly<Record<string, readonly string[]>> },

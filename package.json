@@ -1,7 +1,7 @@
 {
   "name": "stacki",
   "productName": "Stacki",
-  "version": "0.1.87",
+  "version": "0.1.90",
   "description": "Stacki \u2014 a visual Astro builder with live preview and publishing.",
   "homepage": "https://github.com/flowtricks/stacki",
   "main": "dist/electron/main.js",
@@ -159,19 +159,22 @@
       "releaseType": "release"
     },
     "mac": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
       "category": "public.app-category.developer-tools",
       "icon": "resources/icon.icns",
       "target": [
         {
           "target": "dmg",
           "arch": [
-            "universal"
+            "arm64",
+            "x64"
           ]
         },
         {
           "target": "zip",
           "arch": [
-            "universal"
+            "arm64",
+            "x64"
           ]
         }
       ],
@@ -181,8 +184,7 @@
       "entitlementsInherit": "resources/entitlements.mac.inherit.plist",
       "forceCodeSigning": true,
       "notarize": true,
-      "minimumSystemVersion": "13.0.0",
-      "x64ArchFiles": "**/node-pty/prebuilds/darwin-{x64,arm64}/{pty.node,spawn-helper}"
+      "minimumSystemVersion": "13.0.0"
     },
     "win": {
       "icon": "resources/icon.ico",

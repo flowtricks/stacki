@@ -15,6 +15,50 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.90 release validation
+
+At the user's request, remove the variables-panel layout probe because its visible Electron
+window interrupts local work every time the full regression gate runs. Other variables-panel
+unit and integration tests remain. The removed probe's row-alignment, scroll and hit-testing
+measurements are no longer covered by that browser test; application behavior is unchanged.
+
+The 0.1.89 release run was canceled before publication to include this removal. Its tag remains
+unchanged. Desktop, Studio and the starter are aligned at 0.1.90.
+
+## 0.1.89 release validation
+
+The 0.1.88 Windows gate caught a watcher test that assumed creating a file only emits `add`.
+Windows also emitted `change` before the file was removed. Replaying the recorded event trace
+reproduced the assertion locally. The test now accepts creation writes only between the new
+route's add and unlink events; fixtures reject missing, reordered, unrelated and staging events.
+The real-watcher test still requires one atomic-save event and preserves project ignore rules.
+
+A native Windows runner is unavailable locally; the hosted Windows gate remains required.
+Release 0.1.88 stays an unpublished draft with its original tag. Version 0.1.89 aligns Desktop,
+Studio and the starter and includes the Mac packaging changes below.
+
+## Separate Mac architectures
+
+Mac releases produce `Stacki-VERSION-arm64.dmg` and `Stacki-VERSION-x64.dmg`, plus
+matching `.zip` archives and blockmaps. Architecture-specific Electron binaries avoid the
+compressed universal binary's mid-file signature changes; download savings must be measured
+between consecutive signed builds with the same Electron version, not promised in advance.
+
+Keep the app ID, signing identity and GitHub feed unchanged. One `latest-mac.yml` lists both
+architectures; the metadata step rejects a missing ZIP or DMG before the draft can publish.
+The existing updater selects ARM on Apple Silicon (including Rosetta) and x64 on Intel.
+The migration may fall back to a full download if the old archive or blockmap cannot be reused.
+
+Local regressions exercise the installed updater's architecture filter, per-target terminal
+binaries, and dual-architecture metadata. Before publishing the first split release, verify
+signed universal-to-native installation on Intel and Apple Silicon, including a Rosetta launch.
+Unsigned packaging cannot verify Squirrel.Mac signature acceptance or notarization.
+
+The marketing site's `/download/mac` selects ARM and `/download/mac-intel` selects Intel.
+Both can use an older universal DMG until split assets are published. Browser CPU hints select
+the button automatically; browsers without them show a choice because `MacIntel` and Intel UA
+strings also occur on Apple Silicon. The website never substitutes the opposite-CPU installer.
+
 ## 0.1.87 startup correction
 
 The live 0.1.86 cold-start check found that Git restoration checked out the baseline a second
