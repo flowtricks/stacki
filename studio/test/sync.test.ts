@@ -11,9 +11,9 @@ const before = 'heading\nfirst\nsecond\nthird\nfooter\n';
 async function fixture(changes: IncomingChanges, draft: string) {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-sync-'));
   await mkdir(path.join(root, 'src/pages'), { recursive: true });
-  await mkdir(path.join(root, '.studio-state'));
+  await mkdir(path.join(root, '.stacki/studio/state'), { recursive: true });
   await writeFile(
-    path.join(root, '.studio-state/github-base.json'),
+    path.join(root, '.stacki/studio/state/github-base.json'),
     JSON.stringify({ sha: 'a'.repeat(40) }),
   );
   await writeFile(path.join(root, 'src/pages/index.astro'), draft);
@@ -47,7 +47,9 @@ test('deployment-only sync advances the baseline without changing the saved draf
     assert.equal(state.room.text.toString(), draft);
     assert.equal(await readFile(path.join(state.root, 'src/pages/index.astro'), 'utf8'), draft);
     assert.deepEqual(
-      JSON.parse(await readFile(path.join(state.root, '.studio-state/github-base.json'), 'utf8')),
+      JSON.parse(
+        await readFile(path.join(state.root, '.stacki/studio/state/github-base.json'), 'utf8'),
+      ),
       { sha: 'b'.repeat(40) },
     );
     assert.equal((await state.service.sync()).kind, 'synced');
@@ -91,7 +93,7 @@ test('conflicts preserve the draft and baseline until a revision-specific resolu
     assert.equal((await state.service.sync()).kind, 'conflict');
     assert.equal(state.room.text.toString(), local);
     assert.match(
-      await readFile(path.join(state.root, '.studio-state/github-base.json'), 'utf8'),
+      await readFile(path.join(state.root, '.stacki/studio/state/github-base.json'), 'utf8'),
       /aaaa/,
     );
     assert.equal(
@@ -120,7 +122,7 @@ test('automatic sync gives conflicting draft lines priority and retains unrelate
     assert.equal((await state.service.latest()).kind, 'synced');
     assert.equal(state.room.text.toString(), local.replace('footer', 'remote footer'));
     assert.match(
-      await readFile(path.join(state.root, '.studio-state/github-base.json'), 'utf8'),
+      await readFile(path.join(state.root, '.stacki/studio/state/github-base.json'), 'utf8'),
       /bbbb/,
     );
   } finally {

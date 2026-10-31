@@ -1,6 +1,8 @@
 // Studio gets its own module graph so its preview hooks cannot interfere with
 // Electron's canvas. Both servers read and write the same website source folder.
 import { spawn, type ChildProcess } from 'node:child_process';
+import { prepareStudioLocal } from './studioLocalMove';
+import { STUDIO_STATE_DIRECTORY } from '../../shared/properties/studioLocal';
 import {
   existsSync,
   lstatSync,
@@ -140,15 +142,13 @@ export function writeLocalStudioConfig(project: string, assets: string, port: nu
     : 'const config = {};';
   const integration = pathToFileURL(path.join(assets, 'integration.mjs')).href;
   const directory = path.join(project, 'node_modules/.avb');
-  const state = path.join(project, '.studio-state');
+  const state = path.join(project, STUDIO_STATE_DIRECTORY);
   mkdirSync(directory, { recursive: true });
+  // `.stacki/studio/` ignores its own contents; an older `.studio-state` moves in.
+  prepareStudioLocal(project);
   mkdirSync(state, { recursive: true });
   if (lstatSync(state).isSymbolicLink()) {
     throw new Error('Studio session storage must be a real directory');
-  }
-  const ignore = path.join(state, '.gitignore');
-  if (!existsSync(ignore)) {
-    writeFileSync(ignore, '*\n', { flag: 'wx' });
   }
   const file = path.join(directory, 'astro.studio.config.mjs');
   writeFileSync(

@@ -6,6 +6,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": false,
+  // Keep diagnostic logging opt-in to avoid unexpected Observability charges.
+  "observability": { "enabled": false },
   "limits": { "cpu_ms": 50 },
   "assets": { "directory": "../dist", "binding": "ASSETS", "run_worker_first": true },
   "containers": [

@@ -41,7 +41,7 @@ the guide. Preserve existing routes and hosting; present the proposed routing ch
 5. Guide me through entering GITHUB_PRIVATE_KEY, GITHUB_CLIENT_SECRET, SESSION_SECRET and
 CONTAINER_TOKEN using Wrangler secret prompts. Generate independent random values of at least
 32 bytes for the last two. Never put secrets in source, prompts, logs or public environment vars.
-Ignore .studio/, .studio-state/, .wrangler/, .env*, .dev.vars* and node_modules/ in Git and Docker.
+Ignore .studio/, .stacki/studio/, .wrangler/, .env*, .dev.vars* and node_modules/ in Git and Docker.
 Do not reuse another project's credentials, account IDs, drafts or saved browser sessions.
 6. Validate the Worker bundle and real container image build. Ask before provisioning billable
 resources or deploying. Deploy only after configuration and access controls are reviewed.

@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import type { OverlayInfo, RectMap, SpacingMap } from './PreviewOverlays';
 import type { PreviewDevice } from './PreviewToolbar';
-import type { PreviewMessage, PreviewReloadReason } from './previewMessages';
+import type { PreviewMessage, PreviewReloadReason, TextMarks } from './previewMessages';
+import { NO_TEXT_MARKS } from './previewMessages';
 import type { GuideMetrics } from './guideModel';
 import { parsePreviewMessage } from './previewMessages';
 import { outlineBoxPath, sameCopy } from './outlineBoxes';
@@ -69,6 +70,8 @@ export interface PreviewRuntime {
   readonly hoverOcc: number | undefined;
   /** What the column guide is drawn from; undefined until the frame reports. */
   readonly guide: GuideMetrics | undefined;
+  /** Text of the selected instance the pointer is on, or that was clicked. */
+  readonly textMarks: TextMarks;
   readonly registerFrame: () => void;
   readonly sendTrack: () => void;
   /** Sends a message to the current frame. */
@@ -88,13 +91,8 @@ export function usePreviewRuntime(
   const [selectedOccurrence, setSelectedOccurrence] = useState<number | undefined>(undefined);
   const [hoverOcc, setHoverOcc] = useState(0);
   const [guide, setGuide] = useState<GuideMetrics | undefined>(undefined);
-  const hoverPath = props.navHoverPath ?? canvasHover;
-  const selectedBoxPath = props.selPath
-    ? outlineBoxPath(props.selPath, props.overlayInfo?.(props.selPath)?.nodeKind)
-    : undefined;
-  const hoverBoxPath = hoverPath
-    ? outlineBoxPath(hoverPath, props.overlayInfo?.(hoverPath)?.nodeKind)
-    : undefined;
+  const [textMarks, setTextMarks] = useState<TextMarks>(NO_TEXT_MARKS);
+  const { hoverPath, selectedBoxPath, hoverBoxPath } = outlinePaths(props, canvasHover);
   const refs = useRuntimeRefs(props, selectedOccurrence);
   const setters = useMemo(
     () => ({
@@ -104,6 +102,7 @@ export function usePreviewRuntime(
       setSelectedOccurrence,
       setHoverOcc,
       setGuide,
+      setTextMarks,
     }),
     [],
   );
@@ -144,6 +143,7 @@ export function usePreviewRuntime(
     hoverPath,
     hoverOcc: props.navHoverPath ? 0 : hoverOcc,
     guide,
+    textMarks,
     registerFrame,
     sendTrack,
     post: link.post,
@@ -234,6 +234,15 @@ function useOccurrenceSelection(
   }, [props.navigatorSelectionTick, props.selPath, refs, setSelectedOccurrence]);
 }
 
+// What the outlines follow: the hovered path (the navigator's wins over the
+// canvas's), and the paths whose boxes stand for the selected and hovered nodes.
+function outlinePaths(props: PreviewRuntimeProps, canvasHover: string | undefined) {
+  const hoverPath = props.navHoverPath ?? canvasHover;
+  const boxPath = (path: string | undefined) =>
+    path ? outlineBoxPath(path, props.overlayInfo?.(path)?.nodeKind) : undefined;
+  return { hoverPath, selectedBoxPath: boxPath(props.selPath), hoverBoxPath: boxPath(hoverPath) };
+}
+
 interface RuntimeSetters {
   readonly setRects: React.Dispatch<React.SetStateAction<RectMap>>;
   readonly setSpacing: React.Dispatch<React.SetStateAction<SpacingMap>>;
@@ -241,6 +250,7 @@ interface RuntimeSetters {
   readonly setSelectedOccurrence: React.Dispatch<React.SetStateAction<number | undefined>>;
   readonly setHoverOcc: React.Dispatch<React.SetStateAction<number>>;
   readonly setGuide: React.Dispatch<React.SetStateAction<GuideMetrics | undefined>>;
+  readonly setTextMarks: React.Dispatch<React.SetStateAction<TextMarks>>;
 }
 
 // A plain link to the current frame for the features built on the canvas:
@@ -353,6 +363,9 @@ function applyMessage(
       break;
     case 'query-result':
       receiveCanvasReply(message.input);
+      break;
+    case 'text-marks':
+      setters.setTextMarks({ hover: message.hover, picked: message.picked });
       break;
     case 'open-node':
       gateEvent(message.token, refs, { kind: 'open' }, () =>
@@ -532,6 +545,7 @@ function useResetOnReload(
     setters.setCanvasHover(undefined);
     setters.setSpacing({});
     setters.setGuide(undefined);
+    setters.setTextMarks(NO_TEXT_MARKS);
     setters.setSelectedOccurrence(undefined);
     setters.setHoverOcc(0);
     selectedClassesRef.current = undefined;

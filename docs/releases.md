@@ -15,6 +15,34 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.96 component text on the canvas, live CMS data, Studio parity
+
+- Text a component shows from a prop is edited on the canvas like any other text. Select the
+  component and its text is outlined dashed; hover outlines it with its own tag and tints the
+  component; a click picks it, with the component shown as its parent; a double click types in
+  it. Plain props save the words to the attribute; props a component renders as HTML
+  (`set:html`) edit one run at a time with the canvas formatting bar and save back as HTML. The
+  matching prop field in Settings follows each keystroke.
+- Slot text inside a selected component gets the same outlines, and double-clicking slot text
+  passed through a wrapper component (a Section's container) now opens the editor.
+- Canvas text no longer carries a component template's indentation into the Content field or
+  the source: an edit keeps only the words, with the source's own edges.
+- The binding picker shows real data a page reads from its own code — `const pastors = await
+  getCampusPastors()` — sampled by the dev server the way the page's render runs it (only a
+  project module under `src/`, only an export called with no arguments). A loop item lists every
+  field with its value and steps through entries; images show as thumbnails. The picker's rows
+  are calmer: a quiet hover, a shallower indent, values without quotes.
+- Stacki Studio gets all of it: prop text editing and outlines on the canvas, saved through its
+  own attribute edits, and the binding picker with the page's data (a new
+  `/studio/api/sample-value` route runs the same bounded sample inside the dev server).
+- Studio keeps its own files under `.stacki/studio/`, which ignores its contents: drafts,
+  history and uploads in `state/`, update backups in `updates/`. An older `.studio-state/` or
+  `.stacki-studio/` moves there whole on first start.
+- The Cloudflare template turns Observability off by default to avoid diagnostic logging
+  charges (Studio's docs/cloudflare.md says how to apply it to an existing installation).
+- Fixes the Windows test that held back the 0.1.95 Desktop release. Desktop, the Studio source
+  bundle and `create-stacki` are aligned at 0.1.96.
+
 ## 0.1.95 connected CMS and canvas editing
 
 - Connect Sanity from Settings with "Log in with Sanity" (or a pasted key) and edit its content in

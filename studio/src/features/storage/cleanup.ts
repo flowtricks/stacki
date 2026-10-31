@@ -152,7 +152,9 @@ export class StorageCleanup {
     }
     const current = string(
       record(
-        JSON.parse(await readFile(path.join(this.root, '.studio-state/github-base.json'), 'utf8')),
+        JSON.parse(
+          await readFile(path.join(this.root, '.stacki/studio/state/github-base.json'), 'utf8'),
+        ),
       )['sha'],
       40,
     );

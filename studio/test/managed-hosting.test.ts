@@ -79,9 +79,11 @@ for (const deployment of ['live', 'pending'] as const) {
     );
     assert.equal(await readFile(path.join(root, '.stacki/publish.json'), 'utf8'), source);
     assert.equal(
-      record(JSON.parse(await readFile(path.join(root, '.studio-state/github-base.json'), 'utf8')))[
-        'sha'
-      ],
+      record(
+        JSON.parse(
+          await readFile(path.join(root, '.stacki/studio/state/github-base.json'), 'utf8'),
+        ),
+      )['sha'],
       revision,
     );
   });
@@ -121,14 +123,14 @@ test('managed environment validates configuration before selecting a destination
 
 async function managedFixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-managed-hosting-'));
-  for (const directory of ['src/pages', '.studio-state', '.stacki']) {
+  for (const directory of ['src/pages', '.stacki/studio/state', '.stacki']) {
     await mkdir(path.join(root, directory), { recursive: true });
   }
   await writeFile(path.join(root, 'src/pages/index.astro'), '<h1>Latest draft</h1>');
   const source = JSON.stringify(config);
   await writeFile(path.join(root, '.stacki/publish.json'), source);
   await writeFile(
-    path.join(root, '.studio-state/github-base.json'),
+    path.join(root, '.stacki/studio/state/github-base.json'),
     JSON.stringify({ sha: 'a'.repeat(40) }),
   );
   return { root, source };

@@ -136,7 +136,9 @@ for (const [key, value] of Object.entries(firstSettings)) {
       const source = JSON.stringify(value);
       const changed = JSON.stringify(value, undefined, 2) + '\n';
       assert.equal((await setup.post({ kind, source })).status, 200);
-      assert.deepEqual(await readdir(directory), [path.basename(METADATA_FILES[kind])]);
+      // Studio's own state shares `.stacki/` in its self-ignored `studio` folder.
+      const shared = (await readdir(directory)).filter((name) => name !== 'studio');
+      assert.deepEqual(shared, [path.basename(METADATA_FILES[kind])]);
       assert.equal((await setup.get(kind))['source'], source);
       assert.equal((await setup.post({ kind, source: changed, base: source })).status, 200);
       assert.equal((await setup.get(kind))['source'], changed);

@@ -191,7 +191,7 @@ export class HistoryRepository {
         return this.snapshot;
       }
     }
-    const parent = path.join(this.root, '.studio-state');
+    const parent = path.join(this.root, '.stacki/studio/state');
     await mkdir(parent, { recursive: true });
     const directory = await mkdtemp(path.join(parent, 'history-'));
     const git = { root: this.root, directory, authorization: connection.token };

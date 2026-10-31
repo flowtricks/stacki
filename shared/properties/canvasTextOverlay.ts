@@ -1,4 +1,5 @@
-import { pathText, record } from '../core/boundary';
+import { list, pathText, record } from '../core/boundary';
+import { assert } from '../core/assert';
 import { CANVAS_TEXT_LIMIT } from './canvasText';
 
 // The host receives editing state only; the browser owns the text and caret.
@@ -19,6 +20,35 @@ export function parseCanvasTextOverlay(input: unknown): CanvasTextOverlayEvent |
     return { type: 'avb:text-inactive', session: pathText(data['session']) };
   }
   return undefined;
+}
+
+// The selected node's page path. Text a page hands to a component instance
+// (its slot content, its props) is marked as editable only while that
+// instance is the selection — not while something inside it is.
+export interface CanvasTextFocus {
+  readonly type: 'avb:text-focus';
+  readonly paths: readonly string[];
+}
+
+// A selection is never deeper than this; a longer list is not a selection.
+export const CANVAS_FOCUS_PATHS_MAX = 256;
+
+export function canvasTextFocus(paths: readonly string[]): CanvasTextFocus {
+  assert(paths.length <= CANVAS_FOCUS_PATHS_MAX, 'Canvas text focus stays within its bound');
+  assert(!paths.includes(''), 'Canvas text focus names real paths');
+  return { type: 'avb:text-focus', paths };
+}
+
+export function parseCanvasTextFocus(input: unknown): CanvasTextFocus | undefined {
+  const data = record(input);
+  if (data['type'] !== 'avb:text-focus') {
+    return undefined;
+  }
+  const paths = list(pathText)(data['paths']);
+  if (paths.length > CANVAS_FOCUS_PATHS_MAX) {
+    throw new Error('Canvas text focus exceeds limit');
+  }
+  return { type: 'avb:text-focus', paths: paths.filter((path) => path !== '') };
 }
 
 export function parseCanvasTextClose(input: unknown) {

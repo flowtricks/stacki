@@ -69,5 +69,5 @@ async function writeLocalState(root: string, body: string) {
   await rename(statePath(root) + '.tmp', statePath(root));
 }
 function statePath(root: string) {
-  return path.join(root, '.studio-state/asset-state.json');
+  return path.join(root, '.stacki/studio/state/asset-state.json');
 }

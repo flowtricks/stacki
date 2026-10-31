@@ -83,7 +83,7 @@ export async function saveGitWorkspace(
     );
   }
   if (bundle && manifest.bundle) {
-    await copyFile(bundle, path.join(root, '.studio-state/' + manifest.bundle + '.bundle'));
+    await copyFile(bundle, path.join(root, '.stacki/studio/state/' + manifest.bundle + '.bundle'));
   }
   await writeLocalGitWorkspace(root, manifest);
 }
@@ -112,7 +112,7 @@ async function requireStored(response: Response): Promise<void> {
   }
 }
 function manifestPath(root: string): string {
-  return path.join(root, '.studio-state/git-workspace.json');
+  return path.join(root, '.stacki/studio/state/git-workspace.json');
 }
 
 async function boundedGitBytes(response: Response): Promise<Buffer> {

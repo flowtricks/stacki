@@ -47,7 +47,12 @@ import {
   serverAlive,
   trailingSlashFromSource,
 } from '../preview/devServerChecks';
-import { DATA_ENDPOINT, PATHS_ENDPOINT, renderMarkerConfig } from '../preview/markerConfig';
+import {
+  DATA_ENDPOINT,
+  PATHS_ENDPOINT,
+  VALUE_ENDPOINT,
+  renderMarkerConfig,
+} from '../preview/markerConfig';
 import { PROGRESS_CLEARED, installDependencies } from './projectHandlers';
 import type { MainHost } from './mainHost';
 import type { Thumbnails } from './thumbnails';
@@ -257,12 +262,14 @@ export class DevServers {
         JSON.stringify(toPosix(path.join(directory, 'preview.astro'))),
         JSON.stringify(toPosix(path.join(directory, 'paths.js'))),
         JSON.stringify(toPosix(path.join(directory, 'data.js'))),
+        JSON.stringify(toPosix(path.join(directory, 'value.js'))),
       ]);
       const configPath = path.join(directory, 'astro.config.mjs');
       fs.writeFileSync(configPath, config);
       fs.writeFileSync(path.join(directory, 'preview.astro'), renderComponentPreviewPage());
       fs.writeFileSync(path.join(directory, 'paths.js'), PATHS_ENDPOINT);
       fs.writeFileSync(path.join(directory, 'data.js'), DATA_ENDPOINT);
+      fs.writeFileSync(path.join(directory, 'value.js'), VALUE_ENDPOINT);
       // This file is assembled here and handed to Astro as its config. If it
       // will not parse, Astro does not start, and the project gets no preview at
       // all — the editor's own canvas broken by the editor's own scaffolding,

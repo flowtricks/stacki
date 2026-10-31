@@ -187,6 +187,7 @@ function checkGeneratedConfig(directory) {
     local('preview.astro'),
     local('paths.js'),
     local('data.js'),
+    local('value.js'),
   ]);
   const config = path.join(directory, 'astro.config.mjs');
   fs.writeFileSync(config, source);

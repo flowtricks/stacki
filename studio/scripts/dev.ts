@@ -6,12 +6,16 @@ import { promisify } from 'node:util';
 import path from 'node:path';
 import { writeStudioConfig, exists } from './workspace';
 import { copyProject } from './copyProject';
+import { prepareStudioLocal } from '../vendor/stacki/electron/previewServer/studioLocalMove';
 
 export async function startDraft(packageRoot: string, source: string, port: number) {
   const requested = path.resolve(process.env['STUDIO_WORKSPACE'] ?? '.studio/workspace');
   await mkdir(requested, { recursive: true });
   const workspace = await realpath(requested);
-  const identity = path.join(workspace, '.studio-state/project.json');
+  // A draft from an older Studio keeps its state: it moves into `.stacki/studio/`
+  // before anything here reads or creates the new folder.
+  prepareStudioLocal(workspace);
+  const identity = path.join(workspace, '.stacki/studio/state/project.json');
   if (await exists(identity)) {
     const previous: unknown = JSON.parse(await readFile(identity, 'utf8'));
     if (previous !== source) {
@@ -28,9 +32,9 @@ export async function startDraft(packageRoot: string, source: string, port: numb
       await run('npm', ['ci'], workspace);
     }
   }
-  await mkdir(path.join(workspace, '.studio-state'), { recursive: true });
+  await mkdir(path.join(workspace, '.stacki/studio/state'), { recursive: true });
   await writeFile(identity, JSON.stringify(source));
-  const baseline = path.join(workspace, '.studio-state/github-base.json');
+  const baseline = path.join(workspace, '.stacki/studio/state/github-base.json');
   if (!(await exists(baseline))) {
     try {
       const result = await promisify(execFile)('git', ['rev-parse', 'HEAD'], {

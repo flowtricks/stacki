@@ -15,13 +15,19 @@ import { createRooms } from '../src/features/collaboration/rooms';
 
 async function fixture(hosting = false) {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-publish-'));
-  for (const directory of ['src/pages', 'public', '.studio-state', '.stacki', 'node_modules']) {
+  for (const directory of [
+    'src/pages',
+    'public',
+    '.stacki/studio/state',
+    '.stacki',
+    'node_modules',
+  ]) {
     await mkdir(path.join(root, directory), { recursive: true });
   }
   await writeFile(path.join(root, 'src/pages/index.astro'), '<h1>Captured</h1>');
   await writeFile(path.join(root, 'public/photo.png'), Buffer.from([0, 1, 128, 255]));
   await writeFile(
-    path.join(root, '.studio-state/github-base.json'),
+    path.join(root, '.stacki/studio/state/github-base.json'),
     JSON.stringify({ sha: 'a'.repeat(40) }),
   );
   if (hosting) {
@@ -152,7 +158,10 @@ test('failed hosting builds never commit and snapshots preserve captured bytes',
   const result = await publisher.publish();
   assert.equal(result.kind, 'failed');
   assert.match(JSON.stringify(result), /Build failed/);
-  assert.match(await readFile(path.join(root, '.studio-state/github-base.json'), 'utf8'), /aaaa/);
+  assert.match(
+    await readFile(path.join(root, '.stacki/studio/state/github-base.json'), 'utf8'),
+    /aaaa/,
+  );
   await assert.rejects(access(snapshotPath));
 });
 
@@ -180,7 +189,7 @@ test('a definite pre-push race captures the refreshed draft, but ambiguous failu
       async () => {
         if (++refreshes === 2) {
           await writeFile(
-            path.join(root, '.studio-state/github-base.json'),
+            path.join(root, '.stacki/studio/state/github-base.json'),
             JSON.stringify(receipt),
           );
         }

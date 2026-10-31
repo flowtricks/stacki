@@ -10,6 +10,14 @@ import { setTimeout } from 'node:timers/promises';
 import { writeStudioConfig } from '../scripts/workspace';
 
 const execute = promisify(execFile);
+const FIXTURE_FOLDERS = [
+  'src/pages',
+  'src/components',
+  'src/styles',
+  'public',
+  '.stacki/studio/state',
+];
+
 export async function startStyleFixture(
   sources: {
     readonly page?: string;
@@ -21,7 +29,7 @@ export async function startStyleFixture(
   const root = await mkdtemp(path.resolve('.studio/style-parity-'));
   const port = await availablePort();
   const astro = path.resolve('node_modules/astro/bin/astro.mjs');
-  for (const folder of ['src/pages', 'src/components', 'src/styles', 'public', '.studio-state']) {
+  for (const folder of FIXTURE_FOLDERS) {
     await mkdir(path.join(root, folder), { recursive: true });
   }
   await symlink(path.resolve('node_modules'), path.join(root, 'node_modules'), 'dir');

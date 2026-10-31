@@ -65,7 +65,8 @@ test('the complete channel inventory matches real main and terminal registration
   // CMS connections add four (list, save, remove, Sanity login) and the connected-CMS
   // panel twelve (collections, documents, one document, write, create, delete, move,
   // references, upload, publish/discard/unpublish, history, restore).
-  assert.equal(harness.handlers.size, 147);
+  // The binding picker samples a page's own import calls (content:sampleValue).
+  assert.equal(harness.handlers.size, 148);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual(
     [...Object.keys(IPC_PAYLOADS)].sort(),

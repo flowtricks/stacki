@@ -3,6 +3,11 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { retainedPath, type StudioRelease } from '../../shared/ipc/studioRelease';
+import {
+  STUDIO_LEGACY_DIRECTORIES,
+  STUDIO_LOCAL_DIRECTORY,
+  STUDIO_UPDATES_DIRECTORY,
+} from '../../shared/properties/studioLocal';
 
 export async function writeRelease(directory: string, release: StudioRelease) {
   for (const file of release.files) {
@@ -69,8 +74,7 @@ async function installReleaseWithMode(
   if (path.basename(directory) !== 'studio') {
     throw new Error('Updates target a project’s studio directory');
   }
-  const metadata = path.join(path.dirname(directory), '.stacki-studio');
-  await mkdir(metadata, { recursive: true });
+  const metadata = await updateStorage(path.dirname(directory));
   if ((await lstat(metadata)).isSymbolicLink()) {
     throw new Error('Update storage must not be a symlink');
   }
@@ -131,4 +135,26 @@ async function activate(directory: string, staging: string, backup: string) {
     await rename(backup, directory);
     throw error;
   }
+}
+
+// The updater's staging, backups and lock, under `.stacki/studio/`, which
+// ignores its own contents. An older site's `.stacki-studio` moves in whole,
+// once, so earlier backups stay where recovery looks for them.
+async function updateStorage(site: string): Promise<string> {
+  const local = path.join(site, STUDIO_LOCAL_DIRECTORY);
+  const metadata = path.join(site, STUDIO_UPDATES_DIRECTORY);
+  const legacyName = STUDIO_LEGACY_DIRECTORIES[STUDIO_UPDATES_DIRECTORY];
+  if (legacyName === undefined || legacyName === '') {
+    throw new Error('The older update folder must be named');
+  }
+  const legacy = path.join(site, legacyName);
+  await mkdir(local, { recursive: true });
+  await writeFile(path.join(local, '.gitignore'), '*\n');
+  const moved = await lstat(metadata).catch(() => undefined);
+  const older = await lstat(legacy).catch(() => undefined);
+  if (!moved && older?.isDirectory()) {
+    await rename(legacy, metadata);
+  }
+  await mkdir(metadata, { recursive: true });
+  return metadata;
 }

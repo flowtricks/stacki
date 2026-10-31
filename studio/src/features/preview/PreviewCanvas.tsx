@@ -29,6 +29,7 @@ import { CollectionEditor } from '../collections/CollectionEditor';
 import type { SharedDocument } from '../collaboration/useDocument';
 import { nodeId, type ParserNode } from '../source/source';
 import type { usePreview } from './usePreview';
+import type { Component } from '../project/projectClient';
 interface Props {
   readonly focusPath?: string | undefined;
   readonly dimensions: ReturnType<typeof usePreviewDimensions>;
@@ -45,19 +46,15 @@ interface Props {
   readonly select: (id: string) => void;
   readonly restoreSelection: () => void;
   readonly nodes: readonly ParserNode[];
+  /** The project's components: text their props show is editable on the canvas. */
+  readonly components: readonly Component[];
   readonly device: PreviewDevice;
   readonly onDevice: (device: PreviewDevice) => void;
   readonly inspector: PreviewInspectorActions | undefined;
   readonly openComponent?: ((name: string, id: string, occurrence: number) => void) | undefined;
 }
 export function PreviewCanvas(props: Props) {
-  useCanvasText({
-    document: studioCanvasText(props.file, props.document, props.nodes),
-    frame: props.preview.frame,
-    url: props.preview.url,
-    post: props.preview.send,
-    subscribeLoad: props.preview.subscribeLoad,
-  });
+  useStudioCanvasText(props);
   const interaction = useCanvasInteraction({
     projectKey: props.projectName,
     url: props.preview.url,
@@ -119,6 +116,21 @@ export function PreviewCanvas(props: Props) {
     </main>
   );
 }
+// Text editing on the canvas, with the text the selected instance's props and
+// slot show marked and editable as on the page itself.
+function useStudioCanvasText(props: Props) {
+  useCanvasText({
+    document: studioCanvasText(props.file, props.document, props.nodes, {
+      components: props.components,
+      selected: props.selected,
+    }),
+    frame: props.preview.frame,
+    url: props.preview.url,
+    post: props.preview.send,
+    subscribeLoad: props.preview.subscribeLoad,
+  });
+}
+
 function PreviewSurface({
   interactive,
   props,
@@ -255,6 +267,7 @@ function CanvasOverlays({
         hoverOcc={props.preview.outlines.hovered?.occurrence}
         focusPath={props.focusPath}
         focusWhole={false}
+        textMarks={props.preview.textMarks}
         overlayInfo={(path) => outlineInfo(props.nodes, path)}
         onOpenComponent={
           props.openComponent

@@ -178,7 +178,7 @@ export class Publisher {
     }
     published(
       await writeFile(
-        path.join(this.root, '.studio-state/github-base.json'),
+        path.join(this.root, '.stacki/studio/state/github-base.json'),
         JSON.stringify({ sha: result.sha }),
       ).then(ok, publishFailure),
     );
@@ -216,7 +216,7 @@ export class Publisher {
     const captured = await this.coordinator.run(async () => {
       await this.persistDraft?.();
       const expectedHead = published(
-        await readFile(path.join(this.root, '.studio-state/github-base.json'), 'utf8')
+        await readFile(path.join(this.root, '.stacki/studio/state/github-base.json'), 'utf8')
           .then((body) => {
             const baseline: unknown = JSON.parse(body);
             const sha = string(record(baseline)['sha'], 40);
@@ -252,7 +252,7 @@ export class Publisher {
       const { source, expectedHead } = await this.coordinator.run(async () => {
         await this.persistDraft?.();
         const expectedHead = published(
-          await readFile(path.join(this.root, '.studio-state/github-base.json'), 'utf8')
+          await readFile(path.join(this.root, '.stacki/studio/state/github-base.json'), 'utf8')
             .then((body) => {
               const baseline: unknown = JSON.parse(body);
               const sha = string(record(baseline)['sha'], 40);

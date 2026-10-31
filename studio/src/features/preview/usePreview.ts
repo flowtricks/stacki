@@ -9,7 +9,11 @@ import {
   setCanvasFrame,
   noteCanvasReady,
 } from '../../../vendor/stacki/src/editor/canvasQuery';
-import { parsePreviewMessage } from '../../../vendor/stacki/src/features/preview/previewMessages';
+import {
+  NO_TEXT_MARKS,
+  parsePreviewMessage,
+  type TextMarks,
+} from '../../../vendor/stacki/src/features/preview/previewMessages';
 import type { GuideMetrics } from '../../../vendor/stacki/src/features/preview/guideModel';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { request, routeFor } from '../project/projectClient';
@@ -25,6 +29,8 @@ export function usePreview(
   const [outlines, setOutlines] = useState(emptyOutlines);
   // What the column guide is drawn from; undefined until the page reports.
   const [guide, setGuide] = useState<GuideMetrics | undefined>(undefined);
+  // Text of the selected instance the pointer is on, or that was clicked (frameTextMarks.ts).
+  const [textMarks, setTextMarks] = useState<TextMarks>(NO_TEXT_MARKS);
   const frame = useRef<HTMLIFrameElement>(null);
   const loadListeners = useRef(new Set<() => void>());
   const subscribeLoad = useCallback((listener: () => void) => {
@@ -41,7 +47,7 @@ export function usePreview(
   const { target, retry } = usePreviewTarget(file, enabled, callbacks);
   const send = (message: unknown) => postToFrame(frame.current, target?.origin, message);
   const source = usePreviewSource(target?.url, send);
-  usePreviewMessages(frame, target, callbacks, { setOutlines, setGuide });
+  usePreviewMessages(frame, target, callbacks, { setOutlines, setGuide, setTextMarks });
   const contextMenu = usePreviewContextMenu(frame, target?.origin, file, onSelect);
 
   return {
@@ -50,6 +56,7 @@ export function usePreview(
     frame,
     outlines,
     guide,
+    textMarks,
     subscribeLoad,
     subscribeOutside,
     reveal: (id: string, occurrence = 0) => {
@@ -107,12 +114,9 @@ function usePreviewMessages(
     onOpen: ((id: string, occurrence: number) => void) | undefined;
     report: (error: unknown) => void;
   }>,
-  setters: {
-    readonly setOutlines: (state: OutlineState) => void;
-    readonly setGuide: (metrics: GuideMetrics) => void;
-  },
+  setters: MeasurementSetters,
 ) {
-  const { setOutlines, setGuide } = setters;
+  const { setOutlines, setGuide, setTextMarks } = setters;
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const patch = (event?: Event) => {
@@ -134,7 +138,7 @@ function usePreviewMessages(
       ) {
         return;
       }
-      receiveMeasurements(event.data, setOutlines, setGuide);
+      receiveMeasurements(event.data, { setOutlines, setGuide, setTextMarks });
       receiveStudioSignals(event.data, patch);
       if (isMessage(event.data, 'avb:query-result')) {
         receiveCanvasReply(event.data);
@@ -166,7 +170,7 @@ function usePreviewMessages(
       window.removeEventListener('studio:source-updated', patch);
       window.removeEventListener('message', receive);
     };
-  }, [target, frame, callbacks, setOutlines, setGuide]);
+  }, [target, frame, callbacks, setOutlines, setGuide, setTextMarks]);
 }
 function requestStructuralPreview(
   event: Event | undefined,
@@ -183,18 +187,22 @@ function requestStructuralPreview(
 }
 // What the page measured: the outlines it draws, and what the column guide is
 // drawn from, read through the shared parser.
-function receiveMeasurements(
-  data: unknown,
-  setOutlines: (state: OutlineState) => void,
-  setGuide: (metrics: GuideMetrics) => void,
-) {
+interface MeasurementSetters {
+  readonly setOutlines: (state: OutlineState) => void;
+  readonly setGuide: (metrics: GuideMetrics) => void;
+  readonly setTextMarks: (marks: TextMarks) => void;
+}
+function receiveMeasurements(data: unknown, setters: MeasurementSetters) {
   const outlines = parseOutlines(data);
   if (outlines) {
-    setOutlines(outlines);
+    setters.setOutlines(outlines);
   }
   const message = parsePreviewMessage(data);
   if (message?.kind === 'guide') {
-    setGuide(message.metrics);
+    setters.setGuide(message.metrics);
+  }
+  if (message?.kind === 'text-marks') {
+    setters.setTextMarks({ hover: message.hover, picked: message.picked });
   }
 }
 function messageOccurrence(data: Record<string, unknown>) {

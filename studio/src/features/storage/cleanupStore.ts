@@ -19,7 +19,7 @@ export const gitBlob = (bytes: Uint8Array) =>
 export function localUploadPath(root: string, file: string) {
   return path.join(
     root,
-    '.studio-state/uploads',
+    '.stacki/studio/state/uploads',
     Buffer.from(assetPath(file)).toString('base64url') + '.bin',
   );
 }
@@ -40,7 +40,7 @@ export class CleanupStore {
       return { location: 'r2', entries: parseEntries((await this.remote('/storage'))['entries']) };
     }
     const entries = [];
-    for (const directory of ['.studio-state', '.studio-state/uploads']) {
+    for (const directory of ['.stacki/studio/state', '.stacki/studio/state/uploads']) {
       for (const name of await namesIn(path.join(this.root, directory))) {
         if (!name.endsWith('.bin')) {
           continue;
@@ -71,7 +71,10 @@ export class CleanupStore {
     try {
       return parseBaseline(
         JSON.parse(
-          await readFile(path.join(this.root, '.studio-state/published-assets.json'), 'utf8'),
+          await readFile(
+            path.join(this.root, '.stacki/studio/state/published-assets.json'),
+            'utf8',
+          ),
         ),
       );
     } catch (error) {
@@ -85,7 +88,7 @@ export class CleanupStore {
     if (this.backend) {
       return;
     }
-    const destination = path.join(this.root, '.studio-state/published-assets.json');
+    const destination = path.join(this.root, '.stacki/studio/state/published-assets.json');
     await mkdir(path.dirname(destination), { recursive: true });
     await writeFile(
       destination + '.tmp',

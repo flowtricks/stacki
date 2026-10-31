@@ -25,7 +25,7 @@ async function preparePackage(root: string): Promise<string> {
   const directory = path.join(root, 'node_modules/@example/kit/components');
   await mkdir(directory, { recursive: true });
   await symlink(path.resolve('node_modules/astro'), path.join(root, 'node_modules/astro'));
-  await mkdir(path.join(root, '.stacki'));
+  await mkdir(path.join(root, '.stacki'), { recursive: true });
   await writeFile(path.join(directory, 'Button.astro'), '<button>Package preview</button>');
   await writeFile(
     path.join(root, '.stacki/component-sources.json'),
@@ -71,7 +71,7 @@ test(
         const root = await mkdtemp(path.join(os.tmpdir(), 'stacki-slashes-'));
         const port = await availablePort();
         await mkdir(path.join(root, 'src/pages'), { recursive: true });
-        await mkdir(path.join(root, '.studio-state'));
+        await mkdir(path.join(root, '.stacki/studio/state'), { recursive: true });
         await writeFile(path.join(root, 'package.json'), '{"type":"module"}');
         await writeFile(path.join(root, 'src/pages/about.astro'), '<h1>About</h1>');
         const componentDirectory = await preparePackage(root);

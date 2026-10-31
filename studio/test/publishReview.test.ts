@@ -14,12 +14,12 @@ import { parsePublishState } from '../src/features/publishing/publishClient';
 test('review outcome preserves draft baseline and excludes deployment side effects', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'studio-review-'));
   try {
-    for (const directory of ['src/pages', '.stacki', '.studio-state']) {
+    for (const directory of ['src/pages', '.stacki', '.stacki/studio/state']) {
       await mkdir(path.join(root, directory), { recursive: true });
     }
     await writeFile(path.join(root, 'src/pages/index.astro'), '<h1>Draft</h1>');
     const baseline = JSON.stringify({ sha: 'a'.repeat(40) });
-    await writeFile(path.join(root, '.studio-state/github-base.json'), baseline);
+    await writeFile(path.join(root, '.stacki/studio/state/github-base.json'), baseline);
     await writeFile(
       path.join(root, '.stacki/publish.json'),
       JSON.stringify({
@@ -58,12 +58,12 @@ test('review outcome preserves draft baseline and excludes deployment side effec
     assert.deepEqual(parsePublishState(result), result);
     assert.equal(submitted, 1);
     assert.equal(
-      await readFile(path.join(root, '.studio-state/github-base.json'), 'utf8'),
+      await readFile(path.join(root, '.stacki/studio/state/github-base.json'), 'utf8'),
       baseline,
     );
     assert.equal((await publisher.publish('hosting')).kind, 'failed');
     assert.equal(submitted, 1);
-    await writeFile(path.join(root, '.studio-state/github-base.json'), '{"sha":"invalid"}');
+    await writeFile(path.join(root, '.stacki/studio/state/github-base.json'), '{"sha":"invalid"}');
     const failed = await publisher.publish('github');
     assert.equal(failed.kind, 'failed');
     assert.equal(submitted, 1);

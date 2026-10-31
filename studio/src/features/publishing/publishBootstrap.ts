@@ -1,4 +1,5 @@
 import { mkdir, rm } from 'node:fs/promises';
+import { isStudioLocalPath } from '../../../vendor/stacki/shared/properties/studioLocal';
 import path from 'node:path';
 import { ok, err, type Result } from '../../../vendor/stacki/shared/core/result';
 import { parsePublishConnection } from '../../shared/publishConnection';
@@ -28,7 +29,7 @@ export async function restorePublishRepository(
   if (!baseline.ok) {
     return baseline;
   }
-  const directory = path.join(root, '.studio-state/bootstrap.git');
+  const directory = path.join(root, '.stacki/studio/state/bootstrap.git');
   const prepared = await mkdir(directory, { recursive: true, mode: 0o700 }).then(
     ok,
     publishFailure,
@@ -71,7 +72,7 @@ async function restorePublishCheckout(
   if (!files.ok) {
     return files;
   }
-  if (files.value.some((file) => file.path.toLowerCase().split('/').includes('.studio-state'))) {
+  if (files.value.some((file) => isStudioLocalPath(file.path.toLowerCase()))) {
     return err({ code: 'path', message: 'Repository cannot contain Studio runtime state.' });
   }
   const bytes = files.value.reduce((total, file) => total + file.size, 0);

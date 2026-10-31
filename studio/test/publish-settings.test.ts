@@ -14,11 +14,11 @@ import { parsePublishState } from '../src/features/publishing/publishClient';
 test('GitHub-only publishes shared settings while skipping hooks and hosting', async (context) => {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-publish-settings-'));
   context.after(() => rm(root, { recursive: true, force: true }));
-  for (const directory of ['src', 'public', '.studio-state', '.stacki', 'node_modules']) {
-    await mkdir(path.join(root, directory));
+  for (const directory of ['src', 'public', '.stacki/studio/state', '.stacki', 'node_modules']) {
+    await mkdir(path.join(root, directory), { recursive: true });
   }
   await writeFile(
-    path.join(root, '.studio-state/github-base.json'),
+    path.join(root, '.stacki/studio/state/github-base.json'),
     JSON.stringify({ sha: 'a'.repeat(40) }),
   );
   const config = {

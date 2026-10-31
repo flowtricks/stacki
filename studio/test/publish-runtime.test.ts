@@ -10,7 +10,7 @@ import { record } from '../src/shared/validation';
 
 test('publishing still captures after Vite closes its configuration module runner', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-publish-runtime-'));
-  for (const directory of ['src/pages', 'public', '.studio-state']) {
+  for (const directory of ['src/pages', 'public', '.stacki/studio/state']) {
     await mkdir(path.join(root, directory), { recursive: true });
   }
   await symlink(path.resolve('node_modules'), path.join(root, 'node_modules'), 'dir');
@@ -23,7 +23,7 @@ test('publishing still captures after Vite closes its configuration module runne
   );
   await writeFile(path.join(root, 'src/pages/index.astro'), '<h1>Publish snapshot</h1>');
   await writeFile(
-    path.join(root, '.studio-state/github-base.json'),
+    path.join(root, '.stacki/studio/state/github-base.json'),
     JSON.stringify({ sha: 'a'.repeat(40) }),
   );
   const entry = path.join(root, 'publish-entry.ts');

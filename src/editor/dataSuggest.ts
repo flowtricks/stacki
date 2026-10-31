@@ -38,6 +38,8 @@ export {
   scopeChips,
   autoQueryName,
   collectionsInScope,
+  type ImportedCall,
+  importedCallsInScope,
 } from './dataScope';
 
 export {
@@ -302,11 +304,19 @@ function buildValueNodes(
   samples: Record<string, unknown>,
   sample: unknown,
   seen: Set<string>,
+  valueSamples: Record<string, unknown> = {},
 ): TreeNode[] {
   const values: TreeNode[] = [];
   for (const [name, value] of decls) {
     if (looksCallable(value)) {
       continue; // getStaticPaths and friends are code, not data
+    }
+    // What a call to an import returned, as the dev server ran it: a CMS
+    // query's real entries, with every field they carry.
+    const returned = valueSamples[name];
+    if (returned !== undefined && returned !== null) {
+      addUnique(values, sampleNode(name, name, returned, 0), seen);
+      continue;
     }
     // A collection read by name gets the real thing: one entry, sampled, with
     // the query's own shape around it — `getCollection` hands back a list.
@@ -348,6 +358,17 @@ function buildValueNodes(
       seen,
     );
   }
+  addImportNodes(values, decls, imports, seen);
+  return values;
+}
+
+// The imports that may hold data, for a value read straight from one.
+function addImportNodes(
+  values: TreeNode[],
+  decls: ReadonlyMap<string, string>,
+  imports: readonly ImportLike[],
+  seen: Set<string>,
+): void {
   for (const imp of imports) {
     if (imp.name === undefined || decls.has(imp.name)) {
       continue;
@@ -361,7 +382,6 @@ function buildValueNodes(
       seen,
     );
   }
-  return values;
 }
 
 // A value that is another value narrowed — `headings.filter(…)` — gets that
@@ -605,7 +625,7 @@ export function dataTree(context: DataContext | undefined): TreeNode[] {
   const derived = withDerivedShapes(
     decls,
     buildPropNodes(destructures, schema, sample, seen),
-    buildValueNodes(decls, destructures, imports, samples, sample, seen),
+    buildValueNodes(decls, destructures, imports, samples, sample, seen, context?.valueSamples),
   );
   const props = derived.props;
   const values = [

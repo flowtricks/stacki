@@ -112,6 +112,12 @@ export interface DataContext {
   readonly collectionSamples?: Record<string, unknown>;
   readonly collections?: readonly { readonly name: string; readonly count?: number }[];
   readonly itemIndex?: Record<string, number>;
+  /**
+   * What a value the file computes by calling an import returned, sampled by
+   * the dev server — `campusPastors` for `await getCampusPastors()`. Keyed by
+   * the value's name.
+   */
+  readonly valueSamples?: Record<string, unknown>;
 }
 
 export interface SchemaField {
@@ -234,6 +240,42 @@ export function autoQueryName(collection: string, taken: ReadonlySet<string> = n
     }
   }
   return `${base}X`;
+}
+
+/** A frontmatter value the file gets by calling one of its imports, with no arguments. */
+export interface ImportedCall {
+  /** The value's name: `campusPastors`. */
+  readonly name: string;
+  /** The imported function: `getCampusPastors`. */
+  readonly exportName: string;
+  /** Where it is imported from, as the file writes it: `@/sanity/queries.ts`. */
+  readonly spec: string;
+}
+
+// `await getCampusPastors()` exactly: one imported name, called with nothing.
+// Anything with arguments depends on values the app cannot supply, so it is
+// left as an unknown value rather than run with the wrong ones.
+const IMPORTED_CALL = /^await\s+([A-Za-z_$][\w$]*)\s*\(\s*\)\s*;?$/;
+
+/**
+ * The values this file computes by calling an import — what the app asks the
+ * dev server to sample, since only it can run the project's code.
+ */
+export function importedCallsInScope(
+  frontmatter: string | undefined,
+  imports: readonly ImportLike[],
+): ImportedCall[] {
+  const calls: ImportedCall[] = [];
+  for (const [name, value] of parseDeclarations(frontmatter ?? '')) {
+    const exportName = IMPORTED_CALL.exec(value.trim())?.[1];
+    const spec = imports.find(
+      (entry) => entry.name !== undefined && entry.name === exportName,
+    )?.path;
+    if (exportName !== undefined && spec !== undefined) {
+      calls.push({ name, exportName, spec });
+    }
+  }
+  return calls;
 }
 
 /** Which collections this file reads by name — what the app fetches a sample entry for. */

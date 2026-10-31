@@ -147,6 +147,16 @@ export function parseSampleEntry(input: unknown): {
   return { entry: data(source['entry']), ...(error === undefined ? {} : { error }) };
 }
 
+export function parseSampleValue(input: unknown): {
+  readonly value: Data;
+  readonly error?: string;
+} {
+  const source = record(input);
+  // The dev server's JSON writes `null` for no error; absence is `undefined` here.
+  const error = optional(nullable(text))(source['error']) ?? undefined;
+  return { value: data(source['value']), ...(error === undefined ? {} : { error }) };
+}
+
 export const parseValidationResult = object({
   issues: list(
     object({

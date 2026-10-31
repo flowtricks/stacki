@@ -165,15 +165,17 @@ export class RepositorySync {
   private async baseline() {
     return string(
       record(
-        JSON.parse(await readFile(path.join(this.root, '.studio-state/github-base.json'), 'utf8')),
+        JSON.parse(
+          await readFile(path.join(this.root, '.stacki/studio/state/github-base.json'), 'utf8'),
+        ),
       )['sha'],
       64,
     );
   }
   private async writeBaseline(sha: string) {
-    await mkdir(path.join(this.root, '.studio-state'), { recursive: true });
+    await mkdir(path.join(this.root, '.stacki/studio/state'), { recursive: true });
     await writeFile(
-      path.join(this.root, '.studio-state/github-base.json'),
+      path.join(this.root, '.stacki/studio/state/github-base.json'),
       JSON.stringify({ sha }),
     );
   }

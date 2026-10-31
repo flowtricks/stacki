@@ -6,6 +6,7 @@ import { assert } from '../../../vendor/stacki/shared/core/assert';
 import { CoalescedRead } from '../../shared/coalescedRead';
 import { assetCatalog } from '../assets/assetCatalog';
 import { scanProject } from './projectServer';
+import { valueSampler } from './valueSampler';
 
 export function projectCatalogs(server: ViteDevServer, root: string) {
   const analysis = new ComponentAnalysis();
@@ -24,6 +25,8 @@ export function projectCatalogs(server: ViteDevServer, root: string) {
   server.watcher.on('all', changed);
   server.httpServer?.once('close', () => server.watcher.off('all', changed));
   return {
+    // What a page's calls to its imports return, for the binding picker.
+    values: valueSampler(server, root),
     project: async () => {
       const cached = await project.read();
       return { ...cached, value: { ...cached.value, workspaceId: await readWorkspaceId(root) } };

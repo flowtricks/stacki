@@ -178,6 +178,13 @@ export const IPC_PAYLOADS = {
   'content:rename': object({ ...named, from: text, to: text }),
   'content:renamePlan': object({ ...named, from: text, to: text }),
   'content:sampleEntry': object({ devUrl: maybeText, name: text, id: maybeText }),
+  'content:sampleValue': object({
+    ...project,
+    devUrl: maybeText,
+    pagePath: pathText,
+    spec: pathText,
+    name: text,
+  }),
   'content:targets': object({ ...named }),
   'content:validate': object({ ...project, collection: text, data }),
   'content:writeEntry': object({

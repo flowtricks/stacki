@@ -207,6 +207,7 @@ function EditorContent({
         dimensions={props.view.dimensions}
         file={props.file}
         projectName={props.project.name}
+        components={props.project.components}
         pageLabel={projectPageLabel(props.project, props.file)}
         editRoute={(route) => editCanvasRoute(props, model, route)}
         inspector={

@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Box } from './outlineBoxes';
 import type { PreviewMessage } from './previewMessages';
+import { NO_TEXT_MARKS, type TextMarks } from './previewMessages';
 import { hoverIsSelection, onePerPlace, outlineBoxPath } from './outlineBoxes';
 import { spacingBands, withLiveSpacing } from './spacingBands';
 import {
@@ -54,6 +55,8 @@ interface PreviewOverlaysProps {
   readonly hoverOcc: number | undefined;
   readonly focusPath: string | undefined;
   readonly focusWhole: boolean;
+  /** Hovered or picked text of the selected instance; absent where the canvas reports none. */
+  readonly textMarks?: TextMarks | undefined;
   readonly overlayInfo?: (path: string) => OverlayInfo | undefined;
   readonly onOpenComponent?: ((path: string, occurrence: number) => void) | undefined;
 }
@@ -66,6 +69,7 @@ export function PreviewOverlays(props: PreviewOverlaysProps) {
       )}
       <SpacingOverlays {...props} />
       <NodeOutlines {...props} />
+      <TextMarkOutlines marks={props.textMarks ?? NO_TEXT_MARKS} scale={props.scale} />
     </>
   );
 }
@@ -127,7 +131,11 @@ function NodeOutlines(props: PreviewOverlaysProps) {
     return boxes.map((box, index) => (
       <div
         key={`${outline.type}-${index}`}
-        className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}`}
+        className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${
+          outline.type === 'sel'
+            ? textMarkState(props.textMarks, { pointedAt: props.hoverPath === outline.path })
+            : ''
+        }`}
         style={boxStyle(box, props.scale)}
       >
         <span className={`node-outline-tag ${box.y * props.scale < 20 ? 'inside' : ''}`}>
@@ -244,6 +252,52 @@ function outlineIcon(info: OverlayInfo): React.ReactNode {
     default:
       return info.tag ? elementIcon(info.tag, size) : <CustomElementIcon size={size} />;
   }
+}
+
+// Text the selected instance shows, hovered or clicked: drawn like an element's
+// hover and selection outlines, named for the component (or tag) rendering it.
+// While one is picked the instance's own outline steps back to a parent's.
+function TextMarkOutlines({ marks, scale }: { readonly marks: TextMarks; readonly scale: number }) {
+  const drawn = [
+    ...(marks.hover && !sameBox(marks.hover, marks.picked)
+      ? [['hover', marks.hover] as const]
+      : []),
+    ...(marks.picked ? [['sel', marks.picked] as const] : []),
+  ];
+  return drawn.map(([type, box]) => (
+    <div
+      key={type}
+      className={`node-outline ${type} component text-mark`}
+      style={boxStyle(box, scale)}
+    >
+      <span className={`node-outline-tag ${box.y * scale < 20 ? 'inside' : ''}`}>
+        {box.kind === 'component' ? <ElementComponentIcon size={11} /> : <TextIcon size={11} />}
+        {box.label}
+      </span>
+    </div>
+  ));
+}
+
+// How the selected instance shows the state of its text. While one is
+// picked it reads as that text's parent, tinted when the pointer is on the
+// instance beside the text rather than on it. Pointing at any other text of
+// it tints it too, as pointing at a component does.
+function textMarkState(
+  marks: TextMarks | undefined,
+  pointer: { readonly pointedAt: boolean },
+): string {
+  const picked = marks?.picked;
+  const hover = marks?.hover;
+  const onOtherText = hover !== undefined && !sameBox(hover, picked);
+  const besideText = picked !== undefined && pointer.pointedAt && hover === undefined;
+  return (picked ? ' parent' : '') + (onOtherText || besideText ? ' tinted' : '');
+}
+
+function sameBox(left: Box, right: Box | undefined): boolean {
+  if (!right) {
+    return false;
+  }
+  return left.x === right.x && left.y === right.y && left.w === right.w && left.h === right.h;
 }
 
 function boxStyle(box: Box, scale: number): React.CSSProperties {

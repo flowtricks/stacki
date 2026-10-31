@@ -2,6 +2,7 @@ import { isDefaultsCanvas } from '../../../vendor/stacki/shared/properties/defau
 import { VariantPreview } from './VariantPreview';
 import { LockedSettings } from './LockedSettings';
 import { slotOptions } from './slotOptions';
+import { useBindContext } from './bindContext';
 import PropsPanel from '../../../vendor/stacki/src/features/props/PropsPanel';
 import { useEditorRole } from '../roles/useEditorRole';
 import { parsePageNode } from '../../../vendor/stacki/shared/page/pageNode';
@@ -33,6 +34,7 @@ export function Settings(props: Props) {
   const { document, node, selected, component, project, nodes } = props;
   const source = document.text.toString();
   const current = settingsNode(selected, node);
+  const bindContext = useBindContext(document.file, source, nodes, selected);
   const change = (edit: (source: string) => string) => {
     try {
       document.replaceSource(edit(document.text.toString()));
@@ -66,6 +68,7 @@ export function Settings(props: Props) {
         slotOptions={slotOptions(project, document.file, source, selected)}
         allowAttrs={node?.kind === 'element'}
         projectClasses={project.classes}
+        bindContext={bindContext}
         projectPath="studio"
         filePath={document.file}
         frontmatterSource={/^---\r?\n([\s\S]*?)\r?\n---/.exec(source)?.[1] ?? ''}

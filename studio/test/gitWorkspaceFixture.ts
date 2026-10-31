@@ -34,11 +34,11 @@ export async function createGitWorkspaceFixture(options: { readonly root?: strin
   await git('add', '.');
   await git('commit', '--quiet', '-m', 'Initial');
   const head = await git('rev-parse', 'HEAD');
-  await mkdir(path.join(root, '.studio-state'), { recursive: true });
+  await mkdir(path.join(root, '.stacki/studio/state'), { recursive: true });
   await mkdir(path.join(root, 'src/pages'), { recursive: true });
   await writeFile(path.join(root, 'src/pages/index.astro'), '<h1>Changed</h1>');
   await writeFile(path.join(root, 'src/pages/about.astro'), '<h1>Draft</h1>');
-  const directory = path.join(root, '.studio-state/workspace.git');
+  const directory = path.join(root, '.stacki/studio/state/workspace.git');
   await git('clone', '--bare', '--quiet', remote, directory);
   const manifest: GitWorkspaceManifest = {
     version: 1,

@@ -47,9 +47,9 @@ test('source comparison follows edits, undo, additions, modes, and explicit dele
   await rm(path.join(fixture.root, 'public/new.txt'));
   const assetTree = new Map([...remote, ['public/old.png', { sha: revision, mode: '100644' }]]);
   assert.equal(await status.differs(assetTree), false, 'Missing files are not implicit deletions');
-  await mkdir(path.join(fixture.root, '.studio-state'));
+  await mkdir(path.join(fixture.root, '.stacki/studio/state'), { recursive: true });
   await writeFile(
-    path.join(fixture.root, '.studio-state/asset-state.json'),
+    path.join(fixture.root, '.stacki/studio/state/asset-state.json'),
     JSON.stringify({
       deleted: ['public/old.png'],
       directories: [],

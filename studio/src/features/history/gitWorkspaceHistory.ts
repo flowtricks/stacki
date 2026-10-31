@@ -11,7 +11,7 @@ export async function gitWorkspaceHistory(root: string, token: string) {
   if (!manifest) {
     return undefined;
   }
-  const parent = path.join(root, '.studio-state');
+  const parent = path.join(root, '.stacki/studio/state');
   await mkdir(parent, { recursive: true });
   const directory = await mkdtemp(path.join(parent, 'history-'));
   const git = { root, directory, authorization: token };
@@ -41,7 +41,7 @@ async function buildHistoryView(git: PublishGit, manifest: GitWorkspaceManifest)
     '--bare',
     '--shared',
     '--quiet',
-    path.join(git.root, '.studio-state/workspace.git'),
+    path.join(git.root, '.stacki/studio/state/workspace.git'),
     git.directory,
   ]);
   const references = (await run(['for-each-ref', '--format=%(refname)']))

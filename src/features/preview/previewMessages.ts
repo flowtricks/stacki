@@ -44,7 +44,30 @@ export type PreviewMessage =
   | { readonly kind: 'render'; readonly render: PreviewRender }
   /** The canvas reloaded instead of patching, and why (step 7). */
   | { readonly kind: 'preview-reload'; readonly reason: PreviewReloadReason }
-  | { readonly kind: 'query-result'; readonly input: unknown };
+  | { readonly kind: 'query-result'; readonly input: unknown }
+  | {
+      readonly kind: 'text-marks';
+      readonly hover: TextMarkBox | undefined;
+      readonly picked: TextMarkBox | undefined;
+    };
+
+/**
+ * Text a page hands to the selected component instance, as the canvas frame
+ * draws it hovered or picked: its element's box and what to call it. It has
+ * no page node of its own to outline, so the frame reports the box itself.
+ */
+export interface TextMarks {
+  readonly hover: TextMarkBox | undefined;
+  readonly picked: TextMarkBox | undefined;
+}
+
+export const NO_TEXT_MARKS: TextMarks = { hover: undefined, picked: undefined };
+
+export interface TextMarkBox extends Box {
+  readonly label: string;
+  /** `component` when the element is a component's own root, `text` otherwise. */
+  readonly kind: 'component' | 'text';
+}
 
 /** Why the canvas patcher reloaded (electron/previewClient/morphClient.ts): past one of its
  * caps, or for the reasons a patch was never possible. */
@@ -184,6 +207,12 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
       return { kind: 'preview-reload', reason: parseReloadReason(value['reason']) };
     case 'avb:query-result':
       return { kind: 'query-result', input: value };
+    case 'avb:text-marks':
+      return {
+        kind: 'text-marks',
+        hover: optional(parseTextMarkBox)(value['hover']),
+        picked: optional(parseTextMarkBox)(value['picked']),
+      };
     default:
       return undefined;
   }
@@ -276,6 +305,15 @@ function parseBox(input: unknown): Box {
     throw new Error('Preview rectangle: expected nonnegative size');
   }
   return { x: finite(value['x']), y: finite(value['y']), w: width, h: height };
+}
+
+function parseTextMarkBox(input: unknown): TextMarkBox {
+  const value = record(input);
+  const kind = value['kind'];
+  if (kind !== 'component' && kind !== 'text') {
+    throw new Error('Text mark: expected component or text');
+  }
+  return { ...parseBox(value), label: pathText(value['label']), kind };
 }
 
 function parseSpacing(input: unknown): Spacing {

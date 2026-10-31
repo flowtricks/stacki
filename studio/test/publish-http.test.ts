@@ -82,12 +82,12 @@ test('publish HTTP returns a job before the commit finishes and duplicate starts
 
 async function publishFixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-publish-http-'));
-  for (const directory of ['src/pages', 'public', '.studio-state', 'node_modules']) {
+  for (const directory of ['src/pages', 'public', '.stacki/studio/state', 'node_modules']) {
     await mkdir(path.join(root, directory), { recursive: true });
   }
   await writeFile(path.join(root, 'src/pages/index.astro'), '<h1>Draft</h1>');
   await writeFile(
-    path.join(root, '.studio-state/github-base.json'),
+    path.join(root, '.stacki/studio/state/github-base.json'),
     JSON.stringify({ sha: 'a'.repeat(40) }),
   );
   return root;

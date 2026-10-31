@@ -28,6 +28,8 @@ export async function copyProject(source: string, workspace: string, packageRoot
       !excluded.has(path.basename(file)) &&
       absolute !== path.join(project, '.stacki', 'preview') &&
       absolute !== path.join(project, '.stacki', 'canvas') &&
+      // Studio's own drafts, history and backups are this machine's, not the site's.
+      absolute !== path.join(project, '.stacki', 'studio') &&
       absolute !== studio &&
       absolute !== destination &&
       !destination.startsWith(absolute + path.sep)

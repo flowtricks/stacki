@@ -3,6 +3,7 @@ import { pathsOf, canvasTextSourceMatches } from './frameRegions';
 import { canvasDragged } from './frameInteraction';
 import { matchCanvasText, canvasTextRect } from './frameTextMatch';
 import { createCanvasTextSession } from './frameTextSession';
+import { installTextMarks } from './frameTextMarks';
 
 export function installCanvasText(
   post: (message: unknown) => void,
@@ -10,11 +11,20 @@ export function installCanvasText(
   select: (target: CanvasTextTarget, element: Element) => void,
 ): void {
   const session = createCanvasTextSession(post);
+  const redrawMarks = installTextMarks({
+    catalog: session.catalog,
+    editing: session.editing,
+    editingElement: session.editingElement,
+    focus: session.focus,
+    visible: selects,
+    post,
+  });
   window.addEventListener('message', (event: MessageEvent<unknown>) => {
     if (event.source !== window.parent) {
       return;
     }
     session.receive(event.data);
+    redrawMarks();
   });
   const click = (event: MouseEvent) => {
     if (session.contains(event)) {
@@ -25,8 +35,10 @@ export function installCanvasText(
       return;
     }
     session.dismiss();
-    // A single click belongs to element selection. Only a double click may
-    // take over focus for typing; clicks inside an open editor still place its caret.
+    redrawMarks();
+    // A single click belongs to element selection, marked prop text included.
+    // Only a double click may take over focus for typing; clicks inside an
+    // open editor still place its caret.
     if (event.type !== 'dblclick') {
       return;
     }
@@ -49,6 +61,7 @@ export function installCanvasText(
     }
     select(hit.target, hit.match.element);
     session.open(hit.target, hit.match, event);
+    redrawMarks();
   };
   window.addEventListener('click', click, true);
   window.addEventListener('dblclick', click, true);
@@ -82,6 +95,9 @@ function findTextHit(catalog: CanvasTextCatalog, event: MouseEvent) {
   let nearest: { readonly hit: TextHit; readonly distance: number } | undefined;
   for (const target of catalog.targets) {
     if (!ancestors.has(target.parent)) {
+      continue;
+    }
+    if (target.scope !== undefined && !ancestors.has(target.scope)) {
       continue;
     }
     const match = matchCanvasText(target, event.target);

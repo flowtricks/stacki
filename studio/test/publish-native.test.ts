@@ -155,7 +155,7 @@ test('startup restores Git bytes without an archive buffer and rejects invalid r
   const state = await fixture();
   context.after(() => rm(state.root, { recursive: true, force: true }));
   const root = path.join(state.root, 'restored');
-  const directory = path.join(root, '.studio-state/bootstrap.git');
+  const directory = path.join(root, '.stacki/studio/state/bootstrap.git');
   await mkdir(directory, { recursive: true });
   run(root, ['init', '--bare', directory]);
   run(root, [
@@ -198,9 +198,9 @@ test('asset deletions share the same atomic commit as captured source', async (c
   run(state.site, ['push', state.remote, 'main']);
   const head = run(state.site, ['rev-parse', 'HEAD']);
   await rm(path.join(state.site, 'public/old.png'));
-  await mkdir(path.join(state.site, '.studio-state'));
+  await mkdir(path.join(state.site, '.stacki/studio/state'), { recursive: true });
   await writeFile(
-    path.join(state.site, '.studio-state/asset-state.json'),
+    path.join(state.site, '.stacki/studio/state/asset-state.json'),
     JSON.stringify({
       deleted: ['public/old.png'],
       directories: [],

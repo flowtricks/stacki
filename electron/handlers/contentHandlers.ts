@@ -1,13 +1,19 @@
 // The content collections' IPC: the project's content config, its entries,
-// validation, renames across references, and a sample entry for the canvas.
+// validation, renames across references, and sample data for the canvas.
+import path from 'node:path';
 
 import { definedFields } from '../../shared/core/boundary';
-import { parseValidationResult, parseContentConfig, parseSampleEntry } from '../app/mainValidation';
+import {
+  parseValidationResult,
+  parseContentConfig,
+  parseSampleEntry,
+  parseSampleValue,
+} from '../app/mainValidation';
 import { resolveImport } from '../content/cmsRefs';
 import { readContentConfig, validateEntry } from '../content/contentConfig';
 import { listEntries, writeEntry, countEntries, coveredPaths } from '../content/contentEntries';
 import { planRename, applyRename } from '../content/contentRefs';
-import { errorMessage } from '../lib/mainHelpers';
+import { errorMessage, toPosix } from '../lib/mainHelpers';
 import { collectionOf } from './cmsFiles';
 import type { MainHost } from './mainHost';
 
@@ -144,6 +150,31 @@ function registerContentRenameHandlers({
       return { entry: undefined, error: errorMessage(error) };
     }
   });
+
+  // What a page's own data call returns — `await getCampusPastors()` — sampled
+  // by the dev server, which runs it as the page's render does. The import is
+  // resolved here, so only a project module under src is ever asked for.
+  ipcMain.handle(
+    'content:sampleValue',
+    async (_event, { projectPath, devUrl, pagePath, spec, name }) => {
+      const target = devUrl ? resolveImport(projectPath, pagePath, spec) : undefined;
+      const rel = target ? toPosix(path.relative(projectPath, target)) : '';
+      if (!devUrl || !rel.startsWith('src/')) {
+        return { value: undefined };
+      }
+      try {
+        const query = `m=${encodeURIComponent('/' + rel)}&f=${encodeURIComponent(name)}`;
+        const response = await fetch(`${devUrl}/__avb/value?${query}`);
+        if (!response.ok) {
+          return { value: undefined, error: `Dev server returned ${response.status}` };
+        }
+        const input: unknown = await response.json();
+        return parseSampleValue(input);
+      } catch (error: unknown) {
+        return { value: undefined, error: errorMessage(error) };
+      }
+    },
+  );
 
   // Where an import in a page actually points. The tag name is only a local
   // binding — `import Layout from '@/layouts/BaseLayout.astro'` renders as

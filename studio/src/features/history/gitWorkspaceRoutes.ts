@@ -171,11 +171,11 @@ async function applyGitWorkspaceChange(
     const saved = await checkpointGitWorkspace(state.git, state.manifest, manifest);
     persisted = true;
     await staged.apply();
-    await rm(path.join(root, '.studio-state/asset-state.json'), { force: true });
+    await rm(path.join(root, '.stacki/studio/state/asset-state.json'), { force: true });
     await saveAssetState(root, emptyAssetState);
     const remote = saved.remote.find((entry) => entry.name === saved.branch);
     await writeFile(
-      path.join(root, '.studio-state/github-base.json'),
+      path.join(root, '.stacki/studio/state/github-base.json'),
       JSON.stringify({ sha: remote?.head ?? gitWorkspaceBranch(saved).head }),
     );
     await rooms.resetWorkspace();

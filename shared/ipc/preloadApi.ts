@@ -83,6 +83,7 @@ interface InvokeChannels {
   readonly dynamicPaths: 'page:dynamicPaths';
   readonly injectedRoutes: 'project:injectedRoutes';
   readonly sampleEntry: 'content:sampleEntry';
+  readonly sampleValue: 'content:sampleValue';
   readonly startDevServer: 'dev:start';
   readonly stopDevServer: 'dev:stop';
   readonly diagnoseDev: 'dev:diagnose';

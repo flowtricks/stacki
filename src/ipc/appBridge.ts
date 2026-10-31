@@ -245,6 +245,21 @@ export function readSampleEntry(devUrl: string, name: string, id?: string): Prom
   });
 }
 
+// What a page's call to one of its imports returns, as the dev server ran it.
+export function readSampleValue(request: {
+  readonly projectPath: string;
+  readonly devUrl: string;
+  readonly pagePath: string;
+  readonly spec: string;
+  readonly name: string;
+}): Promise<Data> {
+  const payload = parseIpcPayload('content:sampleValue', request);
+  return window.avb.sampleValue(payload).then((input) => {
+    const value = record(input)['value'];
+    return value === null ? undefined : data(value);
+  });
+}
+
 export function createProjectPage(
   projectPath: string,
   name: string,

@@ -660,7 +660,8 @@ own `/studio` URL. A private loopback server isolates Studio's module graph from
 desktop canvas instrumentation; the entry embeds that editor while preserving the
 website's address. Both servers use the original project source, so local Studio saves
 edit website files directly. Local editing needs no Cloudflare configuration. Session
-state lives in a self-ignored `.studio-state` directory, not a copied draft workspace.
+state lives in `.stacki/studio/state`, inside the self-ignored `.stacki/studio/`, not a copied
+draft workspace; an older `.studio-state` moves there on start.
 The website preview owns the child process and closes it on shutdown. Missing Studio
 is checked again when `/studio` opens so a new installation works without a restart.
 Startup and health probes are bounded; failures leave the website preview available.

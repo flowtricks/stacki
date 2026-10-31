@@ -80,7 +80,7 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
     writeFileSync: { count: 2, reason: '.stacki/cms.json metadata' },
   },
   'electron/handlers/devServers.ts': {
-    writeFileSync: { count: 4, reason: 'the generated preview harness in node_modules/.avb' },
+    writeFileSync: { count: 5, reason: 'the generated preview harness in node_modules/.avb' },
   },
   'electron/project/pageRenameWrite.ts': {
     renameSync: { count: 1, reason: 'a page or folder move; text changes use the host writer' },
@@ -99,8 +99,8 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   },
   'electron/previewServer/studioLocal.ts': {
     writeFileSync: {
-      count: 2,
-      reason: 'generated Studio dev config in node_modules and session metadata ignore rules',
+      count: 1,
+      reason: 'generated Studio dev config in node_modules',
     },
   },
   'electron/project/publishReceipt.ts': {
@@ -123,10 +123,14 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   },
   // Studio releases are new tool source staged outside website documents;
   // the second write ignores transaction metadata in Git. No website text is edited.
+  'electron/previewServer/studioLocalMove.ts': {
+    writeFileSync: { count: 1, reason: 'the ignore rule of Studio storage in .stacki/studio' },
+    renameSync: { count: 1, reason: "moving an older Studio's state folders into .stacki/studio" },
+  },
   'electron/project/studioInstall.ts': {
     writeFile: {
-      count: 2,
-      reason: 'staged Studio release files and transaction metadata ignore rules',
+      count: 3,
+      reason: 'staged Studio release files and the ignore rules of .stacki/studio and its updates',
     },
   },
   'electron/project/imageConversion.ts': {

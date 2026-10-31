@@ -186,6 +186,7 @@ function pageBridge() {
     dynamicPaths: invoke('page:dynamicPaths'),
     injectedRoutes: invoke('project:injectedRoutes'),
     sampleEntry: invoke('content:sampleEntry'),
+    sampleValue: invoke('content:sampleValue'),
 
     // Dev server:
     startDevServer: invoke('dev:start'),

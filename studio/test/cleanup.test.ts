@@ -13,17 +13,17 @@ import { SerialQueue } from '../src/shared/serialQueue';
 
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-cleanup-'));
-  for (const directory of ['src/pages', 'public', '.studio-state']) {
+  for (const directory of ['src/pages', 'public', '.stacki/studio/state']) {
     await mkdir(path.join(root, directory), { recursive: true });
   }
   await writeFile(path.join(root, 'src/pages/index.astro'), '<h1>Draft</h1>');
   await writeFile(
-    path.join(root, '.studio-state/github-base.json'),
+    path.join(root, '.stacki/studio/state/github-base.json'),
     JSON.stringify({ sha: 'a'.repeat(40) }),
   );
   const draft = path.join(
     root,
-    '.studio-state',
+    '.stacki/studio/state',
     Buffer.from('src/pages/index.astro').toString('base64url') + '.bin',
   );
   await writeFile(draft, 'CRDT identity must remain');

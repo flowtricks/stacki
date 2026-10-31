@@ -8,6 +8,8 @@ import { insertTargetFor as placeInsert } from '../../editor/insertTarget';
 import { frontmatterGesture, insertGesture } from '../../editor/editGestures';
 import {
   collectionsInScope,
+  type ImportedCall,
+  importedCallsInScope,
   markedQueries,
   QUERY_MARK,
   referencesInScope,
@@ -22,6 +24,7 @@ import {
   readDynamicPaths,
   readInjectedRoutes,
   readSampleEntry,
+  readSampleValue,
   runNativeEdit,
 } from '../../ipc/appBridge';
 import { newId, routeToPath } from '../model/nodeFactory';
@@ -613,6 +616,47 @@ export function useSampleEntries(
     currentPage,
     setCollectionSamples,
   ]);
+}
+
+// What the open file's calls to its imports return — a CMS query's entries —
+// sampled once per value, by the dev server, for the binding picker.
+export function useSampleValues(
+  coreState: ReturnType<typeof useCoreState>,
+  routes: ReturnType<typeof useRoutes>,
+) {
+  const { currentPage, devStatus, devUrl, project, setValueSamples, valueSamples } = coreState;
+  const { model, pageFrontmatter } = routes;
+  const pagePath = currentPage?.path;
+  useEffect(() => {
+    if (!devUrl || devStatus !== 'on' || !project || !pagePath) {
+      return undefined;
+    }
+    const wanted = importedCallsInScope(pageFrontmatter, model?.imports ?? []).filter(
+      (call) => !(`${pagePath}|${call.name}` in valueSamples),
+    );
+    if (!wanted.length) {
+      return undefined;
+    }
+    let live = true;
+    const ask = (call: ImportedCall) =>
+      readSampleValue({
+        projectPath: project.path,
+        devUrl,
+        pagePath,
+        spec: call.spec,
+        name: call.exportName,
+      })
+        .catch(() => undefined)
+        .then((value) => [`${pagePath}|${call.name}`, value] as const);
+    void Promise.all(wanted.map(ask)).then((pairs) => {
+      if (live) {
+        setValueSamples((previous) => ({ ...previous, ...Object.fromEntries(pairs) }));
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [devUrl, devStatus, project, pagePath, pageFrontmatter, model, valueSamples, setValueSamples]);
 }
 
 // Taking back queries the page stopped using.

@@ -4,7 +4,10 @@ import {
   type CanvasTextCatalog,
   type CanvasTextTarget,
 } from '../../shared/properties/canvasText';
-import { parseCanvasTextClose } from '../../shared/properties/canvasTextOverlay';
+import {
+  parseCanvasTextClose,
+  parseCanvasTextFocus,
+} from '../../shared/properties/canvasTextOverlay';
 import { canvasTextSourceMatches } from './frameRegions';
 import { matchCanvasText, type TextMatch } from './frameTextMatch';
 import { openNativeText } from './frameTextNative';
@@ -18,23 +21,29 @@ interface ActiveText {
 export function createCanvasTextSession(post: (message: unknown) => void) {
   let catalog: CanvasTextCatalog | undefined;
   let active: ActiveText | undefined;
+  // What is being typed in, and where: its words may no longer match the catalog's.
+  let typing: { readonly key: string; readonly element: Element } | undefined;
+  let focus: ReadonlySet<string> = new Set();
   const finish = (action: 'apply' | 'cancel') => active?.editor.finish(action);
   return {
     catalog: () => catalog,
+    focus: () => focus, // The selected node's page path.
+    editing: () => (active ? typing?.key : undefined),
+    editingElement: () => (active ? typing?.element : undefined),
     contains: (event: MouseEvent) => active?.editor.contains(event) ?? false,
     dismiss: () => finish('apply'),
     reconcile: () => {
-      if (
-        active &&
-        (!active.editor.intact() ||
-          !canvasTextSourceMatches(active.catalog.file, active.catalog.checksum))
-      ) {
+      if (active && stale(active)) {
         finish('cancel');
       }
     },
     receive: (input: unknown) => {
       const request = readCanvasTextRequest(input);
       if (!request) {
+        return;
+      }
+      if (request.kind === 'focus') {
+        focus = new Set(request.value.paths);
         return;
       }
       if (request.kind === 'close') {
@@ -72,6 +81,7 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       );
       if (editor) {
         active = { catalog: current, editor };
+        typing = { key: target.key, element: match.element };
         post({ type: 'avb:text-active', session: current.session, key: target.key });
       } else {
         stopSelection();
@@ -79,6 +89,14 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       }
     },
   };
+}
+
+// An open editor whose text the page replaced, or whose source moved on.
+function stale(active: ActiveText): boolean {
+  if (!active.editor.intact()) {
+    return true;
+  }
+  return !canvasTextSourceMatches(active.catalog.file, active.catalog.checksum);
 }
 
 // The selected words, as offsets into the editor's text and a box, whenever
@@ -148,6 +166,10 @@ function commitCanvasText(
 
 function readCanvasTextRequest(input: unknown) {
   try {
+    const focus = parseCanvasTextFocus(input);
+    if (focus) {
+      return { kind: 'focus', value: focus } as const;
+    }
     const close = parseCanvasTextClose(input);
     if (close) {
       return { kind: 'close', value: close } as const;

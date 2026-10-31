@@ -45,7 +45,7 @@ export function pageRenameInventory(root: string): PageRenameInventory {
     }
     for (const entry of entries) {
       const file = directory ? directory + '/' + entry.name : entry.name;
-      if (ignored.has(entry.name) || /^\.stacki\/(preview|canvas|io)(\/|$)/.test(file)) {
+      if (ignored.has(entry.name) || /^\.stacki\/(preview|canvas|io|studio)(\/|$)/.test(file)) {
         continue;
       }
       if (entry.isSymbolicLink()) {

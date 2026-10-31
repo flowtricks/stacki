@@ -33,7 +33,7 @@ if (!bootstrap.ok) {
 const connection: unknown = JSON.parse(await boundedText(bootstrap, 16_384));
 const baseline = published(await restorePublishRepository(root, connection));
 await writeFile(
-  path.join(root, '.studio-state/github-base.json'),
+  path.join(root, '.stacki/studio/state/github-base.json'),
   JSON.stringify({ sha: baseline }),
 );
 await restoreGitWorkspace(root, connection, baseline);

@@ -17,11 +17,11 @@ import { ok } from '../vendor/stacki/shared/core/result';
 
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-assets-'));
-  for (const directory of ['src/assets', 'public', '.studio-state', 'node_modules']) {
+  for (const directory of ['src/assets', 'public', '.stacki/studio/state', 'node_modules']) {
     await mkdir(path.join(root, directory), { recursive: true });
   }
   await writeFile(
-    path.join(root, '.studio-state/github-base.json'),
+    path.join(root, '.stacki/studio/state/github-base.json'),
     JSON.stringify({ sha: 'a'.repeat(40) }),
   );
   return root;

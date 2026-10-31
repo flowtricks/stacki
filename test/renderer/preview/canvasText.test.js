@@ -12,7 +12,7 @@ const { canvasTextPlans, applyCanvasText } = loadRenderer(
 const { canvasContentBinding } = loadRenderer('src/features/preview/canvasContentBinding.ts');
 const { canvasDraftInline } = loadRenderer('src/features/props/canvasDraftInline.ts');
 const { nodesToHtml, domToNodes } = loadRenderer('src/features/props/richContentModel.ts');
-const { canvasTextDraft, clearCanvasTextDraft, canvasDraftValue } = loadRenderer(
+const { canvasTextDraft, clearCanvasTextDraft, canvasDraftValue, canvasTypedText } = loadRenderer(
   'src/ui/canvasTextDraft.ts',
 );
 const { parseCanvasTextOverlay, parseCanvasTextClose } = loadRenderer(
@@ -172,6 +172,7 @@ test('live Content projection preserves nested spans, bindings and its source wi
     .children;
   const original = nodesToHtml(nodes);
   const draft = {
+    kind: 'text',
     session: 'one',
     projectPath: '/project',
     file: 'src/pages/index.astro',
@@ -294,6 +295,28 @@ test('component slot fallback crosses internal wrappers but preserves caller spa
   );
 });
 
+test('slot text passed through a wrapper matches inside the innermost instance element', () => {
+  // A slider instance (0) tags its section and the section's container; its slot
+  // text sits in a heading beside card text the component renders itself.
+  const html =
+    '<section data-avb-p="0 Section.astro|0"><div data-avb-p="0 Section.astro|0.0">' +
+    '<h2 data-avb-p="Slider.astro|0.0">Hello</h2>' +
+    '<p data-avb-p="Slider.astro|0.1">Card</p></div></section>';
+  matching(html, '<Slider>Hello</Slider>', (match, targets) => {
+    const result = match(targets[0].target, document.querySelector('h2'));
+    assert.equal(result.nodes[0].data, 'Hello');
+    assert.equal(result.element, document.querySelector('h2'), 'the words own the box');
+    assert.equal(match(targets[0].target, document.querySelector('p')), undefined, 'not the card');
+  });
+  matching(html.replace('Card', 'Hello'), '<Slider>Hello</Slider>', (match, targets) => {
+    assert.equal(
+      match(targets[0].target, document.querySelector('section')),
+      undefined,
+      'the same words twice, clicked from outside both, stay ambiguous',
+    );
+  });
+});
+
 test('native text operations preserve spans and refuse external mutations', () => {
   const source = '<h1>Hello <span>world</span> again</h1>';
   matching(source, source, (matchText, targets) => {
@@ -345,4 +368,35 @@ test('native composition cannot introduce elements or remove authored children',
     assert.equal(root.textContent, 'Text');
     assert.equal(buffer.restore(), true);
   });
+});
+
+test('typed text drops the template whitespace around a component slot', () => {
+  // A Heading renders its slot inside indented template markup, so the one text
+  // node the editor holds starts and ends with line breaks the source never had.
+  const rendered = '\n        \n        Find hope. Live with purpose\n        \n      ';
+  assert.equal(
+    canvasTypedText('Find hope. Live with purpose!', rendered),
+    'Find hope. Live with purpose',
+  );
+  assert.equal(
+    canvasTypedText(' Spaced ', '\n  Spaced out \n'),
+    ' Spaced out ',
+    'source edges kept',
+  );
+  assert.equal(canvasTypedText('Words', '\n   \n'), '', 'deleting every word leaves nothing');
+  assert.equal(
+    canvasTypedText('Words', '\u00a0Words'),
+    '\u00a0Words',
+    'U+00A0 is a word character',
+  );
+  const draft = {
+    kind: 'text',
+    session: 's',
+    projectPath: '/p',
+    file: 'src/pages/index.astro',
+    nodeID: 'n1',
+    sourceValue: 'Find hope!',
+    value: '\n      Find hope\n    ',
+  };
+  assert.equal(canvasDraftValue({ id: 'n1', value: 'Find hope!' }, draft), 'Find hope');
 });

@@ -46,6 +46,10 @@ function ancestorsOf(path: string | undefined): string[] {
   return out;
 }
 
+// How far a nested field steps in: enough to read as inside its parent, with
+// its name starting just past the parent's chevron rather than far beyond it.
+const DEPTH_INDENT_PX = 8;
+
 function flatten(nodes: readonly PickerNode[]): PickerNode[] {
   const pending = nodes.map((node) => ({ node, depth: 0 })).reverse();
   const out: PickerNode[] = [];
@@ -140,6 +144,7 @@ export interface PickerNode {
   readonly lazy?: boolean;
   readonly pickable?: boolean;
   readonly missing?: boolean;
+  readonly image?: string;
 }
 export interface DataPickerProps {
   readonly tree?: readonly PickerNode[] | undefined;
@@ -393,7 +398,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
         className={`dp-row ${isCurrent ? 'selected' : ''} ${
           node.pickable === false ? 'path-only' : ''
         } ${node.missing ? 'missing' : ''}`}
-        style={{ paddingLeft: 6 + depth * 13 }}
+        style={{ paddingLeft: 6 + depth * DEPTH_INDENT_PX }}
         title={`${node.path}${node.kind ? ` — ${node.kind}` : ''}`}
         onMouseDown={(event) => event.preventDefault()}
         // The root carries what has to happen before this path means
@@ -427,7 +432,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
         {node.nav && onStepItem ? (
           <ItemNavigation path={node.path} nav={node.nav} onStepItem={onStepItem} />
         ) : undefined}
-        <span className={`dp-val ${node.preview ? '' : 'kind'}`}>{node.preview || node.kind}</span>
+        <PreviewValue preview={node.preview} kind={node.kind} image={node.image} />
       </div>
       {isOpen &&
         (node.children?.length ? (
@@ -444,7 +449,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
             />
           ))
         ) : node.lazy ? (
-          <div className="dp-loading" style={{ paddingLeft: 19 + depth * 13 }}>
+          <div className="dp-loading" style={{ paddingLeft: 19 + depth * DEPTH_INDENT_PX }}>
             Reading one entry…
           </div>
         ) : undefined)}
@@ -551,4 +556,46 @@ function EntryNavigation({ entries }: { readonly entries: Entries }) {
       </button>
     </div>
   );
+}
+
+// What a field holds, as a person reads it: words without the quotes a sample
+// writes around them, a link without its scheme, and an image as the image.
+function PreviewValue(props: {
+  readonly preview: string;
+  readonly kind: string;
+  readonly image: string | undefined;
+}) {
+  if (props.image) {
+    return (
+      <span className="dp-val" title={props.image}>
+        <img className="dp-thumb" src={props.image} alt="" loading="lazy" />
+      </span>
+    );
+  }
+  if (!props.preview) {
+    return <span className="dp-val kind">{props.kind}</span>;
+  }
+  const words = unquoted(props.preview);
+  return words === undefined ? (
+    <span className="dp-val">{props.preview}</span>
+  ) : (
+    <span className="dp-val text" title={words}>
+      {words.replace(/^https?:\/\//, '')}
+    </span>
+  );
+}
+
+// The words of a quoted string preview, or undefined for any other value. A
+// long one is clipped with an ellipsis where its closing quote was.
+function unquoted(preview: string): string | undefined {
+  if (!preview.startsWith('"')) {
+    return undefined;
+  }
+  if (preview.endsWith('…')) {
+    return preview.slice(1);
+  }
+  if (preview.length < 2 || !preview.endsWith('"')) {
+    return undefined;
+  }
+  return preview.slice(1, -1);
 }

@@ -69,6 +69,8 @@ export interface PreviewCommitInfo {
 export type DynamicEntry = IpcResults['page:dynamicPaths']['entries'][number];
 export type CollectionSample = Data;
 export type CollectionSamples = Readonly<Record<string, CollectionSample>>;
+/** What a file's import calls returned, keyed `<file>|<value name>`; absent: never asked. */
+export type ValueSamples = Readonly<Record<string, Data>>;
 export type ItemIndexes = Readonly<Record<string, number>>;
 export type GitInfo = IpcResults['git:info'];
 export type RepositoryInfo = WireGitInfo;

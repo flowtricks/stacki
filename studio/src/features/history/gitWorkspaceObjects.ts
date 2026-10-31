@@ -18,7 +18,7 @@ export function gitWorkspaceRun(git: PublishGit): GitWorkspaceRun {
 export function gitWorkspaceContext(root: string, connection: PublishConnection): PublishGit {
   return {
     root,
-    directory: path.join(root, '.studio-state/workspace.git'),
+    directory: path.join(root, '.stacki/studio/state/workspace.git'),
     authorization: connection.token,
   };
 }
@@ -57,7 +57,7 @@ export async function initializeGitWorkspace(
       await downloadGitBundle(manifest.bundle, bundle);
     } else {
       await copyVerifiedGitBundle(
-        path.join(git.root, '.studio-state/' + manifest.bundle + '.bundle'),
+        path.join(git.root, '.stacki/studio/state/' + manifest.bundle + '.bundle'),
         bundle,
         manifest.bundle,
       );
@@ -152,7 +152,7 @@ export async function gitWorkspaceCommit(
   );
 }
 export async function readGitWorkspaceBaseline(root: string): Promise<string> {
-  const handle = await open(path.join(root, '.studio-state/github-base.json'), 'r');
+  const handle = await open(path.join(root, '.stacki/studio/state/github-base.json'), 'r');
   try {
     if ((await handle.stat()).size > 1024) {
       throw new Error('Git workspace baseline exceeds its limit.');

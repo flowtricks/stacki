@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { isStudioLocalPath } from '../../../vendor/stacki/shared/properties/studioLocal';
 import { opendir, lstat, statfs } from 'node:fs/promises';
 import path from 'node:path';
 import { ok, err, type Result } from '../../../vendor/stacki/shared/core/result';
@@ -107,9 +108,8 @@ function excluded(file: string): boolean {
   return (
     file
       .split('/')
-      .some((part) =>
-        ['.git', '.studio-state', 'node_modules', '.astro', 'dist', '.studio'].includes(part),
-      ) ||
+      .some((part) => ['.git', 'node_modules', '.astro', 'dist', '.studio'].includes(part)) ||
+    isStudioLocalPath(file) ||
     ['.stacki/preview', '.stacki/canvas'].includes(file) ||
     /^astro\.studio\.config\.[cm]?[jt]s$/.test(file)
   );

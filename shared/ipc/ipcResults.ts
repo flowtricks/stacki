@@ -272,6 +272,10 @@ export interface IpcResults {
     readonly entry: Data;
     readonly error?: undefined | string;
   };
+  readonly 'content:sampleValue': {
+    readonly value: Data;
+    readonly error?: undefined | string;
+  };
   readonly 'content:targets': {
     readonly targets: ReadonlyArray<{
       readonly id: string;

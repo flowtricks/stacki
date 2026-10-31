@@ -45,6 +45,7 @@ import {
   useRoutes,
   useCollections,
   useSampleEntries,
+  useSampleValues,
   useQueryCleanup,
 } from './appShortcuts';
 
@@ -64,6 +65,7 @@ export function useShortcuts(
   const routes = useRoutes(coreState);
   useCollections(coreState);
   useSampleEntries(coreState, routes);
+  useSampleValues(coreState, routes);
   useQueryCleanup(routes, history);
   return { ...insertItemScope, ...interactivePreview, ...routes };
 }

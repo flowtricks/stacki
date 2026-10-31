@@ -93,7 +93,7 @@ for (const failure of ['source', 'durable'] as const) {
         ? path.join(state.root, file + '.studio-tmp')
         : path.join(
             state.root,
-            '.studio-state',
+            '.stacki/studio/state',
             Buffer.from(file).toString('base64url') + '.bin.tmp',
           );
     try {

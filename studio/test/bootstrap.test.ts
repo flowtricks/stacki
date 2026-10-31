@@ -52,7 +52,7 @@ async function redirectRemote(git: PublishGit, remote: string) {
 async function restore(state: Awaited<ReturnType<typeof fixture>>) {
   const git = {
     root: state.workspace,
-    directory: path.join(state.workspace, '.studio-state/bootstrap.git'),
+    directory: path.join(state.workspace, '.stacki/studio/state/bootstrap.git'),
   };
   await mkdir(git.directory, { recursive: true });
   await redirectRemote(git, state.git.directory);
@@ -79,7 +79,7 @@ test('startup omits links while publishing preserves them', async (context) => {
       assert.equal(await readFile(file, 'utf8'), entry.content);
     }
   }
-  await assert.rejects(lstat(path.join(state.workspace, '.studio-state/bootstrap.git')), {
+  await assert.rejects(lstat(path.join(state.workspace, '.stacki/studio/state/bootstrap.git')), {
     code: 'ENOENT',
   });
   await writeFile(path.join(state.workspace, 'src/index.astro'), '<h1>Published edit</h1>');
@@ -109,7 +109,7 @@ test('link-only repositories never trigger a full index checkout', async (contex
 });
 
 test('startup rejects runtime state and submodules before writing', async (context) => {
-  for (const invalid of ['.studio-state/secrets', 'submodule']) {
+  for (const invalid of ['.stacki/studio/state/secrets', 'submodule']) {
     const state = await fixture([
       { path: 'src/index.astro', mode: '100644', content: 'must not be written' },
       { path: invalid, mode: '100644', content: 'invalid' },

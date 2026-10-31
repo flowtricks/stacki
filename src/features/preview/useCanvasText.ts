@@ -1,5 +1,5 @@
 import { cmsTransport } from '../../ipc/editorEnvironment';
-import type { CanvasTextEdit } from './canvasTextSource';
+import type { CanvasEditFormat, CanvasTextEdit } from './canvasTextSource';
 import { useEffect, useRef, type RefObject } from 'react';
 import {
   canvasTextUnfolded,
@@ -14,6 +14,8 @@ import {
 } from './canvasTextSource';
 import { createCanvasTextOverlay } from './canvasTextOverlay';
 import {
+  CANVAS_FOCUS_PATHS_MAX,
+  canvasTextFocus,
   parseCanvasTextOverlay,
   parseCanvasTextSelection,
   type CanvasTextSelection,
@@ -25,7 +27,12 @@ import {
   type CanvasFormatAction,
   type CanvasFormatState,
 } from './canvasTextSelection';
-import { canvasTextDraft, clearCanvasTextDraft } from '../../ui/canvasTextDraft';
+import {
+  canvasTextDraft,
+  clearCanvasTextDraft,
+  canvasTypedText,
+  type CanvasTextDraft,
+} from '../../ui/canvasTextDraft';
 
 export interface CanvasTextDocument {
   readonly projectPath: string;
@@ -36,6 +43,14 @@ export interface CanvasTextDocument {
   readonly apply: (source: string, position: number) => Promise<void>;
   readonly report: (message: string) => void;
   readonly loadContent: (document: CanvasTextDocument) => Promise<readonly CanvasTextEdit[]>;
+  /**
+   * What the content edits are read from besides the page — the project's
+   * components, for the text their props show. A new value rebuilds the
+   * catalog, so editing a component's template never leaves its text stale.
+   */
+  readonly components?: unknown;
+  /** The selected node's page path. Absent: no component text is marked. */
+  readonly focus?: readonly string[] | undefined;
   /** The Content field's formatting, for words selected on the canvas. Absent: no bar. */
   readonly format?: CanvasTextFormatter | undefined;
 }
@@ -63,7 +78,20 @@ export function useCanvasText(options: Options): void {
   const document = options.document;
   const file = document?.file;
   const source = document?.source;
-  useEffect(() => startCanvasText(current), [file, source]);
+  const components = document?.components;
+  useEffect(() => startCanvasText(current), [file, source, components]);
+  const focus = (document?.focus ?? []).join('\n');
+  useEffect(() => startCanvasFocus(current, focus), [focus]);
+}
+
+// The frame learns the selection separately from the catalog: selecting is
+// frequent, and rebuilding the catalog would reread every component.
+function startCanvasFocus(current: RefObject<Options>, focus: string) {
+  const paths = focus === '' ? [] : focus.split('\n');
+  const message = canvasTextFocus(paths.slice(0, CANVAS_FOCUS_PATHS_MAX));
+  const send = () => current.current?.post(message);
+  send();
+  return current.current?.subscribeLoad(send);
 }
 
 function startCanvasText(current: RefObject<Options>) {
@@ -166,17 +194,7 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
       return;
     }
     if (message.type === 'avb:text-draft') {
-      const node = nodes.get(plan.target.path);
-      if (node?.id && node.value !== undefined) {
-        canvasTextDraft.set({
-          session: options.session,
-          projectPath: options.initial.projectPath,
-          file: options.initial.file,
-          nodeID: node.id,
-          sourceValue: node.value,
-          value: message.value,
-        });
-      }
+      publishCanvasDraft(plan, nodes.get(plan.target.path), message.value, options);
       return;
     }
     busy = true;
@@ -191,6 +209,37 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
         }
       });
   };
+}
+
+// The words being typed, mirrored into the field that shows them: a text
+// node's Content field, or the props panel field of the prop that sets them.
+function publishCanvasDraft(
+  plan: CanvasTextEdit,
+  node: CanvasSourceNode | undefined,
+  value: string,
+  options: CanvasTextReceiverOptions,
+) {
+  const scope = {
+    session: options.session,
+    projectPath: options.initial.projectPath,
+    file: options.initial.file,
+    value,
+  };
+  if (plan.prop) {
+    const { nodeID, name } = plan.prop;
+    canvasTextDraft.set({
+      ...scope,
+      kind: 'prop',
+      nodeID,
+      prop: name,
+      value: plan.prop.value(value),
+      typed: value,
+    });
+    return;
+  }
+  if (node?.id && node.value !== undefined) {
+    canvasTextDraft.set({ ...scope, kind: 'text', nodeID: node.id, sourceValue: node.value });
+  }
 }
 
 function canvasTextSessionMessage(
@@ -254,8 +303,10 @@ async function publishCanvasTextSession(
   const plans: readonly CanvasTextEdit[] = [
     ...literal.map((plan) => ({
       target: plan.target,
-      apply: (value: string) =>
-        document.apply(applyCanvasText(document.source, plan, value), plan.start),
+      apply: (value: string) => {
+        const typed = canvasTypedText(plan.target.value, value);
+        return document.apply(applyCanvasText(document.source, plan, typed), plan.start);
+      },
     })),
   ];
   const catalog: CanvasTextCatalog = {
@@ -298,23 +349,19 @@ interface CanvasSelectionOptions extends CanvasTextReceiverOptions {
 function receiveCanvasSelection(message: CanvasTextSelection, options: CanvasSelectionOptions) {
   const { initial, session, takeover } = options;
   const plan = options.plans().find((entry) => entry.target.key === message.key);
-  const node = plan ? options.nodes.get(plan.target.path) : undefined;
   const range = message.range;
-  const format = initial.format;
-  if (!range || !plan || !node?.id || node.kind !== 'text' || !format) {
-    clearCanvasTextSelection(session);
-    return;
-  }
-  const states = format.states(node.id);
+  const format = plan && editFormat(plan, options.nodes, initial.format);
+  const states = format?.states();
   const frame = options.current.current?.frame.current;
-  if (!states || !frame || message.key.startsWith('cms:')) {
+  if (!range || !plan || !format || !states || !frame) {
     clearCanvasTextSelection(session);
     return;
   }
-  const textId = node.id;
   const typed = () => {
     const draft = canvasTextDraft.get();
-    return draft?.session === session && draft.nodeID === textId ? draft.value : plan.target.value;
+    return draft?.session === session && draftOf(plan, draft, options.nodes)
+      ? draftTyped(draft)
+      : plan.target.value;
   };
   const takeOver = () => {
     const value = typed();
@@ -323,7 +370,7 @@ function receiveCanvasSelection(message: CanvasTextSelection, options: CanvasSel
     // The frame counts shown characters; this text may space them differently.
     const start = canvasTextUnfolded(value, range.start, 'start');
     const end = canvasTextUnfolded(value, range.end, 'end');
-    return { start: start ?? 0, end: end ?? 0, value };
+    return typedSelection(plan, { start: start ?? 0, end: end ?? 0, value });
   };
   const release = () => {
     takeover.linking = false;
@@ -337,7 +384,7 @@ function receiveCanvasSelection(message: CanvasTextSelection, options: CanvasSel
     states,
     press: (action) => {
       const selection = takeOver();
-      if (selection.start >= selection.end || !format.apply(textId, selection, action)) {
+      if (selection.start >= selection.end || !format.apply(selection, action)) {
         initial.report('This text can’t be formatted here. Use the Content field in Settings.');
       }
       release();
@@ -354,7 +401,7 @@ function receiveCanvasSelection(message: CanvasTextSelection, options: CanvasSel
         return;
       }
       const linkable = selection.start < selection.end;
-      if (url !== undefined && linkable && format.apply(textId, selection, { kind: 'link', url })) {
+      if (url !== undefined && linkable && format.apply(selection, { kind: 'link', url })) {
         return;
       }
       // No link after all: the words typed before the URL field opened still save.
@@ -363,6 +410,66 @@ function receiveCanvasSelection(message: CanvasTextSelection, options: CanvasSel
       }
     },
   });
+}
+
+// The format bar for one text: its own, for text that is not the page's inline
+// content (a prop's HTML), or the page's, bound to the text node it edits.
+function editFormat(
+  plan: CanvasTextEdit,
+  nodes: ReadonlyMap<string | undefined, CanvasSourceNode>,
+  format: CanvasTextFormatter | undefined,
+): CanvasEditFormat | undefined {
+  if (plan.format) {
+    return plan.format;
+  }
+  // Content loaded beside the page (CMS entries, prop text) formats only with
+  // its own formatter: its paths may name page nodes it does not edit.
+  if (plan.target.key.startsWith('cms:')) {
+    return undefined;
+  }
+  const node = nodes.get(plan.target.path);
+  const textId = node?.kind === 'text' ? node.id : undefined;
+  if (!textId || !format) {
+    return undefined;
+  }
+  return {
+    states: () => format.states(textId),
+    apply: (selection, action) => format.apply(textId, selection, action),
+  };
+}
+
+// A selection over the editor's text, moved onto the words as they will be
+// saved: without the template's whitespace around them (canvasTypedText).
+// Prop text keeps its own value; its runs carry no template whitespace.
+function typedSelection(
+  plan: CanvasTextEdit,
+  selection: { readonly start: number; readonly end: number; readonly value: string },
+) {
+  if (plan.prop) {
+    return selection;
+  }
+  const value = canvasTypedText(plan.target.value, selection.value);
+  // HTML whitespace only, as canvasTypedText strips it: U+00A0 is a word character.
+  const dropped = /^[ \t\n\r\f]*/.exec(selection.value)?.[0].length ?? 0;
+  const shift = dropped - (value.startsWith(' ') && dropped > 0 ? 1 : 0);
+  const clamp = (offset: number) => Math.min(Math.max(offset - shift, 0), value.length);
+  return { start: clamp(selection.start), end: clamp(selection.end), value };
+}
+
+// Whether a draft is the one this text's editor is writing.
+function draftOf(
+  plan: CanvasTextEdit,
+  draft: CanvasTextDraft,
+  nodes: ReadonlyMap<string | undefined, CanvasSourceNode>,
+): boolean {
+  if (draft.kind === 'prop') {
+    return draft.nodeID === plan.prop?.nodeID && draft.prop === plan.prop.name;
+  }
+  return draft.nodeID === nodes.get(plan.target.path)?.id;
+}
+
+function draftTyped(draft: CanvasTextDraft): string {
+  return draft.kind === 'prop' ? draft.typed : draft.value;
 }
 
 // The selection's box is in the frame's own pixels, and the frame is scaled

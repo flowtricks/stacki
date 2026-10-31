@@ -15,6 +15,7 @@ import { type CodeWindowState } from '../../features/code/codeWindowTarget';
 import {
   type AssetPick,
   type CollectionSamples,
+  type ValueSamples,
   type DevStatus,
   type DynamicEntry,
   type GitInfo,
@@ -205,6 +206,9 @@ export function useDataState() {
   // binding picker. Keyed by collection; a name present with no value has
   // been asked for and has no answer, which stops it being asked again.
   const [collectionSamples, setCollectionSamples] = useState<CollectionSamples>({});
+  // What the open file's calls to its imports returned (`await getCampusPastors()`),
+  // sampled by the dev server; a key present with no value has no answer.
+  const [valueSamples, setValueSamples] = useState<ValueSamples>({});
   // Every collection the project has, so data anywhere in the site is
   // reachable from the picker — not only what this page already reads.
   const [collections, setCollections] = useState<readonly AppCollection[]>([]);
@@ -225,6 +229,8 @@ export function useDataState() {
     sampleAskedRef,
     setCollectionSamples,
     setCollections,
+    setValueSamples,
+    valueSamples,
     setDynamicError,
     setDynamicIndex,
     setDynamicPaths,

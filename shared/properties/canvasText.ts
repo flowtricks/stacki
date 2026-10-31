@@ -12,6 +12,27 @@ export interface CanvasTextTarget {
   readonly nested: boolean;
   readonly tag: string;
   readonly siblings: readonly string[];
+  /**
+   * The page instance this text belongs to, for text inside a component: only
+   * a click inside that copy edits it, so two copies showing the same words
+   * never edit each other's prop.
+   */
+  readonly scope?: string;
+  /**
+   * Text a page hands to a component instance: `slot` for the instance's own
+   * content (`<Slider>Words</Slider>`), `prop` for one of its props
+   * (`<Slider heading="Words" />`). The canvas marks it with a dashed outline
+   * while that instance — not something inside it — is selected, so it reads
+   * as editable. Like any text, a double click types in it; a single click
+   * selects.
+   */
+  readonly from?: 'slot' | 'prop';
+  /**
+   * For a prop the component renders as HTML (`set:html`): which text node,
+   * in document order, inside the element at `parent`. Markup from a prop
+   * carries no canvas paths, so its runs are told apart by position.
+   */
+  readonly segment?: number;
 }
 
 export interface CanvasTextCatalog {
@@ -82,7 +103,28 @@ function parseTarget(input: unknown): CanvasTextTarget {
     value: canvasTextValue(data['value']),
     label: pathText(data['label']),
     nested: data['nested'],
+    ...(data['scope'] === undefined ? {} : { scope: pathText(data['scope']) }),
+    ...(data['from'] === undefined ? {} : { from: parseFrom(data['from']) }),
+    ...(data['segment'] === undefined ? {} : { segment: parseSegment(data['segment']) }),
   };
+}
+
+function parseFrom(input: unknown): 'slot' | 'prop' {
+  if (input !== 'slot' && input !== 'prop') {
+    throw new Error('Expected where canvas text comes from');
+  }
+  return input;
+}
+
+// A text node's position inside its element: bounded like the element's text.
+function parseSegment(input: unknown): number {
+  if (typeof input !== 'number' || !Number.isSafeInteger(input)) {
+    throw new Error('Expected a text segment index');
+  }
+  if (input < 0 || input >= CANVAS_TEXT_LIMIT) {
+    throw new Error('Text segment index out of range');
+  }
+  return input;
 }
 
 export function parseCanvasTextEvent(input: unknown): CanvasTextEvent | undefined {

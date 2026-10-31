@@ -68,7 +68,7 @@ export class DraftStorage {
   private async filename(file: string) {
     const namespace = (await gitDraftHeaders(this.root))['x-studio-draft'];
     const directory =
-      namespace === 'legacy' ? '.studio-state' : '.studio-state/drafts/' + namespace;
+      namespace === 'legacy' ? '.stacki/studio/state' : '.stacki/studio/state/drafts/' + namespace;
     return path.join(this.root, directory, Buffer.from(file).toString('base64url') + '.bin');
   }
   private async remote(backend: string, file: string, method: string, bytes?: Uint8Array) {

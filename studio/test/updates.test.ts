@@ -65,7 +65,8 @@ test('an accepted update replaces customized Studio code and preserves project d
     ]) {
       assert.equal(await readFile(path.join(root, file), 'utf8'), file);
     }
-    assert.equal(await readFile(path.join(root, '.stacki-studio/.gitignore'), 'utf8'), '*\n');
+    // Update backups live under `.stacki/studio/`, which ignores its own contents.
+    assert.equal(await readFile(path.join(root, '.stacki/studio/.gitignore'), 'utf8'), '*\n');
   } finally {
     await rm(root, { recursive: true, force: true });
   }

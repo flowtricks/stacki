@@ -207,7 +207,13 @@ export interface TreeNode {
   nav?: { index: number; count: number };
   query?: { collection: string; name: string };
   lazy?: boolean;
+  /** The whole address of an image the value names: the preview is clipped. */
+  image?: string;
 }
+
+// A web address that names an image by its extension, or Sanity's image CDN.
+const IMAGE_URL =
+  /^https:\/\/(?:cdn\.sanity\.io\/images\/\S+|\S+\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#]\S*)?)$/i;
 
 // A value the app has actually seen — every key is real, so the tree is the
 // data rather than a guess at it.
@@ -234,12 +240,14 @@ export function fromSample(value: unknown, base: string, depth: number): TreeNod
 
 export function sampleNode(path: string, key: string, value: unknown, depth: number): TreeNode {
   const children = fromSample(value, path, depth);
+  const image = typeof value === 'string' && IMAGE_URL.test(value) ? value : undefined;
   return {
     path,
     key,
     kind: sampleKind(value),
     preview: samplePreview(value),
     children: children && children.length ? children : undefined,
+    ...(image === undefined ? {} : { image }),
   };
 }
 

@@ -133,8 +133,10 @@ async function serve(root: string): Promise<{ server: Server; base: string }> {
 test('a local Studio keeps its connections privately and uses them for CMS calls', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-cms-connections-'));
   const home = await mkdtemp(path.join(tmpdir(), 'studio-cms-home-'));
-  const realHome = process.env['HOME'];
+  // os.homedir() reads HOME on macOS and Linux and USERPROFILE on Windows.
+  const realHome = { HOME: process.env['HOME'], USERPROFILE: process.env['USERPROFILE'] };
   process.env['HOME'] = home;
+  process.env['USERPROFILE'] = home;
   delete process.env['STUDIO_CONTAINER_TOKEN'];
   const realFetch = globalThis.fetch;
   const { server, base } = await serve(root);
@@ -157,7 +159,12 @@ test('a local Studio keeps its connections privately and uses them for CMS calls
     assert.equal(JSON.stringify(saved).includes(DRAFT.secret), false, 'the key is not returned');
     const kept = path.join(home, '.stacki', 'studio-cms');
     const [file = ''] = await readdir(kept);
-    assert.equal((await stat(path.join(kept, file))).mode & 0o777, 0o600, 'private to this user');
+    if (process.platform !== 'win32') {
+      // Windows keeps a user's files private through the profile folder's ACL;
+      // it has no POSIX mode bits to check.
+      const mode = (await stat(path.join(kept, file))).mode & 0o777;
+      assert.equal(mode, 0o600, 'private to this user');
+    }
     assert.ok((await readFile(path.join(kept, file), 'utf8')).includes('abc123'));
     assert.deepEqual(await readdir(root), [], 'nothing is written into the project');
     const listed: unknown = await fetch(`${base}/studio/api/cms-connections`).then((r) => r.json());
@@ -181,7 +188,13 @@ test('a local Studio keeps its connections privately and uses them for CMS calls
     assert.equal(unknown['ok'], false);
   } finally {
     globalThis.fetch = realFetch;
-    process.env['HOME'] = realHome;
+    for (const [name, value] of Object.entries(realHome)) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
     server.close();
     await rm(root, { recursive: true, force: true });
     await rm(home, { recursive: true, force: true });

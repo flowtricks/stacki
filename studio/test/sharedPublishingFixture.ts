@@ -89,7 +89,7 @@ export async function sharedPublishingFixture() {
 
 async function prepareProject() {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-shared-publish-'));
-  for (const directory of ['src/pages', 'public', '.studio-state', '.vercel']) {
+  for (const directory of ['src/pages', 'public', '.stacki/studio/state', '.vercel']) {
     await mkdir(path.join(root, directory), { recursive: true });
   }
   await symlink(path.resolve('node_modules'), path.join(root, 'node_modules'), 'dir');
@@ -106,7 +106,7 @@ async function prepareProject() {
     await writeFile(path.join(root, `src/pages/${name}.astro`), source);
   }
   await writeFile(
-    path.join(root, '.studio-state/github-base.json'),
+    path.join(root, '.stacki/studio/state/github-base.json'),
     JSON.stringify({ sha: 'a'.repeat(40) }),
   );
   await git(root, ['init', '--initial-branch=main']);

@@ -14,7 +14,9 @@ import { sourceWatch } from '../features/project/sourceWatch';
 import { parseProfile } from '../features/auth/profile';
 import type { Duplex } from 'node:stream';
 import type { AstroIntegration } from 'astro';
-import { readFile, writeFile, access } from 'node:fs/promises';
+import { readFile, writeFile, access, mkdir } from 'node:fs/promises';
+import { prepareStudioLocal } from '../../vendor/stacki/electron/previewServer/studioLocalMove';
+import { STUDIO_STATE_DIRECTORY } from '../../vendor/stacki/shared/properties/studioLocal';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { markSourceFile } from '../../vendor/stacki/electron/previewServer/previewMarkers';
@@ -58,7 +60,13 @@ export default function studio(options: Options): AstroIntegration {
         config,
       }) => {
         if (command === 'dev') {
-          const entrypoint = path.join(options.root, '.studio-state/component-preview.astro');
+          // `.stacki/studio/` ignores its own contents; an older `.studio-state` moves in.
+          prepareStudioLocal(options.root);
+          await mkdir(path.join(options.root, STUDIO_STATE_DIRECTORY), { recursive: true });
+          const entrypoint = path.join(
+            options.root,
+            '.stacki/studio/state/component-preview.astro',
+          );
           await writeFile(entrypoint, renderComponentPreviewPage());
           injectRoute({ pattern: '/__avb/preview', entrypoint });
         }
@@ -210,9 +218,7 @@ async function handleRequestInWorkspace(
     await sendCatalog(response, catalogs.project);
     return;
   }
-  if (url.pathname === '/studio/api/file' && request.method === 'GET') {
-    const file = sourcePath(url.searchParams.get('file'));
-    json(response, 200, { file, source: await readSource(options.root, file) });
+  if (request.method === 'GET' && (await sendSourceRead(response, url, options, catalogs))) {
     return;
   }
   if (url.pathname === '/studio/api/asset' && request.method === 'GET') {
@@ -363,6 +369,29 @@ function configureProjectWatching(
       server.ws.send({ type: 'custom', event: 'studio:css-changed' });
     }
   });
+}
+
+// Reads of a project file: its source, or what its call to one of its imports
+// returns, sampled for the binding picker (valueSampler.ts). False: not a read.
+async function sendSourceRead(
+  response: ServerResponse,
+  url: URL,
+  options: Options,
+  catalogs: ReturnType<typeof projectCatalogs>,
+): Promise<boolean> {
+  if (url.pathname === '/studio/api/file') {
+    const file = sourcePath(url.searchParams.get('file'));
+    json(response, 200, { file, source: await readSource(options.root, file) });
+    return true;
+  }
+  if (url.pathname === '/studio/api/sample-value') {
+    const file = sourcePath(url.searchParams.get('file'));
+    const spec = string(url.searchParams.get('spec'), 500);
+    const name = string(url.searchParams.get('name'), 200);
+    json(response, 200, await catalogs.values({ file, spec, name }));
+    return true;
+  }
+  return false;
 }
 
 async function createFile(

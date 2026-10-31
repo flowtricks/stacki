@@ -230,14 +230,10 @@ function DesignPreview({
         {/* First in the layer, so the outlines and spacing bands paint over it. */}
         {shownGuide && <GuideOverlay {...shownGuide} scale={scale} />}
         <PreviewOverlays
-          rects={runtime.rects}
-          spacing={runtime.spacing}
+          {...measuredOutlines(runtime)}
           scale={scale}
           {...(props.spacingHover === undefined ? {} : { spacingHover: props.spacingHover })}
           selPath={props.selPath}
-          selOcc={runtime.selOcc}
-          hoverPath={runtime.hoverPath}
-          hoverOcc={runtime.hoverOcc}
           focusPath={props.focusPath}
           focusWhole={props.focusWhole ?? false}
           {...(props.overlayInfo === undefined ? {} : { overlayInfo: props.overlayInfo })}
@@ -246,6 +242,18 @@ function DesignPreview({
       </div>
     </>
   );
+}
+
+// What the frame measured and reports, as the outlines draw it.
+function measuredOutlines(runtime: Runtime) {
+  return {
+    rects: runtime.rects,
+    spacing: runtime.spacing,
+    selOcc: runtime.selOcc,
+    hoverPath: runtime.hoverPath,
+    hoverOcc: runtime.hoverOcc,
+    textMarks: runtime.textMarks,
+  };
 }
 
 function ResizeHandles({ sizing }: { readonly sizing: Sizing }) {

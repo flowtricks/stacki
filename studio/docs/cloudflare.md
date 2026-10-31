@@ -25,6 +25,11 @@ source distribution does not create resources or claim that an account is config
 
 These reduce accidental use; they are not a monthly spending cap. Active editors, abusive traffic, other account resources, storage operations, and subscription fees can still increase the bill. Check any other account resources and subscriptions separately.
 
+The Cloudflare configuration explicitly disables Observability by default to avoid diagnostic
+logging charges. Existing installations preserve their configuration during Studio updates; set
+`"observability": { "enabled": false }` in their `studio/cloudflare/wrangler.jsonc` and redeploy
+to apply the same default. This does not change the account's Observability subscription.
+
 ### Interactive editing capacity
 
 Keep at least the template's one-vCPU capacity for a substantial Astro project with concurrent
@@ -179,7 +184,8 @@ expiration of draft documents or history reset.
 
 If cleanup fails, publishing still succeeds and reports a warning. The next successful GitHub
 publish scans stored uploads again, including copies left by an earlier failed cleanup.
-Local development uses the same automatic cleanup with snapshots under `.studio-state/uploads`.
+Local development uses the same automatic cleanup with snapshots under
+`.stacki/studio/state/uploads`.
 No additional storage service, scheduled job or package dependency is required.
 
 Publishing starts a job and returns immediately; the editor checks progress with

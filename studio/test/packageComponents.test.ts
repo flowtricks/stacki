@@ -53,7 +53,7 @@ test('package preview links retain identity across Desktop and Studio path forma
 
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'stacki-package-'));
-  await mkdir(path.join(root, '.stacki'));
+  await mkdir(path.join(root, '.stacki'), { recursive: true });
   await mkdir(path.join(root, 'src/pages'), { recursive: true });
   await mkdir(path.dirname(path.join(root, file)), { recursive: true });
   await writeFile(

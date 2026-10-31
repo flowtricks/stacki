@@ -8,11 +8,14 @@ export interface TextMatch {
   readonly element: Element;
 }
 export function matchCanvasText(target: CanvasTextTarget, clicked: Element): TextMatch | undefined {
+  // Every element carrying the path around the click is on the click's own
+  // ancestor chain, so they nest: a component that passes its slot on to a
+  // wrapper (a Section's container) tags each level. The innermost one is the
+  // closest the instance comes to the words.
   const parents = elementsWithPath(target.parent).filter((parent) => parent.contains(clicked));
-  if (parents.length !== 1) {
-    return undefined;
-  }
-  const parent = parents[0];
+  const parent = parents.find((outer) =>
+    parents.every((inner) => inner === outer || !outer.contains(inner)),
+  );
   if (!parent || (target.kind === 'element' && parent.localName !== target.tag)) {
     return undefined;
   }
@@ -22,6 +25,9 @@ export function matchCanvasText(target: CanvasTextTarget, clicked: Element): Tex
       return undefined;
     }
     ancestor = ancestor.parentElement ?? undefined;
+  }
+  if (target.segment !== undefined) {
+    return segmentMatch(parent, target, target.segment);
   }
   const mapped = (runsOf(target.path) ?? []).filter(
     (run) => run.length > 0 && run.every((node) => node.isConnected && parent.contains(node)),
@@ -40,9 +46,40 @@ export function matchCanvasText(target: CanvasTextTarget, clicked: Element): Tex
   ) {
     return undefined;
   }
-  const groups = textGroups(parent, target);
-  const matches = groups.filter((nodes) => sameText(nodes, target.value));
-  return matches.length === 1 && matches[0] ? { nodes: matches[0], element: parent } : undefined;
+  // The words are looked for from the clicked element outwards: a component
+  // may render other text of its own beside the slot (a slider's cards beside
+  // its heading), which would join the slot's words in one run if the search
+  // started at the instance's outermost element.
+  let scope: Element | undefined = clicked;
+  for (let depth = 0; scope && depth < 32; depth++) {
+    const matches = textGroups(scope, target).filter((nodes) => sameText(nodes, target.value));
+    if (matches.length === 1 && matches[0]) {
+      return { nodes: matches[0], element: scope };
+    }
+    if (scope === parent || matches.length > 1) {
+      return undefined;
+    }
+    scope = scope.parentElement ?? undefined;
+  }
+  return undefined;
+}
+
+// The text node at a position inside HTML a prop rendered (`set:html`), which
+// carries no canvas paths. It must still read what the prop says it reads.
+function segmentMatch(
+  parent: Element,
+  target: CanvasTextTarget,
+  segment: number,
+): TextMatch | undefined {
+  const walker = document.createTreeWalker(parent, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  for (let index = 0; node && index < segment && index < 1_000; index++) {
+    node = walker.nextNode();
+  }
+  if (!(node instanceof Text) || !sameText([node], target.value)) {
+    return undefined;
+  }
+  return { nodes: [node], element: parent };
 }
 
 function textGroups(parent: Element, target: CanvasTextTarget): Text[][] {

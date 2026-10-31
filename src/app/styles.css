@@ -2821,7 +2821,13 @@ body > .embed-editor_provenance {
   flex: none;
 }
 .dp-item-nav .dp-step {
-  padding: 0 2px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+}
+/* The row under it is already lit, so the arrow's own hover is a step brighter. */
+.dp-item-nav .dp-step:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
 }
 .dp-item-count {
   font-size: 10px;
@@ -2878,15 +2884,15 @@ body > .embed-editor_provenance {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 6px;
-  border-radius: 5px;
+  min-height: 28px;
+  padding: 0 8px 0 6px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 11.5px;
   line-height: 1.4;
 }
 .dp-row:hover {
-  background: var(--accent);
-  color: white;
+  background: var(--bg-active);
 }
 /* What the field is bound to now: the row is lit in the same purple as the
    chip that opened the picker, so the connection between the two is visible
@@ -2899,13 +2905,16 @@ body > .embed-editor_provenance {
   color: var(--collection-purple);
 }
 .dp-row.selected:hover {
-  background: var(--accent);
-  box-shadow: none;
+  background: rgba(146, 116, 255, 0.24);
 }
+/* Under the pointer the row only brightens: every column keeps its colour,
+   so a dim count or value stays as readable as the name beside it. */
 .dp-row:hover .dp-key,
-.dp-row:hover .dp-val,
 .dp-row:hover .dp-twist {
-  color: white;
+  color: var(--text);
+}
+.dp-row:hover .dp-val {
+  color: var(--text-dim);
 }
 .dp-key {
   font-family: var(--mono);
@@ -2914,6 +2923,10 @@ body > .embed-editor_provenance {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* The name is what is picked: it keeps its width, and the value gives way. */
+  flex: 0 1 auto;
+  min-width: min-content;
+  max-width: 60%;
 }
 .dp-check {
   flex-shrink: 0;
@@ -2936,6 +2949,24 @@ body > .embed-editor_provenance {
 .dp-val.kind {
   color: var(--text-faint);
   font-style: italic;
+}
+/* Words from the content read as words: the interface's face, not code. */
+.dp-val.text {
+  font-family: var(--font);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.dp-val:has(.dp-thumb) {
+  display: inline-flex;
+  justify-content: flex-end;
+}
+.dp-thumb {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--bg-active);
 }
 /* Bound to, but not present in the entry on the canvas — an optional field
    nobody filled in. Stepping to another entry often fills it. */
@@ -5344,6 +5375,17 @@ body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel {
 body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel .node-outline-tag {
   display: none;
 }
+/* Typing in text a component instance shows: the text takes the band above,
+   tagless, and the instance keeps its parent outline and its tag — it is still
+   the selection, and the tag says what is being edited inside. */
+body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel.parent {
+  outline-width: 2px;
+  outline-offset: -1px;
+  opacity: 1;
+}
+body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel.parent .node-outline-tag {
+  display: inline-flex;
+}
 body:has(#stacki-canvas-text-editor[data-shared]) .node-outline.sel {
   outline-color: #8b5cf6;
 }
@@ -5362,8 +5404,14 @@ body:has(#stacki-canvas-text-editor[data-shared='variable'])
    translucent fill — plain elements stay clear so their content reads, and a
    loop covers so much of the page that tinting it washes out everything
    inside. */
-.node-outline.hover.component {
+.node-outline.hover.component,
+.node-outline.sel.tinted {
   background: rgba(48, 193, 88, 0.14);
+}
+/* Text inside the selected instance is outlined, never filled: the tint
+   belongs to the instance around it. */
+.node-outline.hover.text-mark {
+  background: none;
 }
 .node-outline-tag {
   position: absolute;
@@ -5397,6 +5445,17 @@ body:has(#stacki-canvas-text-editor[data-shared='variable'])
 .node-outline.sel .node-outline-tag {
   top: -1px;
   left: -1px;
+}
+/* A selected component whose text was clicked: the text takes the selection
+   look (TextMarkOutlines), and the instance reads as its parent — a light
+   outline and a light tag with dark words. */
+.node-outline.sel.parent {
+  outline-color: #b6e6c1;
+}
+/* Opaque, so the tag reads the same over any page colour beneath it. */
+.node-outline.sel.parent .node-outline-tag {
+  background: #7ddc94;
+  color: #0e2014;
 }
 .node-outline-tag .node-outline-edit {
   align-self: stretch;

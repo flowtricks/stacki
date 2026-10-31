@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { isStudioLocalPath } from '../../../vendor/stacki/shared/properties/studioLocal';
 import { promisify } from 'node:util';
 import { mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -42,7 +43,7 @@ export async function mergeGitWorkspace(
       },
     };
   }
-  const temporary = await mkdtemp(path.join(git.root, '.studio-state/merge-'));
+  const temporary = await mkdtemp(path.join(git.root, '.stacki/studio/state/merge-'));
   try {
     const context = { ...git, root: temporary };
     await prepareMergeCheckout(context, current.head, draft);
@@ -74,7 +75,7 @@ export async function mergeGitWorkspace(
 }
 async function prepareMergeCheckout(git: PublishGit, head: string, tree: string) {
   const files = published(await publishTreeFiles(git, tree));
-  if (files.some((file) => file.path.split('/').includes('.studio-state'))) {
+  if (files.some((file) => isStudioLocalPath(file.path))) {
     throw new Error('Repository files cannot overwrite Studio runtime state.');
   }
   const run = gitWorkspaceRun(git);

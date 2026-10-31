@@ -191,6 +191,7 @@ function bindContextOf(app: AppView, route: CanvasRoute) {
           : dynamicEntry?.props || undefined,
       propsSchema: schemaFor(editedEntry),
       collectionSamples: app.collectionSamples,
+      valueSamples: valueSamplesOf(app.valueSamples, app.currentPage?.path),
       collections: app.collections,
       // Opening a collection in the picker asks for one entry of it; nothing is
       // fetched for collections nobody looks at.
@@ -235,4 +236,18 @@ function defaultsSelection(
     }
     scope.setSelectedId(id);
   };
+}
+
+// The open file's own value samples, by value name: the store keys them by
+// file too, so two files' `pastors` never answer for each other.
+function valueSamplesOf(
+  samples: Readonly<Record<string, unknown>>,
+  file: string | undefined,
+): Record<string, unknown> {
+  const prefix = `${file ?? ''}|`;
+  return Object.fromEntries(
+    Object.entries(samples)
+      .filter(([key]) => file !== undefined && key.startsWith(prefix))
+      .map(([key, value]) => [key.slice(prefix.length), value]),
+  );
 }

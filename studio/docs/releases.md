@@ -50,7 +50,7 @@ node dist/cli.mjs update /path/to/site /path/to/stacki/studio/release/stacki-stu
 The installer stages a clean release and runs dependency installation, both compiler
 checks, and the build before replacing `site/studio`. A failure during validation
 leaves the existing installation intact. The previous code is backed up under
-`site/.stacki-studio/backup-VERSION-ID`; settings and runtime state move to the new
+`site/.stacki/studio/updates/backup-VERSION-ID`; settings and runtime state move to the new
 installation. This metadata directory ignores its contents in Git. Review the
 website's Git diff, commit the Studio replacement, and deploy when ready.
 
@@ -66,7 +66,7 @@ Then install dependencies and rebuild. Backups contain the previous code, not a
 second copy of live drafts. Do not restore old draft snapshots over newer work.
 
 An interrupted filesystem swap may leave staging, backup, and an `update.lock` in
-`.stacki-studio`. These are deliberately retained. Inspect the directories, restore
+`.stacki/studio/updates` (`.stacki-studio` before it moved there). These are deliberately retained. Inspect the directories, restore
 `studio` and its retained state from them, and remove the stale lock only after
 confirming the original updater is no longer running. No automatic garbage collection
 removes backups or incomplete update directories.

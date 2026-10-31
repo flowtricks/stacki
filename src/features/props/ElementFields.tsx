@@ -15,7 +15,7 @@ import RichContent, { isInlineOnly } from './RichContent';
 import { VariableTextSizeIcon, ChevronRightIcon } from '../../ui/Icons';
 import { noLabelActivation, CommentField } from './SourcePanels';
 import { type ElementState } from './elementState';
-import { canvasDraftValue, useCanvasTextDraft } from '../../ui/canvasTextDraft';
+import { canvasDraftProp, canvasDraftValue, useCanvasTextDraft } from '../../ui/canvasTextDraft';
 import { canvasDraftInline } from './canvasDraftInline';
 
 export function ElementContent({ state }: { readonly state: ElementState }) {
@@ -160,6 +160,9 @@ export function ElementLooseText({ state }: { readonly state: ElementState }) {
 }
 
 export function ElementSchemaFields({ state }: { readonly state: ElementState }) {
+  // Words typed on the canvas into text this instance's prop sets show here as
+  // they are typed; the attribute itself is written when typing ends.
+  const draft = useCanvasTextDraft(state);
   const {
     node,
     schema,
@@ -188,7 +191,7 @@ export function ElementSchemaFields({ state }: { readonly state: ElementState })
             bindContext={bindContext || loopContext}
             field={narrowOptions(field)}
             branchDefault={branchDefault(field.name)}
-            value={node.props?.[field.name]}
+            value={canvasDraftProp(node.id, field.name, draft) ?? node.props?.[field.name]}
             slotOptions={slotOptions}
             projectClasses={projectClasses}
             assetContext={assetContext}

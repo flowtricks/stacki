@@ -1,4 +1,5 @@
 import { gitWorkspaceTree } from './gitWorkspaceTree';
+import { isStudioLocalPath } from '../../../vendor/stacki/shared/properties/studioLocal';
 import { mkdir, mkdtemp, rm, rename, copyFile, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { published } from '../publishing/publishFailure';
@@ -24,7 +25,7 @@ export async function prepareGitWorkspaceCheckout(git: PublishGit, before: strin
     await checkoutPath(git.root, file);
     await checkoutPath(git.root, file + '.studio-tmp');
   }
-  const temporary = await mkdtemp(path.join(git.root, '.studio-state/checkout-'));
+  const temporary = await mkdtemp(path.join(git.root, '.stacki/studio/state/checkout-'));
   const run = gitWorkspaceRun({ ...git, root: temporary });
   try {
     await run(['read-tree', target]);
@@ -56,9 +57,8 @@ function checkoutFile(file: string): boolean {
   return (
     !file
       .split('/')
-      .some((part) =>
-        ['.git', '.studio-state', 'node_modules', '.astro', 'dist', '.studio'].includes(part),
-      ) &&
+      .some((part) => ['.git', 'node_modules', '.astro', 'dist', '.studio'].includes(part)) &&
+    !isStudioLocalPath(file) &&
     file !== 'studio' &&
     !file.startsWith('studio/') &&
     !file.startsWith('.stacki/preview/') &&

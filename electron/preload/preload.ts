@@ -19,15 +19,21 @@ import { listenForQueries, startWhenReady } from './frameQueries';
 
 if (!process.isMainFrame) {
   const post = (message: unknown) => window.parent.postMessage(message, '*');
-  installCanvasText(post, canvasSelects, (target, element) =>
+  // Opening text selects what holds it. Prop text is already selected by the
+  // two clicks before the double click: its element lives in the component's
+  // file, where a page path would name some other node on the page.
+  installCanvasText(post, canvasSelects, (target, element) => {
+    if (target.from === 'prop') {
+      return;
+    }
     post({
       type: 'avb:click-node',
       path: target.parent,
       outside: false,
       occurrence: occurrenceOf(target.parent, element),
       token: renderToken,
-    }),
-  );
+    });
+  });
   markFrameMode();
   listenForDesign();
   listenForQueries();

@@ -8,6 +8,7 @@ import {
   type CanvasTextTarget,
 } from '../../../shared/properties/canvasText';
 import { canvasTextBinding } from './canvasTextBinding';
+import type { CanvasFormatAction, CanvasFormatState } from './canvasTextSelection';
 
 export interface CanvasSourceNode {
   readonly id?: string;
@@ -131,6 +132,8 @@ export function canvasTextTarget(
     nested: ['span', 'a', 'strong', 'em', 'b', 'i', 'small', 'mark', 'sup', 'sub'].includes(
       parent.name ?? '',
     ),
+    // A component instance's own content: marked while that instance is selected.
+    ...(parent.kind === 'component' ? { from: 'slot', scope: parentPath } : {}),
   };
 }
 
@@ -157,4 +160,25 @@ function escapeCanvasText(value: string): string {
 export interface CanvasTextEdit {
   readonly target: CanvasTextTarget;
   readonly apply: (value: string) => Promise<void>;
+  /**
+   * For text a component prop sets: the instance and prop the props panel
+   * shows it in, and that prop's value once the typed words replace these.
+   */
+  readonly prop?: {
+    readonly nodeID: string;
+    readonly name: string;
+    readonly value: (typed: string) => string;
+  };
+  /** The format bar for text that is not the page's own inline content. */
+  readonly format?: CanvasEditFormat;
+}
+
+/** The canvas format bar for one text: which buttons are lit, and one press. */
+export interface CanvasEditFormat {
+  readonly states: () => CanvasFormatState | undefined;
+  /** False when the press changes nothing or cannot be laid out. */
+  readonly apply: (
+    selection: { readonly start: number; readonly end: number; readonly value: string },
+    action: CanvasFormatAction,
+  ) => boolean;
 }
