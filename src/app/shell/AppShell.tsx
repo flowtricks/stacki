@@ -1,4 +1,5 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import { CanvasTextFormatBar } from './CanvasTextFormatBar';
 import { ResizablePanel } from './ResizablePanel';
 import { desktopElementActions } from './desktopElementActions';
 import { DefaultsCanvasBar } from '../../features/componentDefaults/DefaultsCanvasBar';
@@ -118,6 +119,7 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
         onClose={() => app.setTermOpen(false)}
       />
       <CodeWindowHost app={app} />
+      <CanvasTextFormatBar />
       {app.insertOpen && (
         <InsertSearch
           components={app.insertables}
@@ -496,10 +498,20 @@ export function CmsTab({ app }: { readonly app: ShellView }) {
       project={app.project}
       selectedRel={app.cmsRel}
       selectedContent={app.contentName}
+      selectedRemote={app.cmsRemote}
+      onSelectRemote={(selection) => {
+        app.setCmsRemote(selection);
+        if (selection) {
+          app.setCmsRel(undefined);
+          app.setContentName(undefined);
+          app.setCmsSettings(false);
+        }
+      }}
       onSelectContent={(name) => {
         app.setContentName(name);
         if (name) {
           app.setCmsRel(undefined);
+          app.setCmsRemote(undefined);
           app.setCmsSettings(false);
         }
       }}
@@ -510,6 +522,7 @@ export function CmsTab({ app }: { readonly app: ShellView }) {
         app.setCmsSettings(false);
         if (rel) {
           app.setContentName(undefined);
+          app.setCmsRemote(undefined);
         }
         // Closing a collection leaves nothing selected anywhere, so
         // the right-hand panels show their empty state rather than

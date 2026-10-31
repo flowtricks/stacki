@@ -1,4 +1,5 @@
 import { desktopCanvasText } from './desktopCanvasText';
+import { RemoteCmsView } from '../../features/cms/RemoteCmsView';
 import { useEffect, useState } from 'react';
 import { ResizablePanel } from './ResizablePanel';
 import { ElementContextMenu } from '../../features/structure/ElementContextMenu';
@@ -277,6 +278,15 @@ export function CanvasCovers({ app }: { readonly app: ShellView }) {
             app.setCmsSettings(false);
           }}
           onClose={() => app.setCmsRel(undefined)}
+        />
+      )}
+      {app.cmsRemote && (
+        <RemoteCmsView
+          key={`${app.cmsRemote.connection.id}:${app.cmsRemote.collection}`}
+          projectPath={app.project.path}
+          selection={app.cmsRemote}
+          hidden={app.leftTab !== 'cms'}
+          onSelect={app.setCmsRemote}
         />
       )}
     </>

@@ -14,7 +14,7 @@ import {
   useColumnGuide,
   type ShownGuide,
 } from '../../../vendor/stacki/src/features/preview/guideSettings';
-import { outlineInfo } from './outlineInfo';
+import { outlineInfo, outlineNode } from './outlineInfo';
 import type { CSSProperties } from 'react';
 import {
   PreviewToolbar,
@@ -27,7 +27,7 @@ import type { usePreviewDimensions } from '../../../vendor/stacki/src/features/p
 import '../../../vendor/stacki/src/features/preview/previewViewport.css';
 import { CollectionEditor } from '../collections/CollectionEditor';
 import type { SharedDocument } from '../collaboration/useDocument';
-import type { ParserNode } from '../source/source';
+import { nodeId, type ParserNode } from '../source/source';
 import type { usePreview } from './usePreview';
 interface Props {
   readonly focusPath?: string | undefined;
@@ -48,6 +48,7 @@ interface Props {
   readonly device: PreviewDevice;
   readonly onDevice: (device: PreviewDevice) => void;
   readonly inspector: PreviewInspectorActions | undefined;
+  readonly openComponent?: ((name: string, id: string, occurrence: number) => void) | undefined;
 }
 export function PreviewCanvas(props: Props) {
   useCanvasText({
@@ -255,6 +256,16 @@ function CanvasOverlays({
         focusPath={props.focusPath}
         focusWhole={false}
         overlayInfo={(path) => outlineInfo(props.nodes, path)}
+        onOpenComponent={
+          props.openComponent
+            ? (path, occurrence) => {
+                const node = outlineNode(props.nodes, path);
+                if (node?.kind === 'component') {
+                  props.openComponent?.(node.name, nodeId(node), occurrence);
+                }
+              }
+            : undefined
+        }
       />
     </div>
   );

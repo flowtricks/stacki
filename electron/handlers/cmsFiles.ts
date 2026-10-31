@@ -111,6 +111,9 @@ export const collectionOf = async (projectPath: string, name: string) => {
   return { config, collection };
 };
 
+// A file's single values go by the file's own name: they are what the file is.
+const fileName = (rel: string): string => rel.slice(rel.lastIndexOf('/') + 1);
+
 export function readCmsSource(
   full: string,
   entryRel: string,
@@ -152,7 +155,7 @@ export function readCmsSource(
   };
   const general = readGeneral(source, scan);
   const files: CmsFile[] = general
-    ? [{ ...metadata, rel: `${entryRel}#${GENERAL}`, name: 'General', data: general }]
+    ? [{ ...metadata, rel: `${entryRel}#${GENERAL}`, name: fileName(entryRel), data: general }]
     : [];
   for (const collection of collections) {
     if (collection.data) {

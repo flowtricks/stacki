@@ -1,31 +1,55 @@
 import './cms.css';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import CmsPanel from '../../../vendor/stacki/src/features/cms/CmsPanel';
 import CmsView from '../../../vendor/stacki/src/features/cms/CmsView';
 import ContentView from '../../../vendor/stacki/src/features/content/ContentView';
+import { RemoteCmsView } from '../../../vendor/stacki/src/features/cms/RemoteCmsView';
+import type { RemoteCmsSelection } from '../../../vendor/stacki/src/features/cms/remoteCmsShared';
+import { CmsConnectionsDialog } from './CmsConnectionsDialog';
 import type { CmsUndo } from '../../../vendor/stacki/src/features/cms/cmsWriter';
 import type { EditorProps } from '../../app/Editor';
 import type { SharedDocument } from '../collaboration/useDocument';
 
 export type CmsSelection =
   | { readonly kind: 'data'; readonly rel: string; readonly settings: boolean }
-  | { readonly kind: 'content'; readonly name: string };
+  | { readonly kind: 'content'; readonly name: string }
+  | { readonly kind: 'remote'; readonly selection: RemoteCmsSelection };
 export function CmsNavigation({ props }: { readonly props: EditorProps }) {
   const { cms, setCms } = props.view;
+  // Reopening the panel's list after the connections dialog reads the new ones.
+  const [connecting, setConnecting] = useState(false);
+  const [connectionsRevision, setConnectionsRevision] = useState(0);
   return (
-    <CmsPanel
-      project={{ path: 'studio' }}
-      selectedRel={cms?.kind === 'data' ? cms.rel : undefined}
-      selectedContent={cms?.kind === 'content' ? cms.name : undefined}
-      currentFile={props.file.replace(/^src\//, '')}
-      refreshKey={props.project.pages.length}
-      onSelect={(rel) =>
-        setCms(rel === undefined ? undefined : { kind: 'data', rel, settings: false })
-      }
-      onSelectContent={(name) => setCms(name === undefined ? undefined : { kind: 'content', name })}
-      onOpenSettings={(rel) => setCms({ kind: 'data', rel, settings: true })}
-      showToast={props.report}
-    />
+    <>
+      <CmsPanel
+        project={{ path: 'studio' }}
+        selectedRel={cms?.kind === 'data' ? cms.rel : undefined}
+        selectedContent={cms?.kind === 'content' ? cms.name : undefined}
+        selectedRemote={cms?.kind === 'remote' ? cms.selection : undefined}
+        onSelectRemote={(selection) =>
+          setCms(selection === undefined ? undefined : { kind: 'remote', selection })
+        }
+        onConnect={() => setConnecting(true)}
+        currentFile={props.file.replace(/^src\//, '')}
+        refreshKey={`${props.project.pages.length}:${connectionsRevision}`}
+        onSelect={(rel) =>
+          setCms(rel === undefined ? undefined : { kind: 'data', rel, settings: false })
+        }
+        onSelectContent={(name) =>
+          setCms(name === undefined ? undefined : { kind: 'content', name })
+        }
+        onOpenSettings={(rel) => setCms({ kind: 'data', rel, settings: true })}
+        showToast={props.report}
+      />
+      {connecting && (
+        <CmsConnectionsDialog
+          onClose={() => {
+            setConnecting(false);
+            setConnectionsRevision((count) => count + 1);
+          }}
+        />
+      )}
+    </>
   );
 }
 export function CmsWorkspace({
@@ -55,6 +79,19 @@ export function CmsWorkspace({
   };
   if (!cms) {
     return null;
+  }
+  if (cms.kind === 'remote') {
+    return (
+      <RemoteCmsView
+        key={`${cms.selection.connection.id}:${cms.selection.collection}`}
+        projectPath="studio"
+        selection={cms.selection}
+        hidden={panel !== 'collections'}
+        onSelect={(selection) =>
+          setCms(selection === undefined ? undefined : { kind: 'remote', selection })
+        }
+      />
+    );
   }
   if (cms.kind === 'content') {
     return (

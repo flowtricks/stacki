@@ -46,7 +46,9 @@ const check = (what, condition, detail) => {
     platform: 'node',
     logLevel: 'silent',
   });
-  const { rankInsertItems } = await import(`${pathToFileURL(out).href}?v=${Date.now()}`);
+  const { rankInsertItems, tagSearchText } = await import(
+    `${pathToFileURL(out).href}?v=${Date.now()}`
+  );
 
   // The palette's own shape: components carry the folder they came from, tags
   // carry the tag as their search text, and the rest are the odds and ends.
@@ -210,6 +212,65 @@ const check = (what, condition, detail) => {
       'and both below the components',
       text.indexOf('Textarea') < text.indexOf('<textarea>'),
       text.join(' | '),
+    );
+  }
+
+  // --- an element by what it is called ---------------------------------------------------
+  // `p` and `img` are abbreviations; a person types `paragraph` and `image`.
+  // The tag answers to its word but stays below the components that matched.
+  {
+    const words = (tagName) => ({ ...tag(tagName), search: tagSearchText(tagName) });
+    const LISTED = [
+      comp('Paragraph', 'Typography'),
+      comp('Heading', 'Typography'),
+      comp('ImageCard', 'Media'),
+      comp('VideoEmbed', 'Media'),
+      ...['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'img', 'video', 'div'].map(words),
+    ];
+    const listed = (query) => rankInsertItems(LISTED, query).map((i) => i.label);
+    const below = (list, component, tags) =>
+      tags.every((label) => list.indexOf(label) > list.indexOf(component));
+
+    const paragraph = listed('Paragraph');
+    check('paragraph finds <p>', paragraph.includes('<p>'), paragraph.join(' | '));
+    check('below the component', below(paragraph, 'Paragraph', ['<p>']), paragraph.join(' | '));
+
+    const headings = ['<h1>', '<h2>', '<h3>', '<h4>', '<h5>', '<h6>'];
+    const heading = listed('heading');
+    check(
+      'heading finds every level',
+      headings.every((label) => heading.includes(label)),
+      heading.join(' | '),
+    );
+    check('below the component', below(heading, 'Heading', headings), heading.join(' | '));
+    check(
+      'and in level order',
+      headings.every((label, i) => heading.indexOf(label) === i + 1),
+      heading.join(' | '),
+    );
+
+    const image = listed('image');
+    check('image finds <img>', image.includes('<img>'), image.join(' | '));
+    check('below the component', below(image, 'ImageCard', ['<img>']), image.join(' | '));
+
+    const video = listed('video');
+    check('video finds <video>', video.includes('<video>'), video.join(' | '));
+    check('below the component', below(video, 'VideoEmbed', ['<video>']), video.join(' | '));
+
+    const short = listed('p').filter((label) => label.startsWith('<'));
+    check('the tag itself still leads the elements', short[0] === '<p>', short.join(' | '));
+    check('an unnamed tag searches as itself', tagSearchText('div') === 'div');
+    check('a word does not reach unrelated tags', !paragraph.includes('<div>'));
+    let threw = '';
+    try {
+      tagSearchText('');
+    } catch (error) {
+      threw = String(error);
+    }
+    check(
+      'an empty tag is a programmer error',
+      threw.includes('An element search text needs a tag'),
+      threw,
     );
   }
 

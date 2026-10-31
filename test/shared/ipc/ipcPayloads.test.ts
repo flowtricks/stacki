@@ -141,6 +141,83 @@ const fields = {
 };
 
 const metadataSamples: Readonly<Record<string, unknown>> = {
+  'cmsRemote:create': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    collection: 'booklet',
+  },
+  'cmsRemote:delete': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    ids: ['abc'],
+  },
+  'cmsRemote:move': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    move: { collection: 'booklet', id: 'abc', after: 'def' },
+  },
+  'cmsRemote:collections': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+  },
+  'cmsRemote:documents': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    collection: 'campus',
+  },
+  'cmsRemote:document': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    id: 'abc',
+  },
+  'cmsRemote:write': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    write: { id: 'abc', field: 'pastorName', value: 'Matt' },
+  },
+  'cmsRemote:references': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    types: ['campus'],
+  },
+  'cmsRemote:upload': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    kind: 'image',
+  },
+  'cmsRemote:act': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    id: 'abc',
+    action: 'publish',
+  },
+  'cmsRemote:history': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    id: 'abc',
+  },
+  'cmsRemote:restore': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    id: 'abc',
+    revision: 'tx-123',
+  },
+  'cmsConnections:list': { projectPath: '/site' },
+  'cmsConnections:save': {
+    projectPath: '/site',
+    draft: {
+      kind: 'sanity',
+      label: 'Site',
+      projectId: 'abc123',
+      dataset: 'production',
+      secret: 'sk',
+    },
+  },
+  'cmsConnections:remove': { projectPath: '/site', id: '00000000-0000-4000-8000-000000000000' },
+  'cmsConnections:sanityLogin': {
+    projectPath: '/site',
+    request: { action: 'start', id: '00000000-0000-4000-8000-000000000000' },
+  },
   'publish:account': {
     projectPath: '/site',
     request: { action: 'start', id: '00000000-0000-4000-8000-000000000000' },

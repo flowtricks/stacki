@@ -7,6 +7,7 @@ import {
   BranchIcon,
   CodeIcon,
   CommentIcon,
+  ComponentEditIcon,
   CornerIcon,
   CustomElementIcon,
   ElementComponentIcon,
@@ -54,6 +55,7 @@ interface PreviewOverlaysProps {
   readonly focusPath: string | undefined;
   readonly focusWhole: boolean;
   readonly overlayInfo?: (path: string) => OverlayInfo | undefined;
+  readonly onOpenComponent?: ((path: string, occurrence: number) => void) | undefined;
 }
 
 export function PreviewOverlays(props: PreviewOverlaysProps) {
@@ -131,10 +133,59 @@ function NodeOutlines(props: PreviewOverlaysProps) {
         <span className={`node-outline-tag ${box.y * props.scale < 20 ? 'inside' : ''}`}>
           {outlineIcon(info)}
           {info.label}
+          {outline.type === 'sel' && (
+            <ComponentEditButton
+              info={info}
+              path={outline.path}
+              occurrence={all.indexOf(box)}
+              onOpen={props.onOpenComponent}
+            />
+          )}
         </span>
       </div>
     ));
   });
+}
+
+function ComponentEditButton({
+  info,
+  path,
+  occurrence,
+  onOpen,
+}: {
+  readonly info: OverlayInfo;
+  readonly path: string;
+  readonly occurrence: number;
+  readonly onOpen: PreviewOverlaysProps['onOpenComponent'];
+}) {
+  if (info.kind !== 'component') {
+    return undefined;
+  }
+  if (info.astroAsset) {
+    return undefined;
+  }
+  if (info.dynamicTag) {
+    return undefined;
+  }
+  if (!onOpen) {
+    return undefined;
+  }
+  return (
+    <button
+      type="button"
+      className="node-outline-edit"
+      aria-label={`Edit ${info.label} component`}
+      data-tooltip="Edit component"
+      onPointerDown={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen(path, occurrence);
+      }}
+    >
+      <ComponentEditIcon size={14} />
+    </button>
+  );
 }
 
 interface OutlineTarget {

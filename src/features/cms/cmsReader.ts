@@ -26,8 +26,25 @@ export function createCmsReader(options: ReaderOptions) {
 }
 export function cmsCollection(rel: string, data: unknown, error?: string): Collection {
   const slash = rel.lastIndexOf('/');
-  const file = { rel, name: rel.slice(slash + 1), dir: slash < 0 ? '' : rel.slice(0, slash) };
+  const file = {
+    rel,
+    name: collectionName(rel.slice(slash + 1)),
+    dir: slash < 0 ? '' : rel.slice(0, slash),
+  };
   return error === undefined ? collectionOf({ ...file, data }) : collectionOf({ ...file, error });
+}
+
+// The name a collection goes by, as the panel shows it. One inside a source file
+// is addressed as `consts.ts#CAMPUSES`, and a file's single values as
+// `consts.ts#*general`; neither address is a name. The single values go by
+// the file's own name.
+function collectionName(file: string): string {
+  const hash = file.indexOf('#');
+  if (hash === -1) {
+    return file;
+  }
+  const inside = file.slice(hash + 1);
+  return inside === '*general' ? file.slice(0, hash) : inside;
 }
 
 // One active read and one pending refresh bound watcher bursts

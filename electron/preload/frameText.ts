@@ -62,29 +62,55 @@ function findTextHit(catalog: CanvasTextCatalog, event: MouseEvent) {
     return undefined;
   }
   const ancestors = new Set<string>();
+  // The paths of the innermost tagged element clicked: only its own text is
+  // near enough to take a click that missed the words.
+  let innermost: ReadonlySet<string> | undefined;
   let element: Element | undefined = event.target;
   for (let depth = 0; element && depth < 32; depth++) {
-    for (const path of pathsOf(element)) {
+    const paths = pathsOf(element);
+    for (const path of paths) {
       ancestors.add(path);
+    }
+    if (!innermost && paths.length) {
+      innermost = new Set(paths);
     }
     element = element.parentElement ?? undefined;
   }
+  // A double-click inside the element that holds the text but beside its
+  // words — the empty width of a centred heading — still means "edit this
+  // text", not "open the component": the nearest text in that element takes it.
+  let nearest: { readonly hit: TextHit; readonly distance: number } | undefined;
   for (const target of catalog.targets) {
     if (!ancestors.has(target.parent)) {
       continue;
     }
     const match = matchCanvasText(target, event.target);
     const box = match && canvasTextRect(match);
-    if (
-      box &&
-      match &&
-      event.clientX >= box.left &&
-      event.clientX <= box.right &&
-      event.clientY >= box.top &&
-      event.clientY <= box.bottom
-    ) {
+    if (!box || !match) {
+      continue;
+    }
+    const distance = distanceToBox(box, event.clientX, event.clientY);
+    if (distance === 0) {
       return { target, match };
     }
+    if (!innermost?.has(target.parent)) {
+      continue;
+    }
+    if (!nearest || distance < nearest.distance) {
+      nearest = { hit: { target, match }, distance };
+    }
   }
-  return undefined;
+  return nearest?.hit;
+}
+
+type TextHit = {
+  readonly target: CanvasTextTarget;
+  readonly match: NonNullable<ReturnType<typeof matchCanvasText>>;
+};
+
+// How far a point is from a box; zero inside it.
+function distanceToBox(box: DOMRect, x: number, y: number): number {
+  const dx = Math.max(box.left - x, 0, x - box.right);
+  const dy = Math.max(box.top - y, 0, y - box.bottom);
+  return Math.hypot(dx, dy);
 }

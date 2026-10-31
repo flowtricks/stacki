@@ -1,0 +1,596 @@
+/* A connected CMS in the CMS panel (RemoteCmsBrowser.tsx): the panel's own rows,
+   plus a field list for one document. */
+.remote-cms-logo {
+  display: flex;
+  color: var(--text-dim);
+}
+.remote-cms-note {
+  padding: 6px 0;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.remote-cms-failure {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.remote-cms-note button {
+  margin-top: 8px;
+}
+.remote-cms-fields {
+  /* Native date, time and number controls draw their icons for the dark editor. */
+  color-scheme: dark;
+  display: grid;
+  gap: 14px;
+  max-width: 640px;
+}
+/* A field is a component prop field (CmsPropField.tsx): its label row, its
+   control, then any broken rule. The props panel insets its fields; here the
+   column does, so a field fills it. */
+.remote-cms-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.remote-cms-field > .props-field {
+  margin: 0;
+}
+/* Required by the CMS: an asterisk after the field's own name (not a nested field's). */
+.remote-cms-field.is-required > .props-field > label .prop-label::after {
+  content: '*';
+  margin-left: 1px;
+  color: inherit;
+}
+.remote-cms-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+.remote-cms-label-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-faint);
+}
+.remote-cms-label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.remote-cms-required {
+  margin-left: auto;
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--text-faint);
+}
+/* Required and empty: the CMS will not publish until it is filled. */
+.remote-cms-required.is-missing {
+  color: var(--amber);
+}
+.remote-cms-help {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-faint);
+}
+.remote-cms-field textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+/* A group's fields (and an image's own fields), inset under the group's name. */
+.remote-cms-group {
+  display: grid;
+  gap: 14px;
+  padding: 4px 0 2px 12px;
+  border-left: 1px solid var(--border);
+}
+.remote-cms-geopoint {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.remote-cms-geopoint label {
+  display: grid;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+/* An image or file: a preview beside its upload and remove buttons. */
+.remote-cms-asset {
+  display: grid;
+  gap: 8px;
+}
+.remote-cms-asset-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.remote-cms-asset-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.remote-cms-asset-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* A list of groups, images or references: rows that open in place. */
+.remote-cms-list {
+  display: grid;
+  gap: 2px;
+}
+.remote-cms-list-item {
+  border-radius: 6px;
+  background: var(--bg-input);
+  min-width: 0;
+}
+.remote-cms-list-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  min-width: 0;
+}
+.remote-cms-list-row.is-opens:hover {
+  background: var(--bg-hover);
+}
+.remote-cms-list-row .ghost {
+  color: var(--text-faint);
+  opacity: 0;
+}
+.remote-cms-list-row:hover .ghost,
+.remote-cms-list-row .ghost:focus-visible {
+  opacity: 1;
+}
+.remote-cms-list-row .ghost:hover {
+  color: var(--red);
+}
+.remote-cms-list-row .remote-cms-grip {
+  opacity: 0.5;
+}
+.remote-cms-list-row:hover .remote-cms-grip {
+  opacity: 1;
+}
+/* Inside a filled row a control needs no fill of its own. */
+.remote-cms-list-inline input,
+.remote-cms-list-inline textarea {
+  background: transparent;
+  padding-left: 2px;
+}
+.remote-cms-list-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.remote-cms-list-body {
+  padding: 6px 10px 12px;
+}
+.remote-cms-list-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* A collection as a table (RemoteCmsView.tsx): a toolbar, then one row per item. */
+.remote-cms-table-view {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  /* The same darker panel the column of names keeps once an item is open, so
+     opening one does not change the list's colour. */
+  background: var(--bg-panel);
+}
+.remote-cms-toolbar {
+  gap: 8px;
+}
+.remote-cms-toolbar .cms-detail-title {
+  flex: 1;
+}
+.remote-cms-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(260px, 30vw);
+  padding: 0 8px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-faint);
+}
+.remote-cms-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 5px 0;
+}
+.remote-cms-table {
+  flex: 1;
+  overflow: auto;
+}
+.remote-cms-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 110px 130px;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 16px 0 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+}
+.remote-cms-row:hover {
+  background: var(--bg-hover);
+}
+.remote-cms-row-head {
+  min-height: 32px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: default;
+}
+.remote-cms-row-head:hover {
+  background: transparent;
+}
+.remote-cms-row.drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.remote-cms-row.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.remote-cms-row.is-dragging {
+  opacity: 0.4;
+}
+.remote-cms-grip {
+  display: flex;
+  color: var(--text-faint);
+  cursor: grab;
+}
+.remote-cms-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Where a document stands, as a tinted pill: published green, a draft or
+   unpublished edits amber, as Sanity Studio colours them. */
+.remote-cms-status {
+  justify-self: start;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+}
+.remote-cms-status.is-published {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+}
+.remote-cms-times {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.remote-cms-date {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+/* An image as a thumbnail tile, alone or in a grid (RemoteImageGrid.tsx). */
+.remote-cms-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+}
+.remote-cms-tile-slot {
+  cursor: grab;
+  min-width: 0;
+}
+.remote-cms-tile-slot.is-dragging {
+  opacity: 0.4;
+}
+.remote-cms-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-width: 220px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.12));
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.remote-cms-tiles .remote-cms-tile {
+  max-width: none;
+}
+.remote-cms-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.remote-cms-tile.is-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.remote-cms-tile.is-empty:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+/* A single empty image field is a short strip to click, not a large empty frame. */
+.remote-cms-asset > .remote-cms-tile.is-empty {
+  aspect-ratio: auto;
+  height: 96px;
+  max-width: 320px;
+}
+.remote-cms-tile-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.remote-cms-tile:hover .remote-cms-tile-actions,
+.remote-cms-tile:focus-within .remote-cms-tile-actions {
+  opacity: 1;
+}
+.remote-cms-tile-actions button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  transition:
+    background 0.1s,
+    color 0.1s;
+}
+.remote-cms-tile-actions button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.remote-cms-tile-actions .is-remove:hover:not(:disabled) {
+  background: rgba(255, 69, 58, 0.85);
+  color: #fff;
+}
+.remote-cms-tile-busy {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+}
+
+/* A switch sits under its label at its own width; stretched across the field's
+   grid cell, its knob would leave the track behind. */
+.remote-cms-field .cms-toggle,
+.remote-cms-group .cms-toggle {
+  justify-self: start;
+  width: auto;
+}
+
+/* A reference row is fixed, and a one-value row edits in place: neither opens. */
+.remote-cms-list-row.is-fixed,
+.remote-cms-list-row.is-inline {
+  cursor: default;
+}
+.remote-cms-list-inline {
+  flex: 1;
+  min-width: 0;
+}
+.remote-cms-list-inline input {
+  width: 100%;
+}
+
+/* A single image field shows the picture at its own aspect ratio, which its
+   asset id gives before it loads (ImageTile); only a grid crops to tiles. */
+.remote-cms-asset > .remote-cms-tile:not(.is-empty) {
+  max-width: 320px;
+}
+.remote-cms-tile img {
+  opacity: 1;
+  transition: opacity 0.2s;
+}
+/* Until the picture arrives: a quiet shimmer in the box it will fill. */
+.remote-cms-tile.is-loading {
+  background: linear-gradient(
+      100deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.06) 50%,
+      transparent 70%
+    )
+    var(--bg-input);
+  background-size: 200% 100%;
+  animation: remote-cms-shimmer 1.2s linear infinite;
+}
+.remote-cms-tile.is-loading img {
+  opacity: 0;
+}
+@keyframes remote-cms-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+/* A broken rule under its field: red blocks publishing, amber only warns. */
+.remote-cms-problem {
+  font-size: 11px;
+  color: var(--red);
+}
+.remote-cms-problem.is-warning {
+  color: var(--amber);
+}
+
+/* The item header's Publish and its menu, at the far right. */
+.remote-cms-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+}
+.remote-cms-actions .primary {
+  min-width: 84px;
+}
+
+/* History: one row per saved version, newest first. */
+.remote-cms-history {
+  width: min(440px, 92vw);
+}
+.remote-cms-history-body {
+  display: grid;
+  gap: 2px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.remote-cms-revision {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.remote-cms-revision:hover {
+  background: var(--bg-hover);
+}
+.remote-cms-revision-time {
+  color: var(--text);
+}
+.remote-cms-revision-author {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.remote-cms-revision-now {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* A row's preview, as the CMS lists it: a square picture, then the title with
+   its subtitle under it. The picture's box is fixed, so loading moves nothing. */
+.remote-cms-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.remote-cms-preview-media {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: var(--bg-input);
+}
+.cms-item .remote-cms-preview-media {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+}
+.remote-cms-preview-text {
+  display: grid;
+  min-width: 0;
+}
+.remote-cms-subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.cms-item .remote-cms-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The narrow column grows to fit a subtitle rather than clipping it. */
+.cms-item:has(.remote-cms-preview) {
+  height: auto;
+  min-height: 32px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+/* An item with no picture shows its type's icon in the picture's place. */
+.remote-cms-preview-media.is-icon {
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+}
+.sanity-type-icon {
+  flex: none;
+  display: block;
+}
+
+/* A row with a subtitle stacks it under the title, as a list preview does. */
+.remote-cms-list-title {
+  display: grid;
+}
+
+/* A colour: Stacki's swatch, which opens its picker, beside the value as text. */
+.cms-color-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.cms-color-input input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+}
+
+/* An SVG has no size of its own to reserve: it sits whole inside a square box. */
+.remote-cms-tile.is-vector {
+  aspect-ratio: 1;
+  max-width: 200px;
+  padding: 12px;
+}
+.remote-cms-tile.is-vector img {
+  object-fit: contain;
+}

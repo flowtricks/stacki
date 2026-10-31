@@ -200,6 +200,7 @@ function EditorContent({
     <div className="studio-editor-content">
       <PreviewCanvas
         {...model}
+        openComponent={props.view.role === 'client' ? undefined : model.openComponent}
         focusPath={props.focus?.path}
         device={device}
         onDevice={setDevice}

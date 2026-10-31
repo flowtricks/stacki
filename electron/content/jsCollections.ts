@@ -345,8 +345,9 @@ function parseWord(source: string, at: number): Parsed | undefined {
  *   requireExport — only `export const` counts. A page's frontmatter has no
  *     exports, so scanning one passes false.
  *   allowPlainLists — a list of strings or numbers counts as a collection too.
- *     In a data file that's a constant, not content; in a page's frontmatter
- *     (`const rotatingWords = ["found.", …]`) it's exactly what's being edited.
+ *     In a data file that's one of its settings, shown as a list field in
+ *     General; in a page's frontmatter (`const rotatingWords = ["found.", …]`)
+ *     it's exactly what's being edited.
  */
 interface ScanOptions {
   readonly requireExport?: boolean;
@@ -405,7 +406,7 @@ function findCollections(source: string, options: ScanOptions = {}): Collection[
     }
     const list: unknown[] = value;
     // A collection is a list of records; an array of bare strings is a
-    // constant in a data file, but it is content in a page.
+    // setting in a data file (General's list field), but content in a page.
     const isRecords =
       list.length > 0 &&
       list.every((item) => item !== null && typeof item === 'object' && !Array.isArray(item));
@@ -583,14 +584,23 @@ function findScalarExports(source: string, options: ScanOptions = {}): ScalarExp
       continue;
     }
     const value = parsed.value;
-    // An array is a collection of its own; an object rides along here as a
-    // group of fields.
-    if (Array.isArray(value)) {
+    // A list of records is a collection of its own; an object rides along here
+    // as a group of fields. A list of plain values — `SERMON_SERVICES =
+    // ["Sunday Service", …]` — is one setting with several items, a list field,
+    // except where the scan makes such lists collections (a page's frontmatter).
+    if (Array.isArray(value) && !isPlainValues(value, options)) {
       continue;
     }
     out.push({ name, value: value, start, end: parsed.next });
   }
   return out;
+}
+
+function isPlainValues(list: readonly unknown[], options: ScanOptions): boolean {
+  if (options.allowPlainLists === true) {
+    return false;
+  }
+  return list.every((item) => item === null || typeof item !== 'object');
 }
 
 /** A file's single values as one record, or undefined when it has none. */

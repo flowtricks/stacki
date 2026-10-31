@@ -241,6 +241,7 @@ function DesignPreview({
           focusPath={props.focusPath}
           focusWhole={props.focusWhole ?? false}
           {...(props.overlayInfo === undefined ? {} : { overlayInfo: props.overlayInfo })}
+          onOpenComponent={props.onOpenPath}
         />
       </div>
     </>

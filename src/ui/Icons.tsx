@@ -28,9 +28,28 @@ export {
 
 export { type IconProps, ASTRO_ASSET_ACCENT } from './IconBase';
 
+export const ComponentEditIcon = (props: IconProps) => (
+  <I {...props} filled>
+    <path fillRule="evenodd" clipRule="evenodd" d={paths.componentEditIconPath} />
+    <path d="M9 13H9.70711L14.3536 8.35359L13.6464 7.64648L9 12.2929V13Z" />
+  </I>
+);
+
 export const GitHubIcon = (props: IconProps) => (
   <I24 {...props}>
     <path fill="currentColor" d={paths.githubIconPath} />
+  </I24>
+);
+
+export const SanityIcon = (props: IconProps) => (
+  <I24 {...props}>
+    <path fill="currentColor" d={paths.sanityIconPath} />
+  </I24>
+);
+
+export const PayloadIcon = (props: IconProps) => (
+  <I24 {...props}>
+    <path fill="currentColor" d={paths.payloadIconPath} />
   </I24>
 );
 
@@ -511,6 +530,22 @@ export const CalendarIcon = (props: IconProps) => (
   <I {...props}>
     <rect x="2.25" y="3.25" width="11.5" height="10.5" rx="1.5" />
     <path d="M2.25 6.5h11.5M5.5 1.75v2.5M10.5 1.75v2.5" />
+  </I>
+);
+
+// A place on a map: a CMS location field.
+export const MapPinIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="M8 14.25S12.25 10.35 12.25 7a4.25 4.25 0 0 0-8.5 0c0 3.35 4.25 7.25 4.25 7.25" />
+    <circle cx="8" cy="7" r="1.5" />
+  </I>
+);
+
+// An attached file: a CMS file field.
+export const PaperclipIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="m13 7.5-5.2 5.2a3 3 0 0 1-4.25-4.25l5.3-5.3a2 2 0 0 1 2.85 2.85" />
+    <path d="M11.7 6 6.4 11.3a1 1 0 0 1-1.4-1.4l4.6-4.6" />
   </I>
 );
 

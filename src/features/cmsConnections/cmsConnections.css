@@ -1,0 +1,102 @@
+/* CMS connections, in Settings (Desktop) and the Studio menu. Matches the
+   Settings cards: 13px headings, #aaa body text, white primary actions. */
+.cms-connections {
+  /* The Settings section rhythm (.app-preferences): space, divider, 24px to the next. */
+  padding-bottom: 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #333;
+}
+.cms-connections h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.cms-connections p {
+  margin: 0 0 10px;
+  color: #aaa;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.cms-connections .cms-connections-alert {
+  color: #ff9b92;
+}
+.cms-connection-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.cms-connection-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.cms-connection-label {
+  font-weight: 600;
+}
+.cms-connection-detail {
+  flex: 1;
+  color: #8a8a8a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cms-connection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cms-connect-control {
+  position: relative;
+  display: inline-block;
+}
+/* The Publish split button's shape (publishing.css), in the plain button colours. */
+.cms-connect-split {
+  display: flex;
+}
+.cms-connect-split > button:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.cms-connect-split > .cms-connect-arrow {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid #1b1b1b;
+  width: 24px;
+  min-width: 24px;
+  padding-inline: 0;
+}
+.cms-connect-arrow > svg {
+  /* Lower the top-heavy triangle so its visual weight sits at the button's center. */
+  transform: translateY(0.5px);
+}
+.cms-connect-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 100;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  min-width: 220px;
+  border: 1px solid var(--border, #444);
+  border-radius: 8px;
+  background: var(--panel, #242424);
+  box-shadow: 0 8px 24px #0004;
+}
+.cms-connect-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  text-align: left;
+}
+.cms-sanity-sign-in .modal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

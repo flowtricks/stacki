@@ -28,14 +28,16 @@ enforce these invariants:
   for a page result's `bail` and a Markdown model's `layoutPath`.
 - Attribute variants are `string`, `expr`, `bare`, or `spread`. The value field
   exists only on variants that need it.
-- General `.map()` callbacks carry `bodyParts`: bounded JavaScript slices interleaved
-  with their markup children, with exactly one more slice than child. Arrow, async,
+- General `.map()` and `.flatMap()` callbacks carry `bodyParts`: bounded JavaScript slices
+  interleaved with their markup children, with exactly one more slice than child. Arrow, async,
   function, typed, destructured, and referenced callbacks are recognized by the
   TypeScript syntax parser. Early returns, nested scopes, and the optional `thisArg`
   stay in those slices; preview markers wrap each markup root as one expression.
   Callback roots are separate expression sites, so the projection marks the container
   with `callback: true`; inserting into it cannot silently choose a return branch.
   Its element attributes and nested markup remain editable through ordinary intents.
+  Flat-map callbacks always retain their JavaScript slices, including nested map scopes,
+  so the navigator exposes their markup without rewriting the flattening operation.
   Referenced callbacks remain loops without invented children: their markup belongs
   to the referenced implementation, not to the call site.
 
@@ -995,6 +997,36 @@ Escape and blur never rename anything. Errors appear below the field, including 
 conflicts from outside edits. Studio project scans include bounded `pageFolders` entries so
 empty folders reserve destinations during live validation as well as during the final write.
 
+### CMS connections
+
+A project's hosted CMS connections (`shared/properties/cmsConnections.ts`) name which CMS its
+content comes from and hold the key Stacki writes drafts with. Kinds: Sanity (project, dataset),
+Payload (https address, auth collection) and custom (a draft endpoint and the header its key goes
+in). Addresses are https, or http on localhost only, with no login or fragment. A key is one line
+of printable ASCII, at most 4,096 characters; it crosses the boundary once, in
+`cmsConnections:save`, and no reply ever carries it. At most 16 connections per project.
+
+Desktop keeps connections in `userData/cms-connections.json`, keyed by the project's real path,
+never in `.stacki/` (which is committed). Keys are encrypted with Electron `safeStorage`; where it
+is unavailable nothing is saved, and a key that cannot be decrypted reads as absent. The file is
+owner-only and a damaged one reads as empty.
+
+"Log in with Sanity" (`cmsConnections:sanityLogin`) opens Sanity's own login page
+(`https://www.sanity.io/login`, `type=stampedToken`, `withSid=true`), where the person picks Google,
+GitHub or email, as Sanity's SDK does. It returns to a one-shot `localhost` server, which Sanity
+allows as an origin; it is not a documented public API for third-party apps. The session id may
+arrive in the query, in a `url` parameter, or in the fragment, which a page on that server reads
+and returns once in the query. The id is exchanged for the person's login token, used only in
+the main process to list projects and datasets and to create a project key with the Editor
+role, then logged out. Only the key is kept. The sign-in page must be on `https://www.sanity.io`.
+A suggestion comes from the site's `.env` (`*SANITY_PROJECT_ID`, `*SANITY_DATASET`). Sessions
+time out after five minutes. A role that cannot create keys is told to paste an Editor key instead.
+
+While Stacki previews a project with a Sanity connection, its dev server gets
+`STACKI_SANITY_PREVIEW=1`, `STACKI_SANITY_PROJECT_ID`, `STACKI_SANITY_DATASET` and
+`STACKI_SANITY_TOKEN` (the connection's key). Nothing else receives them, and a site opts in by
+reading them; production builds never see them.
+
 ### On-canvas text editing
 
 Desktop and Studio share the canvas text catalog and native text editor. In selection mode,
@@ -1030,6 +1062,26 @@ inline markup survives the projection, and expression chips retain their origina
 while displaying the draft value. Cancellation and source changes discard the mirror. A save
 precedes the inactive message so the mirror remains until the source acknowledges the edit.
 Leaving native editing clears its text selection without clearing another element's selection.
+
+Validated `avb:text-selection` messages report the words selected in the open editor: offsets
+counted in shown characters (`canvasTextFolded`: a whitespace run is one space, leading
+whitespace is none), because the editor's text and the source may differ in whitespace alone;
+the host unfolds them into the text it formats. Offsets are at most the 10,000-character limit,
+start before end, with the selection's
+box in frame viewport pixels (finite, at most 1,000,000 in any direction, non-negative size).
+Only changes are posted; a message with no range clears the selection. Desktop shows the
+Settings Content field's formatting bar over literal text only — never shared variables or CMS
+fields. A press takes over the session: the host closes the editor with `cancel`, ignores the
+save the editor posts on its way out, and applies one `setNodeInline` edit to the element the
+Content field would edit, with the typed words and the press together, using the same
+formatting code (`src/features/props/richFormat.ts`). The link field ends typing first; leaving
+it without a URL saves the typed words as an ordinary text edit.
+
+Words in an inline run carry no markers (`astroSerializeMarked.ts`). The frame places an
+unmarked run between its tagged siblings for outlines, and names it for hover and click only
+where it sits beside a tagged sibling; a run that is its element's only content leaves the
+element as the target. A double-click beside the words of the innermost clicked element edits
+its nearest text rather than opening a component.
 
 Exact marked text runs take precedence. A bounded fallback can combine unmarked span/div
 animation wrappers when their text matches one unique source segment and every authored child

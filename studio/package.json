@@ -1,6 +1,6 @@
 {
   "name": "@stacki/studio",
-  "version": "0.1.94",
+  "version": "0.1.95",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -39,6 +39,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@lezer/highlight": "^1.2.5",
+    "@sanity/icons": "5.2.1",
     "@uiw/react-codemirror": "^4.25.12",
     "codemirror": "^6.0.2",
     "json5": "^2.2.3",

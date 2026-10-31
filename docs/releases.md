@@ -15,6 +15,35 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.95 connected CMS and canvas editing
+
+- Connect Sanity from Settings with "Log in with Sanity" (or a pasted key) and edit its content in
+  the CMS panel. Collections follow the site's Studio order and icons; lists show each type's
+  preview picture, title and subtitle. Every field type is editable — text, numbers, switches,
+  dates, choices (including ones built from project constants), slugs, locations, groups, lists,
+  images and files (uploaded to Sanity), references and rich text — read from the site's own
+  schema, including field helpers, hidden fields, required fields and stated validation rules.
+- Edits save as drafts. The item header shows draft or published state with times, and offers
+  Publish (blocked while a stated rule fails), Discard changes, Unpublish and History with
+  restore. Items can be created, deleted after a confirm, and dragged into order where the
+  collection uses the orderable plugin.
+- Sanity reads are cached and refreshed in the background, so panels open at once; nothing waits
+  on the network, and offline the panel keeps what it last read.
+- CMS fields, local and Sanity, use the component prop fields: blue labels when set, the `?`
+  help, the `{}` switch from a dropdown to free text, locale and time-zone choices, real toggles,
+  and dropdowns capped in height with search for long lists.
+- `consts.ts` lists are fields inside their file; canvas text, palette search, outlines and the
+  canvas formatting toolbar carry the editing improvements made alongside.
+- Stacki Studio connects Sanity too, by pasted Editor key from the CMS panel's "Connect a CMS"
+  row (Studio's docs/cloudflare.md, "CMS connections"). The Worker keeps keys encrypted in R2 and
+  decrypts one only for the request that needs it; only GitHub Write or Admin collaborators may
+  add or remove a connection. A local Studio keeps its connections in the user's home folder.
+  Desktop and Studio answer every connected-CMS call with the same service.
+- Text fields holding a hex colour use Stacki's colour picker, with `{}` for any other value;
+  SVG files preview as pictures.
+- New dependency `@sanity/icons` (docs/dependencies.md). Desktop, the Studio source bundle and
+  `create-stacki` are aligned at 0.1.95.
+
 ## 0.1.94 Windows release corrections
 
 The 0.1.93 release stopped after Windows exposed two failures. A preview-port probe rejected

@@ -62,7 +62,10 @@ test('the complete channel inventory matches real main and terminal registration
   // Account sign-in adds one project-scoped channel for start, status, and cancellation.
   // Published-site discovery has its own channel so remote lookups cannot block local status.
   // Git pull and its background incoming check each have a project-scoped channel.
-  assert.equal(harness.handlers.size, 131);
+  // CMS connections add four (list, save, remove, Sanity login) and the connected-CMS
+  // panel twelve (collections, documents, one document, write, create, delete, move,
+  // references, upload, publish/discard/unpublish, history, restore).
+  assert.equal(harness.handlers.size, 147);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual(
     [...Object.keys(IPC_PAYLOADS)].sort(),
@@ -282,11 +285,13 @@ test('CMS discovers root site constants and preserves unrelated source', async (
   const read = toRecord(await harness.invoke('cms:read', payload));
   const data = toRecord(read?.['data']);
   assert.ok(data);
+  // A list of text is one of the file's values, edited as a list field.
   assert.deepEqual(data, {
     SITE_NAME: 'Original',
     SITE_DESCRIPTION: 'Site description',
     SITE_URL: 'https://example.com',
     SITE_LOCALE: 'en-US',
+    NOINDEX_ROUTES: ['/404'],
   });
   const saved = toRecord(
     await harness.invoke('cms:write', { ...payload, data: { ...data, SITE_NAME: 'Updated' } }),

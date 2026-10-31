@@ -110,7 +110,18 @@ Use independent cryptographically random values of at least 32 bytes for the fin
 
 Optional AI configuration: set `AI_BASE_URL` and `AI_MODEL` in Worker vars; use a secret for `AI_API_KEY` if your provider requires one. `AI_BASE_URL` is the OpenAI-compatible base URL, typically ending in `/v1`; the gateway appends `/chat/completions`. Without a provider, the AI panel explains the missing configuration. The endpoint must use HTTPS and be reachable from the Worker. A local model on your laptop is only usable in local development unless you intentionally host an authenticated reachable endpoint.
 
-## Build and verify
+## CMS connections
+
+Editors connect a site's Sanity project from the CMS panel's **Connect a CMS** row by pasting
+an Editor key. The Worker keeps connections in the `DRAFTS` R2 bucket at
+`cms/connections.json`, each key encrypted (AES-GCM) under a key derived from `SESSION_SECRET`.
+Neither R2, the container nor the browser holds a usable key: the Worker decrypts it for one
+connected-CMS request and passes it to the container with that request alone. Anyone who can
+edit may use a connection; only GitHub Write or Admin collaborators may add or remove one.
+
+Rotating `SESSION_SECRET` makes saved keys unreadable; add the connections again afterwards.
+A local Studio (`npm run dev`) keeps its connections in the user's home folder
+(`~/.stacki/studio-cms/`), never in the project.
 
 From the website’s `studio/` directory, or a directory produced by `astro-studio init-cloudflare`:
 

@@ -13,6 +13,7 @@ import { confirmDialog } from '../../ui/ConfirmDialog';
 import {
   PlusIcon,
   CloseIcon,
+  FileIcon,
   ChevronRightIcon,
   CopyIcon,
   TrashIcon,
@@ -228,7 +229,10 @@ function CmsContent({ model, snapshot }: ContentProps) {
   }
   return (
     <div className={`cms-view ${model.hidden ? 'hidden' : ''}`}>
-      <CmsItems model={model} snapshot={snapshot} actions={actions} />
+      {/* One object (not a list) has nothing to choose between: its fields fill the view. */}
+      {!snapshot.collection.single && (
+        <CmsItems model={model} snapshot={snapshot} actions={actions} />
+      )}
       <div className="cms-detail">
         <CmsDetailHead model={model} snapshot={snapshot} actions={actions} />
         <CmsDetailBody model={model} snapshot={snapshot} />
@@ -364,13 +368,20 @@ function CmsDetailHead({ model, snapshot, actions }: ItemProps) {
       <button className="ghost cms-back" title="Close the CMS" onClick={model.onClose}>
         <CloseIcon size={13} />
       </button>
+      {collection.single && (
+        <span className="cms-detail-icon">
+          <FileIcon size={14} />
+        </span>
+      )}
       <span className="cms-detail-title">
-        {item !== undefined ? titleOf(item, model.selection) : collection.label}
+        {item !== undefined && !collection.single
+          ? titleOf(item, model.selection)
+          : collection.label}
       </span>
       <span className={`cms-saved ${model.saved ? 'on' : ''}`}>
         <CheckIcon size={11} /> Saved
       </span>
-      <span className="cms-detail-path">src/{collection.rel}</span>
+      <span className="cms-detail-path">src/{filePath(collection.rel)}</span>
       {item !== undefined && !collection.single && (
         <>
           <button className="ghost" title="Duplicate item" onClick={actions.duplicate}>
@@ -390,6 +401,10 @@ function CmsDetailHead({ model, snapshot, actions }: ItemProps) {
       )}
     </div>
   );
+}
+// A file's single values are addressed `consts.ts#*general`; the file is what it is.
+function filePath(rel: string): string {
+  return rel.endsWith('#*general') ? rel.slice(0, -'#*general'.length) : rel;
 }
 function CmsDetailBody({ model, snapshot }: ContentProps) {
   const { collection, items, declared } = snapshot;
@@ -414,7 +429,7 @@ function CmsDetailBody({ model, snapshot }: ContentProps) {
       {collection.error && <ErrorToast message={collection.error} />}
       {item !== undefined && !isPlainObject(item) && (
         <div className="cms-card">
-          <h3>{collection.single ? collection.label : 'Basic info'}</h3>
+          {!collection.single && <h3>Basic info</h3>}
           <FieldRow
             {...context}
             label="Value"
@@ -428,7 +443,8 @@ function CmsDetailBody({ model, snapshot }: ContentProps) {
       )}
       {isPlainObject(item) && (
         <div className="cms-card">
-          <h3>{collection.single ? collection.label : 'Basic info'}</h3>
+          {/* One object is the whole view: its title already names it. */}
+          {!collection.single && <h3>Basic info</h3>}
           {fields.map((field) => (
             <FieldRow
               key={field.key}

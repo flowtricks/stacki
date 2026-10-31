@@ -1,5 +1,6 @@
 // Only bounded text values cross the frame boundary. Source ranges stay in the editor.
 import { digest, list, pathText, record, text } from '../core/boundary';
+import { assert } from '../core/assert';
 
 export interface CanvasTextTarget {
   readonly kind: 'element' | 'component';
@@ -100,4 +101,78 @@ export function parseCanvasTextEvent(input: unknown): CanvasTextEvent | undefine
     default:
       return undefined;
   }
+}
+
+// Positions in canvas text, counted the way HTML shows it: a run of ASCII
+// whitespace is one space, and whitespace before the first word is nothing.
+// The editor's text and the source text agree on this count even when their
+// whitespace differs — a component's template indentation, a trimmed slot —
+// which is the same sameness the frame requires before it opens an editor.
+const FOLDABLE = /[\t\r\n ]/;
+
+/** How many shown characters precede `offset` in `text`. */
+export function canvasTextFolded(text: string, offset: number): number {
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > text.length) {
+    throw new Error('Canvas text offset is outside its text');
+  }
+  let count = 0;
+  let started = false;
+  let inSpace = false;
+  assert(offset <= text.length, 'A folded offset lies inside its text');
+  for (let index = 0; index < offset; index += 1) {
+    if (FOLDABLE.test(text.charAt(index))) {
+      if (started && !inSpace) {
+        count += 1;
+      }
+      inSpace = true;
+    } else {
+      started = true;
+      inSpace = false;
+      count += 1;
+    }
+  }
+  assert(count <= offset, 'Folding never adds characters');
+  return count;
+}
+
+/**
+ * The offset in `text` where `folded` shown characters have gone by: for a
+ * start, at the next shown character; for an end, right after the last one.
+ * Undefined when the text shows fewer characters than that.
+ */
+export function canvasTextUnfolded(
+  text: string,
+  folded: number,
+  edge: 'start' | 'end',
+): number | undefined {
+  if (!Number.isSafeInteger(folded) || folded < 0) {
+    throw new Error('Canvas text position must be a non-negative integer');
+  }
+  assert(text.length <= CANVAS_TEXT_LIMIT * 2, 'Unfolded text is within the editing bound');
+  // One pass: `count` is canvasTextFolded(text, index) at each step.
+  let count = 0;
+  let started = false;
+  let inSpace = false;
+  for (let index = 0; index <= text.length; index += 1) {
+    const shown = index < text.length && !FOLDABLE.test(text.charAt(index));
+    if (count === folded) {
+      if (edge === 'end' || shown || index === text.length) {
+        return index;
+      }
+    }
+    if (count > folded || index === text.length) {
+      return undefined;
+    }
+    if (shown) {
+      started = true;
+      inSpace = false;
+      count += 1;
+    } else {
+      if (started && !inSpace) {
+        count += 1;
+      }
+      inSpace = true;
+    }
+  }
+  return undefined;
 }

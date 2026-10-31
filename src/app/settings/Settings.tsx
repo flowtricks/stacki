@@ -1,4 +1,5 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import { CmsConnections } from '../../features/cmsConnections/CmsConnections';
 import { useEffect, useState } from 'react';
 import Popup from '../../ui/Popup';
 import StudioSetup from '../../features/studioSetup/StudioSetup';
@@ -31,6 +32,9 @@ function SettingsDialog(props: Props & { readonly onClose: () => void }) {
           </header>
           <div className="app-settings-content">
             <Preferences />
+            {props.projectPath && (
+              <CmsConnections key={`cms:${props.projectPath}`} projectPath={props.projectPath} />
+            )}
             {props.projectPath ? (
               <StudioSetup
                 key={props.projectPath}

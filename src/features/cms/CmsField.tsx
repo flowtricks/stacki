@@ -7,7 +7,14 @@ import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import { toArray, toRecord } from '../../../shared/core/record';
 import { blankItem, contentFieldsOf, isExpr, titleOf, EXPR_KEY } from './cmsSchema';
-import { ChevronRightIcon, CloseIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
+import {
+  ChevronRightIcon,
+  CloseIcon,
+  DragIcon,
+  PlusIcon,
+  TrashIcon,
+  VariableTextSizeIcon,
+} from '../../ui/Icons';
 import AssetField from '../../ui/AssetField';
 import AutoTextarea from '../../ui/AutoTextarea';
 import CalendarField from '../../ui/DateField';
@@ -16,6 +23,10 @@ import { containsHTML } from '../../ui/htmlFieldModel';
 import { calendarValue } from '../../ui/dateFieldModel';
 import ExprInput from '../../ui/ExprInput';
 import useListReorder from '../../ui/useListReorder';
+import { CmsListField } from './CmsListField';
+import { CmsFieldFrame, CmsPropField, type CmsScalar, type CmsScalarKind } from './CmsPropField';
+import { FIELD_TYPES } from './cmsFieldTypes';
+import { CmsColorInput } from './CmsColorInput';
 
 export interface CmsFieldContext {
   readonly projectPath: string;
@@ -76,12 +87,63 @@ export default function CmsField({ label, type, depth = 0, ...props }: CmsFieldP
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
     >
-      <div className="cms-field-head">
-        <label>{label}</label>
-      </div>
-      <FieldControl {...props} label={label} type={shown.current} depth={depth} />
+      <LocalField {...props} label={label} type={shown.current} depth={depth} />
     </div>
   );
+}
+
+// A project field drawn as a component prop field, like a connected CMS's
+// (CmsPropField.tsx): text, numbers and switches are prop fields outright;
+// any other kind keeps its control under the same label row.
+function LocalField(props: ControlProps) {
+  const { type, value, label, onChange } = props;
+  const scalar = localScalar(type, value);
+  if (scalar !== undefined) {
+    return (
+      <CmsPropField
+        name={label}
+        help=""
+        kind={scalar}
+        options={[]}
+        value={scalarValue(value)}
+        onChange={(next) => onChange(next ?? (scalar === 'boolean' ? false : ''))}
+      />
+    );
+  }
+  const Icon = FIELD_TYPES.find((entry) => entry.value === type)?.Icon ?? VariableTextSizeIcon;
+  return (
+    <CmsFieldFrame name={label} help="" icon={<Icon size={12} />} set={hasValue(value)}>
+      <FieldControl {...props} />
+    </CmsFieldFrame>
+  );
+}
+
+// Plain text, long text, numbers and switches; text holding HTML keeps its editor.
+function localScalar(type: FieldType, value: unknown): CmsScalarKind | undefined {
+  if (type === 'number' || type === 'boolean') {
+    return type;
+  }
+  if (type === 'text' || type === 'empty' || type === 'longtext') {
+    if (containsHTML(fieldText(value))) {
+      return undefined;
+    }
+    return type === 'longtext' ? 'text' : 'string';
+  }
+  return undefined;
+}
+
+function scalarValue(value: unknown): CmsScalar | undefined {
+  if (typeof value === 'string') {
+    return value === '' ? undefined : value;
+  }
+  return typeof value === 'number' || typeof value === 'boolean' ? value : undefined;
+}
+
+function hasValue(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  return value !== undefined && value !== '';
 }
 
 function FieldControl(props: ControlProps) {
@@ -114,7 +176,7 @@ function FieldControl(props: ControlProps) {
         />
       );
     case 'list':
-      return <ListEditor value={toArray(value) ?? []} onChange={onChange} />;
+      return <ListField value={toArray(value) ?? []} onChange={onChange} />;
     case 'object':
       return (
         <GroupEditor
@@ -252,23 +314,16 @@ function AddressField({
   );
 }
 function ColorField({ value, onChange }: ScalarProps) {
-  const text = fieldText(value);
-  return (
-    <div className="cms-color">
-      <input
-        type="color"
-        value={/^#[0-9a-f]{6}$/i.test(text) ? text : '#000000'}
-        onChange={(event) => onChange(event.target.value)}
-      />
-      <input
-        value={text}
-        placeholder="#000000"
-        spellCheck={false}
-        maxLength={BOUNDARY_LIMITS.textLengthMax}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </div>
-  );
+  return <CmsColorInput value={fieldText(value)} label="colour" onChange={onChange} />;
+}
+// Plain text and numbers are options to drag, rename and delete; a list holding
+// rich text or dates keeps the editors those values need.
+function ListField(props: ListProps) {
+  const rich = props.value.some((entry) => {
+    const text = fieldText(entry);
+    return containsHTML(text) || calendarValue(text) !== undefined;
+  });
+  return rich ? <ListEditor {...props} /> : <CmsListField {...props} />;
 }
 function ListEditor({ value, onChange }: ListProps) {
   assert(value.length <= BOUNDARY_LIMITS.itemsMax, 'CMS list: item limit exceeded');

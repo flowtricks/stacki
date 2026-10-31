@@ -1,4 +1,5 @@
 import { parseCanvasInteraction } from '../../shared/properties/canvasInteraction';
+import { hidePendingDelete, settlePendingDeletes } from './framePendingDelete';
 import { setCanvasInteraction } from './frameInteraction';
 // The app asking the frame: a path's elements and computed values, the paths
 // it tracks, scrolling a node into view and the viewport height to freeze; and
@@ -119,6 +120,8 @@ const recordPayload = (x: unknown): x is Record<string, unknown> =>
 
 // The app's questions and instructions, from its own window only.
 export function listenForQueries(): void {
+  // After the patch has swapped the nodes and their stamps (see the listener's note).
+  document.addEventListener('avb:morphed', () => setTimeout(settlePendingDeletes, 0));
   window.addEventListener('message', (event: MessageEvent) => {
     if (event.source !== window.parent) {
       return;
@@ -144,6 +147,10 @@ export function listenForQueries(): void {
       reportRender();
       return;
     }
+    if (data['type'] === 'avb:hide-pending') {
+      hidePending(data['path']);
+      return;
+    }
     guideFrame?.receive(data);
     if (data['type'] === 'avb:track' && Array.isArray(data['paths'])) {
       track(data, data['paths']);
@@ -155,6 +162,18 @@ export function listenForQueries(): void {
       freezeViewportHeight(data['px']);
     }
   });
+}
+
+// A deleted node, hidden until the rebuilt page confirms it (framePendingDelete.ts).
+function hidePending(input: unknown): void {
+  let path: string;
+  try {
+    path = pathText(input);
+  } catch {
+    return;
+  }
+  hidePendingDelete(path);
+  sendRects();
 }
 
 const CLASS_PATCH_NAMES_MAX = 64;

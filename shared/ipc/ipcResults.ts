@@ -1,4 +1,19 @@
 import type { AccountState } from './publishAccount';
+import type {
+  CmsConnectionList,
+  CmsSaveResult,
+  SanityLoginState,
+} from '../properties/cmsConnections';
+import type {
+  RemoteCollection,
+  RemoteAsset,
+  RemoteDocument,
+  RemoteReferenceOption,
+  RemoteRevision,
+  RemoteDocumentList,
+  RemoteDocumentSummary,
+  RemoteResult,
+} from '../properties/cmsRemote';
 import type { RepositoryResult } from '../ipc/publishRepository';
 import type { PublishDiscovery } from '../properties/publishDiscovery';
 import type { DesktopPublishState, PublishAvailability } from '../properties/publishState';
@@ -437,6 +452,22 @@ export interface IpcResults {
   readonly 'publish:repository': RepositoryResult;
   readonly 'publish:discover': PublishDiscovery;
   readonly 'publish:account': AccountState;
+  readonly 'cmsConnections:list': CmsConnectionList;
+  readonly 'cmsConnections:save': CmsSaveResult;
+  readonly 'cmsConnections:remove': CmsConnectionList;
+  readonly 'cmsConnections:sanityLogin': SanityLoginState;
+  readonly 'cmsRemote:collections': RemoteResult<readonly RemoteCollection[]>;
+  readonly 'cmsRemote:documents': RemoteResult<RemoteDocumentList>;
+  readonly 'cmsRemote:create': RemoteResult<RemoteDocumentSummary>;
+  readonly 'cmsRemote:delete': RemoteResult<number>;
+  readonly 'cmsRemote:move': RemoteResult<RemoteDocumentList>;
+  readonly 'cmsRemote:document': RemoteResult<RemoteDocument>;
+  readonly 'cmsRemote:write': RemoteResult<RemoteDocument>;
+  readonly 'cmsRemote:act': RemoteResult<RemoteDocument | undefined>;
+  readonly 'cmsRemote:history': RemoteResult<readonly RemoteRevision[]>;
+  readonly 'cmsRemote:restore': RemoteResult<RemoteDocument>;
+  readonly 'cmsRemote:references': RemoteResult<readonly RemoteReferenceOption[]>;
+  readonly 'cmsRemote:upload': RemoteResult<RemoteAsset | undefined>;
   readonly 'git:publish': {
     readonly ok: true;
     readonly url: undefined | string;

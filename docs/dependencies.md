@@ -30,6 +30,16 @@ renderer dependency family; split per language so only what is used ships.
 **Why not the platform:** no incremental JS parser exists in the browser. **Cost:** small; already
 a transitive dependency of CodeMirror, declared because we import it directly.
 
+### `@sanity/icons`
+
+**Does:** draws the icon a site's Sanity schema gives each document type (`icon: UserIcon`) in
+the CMS panel's collection list, reference rows and image-less list rows
+(`src/features/cms/SanityTypeIcon.tsx`), so a connected Sanity reads as its own Studio does.
+**Why not the platform:** the icons are Sanity's own drawings; the schema names them, it does not
+contain them, and redrawing them by hand would drift. **Cost:** MIT, no dependencies of its own
+(React is a peer); a 12 KB index whose icons each load lazily, so only the icons a schema names
+are ever fetched. Pinned to the version Sanity Studio ships with.
+
 ### `@shikijs/core`, `@shikijs/engine-javascript`, `@shikijs/langs`, `@shikijs/themes`
 
 **Does:** read-only Astro highlighting (`src/ui/astroHighlight.ts`) matching Astro's own output.

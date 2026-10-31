@@ -12,11 +12,17 @@ import {
   ChevronRightIcon,
   CmsIcon,
   CollectionIcon,
+  FileIcon,
   FolderDefaultIcon,
   GearIcon,
   HideIcon,
   PlusIcon,
 } from '../../ui/Icons';
+import { listCmsConnections } from '../../ipc/cmsConnectionsBridge';
+import type { CmsConnection } from '../../../shared/properties/cmsConnections';
+import { RemoteCmsBrowser } from './RemoteCmsBrowser';
+import { prefetchConnection } from './remoteCmsCache';
+import { ConnectionLogo, type RemoteCmsSelection } from './remoteCmsShared';
 
 const CONTENT_KEY = '\u0000content';
 
@@ -28,7 +34,13 @@ interface CmsPanelProps {
   readonly refreshKey: string | number;
   readonly onSelect: (rel: string | undefined) => void;
   readonly onSelectContent: (name: string | undefined) => void;
+  /** The connected-CMS document open in the main view, if any. A host with no
+   *  connected CMS (Studio, for now) leaves both out. */
+  readonly selectedRemote?: RemoteCmsSelection | undefined;
+  readonly onSelectRemote?: ((selection: RemoteCmsSelection | undefined) => void) | undefined;
   readonly onOpenSettings: (rel: string) => void;
+  /** Where a host without an app Settings window (Studio) adds a connection. */
+  readonly onConnect?: (() => void) | undefined;
   readonly showToast: (message: string, kind: 'error') => void;
 }
 
@@ -60,6 +72,34 @@ export default function CmsPanel(props: CmsPanelProps) {
 }
 
 function ProjectCmsPanel(props: CmsPanelProps) {
+  const connections = useCmsConnections(props.project.path, props.refreshKey);
+  const [remote, setRemote] = useState<CmsConnection | undefined>(props.selectedRemote?.connection);
+  if (remote) {
+    return (
+      <RemoteCmsBrowser
+        projectPath={props.project.path}
+        connection={remote}
+        selected={props.selectedRemote}
+        onOpen={props.onSelectRemote ?? (() => undefined)}
+        onClose={() => setRemote(undefined)}
+      />
+    );
+  }
+  // Moving to a connected CMS closes whatever local collection was open beside it.
+  const openRemote = (connection: CmsConnection) => {
+    props.onSelect(undefined);
+    props.onSelectContent(undefined);
+    setRemote(connection);
+  };
+  return <LocalCmsPanel {...props} connections={connections} onOpenRemote={openRemote} />;
+}
+
+function LocalCmsPanel(
+  props: CmsPanelProps & {
+    readonly connections: readonly CmsConnection[];
+    readonly onOpenRemote: (connection: CmsConnection) => void;
+  },
+) {
   const { files, content, refresh, state } = useCmsPanelData(props.project.path, props.refreshKey);
   const [creating, setCreating] = useState(false);
   const [openKey, setOpenKey] = useState<string | undefined>(
@@ -71,7 +111,6 @@ function ProjectCmsPanel(props: CmsPanelProps) {
     [collections, props.currentFile],
   );
   useSelectedGroup(props.selectedRel, openKey, collections, setOpenKey);
-  useDefaultCmsGroup(groups, content, openKey, setOpenKey);
   const open = openKey === undefined ? undefined : groups.find((group) => group.key === openKey);
   const create = useCreateCollection(props, setCreating, setOpenKey, refresh);
   return (
@@ -85,7 +124,19 @@ function ProjectCmsPanel(props: CmsPanelProps) {
       <div className="panel-body">
         {creating && <CreateRow onCreate={create} />}
         {!open && openKey !== CONTENT_KEY && (
-          <GroupList content={content} groups={groups} onOpen={setOpenKey} />
+          <>
+            <ConnectionRows
+              connections={props.connections}
+              onOpen={props.onOpenRemote}
+              onConnect={props.onConnect}
+            />
+            <GroupList
+              content={content}
+              groups={groups}
+              selectedRel={props.selectedRel}
+              onOpen={(key) => openGroup(groups, key, { select: props.onSelect, open: setOpenKey })}
+            />
+          </>
         )}
         {openKey === CONTENT_KEY && (
           <ContentCollectionList
@@ -107,36 +158,11 @@ function ProjectCmsPanel(props: CmsPanelProps) {
         {state.kind === 'ready' &&
           groups.length === 0 &&
           content.collections.length === 0 &&
+          props.connections.length === 0 &&
           !creating && <EmptyPanel onCreate={() => setCreating(true)} />}
       </div>
     </div>
   );
-}
-
-function useDefaultCmsGroup(
-  groups: readonly CollectionGroup[],
-  content: CmsPanelContent,
-  openKey: string | undefined,
-  setOpenKey: React.Dispatch<React.SetStateAction<string | undefined>>,
-): void {
-  const initialized = useRef(false);
-  useEffect(() => {
-    if (initialized.current) {
-      return;
-    }
-    const groupCount = groups.length + (content.collections.length > 0 ? 1 : 0);
-    if (groupCount === 0) {
-      return;
-    }
-    // Default once on entry so returning to the folder list remains possible.
-    initialized.current = true;
-    if (openKey !== undefined) {
-      return;
-    }
-    if (groupCount === 1) {
-      setOpenKey(groups[0]?.key ?? CONTENT_KEY);
-    }
-  }, [groups, content, openKey, setOpenKey]);
 }
 
 const EMPTY_FILES: readonly CmsPanelFile[] = [];
@@ -213,8 +239,16 @@ function useSelectedGroup(
       return;
     }
     const selected = collections.find((collection) => collection.rel === selectedRel);
-    if (selected) {
-      setOpenKey(groupIdentity(selected.rel, selected.dir).key);
+    if (!selected) {
+      return;
+    }
+    const key = groupIdentity(selected.rel, selected.dir).key;
+    // A group with this one collection is not opened: its row already opened it.
+    const siblings = collections.filter(
+      (collection) => groupIdentity(collection.rel, collection.dir).key === key,
+    );
+    if (siblings.length > 1) {
+      setOpenKey(key);
     }
   }, [collections, openKey, selectedRel, setOpenKey]);
 }
@@ -301,6 +335,25 @@ function directoryOf(rel: string): string {
   return rel.split('/').slice(0, -1).join('/');
 }
 
+// A file or folder with one collection has nothing to choose between: its row
+// opens that collection, and the panel stays on the list of groups.
+function openGroup(
+  groups: readonly CollectionGroup[],
+  key: string,
+  to: {
+    readonly select: (rel: string | undefined) => void;
+    readonly open: (key: string) => void;
+  },
+): void {
+  const group = groups.find((entry) => entry.key === key);
+  const only = group?.items.length === 1 ? group.items[0] : undefined;
+  if (only) {
+    to.select(only.rel);
+  } else {
+    to.open(key);
+  }
+}
+
 function closeGroup(
   props: Pick<CmsPanelProps, 'onSelect' | 'onSelectContent'>,
   setOpenKey: React.Dispatch<React.SetStateAction<string | undefined>>,
@@ -309,6 +362,80 @@ function closeGroup(
   props.onSelect(undefined);
   props.onSelectContent(undefined);
 }
+
+// The project's connected CMSs (Settings → CMS connections), read with the panel.
+// A failure leaves them out rather than hiding the project's own collections.
+// The last list read shows at once on the next open, and each Sanity connection's
+// collections and their items are read ahead, so opening one shows them at once.
+const KEPT_CONNECTIONS = createPanelCache<readonly CmsConnection[]>();
+
+function useCmsConnections(projectPath: string, refreshKey: string | number) {
+  const [connections, setConnections] = useState<readonly CmsConnection[]>(() => {
+    const kept = KEPT_CONNECTIONS.get(projectPath);
+    return kept?.kind === 'ready' ? kept.value : [];
+  });
+  useEffect(() => {
+    let active = true;
+    // Read ahead now, and again when the network returns after being offline.
+    let sanity: readonly CmsConnection[] = [];
+    const readAhead = () => {
+      for (const connection of sanity) {
+        prefetchConnection(projectPath, connection.id);
+      }
+    };
+    window.addEventListener('online', readAhead);
+    listCmsConnections(projectPath).then(
+      (list) => {
+        KEPT_CONNECTIONS.set(projectPath, list.connections);
+        sanity = list.connections.filter((connection) => connection.kind === 'sanity');
+        readAhead();
+        if (active) {
+          setConnections(list.connections);
+        }
+      },
+      () => active && setConnections([]),
+    );
+    return () => {
+      active = false;
+      window.removeEventListener('online', readAhead);
+    };
+  }, [projectPath, refreshKey]);
+  return connections;
+}
+
+function ConnectionRows(props: {
+  readonly connections: readonly CmsConnection[];
+  readonly onOpen: (connection: CmsConnection) => void;
+  readonly onConnect: (() => void) | undefined;
+}) {
+  return (
+    <>
+      {props.connections.map((connection) => (
+        <GroupRow
+          key={connection.id}
+          label={connection.label}
+          count={CONNECTION_KINDS[connection.kind]}
+          onClick={() => props.onOpen(connection)}
+          icon={<ConnectionLogo kind={connection.kind} />}
+        />
+      ))}
+      {props.onConnect && (
+        <GroupRow
+          label="Connect a CMS"
+          count=""
+          onClick={props.onConnect}
+          icon={<CmsIcon size={14} />}
+        />
+      )}
+    </>
+  );
+}
+
+const CONNECTION_KINDS: Readonly<Record<CmsConnection['kind'], string>> = {
+  sanity: 'Sanity',
+  payload: 'Payload',
+  custom: 'Custom CMS',
+};
 
 function PanelHeader({
   open,
@@ -369,10 +496,12 @@ function setInputText(inputElement: HTMLInputElement, text: string): void {
 function GroupList({
   content,
   groups,
+  selectedRel,
   onOpen,
 }: {
   readonly content: CmsPanelContent;
   readonly groups: readonly CollectionGroup[];
+  readonly selectedRel: string | undefined;
   readonly onOpen: (key: string) => void;
 }) {
   return (
@@ -393,8 +522,9 @@ function GroupList({
           count={collectionCount(group.items.length)}
           title={group.path}
           badge={group.badge}
+          selected={group.items.some((item) => item.rel === selectedRel)}
           onClick={() => onOpen(group.key)}
-          icon={<FolderDefaultIcon size={14} />}
+          icon={group.kind === 'file' ? <FileIcon size={14} /> : <FolderDefaultIcon size={14} />}
         />
       ))}
     </>
@@ -406,6 +536,7 @@ function GroupRow({
   count: countLabel,
   title,
   badge,
+  selected,
   onClick,
   icon,
 }: {
@@ -413,11 +544,13 @@ function GroupRow({
   readonly count: string;
   readonly title?: string | undefined;
   readonly badge?: CollectionGroup['badge'];
+  /** Its collection is the one open: the row reads as the current place. */
+  readonly selected?: boolean | undefined;
   readonly onClick: () => void;
   readonly icon: React.ReactNode;
 }) {
   return (
-    <div className="cms-collection" onClick={onClick} title={title}>
+    <div className={`cms-collection ${selected ? 'on' : ''}`} onClick={onClick} title={title}>
       {icon}
       <span className="cms-collection-name">{label}</span>
       {badge && <span className="badge">{badge}</span>}

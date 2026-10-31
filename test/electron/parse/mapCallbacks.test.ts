@@ -72,28 +72,30 @@ const callbacks = [
   'async function* (item) { yield <div>{await item.name}</div>; }',
 ] as const;
 
-for (const callback of callbacks) {
-  test(`callback markup: ${callback}`, async () => {
-    const source = `{items.map(${callback})}\n`;
-    const model = parsed(source);
-    assert.ok(tags(model.nodes).length > 0);
-    assert.ok(tags(model.nodes).every((node) => node.name !== 'Fake' && node.name !== 'Wrong'));
-    assert.equal(serializePage(model), source);
-    const marked = serializePageMarked(model);
-    const result = await transform(marked, { filename: '/Callback.astro' });
-    assert.deepEqual(
-      result.diagnostics.filter((diagnostic) => diagnostic.severity === 1),
-      [],
-    );
-    assert.match(marked, /data-avb-p/);
-    const modern = await transformModern(marked, { filename: '/Callback.astro' });
-    await compileJavaScript(modern.code, { loader: 'ts' });
-    for (const node of tags(model.nodes)) {
-      assert.ok(node.start !== undefined);
-      assert.ok(node.end !== undefined);
-      assert.ok(source.slice(node.start, node.end).startsWith('<'));
-    }
-  });
+for (const method of ['map', 'flatMap']) {
+  for (const callback of callbacks) {
+    test(`${method} callback markup: ${callback}`, async () => {
+      const source = `{items.${method}(${callback})}\n`;
+      const model = parsed(source);
+      assert.ok(tags(model.nodes).length > 0);
+      assert.ok(tags(model.nodes).every((node) => node.name !== 'Fake' && node.name !== 'Wrong'));
+      assert.equal(serializePage(model), source);
+      const marked = serializePageMarked(model);
+      const result = await transform(marked, { filename: '/Callback.astro' });
+      assert.deepEqual(
+        result.diagnostics.filter((diagnostic) => diagnostic.severity === 1),
+        [],
+      );
+      assert.match(marked, /data-avb-p/);
+      const modern = await transformModern(marked, { filename: '/Callback.astro' });
+      await compileJavaScript(modern.code, { loader: 'ts' });
+      for (const node of tags(model.nodes)) {
+        assert.ok(node.start !== undefined);
+        assert.ok(node.end !== undefined);
+        assert.ok(source.slice(node.start, node.end).startsWith('<'));
+      }
+    });
+  }
 }
 
 test('NativeNodes exposes every markup return and recursive child', async () => {

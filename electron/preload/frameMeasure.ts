@@ -16,6 +16,7 @@ import {
   taggedPlaces,
   toRect,
 } from './frameRegions';
+import { inlineTextRuns } from './inlineText';
 
 // One rect per marker-pair occurrence (a loop child renders once per
 // item — each instance gets its own box), unioned across the nodes
@@ -69,11 +70,31 @@ const withoutHollow = (list: Rect[]): Rect[] => {
   return real.length ? real : list;
 };
 
+// One box per place the unmarked text run renders, around its words only.
+const rectsForInlineText = (nodePath: string): Rect[] => {
+  const out: Rect[] = [];
+  for (const run of inlineTextRuns(nodePath)) {
+    let acc: Box | undefined = undefined;
+    for (const node of run) {
+      acc = addNode(acc, node);
+    }
+    if (acc) {
+      out.push(toRect(acc));
+    }
+  }
+  return out;
+};
+
 export const rectsForPath = (nodePath: string): Rect[] | undefined => {
   const runs = runsOf(nodePath);
   if (!runs) {
     const places = taggedPlaces(nodePath);
-    return places.length ? places.map((place) => place.rect) : rectsFromDescendants(nodePath);
+    if (places.length) {
+      return places.map((place) => place.rect);
+    }
+    // A text run in an inline run has neither markers nor a tag (inlineText.ts).
+    const inline = rectsForInlineText(nodePath);
+    return inline.length ? inline : rectsFromDescendants(nodePath);
   }
   const out: Rect[] = [];
   for (const run of runs) {

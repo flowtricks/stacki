@@ -13,7 +13,9 @@ export interface MapSyntax {
 
 export function readMapSyntax(source: string): MapSyntax | undefined {
   if (!source.includes('map')) {
-    return undefined;
+    if (!source.includes('flatMap')) {
+      return undefined;
+    }
   }
   assert(source.length <= LIMITS.ipcFieldCharsMax, 'Map source is bounded by its template');
   const syntax = mapSourceFile(source);
@@ -25,8 +27,14 @@ export function readMapSyntax(source: string): MapSyntax | undefined {
     return undefined;
   }
   const call = unwrapExpression(statement.expression);
-  if (!ts.isCallExpression(call) || !isMapAccess(call.expression)) {
+  if (!ts.isCallExpression(call)) {
     return undefined;
+  }
+  const method = mapAccessName(call.expression);
+  if (method !== 'map') {
+    if (method !== 'flatMap') {
+      return undefined;
+    }
   }
   const argument = call.arguments[0];
   if (!argument) {
@@ -56,7 +64,9 @@ export function readMapSyntax(source: string): MapSyntax | undefined {
   }
   parts.push(source.slice(position) + '}');
   return {
-    form: mapForm(callback, markup.length),
+    // Compact readers own map syntax only. Preserve flatMap's callback scopes
+    // verbatim, including nested map calls that must not become the outer head.
+    form: method === 'map' ? mapForm(callback, markup.length) : 'general',
     head: source.slice(0, bodyStart) + '(',
     parts,
     markup,
@@ -152,17 +162,17 @@ function unwrapExpression(expression: ts.Expression): ts.Expression {
   return current;
 }
 
-function isMapAccess(expression: ts.Expression): boolean {
+function mapAccessName(expression: ts.Expression): string | undefined {
   if (ts.isPropertyAccessExpression(expression)) {
-    return expression.name.text === 'map';
+    return expression.name.text;
   }
   if (ts.isElementAccessExpression(expression)) {
     const name = expression.argumentExpression;
     if (ts.isStringLiteral(name)) {
-      return name.text === 'map';
+      return name.text;
     }
   }
-  return false;
+  return undefined;
 }
 
 function mapMarkup(body: ts.Node, syntax: ts.SourceFile): MapSyntax['markup'] | undefined {

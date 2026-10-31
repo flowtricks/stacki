@@ -20,6 +20,18 @@ const nodes = flatten(nodesOf(source));
 const heading = nodes.find((node) => node.name === 'Heading');
 assert.ok(heading?.id);
 const headingId = nodeId(heading);
+test('nested flatMap cards expose editable markup in the assembled Studio parser', () => {
+  const source = `{groups.flatMap((group) => group.cards.map((card) => (
+  <a href={card.href} data-campuses={group.campuses.join(",")} class="card">{card.title}</a>
+)))}`;
+  const nodes = flatten(nodesOf(source));
+  assert.equal(nodes[0]?.kind, 'map');
+  const card = nodes.find((node) => node.name === 'a');
+  assert.ok(card);
+  const next = applyEdits(source, [attributeEdit(source, nodeId(card), 'class', 'featured')]);
+  assert.equal(next, source.replace('class="card"', 'class="featured"'));
+  assert.equal(flatten(nodesOf(next)).find((node) => node.name === 'a')?.kind, 'element');
+});
 test('content edit preserves the entire surrounding source', () => {
   const edit = contentEdit(source, headingId, 'Hello <world> {safe}');
   const next = applyEdits(source, [edit]);

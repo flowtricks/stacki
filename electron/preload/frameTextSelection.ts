@@ -37,11 +37,33 @@ export function selectTextOffsets(nodes: readonly Text[], offsets: TextOffsets):
 }
 
 export function placeTextCaret(nodes: readonly Text[], event: MouseEvent): void {
-  const range = document.caretRangeFromPoint(event.clientX, event.clientY);
-  const offsets = range ? textSelection(nodes, range) : undefined;
+  const offsets =
+    caretOffsetsAt(nodes, event.clientX, event.clientY) ?? caretBesideText(nodes, event);
   if (offsets) {
     selectTextOffsets(nodes, offsets);
   }
+}
+
+function caretOffsetsAt(nodes: readonly Text[], x: number, y: number) {
+  const range = document.caretRangeFromPoint(x, y);
+  return range ? textSelection(nodes, range) : undefined;
+}
+
+// A double-click beside the words (frameText.ts) puts the caret at the point
+// in them nearest the click: the click moved inside their box.
+function caretBesideText(nodes: readonly Text[], event: MouseEvent) {
+  const first = nodes[0];
+  const last = nodes.at(-1);
+  if (!first || !last) {
+    return undefined;
+  }
+  const range = document.createRange();
+  range.setStart(first, 0);
+  range.setEnd(last, last.length);
+  const box = range.getBoundingClientRect();
+  const x = Math.min(Math.max(event.clientX, box.left + 1), box.right - 1);
+  const y = Math.min(Math.max(event.clientY, box.top + 1), box.bottom - 1);
+  return caretOffsetsAt(nodes, x, y);
 }
 
 export function textEditorRoot(match: TextMatch): HTMLElement | undefined {

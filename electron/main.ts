@@ -1,4 +1,8 @@
 import { registerPublishHandlers } from './handlers/publishHandlers';
+import { registerCmsConnectionHandlers } from './handlers/cmsConnectionHandlers';
+import { CmsConnectionStore } from './content/cmsConnectionStore';
+import { SanityLogin } from './content/sanityLogin';
+import { cmsPreviewEnvironment } from './content/cmsPreviewEnvironment';
 import { registerProjectMetadataHandlers } from './handlers/projectMetadataHandlers';
 import { registerImageConversionHandler } from './handlers/imageConversionHandler';
 import { registerGitRepositoryHandlers } from './handlers/gitRepositoryHandlers';
@@ -40,6 +44,7 @@ import {
   nativeImage,
   clipboard,
   session,
+  safeStorage,
 } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -79,7 +84,18 @@ setToolPathHome(app.getPath('home'));
 let mainWindow: Window | undefined = undefined;
 // The project's dev server and its home-page pictures: state of this process,
 // kept by the objects that own it (handlers/devServers.ts, thumbnails.ts).
-const devServers = new DevServers({ send });
+// CMS keys are encrypted by the operating system (cms/cmsConnectionStore.ts).
+const cmsConnections = new CmsConnectionStore(
+  {
+    available: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (text) => safeStorage.encryptString(text),
+    decrypt: (data) => safeStorage.decryptString(data),
+  },
+  () => app.getPath('userData'),
+);
+const devServers = new DevServers({ send }, (projectRoot) =>
+  cmsPreviewEnvironment(cmsConnections, projectRoot),
+);
 const thumbnails = new Thumbnails({
   devServers,
   userDataPath: () => app.getPath('userData'),
@@ -945,6 +961,7 @@ registerPreviewHandlers(host);
 registerProjectHandlers(host);
 registerProjectMetadataHandlers(host);
 registerPublishHandlers(host);
+registerCmsConnectionHandlers(host, cmsConnections, new SanityLogin(cmsConnections));
 registerStudioHandlers(
   host,
   app.isPackaged ? { kind: 'packaged' } : { kind: 'development', appPath: app.getAppPath() },

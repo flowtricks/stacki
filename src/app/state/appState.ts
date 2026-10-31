@@ -4,6 +4,7 @@
 // them (App.tsx).
 
 import { usePropertySaveGuard } from '../usePropertySaveGuard';
+import type { RemoteCmsSelection } from '../../features/cms/remoteCmsShared';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ScanResult } from '../../../shared/properties/projectScan';
 import { nodeAtPath, pathOfNode } from '../../editor/editorTree';
@@ -256,6 +257,8 @@ export function usePanelState(
   // Content collection open in the schema-driven editor. Only one of the two
   // is ever open: they edit the same kind of thing in two different ways.
   const [contentName, setContentName] = useState<string | undefined>(undefined);
+  // A connected CMS's document open in the main view; never open beside the two above.
+  const [cmsRemote, setCmsRemote] = useState<RemoteCmsSelection | undefined>(undefined);
   // Which stylesheet group the variables sheet is showing: { file, index }.
   const [varsGroup, setVarsGroup] = useState<VariableSelection | undefined>(undefined);
   const [cmsTick, setCmsTick] = useState(0); // bumped on save, refreshes counts
@@ -263,6 +266,8 @@ export function usePanelState(
   const [inPreview, setInPreview] = useState(false); // interactive full-site preview
   const [previewSource, setPreviewSource] = useState<string | undefined>(undefined);
   return {
+    cmsRemote,
+    setCmsRemote,
     cmsRel,
     cmsSettings,
     cmsTick,
@@ -289,6 +294,10 @@ export function useWindowState() {
   // derived at the bottom of this component (a dynamic page's entry is picked
   // there), long after the callbacks up here are defined.
   const livePathRef = useRef<string | undefined>(undefined);
+  // A node's path on the canvas, for the edits that show themselves there
+  // before the source rebuilds. Set where the page tree is (appCanvasModel.ts),
+  // which is built after the edit callbacks that read it.
+  const canvasPathForRef = useRef<(id: string) => string | undefined>(() => undefined);
   const [termOpen, setTermOpen] = useState(false); // bottom terminal dock
   const [codeWin, setCodeWin] = useState<CodeWindowState | undefined>(undefined);
   const openCodeWindowRef = useRef<(() => boolean) | undefined>(undefined);
@@ -337,6 +346,7 @@ export function useWindowState() {
     fileText,
     gitInfo,
     livePathRef,
+    canvasPathForRef,
     openCodeWindowRef,
     previewInfo,
     previewRef,

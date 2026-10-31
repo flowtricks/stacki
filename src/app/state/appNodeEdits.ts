@@ -3,6 +3,7 @@
 // composing the history (App.tsx).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { tellCanvas } from '../../editor/canvasQuery';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { findWithParent, noteIndexAbove, selectionAfterDelete } from '../../editor/treeSelection';
 import { setSoundEnabled } from '../../ui/sound';
@@ -390,7 +391,7 @@ export function useRemoveNode(
   lifecycle: ReturnType<typeof useLifecycle>,
   history: ReturnType<typeof useHistory>,
 ) {
-  const { pageStateRef, setSelectedId } = coreState;
+  const { canvasPathForRef, pageStateRef, setSelectedId } = coreState;
   const { showToast } = lifecycle;
   const { commitEdit } = history;
 
@@ -425,7 +426,12 @@ export function useRemoveNode(
       const prune = (model: EditorModel): EditorModel => prunedAfterRemoval(model).model;
       const options = { coalesceKey: undefined, urgency: true };
       const pruning = frontmatterGesture(afterRemoval, options, prune);
-      commitEdit(changed ? sequence(removal, pruning) : removal);
+      // Read before the edit: once the node is gone it has no path.
+      const canvasPath = canvasPathForRef.current(nodeId);
+      if (commitEdit(changed ? sequence(removal, pruning) : removal) && canvasPath) {
+        // Gone from the canvas at once; the rebuilt page confirms it.
+        tellCanvas({ type: 'avb:hide-pending', path: canvasPath });
+      }
       if (removed.dropped.length) {
         const names = removed.dropped;
         showToast(
@@ -438,7 +444,7 @@ export function useRemoveNode(
       // (navigator menu, canvas) leaves what you were working on alone.
       setSelectedId((id) => (id === nodeId ? nextId : id));
     },
-    [commitEdit, showToast, pageStateRef, setSelectedId],
+    [commitEdit, showToast, canvasPathForRef, pageStateRef, setSelectedId],
   );
 
   // ----------------------------------------------------------------

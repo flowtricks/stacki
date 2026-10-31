@@ -99,6 +99,40 @@ function scoreToken(item: SearchItem, token: string, state: TokenState): number 
   return best;
 }
 
+// What an element is called in words, for the tags whose names don't say it.
+// A person looking for a paragraph types `paragraph`, not `p`; the tag still
+// lists below any component that matched, because the category sort decides
+// that, not the words.
+const TAG_WORDS: Readonly<Record<string, string>> = {
+  a: 'link',
+  blockquote: 'quote',
+  br: 'line break',
+  em: 'italic emphasis',
+  h1: 'heading',
+  h2: 'heading',
+  h3: 'heading',
+  h4: 'heading',
+  h5: 'heading',
+  h6: 'heading',
+  hr: 'divider line',
+  iframe: 'embed',
+  img: 'image',
+  li: 'list item',
+  nav: 'navigation',
+  ol: 'list ordered',
+  p: 'paragraph',
+  slot: 'children content',
+  strong: 'bold',
+  ul: 'list unordered',
+};
+
+/** The search text for an element: its tag, then the words it goes by. */
+export function tagSearchText(tag: string): string {
+  assert(tag.length > 0, 'An element search text needs a tag');
+  const words = Object.hasOwn(TAG_WORDS, tag) ? TAG_WORDS[tag] : undefined;
+  return words === undefined ? tag : `${tag} ${words}`;
+}
+
 // Components first, then elements, then everything else — the order the tabs
 // are in, and the order of how much of the project a thing belongs to. A
 // project's own components are its vocabulary; `<form>` is always there.

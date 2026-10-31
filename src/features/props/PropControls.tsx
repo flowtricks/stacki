@@ -1,4 +1,4 @@
-import { PropValuePolicyContext } from './propValuePolicy';
+import { PropHoverPreviewContext, PropValuePolicyContext } from './propValuePolicy';
 import { PropPreviewContext } from './propPreviewContext';
 // The control a prop field shows for its kind of value: a binding, style,
 // attribute, class, slot, an option, a boolean, a number, a link, media, an
@@ -211,6 +211,7 @@ export function SlotControl({ state }: { readonly state: PropControlState }) {
 export function EnumControl({ state }: { readonly state: PropControlState }) {
   const preview = useContext(PropPreviewContext);
   const policy = useContext(PropValuePolicyContext);
+  const hoverPreview = useContext(PropHoverPreviewContext);
   const { field, value, onChange, placeholderFor, label } = state;
   assert(field.options?.length, 'Enum control: options exist');
 
@@ -258,21 +259,10 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
       {label}
       <Dropdown
         value={selectedOption}
-        {...(preview
-          ? {
-              onPrepare: () =>
-                preview.prepare(
-                  field.name,
-                  choices.map((option) =>
-                    option === omittedDefault ? undefined : field.numeric ? Number(option) : option,
-                  ),
-                ),
-              onPreview: (next: string) =>
-                preview.hover(next === '' ? undefined : field.numeric ? Number(next) : next),
-              onCancelPreview: preview.cancel,
-              onCommitPreview: preview.commit,
-            }
-          : {})}
+        livePreview={hoverPreview}
+        // A long list is found by typing, not by scrolling through it.
+        searchable={choices.length > 12}
+        {...enumPreview(preview, { field, choices, omittedDefault })}
         // Says what happens when nothing is picked. For a conditional
         // default that's the condition itself — better than naming one of
         // the two answers as if it were the only one.
@@ -292,6 +282,34 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
     </div>
   );
 }
+// A dropdown's live preview on the canvas, when the panel provides one.
+function enumPreview(
+  preview: React.ContextType<typeof PropPreviewContext>,
+  enumField: {
+    readonly field: { readonly name: string; readonly numeric?: boolean | undefined };
+    readonly choices: readonly string[];
+    readonly omittedDefault: string | undefined;
+  },
+) {
+  const { field, choices, omittedDefault } = enumField;
+  if (!preview) {
+    return {};
+  }
+  return {
+    onPrepare: () =>
+      preview.prepare(
+        field.name,
+        choices.map((option) =>
+          option === omittedDefault ? undefined : field.numeric ? Number(option) : option,
+        ),
+      ),
+    onPreview: (next: string) =>
+      preview.hover(next === '' ? undefined : field.numeric ? Number(next) : next),
+    onCancelPreview: preview.cancel,
+    onCommitPreview: preview.commit,
+  };
+}
+
 export function BooleanControl({ state }: { readonly state: PropControlState }) {
   const policy = useContext(PropValuePolicyContext);
   const { field, value, onChange, label } = state;
@@ -592,8 +610,12 @@ export function TextControl({ state }: { readonly state: PropControlState }) {
       </div>
     );
   }
+  // A field declared multi-line (a CMS's long text) always gets the box;
+  // otherwise its length or its name says it holds prose.
   const long =
-    String(valueText).length > 48 || /text|description|content|body|paragraph/i.test(name);
+    field.type === 'text' ||
+    String(valueText).length > 48 ||
+    /text|description|content|body|paragraph/i.test(name);
   return (
     <div className="props-field">
       {label}

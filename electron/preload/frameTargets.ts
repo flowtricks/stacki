@@ -3,6 +3,7 @@
 // double-click the canvas turns into selection.
 
 import { canvasSelects, canvasDragged, trackCanvas } from './frameInteraction';
+import { inlineTextPathAt } from './inlineText';
 import { isElement } from './frameBasics';
 import {
   PATH_ATTR,
@@ -57,6 +58,14 @@ const nodeAt = (
     const thin = thinAt(x, y, best);
     if (thin) {
       return { path: thin.path, occurrence: occurrenceOf(thin.path, thin.el), outside: false };
+    }
+  }
+  // Words beside a tagged sibling — the text around a <strong> — have no
+  // element to hit, so the pointer is checked against them directly.
+  if (best && x !== undefined && y !== undefined) {
+    const text = inlineTextPathAt(best, x, y);
+    if (text) {
+      return { path: text, occurrence: occurrenceOf(best, target), outside: false };
     }
   }
   // Resolved separately from the search above: when the winning path came

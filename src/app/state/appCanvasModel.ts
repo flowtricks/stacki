@@ -371,7 +371,7 @@ export function useSelectionPaths(
   const { tree } = pageOps;
   const { editedRel } = canvasNotices;
   const { currentPage, editStack, pageState, project, rightTab, rightTabRefs } = coreState;
-  const { selectedId, selectionKeysRef, setRightTabInd } = coreState;
+  const { selectedId, selectionKeysRef, setRightTabInd, canvasPathForRef } = coreState;
 
   const pathFor = (id: string | undefined): string | undefined => {
     if (!model || !id) {
@@ -383,6 +383,8 @@ export function useSelectionPaths(
     }
     return editedRel ? `${editedRel}|${path}` : path;
   };
+  // Read by edits bound before this tree existed (appState.ts).
+  canvasPathForRef.current = pathFor;
   // The right panel stays on whichever tab the user picked, whatever gets
   // selected next. (S / D switch it by hand.)
 

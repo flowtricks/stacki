@@ -11,6 +11,7 @@ import { readCmsUsage, deleteCms } from './cmsBridge';
 import { cleanError } from '../../lib/cleanError';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import useListReorder from '../../ui/useListReorder';
+import { FIELD_TYPES } from './cmsFieldTypes';
 import {
   PlusIcon,
   CloseIcon,
@@ -19,20 +20,6 @@ import {
   TrashIcon,
   DragIcon,
   CheckIcon,
-  VariableTextSizeIcon,
-  ParagraphIcon,
-  FieldNumberIcon,
-  SwitchIcon,
-  ElementImageIcon,
-  CalendarIcon,
-  ElementLinkIcon,
-  MailIcon,
-  PhoneCallIcon,
-  DropletIcon,
-  ElementListDefaultIcon,
-  BracesIcon,
-  RepeatIcon,
-  CodeIcon,
 } from '../../ui/Icons';
 
 export interface SchemaOperations {
@@ -56,25 +43,6 @@ export interface CmsSettingsProps extends SchemaOperations {
   readonly onDeleted?: (() => void) | undefined;
   readonly onDone?: (() => void) | undefined;
 }
-
-const FIELD_TYPES = [
-  { value: 'text', label: 'Text', Icon: VariableTextSizeIcon, hint: 'A short line' },
-  { value: 'longtext', label: 'Long text', Icon: ParagraphIcon, hint: 'A paragraph' },
-  { value: 'number', label: 'Number', Icon: FieldNumberIcon, hint: 'A figure' },
-  { value: 'boolean', label: 'Toggle', Icon: SwitchIcon, hint: 'On or off' },
-  { value: 'image', label: 'Image', Icon: ElementImageIcon, hint: 'From your assets' },
-  { value: 'date', label: 'Date', Icon: CalendarIcon, hint: 'A calendar date' },
-  { value: 'link', label: 'Link', Icon: ElementLinkIcon, hint: 'A web address' },
-  { value: 'email', label: 'Email', Icon: MailIcon, hint: 'An address' },
-  { value: 'phone', label: 'Phone', Icon: PhoneCallIcon, hint: 'A number to call' },
-  { value: 'color', label: 'Color', Icon: DropletIcon, hint: 'A hex value' },
-  { value: 'list', label: 'List of text', Icon: ElementListDefaultIcon, hint: 'Tags, bullets' },
-  { value: 'object', label: 'Group', Icon: BracesIcon, hint: 'Fields kept together' },
-  { value: 'objects', label: 'Repeating items', Icon: RepeatIcon, hint: 'A list of entries' },
-  // Not offered when creating a field: a value is code because the file says
-  // so, never because someone picked it from a list.
-  { value: 'code', label: 'Code', Icon: CodeIcon, hint: 'A computed value' },
-] as const;
 
 // The types you can choose for a new field.
 const CREATABLE_TYPES = FIELD_TYPES.filter((entry) => entry.value !== 'code');

@@ -57,8 +57,13 @@ test('duplicate component names cannot leave stale highlighted search results', 
         }),
       );
     });
+    // "paragraph" also names the `<p>` element, listed after matching components.
     await query('paragraph');
-    assert.deepEqual(labels(), ['Paragraph'], 'unmatched duplicate names must leave the DOM');
+    assert.deepEqual(
+      labels(),
+      ['Paragraph', '<p>'],
+      'unmatched duplicate names must leave the DOM',
+    );
     assert.equal(highlighted().length, 1);
     await query('plan');
     assert.deepEqual(labels(), ['PlanYourVisit', 'PlanYourVisit']);
@@ -71,7 +76,7 @@ test('duplicate component names cannot leave stale highlighted search results', 
     });
     assert.equal(inserted[0].path, components[1].path, 'Enter inserts the highlighted file');
     await query('paragraph');
-    assert.deepEqual(labels(), ['Paragraph']);
+    assert.deepEqual(labels(), ['Paragraph', '<p>']);
     assert.equal(highlighted().length, 1);
     await query('no-such-component');
     assert.deepEqual(labels(), []);

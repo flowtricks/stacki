@@ -16,7 +16,9 @@ import { createServer, type ViteDevServer } from 'vite';
 // The validated merge-result payload adds one module to the 47-module graph.
 // The package manager a new site is created with adds one more.
 // Saved publish settings now validate their URL through the published-site contract.
-const MODULES_MAX = 50;
+// CMS connections and the connected-CMS panel add their contracts (connections, remote
+// documents, remote schema): three more.
+const MODULES_MAX = 53;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [
   { file: 'src/lib/cleanError.ts', exportName: 'cleanError' },

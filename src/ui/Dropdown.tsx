@@ -13,6 +13,9 @@ const POPUP_MIN = 120;
 const POPUP_PADDING_HEIGHT = 8;
 const OPTION_HEIGHT = 26;
 const SEARCH_HEIGHT = 36;
+// The tallest a list grows before it scrolls: about a dozen options, so a long
+// list (time zones, locales) is a list to scroll, not a wall down the window.
+const MENU_HEIGHT_MAX = 320;
 export function popupBox(
   rectangle: Pick<DOMRect, 'top' | 'bottom'>,
   wanted: number,
@@ -288,10 +291,13 @@ function useDropdownPosition<T>(state: Selection<T>, options: { readonly searcha
       (visible.length + dropdownGroupCount(visible)) * OPTION_HEIGHT +
       POPUP_PADDING_HEIGHT +
       (searchable ? SEARCH_HEIGHT : 0);
+    const shown = Math.min(wanted, MENU_HEIGHT_MAX);
+    const box = popupBox(rectangle, shown, window.innerHeight);
     const next = {
       left: rectangle.left,
       width: rectangle.width,
-      ...popupBox(rectangle, wanted, window.innerHeight),
+      ...box,
+      maxHeight: wanted > shown ? Math.min(box.maxHeight ?? shown, shown) : box.maxHeight,
     };
     setPosition((previous) =>
       previous &&

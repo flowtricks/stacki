@@ -4,8 +4,7 @@ import { isDataBound } from '../../../vendor/stacki/src/editor/bindings';
 import { flatten, type ParserNode } from '../source/source';
 import { pathFor } from '../project/previewSelection';
 export function outlineInfo(nodes: readonly ParserNode[], path: string): OverlayInfo | undefined {
-  const trail = path.slice(path.lastIndexOf('|') + 1);
-  const node = flatten(nodes).find((node) => pathFor(node.id ?? '') === trail);
+  const node = outlineNode(nodes, path);
   if (!node) {
     return undefined;
   }
@@ -27,6 +26,10 @@ export function outlineInfo(nodes: readonly ParserNode[], path: string): Overlay
     isLayout: node.id === 'layout',
     bound: kind === 'element' && isDataBound(node),
   };
+}
+export function outlineNode(nodes: readonly ParserNode[], path: string): ParserNode | undefined {
+  const trail = path.slice(path.lastIndexOf('|') + 1);
+  return flatten(nodes).find((node) => pathFor(node.id ?? '') === trail);
 }
 export function outlineLabel(node: ParserNode): string {
   if (node.kind === 'element' || node.kind === 'raw' || node.dynamicTag) {

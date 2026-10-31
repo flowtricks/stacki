@@ -332,7 +332,12 @@ export function stopProcessTree(proc: ChildProcess | undefined) {
 // `devServer` belongs to the canvas, and a thumbnail must not disturb what the
 // editor is showing. The project's own config is used rather than the app's
 // generated one — the picture is of the site, not of the canvas.
-export function spawnAstroServer(projectPath: string, localBin: string, args: readonly string[]) {
+export function spawnAstroServer(
+  projectPath: string,
+  localBin: string,
+  args: readonly string[],
+  extraEnvironment: Readonly<Record<string, string>> = {},
+) {
   const [cmd, argv] = nodeCliCommand(localBin, args);
   return spawn(cmd, argv, {
     cwd: projectPath,
@@ -341,6 +346,6 @@ export function spawnAstroServer(projectPath: string, localBin: string, args: re
     // Vite and Astro together, including CLIs that launch another process.
     detached: !isWin,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+    env: { ...process.env, ...extraEnvironment, FORCE_COLOR: '0', NO_COLOR: '1' },
   });
 }

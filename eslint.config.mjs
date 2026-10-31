@@ -301,6 +301,14 @@ const SOURCE_LAYERS = {
       'features/props/arrayValue',
       'features/props/propBindings',
     ],
+    // CMS fields are the component props panel's fields, so both read and work alike.
+    cms: [
+      'features/props/PropField',
+      'features/props/PropTip',
+      'features/props/propValuePolicy',
+      // A colour value is chosen with the style panel's swatch and picker.
+      'features/style/components/ColorSwatch',
+    ],
     // The history panel draws commits with git's file and branch widgets.
     history: ['features/git/BranchActions', 'features/git/FileBrowser', 'features/git/FileStatus'],
     // The column guide's menu is built from the style panel's controls.

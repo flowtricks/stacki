@@ -1,7 +1,7 @@
 {
   "name": "stacki",
   "productName": "Stacki",
-  "version": "0.1.94",
+  "version": "0.1.95",
   "description": "Stacki — a visual Astro builder with live preview and publishing.",
   "homepage": "https://github.com/flowtricks/stacki",
   "main": "dist/electron/main.js",
@@ -86,6 +86,7 @@
     "@img/sharp-wasm32": "0.35.5",
     "@lezer/highlight": "^1.2.3",
     "@lezer/javascript": "^1.5.4",
+    "@sanity/icons": "5.2.1",
     "@shikijs/core": "^4.4.3",
     "@shikijs/engine-javascript": "^4.4.3",
     "@shikijs/langs": "^4.4.3",

@@ -1,4 +1,5 @@
 import {
+  canvasTextFolded,
   parseCanvasTextCatalog,
   type CanvasTextCatalog,
   type CanvasTextTarget,
@@ -7,6 +8,7 @@ import { parseCanvasTextClose } from '../../shared/properties/canvasTextOverlay'
 import { canvasTextSourceMatches } from './frameRegions';
 import { matchCanvasText, type TextMatch } from './frameTextMatch';
 import { openNativeText } from './frameTextNative';
+import { textSelection } from './frameTextSelection';
 
 interface ActiveText {
   readonly catalog: CanvasTextCatalog;
@@ -52,6 +54,8 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       if (!current) {
         return;
       }
+      const scope = { session: current.session, key: target.key };
+      const stopSelection = reportTextSelection(match.nodes, scope, post);
       const editor = openNativeText(
         match,
         event,
@@ -59,6 +63,7 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
           post({ type: 'avb:text-draft', session: current.session, key: target.key, value }),
         (result) => {
           active = undefined;
+          stopSelection();
           // Save precedes inactive so the panel can retain its draft until the
           // source acknowledges it, without flashing the old text on blur.
           commitCanvasText({ catalog: current, target, match }, result, post);
@@ -69,9 +74,48 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
         active = { catalog: current, editor };
         post({ type: 'avb:text-active', session: current.session, key: target.key });
       } else {
+        stopSelection();
         post({ type: 'avb:text-refused', message: 'This text cannot be edited safely.' });
       }
     },
+  };
+}
+
+// The selected words, as offsets into the editor's text and a box, whenever
+// they change — so the host can offer formatting over them. Only a change is
+// posted: dragging a selection fires selectionchange on every pixel.
+function reportTextSelection(
+  nodes: readonly Text[],
+  scope: { readonly session: string; readonly key: string },
+  post: (message: unknown) => void,
+): () => void {
+  let last = '';
+  const report = () => {
+    const offsets = textSelection(nodes);
+    const selection = window.getSelection();
+    let range = undefined;
+    // Offsets cross folded (canvasTextFolded): the host's text may differ
+    // from this one in whitespace alone.
+    const text = nodes.map((node) => node.data).join('');
+    const start = offsets ? canvasTextFolded(text, offsets.start) : 0;
+    const end = offsets ? canvasTextFolded(text, offsets.end) : 0;
+    if (start < end && selection?.rangeCount) {
+      const box = selection.getRangeAt(0).getBoundingClientRect();
+      const rect = { x: box.left, y: box.top, w: box.width, h: box.height };
+      range = { start, end, rect };
+    }
+    const next = range ? JSON.stringify(range) : 'none';
+    if (next !== last) {
+      last = next;
+      post({ type: 'avb:text-selection', ...scope, ...(range ? { range } : {}) });
+    }
+  };
+  document.addEventListener('selectionchange', report);
+  return () => {
+    document.removeEventListener('selectionchange', report);
+    if (last !== '' && last !== 'none') {
+      post({ type: 'avb:text-selection', ...scope });
+    }
   };
 }
 

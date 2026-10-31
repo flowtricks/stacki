@@ -1,5 +1,22 @@
 import { parseMergeResolution } from './mergeResolution';
 import { parseAccountRequest } from './publishAccount';
+import {
+  parseCmsConnectionDraft,
+  parseConnectionId,
+  parseSanityLoginRequest,
+} from '../properties/cmsConnections';
+import {
+  parseRemoteCollectionName,
+  parseRemoteConnection,
+  parseRemoteDocumentId,
+  parseRemoteIds,
+  parseRemoteMove,
+  parseRemoteWrite,
+  parseRemoteTypes,
+  parseRemoteAssetKind,
+  parseRemoteDocumentAction,
+  parseRemoteRevisionId,
+} from '../properties/cmsRemote';
 import { parseRepositoryRequest } from '../ipc/publishRepository';
 import { parseCanvasCreate, defaultsCanvasFile } from '../properties/defaultsCanvas';
 import { parseDiscoveryRequest } from '../properties/publishDiscovery';
@@ -232,6 +249,68 @@ export const IPC_PAYLOADS = {
   'publish:repository': object({ ...project, request: parseRepositoryRequest }),
   'publish:discover': object({ ...project, request: parseDiscoveryRequest }),
   'publish:account': object({ ...project, request: parseAccountRequest }),
+  'cmsConnections:list': object({ ...project }),
+  'cmsConnections:save': object({ ...project, draft: parseCmsConnectionDraft }),
+  'cmsConnections:remove': object({ ...project, id: parseConnectionId }),
+  'cmsConnections:sanityLogin': object({ ...project, request: parseSanityLoginRequest }),
+  'cmsRemote:collections': object({ ...project, connectionId: parseRemoteConnection }),
+  'cmsRemote:documents': object({
+    ...project,
+    connectionId: parseRemoteConnection,
+    collection: parseRemoteCollectionName,
+  }),
+  'cmsRemote:document': object({
+    ...project,
+    connectionId: parseRemoteConnection,
+    id: parseRemoteDocumentId,
+  }),
+  'cmsRemote:create': object({
+    ...project,
+    connectionId: parseRemoteConnection,
+    collection: parseRemoteCollectionName,
+  }),
+  'cmsRemote:delete': object({
+    ...project,
+    connectionId: parseRemoteConnection,
+    ids: parseRemoteIds,
+  }),
+  'cmsRemote:move': object({
+    ...project,
+    connectionId: parseRemoteConnection,
+    move: parseRemoteMove,
+  }),
+  'cmsRemote:write': object({
+    ...project,
+    connectionId: parseRemoteConnection,
+    write: parseRemoteWrite,
+  }),
+  'cmsRemote:act': object({
+    ...project,
+    connectionId: parseRemoteConnection,
+    id: parseRemoteDocumentId,
+    action: parseRemoteDocumentAction,
+  }),
+  'cmsRemote:history': object({
+    ...project,
+    connectionId: parseRemoteConnection,
+    id: parseRemoteDocumentId,
+  }),
+  'cmsRemote:restore': object({
+    ...project,
+    connectionId: parseRemoteConnection,
+    id: parseRemoteDocumentId,
+    revision: parseRemoteRevisionId,
+  }),
+  'cmsRemote:references': object({
+    ...project,
+    connectionId: parseRemoteConnection,
+    types: parseRemoteTypes,
+  }),
+  'cmsRemote:upload': object({
+    ...project,
+    connectionId: parseRemoteConnection,
+    kind: parseRemoteAssetKind,
+  }),
   'git:publish': object({ ...project, repoName: text, isPrivate: boolean }),
   'git:push': object({ ...branch }),
   'git:pull': object({ ...branch }),

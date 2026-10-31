@@ -16,6 +16,8 @@ import type { Environment } from './environment';
 import { internal } from './internalRoutes';
 import { claimLoginAttempt, LoginAttempts } from '../features/auth/loginAttempts';
 import { warmupRequest } from './warmupRequest';
+import { cmsConnectionRoute, cmsVault } from './cmsConnectionRoutes';
+import { CmsUnavailable, cmsForwarded } from '../features/cms/cmsConnectionVault';
 
 export class PreviewContainer extends Container<Environment> {
   private readonly loginAttempts = new LoginAttempts((state, expires) =>
@@ -128,17 +130,9 @@ async function route(
   ) {
     return studioError(request, 'Invalid request origin', 403);
   }
-  if (!previewHost && url.pathname === '/studio/api/updates') {
-    return authorizedUpdate(request, environment, identity);
-  }
-  if (!previewHost && url.pathname === '/studio/api/session') {
-    return Response.json(
-      { kind: 'github', id: identity.id, login: identity.login },
-      { headers: { 'Cache-Control': 'no-store' } },
-    );
-  }
-  if (!previewHost && url.pathname === '/studio/api/preview-url') {
-    return previewURL(url, environment, identity);
+  const answered = !previewHost && (await workerRoute(request, url, environment, identity));
+  if (answered) {
+    return answered;
   }
   const asset = !previewHost && studioAsset(request, environment);
   if (asset) {
@@ -159,7 +153,51 @@ async function route(
   ) {
     return new Response('Invalid socket origin', { status: 403 });
   }
-  return proxy(request, environment, identity, previewHost);
+  return forward(request, url, environment, identity, previewHost);
+}
+
+// The Studio host's requests the Worker answers itself, without the container.
+async function workerRoute(
+  request: Request,
+  url: URL,
+  environment: Environment,
+  identity: Identity,
+): Promise<Response | undefined> {
+  if (url.pathname === '/studio/api/updates') {
+    return authorizedUpdate(request, environment, identity);
+  }
+  if (url.pathname === '/studio/api/session') {
+    return Response.json(
+      { kind: 'github', id: identity.id, login: identity.login },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+  if (url.pathname === '/studio/api/preview-url') {
+    return previewURL(url, environment, identity);
+  }
+  // CMS connections are kept here, never by the container (cmsConnectionRoutes.ts).
+  return cmsConnectionRoute(request, url, environment, identity);
+}
+
+// To the container: never with a client's CMS target, and with ours for a CMS
+// call (cmsConnectionRoutes.ts). A connection that cannot be used is answered here.
+async function forward(
+  request: Request,
+  url: URL,
+  environment: Environment,
+  identity: Identity,
+  previewHost: boolean,
+): Promise<Response> {
+  let forwarded: Request;
+  try {
+    forwarded = await cmsForwarded(request, url, cmsVault(environment));
+  } catch (error) {
+    if (error instanceof CmsUnavailable) {
+      return Response.json({ ok: false, message: error.message });
+    }
+    throw error;
+  }
+  return proxy(forwarded, environment, identity, previewHost);
 }
 
 function warmPreview(

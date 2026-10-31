@@ -8,6 +8,7 @@ import { repositoryRoute } from '../features/publishing/repositoryRoutes';
 import { discoveryRoute } from '../features/publishing/discoveryRoutes';
 import { metadataRoute } from '../features/settings/projectMetadata';
 import { cmsRoutes } from '../features/cms/cmsServer';
+import { cmsRemoteRoutes } from '../features/cms/cmsRemoteServer';
 import { aiRoute } from '../features/ai/aiRoutes';
 import { publishRoute } from '../features/publishing/publishRoutes';
 import { componentUsageRoute } from '../features/components/componentUsageServer';
@@ -29,6 +30,7 @@ export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms
   const history = historyRoutes(root, repository);
   const availability = availabilityRoutes(root, repository);
   const cms = cmsRoutes(root, rooms);
+  const cmsRemote = cmsRemoteRoutes(root);
   const variables = variableRoutes(root, rooms);
   const properties = propertyRoutes(root, rooms);
   const { cleanup, publisher, synchronization, proposals } = featureServices(root, rooms);
@@ -57,6 +59,7 @@ export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms
       (await repositoryRoute(root, request, response, pathname, readBody)) ||
       (await componentUsageRoute(root, request, response, pathname)) ||
       (await cms(request, response, pathname, readBody)) ||
+      (await cmsRemote(request, response, pathname, readBody)) ||
       (await variables(request, response, pathname, readBody)) ||
       (await properties(request, response, pathname, readBody)) ||
       (await storageRoute(cleanup, request, response, pathname, readBody))

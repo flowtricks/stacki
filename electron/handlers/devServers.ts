@@ -112,7 +112,13 @@ export class DevServers {
   // the loser dies with "exited before becoming ready".
   private readonly starts = createKeyedQueue<IpcResults['dev:start']>();
 
-  constructor(private readonly host: Pick<MainHost, 'send'>) {}
+  constructor(
+    private readonly host: Pick<MainHost, 'send'>,
+    // Extra variables the project's dev server gets (cms/cmsPreviewEnvironment.ts).
+    private readonly previewEnvironment: (
+      projectRoot: string,
+    ) => Readonly<Record<string, string>> = () => ({}),
+  ) {}
 
   /** The dev server the canvas shows, while one runs. */
   current(): DevServer | undefined {
@@ -380,7 +386,8 @@ export class DevServers {
     }
 
     const startedAtMs = Date.now();
-    const proc = spawnAstroServer(projectPath, localBin, args);
+    const extra = this.previewEnvironment(fs.realpathSync(projectPath));
+    const proc = spawnAstroServer(projectPath, localBin, args, extra);
 
     const url = `http://127.0.0.1:${port}`;
     this.server = { proc, url, projectPath, bin: localBin };

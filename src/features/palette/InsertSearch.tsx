@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { HTML_TAGS } from '../../editor/elementSchemas';
-import { rankInsertItems } from './insertRank';
+import { rankInsertItems, tagSearchText } from './insertRank';
 import { ASTRO_ASSETS } from './astroAssets';
 import {
   elementIcon,
@@ -226,7 +226,7 @@ function insertTags({ allowSlot }: { readonly allowSlot: boolean | undefined }):
     type: 'element',
     tag,
     label: `<${tag}>`,
-    search: tag === 'slot' ? 'slot children content' : tag,
+    search: tagSearchText(tag),
     ...(tag === 'slot' ? { sub: 'what the caller passes in' } : {}),
     cat: 'elements',
     icon: elementIcon(tag, 14),
