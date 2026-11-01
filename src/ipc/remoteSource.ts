@@ -3,12 +3,12 @@
 // client in its place), and the project's Astro content collections, named by
 // their fixed id (astroContent.ts), go to the content handlers through the CMS
 // transport both hosts provide. The views stay the same for both.
-import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
+import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 import {
   ASTRO_CONTENT_ID,
   type AstroRemoteEdit,
   type AstroRemoteRead,
-} from '../../../shared/properties/astroContent';
+} from '../../shared/properties/astroContent';
 import {
   parseRemoteCollections,
   parseRemoteDocument,
@@ -21,14 +21,14 @@ import {
   type RemoteDocumentSummary,
   type RemoteResult,
   type RemoteWrite,
-} from '../../../shared/properties/cmsRemote';
-import * as connections from '../../ipc/cmsConnectionsBridge';
+} from '../../shared/properties/cmsRemote';
+import * as connections from './cmsConnectionsBridge';
 import {
   parseCollectionSettings,
   type CollectionSettings,
   type SettingsChange,
-} from '../../../shared/properties/collectionSettings';
-import { cmsTransport } from '../../ipc/editorEnvironment';
+} from '../../shared/properties/collectionSettings';
+import { cmsTransport } from './editorEnvironment';
 
 export function remoteCollections(
   projectPath: string,

@@ -521,10 +521,8 @@ function ClassFamilyMenu({ state }: { readonly state: ClassState }) {
           onMouseEnter={() => previewFamily(i)}
           onClick={() => applyFamily(i)}
         >
-          <span className="dd-check">
-            {option === famOriginal.current && <CheckIcon size={12} />}
-          </span>
           <span className="dd-option-label">{option}</span>
+          <span className="dd-check">{option === famOriginal.current && <CheckIcon size={12} />}</span>
         </div>
       ))}
     </Popup>

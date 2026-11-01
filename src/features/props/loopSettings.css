@@ -1,0 +1,356 @@
+/* The loop's list settings (LoopSettings.tsx): Source, Filters, Sort, Limit.
+   Sections and editors are set apart by fills, never by rules. */
+
+.loop-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.loop-settings-source {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.loop-settings-source > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.loop-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px 6px;
+}
+
+.loop-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+}
+
+.loop-settings-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.loop-settings-add:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.loop-settings-add:disabled {
+  opacity: 0.35;
+}
+
+.loop-settings-header-tools {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  margin-right: 4px;
+}
+
+/* "Match all": a compact menu beside the add button. */
+.loop-settings-match {
+  width: auto;
+  height: 24px;
+  padding: 0 6px 0 8px;
+  font-size: 12px;
+}
+
+/* The filters (or sorts) as one box of rows, as a builder's settings list. */
+.loop-settings-list {
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  background: var(--bg-input);
+  overflow: hidden;
+}
+
+.loop-settings-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.loop-settings-item:hover,
+.loop-settings-item.open {
+  background: var(--bg-hover);
+}
+
+.loop-settings-item-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0 34px 0 10px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 30px;
+  text-align: left;
+}
+.loop-settings-item-main:hover:not(:disabled) {
+  background: transparent;
+}
+.loop-settings-item-main:disabled {
+  cursor: default;
+}
+
+.loop-settings-item-lead {
+  flex-shrink: 0;
+  max-width: 50%;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.loop-settings-item-rest {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.loop-settings-item-main:disabled .loop-settings-item-rest {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* Shown on hover (and keyboard focus), so the rows read as text at rest. */
+.loop-settings-item-remove {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-top: -12px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  opacity: 0;
+}
+.loop-settings-item:hover .loop-settings-item-remove,
+.loop-settings-item-remove:focus-visible {
+  opacity: 1;
+}
+.loop-settings-item-remove:hover {
+  background: var(--bg-active);
+  color: var(--text);
+}
+
+.loop-settings-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+}
+.loop-settings-remove:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* An open filter or sort: Field, When, Value, each a labelled row. */
+.loop-settings-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+
+.loop-settings-editor-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.loop-settings-editor-label {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.loop-settings-editor-control {
+  min-width: 0;
+}
+.loop-settings-editor-control > input {
+  width: 100%;
+  margin: 0;
+}
+
+.loop-settings-empty {
+  color: var(--text-faint);
+  font-size: 11px;
+  padding: 2px 0;
+}
+
+.loop-settings-link {
+  align-self: flex-start;
+  padding: 2px 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+}
+.loop-settings-link:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+.loop-settings-link.danger {
+  color: var(--text-dim);
+}
+.loop-settings-link.danger:hover {
+  color: var(--red);
+}
+
+.loop-settings-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 4px 12px;
+  padding: 8px 6px 8px 10px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.loop-settings-notice > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* Something was unlinked: amber, and it stays until dismissed. */
+.loop-settings-notice.warning {
+  background: color-mix(in srgb, var(--amber) 18%, transparent);
+}
+.loop-settings-notice.error {
+  background: color-mix(in srgb, var(--red) 18%, transparent);
+}
+
+.loop-settings-partial {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 12px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.loop-settings-partial-title {
+  color: var(--text);
+  font-weight: 600;
+}
+.loop-settings-partial-reason {
+  color: var(--text-dim);
+}
+
+/* Where a traced list comes from: one row per layer, the collection last. */
+.loop-lineage {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  font-size: 12px;
+}
+.loop-lineage-title {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.loop-lineage-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 22px;
+}
+.loop-lineage-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+.loop-lineage-name {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.loop-lineage-detail-inline {
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--text-faint);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.loop-lineage-collection .loop-lineage-name {
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+}
+.loop-lineage-detail {
+  padding-left: 18px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.loop-lineage-note {
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.loop-settings-note {
+  padding: 4px 12px 0;
+  line-height: 1.45;
+}
+
+/* A filter or sort being edited: a raised panel under its row. Positioned by
+   RowPopup (fixed, from the row's bounds); the fill sets it apart, no rule. */
+.loop-settings-popup {
+  position: fixed;
+  /* Under the menus its own dropdowns open (.dd-popup, 400), over the panel. */
+  z-index: 390;
+  padding: 10px;
+  border-radius: 10px;
+  background: #232323;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+}
+.loop-settings-popup .loop-settings-editor {
+  padding: 0;
+  background: transparent;
+}

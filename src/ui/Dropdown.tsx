@@ -36,6 +36,8 @@ export interface DropdownOption<T = string> {
   readonly label: string;
   readonly hint?: string;
   readonly group?: string;
+  /** A mark beside the group's heading (a CMS's logo); taken from the group's first option. */
+  readonly groupIcon?: ReactNode;
   readonly description?: string;
   readonly icon?: ReactNode;
   readonly dim?: boolean;
@@ -447,7 +449,10 @@ function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
         {control.visible.map((option, index) => (
           <Fragment key={`${String(option.value)}-${index}`}>
             {option.group && option.group !== control.visible[index - 1]?.group && (
-              <div className="dd-group-label">{option.group}</div>
+              <div className="dd-group-label">
+                {option.groupIcon && <span className="dd-group-icon">{option.groupIcon}</span>}
+                {option.group}
+              </div>
             )}
             <DropdownRow option={option} index={index} control={control} />
           </Fragment>
@@ -481,12 +486,12 @@ function DropdownRow<T>({
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => control.pick(option)}
     >
-      <span className="dd-check">
-        {option.value === control.committed.current ? <CheckIcon size={11} /> : undefined}
-      </span>
+      {/* The check sits at the end, so icons and images line up down the left edge. */}
       {option.icon && <span className="dd-icon">{option.icon}</span>}
       <span className="dd-option-label">{option.label}</span>
       {option.description && <span className="dd-description">{option.description}</span>}
+      {option.hint && <span className="dd-hint">{option.hint}</span>}
+      <span className="dd-check">{option.value === control.committed.current ? <CheckIcon size={11} /> : undefined}</span>
     </div>
   );
 }

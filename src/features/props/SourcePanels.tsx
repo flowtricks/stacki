@@ -214,6 +214,9 @@ export function MapPanel(props: NodePanelProps<'map'>) {
         bindContext={bindContext || loopContext}
         dataContext={buildDataContext()}
         onSetText={onSetText}
+        imports={props.frontmatterImports}
+        projectPath={props.projectPath}
+        onSetLoopSource={props.onSetLoopSource}
       />
     </div>
   );

@@ -1,7 +1,11 @@
 import Popup from '../../ui/Popup';
 import { dataPickerPosition } from './dataPickerPosition';
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { MapNode } from '../../../shared/page/pageNode';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { ImportDecl, MapNode } from '../../../shared/page/pageNode';
+import type { LoopTarget } from '../../editor/loopQueryPlan';
+import { readLoop, type LoopReadInput } from '../../editor/loopQueryRead';
+import type { TreeNode } from '../../editor/dataSuggest';
+import LoopSettings, { type LoopApplyResult, type LoopListOption } from './LoopSettings';
 import type { RichContext } from './RichContent';
 import type { ExprInputAPI } from '../../ui/ExprInput';
 import type { FieldPosition, SourceContext } from './propBindings';
@@ -26,6 +30,10 @@ interface MapEditorProps {
   readonly bindContext?: RichContext | undefined;
   readonly dataContext?: SourceContext | undefined;
   readonly onSetText: SetText;
+  /** The file's imports, which say where a loop's list comes from. */
+  readonly imports?: readonly ImportDecl[] | undefined;
+  readonly projectPath?: string | undefined;
+  readonly onSetLoopSource?: ((target: LoopTarget, sanityClient: 'available' | 'unavailable') => LoopApplyResult) | undefined;
 }
 interface MapFields {
   readonly data: string;
@@ -184,7 +192,7 @@ function useMapModel({ node, onSetText }: MapEditorProps) {
   return { fields, update, commit, commitOnEnter, commitSource };
 }
 function useMapEditor(props: MapEditorProps) {
-  const { node, loopContext, bindContext, dataContext, onSetText } = props;
+  const { node, loopContext, bindContext, dataContext, onSetText, imports, projectPath, onSetLoopSource } = props;
   const { fields, update, commit, commitOnEnter, commitSource } = useMapModel(props);
   // Anchors the source popup under the Data row.
   const dataRef = useRef<HTMLDivElement>(null);
@@ -230,6 +238,9 @@ function useMapEditor(props: MapEditorProps) {
     bindContext,
     dataContext,
     onSetText,
+    imports,
+    projectPath,
+    onSetLoopSource,
     fields,
     update,
     commit,
@@ -263,7 +274,7 @@ function MapEditorView({ state }: { readonly state: ReturnType<typeof useMapEdit
     <>
       {parseableNow ? (
         <>
-          <MapDataField state={state} />
+          <MapListSettings state={state} />
           <MapNames state={state} />
         </>
       ) : (
@@ -509,6 +520,58 @@ function TagFieldView({ state }: { readonly state: ReturnType<typeof useTagField
       )}
     </div>
   );
+}
+
+// The list settings when the app can write them, with the expression field
+// beneath for a list that is a value or code rather than a collection query —
+// the settings name it, and the field is where it is edited.
+function MapListSettings({ state }: { readonly state: ReturnType<typeof useMapEditor> }) {
+  const { node, dataContext, imports, projectPath, onSetLoopSource, bindContext, loopContext, dataRef } = state;
+  const data = parseMapHead(node.head)?.data ?? '';
+  const frontmatter = dataContext?.frontmatter ?? '';
+  const input = useMemo<Omit<LoopReadInput, 'fieldKind'>>(() => ({ frontmatter, imports: imports ?? [], data }), [frontmatter, imports, data]);
+  const kind = useMemo(() => readLoop(input).kind, [input]);
+  const lists = useMemo(() => pageLists(dataTree(bindContext || loopContext || {})), [bindContext, loopContext]);
+  if (onSetLoopSource === undefined) {
+    return <MapDataField state={state} />;
+  }
+  return (
+    <>
+      <LoopSettings
+        input={input}
+        projectPath={projectPath}
+        filePath={dataContext?.filePath}
+        lists={lists}
+        onApply={onSetLoopSource}
+        sourceButton={(name) => <SourceEditButton name={name} dataContext={dataContext} anchorRef={dataRef} />}
+      />
+      {(kind === 'value' || kind === 'code') && <MapDataField state={state} />}
+    </>
+  );
+}
+
+// Lists the page already holds — props, constants, an outer loop item's lists
+// — for the Source menu. Collections are offered by the catalog instead.
+const PAGE_LISTS_MAX = 100;
+
+export function pageLists(tree: readonly TreeNode[]): readonly LoopListOption[] {
+  const out: LoopListOption[] = [];
+  // Children of a pickable node are pickable nodes too (listsOnly marks the
+  // whole tree), but are typed as plain tree nodes; `pickable` is read as a key.
+  const pending: TreeNode[] = [...listsOnly(tree)].reverse();
+  for (let count = 0; pending.length > 0 && out.length < PAGE_LISTS_MAX && count < LIMITS.treeNodesMax; count++) {
+    const node = pending.pop();
+    if (node === undefined || node.section === 'collections' || node.query !== undefined) {
+      continue;
+    }
+    if ('pickable' in node && node.pickable === true) {
+      out.push({ path: node.path, label: node.path, hint: node.preview || node.section || '' });
+    }
+    for (const child of [...(node.children ?? [])].reverse()) {
+      pending.push(child);
+    }
+  }
+  return out;
 }
 
 function MapSourcePicker({ state }: { readonly state: ReturnType<typeof useMapEditor> }) {

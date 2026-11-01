@@ -8,7 +8,10 @@ import type {
   ChunkGroupNode,
   Attr,
   ValueNode,
+  ImportDecl,
 } from '../../../shared/page/pageNode';
+import type { LoopTarget } from '../../editor/loopQueryPlan';
+import type { LoopApplyResult } from './LoopSettings';
 import type { FieldDefinition, PropValues } from './propRules';
 import type { SetProp, SetProps } from './propAttributes';
 import type { SetText, TagOption, TagFieldProps } from './propNodeEditors';
@@ -52,6 +55,9 @@ export interface PropsPanelProps {
   readonly onOpenCode?: () => void;
   readonly onSetFrontmatter?: (source: string) => void;
   readonly frontmatterSource?: string;
+  /** The open file's imports: what a loop's source is read against. */
+  readonly frontmatterImports?: readonly ImportDecl[] | undefined;
+  readonly onSetLoopSource?: (target: LoopTarget, sanityClient: 'available' | 'unavailable') => LoopApplyResult;
   readonly onOpenSymbol?: (name: string) => void;
   readonly onToggleElse?: (value: boolean) => void;
   readonly projectPath?: string | undefined;

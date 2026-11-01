@@ -22,6 +22,8 @@ import type { PickedAsset } from '../../ui/AssetField';
 import type { InlineNode } from '../../features/props/RichContent';
 import type { Rename } from '../../features/props/propNodeEditors';
 import type { PropValues } from '../../features/props/propRules';
+import type { LoopApplyResult } from '../../features/props/LoopSettings';
+import type { LoopTarget } from '../../editor/loopQueryPlan';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorNode } from '../../editor/pageView';
 import { useLiveValue } from '../../ui/liveValue';
@@ -433,6 +435,7 @@ export function settingsValues(app: ShellView) {
     comment: noteText(commentAbove(app.model, selectedId)?.value),
     tagOptions: app.tagOptions,
     frontmatterSource: app.frontmatterCode,
+    frontmatterImports: app.model?.imports,
     projectPath: app.project.path,
     filePath: app.editStack[app.editStack.length - 1]?.path || app.currentPage?.path || undefined,
   };
@@ -477,6 +480,8 @@ export function settingsHandlers(app: ShellView) {
     },
     onOpenCode: app.openCodeWindow,
     onSetFrontmatter: app.setExtraFrontmatter,
+    onSetLoopSource: (target: LoopTarget, sanityClient: 'available' | 'unavailable'): LoopApplyResult =>
+      selectedId ? app.setLoopSource(selectedId, target, sanityClient) : { ok: false, message: 'Select the loop first.' },
     onOpenSymbol: app.onOpenSymbol,
     onToggleElse: (want: boolean) => {
       if (selectedId) {

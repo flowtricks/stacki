@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeftIcon } from '../../ui/Icons';
 import { ErrorToast } from '../../ui/ErrorToast';
-import { remoteDocument, writeRemoteDocument } from './remoteSource';
+import { remoteDocument, writeRemoteDocument } from '../../ipc/remoteSource';
 import type {
   RemoteAsset,
   RemoteDocument,

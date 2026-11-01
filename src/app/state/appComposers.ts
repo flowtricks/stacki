@@ -19,6 +19,7 @@ import {
   useContentEdits,
 } from './appPropertyEdits';
 import { useShortcuts } from './appPageOps';
+import { useLoopEdits } from './appLoopEdits';
 import {
   usePageOps,
   useScopeContext,
@@ -73,6 +74,7 @@ export function usePropertyEdits(
   const elementTag = useElementTag(coreState, history);
   const nodeText = useNodeText(coreState, history);
   const branchEdits = useBranchEdits(coreState, history);
+  const loopEdits = useLoopEdits(coreState, history);
   const contentEdits = useContentEdits(coreState, history);
   return {
     ...comment,
@@ -83,6 +85,7 @@ export function usePropertyEdits(
     ...elementTag,
     ...nodeText,
     ...branchEdits,
+    ...loopEdits,
     ...contentEdits,
   };
 }

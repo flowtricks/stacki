@@ -33,7 +33,7 @@ import { reportErrorToast } from '../../ui/errorNotices';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import useListReorder from '../../ui/useListReorder';
 import { moveRemoteDocument } from '../../ipc/cmsConnectionsBridge';
-import { deleteRemoteDocuments, remoteDocuments, remoteTemplate } from './remoteSource';
+import { deleteRemoteDocuments, remoteDocuments, remoteTemplate } from '../../ipc/remoteSource';
 import { duplicateOf, RemotePendingItem, type PendingItem } from './RemotePendingItem';
 import type {
   RemoteDocumentList,

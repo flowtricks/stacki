@@ -5,7 +5,7 @@
 import { useRef, useState } from 'react';
 import Popup from '../../ui/Popup';
 import { CheckIcon, PinIcon } from '../../ui/Icons';
-import { remoteTemplate } from './remoteSource';
+import { remoteTemplate } from '../../ipc/remoteSource';
 import type { RemoteCmsSelection } from './remoteCmsShared';
 import { columnFields, type RemoteColumn } from './remoteColumns';
 
@@ -101,10 +101,8 @@ function ColumnMenu(props: {
       className="more-menu-item"
       onClick={() => props.onToggle(field, fields.fields)}
     >
-      <span className="remote-cms-column-check">
-        {props.chosen.has(field.name) && <CheckIcon size={12} />}
-      </span>
       {field.title}
+      <span className="remote-cms-column-check">{props.chosen.has(field.name) && <CheckIcon size={12} />}</span>
     </button>
   ));
 }

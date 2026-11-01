@@ -978,6 +978,7 @@
   width: 14px;
   display: inline-grid;
   place-items: center;
+  margin-left: auto; /* Checks end the row, as in every menu. */
 }
 /* Through the header row, so the app's button look (a fill on hover, a full
    width, centred text) never reaches a column's name. */

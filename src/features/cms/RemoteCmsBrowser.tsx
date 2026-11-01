@@ -16,7 +16,7 @@ import {
   PlusIcon,
 } from '../../ui/Icons';
 import { SanityTypeIcon } from './SanityTypeIcon';
-import { createContentCollection, remoteCollections, remoteDocuments } from './remoteSource';
+import { createContentCollection, remoteCollections, remoteDocuments } from '../../ipc/remoteSource';
 import {
   ASTRO_CONTENT_SOURCE,
   isAstroContent,

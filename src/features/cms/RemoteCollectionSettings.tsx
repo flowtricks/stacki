@@ -41,7 +41,7 @@ import {
 import useListReorder from '../../ui/useListReorder';
 import { labelize } from './cmsSchema';
 import type { RemoteCmsSelection } from './remoteCmsShared';
-import { changeCollectionSettings, collectionSettings, remoteCollections } from './remoteSource';
+import { changeCollectionSettings, collectionSettings, remoteCollections } from '../../ipc/remoteSource';
 import { applyDraft } from './settingsDraft';
 import { FieldInputs } from './RemoteFieldSettings';
 

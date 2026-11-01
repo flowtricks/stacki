@@ -8,7 +8,7 @@ import { confirmDialog } from '../../ui/ConfirmDialog';
 import { isAstroContent } from '../../../shared/properties/astroContent';
 import type { RemoteDocument } from '../../../shared/properties/cmsRemote';
 import { entryDeletionMessage } from '../../ipc/editorEnvironment';
-import { deleteRemoteDocuments } from './remoteSource';
+import { deleteRemoteDocuments } from '../../ipc/remoteSource';
 import type { RemoteCmsSelection } from './remoteCmsShared';
 
 export function RemoteItemActions(props: {

@@ -19,7 +19,7 @@ import { ErrorToast } from '../../ui/ErrorToast';
 import { RemoteFieldList } from './RemoteFieldList';
 import { useEditContext } from './RemoteItemFields';
 import type { RemoteCmsSelection } from './remoteCmsShared';
-import { createRemoteDocument, writeRemoteDocument } from './remoteSource';
+import { createRemoteDocument, writeRemoteDocument } from '../../ipc/remoteSource';
 
 /** An item being made: what it is called until it exists, and its fields. */
 export interface PendingItem {

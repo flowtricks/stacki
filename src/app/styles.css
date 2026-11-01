@@ -3557,7 +3557,7 @@ body > .embed-editor_provenance {
   align-items: center;
   gap: 6px;
   height: 26px;
-  padding: 0 8px 0 4px;
+  padding: 0 4px 0 8px;
   border-radius: 5px;
   cursor: pointer;
   font-size: 12px;
@@ -3575,16 +3575,44 @@ body > .embed-editor_provenance {
 .dd-option.dim:not(.highlight) {
   color: var(--text-faint);
 }
+/* The check ends the row, so icons and images align down the left edge (a
+   rule across the app). Its column is kept empty on unchecked rows, so labels
+   never shift; after a hint it follows the hint rather than splitting the gap. */
 .dd-check {
   width: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  margin-left: auto;
+}
+.dd-hint ~ .dd-check {
+  margin-left: 0;
 }
 .dd-option-label {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* A heading over a run of options (Content collections, On this page). */
+.dd-group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px 4px;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dd-group-label:not(:first-child) {
+  margin-top: 4px;
+}
+.dd-group-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--text-dim);
 }
 .dd-icon {
   display: flex;
