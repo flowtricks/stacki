@@ -4,12 +4,7 @@
 // RemoteCollectionSettings.tsx saves them with the field.
 import { useState } from 'react';
 import type { SettingsField } from '../../../shared/properties/collectionSettings';
-import {
-  checksFor,
-  FIELD_CHECKS,
-  type FieldCheckKey,
-  type FieldChecks,
-} from '../../../shared/properties/fieldChecks';
+import { checksFor, FIELD_CHECKS, type FieldCheckKey, type FieldChecks } from '../../../shared/properties/fieldChecks';
 import Dropdown from '../../ui/Dropdown';
 import { ChevronDownIcon, ChevronRightIcon } from '../../ui/Icons';
 import { checkLabel, choicesFor, typedValue, withCheck } from './fieldCheckInputs';
@@ -19,6 +14,8 @@ type Draft = (draft: SettingsField) => void;
 export function FieldInputs(props: {
   readonly field: SettingsField;
   readonly draft: SettingsField;
+  /** A new field's form starts in its name; an open field's does not move focus. */
+  readonly autoFocusName?: boolean;
   readonly onDraft: Draft;
 }) {
   const { draft, onDraft } = props;
@@ -26,10 +23,7 @@ export function FieldInputs(props: {
     <div className="field-settings">
       <div className="field-settings-grid">
         <Labelled label="Name" wide>
-          <input
-            value={draft.name}
-            onChange={(event) => onDraft({ ...draft, name: event.target.value })}
-          />
+          <input autoFocus={props.autoFocusName === true} value={draft.name} onChange={(event) => onDraft({ ...draft, name: event.target.value })} />
         </Labelled>
         {props.field.editable && (
           <Labelled label="Help text" wide>
@@ -41,17 +35,12 @@ export function FieldInputs(props: {
             />
           </Labelled>
         )}
-        {props.field.editable && draft.kind === 'option' && (
-          <OptionValues draft={draft} onDraft={onDraft} />
-        )}
+        {props.field.editable && draft.kind === 'option' && <OptionValues draft={draft} onDraft={onDraft} />}
       </div>
       {props.field.editable ? (
         <FieldRules draft={draft} onDraft={onDraft} />
       ) : (
-        <p className="field-settings-note">
-          This field’s schema is written by hand in the content config: only its name, place and
-          removal change here.
-        </p>
+        <p className="field-settings-note">This field is written as a method in the content config: only its name, place and removal change here.</p>
       )}
     </div>
   );
@@ -64,17 +53,11 @@ function FieldRules(props: { readonly draft: SettingsField; readonly onDraft: Dr
   const all = checksFor(draft.kind);
   const common = all.filter((key) => COMMON_CHECKS.includes(key));
   const more = all.filter((key) => !COMMON_CHECKS.includes(key));
-  const setCheck = (key: FieldCheckKey, value: FieldChecks[FieldCheckKey]) =>
-    onDraft({ ...draft, checks: withCheck(draft.checks, key, value) });
+  const setCheck = (key: FieldCheckKey, value: FieldChecks[FieldCheckKey]) => onDraft({ ...draft, checks: withCheck(draft.checks, key, value) });
   return (
     <>
       {common.length > 0 && <CheckGroup keys={common} draft={draft} onCheck={setCheck} />}
-      <button
-        type="button"
-        className="field-settings-disclosure"
-        aria-expanded={advanced}
-        onClick={() => setAdvanced(!advanced)}
-      >
+      <button type="button" className="field-settings-disclosure" aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}>
         {advanced ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
         Advanced validation
       </button>
@@ -87,28 +70,14 @@ function FieldRules(props: { readonly draft: SettingsField; readonly onDraft: Dr
         </div>
       )}
       <label className="field-settings-required">
-        <input
-          type="checkbox"
-          checked={draft.required}
-          onChange={(event) => onDraft({ ...draft, required: event.target.checked })}
-        />
+        <input type="checkbox" checked={draft.required} onChange={(event) => onDraft({ ...draft, required: event.target.checked })} />
         <span>This field is required</span>
       </label>
     </>
   );
 }
 
-const COMMON_CHECKS: readonly FieldCheckKey[] = [
-  'min',
-  'max',
-  'integer',
-  'minDate',
-  'maxDate',
-  'minWidth',
-  'maxWidth',
-  'minHeight',
-  'maxHeight',
-];
+const COMMON_CHECKS: readonly FieldCheckKey[] = ['min', 'max', 'integer', 'minDate', 'maxDate', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight'];
 
 // Checks laid out by what they take: values two to a row, switches together under them.
 function CheckGroup(props: {
@@ -131,11 +100,7 @@ function CheckGroup(props: {
         <div className="field-settings-flags">
           {flags.map((key) => (
             <label key={key} className="field-settings-flag">
-              <input
-                type="checkbox"
-                checked={props.draft.checks[key] === true}
-                onChange={(event) => props.onCheck(key, event.target.checked || undefined)}
-              />
+              <input type="checkbox" checked={props.draft.checks[key] === true} onChange={(event) => props.onCheck(key, event.target.checked || undefined)} />
               <span>{checkLabel(key, props.draft.kind)}</span>
             </label>
           ))}
@@ -229,8 +194,7 @@ function OptionValues(props: { readonly draft: SettingsField; readonly onDraft: 
 // The value an entry gets when it leaves the field out, as the field's kind holds one.
 function DefaultInput(props: { readonly draft: SettingsField; readonly onDraft: Draft }) {
   const { draft } = props;
-  const set = (defaultValue: SettingsField['defaultValue']) =>
-    props.onDraft({ ...draft, defaultValue });
+  const set = (defaultValue: SettingsField['defaultValue']) => props.onDraft({ ...draft, defaultValue });
   const current = draft.defaultValue === undefined ? '' : String(draft.defaultValue);
   if (draft.kind === 'switch' || draft.kind === 'option') {
     const values = draft.kind === 'switch' ? ['true', 'false'] : (draft.options ?? []);
@@ -240,13 +204,8 @@ function DefaultInput(props: { readonly draft: SettingsField; readonly onDraft: 
         <Dropdown
           value={current}
           livePreview={false}
-          options={[
-            { value: '', label: 'None' },
-            ...values.map((each) => ({ value: each, label: named(each) })),
-          ]}
-          onChange={(next) =>
-            set(next === '' ? undefined : draft.kind === 'switch' ? next === 'true' : next)
-          }
+          options={[{ value: '', label: 'None' }, ...values.map((each) => ({ value: each, label: named(each) }))]}
+          onChange={(next) => set(next === '' ? undefined : draft.kind === 'switch' ? next === 'true' : next)}
         />
       </Labelled>
     );
@@ -270,23 +229,9 @@ function DefaultInput(props: { readonly draft: SettingsField; readonly onDraft: 
   );
 }
 
-const TYPED_DEFAULTS: readonly SettingsField['kind'][] = [
-  'text',
-  'richText',
-  'link',
-  'videoLink',
-  'email',
-  'phone',
-  'color',
-  'file',
-  'number',
-];
+const TYPED_DEFAULTS: readonly SettingsField['kind'][] = ['text', 'richText', 'link', 'videoLink', 'email', 'phone', 'color', 'file', 'number'];
 
-function Labelled(props: {
-  readonly label: string;
-  readonly wide?: boolean;
-  readonly children: React.ReactNode;
-}) {
+function Labelled(props: { readonly label: string; readonly wide?: boolean; readonly children: React.ReactNode }) {
   return (
     <label className={`field-settings-field ${props.wide === true ? 'is-wide' : ''}`}>
       <span className="field-settings-label">{props.label}</span>

@@ -46,8 +46,17 @@ test('each change is made to the copy, in the order it comes', () => {
     name: 'cover',
     fieldKind: 'image',
     target: undefined,
+    settings: {
+      description: 'Shown above the post',
+      required: true,
+      checks: { minWidth: 800 },
+      options: undefined,
+      defaultValue: undefined,
+    },
   });
   assert.deepEqual(names(added), ['title', 'views', 'cover']);
+  assert.equal(added.value.fields[2].required, true, 'a new field shows the settings it was added with');
+  assert.deepEqual(added.value.fields[2].checks, { minWidth: 800 });
   const renamed = applyDraft(added.value, { kind: 'renameField', from: 'views', to: 'reads' });
   assert.deepEqual(names(renamed), ['title', 'reads', 'cover']);
   const updated = applyDraft(renamed.value, {
@@ -75,8 +84,19 @@ test('a change the config would refuse is refused while it is made', () => {
   assert.equal(applyDraft(settings, { kind: 'renameField', from: 'views', to: 'title' }).ok, false);
   assert.equal(applyDraft(settings, { kind: 'renameField', from: 'gone', to: 'x' }).ok, false);
   assert.equal(
-    applyDraft(settings, { kind: 'addField', name: 'title', fieldKind: 'text', target: undefined })
-      .ok,
+    applyDraft(settings, {
+      kind: 'addField',
+      name: 'title',
+      fieldKind: 'text',
+      target: undefined,
+      settings: {
+        description: undefined,
+        required: false,
+        checks: {},
+        options: undefined,
+        defaultValue: undefined,
+      },
+    }).ok,
     false,
   );
   assert.equal(applyDraft(settings, { kind: 'reorder', order: ['title'] }).ok, false);

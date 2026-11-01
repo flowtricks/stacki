@@ -8,9 +8,10 @@
 //
 // A field's chain is understood as a base type (`z.string()`, `image()`,
 // `reference('team')`, `z.array(…)`) followed by methods. The settings own
-// `.min()`, `.max()`, `.describe()` and optionality (`.optional()`,
-// `.nullish()`, `.default()`); other validators (`.email()`, `.url()`) are kept
-// in place; a transform or refinement makes the field read-only to the form.
+// the checks, `.describe()` and optionality (`.optional()`, `.nullish()`,
+// `.default()`); writing them changes only the methods for the settings that
+// changed (astroSchemaChecks.ts), so other validators (`.email()`), a
+// transform or refinement, and a base kept in a constant stay as written.
 
 import ts from 'typescript';
 
@@ -35,13 +36,8 @@ import {
   type Located,
 } from './astroSchemaSyntax';
 
-import type {
-  FieldUpdate,
-  NewFieldKind,
-  SettingsChange,
-  SettingsField,
-  SettingsFieldKind,
-} from '../../shared/properties/collectionSettings';
+import type { FieldSettings, FieldUpdate, NewFieldKind, SettingsChange, SettingsField, SettingsFieldKind } from '../../shared/properties/collectionSettings';
+import { newFieldSettings } from '../../shared/properties/collectionSettings';
 
 /** What reading a collection found: its fields, and where its glob folder is named. */
 export interface SchemaRead {
@@ -55,26 +51,18 @@ export interface SchemaEdit {
   readonly move: { readonly from: string; readonly to: string } | undefined;
 }
 
-export function readCollectionSchema(
-  source: string,
-  collection: string,
-): Result<SchemaRead, string> {
+export function readCollectionSchema(source: string, collection: string): Result<SchemaRead, string> {
   const located = locate(source, collection);
   if (!located.ok) {
     return located;
   }
   const { object, call, file } = located.value;
-  const fields =
-    object === undefined ? [] : object.properties.flatMap((property) => fieldOf(property, file));
+  const fields = object === undefined ? [] : object.properties.flatMap((property) => fieldOf(property, file));
   return { ok: true, value: { fields, source: loaderSource(call, file) } };
 }
 
 /** The config with `change` made to `collection`'s schema, or why it cannot be. */
-export function editCollectionSchema(
-  source: string,
-  collection: string,
-  change: SettingsChange,
-): Result<SchemaEdit, string> {
+export function editCollectionSchema(source: string, collection: string, change: SettingsChange): Result<SchemaEdit, string> {
   const located = locate(source, collection);
   if (!located.ok) {
     return located;
@@ -105,8 +93,7 @@ function fieldEdits(
   change: Exclude<SettingsChange, { readonly kind: 'renameCollection' | 'deleteCollection' }>,
 ): Result<readonly SpanEdit[], string> {
   const { file } = located;
-  const named = (name: string) =>
-    object.properties.find((property) => propertyName(property) === name);
+  const named = (name: string) => object.properties.find((property) => propertyName(property) === name);
   switch (change.kind) {
     case 'reorder':
       return reorderFields(object, file, change.order);
@@ -119,9 +106,11 @@ function fieldEdits(
         return { ok: false, error: `A field named ${change.to} already exists.` };
       }
       const key = keyText(change.to, { quoted: ts.isStringLiteral(property.name) });
+      // A shorthand field names its schema's constant: that name stays as its value.
+      const text = ts.isShorthandPropertyAssignment(property) ? `${key}: ${property.name.text}` : key;
       return {
         ok: true,
-        value: [{ start: property.name.getStart(file), end: property.name.getEnd(), text: key }],
+        value: [{ start: property.name.getStart(file), end: property.name.getEnd(), text }],
       };
     }
     case 'updateField':
@@ -151,11 +140,7 @@ function fieldEdits(
   }
 }
 
-function reorderFields(
-  object: ts.ObjectLiteralExpression,
-  file: ts.SourceFile,
-  order: readonly string[],
-): Result<readonly SpanEdit[], string> {
+function reorderFields(object: ts.ObjectLiteralExpression, file: ts.SourceFile, order: readonly string[]): Result<readonly SpanEdit[], string> {
   const byName = new Map(object.properties.map((property) => [propertyName(property), property]));
   const known = order.every((name) => byName.has(name));
   if (!known || order.length !== object.properties.length) {
@@ -169,28 +154,35 @@ function reorderFields(
   return { ok: true, value: [propertyList(object, file, texts)] };
 }
 
-function updateField(
-  property: ts.ObjectLiteralElementLike | undefined,
-  file: ts.SourceFile,
-  update: FieldUpdate,
-): Result<readonly SpanEdit[], string> {
-  if (property === undefined || !ts.isPropertyAssignment(property)) {
+function updateField(property: ts.ObjectLiteralElementLike | undefined, file: ts.SourceFile, update: FieldUpdate): Result<readonly SpanEdit[], string> {
+  if (property === undefined) {
     return { ok: false, error: `There is no field ${update.name}.` };
   }
-  const chain = chainOf(property.initializer, file);
-  if (chain === undefined || !readChain(chain).editable) {
+  const schema = schemaOf(property);
+  const chain = schema === undefined ? undefined : chainOf(schema, file);
+  if (schema === undefined || chain === undefined) {
     return {
       ok: false,
-      error: `${update.name}’s schema is written by hand; edit it in the config.`,
+      error: `${update.name} is written as a method or a very long chain; edit it in the config.`,
     };
   }
   const text = writeChain(chain, update);
-  return {
-    ok: true,
-    value: [
-      { start: property.initializer.getStart(file), end: property.initializer.getEnd(), text },
-    ],
-  };
+  assert(text.length > 0, 'A field is written with a schema');
+  // A shorthand field becomes `name: constant…` once its chain holds more than the name.
+  if (ts.isShorthandPropertyAssignment(property)) {
+    const written = text === chain.base ? text : `${property.name.text}: ${text}`;
+    const span = { start: property.getStart(file), end: property.getEnd() };
+    return { ok: true, value: [{ ...span, text: written }] };
+  }
+  return { ok: true, value: [{ start: schema.getStart(file), end: schema.getEnd(), text }] };
+}
+
+// A field's schema as written: `name: schema`, or `name` alone naming a constant.
+function schemaOf(property: ts.ObjectLiteralElementLike): ts.Expression | undefined {
+  if (ts.isPropertyAssignment(property)) {
+    return property.initializer;
+  }
+  return ts.isShorthandPropertyAssignment(property) ? property.name : undefined;
 }
 
 // A new field, optional until its settings say otherwise, with what its schema
@@ -202,6 +194,7 @@ function addField(
     readonly name: string;
     readonly fieldKind: NewFieldKind;
     readonly target: string | undefined;
+    readonly settings: FieldSettings;
   },
   existing: ts.ObjectLiteralElementLike | undefined,
 ): Result<readonly SpanEdit[], string> {
@@ -211,14 +204,11 @@ function addField(
   }
   const target = field.target ?? '';
   const pointing = field.fieldKind === 'reference' || field.fieldKind === 'multiReference';
-  if (
-    pointing &&
-    !collectionsObject(file)?.properties.some((property) => propertyName(property) === target)
-  ) {
+  if (pointing && !collectionsObject(file)?.properties.some((property) => propertyName(property) === target)) {
     return { ok: false, error: `${target} is not a collection in the content config.` };
   }
   const key = keyText(field.name, { quoted: false });
-  const added = `${key}: ${newFieldText(field.fieldKind, target)}`;
+  const added = `${key}: ${settledFieldText(field.fieldKind, target, field.settings)}`;
   const texts = [...object.properties.map((property) => property.getText(file)), added];
   const imaging = field.fieldKind === 'image' || field.fieldKind === 'multiImage';
   const scope = imaging ? imageScope(located) : { ok: true as const, value: [] };
@@ -227,6 +217,21 @@ function addField(
   }
   const imported = pointing ? referenceImport(file) : [];
   return { ok: true, value: [propertyList(object, file, texts), ...scope.value, ...imported] };
+}
+
+/** A new field's schema with its settings written in, as an existing field's would be. */
+export function settledFieldText(kind: NewFieldKind, target: string, settings: FieldSettings): string {
+  const plain = newFieldText(kind, target);
+  const file = ts.createSourceFile('field.ts', `(${plain})`, ts.ScriptTarget.Latest, true);
+  const statement = file.statements[0];
+  assert(statement !== undefined, 'A new field’s schema parses');
+  assert(ts.isExpressionStatement(statement), 'A new field’s schema is an expression');
+  const schema = unwrap(statement.expression);
+  const chain = schema === undefined ? undefined : chainOf(schema, file);
+  assert(chain !== undefined, 'A new field’s schema reads as a chain');
+  // The form starts from newFieldSettings: it must be what the plain schema states.
+  assert(JSON.stringify(readChain(chain)) === JSON.stringify(newFieldSettings(kind)), `A new ${kind} field reads back as its starting settings`);
+  return writeChain(chain, settings);
 }
 
 /** The schema a new field of `kind` is written as. */
@@ -278,9 +283,7 @@ function imageScope(located: Located): Result<readonly SpanEdit[], string> {
     const open = value.getStart(file);
     return {
       ok: true,
-      value: [
-        { start: open, end: value.equalsGreaterThanToken.getStart(file), text: '({ image }) ' },
-      ],
+      value: [{ start: open, end: value.equalsGreaterThanToken.getStart(file), text: '({ image }) ' }],
     };
   }
   if (!ts.isObjectBindingPattern(parameter.name)) {
@@ -325,11 +328,7 @@ function referenceImport(file: ts.SourceFile): readonly SpanEdit[] {
   return [{ start: 0, end: 0, text: "import { reference } from 'astro:content';\n" }];
 }
 
-function renameCollection(
-  source: string,
-  located: Located,
-  rename: { readonly from: string; readonly to: string },
-): Result<SchemaEdit, string> {
+function renameCollection(source: string, located: Located, rename: { readonly from: string; readonly to: string }): Result<SchemaEdit, string> {
   const { entry, file, call } = located;
   const collections = entry.parent;
   assert(ts.isObjectLiteralExpression(collections), 'A collection is listed in an object');
@@ -354,10 +353,7 @@ function renameCollection(
   const base = globBase(call);
   const folder = base === undefined ? undefined : base.text.replace(/^\.\//, '').replace(/\/$/, '');
   const named = folder !== undefined && folder.split('/').at(-1) === rename.from;
-  const moved =
-    named && folder !== undefined
-      ? `${folder.split('/').slice(0, -1).join('/')}/${rename.to}`
-      : undefined;
+  const moved = named && folder !== undefined ? `${folder.split('/').slice(0, -1).join('/')}/${rename.to}` : undefined;
   if (base !== undefined && moved !== undefined) {
     const prefix = base.text.startsWith('./') ? './' : '';
     edits.push({
@@ -381,13 +377,7 @@ function renameCollection(
  * entry in `collections`, and the const that declared it when nothing else uses it.
  */
 function deleteCollection(source: string, name: string): Result<SchemaEdit, string> {
-  const first = ts.createSourceFile(
-    'content.config.ts',
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const first = ts.createSourceFile('content.config.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const collections = collectionsObject(first);
   if (collections === undefined) {
     return {
@@ -437,10 +427,7 @@ function deleteCollection(source: string, name: string): Result<SchemaEdit, stri
 
 // The `const x = defineCollection(…)` an entry names, as a span to remove, when
 // nothing else in the file uses `x`.
-function declarationOf(
-  entry: ts.ObjectLiteralElementLike,
-  file: ts.SourceFile,
-): SpanEdit | undefined {
+function declarationOf(entry: ts.ObjectLiteralElementLike, file: ts.SourceFile): SpanEdit | undefined {
   const named = ts.isShorthandPropertyAssignment(entry)
     ? entry.name.text
     : ts.isPropertyAssignment(entry) && ts.isIdentifier(entry.initializer)
@@ -453,9 +440,7 @@ function declarationOf(
     (each) =>
       ts.isVariableStatement(each) &&
       each.declarationList.declarations.length === 1 &&
-      each.declarationList.declarations.some(
-        (declaration) => ts.isIdentifier(declaration.name) && declaration.name.text === named,
-      ),
+      each.declarationList.declarations.some((declaration) => ts.isIdentifier(declaration.name) && declaration.name.text === named),
   );
   if (statement === undefined) {
     return undefined;
@@ -465,33 +450,23 @@ function declarationOf(
   if (uses > 2) {
     return undefined;
   }
-  const end =
-    file.text.charAt(statement.getEnd()) === '\n' ? statement.getEnd() + 1 : statement.getEnd();
+  const end = file.text.charAt(statement.getEnd()) === '\n' ? statement.getEnd() + 1 : statement.getEnd();
   return { start: statement.getStart(file), end, text: '' };
 }
 
-function loaderSource(
-  call: ts.CallExpression | undefined,
-  file: ts.SourceFile,
-): string | undefined {
+function loaderSource(call: ts.CallExpression | undefined, file: ts.SourceFile): string | undefined {
   const base = globBase(call);
   if (base !== undefined) {
     return base.text.replace(/^\.\//, '');
   }
   const loader = loaderCall(call);
   const first = loader?.arguments[0];
-  return first !== undefined && ts.isStringLiteralLike(first)
-    ? first.text.replace(/^\.\//, '')
-    : loader?.getText(file);
+  return first !== undefined && ts.isStringLiteralLike(first) ? first.text.replace(/^\.\//, '') : loader?.getText(file);
 }
 
 function globBase(call: ts.CallExpression | undefined): ts.StringLiteralLike | undefined {
   const loader = loaderCall(call);
-  if (
-    loader === undefined ||
-    !ts.isIdentifier(loader.expression) ||
-    loader.expression.text !== 'glob'
-  ) {
+  if (loader === undefined || !ts.isIdentifier(loader.expression) || loader.expression.text !== 'glob') {
     return undefined;
   }
   const options = loader.arguments[0];
@@ -509,10 +484,7 @@ function loaderCall(call: ts.CallExpression | undefined): ts.CallExpression | un
     return undefined;
   }
   const loader = options.properties.find((property) => propertyName(property) === 'loader');
-  const value =
-    loader !== undefined && ts.isPropertyAssignment(loader)
-      ? unwrap(loader.initializer)
-      : undefined;
+  const value = loader !== undefined && ts.isPropertyAssignment(loader) ? unwrap(loader.initializer) : undefined;
   return value !== undefined && ts.isCallExpression(value) ? value : undefined;
 }
 
@@ -522,7 +494,8 @@ function fieldOf(property: ts.ObjectLiteralElementLike, file: ts.SourceFile): Se
   if (name === undefined || !/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(name)) {
     return [];
   }
-  const chain = ts.isPropertyAssignment(property) ? chainOf(property.initializer, file) : undefined;
+  const schema = schemaOf(property);
+  const chain = schema === undefined ? undefined : chainOf(schema, file);
   if (chain === undefined) {
     return [
       {
@@ -537,20 +510,27 @@ function fieldOf(property: ts.ObjectLiteralElementLike, file: ts.SourceFile): Se
       },
     ];
   }
-  return [{ name, kind: chain.kind, ...readChain(chain), target: referenceTarget(property) }];
+  return [
+    {
+      name,
+      kind: chain.kind,
+      ...readChain(chain),
+      editable: true,
+      target: referenceTarget(property),
+    },
+  ];
 }
 
 // `z.string().min(1).optional()` → base `z.string()`, steps min and optional.
+// Anything else at the root — a schema kept in a constant (`titleSchema`), a
+// helper's call (`slugField()`) — is a base of its own, kept as written.
 function chainOf(expression: ts.Expression, file: ts.SourceFile): Chain | undefined {
   const steps: ChainStep[] = [];
   let node: ts.Expression = expression;
   for (let depth = 0; depth < CHAIN_STEPS_MAX; depth += 1) {
-    if (!ts.isCallExpression(node)) {
-      return undefined;
-    }
-    const callee = node.expression;
-    const kind = baseKind(callee);
-    if (kind !== undefined) {
+    const callee = ts.isCallExpression(node) ? node.expression : undefined;
+    const kind = callee === undefined ? undefined : baseKind(callee);
+    if (kind !== undefined && ts.isCallExpression(node)) {
       const ordered = steps.reverse();
       return {
         base: node.getText(file),
@@ -559,8 +539,8 @@ function chainOf(expression: ts.Expression, file: ts.SourceFile): Chain | undefi
         steps: ordered,
       };
     }
-    if (!ts.isPropertyAccessExpression(callee)) {
-      return undefined;
+    if (callee === undefined || !ts.isCallExpression(node) || !ts.isPropertyAccessExpression(callee)) {
+      return { base: node.getText(file), baseNode: node, kind: 'other', steps: steps.reverse() };
     }
     const inner = callee.expression;
     steps.push({
@@ -574,11 +554,7 @@ function chainOf(expression: ts.Expression, file: ts.SourceFile): Chain | undefi
 }
 
 // A string read by its validators, a list by what it lists.
-function refinedKind(
-  kind: SettingsFieldKind,
-  base: ts.CallExpression,
-  steps: readonly ChainStep[],
-): SettingsFieldKind {
+function refinedKind(kind: SettingsFieldKind, base: ts.CallExpression, steps: readonly ChainStep[]): SettingsFieldKind {
   const has = (name: string) => steps.some((step) => step.name === name);
   if (kind === 'text') {
     return has('email') ? 'email' : has('url') ? 'link' : has('regex') ? 'color' : 'text';
@@ -589,11 +565,7 @@ function refinedKind(
   const item = base.arguments[0];
   const callee = item !== undefined && ts.isCallExpression(item) ? item.expression : undefined;
   if (callee !== undefined && ts.isIdentifier(callee)) {
-    return callee.text === 'image'
-      ? 'multiImage'
-      : callee.text === 'reference'
-        ? 'multiReference'
-        : 'list';
+    return callee.text === 'image' ? 'multiImage' : callee.text === 'reference' ? 'multiReference' : 'list';
   }
   return 'list';
 }
@@ -601,11 +573,7 @@ function refinedKind(
 // The kind a base call makes, or undefined when `callee` is not a base.
 function baseKind(callee: ts.LeftHandSideExpression): SettingsFieldKind | undefined {
   if (ts.isIdentifier(callee)) {
-    return callee.text === 'image'
-      ? 'image'
-      : callee.text === 'reference'
-        ? 'reference'
-        : undefined;
+    return callee.text === 'image' ? 'image' : callee.text === 'reference' ? 'reference' : undefined;
   }
   if (!ts.isPropertyAccessExpression(callee)) {
     return undefined;

@@ -4,17 +4,13 @@
 // and maximum (`.min()`, `.max()`: characters for text, the value for numbers).
 // They are read from, and written to, the project's content config itself
 // (astroSchemaEdit.ts). A field whose schema holds more than that — a union, a
-// transform — is listed but left as it is written.
+// transform, a message beside a check — is still edited: only the methods for
+// the settings that change are rewritten, and the rest stays as written. A new
+// field carries its settings, so it is written in one change.
 
 import { record, text } from '../core/boundary';
 import { assert } from '../core/assert';
-import {
-  parseFieldChecks,
-  parseFieldDefault,
-  parseFieldOptions,
-  type FieldChecks,
-  type FieldDefault,
-} from './fieldChecks';
+import { parseFieldChecks, parseFieldDefault, parseFieldOptions, type FieldChecks, type FieldDefault } from './fieldChecks';
 
 export const COLLECTION_SETTINGS_LIMITS = {
   fieldsMax: 200,
@@ -77,7 +73,10 @@ export interface SettingsField {
   readonly options: readonly string[] | undefined;
   /** Its `.default(…)`, filled in when an entry leaves it out. */
   readonly defaultValue: FieldDefault | undefined;
-  /** Its schema is a plain type with these settings: a form can rewrite it. */
+  /**
+   * Its settings can be written back. Every field written as `name: schema`
+   * (or shorthand) can; one written as a method or accessor cannot.
+   */
   readonly editable: boolean;
   /** The collection a reference points at; absent for every other kind. */
   readonly target?: string | undefined;
@@ -90,14 +89,18 @@ export interface CollectionSettings {
   readonly fields: readonly SettingsField[];
 }
 
-/** A field's settings as the form saves them. */
-export interface FieldUpdate {
-  readonly name: string;
+/** A field's settings as the form saves them, apart from its name. */
+export interface FieldSettings {
   readonly description: string | undefined;
   readonly required: boolean;
   readonly checks: FieldChecks;
   readonly options: readonly string[] | undefined;
   readonly defaultValue: FieldDefault | undefined;
+}
+
+/** An existing field's settings as the form saves them. */
+export interface FieldUpdate extends FieldSettings {
+  readonly name: string;
 }
 
 export type SettingsChange =
@@ -111,14 +114,26 @@ export type SettingsChange =
       readonly fieldKind: NewFieldKind;
       /** The collection a reference points at; absent for every other kind. */
       readonly target: string | undefined;
+      /** Its settings, written with it: help text, checks, required, a default. */
+      readonly settings: FieldSettings;
     }
   | { readonly kind: 'removeField'; readonly name: string }
   | { readonly kind: 'deleteCollection' };
 
 const FIELD_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
-const NEW_KINDS: readonly NewFieldKind[] = SETTINGS_FIELD_KINDS.filter(
-  (kind): kind is NewFieldKind => kind !== 'other',
-);
+const NEW_KINDS: readonly NewFieldKind[] = SETTINGS_FIELD_KINDS.filter((kind): kind is NewFieldKind => kind !== 'other');
+
+/** A new field's settings until the form says otherwise: optional, with nothing else set. */
+export function newFieldSettings(kind: NewFieldKind): FieldSettings {
+  return {
+    description: undefined,
+    required: false,
+    // A colour is a string held to a hex pattern (astroSchemaEdit.ts newFieldText).
+    checks: kind === 'color' ? { pattern: '^#[0-9a-fA-F]{6}$' } : {},
+    options: kind === 'option' ? ['Option 1', 'Option 2'] : undefined,
+    defaultValue: undefined,
+  };
+}
 
 /** A field's name as typed: letters, digits, `-` and `_`, starting with a letter. */
 export function parseSettingsFieldName(input: unknown): string {
@@ -164,6 +179,7 @@ export function parseSettingsChange(input: unknown): SettingsChange {
         name: parseSettingsFieldName(value['name']),
         fieldKind,
         target: pointsAtCollection(fieldKind) ? target : undefined,
+        settings: parseFieldSettings(value['settings']),
       };
     }
     case 'removeField':
@@ -177,19 +193,20 @@ export function parseSettingsChange(input: unknown): SettingsChange {
 
 export function parseFieldUpdate(input: unknown): FieldUpdate {
   const value = record(input);
+  return { name: parseSettingsFieldName(value['name']), ...parseFieldSettings(input) };
+}
+
+export function parseFieldSettings(input: unknown): FieldSettings {
+  const value = record(input);
   const required = value['required'];
   if (typeof required !== 'boolean') {
     throw new Error('Say whether the field is required.');
   }
   const description = value['description'] === undefined ? undefined : text(value['description']);
-  if (
-    description !== undefined &&
-    description.length > COLLECTION_SETTINGS_LIMITS.descriptionCharsMax
-  ) {
+  if (description !== undefined && description.length > COLLECTION_SETTINGS_LIMITS.descriptionCharsMax) {
     throw new Error('Help text is at most 500 characters.');
   }
   return {
-    name: parseSettingsFieldName(value['name']),
     description: description === undefined || description.trim() === '' ? undefined : description,
     required,
     checks: parseFieldChecks(value['checks']),

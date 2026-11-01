@@ -7,21 +7,16 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import type {
   CollectionSettings,
+  FieldSettings,
   NewFieldKind,
   SettingsChange,
   SettingsField,
   SettingsFieldKind,
 } from '../../../shared/properties/collectionSettings';
-import { pointsAtCollection } from '../../../shared/properties/collectionSettings';
+import { newFieldSettings, pointsAtCollection } from '../../../shared/properties/collectionSettings';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import Dropdown from '../../ui/Dropdown';
-import {
-  ElementImageIcon,
-  ElementLinkIcon,
-  ElementListDefaultIcon,
-  ElementSelectIcon,
-  ElementVideoIcon,
-} from '../../ui/ElementIcons';
+import { ElementImageIcon, ElementLinkIcon, ElementListDefaultIcon, ElementSelectIcon, ElementVideoIcon } from '../../ui/ElementIcons';
 import { ErrorToast } from '../../ui/ErrorToast';
 import type { IconProps } from '../../ui/IconBase';
 import {
@@ -56,6 +51,8 @@ export function RemoteCollectionSettings(props: {
   readonly projectPath: string;
   readonly selection: RemoteCmsSelection;
   readonly onSelect: (selection: RemoteCmsSelection | undefined) => void;
+  /** After a save that went through whole, before the items show again. */
+  readonly onSaved: () => void;
 }) {
   const { selection } = props;
   const editing = useSettingsDraft(props);
@@ -63,11 +60,7 @@ export function RemoteCollectionSettings(props: {
   return (
     <div className="cms-detail remote-cms-settings">
       <div className="cms-detail-head remote-cms-toolbar">
-        <button
-          className="ghost cms-back"
-          title="Back to the items"
-          onClick={() => props.onSelect({ ...selection, mode: undefined })}
-        >
+        <button className="ghost cms-back" title="Back to the items" onClick={() => props.onSelect({ ...selection, mode: undefined })}>
           <ChevronLeftIcon size={13} />
         </button>
         <span className="cms-detail-title">{labelize(selection.collection)} settings</span>
@@ -81,11 +74,7 @@ export function RemoteCollectionSettings(props: {
         >
           Cancel
         </button>
-        <button
-          className="primary"
-          disabled={!editing.dirty || editing.saving}
-          onClick={() => void editing.save()}
-        >
+        <button className="primary" disabled={!editing.dirty || editing.saving} onClick={() => void editing.save()}>
           {editing.saving ? 'Saving…' : 'Save collection'}
         </button>
       </div>
@@ -97,17 +86,9 @@ export function RemoteCollectionSettings(props: {
           ) : (
             <>
               <CollectionName settings={draft} name={editing.name} onName={editing.setName} />
-              <FieldList
-                settings={draft}
-                collections={editing.collections}
-                onChange={editing.stage}
-              />
+              <FieldList settings={draft} collections={editing.collections} onChange={editing.stage} />
               <div className="remote-cms-settings-danger">
-                <button
-                  className="danger"
-                  disabled={editing.saving}
-                  onClick={() => void editing.remove()}
-                >
+                <button className="danger" disabled={editing.saving} onClick={() => void editing.remove()}>
                   <TrashIcon size={12} /> Delete collection
                 </button>
               </div>
@@ -125,6 +106,7 @@ function useSettingsDraft(props: {
   readonly projectPath: string;
   readonly selection: RemoteCmsSelection;
   readonly onSelect: (selection: RemoteCmsSelection | undefined) => void;
+  readonly onSaved: () => void;
 }) {
   const { projectPath, selection } = props;
   const [saved, setSaved] = useState<CollectionSettings | undefined>(undefined);
@@ -141,9 +123,7 @@ function useSettingsDraft(props: {
     setName(settings.name);
   };
   useEffect(() => {
-    void collectionSettings(projectPath, selection.collection).then((read) =>
-      read.ok ? show(read.value) : setError(read.message),
-    );
+    void collectionSettings(projectPath, selection.collection).then((read) => (read.ok ? show(read.value) : setError(read.message)));
   }, [projectPath, selection.collection]);
   const stage: Change = async (change) => {
     const next = draft === undefined ? undefined : applyDraft(draft, change);
@@ -160,17 +140,23 @@ function useSettingsDraft(props: {
   const renamed = saved !== undefined && name.trim() !== '' && name.trim() !== saved.name;
   const save = async () => {
     setSaving(true);
-    const all = renamed
-      ? [...changes, { kind: 'renameCollection' as const, to: name.trim() }]
-      : changes;
+    const all = renamed ? [...changes, { kind: 'renameCollection' as const, to: name.trim() }] : changes;
     const result = await sendChanges(projectPath, selection.collection, all);
     setSaving(false);
     setError(result.error);
-    if (result.settings !== undefined) {
-      show(result.settings);
-      if (result.settings.name !== selection.collection) {
-        props.onSelect({ ...selection, collection: result.settings.name, mode: 'settings' });
-      }
+    if (result.settings === undefined) {
+      return;
+    }
+    show(result.settings);
+    // Saved whole: back to the items, which a field rename or delete may have
+    // rewritten, so they are read again. A refused change keeps the settings
+    // open on what was saved, with why, under the collection's new name if the
+    // rename went through before it.
+    if (result.error === undefined) {
+      props.onSaved();
+      props.onSelect({ ...selection, collection: result.settings.name, mode: undefined });
+    } else if (result.settings.name !== selection.collection) {
+      props.onSelect({ ...selection, collection: result.settings.name, mode: 'settings' });
     }
   };
   const cancel = () => (saved === undefined ? undefined : show(saved));
@@ -182,9 +168,7 @@ function useSettingsDraft(props: {
 function useCollectionNames(projectPath: string, connectionId: string): readonly string[] {
   const [names, setNames] = useState<readonly string[]>([]);
   useEffect(() => {
-    void remoteCollections(projectPath, connectionId).then((read) =>
-      setNames(read.ok ? read.value.map((each) => each.name) : []),
-    );
+    void remoteCollections(projectPath, connectionId).then((read) => setNames(read.ok ? read.value.map((each) => each.name) : []));
   }, [projectPath, connectionId]);
   return names;
 }
@@ -241,11 +225,7 @@ async function deleteWholeCollection(context: {
   }
 }
 
-function CollectionName(props: {
-  readonly settings: CollectionSettings;
-  readonly name: string;
-  readonly onName: (name: string) => void;
-}) {
+function CollectionName(props: { readonly settings: CollectionSettings; readonly name: string; readonly onName: (name: string) => void }) {
   return (
     <section className="remote-cms-settings-section">
       <label className="remote-cms-settings-label">
@@ -254,18 +234,13 @@ function CollectionName(props: {
       </label>
       <p className="remote-cms-settings-hint">
         Renaming updates the content config
-        {props.settings.source ? `, ${props.settings.source}` : ''} and the code that reads this
-        collection.
+        {props.settings.source ? `, ${props.settings.source}` : ''} and the code that reads this collection.
       </p>
     </section>
   );
 }
 
-function FieldList(props: {
-  readonly settings: CollectionSettings;
-  readonly collections: readonly string[];
-  readonly onChange: Change;
-}) {
+function FieldList(props: { readonly settings: CollectionSettings; readonly collections: readonly string[]; readonly onChange: Change }) {
   const { fields } = props.settings;
   const [open, setOpen] = useState<string | undefined>(undefined);
   const [adding, setAdding] = useState(false);
@@ -280,12 +255,7 @@ function FieldList(props: {
       <div className="remote-cms-settings-fields">
         {fields.map((field, index) =>
           field.name === open ? (
-            <FieldEditor
-              key={field.name}
-              field={field}
-              onChange={props.onChange}
-              onClose={() => setOpen(undefined)}
-            />
+            <FieldEditor key={field.name} field={field} onChange={props.onChange} onClose={() => setOpen(undefined)} />
           ) : (
             <div
               key={field.name}
@@ -305,11 +275,7 @@ function FieldList(props: {
         )}
       </div>
       {adding ? (
-        <AddField
-          collections={props.collections}
-          onChange={props.onChange}
-          onClose={() => setAdding(false)}
-        />
+        <AddField collections={props.collections} onChange={props.onChange} onClose={() => setAdding(false)} />
       ) : (
         <button className="remote-cms-settings-add" onClick={() => setAdding(true)}>
           <PlusIcon size={12} /> Add field
@@ -320,22 +286,15 @@ function FieldList(props: {
 }
 
 // One field's settings, open in its row: saved together, renamed first when its name changed.
-function FieldEditor(props: {
-  readonly field: SettingsField;
-  readonly onChange: Change;
-  readonly onClose: () => void;
-}) {
+function FieldEditor(props: { readonly field: SettingsField; readonly onChange: Change; readonly onClose: () => void }) {
   const { field } = props;
   const [draft, setDraft] = useState(field);
   const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true);
-    const renamed =
-      draft.name === field.name ||
-      (await props.onChange({ kind: 'renameField', from: field.name, to: draft.name }));
-    const update = { ...draft, description: draft.description?.trim() || undefined };
-    const saved =
-      renamed && (!field.editable || (await props.onChange({ kind: 'updateField', update })));
+    const renamed = draft.name === field.name || (await props.onChange({ kind: 'renameField', from: field.name, to: draft.name }));
+    const update = { name: draft.name, ...settingsOf(draft) };
+    const saved = renamed && (!field.editable || (await props.onChange({ kind: 'updateField', update })));
     setBusy(false);
     if (saved) {
       props.onClose();
@@ -349,12 +308,7 @@ function FieldEditor(props: {
         <span className="remote-cms-settings-name">{field.name}</span>
         <span className="remote-cms-settings-kind">({KIND_LABELS[field.kind]})</span>
         <span className="remote-cms-settings-spacer" />
-        <button
-          className="ghost remote-cms-settings-tool"
-          title="Delete field"
-          disabled={busy}
-          onClick={() => void removeField(props)}
-        >
+        <button className="ghost remote-cms-settings-tool" title="Delete field" disabled={busy} onClick={() => void removeField(props)}>
           <TrashIcon size={13} />
         </button>
         <button
@@ -378,12 +332,9 @@ function FieldEditor(props: {
 }
 
 // Adding a field: first its kind, from a grid of every kind a collection can
-// hold, then its name and, for a reference, the collection it points at.
-function AddField(props: {
-  readonly collections: readonly string[];
-  readonly onChange: Change;
-  readonly onClose: () => void;
-}) {
+// hold, then its name, for a reference the collection it points at, and the
+// same settings an existing field opens with — written with the field at once.
+function AddField(props: { readonly collections: readonly string[]; readonly onChange: Change; readonly onClose: () => void }) {
   const [kind, setKind] = useState<NewFieldKind | undefined>(undefined);
   if (kind === undefined) {
     return (
@@ -399,12 +350,7 @@ function AddField(props: {
           {NEW_KINDS.map((option) => {
             const Icon = KIND_ICONS[option];
             return (
-              <button
-                key={option}
-                type="button"
-                className="remote-cms-settings-kind-tile"
-                onClick={() => setKind(option)}
-              >
+              <button key={option} type="button" className="remote-cms-settings-kind-tile" onClick={() => setKind(option)}>
                 <Icon size={22} />
                 <span>{KIND_LABELS[option]}</span>
               </button>
@@ -424,17 +370,28 @@ function NewFieldForm(props: {
   readonly onBack: () => void;
   readonly onClose: () => void;
 }) {
-  const [name, setName] = useState('');
+  // The settings a new field of this kind is written with until they are changed.
+  const [field] = useState<SettingsField>(() => ({
+    name: '',
+    kind: props.kind,
+    ...newFieldSettings(props.kind),
+    editable: true,
+  }));
+  const [draft, setDraft] = useState(field);
+  const [busy, setBusy] = useState(false);
   const pointing = pointsAtCollection(props.kind);
   const [target, setTarget] = useState(props.collections[0] ?? '');
   const add = async () => {
-    const change = {
-      kind: 'addField' as const,
-      name: name.trim(),
+    setBusy(true);
+    const added = await props.onChange({
+      kind: 'addField',
+      name: draft.name.trim(),
       fieldKind: props.kind,
       target: pointing ? target : undefined,
-    };
-    if (await props.onChange(change)) {
+      settings: settingsOf(draft),
+    });
+    setBusy(false);
+    if (added) {
       props.onClose();
     }
   };
@@ -442,23 +399,15 @@ function NewFieldForm(props: {
     <div className="remote-cms-settings-editor">
       <div className="remote-cms-settings-editor-head">
         <KindIcon kind={props.kind} />
-        <span className="remote-cms-settings-name">
-          New {KIND_LABELS[props.kind].toLowerCase()} field
-        </span>
+        <span className="remote-cms-settings-name">New {KIND_LABELS[props.kind].toLowerCase()} field</span>
         <span className="remote-cms-settings-spacer" />
-        <button onClick={props.onBack}>Back</button>
-        <button
-          className="primary"
-          disabled={name.trim() === '' || (pointing && target === '')}
-          onClick={() => void add()}
-        >
-          Add field
+        <button disabled={busy} onClick={props.onBack}>
+          Back
+        </button>
+        <button className="primary" disabled={busy || draft.name.trim() === '' || (pointing && target === '')} onClick={() => void add()}>
+          {busy ? 'Adding…' : 'Add field'}
         </button>
       </div>
-      <label className="remote-cms-settings-label">
-        Name
-        <input autoFocus value={name} onChange={(event) => setName(event.target.value)} />
-      </label>
       {pointing && (
         <label className="remote-cms-settings-label">
           Collection
@@ -470,8 +419,20 @@ function NewFieldForm(props: {
           />
         </label>
       )}
+      <FieldInputs field={field} draft={draft} onDraft={setDraft} autoFocusName />
     </div>
   );
+}
+
+// What the form saves beside a field's name: blank help text is no help text.
+function settingsOf(draft: SettingsField): FieldSettings {
+  return {
+    description: draft.description?.trim() || undefined,
+    required: draft.required,
+    checks: draft.checks,
+    options: draft.options,
+    defaultValue: draft.defaultValue,
+  };
 }
 
 async function removeField(props: { readonly field: SettingsField; readonly onChange: Change }) {
@@ -493,9 +454,13 @@ async function duplicateField(props: { readonly field: SettingsField; readonly o
     return;
   }
   const name = `${field.name}-copy`;
-  if (await props.onChange({ kind: 'addField', name, fieldKind: field.kind, target: undefined })) {
-    await props.onChange({ kind: 'updateField', update: { ...field, name } });
-  }
+  await props.onChange({
+    kind: 'addField',
+    name,
+    fieldKind: field.kind,
+    target: undefined,
+    settings: settingsOf(field),
+  });
 }
 
 // A reference is not duplicated: the collection it points at is not read back here.
