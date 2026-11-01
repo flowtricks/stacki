@@ -351,7 +351,8 @@ test('deleting a collection unlinks it everywhere the site uses it', async () =>
   const host = {
     readConfig: async () => ({ collections: [blog, people] }),
     trash: async (file) => {
-      trashed.push(path.relative(root, file));
+      // Project-relative, with forward slashes on every platform (Windows writes backslashes).
+      trashed.push(path.relative(root, file).split(path.sep).join('/'));
       fs.rmSync(file);
     },
   };

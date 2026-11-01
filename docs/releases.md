@@ -15,6 +15,15 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.99 Windows release correction
+
+The 0.1.98 release stopped at the Windows build: the collection-delete test recorded the
+trashed file with Windows path separators (`src\data\people.json`) and compared it with a
+forward-slash path. The app was not at fault. The test now compares project-relative paths with
+forward slashes on every platform. Version 0.1.98 remains an unpublished Desktop draft with its
+original tag (its `create-stacki` package was published); Desktop, the Studio source bundle and
+`create-stacki` are aligned at 0.1.99 with the 0.1.98 changes below.
+
 ## 0.1.98 content collection settings
 
 - A content collection's row shows a settings gear on hover. Its settings open in the main
