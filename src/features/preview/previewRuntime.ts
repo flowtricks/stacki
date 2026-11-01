@@ -7,7 +7,7 @@ import type { PreviewMessage, PreviewReloadReason, TextMarks } from './previewMe
 import { NO_TEXT_MARKS } from './previewMessages';
 import type { GuideMetrics } from './guideModel';
 import { parsePreviewMessage } from './previewMessages';
-import { outlineBoxPath, sameCopy } from './outlineBoxes';
+import { loopChildPaths, outlineBoxPath, sameCopy } from './outlineBoxes';
 import { setModifiers } from '../../editor/heldModifiers';
 import { noteCanvasReady, receiveCanvasReply, setCanvasFrame } from '../../editor/canvasQuery';
 import type { Digest } from '../../../shared/core/brand';
@@ -92,7 +92,7 @@ export function usePreviewRuntime(
   const [hoverOcc, setHoverOcc] = useState(0);
   const [guide, setGuide] = useState<GuideMetrics | undefined>(undefined);
   const [textMarks, setTextMarks] = useState<TextMarks>(NO_TEXT_MARKS);
-  const { hoverPath, selectedBoxPath, hoverBoxPath } = outlinePaths(props, canvasHover);
+  const { hoverPath, trackPaths } = useTrackedPaths(props, canvasHover);
   const refs = useRuntimeRefs(props, selectedOccurrence);
   const setters = useMemo(
     () => ({
@@ -108,12 +108,6 @@ export function usePreviewRuntime(
   );
   useOccurrenceSelection(props, refs, setSelectedOccurrence);
   useMessageListener(iframeRef, refs, setters);
-  // The frame measures only tracked paths, so both hover sources must use
-  // the same active path for measurement requests and outline rendering.
-  const trackPaths = useMemo(
-    () => trackedPaths(props.selPath, hoverPath, props.focusPath, selectedBoxPath, hoverBoxPath),
-    [props.focusPath, hoverPath, hoverBoxPath, props.selPath, selectedBoxPath],
-  );
   const link = useFrameLink(iframeRef);
   const registerFrame = useCallback((): void => {
     const frame = iframeRef.current?.contentWindow;
@@ -234,13 +228,49 @@ function useOccurrenceSelection(
   }, [props.navigatorSelectionTick, props.selPath, refs, setSelectedOccurrence]);
 }
 
+// The paths the frame measures. It measures only these, so both hover sources
+// must use the same active path for measurement requests and outline rendering.
+function useTrackedPaths(props: PreviewRuntimeProps, canvasHover: string | undefined) {
+  const { hoverPath, selectedBoxPath, hoverBoxPath, loopBoxPaths } = outlinePaths(
+    props,
+    canvasHover,
+  );
+  const trackPaths = useMemo(
+    // The loop's child paths come joined as one string, so the list is rebuilt
+    // only when they change rather than on every render.
+    () =>
+      trackedPaths(
+        props.selPath,
+        hoverPath,
+        props.focusPath,
+        selectedBoxPath,
+        hoverBoxPath,
+        ...loopBoxPaths.split('\n'),
+      ),
+    [props.focusPath, hoverPath, hoverBoxPath, props.selPath, selectedBoxPath, loopBoxPaths],
+  );
+  return { hoverPath, trackPaths };
+}
+
 // What the outlines follow: the hovered path (the navigator's wins over the
 // canvas's), and the paths whose boxes stand for the selected and hovered nodes.
 function outlinePaths(props: PreviewRuntimeProps, canvasHover: string | undefined) {
   const hoverPath = props.navHoverPath ?? canvasHover;
   const boxPath = (path: string | undefined) =>
     path ? outlineBoxPath(path, props.overlayInfo?.(path)?.nodeKind) : undefined;
-  return { hoverPath, selectedBoxPath: boxPath(props.selPath), hoverBoxPath: boxPath(hoverPath) };
+  // A loop's outline wraps every child, so each is measured, not the first alone.
+  const loopPaths = (path: string | undefined): readonly string[] => {
+    const info = path === undefined ? undefined : props.overlayInfo?.(path);
+    return path !== undefined && info?.nodeKind === 'map'
+      ? loopChildPaths(path, info.childCount)
+      : [];
+  };
+  return {
+    hoverPath,
+    selectedBoxPath: boxPath(props.selPath),
+    hoverBoxPath: boxPath(hoverPath),
+    loopBoxPaths: [...loopPaths(props.selPath), ...loopPaths(hoverPath)].join('\n'),
+  };
 }
 
 interface RuntimeSetters {

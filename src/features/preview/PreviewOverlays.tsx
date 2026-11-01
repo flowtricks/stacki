@@ -2,7 +2,13 @@ import React from 'react';
 import type { Box } from './outlineBoxes';
 import type { PreviewMessage } from './previewMessages';
 import { NO_TEXT_MARKS, type TextMarks } from './previewMessages';
-import { hoverIsSelection, onePerPlace, outlineBoxPath } from './outlineBoxes';
+import {
+  hoverIsSelection,
+  loopChildPaths,
+  onePerPlace,
+  outlineBoxPath,
+  unionBox,
+} from './outlineBoxes';
 import { spacingBands, withLiveSpacing } from './spacingBands';
 import {
   BranchIcon,
@@ -26,6 +32,8 @@ export interface OverlayInfo {
   readonly astroAsset: boolean;
   readonly dynamicTag: boolean;
   readonly nodeKind: string;
+  /** How many children the node has: a loop's outline wraps every one. */
+  readonly childCount: number;
   readonly isLayout: boolean;
   readonly bound: boolean;
 }
@@ -124,10 +132,13 @@ function NodeOutlines(props: PreviewOverlaysProps) {
       return [];
     }
     // No occurrence means the node, so draw one box per place. A number means
-    // the specific repeated copy clicked on the canvas.
+    // the specific repeated copy clicked on the canvas. A loop is every copy.
     const selected = outline.occ === undefined ? undefined : all[outline.occ];
-    const boxes =
+    const loop =
+      info.nodeKind === 'map' ? loopBox(props.rects, outline.path, info.childCount) : undefined;
+    const copies =
       outline.occ === undefined ? onePerPlace(all) : selected ? [selected] : all.slice(0, 1);
+    const boxes = loop !== undefined ? [loop] : copies;
     return boxes.map((box, index) => (
       <div
         key={`${outline.type}-${index}`}
@@ -312,4 +323,9 @@ function boxStyle(box: Box, scale: number): React.CSSProperties {
 function spacingLabel(box: Box & { readonly side: string }): string {
   const horizontal = box.side === 'left' || box.side === 'right';
   return `${Math.round(horizontal ? box.w : box.h)}px`;
+}
+
+// The box around every copy of every child a loop renders.
+function loopBox(rects: RectMap, path: string, childCount: number): Box | undefined {
+  return unionBox(loopChildPaths(path, childCount).flatMap((child) => rects[child] ?? []));
 }

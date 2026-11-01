@@ -23,6 +23,7 @@ export function outlineInfo(nodes: readonly ParserNode[], path: string): Overlay
     astroAsset: !!node.astroAsset,
     dynamicTag: !!node.dynamicTag,
     nodeKind: node.kind,
+    childCount: Array.isArray(node.children) ? node.children.length : 0,
     isLayout: node.id === 'layout',
     bound: kind === 'element' && isDataBound(node),
   };

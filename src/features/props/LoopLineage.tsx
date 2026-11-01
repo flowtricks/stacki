@@ -10,7 +10,6 @@ import { readSymbol } from '../../ipc/bridge';
 import { TRACE_HOPS_MAX, traceFunction, type TraceStep } from '../../editor/loopTrace';
 import type { LoopValueOrigin } from '../../editor/loopQueryRead';
 import { AstroIcon, BracesIcon, CodeIcon, LayersIcon, SanityIcon } from '../../ui/Icons';
-import { LoopDetails } from './LoopRows';
 import { assert } from '../../../shared/core/assert';
 import type { CatalogField, LoopCatalog } from './loopCatalog';
 import { titled } from './loopCatalog';
@@ -109,13 +108,9 @@ export function LoopLineage(props: {
 }) {
   const { trace } = props;
   const collection = tracedCollection(trace);
-  // Folded by default: the Source menu already names the collection, and the
-  // layers of code it passes through are for when someone asks.
-  return (
-    <LoopDetails>
-      <LineageBody {...props} trace={trace} collection={collection} />
-    </LoopDetails>
-  );
+  // Shown under the panel's Details: the Source menu already names the
+  // collection, and the layers of code it passes through are for when asked.
+  return <LineageBody {...props} trace={trace} collection={collection} />;
 }
 
 function LineageBody(props: {

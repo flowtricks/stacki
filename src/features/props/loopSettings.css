@@ -209,7 +209,8 @@
 .loop-settings-editor-control {
   min-width: 0;
 }
-.loop-settings-editor-control > input {
+.loop-settings-editor-control > input,
+.loop-settings-editor-control > .num-field > input {
   width: 100%;
   margin: 0;
 }
@@ -272,30 +273,26 @@
   font-weight: 600;
 }
 
-/* Where a traced list comes from, folded under Details: one row per layer,
-   the collection last. */
+/* Details: plain text at the end of the panel, folded by default; what it
+   holds is explanation, so it sits below the controls without a fill. */
 .loop-lineage {
-  margin: 4px 12px;
-  border-radius: 8px;
-  background: var(--bg-input);
+  margin: 0 12px;
   font-size: 12px;
 }
-.loop-lineage-toggle {
+.loop-lineage-toggle,
+.loop-lineage-toggle:hover:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
-  width: 100%;
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 8px;
+  height: 26px;
+  padding: 0;
   background: transparent;
-  color: var(--text-dim);
+  color: var(--text-faint);
   font-size: 12px;
 }
-.loop-lineage-toggle:hover {
-  background: var(--bg-hover);
-  color: var(--text);
+.loop-lineage-toggle:hover:not(:disabled) {
+  color: var(--text-dim);
 }
 .loop-lineage-chevron {
   transition: transform 0.15s ease;
@@ -312,7 +309,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 0 10px 8px;
+  padding: 2px 0 8px 16px;
 }
 .loop-lineage-title {
   color: var(--text-faint);
@@ -484,4 +481,294 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* A custom list's item: text to edit in place, on the row's own fill. */
+.loop-settings-literal-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.loop-settings-literal-input:focus {
+  outline: none;
+  background: var(--bg-input, var(--bg-hover));
+}
+
+/* The purple dot that links a setting to a component property: just after a
+   section's label, or on the top-left corner of a Show or Skip field. It is
+   always shown, so what can be linked is plain at a glance. It grows
+   by scaling, so pointing at it never moves the label or the field. */
+.loop-settings-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.loop-bind-dot {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #9274ff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transition: transform 0.1s ease;
+}
+.loop-settings-editor-control {
+  position: relative;
+}
+.loop-settings-editor-control > .loop-bind-dot {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  z-index: 2;
+}
+.loop-bind-dot:hover:not(:disabled) {
+  /* About twice its size, over the end of the label, as a builder's dot grows.
+     Purple stated again: the global button hover (styles.css) would grey it. */
+  z-index: 3;
+  background: #9274ff;
+  transform: scale(1.8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+.loop-bind-dot .bind-plus {
+  position: absolute;
+  color: #fff;
+  opacity: 0;
+}
+.loop-bind-dot:hover .bind-dot {
+  opacity: 0;
+}
+.loop-bind-dot:hover .bind-plus {
+  opacity: 1;
+}
+.loop-bind-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 240px;
+}
+.loop-bind-title {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.loop-bind-chip {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(146, 116, 255, 0.22);
+  color: #d7ccff;
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: 11px;
+}
+.loop-bind-name {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.loop-bind-name input {
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.loop-bind-name input[aria-invalid='true'] {
+  background: rgba(255, 90, 90, 0.12);
+}
+.loop-bind-problem {
+  color: #ff8a8a;
+  font-size: 11px;
+}
+.loop-bind-note {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.loop-bind-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.loop-bind-button {
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.loop-bind-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.loop-bind-button.primary {
+  background: #9274ff;
+  color: #fff;
+}
+.loop-bind-button.primary:hover:not(:disabled) {
+  background: #a48aff;
+}
+.loop-bind-button:disabled {
+  opacity: 0.45;
+}
+
+/* A component instance's list prop: the loop's own section, its label blue
+   once the page sets its own. */
+.list-prop-field .loop-settings-section {
+  padding: 0;
+}
+.list-prop-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* A linked setting: its label, then a purple bar naming the property, as a
+   builder shows a setting a component property supplies. In a section it
+   lines up with Source and Items; inside Limit items, with Show and Skip. */
+.loop-linked-row {
+  padding: 4px 0;
+}
+.loop-settings-editor .loop-linked-row {
+  grid-template-columns: 48px minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+}
+.loop-linked-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(146, 116, 255, 0.28);
+  color: #c9bbff;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.loop-linked-bar:hover:not(:disabled),
+.loop-linked-bar[aria-expanded='true'] {
+  background: rgba(146, 116, 255, 0.38);
+}
+.loop-linked-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.loop-linked-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Its menu: what can be done with the link, then what it can connect to. */
+.loop-linked-menu {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 220px;
+}
+.loop-linked-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.loop-linked-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.loop-linked-item.accent {
+  color: #b9a6ff;
+}
+.loop-linked-heading {
+  margin-top: 6px;
+  padding: 8px 8px 4px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.loop-linked-component {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.loop-linked-prop {
+  padding-left: 28px;
+}
+.loop-linked-check {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+}
+
+/* Property settings: name and tooltip, then the default, editable. */
+.loop-property-settings {
+  width: 270px;
+}
+.loop-property-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.loop-bind-name.top {
+  align-items: start;
+}
+.loop-bind-name textarea {
+  min-height: 56px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+.loop-property-default {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px -10px -10px;
+  padding: 10px;
+  border-radius: 0 0 10px 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.loop-property-default .loop-settings-section,
+.loop-property-default .loop-settings-editor-row {
+  padding: 0;
 }

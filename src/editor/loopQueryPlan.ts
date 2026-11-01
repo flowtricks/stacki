@@ -31,16 +31,26 @@ import {
 import { readingChain, readLoop, type LoopReading } from './loopQueryRead';
 import { reboundItem, type ItemShape } from './loopRebind';
 import { parseFrontmatter, type ParsedFrontmatter } from './loopSyntax';
-import { rewrittenOptions } from './optionsQuery';
+import { dataFormProblem, optionsLiteral, rewrittenOptions } from './optionsQuery';
+import { LIST_ITEMS_HELPER, LIST_ITEMS_NAME, listItemsNeed } from './listItemsHelper';
+import { reboundOptions, type BindingChange } from './optionsBinding';
 import { splitMapHead } from './loopBindings';
 import { autoQueryName, QUERY_MARK } from './dataScope';
 import type { EditorModel, EditorNode } from './pageView';
 
 /** What a loop is changed to loop over. */
 export type LoopTarget =
-  | { readonly kind: 'query'; readonly query: LoopQuery; readonly fields: readonly LoopField[] }
+  | {
+      readonly kind: 'query';
+      readonly query: LoopQuery;
+      readonly fields: readonly LoopField[];
+      /** `data` writes the settings as data a prop can hold (listItemsHelper.ts); code otherwise. */
+      readonly form?: 'code' | 'data' | undefined;
+    }
   | { readonly kind: 'value'; readonly data: string }
-  | { readonly kind: 'empty' };
+  | { readonly kind: 'empty' }
+  /** One of the list's settings linked to a component prop, or unlinked. */
+  | { readonly kind: 'binding'; readonly change: BindingChange };
 
 export interface LoopPlanInput {
   readonly model: Pick<EditorModel, 'extraFrontmatter' | 'imports' | 'nodes'>;
@@ -90,6 +100,13 @@ export function planLoop(input: LoopPlanInput): LoopPlanResult {
     imports: input.model.imports,
     data: head.data,
   });
+  if (input.target.kind === 'binding') {
+    return bindingEdit(input, input.target.change, {
+      reading,
+      frontmatter: before,
+      data: head.data,
+    });
+  }
   const inPlace = optionsEdit(input, reading, before);
   if (inPlace !== undefined) {
     return inPlace;
@@ -118,17 +135,9 @@ export function planLoop(input: LoopPlanInput): LoopPlanResult {
     removable,
     markupAfter,
   );
-  const shape = itemShape(input.target);
-  const children = input.loop.children ?? [];
-  const changed = shapeChanged(reading, input.target);
   const restoring =
     input.restore !== undefined && readingKeyOf(reading, head.data) !== targetKey(input.target);
-  const rebound =
-    restoring && input.restore !== undefined
-      ? { nodes: withoutSourceSpans(input.restore, 0), unbound: 0, lost: [] }
-      : shape === undefined || !changed
-        ? { nodes: children, unbound: 0, lost: [] }
-        : reboundItem(children, head.item, shape);
+  const rebound = reboundChildren(input, { reading, item: head.item, restoring });
   const loop = { ...input.loop, head: loopHead, children: rebound.nodes };
   assert(loop.id === input.loop.id, 'A planned loop keeps its id');
   assert(splitMapHead(loop.head) !== undefined, 'A planned head is one the loop editor reads back');
@@ -144,6 +153,27 @@ export function planLoop(input: LoopPlanInput): LoopPlanResult {
       restored: restoring,
     },
   };
+}
+
+// The loop's children for the new source: put back as they were for it, re-pointed
+// at its fields when items take another shape, or left as they are.
+function reboundChildren(
+  input: LoopPlanInput,
+  read: { readonly reading: LoopReading; readonly item: string; readonly restoring: boolean },
+): {
+  readonly nodes: readonly EditorNode[];
+  readonly unbound: number;
+  readonly lost: readonly string[];
+} {
+  const children = input.loop.children ?? [];
+  const shape = itemShape(input.target);
+  if (read.restoring && input.restore !== undefined) {
+    return { nodes: withoutSourceSpans(input.restore, 0), unbound: 0, lost: [] };
+  }
+  if (shape === undefined || !shapeChanged(read.reading, input.target)) {
+    return { nodes: children, unbound: 0, lost: [] };
+  }
+  return reboundItem(children, read.item, shape);
 }
 
 // A builder's options object read from this file, edited with the same
@@ -213,6 +243,100 @@ function optionsEdit(
   return { ok: true, plan: inPlacePlan(input, extraFrontmatter, targetKey(target)) };
 }
 
+// A setting linked to a prop or unlinked: only the options, the props
+// destructure and `interface Props` change; the loop and its children stay.
+function bindingEdit(
+  input: LoopPlanInput,
+  change: BindingChange,
+  read: {
+    readonly reading: LoopReading;
+    readonly frontmatter: ParsedFrontmatter;
+    readonly data: string;
+  },
+): LoopPlanResult {
+  const { reading, frontmatter } = read;
+  if (reading.kind === 'query' && reading.home === undefined && change.kind !== 'unbind') {
+    return convertedBinding(input, reading.query, change);
+  }
+  if (reading.kind !== 'query' || reading.home?.kind !== 'options') {
+    return {
+      ok: false,
+      message: 'Only a list whose settings are kept as data can link them to properties.',
+    };
+  }
+  const holder = reading.chain[reading.chain.length - 1];
+  const declaration = holder === undefined ? undefined : frontmatter.declarations.get(holder);
+  const init = declaration?.init;
+  const call = init?.kind === 'await' ? init.value : init;
+  const options = call?.kind === 'call' ? call.args[1] : undefined;
+  if (
+    declaration === undefined ||
+    options?.kind !== 'object' ||
+    options.from !== reading.home.options.from
+  ) {
+    return {
+      ok: false,
+      message: 'The list settings changed in the code since they were read. Select the loop again.',
+    };
+  }
+  const result = reboundOptions(
+    input.model.extraFrontmatter,
+    {
+      home: reading.home,
+      options,
+      statementFrom: declaration.statement.from,
+      taken: frontmatter.bound,
+    },
+    change,
+  );
+  if (!result.ok) {
+    return result;
+  }
+  const key = readingKeyOf(reading, read.data);
+  assert(key !== undefined, 'A list with settings has a key');
+  return { ok: true, plan: inPlacePlan(input, result.frontmatter, key) };
+}
+
+// A list written as code is first rewritten as data, in its place and with
+// the helper that reads it; then the setting is linked as on any data list.
+// Both land as one plan, so one undo puts the code back.
+function convertedBinding(
+  input: LoopPlanInput,
+  query: LoopQuery,
+  change: BindingChange,
+): LoopPlanResult {
+  const problem = dataFormProblem(query);
+  if (problem !== undefined) {
+    return { ok: false, message: problem };
+  }
+  const converted = planLoop({
+    ...input,
+    target: { kind: 'query', query, fields: [], form: 'data' },
+    restore: undefined,
+  });
+  if (!converted.ok) {
+    return converted;
+  }
+  const model = {
+    ...input.model,
+    extraFrontmatter: converted.plan.extraFrontmatter,
+    imports: converted.plan.imports,
+  };
+  const bound = planLoop({
+    ...input,
+    model,
+    loop: converted.plan.loop,
+    target: { kind: 'binding', change },
+    restore: undefined,
+  });
+  if (!bound.ok) {
+    return bound;
+  }
+  assert(bound.plan.loop === converted.plan.loop, 'Linking leaves the converted loop as it is');
+  assert(converted.plan.unbound === 0, 'Rewriting a list as data keeps its items as they were');
+  return { ok: true, plan: { ...converted.plan, extraFrontmatter: bound.plan.extraFrontmatter } };
+}
+
 // The holder's value is the kept list with its refinements: rewrite the value only.
 function chainEdit(
   frontmatter: string,
@@ -277,6 +401,11 @@ function writtenTarget(
       };
     case 'query':
       return writtenQuery(input, target, holder, before);
+    case 'binding':
+      // Linking a setting edits the options in place (bindingEdit); it never
+      // writes a new source.
+      assert(false, 'A binding change is planned in place');
+      return { ok: false, message: 'A binding change is planned in place.' };
     default: {
       const exhaustive: never = target;
       return exhaustive;
@@ -299,7 +428,10 @@ function writtenQuery(
     if (reader === undefined) {
       imports = [...imports, newImport('getCollection', 'astro:content')];
     }
-    code = astroQueryCode(query, reader ?? 'getCollection');
+    code =
+      target.form === 'data'
+        ? `${LIST_ITEMS_NAME}(await ${reader ?? 'getCollection'}(${JSON.stringify(query.source.collection)}), ${optionsLiteral(query)})`
+        : astroQueryCode(query, reader ?? 'getCollection');
   } else {
     const client = importedName(imports, 'sanity:client', 'sanityClient');
     if (client === undefined && input.sanityClient === 'unavailable') {
@@ -326,9 +458,18 @@ function writtenQuery(
   const name = keep ? holder.name : autoQueryName(query.source.collection, taken);
   const statement = `const ${name} = ${code}; // ${QUERY_MARK}`;
   assert(!statement.includes('\n'), 'A query is written on one line');
+  // A list kept as data is read through the helper, written once, above it.
+  const need = target.form === 'data' ? listItemsNeed(before) : { kind: 'present' as const };
+  if (need.kind === 'taken') {
+    return {
+      ok: false,
+      message: `This file already has its own ${LIST_ITEMS_NAME}. Rename it to link list settings to properties.`,
+    };
+  }
+  const written = need.kind === 'add' ? `${LIST_ITEMS_HELPER}\n${statement}` : statement;
   const frontmatter = holder
-    ? spliced(input.model.extraFrontmatter, holder, `${statement}\n`)
-    : appended(input.model.extraFrontmatter, statement);
+    ? spliced(input.model.extraFrontmatter, holder, `${written}\n`)
+    : appended(input.model.extraFrontmatter, written);
   return { ok: true, frontmatter, imports, data: name, name };
 }
 
@@ -550,6 +691,9 @@ export function targetKey(target: LoopTarget): string {
       return `value:${target.data.trim()}`;
     case 'empty':
       return 'empty';
+    case 'binding':
+      // Not a source: no children are kept or restored under it.
+      return `binding:${target.change.setting}`;
     default: {
       const exhaustive: never = target;
       return exhaustive;

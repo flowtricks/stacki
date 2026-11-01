@@ -726,7 +726,15 @@ function withOrder(
 ): LoopSort {
   const kind = fieldKind?.(source, sort.field);
   const order: LoopSortOrder | undefined =
-    kind === 'number' ? 'number' : kind === 'date' ? 'date' : kind === 'text' ? 'text' : undefined;
+    kind === 'number'
+      ? 'number'
+      : kind === 'date'
+        ? 'date'
+        : kind === 'text'
+          ? 'text'
+          : kind === 'boolean'
+            ? 'boolean'
+            : undefined;
   return order === undefined ? sort : { ...sort, order };
 }
 

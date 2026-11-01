@@ -13,7 +13,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
-import { AstroIcon, SanityIcon, CloseIcon, CollectionIcon, LayersIcon } from '../../ui/Icons';
+import {
+  AstroIcon,
+  SanityIcon,
+  CloseIcon,
+  CollectionIcon,
+  LayersIcon,
+  TextIcon,
+} from '../../ui/Icons';
 import { assert } from '../../../shared/core/assert';
 import {
   emptyQuery,
@@ -29,6 +36,8 @@ import {
   type QueryHome,
 } from '../../editor/loopQueryRead';
 import type { LoopTarget } from '../../editor/loopQueryPlan';
+import { literalCode, literalItems, STARTER_ITEMS } from '../../editor/loopLiteral';
+import { LiteralItemsSection } from './LoopLiteralItems';
 import {
   loadFields,
   LOOP_CATALOG_LIMITS,
@@ -37,6 +46,10 @@ import {
   type LoopCatalog,
 } from './loopCatalog';
 import { fieldNamed, parseSourceKey, readingKey, sourceKey } from './loopSettingsModel';
+import { connectableProps, propNameProblem, SETTING_TITLES } from '../../editor/optionsBinding';
+import { propTooltip } from '../../editor/loopProps';
+import type { BindingContext } from './LoopBinding';
+import { LOOP_SETTINGS, type LoopSetting, type SettingHome } from '../../editor/optionsQuery';
 import { LoopLineage, tracedCollection, useLoopTrace, type TracedCollection } from './LoopLineage';
 import { FilterSection } from './LoopFilters';
 import { LimitSection, SortSection } from './LoopOrder';
@@ -79,13 +92,24 @@ export interface LoopSettingsProps {
     target: LoopTarget,
     sanityClient: 'available' | 'unavailable',
   ) => LoopApplyResult;
+  /** Renames a linked setting's property or changes its tooltip, across the site. */
+  readonly onEditProperty?:
+    | ((
+        key: string,
+        edit: { readonly name: string; readonly description: string },
+      ) => Promise<string | undefined>)
+    | undefined;
   /** A button opening the code that declares `name`, the list's holder. */
   readonly sourceButton?: ((name: string) => ReactNode) | undefined;
+  /** What follows the settings (the loop's Code field), before Details at the end. */
+  readonly children?: ReactNode;
 }
 
 interface SourceRowProps {
   readonly reading: LoopReading;
   readonly data: string;
+  /** The items of a list typed in place, which the menu names Custom list. */
+  readonly literal: readonly string[] | undefined;
   readonly projectPath: string | undefined;
   readonly lists: readonly LoopListOption[];
   readonly sourceButton: ReactNode;
@@ -146,14 +170,22 @@ export default function LoopSettings(props: LoopSettingsProps) {
     const before = readingLabel(reading, props.input.data, catalog);
     setNotice(noticeFor(props.onApply(target, client), before));
   };
-  const applyQuery = (query: LoopQuery): void =>
-    apply({ kind: 'query', query, fields: fields ?? [] });
   const shared = { catalog, projectPath: props.projectPath };
+  const literal = reading.kind === 'code' ? literalItems(props.input.data) : undefined;
+  const binding = bindingFor(
+    reading,
+    { frontmatter: props.input.frontmatter, filePath: props.filePath },
+    {
+      onChange: (change) => apply({ kind: 'binding', change }),
+      onEditProperty: props.onEditProperty,
+    },
+  );
   return (
     <div className="loop-settings">
       <SourceRow
         reading={reading}
         data={props.input.data}
+        literal={literal}
         projectPath={props.projectPath}
         lists={props.lists}
         sourceButton={holder === undefined ? undefined : props.sourceButton?.(holder)}
@@ -165,18 +197,91 @@ export default function LoopSettings(props: LoopSettingsProps) {
       {notice !== undefined && (
         <NoticeBanner notice={notice} onDismiss={() => setNotice(undefined)} />
       )}
+      <ReadingSettings
+        {...shared}
+        reading={reading}
+        traced={traced}
+        fields={fields}
+        binding={binding}
+        literal={literal}
+        onApply={apply}
+      />
+      {props.children}
+      <ReadingDetails reading={reading} data={props.input.data} traced={traced} catalog={catalog} />
+    </div>
+  );
+}
+
+// A component's list can link its settings to its properties: one kept as
+// data links them where they are; one written as code over a content
+// collection is rewritten as data first, when linking (optionsBinding.ts).
+// A page is not a component: nothing passes it props.
+function bindingFor(
+  reading: LoopReading,
+  file: { readonly frontmatter: string; readonly filePath: string | undefined },
+  actions: Pick<BindingContext, 'onChange' | 'onEditProperty'>,
+): BindingContext | undefined {
+  if (file.filePath === undefined) {
+    return undefined;
+  }
+  if (/(^|[\\/])src[\\/]pages[\\/]/.test(file.filePath)) {
+    return undefined;
+  }
+  if (reading.kind !== 'query') {
+    return undefined;
+  }
+  const base = {
+    ...actions,
+    componentName: titled(
+      file.filePath
+        .split(/[\\/]/)
+        .pop()
+        ?.replace(/\.astro$/, '') ?? 'Component',
+    ),
+    problemOf: (key: string): string | undefined => propNameProblem(file.frontmatter, key),
+    connectable: (setting: LoopSetting): readonly string[] =>
+      connectableProps(file.frontmatter, setting),
+    tooltipOf: (key: string): string => propTooltip(file.frontmatter, key),
+  };
+  if (reading.home?.kind === 'options') {
+    return { ...base, settings: reading.home.settings };
+  }
+  // Code over a content collection: nothing is linked yet.
+  return reading.home === undefined && reading.query.source.kind === 'astro'
+    ? { ...base, settings: UNLINKED }
+    : undefined;
+}
+
+const UNLINKED: Readonly<Record<LoopSetting, SettingHome>> = {
+  filter: { kind: 'inline' },
+  sort: { kind: 'inline' },
+  limit: { kind: 'inline' },
+  offset: { kind: 'inline' },
+};
+
+// The settings the reading has: a traced list's, a partly custom list's
+// notice, a collection list's, or a typed list's items.
+function ReadingSettings(props: {
+  readonly reading: LoopReading;
+  readonly traced: ReturnType<typeof useTracedEditing>;
+  readonly fields: readonly CatalogField[] | undefined;
+  readonly binding: BindingContext | undefined;
+  readonly literal: readonly string[] | undefined;
+  readonly catalog: LoopCatalog | undefined;
+  readonly projectPath: string | undefined;
+  readonly onApply: (target: LoopTarget) => void;
+}) {
+  const { reading, fields, literal, onApply } = props;
+  const shared = { catalog: props.catalog, projectPath: props.projectPath };
+  return (
+    <>
       {reading.kind === 'value' && reading.origin.kind === 'call' && (
-        <TracedSettings
-          {...shared}
-          names={reading.chain.length > 0 ? reading.chain : [props.input.data.trim()]}
-          traced={traced}
-        />
+        <TracedSettings {...shared} traced={props.traced} />
       )}
       {reading.kind === 'partial' && (
         <PartialNotice
-          reason={reading.reason}
           onReplace={() =>
-            apply({ kind: 'query', query: emptyQuery(reading.source), fields: fields ?? [] })
+            onApply({ kind: 'query', query: emptyQuery(reading.source), fields: fields ?? [] })
           }
         />
       )}
@@ -186,17 +291,64 @@ export default function LoopSettings(props: LoopSettingsProps) {
           query={reading.query}
           home={reading.home}
           fields={fields}
-          onChange={applyQuery}
+          binding={props.binding}
+          onChange={(query) => onApply({ kind: 'query', query, fields: fields ?? [] })}
         />
       )}
-    </div>
+      {literal !== undefined && (
+        <LiteralItemsSection
+          items={literal}
+          onChange={(items) => onApply({ kind: 'value', data: literalCode(items) })}
+        />
+      )}
+    </>
   );
+}
+
+// The explanation behind the settings, folded under Details at the end of the
+// panel: where a traced list comes from, why custom code shapes one, where an
+// export's settings are saved. Nothing when there is nothing to explain.
+function ReadingDetails(props: {
+  readonly reading: LoopReading;
+  readonly data: string;
+  readonly traced: ReturnType<typeof useTracedEditing>;
+  readonly catalog: LoopCatalog | undefined;
+}) {
+  const { reading, traced } = props;
+  if (reading.kind === 'value' && reading.origin.kind === 'call') {
+    return (
+      <LoopDetails>
+        <LoopLineage
+          names={reading.chain.length > 0 ? reading.chain : [props.data.trim()]}
+          trace={traced.trace}
+          catalog={props.catalog}
+          fields={traced.fields}
+          editable={traced.editable !== undefined}
+        />
+      </LoopDetails>
+    );
+  }
+  if (reading.kind === 'partial') {
+    return (
+      <LoopDetails>
+        <div className="loop-lineage-note">
+          {reading.reason} It still works; edit it in the code.
+        </div>
+      </LoopDetails>
+    );
+  }
+  return reading.kind === 'query' && reading.home !== undefined ? (
+    <LoopDetails>
+      <OptionsNote home={reading.home} />
+    </LoopDetails>
+  ) : undefined;
 }
 
 // A collection list: Dynamic (filters, sort, limit) or Selected (items picked
 // by hand), as a builder's collection list offers both.
 function CollectionSettings(props: {
   readonly query: LoopQuery;
+  readonly binding: BindingContext | undefined;
   readonly home: QueryHome | undefined;
   readonly fields: readonly CatalogField[] | undefined;
   readonly catalog: LoopCatalog | undefined;
@@ -244,7 +396,6 @@ function CollectionSettings(props: {
           onPick={switchTo}
         />
       </div>
-      {home !== undefined && <OptionsNote home={home} />}
       {query.selection === undefined ? (
         <QuerySections
           {...props}
@@ -268,34 +419,22 @@ function CollectionSettings(props: {
   );
 }
 
-// Where a traced list comes from, and its settings when they can be edited there.
+// A traced list's settings, when they can be edited where its query lives.
 function TracedSettings(props: {
-  readonly names: readonly string[];
   readonly traced: ReturnType<typeof useTracedEditing>;
   readonly catalog: LoopCatalog | undefined;
   readonly projectPath: string | undefined;
 }) {
-  const { traced } = props;
-  return (
-    <>
-      <LoopLineage
-        names={props.names}
-        trace={traced.trace}
-        catalog={props.catalog}
-        fields={traced.fields}
-        editable={traced.editable !== undefined}
-      />
-      {traced.editable !== undefined && (
-        <QuerySections
-          catalog={props.catalog}
-          projectPath={props.projectPath}
-          query={traced.editable.query}
-          fields={traced.fields}
-          stored="traced"
-          onChange={traced.apply}
-        />
-      )}
-    </>
+  const editable = props.traced.editable;
+  return editable === undefined ? undefined : (
+    <QuerySections
+      catalog={props.catalog}
+      projectPath={props.projectPath}
+      query={editable.query}
+      fields={props.traced.fields}
+      stored="traced"
+      onChange={props.traced.apply}
+    />
   );
 }
 
@@ -307,6 +446,7 @@ function QuerySections(props: {
   readonly catalog: LoopCatalog | undefined;
   readonly projectPath: string | undefined;
   readonly stored: 'code' | 'data' | 'traced';
+  readonly binding?: BindingContext | undefined;
   readonly onChange: (query: LoopQuery) => void;
 }) {
   // Data has no "now" to compare with; a shuffle runs in JS, so neither data
@@ -321,15 +461,17 @@ function QuerySections(props: {
         catalog={props.catalog}
         projectPath={props.projectPath}
         operatorSet={operatorSet}
+        binding={props.binding}
         onChange={props.onChange}
       />
       <SortSection
         query={props.query}
         fields={props.fields}
         randomOrder={randomOrder}
+        binding={props.binding}
         onChange={props.onChange}
       />
-      <LimitSection query={props.query} onChange={props.onChange} />
+      <LimitSection query={props.query} binding={props.binding} onChange={props.onChange} />
     </>
   );
 }
@@ -452,7 +594,7 @@ function useTracedEditing(
 
 function SourceRow(props: SourceRowProps) {
   const { reading, catalog } = props;
-  const current = readingKey(reading, props.data);
+  const current = props.literal === undefined ? readingKey(reading, props.data) : 'list';
   const options = sourceOptions(props, catalog, current);
   const choose = (key: string): void => {
     if (key === current) {
@@ -464,6 +606,10 @@ function SourceRow(props: SourceRowProps) {
     }
     if (parsed.kind === 'empty') {
       props.onChoose({ kind: 'empty' });
+      return;
+    }
+    if (parsed.kind === 'list') {
+      props.onChoose({ kind: 'value', data: literalCode(STARTER_ITEMS) });
       return;
     }
     if (parsed.kind === 'value') {
@@ -531,7 +677,10 @@ function sourceOptions(
   catalog: LoopCatalog | undefined,
   current: string,
 ): DropdownOption<string>[] {
-  const options: DropdownOption<string>[] = [{ value: 'empty', label: 'None' }];
+  const options: DropdownOption<string>[] = [
+    { value: 'empty', label: 'None' },
+    { value: 'list', label: 'Custom list', hint: 'type the items', icon: <TextIcon size={13} /> },
+  ];
   const sanityLabel =
     catalog?.sanity.kind === 'connected' ? `Sanity · ${catalog.sanity.label}` : 'Sanity';
   const sanityMissing =
@@ -569,7 +718,7 @@ function sourceOptions(
     options.push(currentOption(props, current));
   }
   assert(
-    options.length <= LOOP_CATALOG_LIMITS.collectionsMax + props.lists.length + 2,
+    options.length <= LOOP_CATALOG_LIMITS.collectionsMax + props.lists.length + 3,
     'The Source menu is bounded',
   );
   return options;
@@ -623,42 +772,39 @@ function currentOption(props: SourceRowProps, current: string): DropdownOption<s
   return { value: current, label: 'Custom code', hint: 'edit below' };
 }
 
-// Where an options object's settings are saved, said once above them.
+// Where an options object's settings are saved.
 function OptionsNote(props: { readonly home: QueryHome }) {
   const home = props.home;
-  const filters =
-    home.kind === 'options' && home.filter.kind === 'prop'
-      ? ' Filters are this component’s default Filters; a page using it can set its own.'
-      : '';
+  const bound =
+    home.kind === 'options'
+      ? LOOP_SETTINGS.filter((setting) => home.settings[setting].kind === 'prop').map(
+          (setting) => SETTING_TITLES[setting],
+        )
+      : [];
+  const defaults =
+    bound.length === 0
+      ? ''
+      : ` ${bound.join(', ')} are this component’s defaults; a page using it can set its own.`;
   const text =
     home.kind === 'chain'
       ? `Applied to ${home.list}, kept as written.`
-      : `Saved in this file, in the settings ${home.reader}() applies.${filters}`;
-  return (
-    <LoopDetails>
-      <div className="loop-lineage-note">{text}</div>
-    </LoopDetails>
-  );
+      : `Saved in this file, in the settings ${home.reader}() applies.${defaults}`;
+  return <div className="loop-lineage-note">{text}</div>;
 }
 
-function PartialNotice(props: { readonly reason: string; readonly onReplace: () => void }) {
+function PartialNotice(props: { readonly onReplace: () => void }) {
   const [armed, setArmed] = useState(false);
   return (
-    <>
-      <div className="loop-settings-partial">
-        <div className="loop-settings-partial-title">Custom code shapes this list</div>
-        <button
-          type="button"
-          className="loop-settings-link"
-          onClick={() => (armed ? props.onReplace() : setArmed(true))}
-          onBlur={() => setArmed(false)}
-        >
-          {armed ? 'Click again to replace the code' : 'Use list settings instead'}
-        </button>
-      </div>
-      <LoopDetails>
-        <div className="loop-lineage-note">{props.reason} It still works; edit it in the code.</div>
-      </LoopDetails>
-    </>
+    <div className="loop-settings-partial">
+      <div className="loop-settings-partial-title">Custom code shapes this list</div>
+      <button
+        type="button"
+        className="loop-settings-link"
+        onClick={() => (armed ? props.onReplace() : setArmed(true))}
+        onBlur={() => setArmed(false)}
+      >
+        {armed ? 'Click again to replace the code' : 'Use list settings instead'}
+      </button>
+    </div>
   );
 }

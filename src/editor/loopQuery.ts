@@ -123,12 +123,12 @@ export type LoopCondition =
 
 export type LoopTestCondition = Extract<LoopCondition, { readonly kind: 'test' }>;
 
-export type LoopSortOrder = 'text' | 'number' | 'date';
+export type LoopSortOrder = 'text' | 'number' | 'date' | 'boolean';
 
 export interface LoopSort {
   readonly field: string;
   readonly direction: 'ascending' | 'descending';
-  /** How values compare: alphabetically, numerically, or by time. */
+  /** How values compare: alphabetically, numerically, by time, or off before on. */
   readonly order: LoopSortOrder;
 }
 
@@ -211,6 +211,7 @@ export function sortOrderFor(kind: LoopFieldKind): LoopSortOrder | undefined {
     case 'date':
       return 'date';
     case 'boolean':
+      return 'boolean';
     case 'list':
     case 'reference':
     case 'image':
@@ -586,6 +587,9 @@ function comparison(sort: LoopSort, left: string, right: string): string {
       return `(${leftValue} ?? 0) - (${rightValue} ?? 0)`;
     case 'date':
       return `new Date(${leftValue}).valueOf() - new Date(${rightValue}).valueOf()`;
+    case 'boolean':
+      // Off (false or unset) before on, as a builder's switch sort has it.
+      return `Number(${leftValue} === true) - Number(${rightValue} === true)`;
     default: {
       const exhaustive: never = sort.order;
       return exhaustive;

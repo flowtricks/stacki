@@ -170,64 +170,104 @@ export function parsePropSchemaDestructure(
   schema: Map<string, SchemaField>,
 ): void {
   const destructure = frontmatter.match(/(?:const|let)\s*\{([\s\S]*?)\}\s*=\s*Astro\.props/);
-  if (destructure) {
+  if (!destructure) {
+    return;
+  }
+  // One entry per top-level comma. A default may be an object or a list of
+  // its own (`filters: propFilters = {"fields": [{"fieldPath": "name"}]}`),
+  // and its keys and values are not props: reading the entries with patterns
+  // over the whole text listed `fields`, `fieldPath` and `name` as props.
+  for (const entry of topLevelEntries(required(destructure[1], 'Props destructure capture'))) {
     // Rest params (...rest) aren't real props, and renames (class: className)
-    // should register under the real prop name only.
-    destructure[1] = required(destructure[1], 'Props destructure capture')
-      .replace(/\.\.\.\s*\w+/g, '')
-      .replace(/(\w+)\s*:\s*\w+/g, '$1');
-    // Defaults can be quoted strings, shallow object/array literals ({} or
-    // { a: 1 }), or plain expressions — the literal alternatives come first
-    // so `= {}` isn't truncated at the closing brace.
-    const entryRe = new RegExp(
-      '(\\w+)(?:\\s*=\\s*("(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.' +
-        ")*'|`(?:[^`\\\\]|\\\\.)*`|\\{[^{}]*\\}|\\[[^\\][]*\\]|[^," +
-        '\\n}]+))?',
-      'g',
+    // register under the real prop name only.
+    const match = entry.match(/^\s*(\w+)\s*(?::\s*\w+\s*)?(?:=\s*([\s\S]+?))?\s*$/);
+    if (!match?.[1] || /^\s*\.\.\./.test(entry)) {
+      continue;
+    }
+    const existing = schema.get(match[1]) || {
+      name: match[1],
+      type: 'other',
+      optional: true,
+      default: undefined,
+    };
+    schema.set(
+      match[1],
+      match[2] === undefined ? existing : withDestructureDefault(existing, match[2].trim()),
     );
-    let match;
-    while ((match = entryRe.exec(destructure[1])) !== null) {
-      if (!match[1]) {
-        continue;
+  }
+}
+
+// What a default's text says about the prop: a literal sets its type and
+// value; anything else is kept as an expression for the scanner to resolve.
+function withDestructureDefault(field: SchemaField, defaultText: string): SchemaField {
+  const typed = (type: SchemaField['type']): SchemaField['type'] =>
+    field.type === 'other' ? type : field.type;
+  if (/^["'`]/.test(defaultText)) {
+    return { ...field, optional: true, default: defaultText.slice(1, -1), type: typed('string') };
+  }
+  if (/^(true|false)$/.test(defaultText)) {
+    return { ...field, optional: true, default: defaultText === 'true', type: typed('boolean') };
+  }
+  if (/^-?\d+(\.\d+)?$/.test(defaultText)) {
+    return { ...field, optional: true, default: Number(defaultText), type: typed('number') };
+  }
+  // Not a literal — an identifier or expression (e.g. SITE_TITLE). Flagged so
+  // the scanner can try resolving it to a real value; an object-literal
+  // default marks an attributes-object prop.
+  return {
+    ...field,
+    optional: true,
+    default: defaultText,
+    defaultExpr: true,
+    type: /^\{/.test(defaultText) ? typed('attrs') : field.type,
+  };
+}
+
+/**
+ * A destructure's text split at its top-level commas: commas inside a
+ * string, a template or brackets belong to that entry's default, and comments
+ * (a doc comment above an entry) are left out. Bounded by the text, which
+ * the frontmatter limit bounds.
+ */
+export function topLevelEntries(text: string): string[] {
+  const entries: string[] = [];
+  let current = '';
+  let depth = 0;
+  let quote = '';
+  const end = Math.min(text.length, LIMITS.ipcFieldCharsMax);
+  for (let index = 0; index < end; index++) {
+    const char = text.charAt(index);
+    const next = text.charAt(index + 1);
+    if (quote !== '') {
+      current += char;
+      if (char === '\\') {
+        current += next;
+        index++;
+      } else if (char === quote) {
+        quote = '';
       }
-      const existing = schema.get(match[1]) || {
-        name: match[1],
-        type: 'other',
-        optional: true,
-        default: undefined,
-      };
-      if (match[2] !== undefined) {
-        let defaultText = match[2].trim();
-        if (/^["'`]/.test(defaultText)) {
-          existing.default = defaultText.slice(1, -1);
-          if (existing.type === 'other') {
-            existing.type = 'string';
-          }
-        } else if (/^(true|false)$/.test(defaultText)) {
-          existing.default = defaultText === 'true';
-          if (existing.type === 'other') {
-            existing.type = 'boolean';
-          }
-        } else if (/^-?\d+(\.\d+)?$/.test(defaultText)) {
-          existing.default = Number(defaultText);
-          if (existing.type === 'other') {
-            existing.type = 'number';
-          }
-        } else {
-          // Not a literal — an identifier or expression (e.g. SITE_TITLE).
-          // Flag it so the scanner can try resolving it to a real value.
-          existing.default = defaultText;
-          existing.defaultExpr = true;
-          // An object-literal default marks an attributes-object prop.
-          if (existing.type === 'other' && /^\{/.test(defaultText)) {
-            existing.type = 'attrs';
-          }
-        }
-        existing.optional = true;
+    } else if (char === '/' && next === '*') {
+      const close = text.indexOf('*/', index + 2);
+      index = close < 0 ? end : close + 1;
+    } else if (char === '/' && next === '/') {
+      const close = text.indexOf('\n', index);
+      index = close < 0 ? end : close - 1;
+    } else if (char === ',' && depth === 0) {
+      entries.push(current);
+      current = '';
+    } else {
+      if (char === '"' || char === "'" || char === '`') {
+        quote = char;
+      } else if (char === '{' || char === '[' || char === '(') {
+        depth++;
+      } else if (char === '}' || char === ']' || char === ')') {
+        depth = Math.max(0, depth - 1);
       }
-      schema.set(match[1], existing);
+      current += char;
     }
   }
+  entries.push(current);
+  return entries.filter((entry) => entry.trim() !== '');
 }
 
 export function parsePropSchemaSplitFallback(unions: readonly PropUnion[]): Set<string> {

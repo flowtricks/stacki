@@ -104,28 +104,45 @@ function comparatorKey(node: Js, bases: ComparatorBases): LoopSort | undefined {
   if (node.kind === 'binary' && node.operator === '-') {
     const left = sortValue(node.left);
     const right = sortValue(node.right);
-    return keyOf(
-      left,
-      right,
-      bases,
-      left?.date === true || right?.date === true ? 'date' : 'number',
-    );
+    return keyOf(left, right, bases, subtractedOrder(left, right));
   }
   return undefined;
 }
 
 interface SortValue {
   readonly path: readonly string[];
-  readonly date: boolean;
+  /** What the conversions said the field holds: a time, a switch, or a number. */
+  readonly kind: 'date' | 'boolean' | 'number';
+}
+
+// A subtraction compares times when either side was made a date, switches
+// when either side was asked `=== true`, and plain numbers otherwise.
+function subtractedOrder(left: SortValue | undefined, right: SortValue | undefined): LoopSortOrder {
+  if (left?.kind === 'date' || right?.kind === 'date') {
+    return 'date';
+  }
+  return left?.kind === 'boolean' || right?.kind === 'boolean' ? 'boolean' : 'number';
 }
 
 // Peels the conversions a comparator wraps a field in: String(), Number(),
-// unary +, `?? 0`, new Date(), Date.parse(), .valueOf(), .getTime().
+// unary +, `?? 0`, new Date(), Date.parse(), .valueOf(), .getTime(), and a
+// switch's `=== true` (Stacki's own `Number(a.x === true) - …`).
 function sortValue(node: Js): SortValue | undefined {
   let current = node;
-  let date = false;
+  let kind: SortValue['kind'] = 'number';
   for (let depth = 0; depth < 6; depth++) {
-    if (current.kind === 'binary' && (current.operator === '??' || current.operator === '||')) {
+    if (
+      current.kind === 'binary' &&
+      current.operator === '===' &&
+      current.right.kind === 'boolean' &&
+      current.right.value
+    ) {
+      kind = 'boolean';
+      current = current.left;
+    } else if (
+      current.kind === 'binary' &&
+      (current.operator === '??' || current.operator === '||')
+    ) {
       current = current.left;
     } else if (current.kind === 'unary' && current.operator === '+') {
       current = current.value;
@@ -142,7 +159,7 @@ function sortValue(node: Js): SortValue | undefined {
       current.args[0] &&
       namePath(current.callee)?.join('.') === 'Date.parse'
     ) {
-      date = true;
+      kind = 'date';
       current = current.args[0];
     } else if (
       current.kind === 'new' &&
@@ -150,7 +167,7 @@ function sortValue(node: Js): SortValue | undefined {
       current.args.length === 1 &&
       current.args[0]
     ) {
-      date = true;
+      kind = 'date';
       current = current.args[0];
     } else if (
       current.kind === 'call' &&
@@ -158,14 +175,14 @@ function sortValue(node: Js): SortValue | undefined {
       ['valueOf', 'getTime'].includes(current.callee.property) &&
       current.args.length === 0
     ) {
-      date = true;
+      kind = 'date';
       current = current.callee.object;
     } else {
       break;
     }
   }
   const path = namePath(current);
-  return path === undefined ? undefined : { path, date };
+  return path === undefined ? undefined : { path, kind };
 }
 
 function keyOf(

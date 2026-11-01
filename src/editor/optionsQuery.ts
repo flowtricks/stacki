@@ -7,9 +7,10 @@
 //
 // A helper (here `queryItems`) applies them at runtime. The settings are an
 // object literal in the page, so they are read from it and written back into
-// it, entry for entry, keeping every key this module does not own. The filter
-// may instead be a prop (`"filter": propFilters`), each use of the component
-// passing its own; then the prop's default holds the filters edited here.
+// it, entry for entry, keeping every key this module does not own. Any of the
+// filter, sort, limit and offset may instead be a prop (`"filter":
+// propFilters`), each use of the component passing its own; then the prop's
+// default holds the setting edited here (loopProps.ts reads the props).
 //
 // The collection is found by following the first argument through the
 // frontmatter to the `getCollection` that reads it: `collections["campus"]`
@@ -32,7 +33,28 @@ import {
   type LoopSort,
   type LoopSource,
 } from './loopQuery';
-import { destructuredDefault, type Js, type JsEntry, type ParsedFrontmatter } from './loopSyntax';
+import {
+  destructuredDefault,
+  parseExpression,
+  type Js,
+  type JsEntry,
+  type ParsedFrontmatter,
+} from './loopSyntax';
+import { propNamed } from './loopProps';
+
+/** The settings a component prop can hold. */
+export const LOOP_SETTINGS = ['filter', 'sort', 'limit', 'offset'] as const;
+export type LoopSetting = (typeof LOOP_SETTINGS)[number];
+
+/**
+ * Where one setting is written: in the options (`inline`), in a prop's default
+ * (`prop`: `key` as a page passes it, `local` as the options name it), or not
+ * at all yet (`none`).
+ */
+export type SettingHome =
+  | { readonly kind: 'inline' }
+  | { readonly kind: 'prop'; readonly key: string; readonly local: string; readonly literal: Span }
+  | { readonly kind: 'none' };
 
 /** Where an options query lives in the frontmatter, so an edit rewrites just that. */
 export interface OptionsHome {
@@ -41,10 +63,7 @@ export interface OptionsHome {
   readonly reader: string;
   /** The options object literal. */
   readonly options: Span;
-  readonly filter:
-    | { readonly kind: 'inline' }
-    | { readonly kind: 'prop'; readonly name: string; readonly literal: Span }
-    | { readonly kind: 'none' };
+  readonly settings: Readonly<Record<LoopSetting, SettingHome>>;
 }
 
 interface Span {
@@ -94,8 +113,11 @@ export function readOptionsQuery(
   }
   const source: LoopSource = { kind: 'astro', collection };
   const kind = (path: string): LoopFieldKind | undefined => context.fieldKind?.(source, path);
-  const filterValue = entryValue(options.entries, 'filter');
-  const filter = filterOf(filterValue, context.frontmatter.source, kind);
+  const settings = settingsOf(options.entries, context.frontmatter.source);
+  if (settings === undefined) {
+    return undefined;
+  }
+  const filter = filterOf(settings.values.filter, context.frontmatter.source, kind);
   if (filter === undefined) {
     return undefined;
   }
@@ -103,7 +125,7 @@ export function readOptionsQuery(
     kind: 'options',
     reader: call.callee.name,
     options: { from: options.from, to: options.to },
-    filter: filter.home,
+    settings: settings.homes,
   };
   const selection = curatedOf(
     entryValue(options.entries, 'curated'),
@@ -113,23 +135,89 @@ export function readOptionsQuery(
     // Picked items: the helper starts from them, so they are the list.
     return { query: { ...emptyQuery(source), selection }, home };
   }
-  const query = dynamicQuery(options.entries, { source, filter, kind });
+  const query = dynamicQuery(settings.values, { source, filter, kind });
   return query === undefined ? undefined : { query, home };
+}
+
+/** The options key a setting is written under; a builder may say `skip` for the offset. */
+export function settingEntry(
+  entries: readonly JsEntry[],
+  setting: LoopSetting,
+): JsEntry | undefined {
+  return (
+    entries.find((entry) => entry.key === setting) ??
+    (setting === 'offset' ? entries.find((entry) => entry.key === 'skip') : undefined)
+  );
+}
+
+// Each setting's value and where it is written. A setting naming a prop is
+// read from that prop's default; one naming anything else, or a prop without
+// a default, is outside what the list settings can show.
+function settingsOf(
+  entries: readonly JsEntry[],
+  frontmatter: string,
+):
+  | {
+      readonly values: Readonly<Record<LoopSetting, Js | undefined>>;
+      readonly homes: Readonly<Record<LoopSetting, SettingHome>>;
+    }
+  | undefined {
+  const values: Record<LoopSetting, Js | undefined> = {
+    filter: undefined,
+    sort: undefined,
+    limit: undefined,
+    offset: undefined,
+  };
+  const homes: Record<LoopSetting, SettingHome> = {
+    filter: { kind: 'none' },
+    sort: { kind: 'none' },
+    limit: { kind: 'none' },
+    offset: { kind: 'none' },
+  };
+  for (const setting of LOOP_SETTINGS) {
+    const value = settingEntry(entries, setting)?.value;
+    if (value === undefined) {
+      continue;
+    }
+    if (value.kind === 'name') {
+      const prop = propNamed(frontmatter, value.name);
+      const fallback = destructuredDefault(frontmatter, value.name);
+      if (prop === undefined || prop.defaultValue === undefined || fallback === undefined) {
+        return undefined;
+      }
+      assert(
+        fallback.from === prop.defaultValue.from,
+        'A prop default is read where the destructure says',
+      );
+      values[setting] = fallback;
+      homes[setting] = {
+        kind: 'prop',
+        key: prop.key,
+        local: prop.local,
+        literal: prop.defaultValue,
+      };
+    } else {
+      values[setting] = value;
+      homes[setting] = { kind: 'inline' };
+    }
+  }
+  assert(Object.keys(homes).length === LOOP_SETTINGS.length, 'Every setting has a home');
+  return { values, homes };
 }
 
 // Filters, sort, start and limit, as the options state them; undefined when
 // one of them is outside what the list settings can show.
 function dynamicQuery(
-  entries: readonly JsEntry[],
+  values: Readonly<Record<LoopSetting, Js | undefined>>,
   read: {
     readonly source: LoopSource;
     readonly filter: FilterReading;
     readonly kind: (path: string) => LoopFieldKind | undefined;
   },
 ): LoopQuery | undefined {
-  const sorts = sortsOf(entryValue(entries, 'sort'), read.kind);
-  const offset = wholeOf(entryValue(entries, 'offset') ?? entryValue(entries, 'skip')) ?? 0;
-  const limit = wholeOf(entryValue(entries, 'limit'));
+  const sorts = sortsOf(values.sort, read.kind);
+  const offset = wholeOf(values.offset) ?? 0;
+  const limit = wholeOf(values.limit);
   if (
     sorts === undefined ||
     offset > LOOP_QUERY_LIMITS.offsetMax ||
@@ -253,10 +341,9 @@ function entryValue(entries: readonly JsEntry[], key: string): Js | undefined {
   return entries.find((entry) => entry.key === key)?.value;
 }
 
-interface FilterReading {
+export interface FilterReading {
   readonly match: 'all' | 'any';
   readonly conditions: readonly LoopCondition[];
-  readonly home: OptionsHome['filter'];
 }
 
 function filterOf(
@@ -265,30 +352,9 @@ function filterOf(
   kind: (path: string) => LoopFieldKind | undefined,
 ): FilterReading | undefined {
   if (value === undefined) {
-    return { match: 'all', conditions: [], home: { kind: 'none' } };
+    return { match: 'all', conditions: [] };
   }
-  if (value.kind === 'name') {
-    const fallback = destructuredDefault(frontmatter, value.name);
-    if (fallback?.kind !== 'object') {
-      return undefined;
-    }
-    const read = filterObject(fallback, frontmatter, kind);
-    return read === undefined
-      ? undefined
-      : {
-          ...read,
-          home: {
-            kind: 'prop',
-            name: value.name,
-            literal: { from: fallback.from, to: fallback.to },
-          },
-        };
-  }
-  if (value.kind !== 'object') {
-    return undefined;
-  }
-  const read = filterObject(value, frontmatter, kind);
-  return read === undefined ? undefined : { ...read, home: { kind: 'inline' } };
+  return value.kind === 'object' ? filterObject(value, frontmatter, kind) : undefined;
 }
 
 function filterObject(
@@ -453,7 +519,14 @@ function sortsOf(
       field: field.value,
       direction:
         direction?.kind === 'string' && direction.value === 'desc' ? 'descending' : 'ascending',
-      order: fieldKind === 'number' ? 'number' : fieldKind === 'date' ? 'date' : 'text',
+      order:
+        fieldKind === 'number'
+          ? 'number'
+          : fieldKind === 'date'
+            ? 'date'
+            : fieldKind === 'boolean'
+              ? 'boolean'
+              : 'text',
     });
   }
   return sorts;
@@ -467,6 +540,76 @@ function wholeOf(value: Js | undefined): number | undefined {
         ? Number(value.value)
         : undefined;
   return number !== undefined && Number.isSafeInteger(number) && number >= 0 ? number : undefined;
+}
+
+/**
+ * A filter a page passes a component's prop (`filters={{"filterFor": …}}`),
+ * or undefined when the value is anything the Filters editor cannot show.
+ */
+export function readFilterValue(
+  text: string,
+  kind: (path: string) => LoopFieldKind | undefined,
+): FilterReading | undefined {
+  const parsed = parseExpression(text);
+  return parsed === undefined ? undefined : filterOf(parsed.expression, parsed.source, kind);
+}
+
+/** A sort a page passes a component's prop, or undefined when it is not one. */
+export function readSortValue(
+  text: string,
+  kind: (path: string) => LoopFieldKind | undefined,
+): readonly LoopSort[] | undefined {
+  const parsed = parseExpression(text);
+  return parsed === undefined ? undefined : sortsOf(parsed.expression, kind);
+}
+
+/**
+ * A whole options object for `query`, as a list rewritten into the data form
+ * is written (optionsBinding.ts). Filter and sort are always written, so the
+ * object reads back as options even when nothing narrows the list.
+ */
+export function optionsLiteral(query: LoopQuery): string {
+  assert(dataFormProblem(query) === undefined, 'Only a query the data can say is written as data');
+  const entries = [`"filter": ${filterText(query)}`, `"sort": ${sortText(query.sorts)}`];
+  if (query.limit !== undefined) {
+    entries.push(`"limit": ${query.limit}`);
+  }
+  if (query.offset > 0) {
+    entries.push(`"offset": ${query.offset}`);
+  }
+  if (query.selection !== undefined) {
+    entries.push(`"curated": {"itemIds": ${JSON.stringify(query.selection)}}`);
+  }
+  return `{${entries.join(', ')}}`;
+}
+
+/** Why a query cannot be kept as data, or undefined when it can. */
+export function dataFormProblem(query: LoopQuery): string | undefined {
+  if (query.source.kind !== 'astro') {
+    return 'Only content collection lists can link their settings to properties.';
+  }
+  if (query.random) {
+    return 'A shuffled list can’t link its settings to properties.';
+  }
+  for (const condition of query.conditions) {
+    if (condition.kind === 'custom') {
+      return 'A filter written as code can’t be linked to a property. Remove it first.';
+    }
+    if (condition.operator === 'inPast' || condition.operator === 'inFuture') {
+      return 'A filter comparing with today’s date can’t be linked to a property.';
+    }
+  }
+  return undefined;
+}
+
+/** The filter value a prop is given, in the helper's own data form. */
+export function filterValueText(query: Pick<LoopQuery, 'match' | 'conditions'>): string {
+  return filterText(query);
+}
+
+/** The sort value a prop is given. */
+export function sortValueText(sorts: readonly LoopSort[]): string {
+  return sortText(sorts);
 }
 
 // ---------------------------------------------------------------------------
@@ -489,14 +632,25 @@ export function rewrittenOptions(
   const filter = filterText(query);
   // Picked items go in `curated` (the helper keeps their order); a dynamic
   // list empties it, as a builder does when the list is switched back.
+  const texts: Readonly<Record<LoopSetting, string>> = {
+    filter,
+    sort: sortText(query.sorts),
+    limit: String(query.limit ?? 0),
+    offset: String(query.offset),
+  };
   const owned = new Map<string, string>([
-    ['sort', sortText(query.sorts)],
-    ['limit', String(query.limit ?? 0)],
-    ['offset', String(query.offset)],
     ['curated', `{"itemIds": ${JSON.stringify(query.selection ?? [])}}`],
   ]);
-  if (home.filter.kind !== 'prop') {
-    owned.set('filter', filter);
+  // A setting a prop holds is written as the prop's default; its options
+  // entry, which names the prop, is kept as written.
+  const edits: { readonly span: Span; readonly text: string }[] = [];
+  for (const setting of LOOP_SETTINGS) {
+    const settingHome = home.settings[setting];
+    if (settingHome.kind === 'prop') {
+      edits.push({ span: settingHome.literal, text: texts[setting] });
+    } else {
+      owned.set(setting, texts[setting]);
+    }
   }
   const entries: string[] = [];
   const written = new Set<string>();
@@ -522,12 +676,7 @@ export function rewrittenOptions(
     }
   }
   const optionsText = `{${entries.join(', ')}}`;
-  const edits: { readonly span: Span; readonly text: string }[] = [
-    { span: home.options, text: optionsText },
-  ];
-  if (home.filter.kind === 'prop') {
-    edits.push({ span: home.filter.literal, text: filter });
-  }
+  edits.push({ span: home.options, text: optionsText });
   // From the end, so an earlier span still points at its text.
   edits.sort((left, right) => right.span.from - left.span.from);
   let out = frontmatter;
@@ -544,7 +693,7 @@ function entryText(frontmatter: string, entry: JsEntry): string {
   return entry.key === undefined ? value : `${JSON.stringify(entry.key)}: ${value}`;
 }
 
-function filterText(query: LoopQuery): string {
+function filterText(query: Pick<LoopQuery, 'match' | 'conditions'>): string {
   const fields = query.conditions.map(conditionText);
   return `{"filterFor": ${JSON.stringify(query.match === 'any' ? 'ANY' : 'ALL')}, "fields": [${fields.join(', ')}]}`;
 }

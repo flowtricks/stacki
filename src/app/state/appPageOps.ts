@@ -1,4 +1,5 @@
 import { componentReference } from '../model/componentReference';
+import { useListProps } from './useListProps';
 // Page operations: changing the layout, creating, moving and deleting pages
 // and folders, the selection's model, creating from a selection, the
 // selected schema, and composing the shortcuts (App.tsx).
@@ -601,7 +602,9 @@ export function useSelectedSchema(
     selectedId === 'layout' && isMarkdownFormatRef.current
       ? schemaFor(scan.layouts.find((layout) => layout.name === currentLayoutName))
       : selectedFields(selectedNode, selectedComponent);
-  return { currentLayoutName, layoutNode, selectedSchema, selectedComponent };
+  // Props the component's loop reads its settings from, drawn with the loop's editors.
+  const listProps = useListProps(project?.path, selectedComponent?.path);
+  return { currentLayoutName, layoutNode, selectedSchema, selectedComponent, listProps };
 }
 
 function selectedFields(

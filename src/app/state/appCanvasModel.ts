@@ -481,6 +481,7 @@ export function useOverlayInfo(
       astroAsset: !!node.astroAsset,
       dynamicTag: !!node.dynamicTag,
       nodeKind: node.kind,
+      childCount: 'children' in node && Array.isArray(node.children) ? node.children.length : 0,
       isLayout: node.id === 'layout',
       bound: kind === 'element' && isDataBound(node),
     };

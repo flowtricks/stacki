@@ -122,11 +122,18 @@ export function SectionHeader(props: {
   readonly title: string;
   readonly addable: boolean;
   readonly extra?: ReactNode;
+  /** The purple dot linking the section to a component property (LoopBinding.tsx). */
+  readonly dot?: ReactNode;
+  /** The label in place of the plain title: a set value's reset label, say. */
+  readonly label?: ReactNode;
   readonly onAdd: () => void;
 }) {
   return (
     <div className="loop-settings-header">
-      <span className="prop-label">{props.title}</span>
+      <span className="loop-settings-label">
+        {props.label ?? <span className="prop-label">{props.title}</span>}
+        {props.dot}
+      </span>
       <span className="loop-settings-header-tools">{props.extra}</span>
       <button
         type="button"
@@ -167,11 +174,19 @@ export function fieldIcon(kind: LoopFieldKind): ReactNode {
   }
 }
 
-export function EditorRow(props: { readonly label: string; readonly children: ReactNode }) {
+export function EditorRow(props: {
+  readonly label: string;
+  readonly dot?: ReactNode;
+  readonly children: ReactNode;
+}) {
   return (
     <div className="loop-settings-editor-row">
-      <span className="loop-settings-editor-label">{props.label}</span>
-      <div className="loop-settings-editor-control">{props.children}</div>
+      <span className="loop-settings-editor-label loop-settings-label">{props.label}</span>
+      {/* The dot sits on the control's top-left corner, as a bound field's does. */}
+      <div className="loop-settings-editor-control">
+        {props.children}
+        {props.dot}
+      </div>
     </div>
   );
 }

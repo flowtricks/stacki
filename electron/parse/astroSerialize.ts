@@ -448,9 +448,7 @@ function serializeNodeMap(node: MapNode, indent: string, lines: string[], depth:
   // adding them would rewrite a line the user never edited.
   if (node.bare) {
     lines.push(indent + '  ' + node.head.replace(/\($/, '').trimEnd());
-    for (const child of node.children || []) {
-      serializeNode(child, indent + '    ', lines, depth + 1);
-    }
+    serializeLoopBody(node, indent + '    ', lines, depth);
     lines.push(indent + '  )');
     lines.push(indent + '}');
     return;
@@ -475,12 +473,22 @@ function serializeNodeMap(node: MapNode, indent: string, lines: string[], depth:
   } else {
     lines.push(indent + '  ' + node.head);
   }
-  for (const child of node.children || []) {
-    serializeNode(child, indent + '  ' + inner + '  ', lines, depth + 1);
-  }
+  serializeLoopBody(node, indent + '  ' + inner + '  ', lines, depth);
   lines.push(indent + '  ' + inner + '))');
   lines.push(indent + '}');
   return;
+}
+
+// What a loop renders for each item. An arrow's parenthesized body cannot be
+// empty: `(item) => ()` does not parse, and the page with it stops building,
+// so a loop with nothing in it yet (one just inserted) renders `null`.
+function serializeLoopBody(node: MapNode, indent: string, lines: string[], depth: number): void {
+  for (const child of node.children || []) {
+    serializeNode(child, indent, lines, depth + 1);
+  }
+  if ((node.children || []).length === 0) {
+    lines.push(indent + 'null');
+  }
 }
 
 function serializeNodeRaw(

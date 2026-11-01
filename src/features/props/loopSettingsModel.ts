@@ -66,6 +66,8 @@ export function orderLabels(order: LoopSortOrder): {
       return { ascending: 'Smallest to largest', descending: 'Largest to smallest' };
     case 'date':
       return { ascending: 'Oldest to newest', descending: 'Newest to oldest' };
+    case 'boolean':
+      return { ascending: 'Is Off First', descending: 'Is On First' };
     default: {
       const exhaustive: never = order;
       return exhaustive;
@@ -106,11 +108,16 @@ export function parseSourceKey(
   key: string,
 ):
   | { readonly kind: 'empty' }
+  | { readonly kind: 'list' }
   | { readonly kind: 'collection'; readonly source: LoopSource }
   | { readonly kind: 'value'; readonly data: string }
   | undefined {
   if (key === 'empty') {
     return { kind: 'empty' };
+  }
+  // A list typed in place, edited as rows (LoopLiteralItems.tsx).
+  if (key === 'list') {
+    return { kind: 'list' };
   }
   const at = key.indexOf(':');
   const prefix = key.slice(0, at);

@@ -11,6 +11,7 @@ import type {
   ImportDecl,
 } from '../../../shared/page/pageNode';
 import type { LoopTarget } from '../../editor/loopQueryPlan';
+import type { ListProp } from '../../editor/listProps';
 import type { LoopApplyResult } from './LoopSettings';
 import type { FieldDefinition, PropValues } from './propRules';
 import type { SetProp, SetProps } from './propAttributes';
@@ -34,6 +35,8 @@ export interface PropsPanelProps {
   readonly currentLayoutName?: string;
   readonly onChangeLayout?: (name: string) => void;
   readonly schema?: readonly FieldDefinition[];
+  /** Props of the selected component that hold its list's settings (listProps.ts). */
+  readonly listProps?: ReadonlyMap<string, ListProp> | undefined;
   readonly slotOptions?: readonly string[] | undefined;
   readonly takesSlotText?: boolean;
   readonly tagOptions?: readonly TagOption[];
@@ -57,7 +60,15 @@ export interface PropsPanelProps {
   readonly frontmatterSource?: string;
   /** The open file's imports: what a loop's source is read against. */
   readonly frontmatterImports?: readonly ImportDecl[] | undefined;
-  readonly onSetLoopSource?: (target: LoopTarget, sanityClient: 'available' | 'unavailable') => LoopApplyResult;
+  readonly onSetLoopSource?: (
+    target: LoopTarget,
+    sanityClient: 'available' | 'unavailable',
+  ) => LoopApplyResult;
+  /** Renames a list setting's property, or changes its tooltip; resolves with why it could not. */
+  readonly onEditLoopProperty?: (
+    key: string,
+    edit: { readonly name: string; readonly description: string },
+  ) => Promise<string | undefined>;
   readonly onOpenSymbol?: (name: string) => void;
   readonly onToggleElse?: (value: boolean) => void;
   readonly projectPath?: string | undefined;

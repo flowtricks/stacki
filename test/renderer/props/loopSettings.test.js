@@ -77,6 +77,14 @@ assert.equal(
   model.sortSummary({ field: 'date', direction: 'descending', order: 'date' }, fields),
   'Published On · Newest to oldest',
 );
+assert.equal(
+  model.sortSummary({ field: 'featured', direction: 'ascending', order: 'boolean' }, fields),
+  'Featured · Is Off First',
+);
+assert.equal(
+  model.sortSummary({ field: 'featured', direction: 'descending', order: 'boolean' }, fields),
+  'Featured · Is On First',
+);
 
 // Drafts become conditions only when complete and valid.
 const draft = (operator, value, field = 'order') =>
@@ -184,5 +192,28 @@ assert.deepEqual(moved(['a', 'b', 'c'], 0, 3), ['b', 'c', 'a'], 'to the end');
 assert.deepEqual(moved(['a', 'b', 'c'], 2, 0), ['c', 'a', 'b'], 'to the start');
 assert.deepEqual(moved(['a', 'b', 'c'], 1, 1), ['a', 'b', 'c'], 'onto itself');
 assert.throws(() => moved(['a'], 1, 0), /A moved item exists/);
+
+// A list typed in place: only plain strings read as rows, and rows write back
+// as code that reads the same. Anything else stays code, so editing rows never
+// turns a number or an object into text.
+const literal = load('src/editor/loopLiteral.ts');
+assert.deepEqual(literal.literalItems('["item 1", "item 2"]'), ['item 1', 'item 2']);
+assert.deepEqual(literal.literalItems("['a', 'b']"), ['a', 'b'], 'single quotes read too');
+for (const code of ['[1, 2]', '[{ a: 1 }]', '[...posts]', 'posts', '["a", b]', '']) {
+  assert.equal(literal.literalItems(code), undefined, `${code} stays code`);
+}
+assert.equal(
+  literal.literalItems(`[${Array.from({ length: 201 }, () => '"x"').join(',')}]`),
+  undefined,
+  'a typed list is bounded',
+);
+assert.equal(literal.literalCode(['He said "hi"', 'x']), '["He said \\"hi\\"", "x"]');
+assert.deepEqual(
+  literal.literalItems(literal.literalCode(['He said "hi"', '\\'])),
+  ['He said "hi"', '\\'],
+  'escapes round-trip',
+);
+assert.throws(() => literal.literalCode(['x'.repeat(501)]), /A typed item is bounded/);
+assert.deepEqual(model.parseSourceKey('list'), { kind: 'list' });
 
 console.log('loopSettings: ok');

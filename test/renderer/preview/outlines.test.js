@@ -49,33 +49,89 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
     platform: 'node',
     logLevel: 'silent',
   });
-  const { onePerPlace, outlineBoxPath } = require(bundlePath);
+  const { loopChildPaths, onePerPlace, outlineBoxPath, unionBox } = require(bundlePath);
 
   check('a map uses its first child outline box', outlineBoxPath('0.2.1', 'map') === '0.2.1.0');
-  check('a component map stays in its namespace', outlineBoxPath('src/Card.astro|0.2.1', 'map') === 'src/Card.astro|0.2.1.0');
+  check(
+    'a component map stays in its namespace',
+    outlineBoxPath('src/Card.astro|0.2.1', 'map') === 'src/Card.astro|0.2.1.0',
+  );
   check('a map at the top of a page still has a box', outlineBoxPath('0', 'map') === '0.0');
-  check('a root map in a component still has a box', outlineBoxPath('src/Card.astro|0', 'map') === 'src/Card.astro|0.0');
+  check(
+    'a root map in a component still has a box',
+    outlineBoxPath('src/Card.astro|0', 'map') === 'src/Card.astro|0.0',
+  );
   let emptyPath = '';
   try {
     outlineBoxPath('', 'map');
   } catch (error) {
     emptyPath = String(error);
   }
-  check('an empty path is a bug', emptyPath.includes('outlineBoxPath: path must not be empty'), emptyPath);
+  check(
+    'an empty path is a bug',
+    emptyPath.includes('outlineBoxPath: path must not be empty'),
+    emptyPath,
+  );
   check('ordinary elements keep their box', outlineBoxPath('0.2.1', 'element') === '0.2.1');
+
+  // --- a loop is every item ---------------------------------------------------
+  // Selecting a loop outlined only its first item, which read as that item
+  // selected. A loop's box wraps every copy of every child it renders.
+  const loopItems = [box(0, 0, 1200, 900), box(0, 900, 1200, 900), box(0, 1800, 1200, 900)];
+  const wrapped = unionBox(loopItems);
+  check(
+    'a loop wraps all its items',
+    JSON.stringify(wrapped) === JSON.stringify(box(0, 0, 1200, 2700)),
+    JSON.stringify(wrapped),
+  );
+  check('a loop with nothing rendered has no box', unionBox([]) === undefined);
+  check(
+    'an unsized copy does not stretch the loop',
+    JSON.stringify(unionBox([box(0, 0, 0, 0), box(10, 10, 5, 5)])) ===
+      JSON.stringify(box(10, 10, 5, 5)),
+  );
+  check(
+    'a loop measures each child',
+    JSON.stringify(loopChildPaths('0.2', 2)) === JSON.stringify(['0.2.0', '0.2.1']),
+  );
+  check(
+    'an empty loop still measures its first slot',
+    JSON.stringify(loopChildPaths('0.2', 0)) === JSON.stringify(['0.2.0']),
+  );
+  let badCount = '';
+  try {
+    loopChildPaths('0', 1.5);
+  } catch (error) {
+    badCount = String(error);
+  }
+  check(
+    'a fractional child count is a bug',
+    badCount.includes('a child count is a whole number'),
+    badCount,
+  );
 
   // --- one box per place -----------------------------------------------------
   const hero = box(0, 100, 1200, 800);
   const fourteen = () => Array.from({ length: 14 }, () => ({ ...hero }));
   check('one box is one box', onePerPlace([hero]).length === 1);
-  check('the same box reported fourteen times is one box', onePerPlace(fourteen()).length === 1, `${onePerPlace(fourteen()).length} boxes`);
+  check(
+    'the same box reported fourteen times is one box',
+    onePerPlace(fourteen()).length === 1,
+    `${onePerPlace(fourteen()).length} boxes`,
+  );
   check(
     'so the fill stays the fill',
     Math.abs(stacked(onePerPlace(fourteen()).length) - 0.14) < 1e-9,
     `the page would be ${Math.round(stacked(14) * 100)}% green`,
   );
-  check('a box a rounding error off is still the same place', onePerPlace([hero, box(0.4, 100.2, 1199.7, 799.6)]).length === 1);
-  check('a box inside another is covered by it', onePerPlace([hero, box(40, 200, 300, 100)]).length === 1);
+  check(
+    'a box a rounding error off is still the same place',
+    onePerPlace([hero, box(0.4, 100.2, 1199.7, 799.6)]).length === 1,
+  );
+  check(
+    'a box inside another is covered by it',
+    onePerPlace([hero, box(40, 200, 300, 100)]).length === 1,
+  );
 
   // A loop renders its child once per item: separate places, all of them
   // labelled, none of them inside another.
@@ -90,8 +146,14 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
       .map((box) => box.y)
       .join(','),
   );
-  check('and duplicates among them collapse without taking the rest', onePerPlace([items[0], { ...items[0] }, items[1]]).length === 2);
-  check('two boxes that merely overlap are still two boxes', onePerPlace([box(0, 0, 100, 100), box(50, 50, 100, 100)]).length === 2);
+  check(
+    'and duplicates among them collapse without taking the rest',
+    onePerPlace([items[0], { ...items[0] }, items[1]]).length === 2,
+  );
+  check(
+    'two boxes that merely overlap are still two boxes',
+    onePerPlace([box(0, 0, 100, 100), box(50, 50, 100, 100)]).length === 2,
+  );
   check('an empty box is not drawn', onePerPlace([box(10, 10, 0, 0), hero]).length === 1);
   check('nothing at all is nothing', onePerPlace(undefined).length === 0);
 
@@ -103,14 +165,30 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
   // the pointer moved across them.
   const { hoverIsSelection } = require(bundlePath);
   const at = (path, occ) => ({ path, occ });
-  check('hovering the copy that is selected draws no second outline', hoverIsSelection(at('0.1', 1), at('0.1', 1)));
-  check('hovering another copy of it does', !hoverIsSelection(at('0.1', 0), at('0.1', 1)), 'a sibling in the loop is unhoverable');
+  check(
+    'hovering the copy that is selected draws no second outline',
+    hoverIsSelection(at('0.1', 1), at('0.1', 1)),
+  );
+  check(
+    'hovering another copy of it does',
+    !hoverIsSelection(at('0.1', 0), at('0.1', 1)),
+    'a sibling in the loop is unhoverable',
+  );
   check('and so does another node entirely', !hoverIsSelection(at('0.2', 0), at('0.1', 0)));
-  check('the first copy is the one a selection with no occurrence means', hoverIsSelection(at('0.1', 0), { path: '0.1' }));
+  check(
+    'the first copy is the one a selection with no occurrence means',
+    hoverIsSelection(at('0.1', 0), { path: '0.1' }),
+  );
   // A path without an occurrence still suppresses a matching hover. Navigator
   // hover now supplies occurrence zero, leaving a different clicked copy visible.
-  check('a hover without an occurrence on the selected node draws nothing extra', hoverIsSelection({ path: '0.1', occ: undefined }, at('0.1', 2)));
-  check('a hover without an occurrence on another node still draws', !hoverIsSelection({ path: '0.1', occ: undefined }, at('0.2', 0)));
+  check(
+    'a hover without an occurrence on the selected node draws nothing extra',
+    hoverIsSelection({ path: '0.1', occ: undefined }, at('0.1', 2)),
+  );
+  check(
+    'a hover without an occurrence on another node still draws',
+    !hoverIsSelection({ path: '0.1', occ: undefined }, at('0.2', 0)),
+  );
   check('nothing hovered is not the selection', !hoverIsSelection(undefined, at('0.1', 0)));
   check('and nothing selected leaves the hover alone', !hoverIsSelection(at('0.1', 0), undefined));
 
@@ -124,7 +202,11 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
   check('↓ into a child does too', sameCopy('0.1.2', '0.1.2.0'));
   check('and → to a sibling', sameCopy('0.1.2', '0.1.3'));
   check('however deep it is', sameCopy('0.1.2.3.4', '0.1.2.3.5'));
-  check('a jump somewhere else starts at the first copy again', !sameCopy('0.1.2.0', '0.9.0'), 'an unrelated node kept an occurrence that means nothing there');
+  check(
+    'a jump somewhere else starts at the first copy again',
+    !sameCopy('0.1.2.0', '0.9.0'),
+    'an unrelated node kept an occurrence that means nothing there',
+  );
   check('a cousin is somewhere else too', !sameCopy('0.1.2.0', '0.1.3.0'));
   check('and so is the same path in another file', !sameCopy('src/A.astro|0.1', 'src/B.astro|0.1'));
   check('within one file it still counts', sameCopy('src/A.astro|0.1.0', 'src/A.astro|0.1'));
@@ -141,7 +223,9 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
   );
   check(
     'the overlay asks it rather than comparing paths',
-    /!hoverIsSelection\([\s\S]{0,100}path: props\.hoverPath[\s\S]{0,100}occ: props\.hoverOcc/.test(overlays),
+    /!hoverIsSelection\([\s\S]{0,100}path: props\.hoverPath[\s\S]{0,100}occ: props\.hoverOcc/.test(
+      overlays,
+    ),
     'the hover outline is back to comparing paths, which a loop breaks',
   );
   check(
@@ -286,7 +370,11 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
   {
     const boxes3 = boxesFor('0.3');
     check('the word is what gets measured', boxes3.length === 1, JSON.stringify(boxes3));
-    check('and the box is the word, not a bar beside it', boxes3[0]?.w === 172 && boxes3[0]?.h === 50, JSON.stringify(boxes3[0]));
+    check(
+      'and the box is the word, not a bar beside it',
+      boxes3[0]?.w === 172 && boxes3[0]?.h === 50,
+      JSON.stringify(boxes3[0]),
+    );
     check('at the line the word is on', boxes3[0]?.y === 1460, JSON.stringify(boxes3[0]));
   }
 
@@ -299,7 +387,11 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
   {
     const boxes = boxesFor('0.4.0.0');
     check('each copy of the link is a box', boxes.length === 3, JSON.stringify(boxes));
-    check('in the order they are down the page', boxes.map((box) => box.x).join(',') === '0,130,260', JSON.stringify(boxes.map((box) => box.x)));
+    check(
+      'in the order they are down the page',
+      boxes.map((box) => box.x).join(',') === '0,130,260',
+      JSON.stringify(boxes.map((box) => box.x)),
+    );
     // What the click reports, from the same list the boxes came from.
     const clickOn = (box) => {
       const element = document.querySelector(`[data-box="${box}"]`);
@@ -311,10 +403,26 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
     Object.defineProperty(design, 'source', { value: window.parent });
     window.dispatchEvent(design);
 
-    check('clicking the first link says so', clickOn('link-one')?.occurrence === 0, JSON.stringify(clickOn('link-one')));
-    check('clicking the second says the second', clickOn('link-two')?.occurrence === 1, JSON.stringify(clickOn('link-two')));
-    check('and the third the third', clickOn('link-three')?.occurrence === 2, JSON.stringify(clickOn('link-three')));
-    check('all of them naming the same node', clickOn('link-three')?.path === '0.4.0.0', JSON.stringify(clickOn('link-three')));
+    check(
+      'clicking the first link says so',
+      clickOn('link-one')?.occurrence === 0,
+      JSON.stringify(clickOn('link-one')),
+    );
+    check(
+      'clicking the second says the second',
+      clickOn('link-two')?.occurrence === 1,
+      JSON.stringify(clickOn('link-two')),
+    );
+    check(
+      'and the third the third',
+      clickOn('link-three')?.occurrence === 2,
+      JSON.stringify(clickOn('link-three')),
+    );
+    check(
+      'all of them naming the same node',
+      clickOn('link-three')?.path === '0.4.0.0',
+      JSON.stringify(clickOn('link-three')),
+    );
   }
 
   // A patch: the page is re-rendered around the nodes that are already there,
@@ -322,12 +430,19 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
   const patch = (nodePath) => {
     const element = document.querySelector(nodePath === '0.1' ? 'section' : 'article');
     element.parentNode.insertBefore(document.createComment(`avb-s:${nodePath}`), element);
-    element.parentNode.insertBefore(document.createComment(`avb-e:${nodePath}`), element.nextSibling);
+    element.parentNode.insertBefore(
+      document.createComment(`avb-e:${nodePath}`),
+      element.nextSibling,
+    );
     document.dispatchEvent(new window.Event('avb:morphed'));
   };
 
   check('a section is one box', boxesFor('0.1').length === 1, JSON.stringify(boxesFor('0.1')));
-  check('a loop child is one box per item', boxesFor('0.2').length === 2, JSON.stringify(boxesFor('0.2')));
+  check(
+    'a loop child is one box per item',
+    boxesFor('0.2').length === 2,
+    JSON.stringify(boxesFor('0.2')),
+  );
 
   patch('0.1');
   check(
@@ -342,7 +457,11 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
     boxesFor('0.1').length === 1,
     `${boxesFor('0.1').length} boxes after three edits, painting the fill ${Math.round(stacked(boxesFor('0.1').length) * 100)}% over the section`,
   );
-  check('the loop still has its two', boxesFor('0.2').length === 2, JSON.stringify(boxesFor('0.2')));
+  check(
+    'the loop still has its two',
+    boxesFor('0.2').length === 2,
+    JSON.stringify(boxesFor('0.2')),
+  );
 
   // A patch that replaces the node rather than morphing it: the old run is
   // nodes that have left the document, and what is drawn is where the node is
@@ -380,13 +499,23 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
     check('and typing on does not repeat it', heard().length === 0, JSON.stringify(sent));
 
     sent.length = 0;
-    window.dispatchEvent(new window.KeyboardEvent('keyup', { key: 'Shift', shiftKey: false, altKey: true }));
-    check('letting go of it is forwarded too', heard()[0]?.shiftKey === false, JSON.stringify(heard()[0]));
+    window.dispatchEvent(
+      new window.KeyboardEvent('keyup', { key: 'Shift', shiftKey: false, altKey: true }),
+    );
+    check(
+      'letting go of it is forwarded too',
+      heard()[0]?.shiftKey === false,
+      JSON.stringify(heard()[0]),
+    );
     check('along with what is still held', heard()[0]?.altKey === true, JSON.stringify(heard()[0]));
 
     sent.length = 0;
     window.dispatchEvent(new window.Event('blur'));
-    check('and losing focus holds nothing', heard()[0]?.altKey === false, JSON.stringify(heard()[0]));
+    check(
+      'and losing focus holds nothing',
+      heard()[0]?.altKey === false,
+      JSON.stringify(heard()[0]),
+    );
   }
 
   // --- styling it moves it, and the outline has to move with it ---------------
@@ -414,7 +543,11 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
       sent.some((message) => message.type === 'avb:rects'),
       'nothing was measured',
     );
-    check('and the box it reports is the new one', lastSent()?.h === 640, JSON.stringify(lastSent()));
+    check(
+      'and the box it reports is the new one',
+      lastSent()?.h === 640,
+      JSON.stringify(lastSent()),
+    );
 
     // The same again, edited in place rather than added — HMR updates a sheet
     // it has already inserted.
@@ -422,7 +555,11 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
     sent.length = 0;
     style.textContent = '.section { padding-bottom: 4rem }';
     await new Promise((resolve) => setTimeout(resolve, 60));
-    check('editing a stylesheet in place re-measures too', lastSent()?.h === 700, JSON.stringify(lastSent()));
+    check(
+      'editing a stylesheet in place re-measures too',
+      lastSent()?.h === 700,
+      JSON.stringify(lastSent()),
+    );
 
     // A change that lands after the one that caused it: the second pass is what
     // catches the layout that had not happened yet when the first one ran.
@@ -431,7 +568,11 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
     await new Promise((resolve) => setTimeout(resolve, 10));
     boxes[key] = [0, 100, 1200, 760]; // the browser gets round to it
     await new Promise((resolve) => setTimeout(resolve, 200));
-    check('a layout that settles late is measured again', lastSent()?.h === 760, JSON.stringify(lastSent()));
+    check(
+      'a layout that settles late is measured again',
+      lastSent()?.h === 760,
+      JSON.stringify(lastSent()),
+    );
   }
 
   // --- inside a component that has no marker pair -------------------------------
@@ -469,7 +610,11 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
 
     const root = inside('src/components/Card.astro|0.0.0', '0.6.1');
     check('the component root is one box too', root.length === 1, JSON.stringify(root));
-    check('around the open card', root[0]?.y === 2200 && root[0]?.h === 100, JSON.stringify(root[0]));
+    check(
+      'around the open card',
+      root[0]?.y === 2200 && root[0]?.h === 100,
+      JSON.stringify(root[0]),
+    );
   }
 
   if (failures.length) {

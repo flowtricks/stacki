@@ -217,6 +217,7 @@ export function MapPanel(props: NodePanelProps<'map'>) {
         imports={props.frontmatterImports}
         projectPath={props.projectPath}
         onSetLoopSource={props.onSetLoopSource}
+        onEditLoopProperty={props.onEditLoopProperty}
       />
     </div>
   );

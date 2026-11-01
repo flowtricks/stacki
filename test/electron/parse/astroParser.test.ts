@@ -192,3 +192,23 @@ test('producer tree invariants reject missing ids and bounded traversal overflow
   }
   assert.throws(() => assertTreeInvariants([tree]), /Tree invariant violated: exceeds depth 64/);
 });
+
+test('an empty loop saves as code that builds and reads back empty', () => {
+  // A loop just inserted has no children. `(item) => ()` does not parse, so
+  // the body is written as `null`, and reading it back finds no children.
+  for (const loop of [
+    { id: 'n1', kind: 'map', head: '[].map((item) => (', children: [] },
+    { id: 'n1', kind: 'map', head: '[].map((item) => (', children: [], bare: true },
+  ] as const) {
+    const written = serializeNodes([parsePageNode(loop)]);
+    assert.ok(!/\(\s*\)\s*\)/.test(written), `no empty arrow body in ${written}`);
+    const parsed = parseTemplate(written);
+    assert.equal(parsed.clean, true, `${written} parses`);
+    const [read] = parsed.nodes;
+    assert.equal(read?.kind, 'map');
+    if (read?.kind !== 'map') {
+      return;
+    }
+    assert.deepEqual(read.children, [], `an empty loop reads back empty from ${written}`);
+  }
+});

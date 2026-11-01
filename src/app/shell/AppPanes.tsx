@@ -37,6 +37,7 @@ import {
 } from '../appPanels';
 import { holdsInlineText, commentAbove, trailOf } from '../model/pageGestures';
 import type { ShellView } from '../App';
+import { editLoopProperty, type LoopPropertyEdit } from '../state/loopPropertyEdit';
 
 export function CanvasPane({ app }: { readonly app: ShellView }) {
   const hoverNodeId = useLiveValue(app.hoverNode);
@@ -416,6 +417,7 @@ export function settingsValues(app: ShellView) {
     layouts: app.scan.layouts,
     currentLayoutName: app.currentLayoutName,
     schema: app.selectedSchema,
+    listProps: app.listProps,
     slotOptions: app.slotOptions,
     // Whether this component takes default slot content — the same
     // test used to decide what an insert or paste can go inside.
@@ -442,6 +444,25 @@ export function settingsValues(app: ShellView) {
 }
 
 // What the Settings tab's fields write, each to the selection.
+// A list setting's property, renamed or retitled as the Properties panel would.
+function loopPropertyEditor(app: ShellView) {
+  return async (key: string, edit: LoopPropertyEdit): Promise<string | undefined> => {
+    const file = app.editStack[app.editStack.length - 1]?.path || app.currentPage?.path;
+    if (file === undefined) {
+      return 'Open the component first.';
+    }
+    const saver = {
+      projectPath: app.project.path,
+      file,
+      flushSave: app.flushSave,
+      changePhase: app.propertySave.changePhase,
+      recordUndo: app.recordPropertyUndo,
+      completeSave: app.completePropertySave,
+    };
+    return editLoopProperty(saver, key, edit);
+  };
+}
+
 export function settingsHandlers(app: ShellView) {
   const { selectedId } = app;
   return {
@@ -480,8 +501,14 @@ export function settingsHandlers(app: ShellView) {
     },
     onOpenCode: app.openCodeWindow,
     onSetFrontmatter: app.setExtraFrontmatter,
-    onSetLoopSource: (target: LoopTarget, sanityClient: 'available' | 'unavailable'): LoopApplyResult =>
-      selectedId ? app.setLoopSource(selectedId, target, sanityClient) : { ok: false, message: 'Select the loop first.' },
+    onSetLoopSource: (
+      target: LoopTarget,
+      sanityClient: 'available' | 'unavailable',
+    ): LoopApplyResult =>
+      selectedId
+        ? app.setLoopSource(selectedId, target, sanityClient)
+        : { ok: false, message: 'Select the loop first.' },
+    onEditLoopProperty: loopPropertyEditor(app),
     onOpenSymbol: app.onOpenSymbol,
     onToggleElse: (want: boolean) => {
       if (selectedId) {

@@ -32,7 +32,10 @@ interface Occurrence {
 const SLACK = 1;
 
 const covers = (outer: Box, inner: Box): boolean =>
-  inner.x >= outer.x - SLACK && inner.y >= outer.y - SLACK && inner.x + inner.w <= outer.x + outer.w + SLACK && inner.y + inner.h <= outer.y + outer.h + SLACK;
+  inner.x >= outer.x - SLACK &&
+  inner.y >= outer.y - SLACK &&
+  inner.x + inner.w <= outer.x + outer.w + SLACK &&
+  inner.y + inner.h <= outer.y + outer.h + SLACK;
 
 /**
  * The boxes worth drawing, in the order they were reported — which is document
@@ -68,6 +71,43 @@ export function outlineBoxPath(path: string, nodeKind: string | undefined): stri
   return childPath;
 }
 
+/** The paths a loop's outline is measured from: each of its children. */
+export function loopChildPaths(path: string, childCount: number): readonly string[] {
+  assert(path.length > 0, 'loopChildPaths: path must not be empty');
+  assert(Number.isSafeInteger(childCount), 'loopChildPaths: a child count is a whole number');
+  assert(childCount >= 0, 'loopChildPaths: a child count is not negative');
+  // Bounded by the tree: a node never has more children than the page has nodes.
+  assert(childCount <= LIMITS.treeNodesMax, 'loopChildPaths: child count exceeds limit');
+  return Array.from({ length: Math.max(childCount, 1) }, (_, index) => `${path}.${index}`);
+}
+
+/**
+ * One box around every copy a loop renders. A loop is the whole run of its
+ * items, so its outline wraps them all, as a builder's collection list does,
+ * rather than the first item alone (which reads as that item selected).
+ */
+export function unionBox(boxes: readonly Box[]): Box | undefined {
+  assert(boxes.length <= LIMITS.treeNodesMax, 'unionBox: box count exceeds limit');
+  const sized = boxes.filter((box) => box.w > 0 && box.h > 0);
+  const [first] = sized;
+  if (first === undefined) {
+    return undefined;
+  }
+  let left = first.x;
+  let top = first.y;
+  let right = first.x + first.w;
+  let bottom = first.y + first.h;
+  for (const box of sized) {
+    left = Math.min(left, box.x);
+    top = Math.min(top, box.y);
+    right = Math.max(right, box.x + box.w);
+    bottom = Math.max(bottom, box.y + box.h);
+  }
+  assert(right >= left, 'unionBox: a union has width');
+  assert(bottom >= top, 'unionBox: a union has height');
+  return { x: left, y: top, w: right - left, h: bottom - top };
+}
+
 /**
  * Whether a hover is on the thing already outlined as selected — in which case
  * there is no second outline to draw.
@@ -81,7 +121,10 @@ export function outlineBoxPath(path: string, nodeKind: string | undefined): stri
  * Navigator hover and selection supply occurrence zero; this fallback still
  * handles a selection before a particular occurrence is known.
  */
-export function hoverIsSelection(hover: Occurrence | undefined, selection: Occurrence | undefined): boolean {
+export function hoverIsSelection(
+  hover: Occurrence | undefined,
+  selection: Occurrence | undefined,
+): boolean {
   if (!hover?.path || !selection?.path) {
     return false;
   }

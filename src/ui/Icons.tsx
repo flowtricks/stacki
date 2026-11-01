@@ -655,6 +655,27 @@ export const SearchIcon = (props: IconProps) => (
   </I>
 );
 
+// A list's filters: a funnel, as a builder's collection list settings draw them.
+export const FilterIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="M2.5 3h11l-4.25 5.25V13l-2.5-1.25V8.25L2.5 3Z" />
+  </I>
+);
+
+// A list's sort: an up-and-down arrow beside the lines it orders.
+export const SortIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="M4.5 3v10M2.5 5l2-2 2 2M2.5 11l2 2 2-2M9 4.5h4.5M9 8h4.5M9 11.5h4.5" />
+  </I>
+);
+
+// Disconnecting a setting from a property: a chain link broken in two.
+export const UnlinkIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="m7 4.5.9-.9a2.6 2.6 0 0 1 3.7 3.7l-.9.9M9 11.5l-.9.9a2.6 2.6 0 0 1-3.7-3.7l.9-.9M3 3l1.4 1.4M11.6 11.6 13 13M2 6.5h1.5M6.5 2v1.5M14 9.5h-1.5M9.5 14v-1.5" />
+  </I>
+);
+
 export const TerminalIcon = (props: IconProps) => (
   <I {...props}>
     <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" />

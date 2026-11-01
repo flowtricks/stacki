@@ -13,6 +13,9 @@ const POPUP_MIN = 120;
 const POPUP_PADDING_HEIGHT = 8;
 const OPTION_HEIGHT = 26;
 const SEARCH_HEIGHT = 36;
+// A searchable menu is never narrower than this (styles.css `.dd-searchable`),
+// so its position is worked out at this width, inside the window.
+const SEARCHABLE_WIDTH_MIN = 300;
 // The tallest a list grows before it scrolls: about a dozen options, so a long
 // list (time zones, locales) is a list to scroll, not a wall down the window.
 const MENU_HEIGHT_MAX = 320;
@@ -97,7 +100,10 @@ export default function Dropdown<T>(props: DropdownProps<T>) {
   const state = useDropdownSelection(props);
   const actions = useDropdownActions(props, state);
   const control = { ...state, ...actions };
-  const position = useDropdownPosition(state, { searchable: props.searchable ?? false, widthPxMin: props.menuWidthMin ?? 0 });
+  const position = useDropdownPosition(state, {
+    searchable: props.searchable ?? false,
+    widthPxMin: props.menuWidthMin ?? 0,
+  });
   useDropdownSound(state);
   useDropdownFocus(state, { searchable: props.searchable ?? false });
   useEffect(() => {
@@ -278,7 +284,10 @@ function commitDropdownOption<T>(
   triggerRef.current?.focus();
 }
 
-function useDropdownPosition<T>(state: Selection<T>, options: { readonly searchable: boolean; readonly widthPxMin: number }) {
+function useDropdownPosition<T>(
+  state: Selection<T>,
+  options: { readonly searchable: boolean; readonly widthPxMin: number },
+) {
   const [position, setPosition] = useState<PopupPosition | undefined>(undefined);
   const { open, triggerRef, visible } = state;
   const { searchable, widthPxMin } = options;
@@ -299,7 +308,8 @@ function useDropdownPosition<T>(state: Selection<T>, options: { readonly searcha
     const box = popupBox(rectangle, shown, window.innerHeight);
     // A menu wider than its trigger (a compact "Match all") grows to its
     // minimum and slides left as far as it must to stay inside the window.
-    const width = Math.min(Math.max(rectangle.width, widthPxMin), window.innerWidth - POPUP_EDGE * 2);
+    const least = searchable ? Math.max(widthPxMin, SEARCHABLE_WIDTH_MIN) : widthPxMin;
+    const width = Math.min(Math.max(rectangle.width, least), window.innerWidth - POPUP_EDGE * 2);
     const next = {
       left: Math.max(POPUP_EDGE, Math.min(rectangle.left, window.innerWidth - POPUP_EDGE - width)),
       width,
@@ -496,7 +506,9 @@ function DropdownRow<T>({
       <span className="dd-option-label">{option.label}</span>
       {option.description && <span className="dd-description">{option.description}</span>}
       {option.hint && <span className="dd-hint">{option.hint}</span>}
-      <span className="dd-check">{option.value === control.committed.current ? <CheckIcon size={11} /> : undefined}</span>
+      <span className="dd-check">
+        {option.value === control.committed.current ? <CheckIcon size={11} /> : undefined}
+      </span>
     </div>
   );
 }

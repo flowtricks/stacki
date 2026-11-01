@@ -846,7 +846,16 @@
     "src/features/props/loopSettingsData.ts",
     "src/editor/loopSortRead.ts",
     "src/features/props/LoopItems.tsx",
-    "src/editor/loopSelectionRead.ts"
+    "src/editor/loopSelectionRead.ts",
+    "src/editor/loopLiteral.ts",
+    "src/features/props/LoopLiteralItems.tsx",
+    "src/editor/loopProps.ts",
+    "src/editor/optionsBinding.ts",
+    "src/features/props/LoopBinding.tsx",
+    "src/editor/listProps.ts",
+    "src/features/props/ListPropField.tsx",
+    "src/editor/listItemsHelper.ts",
+    "src/features/props/LoopLinked.tsx"
   ],
   "adapters": [
     "electron/content/contentConfig.ts",

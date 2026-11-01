@@ -4,7 +4,11 @@ import type { ImportDecl, MapNode } from '../../../shared/page/pageNode';
 import type { LoopTarget } from '../../editor/loopQueryPlan';
 import type { LoopReadInput } from '../../editor/loopQueryRead';
 import type { TreeNode } from '../../editor/dataSuggest';
-import LoopSettings, { type LoopApplyResult, type LoopListOption } from './LoopSettings';
+import LoopSettings, {
+  type LoopApplyResult,
+  type LoopListOption,
+  type LoopSettingsProps,
+} from './LoopSettings';
 import type { RichContext } from './RichContent';
 import type { FieldPosition, SourceContext } from './propBindings';
 import { assert } from '../../../shared/core/assert';
@@ -13,7 +17,14 @@ import { HTML_TAGS } from '../../editor/elementSchemas';
 import { dataTree, listsOnly } from '../../editor/dataSuggest';
 import ExprInput from '../../ui/ExprInput';
 import { SourceEditButton } from './propBindings';
-import { elementIcon, astroAssetIcon, LayoutIcon, ElementComponentIcon, CodeIcon, TagIcon } from '../../ui/Icons';
+import {
+  elementIcon,
+  astroAssetIcon,
+  LayoutIcon,
+  ElementComponentIcon,
+  CodeIcon,
+  TagIcon,
+} from '../../ui/Icons';
 
 export interface Rename {
   readonly from: string;
@@ -29,7 +40,10 @@ interface MapEditorProps {
   /** The file's imports, which say where a loop's list comes from. */
   readonly imports?: readonly ImportDecl[] | undefined;
   readonly projectPath?: string | undefined;
-  readonly onSetLoopSource?: ((target: LoopTarget, sanityClient: 'available' | 'unavailable') => LoopApplyResult) | undefined;
+  readonly onSetLoopSource?:
+    | ((target: LoopTarget, sanityClient: 'available' | 'unavailable') => LoopApplyResult)
+    | undefined;
+  readonly onEditLoopProperty?: LoopSettingsProps['onEditProperty'];
 }
 export interface TagOption {
   readonly name: string;
@@ -96,24 +110,31 @@ export function MapEditor(props: MapEditorProps) {
       onSetText(value, node.bodyParts === undefined ? headRenames(node.head, value) : []);
     }
   };
-  return (
+  const code = (
+    <div className="props-field loop-settings-row" ref={codeRef}>
+      <label onClick={noLabelActivation}>
+        <span className="prop-label">
+          <CodeIcon size={12} className="prop-label-icon" />
+          Code
+        </span>
+      </label>
+      <ExprInput value={node.head} syncValue={node.head} onCommit={commitCode} />
+    </div>
+  );
+  // The Code field goes inside the settings, so their Details come after it.
+  return splittable ? (
+    <MapListSettings props={props} anchorRef={codeRef}>
+      {code}
+    </MapListSettings>
+  ) : (
     <>
-      {splittable ? (
-        <MapListSettings props={props} anchorRef={codeRef} />
-      ) : (
-        <div className="props-field" style={{ marginTop: 8, fontSize: 11, color: 'var(--text-faint)' }}>
-          Custom loop code — edit it below.
-        </div>
-      )}
-      <div className="props-field loop-settings-row" ref={codeRef}>
-        <label onClick={noLabelActivation}>
-          <span className="prop-label">
-            <CodeIcon size={12} className="prop-label-icon" />
-            Code
-          </span>
-        </label>
-        <ExprInput value={node.head} syncValue={node.head} onCommit={commitCode} />
+      <div
+        className="props-field"
+        style={{ marginTop: 8, fontSize: 11, color: 'var(--text-faint)' }}
+      >
+        Custom loop code — edit it below.
       </div>
+      {code}
     </>
   );
 }
@@ -169,7 +190,8 @@ function useTagModel({ tag, options }: TagFieldProps) {
   // frontmatter already imports).
   assert(tag.length <= LIMITS.tagNameCharsMax, 'TagField: tag limit exceeded');
   assert((options?.length ?? 0) <= LIMITS.scanEntriesMax, 'TagField: option limit exceeded');
-  const pool = options && options.length ? options : HTML_TAGS.map((name) => ({ name, kind: 'element' }));
+  const pool =
+    options && options.length ? options : HTML_TAGS.map((name) => ({ name, kind: 'element' }));
   const query = draft.trim();
   const ql = query.toLowerCase();
   const matches =
@@ -296,7 +318,20 @@ export function TagField(props: TagFieldProps) {
 }
 
 function TagFieldView({ state }: { readonly state: ReturnType<typeof useTagField> }) {
-  const { draft, setFocused, highlight, setHighlight, popupPos: popupPosition, wrapRef, inputRef, draftRef, updateDraft, matches, commit, onKeyDown } = state;
+  const {
+    draft,
+    setFocused,
+    highlight,
+    setHighlight,
+    popupPos: popupPosition,
+    wrapRef,
+    inputRef,
+    draftRef,
+    updateDraft,
+    matches,
+    commit,
+    onKeyDown,
+  } = state;
   return (
     <div className="props-field" ref={wrapRef}>
       <label onClick={noLabelActivation}>
@@ -353,14 +388,29 @@ function TagFieldView({ state }: { readonly state: ReturnType<typeof useTagField
 }
 
 // The list settings, when the app can write them.
-function MapListSettings({ props, anchorRef }: { readonly props: MapEditorProps; readonly anchorRef: React.RefObject<HTMLDivElement> }) {
-  const { node, dataContext, imports, projectPath, onSetLoopSource, bindContext, loopContext } = props;
+function MapListSettings({
+  props,
+  anchorRef,
+  children,
+}: {
+  readonly props: MapEditorProps;
+  readonly anchorRef: React.RefObject<HTMLDivElement>;
+  readonly children: React.ReactNode;
+}) {
+  const { node, dataContext, imports, projectPath, onSetLoopSource, bindContext, loopContext } =
+    props;
   const data = parseMapHead(node.head)?.data ?? '';
   const frontmatter = dataContext?.frontmatter ?? '';
-  const input = useMemo<Omit<LoopReadInput, 'fieldKind'>>(() => ({ frontmatter, imports: imports ?? [], data }), [frontmatter, imports, data]);
-  const lists = useMemo(() => pageLists(dataTree(bindContext || loopContext || {})), [bindContext, loopContext]);
+  const input = useMemo<Omit<LoopReadInput, 'fieldKind'>>(
+    () => ({ frontmatter, imports: imports ?? [], data }),
+    [frontmatter, imports, data],
+  );
+  const lists = useMemo(
+    () => pageLists(dataTree(bindContext || loopContext || {})),
+    [bindContext, loopContext],
+  );
   if (onSetLoopSource === undefined) {
-    return undefined;
+    return children;
   }
   return (
     <LoopSettings
@@ -369,8 +419,13 @@ function MapListSettings({ props, anchorRef }: { readonly props: MapEditorProps;
       filePath={dataContext?.filePath}
       lists={lists}
       onApply={onSetLoopSource}
-      sourceButton={(name) => <SourceEditButton name={name} dataContext={dataContext} anchorRef={anchorRef} />}
-    />
+      onEditProperty={props.onEditLoopProperty}
+      sourceButton={(name) => (
+        <SourceEditButton name={name} dataContext={dataContext} anchorRef={anchorRef} />
+      )}
+    >
+      {children}
+    </LoopSettings>
   );
 }
 
@@ -383,7 +438,11 @@ export function pageLists(tree: readonly TreeNode[]): readonly LoopListOption[] 
   // Children of a pickable node are pickable nodes too (listsOnly marks the
   // whole tree), but are typed as plain tree nodes; `pickable` is read as a key.
   const pending: TreeNode[] = [...listsOnly(tree)].reverse();
-  for (let count = 0; pending.length > 0 && out.length < PAGE_LISTS_MAX && count < LIMITS.treeNodesMax; count++) {
+  for (
+    let count = 0;
+    pending.length > 0 && out.length < PAGE_LISTS_MAX && count < LIMITS.treeNodesMax;
+    count++
+  ) {
     const node = pending.pop();
     if (node === undefined || node.section === 'collections' || node.query !== undefined) {
       continue;

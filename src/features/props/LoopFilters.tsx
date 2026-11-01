@@ -24,6 +24,8 @@ import {
 } from './loopSettingsModel';
 import { EditorRow, ListRow, SectionHeader, fieldIcon } from './LoopRows';
 import { useReferenceChoices } from './loopSettingsData';
+import { SettingDot, type BindingContext } from './LoopBinding';
+import { LinkedSetting } from './LoopLinked';
 // ---------------------------------------------------------------------------
 // Filters.
 // ---------------------------------------------------------------------------
@@ -34,13 +36,30 @@ export interface SectionProps {
   readonly onChange: (query: LoopQuery) => void;
 }
 
-export function FilterSection(
-  props: SectionProps & {
-    readonly catalog: LoopCatalog | undefined;
-    readonly projectPath: string | undefined;
-    readonly operatorSet: OperatorSet;
-  },
-) {
+type FilterSectionProps = SectionProps & {
+  readonly catalog: LoopCatalog | undefined;
+  readonly projectPath: string | undefined;
+  readonly operatorSet: OperatorSet;
+  readonly binding?: BindingContext | undefined;
+  /** The section's label, when it says more than its title (a page's own value). */
+  readonly label?: ReactNode;
+};
+
+/** Filters, or, once linked to a property, its purple bar with the filters as its default. */
+export function FilterSection(props: FilterSectionProps) {
+  const { binding } = props;
+  return binding?.settings.filter.kind === 'prop' ? (
+    <LinkedSetting
+      setting="filter"
+      binding={binding}
+      editor={<FilterEditor {...props} binding={undefined} />}
+    />
+  ) : (
+    <FilterEditor {...props} />
+  );
+}
+
+function FilterEditor(props: FilterSectionProps) {
   const { query, fields } = props;
   const [open, setOpen] = useState<number | 'new' | undefined>(undefined);
   const filterable = (fields ?? []).filter((field) => operatorsFor(field.kind).length > 0);
@@ -56,6 +75,8 @@ export function FilterSection(
     <div className="loop-settings-section">
       <SectionHeader
         title="Filters"
+        label={props.label}
+        dot={<SettingDot setting="filter" binding={props.binding} />}
         addable={!full && filterable.length > 0}
         extra={
           query.conditions.length > 1 ? (
@@ -83,8 +104,10 @@ export function FilterSection(
               fields={filterable}
               context={props}
               onCommit={(condition) => {
+                // Stays open on the filter just added: a first valid value
+                // (a switch's "is on") is a start, not the last word.
                 props.onChange({ ...query, conditions: [...query.conditions, condition] });
-                setOpen(undefined);
+                setOpen(query.conditions.length);
               }}
               onClose={() => setOpen(undefined)}
             />

@@ -242,6 +242,7 @@ const astroQuery = {
     { kind: 'test', field: 'live', operator: 'isFalse' },
   ],
   sorts: [
+    { field: 'live', direction: 'descending', order: 'boolean' },
     { field: 'date', direction: 'descending', order: 'date' },
     { field: 'title', direction: 'ascending', order: 'text' },
   ],
@@ -277,6 +278,21 @@ assert.ok(
 assert.ok(
   astroCode.includes("data['campus-name']"),
   'a field name that is not an identifier is indexed',
+);
+// A switch sorts off (false or unset) before on; descending puts the on ones first.
+assert.ok(
+  astroCode.includes('Number(b.data.live === true) - Number(a.data.live === true)'),
+  astroCode,
+);
+const switchFirst = new Function(
+  'a',
+  'b',
+  'return Number(b.live === true) - Number(a.live === true);',
+);
+assert.deepEqual(
+  [{ live: false }, { live: true }, {}].sort(switchFirst).map((item) => item.live),
+  [true, false, undefined],
+  'Is On First puts on first and keeps unset with off',
 );
 
 const sanityQuery = {
@@ -769,7 +785,10 @@ const optionsReading = readLoop({
   fieldKind: (_source, field) => (field === 'featured' ? 'boolean' : 'text'),
 });
 assert.equal(optionsReading.home.kind, 'options');
-assert.equal(optionsReading.home.filter.kind, 'prop');
+assert.equal(optionsReading.home.settings.filter.kind, 'prop');
+assert.equal(optionsReading.home.settings.filter.key, 'filters');
+assert.equal(optionsReading.home.settings.sort.kind, 'inline');
+assert.equal(optionsReading.home.settings.offset.kind, 'none');
 assert.deepEqual(optionsReading.query.conditions, [
   { kind: 'test', field: 'featured', operator: 'isTrue' },
 ]);
@@ -822,6 +841,421 @@ assert.equal(
   }).ok,
   false,
 );
+// Linking settings to component props. Binding moves a setting's value into a
+// new prop's default, so the component renders as before; the setting then
+// reads from and writes to that default, and unlinking puts it back inline.
+const bindPlan = (frontmatter, change) =>
+  planLoop({
+    model: { extraFrontmatter: frontmatter, imports: exportImports, nodes: [exportLoop] },
+    loop: exportLoop,
+    target: { kind: 'binding', change },
+    sanityClient: 'unavailable',
+  });
+const sortBound = bindPlan(optionsCode, { kind: 'bind', setting: 'sort', key: 'sort' });
+assert.equal(sortBound.ok, true, JSON.stringify(sortBound));
+const sortCode = sortBound.plan.extraFrontmatter;
+assert.ok(sortCode.includes('sort: propSort = [{"field": "name", "direction": "desc"}]'), sortCode);
+assert.ok(sortCode.includes('"sort": propSort'), sortCode);
+assert.equal(
+  sortBound.plan.loop,
+  exportLoop,
+  'linking leaves the loop and its children as they were',
+);
+const sortReading = readLoop({ frontmatter: sortCode, imports: exportImports, data: 'items1' });
+assert.equal(sortReading.home.settings.sort.kind, 'prop');
+assert.equal(sortReading.home.settings.sort.key, 'sort');
+assert.deepEqual(
+  sortReading.query.sorts,
+  optionsReading.query.sorts,
+  'a bound setting reads the same',
+);
+// Editing a bound setting writes the prop's default, not the options.
+const sortEdited = planLoop({
+  model: { extraFrontmatter: sortCode, imports: exportImports, nodes: [exportLoop] },
+  loop: exportLoop,
+  target: {
+    kind: 'query',
+    query: {
+      ...sortReading.query,
+      sorts: [{ field: 'name', direction: 'ascending', order: 'text' }],
+    },
+    fields: [],
+  },
+  sanityClient: 'unavailable',
+}).plan.extraFrontmatter;
+assert.ok(
+  sortEdited.includes('sort: propSort = [{"field": "name", "direction": "asc"}]'),
+  sortEdited,
+);
+assert.ok(sortEdited.includes('"sort": propSort'), sortEdited);
+// A setting not written yet is bound with the helper's own default, and added to the options.
+const skipBound = bindPlan(sortCode, { kind: 'bind', setting: 'offset', key: 'skip' });
+assert.ok(
+  skipBound.plan.extraFrontmatter.includes('skip: propSkip = 0'),
+  skipBound.plan.extraFrontmatter,
+);
+assert.ok(
+  skipBound.plan.extraFrontmatter.includes('"offset": propSkip})'),
+  skipBound.plan.extraFrontmatter,
+);
+assert.equal(
+  readLoop({ frontmatter: skipBound.plan.extraFrontmatter, imports: exportImports, data: 'items1' })
+    .home.settings.offset.kind,
+  'prop',
+);
+// A component with no props yet gets a destructure above the list.
+const noProps =
+  collectionsCode.replaceAll('nav-links', 'campus') +
+  'const items1 = queryItems(collections["campus"] || [], ({"limit": 6}), {});';
+const limitBound = bindPlan(noProps, { kind: 'bind', setting: 'limit', key: 'limit' }).plan
+  .extraFrontmatter;
+assert.ok(
+  limitBound.includes('const { limit: propLimit = 6 } = Astro.props;\nconst items1 = queryItems('),
+  limitBound,
+);
+assert.equal(
+  readLoop({ frontmatter: limitBound, imports: exportImports, data: 'items1' }).query.limit,
+  6,
+);
+// Unlinking puts the default back where the options name the prop.
+const unlinked = bindPlan(sortCode, { kind: 'unbind', setting: 'sort' }).plan.extraFrontmatter;
+assert.ok(unlinked.includes('"sort": [{"field": "name", "direction": "desc"}]'), unlinked);
+assert.equal(
+  readLoop({ frontmatter: unlinked, imports: exportImports, data: 'items1' }).home.settings.sort
+    .kind,
+  'inline',
+);
+// What cannot be done is said, not written.
+assert.match(
+  bindPlan(optionsCode, { kind: 'bind', setting: 'sort', key: 'filters' }).message,
+  /already has a filters property/,
+);
+assert.match(
+  bindPlan(optionsCode, { kind: 'bind', setting: 'sort', key: '2fast' }).message,
+  /starting with a letter/,
+);
+// A linked setting moved to a new property keeps its value: the new
+// property's default is the old one's.
+const moved = bindPlan(optionsCode, { kind: 'bind', setting: 'filter', key: 'campusFilters' }).plan
+  .extraFrontmatter;
+assert.ok(
+  moved.includes(
+    'campusFilters: propCampusFilters = {"filterFor": "ALL", "fields": [{"fieldPath": "featured"',
+  ),
+  moved,
+);
+assert.ok(moved.includes('"filter": propCampusFilters'), moved);
+// Connecting to a property the component has: only one whose default this
+// setting could read is offered, and its default becomes the value.
+const { connectableProps } = load('src/editor/optionsBinding.ts');
+const twoFilters = moved;
+assert.deepEqual(connectableProps(twoFilters, 'filter'), ['filters', 'campusFilters']);
+assert.deepEqual(connectableProps(twoFilters, 'sort'), []);
+assert.deepEqual(connectableProps(skipBound.plan.extraFrontmatter, 'offset'), ['skip']);
+const connected = bindPlan(twoFilters, { kind: 'connect', setting: 'filter', key: 'filters' }).plan
+  .extraFrontmatter;
+assert.ok(connected.includes('"filter": propFilters'), connected);
+assert.equal(
+  readLoop({ frontmatter: connected, imports: exportImports, data: 'items1' }).home.settings.filter
+    .key,
+  'filters',
+);
+assert.match(
+  bindPlan(twoFilters, { kind: 'connect', setting: 'sort', key: 'filters' }).message,
+  /can’t hold this list’s sort/,
+);
+// A property's tooltip is its doc comment in `interface Props`.
+const { propTooltip } = load('src/editor/loopProps.ts');
+assert.equal(
+  propTooltip(
+    'interface Props {\n  /** Filters\n   * for the list */\n  filters?: unknown;\n  bare?: number;\n}',
+    'filters',
+  ),
+  'Filters\nfor the list',
+);
+assert.equal(
+  propTooltip(
+    'interface Props {\n  /** Filters */\n  filters?: unknown;\n  bare?: number;\n}',
+    'bare',
+  ),
+  '',
+  'a comment belongs to the member under it',
+);
+assert.match(bindPlan(optionsCode, { kind: 'unbind', setting: 'sort' }).message, /not linked/);
+// A local name the frontmatter already binds is not reused.
+const clash = bindPlan('const propSort = 1;\n' + optionsCode, {
+  kind: 'bind',
+  setting: 'sort',
+  key: 'sort',
+}).plan.extraFrontmatter;
+assert.ok(clash.includes('sort: propSort2 = '), clash);
+
+// The props destructure and `interface Props` gain the new prop as text
+// edits: one entry per line stays so, one line stays one line, and a name the
+// component already has is refused before anything is written.
+const loopProps = load('src/editor/loopProps.ts');
+const newLimit = {
+  key: 'limit',
+  local: 'propLimit',
+  defaultCode: '3',
+  type: 'number',
+  description: 'Show',
+};
+const typed = loopProps.withProp(
+  'interface Props {\n  title?: string;\n}\nconst {\n  title = "x",\n} = Astro.props;\n',
+  newLimit,
+  0,
+);
+assert.equal(
+  typed,
+  'interface Props {\n  title?: string;\n  /** Show */\n  limit?: number;\n}\nconst {\n  title = "x",\n  limit: propLimit = 3,\n} = Astro.props;\n',
+);
+assert.equal(
+  loopProps.withProp('const { a } = Astro.props;', newLimit, 0),
+  'const { a, limit: propLimit = 3 } = Astro.props;',
+);
+assert.deepEqual(
+  loopProps
+    .readPropsDestructure('const { a, b: c = 1 } = Astro.props;')
+    .entries.map((entry) => `${entry.key}:${entry.local}`),
+  ['a:a', 'b:c'],
+);
+assert.throws(
+  () => loopProps.withProp('const { limit } = Astro.props;', newLimit, 0),
+  /not one the component has/,
+);
+assert.equal(loopProps.freeLocal('sort', new Set(['propSort', 'propSort2'])), 'propSort3');
+
+// A page using the component edits a list prop with the loop's editors: the
+// component says which props hold which setting, over which collection, and
+// a value a page passes reads and writes in the helper's data form.
+const { listPropsOf } = load('src/editor/listProps.ts');
+const optionsQueryModule = load('src/editor/optionsQuery.ts');
+const componentText =
+  "import { getCollection } from 'astro:content';\nimport { queryItems } from '@/lib/collection-query';\n" +
+  sortCode;
+const listProps = listPropsOf(componentText);
+assert.deepEqual([...listProps.keys()].sort(), ['filters', 'sort']);
+assert.equal(listProps.get('sort').setting, 'sort');
+assert.deepEqual(listProps.get('filters').source, { kind: 'astro', collection: 'campus' });
+assert.equal(listProps.get('sort').defaultCode, '[{"field": "name", "direction": "desc"}]');
+assert.equal(
+  listPropsOf(optionsCode).size,
+  0,
+  'without the getCollection import the list is not a collection’s',
+);
+const passed = optionsQueryModule.readFilterValue(
+  '{"filterFor": "ANY", "fields": [{"fieldPath": "featured", "operatorName": "eq", "value": "true"}]}',
+  () => 'boolean',
+);
+assert.deepEqual(passed, {
+  match: 'any',
+  conditions: [{ kind: 'test', field: 'featured', operator: 'isTrue' }],
+});
+assert.equal(
+  optionsQueryModule.readFilterValue('someVariable', () => 'text'),
+  undefined,
+  'code is not a filter value',
+);
+assert.equal(
+  optionsQueryModule.readFilterValue(optionsQueryModule.filterValueText(passed), () => 'boolean')
+    .conditions.length,
+  1,
+);
+const passedSort = optionsQueryModule.readSortValue(
+  '[{"field": "date", "direction": "desc"}]',
+  () => 'date',
+);
+assert.deepEqual(passedSort, [{ field: 'date', direction: 'descending', order: 'date' }]);
+assert.equal(
+  optionsQueryModule.sortValueText(passedSort),
+  '[{"field": "date", "direction": "desc"}]',
+);
+
+// A list Stacki wrote as code, in a component: linking a setting first
+// rewrites the list as data, read through the listItems helper written above
+// it, and then links the setting, as one plan. The helper is run here on
+// sample entries to check it gives the same items, in the same order, as the
+// code it replaces.
+const { LIST_ITEMS_HELPER } = load('src/editor/listItemsHelper.ts');
+const codeQuery = {
+  ...loopQuery.emptyQuery({ kind: 'astro', collection: 'blog' }),
+  conditions: [
+    { kind: 'test', field: 'featured', operator: 'isFalse' },
+    { kind: 'test', field: 'title', operator: 'contains', value: 'grace' },
+    { kind: 'test', field: 'date', operator: 'before', value: '2025-01-01' },
+    { kind: 'test', field: 'category', operator: 'is', value: { kind: 'reference', id: 'news' } },
+  ],
+  sorts: [{ field: 'date', direction: 'descending', order: 'date' }],
+  offset: 1,
+  limit: 2,
+};
+const codeFrontmatter = `const posts = ${loopQuery.astroQueryCode(codeQuery)}; // stacki:query`;
+const codeLoop = loop('posts.map((post) => (', [
+  { id: 'title', kind: 'expr', value: 'post.data.title' },
+]);
+const linkCode = (frontmatter, change) =>
+  planLoop({
+    model: { extraFrontmatter: frontmatter, imports: astroImports, nodes: [codeLoop] },
+    loop: codeLoop,
+    target: { kind: 'binding', change },
+    sanityClient: 'unavailable',
+  });
+const linkedCode = linkCode(codeFrontmatter, { kind: 'bind', setting: 'filter', key: 'filters' });
+assert.equal(linkedCode.ok, true, JSON.stringify(linkedCode));
+const linkedText = linkedCode.plan.extraFrontmatter;
+assert.ok(linkedText.startsWith(LIST_ITEMS_HELPER), 'the helper is written above the list');
+assert.ok(
+  linkedText.includes(
+    '\nconst { filters: propFilters = {"filterFor": "ALL", "fields": [{"fieldPath": "featured", "operatorName": "ne"',
+  ),
+  linkedText,
+);
+assert.ok(
+  linkedText.indexOf('const { filters') < linkedText.indexOf('const posts'),
+  'the prop is read before the list',
+);
+assert.ok(
+  linkedText.includes(
+    'const posts = listItems(await getCollection("blog"), {"filter": propFilters, "sort": [{"field": "date", "direction": "desc"}], "limit": 2, "offset": 1});',
+  ),
+  linkedText,
+);
+assert.equal(linkedCode.plan.loop.head, 'posts.map((post) => (', 'the loop reads the same name');
+assert.deepEqual(
+  linkedCode.plan.loop.children,
+  codeLoop.children,
+  'and its children are untouched',
+);
+const linkedReading = readLoop({
+  frontmatter: linkedText,
+  imports: astroImports,
+  data: 'posts',
+  fieldKind: (_source, path) =>
+    ({ featured: 'boolean', date: 'date', category: 'reference' })[path] ?? 'text',
+});
+assert.equal(linkedReading.home.settings.filter.kind, 'prop');
+assert.equal(linkedReading.query.limit, 2);
+assert.equal(linkedReading.query.offset, 1);
+assert.deepEqual(linkedReading.query.sorts, codeQuery.sorts);
+// A second setting links in place, and the helper is not written twice.
+const twice = linkCode(linkedText, { kind: 'bind', setting: 'sort', key: 'sort' }).plan
+  .extraFrontmatter;
+assert.equal(twice.split('const listItems = ').length, 2, 'one helper');
+assert.ok(twice.includes('"sort": propSort'), twice);
+// The helper and the code it replaces agree on sample entries.
+const entries = [
+  {
+    id: 'a',
+    data: {
+      title: 'Grace one',
+      featured: false,
+      date: new Date('2024-03-01'),
+      category: { id: 'news', collection: 'categories' },
+    },
+  },
+  {
+    id: 'b',
+    data: {
+      title: 'GRACE two',
+      date: new Date('2024-06-01'),
+      category: { id: 'news', collection: 'categories' },
+    },
+  },
+  {
+    id: 'c',
+    data: {
+      title: 'Grace three',
+      featured: true,
+      date: new Date('2024-07-01'),
+      category: { id: 'news', collection: 'categories' },
+    },
+  },
+  {
+    id: 'd',
+    data: {
+      title: 'Grace four',
+      featured: false,
+      date: new Date('2024-09-01'),
+      category: { id: 'news', collection: 'categories' },
+    },
+  },
+  {
+    id: 'e',
+    data: {
+      title: 'Grace five',
+      featured: false,
+      date: new Date('2025-02-01'),
+      category: { id: 'news', collection: 'categories' },
+    },
+  },
+  {
+    id: 'f',
+    data: {
+      title: 'Mercy',
+      featured: false,
+      date: new Date('2024-10-01'),
+      category: { id: 'news', collection: 'categories' },
+    },
+  },
+  {
+    id: 'g',
+    data: {
+      title: 'Grace six',
+      featured: false,
+      date: new Date('2024-01-01'),
+      category: { id: 'events', collection: 'categories' },
+    },
+  },
+  {
+    id: 'h',
+    data: { title: 'Grace seven', featured: false, date: new Date('2024-02-01'), category: 'news' },
+  },
+];
+const options = JSON.parse(
+  linkedText
+    .match(/listItems\(await getCollection\("blog"\), (\{.*\})\);/)[1]
+    .replace('propFilters', JSON.stringify(readDefault(linkedText))),
+);
+function readDefault(text) {
+  return JSON.parse(text.match(/propFilters = (\{.*?\}\]\})/)[1]);
+}
+const helperItems = new Function(
+  'items',
+  'options',
+  `${LIST_ITEMS_HELPER}\nreturn listItems(items, options);`,
+)(entries, options);
+const codeItems = new Function(
+  'getCollection',
+  `return (async () => ${loopQuery.astroQueryCode(codeQuery)})();`,
+);
+void codeItems(async (_name, filter) => (filter ? entries.filter(filter) : entries)).then(
+  (expected) => {
+    assert.deepEqual(
+      helperItems.map((entry) => entry.id),
+      expected.map((entry) => entry.id),
+      'the helper gives what the code gave',
+    );
+    assert.deepEqual(
+      expected.map((entry) => entry.id),
+      ['b', 'a'],
+      'newest first, one skipped, two shown',
+    );
+    console.log('code list to data: ok');
+  },
+);
+// What data cannot say is refused before anything is written.
+const shuffledCode = `const posts = ${loopQuery.astroQueryCode({ ...codeQuery, random: true })}; // stacki:query`;
+assert.match(
+  linkCode(shuffledCode, { kind: 'bind', setting: 'filter', key: 'filters' }).message,
+  /shuffled/,
+);
+const ownHelper = `const listItems = () => [];\n${codeFrontmatter}`;
+assert.match(
+  linkCode(ownHelper, { kind: 'bind', setting: 'filter', key: 'filters' }).message,
+  /already has its own listItems/,
+);
+
 // Switching an export's loop to another collection re-points `fields` to `data`.
 assert.equal(
   reboundCode('item0.fields.name', 'item0', { kind: 'astro', fields: new Set(['name']) }),
