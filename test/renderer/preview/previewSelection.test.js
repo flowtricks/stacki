@@ -46,8 +46,7 @@ function fixture(nextNodes = nodes) {
       shown = value;
     },
     shown: () => shown,
-    judge: (inspect = check, request = current, path = `${file}|0`) =>
-      judgeRememberedClick(request.token, request, path, origins, inspect, () => shown),
+    judge: (inspect = check, request = current, path = `${file}|0`) => judgeRememberedClick(request.token, request, path, origins, inspect, () => shown),
   };
 }
 

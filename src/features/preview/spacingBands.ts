@@ -77,10 +77,7 @@ export function spacingBands(
   // Margin lies outside the border box, padding inside it — the same four
   // strips either way, around a box that is either the element or the element
   // plus its margins.
-  const outer =
-    kind === 'margin'
-      ? { x: box.x - left, y: box.y - top, w: box.w + left + right, h: box.h + top + bottom }
-      : box;
+  const outer = kind === 'margin' ? { x: box.x - left, y: box.y - top, w: box.w + left + right, h: box.h + top + bottom } : box;
 
   // A corner belongs to the side strip, so the top and bottom stop short of any
   // side being drawn beside them.
@@ -104,12 +101,10 @@ export function spacingBands(
     },
   };
 
-  return SIDES.filter((side) => want.has(side) && bands[side].w > 0 && bands[side].h > 0).map(
-    (side) => ({
-      side,
-      ...bands[side],
-    }),
-  );
+  return SIDES.filter((side) => want.has(side) && bands[side].w > 0 && bands[side].h > 0).map((side) => ({
+    side,
+    ...bands[side],
+  }));
 }
 
 const LENGTH = /^\s*(-?(?:\d+\.?\d*|\.\d+))\s*(px|rem|em|vw|vh)?\s*(?:!important)?\s*$/i;
@@ -117,10 +112,7 @@ const LENGTH = /^\s*(-?(?:\d+\.?\d*|\.\d+))\s*(px|rem|em|vw|vh)?\s*(?:!important
 /** A value the panel is dragging, in pixels, or undefined when only the laid-out
  *  page can say: a percentage, a variable, a calc(). Units come from the page
  *  with its measurements: em is the element's own font size, rem the root's. */
-export function lengthToPx(
-  value: string,
-  units: Readonly<Record<string, number>> | undefined,
-): number | undefined {
+export function lengthToPx(value: string, units: Readonly<Record<string, number>> | undefined): number | undefined {
   const match = LENGTH.exec(value);
   if (!match) {
     return undefined;
@@ -147,11 +139,7 @@ export function lengthToPx(
  * than the page as it was last measured. A value that cannot be turned into
  * pixels here keeps its measurement.
  */
-export function withLiveSpacing(
-  spacing: Spacing | undefined,
-  kind: string,
-  live: Readonly<Record<string, string>> | undefined,
-): Spacing | undefined {
+export function withLiveSpacing(spacing: Spacing | undefined, kind: string, live: Readonly<Record<string, string>> | undefined): Spacing | undefined {
   if (!spacing || !live) {
     return spacing;
   }

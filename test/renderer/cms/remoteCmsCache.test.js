@@ -23,10 +23,7 @@ test('a kept value is shown while a refresh replaces it', async () => {
 test('a failed refresh keeps the last good value; a first failure is shown', async () => {
   const cache = createRemoteCache(4);
   await cache.load('a', async () => ok('kept'));
-  assert.deepEqual(
-    await cache.load('a', async () => ({ ok: false, message: 'offline' })),
-    ok('kept'),
-  );
+  assert.deepEqual(await cache.load('a', async () => ({ ok: false, message: 'offline' })), ok('kept'));
   const first = await cache.load('b', async () => {
     throw new Error('offline');
   });

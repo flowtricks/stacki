@@ -57,9 +57,7 @@ export function statedDefault(documentation: string | undefined): StatedDefault 
   if (!documentation) {
     return {};
   }
-  const stated =
-    documentation.match(/defaults?\s*(?:to|:)\s*\`([^\`]+)\`/i) ||
-    documentation.match(/defaults?\s*(?:to|:)\s*([^\`.,;]+)/i);
+  const stated = documentation.match(/defaults?\s*(?:to|:)\s*\`([^\`]+)\`/i) || documentation.match(/defaults?\s*(?:to|:)\s*([^\`.,;]+)/i);
   if (!stated) {
     return {};
   }
@@ -75,14 +73,9 @@ export function statedDefault(documentation: string | undefined): StatedDefault 
   // Explicit advice after "; use" starts a separate clause about an authored
   // choice, not another automatic fallback. Keep quoted values intact while
   // stopping there. Prose still needs joining words, having no values to count.
-  const clause =
-    (documentation.match(/defaults?\s*(?:to|:)\s*((?:`[^`]*`|(?!;\s*use\b)[^.])+)/i) || [])[1] ||
-    '';
+  const clause = (documentation.match(/defaults?\s*(?:to|:)\s*((?:`[^`]*`|(?!;\s*use\b)[^.])+)/i) || [])[1] || '';
   const named = clause.match(/`[^`]+`/g) || [];
-  const conditional =
-    named.length > 1 ||
-    (/\bor\b/i.test(clause) &&
-      /\b(?:for|when|if|on|while|unless|with|without|depending)\b/i.test(clause));
+  const conditional = named.length > 1 || (/\bor\b/i.test(clause) && /\b(?:for|when|if|on|while|unless|with|without|depending)\b/i.test(clause));
   if (conditional) {
     const hint = clause
       .replace(/`/g, '')
@@ -97,16 +90,8 @@ export function statedDefault(documentation: string | undefined): StatedDefault 
     // boolean prop being true.
     const rule =
       clause.match(
-        new RegExp(
-          '^\\s*`([^`]+)`.*?\\bor\\b\\s*`([^`]+)`\\s*(?:when|whi' +
-            'le|if)\\s+([A-Za-z_$][\\w$]*)\\s+(?:is|=|===)\\s*`?(' +
-            '[^`\\s.,]+)`?',
-          'i',
-        ),
-      ) ||
-      clause.match(
-        /^\s*`([^`]+)`.*?\bor\b\s*`([^`]+)`\s*(?:when|while|if)\s+([A-Za-z_$][\w$]*)\s*$/i,
-      );
+        new RegExp('^\\s*`([^`]+)`.*?\\bor\\b\\s*`([^`]+)`\\s*(?:when|whi' + 'le|if)\\s+([A-Za-z_$][\\w$]*)\\s+(?:is|=|===)\\s*`?(' + '[^`\\s.,]+)`?', 'i'),
+      ) || clause.match(/^\s*`([^`]+)`.*?\bor\b\s*`([^`]+)`\s*(?:when|while|if)\s+([A-Za-z_$][\w$]*)\s*$/i);
     if (rule) {
       return {
         hint,
@@ -163,25 +148,16 @@ export function numberRules(documentation: string | undefined): NumberRules {
     }
   });
   // Inclusive bounds first: they contain the words the exclusive ones use.
-  take(
-    new RegExp(
-      `(?:no more than|not more than|at most|maximum(?: of)?|up to)\\s+(${NUMBER_RE})`,
-      'i',
-    ),
-    (bound) => {
-      if (rules.max === undefined) {
-        rules.max = bound;
-      }
-    },
-  );
-  take(
-    new RegExp(`(?:no less than|not less than|at least|minimum(?: of)?)\\s+(${NUMBER_RE})`, 'i'),
-    (bound) => {
-      if (rules.min === undefined) {
-        rules.min = bound;
-      }
-    },
-  );
+  take(new RegExp(`(?:no more than|not more than|at most|maximum(?: of)?|up to)\\s+(${NUMBER_RE})`, 'i'), (bound) => {
+    if (rules.max === undefined) {
+      rules.max = bound;
+    }
+  });
+  take(new RegExp(`(?:no less than|not less than|at least|minimum(?: of)?)\\s+(${NUMBER_RE})`, 'i'), (bound) => {
+    if (rules.min === undefined) {
+      rules.min = bound;
+    }
+  });
   take(new RegExp(`(?:greater than|more than|above)\\s+(${NUMBER_RE})`, 'i'), (bound) => {
     if (rules.min !== undefined) {
       return;
@@ -229,8 +205,7 @@ export function normalizeType(typeText: string): NormalizedType {
   // BEFORE the primitive prefixes, or `number[]` reads as a plain number and
   // the field writes `widths="400"` where the component wants `widths={[400]}`.
   // A text field here produces a string, and the component does .map on it.
-  const arrayish =
-    /\[\s*\]\s*$/.test(typeText) || /^Array\s*</.test(typeText) || /^\[[\s\S]*\]$/.test(typeText);
+  const arrayish = /\[\s*\]\s*$/.test(typeText) || /^Array\s*</.test(typeText) || /^\[[\s\S]*\]$/.test(typeText);
   // A plain bag of attributes still edits as name/value rows — that reads far
   // better than a JS literal. Only when it can also be an ARRAY does it have
   // to become code, since rows cannot express one.

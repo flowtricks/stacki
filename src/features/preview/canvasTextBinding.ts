@@ -11,18 +11,12 @@ interface StringBinding {
 }
 const typescript = parser.configure({ dialect: 'ts' });
 
-export function canvasTextBinding(
-  source: string,
-  node: CanvasSourceNode,
-): StringBinding | undefined {
+export function canvasTextBinding(source: string, node: CanvasSourceNode): StringBinding | undefined {
   if (node.start === undefined || node.end === undefined) {
     return undefined;
   }
   const expression = source.slice(node.start + 1, node.end - 1).trim();
-  const direct = readString(
-    expression,
-    node.start + 1 + source.slice(node.start + 1, node.end - 1).indexOf(expression),
-  );
+  const direct = readString(expression, node.start + 1 + source.slice(node.start + 1, node.end - 1).indexOf(expression));
   if (direct) {
     return direct;
   }

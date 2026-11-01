@@ -4,16 +4,8 @@ import { usePreviewSource } from '../../../vendor/stacki/src/features/preview/us
 import { emptyOutlines, parseOutlines, type OutlineState } from './outlineState';
 import { receivePreviewKey } from './previewKeys';
 import { receiveStyleModifiers } from './styleModifiers';
-import {
-  receiveCanvasReply,
-  setCanvasFrame,
-  noteCanvasReady,
-} from '../../../vendor/stacki/src/editor/canvasQuery';
-import {
-  NO_TEXT_MARKS,
-  parsePreviewMessage,
-  type TextMarks,
-} from '../../../vendor/stacki/src/features/preview/previewMessages';
+import { receiveCanvasReply, setCanvasFrame, noteCanvasReady } from '../../../vendor/stacki/src/editor/canvasQuery';
+import { NO_TEXT_MARKS, parsePreviewMessage, type TextMarks } from '../../../vendor/stacki/src/features/preview/previewMessages';
 import type { GuideMetrics } from '../../../vendor/stacki/src/features/preview/guideModel';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { request, routeFor } from '../project/projectClient';
@@ -131,11 +123,7 @@ function usePreviewMessages(
       }, 32);
     };
     const receive = (event: MessageEvent) => {
-      if (
-        !target ||
-        event.origin !== target.origin ||
-        event.source !== frame.current?.contentWindow
-      ) {
+      if (!target || event.origin !== target.origin || event.source !== frame.current?.contentWindow) {
         return;
       }
       receiveMeasurements(event.data, { setOutlines, setGuide, setTextMarks });
@@ -172,11 +160,7 @@ function usePreviewMessages(
     };
   }, [target, frame, callbacks, setOutlines, setGuide, setTextMarks]);
 }
-function requestStructuralPreview(
-  event: Event | undefined,
-  frame: HTMLIFrameElement | null,
-  origin: string | undefined,
-): boolean {
+function requestStructuralPreview(event: Event | undefined, frame: HTMLIFrameElement | null, origin: string | undefined): boolean {
   if (!(event instanceof CustomEvent) || event.detail !== 'structure' || !origin) {
     return false;
   }
@@ -207,9 +191,7 @@ function receiveMeasurements(data: unknown, setters: MeasurementSetters) {
 }
 function messageOccurrence(data: Record<string, unknown>) {
   const value = data['occurrence'];
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value < 10_000
-    ? value
-    : 0;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value < 10_000 ? value : 0;
 }
 function receiveStudioSignals(data: unknown, patch: () => void) {
   receiveStyleModifiers(data);
@@ -230,11 +212,7 @@ function receiveStudioSignals(data: unknown, patch: () => void) {
     patch();
   }
 }
-function usePreviewTarget(
-  file: string,
-  enabled: boolean,
-  callbacks: React.MutableRefObject<{ report: (error: unknown) => void }>,
-) {
+function usePreviewTarget(file: string, enabled: boolean, callbacks: React.MutableRefObject<{ report: (error: unknown) => void }>) {
   const [target, setTarget] = useState<{ url: string; origin: string }>();
   const [revision, setRevision] = useState(0);
   const retry = useCallback(() => {
@@ -268,11 +246,7 @@ function usePreviewTarget(
   return { target, retry };
 }
 
-function postToFrame(
-  frame: HTMLIFrameElement | null,
-  origin: string | undefined,
-  message: unknown,
-) {
+function postToFrame(frame: HTMLIFrameElement | null, origin: string | undefined, message: unknown) {
   if (origin) {
     frame?.contentWindow?.postMessage(message, origin);
   }
@@ -290,14 +264,7 @@ export function parsePreviewTarget(value: unknown) {
 }
 
 function selectionID(data: unknown): string | undefined {
-  if (
-    data &&
-    typeof data === 'object' &&
-    'type' in data &&
-    data.type === 'studio:select' &&
-    'id' in data &&
-    typeof data.id === 'string'
-  ) {
+  if (data && typeof data === 'object' && 'type' in data && data.type === 'studio:select' && 'id' in data && typeof data.id === 'string') {
     return data.id;
   }
   return undefined;

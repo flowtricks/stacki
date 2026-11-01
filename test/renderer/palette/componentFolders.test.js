@@ -85,28 +85,15 @@ const toPosix = (filePath) => filePath.split(path.sep).join('/');
     isLayout: true,
   }));
 
-  const folderOf = (name) =>
-    components.concat(layouts).find((component) => component.name === name)?.folder;
+  const folderOf = (name) => components.concat(layouts).find((component) => component.name === name)?.folder;
 
   // --- the scan ------------------------------------------------------------------
-  check(
-    'every component is found, however deep',
-    components.length === 5,
-    String(components.length),
-  );
+  check('every component is found, however deep', components.length === 5, String(components.length));
   check('one at the root has no folder', folderOf('Card') === '', JSON.stringify(folderOf('Card')));
   check('one a folder down says so', folderOf('Fieldset') === 'Form', folderOf('Fieldset'));
   check('two down says both', folderOf('Input') === 'Form/Fields', folderOf('Input'));
-  check(
-    'three down says all three',
-    folderOf('Combobox') === 'Form/Fields/Advanced',
-    folderOf('Combobox'),
-  );
-  check(
-    'and a layout reads from src',
-    folderOf('Landing') === 'layouts/marketing',
-    folderOf('Landing'),
-  );
+  check('three down says all three', folderOf('Combobox') === 'Form/Fields/Advanced', folderOf('Combobox'));
+  check('and a layout reads from src', folderOf('Landing') === 'layouts/marketing', folderOf('Landing'));
 
   // --- the panel's grouping -------------------------------------------------------
   //
@@ -122,9 +109,7 @@ const toPosix = (filePath) => filePath.split(path.sep).join('/');
       }
       byFolder.get(key).push(component);
     }
-    return [...byFolder.entries()].sort(([left], [right]) =>
-      left === '' ? -1 : right === '' ? 1 : left.localeCompare(right),
-    );
+    return [...byFolder.entries()].sort(([left], [right]) => (left === '' ? -1 : right === '' ? 1 : left.localeCompare(right)));
   };
   const headings = groupsOf(components).map(([folder]) => folder);
   check('the root comes first', headings[0] === '', JSON.stringify(headings));
@@ -150,53 +135,17 @@ const toPosix = (filePath) => filePath.split(path.sep).join('/');
   const { rankInsertItems } = await import(`${pathToFileURL(out).href}?v=${Date.now()}`);
   const found = (query) => rankInsertItems(components, query).map((item) => item.name);
 
-  check(
-    'a component is found by its name',
-    found('combobox').join() === 'Combobox',
-    found('combobox').join(),
-  );
-  check(
-    'by the folder it is in',
-    found('advanced').join() === 'Combobox',
-    found('advanced').join(),
-  );
+  check('a component is found by its name', found('combobox').join() === 'Combobox', found('combobox').join());
+  check('by the folder it is in', found('advanced').join() === 'Combobox', found('advanced').join());
   // Still being typed, `fields` is a beginning — and Fieldset begins that way,
   // so it is offered. Finished, it is the folder and Fieldset is not in it.
-  check(
-    'a folder further up the path, while it is being typed',
-    found('fields').sort().join() === 'Combobox,Fieldset,Input',
-    found('fields').join(),
-  );
-  check(
-    'and once the word is finished, only what is in it',
-    found('fields ').sort().join() === 'Combobox,Input',
-    found('fields ').join(),
-  );
-  check(
-    'and by the top of it',
-    found('form').sort().join() === 'Combobox,Fieldset,Input,Row',
-    found('form').join(),
-  );
-  check(
-    'folder then name names one of them',
-    found('form input').join() === 'Input',
-    found('form input').join(),
-  );
-  check(
-    'and so does a folder inside a folder',
-    found('fields advanced').join() === 'Combobox',
-    found('fields advanced').join(),
-  );
-  check(
-    'every segment of the path can be said',
-    found('form fields advanced combobox').join() === 'Combobox',
-    found('form fields advanced combobox').join(),
-  );
-  check(
-    'a folder that is not on the path finds nothing',
-    found('layout input').length === 0,
-    found('layout input').join(),
-  );
+  check('a folder further up the path, while it is being typed', found('fields').sort().join() === 'Combobox,Fieldset,Input', found('fields').join());
+  check('and once the word is finished, only what is in it', found('fields ').sort().join() === 'Combobox,Input', found('fields ').join());
+  check('and by the top of it', found('form').sort().join() === 'Combobox,Fieldset,Input,Row', found('form').join());
+  check('folder then name names one of them', found('form input').join() === 'Input', found('form input').join());
+  check('and so does a folder inside a folder', found('fields advanced').join() === 'Combobox', found('fields advanced').join());
+  check('every segment of the path can be said', found('form fields advanced combobox').join() === 'Combobox', found('form fields advanced combobox').join());
+  check('a folder that is not on the path finds nothing', found('layout input').length === 0, found('layout input').join());
 
   // The panel and the palette ask the same question of the same list.
   const panel = fs.readFileSync(repoPath('src/features/palette/PalettePanel.tsx'), 'utf8');
@@ -206,18 +155,12 @@ const toPosix = (filePath) => filePath.split(path.sep).join('/');
     'the panel has its own idea of what matches',
   );
   const model = fs.readFileSync(repoPath('src/features/palette/paletteModel.ts'), 'utf8');
-  check(
-    'and still groups what comes back by folder',
-    /const folder = component\.folder;/.test(model),
-    'the grouping went with it',
-  );
+  check('and still groups what comes back by folder', /const folder = component\.folder;/.test(model), 'the grouping went with it');
 
   fs.rmSync(directory, { recursive: true, force: true });
 
   if (failures.length) {
-    console.error(
-      `\ncomponent-folders: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\ncomponent-folders: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

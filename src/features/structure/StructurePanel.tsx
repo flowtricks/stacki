@@ -1,13 +1,7 @@
 import { TreeDragRow, useTreeDragCleanup } from '../../ui/TreeDragDrop';
 import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type {
-  NavigatorNode,
-  StructurePageState,
-  StructureProjection,
-  DropLocation,
-  DropTarget,
-} from './structureModel';
+import type { NavigatorNode, StructurePageState, StructureProjection, DropLocation, DropTarget } from './structureModel';
 import type { StructureTreeContext } from './StructureTree';
 import type { ContextPosition } from './StructureContextMenu';
 import { ElementContextMenu } from './ElementContextMenu';
@@ -103,10 +97,8 @@ function MissingPage({ currentPage }: Pick<StructurePanelProps, 'currentPage'>) 
       <div className="props-empty">
         {injected ? (
           <>
-            <strong>{currentPage.route}</strong> comes from{' '}
-            {currentPage.from ? <code>{currentPage.from}</code> : 'an integration'}, not from this
-            project — it can be previewed here, but its markup lives in a dependency and isn’t
-            editable.
+            <strong>{currentPage.route}</strong> comes from {currentPage.from ? <code>{currentPage.from}</code> : 'an integration'}, not from this project — it
+            can be previewed here, but its markup lives in a dependency and isn’t editable.
           </>
         ) : (
           'Select a page to edit.'
@@ -132,11 +124,7 @@ function ParseErrorPage({
       </div>
       <div className="code-editor">
         <ErrorToast
-          message={
-            diagnostic
-              ? `${diagnostic.message}${diagnostic.near ? ` Near ${diagnostic.near}` : ''}`
-              : 'This page contains a syntax error.'
-          }
+          message={diagnostic ? `${diagnostic.message}${diagnostic.near ? ` Near ${diagnostic.near}` : ''}` : 'This page contains a syntax error.'}
           recovery={[{ label: 'Open code panel', run: onOpenCodePanel }]}
         />
         <div className="code-panel-editor">
@@ -159,12 +147,7 @@ function EditableStructurePanel(props: EditableProps) {
       <NavigatorHeader state={state} nodes={props.pageState.model.nodes} />
       <NavigatorBody props={props} state={state} treeContext={treeContext} />
       {state.contextMenu && (
-        <ElementContextMenu
-          {...props}
-          nodes={props.pageState.model.nodes}
-          position={state.contextMenu}
-          onClose={() => state.setContextMenu(undefined)}
-        />
+        <ElementContextMenu {...props} nodes={props.pageState.model.nodes} position={state.contextMenu} onClose={() => state.setContextMenu(undefined)} />
       )}
     </div>
   );
@@ -223,10 +206,7 @@ function useHeaderTooltip(): Pick<TreeState, 'tooltip' | 'showTooltip' | 'hideTo
   const showTooltip = useCallback((event: React.MouseEvent<HTMLButtonElement>): void => {
     const bounds = event.currentTarget.getBoundingClientRect();
     clearTimeout(timer.current);
-    timer.current = setTimeout(
-      () => setTooltip({ left: bounds.left + bounds.width / 2, top: bounds.bottom + 8 }),
-      500,
-    );
+    timer.current = setTimeout(() => setTooltip({ left: bounds.left + bounds.width / 2, top: bounds.bottom + 8 }), 500);
   }, []);
   useEffect(() => () => clearTimeout(timer.current), []);
   return { tooltip, showTooltip, hideTooltip };
@@ -265,10 +245,7 @@ function parseArrowKey(event: KeyboardEvent): ArrowKey | undefined {
     return undefined;
   }
   const target = event.target;
-  if (
-    target instanceof HTMLElement &&
-    (target.matches('input, textarea, select') || target.isContentEditable)
-  ) {
+  if (target instanceof HTMLElement && (target.matches('input, textarea, select') || target.isContentEditable)) {
     return undefined;
   }
   switch (event.key) {
@@ -307,10 +284,7 @@ function arrowTarget(
   return children[0];
 }
 
-function useSelectionExpansion(
-  props: EditableProps,
-  setToggled: React.Dispatch<React.SetStateAction<ReadonlyMap<string, boolean>>>,
-): void {
+function useSelectionExpansion(props: EditableProps, setToggled: React.Dispatch<React.SetStateAction<ReadonlyMap<string, boolean>>>): void {
   useEffect(() => {
     if (!props.selectedId || props.selectedId === 'frontmatter') {
       return;
@@ -323,10 +297,7 @@ function useSelectionExpansion(
   }, [props.pageState.model.nodes, props.selectedId, setToggled]);
 }
 
-function expandAncestors(
-  previous: ReadonlyMap<string, boolean>,
-  ancestors: readonly NavigatorNode[],
-): ReadonlyMap<string, boolean> {
+function expandAncestors(previous: ReadonlyMap<string, boolean>, ancestors: readonly NavigatorNode[]): ReadonlyMap<string, boolean> {
   const next = new Map(previous);
   let changed = false;
   for (const node of ancestors) {
@@ -338,11 +309,7 @@ function expandAncestors(
   return changed ? next : previous;
 }
 
-function useRevealRow(
-  bodyRef: React.RefObject<HTMLDivElement>,
-  revealTick: number,
-  selectedId: string | undefined,
-): void {
+function useRevealRow(bodyRef: React.RefObject<HTMLDivElement>, revealTick: number, selectedId: string | undefined): void {
   const lastReveal = useRef(revealTick);
   useEffect(() => {
     if (revealTick === lastReveal.current) {
@@ -367,8 +334,7 @@ function revealRow(bodyElement: HTMLDivElement | undefined, selectedId: string):
   if (rowBounds.top >= bodyBounds.top && rowBounds.bottom <= bodyBounds.bottom) {
     return;
   }
-  bodyElement.scrollTop +=
-    rowBounds.top - bodyBounds.top - (bodyBounds.height - rowBounds.height) / 2;
+  bodyElement.scrollTop += rowBounds.top - bodyBounds.top - (bodyBounds.height - rowBounds.height) / 2;
 }
 
 function treeContextOf(props: EditableProps, state: TreeState): StructureTreeContext {
@@ -398,9 +364,7 @@ function treeContextOf(props: EditableProps, state: TreeState): StructureTreeCon
     ...(props.onOpenComponent === undefined ? {} : { onOpenComponent: props.onOpenComponent }),
     ...(props.onOpenCode === undefined ? {} : { onOpenCode: props.onOpenCode }),
     toggleCollapse: (node) => {
-      state.setToggled((previous) =>
-        new Map(previous).set(node.id, !collapsedState(node, previous)),
-      );
+      state.setToggled((previous) => new Map(previous).set(node.id, !collapsedState(node, previous)));
     },
     openContextMenu: (left, top, nodeId) => {
       if (!canEditNode(props, nodeId)) {
@@ -413,18 +377,10 @@ function treeContextOf(props: EditableProps, state: TreeState): StructureTreeCon
 }
 
 function isDndPayload(event: React.DragEvent<HTMLElement>): boolean {
-  return (
-    event.dataTransfer.types.includes('avb/component') ||
-    event.dataTransfer.types.includes('avb/node')
-  );
+  return event.dataTransfer.types.includes('avb/component') || event.dataTransfer.types.includes('avb/node');
 }
 
-function dropOnTree(
-  event: React.DragEvent<HTMLElement>,
-  target: DropLocation,
-  props: EditableProps,
-  state: TreeState,
-): void {
+function dropOnTree(event: React.DragEvent<HTMLElement>, target: DropLocation, props: EditableProps, state: TreeState): void {
   event.preventDefault();
   event.stopPropagation();
   state.setDropTarget(undefined);
@@ -452,13 +408,7 @@ function dropOnTree(
   }
 }
 
-function NavigatorHeader({
-  state,
-  nodes,
-}: {
-  readonly state: TreeState;
-  readonly nodes: readonly NavigatorNode[];
-}) {
+function NavigatorHeader({ state, nodes }: { readonly state: TreeState; readonly nodes: readonly NavigatorNode[] }) {
   const toggleAll = (): void => {
     state.setToggled(collapseMap(nodes, { collapsed: state.allExpanded }));
     state.setAllExpanded((expanded) => !expanded);
@@ -477,11 +427,7 @@ function NavigatorHeader({
             toggleAll();
           }}
         >
-          {state.allExpanded ? (
-            <CollapseVerticalIcon size={14} />
-          ) : (
-            <ExpandVerticalIcon size={14} />
-          )}
+          {state.allExpanded ? <CollapseVerticalIcon size={14} /> : <ExpandVerticalIcon size={14} />}
         </button>
       </div>
       {state.tooltip && (
@@ -548,18 +494,9 @@ function FrontmatterRow({ props }: { readonly props: EditableProps }) {
   );
 }
 
-function EmptyDropTarget({
-  props,
-  state,
-}: {
-  readonly props: EditableProps;
-  readonly state: TreeState;
-}) {
+function EmptyDropTarget({ props, state }: { readonly props: EditableProps; readonly state: TreeState }) {
   const location = { parentId: undefined, index: 0 };
-  const active =
-    state.dropTarget?.kind === 'gap' &&
-    state.dropTarget.parentId === undefined &&
-    state.dropTarget.index === 0;
+  const active = state.dropTarget?.kind === 'gap' && state.dropTarget.parentId === undefined && state.dropTarget.index === 0;
   return (
     <TreeDragRow
       className={`drop-zone-empty ${active ? 'over' : ''}`}

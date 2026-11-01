@@ -44,14 +44,7 @@ export function mergeConflictSnapshot(parts: readonly WireConflictPart[]): strin
       parts.map((part) =>
         part.kind === 'same'
           ? ['same', part.text]
-          : [
-              'clash',
-              part.ours,
-              part.theirs,
-              part.changedBy,
-              part.merged === undefined ? 'uncombined' : 'combined',
-              part.merged ?? '',
-            ],
+          : ['clash', part.ours, part.theirs, part.changedBy, part.merged === undefined ? 'uncombined' : 'combined', part.merged ?? ''],
       ),
     ),
   );

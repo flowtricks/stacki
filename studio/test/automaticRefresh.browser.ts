@@ -10,8 +10,7 @@ import { parseReport } from '../src/features/storage/cleanupTypes';
 const workspace = process.env['STUDIO_WORKSPACE'];
 assert.ok(workspace, 'STUDIO_WORKSPACE must name the running disposable test draft');
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -28,21 +27,14 @@ try {
   await page.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
   await page.getByRole('button', { name: 'Pages', exact: true }).click();
   assert.equal(await page.getByRole('button', { name: /refresh|rescan|reload/i }).count(), 0);
-  await writeFile(
-    path.join(workspace, markdown),
-    '---\ntitle: Automatic update\n---\n# New page\n',
-  );
+  await writeFile(path.join(workspace, markdown), '---\ntitle: Automatic update\n---\n# New page\n');
   await page.locator(`[data-file="${markdown}"]`).waitFor();
   await rm(path.join(workspace, markdown));
   await page.locator(`[data-file="${markdown}"]`).waitFor({ state: 'detached' });
 
   await page.getByRole('button', { name: 'Assets', exact: true }).click();
   await mkdir(path.join(workspace, 'src/assets'), { recursive: true });
-  await writeFile(
-    path.join(workspace, asset),
-    '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">' +
-      '<rect width="10" height="10"/></svg>',
-  );
+  await writeFile(path.join(workspace, asset), '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">' + '<rect width="10" height="10"/></svg>');
   await page
     .locator('.asset-name')
     .filter({ hasText: `${suffix}.svg` })
@@ -74,15 +66,9 @@ async function checkStorageUpdates(page: Page, suffix: string): Promise<void> {
     .click();
   assert.equal(await page.getByRole('button', { name: /refresh/i }).count(), 0);
   try {
-    const upload = await page.request.post(
-      `${origin}/studio/api/upload?file=${encodeURIComponent(file)}`,
-      {
-        data: Buffer.from(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=',
-          'base64',
-        ),
-      },
-    );
+    const upload = await page.request.post(`${origin}/studio/api/upload?file=${encodeURIComponent(file)}`, {
+      data: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=', 'base64'),
+    });
     assert.equal(upload.status(), 201);
     const candidate = page.locator('.asset-name').filter({ hasText: `${suffix}.png` });
     await candidate.waitFor();

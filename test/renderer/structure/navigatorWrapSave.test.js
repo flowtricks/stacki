@@ -37,19 +37,13 @@ test('navigator wrappers save and undo through the document engine', async (cont
   context.after(app.unmount);
   const disk = () => fs.readFileSync(file, 'utf8');
   await gesture(app, () => __panels.StructurePanel.onWrapNode(nodeAt([0, 0]).id, 'div'));
-  assert.equal(
-    disk(),
-    source.replace('<section', '<div>\n<section').replace('</section>', '</section>\n</div>'),
-  );
+  assert.equal(disk(), source.replace('<section', '<div>\n<section').replace('</section>', '</section>\n</div>'));
   assert.equal(nodeAt([0, 0]).name, 'div');
   assert.ok(nodeAt([0, 0]).children.some((node) => node.name === 'section'));
   await undo(app);
   assert.equal(disk(), source);
   await gesture(app, () => __panels.StructurePanel.onWrapNode(nodeAt([0, 0]).id, 'a'));
-  assert.equal(
-    disk(),
-    source.replace('<section', '<a>\n<section').replace('</section>', '</section>\n</a>'),
-  );
+  assert.equal(disk(), source.replace('<section', '<a>\n<section').replace('</section>', '</section>\n</a>'));
   await undo(app);
   assert.equal(disk(), source);
   // Locate the component by kind because parser whitespace occupies sibling slots.
@@ -72,10 +66,7 @@ test('navigator wrappers save and undo through the document engine', async (cont
   assert.ok(menu, 'the canvas opens the navigator action menu');
   assert.equal(document.activeElement, menu, 'no action is initially focused');
   assert.equal(__panels.StructurePanel.selectedId, nodeAt([0, 0]).id);
-  const item = (label) =>
-    [...document.querySelectorAll('[role="menuitem"]')].find(
-      (entry) => entry.firstElementChild?.textContent === label,
-    );
+  const item = (label) => [...document.querySelectorAll('[role="menuitem"]')].find((entry) => entry.firstElementChild?.textContent === label);
   await app.act(() => item('Wrap in').click());
   await gesture(app, () => item('div').click());
   assert.equal(nodeAt([0, 0]).name, 'div');

@@ -1,16 +1,7 @@
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import type { Data, Parser } from '../../../shared/core/boundary';
 import type { Result } from '../../../shared/core/result';
-import {
-  boolean,
-  count,
-  data,
-  list,
-  optional,
-  pathText,
-  record,
-  text,
-} from '../../../shared/core/boundary';
+import { boolean, count, data, list, optional, pathText, record, text } from '../../../shared/core/boundary';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import { cleanError } from '../../lib/cleanError';
 
@@ -133,10 +124,7 @@ function parseLoader(input: unknown): NonNullable<CmsPanelContentCollection['loa
   };
 }
 
-function parseUnavailableContent(
-  value: Readonly<Record<string, unknown>>,
-  collectionCount: number,
-): void {
+function parseUnavailableContent(value: Readonly<Record<string, unknown>>, collectionCount: number): void {
   if (collectionCount !== 0) {
     throw new Error('Content collections: missing covered paths');
   }
@@ -147,17 +135,11 @@ function parseUnavailableContent(
   }
 }
 
-function withOptionalConfigPath(
-  value: Omit<CmsPanelContent, 'configPath'>,
-  configPath: string | undefined,
-): CmsPanelContent {
+function withOptionalConfigPath(value: Omit<CmsPanelContent, 'configPath'>, configPath: string | undefined): CmsPanelContent {
   return configPath === undefined ? value : { ...value, configPath };
 }
 
-async function request<Value>(
-  parse: Parser<Value>,
-  invoke: () => Promise<unknown>,
-): Promise<Result<Value, string>> {
+async function request<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<Result<Value, string>> {
   let response: unknown;
   try {
     response = await invoke();

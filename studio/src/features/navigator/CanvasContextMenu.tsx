@@ -22,8 +22,7 @@ export function CanvasContextMenu({
   if (!position || !model.editable) {
     return undefined;
   }
-  const nodeId =
-    position.path === '0' && nodes[0]?.id === 'layout' ? 'layout' : 'n' + position.path;
+  const nodeId = position.path === '0' && nodes[0]?.id === 'layout' ? 'layout' : 'n' + position.path;
   if (model.selected !== nodeId) {
     return undefined;
   }

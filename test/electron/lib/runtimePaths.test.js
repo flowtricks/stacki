@@ -7,11 +7,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const {
-  RUNTIME_PATHS,
-  contentWorkerPath,
-  resourcePath,
-} = require('#dist/electron/lib/runtimePaths.js');
+const { RUNTIME_PATHS, contentWorkerPath, resourcePath } = require('#dist/electron/lib/runtimePaths.js');
 
 test('each runtime path names a file the build produced', () => {
   for (const [name, file] of Object.entries(RUNTIME_PATHS)) {

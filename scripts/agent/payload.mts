@@ -24,9 +24,7 @@ export interface HookPayload {
   readonly paths: readonly string[];
 }
 
-export type ParseResult =
-  | { readonly ok: true; readonly value: HookPayload }
-  | { readonly ok: false; readonly error: string };
+export type ParseResult = { readonly ok: true; readonly value: HookPayload } | { readonly ok: false; readonly error: string };
 
 const EVENT_NAMES = {
   'pre-tool': 'PreToolUse',
@@ -60,9 +58,7 @@ export function parseHookPayload(raw: string, event: keyof typeof EVENT_NAMES): 
   }
   const toolInput: unknown = Reflect.get(input, 'tool_input');
   const command = field(toolInput, 'command');
-  const paths = PATH_FIELDS.map((name) => field(toolInput, name)).filter(
-    (value): value is string => value !== undefined,
-  );
+  const paths = PATH_FIELDS.map((name) => field(toolInput, name)).filter((value): value is string => value !== undefined);
   return {
     ok: true,
     value: {

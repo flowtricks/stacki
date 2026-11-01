@@ -15,10 +15,7 @@ export interface PropertyConsumer {
   readonly source: string;
   readonly names: ReadonlySet<string>;
 }
-export function readPropertyConsumers(location: {
-  readonly projectPath: string;
-  readonly file: string;
-}): Result<readonly PropertyConsumer[]> {
+export function readPropertyConsumers(location: { readonly projectPath: string; readonly file: string }): Result<readonly PropertyConsumer[]> {
   const files = projectSources(location.projectPath);
   if (!files.ok) {
     return files;
@@ -67,26 +64,16 @@ export function filesystemError(error: unknown): Result<never> {
   });
 }
 
-function readConsumerNames(
-  source: string,
-  file: string,
-  target: string,
-  aliases: readonly Alias[],
-): Result<ReadonlySet<string>> {
+function readConsumerNames(source: string, file: string, target: string, aliases: readonly Alias[]): Result<ReadonlySet<string>> {
   const names = new Set(
     importsOf(source, file, aliases)
-      .filter((entry) =>
-        [...entry.candidates].some((candidate) => sameFilesystemPath(candidate, target)),
-      )
+      .filter((entry) => [...entry.candidates].some((candidate) => sameFilesystemPath(candidate, target)))
       .flatMap((entry) => entry.names),
   );
   const syntax = file.endsWith('.astro')
     ? readPropertySyntax(source).syntax
     : ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const resolves = (specifier: string): boolean =>
-    resolveSpec(specifier, file, aliases).some((candidate) =>
-      sameFilesystemPath(candidate, target),
-    );
+  const resolves = (specifier: string): boolean => resolveSpec(specifier, file, aliases).some((candidate) => sameFilesystemPath(candidate, target));
   for (const statement of syntax.statements) {
     if (
       ts.isExportDeclaration(statement) &&
@@ -142,8 +129,7 @@ function projectSources(projectPath: string): Result<readonly string[]> {
       if (entry.isSymbolicLink()) {
         return err({
           code: 'symlink',
-          message:
-            'Project sources contain a symbolic link. Resolve it before a project-wide rename.',
+          message: 'Project sources contain a symbolic link. Resolve it before a project-wide rename.',
         });
       }
       const full = path.join(directory, entry.name);

@@ -17,8 +17,7 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     stdin: {
       contents: [
         `export {default as Controls} from ${sourceSpecifier('src/features/git/GitChip.tsx')};`,
-        `export {default as Panel} from ` +
-          `${sourceSpecifier('src/features/history/HistoryPanel.tsx')};`,
+        `export {default as Panel} from ` + `${sourceSpecifier('src/features/history/HistoryPanel.tsx')};`,
         `export {ConfirmHost} from ${sourceSpecifier('src/ui/ConfirmDialog.tsx')};`,
       ].join('\n'),
       resolveDir: repoPath('src'),
@@ -150,27 +149,18 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
       ),
     );
   const click = (element) => act(async () => element.click());
-  const button = (label) =>
-    Array.from(document.querySelectorAll('button')).find(
-      (element) => element.textContent.trim() === label,
-    );
+  const button = (label) => Array.from(document.querySelectorAll('button')).find((element) => element.textContent.trim() === label);
   const fill = async (selector, value) =>
     act(async () => {
       const input = document.querySelector(selector);
-      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(
-        input,
-        value,
-      );
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, value);
       input.dispatchEvent(new window.Event('input', { bubbles: true }));
     });
   const checkouts = () => requests.filter(([kind]) => kind === 'checkout');
   try {
     await render();
     assert.equal(document.querySelector('h2').textContent, 'Git');
-    assert.equal(
-      document.querySelector('.history-body').firstElementChild.className,
-      'git-panel-controls',
-    );
+    assert.equal(document.querySelector('.history-body').firstElementChild.className, 'git-panel-controls');
     assert.equal(document.querySelector('.git-chip') === null, true);
     assert.equal(document.querySelector('.dropdown') === null, true);
     assert.equal(document.querySelector('[aria-label="main, current branch"]').disabled, true);
@@ -207,13 +197,7 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     await click(button('Pull from GitHub'));
     assert.deepEqual(
       requests.slice(pullStart).filter(([kind]) => kind !== 'log'),
-      [
-        ['save'],
-        ['pull', { projectPath: '/project', branch: 'main' }],
-        ['toast', 'Pulled changes from GitHub', 'success'],
-        ['refresh'],
-        ['reload'],
-      ],
+      [['save'], ['pull', { projectPath: '/project', branch: 'main' }], ['toast', 'Pulled changes from GitHub', 'success'], ['refresh'], ['reload']],
     );
     pullReply = async () => ({ ok: true, into: 'main', changed: false });
     await click(button('Pull from GitHub'));
@@ -265,9 +249,7 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
       throw new Error('Network unavailable');
     };
     await click(button('Pull from GitHub'));
-    assert.ok(
-      requests.some(([kind, text]) => kind === 'toast' && /Network unavailable/.test(text)),
-    );
+    assert.ok(requests.some(([kind, text]) => kind === 'toast' && /Network unavailable/.test(text)));
     assert.equal(button('Pull from GitHub').disabled, false);
     await act(async () => {
       const select = document.querySelector('[aria-label="Filter commits by branch"]');
@@ -292,9 +274,7 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
       false,
     );
     await click(document.querySelector('[title="Delete feature"]'));
-    await act(async () =>
-      document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
-    );
+    await act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     assert.equal(document.querySelector('[role="alertdialog"]') === null, true);
     assert.equal(
       requests.some(([kind]) => kind === 'delete'),
@@ -325,14 +305,9 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     assert.equal(button('Create').disabled, true);
     await fill('[aria-label="New branch name"]', 'main');
     assert.equal(button('Create').disabled, true);
-    assert.match(
-      document.querySelector('.git-branch-editor .git-hint').textContent,
-      /already exists/,
-    );
+    assert.match(document.querySelector('.git-branch-editor .git-hint').textContent, /already exists/);
     await act(async () => {
-      document
-        .querySelector('.git-branch-editor form')
-        .dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+      document.querySelector('.git-branch-editor form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     });
     assert.equal(checkouts().length, 0);
     await click(document.querySelector('[aria-label="Close new branch"]'));
@@ -376,10 +351,7 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     assert.match(requests.filter(([kind]) => kind === 'toast').at(-1)[1], /waiting on main/);
     info = { ...info, branch: 'feature', head: 'b'.repeat(40) };
     await render();
-    assert.equal(
-      document.querySelector('.git-commit-destination').textContent,
-      'Commit to feature',
-    );
+    assert.equal(document.querySelector('.git-commit-destination').textContent, 'Commit to feature');
     assert.ok(document.querySelector('.git-commit-destination .history-graph-color-1'));
     assert.equal(document.querySelector('[aria-label="feature, current branch"]').disabled, true);
     assert.equal(document.querySelector('.history-branch-row.active .row-action') === null, true);
@@ -412,11 +384,7 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     await click(button('Done'));
     assert.equal(document.querySelector('dialog') === null, true);
     await click(document.querySelector('[aria-label="Choose what to commit"]'));
-    await act(async () =>
-      document
-        .querySelector('dialog')
-        .dispatchEvent(new window.Event('cancel', { cancelable: true })),
-    );
+    await act(async () => document.querySelector('dialog').dispatchEvent(new window.Event('cancel', { cancelable: true })));
     assert.equal(document.querySelector('dialog') === null, true);
     commitError = 'Commit failed';
     await click(button('Commit 1 file'));
@@ -456,14 +424,7 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
   } finally {
     await act(async () => root.unmount());
     dom.window.close();
-    for (const key of [
-      'window',
-      'document',
-      'HTMLElement',
-      'Element',
-      'Node',
-      'IS_REACT_ACT_ENVIRONMENT',
-    ]) {
+    for (const key of ['window', 'document', 'HTMLElement', 'Element', 'Node', 'IS_REACT_ACT_ENVIRONMENT']) {
       delete global[key];
     }
   }

@@ -25,9 +25,7 @@ try {
     assert.ok(offset > 0, 'Initial loads retain their exact server baseline');
     assert.equal(refresh, first.slice(0, offset), 'Refreshes contain the same complete HTML once');
     assert.ok(refresh.length < first.length / 2, 'Refreshes avoid the escaped duplicate');
-    console.log(
-      JSON.stringify({ attempt, initialBytes: first.length, refreshBytes: refresh.length }),
-    );
+    console.log(JSON.stringify({ attempt, initialBytes: first.length, refreshBytes: refresh.length }));
   }
 } finally {
   await fixture.stop();

@@ -122,13 +122,7 @@ export function LivePropField({
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
       />
-      <VariableConnect
-        code
-        ariaLabel={`Connect ${label} to a variable`}
-        disabled={busy}
-        prop={prop}
-        onPick={(binding) => setProp(prop, binding, false)}
-      >
+      <VariableConnect code ariaLabel={`Connect ${label} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
         <input
           {...field.scrub.input}
           className="u-input embed-editor_size-input"
@@ -167,9 +161,7 @@ export function useLivePropEditing({
 }) {
   const external = display.present ? withImportant(display) : '';
   const { draft, setDraft, focused, cleared } = useFieldDraft(external, { busy });
-  const { cancelLive, liveNow, scheduleLive } = useDebouncedLive((value, important) =>
-    liveSetProp(prop, value, important),
-  );
+  const { cancelLive, liveNow, scheduleLive } = useDebouncedLive((value, important) => liveSetProp(prop, value, important));
   const commit = (text = draft) => {
     const trimmed = text.trim();
     if (!trimmed) {
@@ -220,8 +212,7 @@ export function useLivePropEditing({
 
 // ─────────────────── Shared field plumbing ───────────────────
 
-export const withImportant = ({ value, important }: { value: string; important: boolean }) =>
-  important ? `${value} !important` : value;
+export const withImportant = ({ value, important }: { value: string; important: boolean }) => (important ? `${value} !important` : value);
 
 // A draft that follows `value` while the field is not focused, so an edit made
 // elsewhere shows up without overwriting what someone is typing.

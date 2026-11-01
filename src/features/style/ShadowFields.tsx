@@ -227,8 +227,7 @@ export function ShadowLength({
   }, [value]);
   // A bare typed number gets the current/default unit ("150" → "150%", "5" → "5px");
   // a value that already carries a unit (em/rem/%/var()/…) passes through untouched.
-  const withUnit = (text: string): string =>
-    /^-?[\d.]+$/.test(text.trim()) ? `${text.trim()}${unit}` : text;
+  const withUnit = (text: string): string => (/^-?[\d.]+$/.test(text.trim()) ? `${text.trim()}${unit}` : text);
   return (
     <div className="embed-editor_size-row">
       <span className="embed-editor_size-label embed-editor_bg-caption">{label}</span>
@@ -266,15 +265,7 @@ export function ShadowLength({
 // would be absurd. So the row shows the colour it last emitted until the model
 // catches up: otherwise the page moves under the pointer while the swatch and
 // the number sit on the colour the drag started from (see liveColor.ts).
-export function ShadowColorRow({
-  color,
-  busy,
-  onChange,
-}: {
-  color: string;
-  busy: boolean;
-  onChange: (color: string, live: boolean) => void;
-}) {
+export function ShadowColorRow({ color, busy, onChange }: { color: string; busy: boolean; onChange: (color: string, live: boolean) => void }) {
   const [shown, noteLive] = useLiveColor(color);
   return (
     <div className="embed-editor_size-row">

@@ -41,11 +41,7 @@ export async function connectRepository(
   return { ok: true, value: { url, output: pushed.value.stdout + pushed.value.stderr } };
 }
 
-async function executeCommand(
-  execute: typeof git,
-  projectPath: string,
-  args: readonly string[],
-): Promise<Result<Awaited<ReturnType<typeof git>>, string>> {
+async function executeCommand(execute: typeof git, projectPath: string, args: readonly string[]): Promise<Result<Awaited<ReturnType<typeof git>>, string>> {
   try {
     return { ok: true, value: await execute(projectPath, args, { timeout: 180000 }) };
   } catch (error: unknown) {

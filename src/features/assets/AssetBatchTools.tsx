@@ -7,10 +7,7 @@ import type { AssetFile } from './assetPaths';
 import AssetCompressionDialog from './AssetCompressionDialog';
 import { AssetSelectionToolbar } from './AssetSelection';
 
-export function useAssetBatch(
-  projectPath: string,
-  showToast: (message: string, kind: 'error') => void,
-) {
+export function useAssetBatch(projectPath: string, showToast: (message: string, kind: 'error') => void) {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [compression, setCompression] = useState<readonly AssetFile[]>();
@@ -84,10 +81,7 @@ function useBatchExecution(
       }
       for (const [index, file] of files.entries()) {
         setProgress(`${index + 1} of ${files.length} · ${file.name}`);
-        const result =
-          operation === 'delete'
-            ? await deleteAsset(projectPath, file.rel)
-            : await convertAsset(projectPath, file.rel, operation);
+        const result = operation === 'delete' ? await deleteAsset(projectPath, file.rel) : await convertAsset(projectPath, file.rel, operation);
         if (!active.current) {
           return;
         }
@@ -97,9 +91,7 @@ function useBatchExecution(
         }
         setSelected((previous) => new Set([...previous].filter((item) => item !== file.rel)));
       }
-      setNotice(
-        `${files.length} ${operation === 'delete' ? 'assets deleted' : 'images compressed'}.`,
-      );
+      setNotice(`${files.length} ${operation === 'delete' ? 'assets deleted' : 'images compressed'}.`);
     } finally {
       setProgress(undefined);
       running.current = false;
@@ -116,13 +108,7 @@ export function selectableAsset(file: AssetFile): boolean {
   return canConvertAssets ? convertible(file) : true;
 }
 
-export function AssetBatchTools({
-  batch,
-  files,
-}: {
-  readonly batch: AssetBatch;
-  readonly files: readonly AssetFile[];
-}) {
+export function AssetBatchTools({ batch, files }: { readonly batch: AssetBatch; readonly files: readonly AssetFile[] }) {
   return (
     <>
       <AssetSelectionToolbar batch={batch} files={files} />

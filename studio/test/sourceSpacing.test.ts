@@ -58,8 +58,7 @@ for (const separator of ['\n', '\r\n', '']) {
 }
 
 test('insertions use existing indentation and preserve unrelated blank lines', () => {
-  const source =
-    '<main>\n  <Button>First</Button>\n  <Button>Second</Button>\n</main>\n\n<!-- End -->';
+  const source = '<main>\n  <Button>First</Button>\n  <Button>Second</Button>\n</main>\n\n<!-- End -->';
   const edit = insertFragment(
     source,
     {

@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
-import type {
-  ComponentProperties,
-  PropertyChange,
-} from '../../../shared/properties/propertyEditing';
+import type { ComponentProperties, PropertyChange } from '../../../shared/properties/propertyEditing';
 import { onPropertyFilesChanged as onFilesChanged } from '../../ipc/editorEnvironment';
 import { onWindowReturn } from '../../lib/windowReturn';
 import { editComponentProperties, readComponentProperties } from './propertiesBridge';
@@ -19,9 +16,7 @@ export interface ComponentPropertiesPanelProps {
   readonly onRecordUndo?: (token: string) => void;
 }
 type PanelState =
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'ready'; readonly data: ComponentProperties };
+  { readonly kind: 'loading' } | { readonly kind: 'error'; readonly message: string } | { readonly kind: 'ready'; readonly data: ComponentProperties };
 type LoadReason = 'initial' | 'external';
 interface Snapshot {
   readonly state: PanelState;
@@ -44,12 +39,7 @@ export function useComponentProperties(props: ComponentPropertiesPanelProps) {
     setError('');
     try {
       await props.flushSave();
-      const result = await editComponentProperties(
-        props.projectPath,
-        props.file,
-        snapshot.state.data.source,
-        change,
-      );
+      const result = await editComponentProperties(props.projectPath, props.file, snapshot.state.data.source, change);
       if (!result.ok) {
         if (snapshot.active.current) {
           if (result.error.code === 'conflict') {
@@ -82,11 +72,7 @@ export function useComponentProperties(props: ComponentPropertiesPanelProps) {
   return { state: snapshot.state, revision: snapshot.revision, busy, error, save };
 }
 
-function usePropertySnapshot(
-  props: ComponentPropertiesPanelProps,
-  pending: MutableRefObject<boolean>,
-  setError: (message: string) => void,
-) {
+function usePropertySnapshot(props: ComponentPropertiesPanelProps, pending: MutableRefObject<boolean>, setError: (message: string) => void) {
   const [snapshot, setSnapshot] = useState<Snapshot>({ state: { kind: 'loading' }, revision: 0 });
   const active = useRef(false);
   const version = useRef(0);
@@ -183,19 +169,14 @@ function refreshSnapshot(previous: Snapshot, state: PanelState): Snapshot {
   return { state, revision: previous.revision + 1 };
 }
 
-async function loadPropertiesPanel(
-  props: ComponentPropertiesPanelProps,
-  reason: LoadReason,
-): Promise<PanelState> {
+async function loadPropertiesPanel(props: ComponentPropertiesPanelProps, reason: LoadReason): Promise<PanelState> {
   try {
     // An external read must never flush a stale model over the new disk source.
     if (reason === 'initial') {
       await props.flushSave();
     }
     const result = await readComponentProperties(props.projectPath, props.file);
-    return result.ok
-      ? { kind: 'ready', data: result.value }
-      : { kind: 'error', message: result.error.message };
+    return result.ok ? { kind: 'ready', data: result.value } : { kind: 'error', message: result.error.message };
   } catch (caught: unknown) {
     return { kind: 'error', message: String(caught) };
   }

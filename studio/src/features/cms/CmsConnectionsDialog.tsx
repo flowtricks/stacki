@@ -6,12 +6,7 @@ import { CmsConnections } from '../../../vendor/stacki/src/features/cmsConnectio
 
 export function CmsConnectionsDialog(props: { readonly onClose: () => void }) {
   return (
-    <Popup
-      className="modal cms-connections-dialog"
-      label="CMS connections"
-      onClose={props.onClose}
-      dismissible={true}
-    >
+    <Popup className="modal cms-connections-dialog" label="CMS connections" onClose={props.onClose} dismissible={true}>
       {({ close }) => (
         <>
           <div className="modal-header cms-modal-header">

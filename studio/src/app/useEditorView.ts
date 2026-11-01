@@ -15,9 +15,7 @@ export function useEditorView() {
   const [cms, setCms] = useState<CmsSelection>();
   const dimensions = usePreviewDimensions();
   const [device, setDevice] = useState<PreviewDevice>('desktop');
-  const [panel, setPanel] = useState<Panel | undefined>(() =>
-    isMobileEditor() ? undefined : 'navigator',
-  );
+  const [panel, setPanel] = useState<Panel | undefined>(() => (isMobileEditor() ? undefined : 'navigator'));
   const [tab, setTab] = useState<'style' | 'settings'>('settings');
   const [pick, setPick] = useState<AssetRequest>();
   const [variable, setVariable] = useState<VariableSelection>();

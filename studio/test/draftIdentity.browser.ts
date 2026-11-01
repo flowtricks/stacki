@@ -8,10 +8,7 @@ import { startStyleFixture } from './stylePanelFixture';
 const fixture = await startStyleFixture({ page: '<main><h1>Preserved local draft</h1></main>' });
 const browser = await chromium.launch({
   executablePath:
-    process.env['CHROME_PATH'] ??
-    (process.platform === 'darwin'
-      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-      : chromium.executablePath()),
+    process.env['CHROME_PATH'] ?? (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
   headless: true,
 });
 try {

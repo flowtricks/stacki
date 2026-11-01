@@ -9,12 +9,8 @@ export function loginCountdown(seconds: number) {
   }
   const nonce = crypto.randomUUID();
   return {
-    markup:
-      ` <span id="login-countdown">Wait at least ${seconds} ` +
-      `${seconds === 1 ? 'second' : 'seconds'}, then start a new sign-in below.</span>`,
-    script:
-      `<script nonce="${nonce}">` +
-      `(${startLoginCountdown.toString()})(${seconds}, window);</script>`,
+    markup: ` <span id="login-countdown">Wait at least ${seconds} ` + `${seconds === 1 ? 'second' : 'seconds'}, then start a new sign-in below.</span>`,
+    script: `<script nonce="${nonce}">` + `(${startLoginCountdown.toString()})(${seconds}, window);</script>`,
     policy: `; script-src 'nonce-${nonce}'`,
   } as const;
 }
@@ -34,9 +30,7 @@ function startLoginCountdown(seconds: number, browser: LoginCountdownBrowser): v
   const timer = browser.setInterval(() => {
     const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
     if (remaining > 0) {
-      countdown.textContent =
-        `Wait at least ${remaining} ${remaining === 1 ? 'second' : 'seconds'}, ` +
-        'then start a new sign-in below.';
+      countdown.textContent = `Wait at least ${remaining} ${remaining === 1 ? 'second' : 'seconds'}, ` + 'then start a new sign-in below.';
     } else {
       browser.clearInterval(timer);
       message.setAttribute('role', 'status');

@@ -9,9 +9,7 @@ export const styleTransport = {
   listAstroStyleFiles: (_project: unknown) => readStyleResource('/studio/api/styles?astro=1'),
   async readStyleFile(input: unknown) {
     const file = string(input, 500);
-    const data = record(
-      await readStyleResource('/studio/api/file?file=' + encodeURIComponent(file)),
-    );
+    const data = record(await readStyleResource('/studio/api/file?file=' + encodeURIComponent(file)));
     const source = string(data['source']);
     if (baselines.size >= 1000 && !baselines.has(file)) {
       baselines.clear();

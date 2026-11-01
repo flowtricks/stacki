@@ -1,13 +1,5 @@
-import {
-  canvasTextFolded,
-  parseCanvasTextCatalog,
-  type CanvasTextCatalog,
-  type CanvasTextTarget,
-} from '../../shared/properties/canvasText';
-import {
-  parseCanvasTextClose,
-  parseCanvasTextFocus,
-} from '../../shared/properties/canvasTextOverlay';
+import { canvasTextFolded, parseCanvasTextCatalog, type CanvasTextCatalog, type CanvasTextTarget } from '../../shared/properties/canvasText';
+import { parseCanvasTextClose, parseCanvasTextFocus } from '../../shared/properties/canvasTextOverlay';
 import { canvasTextSourceMatches } from './frameRegions';
 import { matchCanvasText, type TextMatch } from './frameTextMatch';
 import { openNativeText, type NativeTextResult } from './frameTextNative';
@@ -68,8 +60,7 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       const editor = openNativeText(
         match,
         event,
-        (value) =>
-          post({ type: 'avb:text-draft', session: current.session, key: target.key, value }),
+        (value) => post({ type: 'avb:text-draft', session: current.session, key: target.key, value }),
         (result) => {
           active = undefined;
           stopSelection();
@@ -102,11 +93,7 @@ function stale(active: ActiveText): boolean {
 // The selected words, as offsets into the editor's text and a box, whenever
 // they change — so the host can offer formatting over them. Only a change is
 // posted: dragging a selection fires selectionchange on every pixel.
-function reportTextSelection(
-  nodes: readonly Text[],
-  scope: { readonly session: string; readonly key: string },
-  post: (message: unknown) => void,
-): () => void {
+function reportTextSelection(nodes: readonly Text[], scope: { readonly session: string; readonly key: string }, post: (message: unknown) => void): () => void {
   let last = '';
   const report = () => {
     const offsets = textSelection(nodes);
@@ -150,11 +137,7 @@ function commitCanvasText(
   if (value === undefined || value === entry.target.value) {
     return;
   }
-  if (
-    !restored ||
-    !matchCanvasText(entry.target, entry.match.element) ||
-    !canvasTextSourceMatches(entry.catalog.file, entry.catalog.checksum)
-  ) {
+  if (!restored || !matchCanvasText(entry.target, entry.match.element) || !canvasTextSourceMatches(entry.catalog.file, entry.catalog.checksum)) {
     post({
       type: 'avb:text-refused',
       message: 'The page changed while editing. The text was not saved; select it again.',

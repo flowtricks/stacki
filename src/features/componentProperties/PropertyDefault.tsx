@@ -12,12 +12,8 @@ interface DefaultProps {
   readonly onChange: (value: string) => void;
 }
 export function PropertyDefault({ property, frontmatter, onChange }: DefaultProps) {
-  const simple =
-    ['string', 'number', 'boolean'].includes(property.type) ||
-    literalOptions(property.type) !== undefined;
-  const [mode, setMode] = useState<'value' | 'expression'>(
-    simple && isLiteralDefault(property) ? 'value' : 'expression',
-  );
+  const simple = ['string', 'number', 'boolean'].includes(property.type) || literalOptions(property.type) !== undefined;
+  const [mode, setMode] = useState<'value' | 'expression'>(simple && isLiteralDefault(property) ? 'value' : 'expression');
   const expression = mode === 'expression';
   const action = expression ? 'Use the default value control' : 'Write a default expression';
   return (
@@ -113,10 +109,7 @@ export function propertyDefaultText(expression: string): string | undefined {
 function defaultChoice(choices: readonly string[], expression: string): string {
   return (
     choices.find(
-      (choice) =>
-        choice === expression ||
-        (propertyDefaultText(choice) !== undefined &&
-          propertyDefaultText(choice) === propertyDefaultText(expression)),
+      (choice) => choice === expression || (propertyDefaultText(choice) !== undefined && propertyDefaultText(choice) === propertyDefaultText(expression)),
     ) ?? ''
   );
 }

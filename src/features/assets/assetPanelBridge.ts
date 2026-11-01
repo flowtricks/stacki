@@ -2,15 +2,7 @@ import { parseConversionResult, type ImageFormat } from '../../../shared/ipc/ass
 import type { Parser } from '../../../shared/core/boundary';
 import type { Result } from '../../../shared/core/result';
 import type { WireAssetEntry } from '../../../shared/ipc/ipcResults';
-import {
-  BOUNDARY_LIMITS,
-  boolean,
-  count,
-  list,
-  pathText,
-  record,
-  text,
-} from '../../../shared/core/boundary';
+import { BOUNDARY_LIMITS, boolean, count, list, pathText, record, text } from '../../../shared/core/boundary';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import { toProjectPath } from '../../../shared/core/brand';
 import { cleanError } from '../../lib/cleanError';
@@ -35,9 +27,7 @@ export function parseAssetListing(input: unknown): AssetListing {
     seen.add(entry.rel);
   }
   const missing = boolean(value['missing']);
-  const hasPublicRoot = entries.some(
-    (entry) => entry.isDir && entry.isRoot === true && entry.root === 'public',
-  );
+  const hasPublicRoot = entries.some((entry) => entry.isDir && entry.isRoot === true && entry.root === 'public');
   if (missing === hasPublicRoot) {
     throw new Error('Asset listing: missing state contradicts public root');
   }
@@ -57,14 +47,8 @@ export function pickUploadAssets(projectPath: string, destinationRel: string) {
   return request(parseAdded, () => window.avb.pickUploadAssets(payload));
 }
 
-export function uploadAssets(
-  projectPath: string,
-  destinationRel: string,
-  files: readonly (File | string)[],
-) {
-  const filePaths = files
-    .map((file) => (typeof file === 'string' ? file : window.avb.getFilePath(file)))
-    .filter((file): file is string => !!file);
+export function uploadAssets(projectPath: string, destinationRel: string, files: readonly (File | string)[]) {
+  const filePaths = files.map((file) => (typeof file === 'string' ? file : window.avb.getFilePath(file))).filter((file): file is string => !!file);
   const payload = parseIpcPayload('assets:upload', {
     projectPath: toProjectPath(projectPath),
     destRel: parseAssetDestination(destinationRel),
@@ -145,10 +129,7 @@ function assetSegments(rel: string): readonly string[] {
   if (segments.length > BOUNDARY_LIMITS.depthMax) {
     throw new Error('Asset listing: path depth exceeds limit');
   }
-  if (
-    segments.length === 0 ||
-    segments.some((segment) => segment === '' || segment === '.' || segment === '..')
-  ) {
+  if (segments.length === 0 || segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
     throw new Error('Asset listing: invalid relative path');
   }
   return segments;
@@ -200,10 +181,7 @@ function parseSuccess(input: unknown): void {
   }
 }
 
-async function request<Value>(
-  parse: Parser<Value>,
-  invoke: () => Promise<unknown>,
-): Promise<Result<Value, string>> {
+async function request<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<Result<Value, string>> {
   let response: unknown;
   try {
     response = await invoke();

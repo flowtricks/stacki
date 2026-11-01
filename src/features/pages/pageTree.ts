@@ -21,10 +21,7 @@ export interface PageDragPayload {
   readonly name: string;
 }
 
-export function buildPageTree(
-  pages: readonly ScanPage[],
-  folders: readonly string[],
-): PageTreeNode {
+export function buildPageTree(pages: readonly ScanPage[], folders: readonly string[]): PageTreeNode {
   const root = createNode();
   for (const folder of folders) {
     directoryNode(root, folder);
@@ -59,10 +56,7 @@ export function collectPageTreeDirectories(node: PageTreeNode): ReadonlySet<stri
   const directories = new Set<string>();
   const pending: Array<readonly [string, PageTreeNode]> = [['', node]];
   while (pending.length > 0) {
-    assert(
-      directories.size <= BOUNDARY_LIMITS.itemsMax,
-      'Page tree: directory count exceeds limit',
-    );
+    assert(directories.size <= BOUNDARY_LIMITS.itemsMax, 'Page tree: directory count exceeds limit');
     const current = pending.pop();
     assert(current !== undefined, 'Page tree: pending directory exists');
     const [parent, currentNode] = current;

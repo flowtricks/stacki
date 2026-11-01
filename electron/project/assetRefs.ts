@@ -24,9 +24,7 @@
 // The pattern is assembled from three literal pieces only to fit the line width; each piece is a
 // complete regular expression on its own, and the joined source is the original pattern.
 const DEFAULT_IMPORT = new RegExp(
-  /^[ \t]*import\s+([A-Za-z_$][\w$]*)\s*/.source +
-    /(?:,\s*(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*))?/.source +
-    /\s*from\s*(['"])([^'"]+)\2\s*;?[ \t]*$/.source,
+  /^[ \t]*import\s+([A-Za-z_$][\w$]*)\s*/.source + /(?:,\s*(?:\{[^}]*\}|\*\s+as\s+[A-Za-z_$][\w$]*))?/.source + /\s*from\s*(['"])([^'"]+)\2\s*;?[ \t]*$/.source,
   'gm',
 );
 
@@ -132,11 +130,7 @@ interface ImportSpecContext {
 // markup; this is the same rule over a file's text.)
 // The `srcRelative` field names the project's `src/` folder, not an abbreviation; the binding
 // spells it out.
-function importSpecFor({
-  imports = [],
-  srcRelative: pathInSourceFolder,
-  relative,
-}: ImportSpecContext): string {
+function importSpecFor({ imports = [], srcRelative: pathInSourceFolder, relative }: ImportSpecContext): string {
   if (pathInSourceFolder) {
     for (const imp of imports) {
       if (imp.spec.startsWith('.')) {
@@ -166,11 +160,7 @@ function withAssets(value: unknown, resolve: (name: string) => string | undefine
 
 // The value comes from a project's data file, so its nesting is not ours to trust: past the
 // depth any IPC value may have, the rest is returned as it is, without asset paths.
-function withAssetsAtDepth(
-  value: unknown,
-  depth: number,
-  resolve: (name: string) => string | undefined,
-): unknown {
+function withAssetsAtDepth(value: unknown, depth: number, resolve: (name: string) => string | undefined): unknown {
   if (depth > LIMITS.ipcDepthMax) {
     return value;
   }
@@ -193,13 +183,5 @@ function withAssetsAtDepth(
   return out;
 }
 
-export {
-  defaultImports,
-  importedAs,
-  importInsertAt,
-  addImport,
-  importName,
-  importSpecFor,
-  withAssets,
-};
+export { defaultImports, importedAs, importInsertAt, addImport, importName, importSpecFor, withAssets };
 export type { DefaultImport, ImportSpecContext };

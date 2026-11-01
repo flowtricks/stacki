@@ -15,10 +15,7 @@ export class PropertyBatches {
     let count = 0;
     for (const [key, batch] of [...this.entries].reverse()) {
       count++;
-      size += batch.reduce(
-        (total, change) => total + change.before.length + change.after.length,
-        0,
-      );
+      size += batch.reduce((total, change) => total + change.before.length + change.after.length, 0);
       if (size > 64 * 1024 * 1024 || count > 200) {
         this.entries.delete(key);
       }
@@ -37,10 +34,7 @@ export class PropertyBatches {
   }
 }
 
-export async function commitProperties(
-  rooms: ReturnType<typeof createRooms>,
-  changes: readonly FileChange[],
-) {
+export async function commitProperties(rooms: ReturnType<typeof createRooms>, changes: readonly FileChange[]) {
   if (changes.length > 100 || new Set(changes.map(({ file }) => file)).size !== changes.length) {
     throw new Error('Property batch exceeds the shared document limit');
   }
@@ -73,9 +67,7 @@ export async function commitProperties(
       }
     }
     if (failures.length) {
-      throw new Error(
-        `Property save failed; recovery failed for ${failures.join(', ')}. ${String(error)}`,
-      );
+      throw new Error(`Property save failed; recovery failed for ${failures.join(', ')}. ${String(error)}`);
     }
     throw error;
   }

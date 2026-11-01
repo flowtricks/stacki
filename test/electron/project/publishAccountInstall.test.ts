@@ -6,19 +6,12 @@
 // changed. Timeouts use mocked timers.
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
-import childProcess, {
-  spawn,
-  type ChildProcessWithoutNullStreams,
-  type SpawnOptionsWithoutStdio,
-} from 'node:child_process';
+import childProcess, { spawn, type ChildProcessWithoutNullStreams, type SpawnOptionsWithoutStdio } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
-import {
-  PublishingAccount,
-  wranglerInstallArguments,
-} from '#dist/electron/project/publishAccount.js';
+import { PublishingAccount, wranglerInstallArguments } from '#dist/electron/project/publishAccount.js';
 import { projectHasWrangler } from '#dist/electron/project/publishExecutable.js';
 import { setToolPathHome } from '#dist/electron/lib/nodeTools.js';
 import { ACCOUNT_INSTALL_TIMEOUT_MS } from '#dist/shared/ipc/publishAccount.js';
@@ -99,10 +92,7 @@ test('successful installation automatically begins login in the same session', a
 });
 
 test('failed installation never starts login or exposes installer output', async (context) => {
-  const { account, installer, steps } = fixture(
-    context,
-    "process.stderr.write('registry-secret'); process.exitCode = 1;",
-  );
+  const { account, installer, steps } = fixture(context, "process.stderr.write('registry-secret'); process.exitCode = 1;");
   await once(installer, 'close');
   assert.deepEqual(steps, ['installing']);
   const state = account.request(root, { ...request, action: 'status' });
@@ -151,10 +141,7 @@ test('a package manager that cannot be resolved fails without a session', () => 
 });
 
 test('cancelling installation skips login but lets the installer finish', async (context) => {
-  const { account, installer, steps } = fixture(
-    context,
-    "process.stdout.write('ready'); setTimeout(() => {}, 300);",
-  );
+  const { account, installer, steps } = fixture(context, "process.stdout.write('ready'); setTimeout(() => {}, 300);");
   await once(installer.stdout, 'data');
   assert.equal(account.request(root, { ...request, action: 'cancel' }).kind, 'cancelled');
   assert.ok(installer.exitCode === null, 'the installer keeps running after cancel');
@@ -197,10 +184,7 @@ test('installation timeout stops the process without starting login', async (con
 });
 
 test('installation discards and bounds output', async (context) => {
-  const { account, installer, steps } = fixture(
-    context,
-    "process.stdout.write('x'.repeat(1048577)); setInterval(() => {}, 1000);",
-  );
+  const { account, installer, steps } = fixture(context, "process.stdout.write('x'.repeat(1048577)); setInterval(() => {}, 1000);");
   await once(installer, 'close');
   assert.deepEqual(steps, ['installing']);
   assert.deepEqual(account.request(root, { ...request, action: 'status' }), {
@@ -211,12 +195,7 @@ test('installation discards and bounds output', async (context) => {
 
 test('each package manager adds the latest Wrangler as a development dependency', () => {
   assert.deepEqual(wranglerInstallArguments('npm'), ['install', '--save-dev', 'wrangler']);
-  assert.deepEqual(wranglerInstallArguments('pnpm'), [
-    'add',
-    '--save-dev',
-    '--config.strict-dep-builds=false',
-    'wrangler',
-  ]);
+  assert.deepEqual(wranglerInstallArguments('pnpm'), ['add', '--save-dev', '--config.strict-dep-builds=false', 'wrangler']);
   assert.deepEqual(wranglerInstallArguments('yarn'), ['add', '--dev', 'wrangler']);
   assert.deepEqual(wranglerInstallArguments('bun'), ['add', '--dev', 'wrangler']);
 });
@@ -253,19 +232,15 @@ test('default launch installs Wrangler with the site package manager', async (co
     stdio: 'pipe',
     shell: false,
   });
-  context.mock.method(
-    childProcess,
-    'spawn',
-    (executable: string, argumentsList: readonly string[], options: SpawnOptionsWithoutStdio) => {
-      assert.equal(typeof executable, 'string');
-      const expected = wranglerInstallArguments('npm');
-      assert.deepEqual(argumentsList.slice(-expected.length), expected);
-      assert.equal(options.cwd, directory);
-      assert.equal(options.shell, false);
-      assert.equal(options.detached, process.platform !== 'win32');
-      return child;
-    },
-  );
+  context.mock.method(childProcess, 'spawn', (executable: string, argumentsList: readonly string[], options: SpawnOptionsWithoutStdio) => {
+    assert.equal(typeof executable, 'string');
+    const expected = wranglerInstallArguments('npm');
+    assert.deepEqual(argumentsList.slice(-expected.length), expected);
+    assert.equal(options.cwd, directory);
+    assert.equal(options.shell, false);
+    assert.equal(options.detached, process.platform !== 'win32');
+    return child;
+  });
   const account = new PublishingAccount();
   assert.equal(account.request(directory, { ...request, action: 'start' }).kind, 'installing');
   await once(child, 'close');

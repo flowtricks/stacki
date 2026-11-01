@@ -19,9 +19,7 @@ export async function startDraft(packageRoot: string, source: string, port: numb
   if (await exists(identity)) {
     const previous: unknown = JSON.parse(await readFile(identity, 'utf8'));
     if (previous !== source) {
-      throw new Error(
-        'This draft belongs to another project. Set STUDIO_WORKSPACE to a different directory.',
-      );
+      throw new Error('This draft belongs to another project. Set STUDIO_WORKSPACE to a different directory.');
     }
   }
   if (!(await exists(path.join(workspace, 'package.json')))) {

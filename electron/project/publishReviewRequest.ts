@@ -12,10 +12,7 @@ export interface ReviewRequest {
   readonly sha: string;
 }
 
-export async function openPublishReview(
-  input: ReviewRequest,
-  transport: typeof fetch = fetch,
-): Promise<Result<ReviewReceipt>> {
+export async function openPublishReview(input: ReviewRequest, transport: typeof fetch = fetch): Promise<Result<ReviewReceipt>> {
   if (!/^[\w.-]+\/[\w.-]+$/.test(input.repository)) {
     return err({ code: 'review', message: 'Invalid review repository.' });
   }
@@ -45,9 +42,7 @@ export async function openPublishReview(
       title: 'Review website changes from Stacki',
       head: input.branch,
       base: input.base,
-      body:
-        'Submitted from Stacki. This snapshot has not been deployed by Stacki. ' +
-        'Review and merge through the repository workflow.',
+      body: 'Submitted from Stacki. This snapshot has not been deployed by Stacki. ' + 'Review and merge through the repository workflow.',
     },
     transport,
   );
@@ -61,9 +56,7 @@ function reviewReceipt(input: ReviewRequest, data: unknown): Result<ReviewReceip
     if (value['state'] !== 'open') {
       return err({
         code: 'review-closed',
-        message:
-          'This snapshot already has a closed review. ' +
-          'Sync the base branch or make a new change before submitting.',
+        message: 'This snapshot already has a closed review. ' + 'Sync the base branch or make a new change before submitting.',
       });
     }
     const url = text(value['html_url']);
@@ -105,9 +98,7 @@ async function reviewRequest(
   if (!response.value.ok) {
     return err({
       code: 'review-http',
-      message:
-        `GitHub review request failed (${response.value.status}). ` +
-        'Check pull request write permission, then retry.',
+      message: `GitHub review request failed (${response.value.status}). ` + 'Check pull request write permission, then retry.',
     });
   }
   return readReviewResponse(response.value);

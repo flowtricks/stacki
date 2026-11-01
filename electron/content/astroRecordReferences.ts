@@ -14,12 +14,7 @@ import path from 'node:path';
 
 import { assert } from '../../shared/core/assert';
 import { toArray, toRecord } from '../../shared/core/record';
-import {
-  REMOTE_SCHEMA_LIMITS,
-  type RemoteOption,
-  type RemoteSchemaField,
-  type RemoteType,
-} from '../../shared/properties/cmsRemoteSchema';
+import { REMOTE_SCHEMA_LIMITS, type RemoteOption, type RemoteSchemaField, type RemoteType } from '../../shared/properties/cmsRemoteSchema';
 import type { Entry } from './contentEntries';
 
 /** One collection's entries, as the inference reads them. */
@@ -60,8 +55,7 @@ export function withInferredReferences(
 
 // A free-text string, or a list of them: the shapes an undeclared reference takes.
 function plainString(type: RemoteType): 'one' | 'list' | undefined {
-  const free = (member: RemoteType | undefined) =>
-    member?.kind === 'string' && member.options.length === 0 && member.asset === undefined;
+  const free = (member: RemoteType | undefined) => member?.kind === 'string' && member.options.length === 0 && member.asset === undefined;
   if (free(type)) {
     return 'one';
   }
@@ -87,10 +81,7 @@ function fieldValues(entries: readonly Entry[], name: string): readonly string[]
 }
 
 // The one collection whose records every value names, by entry id or by `_id`, as options.
-function targetOptions(
-  values: readonly string[],
-  collections: readonly RecordCollection[],
-): readonly RemoteOption[] | undefined {
+function targetOptions(values: readonly string[], collections: readonly RecordCollection[]): readonly RemoteOption[] | undefined {
   for (const collection of collections) {
     if (collection.entries.length > REMOTE_SCHEMA_LIMITS.optionsMax) {
       continue;
@@ -101,9 +92,7 @@ function targetOptions(
         return collection.entries.flatMap((entry) => {
           const value = key(entry);
           const imageFile = entryImage(entry, collection.imageField);
-          return value === undefined
-            ? []
-            : [{ title: entry.title, value, ...(imageFile === undefined ? {} : { imageFile }) }];
+          return value === undefined ? [] : [{ title: entry.title, value, ...(imageFile === undefined ? {} : { imageFile }) }];
         });
       }
     }
@@ -129,9 +118,7 @@ export function projectImage(entryFile: string, value: string): string | undefin
   if (target.length === 0 || /^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('@')) {
     return undefined;
   }
-  const joined = target.startsWith('/')
-    ? path.posix.join('public', target)
-    : path.posix.join(path.posix.dirname(entryFile), target);
+  const joined = target.startsWith('/') ? path.posix.join('public', target) : path.posix.join(path.posix.dirname(entryFile), target);
   const file = path.posix.normalize(joined);
   if (file.startsWith('..') || path.posix.isAbsolute(file)) {
     return undefined;

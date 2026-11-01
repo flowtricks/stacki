@@ -7,10 +7,7 @@ import release from '../shared/release.json';
 export async function updateRoutes(request: Request, environment: Environment): Promise<Response> {
   try {
     if (request.method === 'GET') {
-      return Response.json(
-        { current: release.version, latest: await latestRelease() },
-        { headers: { 'Cache-Control': 'no-store' } },
-      );
+      return Response.json({ current: release.version, latest: await latestRelease() }, { headers: { 'Cache-Control': 'no-store' } });
     }
     if (request.method !== 'POST') {
       return new Response('Method not allowed', { status: 405 });
@@ -35,9 +32,6 @@ export async function updateRoutes(request: Request, environment: Environment): 
     });
     return Response.json(await repository.prepareStudioUpdate(next));
   } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : 'Studio update failed' },
-      { status: 400 },
-    );
+    return Response.json({ error: error instanceof Error ? error.message : 'Studio update failed' }, { status: 400 });
   }
 }

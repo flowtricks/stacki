@@ -113,11 +113,7 @@ const check = (what, condition, detail) => {
 
   // The syntax-highlighted editor is what the pointer actually meets.
   const wrap = field?.closest('.embed-editor_varconnect');
-  check(
-    'the field wears the code editor',
-    wrap?.className.includes('is-token') === true,
-    wrap?.className,
-  );
+  check('the field wears the code editor', wrap?.className.includes('is-token') === true, wrap?.className);
 
   // React synthesises enter/leave from mouseover/mouseout, so that is what a
   // pointer arriving is.
@@ -136,16 +132,8 @@ const check = (what, condition, detail) => {
 
   await point('mouseover', editor, document.body);
   check('pointing at it asks for the bands', hover !== undefined, JSON.stringify(hover));
-  check(
-    'on both axes, since one field owns both',
-    hover?.sides?.join(',') === 'row,column',
-    JSON.stringify(hover?.sides),
-  );
-  check(
-    'labelled with the value it holds',
-    hover?.labels?.row === '2rem',
-    JSON.stringify(hover?.labels),
-  );
+  check('on both axes, since one field owns both', hover?.sides?.join(',') === 'row,column', JSON.stringify(hover?.sides));
+  check('labelled with the value it holds', hover?.labels?.row === '2rem', JSON.stringify(hover?.labels));
   check('and named as a gap, not a padding', hover?.kind === 'gap', hover?.kind);
 
   await point('mouseout', editor, document.body);
@@ -158,11 +146,7 @@ const check = (what, condition, detail) => {
   });
   check('clicking in while hovering keeps them up', hover !== undefined);
   await point('mouseout', editor, document.body);
-  check(
-    'and the pointer leaving does not take them from the caret',
-    hover !== undefined,
-    JSON.stringify(hover),
-  );
+  check('and the pointer leaving does not take them from the caret', hover !== undefined, JSON.stringify(hover));
   await act(async () => {
     field.blur();
   });
@@ -172,18 +156,11 @@ const check = (what, condition, detail) => {
   // that was there when the pointer arrived.
   await point('mouseover', editor, document.body);
   await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(
-      dom.window.HTMLInputElement.prototype,
-      'value',
-    ).set;
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
     setter.call(field, '3rem');
     field.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
   });
-  check(
-    'typing relabels them as it goes',
-    hover?.labels?.row === '3rem',
-    JSON.stringify(hover?.labels),
-  );
+  check('typing relabels them as it goes', hover?.labels?.row === '3rem', JSON.stringify(hover?.labels));
 
   if (failures.length) {
     console.error(`gap-hover: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);

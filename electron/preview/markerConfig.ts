@@ -114,7 +114,8 @@ import { SAMPLE } from './paths.js';
 export async function GET({ url }) {
   const name = url.searchParams.get('c') || '';
   // A particular entry when the editor knows which one — a reference names it
-  // — and otherwise the first, which is enough to show what a collection has.
+  // — and otherwise the first one a page would show: a draft or an archived
+  // entry is what lists filter out, and its fields are often still empty.
   const id = url.searchParams.get('id') || '';
   const body = { entry: null, error: null };
   if (!/^[\\w-]+$/.test(name) || (id && (!/^[\\w\\-./]+$/.test(id) || id.includes('..')))) {
@@ -130,8 +131,13 @@ export async function GET({ url }) {
       const entry = await getEntry(name, id);
       body.entry = entry ? SAMPLE(entry) : null;
     } else {
-      const entries = await getCollection(name);
-      body.entry = entries && entries.length ? SAMPLE(entries[0]) : null;
+      const entries = (await getCollection(name)) || [];
+      const hidden = (entry) => {
+        const data = (entry && entry.data) || {};
+        return data.draft === true || data.isDraft === true || data.isArchived === true;
+      };
+      const shown = entries.find((entry) => !hidden(entry)) || entries[0];
+      body.entry = shown ? SAMPLE(shown) : null;
     }
   } catch (err) {
     body.error = String((err && err.message) || err);

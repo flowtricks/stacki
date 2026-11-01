@@ -36,17 +36,8 @@ export async function gitWorkspaceHistory(root: string, token: string) {
 }
 async function buildHistoryView(git: PublishGit, manifest: GitWorkspaceManifest) {
   const run = gitWorkspaceRun(git);
-  await run([
-    'clone',
-    '--bare',
-    '--shared',
-    '--quiet',
-    path.join(git.root, '.stacki/studio/state/workspace.git'),
-    git.directory,
-  ]);
-  const references = (await run(['for-each-ref', '--format=%(refname)']))
-    .split('\n')
-    .filter(Boolean);
+  await run(['clone', '--bare', '--shared', '--quiet', path.join(git.root, '.stacki/studio/state/workspace.git'), git.directory]);
+  const references = (await run(['for-each-ref', '--format=%(refname)'])).split('\n').filter(Boolean);
   if (references.length > 194) {
     throw new Error('Git history exceeds its reference limit.');
   }

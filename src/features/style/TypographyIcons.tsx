@@ -47,12 +47,7 @@ export const DECORATION_NONE_ICON_PATH =
 export function DecorNoneIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={DECORATION_NONE_ICON_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={DECORATION_NONE_ICON_PATH} fill="currentColor" />
     </svg>
   );
 }
@@ -90,10 +85,7 @@ export function FontStyleRegularIcon() {
 export function FontStyleItalicIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M8.80629 4H7V3H12V4H9.86038L7.19371 12H9V13H4V12H6.13962L8.80629 4Z"
-        fill="currentColor"
-      />
+      <path d="M8.80629 4H7V3H12V4H9.86038L7.19371 12H9V13H4V12H6.13962L8.80629 4Z" fill="currentColor" />
     </svg>
   );
 }
@@ -107,12 +99,7 @@ export const TRANSFORM_CAPS_ICON_PATH =
 export function TransformCapsIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={TRANSFORM_CAPS_ICON_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={TRANSFORM_CAPS_ICON_PATH} fill="currentColor" />
     </svg>
   );
 }
@@ -128,18 +115,8 @@ export const TRANSFORM_CAPITALIZE_LOWER_PATH =
 export function TransformCapitalizeIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={TRANSFORM_CAPITALIZE_UPPER_PATH}
-        fill="currentColor"
-      />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={TRANSFORM_CAPITALIZE_LOWER_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={TRANSFORM_CAPITALIZE_UPPER_PATH} fill="currentColor" />
+      <path fillRule="evenodd" clipRule="evenodd" d={TRANSFORM_CAPITALIZE_LOWER_PATH} fill="currentColor" />
     </svg>
   );
 }
@@ -156,24 +133,13 @@ export const TRANSFORM_LOWERCASE_RIGHT_PATH =
 export function TransformLowercaseIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={TRANSFORM_LOWERCASE_LEFT_PATH}
-        fill="currentColor"
-      />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={TRANSFORM_LOWERCASE_RIGHT_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={TRANSFORM_LOWERCASE_LEFT_PATH} fill="currentColor" />
+      <path fillRule="evenodd" clipRule="evenodd" d={TRANSFORM_LOWERCASE_RIGHT_PATH} fill="currentColor" />
     </svg>
   );
 }
 export const DIRECTION_LTR_ARROW_PATH =
-  'M5 12L12.3111 12L10.6484 10.3555L11.3516 9.64453L14.2071 12.4688' +
-  'L11.3555 15.3516L10.6445 14.6484L12.2751 13L5 13L5 12Z';
+  'M5 12L12.3111 12L10.6484 10.3555L11.3516 9.64453L14.2071 12.4688' + 'L11.3555 15.3516L10.6445 14.6484L12.2751 13L5 13L5 12Z';
 export const DIRECTION_LTR_MARK_PATH =
   'M4.23463 2.15224C4.47728 2.05173 4.73736 2 5 2L5 6C4.73736 6 4.47728 5.94827 ' +
   '4.23463 5.84776C3.99198 5.74725 3.7715 5.59993 3.58579 5.41421C3.40007 5.2285 ' +
@@ -186,19 +152,12 @@ export function DirectionLTRIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d={DIRECTION_LTR_ARROW_PATH} fill="currentColor" />
-      <path
-        opacity="0.6"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={DIRECTION_LTR_MARK_PATH}
-        fill="currentColor"
-      />
+      <path opacity="0.6" fillRule="evenodd" clipRule="evenodd" d={DIRECTION_LTR_MARK_PATH} fill="currentColor" />
     </svg>
   );
 }
 export const DIRECTION_RTL_ARROW_PATH =
-  'M11.0001 12L3.689 12L5.35169 10.3555L4.64848 9.64453L1.79297 12.4688' +
-  'L4.64462 15.3516L5.35556 14.6484L3.72502 13L11.0001 13V12Z';
+  'M11.0001 12L3.689 12L5.35169 10.3555L4.64848 9.64453L1.79297 12.4688' + 'L4.64462 15.3516L5.35556 14.6484L3.72502 13L11.0001 13V12Z';
 export const DIRECTION_RTL_MARK_PATH =
   'M6.23463 2.15224C6.47728 2.05173 6.73736 2 7 2L7 6C6.73736 6 6.47728 5.94827 ' +
   '6.23463 5.84776C5.99198 5.74725 5.7715 5.59993 5.58579 5.41421C5.40007 5.2285 ' +
@@ -210,13 +169,7 @@ export function DirectionRTLIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d={DIRECTION_RTL_ARROW_PATH} fill="currentColor" />
-      <path
-        opacity="0.6"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={DIRECTION_RTL_MARK_PATH}
-        fill="currentColor"
-      />
+      <path opacity="0.6" fillRule="evenodd" clipRule="evenodd" d={DIRECTION_RTL_MARK_PATH} fill="currentColor" />
     </svg>
   );
 }

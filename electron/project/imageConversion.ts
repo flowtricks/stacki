@@ -81,13 +81,7 @@ function prepareImage(projectPath: string, rel: string, format: ImageFormat) {
     return { ok: false as const, error: String(error) };
   }
 }
-function stageImage(
-  projectPath: string,
-  from: string,
-  to: string,
-  bytes: Buffer,
-  aliases: ImageAliases,
-) {
+function stageImage(projectPath: string, from: string, to: string, bytes: Buffer, aliases: ImageAliases) {
   try {
     const edits = planImageReferences(projectPath, from, to, aliases);
     // Exclusive binary creation never overwrites an asset; text uses actors below.
@@ -108,28 +102,18 @@ function applyReferences(edits: readonly ImageReferenceEdit[]): Result<void, str
   const result = host.documents.withLeases(edits, (ordered): Result<void, string> => {
     const applied: ImageReferenceEdit[] = [];
     for (const edit of ordered) {
-      const report = host.documents.writeText(
-        edit.file,
-        edit.after,
-        imageReferenceDigest(edit.before),
-      );
+      const report = host.documents.writeText(edit.file, edit.after, imageReferenceDigest(edit.before));
       if (report.tag !== 'applied') {
         let rollbackFailures = 0;
         for (const previous of [...applied].reverse()) {
-          const rollback = host.documents.writeText(
-            previous.file,
-            previous.before,
-            imageReferenceDigest(previous.after),
-          );
+          const rollback = host.documents.writeText(previous.file, previous.before, imageReferenceDigest(previous.after));
           if (rollback.tag !== 'applied') {
             rollbackFailures += 1;
           }
         }
         return {
           ok: false,
-          error:
-            `Could not update ${edit.file}: ${report.tag}. ` +
-            `${rollbackFailures} rollback failures.`,
+          error: `Could not update ${edit.file}: ${report.tag}. ` + `${rollbackFailures} rollback failures.`,
         };
       }
       host.noteWrite(edit.file);
@@ -140,12 +124,7 @@ function applyReferences(edits: readonly ImageReferenceEdit[]): Result<void, str
   return result.ok ? result.value : result;
 }
 
-function verifyImages(
-  from: string,
-  before: Buffer,
-  to: string,
-  after: Buffer,
-): Result<void, string> {
+function verifyImages(from: string, before: Buffer, to: string, after: Buffer): Result<void, string> {
   try {
     for (const [file, bytes] of [
       [from, before],

@@ -28,19 +28,12 @@ export function parsePeer(input: unknown, fallbackFile = 'src/pages/index.astro'
     page: sourcePath(string(peer['page'] ?? file)),
     occurrence: occurrenceOf(peer['occurrence']),
     ...(peer['color'] === undefined ? {} : { color: colorIndex(peer['color']) }),
-    updatedAt:
-      typeof peer['updatedAt'] === 'number' && Number.isFinite(peer['updatedAt'])
-        ? peer['updatedAt']
-        : 0,
-    ...(peer['githubId'] === undefined
-      ? {}
-      : { githubId: parseProfile({ id: peer['githubId'], login: name }).id }),
+    updatedAt: typeof peer['updatedAt'] === 'number' && Number.isFinite(peer['updatedAt']) ? peer['updatedAt'] : 0,
+    ...(peer['githubId'] === undefined ? {} : { githubId: parseProfile({ id: peer['githubId'], login: name }).id }),
   };
 }
 export function occurrenceOf(value: unknown): number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 10000
-    ? value
-    : 0;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 10000 ? value : 0;
 }
 export function peerPath(peer: Peer): string {
   return (peer.file.startsWith('src/pages/') ? '' : peer.file + '|') + pathFor(peer.selection);

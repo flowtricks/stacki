@@ -67,12 +67,7 @@ test('Portable Text becomes HTML, with lists gathered and text escaped', () => {
 test('the HTML reads back as the same blocks, marks and links, keeping the image', () => {
   const back = htmlPortableText(portableTextHTML(TEXT), TEXT, { document, key: keys() });
   const link = back[0].markDefs[0]._key;
-  const shape = back.map((block) => [
-    block._type,
-    block.style,
-    block.listItem,
-    (block.children ?? []).map((child) => [child.text, child.marks.join('+')]),
-  ]);
+  const shape = back.map((block) => [block._type, block.style, block.listItem, (block.children ?? []).map((child) => [child.text, child.marks.join('+')])]);
   assert.deepEqual(shape, [
     [
       'block',

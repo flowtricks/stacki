@@ -44,13 +44,7 @@ export function serializeShadows(shadows: Shadow[]): string {
   if (!shadows.length) {
     return '';
   }
-  return shadows
-    .map(
-      (shadow) =>
-        `${shadow.x || '0px'} ${shadow.y || '0px'} ${shadow.blur || '0px'}` +
-        (shadow.color ? ` ${shadow.color}` : ''),
-    )
-    .join(', ');
+  return shadows.map((shadow) => `${shadow.x || '0px'} ${shadow.y || '0px'} ${shadow.blur || '0px'}` + (shadow.color ? ` ${shadow.color}` : '')).join(', ');
 }
 
 /** A new shadow with Webflow-like defaults. */

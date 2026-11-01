@@ -54,14 +54,7 @@ export async function parkBranch(projectPath: string, branch: string | undefined
 // Branches can disagree about .gitignore. Keep existing generated files ignored
 // locally so a return trip cannot stash the other branch's runtime dependencies.
 async function preserveIgnoredPaths(projectPath: string): Promise<void> {
-  const { stdout } = await git(projectPath, [
-    'ls-files',
-    '--others',
-    '--ignored',
-    '--exclude-standard',
-    '--directory',
-    '-z',
-  ]);
+  const { stdout } = await git(projectPath, ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z']);
   const paths = stdout.split('\0').filter(Boolean);
   if (paths.length > 4096) {
     throw new Error('Too many ignored paths to preserve while switching branches');
@@ -160,8 +153,7 @@ export async function readGitIdentity(projectPath: string) {
     // Whose commits are "yours". Git records an author on every commit, and on
     // your own machine that is nearly always you — "Timothy Ricks changed the
     // hero" reads oddly about yourself.
-    identity.userEmail =
-      (await git(projectPath, ['config', 'user.email'])).stdout.trim() || undefined;
+    identity.userEmail = (await git(projectPath, ['config', 'user.email'])).stdout.trim() || undefined;
   } catch {
     identity.userEmail = undefined;
   }

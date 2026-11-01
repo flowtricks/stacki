@@ -2,18 +2,12 @@
 // Resolve its index through that version's stable node handle, then validate the
 // current disk version before selecting. Never reinterpret an old index as a new one.
 import { toDigest, type Digest } from '../../../shared/core/brand';
-import {
-  canonicalManifest,
-  judgeEventToken,
-  type PreviewRender,
-  type PreviewVerdict,
-} from '../../../shared/page/previewToken';
+import { canonicalManifest, judgeEventToken, type PreviewRender, type PreviewVerdict } from '../../../shared/page/previewToken';
 import type { PageOrigin } from '../../editor/pageEdits';
 import { nodeAtPath, pathOfNode } from '../../editor/editorTree';
 import { judgeCanvasEvent, judgeLocally, type CheckRender, type ShownFile } from './previewGate';
 
-export type CanvasSelectionVerdict =
-  PreviewVerdict | { readonly tag: 'current'; readonly path: string };
+export type CanvasSelectionVerdict = PreviewVerdict | { readonly tag: 'current'; readonly path: string };
 
 // Only the open file is retained. Eight saves cover a short render backlog without
 // keeping an unbounded editing history or sharing handles between file sessions.
@@ -69,9 +63,7 @@ export async function judgeRememberedClick(
   if ((await manifestDigest(render)) !== render.token) {
     return { tag: 'stale', reason: 'token-mismatch', file: undefined };
   }
-  const stamps = render.stamps.map((stamp) =>
-    stamp.file === target.file ? { ...stamp, checksum: target.checksum } : stamp,
-  );
+  const stamps = render.stamps.map((stamp) => (stamp.file === target.file ? { ...stamp, checksum: target.checksum } : stamp));
   const checked = { stamps, token: await manifestDigest({ stamps }) };
   const verdict = await check(checked);
   if (verdict.tag === 'stale') {
@@ -90,12 +82,7 @@ export async function judgeRememberedClick(
   return { tag: 'stale', reason: 'shown-page-differs', file: target.file };
 }
 
-function rememberedTarget(
-  render: PreviewRender | undefined,
-  path: string | undefined,
-  origins: PreviewOrigins,
-  shown: ShownFile | undefined,
-) {
+function rememberedTarget(render: PreviewRender | undefined, path: string | undefined, origins: PreviewOrigins, shown: ShownFile | undefined) {
   if (path === undefined || shown === undefined || !shown.state.editable) {
     return undefined;
   }
@@ -127,7 +114,5 @@ function rememberedTarget(
 async function manifestDigest(render: Pick<PreviewRender, 'stamps'>): Promise<Digest> {
   const bytes = new TextEncoder().encode(canonicalManifest(render.stamps));
   const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
-  return toDigest(
-    Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join(''),
-  );
+  return toDigest(Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join(''));
 }

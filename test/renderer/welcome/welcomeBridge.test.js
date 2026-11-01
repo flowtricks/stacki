@@ -21,23 +21,17 @@ const recent = {
 
 test('welcome parsers preserve valid recent, thumbnail, and dialog variants', () => {
   assert.deepEqual(welcome.parseRecentProjects([recent]), [recent]);
-  assert.deepEqual(
-    welcome.parseRefreshThumb({ ok: true, thumb: 'data:image/png,x', stale: false }),
-    {
-      ok: true,
-      thumb: 'data:image/png,x',
-      stale: false,
-    },
-  );
-  assert.deepEqual(
-    welcome.parseRefreshThumb({ ok: false, error: 'failed', thumb: undefined, stale: true }),
-    {
-      ok: false,
-      error: 'failed',
-      thumb: undefined,
-      stale: true,
-    },
-  );
+  assert.deepEqual(welcome.parseRefreshThumb({ ok: true, thumb: 'data:image/png,x', stale: false }), {
+    ok: true,
+    thumb: 'data:image/png,x',
+    stale: false,
+  });
+  assert.deepEqual(welcome.parseRefreshThumb({ ok: false, error: 'failed', thumb: undefined, stale: true }), {
+    ok: false,
+    error: 'failed',
+    thumb: undefined,
+    stale: true,
+  });
   assert.deepEqual(welcome.parseProjectDialog({ canceled: true }), { canceled: true });
   assert.deepEqual(welcome.parseProjectDialog({ canceled: false, error: 'not Astro' }), {
     canceled: false,

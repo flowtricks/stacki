@@ -19,13 +19,7 @@ export const parseAstroLock = object({ url: text });
 // want to go to /de/hotel/ instead?"; under 'never' the slash is the 404. The
 // canvas points at real URLs, so it has to know which spelling it serves.
 export const TRAILING_SLASH_MODES = ['always', 'never', 'ignore'];
-export const ASTRO_CONFIG_FILES = [
-  'astro.config.mjs',
-  'astro.config.js',
-  'astro.config.mts',
-  'astro.config.ts',
-  'astro.config.cjs',
-];
+export const ASTRO_CONFIG_FILES = ['astro.config.mjs', 'astro.config.js', 'astro.config.mts', 'astro.config.ts', 'astro.config.cjs'];
 
 // Read from the config's text, not by importing it: the file is ESM, is often
 // TypeScript, and is written to be loaded by Astro rather than by this

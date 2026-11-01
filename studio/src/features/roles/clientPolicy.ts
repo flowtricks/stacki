@@ -15,8 +15,7 @@ export function assertClientAction(source: string, action: TreeAction) {
     throw new Error('Client mode keeps the page layout and everything outside it protected.');
   }
   if ('target' in action) {
-    const insideLayout =
-      action.target === layout.id && (!action.placement || action.placement === 'inside');
+    const insideLayout = action.target === layout.id && (!action.placement || action.placement === 'inside');
     if (!insideLayout && !children.has(action.target)) {
       throw new Error('Add and move elements inside the page layout in Client mode.');
     }

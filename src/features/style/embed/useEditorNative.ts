@@ -18,10 +18,7 @@ import { nativeModelCache } from './editorModel';
 import { useEditorRefs, useBusyState, useScanState, useNativeState } from './useEditorFoundation';
 
 // Re-read the native class styles after a native write.
-export function useNativeRefresh(
-  editorRefs: ReturnType<typeof useEditorRefs>,
-  nativeState: ReturnType<typeof useNativeState>,
-) {
+export function useNativeRefresh(editorRefs: ReturnType<typeof useEditorRefs>, nativeState: ReturnType<typeof useNativeState>) {
   const { selectedRef } = editorRefs;
   const { activeSelectorRef, nativeIdentityRef, nativeModelRef, setNativeModel } = nativeState;
 
@@ -89,22 +86,13 @@ export function useNativeOps(
         try {
           setBusyBoth(true);
           setStatus('Saving…');
-          const result = await removeNativePropertyAt(
-            selectedRef.current,
-            nativeWriteTargetAt(index),
-            props,
-            options,
-          );
+          const result = await removeNativePropertyAt(selectedRef.current, nativeWriteTargetAt(index), props, options);
           ok = result.ok;
         } finally {
           setBusyBoth(false);
         }
         await refreshNative();
-        setStatus(
-          ok
-            ? 'Removed from the Webflow class style.'
-            : 'Couldn’t remove from the Webflow class style.',
-        );
+        setStatus(ok ? 'Removed from the Webflow class style.' : 'Couldn’t remove from the Webflow class style.');
       }),
     [refreshNative, setBusyBoth, nativeWriteTargetAt, runNativeOp, selectedRef, setStatus],
   );

@@ -8,28 +8,8 @@ import type { ImportMember } from '../../shared/page/frontmatter';
 import type { ParserNode, ParserPageModel } from './astroParserTypes';
 
 const NODE_VARIANT_FIELDS: Readonly<Record<string, readonly string[]>> = {
-  component: [
-    'name',
-    'children',
-    'shorthand',
-    'tightClose',
-    'closeSource',
-    'dynamicTag',
-    'astroAsset',
-    'chunkFile',
-    'chunkAggregate',
-  ],
-  element: [
-    'name',
-    'children',
-    'shorthand',
-    'tightClose',
-    'closeSource',
-    'dynamicTag',
-    'astroAsset',
-    'chunkFile',
-    'chunkAggregate',
-  ],
+  component: ['name', 'children', 'shorthand', 'tightClose', 'closeSource', 'dynamicTag', 'astroAsset', 'chunkFile', 'chunkAggregate'],
+  element: ['name', 'children', 'shorthand', 'tightClose', 'closeSource', 'dynamicTag', 'astroAsset', 'chunkFile', 'chunkAggregate'],
   text: ['value'],
   expr: ['value'],
   'raw-line': ['value'],
@@ -91,10 +71,7 @@ export function parseSerializePage(input: unknown): ParserPageModel {
   if (imports.length > LIMITS.importsMax) {
     throw new Error('SerializePage.imports: limit');
   }
-  const layout =
-    record['frontmatterLayout'] === undefined
-      ? undefined
-      : parseRecord(record['frontmatterLayout'], 'SerializePage.frontmatterLayout');
+  const layout = record['frontmatterLayout'] === undefined ? undefined : parseRecord(record['frontmatterLayout'], 'SerializePage.frontmatterLayout');
   return {
     imports: imports.map(parseSerializeImport),
     frontmatterLead: parseText(record['frontmatterLead'] ?? '', 'frontmatterLead'),
@@ -260,15 +237,7 @@ function parseSerializeChildren(record: Record<string, unknown>): void {
 }
 
 function parseSerializeMetadata(record: Record<string, unknown>): void {
-  for (const field of [
-    'id',
-    'source',
-    'attrSource',
-    'closeSource',
-    'headSource',
-    'chunkFile',
-    'mdSource',
-  ] as const) {
+  for (const field of ['id', 'source', 'attrSource', 'closeSource', 'headSource', 'chunkFile', 'mdSource'] as const) {
     if (record[field] !== undefined) {
       parseText(record[field], `node.${field}`);
     }
@@ -278,15 +247,7 @@ function parseSerializeMetadata(record: Record<string, unknown>): void {
       parseCount(record[field], `node.${field}`);
     }
   }
-  for (const field of [
-    'jsx',
-    'shorthand',
-    'tightClose',
-    'dynamicTag',
-    'astroAsset',
-    'chunkAggregate',
-    'bare',
-  ] as const) {
+  for (const field of ['jsx', 'shorthand', 'tightClose', 'dynamicTag', 'astroAsset', 'chunkAggregate', 'bare'] as const) {
     if (record[field] !== undefined) {
       parseBoolean(record[field]);
     }
@@ -330,11 +291,7 @@ function parseRecord(input: unknown, field: string): Record<string, unknown> {
   return record;
 }
 
-function parseText(
-  input: unknown,
-  field: string,
-  limit: number = LIMITS.nodeValueCharsMax,
-): string {
+function parseText(input: unknown, field: string, limit: number = LIMITS.nodeValueCharsMax): string {
   if (typeof input !== 'string') {
     throw new Error(`${field}: expected string`);
   }

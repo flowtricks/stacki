@@ -5,25 +5,14 @@ import type { TransformType } from './model/transform';
 // the label slot of each axis row in the transform editor. Move, Scale and Skew reuse
 // the translate arrows; Rotate has its own curved-arrow set. Skew is 2D (X/Y only).
 
-const TRANSLATE_X_GUIDE_PATH =
-  'M7.00004 10.2929V4H8.00004V10H13.5V11H7.70714' +
-  'L3.85359 14.8536L3.14648 14.1464L7.00004 10.2929Z';
-const TRANSLATE_X_LETTER_PATH =
-  'M3.5 2.667L2.25 1H1L2.875 3.5L1 6H2.25L3.5 4.333L4.75 6H6L4.125 3.5L6 1H4.75L3.5 2.667Z';
-const TRANSLATE_X_ARROW_PATH =
-  'M13.2929 11H7V10H13.2929L11.6464 8.35355L12.3536 7.64645' +
-  'L15.2071 10.5L12.3536 13.3536L11.6464 12.6464L13.2929 11Z';
+const TRANSLATE_X_GUIDE_PATH = 'M7.00004 10.2929V4H8.00004V10H13.5V11H7.70714' + 'L3.85359 14.8536L3.14648 14.1464L7.00004 10.2929Z';
+const TRANSLATE_X_LETTER_PATH = 'M3.5 2.667L2.25 1H1L2.875 3.5L1 6H2.25L3.5 4.333L4.75 6H6L4.125 3.5L6 1H4.75L3.5 2.667Z';
+const TRANSLATE_X_ARROW_PATH = 'M13.2929 11H7V10H13.2929L11.6464 8.35355L12.3536 7.64645' + 'L15.2071 10.5L12.3536 13.3536L11.6464 12.6464L13.2929 11Z';
 
 const TranslateX = (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <g>
-      <path
-        opacity="0.4"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={TRANSLATE_X_GUIDE_PATH}
-        fill="currentColor"
-      />
+      <path opacity="0.4" fillRule="evenodd" clipRule="evenodd" d={TRANSLATE_X_GUIDE_PATH} fill="currentColor" />
       <g>
         <path d={TRANSLATE_X_LETTER_PATH} fill="currentColor" />
         <path d={TRANSLATE_X_ARROW_PATH} fill="currentColor" />
@@ -31,53 +20,29 @@ const TranslateX = (
     </g>
   </svg>
 );
-const TRANSLATE_Y_GUIDE_PATH =
-  'M8.00004 8.70711V15H9.00004V9H15V8H8.70714' +
-  'L5.85359 5.14645L5.14648 5.85355L8.00004 8.70711Z';
-const TRANSLATE_Y_ARROW_PATH =
-  'M9 14.043L10.6465 12.3965L11.3535 13.1035L8.5 15.957' +
-  'L5.64648 13.1035L6.35352 12.3965L8 14.043V8H9V14.043Z';
+const TRANSLATE_Y_GUIDE_PATH = 'M8.00004 8.70711V15H9.00004V9H15V8H8.70714' + 'L5.85359 5.14645L5.14648 5.85355L8.00004 8.70711Z';
+const TRANSLATE_Y_ARROW_PATH = 'M9 14.043L10.6465 12.3965L11.3535 13.1035L8.5 15.957' + 'L5.64648 13.1035L6.35352 12.3965L8 14.043V8H9V14.043Z';
 
 const TranslateY = (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <g>
-      <path
-        opacity="0.4"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={TRANSLATE_Y_GUIDE_PATH}
-        fill="currentColor"
-      />
+      <path opacity="0.4" fillRule="evenodd" clipRule="evenodd" d={TRANSLATE_Y_GUIDE_PATH} fill="currentColor" />
       <g>
         <path d={TRANSLATE_Y_ARROW_PATH} fill="currentColor" />
-        <path
-          d="M3.5 2.49414L4.75293 1H6L4 3.5V6H3V3.5L1 1H2.25L3.5 2.49414Z"
-          fill="currentColor"
-        />
+        <path d="M3.5 2.49414L4.75293 1H6L4 3.5V6H3V3.5L1 1H2.25L3.5 2.49414Z" fill="currentColor" />
       </g>
     </g>
   </svg>
 );
-const TRANSLATE_Z_GUIDE_PATH =
-  'M7.99998 10.2929V4H8.99998V10H15V11H8.70708' +
-  'L4.85353 14.8536L4.14642 14.1464L7.99998 10.2929Z';
+const TRANSLATE_Z_GUIDE_PATH = 'M7.99998 10.2929V4H8.99998V10H15V11H8.70708' + 'L4.85353 14.8536L4.14642 14.1464L7.99998 10.2929Z';
 
 const TranslateZ = (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <g>
-      <path
-        opacity="0.4"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={TRANSLATE_Z_GUIDE_PATH}
-        fill="currentColor"
-      />
+      <path opacity="0.4" fillRule="evenodd" clipRule="evenodd" d={TRANSLATE_Z_GUIDE_PATH} fill="currentColor" />
       <g>
         <path d="M4.29289 2H1V1H6V1.70711L2.70711 5H6V6H1V5.29289L4.29289 2Z" fill="currentColor" />
-        <path
-          d="M9.35355 10.3536L5.70711 14H8V15H4V11H5V13.2929L8.64645 9.64648L9.35355 10.3536Z"
-          fill="currentColor"
-        />
+        <path d="M9.35355 10.3536L5.70711 14H8V15H4V11H5V13.2929L8.64645 9.64648L9.35355 10.3536Z" fill="currentColor" />
       </g>
     </g>
   </svg>
@@ -162,9 +127,7 @@ const SKEW_TYPE_OUTLINE_PATH =
   'M6.11801 4L2.11801 12H9.88194L13.8819 4H6.11801ZM5.80899 3C5.61961 3 5.44648 3.107 ' +
   '5.36178 3.27639L0.861781 12.2764C0.695556 12.6088 0.937304 13 1.309 13H10.191C10.3803 13 ' +
   '10.5535 12.893 10.6382 12.7236L15.1382 3.72361C15.3044 3.39116 15.0627 3 14.691 3H5.80899Z';
-const SKEW_TYPE_TOP_EDGE_PATH =
-  'M4.99998 4H11C11 3.44771 10.5523 3 10 3H5.80899' +
-  'C5.61961 3 5.44648 3.107 5.36178 3.27639L4.99998 4Z';
+const SKEW_TYPE_TOP_EDGE_PATH = 'M4.99998 4H11C11 3.44771 10.5523 3 10 3H5.80899' + 'C5.61961 3 5.44648 3.107 5.36178 3.27639L4.99998 4Z';
 
 // The per-type glyph shown on each collapsed layer row (Move / Scale / Rotate / Skew).
 const TYPE_ICONS: Record<TransformType, ReactNode> = {
@@ -175,10 +138,7 @@ const TYPE_ICONS: Record<TransformType, ReactNode> = {
   ),
   scale: (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M13 3.70711L3.70711 13H7V14H2V9H3V12.2929L12.2929 3H9V2H14V7H13V3.70711Z"
-        fill="currentColor"
-      />
+      <path d="M13 3.70711L3.70711 13H7V14H2V9H3V12.2929L12.2929 3H9V2H14V7H13V3.70711Z" fill="currentColor" />
       <g opacity="0.4">
         <path d="M8 2H3C2.44772 2 2 2.44772 2 3V8H3V3H8V2Z" fill="currentColor" />
         <path d="M8 13H13V8H14V13C14 13.5523 13.5523 14 13 14H8V13Z" fill="currentColor" />
@@ -196,17 +156,9 @@ const TYPE_ICONS: Record<TransformType, ReactNode> = {
   skew: (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <g>
-        <path
-          fillRule="evenodd"
-          clipRule="evenodd"
-          d={SKEW_TYPE_OUTLINE_PATH}
-          fill="currentColor"
-        />
+        <path fillRule="evenodd" clipRule="evenodd" d={SKEW_TYPE_OUTLINE_PATH} fill="currentColor" />
         <g opacity="0.4">
-          <path
-            d="M2 7.76389L1 9.76389V4C1 3.44772 1.44772 3 2 3H4.38194L3.88194 4H2V7.76389Z"
-            fill="currentColor"
-          />
+          <path d="M2 7.76389L1 9.76389V4C1 3.44772 1.44772 3 2 3H4.38194L3.88194 4H2V7.76389Z" fill="currentColor" />
           <path d={SKEW_TYPE_TOP_EDGE_PATH} fill="currentColor" />
           <path d="M11 5V7.52782L10 9.52782V5H11Z" fill="currentColor" />
           <path d="M10.8819 10L11 9.76389V10H10.8819Z" fill="currentColor" />

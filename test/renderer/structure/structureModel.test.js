@@ -54,18 +54,12 @@ test('Navigator opens only the first expandable root and skips non-expandable ro
   const raw = { id: 'style', kind: 'raw', name: 'style', inner: '' };
   const text = { id: 'text', kind: 'text', value: 'Introduction' };
   const paragraph = element('paragraph', [text]);
-  assert.deepEqual(
-    [...model.initialCollapseMap([raw, paragraph, layout, sibling])],
-    [['layout', false]],
-  );
+  assert.deepEqual([...model.initialCollapseMap([raw, paragraph, layout, sibling])], [['layout', false]]);
   assert.deepEqual([...model.initialCollapseMap([element('main', [section])])], [['main', false]]);
   assert.deepEqual([...model.initialCollapseMap([raw, paragraph])], []);
   assert.deepEqual([...model.initialCollapseMap([])], []);
   assert.equal(model.defaultCollapsed(section), true, 'nested components retain their default');
-  assert.throws(
-    () => model.initialCollapseMap(Array.from({ length: 20_001 }, () => raw)),
-    /root node limit/,
-  );
+  assert.throws(() => model.initialCollapseMap(Array.from({ length: 20_001 }, () => raw)), /root node limit/);
 });
 
 test('Navigator traversals reject excessive width, depth, and cycles', () => {

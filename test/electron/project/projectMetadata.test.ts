@@ -5,15 +5,8 @@ import test from 'node:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-  readProjectMetadata,
-  writeProjectMetadata,
-} from '#dist/electron/project/projectMetadata.js';
-import {
-  METADATA_FILES,
-  metadataKind,
-  type MetadataKind,
-} from '#dist/shared/properties/projectMetadata.js';
+import { readProjectMetadata, writeProjectMetadata } from '#dist/electron/project/projectMetadata.js';
+import { METADATA_FILES, metadataKind, type MetadataKind } from '#dist/shared/properties/projectMetadata.js';
 import { DEFAULT_PUBLISH_CONFIG } from '#dist/shared/properties/publishConfig.js';
 import { readPublishConfig } from '#dist/electron/project/publishConfig.js';
 
@@ -96,16 +89,10 @@ test('metadata creates once, saves against its base and reports external edits',
     },
   });
   assert.equal(writeProjectMetadata(root, { kind: 'components', source: next }).ok, false);
-  assert.equal(
-    writeProjectMetadata(root, { kind: 'components', source: next, base: source }).ok,
-    true,
-  );
+  assert.equal(writeProjectMetadata(root, { kind: 'components', source: next, base: source }).ok, true);
   assert.equal(writeProjectMetadata(root, { kind: 'components', source, base: source }).ok, false);
   assert.equal(fs.readFileSync(path.join(root, '.stacki/components.json'), 'utf8'), next);
-  assert.equal(
-    writeProjectMetadata(root, { kind: 'components', source: '{broken', base: next }).ok,
-    false,
-  );
+  assert.equal(writeProjectMetadata(root, { kind: 'components', source: '{broken', base: next }).ok, false);
 });
 
 test('metadata refuses symlink directories and leaves the destination untouched', (context) => {

@@ -25,10 +25,7 @@ const valid = {
   inheritedSources: { 'font-size': { label: '.heading', path: '0' } },
 };
 assert.equal(parseCanvasReply(valid).ok, true);
-assert.equal(
-  parseCanvasReply({ ...valid, identity: { ...valid.identity, id: undefined } }).ok,
-  true,
-);
+assert.equal(parseCanvasReply({ ...valid, identity: { ...valid.identity, id: undefined } }).ok, true);
 for (const input of [
   PLATFORM_NULL,
   [],
@@ -96,9 +93,7 @@ async function main() {
   assert.equal(canvas.tellCanvas({ type: 'test' }), false);
 
   canvas.setCanvasFrame({ postMessage() {} });
-  const waiting = Array.from({ length: canvas.CANVAS_LIMITS.pendingMax }, () =>
-    canvas.queryCanvas('0'),
-  );
+  const waiting = Array.from({ length: canvas.CANVAS_LIMITS.pendingMax }, () => canvas.queryCanvas('0'));
   assert.equal(await canvas.queryCanvas('overflow'), undefined);
   canvas.setCanvasFrame(undefined);
   assert.equal(

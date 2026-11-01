@@ -10,14 +10,7 @@ import {
   removeRecentProject,
   type RecentProject,
 } from './welcomeBridge';
-import {
-  AstroIcon,
-  CloseIcon,
-  FolderIcon,
-  GitHubIcon,
-  LayersIcon,
-  LumosIcon,
-} from '../../ui/Icons';
+import { AstroIcon, CloseIcon, FolderIcon, GitHubIcon, LayersIcon, LumosIcon } from '../../ui/Icons';
 import StackiLogo from './StackiLogo';
 import WelcomeBackground from './WelcomeBackground';
 import { NewProjectWizard, StarterWizard } from './WelcomeWizards';
@@ -46,12 +39,7 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
         createNew={() => void actions.createNew()}
         cloneRepository={() => setCloning(true)}
       />
-      <RecentRail
-        projects={recent.projects}
-        refreshing={recent.refreshing}
-        open={onOpen}
-        remove={(projectPath) => void recent.remove(projectPath)}
-      />
+      <RecentRail projects={recent.projects} refreshing={recent.refreshing} open={onOpen} remove={(projectPath) => void recent.remove(projectPath)} />
       {cloning && (
         <CloneRepositoryModal
           onClose={() => setCloning(false)}
@@ -136,9 +124,7 @@ function useRecentProjects(showToast: WelcomeScreenProps['showToast']) {
     void listRecentProjects().then((result) => {
       if (active && result.ok) {
         setProjects(result.value);
-        setQueue(
-          result.value.filter((project) => project.canRefresh && (project.stale || !project.thumb)),
-        );
+        setQueue(result.value.filter((project) => project.canRefresh && (project.stale || !project.thumb)));
       }
     });
     return () => {
@@ -194,11 +180,7 @@ function updateThumbnail(
   projectPath: string,
   result: { readonly thumb: string | undefined; readonly stale: boolean },
 ): readonly RecentProject[] {
-  return projects.map((project) =>
-    project.path === projectPath
-      ? { ...project, thumb: result.thumb, stale: result.stale }
-      : project,
-  );
+  return projects.map((project) => (project.path === projectPath ? { ...project, thumb: result.thumb, stale: result.stale } : project));
 }
 
 function withoutPath(paths: ReadonlySet<string>, projectPath: string): ReadonlySet<string> {
@@ -274,12 +256,7 @@ function RecentRail({
       <div className="recents-title">Recent projects</div>
       <div className="recent-rail">
         {projects.map((project) => (
-          <div
-            key={project.path}
-            className="recent-card"
-            title={project.path}
-            onClick={() => open(project.path)}
-          >
+          <div key={project.path} className="recent-card" title={project.path} onClick={() => open(project.path)}>
             <button
               className="recent-remove"
               title="Remove from recent projects"
@@ -291,11 +268,7 @@ function RecentRail({
               <CloseIcon size={11} />
             </button>
             <div className={`recent-thumb ${refreshing.has(project.path) ? 'busy' : ''}`}>
-              {project.thumb ? (
-                <img src={project.thumb} alt="" draggable={false} />
-              ) : (
-                <LayersIcon size={22} strokeWidth={1.2} />
-              )}
+              {project.thumb ? <img src={project.thumb} alt="" draggable={false} /> : <LayersIcon size={22} strokeWidth={1.2} />}
             </div>
             <div className="recent-name">{project.name}</div>
             <div className="recent-path">{project.path}</div>

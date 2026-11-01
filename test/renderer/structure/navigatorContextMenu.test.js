@@ -44,14 +44,8 @@ function checkWrap({ canWrapNode, wrapNodeGesture }) {
   assert.equal(canWrapNode([table], 'n0.0', 'div'), false);
   const link = element('n0', 'div', [element('n0.0', 'a')]);
   assert.equal(canWrapNode([link], 'n0', 'a'), false);
-  assert.throws(
-    () => wrapNodeGesture({ nodes: [link] }, 'n0', { id: 'n2', name: 'a' }),
-    /The node accepts this wrapper/,
-  );
-  assert.throws(
-    () => wrapNodeGesture(model, 'n0', { id: 'n0', name: 'div' }),
-    /A wrapper has its own identity/,
-  );
+  assert.throws(() => wrapNodeGesture({ nodes: [link] }, 'n0', { id: 'n2', name: 'a' }), /The node accepts this wrapper/);
+  assert.throws(() => wrapNodeGesture(model, 'n0', { id: 'n0', name: 'div' }), /A wrapper has its own identity/);
   const gesture = wrapNodeGesture(model, 'n0', { id: 'n2', name: 'div' });
   const target = { id: 'n0' };
   assert.deepEqual(
@@ -122,12 +116,9 @@ async function checkMenu(StructurePanel) {
     onCodeChange: () => {},
     onOpenCodePanel: () => {},
   };
-  const render = (overrides = {}) =>
-    act(() => root.render(React.createElement(StructurePanel, { ...props, ...overrides })));
+  const render = (overrides = {}) => act(() => root.render(React.createElement(StructurePanel, { ...props, ...overrides })));
   const item = (label) =>
-    [...document.querySelectorAll('[role="menuitem"]')].find(
-      (entry) => entry.textContent === label || entry.firstElementChild?.textContent === label,
-    );
+    [...document.querySelectorAll('[role="menuitem"]')].find((entry) => entry.textContent === label || entry.firstElementChild?.textContent === label);
   const open = (id) =>
     act(() => {
       document.querySelector(`[data-node-id="${id}"]`).dispatchEvent(
@@ -140,12 +131,7 @@ async function checkMenu(StructurePanel) {
       );
     });
   const click = (label) => act(() => item(label).click());
-  const key = (target, name) =>
-    act(() =>
-      target.dispatchEvent(
-        new dom.window.KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }),
-      ),
-    );
+  const key = (target, name) => act(() => target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true })));
   await render();
   await open('n1');
   assert.ok(item('Open component'));
@@ -162,10 +148,7 @@ async function checkMenu(StructurePanel) {
   assert.deepEqual(calls.at(-1), ['open', 'Card', 'n1']);
   assert.equal(document.querySelector('[role="menu"]') ?? undefined, undefined);
   await open('n1');
-  assert.equal(
-    document.querySelector('[aria-label="Element actions"] > button:last-child').textContent,
-    'Set component defaults',
-  );
+  assert.equal(document.querySelector('[aria-label="Element actions"] > button:last-child').textContent, 'Set component defaults');
   await click('Set component defaults');
   assert.deepEqual(calls.at(-1), ['defaults', 'Card', 'n1']);
   await open('n1');
@@ -201,15 +184,7 @@ async function checkMenu(StructurePanel) {
   assert.equal(item('Open component').disabled, true);
   await render({ clientMode: true, hasClipboard: false });
   await open('layout');
-  for (const label of [
-    'Cut',
-    'Copy',
-    'Duplicate',
-    'Delete',
-    'Wrap in',
-    'Paste',
-    'Set component defaults',
-  ]) {
+  for (const label of ['Cut', 'Copy', 'Duplicate', 'Delete', 'Wrap in', 'Paste', 'Set component defaults']) {
     assert.equal(item(label).disabled, true, label);
   }
   await key(document.activeElement, 'Escape');
@@ -225,10 +200,7 @@ async function checkMenu(StructurePanel) {
 
 (async () => {
   checkWrap(await bundle('src/editor/wrapNode.ts', 'wrap.cjs'));
-  const { default: StructurePanel } = await bundle(
-    'src/features/structure/StructurePanel.tsx',
-    'panel.cjs',
-  );
+  const { default: StructurePanel } = await bundle('src/features/structure/StructurePanel.tsx', 'panel.cjs');
   await checkMenu(StructurePanel);
   console.log('navigator-context-menu: all checks passed');
 })().catch((error) => {

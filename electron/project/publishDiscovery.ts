@@ -10,19 +10,12 @@ import {
   type PublishProject,
 } from '../../shared/properties/publishDiscovery';
 import { discoveryCommand } from './publishDiscoveryCommand';
-import {
-  cloudflareAccounts,
-  cloudflareProjects,
-  cloudflareWorkers,
-} from './publishDiscoveryCloudflare';
+import { cloudflareAccounts, cloudflareProjects, cloudflareWorkers } from './publishDiscoveryCloudflare';
 import { vercelAccounts, vercelProjects } from './publishDiscoveryVercel';
 import { linkedPublishProject } from './publishLinkedProject';
 
 /** This boundary returns sanitized failures, never CLI output that could contain credentials. */
-export async function discoverPublishing(
-  root: string,
-  input: DiscoveryRequest,
-): Promise<PublishDiscovery> {
+export async function discoverPublishing(root: string, input: DiscoveryRequest): Promise<PublishDiscovery> {
   const request = parseDiscoveryRequest(input);
   try {
     return parsePublishDiscovery(await discoverProvider(root, request));
@@ -44,14 +37,9 @@ export async function discoverPublishing(
   }
 }
 
-async function discoverProvider(
-  root: string,
-  request: DiscoveryRequest,
-): Promise<PublishDiscovery> {
+async function discoverProvider(root: string, request: DiscoveryRequest): Promise<PublishDiscovery> {
   if (request.provider === 'linked') {
-    const results = await Promise.allSettled(
-      (['linked', 'vercel'] as const).map((provider) => linkedPublishProject(root, provider)),
-    );
+    const results = await Promise.allSettled((['linked', 'vercel'] as const).map((provider) => linkedPublishProject(root, provider)));
     return {
       kind: 'ready',
       accounts: [],
@@ -59,16 +47,7 @@ async function discoverProvider(
     };
   }
   if (request.provider === 'github') {
-    const status = record(
-      await discoveryCommand(root, 'gh', [
-        'auth',
-        'status',
-        '--hostname',
-        'github.com',
-        '--json',
-        'hosts',
-      ]),
-    );
+    const status = record(await discoveryCommand(root, 'gh', ['auth', 'status', '--hostname', 'github.com', '--json', 'hosts']));
     const entries = discoveryList(record(status['hosts'])['github.com'] ?? []);
     const connected = await repositoryState(root).catch(() => undefined);
     const owner = connected?.connected.split('/')[0];
@@ -94,10 +73,7 @@ async function discoverProvider(
   return discoverHosting(root, request.provider);
 }
 
-async function discoverHosting(
-  root: string,
-  provider: 'cloudflare' | 'cloudflare-workers' | 'vercel',
-): Promise<PublishDiscovery> {
+async function discoverHosting(root: string, provider: 'cloudflare' | 'cloudflare-workers' | 'vercel'): Promise<PublishDiscovery> {
   const [linked, connected] = await Promise.allSettled([
     linkedPublishProject(root, provider),
     provider === 'vercel' ? vercelAccounts(root) : cloudflareAccounts(root),

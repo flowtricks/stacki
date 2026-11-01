@@ -3,9 +3,13 @@ import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
 import Dropdown from '../../ui/Dropdown';
 import type { DropdownOption } from '../../ui/Dropdown';
+import { SETTING_PROP_TYPES } from '../../editor/optionsBinding';
 import {
   BracesIcon,
   CalendarIcon,
+  CheckIcon,
+  FilterIcon,
+  SortIcon,
   CloseIcon,
   CodeIcon,
   ComponentPropertiesIcon,
@@ -23,6 +27,13 @@ import {
 } from '../../ui/Icons';
 
 const UNION_TYPE = '"Option 1" | "Option 2"';
+// A collection list's settings, as the loop that reads them types them
+// (optionsBinding.ts): named for what they are rather than their shape.
+const LIST_SETTING_CHOICES: readonly DropdownOption<string>[] = [
+  { value: SETTING_PROP_TYPES.filter, label: 'Filter', hint: 'Collection list filters', icon: <FilterIcon size={14} /> },
+  { value: SETTING_PROP_TYPES.sort, label: 'Sort', hint: 'Collection list sort', icon: <SortIcon size={14} /> },
+  { value: SETTING_PROP_TYPES.curated, label: 'Selected items', hint: 'Collection list picks', icon: <CheckIcon size={14} /> },
+];
 // These are authored type expressions, not types used to bypass the app's own checking.
 const TYPE_CHOICES: readonly DropdownOption<string>[] = [
   { value: 'string', label: 'string', hint: 'Text / link', icon: <TextIcon size={14} /> },
@@ -74,20 +85,12 @@ const TYPE_CHOICES: readonly DropdownOption<string>[] = [
   { value: 'never', label: 'never', icon: <PointerEventsNoneIcon size={14} /> },
   { value: 'void', label: 'void', icon: <ElementSlotIcon size={14} /> },
   { value: 'any', label: 'any', hint: 'Unchecked value', icon: <SparkleIcon size={14} /> },
+  ...LIST_SETTING_CHOICES,
 ];
 
-export function PropertyType({
-  type,
-  onChange,
-}: {
-  readonly type: string;
-  readonly onChange: (type: string) => void;
-}) {
-  const supported =
-    TYPE_CHOICES.some((option) => option.value === type) || literalOptions(type) !== undefined;
-  const [mode, setMode] = useState<'dropdown' | 'expression'>(
-    supported ? 'dropdown' : 'expression',
-  );
+export function PropertyType({ type, onChange }: { readonly type: string; readonly onChange: (type: string) => void }) {
+  const supported = TYPE_CHOICES.some((option) => option.value === type) || literalOptions(type) !== undefined;
+  const [mode, setMode] = useState<'dropdown' | 'expression'>(supported ? 'dropdown' : 'expression');
   const expression = mode === 'expression';
   const action = expression ? 'Use the type dropdown' : 'Write a type expression';
   return (
@@ -116,14 +119,7 @@ export function PropertyType({
           onChange={(event) => onChange(event.target.value)}
         />
       ) : (
-        <Dropdown
-          value={type}
-          options={propertyTypeChoices(type)}
-          onChange={onChange}
-          livePreview={false}
-          searchable
-          searchPlaceholder="Search types…"
-        />
+        <Dropdown value={type} options={propertyTypeChoices(type)} onChange={onChange} livePreview={false} searchable searchPlaceholder="Search types…" />
       )}
     </div>
   );
@@ -131,9 +127,7 @@ export function PropertyType({
 
 function propertyTypeChoices(type: string): readonly DropdownOption<string>[] {
   // Toggling modes must preserve custom expressions and existing union options.
-  const choices = TYPE_CHOICES.map((option) =>
-    option.value === UNION_TYPE && literalOptions(type) ? { ...option, value: type } : option,
-  );
+  const choices = TYPE_CHOICES.map((option) => (option.value === UNION_TYPE && literalOptions(type) ? { ...option, value: type } : option));
   return choices.some((option) => option.value === type)
     ? choices
     : [

@@ -3,10 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import {
-  parseGitWorkspaceManifest,
-  gitBranchName,
-} from '../src/features/history/gitWorkspaceContract';
+import { parseGitWorkspaceManifest, gitBranchName } from '../src/features/history/gitWorkspaceContract';
 
 const head = 'a'.repeat(40);
 const valid = {
@@ -39,17 +36,7 @@ test('Git workspace metadata validates branches, hashes, identities and bounds',
   ]) {
     assert.throws(() => parseGitWorkspaceManifest(input));
   }
-  for (const name of [
-    'HEAD',
-    '-main',
-    '../main',
-    'a..b',
-    'a.lock',
-    'a//b',
-    'a/.hidden',
-    'main\nbranch',
-    'a'.repeat(201),
-  ]) {
+  for (const name of ['HEAD', '-main', '../main', 'a..b', 'a.lock', 'a//b', 'a/.hidden', 'main\nbranch', 'a'.repeat(201)]) {
     assert.throws(() => gitBranchName(name));
   }
   assert.equal(gitBranchName('feature/component'), 'feature/component');

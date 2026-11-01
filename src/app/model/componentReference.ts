@@ -14,9 +14,7 @@ interface ComponentReference {
 // can contain Heading. Match the imported file before considering a name fallback.
 export function componentReference(context: ComponentReference): ScanComponent | undefined {
   const specifier = context.imports.find((item) => item.name === context.name)?.path;
-  const installed = context.components.find(
-    (item) => item.origin?.kind === 'package' && item.origin.importPath === specifier,
-  );
+  const installed = context.components.find((item) => item.origin?.kind === 'package' && item.origin.importPath === specifier);
   if (installed) {
     return installed;
   }
@@ -25,9 +23,7 @@ export function componentReference(context: ComponentReference): ScanComponent |
   if (specifier && root && file?.startsWith(root + '/')) {
     const resolved = resolveSourceImport(file.slice(root.length + 1), specifier);
     if (resolved) {
-      return context.components.find(
-        (item) => item.path.replaceAll('\\', '/') === root + '/' + resolved,
-      );
+      return context.components.find((item) => item.path.replaceAll('\\', '/') === root + '/' + resolved);
     }
   }
   return context.components.find((item) => item.name === context.name);

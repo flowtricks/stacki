@@ -10,32 +10,16 @@ import { setSoundEnabled } from '../../ui/sound';
 import { LIMITS } from '../../../shared/core/limits';
 import { assert } from '../../../shared/core/assert';
 import { keepsSlot as keepsSlotAttribute } from '../../editor/slotAttr';
-import {
-  duplicateGesture,
-  frontmatterGesture,
-  insertGesture,
-  moveGesture,
-  removalGesture,
-  sequence,
-} from '../../editor/editGestures';
+import { duplicateGesture, frontmatterGesture, insertGesture, moveGesture, removalGesture, sequence } from '../../editor/editGestures';
 import { loopVarsAt, strippedBindings } from '../../editor/loopBindings';
 import { propsForExtraction } from '../../editor/extractProps';
 import { cleanError } from '../../lib/cleanError';
 import { namesInScope } from '../../editor/dataSuggest';
 import type { InsertTarget } from '../../editor/insertTarget';
 import { type NodeClipboard } from '../appTypes';
-import {
-  findEditorNodeById as findNodeById,
-  findEditorParentList as findParentList,
-} from '../../editor/pageState';
+import { findEditorNodeById as findNodeById, findEditorParentList as findParentList } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
-import {
-  createProjectComponent,
-  findImportPath,
-  onSoundSettingChanged,
-  readComponentUsage,
-  readAppSettings,
-} from '../../ipc/appBridge';
+import { createProjectComponent, findImportPath, onSoundSettingChanged, readComponentUsage, readAppSettings } from '../../ipc/appBridge';
 import { parseShortcutMessage } from '../../features/preview/previewMessages';
 import { namesInSubtree, offerStyleCleanup } from '../../features/selectors/deleteCleanup';
 import { newId, withNewIds, usesPageScope, slotHostOf, definitionOf, frontmatterOf } from '../model/nodeFactory';
@@ -72,13 +56,7 @@ export function useHistory(
   const undoRedo = useUndoRedo(coreState, typedParse, lifecycle, stepEditsScope);
   const scheduleSaveScope = useScheduleSave(coreState, lifecycle, typedParse, historyPush);
   const commitEditScope = useCommitEdit(lifecycle, coreState, scheduleSaveScope, historyPush);
-  const codeSource = useCodeSource(
-    coreState,
-    historyPush,
-    lifecycle,
-    scheduleSaveScope,
-    typedParse,
-  );
+  const codeSource = useCodeSource(coreState, historyPush, lifecycle, scheduleSaveScope, typedParse);
   const outsideEdit = useOutsideEdit(lifecycle, coreState);
   useFileEvents(coreState, lifecycle, outsideEdit);
   return {
@@ -95,10 +73,7 @@ export function useHistory(
 }
 
 // Placing a project component.
-export function useAddComponent(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useAddComponent(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { insertables, pageStateRef, projectRef, setSelectedId } = coreState;
   const { commitEdit } = history;
 
@@ -117,9 +92,7 @@ export function useAddComponent(
   // target: {parentId: string | undefined, index: number} | undefined (append at end)
   const addComponent = useCallback(
     async (componentName: string, target: InsertTarget | undefined) => {
-      const comp =
-        insertables.find((component) => component.path === componentName) ??
-        insertables.find((component) => component.name === componentName);
+      const comp = insertables.find((component) => component.path === componentName) ?? insertables.find((component) => component.name === componentName);
       const page = pageStateRef.current.currentPage;
       const projectPath = projectRef.current?.path;
       if (!comp || !page || !projectPath) {
@@ -258,10 +231,7 @@ export function useCreateComponent(
       const page = pageStateRef.current.currentPage;
       const state = pageStateRef.current.pageState;
       const model = state?.editable ? state.model : undefined;
-      const node =
-        model && selectedIdRef.current
-          ? findNodeById(model.nodes, selectedIdRef.current)
-          : undefined;
+      const node = model && selectedIdRef.current ? findNodeById(model.nodes, selectedIdRef.current) : undefined;
       const projectPath = projectRef.current?.path;
       if (!page?.path || !model || !node || !projectPath) {
         return;
@@ -309,11 +279,7 @@ export function useCreateComponent(
 }
 
 // Moving a node.
-export function useMoveNode(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useMoveNode(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>, lifecycle: ReturnType<typeof useLifecycle>) {
   const { insertables, pageStateRef } = coreState;
   const { commitEdit } = history;
   const { showToast } = lifecycle;
@@ -351,12 +317,7 @@ export function useMoveNode(
       const removed = node && lost.length ? strippedBindings(node, lost).removed : 0;
       commitEdit(gesture);
       if (removed) {
-        showToast(
-          `Removed ${removed} binding${removed === 1 ? '' : 's'} that referenced ${lost.join(
-            ', ',
-          )}.`,
-          'info',
-        );
+        showToast(`Removed ${removed} binding${removed === 1 ? '' : 's'} that referenced ${lost.join(', ')}.`, 'info');
       }
     },
     [insertables, commitEdit, showToast, pageStateRef],
@@ -378,10 +339,7 @@ export function useRemoveNode(coreState: ReturnType<typeof useCoreState>, lifecy
       }
       const target = findNodeById(state.model.nodes, nodeId);
       if (target?.kind === 'chunk-group') {
-        showToast(
-          'This section comes from the page frontmatter — remove it from the code instead.',
-          'error',
-        );
+        showToast('This section comes from the page frontmatter — remove it from the code instead.', 'error');
         return;
       }
       // Worked out against the tree as it stands, before the node is gone.
@@ -491,10 +449,7 @@ export function useCopyNode(
         return;
       }
       if (sourceNode.kind === 'chunk-group' || sourceNode.chunkFile) {
-        showToast(
-          'Chunk sections are defined in the page frontmatter and cannot be duplicated here.',
-          'error',
-        );
+        showToast('Chunk sections are defined in the page frontmatter and cannot be duplicated here.', 'error');
         return;
       }
       const clone = withNewIds(sourceNode);
@@ -552,33 +507,17 @@ export function usePasteNode(
     const place = pastePlace(withImports, selectionId, insertables);
     const { pasted, removed, lost } = pastedInScope(withImports, clone, place, clip.vars || []);
     if (removed) {
-      showToast(
-        `Removed ${removed} binding${removed === 1 ? '' : 's'} that referenced ${lost.join(', ')}.`,
-        'info',
-      );
+      showToast(`Removed ${removed} binding${removed === 1 ? '' : 's'} that referenced ${lost.join(', ')}.`, 'info');
     }
     const insert = insertGesture(withImports, pasted, place, { urgency: true });
     const options = { coalesceKey: undefined, urgency: true };
-    commitEdit(
-      frontmatterOf(withImports) === frontmatterOf(shown)
-        ? insert
-        : sequence(frontmatterGesture(shown, options, imported), insert),
-    );
+    commitEdit(frontmatterOf(withImports) === frontmatterOf(shown) ? insert : sequence(frontmatterGesture(shown, options, imported), insert));
     setSelectedId(clone.id);
     const brought = broughtMessage(needs);
     if (brought !== undefined) {
       showToast(brought, 'info');
     }
-  }, [
-    commitEdit,
-    insertables,
-    resolveImportPath,
-    showToast,
-    nodeClipboardRef,
-    pageStateRef,
-    selectedIdRef,
-    setSelectedId,
-  ]);
+  }, [commitEdit, insertables, resolveImportPath, showToast, nodeClipboardRef, pageStateRef, selectedIdRef, setSelectedId]);
   return { pasteNode };
 }
 
@@ -597,8 +536,7 @@ export function useInsertPalette(coreState: ReturnType<typeof useCoreState>) {
     const onKey = (event: KeyboardEvent): void => {
       const mod = event.metaKey || event.ctrlKey;
       const isToggle =
-        (mod && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j') ||
-        (event.ctrlKey && !event.metaKey && !event.altKey && event.key === '`');
+        (mod && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j') || (event.ctrlKey && !event.metaKey && !event.altKey && event.key === '`');
       if (!isToggle) {
         return;
       }
@@ -633,10 +571,7 @@ export function useInsertPalette(coreState: ReturnType<typeof useCoreState>) {
 }
 
 // Shortcuts forwarded from the canvas.
-export function useCanvasMessages(
-  coreState: ReturnType<typeof useCoreState>,
-  insertPalette: ReturnType<typeof useInsertPalette>,
-) {
+export function useCanvasMessages(coreState: ReturnType<typeof useCoreState>, insertPalette: ReturnType<typeof useInsertPalette>) {
   const { inPreviewRef, pageStateRef } = coreState;
   const { setInsertOpen } = insertPalette;
 
@@ -670,9 +605,7 @@ export function useCanvasMessages(
         // on the app window so tree navigation behaves the same whether the
         // selection was made on the canvas or in the navigator.
         case 'arrow':
-          window.dispatchEvent(
-            new KeyboardEvent('keydown', { key: message.key, bubbles: true, cancelable: true }),
-          );
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: message.key, bubbles: true, cancelable: true }));
           return;
         // Delete / ⌘D from the canvas. Replayed on the document rather than
         // handled here so they go through the same guards as a keypress in the

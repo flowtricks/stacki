@@ -28,12 +28,7 @@ export function patchCounts(): PatchCounts {
   return { ...counts };
 }
 
-export function candidateSnapshot(
-  path: FilePath,
-  base: Snapshot,
-  plan: Plan,
-  bytes: ByteString,
-): Snapshot {
+export function candidateSnapshot(path: FilePath, base: Snapshot, plan: Plan, bytes: ByteString): Snapshot {
   assert.ok(base.path === path, 'The candidate is of the base file');
   const [splice, ...others] = plan.splices;
   if (splice === undefined || others.length > 0) {

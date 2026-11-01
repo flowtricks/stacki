@@ -16,16 +16,8 @@ import { structuralEdits } from '../src/features/source/sourceOperations';
 import { applyEdits, parsePage } from '../src/features/source/source';
 import { filePath, record } from '../src/shared/validation';
 import { metadataFiles } from '../src/features/settings/projectMetadata';
-import {
-  METADATA_FILES,
-  metadataKind,
-  parseMetadataResult,
-  type MetadataKind,
-} from '../vendor/stacki/shared/properties/projectMetadata';
-import {
-  DEFAULT_PUBLISH_CONFIG,
-  parsePublishSource,
-} from '../vendor/stacki/shared/properties/publishConfig';
+import { METADATA_FILES, metadataKind, parseMetadataResult, type MetadataKind } from '../vendor/stacki/shared/properties/projectMetadata';
+import { DEFAULT_PUBLISH_CONFIG, parsePublishSource } from '../vendor/stacki/shared/properties/publishConfig';
 
 const firstSettings = {
   components: {
@@ -74,10 +66,7 @@ test('Desktop and Studio exchange publish settings through the same project file
     assert.deepEqual(initial, { ok: true, value: { source } });
     assert.equal((await setup.get('publish'))['source'], source);
     const changed = JSON.stringify({ ...firstSettings.publish, defaultTarget: 'github' });
-    assert.equal(
-      (await setup.post({ kind: 'publish', source: changed, base: source })).status,
-      200,
-    );
+    assert.equal((await setup.post({ kind: 'publish', source: changed, base: source })).status, 200);
     assert.deepEqual(desktopPublishMetadata(setup.root, {}), {
       ok: true,
       value: { source: changed },
@@ -159,10 +148,7 @@ async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-metadata-'));
   await mkdir(path.join(root, 'src/components'), { recursive: true });
   await writeFile(path.join(root, 'src/components/Heading.astro'), '<h2><slot /></h2>');
-  await writeFile(
-    path.join(root, 'src/components/Wrapper.astro'),
-    '<section><slot /><slot name="aside" /></section>',
-  );
+  await writeFile(path.join(root, 'src/components/Wrapper.astro'), '<section><slot /><slot name="aside" /></section>');
   const rooms = createRooms(root);
   const server = createServer((request, response) => {
     void metadataRoute(root, rooms, request, response, '/studio/api/metadata', async () => {
@@ -245,18 +231,12 @@ test('Studio saves shared recipes, rejects stale saves, and inserts the saved ne
     assert.doesNotMatch(output, /<b>/);
     assert.equal(parsePage(output).editable, true);
     const changed = source.replace('Literal', 'Updated');
-    assert.equal(
-      (await setup.post({ kind: 'components', source: changed, base: source })).status,
-      200,
-    );
+    assert.equal((await setup.post({ kind: 'components', source: changed, base: source })).status, 200);
     assert.equal((await setup.post({ kind: 'components', source, base: source })).status, 400);
     const external = changed.replace('Updated', 'External');
     await writeFile(path.join(setup.root, '.stacki/components.json'), external);
     assert.equal((await setup.get('components'))['source'], external);
-    assert.equal(
-      (await setup.post({ kind: 'components', source: changed, base: external })).status,
-      200,
-    );
+    assert.equal((await setup.post({ kind: 'components', source: changed, base: external })).status, 200);
   } finally {
     await setup.close();
   }
@@ -279,11 +259,7 @@ test('guide settings are shared files; malformed values and arbitrary metadata p
     });
     assert.equal((await setup.post({ kind: 'guide', source })).status, 200);
     assert.equal((await setup.get('guide'))['source'], source);
-    assert.equal(
-      (await setup.post({ kind: 'guide', source: source.replace('0.1', '4'), base: source }))
-        .status,
-      400,
-    );
+    assert.equal((await setup.post({ kind: 'guide', source: source.replace('0.1', '4'), base: source })).status, 400);
     assert.equal((await setup.post({ kind: '../credentials', source })).status, 400);
     assert.equal(filePath('.stacki/guide.json'), '.stacki/guide.json');
     assert.throws(() => filePath('.stacki/secret.json'));

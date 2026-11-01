@@ -125,11 +125,5 @@ export default function Code({ text, language, filename, maxHeight: heightMax }:
     return () => view.destroy();
   }, [text, lang]);
 
-  return (
-    <div
-      ref={hostRef}
-      className="code-block"
-      style={heightMax ? { maxHeight: heightMax, overflow: 'auto' } : undefined}
-    />
-  );
+  return <div ref={hostRef} className="code-block" style={heightMax ? { maxHeight: heightMax, overflow: 'auto' } : undefined} />;
 }

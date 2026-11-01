@@ -7,11 +7,7 @@ import type { ConflictDraft, ConflictDrafts } from './conflictDraft';
 
 export function useMergeConflict(conflict: Conflict, branches: readonly string[], trunk: string) {
   const [drafts, setDrafts] = useState<ConflictDrafts>(() =>
-    Object.fromEntries(
-      conflict.files.flatMap((file) =>
-        file.parts === undefined ? [] : [[file.path, createConflictDraft(file)]],
-      ),
-    ),
+    Object.fromEntries(conflict.files.flatMap((file) => (file.parts === undefined ? [] : [[file.path, createConflictDraft(file)]]))),
   );
   const [whole, setWhole] = useState<Readonly<Record<string, 'ours' | 'theirs'>>>({});
   const first = conflict.files[0];
@@ -25,8 +21,7 @@ export function useMergeConflict(conflict: Conflict, branches: readonly string[]
   const ours = conflict.from ?? 'Current branch';
   const colors = gitBranchColors([...branches, ours, conflict.branch], trunk);
   const select = (index: number) => setSelected((current) => ({ ...current, [file.path]: index }));
-  const edit = (value: ConflictDraft) =>
-    setDrafts((current) => ({ ...current, [file.path]: value }));
+  const edit = (value: ConflictDraft) => setDrafts((current) => ({ ...current, [file.path]: value }));
   const choose = (choice: ConflictChoice) =>
     setDrafts((current) => {
       const value = current[file.path];
@@ -43,11 +38,7 @@ export function useMergeConflict(conflict: Conflict, branches: readonly string[]
     });
   const pendingFor = (path: string) => {
     const value = drafts[path];
-    return value === undefined
-      ? whole[path] === undefined
-        ? 1
-        : 0
-      : value.regions.filter((region) => region.review === 'pending').length;
+    return value === undefined ? (whole[path] === undefined ? 1 : 0) : value.regions.filter((region) => region.review === 'pending').length;
   };
   const pending = conflict.files.reduce((sum, entry) => sum + pendingFor(entry.path), 0);
   return {
@@ -65,8 +56,7 @@ export function useMergeConflict(conflict: Conflict, branches: readonly string[]
     select,
     edit,
     choose,
-    setWhole: (choice: 'ours' | 'theirs') =>
-      setWhole((current) => ({ ...current, [file.path]: choice })),
+    setWhole: (choice: 'ours' | 'theirs') => setWhole((current) => ({ ...current, [file.path]: choice })),
     colors: {
       ours: gitBranchColor(colors.get(ours) ?? 0),
       theirs: gitBranchColor(colors.get(conflict.branch) ?? 1),

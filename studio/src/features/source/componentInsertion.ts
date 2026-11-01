@@ -5,12 +5,7 @@ import { insertFragment } from './sourceOperations';
 import { parsePage, type Edit, type TreeAction } from './source';
 
 type Insert = Extract<TreeAction, { kind: 'insert' }>;
-export function componentInsertionEdits(
-  source: string,
-  action: Insert,
-  file: string,
-  settings?: InsertionDefaults,
-): Edit[] {
+export function componentInsertionEdits(source: string, action: Insert, file: string, settings?: InsertionDefaults): Edit[] {
   if (!/^[A-Z][\w]*$/.test(action.name) || !/^[\w./@-]+\.astro$/.test(action.importPath)) {
     throw new Error('Invalid component');
   }
@@ -23,17 +18,9 @@ export function componentInsertionEdits(
   const resolved = resolveImport(file, action.importPath, components);
   const rootName = imports.resolve(resolved, action.name, action.importPath);
   const node = defaultInstance(resolved, settings, (child, name) =>
-    imports.resolve(
-      child,
-      name,
-      componentImport(file, components.find((item) => item.file === child) ?? { file: child }),
-    ),
+    imports.resolve(child, name, componentImport(file, components.find((item) => item.file === child) ?? { file: child })),
   );
-  const fragment = node
-    ? serializeNodes([node])
-    : action.paired
-      ? `<${rootName}>Text</${rootName}>`
-      : `<${rootName} />`;
+  const fragment = node ? serializeNodes([node]) : action.paired ? `<${rootName}>Text</${rootName}>` : `<${rootName} />`;
   const edits: Edit[] = [insertFragment(source, action, fragment, parsed.model.nodes.length === 0)];
   if (imports.statements.length) {
     const eol = parsed.model.eol;
@@ -57,11 +44,7 @@ function insertionImports(
   const statements: string[] = [];
   const resolve = (resolved: string | undefined, preferred: string, specifier: string) => {
     const existing = available.find(
-      (item) =>
-        !item.typeOnly &&
-        !item.imported &&
-        (item.path === specifier ||
-          (resolved && resolveImport(file, item.path, components) === resolved)),
+      (item) => !item.typeOnly && !item.imported && (item.path === specifier || (resolved && resolveImport(file, item.path, components) === resolved)),
     );
     if (existing) {
       return existing.name;

@@ -46,15 +46,7 @@ import { gitMerge, gitDeleteBranch, gitPark, gitUnpark } from './gitBridge';
  * The confirm names both branches because the direction is the whole decision
  * and neither an icon on a row nor a menu item can show it.
  */
-export async function mergeBranchAction({
-  projectPath,
-  branch,
-  into,
-  trunk,
-  run,
-  showToast,
-  onConflict,
-}: MergeOptions): Promise<void> {
+export async function mergeBranchAction({ projectPath, branch, into, trunk, run, showToast, onConflict }: MergeOptions): Promise<void> {
   // Once a branch has been folded in, it is usually finished — its work lives
   // on the other branch now and the name is clutter. So the offer to tidy it
   // up belongs WITH the merge, ticked, rather than as a second thing to
@@ -93,10 +85,7 @@ export async function mergeBranchAction({
     // stopped without moving anything — so it is offered as the choice it is:
     // set the work aside and go ahead, or leave it and deal with it first.
     if ('dirty' in merged) {
-      await mergeDirtyWork(
-        { projectPath, branch, into, showToast, onConflict, deleteAfter },
-        merged.files,
-      );
+      await mergeDirtyWork({ projectPath, branch, into, showToast, onConflict, deleteAfter }, merged.files);
       return;
     }
     if ('conflicted' in merged) {
@@ -113,12 +102,7 @@ export async function mergeBranchAction({
     // know whether anything actually moved — a merge with nothing to bring is
     // a success, and calling it "merged" would suggest work arrived that was
     // already there.
-    showToast(
-      merged?.changed
-        ? `Merged ${branch} into ${merged.into}`
-        : `${into} already has everything from ${branch}`,
-      'success',
-    );
+    showToast(merged?.changed ? `Merged ${branch} into ${merged.into}` : `${into} already has everything from ${branch}`, 'success');
   }, 'Merging…');
 }
 
@@ -130,16 +114,8 @@ export async function mergeBranchAction({
  * worth hearing rather than forcing past. The merge already worked either way,
  * so a failure here is reported without taking the merge down with it.
  */
-export async function tidyUp({
-  projectPath,
-  branch,
-  into,
-  changed,
-  showToast,
-}: TidyOptions): Promise<void> {
-  const merged = changed
-    ? `Merged ${branch} into ${into}`
-    : `${into} already had everything from ${branch}`;
+export async function tidyUp({ projectPath, branch, into, changed, showToast }: TidyOptions): Promise<void> {
+  const merged = changed ? `Merged ${branch} into ${into}` : `${into} already had everything from ${branch}`;
   try {
     const deleted = await gitDeleteBranch({ projectPath, branch });
     if (!deleted.ok) {
@@ -165,16 +141,9 @@ export async function tidyUp({
  * rather than bundled into the first, where it would be a warning about
  * something that usually isn't true.
  */
-export async function deleteBranchAction({
-  projectPath,
-  branch,
-  parked,
-  run,
-  showToast,
-}: DeleteOptions): Promise<void> {
+export async function deleteBranchAction({ projectPath, branch, parked, run, showToast }: DeleteOptions): Promise<void> {
   const waiting = parked
-    ? '\n\nChanges are waiting on it. They stay parked and won’t be deleted, but nothing will ' +
-      'bring them back once the branch is gone.'
+    ? '\n\nChanges are waiting on it. They stay parked and won’t be deleted, but nothing will ' + 'bring them back once the branch is gone.'
     : '';
   const yes = await confirmDialog({
     title: `Delete the branch “${branch}”?`,
@@ -207,10 +176,7 @@ export async function deleteBranchAction({
   }, 'Deleting branch…');
 }
 
-async function mergeDirtyWork(
-  { projectPath, branch, into, showToast, onConflict, deleteAfter }: DirtyOptions,
-  files: readonly string[],
-): Promise<void> {
+async function mergeDirtyWork({ projectPath, branch, into, showToast, onConflict, deleteAfter }: DirtyOptions, files: readonly string[]): Promise<void> {
   const named = files?.length ? files.slice(0, 3).join(', ') : 'a file the merge needs';
   const park = await confirmDialog({
     title: 'You have unsaved work in the way',
@@ -248,11 +214,6 @@ async function mergeDirtyWork(
     await tidyUp({ projectPath, branch, into, changed: again?.changed, showToast });
     return;
   }
-  showToast(
-    again?.changed
-      ? `Merged ${branch} into ${into} — your work is back`
-      : `${into} already had everything from ${branch}`,
-    'success',
-  );
+  showToast(again?.changed ? `Merged ${branch} into ${into} — your work is back` : `${into} already had everything from ${branch}`, 'success');
   return;
 }

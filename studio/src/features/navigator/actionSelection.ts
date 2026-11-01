@@ -4,12 +4,7 @@ import { flatten, parsePage, type Edit, type TreeAction } from '../source/source
 
 // Parser IDs describe positions, so an insertion can change another person's
 // selected ID too. Match surviving opening offsets through the actual source edits.
-export function actionSelection(
-  before: string,
-  after: string,
-  edits: readonly Edit[],
-  action: TreeAction,
-) {
+export function actionSelection(before: string, after: string, edits: readonly Edit[], action: TreeAction) {
   const previous = parsePage(before, { locs: true });
   const next = parsePage(after, { locs: true });
   if (!previous.editable || !next.editable) {
@@ -29,10 +24,7 @@ export function actionSelection(
   }
   const survivingIds = new Set(mapped.values());
   const inserted = newNodes.find((node) => node.id && !survivingIds.has(node.id))?.id ?? '';
-  const fallback =
-    action.kind === 'delete'
-      ? selectionAfterDelete(parsePageModel(previous.model), action.node)
-      : undefined;
+  const fallback = action.kind === 'delete' ? selectionAfterDelete(parsePageModel(previous.model), action.node) : undefined;
   return (selected: string, ownAction: boolean) => {
     if (ownAction && action.kind !== 'delete') {
       return inserted || mapped.get(selected) || '';

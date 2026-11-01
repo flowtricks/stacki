@@ -33,12 +33,7 @@ const check = (what, condition, detail) => {
   const buildDirectory = repoPath('node_modules/.stacki-test');
   fs.mkdirSync(buildDirectory, { recursive: true });
   const entry = path.join(buildDirectory, 'focus.entry.jsx');
-  fs.writeFileSync(
-    entry,
-    `export { RatioOtherInput } from ${JSON.stringify(
-      repoPath('src/features/style/SizeSection.tsx'),
-    )};\n`,
-  );
+  fs.writeFileSync(entry, `export { RatioOtherInput } from ${JSON.stringify(repoPath('src/features/style/SizeSection.tsx'))};\n`);
   const out = path.join(buildDirectory, 'focus.bundle.js');
   await esbuild.build({
     entryPoints: [entry],
@@ -145,26 +140,13 @@ const check = (what, condition, detail) => {
 
   // --- both fields it serves ----------------------------------------------------
   // The section and the two fields it hosts, which live beside it.
-  const size = readSourceGroup([
-    'src/features/style/SizeSection.tsx',
-    'src/features/style/AspectRatioField.tsx',
-    'src/features/style/ObjectFitFields.tsx',
-  ]);
-  check(
-    'Ratio asks for the caret only when Other was picked',
-    /autoFocus=\{askedForOther\.current\}/.test(size),
-  );
+  const size = readSourceGroup(['src/features/style/SizeSection.tsx', 'src/features/style/AspectRatioField.tsx', 'src/features/style/ObjectFitFields.tsx']);
+  check('Ratio asks for the caret only when Other was picked', /autoFocus=\{askedForOther\.current\}/.test(size));
   check('and Image fit only when Custom was', /autoFocus=\{askedForCustom\.current\}/.test(size));
-  check(
-    'both tell the picker which property they are',
-    /prop="aspect-ratio"/.test(size) && /prop="object-fit"/.test(size),
-  );
+  check('both tell the picker which property they are', /prop="aspect-ratio"/.test(size) && /prop="object-fit"/.test(size));
   // Picking anything else takes the request back, so returning to the field
   // later — by selecting an element — is silent again.
-  check(
-    'choosing another option withdraws the request',
-    /askedForOther\.current = false/.test(size) && /askedForCustom\.current = false/.test(size),
-  );
+  check('choosing another option withdraws the request', /askedForOther\.current = false/.test(size) && /askedForCustom\.current = false/.test(size));
 
   // --- the rest of the panel already worked this way ---------------------------
   //
@@ -178,9 +160,7 @@ const check = (what, condition, detail) => {
   // about fields that render as part of a control that was already there.
   const OPENED_ON_PURPOSE = new Set(['SpacingEditor.tsx']);
   const ungated = [];
-  for (const file of fs
-    .readdirSync(panel)
-    .filter((file) => file.endsWith('.tsx') && !OPENED_ON_PURPOSE.has(file))) {
+  for (const file of fs.readdirSync(panel).filter((file) => file.endsWith('.tsx') && !OPENED_ON_PURPOSE.has(file))) {
     const source = fs.readFileSync(path.join(panel, file), 'utf8');
     for (const effect of source.split('useEffect(').slice(1)) {
       const body = effect.slice(0, effect.indexOf('}, ['));

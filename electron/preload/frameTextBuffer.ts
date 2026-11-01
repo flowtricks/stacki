@@ -7,11 +7,7 @@ interface TextState {
   readonly selection: TextOffsets;
 }
 
-export function createTextBuffer(
-  root: HTMLElement,
-  nodes: readonly Text[],
-  changed: (value: string) => void = () => {},
-) {
+export function createTextBuffer(root: HTMLElement, nodes: readonly Text[], changed: (value: string) => void = () => {}) {
   const structure = captureStructure(root, nodes);
   if (!structure) {
     return undefined;
@@ -20,8 +16,7 @@ export function createTextBuffer(
   let rendered: readonly string[] = original;
   let history: readonly TextState[] = [{ texts: original, selection: { start: 0, end: 0 } }];
   let index = 0;
-  const intact = () =>
-    structure.intact() && nodes.every((node, position) => node.data === rendered[position]);
+  const intact = () => structure.intact() && nodes.every((node, position) => node.data === rendered[position]);
   const write = (texts: readonly string[]) => {
     writeTexts(nodes, texts);
     rendered = texts;
@@ -38,15 +33,10 @@ export function createTextBuffer(
     // The original words back; `keep` shows the typed ones again once a save is checked.
     restore: () => closeTextBuffer(original, rendered, { intact, write }),
     replace: (range: TextOffsets, text: string) => {
-      if (
-        !intact() ||
-        rendered.join('').length - (range.end - range.start) + text.length > CANVAS_TEXT_LIMIT
-      ) {
+      if (!intact() || rendered.join('').length - (range.end - range.start) + text.length > CANVAS_TEXT_LIMIT) {
         return;
       }
-      history = history.map((entry, position) =>
-        position === index ? { texts: entry.texts, selection: range } : entry,
-      );
+      history = history.map((entry, position) => (position === index ? { texts: entry.texts, selection: range } : entry));
       write(replaceText(rendered, range, text));
       const selection = { start: range.start + text.length, end: range.start + text.length };
       remember(selection);
@@ -92,11 +82,7 @@ function closeTextBuffer(
 
 // Writes whole words back into the editor's text nodes, unless the page has
 // replaced them since: the original on close, or the typed words after a save.
-function restoreTextBuffer(
-  texts: readonly string[],
-  intact: () => boolean,
-  write: (texts: readonly string[]) => void,
-): boolean {
+function restoreTextBuffer(texts: readonly string[], intact: () => boolean, write: (texts: readonly string[]) => void): boolean {
   if (!intact()) {
     return false;
   }
@@ -160,9 +146,7 @@ function captureStructure(root: HTMLElement, nodes: readonly Text[]) {
           node.isConnected &&
           children.length === node.childNodes.length &&
           children.every((child, position) => node.childNodes[position] === child) &&
-          (text === undefined ||
-            (node instanceof Text && nodes.includes(node)) ||
-            node.textContent === text),
+          (text === undefined || (node instanceof Text && nodes.includes(node)) || node.textContent === text),
       ),
     restore: () => {
       // Called only for a native composition input whose preceding beforeinput
@@ -170,8 +154,7 @@ function captureStructure(root: HTMLElement, nodes: readonly Text[]) {
       for (const { node, children, text } of structure) {
         if (
           node instanceof Element &&
-          (node.childNodes.length !== children.length ||
-            children.some((child, position) => node.childNodes[position] !== child))
+          (node.childNodes.length !== children.length || children.some((child, position) => node.childNodes[position] !== child))
         ) {
           node.replaceChildren(...children);
         }

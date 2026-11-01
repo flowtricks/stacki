@@ -24,9 +24,7 @@ esbuild.buildSync({
   platform: 'node',
   logLevel: 'silent',
 });
-const { judgeCanvasEvent, judgeLocally, sameShape, shownChecksum } = require(
-  path.join(buildDirectory, 'previewGate.js'),
-);
+const { judgeCanvasEvent, judgeLocally, sameShape, shownChecksum } = require(path.join(buildDirectory, 'previewGate.js'));
 
 const FIRST_DIGEST = 'a'.repeat(64);
 const SECOND_DIGEST = 'b'.repeat(64);
@@ -71,10 +69,7 @@ test('the token must be the latest rendering', () => {
     file: undefined,
   });
   assert.deepEqual(judgeLocally(TOKEN, undefined, shown(clean(FIRST_DIGEST))).reason, 'no-render');
-  assert.deepEqual(
-    judgeLocally(SECOND_DIGEST, render, shown(clean(FIRST_DIGEST))).reason,
-    'superseded',
-  );
+  assert.deepEqual(judgeLocally(SECOND_DIGEST, render, shown(clean(FIRST_DIGEST))).reason, 'superseded');
   assert.deepEqual(judgeLocally(TOKEN, render, shown(clean(FIRST_DIGEST))), { tag: 'current' });
 });
 
@@ -97,15 +92,9 @@ test('the open file must have rendered from the bytes the editor shows', () => {
   // A node moved and not saved: the canvas's paths are not the editor's.
   const moved = tree('p', 'h1');
   assert.equal(shownChecksum(dirty(tree('h1', 'p'), moved)), undefined);
-  assert.equal(
-    judgeLocally(TOKEN, render, shown(dirty(tree('h1', 'p'), moved))).reason,
-    'shown-page-differs',
-  );
+  assert.equal(judgeLocally(TOKEN, render, shown(dirty(tree('h1', 'p'), moved))).reason, 'shown-page-differs');
   const inserted = tree('h1', 'p', 'p');
-  assert.equal(
-    judgeLocally(TOKEN, render, shown(dirty(tree('h1', 'p'), inserted))).reason,
-    'shown-page-differs',
-  );
+  assert.equal(judgeLocally(TOKEN, render, shown(dirty(tree('h1', 'p'), inserted))).reason, 'shown-page-differs');
   // No origin (typed code, a restored snapshot): nothing ties the model to bytes.
   assert.equal(shownChecksum({ ...dirty(tree('h1'), tree('h1')), origin: undefined }), undefined);
   // A raw page shows its source; only a clean one is a known version.
@@ -118,14 +107,11 @@ test('the open file must have rendered from the bytes the editor shows', () => {
     undefined,
   );
   // A file the rendering does not include is not what the canvas shows.
-  assert.deepEqual(
-    judgeLocally(TOKEN, render, { file: 'src/pages/about.astro', state: clean(FIRST_DIGEST) }),
-    {
-      tag: 'stale',
-      reason: 'unstamped-file',
-      file: 'src/pages/about.astro',
-    },
-  );
+  assert.deepEqual(judgeLocally(TOKEN, render, { file: 'src/pages/about.astro', state: clean(FIRST_DIGEST) }), {
+    tag: 'stale',
+    reason: 'unstamped-file',
+    file: 'src/pages/about.astro',
+  });
   // Markdown carries no stamp (its markers are the processor's, not the file's
   // bytes); its layout is still checked on disk.
   const markdown = { ...clean(SECOND_DIGEST), model: { format: 'md', nodes: [] } };
@@ -151,18 +137,11 @@ test('main is asked only when needed, and the page is judged again after', async
     asked++;
     return { tag: 'current' };
   };
-  assert.equal(
-    (await judgeCanvasEvent(SECOND_DIGEST, render, current, () => shown(clean(FIRST_DIGEST))))
-      .reason,
-    'superseded',
-  );
+  assert.equal((await judgeCanvasEvent(SECOND_DIGEST, render, current, () => shown(clean(FIRST_DIGEST)))).reason, 'superseded');
   assert.equal(asked, 0, 'a superseded token never reaches main');
-  assert.deepEqual(
-    await judgeCanvasEvent(TOKEN, render, current, () => shown(clean(FIRST_DIGEST))),
-    {
-      tag: 'current',
-    },
-  );
+  assert.deepEqual(await judgeCanvasEvent(TOKEN, render, current, () => shown(clean(FIRST_DIGEST))), {
+    tag: 'current',
+  });
   assert.equal(asked, 1);
   // Main finds the card changed on disk: stale, whatever the page says.
   const cardChanged = async () => ({
@@ -170,14 +149,11 @@ test('main is asked only when needed, and the page is judged again after', async
     reason: 'file-changed',
     file: 'src/components/Card.astro',
   });
-  assert.deepEqual(
-    await judgeCanvasEvent(TOKEN, render, cardChanged, () => shown(clean(FIRST_DIGEST))),
-    {
-      tag: 'stale',
-      reason: 'file-changed',
-      file: 'src/components/Card.astro',
-    },
-  );
+  assert.deepEqual(await judgeCanvasEvent(TOKEN, render, cardChanged, () => shown(clean(FIRST_DIGEST))), {
+    tag: 'stale',
+    reason: 'file-changed',
+    file: 'src/components/Card.astro',
+  });
   // The page saved while main was reading: the answer is for the new page.
   let state = clean(FIRST_DIGEST);
   const slow = async () => {

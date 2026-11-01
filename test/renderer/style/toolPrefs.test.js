@@ -7,9 +7,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
-const { parseStoredEmbedSource, loadEmbedSource } = require('../../helpers/rendererModule')(
-  'src/features/style/model/toolPreferences.ts',
-);
+const { parseStoredEmbedSource, loadEmbedSource } = require('../../helpers/rendererModule')('src/features/style/model/toolPreferences.ts');
 
 // A boundary can receive null — JSON, structured clone and postMessage all carry it —
 // so the negative space below includes it. It is read from JSON, because our own
@@ -20,14 +18,7 @@ test('a stored embed source is restored only when it is a bounded key', () => {
   assert.equal(parseStoredEmbedSource('file:/p/global.css'), 'file:/p/global.css');
   const atLimit = 'k'.repeat(BOUNDARY_LIMITS.pathLengthMax);
   assert.equal(parseStoredEmbedSource(atLimit), atLimit);
-  for (const raw of [
-    PLATFORM_NULL,
-    undefined,
-    '',
-    42,
-    {},
-    'k'.repeat(BOUNDARY_LIMITS.pathLengthMax + 1),
-  ]) {
+  for (const raw of [PLATFORM_NULL, undefined, '', 42, {}, 'k'.repeat(BOUNDARY_LIMITS.pathLengthMax + 1)]) {
     assert.equal(parseStoredEmbedSource(raw), undefined);
   }
 });

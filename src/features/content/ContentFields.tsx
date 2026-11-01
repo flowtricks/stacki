@@ -16,14 +16,7 @@ import ExprInput from '../../ui/ExprInput';
 import { ResetLabel } from '../../ui/ResetLabel';
 import { ChevronRightIcon, CloseIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import useListReorder from '../../ui/useListReorder';
-import {
-  NULL_DATA,
-  isPlainObject,
-  fieldKey,
-  blankFor,
-  omitField,
-  useTargets,
-} from './contentFieldData';
+import { NULL_DATA, isPlainObject, fieldKey, blankFor, omitField, useTargets } from './contentFieldData';
 export { isPlainObject, blankFor, omitField } from './contentFieldData';
 
 export interface FieldContext {
@@ -77,9 +70,7 @@ function ReferenceField({ field, value, context, onChange }: FieldProps) {
 
 function ReferenceList({ field, value, context, onChange }: FieldProps) {
   const targets = useTargets(context.projectPath, field.target);
-  const values = Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === 'string')
-    : [];
+  const values = Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
   const remaining = (targets ?? []).filter((target) => !values.includes(target.id));
   return (
     <div className="content-reflist">
@@ -87,14 +78,8 @@ function ReferenceList({ field, value, context, onChange }: FieldProps) {
         const target = (targets ?? []).find((entry) => entry.id === id);
         return (
           <div key={`${id}-${index}`} className="content-chip">
-            <span className={target ? '' : 'missing'}>
-              {target ? target.title : `${id} (missing)`}
-            </span>
-            <button
-              className="ghost"
-              title="Remove"
-              onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
-            >
+            <span className={target ? '' : 'missing'}>{target ? target.title : `${id} (missing)`}</span>
+            <button className="ghost" title="Remove" onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}>
               <CloseIcon size={9} />
             </button>
           </div>
@@ -121,9 +106,7 @@ function ReferenceList({ field, value, context, onChange }: FieldProps) {
 }
 
 function TagsField({ value, onChange }: Pick<FieldProps, 'value' | 'onChange'>) {
-  const values = Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === 'string')
-    : [];
+  const values = Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
   const [draft, setDraft] = useState('');
   const add = (): void => {
     const next = draft.trim();
@@ -137,11 +120,7 @@ function TagsField({ value, onChange }: Pick<FieldProps, 'value' | 'onChange'>) 
       {values.map((tag, index) => (
         <span key={`${tag}-${index}`} className="content-chip">
           {tag}
-          <button
-            className="ghost"
-            title="Remove"
-            onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
-          >
+          <button className="ghost" title="Remove" onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}>
             <CloseIcon size={9} />
           </button>
         </span>
@@ -181,16 +160,8 @@ function RecordField(props: FieldProps) {
       {Object.entries(values).map(([key, value]) => (
         <div key={key} className="content-record-row">
           <div className="content-record-head">
-            <input
-              className="content-key"
-              value={key}
-              onChange={(event) => props.onChange(renameRecordKey(values, key, event.target.value))}
-            />
-            <button
-              className="ghost danger"
-              title="Remove"
-              onClick={() => props.onChange(omitField(values, key))}
-            >
+            <input className="content-key" value={key} onChange={(event) => props.onChange(renameRecordKey(values, key, event.target.value))} />
+            <button className="ghost danger" title="Remove" onClick={() => props.onChange(omitField(values, key))}>
               <TrashIcon size={11} />
             </button>
           </div>
@@ -216,11 +187,7 @@ function RecordField(props: FieldProps) {
             }
           }}
         />
-        <button
-          className="cms-add"
-          disabled={!adding.trim()}
-          onClick={() => addRecordItem(values, item, adding, setAdding, props.onChange)}
-        >
+        <button className="cms-add" disabled={!adding.trim()} onClick={() => addRecordItem(values, item, adding, setAdding, props.onChange)}>
           <PlusIcon size={11} /> Add
         </button>
       </div>
@@ -229,12 +196,7 @@ function RecordField(props: FieldProps) {
 }
 
 function renameRecordKey(values: DataRecord, key: string, replacement: string): DataRecord {
-  return Object.fromEntries(
-    Object.entries(values).map(([entryKey, value]) => [
-      entryKey === key ? replacement : entryKey,
-      value,
-    ]),
-  );
+  return Object.fromEntries(Object.entries(values).map(([entryKey, value]) => [entryKey === key ? replacement : entryKey, value]));
 }
 
 function addRecordItem(
@@ -274,10 +236,7 @@ export function UnionField(props: FieldProps) {
       {discriminator && (
         <div className="content-union-head">
           <label>{labelize(discriminator)}</label>
-          <select
-            value={String(current[discriminator] ?? '')}
-            onChange={(event) => switchTo(event.target.value)}
-          >
+          <select value={String(current[discriminator] ?? '')} onChange={(event) => switchTo(event.target.value)}>
             {(props.field.members ?? []).map((entry) => (
               <option key={String(entry.value)} value={String(entry.value)}>
                 {entry.label}
@@ -296,11 +255,7 @@ export function UnionField(props: FieldProps) {
               value={current[key]}
               context={props.context}
               path={[...props.path, key]}
-              onChange={(value) =>
-                props.onChange(
-                  value === undefined ? omitField(current, key) : { ...current, [key]: value },
-                )
-              }
+              onChange={(value) => props.onChange(value === undefined ? omitField(current, key) : { ...current, [key]: value })}
             />
           );
         })}
@@ -309,11 +264,7 @@ export function UnionField(props: FieldProps) {
   );
 }
 
-function unionFields(
-  fields: readonly FieldDescriptor[],
-  previous: DataRecord,
-  current: DataRecord,
-): DataRecord {
+function unionFields(fields: readonly FieldDescriptor[], previous: DataRecord, current: DataRecord): DataRecord {
   const entries = fields.flatMap((field): readonly [string, Data][] => {
     const key = fieldKey(field);
     if (key in previous) {
@@ -347,9 +298,7 @@ function ListField(props: FieldProps) {
   const reorder = useListReorder({ count: values.length, onMove: move });
   const complex = item?.control === 'object' || item?.control === 'union';
   if (!complex) {
-    return (
-      <SimpleList {...props} values={values} item={item} minimum={minimum} maximum={maximum} />
-    );
+    return <SimpleList {...props} values={values} item={item} minimum={minimum} maximum={maximum} />;
   }
   return (
     <ComplexList
@@ -383,20 +332,14 @@ function SimpleList(props: ListProps) {
               value={value}
               context={props.context}
               path={[...props.path, index]}
-              onChange={(next) =>
-                props.onChange(
-                  props.values.map((old, itemIndex) => (itemIndex === index ? next : old)),
-                )
-              }
+              onChange={(next) => props.onChange(props.values.map((old, itemIndex) => (itemIndex === index ? next : old)))}
             />
           )}
           <button
             className="ghost danger"
             title="Remove"
             disabled={props.values.length <= props.minimum}
-            onClick={() =>
-              props.onChange(props.values.filter((_, itemIndex) => itemIndex !== index))
-            }
+            onClick={() => props.onChange(props.values.filter((_, itemIndex) => itemIndex !== index))}
           >
             <TrashIcon size={11} />
           </button>
@@ -450,11 +393,7 @@ function ComplexList(props: ComplexListProps) {
             value={openValue}
             context={props.context}
             path={[...props.path, props.openIndex]}
-            onChange={(next) =>
-              props.onChange(
-                props.values.map((old, itemIndex) => (itemIndex === props.openIndex ? next : old)),
-              )
-            }
+            onChange={(next) => props.onChange(props.values.map((old, itemIndex) => (itemIndex === props.openIndex ? next : old)))}
           />
         </div>
       )}
@@ -473,8 +412,7 @@ function AddListButton(props: ListProps & { readonly onAdded?: (index: number) =
         props.onAdded?.(props.values.length);
       }}
     >
-      <PlusIcon size={11} /> Add{' '}
-      {props.field.label ? props.field.label.replace(/s$/, '').toLowerCase() : 'item'}
+      <PlusIcon size={11} /> Add {props.field.label ? props.field.label.replace(/s$/, '').toLowerCase() : 'item'}
     </button>
   );
 }
@@ -502,11 +440,7 @@ function ScalarControl(props: FieldProps) {
   switch (field.control) {
     case 'boolean':
       return (
-        <button
-          type="button"
-          className={`cms-toggle ${value ? 'on' : ''}`}
-          onClick={() => onChange(!value)}
-        >
+        <button type="button" className={`cms-toggle ${value ? 'on' : ''}`} onClick={() => onChange(!value)}>
           <span className="cms-toggle-knob" />
           <span className="cms-toggle-label">{value ? 'On' : 'Off'}</span>
         </button>
@@ -516,13 +450,7 @@ function ScalarControl(props: FieldProps) {
     case 'enum':
       return <EnumField {...props} />;
     case 'date':
-      return (
-        <DateField
-          label={field.label}
-          value={typeof value === 'string' ? value : ''}
-          onChange={(next) => onChange(next || undefined)}
-        />
-      );
+      return <DateField label={field.label} value={typeof value === 'string' ? value : ''} onChange={(next) => onChange(next || undefined)} />;
     case 'const':
       return <input value={String(field.const)} readOnly />;
     case 'unknown':
@@ -553,19 +481,14 @@ function NumberField({ field, value, onChange }: FieldProps) {
       max={field.constraints.max}
       value={typeof value === 'number' ? value : ''}
       placeholder={'default' in field ? String(field.default) : ''}
-      onChange={(event) =>
-        onChange(event.target.value === '' ? undefined : Number(event.target.value))
-      }
+      onChange={(event) => onChange(event.target.value === '' ? undefined : Number(event.target.value))}
     />
   );
 }
 
 function EnumField({ field, value, onChange }: FieldProps) {
   return (
-    <select
-      value={value === null || value === undefined ? '' : String(value)}
-      onChange={(event) => onChange(event.target.value || undefined)}
-    >
+    <select value={value === null || value === undefined ? '' : String(value)} onChange={(event) => onChange(event.target.value || undefined)}>
       {!field.required && <option value="">Not set</option>}
       {(field.options ?? []).map((option) => (
         <option key={String(option)} value={String(option)}>
@@ -594,13 +517,7 @@ export function FieldControl(props: FieldProps) {
       return <HtmlField value={text} label={props.field.label} onChange={props.onChange} />;
     }
     if (calendarValue(text)) {
-      return (
-        <DateField
-          value={text}
-          label={props.field.label}
-          onChange={(next) => props.onChange(next || undefined)}
-        />
-      );
+      return <DateField value={text} label={props.field.label} onChange={(next) => props.onChange(next || undefined)} />;
     }
   }
   return <TypedFieldControl {...props} />;
@@ -627,13 +544,7 @@ function TypedFieldControl(props: FieldProps) {
       return <TagsField value={props.value} onChange={props.onChange} />;
     case 'markdown':
     case 'longtext':
-      return (
-        <AutoTextarea
-          value={text}
-          minRows={props.field.control === 'markdown' ? 3 : 2}
-          onChange={(event) => props.onChange(event.target.value)}
-        />
-      );
+      return <AutoTextarea value={text} minRows={props.field.control === 'markdown' ? 3 : 2} onChange={(event) => props.onChange(event.target.value)} />;
     case 'code':
       return (
         <ExprInput
@@ -681,11 +592,7 @@ function ObjectField(props: FieldProps) {
             value={values[key]}
             context={props.context}
             path={[...props.path, key]}
-            onChange={(value) =>
-              props.onChange(
-                value === undefined ? omitField(values, key) : { ...values, [key]: value },
-              )
-            }
+            onChange={(value) => props.onChange(value === undefined ? omitField(values, key) : { ...values, [key]: value })}
           />
         );
       })}
@@ -695,13 +602,7 @@ function ObjectField(props: FieldProps) {
 
 export function FieldRow(props: FieldProps) {
   const present = props.value !== undefined;
-  const issue =
-    props.context.issueAt(props.path) ??
-    (present
-      ? fieldIssue(props.field, props.value)
-      : props.field.required
-        ? 'Required'
-        : undefined);
+  const issue = props.context.issueAt(props.path) ?? (present ? fieldIssue(props.field, props.value) : props.field.required ? 'Required' : undefined);
   const hint = hintFor(props.field);
   const synthesized = props.context.parsed && !props.context.inFile(props.path);
   const pathKey = props.path.join('.');
@@ -711,16 +612,8 @@ export function FieldRow(props: FieldProps) {
   return (
     <div className={`cms-field ${props.field.control} ${issue ? 'has-issue' : ''}`}>
       <FieldHeader {...props} present={present} synthesized={synthesized} />
-      {props.value === null ? (
-        <div className="content-null">None</div>
-      ) : (
-        <FieldControl {...props} />
-      )}
-      {issue ? (
-        <ErrorToast message={issue} />
-      ) : hint ? (
-        <div className="content-hint">{hint}</div>
-      ) : undefined}
+      {props.value === null ? <div className="content-null">None</div> : <FieldControl {...props} />}
+      {issue ? <ErrorToast message={issue} /> : hint ? <div className="content-hint">{hint}</div> : undefined}
     </div>
   );
 }
@@ -731,16 +624,12 @@ function AddOptionalField(props: FieldProps & { readonly pathKey: string }) {
       <button className="ghost" onClick={() => props.context.expand(props.pathKey)}>
         <PlusIcon size={10} /> {props.field.label}
       </button>
-      {'default' in props.field && (
-        <span className="content-default">defaults to {JSON.stringify(props.field.default)}</span>
-      )}
+      {'default' in props.field && <span className="content-default">defaults to {JSON.stringify(props.field.default)}</span>}
     </div>
   );
 }
 
-function FieldHeader(
-  props: FieldProps & { readonly present: boolean; readonly synthesized: boolean },
-) {
+function FieldHeader(props: FieldProps & { readonly present: boolean; readonly synthesized: boolean }) {
   return (
     <div className="cms-field-head">
       <label>
@@ -775,14 +664,7 @@ function FieldHeader(
   );
 }
 
-export function issueMessageAt(
-  issues: readonly WireValidationIssue[],
-  path: readonly (string | number)[],
-): string | undefined {
-  const found = issues.find(
-    (issue) =>
-      issue.path.length === path.length &&
-      issue.path.every((part, index) => String(part) === String(path[index])),
-  );
+export function issueMessageAt(issues: readonly WireValidationIssue[], path: readonly (string | number)[]): string | undefined {
+  const found = issues.find((issue) => issue.path.length === path.length && issue.path.every((part, index) => String(part) === String(path[index])));
   return found?.message;
 }

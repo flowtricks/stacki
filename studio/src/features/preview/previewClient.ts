@@ -1,33 +1,20 @@
 import { installCanvasText } from '../../../vendor/stacki/electron/preload/frameText';
 import { parseCanvasInteraction } from '../../../vendor/stacki/shared/properties/canvasInteraction';
-import {
-  canvasDragged,
-  trackCanvasGesture,
-} from '../../../vendor/stacki/electron/preload/frameInteraction';
-import {
-  freezeViewportHeight,
-  report as reportPageHeight,
-} from '../../../vendor/stacki/electron/preload/frameViewport';
+import { canvasDragged, trackCanvasGesture } from '../../../vendor/stacki/electron/preload/frameInteraction';
+import { freezeViewportHeight, report as reportPageHeight } from '../../../vendor/stacki/electron/preload/frameViewport';
 import { receiveLiveNumericStyles, applyLiveNumericStyles } from './liveNumericStyles';
 import { receiveLiveText, applyLiveText } from './liveTextClient';
 import { installCursorPresence } from '../collaboration/cursorClient';
 import { receiveRenderPush } from './renderPushClient';
 import { rectsForPath } from '../../../vendor/stacki/electron/preload/frameMeasure';
 import { startGuide } from '../../../vendor/stacki/electron/preload/frameGuide';
-import {
-  taggedPlaces,
-  inFocus,
-  setTracking,
-  resetFocusCache,
-} from '../../../vendor/stacki/electron/preload/frameRegions';
+import { taggedPlaces, inFocus, setTracking, resetFocusCache } from '../../../vendor/stacki/electron/preload/frameRegions';
 import { forwardPreviewKeys } from './previewKeys';
 import { forwardStyleModifiers } from './styleModifiers';
 import { answerPreviewQuery } from './previewQueries';
 import { createHotContext } from '/@vite/client';
 import { createOutlines, type OutlineTarget } from './previewOutlines';
-const studioOrigin =
-  document.querySelector<HTMLMetaElement>('meta[name=studio-parent-origin]')?.content ||
-  location.origin;
+const studioOrigin = document.querySelector<HTMLMetaElement>('meta[name=studio-parent-origin]')?.content || location.origin;
 const post = (message: unknown) => window.parent.postMessage(message, studioOrigin);
 const cursorPresence = installCursorPresence(post);
 const columnGuide = startGuide(post);
@@ -67,15 +54,12 @@ installCanvasText(
 const selectionCursor = new CSSStyleSheet();
 // Safari can scroll the iframe sideways even when the site's body clips overflow.
 // Clip the document root while editing; interactive preview keeps the site's own scrolling.
-selectionCursor.replaceSync(
-  'html { overflow-x: clip !important; } * { cursor: default !important; }',
-);
+selectionCursor.replaceSync('html { overflow-x: clip !important; } * { cursor: default !important; }');
 selectionCursor.disabled = interactive || window.parent === window;
 document.adoptedStyleSheets = [...document.adoptedStyleSheets, selectionCursor];
 let collaborators: string[] = [];
 forwardPreviewKeys(post, () => interactive);
-const reportNavigation = () =>
-  post({ type: 'avb:navigated', path: location.pathname + location.search });
+const reportNavigation = () => post({ type: 'avb:navigated', path: location.pathname + location.search });
 reportNavigation();
 window.addEventListener('popstate', reportNavigation);
 document.addEventListener('astro:page-load', reportNavigation);
@@ -106,9 +90,7 @@ function pageId(element: Element): string | undefined {
   }
   for (let current: Element | null = element; current; current = current.parentElement) {
     const ids = current.getAttribute('data-avb-p')?.split(' ') ?? [];
-    const id = ids
-      .filter((value) => value.startsWith(scope) && /^\d+(\.\d+)*$/.test(value.slice(scope.length)))
-      .at(-1);
+    const id = ids.filter((value) => value.startsWith(scope) && /^\d+(\.\d+)*$/.test(value.slice(scope.length))).at(-1);
     if (id) {
       return id.slice(scope.length);
     }
@@ -138,12 +120,7 @@ for (const type of ['click', 'dblclick', 'contextmenu']) {
   window.addEventListener(
     type,
     (event) => {
-      if (
-        interactive ||
-        window.parent === window ||
-        !(event.target instanceof Element) ||
-        event.target.closest('#studio-live-cursors')
-      ) {
+      if (interactive || window.parent === window || !(event.target instanceof Element) || event.target.closest('#studio-live-cursors')) {
         return;
       }
       event.preventDefault();
@@ -176,8 +153,7 @@ for (const type of ['click', 'dblclick', 'contextmenu']) {
         post({
           type: type === 'click' ? 'studio:select' : 'studio:open',
           id,
-          occurrence:
-            event instanceof MouseEvent ? occurrenceAt(id, event.clientX, event.clientY) : 0,
+          occurrence: event instanceof MouseEvent ? occurrenceAt(id, event.clientX, event.clientY) : 0,
         });
       }
     },
@@ -204,9 +180,7 @@ window.addEventListener('message', (event) => {
   cursorPresence.receive(data);
   columnGuide.receive(data);
   if (data.type === 'studio:collaborators' && 'paths' in data && Array.isArray(data.paths)) {
-    collaborators = data.paths
-      .filter((path: unknown): path is string => typeof path === 'string' && path.length <= 1000)
-      .slice(0, 30);
+    collaborators = data.paths.filter((path: unknown): path is string => typeof path === 'string' && path.length <= 1000).slice(0, 30);
   }
   if (data.type === 'studio:reveal') {
     revealSelection(data);
@@ -233,11 +207,7 @@ window.addEventListener('message', (event) => {
     if (data.type === 'studio:select') {
       selected = target(
         data.id,
-        'occurrence' in data &&
-          typeof data.occurrence === 'number' &&
-          Number.isSafeInteger(data.occurrence)
-          ? Math.max(0, data.occurrence)
-          : 0,
+        'occurrence' in data && typeof data.occurrence === 'number' && Number.isSafeInteger(data.occurrence) ? Math.max(0, data.occurrence) : 0,
       );
     }
     if (data.type === 'studio:hover') {
@@ -259,8 +229,7 @@ function revealSelection(data: object): void {
   if (!('id' in data) || typeof data.id !== 'string') {
     return;
   }
-  const occurrence =
-    'occurrence' in data && typeof data.occurrence === 'number' ? data.occurrence : 0;
+  const occurrence = 'occurrence' in data && typeof data.occurrence === 'number' ? data.occurrence : 0;
   const rect = rectsForPath(data.id)?.[occurrence];
   if (rect) {
     window.scrollBy({
@@ -276,22 +245,14 @@ function focusScope(data: object) {
     scope,
     focus: 'focus' in data && typeof data.focus === 'string' ? data.focus.slice(0, 1000) : '',
     occurrence:
-      'occurrence' in data &&
-      typeof data.occurrence === 'number' &&
-      Number.isSafeInteger(data.occurrence)
-        ? Math.max(0, Math.min(9999, data.occurrence))
-        : 0,
+      'occurrence' in data && typeof data.occurrence === 'number' && Number.isSafeInteger(data.occurrence) ? Math.max(0, Math.min(9999, data.occurrence)) : 0,
   });
   resetFocusCache();
 }
 document.addEventListener('avb:morphed', (event) => {
-  applyLiveNumericStyles(
-    event instanceof CustomEvent && event.detail instanceof Document ? event.detail : undefined,
-  );
+  applyLiveNumericStyles(event instanceof CustomEvent && event.detail instanceof Document ? event.detail : undefined);
   resetFocusCache();
-  applyLiveText(
-    event instanceof CustomEvent && event.detail instanceof Document ? event.detail : undefined,
-  );
+  applyLiveText(event instanceof CustomEvent && event.detail instanceof Document ? event.detail : undefined);
   draw();
 });
 window.addEventListener('resize', draw);
@@ -315,9 +276,7 @@ post({ type: 'studio:preview-ready' });
 
 function occurrenceAt(id: string, x: number, y: number): number {
   const places = taggedPlaces(scope + id);
-  const index = places.findIndex(
-    ({ rect }) => x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h,
-  );
+  const index = places.findIndex(({ rect }) => x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h);
   return Math.max(0, index);
 }
 
@@ -325,19 +284,11 @@ function setLabels(values: readonly unknown[]) {
   labels = {};
   for (const input of values.slice(0, 10_000)) {
     const value: unknown = input;
-    if (
-      value &&
-      typeof value === 'object' &&
-      'id' in value &&
-      typeof value.id === 'string' &&
-      'label' in value &&
-      typeof value.label === 'string'
-    ) {
+    if (value && typeof value === 'object' && 'id' in value && typeof value.id === 'string' && 'label' in value && typeof value.label === 'string') {
       labels[value.id] = {
         label: value.label.slice(0, 100),
         component: 'component' in value && value.component === true,
-        nodeKind:
-          'nodeKind' in value && typeof value.nodeKind === 'string' ? value.nodeKind : 'element',
+        nodeKind: 'nodeKind' in value && typeof value.nodeKind === 'string' ? value.nodeKind : 'element',
       };
     }
   }

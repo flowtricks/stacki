@@ -50,8 +50,7 @@ const check = (what, condition, detail) => {
   const { dataTree } = require(out);
   const { parsePropSchema } = require('#dist/electron/parse/astroParser.js');
 
-  const itemOf = (context, name = 'service') =>
-    dataTree(context).find((node) => node.path === name);
+  const itemOf = (context, name = 'service') => dataTree(context).find((node) => node.path === name);
   const fieldsOf = (node) => (node?.children || []).map((child) => child.key).join(',');
 
   // --- a component, where the type is all there is -------------------------------
@@ -73,11 +72,7 @@ const { times = [] } = Astro.props;`;
       ancestorHeads: ['times.map((service) => ('],
     });
     check('a loop over a typed prop has an item at all', !!item, 'no item node');
-    check(
-      'with every field the type declares',
-      fieldsOf(item) === 'day,campus,time',
-      fieldsOf(item),
-    );
+    check('with every field the type declares', fieldsOf(item) === 'day,campus,time', fieldsOf(item));
     check(
       'each named as a field of the item, not of the prop',
       (item?.children || []).every((child) => child.path.startsWith('service.')),
@@ -85,9 +80,7 @@ const { times = [] } = Astro.props;`;
     );
     // The prop itself still reads as the list it is, so the loop editor's own
     // Data field can find it.
-    const times = dataTree({ frontmatter: COMPONENT, propsSchema: schema }).find(
-      (node) => node.path === 'times',
-    );
+    const times = dataTree({ frontmatter: COMPONENT, propsSchema: schema }).find((node) => node.path === 'times');
     check(
       'and the prop is a list with an entry under it',
       times?.kind === 'list' && times.children?.[0]?.path === 'times[0]',
@@ -106,11 +99,7 @@ const { times = [] } = Astro.props;`;
       propsSchema: parsePropSchema(`---\n${oneLine}\n---\n<div></div>`),
       ancestorHeads: ['times.map((service) => ('],
     });
-    check(
-      'a one-line interface gives the same fields',
-      fieldsOf(item) === 'day,campus,time',
-      fieldsOf(item),
-    );
+    check('a one-line interface gives the same fields', fieldsOf(item) === 'day,campus,time', fieldsOf(item));
   }
   {
     // An inline type, and an object prop that is not a list.
@@ -120,19 +109,10 @@ const { times = [] } = Astro.props;`;
 }
 const { rows = [], seo } = Astro.props;`;
     const schema = parsePropSchema(`---\n${inline}\n---\n<div></div>`);
-    const item = itemOf(
-      { frontmatter: inline, propsSchema: schema, ancestorHeads: ['rows.map((row) => ('] },
-      'row',
-    );
+    const item = itemOf({ frontmatter: inline, propsSchema: schema, ancestorHeads: ['rows.map((row) => ('] }, 'row');
     check('an inline item type works the same', fieldsOf(item) === 'label,href', fieldsOf(item));
-    const seo = dataTree({ frontmatter: inline, propsSchema: schema }).find(
-      (node) => node.path === 'seo',
-    );
-    check(
-      'an object prop lists its members directly',
-      fieldsOf(seo) === 'title,description',
-      fieldsOf(seo),
-    );
+    const seo = dataTree({ frontmatter: inline, propsSchema: schema }).find((node) => node.path === 'seo');
+    check('an object prop lists its members directly', fieldsOf(seo) === 'title,description', fieldsOf(seo));
     check('and is not called a list', seo?.kind !== 'list', seo?.kind);
   }
   {
@@ -181,17 +161,9 @@ const { posts = [] } = Astro.props;`;
       propsSample: sample,
       ancestorHeads: ['times.map((service) => ('],
     });
-    check(
-      'a field only the second entry has is still a field of the item',
-      fieldsOf(item) === 'day,time,campus',
-      fieldsOf(item),
-    );
+    check('a field only the second entry has is still a field of the item', fieldsOf(item) === 'day,time,campus', fieldsOf(item));
     const campus = (item?.children || []).find((child) => child.key === 'campus');
-    check(
-      'shown with the value of the entry that has it',
-      campus?.preview === '"St. Amant"',
-      campus?.preview,
-    );
+    check('shown with the value of the entry that has it', campus?.preview === '"St. Amant"', campus?.preview);
     check('and named as a field of the item', campus?.path === 'service.campus', campus?.path);
     // Nothing from another entry keeps that entry's index — `service.campus`
     // is the item's campus, not the second service's.
@@ -210,11 +182,7 @@ const { posts = [] } = Astro.props;`;
       'row',
     );
     const nested = (deep?.children || []).find((child) => child.key === 'b');
-    check(
-      'and neither does anything under it',
-      nested?.children?.[0]?.path === 'row.b.deep',
-      nested?.children?.[0]?.path,
-    );
+    check('and neither does anything under it', nested?.children?.[0]?.path === 'row.b.deep', nested?.children?.[0]?.path);
   }
   {
     // A list of plain values has no fields to union, and must not grow any.
@@ -250,35 +218,18 @@ const { posts = [] } = Astro.props;`;
         ancestorHeads: ['times.map((service) => ('],
         itemIndex: { service: i },
       });
-    const valueOf = (node, key) =>
-      (node?.children || []).find((child) => child.key === key)?.preview;
+    const valueOf = (node, key) => (node?.children || []).find((child) => child.key === key)?.preview;
 
-    check(
-      'the item says which entry it is showing',
-      JSON.stringify(at(0)?.nav) === '{"index":0,"count":3}',
-      JSON.stringify(at(0)?.nav),
-    );
-    check(
-      'and stepping shows that one',
-      valueOf(at(1), 'time') === '"11 AM"',
-      valueOf(at(1), 'time'),
-    );
+    check('the item says which entry it is showing', JSON.stringify(at(0)?.nav) === '{"index":0,"count":3}', JSON.stringify(at(0)?.nav));
+    check('and stepping shows that one', valueOf(at(1), 'time') === '"11 AM"', valueOf(at(1), 'time'));
     check('every step of the way', valueOf(at(2), 'day') === '"Wednesday"', valueOf(at(2), 'day'));
-    check(
-      'a field the shown entry lacks still says what it holds elsewhere',
-      valueOf(at(2), 'campus') === '"St. Amant"',
-      valueOf(at(2), 'campus'),
-    );
+    check('a field the shown entry lacks still says what it holds elsewhere', valueOf(at(2), 'campus') === '"St. Amant"', valueOf(at(2), 'campus'));
     check(
       'and the fields are still named after the item',
       (at(2)?.children || []).every((child) => child.path.startsWith('service.')),
       (at(2)?.children || []).map((child) => child.path).join(),
     );
-    check(
-      'an index past the end lands on the last entry',
-      valueOf(at(9), 'day') === '"Wednesday"',
-      valueOf(at(9), 'day'),
-    );
+    check('an index past the end lands on the last entry', valueOf(at(9), 'day') === '"Wednesday"', valueOf(at(9), 'day'));
     // The eleventh entry again: the path a field is written with has to be
     // rebased from the entry being SHOWN, not from the first one — trimming
     // `times[10].day` by the width of `times[0]` is only right by accident
@@ -291,16 +242,8 @@ const { posts = [] } = Astro.props;`;
       ancestorHeads: ['times.map((service) => ('],
       itemIndex: { service: 10 },
     });
-    check(
-      'a field of the eleventh item is still named after the item',
-      late?.children?.[0]?.path === 'service.day',
-      late?.children?.[0]?.path,
-    );
-    check(
-      'and holds that item’s value',
-      valueOf(late, 'day') === '"The eleventh"',
-      valueOf(late, 'day'),
-    );
+    check('a field of the eleventh item is still named after the item', late?.children?.[0]?.path === 'service.day', late?.children?.[0]?.path);
+    check('and holds that item’s value', valueOf(late, 'day') === '"The eleventh"', valueOf(late, 'day'));
     // A list with one entry has nowhere to go, and arrows that cannot move are
     // worse than none.
     const one = itemOf({
@@ -310,33 +253,17 @@ const { posts = [] } = Astro.props;`;
     });
     check('one entry offers no arrows', !one?.nav, JSON.stringify(one?.nav));
     const typed = itemOf({
-      frontmatter:
-        'interface Props { times?: { day: string }[] }\nconst { times = [] } = Astro.props;',
-      propsSchema: parsePropSchema(
-        '---\ninterface Props { times?: { day: string }[] }\n' +
-          'const { times = [] } = Astro.props;\n---\n<div></div>',
-      ),
+      frontmatter: 'interface Props { times?: { day: string }[] }\nconst { times = [] } = Astro.props;',
+      propsSchema: parsePropSchema('---\ninterface Props { times?: { day: string }[] }\n' + 'const { times = [] } = Astro.props;\n---\n<div></div>'),
       ancestorHeads: ['times.map((service) => ('],
     });
-    check(
-      'and neither does a shape with no values behind it',
-      !typed?.nav,
-      JSON.stringify(typed?.nav),
-    );
-    check(
-      'though its fields are still there',
-      (typed?.children || []).length === 1,
-      JSON.stringify(typed?.children),
-    );
+    check('and neither does a shape with no values behind it', !typed?.nav, JSON.stringify(typed?.nav));
+    check('though its fields are still there', (typed?.children || []).length === 1, JSON.stringify(typed?.children));
   }
   {
     // The row draws them, and the app moves the index they show.
     const picker = fs.readFileSync(repoPath('src/features/props/DataPicker.tsx'), 'utf8');
-    check(
-      'the row draws the arrows when the item has somewhere to go',
-      /node\.nav && onStepItem/.test(picker),
-      'no arrows on the row',
-    );
+    check('the row draws the arrows when the item has somewhere to go', /node\.nav && onStepItem/.test(picker), 'no arrows on the row');
     check(
       'and a press on one does not also pick the row',
       /className="dp-item-nav" onClick=\{\(event\) => event\.stopPropagation\(\)\}/.test(picker),
@@ -344,11 +271,7 @@ const { posts = [] } = Astro.props;`;
     );
     // The app shell and the modules it was split into (src/app).
     const app = readAppSource();
-    check(
-      'the app keeps a place per item name',
-      /itemIndex,\n\s*onStepItem:/.test(app),
-      'the picker has nothing to step',
-    );
+    check('the app keeps a place per item name', /itemIndex,\n\s*onStepItem:/.test(app), 'the picker has nothing to step');
     // Compact form, so wrapping and spacing don't matter. The parentheses around
     // `… % count` are optional: they are redundant, and Prettier adds them.
     check(
@@ -359,9 +282,7 @@ const { posts = [] } = Astro.props;`;
   }
 
   if (failures.length) {
-    console.error(
-      `\nitem-fields: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\nitem-fields: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

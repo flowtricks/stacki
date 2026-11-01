@@ -18,10 +18,7 @@ const original = await readFile(sourceFile, 'utf8');
 const originalTheme = /<Section theme="([^"]+)">/.exec(original)?.[1] ?? 'inherit';
 const browser = await chromium.launch({
   executablePath:
-    process.env['CHROME_PATH'] ??
-    (process.platform === 'darwin'
-      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-      : chromium.executablePath()),
+    process.env['CHROME_PATH'] ?? (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
   headless: true,
 });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
@@ -87,9 +84,7 @@ async function selectSection(page: Page) {
 }
 
 async function theme(page: Page, value: string) {
-  const row = page
-    .locator('.props-field')
-    .filter({ has: page.locator('.prop-label', { hasText: /^theme$/i }) });
+  const row = page.locator('.props-field').filter({ has: page.locator('.prop-label', { hasText: /^theme$/i }) });
   await row.locator('.dd-trigger').click();
   await page
     .locator('.dd-option')
@@ -101,14 +96,8 @@ async function theme(page: Page, value: string) {
 
 async function verifyTheme(page: Page, value: string) {
   await saved(page);
-  await page
-    .frameLocator('iframe[title="Site preview"]')
-    .locator(`section.section.theme-${value}`)
-    .first()
-    .waitFor();
-  const response = await page.request.get(
-    new URL('/studio/api/file?file=src/pages/index.astro', url).href,
-  );
+  await page.frameLocator('iframe[title="Site preview"]').locator(`section.section.theme-${value}`).first().waitFor();
+  const response = await page.request.get(new URL('/studio/api/file?file=src/pages/index.astro', url).href);
   const input: unknown = await response.json();
   assert.ok(string(record(input)['source']).includes(`<Section theme="${value}">`));
 }

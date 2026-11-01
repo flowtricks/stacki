@@ -24,8 +24,7 @@ function page(html) {
   return dom;
 }
 const STAMPED = (checksum) =>
-  `<main data-avb-d="avb-d:${checksum}:src/pages/index.astro">` +
-  '<p data-avb-p="0.0">keep</p><p data-avb-p="0.1">gone</p><p data-avb-p="0.2">next</p></main>';
+  `<main data-avb-d="avb-d:${checksum}:src/pages/index.astro">` + '<p data-avb-p="0.0">keep</p><p data-avb-p="0.1">gone</p><p data-avb-p="0.2">next</p></main>';
 
 test('the deleted node is hidden at once, and its stylesheet is installed', () => {
   const dom = page(STAMPED('a'.repeat(64)));

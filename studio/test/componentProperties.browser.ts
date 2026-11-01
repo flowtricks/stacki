@@ -4,8 +4,7 @@ import { mkdir } from 'node:fs/promises';
 import { record, string } from '../src/shared/validation';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -49,10 +48,7 @@ try {
   assert.match(await readSource(page), /studioTestLabel\?: string/);
   assert.match(await readSource(page), /Property manager browser verification/);
   await propertyRow(page).click();
-  assert.equal(
-    await page.getByLabel('Default text', { exact: true }).inputValue(),
-    'Default label',
-  );
+  assert.equal(await page.getByLabel('Default text', { exact: true }).inputValue(), 'Default label');
   await page.getByRole('button', { name: 'Close property settings', exact: true }).click();
   const before = await page.locator('.property-row-main').allTextContents();
   await page.getByRole('button', { name: 'Reorder studioTestLabel', exact: true }).press('ArrowUp');
@@ -73,14 +69,9 @@ try {
   await saved(page);
   assert.equal(await page.getByRole('button', { name: 'Properties', exact: true }).count(), 0);
   await page.locator('.structure-node').first().waitFor();
-  assert.equal(
-    await page.getByRole('button', { name: 'Navigator', exact: true }).getAttribute('aria-pressed'),
-    'true',
-  );
+  assert.equal(await page.getByRole('button', { name: 'Navigator', exact: true }).getAttribute('aria-pressed'), 'true');
   assert.deepEqual(errors, []);
-  console.log(
-    'Component entry exposes Stacki Properties; K, add/default/tooltip, reorder, delete, collaboration, undo/redo and return-to-page passed.',
-  );
+  console.log('Component entry exposes Stacki Properties; K, add/default/tooltip, reorder, delete, collaboration, undo/redo and return-to-page passed.');
 } catch (error) {
   await mkdir('test-results', { recursive: true });
   await page.screenshot({ path: 'test-results/component-properties-failure.png' });
@@ -107,17 +98,12 @@ async function enter(page: Page) {
   await saved(page);
 }
 async function readSource(page: Page) {
-  const response = await page.request.get(
-    new URL('/studio/api/file?file=' + encodeURIComponent(file), url).href,
-  );
+  const response = await page.request.get(new URL('/studio/api/file?file=' + encodeURIComponent(file), url).href);
   return string(record(await response.json())['source']);
 }
 async function waitForOrder(page: Page, position: number) {
   await page.waitForFunction(
-    (position) =>
-      [...document.querySelectorAll('.property-row-main')].findIndex((element) =>
-        element.textContent?.endsWith('studioTestLabel'),
-      ) === position,
+    (position) => [...document.querySelectorAll('.property-row-main')].findIndex((element) => element.textContent?.endsWith('studioTestLabel')) === position,
     position,
   );
 }

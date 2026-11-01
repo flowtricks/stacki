@@ -24,15 +24,7 @@ import InsertSearch from '../../features/palette/InsertSearch';
 import AssetsPanel from '../../features/assets/AssetsPanel';
 import TerminalDock from '../../features/terminal/TerminalDock';
 import { cleanError } from '../../lib/cleanError';
-import {
-  PreviewIcon,
-  RefreshIcon,
-  ExternalIcon,
-  ChevronLeftIcon,
-  ElementComponentIcon,
-  TerminalIcon,
-  GearIcon,
-} from '../../ui/Icons';
+import { PreviewIcon, RefreshIcon, ExternalIcon, ChevronLeftIcon, ElementComponentIcon, TerminalIcon, GearIcon } from '../../ui/Icons';
 import { openAppSettings } from '../settings/Settings';
 import { AssetPickOverlay, assetPickTitle } from '../../ui/AssetPickOverlay';
 import type { HistoryCommit, HistoryCommitFile } from '../../features/history/historyBridge';
@@ -79,21 +71,14 @@ export function AppShell({ app }: { readonly app: ShellView }) {
       <TitleBar app={app} />
       <DefaultsCanvasBar canvas={app.defaultsCanvas} />
       <div className="main">
-        <LeftRail
-          active={app.leftTab}
-          componentOpen={app.componentPropertiesOpen}
-          onSelect={(id) => app.setLeftTab((tab) => (tab === id ? undefined : id))}
-        />
+        <LeftRail active={app.leftTab} componentOpen={app.componentPropertiesOpen} onSelect={(id) => app.setLeftTab((tab) => (tab === id ? undefined : id))} />
         {app.leftTab && <LeftPanel app={app} tab={app.leftTab} />}
         <div className="center">
           <CanvasPane app={app} />
           <CanvasCovers app={app} />
         </div>
         {app.assetPick?.presentation === 'overlay' && (
-          <AssetPickOverlay
-            title={assetPickTitle(app.assetPick.mediaKind)}
-            onClose={() => app.endAssetPick(false)}
-          >
+          <AssetPickOverlay title={assetPickTitle(app.assetPick.mediaKind)} onClose={() => app.endAssetPick(false)}>
             <AssetsPanel
               project={app.project}
               showToast={app.showToast}
@@ -105,11 +90,7 @@ export function AppShell({ app }: { readonly app: ShellView }) {
         )}
         {app.inPreview && app.previewSource && (
           <div className="preview-mode">
-            <iframe
-              ref={app.previewIframeRef}
-              src={app.previewSource}
-              title="Site preview (interactive)"
-            />
+            <iframe ref={app.previewIframeRef} src={app.previewSource} title="Site preview (interactive)" />
           </div>
         )}
         <OldVersionCover app={app} />
@@ -144,11 +125,7 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
           by the panels. Always mounted but inert until opened: it spawns no
           shell until then, and once open it hides rather than unmounting, so
           toggling it doesn't discard the scrollback — see TerminalDock. */}
-      <TerminalDock
-        projectPath={app.project.path}
-        open={app.termOpen}
-        onClose={() => app.setTermOpen(false)}
-      />
+      <TerminalDock projectPath={app.project.path} open={app.termOpen} onClose={() => app.setTermOpen(false)} />
       <CodeWindowHost app={app} />
       <CanvasTextFormatBar />
       {app.insertOpen && (
@@ -161,12 +138,7 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
       )}
       <ConflictNotice app={app} />
       <ErrorToast
-        message={
-          app.pageState?.save.tag === 'failed'
-            ? `${app.currentPage?.name ?? 'This file'} has not been saved. ` +
-              app.pageState.save.message
-            : undefined
-        }
+        message={app.pageState?.save.tag === 'failed' ? `${app.currentPage?.name ?? 'This file'} has not been saved. ` + app.pageState.save.message : undefined}
         recovery={[{ label: 'Retry save', run: app.flushSave }]}
       />
       {app.busy && <BusyOverlay message={app.busy} />}
@@ -220,11 +192,7 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
           <span className="page-switch-label">{app.currentPage?.name}</span>
         </button>
       ) : (
-        <PageSwitcher
-          pages={app.scan.pages}
-          currentPage={app.currentScanPage}
-          onSelect={app.onSelectPage}
-        />
+        <PageSwitcher pages={app.scan.pages} currentPage={app.currentScanPage} onSelect={app.onSelectPage} />
       )}
       <UrlGroup app={app} />
       <span className="spacer" />
@@ -261,9 +229,7 @@ export function UrlGroup({ app }: { readonly app: ShellView }) {
           className="url"
           spellCheck={false}
           value={app.urlDraft ?? liveUrl ?? ''}
-          placeholder={
-            app.devStatus === 'starting' ? 'Starting Astro dev server…' : 'Preview offline'
-          }
+          placeholder={app.devStatus === 'starting' ? 'Starting Astro dev server…' : 'Preview offline'}
           readOnly={!liveUrl}
           onFocus={(event) => event.currentTarget.select()}
           onChange={(event) => app.setUrlDraft(event.target.value)}
@@ -287,13 +253,7 @@ export function UrlGroup({ app }: { readonly app: ShellView }) {
           is what gets edited either way — this only changes the data it's
           rendered against. */}
       {patternRoute?.includes('[') && (
-        <DynamicPicker
-          entries={app.dynamicPaths}
-          index={app.dynamicIndex}
-          onPick={app.setDynamicIndex}
-          error={app.dynamicError}
-          pattern={patternRoute}
-        />
+        <DynamicPicker entries={app.dynamicPaths} index={app.dynamicIndex} onPick={app.setDynamicIndex} error={app.dynamicError} pattern={patternRoute} />
       )}
     </div>
   );
@@ -326,12 +286,7 @@ function SettingsButton() {
     return undefined;
   }
   return (
-    <button
-      className="titlebar-btn"
-      title={`Settings (${shortcutLabel(',', 'primary', platform)})`}
-      aria-label="Settings"
-      onClick={() => openAppSettings()}
-    >
+    <button className="titlebar-btn" title={`Settings (${shortcutLabel(',', 'primary', platform)})`} aria-label="Settings" onClick={() => openAppSettings()}>
       <GearIcon size={14} />
     </button>
   );
@@ -355,13 +310,7 @@ export function TitleActions({ app }: { readonly app: ShellView }) {
           is never on while the only button that turns it off looks idle. */}
       <button
         className={`titlebar-btn preview-btn ${app.inPreview || app.previewRef ? 'on' : ''}`}
-        title={
-          app.previewRef
-            ? 'Back to now (Esc)'
-            : app.inPreview
-              ? 'Exit preview (Esc)'
-              : 'Preview the site'
-        }
+        title={app.previewRef ? 'Back to now (Esc)' : app.inPreview ? 'Exit preview (Esc)' : 'Preview the site'}
         disabled={!app.devUrl}
         onClick={() => togglePreview(app)}
       >
@@ -521,10 +470,7 @@ export function PaletteTab({ app }: { readonly app: ShellView }) {
 
 // A page is opened as a page; a component or layout is drilled into, the same as
 // opening one from the canvas.
-export function openUsage(
-  app: ShellView,
-  entry: { readonly path: string; readonly rel: string },
-): void {
+export function openUsage(app: ShellView, entry: { readonly path: string; readonly rel: string }): void {
   const page = app.scan.pages.find((candidate) => candidate.path === entry.path);
   if (page) {
     app.onSelectPage(page);
@@ -652,17 +598,11 @@ function HistoryGitControls({ app }: { readonly app: ShellView }) {
   );
 }
 
-export async function restoreHistoryFile(
-  app: ShellView,
-  commit: HistoryCommit,
-  file: HistoryCommitFile,
-): Promise<void> {
+export async function restoreHistoryFile(app: ShellView, commit: HistoryCommit, file: HistoryCommitFile): Promise<void> {
   const confirmed = await confirmDialog({
     title: `Put ${file.label} back?`,
     body:
-      `It goes back to how it was in “${commit.subject}”, ` +
-      'and lands as an unsaved change — ' +
-      'so you can look at it and undo it like any other edit.',
+      `It goes back to how it was in “${commit.subject}”, ` + 'and lands as an unsaved change — ' + 'so you can look at it and undo it like any other edit.',
     confirmLabel: 'Put it back',
   });
   if (!confirmed) {
@@ -705,12 +645,7 @@ export async function restoreHistoryProject(app: ShellView, commit: HistoryCommi
     const restored = await restoreProjectVersion(app.project.path, commit.hash);
     await app.refreshGit();
     await app.reloadFromDisk();
-    app.showToast(
-      restored?.parked
-        ? 'The project is back — your unsaved work is waiting on this branch'
-        : 'The project is back to how it was',
-      'success',
-    );
+    app.showToast(restored?.parked ? 'The project is back — your unsaved work is waiting on this branch' : 'The project is back to how it was', 'success');
   } catch (error: unknown) {
     app.showToast(cleanError(error), 'error');
   } finally {

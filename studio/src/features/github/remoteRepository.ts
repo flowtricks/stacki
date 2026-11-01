@@ -42,10 +42,7 @@ export class RemoteRepository {
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(180_000),
     });
-    const input: unknown =
-      route === '/incoming'
-        ? await response.json()
-        : JSON.parse(await boundedText(new Response(response.body), 16_384));
+    const input: unknown = route === '/incoming' ? await response.json() : JSON.parse(await boundedText(new Response(response.body), 16_384));
     const result = record(input);
     if (!response.ok) {
       throw new Error(string(result['error'] ?? 'GitHub request failed'));

@@ -18,12 +18,7 @@ const GripIcon = () => (
 );
 const EyeIcon = () => (
   <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className="embed-editor_bg-glyph">
-    <path
-      d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinejoin="round"
-    />
+    <path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
     <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2" />
   </svg>
 );
@@ -36,12 +31,7 @@ const EyeOffIcon = () => (
       strokeLinecap="round"
       strokeLinejoin="round"
     />
-    <path
-      d="M6.6 6.6a2 2 0 0 0 2.8 2.8"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
+    <path d="M6.6 6.6a2 2 0 0 0 2.8 2.8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
     <path d="m2.5 2.5 11 11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
   </svg>
 );
@@ -73,17 +63,7 @@ export type LayerListProps = {
   onToggleHidden?: (index: number) => void;
 };
 
-export default function LayerList({
-  count,
-  busy,
-  ariaLabel,
-  renderRow,
-  onOpen,
-  onReorder,
-  onRemove,
-  isHidden,
-  onToggleHidden,
-}: LayerListProps) {
+export default function LayerList({ count, busy, ariaLabel, renderRow, onOpen, onReorder, onRemove, isHidden, onToggleHidden }: LayerListProps) {
   const [dragFrom, setDragFrom] = useState<number | undefined>(undefined);
   const [dragOver, setDragOver] = useState<number | undefined>(undefined);
   if (!count) {
@@ -164,10 +144,7 @@ function LayerRow({
 }: LayerRowProps) {
   return (
     <li
-      className={
-        `embed-editor_bg-layer ${dropTarget ? 'is-drop-target' : ''} ` +
-        `${dragging ? 'is-dragging' : ''} ${hidden ? 'is-hidden' : ''}`
-      }
+      className={`embed-editor_bg-layer ${dropTarget ? 'is-drop-target' : ''} ` + `${dragging ? 'is-dragging' : ''} ${hidden ? 'is-hidden' : ''}`}
       onDragOver={(event) => {
         event.preventDefault();
         onDragOverRow();
@@ -196,22 +173,14 @@ function LayerRow({
         <button
           type="button"
           className="embed-editor_bg-layer-main"
-          onClick={(event) =>
-            onOpen(index, event.currentTarget.closest<HTMLElement>('li') ?? event.currentTarget)
-          }
+          onClick={(event) => onOpen(index, event.currentTarget.closest<HTMLElement>('li') ?? event.currentTarget)}
           disabled={busy}
           title="Edit layer"
         >
           {preview}
           <span className="embed-editor_bg-layer-label">{label}</span>
         </button>
-        <LayerRowActions
-          index={index}
-          busy={busy}
-          hidden={hidden}
-          onRemove={onRemove}
-          onToggleHidden={onToggleHidden}
-        />
+        <LayerRowActions index={index} busy={busy} hidden={hidden} onRemove={onRemove} onToggleHidden={onToggleHidden} />
       </div>
     </li>
   );
@@ -219,13 +188,7 @@ function LayerRow({
 
 // The hover-revealed row actions: the eye (only when hiding is supported) and
 // the trash.
-function LayerRowActions({
-  index,
-  busy,
-  hidden,
-  onRemove,
-  onToggleHidden,
-}: Pick<LayerRowProps, 'index' | 'busy' | 'hidden' | 'onRemove' | 'onToggleHidden'>) {
+function LayerRowActions({ index, busy, hidden, onRemove, onToggleHidden }: Pick<LayerRowProps, 'index' | 'busy' | 'hidden' | 'onRemove' | 'onToggleHidden'>) {
   return (
     <>
       {onToggleHidden ? (

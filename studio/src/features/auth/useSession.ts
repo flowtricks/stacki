@@ -3,9 +3,7 @@ import { request } from '../project/projectClient';
 import { record } from '../../shared/validation';
 import { parseProfile, type GitHubProfile } from './profile';
 
-export type Session =
-  | { readonly kind: 'local'; readonly editing: 'source' | 'draft' }
-  | (GitHubProfile & { readonly kind: 'github' });
+export type Session = { readonly kind: 'local'; readonly editing: 'source' | 'draft' } | (GitHubProfile & { readonly kind: 'github' });
 
 export function parseSession(value: unknown): Session {
   const data = record(value);

@@ -107,10 +107,7 @@ assert.deepEqual(cms.reassemble(collection, [{ title: 'Two' }]), {
   metadata: 'keep',
   rows: [{ title: 'Two' }],
 });
-assert.deepEqual(
-  cms.applyToItems([{ group: [{ name: 'One' }] }], ['group'], cms.renameKey('name', 'title')),
-  [{ group: [{ title: 'One' }] }],
-);
+assert.deepEqual(cms.applyToItems([{ group: [{ name: 'One' }] }], ['group'], cms.renameKey('name', 'title')), [{ group: [{ title: 'One' }] }]);
 assert.deepEqual(cms.duplicateItem({ id: 'one', name: 'One', image: raw.rows[0].image }), {
   id: 'one-copy',
   name: 'One copy',

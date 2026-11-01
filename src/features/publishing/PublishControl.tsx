@@ -5,10 +5,7 @@ import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
 import Popup from '../../ui/Popup';
 import { PublishSettings } from './PublishSettings';
 import { PublishMenuOptions } from './PublishMenuOptions';
-import {
-  UNKNOWN_PUBLISH_AVAILABILITY,
-  type PublishAvailability,
-} from '../../../shared/properties/publishState';
+import { UNKNOWN_PUBLISH_AVAILABILITY, type PublishAvailability } from '../../../shared/properties/publishState';
 import { usePublishConfiguration, configuredPublishAvailability } from './usePublishConfiguration';
 import { cachedPublishingDiscovery } from './publishDiscoveryCache';
 import './publishing.css';
@@ -31,12 +28,7 @@ export function PublishControl({
   refreshAvailability,
   availability: checkedAvailability = UNKNOWN_PUBLISH_AVAILABILITY,
 }: Props) {
-  const { open, setOpen, settings, checking, run, openSettings, closeSettings } = usePublishMenu(
-    projectPath,
-    publish,
-    settingsClosed,
-    refreshAvailability,
-  );
+  const { open, setOpen, settings, checking, run, openSettings, closeSettings } = usePublishMenu(projectPath, publish, settingsClosed, refreshAvailability);
   const configuration = usePublishConfiguration(projectPath, { open, settings, checking });
   const defaultTarget = 'config' in configuration ? configuration.config.defaultTarget : 'all';
   const availability = configuredPublishAvailability(checkedAvailability, configuration);
@@ -54,14 +46,7 @@ export function PublishControl({
         }
       }}
     >
-      <PublishButtons
-        busy={busy}
-        checking={checking}
-        current={current}
-        open={open}
-        publish={() => run('default')}
-        toggle={() => setOpen(!open)}
-      />
+      <PublishButtons busy={busy} checking={checking} current={current} open={open} publish={() => run('default')} toggle={() => setOpen(!open)} />
       <Popup
         mode="popover"
         portal={false}
@@ -83,9 +68,7 @@ export function PublishControl({
           openSettings={openSettings}
         />
       </Popup>
-      {settings && (
-        <PublishSettings key={projectPath} projectPath={projectPath} close={closeSettings} />
-      )}
+      {settings && <PublishSettings key={projectPath} projectPath={projectPath} close={closeSettings} />}
     </div>
   );
 }
@@ -151,10 +134,7 @@ function PublishButtons(props: {
 }) {
   return (
     <div className="stacki-publish-split">
-      <span
-        className="stacki-publish-main"
-        title={props.current ? 'All changes are up to date' : undefined}
-      >
+      <span className="stacki-publish-main" title={props.current ? 'All changes are up to date' : undefined}>
         <button
           className="primary"
           disabled={props.busy || props.checking || props.current}
@@ -207,10 +187,7 @@ function usePublishSetup(projectPath: string, publish: Props['publish']) {
   return { settings, setSettings, checking, prepare };
 }
 
-async function preparePublishTarget(
-  projectPath: string,
-  choice: PublishChoice,
-): Promise<PublishTarget | undefined> {
+async function preparePublishTarget(projectPath: string, choice: PublishChoice): Promise<PublishTarget | undefined> {
   const file = await readMetadata(projectPath, 'publish');
   const config = parsePublishSource(file.source);
   // Resolve on click so edits from either host apply without restarting the editor.
@@ -228,11 +205,7 @@ async function preparePublishTarget(
 }
 
 async function saveLinkedHosting(projectPath: string, config: PublishConfig): Promise<boolean> {
-  const discovery = await cachedPublishingDiscovery(
-    projectPath,
-    { provider: 'linked', account: '' },
-    'refresh',
-  );
+  const discovery = await cachedPublishingDiscovery(projectPath, { provider: 'linked', account: '' }, 'refresh');
   if (discovery.kind !== 'ready') {
     return false;
   }
@@ -260,9 +233,6 @@ function publishTargetCurrent(availability: PublishAvailability, target: Publish
     case 'hosting':
       return availability.hosting === 'current';
     case 'all':
-      return (
-        availability.github === 'current' &&
-        (availability.hosting === 'current' || availability.hosting === 'unconfigured')
-      );
+      return availability.github === 'current' && (availability.hosting === 'current' || availability.hosting === 'unconfigured');
   }
 }

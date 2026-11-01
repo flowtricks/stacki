@@ -1,14 +1,7 @@
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
 
-export default function PropertyReadOnlyFields({
-  property,
-}: {
-  readonly property: ComponentProperty;
-}) {
-  const reason =
-    property.editing?.kind === 'restricted'
-      ? property.editing.reason
-      : 'Edit this prop’s declaration in source.';
+export default function PropertyReadOnlyFields({ property }: { readonly property: ComponentProperty }) {
+  const reason = property.editing?.kind === 'restricted' ? property.editing.reason : 'Edit this prop’s declaration in source.';
   return (
     <div className="property-readonly-fields">
       <p className="property-help">{reason}</p>
@@ -34,13 +27,7 @@ function ReadOnlyField({ label, value }: { readonly label: string; readonly valu
   return (
     <label>
       {label}
-      <textarea
-        readOnly
-        value={value}
-        rows={label === 'Tooltip' ? 3 : 1}
-        aria-label={label}
-        placeholder="Not specified"
-      />
+      <textarea readOnly value={value} rows={label === 'Tooltip' ? 3 : 1} aria-label={label} placeholder="Not specified" />
     </label>
   );
 }

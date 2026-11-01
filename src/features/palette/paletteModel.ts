@@ -11,8 +11,7 @@ export interface ComponentUsageFile {
 }
 
 export type ComponentUsageResult =
-  | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'ready'; readonly files: readonly ComponentUsageFile[] };
+  { readonly kind: 'error'; readonly message: string } | { readonly kind: 'ready'; readonly files: readonly ComponentUsageFile[] };
 
 export interface ComponentPreviewMessage {
   readonly status: 'empty' | 'ready';
@@ -63,9 +62,7 @@ export function parseComponentUsage(input: unknown): ComponentUsageResult {
   return { kind: 'ready', files };
 }
 
-export function groupPaletteComponents(
-  components: readonly ScanComponent[],
-): readonly (readonly [string, readonly ScanComponent[]])[] {
+export function groupPaletteComponents(components: readonly ScanComponent[]): readonly (readonly [string, readonly ScanComponent[]])[] {
   const groups = new Map<string, ScanComponent[]>();
   for (const component of components) {
     const folder = component.folder;
@@ -91,18 +88,12 @@ export function prettyComponentName(name: string): string {
   return name.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
 }
 
-export function componentPreviewURL(
-  devURL: string,
-  component: ScanComponent,
-  trailingSlash: TrailingSlash,
-): string {
+export function componentPreviewURL(devURL: string, component: ScanComponent, trailingSlash: TrailingSlash): string {
   // A basename cannot distinguish components in different folders or a layout
   // from a component. Match the scan's folder convention without exposing an absolute path.
   const base = component.isLayout ? 'src' : 'src/components';
   const file =
-    component.origin?.kind === 'package'
-      ? packagePreviewPath(component)
-      : [base, component.folder, `${component.name}.astro`].filter(Boolean).join('/');
+    component.origin?.kind === 'package' ? packagePreviewPath(component) : [base, component.folder, `${component.name}.astro`].filter(Boolean).join('/');
   const query = new URLSearchParams({ c: component.name, p: file });
   // Astro 5 returns a 404 when an injected page violates the project's slash policy.
   const route = trailingSlash === 'always' ? '/__avb/preview/' : '/__avb/preview';

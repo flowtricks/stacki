@@ -39,9 +39,7 @@ export function pickPrompt(kind: AssetRequest['mediaKind']): string {
   }
 }
 
-export function buildCrumbs(
-  cwd: string,
-): readonly { readonly rel: string; readonly label: string }[] {
+export function buildCrumbs(cwd: string): readonly { readonly rel: string; readonly label: string }[] {
   const crumbs = [{ rel: '', label: 'Assets' }];
   const parts = cwd ? cwd.split('/') : [];
   if (parts.length > BOUNDARY_LIMITS.depthMax) {
@@ -69,10 +67,7 @@ export function isInPickHome(rel: string): boolean {
   return rel === PICK_HOME || rel.startsWith(`${PICK_HOME}/`);
 }
 
-export function assetTitle(
-  file: AssetFile,
-  mode: { readonly editable: boolean; readonly picking: boolean },
-): string {
+export function assetTitle(file: AssetFile, mode: { readonly editable: boolean; readonly picking: boolean }): string {
   if (mode.picking) {
     return `Use /${file.rel}`;
   }

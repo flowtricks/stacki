@@ -20,20 +20,16 @@ test('opening a project cancels active and queued thumbnail startups', async (co
   const started = new Promise<void>((resolve) => {
     announce = resolve;
   });
-  context.mock.method(
-    nodeTools,
-    'spawnAstroServer',
-    (_project: string, _binary: string, argumentsList: readonly string[]) => {
-      launches.push(argumentsList);
-      const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
-        detached: process.platform !== 'win32',
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      children.push(child);
-      announce();
-      return child;
-    },
-  );
+  context.mock.method(nodeTools, 'spawnAstroServer', (_project: string, _binary: string, argumentsList: readonly string[]) => {
+    launches.push(argumentsList);
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      detached: process.platform !== 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    children.push(child);
+    announce();
+    return child;
+  });
   context.after(() => {
     for (const child of children) {
       nodeTools.stopProcessTree(child);

@@ -94,9 +94,7 @@ export function videoLinkOf(text: string): VideoLink | undefined {
 export function videoHostOf(hostname: string): VideoHost | undefined {
   const name = hostname.toLowerCase();
   assert(VIDEO_HOSTS.length > 0, 'Some video hosts are known');
-  return VIDEO_HOSTS.find((host) =>
-    host.domains.some((domain) => name === domain || name.endsWith('.' + domain)),
-  );
+  return VIDEO_HOSTS.find((host) => host.domains.some((domain) => name === domain || name.endsWith('.' + domain)));
 }
 
 /** The link a request names: a video host link, or an error at this boundary. */
@@ -125,11 +123,7 @@ export function parseLinkPreview(input: unknown): LinkPreview {
   if (source === undefined) {
     throw new Error('Link preview.source: expected text');
   }
-  const description = textField(
-    value['description'],
-    'description',
-    LINK_PREVIEW_LIMITS.descriptionCharsMax,
-  );
+  const description = textField(value['description'], 'description', LINK_PREVIEW_LIMITS.descriptionCharsMax);
   const author = textField(value['author'], 'author', LINK_PREVIEW_LIMITS.authorCharsMax);
   const thumbnail = thumbnailField(value['thumbnail']);
   return {

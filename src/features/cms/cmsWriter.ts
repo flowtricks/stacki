@@ -29,12 +29,9 @@ type Snapshot =
 /** What the next write puts on disk: the panel's items, reassembled into the
  * file's shape, or a whole value an undo restores. */
 type QueuedWrite =
-  | { readonly kind: 'items'; readonly items: readonly unknown[] }
-  | { readonly kind: 'data'; readonly data: unknown; readonly expected: unknown };
+  { readonly kind: 'items'; readonly items: readonly unknown[] } | { readonly kind: 'data'; readonly data: unknown; readonly expected: unknown };
 type WriteState =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'queued'; readonly write: QueuedWrite }
-  | { readonly kind: 'writing'; pending: QueuedWrite | undefined };
+  { readonly kind: 'idle' } | { readonly kind: 'queued'; readonly write: QueuedWrite } | { readonly kind: 'writing'; pending: QueuedWrite | undefined };
 const SAVE_DELAY_MS = 400;
 
 export function createCmsWriter(options: WriterOptions) {
@@ -99,15 +96,9 @@ class CmsWriter {
     assert(this.snapshot.kind === 'ready', 'CMS save: a loaded snapshot is required');
     const write = this.state.write;
     const before = this.snapshot.data;
-    const after =
-      write.kind === 'items' ? reassemble(this.snapshot.collection, write.items) : write.data;
+    const after = write.kind === 'items' ? reassemble(this.snapshot.collection, write.items) : write.data;
     this.state = { kind: 'writing', pending: undefined };
-    const result = await writeCms(
-      this.options.projectPath,
-      this.options.rel,
-      after,
-      write.kind === 'data' ? write.expected : undefined,
-    );
+    const result = await writeCms(this.options.projectPath, this.options.rel, after, write.kind === 'data' ? write.expected : undefined);
     assert(this.state.kind === 'writing', 'CMS save: active write lost its state');
     const pending = this.state.pending;
     if (!result.ok) {

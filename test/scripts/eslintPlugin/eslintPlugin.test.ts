@@ -138,27 +138,15 @@ tester.run('no-boolean-parameter', rules['no-boolean-parameter'], {
 
 tester.run('bounded-recursion', rules['bounded-recursion'], {
   valid: [
-    'function walk(node, depth) {\n' +
-      '  assert(depth <= LIMITS.treeDepthMax, "deep");\n' +
-      '  walk(node, depth + 1);\n' +
-      '}',
-    'function walk(node, depth) {\n' +
-      '  if (depth + 1 > LIMITS.treeDepthMax) { return; }\n' +
-      '  walk(node, depth + 1);\n' +
-      '}',
-    'function visit(node, state) {\n' +
-      '  if (state.depth > LIMITS.treeDepthMax) { return; }\n' +
-      '  visit(node, state);\n' +
-      '}',
+    'function walk(node, depth) {\n' + '  assert(depth <= LIMITS.treeDepthMax, "deep");\n' + '  walk(node, depth + 1);\n' + '}',
+    'function walk(node, depth) {\n' + '  if (depth + 1 > LIMITS.treeDepthMax) { return; }\n' + '  walk(node, depth + 1);\n' + '}',
+    'function visit(node, state) {\n' + '  if (state.depth > LIMITS.treeDepthMax) { return; }\n' + '  visit(node, state);\n' + '}',
     'function once() { return other(); }',
     // A property's key is not in scope: these call the global or outer binding.
     'const timers = { setTimeout: (callback, ms) => setTimeout(callback, ms) };',
     'useScrub({ onCommit: () => { onCommit(); } });',
     'class Branches { park() { return park(this.name); } }',
-    'function walk(node, depth) {\n' +
-      '  assert(depth < PARSE_LIMITS.depthMax, "deep");\n' +
-      '  walk(node, depth + 1);\n' +
-      '}',
+    'function walk(node, depth) {\n' + '  assert(depth < PARSE_LIMITS.depthMax, "deep");\n' + '  walk(node, depth + 1);\n' + '}',
   ],
   invalid: [
     { code: 'function walk(node) { walk(node.child); }', errors: [{ messageId: 'unbounded' }] },
@@ -172,11 +160,7 @@ tester.run('bounded-recursion', rules['bounded-recursion'], {
     },
     // A bound on something other than depth bounds nothing.
     {
-      code:
-        'function walk(node, count) {\n' +
-        '  assert(count <= LIMITS.treeNodesMax, "n");\n' +
-        '  walk(node, count);\n' +
-        '}',
+      code: 'function walk(node, count) {\n' + '  assert(count <= LIMITS.treeNodesMax, "n");\n' + '  walk(node, count);\n' + '}',
       errors: [{ messageId: 'unbounded' }],
     },
   ],
@@ -231,11 +215,7 @@ tester.run('no-unbounded-loop', rules['no-unbounded-loop'], {
 });
 
 tester.run('division-intent', rules['division-intent'], {
-  valid: [
-    'const middle = list[Math.floor(list.length / 2)];',
-    'const ratio = width / height;',
-    'text.slice(0, Math.ceil(text.length / 2));',
-  ],
+  valid: ['const middle = list[Math.floor(list.length / 2)];', 'const ratio = width / height;', 'text.slice(0, Math.ceil(text.length / 2));'],
   invalid: [
     { code: 'const middle = list[list.length / 2];', errors: [{ messageId: 'bareDivision' }] },
     { code: 'text.slice(0, text.length / 2);', errors: [{ messageId: 'bareDivision' }] },
@@ -266,10 +246,7 @@ tester.run('comment-sentence', rules['comment-sentence'], {
 // A blanket `eslint-disable` suppresses this rule too, so the policy scan
 // holds that case (test/scripts/policy/policyScan.test.ts).
 tester.run('require-disable-reason', rules['require-disable-reason'], {
-  valid: [
-    '// eslint-disable-next-line no-console -- the CLI prints\nconsole.log(1);',
-    '/* eslint-disable no-console -- the CLI prints */',
-  ],
+  valid: ['// eslint-disable-next-line no-console -- the CLI prints\nconsole.log(1);', '/* eslint-disable no-console -- the CLI prints */'],
   invalid: [
     {
       code: '// eslint-disable-next-line no-console\nconsole.log(1);',
@@ -299,27 +276,18 @@ tester.run('no-overloads', rules['no-overloads'], {
   valid: ['function parse(input: string | number) {}', 'declare function external(): void;'],
   invalid: [
     {
-      code:
-        'function parse(input: string): string;\n' +
-        'function parse(input: unknown) { return input; }',
+      code: 'function parse(input: string): string;\n' + 'function parse(input: unknown) { return input; }',
       errors: [{ messageId: 'overload' }],
     },
     {
-      code:
-        'class Parser {\n' +
-        '  parse(input: string): string;\n' +
-        '  parse(input: unknown) { return input; }\n' +
-        '}',
+      code: 'class Parser {\n' + '  parse(input: string): string;\n' + '  parse(input: unknown) { return input; }\n' + '}',
       errors: [{ messageId: 'overload' }],
     },
   ],
 });
 
 tester.run('callback-last', rules['callback-last'], {
-  valid: [
-    'function watch(path: string, onChange: () => void) {}',
-    'function both(onStart: () => void, onEnd: () => void) {}',
-  ],
+  valid: ['function watch(path: string, onChange: () => void) {}', 'function both(onStart: () => void, onEnd: () => void) {}'],
   invalid: [
     {
       code: 'function watch(onChange: () => void, path: string) {}',

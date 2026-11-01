@@ -84,12 +84,7 @@ export class HistoryRepository {
       const connection = await this.connection();
       // Only objects reachable from fetched branches may be inspected.
       const git = this.runner(snapshot.directory, connection.token);
-      const reachable = await git(this.root, [
-        'branch',
-        '--contains',
-        historyHash(request.commit),
-        '--format=%(refname)',
-      ]);
+      const reachable = await git(this.root, ['branch', '--contains', historyHash(request.commit), '--format=%(refname)']);
       if (!reachable.stdout) {
         throw new Error('This commit is no longer available in the fetched history.');
       }
@@ -103,12 +98,7 @@ export class HistoryRepository {
       const snapshot = await this.refresh();
       const connection = await this.connection();
       const git = this.runner(snapshot.directory, connection.token);
-      const reachable = await git(this.root, [
-        'branch',
-        '--contains',
-        commit,
-        '--format=%(refname)',
-      ]);
+      const reachable = await git(this.root, ['branch', '--contains', commit, '--format=%(refname)']);
       if (!reachable.stdout) {
         throw new Error('This commit is no longer available in the fetched history.');
       }
@@ -173,18 +163,11 @@ export class HistoryRepository {
     const previous = this.snapshot;
     if (previous && previous.depth >= depth) {
       const remote = `https://github.com/${connection.repository}.git`;
-      const heads = await this.execute(
-        { root: this.root, directory: previous.directory, authorization: connection.token },
-        ['ls-remote', '--heads', remote],
-      );
+      const heads = await this.execute({ root: this.root, directory: previous.directory, authorization: connection.token }, ['ls-remote', '--heads', remote]);
       if (!heads.ok) {
         throw new Error(heads.error.message);
       }
-      if (
-        previous.info.repository === connection.repository &&
-        previous.info.branch === connection.branch &&
-        previous.remoteHeads === heads.value
-      ) {
+      if (previous.info.repository === connection.repository && previous.info.branch === connection.branch && previous.remoteHeads === heads.value) {
         // Poll references rather than rebuilding the object store and recomputing
         // rename diffs every minute while the repository is unchanged.
         this.snapshot = { ...previous, at: this.now() };

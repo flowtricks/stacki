@@ -11,14 +11,7 @@ interface BranchActionsProps {
 
 // Hide actions that cannot apply to this branch; temporary work only disables
 // available actions so the row does not shift while an operation is running.
-export default function BranchActions({
-  branch,
-  current,
-  trunk,
-  onMerge,
-  onDelete,
-  disabled,
-}: BranchActionsProps) {
+export default function BranchActions({ branch, current, trunk, onMerge, onDelete, disabled }: BranchActionsProps) {
   if (branch === current) {
     return undefined;
   }

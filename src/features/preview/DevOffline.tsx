@@ -20,9 +20,7 @@ export function DevOffline({
   return (
     <>
       <div>Preview is offline.</div>
-      <ErrorToast
-        message={message.known ? `${message.title} ${message.detail ?? ''}` : undefined}
-      />
+      <ErrorToast message={message.known ? `${message.title} ${message.detail ?? ''}` : undefined} />
       <div className="offline-actions">
         <button onClick={onRestart}>Start dev server</button>
         <OfflineAction action={message.action} />
@@ -87,8 +85,7 @@ function offlineMessage(diagnosis: DevDiagnosis | undefined): OfflineMessage {
       known: true,
       title: "This project's dependencies aren't installed.",
       detail:
-        'Astro was not found in node_modules. Starting the server installs them automatically — ' +
-        'if that keeps failing, use Show diagnostics for details.',
+        'Astro was not found in node_modules. Starting the server installs them automatically — ' + 'if that keeps failing, use Show diagnostics for details.',
       action: undefined,
     };
   }

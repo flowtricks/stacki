@@ -3,13 +3,7 @@
 // runner, a free port, and a process tree stopped as a whole.
 
 import { MAIN_LIMITS } from './mainLimits';
-import {
-  commandNeedsShell,
-  mergeToolPaths,
-  pathEnvironmentValue,
-  setPathEnvironment,
-  staticToolPathGuesses,
-} from './platform';
+import { commandNeedsShell, mergeToolPaths, pathEnvironmentValue, setPathEnvironment, staticToolPathGuesses } from './platform';
 import { userInfo } from 'os';
 import type { ChildProcess, ExecFileOptions } from 'child_process';
 import { toRecord } from '../../shared/core/record';
@@ -222,12 +216,7 @@ export function nodeCliCommand(binPath: string, args: readonly string[]): [strin
   return entry ? [node, [entry, ...args]] : [binPath, [...args]];
 }
 
-export function run(
-  cmd: string,
-  args: readonly string[],
-  cwd: string,
-  options: ExecFileOptions = {},
-) {
+export function run(cmd: string, args: readonly string[], cwd: string, options: ExecFileOptions = {}) {
   // Launched from Finder, the packaged app inherits a bare PATH — Homebrew's
   // bin isn't on it, so `gh` looks uninstalled however it was set up. Cheap
   // after the first call (memoized).
@@ -255,11 +244,7 @@ export function run(
   });
 }
 
-export async function git(
-  projectPath: string,
-  args: readonly string[],
-  options: ExecFileOptions = {},
-) {
+export async function git(projectPath: string, args: readonly string[], options: ExecFileOptions = {}) {
   return run('git', args, projectPath, options);
 }
 
@@ -306,16 +291,13 @@ export function stopProcessTree(proc: ChildProcess | undefined) {
   }
   try {
     if (isWin) {
-      spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { windowsHide: true }).on(
-        'error',
-        () => {
-          try {
-            proc.kill('SIGTERM');
-          } catch {
-            /* already gone */
-          }
-        },
-      );
+      spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { windowsHide: true }).on('error', () => {
+        try {
+          proc.kill('SIGTERM');
+        } catch {
+          /* already gone */
+        }
+      });
     } else {
       process.kill(-proc.pid, 'SIGTERM');
     }
@@ -332,12 +314,7 @@ export function stopProcessTree(proc: ChildProcess | undefined) {
 // `devServer` belongs to the canvas, and a thumbnail must not disturb what the
 // editor is showing. The project's own config is used rather than the app's
 // generated one — the picture is of the site, not of the canvas.
-export function spawnAstroServer(
-  projectPath: string,
-  localBin: string,
-  args: readonly string[],
-  extraEnvironment: Readonly<Record<string, string>> = {},
-) {
+export function spawnAstroServer(projectPath: string, localBin: string, args: readonly string[], extraEnvironment: Readonly<Record<string, string>> = {}) {
   const [cmd, argv] = nodeCliCommand(localBin, args);
   return spawn(cmd, argv, {
     cwd: projectPath,

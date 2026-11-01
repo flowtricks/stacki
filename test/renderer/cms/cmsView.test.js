@@ -24,14 +24,7 @@ buildSync({
 });
 const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
 global.window = dom.window;
-for (const name of [
-  'document',
-  'navigator',
-  'HTMLElement',
-  'HTMLInputElement',
-  'Element',
-  'Node',
-]) {
+for (const name of ['document', 'navigator', 'HTMLElement', 'HTMLInputElement', 'Element', 'Node']) {
   global[name] = dom.window[name];
 }
 global.IS_REACT_ACT_ENVIRONMENT = true;
@@ -41,10 +34,7 @@ const { createRoot } = require('react-dom/client');
 const View = require(output).default;
 const type = (input, text) =>
   act(async () => {
-    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(
-      input,
-      text,
-    );
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, text);
     input.dispatchEvent(new window.Event('input', { bubbles: true }));
   });
 
@@ -56,8 +46,7 @@ function fixture() {
   const errors = [];
   const listeners = new Set();
   window.avb = {
-    readCms: (payload) =>
-      new Promise((resolve, reject) => reads.push({ payload, resolve, reject })),
+    readCms: (payload) => new Promise((resolve, reject) => reads.push({ payload, resolve, reject })),
     cmsMeta: async () => ({ meta: {} }),
     writeCms: (payload) => new Promise((resolve) => writes.push({ payload, resolve })),
     onCmsChanged: (listener) => {
@@ -115,9 +104,7 @@ test('the content form hides helpers and preserves them when saving copy', async
   const helper = { __expr: '(entry) => entry.summary || entry.subtitle' };
   try {
     await state.show('data/site.ts#*general');
-    await act(async () =>
-      state.reads[0].resolve({ data: { title: 'Retreats', description: helper } }),
-    );
+    await act(async () => state.reads[0].resolve({ data: { title: 'Retreats', description: helper } }));
     assert.equal(document.querySelectorAll('.cms-field').length, 1);
     assert.match(document.querySelector('.cms-field').textContent, /Title/);
     assert.doesNotMatch(document.querySelector('.cms-detail-body').textContent, /Description/);
@@ -133,31 +120,27 @@ test('the content form hides helpers and preserves them when saving copy', async
   }
 });
 
-test(
-  'obsolete reads cannot replace the selected ' +
-    'collection and unreadable files cannot be edited',
-  async () => {
-    const state = fixture();
-    try {
-      await state.show('a.json');
-      await state.show('b.json');
-      await act(async () => state.reads[1].resolve({ data: [{ title: 'Second' }] }));
-      await act(async () => state.reads[0].resolve({ data: [{ title: 'Obsolete' }] }));
-      assert.equal(document.querySelector('.cms-field input').value, 'Second');
-      await act(async () => {
-        for (const listener of state.listeners) {
-          listener();
-        }
-      });
-      await act(async () => state.reads[2].reject(new Error('cannot read')));
-      assert.match(toastMessages(), /cannot read/);
-      assert.ok(document.querySelector('[title="New item"]') === null);
-      assert.ok(document.querySelector('.cms-items .primary') === null);
-      assert.equal(state.writes.length, 0);
-    } finally {
-      await act(async () => state.root.unmount());
-    }
-  },
-);
+test('obsolete reads cannot replace the selected ' + 'collection and unreadable files cannot be edited', async () => {
+  const state = fixture();
+  try {
+    await state.show('a.json');
+    await state.show('b.json');
+    await act(async () => state.reads[1].resolve({ data: [{ title: 'Second' }] }));
+    await act(async () => state.reads[0].resolve({ data: [{ title: 'Obsolete' }] }));
+    assert.equal(document.querySelector('.cms-field input').value, 'Second');
+    await act(async () => {
+      for (const listener of state.listeners) {
+        listener();
+      }
+    });
+    await act(async () => state.reads[2].reject(new Error('cannot read')));
+    assert.match(toastMessages(), /cannot read/);
+    assert.ok(document.querySelector('[title="New item"]') === null);
+    assert.ok(document.querySelector('.cms-items .primary') === null);
+    assert.equal(state.writes.length, 0);
+  } finally {
+    await act(async () => state.root.unmount());
+  }
+});
 
 test.after(() => dom.window.close());

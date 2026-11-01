@@ -32,9 +32,7 @@ function parsed(source: string) {
 
 function tags(nodes: readonly ParserNode[], depth = 0): readonly ParserNode[] {
   assert.ok(depth <= LIMITS.treeDepthMax);
-  return nodes
-    .flatMap((node) => [node, ...tags(node.children ?? [], depth + 1)])
-    .filter((node) => node.kind === 'element' || node.kind === 'component');
+  return nodes.flatMap((node) => [node, ...tags(node.children ?? [], depth + 1)]).filter((node) => node.kind === 'element' || node.kind === 'component');
 }
 
 const callbacks = [
@@ -130,13 +128,7 @@ test('editing an early-return component changes only its source attribute', () =
   assert.ok(plan.ok);
   const changed = decodeUtf8(applySplices(snapshot.bytes, plan.value.splices));
   assert.ok(changed.ok);
-  assert.equal(
-    changed.value,
-    nativeNodes.replace(
-      '__cms={context.Dynamo || {}} />',
-      '__cms={context.Dynamo || {}} class="updated" />',
-    ),
-  );
+  assert.equal(changed.value, nativeNodes.replace('__cms={context.Dynamo || {}} />', '__cms={context.Dynamo || {}} class="updated" />'));
   parsed(changed.value);
 });
 

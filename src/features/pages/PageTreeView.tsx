@@ -12,10 +12,7 @@ import { countTreePages, pageDisplayName, pageFolderDisplayName } from './pageTr
 import { CollectionIcon, FileIcon, FolderIcon, FolderOpenIcon, TrashIcon } from '../../ui/Icons';
 import { allowDragEffect } from '../../editor/dragState';
 
-export type PageEditing =
-  | { readonly kind: 'page'; readonly key: string }
-  | { readonly kind: 'folder'; readonly key: string }
-  | { readonly kind: 'none' };
+export type PageEditing = { readonly kind: 'page'; readonly key: string } | { readonly kind: 'folder'; readonly key: string } | { readonly kind: 'none' };
 
 export interface PageTreeActions {
   readonly select: (page: ScanPage) => void;
@@ -49,50 +46,25 @@ export function PageTreeView(props: PageTreeViewProps) {
     <>
       {entries.map((entry, index) => (
         <React.Fragment key={entry.key}>
-          <PageOrderGap
-            reorder={props.reorder}
-            parent={props.rel}
-            depth={props.depth}
-            siblings={siblings}
-            index={index}
-          />
+          <PageOrderGap reorder={props.reorder} parent={props.rel} depth={props.depth} siblings={siblings} index={index} />
           {entry.kind === 'page' ? (
             <PageRow page={entry.page} props={props} />
           ) : (
-            <FolderRows
-              name={entry.name}
-              node={entry.node}
-              rel={entry.key.slice(0, -1)}
-              props={props}
-            />
+            <FolderRows name={entry.name} node={entry.node} rel={entry.key.slice(0, -1)} props={props} />
           )}
         </React.Fragment>
       ))}
-      <PageOrderGap
-        reorder={props.reorder}
-        parent={props.rel}
-        depth={props.depth}
-        siblings={siblings}
-        index={entries.length}
-      />
+      <PageOrderGap reorder={props.reorder} parent={props.rel} depth={props.depth} siblings={siblings} index={entries.length} />
     </>
   );
 }
 
-function PageRow({
-  page,
-  props,
-}: {
-  readonly page: PageTreePage;
-  readonly props: PageTreeViewProps;
-}) {
+function PageRow({ page, props }: { readonly page: PageTreePage; readonly props: PageTreeViewProps }) {
   const editing = props.editing.kind === 'page' && props.editing.key === page.path;
   const collection = isCollectionRoute(page.name);
   return (
     <TreeDragRow
-      className={`list-item ${
-        collection ? 'collection' : ''
-      } ${props.currentPage?.path === page.path ? 'active' : ''}`}
+      className={`list-item ${collection ? 'collection' : ''} ${props.currentPage?.path === page.path ? 'active' : ''}`}
       style={{ paddingLeft: 8 + props.depth * 14 }}
       data-order-key={page.name}
       title={page.route}
@@ -112,17 +84,12 @@ function PageRow({
         props.actions.setEditing({ kind: 'page', key: page.path });
       }}
     >
-      <span className="icon">
-        {collection ? <CollectionIcon size={13} /> : <FileIcon size={13} />}
-      </span>
+      <span className="icon">{collection ? <CollectionIcon size={13} /> : <FileIcon size={13} />}</span>
       <span className="page-list-copy">
         <span className="label">{pageDisplayName(page)}</span>
         <span className="sub">{page.route}</span>
       </span>
-      <PageRenameButton
-        kind="page"
-        rename={() => props.actions.setEditing({ kind: 'page', key: page.path })}
-      />
+      <PageRenameButton kind="page" rename={() => props.actions.setEditing({ kind: 'page', key: page.path })} />
       <button
         className="row-action"
         title="Delete page"
@@ -153,14 +120,7 @@ function FolderRows({
   const count = countTreePages(node);
   return (
     <React.Fragment>
-      <FolderRow
-        name={name}
-        rel={rel}
-        count={count}
-        collapsed={collapsed}
-        editing={editing}
-        props={props}
-      />
+      <FolderRow name={name} rel={rel} count={count} collapsed={collapsed} editing={editing} props={props} />
       {!collapsed && <PageTreeView {...props} node={node} rel={rel} depth={props.depth + 1} />}
     </React.Fragment>
   );
@@ -200,9 +160,7 @@ function FolderRow({
       data-order-key={rel + '/'}
       dropBehavior={folderDropBehavior(props, rel)}
     >
-      <span className="icon">
-        {collapsed ? <FolderIcon size={13} /> : <FolderOpenIcon size={13} />}
-      </span>
+      <span className="icon">{collapsed ? <FolderIcon size={13} /> : <FolderOpenIcon size={13} />}</span>
       <span className="page-list-copy">
         <span className="label">{pageFolderDisplayName(name)}</span>
         <span className="sub">/{rel}</span>
@@ -212,10 +170,7 @@ function FolderRow({
           {count} page{count === 1 ? '' : 's'}
         </span>
       )}
-      <PageRenameButton
-        kind="folder"
-        rename={() => props.actions.setEditing({ kind: 'folder', key: rel })}
-      />
+      <PageRenameButton kind="folder" rename={() => props.actions.setEditing({ kind: 'folder', key: rel })} />
       <button
         className="row-action"
         title="Delete folder"
@@ -238,8 +193,7 @@ function startPageDrag(event: React.DragEvent<HTMLDivElement>, page: PageTreePag
 function folderDropBehavior(props: PageTreeViewProps, rel: string) {
   return {
     active: props.dropDirectory === rel && props.reorder.target === undefined,
-    accepts: (event: React.DragEvent<HTMLDivElement>) =>
-      event.dataTransfer.types.includes('avb/page'),
+    accepts: (event: React.DragEvent<HTMLDivElement>) => event.dataTransfer.types.includes('avb/page'),
     enter: (event: React.DragEvent<HTMLDivElement>) => {
       props.reorder.clearTarget();
       props.actions.dragOver(event, rel);

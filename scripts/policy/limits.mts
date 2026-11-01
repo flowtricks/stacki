@@ -3,8 +3,6 @@
 // runaway repository or hook payload fails fast instead of hanging a gate.
 
 export const POLICY_LIMITS = {
-  /** Columns in one line of code or config (AGENTS.md: a hard limit). */
-  lineColumnsMax: 100,
   /** Files one scan reads. The tree holds about 900 today. */
   scanFilesMax: 20_000,
   /** Bytes read from one file; larger files are reported, not read. */

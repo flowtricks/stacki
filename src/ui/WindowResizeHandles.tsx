@@ -14,11 +14,7 @@ const EDGE_LABELS: Readonly<Record<WindowEdge, string>> = {
   nw: 'top left',
 };
 
-export function WindowResizeHandles({
-  windowState,
-}: {
-  readonly windowState: ReturnType<typeof useWindowRectangle>;
-}) {
+export function WindowResizeHandles({ windowState }: { readonly windowState: ReturnType<typeof useWindowRectangle> }) {
   return (
     <>
       {WINDOW_EDGES.map((edge) => (
@@ -31,11 +27,7 @@ export function WindowResizeHandles({
           aria-orientation={edge === 'n' || edge === 's' ? 'horizontal' : 'vertical'}
           aria-valuemin={1}
           aria-valuemax={edge === 'n' || edge === 's' ? window.innerHeight : window.innerWidth}
-          aria-valuenow={
-            edge === 'n' || edge === 's'
-              ? windowState.rectangle.height
-              : windowState.rectangle.width
-          }
+          aria-valuenow={edge === 'n' || edge === 's' ? windowState.rectangle.height : windowState.rectangle.width}
           aria-valuetext={`${windowState.rectangle.width} × ${windowState.rectangle.height} px`}
           onPointerDown={(event) => windowState.start(event, edge)}
           onKeyDown={(event) => windowState.onKeyDown(event, edge)}

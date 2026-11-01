@@ -9,11 +9,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { readCmsSource } = require('#dist/electron/handlers/cmsFiles.js');
-const {
-  writeGeneral,
-  findCollections,
-  readGeneral,
-} = require('#dist/electron/content/jsCollections.js');
+const { writeGeneral, findCollections, readGeneral } = require('#dist/electron/content/jsCollections.js');
 
 const CONSTS = `export const SITE_NAME = "The Church International";
 export const SERMON_SERVICES = [
@@ -58,11 +54,7 @@ test('editing one list rewrites only it, keeping `as const`, the annotation and 
   assert.match(next, /"Youth Night",?\s*\] as const;/);
   assert.match(next, /export const NOINDEX_ROUTES: string\[\] = \["\/404", "\/search"\];/);
   assert.match(next, /\/\*\* Routes kept out of search results\. \*\//);
-  assert.deepEqual(readGeneral(next).SERMON_SERVICES, [
-    'Sunday Service',
-    'Real Men',
-    'Youth Night',
-  ]);
+  assert.deepEqual(readGeneral(next).SERMON_SERVICES, ['Sunday Service', 'Real Men', 'Youth Night']);
 });
 
 test('a list of records stays a collection, and a page keeps plain lists as collections', () => {

@@ -150,8 +150,6 @@ function useClipPathEditorPart3(editor: EditorAfterPointEditActions) {
 
 export default function ClipPath(props: ClipPathProps = {}) {
   // A copy: the composers widen the object they are given into the editor.
-  const editor = useClipPathEditorPart3(
-    useClipPathEditorPart2(useClipPathEditorPart1({ ...props })),
-  );
+  const editor = useClipPathEditorPart3(useClipPathEditorPart2(useClipPathEditorPart1({ ...props })));
   return <ClipPathView editor={editor} />;
 }

@@ -45,9 +45,7 @@ export function renderDefaultsInstance(
       name = 'DefaultsComponent' + index;
     }
     imports.set(file, name);
-    const specifier =
-      snapshot.catalog.find((entry) => entry.file === file)?.importPath ??
-      '../../' + componentFile(file);
+    const specifier = snapshot.catalog.find((entry) => entry.file === file)?.importPath ?? '../../' + componentFile(file);
     additions.push(`import ${name} from ${JSON.stringify(specifier)};`);
     return name;
   };
@@ -66,9 +64,7 @@ export function renderDefaultsInstance(
         : node.content.kind === 'text'
           ? encodeText(node.content.text)
           : node.content.children.map((child) => render(child, depth + 1)).join('');
-    return children === undefined
-      ? `<${name}${props} />`
-      : `<${name}${props}>${children}</${name}>`;
+    return children === undefined ? `<${name}${props} />` : `<${name}${props}>${children}</${name}>`;
   };
   const body = render(result.value, 0);
   assert(additions.length <= DEFAULT_LIMITS.nodesMax, 'Canvas imports fit the expanded tree');
@@ -76,9 +72,7 @@ export function renderDefaultsInstance(
 }
 
 function renderProp(name: string, value: DefaultValue): string {
-  return typeof value === 'string'
-    ? ` ${name}="${encodeText(value).replaceAll('"', '&quot;')}"`
-    : ` ${name}={${String(value)}}`;
+  return typeof value === 'string' ? ` ${name}="${encodeText(value).replaceAll('"', '&quot;')}"` : ` ${name}={${String(value)}}`;
 }
 
 // Both parser hosts expose these structural fields. Unsupported syntax is rejected below.
@@ -96,16 +90,8 @@ export interface CanvasModel {
   readonly imports: readonly { readonly name: string; readonly path: string }[];
   readonly nodes: readonly CanvasNode[];
 }
-export function recipeFromCanvas(
-  model: CanvasModel,
-  session: DefaultsCanvasSession,
-): ComponentRecipe {
-  const imports = new Map(
-    model.imports.map((item) => [
-      item.name,
-      resolveSourceImport(session.file, item.path, session.snapshot.catalog),
-    ]),
-  );
+export function recipeFromCanvas(model: CanvasModel, session: DefaultsCanvasSession): ComponentRecipe {
+  const imports = new Map(model.imports.map((item) => [item.name, resolveSourceImport(session.file, item.path, session.snapshot.catalog)]));
   const root = canvasNodeAt(model.nodes, session.targetPath);
   if (!root || root.kind !== 'component' || imports.get(root.name ?? '') !== session.component) {
     throw new Error('Keep the component whose defaults you are editing in its original position.');
@@ -140,21 +126,14 @@ export function recipeFromCanvas(
   assert(root.kind === 'component', 'A defaults canvas owns a component instance');
   return recipe;
 }
-function canvasNodeRecipe(
-  node: CanvasNode,
-  convert: (node: CanvasNode) => RecipeChild,
-): ComponentRecipe {
-  const props = Object.fromEntries(
-    Object.entries(node.props ?? {}).map(([name, value]) => [name, canvasProp(value)]),
-  );
+function canvasNodeRecipe(node: CanvasNode, convert: (node: CanvasNode) => RecipeChild): ComponentRecipe {
+  const props = Object.fromEntries(Object.entries(node.props ?? {}).map(([name, value]) => [name, canvasProp(value)]));
   const children = node.children;
   if (children === undefined) {
     return { props };
   }
   if (children.every((child) => child.kind === 'text')) {
-    return children.length === 0
-      ? { props, children: [] }
-      : { props, text: children.map((child) => child.value ?? '').join('') };
+    return children.length === 0 ? { props, children: [] } : { props, text: children.map((child) => child.value ?? '').join('') };
   }
   return { props, children: children.map(convert) };
 }
@@ -201,9 +180,7 @@ export function canvasContext(nodes: readonly CanvasNode[], target: string): str
           name: node.name,
           value: node.value,
           props: node.props,
-          children: node.children?.map((child, index) =>
-            visit(child, path + '.' + index, depth + 1),
-          ),
+          children: node.children?.map((child, index) => visit(child, path + '.' + index, depth + 1)),
         };
   };
   return JSON.stringify(nodes.map((node, index) => visit(node, String(index), 0)));

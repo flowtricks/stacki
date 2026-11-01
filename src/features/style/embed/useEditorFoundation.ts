@@ -159,9 +159,7 @@ export function useScanState(editorRefs: ReturnType<typeof useEditorRefs>) {
   // A fast, scan-independent snapshot (tag + classes) read straight off the
   // selected element so the chips appear immediately, before the embed scan's
   // fuller rootSnapshot arrives.
-  const [quickSnapshot, setQuickSnapshot] = useState<ElementSnapshot | undefined>(
-    restoredRef.current?.quick,
-  );
+  const [quickSnapshot, setQuickSnapshot] = useState<ElementSnapshot | undefined>(restoredRef.current?.quick);
   // Classes removed since the panel last resolved — hidden from the chips at once.
   const removedClasses = useRemovedClasses();
   const [, setStatus] = useState('Select an element to inspect its embed styles.');
@@ -261,9 +259,7 @@ export function useNativeState(selectionState: ReturnType<typeof useSelectionSta
   // embed). Reset when the selected element changes.
   // Restore the last-targeted embed so a chosen source (e.g. a global-CSS embed)
   // persists across reloads; effectiveSourceSel still falls back if it's unavailable.
-  const [sourceSelection, setSourceSelection] = useState<string | undefined>(
-    () => loadEmbedSource() ?? undefined,
-  );
+  const [sourceSelection, setSourceSelection] = useState<string | undefined>(() => loadEmbedSource() ?? undefined);
   // Auto-switch the "create styles in" source to the open component's embed while
   // inside a component, and restore the page pick on exit. Refs so the transition
   // effect reads live values without re-running on every source change.
@@ -356,10 +352,7 @@ export function usePendingWrites(
       }
       if (inComponentRef.current && !embedDocument.source.fromComponent) {
         markPending(embedDocument.source.key);
-        setStatus(
-          `Held — this ${held} lives in the page, so the canvas shows it once you ` +
-            'leave the component.',
-        );
+        setStatus(`Held — this ${held} lives in the page, so the canvas shows it once you ` + 'leave the component.');
         return false;
       }
       setSaveError(result.error);
@@ -408,10 +401,7 @@ export function useContentBuild(editorRefs: ReturnType<typeof useEditorRefs>) {
       const onDocument = streamDocs(pageScan, onPartial);
       // Page and component embeds both re-read their CODE fresh so out-of-app edits
       // show up.
-      const [pageResult, componentResult] = await Promise.all([
-        loadEmbedDocs(page.pageEmbeds, onDocument),
-        loadComponentDocs(onDocument),
-      ]);
+      const [pageResult, componentResult] = await Promise.all([loadEmbedDocs(page.pageEmbeds, onDocument), loadComponentDocs(onDocument)]);
       return mergedContent(pageScan, [pageResult, componentResult]);
     },
     [pageInstancesRef],
@@ -427,9 +417,7 @@ export function useContentBuild(editorRefs: ReturnType<typeof useEditorRefs>) {
         return content.docs;
       }
       const seen = new Set(content.docs.map((embedDocument) => embedDocument.source.key));
-      const remembered = pageDocsRef.current.filter(
-        (embedDocument) => !seen.has(embedDocument.source.key),
-      );
+      const remembered = pageDocsRef.current.filter((embedDocument) => !seen.has(embedDocument.source.key));
       return [...content.docs, ...remembered];
     },
     [pageDocsRef],
@@ -438,10 +426,7 @@ export function useContentBuild(editorRefs: ReturnType<typeof useEditorRefs>) {
 }
 
 // Store a scan's content, deriving its rules from the active embeds.
-export function useContentStore(
-  editorRefs: ReturnType<typeof useEditorRefs>,
-  contentBuild: ReturnType<typeof useContentBuild>,
-) {
+export function useContentStore(editorRefs: ReturnType<typeof useEditorRefs>, contentBuild: ReturnType<typeof useContentBuild>) {
   const { contentRef, docsRef, inComponentRef, lastScanAtRef, pageDocsRef } = editorRefs;
   const { composeDocs } = contentBuild;
 
@@ -459,8 +444,7 @@ export function useContentStore(
         ...scanned,
         rules: rebuildRules(active),
         embedCount: active.length,
-        componentEmbedCount: active.filter((embedDocument) => embedDocument.source.fromComponent)
-          .length,
+        componentEmbedCount: active.filter((embedDocument) => embedDocument.source.fromComponent).length,
       };
       contentRef.current = content;
       docsRef.current = active;
@@ -493,10 +477,7 @@ const REBUILD_AFTER_WRITE_ATTEMPTS_MAX = 3;
 // before the write: read again, since storing it would roll the panel back and
 // the next edit would write the old CSS over the new. Undefined when writes
 // kept landing past the cap.
-async function rereadPastWrites(
-  first: { readonly content: Content; readonly writes: number },
-  read: () => Promise<Content>,
-): Promise<Content | undefined> {
+async function rereadPastWrites(first: { readonly content: Content; readonly writes: number }, read: () => Promise<Content>): Promise<Content | undefined> {
   let { content, writes } = first;
   for (let attempt = 0; writes !== embedWritesStarted(); attempt++) {
     if (attempt >= REBUILD_AFTER_WRITE_ATTEMPTS_MAX) {
@@ -524,9 +505,7 @@ function useFlushPending(
     if (!keys.length) {
       return;
     }
-    const byKey = new Map(
-      pageDocsRef.current.map((embedDocument) => [embedDocument.source.key, embedDocument]),
-    );
+    const byKey = new Map(pageDocsRef.current.map((embedDocument) => [embedDocument.source.key, embedDocument]));
     let failed = 0;
     for (const key of keys) {
       const embedDocument = byKey.get(key);
@@ -540,11 +519,7 @@ function useFlushPending(
     }
     pendingKeysRef.current = new Set();
     setPendingKeys(new Set());
-    setStatus(
-      failed
-        ? `Saved your page-embed edits — ${failed} couldn't be written.`
-        : 'Saved the page-embed edits you made inside the component.',
-    );
+    setStatus(failed ? `Saved your page-embed edits — ${failed} couldn't be written.` : 'Saved the page-embed edits you made inside the component.');
   }, [pageDocsRef, pendingKeysRef, setPendingKeys, setStatus]);
 }
 
@@ -567,10 +542,7 @@ export function useContentRebuild(
   // (foreground only) renders the page-level rules as soon as they're ready,
   // before component embeds finish loading.
   const rebuildAndStore = useCallback(
-    async (
-      rescan: RescanOptions = {},
-      onPartial?: (content: Content) => void,
-    ): Promise<Content> => {
+    async (rescan: RescanOptions = {}, onPartial?: (content: Content) => void): Promise<Content> => {
       const wasInComponent = inComponentRef.current;
       let writes = embedWritesStarted();
       // A partial is shown only while no write has landed since the read began:
@@ -598,9 +570,7 @@ export function useContentRebuild(
       // deleted stylesheet: replacing the last complete scan with that partial
       // inventory makes its chips and values disappear until the next poll.
       // Foreground scans still show available sources and their read errors.
-      return storeContent(
-        completeRefresh(fresh ?? content, { allowPartial: !!onPartial || !contentRef.current }),
-      );
+      return storeContent(completeRefresh(fresh ?? content, { allowPartial: !!onPartial || !contentRef.current }));
     },
     [buildContent, flushPending, storeContent, contentRef, inComponentRef, pendingKeysRef],
   );
@@ -608,27 +578,17 @@ export function useContentRebuild(
 }
 
 // Resolve the selected element against the cached content.
-export function useApplyResolve(
-  editorRefs: ReturnType<typeof useEditorRefs>,
-  scanState: ReturnType<typeof useScanState>,
-) {
+export function useApplyResolve(editorRefs: ReturnType<typeof useEditorRefs>, scanState: ReturnType<typeof useScanState>) {
   const { appliedKeyRef, classListRef, pageDocsRef, primedRef, seqRef, targetRef } = editorRefs;
   const { setPhase, setScan, setScanningMore, setStatus } = scanState;
 
   // The cheap part — resolve the selected element against cached content.
   const applyResolve = useCallback(
-    async (
-      element: unknown,
-      content: Content,
-      seq: number,
-      options: { readonly silent?: boolean; readonly sourceOnly?: boolean } = {},
-    ) => {
+    async (element: unknown, content: Content, seq: number, options: { readonly silent?: boolean; readonly sourceOnly?: boolean } = {}) => {
       // Source-known selectors show first when a cached scan is available.
       // The rendered page then supplies component markup, runtime classes and
       // exact DOM matches in one round trip rather than two back to back.
-      const asked = options.sourceOnly
-        ? ({ kind: 'unasked' } as const)
-        : await askCanvasAbout(serializeElementId(element), content.rules);
+      const asked = options.sourceOnly ? ({ kind: 'unasked' } as const) : await askCanvasAbout(serializeElementId(element), content.rules);
       const { target, rootSnapshot } = await resolveTarget(element, content.scan, asked);
       if (seq !== seqRef.current) {
         return;
@@ -660,18 +620,7 @@ export function useApplyResolve(
         setStatus(resolveStatus(content, model));
       }
     },
-    [
-      appliedKeyRef,
-      classListRef,
-      pageDocsRef,
-      primedRef,
-      seqRef,
-      setPhase,
-      setScan,
-      setScanningMore,
-      setStatus,
-      targetRef,
-    ],
+    [appliedKeyRef, classListRef, pageDocsRef, primedRef, seqRef, setPhase, setScan, setScanningMore, setStatus, targetRef],
   );
   return { applyResolve };
 }

@@ -4,15 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { structuralEdits } from '../src/features/source/sourceOperations';
-import {
-  applyEdits,
-  nodeId,
-  attributeEdit,
-  contentEdit,
-  flatten,
-  nodesOf,
-  parsePage,
-} from '../src/features/source/source';
+import { applyEdits, nodeId, attributeEdit, contentEdit, flatten, nodesOf, parsePage } from '../src/features/source/source';
 import { filePath, sourcePath } from '../src/shared/validation';
 
 const source = await readFile(new URL('./fixtures/homepage.astro', import.meta.url), 'utf8');
@@ -91,14 +83,7 @@ test('moving siblings keeps the source parseable and retains both', () => {
   assert.equal((next.match(/<Heading/g) ?? []).length, 1);
 });
 test('path guards reject traversal, hidden files and unsupported sources', () => {
-  for (const input of [
-    '../.env',
-    'src/../.env',
-    'src/.env',
-    '/etc/passwd',
-    'src/a\\b',
-    'src/%2e%2e/a',
-  ]) {
+  for (const input of ['../.env', 'src/../.env', 'src/.env', '/etc/passwd', 'src/a\\b', 'src/%2e%2e/a']) {
     assert.throws(() => filePath(input));
   }
   assert.throws(() => sourcePath('public/picture.png'));

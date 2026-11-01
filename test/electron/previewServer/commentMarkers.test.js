@@ -61,10 +61,8 @@ const { parsePage, serializePageMarked } = require('#dist/electron/parse/astroPa
 const { repoPath } = require('../../helpers/sources.js');
 const { readFolderSource, readSource, readSourceGroup } = require('../../helpers/sourceText.js');
 
-const marked = (
-  body,
-  frontmatter = 'import Split from "./Split.astro";\nimport Img from "./Img.astro";',
-) => serializePageMarked(parsePage(`---\n${frontmatter}\n---\n${body}\n`).model, '');
+const marked = (body, frontmatter = 'import Split from "./Split.astro";\nimport Img from "./Img.astro";') =>
+  serializePageMarked(parsePage(`---\n${frontmatter}\n---\n${body}\n`).model, '');
 
 (async () => {
   // --- nothing the page can see -------------------------------------------------
@@ -80,30 +78,14 @@ const marked = (
       /<Fragment slot="column2" set:html=\{"<!--avb-s:0\.1-->"\} \/>/.test(out),
       out,
     );
-    check(
-      'and closed the same way',
-      /<Fragment slot="column2" set:html=\{"<!--avb-e:0\.1-->"\} \/>/.test(out),
-      out,
-    );
-    check(
-      'the marker carries the slot the node is in, not another one',
-      !/<Fragment slot="caption"/.test(out),
-      out,
-    );
+    check('and closed the same way', /<Fragment slot="column2" set:html=\{"<!--avb-e:0\.1-->"\} \/>/.test(out), out);
+    check('the marker carries the slot the node is in, not another one', !/<Fragment slot="caption"/.test(out), out);
     // A slotted ELEMENT needs no marker node at all: it wears its path.
-    check(
-      'a slotted element is still tagged in place',
-      /<span slot="caption" data-avb-p="0\.2">/.test(out),
-      out,
-    );
+    check('a slotted element is still tagged in place', /<span slot="caption" data-avb-p="0\.2">/.test(out), out);
     check('with no marker written beside it', !/avb-s:0\.2/.test(out), out);
     // Ordinary slot content still gets the Fragment form, for the same reason
     // it always did: Astro drops a plain comment there.
-    check(
-      'slot content keeps its comment in a Fragment',
-      /<Fragment set:html=\{"<!--avb-s:0\.0-->"\} \/>/.test(out),
-      out,
-    );
+    check('slot content keeps its comment in a Fragment', /<Fragment set:html=\{"<!--avb-s:0\.0-->"\} \/>/.test(out), out);
     check('and the page around it is plain comments', /^<!--avb-s:0-->$/m.test(out), out);
   }
   {
@@ -118,36 +100,16 @@ const marked = (
   <Img slot="hero" src="/h.png" />
 </Split>`);
     check('a slotted Fragment adds no element', !/<template/.test(out), out);
-    check(
-      'its markers ride inside it',
-      /<Fragment slot="links">\n\s*<Fragment set:html=\{"<!--avb-s:0\.0-->"\} \/>/.test(out),
-      out,
-    );
-    check(
-      'and close inside it',
-      /<Fragment set:html=\{"<!--avb-e:0\.0-->"\} \/>\n\s*<\/Fragment>/.test(out),
-      out,
-    );
-    check(
-      'while the component beside it is marked with a comment',
-      /<Fragment slot="hero" set:html=\{"<!--avb-s:0\.1-->"\} \/>/.test(out),
-      out,
-    );
-    check(
-      'and carries its path as well, which is what survives a scrubbed slot',
-      /<Img slot="hero" src="\/h\.png" data-avb-p="0\.1" \/>/.test(out),
-      out,
-    );
+    check('its markers ride inside it', /<Fragment slot="links">\n\s*<Fragment set:html=\{"<!--avb-s:0\.0-->"\} \/>/.test(out), out);
+    check('and close inside it', /<Fragment set:html=\{"<!--avb-e:0\.0-->"\} \/>\n\s*<\/Fragment>/.test(out), out);
+    check('while the component beside it is marked with a comment', /<Fragment slot="hero" set:html=\{"<!--avb-s:0\.1-->"\} \/>/.test(out), out);
+    check('and carries its path as well, which is what survives a scrubbed slot', /<Img slot="hero" src="\/h\.png" data-avb-p="0\.1" \/>/.test(out), out);
     // A project reads a slot by rendering it to a string and stripping the
     // comments — that is how it asks whether the slot rendered anything — and
     // the marker goes with them. What the node is addressed by then is the
     // attribute, so the comment form is only ever the better of two answers,
     // never the only one.
-    check(
-      'a slotted component is addressable either way',
-      /data-avb-p="0\.1"/.test(out) && /avb-s:0\.1/.test(out),
-      out,
-    );
+    check('a slotted component is addressable either way', /data-avb-p="0\.1"/.test(out) && /avb-s:0\.1/.test(out), out);
   }
 
   {
@@ -155,17 +117,10 @@ const marked = (
     // says "I am the aside". Nothing above it in this file makes it slot
     // content, so the marker has to take the slot from the node itself.
     const out = serializePageMarked(
-      parsePage('---\nimport Card from "./Card.astro";\n---\n<Card slot="aside" title="Hi" />\n')
-        .model,
+      parsePage('---\nimport Card from "./Card.astro";\n---\n<Card slot="aside" title="Hi" />\n').model,
       'src/components/Side.astro|',
     );
-    check(
-      'a slotted root is marked into its slot',
-      /<Fragment slot="aside" set:html=\{"<!--avb-s:src\/components\/Side\.astro\|0-->"\} \/>/.test(
-        out,
-      ),
-      out,
-    );
+    check('a slotted root is marked into its slot', /<Fragment slot="aside" set:html=\{"<!--avb-s:src\/components\/Side\.astro\|0-->"\} \/>/.test(out), out);
     check('and not into the default one', !/<Fragment set:html/.test(out), out);
   }
 
@@ -187,11 +142,7 @@ const marked = (
         error = String(caught?.message || caught);
       }
       check(`a slotted marker compiles — ${label}`, error === undefined, error);
-      check(
-        `and keeps the slot on it — ${label}`,
-        /column2/.test(code) && /avb-s:0\.0/.test(code),
-        code.slice(0, 400),
-      );
+      check(`and keeps the slot on it — ${label}`, /column2/.test(code) && /avb-s:0\.0/.test(code), code.slice(0, 400));
     }
   }
 
@@ -205,30 +156,16 @@ const marked = (
   // is the one asked.
   {
     const { transform } = require('@astrojs/compiler-rs');
-    const hoisted = await transform(
-      "---\n---\n<div>hi</div>\n<script>import 'virtual:avb-morph';</script>\n",
-      { filename: 'P.astro' },
-    );
-    check(
-      'the patcher is hoisted out of the page',
-      (hoisted.scripts || []).length === 1,
-      JSON.stringify(hoisted.scripts),
-    );
-    check(
-      'and leaves no tag in the markup',
-      !/<script/.test(hoisted.code),
-      'a script tag is still rendered into the page',
-    );
+    const hoisted = await transform("---\n---\n<div>hi</div>\n<script>import 'virtual:avb-morph';</script>\n", { filename: 'P.astro' });
+    check('the patcher is hoisted out of the page', (hoisted.scripts || []).length === 1, JSON.stringify(hoisted.scripts));
+    check('and leaves no tag in the markup', !/<script/.test(hoisted.code), 'a script tag is still rendered into the page');
     check(
       'and it is still the module it has to be',
       /import "virtual:avb-morph"/.test((hoisted.scripts || [])[0]?.code || ''),
       JSON.stringify((hoisted.scripts || [])[0]),
     );
     // The form it used to have, for the same compiler to describe.
-    const inline = await transform(
-      '---\n---\n<div>hi</div>\n<script is:inline src="/x.js"></script>\n',
-      { filename: 'P.astro' },
-    );
+    const inline = await transform('---\n---\n<div>hi</div>\n<script is:inline src="/x.js"></script>\n', { filename: 'P.astro' });
     check(
       'the old form is exactly what it looked like',
       (inline.scripts || []).length === 0 && /<script/.test(inline.code),
@@ -238,10 +175,7 @@ const marked = (
     const main = readSource('electron/handlers/devServers.ts');
     check(
       'the dev config writes the hoistable form',
-      new RegExp(
-        /const MORPH_TAG_HTML = MORPH_CLIENT \? "<script/.source +
-          />import 'virtual:avb-morph';<\/script>" : '';/.source,
-      ).test(main),
+      new RegExp(/const MORPH_TAG_HTML = MORPH_CLIENT \? "<script/.source + />import 'virtual:avb-morph';<\/script>" : '';/.source).test(main),
       'the patcher is written some other way',
     );
   }
@@ -250,11 +184,7 @@ const marked = (
   {
     // Everything that writes the dev config: the config's parts, and the code
     // that assembles and writes them.
-    const main = readSourceGroup([
-      'electron/preview/markerConfig.ts',
-      'electron/handlers/devServers.ts',
-      'electron/main.ts',
-    ]);
+    const main = readSourceGroup(['electron/preview/markerConfig.ts', 'electron/handlers/devServers.ts', 'electron/main.ts']);
     check(
       'a markdown block is marked with comments',
       /insertBefore\(node, \{ type: 'html', value: '<!--avb-s:' \+ path \+ '-->' \}\)/.test(main),
@@ -265,17 +195,9 @@ const marked = (
       /insertAfter\(node, \{ type: 'html', value: '<!--avb-e:' \+ path \+ '-->' \}\)/.test(main),
       'markdown still wraps every block in an element',
     );
-    check(
-      'nothing in the dev config writes a template marker',
-      !/<template data-avb/.test(main),
-      'a template marker is still written',
-    );
+    check('nothing in the dev config writes a template marker', !/<template data-avb/.test(main), 'a template marker is still written');
     // Nothing is added to a page, so nothing has to be taken back out of it.
-    check(
-      'no cleanup script is injected',
-      !/AVB_CLEANUP/.test(main),
-      'the cleanup script is still there',
-    );
+    check('no cleanup script is injected', !/AVB_CLEANUP/.test(main), 'the cleanup script is still there');
     check(
       'and nothing but the patcher rides along with a page',
       /return marked\.page \? marked\.code \+ AVB_MORPH_TAG : marked\.code;/.test(main),
@@ -286,25 +208,16 @@ const marked = (
   // --- the canvas still reads what it is served ------------------------------------
   {
     const preload = readFolderSource('electron/preload');
-    check(
-      'a comment is a marker',
-      /if \(isComment\(node\)\) \{[\s\S]*?avb-\$\{kind\}:/.test(preload),
-      'the collector cannot read a comment marker',
-    );
+    check('a comment is a marker', /if \(isComment\(node\)\) \{[\s\S]*?avb-\$\{kind\}:/.test(preload), 'the collector cannot read a comment marker');
     check(
       'and a template still is too, for a page served before this update',
-      new RegExp(
-        String.raw`node\.tagName === 'TEMPLATE'\) \{[\s\S]*?` +
-          String.raw`return node\.getAttribute\(\`data-avb-\$\{kind\}\`\)`,
-      ).test(preload),
+      new RegExp(String.raw`node\.tagName === 'TEMPLATE'\) \{[\s\S]*?` + String.raw`return node\.getAttribute\(\`data-avb-\$\{kind\}\`\)`).test(preload),
       'a running dev server would go blank on update',
     );
   }
 
   if (failures.length) {
-    console.error(
-      `\ncomment-markers: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\ncomment-markers: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

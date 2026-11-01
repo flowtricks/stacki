@@ -22,11 +22,7 @@ interface Options {
 interface Message {
   readonly role: 'system' | 'user' | 'assistant';
   readonly content:
-    | string
-    | readonly (
-        | { readonly type: 'text'; readonly text: string }
-        | { readonly type: 'image_url'; readonly image_url: { readonly url: string } }
-      )[];
+    string | readonly ({ readonly type: 'text'; readonly text: string } | { readonly type: 'image_url'; readonly image_url: { readonly url: string } })[];
 }
 export function aiConfiguration(): Options | undefined {
   const backend = process.env['STUDIO_BACKEND_URL'];
@@ -62,9 +58,7 @@ export async function propose(
 ): Promise<Proposal> {
   sourcePath(file);
   string(prompt, 12_000);
-  const files = [...(await walk(root, 'src')), ...(await metadataFiles(root))].filter((file) =>
-    /\.(astro|json|md|mdx|css|ts|js)$/.test(file),
-  );
+  const files = [...(await walk(root, 'src')), ...(await metadataFiles(root))].filter((file) => /\.(astro|json|md|mdx|css|ts|js)$/.test(file));
   const messages: Message[] = [
     { role: 'system', content: instructions },
     ...input.history,
@@ -83,10 +77,7 @@ export async function propose(
   ];
   const read = new Set([file]);
   for (let round = 0; round < 6; round++) {
-    if (
-      messages.reduce((size, message) => size + JSON.stringify(message.content).length, 0) >
-      1_500_000
-    ) {
+    if (messages.reduce((size, message) => size + JSON.stringify(message.content).length, 0) > 1_500_000) {
       throw new Error('AI context limit reached. Try a more focused request.');
     }
     const content = await completion(options, messages, signal);
@@ -107,10 +98,7 @@ export async function propose(
         return { file, source: await readSource(root, file) };
       }),
     );
-    messages.push(
-      { role: 'assistant', content },
-      { role: 'user', content: JSON.stringify({ files: context, remainingReads: 4 - round }) },
-    );
+    messages.push({ role: 'assistant', content }, { role: 'user', content: JSON.stringify({ files: context, remainingReads: 4 - round }) });
   }
   throw new Error('AI read limit reached. Try a more focused request.');
 }
@@ -122,15 +110,11 @@ async function completion(options: Options, messages: readonly Message[], signal
       ...(options.apiKey ? { Authorization: `Bearer ${options.apiKey}` } : {}),
       ...(options.containerToken ? { 'x-studio-token': options.containerToken } : {}),
     },
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(60_000)])
-      : AbortSignal.timeout(60_000),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
     body: JSON.stringify({ model: options.model, max_tokens: 6000, messages }),
   });
   if (!response.ok) {
-    throw new Error(
-      `AI provider unavailable (${response.status}). Check the server's AI configuration.`,
-    );
+    throw new Error(`AI provider unavailable (${response.status}). Check the server's AI configuration.`);
   }
   const payload = record(await response.json());
   const choices = payload['choices'];
@@ -139,11 +123,7 @@ async function completion(options: Options, messages: readonly Message[], signal
   }
   return string(record(record(choices[0])['message'])['content'], 200_000);
 }
-function parseProposal(
-  proposal: Record<string, unknown>,
-  files: readonly string[],
-  read: Set<string>,
-): Proposal {
+function parseProposal(proposal: Record<string, unknown>, files: readonly string[], read: Set<string>): Proposal {
   const changes = proposal['changes'];
   if (!Array.isArray(changes) || changes.length > 20) {
     throw new Error('AI must propose at most 20 changes');
@@ -171,8 +151,7 @@ export async function proposedSource(root: string, change: ProposedChange): Prom
       'code' in error &&
       error.code === 'ENOENT' &&
       change.before === '' &&
-      (change.file.startsWith('src/') ||
-        ['.stacki/components.json', '.stacki/guide.json'].includes(change.file))
+      (change.file.startsWith('src/') || ['.stacki/components.json', '.stacki/guide.json'].includes(change.file))
     )) {
       throw error;
     }
@@ -180,11 +159,7 @@ export async function proposedSource(root: string, change: ProposedChange): Prom
   if (!change.before && before) {
     throw new Error('An existing file cannot be overwritten as a new file');
   }
-  if (
-    change.before &&
-    (before.indexOf(change.before) === -1 ||
-      before.indexOf(change.before) !== before.lastIndexOf(change.before))
-  ) {
+  if (change.before && (before.indexOf(change.before) === -1 || before.indexOf(change.before) !== before.lastIndexOf(change.before))) {
     throw new Error('AI change is stale or ambiguous. Ask it to regenerate.');
   }
   const after = change.before ? before.replace(change.before, () => change.after) : change.after;

@@ -18,16 +18,7 @@ export function hostingCommand(hosting: Exclude<Hosting, { provider: 'none' }>):
     case 'cloudflare':
       return {
         executable: 'wrangler',
-        arguments: [
-          'pages',
-          'deploy',
-          hosting.directory,
-          '--project-name',
-          hosting.project,
-          '--branch',
-          hosting.branch,
-          '--commit-dirty=true',
-        ],
+        arguments: ['pages', 'deploy', hosting.directory, '--project-name', hosting.project, '--branch', hosting.branch, '--commit-dirty=true'],
         environment: { CLOUDFLARE_ACCOUNT_ID: hosting.accountId },
       };
     case 'cloudflare-workers':

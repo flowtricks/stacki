@@ -4,18 +4,11 @@
 import type { TSESLint, TSESTree } from '@typescript-eslint/utils';
 import { assert } from '../policy/assert.mts';
 
-export type FunctionNode =
-  TSESTree.ArrowFunctionExpression | TSESTree.FunctionDeclaration | TSESTree.FunctionExpression;
+export type FunctionNode = TSESTree.ArrowFunctionExpression | TSESTree.FunctionDeclaration | TSESTree.FunctionExpression;
 
-export type RuleModule<
-  MessageIds extends string,
-  Options extends readonly unknown[] = [],
-> = TSESLint.RuleModule<MessageIds, Options>;
+export type RuleModule<MessageIds extends string, Options extends readonly unknown[] = []> = TSESLint.RuleModule<MessageIds, Options>;
 
-export type RuleContext<
-  MessageIds extends string,
-  Options extends readonly unknown[] = [],
-> = Readonly<TSESLint.RuleContext<MessageIds, Options>>;
+export type RuleContext<MessageIds extends string, Options extends readonly unknown[] = []> = Readonly<TSESLint.RuleContext<MessageIds, Options>>;
 
 // Identifier words are split on camelCase humps, digits, and underscores, so
 // `sourceElement`, `SOURCE_ELEMENT`, and `source_element` all yield the same
@@ -106,9 +99,7 @@ function patternChildren(node: TSESTree.Node): readonly TSESTree.Node[] {
     return node.elements.filter((element) => element !== null);
   }
   if (node.type === 'ObjectPattern') {
-    return node.properties.map((property) =>
-      property.type === 'Property' ? property.value : property,
-    );
+    return node.properties.map((property) => (property.type === 'Property' ? property.value : property));
   }
   return [];
 }
@@ -120,9 +111,7 @@ export function parameterAnnotation(parameter: TSESTree.Parameter): TSESTree.Typ
   const target = parameter.type === 'TSParameterProperty' ? parameter.parameter : parameter;
   if (target.type === 'AssignmentPattern') {
     // `flag: boolean = false` carries its annotation on the left side.
-    return target.left.type === 'Identifier'
-      ? target.left.typeAnnotation?.typeAnnotation
-      : undefined;
+    return target.left.type === 'Identifier' ? target.left.typeAnnotation?.typeAnnotation : undefined;
   }
   return target.typeAnnotation?.typeAnnotation;
 }

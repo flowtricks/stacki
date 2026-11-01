@@ -42,13 +42,7 @@ export default function CodeWindow(props: CodeWindowProps) {
         </button>
       </div>
       <div className="code-window-body">
-        <CodeEditor
-          key={editorKey}
-          language={language}
-          value={value}
-          onChange={onChange}
-          revealLine={revealLine}
-        />
+        <CodeEditor key={editorKey} language={language} value={value} onChange={onChange} revealLine={revealLine} />
       </div>
       <WindowResizeHandles windowState={windowState} />
     </Popup>

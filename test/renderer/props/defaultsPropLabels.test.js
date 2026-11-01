@@ -122,11 +122,7 @@ function field(name) {
   return label(name).closest('.props-field');
 }
 function pickSegment(name, text) {
-  act(() =>
-    [...field(name).querySelectorAll('button')]
-      .find((button) => button.textContent === text)
-      .click(),
-  );
+  act(() => [...field(name).querySelectorAll('button')].find((button) => button.textContent === text).click());
 }
 function reset(name) {
   act(() =>
@@ -143,9 +139,7 @@ function reset(name) {
 }
 async function checkDropdown() {
   await act(async () => field('tag').querySelector('.dd-trigger').click());
-  const option = [...document.querySelectorAll('.dd-option')].find(
-    (item) => item.textContent === 'h2',
-  );
+  const option = [...document.querySelectorAll('.dd-option')].find((item) => item.textContent === 'h2');
   assert.ok(option);
   await act(async () => option.click());
   assert.deepEqual(values.tag, { type: 'string', value: 'h2' });

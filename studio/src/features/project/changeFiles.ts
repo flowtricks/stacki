@@ -9,11 +9,7 @@ export interface FileChange {
 
 // Caller holds the project coordinator. Validate every change before entering this
 // function. Recovery restores prior text if a persistence operation fails.
-export async function changeFiles(
-  root: string,
-  rooms: ReturnType<typeof createRooms>,
-  changes: readonly FileChange[],
-) {
+export async function changeFiles(root: string, rooms: ReturnType<typeof createRooms>, changes: readonly FileChange[]) {
   await rooms.persist();
   const previous = await Promise.all(
     changes.map(async ({ file }) => {
@@ -50,9 +46,7 @@ export async function changeFiles(
       }
     }
     if (failures.length) {
-      throw new Error(
-        'Storage failed during recovery. Keep the studio open; restore storage before continuing.',
-      );
+      throw new Error('Storage failed during recovery. Keep the studio open; restore storage before continuing.');
     }
     throw error;
   }

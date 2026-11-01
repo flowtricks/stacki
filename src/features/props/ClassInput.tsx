@@ -188,19 +188,8 @@ function classFamilyActions(options: {
   // de-duplication: a transient repeat is invisible and never saved, while
   // collapsing the list mid-preview would shift every index under it.
   const closeFamily = ({ revert }: { readonly revert: boolean }) => {
-    if (
-      revert &&
-      family &&
-      famPreview.current !== undefined &&
-      famPreview.current !== famOriginal.current
-    ) {
-      writeClassAt(
-        tokens,
-        family.index,
-        famOriginal.current,
-        { immediate: true, dedupe: false },
-        onChange,
-      );
+    if (revert && family && famPreview.current !== undefined && famPreview.current !== famOriginal.current) {
+      writeClassAt(tokens, family.index, famOriginal.current, { immediate: true, dedupe: false }, onChange);
     }
     famPreview.current = undefined;
     setFamily(undefined);
@@ -268,11 +257,7 @@ function classFamilyOf(cls: string, suggestions: readonly string[], tokens: read
   const pool = new Set([...suggestions, ...tokens]);
   return [...pool].filter((name) => name.startsWith(prefix)).sort(collator.compare);
 }
-export function classMatches(
-  draft: string,
-  suggestions: readonly string[],
-  tokens: readonly string[],
-) {
+export function classMatches(draft: string, suggestions: readonly string[], tokens: readonly string[]) {
   const query = draft.trim().toLowerCase();
   const matches = query
     ? suggestions
@@ -288,19 +273,7 @@ export function classMatches(
   return matches;
 }
 function classInputKey(event: React.KeyboardEvent<HTMLInputElement>, state: ClassState): void {
-  const {
-    draft,
-    removeAt,
-    at,
-    setCaret,
-    tokens,
-    matches,
-    setHighlight,
-    highlight,
-    addToken,
-    setDraft,
-    inputRef,
-  } = state;
+  const { draft, removeAt, at, setCaret, tokens, matches, setHighlight, highlight, addToken, setDraft, inputRef } = state;
   // While the family menu is up it owns the arrows and Enter: the caret and
   // the suggestion list are both idle behind it.
   if (classFamilyKey(event, state)) {
@@ -398,19 +371,7 @@ function ClassCaret({ state }: { readonly state: ClassState }) {
   );
 }
 function ClassTokens({ state }: { readonly state: ClassState }) {
-  const {
-    tokens,
-    at,
-    family,
-    suggestions,
-    setCaret,
-    inputRef,
-    closeFamily,
-    famOriginal,
-    famPreview,
-    setFamHighlight,
-    setFamily,
-  } = state;
+  const { tokens, at, family, suggestions, setCaret, inputRef, closeFamily, famOriginal, famPreview, setFamHighlight, setFamily } = state;
   const inputElement = <ClassCaret key="caret" state={state} />;
   const items: React.ReactNode[] = [];
   tokens.forEach((token, i) => {
@@ -421,11 +382,7 @@ function ClassTokens({ state }: { readonly state: ClassState }) {
       <span
         key={`${token}-${i}`}
         className={`class-tag${family?.index === i ? ' open' : ''}`}
-        title={
-          classFamilyOf(token, suggestions, tokens).length > 1
-            ? 'Click to switch to a related class'
-            : 'Click to place the caret after this class'
-        }
+        title={classFamilyOf(token, suggestions, tokens).length > 1 ? 'Click to switch to a related class' : 'Click to place the caret after this class'}
         onMouseDown={(event) => {
           // preventDefault keeps the inline input from blurring.
           event.preventDefault();
@@ -471,14 +428,7 @@ function ClassSuggestions({ state }: { readonly state: ClassState }) {
     return undefined;
   }
   return (
-    <Popup
-      mode="popover"
-      portal={true}
-      onClose={() => state.setFocused(false)}
-      ref={popupRef}
-      className="dd-popup class-suggest"
-      style={popupPosition}
-    >
+    <Popup mode="popover" portal={true} onClose={() => state.setFocused(false)} ref={popupRef} className="dd-popup class-suggest" style={popupPosition}>
       {matches.map((suggestion, i) => (
         <div
           key={suggestion}
@@ -503,20 +453,11 @@ function ClassFamilyMenu({ state }: { readonly state: ClassState }) {
     return undefined;
   }
   return (
-    <Popup
-      mode="popover"
-      portal={true}
-      onClose={() => state.closeFamily({ revert: true })}
-      ref={famRef}
-      className="dd-popup class-family"
-      style={position}
-    >
+    <Popup mode="popover" portal={true} onClose={() => state.closeFamily({ revert: true })} ref={famRef} className="dd-popup class-family" style={position}>
       {family.options.map((option, i) => (
         <div
           key={option}
-          className={`dd-option ${i === famHighlight ? 'highlight' : ''} ${
-            option === famOriginal.current ? 'selected' : ''
-          }`}
+          className={`dd-option ${i === famHighlight ? 'highlight' : ''} ${option === famOriginal.current ? 'selected' : ''}`}
           onMouseDown={(event) => event.preventDefault()}
           onMouseEnter={() => previewFamily(i)}
           onClick={() => applyFamily(i)}

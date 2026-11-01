@@ -6,11 +6,7 @@ import { batchedRead } from '../../shared/batchedRead';
 import { opendir, readFile, realpath, stat, mkdir, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { sourcePath, filePath, MAX_SOURCE } from '../../shared/validation';
-import {
-  packageComponentFiles,
-  readPackageSource,
-  packageComponentImport,
-} from '../../../vendor/stacki/electron/lib/componentSources';
+import { packageComponentFiles, readPackageSource, packageComponentImport } from '../../../vendor/stacki/electron/lib/componentSources';
 import { componentSpecifier } from '../../../vendor/stacki/electron/properties/componentImports';
 import { packageOf } from '../../../vendor/stacki/electron/lib/installedPackages';
 
@@ -102,10 +98,7 @@ export async function walk(root: string, directory: string): Promise<string[]> {
 }
 export async function scanProject(root: string, analysis = new ComponentAnalysis()) {
   const files = [...(await walk(root, 'src')), ...(await walk(root, 'public'))];
-  const componentFiles = [
-    ...packageComponentFiles(root),
-    ...files.filter((file) => file.endsWith('.astro') && !file.startsWith('src/pages/')),
-  ];
+  const componentFiles = [...packageComponentFiles(root), ...files.filter((file) => file.endsWith('.astro') && !file.startsWith('src/pages/'))];
   const classes = new Set<string>();
   const components = await Promise.all(
     componentFiles.map(async (file) => {
@@ -136,9 +129,7 @@ export async function scanProject(root: string, analysis = new ComponentAnalysis
     }),
   );
   const componentPaths = new Set(componentFiles);
-  const styleFiles = files.filter(
-    (file) => /\.(css|astro)$/.test(file) && !componentPaths.has(file),
-  );
+  const styleFiles = files.filter((file) => /\.(css|astro)$/.test(file) && !componentPaths.has(file));
   for (const name of await scanStyleClasses(root, styleFiles)) {
     classes.add(name);
   }
@@ -148,11 +139,7 @@ export async function scanProject(root: string, analysis = new ComponentAnalysis
     pages: files.filter((file) => /^src\/pages\/.+\.(astro|md|mdx)$/.test(file)),
     pageMetadata: await projectPageTitles(root, files),
     pageFolders: await projectPageFolders(root),
-    collections: files.filter(
-      (file) =>
-        /^src\/(content|data)\/.+\.(json|md|mdx)$/.test(file) &&
-        !/\/studio-cms-(schema|deleted)\.json$/.test(file),
-    ),
+    collections: files.filter((file) => /^src\/(content|data)\/.+\.(json|md|mdx)$/.test(file) && !/\/studio-cms-(schema|deleted)\.json$/.test(file)),
     assets: files.filter((file) => /\.(svg|png|jpe?g|gif|webp|avif|mp4|pdf|woff2?)$/i.test(file)),
     components,
     classes: [...classes].sort(),
@@ -164,17 +151,11 @@ async function readComponentSource(root: string, file: string): Promise<string> 
 }
 
 async function scanStyleClasses(root: string, files: readonly string[]) {
-  const batches = await batchedRead(files, async (file) =>
-    sourceClasses(file, await readSource(root, file)),
-  );
+  const batches = await batchedRead(files, async (file) => sourceClasses(file, await readSource(root, file)));
   return new Set(batches.flat());
 }
 
 function sourceClasses(file: string, source: string): readonly string[] {
-  const styles = file.endsWith('.astro')
-    ? [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((match) => match[1]).join('\n')
-    : source;
-  return [...styles.matchAll(/\.([a-zA-Z_][\w-]*)/g)].flatMap((match) =>
-    match[1] ? [match[1]] : [],
-  );
+  const styles = file.endsWith('.astro') ? [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((match) => match[1]).join('\n') : source;
+  return [...styles.matchAll(/\.([a-zA-Z_][\w-]*)/g)].flatMap((match) => (match[1] ? [match[1]] : []));
 }

@@ -15,10 +15,7 @@ test('managed publishing links to the public origin and omits the deployment pro
   assert.equal(managedSiteURL(hosting, hosting, endpoint), 'https://example.com');
   assert.equal(managedSiteURL({ provider: 'none' }, undefined, endpoint), 'https://example.com');
   assert.equal(managedSiteURL({ ...hosting, project: 'other' }, hosting, endpoint), undefined);
-  assert.equal(
-    managedSiteURL({ ...hosting, accountId: 'b'.repeat(32) }, hosting, endpoint),
-    undefined,
-  );
+  assert.equal(managedSiteURL({ ...hosting, accountId: 'b'.repeat(32) }, hosting, endpoint), undefined);
   assert.equal(managedSiteURL(hosting, undefined, endpoint), undefined);
   assert.equal(managedSiteURL(hosting, hosting, undefined), undefined);
 });

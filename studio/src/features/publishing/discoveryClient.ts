@@ -1,8 +1,4 @@
-import {
-  parseDiscoveryRequest,
-  parsePublishDiscovery,
-  type DiscoveryRequest,
-} from '../../../vendor/stacki/shared/properties/publishDiscovery';
+import { parseDiscoveryRequest, parsePublishDiscovery, type DiscoveryRequest } from '../../../vendor/stacki/shared/properties/publishDiscovery';
 import { request } from '../project/projectClient';
 
 export async function discoverPublishing(_project: string, input: DiscoveryRequest) {

@@ -24,10 +24,7 @@ function fixture(source: string) {
     read: async () => parsePageDiskRead(await harness.invoke('page:read', file)),
     text: () => fs.readFileSync(file, 'utf8'),
     write: (text: string) => fs.writeFileSync(file, text),
-    edit: async (checksum: string, edit: Edit) =>
-      parsePageEditResult(
-        await harness.invoke('page:edit', { pagePath: file, authoredChecksum: checksum, edit }),
-      ),
+    edit: async (checksum: string, edit: Edit) => parsePageEditResult(await harness.invoke('page:edit', { pagePath: file, authoredChecksum: checksum, edit })),
     dispose: () => {
       harness.dispose();
       fs.rmSync(root, { recursive: true, force: true });
@@ -37,8 +34,7 @@ function fixture(source: string) {
 
 function named(page: PageDiskRead, name: string): NodeRef {
   assert.ok(page.editable);
-  const pending: { readonly node: PageNode; readonly path: readonly number[] }[] =
-    page.model.nodes.map((node, index) => ({ node, path: [index] }));
+  const pending: { readonly node: PageNode; readonly path: readonly number[] }[] = page.model.nodes.map((node, index) => ({ node, path: [index] }));
   for (let index = 0; index < pending.length; index++) {
     assert.ok(pending.length < 100, 'the synthetic fixture is bounded');
     const entry = pending[index];
@@ -49,9 +45,7 @@ function named(page: PageDiskRead, name: string): NodeRef {
       return { path: entry.path, kind: node.kind, span: { start: node.start, end: node.end } };
     }
     if ('children' in node && node.children !== undefined) {
-      pending.push(
-        ...node.children.map((child, at) => ({ node: child, path: [...entry.path, at] })),
-      );
+      pending.push(...node.children.map((child, at) => ({ node: child, path: [...entry.path, at] })));
     }
   }
   assert.fail(`Missing ${name}`);
@@ -81,8 +75,7 @@ const PLACES = [
 for (const [prefix, suffix] of WRAPPERS) {
   for (const place of PLACES) {
     test(`repeated move ${place.placement} ${place.destination} in ${prefix}`, async (context) => {
-      const card = (children: readonly string[]) =>
-        `<Card>\r\n  ${children.join('\r\n  ')}\r\n</Card>`;
+      const card = (children: readonly string[]) => `<Card>\r\n  ${children.join('\r\n  ')}\r\n</Card>`;
       const source = `${prefix}${card(CHILDREN)}${suffix}\r\n<!-- untouched -->\r\n`;
       const harness = fixture(source);
       context.after(harness.dispose);
@@ -94,10 +87,7 @@ for (const [prefix, suffix] of WRAPPERS) {
         placement: place.placement,
       });
       assert.ok(moved.ok, JSON.stringify(moved));
-      assert.equal(
-        harness.text(),
-        `${prefix}${card(place.order)}${suffix}\r\n<!-- untouched -->\r\n`,
-      );
+      assert.equal(harness.text(), `${prefix}${card(place.order)}${suffix}\r\n<!-- untouched -->\r\n`);
       const undone = await harness.edit(moved.value.checksum, {
         tag: 'revert',
         hunks: moved.value.inverse,
@@ -134,8 +124,7 @@ test('move out of a nested container retains outer and inner loop bindings', asy
 
 test('repeated moves and Undo preserve an external change elsewhere', async (context) => {
   const filler = '<p>A paragraph separating the move from other writers and Undo context.</p>';
-  const source =
-    `{rechtsgebiete.map((gebiet) => (<Card>${CHILDREN.join('')}</Card>))}` + `${filler}<Footer />`;
+  const source = `{rechtsgebiete.map((gebiet) => (<Card>${CHILDREN.join('')}</Card>))}` + `${filler}<Footer />`;
   const harness = fixture(source);
   context.after(harness.dispose);
   const page = await harness.read();
@@ -147,22 +136,14 @@ test('repeated moves and Undo preserve an external change elsewhere', async (con
     placement: 'before',
   });
   assert.ok(moved.ok, JSON.stringify(moved));
-  assert.equal(
-    harness.text(),
-    source
-      .replace(CHILDREN.join(''), ICON + HEADING + IMAGE)
-      .replace('<Footer />', '<Footer title="theirs" />'),
-  );
+  assert.equal(harness.text(), source.replace(CHILDREN.join(''), ICON + HEADING + IMAGE).replace('<Footer />', '<Footer title="theirs" />'));
   harness.write(harness.text() + '<!-- another writer -->');
   const undone = await harness.edit(moved.value.checksum, {
     tag: 'revert',
     hunks: moved.value.inverse,
   });
   assert.ok(undone.ok, JSON.stringify(undone));
-  assert.equal(
-    harness.text(),
-    source.replace('<Footer />', '<Footer title="theirs" />') + '<!-- another writer -->',
-  );
+  assert.equal(harness.text(), source.replace('<Footer />', '<Footer title="theirs" />') + '<!-- another writer -->');
 });
 
 test('a repeated move refuses an externally modified source node', async (context) => {
@@ -196,10 +177,7 @@ for (const [prefix, suffix] of WRAPPERS) {
         placement,
       });
       assert.equal(moved.ok, false);
-      assert.equal(
-        !moved.ok && moved.error.code === 'rejected' && moved.error.reason,
-        'unsupported-operation',
-      );
+      assert.equal(!moved.ok && moved.error.code === 'rejected' && moved.error.reason, 'unsupported-operation');
       assert.equal(harness.text(), source);
     });
   }
@@ -240,9 +218,7 @@ test('taking the only return root out of a loop still refuses the move', async (
 
 for (const placement of ['before', 'after', 'first-child', 'last-child'] as const) {
   test(`callback return tags distinguish ${placement} placement`, async (context) => {
-    const source =
-      '{items.map((item) => { if (item.ok) return <Card><Icon /></Card>; ' +
-      'return <Other />; })}<Outside />';
+    const source = '{items.map((item) => { if (item.ok) return <Card><Icon /></Card>; ' + 'return <Other />; })}<Outside />';
     const harness = fixture(source);
     context.after(harness.dispose);
     const page = await harness.read();
@@ -257,10 +233,7 @@ for (const placement of ['before', 'after', 'first-child', 'last-child'] as cons
     if (placement === 'first-child' || placement === 'last-child') {
       assert.ok(moved.ok, JSON.stringify(moved));
       const children = placement === 'first-child' ? '<Outside /><Icon />' : '<Icon /><Outside />';
-      assert.equal(
-        harness.text(),
-        source.replace('<Icon />', children).replace('})}<Outside />', '})}'),
-      );
+      assert.equal(harness.text(), source.replace('<Icon />', children).replace('})}<Outside />', '})}'));
     } else {
       assert.equal(moved.ok, false);
       assert.equal(harness.text(), source);

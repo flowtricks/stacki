@@ -12,11 +12,7 @@ export interface PublishInventory {
 }
 
 /** Directory handles and file metadata are consumed sequentially; no project bytes enter JS. */
-export async function publishInventory(
-  root: string,
-  starts: readonly string[],
-  bytesMax: number,
-): Promise<Result<PublishInventory>> {
+export async function publishInventory(root: string, starts: readonly string[], bytesMax: number): Promise<Result<PublishInventory>> {
   assert(bytesMax > 0, 'Publish byte budget is positive');
   assert(starts.length <= limits.directoriesMax, 'Inventory roots are bounded');
   const deadline = Date.now() + limits.commandTimeoutMs;
@@ -54,11 +50,7 @@ export async function publishInventory(
     } else if (info.value.isFile()) {
       bytes += info.value.size;
       files.push(relative);
-      if (
-        files.length > limits.filesMax ||
-        info.value.size > limits.fileBytesMax ||
-        bytes > bytesMax
-      ) {
+      if (files.length > limits.filesMax || info.value.size > limits.fileBytesMax || bytes > bytesMax) {
         return err({
           code: 'size',
           message: 'Publish exceeds its source, file count or 100 MiB file limit.',
@@ -71,11 +63,7 @@ export async function publishInventory(
   return ok({ files, bytes });
 }
 
-async function inventoryDirectory(
-  root: string,
-  relative: string,
-  deadline: number,
-): Promise<readonly string[]> {
+async function inventoryDirectory(root: string, relative: string, deadline: number): Promise<readonly string[]> {
   const directory = await opendir(path.join(root, relative));
   const files: string[] = [];
   let visited = 0;
@@ -106,9 +94,7 @@ async function inventoryDirectory(
 
 function excluded(file: string): boolean {
   return (
-    file
-      .split('/')
-      .some((part) => ['.git', 'node_modules', '.astro', 'dist', '.studio'].includes(part)) ||
+    file.split('/').some((part) => ['.git', 'node_modules', '.astro', 'dist', '.studio'].includes(part)) ||
     isStudioLocalPath(file) ||
     ['.stacki/preview', '.stacki/canvas'].includes(file) ||
     /^astro\.studio\.config\.[cm]?[jt]s$/.test(file)

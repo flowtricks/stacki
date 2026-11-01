@@ -26,10 +26,7 @@ export function listAstroFiles(directory: string) {
       }
       // Markdown only counts as a page. A .md under src/components isn't a
       // component, it's a README.
-      else if (
-        entry.name.endsWith('.astro') ||
-        (folder.includes(`${path.sep}pages`) && PAGE_MD_RE.test(entry.name))
-      ) {
+      else if (entry.name.endsWith('.astro') || (folder.includes(`${path.sep}pages`) && PAGE_MD_RE.test(entry.name))) {
         out.push(full);
       }
     }
@@ -63,9 +60,7 @@ export function isAstroProject(directory: string) {
       /* fall through */
     }
   }
-  return ['astro.config.mjs', 'astro.config.ts', 'astro.config.js'].some((file) =>
-    fs.existsSync(path.join(directory, file)),
-  );
+  return ['astro.config.mjs', 'astro.config.ts', 'astro.config.js'].some((file) => fs.existsSync(path.join(directory, file)));
 }
 
 // Astro has to be installed for a page to be rendered at all; without it the

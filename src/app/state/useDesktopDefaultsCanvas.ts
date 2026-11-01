@@ -2,10 +2,7 @@ import { useDefaultsKeyboard } from '../../features/componentDefaults/useDefault
 import { canvasNodeAt } from '../../features/componentDefaults/defaultsCanvasModel';
 import { useMemo, useRef } from 'react';
 import { useDefaultsCanvas } from '../../features/componentDefaults/useDefaultsCanvas';
-import {
-  desktopDefaultsHost,
-  relativeComponentPath,
-} from '../../features/componentDefaults/defaultsHost';
+import { desktopDefaultsHost, relativeComponentPath } from '../../features/componentDefaults/defaultsHost';
 import { defaultsCanvasRoute } from '../../../shared/properties/defaultsCanvas';
 import { readPage } from '../../ipc/bridge';
 import type { OpenFile } from '../../editor/pageState';
@@ -56,9 +53,7 @@ export function useDesktopDefaultsCanvas(app: ReturnType<typeof useAppScope>) {
           selectionPath: previous.current.selectionPath,
         });
         if (app.pageStateRef.current.currentPage?.path !== entry.path) {
-          throw new Error(
-            'Could not return to the previous page. Your defaults canvas is still open.',
-          );
+          throw new Error('Could not return to the previous page. Your defaults canvas is still open.');
         }
       } else {
         app.setCurrentPage(undefined);
@@ -67,10 +62,7 @@ export function useDesktopDefaultsCanvas(app: ReturnType<typeof useAppScope>) {
       }
     },
   });
-  const rootId =
-    canvas.state.kind === 'idle'
-      ? undefined
-      : canvasNodeAt(app.model?.nodes ?? [], canvas.state.session.targetPath)?.id;
+  const rootId = canvas.state.kind === 'idle' ? undefined : canvasNodeAt(app.model?.nodes ?? [], canvas.state.session.targetPath)?.id;
   useDefaultsKeyboard(canvas, { selected: app.selectedId, root: rootId });
   return {
     ...canvas,
@@ -79,11 +71,7 @@ export function useDesktopDefaultsCanvas(app: ReturnType<typeof useAppScope>) {
   };
 }
 
-async function startForNode(
-  app: ReturnType<typeof useAppScope>,
-  canvas: ReturnType<typeof useDefaultsCanvas>,
-  id: string,
-) {
+async function startForNode(app: ReturnType<typeof useAppScope>, canvas: ReturnType<typeof useDefaultsCanvas>, id: string) {
   const project = app.project?.path ?? '';
   const file = app.currentPage?.path;
   const path = app.pathFor(id);

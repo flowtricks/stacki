@@ -2,13 +2,7 @@ import { Avatar } from '../auth/Avatar';
 import type { ActionableNotice } from '../notifications/notice';
 import './lockedSettings.css';
 
-export function LockedSettings({
-  notice,
-  report,
-}: {
-  readonly notice: ActionableNotice;
-  readonly report: (error: unknown) => void;
-}) {
+export function LockedSettings({ notice, report }: { readonly notice: ActionableNotice; readonly report: (error: unknown) => void }) {
   const action = notice.details.action;
   const person = notice.details.person;
   const name = person?.name ?? 'Another editor';
@@ -30,11 +24,7 @@ export function LockedSettings({
         <h3>This element is being edited</h3>
         <p>You can still select it and add elements inside. Take over to change its settings.</p>
         {action && (
-          <button
-            type="button"
-            className="locked-settings-action"
-            onClick={() => void Promise.resolve().then(action.run).catch(report)}
-          >
+          <button type="button" className="locked-settings-action" onClick={() => void Promise.resolve().then(action.run).catch(report)}>
             {action.label}
           </button>
         )}

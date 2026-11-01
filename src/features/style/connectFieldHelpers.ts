@@ -8,16 +8,12 @@ import type { ReactElement, ReactNode, Ref, RefCallback } from 'react';
 // Read the current value out of the wrapped <input> child, so callers don't have to
 // thread it through — children IS the input element, and its `value` is the field draft.
 export function childValue(children: ReactNode): string {
-  return isValidElement<{ value?: unknown }>(children) && typeof children.props.value === 'string'
-    ? children.props.value
-    : '';
+  return isValidElement<{ value?: unknown }>(children) && typeof children.props.value === 'string' ? children.props.value : '';
 }
 // The wrapped input's placeholder ("Auto", "0", …). The rich field replaces that
 // input on screen, so it has to show the same hint when the value is empty.
 export function childPlaceholder(children: ReactNode): string {
-  const placeholder = isValidElement<{ placeholder?: unknown }>(children)
-    ? children.props.placeholder
-    : undefined;
+  const placeholder = isValidElement<{ placeholder?: unknown }>(children) ? children.props.placeholder : undefined;
   return typeof placeholder === 'string' ? placeholder : '';
 }
 

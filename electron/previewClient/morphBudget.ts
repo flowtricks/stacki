@@ -18,8 +18,7 @@ declare const AVB_PREVIEW_LIMITS: {
 // Why the page reloaded instead of patching. The first two are the caps: a
 // rendering with more nodes than the canvas may map, or two renderings too far
 // apart to line up within the work bound. The others were always reloads.
-export type ReloadReason =
-  'markers-over-cap' | 'diff-over-cap' | 'scripts-changed' | 'patch-failed';
+export type ReloadReason = 'markers-over-cap' | 'diff-over-cap' | 'scripts-changed' | 'patch-failed';
 
 // Thrown where a cap is hit, caught by update(), which reloads for its reason.
 export class OverCap extends Error {

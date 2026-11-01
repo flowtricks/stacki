@@ -56,12 +56,7 @@ export function parsePropSchema(source: string, prelude = ''): SchemaField[] {
 // already past anything a component declares, and deeper chains are left unexpanded.
 const PROP_SCHEMA_LIMITS = { memberAliasDepthMax: 12 } as const;
 
-function parsePropSchemaMemberBlocks(
-  aliases: ReadonlyMap<string, string>,
-  expr: string | undefined,
-  seen = new Set<string>(),
-  out: string[] = [],
-): string[] {
+function parsePropSchemaMemberBlocks(aliases: ReadonlyMap<string, string>, expr: string | undefined, seen = new Set<string>(), out: string[] = []): string[] {
   // `seen` gains one alias per expansion, so its size bounds how deep the expansion has gone.
   const depth = seen.size;
   if (!expr || depth > PROP_SCHEMA_LIMITS.memberAliasDepthMax) {
@@ -92,12 +87,7 @@ function parsePropSchemaMemberBlocks(
   return out;
 }
 
-function parsePropSchemaCollectUnions(
-  aliases: ReadonlyMap<string, string>,
-  unionTables: string[][],
-  expr: string | undefined,
-  seen = new Set<string>(),
-): void {
+function parsePropSchemaCollectUnions(aliases: ReadonlyMap<string, string>, unionTables: string[][], expr: string | undefined, seen = new Set<string>()): void {
   // `seen` gains one alias per expansion, so its size bounds how deep the expansion has gone.
   const depth = seen.size;
   if (!expr || depth >= LIMITS.treeDepthMax) {
@@ -219,11 +209,7 @@ function parsePropSchemaAliases(frontmatter: string): Map<string, string> {
   return aliases;
 }
 
-function parsePropSchemaBlocks(
-  aliases: ReadonlyMap<string, string>,
-  propsDecl: RegExpMatchArray | undefined,
-  asType: RegExpMatchArray | undefined,
-): string[] {
+function parsePropSchemaBlocks(aliases: ReadonlyMap<string, string>, propsDecl: RegExpMatchArray | undefined, asType: RegExpMatchArray | undefined): string[] {
   const blocks: string[] = [];
   if (propsDecl) {
     // `interface Props extends HTMLAttributes<"button">` — the extended type
@@ -234,12 +220,7 @@ function parsePropSchemaBlocks(
     parsePropSchemaMemberBlocks(aliases, propsDecl[2], new Set(), blocks);
   }
   if (asType && aliases.has(required(asType[1], 'Asserted props type capture'))) {
-    parsePropSchemaMemberBlocks(
-      aliases,
-      aliases.get(required(asType[1], 'Asserted props type capture')),
-      new Set(),
-      blocks,
-    );
+    parsePropSchemaMemberBlocks(aliases, aliases.get(required(asType[1], 'Asserted props type capture')), new Set(), blocks);
   }
   return blocks;
 }
@@ -276,11 +257,7 @@ function parsePropSchemaUnions(
 ): PropUnion[] {
   const unionTables: string[][] = [];
   parsePropSchemaCollectUnions(aliases, unionTables, propsDecl && propsDecl[2]);
-  parsePropSchemaCollectUnions(
-    aliases,
-    unionTables,
-    asType && aliases.get(required(asType[1], 'Asserted props type capture')),
-  );
+  parsePropSchemaCollectUnions(aliases, unionTables, asType && aliases.get(required(asType[1], 'Asserted props type capture')));
   const unions: PropUnion[] = [];
 
   for (const branchBlocks of unionTables) {
@@ -290,9 +267,7 @@ function parsePropSchemaUnions(
     const branches = maps.map((map, at) => {
       const forbids = [];
       const pins: Record<string, string[]> = {};
-      const { defaults, rules, docs } = parsePropSchemaBranchDocs(
-        required(documentationMaps[at], 'Union branch documentation exists'),
-      );
+      const { defaults, rules, docs } = parsePropSchemaBranchDocs(required(documentationMaps[at], 'Union branch documentation exists'));
       for (const name of names) {
         const entry = map.get(name);
         if (!entry) {
@@ -313,8 +288,7 @@ function parsePropSchemaUnions(
           .flatMap((x) => parsePropSchemaExpandAlias(aliases, x.trim()))
           .map((x) => x.trim())
           .filter((x) => x && x !== 'undefined' && x !== 'null');
-        const isLiteral = (x: string) =>
-          /^(['"`]).*\1$/.test(x) || /^(true|false|-?\d+(\.\d+)?)$/.test(x);
+        const isLiteral = (x: string) => /^(['"`]).*\1$/.test(x) || /^(true|false|-?\d+(\.\d+)?)$/.test(x);
         if (parts.length && parts.every(isLiteral)) {
           pins[name] = parts.map((x) => (/^['"`]/.test(x) ? x.slice(1, -1) : x));
         }
@@ -324,11 +298,7 @@ function parsePropSchemaUnions(
     // A union that forbids nothing and pins nothing tells the panel nothing.
     if (
       branches.some(
-        (branch) =>
-          branch.forbids.length ||
-          Object.keys(branch.pins).length ||
-          Object.keys(branch.defaults).length ||
-          Object.keys(branch.rules).length,
+        (branch) => branch.forbids.length || Object.keys(branch.pins).length || Object.keys(branch.defaults).length || Object.keys(branch.rules).length,
       )
     ) {
       unions.push({ names: [...names], branches });

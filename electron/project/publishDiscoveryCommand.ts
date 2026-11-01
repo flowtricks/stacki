@@ -4,11 +4,7 @@ import { resolvePublishExecutable } from './publishExecutable';
 import { publishEnvironment } from './publishCommands';
 
 /** Only fixed read commands reach this runner; credentials never reach renderer diagnostics. */
-export async function discoveryCommand(
-  root: string,
-  executable: 'wrangler' | 'vercel' | 'gh',
-  argumentsList: readonly string[],
-): Promise<unknown> {
+export async function discoveryCommand(root: string, executable: 'wrangler' | 'vercel' | 'gh', argumentsList: readonly string[]): Promise<unknown> {
   const resolved =
     executable === 'gh'
       ? { executable: 'gh', arguments: argumentsList }
@@ -33,9 +29,7 @@ export async function discoveryCommand(
       },
       (error, stdout) => {
         if (error) {
-          reject(
-            new Error(`Could not read ${executable} accounts. Install the latest CLI and sign in.`),
-          );
+          reject(new Error(`Could not read ${executable} accounts. Install the latest CLI and sign in.`));
         } else {
           resolve(stdout);
         }

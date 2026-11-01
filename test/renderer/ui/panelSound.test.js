@@ -170,9 +170,7 @@ function fakeAudio() {
       down: async () => {
         await new Promise((resolve) => setTimeout(resolve, 40));
         await act(async () => {
-          trigger().dispatchEvent(
-            new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
-          );
+          trigger().dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
         });
       },
       hover: async (i) => {
@@ -194,11 +192,7 @@ function fakeAudio() {
     const mounted = await mount(true);
     await mounted.open();
     await mounted.down();
-    check(
-      'a menu in a panel is silent while the setting is off',
-      audio.played.length === 0,
-      String(audio.played.length),
-    );
+    check('a menu in a panel is silent while the setting is off', audio.played.length === 0, String(audio.played.length));
     await mounted.done();
   }
 
@@ -212,18 +206,10 @@ function fakeAudio() {
     check('the menu opened', mounted.rows().length === 3, String(mounted.rows().length));
     check('opening it says nothing', audio.played.length === 0, JSON.stringify(audio.played));
     await mounted.down();
-    check(
-      'moving the highlight sounds a note',
-      audio.played.length === 1,
-      JSON.stringify(audio.played),
-    );
+    check('moving the highlight sounds a note', audio.played.length === 1, JSON.stringify(audio.played));
     await mounted.down();
     check('and the next row another', audio.played.length === 2, JSON.stringify(audio.played));
-    check(
-      'deeper down the list, deeper the note',
-      audio.played[1] < audio.played[0],
-      JSON.stringify(audio.played),
-    );
+    check('deeper down the list, deeper the note', audio.played[1] < audio.played[0], JSON.stringify(audio.played));
     await mounted.done();
   }
 
@@ -234,11 +220,7 @@ function fakeAudio() {
     await mounted.open();
     await mounted.down();
     await mounted.down();
-    check(
-      'a dropdown outside the panels stays quiet',
-      audio.played.length === 0,
-      JSON.stringify(audio.played),
-    );
+    check('a dropdown outside the panels stays quiet', audio.played.length === 0, JSON.stringify(audio.played));
     await mounted.done();
   }
 
@@ -246,10 +228,7 @@ function fakeAudio() {
   const read = (file) => fs.readFileSync(repoPath(file), 'utf8');
   const props = read('src/features/props/PropsPanel.tsx');
   const style = read('src/features/style/StylePanel.tsx');
-  check(
-    'the settings panel taps on a button press',
-    /closest\('button'\)/.test(props) && /clickNote\(\)/.test(props),
-  );
+  check('the settings panel taps on a button press', /closest\('button'\)/.test(props) && /clickNote\(\)/.test(props));
   check('but not on a disabled one', /!button\.disabled/.test(props));
   check('and it is a sound scope', /<SoundHere>/.test(props), 'its dropdowns would be silent');
   check('so is the style panel', /<SoundHere>/.test(style));
@@ -257,20 +236,17 @@ function fakeAudio() {
     // The app shell and every module it was split into, read as one.
     'src/app': readAppSource(),
     ...Object.fromEntries(
-      [
-        'src/features/pages/PagesPanel.tsx',
-        'src/features/terminal/TerminalDock.tsx',
-        'src/features/welcome/WelcomeScreen.tsx',
-      ].map((file) => [file, read(file)]),
+      ['src/features/pages/PagesPanel.tsx', 'src/features/terminal/TerminalDock.tsx', 'src/features/welcome/WelcomeScreen.tsx'].map((file) => [
+        file,
+        read(file),
+      ]),
     ),
   };
   const scopes = Object.keys(others).filter((file) => /<SoundHere>/.test(others[file]));
   check('and nothing else is', scopes.length === 0, scopes.join(', '));
 
   if (failures.length) {
-    console.error(
-      `\npanel-sound: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\npanel-sound: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

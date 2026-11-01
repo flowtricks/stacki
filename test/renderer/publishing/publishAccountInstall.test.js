@@ -68,9 +68,7 @@ function button(label) {
 }
 
 test('installation and browser sign-in share one screen', async (context) => {
-  const { calls, root } = await render(context, (request) =>
-    request.action === 'start' ? { kind: 'installing' } : { kind: 'browser', url: browserURL },
-  );
+  const { calls, root } = await render(context, (request) => (request.action === 'start' ? { kind: 'installing' } : { kind: 'browser', url: browserURL }));
   assert.match(document.body.textContent, /Sign in to Cloudflare/);
   assert.match(document.body.textContent, /Installing Wrangler in this site/);
   assert.match(document.body.textContent, /lets the installation finish/);

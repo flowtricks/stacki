@@ -40,10 +40,7 @@ const RESERVED = new Set(['Fragment', 'Astro', 'Component', 'Props', 'Slot']);
  * already spoken for — components and layouts both, since the palette lists
  * them together and an import can only mean one of them.
  */
-export function componentNameError(
-  input: unknown,
-  taken: readonly string[] = [],
-): string | undefined {
+export function componentNameError(input: unknown, taken: readonly string[] = []): string | undefined {
   const raw = String(input ?? '').trim();
   if (!raw) {
     return 'Give the component a name.';

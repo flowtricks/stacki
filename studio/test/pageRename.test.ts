@@ -17,10 +17,7 @@ import { applyPageRename } from '../vendor/stacki/electron/project/pageRenameWri
 import { studioRenameWriter } from '../src/features/pages/pageRenameWriter';
 import { createGitWorkspaceFixture } from './gitWorkspaceFixture';
 import { readGitWorkspace, gitDraftHeaders } from '../src/features/history/gitWorkspaceStorage';
-import {
-  gitWorkspaceRun,
-  initializeGitWorkspace,
-} from '../src/features/history/gitWorkspaceObjects';
+import { gitWorkspaceRun, initializeGitWorkspace } from '../src/features/history/gitWorkspaceObjects';
 import { gitWorkspaceBranch } from '../src/features/history/gitWorkspaceContract';
 
 async function fixture() {
@@ -72,18 +69,12 @@ test('Studio renames with open drafts, updates links and reloads durable rooms',
     await assert.rejects(readFile(path.join(setup.root, 'src/pages/about/team.astro')), {
       code: 'ENOENT',
     });
-    assert.match(
-      await readFile(path.join(setup.root, 'src/pages/index.astro'), 'utf8'),
-      /Unsaved draft/,
-    );
+    assert.match(await readFile(path.join(setup.root, 'src/pages/index.astro'), 'utf8'), /Unsaved draft/);
     const reopened = await setup.rooms.get('src/pages/index.astro');
     assert.match(reopened.text.toString(), /\/company\/team/);
     const moved = await setup.rooms.get('src/pages/company/team.astro');
     assert.match(moved.text.toString(), /\/company\/team/);
-    assert.equal(
-      (await setup.post({ kind: 'page', from: 'company/team.astro', to: 'index.astro' })).status,
-      409,
-    );
+    assert.equal((await setup.post({ kind: 'page', from: 'company/team.astro', to: 'index.astro' })).status, 409);
   } finally {
     await setup.close();
   }

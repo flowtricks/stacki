@@ -22,8 +22,7 @@ const initial = {
   restricted: '<p>Keep original</p><script>window.__unsafeHTML = true</script>',
 };
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const context = await browser.newContext({
@@ -44,11 +43,7 @@ try {
   const editor = description.getByRole('textbox', { name: 'Description', exact: true });
   assert.equal(await editor.innerText(), 'Are you in a Connect Group?\n\nGet connected!');
   assert.equal(await editor.locator('strong').innerText(), 'Connect Group');
-  assert.equal(
-    await field(page, 'Start date').locator('input[type="date"]').inputValue(),
-    '2026-10-25',
-    'UTC midnight must not shift to yesterday in Chicago',
-  );
+  assert.equal(await field(page, 'Start date').locator('input[type="date"]').inputValue(), '2026-10-25', 'UTC midnight must not shift to yesterday in Chicago');
   assert.deepEqual(await stored(), initial, 'Merely opening fields must not rewrite their data');
   assert.equal(await page.locator('.html-content script').count(), 0);
   assert.equal(
@@ -64,10 +59,7 @@ try {
   assert.match(await editor.innerHTML(), /<(b|strong)>Updated description<\/(b|strong)>/);
   await checkExternalUpdates(await waitForDescriptionSave());
   await description.getByRole('button', { name: 'HTML', exact: true }).click();
-  assert.match(
-    await description.getByRole('textbox', { name: 'Description HTML' }).inputValue(),
-    /Updated description/,
-  );
+  assert.match(await description.getByRole('textbox', { name: 'Description HTML' }).inputValue(), /Updated description/);
   const sourceInput = description.getByRole('textbox', { name: 'Description HTML' });
   const sourceValue = await sourceInput.inputValue();
   await sourceInput.fill('');
@@ -86,14 +78,8 @@ try {
   assert.deepEqual(saved['notes'], initial.notes);
   await page.reload();
   await openCollection(page);
-  assert.equal(
-    await field(page, 'Description').first().locator('.html-content').innerText(),
-    'Updated description',
-  );
-  assert.equal(
-    await field(page, 'Start date').locator('input[type="date"]').inputValue(),
-    '2026-10-28',
-  );
+  assert.equal(await field(page, 'Description').first().locator('.html-content').innerText(), 'Updated description');
+  assert.equal(await field(page, 'Start date').locator('input[type="date"]').inputValue(), '2026-10-28');
   await field(page, 'Start date').getByRole('button', { name: 'Choose start date' }).click();
   await page.keyboard.press('Escape');
   await mkdir('test-results', { recursive: true });

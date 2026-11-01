@@ -1,11 +1,7 @@
 import { githubIconPath } from '../../ui/iconPaths';
 import type { Hosting } from '../../../shared/properties/publishConfig';
 
-export function PublishProviderIcon({
-  provider,
-}: {
-  readonly provider: Hosting['provider'] | 'github';
-}) {
+export function PublishProviderIcon({ provider }: { readonly provider: Hosting['provider'] | 'github' }) {
   return (
     <svg
       className="publish-provider-icon"
@@ -17,17 +13,7 @@ export function PublishProviderIcon({
       aria-hidden="true"
       focusable="false"
     >
-      <path
-        d={
-          PROVIDER_PATHS[
-            provider === 'cloudflare-workers'
-              ? 'cloudflare'
-              : provider === 'github'
-                ? 'none'
-                : provider
-          ]
-        }
-      />
+      <path d={PROVIDER_PATHS[provider === 'cloudflare-workers' ? 'cloudflare' : provider === 'github' ? 'none' : provider]} />
     </svg>
   );
 }

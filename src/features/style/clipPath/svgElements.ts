@@ -22,9 +22,7 @@ export function parseSvgNumberList(value: string | undefined) {
   if (!value) {
     return [];
   }
-  return Array.from(value.matchAll(/[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi), (match) =>
-    Number(match[0]),
-  ).filter(Number.isFinite);
+  return Array.from(value.matchAll(/[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi), (match) => Number(match[0])).filter(Number.isFinite);
 }
 
 export function extractSvgMarkup(value: string) {
@@ -71,27 +69,14 @@ export function isRenderableSvgElement(element: Element) {
   const opacity = inheritedSvgAttribute(element, 'opacity')?.trim();
   const fillOpacity = inheritedSvgAttribute(element, 'fill-opacity')?.trim();
 
-  return (
-    display !== 'none' &&
-    visibility !== 'hidden' &&
-    visibility !== 'collapse' &&
-    fill !== 'none' &&
-    opacity !== '0' &&
-    fillOpacity !== '0'
-  );
+  return display !== 'none' && visibility !== 'hidden' && visibility !== 'collapse' && fill !== 'none' && opacity !== '0' && fillOpacity !== '0';
 }
 
 export function isInsideSkippedSvgElement(element: Element) {
   let current = element.parentElement;
   while (current) {
     const tagName = svgTagName(current);
-    if (
-      tagName === 'defs' ||
-      tagName === 'clippath' ||
-      tagName === 'mask' ||
-      tagName === 'pattern' ||
-      tagName === 'symbol'
-    ) {
+    if (tagName === 'defs' || tagName === 'clippath' || tagName === 'mask' || tagName === 'pattern' || tagName === 'symbol') {
       return true;
     }
     current = current.parentElement;
@@ -157,14 +142,11 @@ export function parseSvgViewBox(svg: Element, contours: Point[][]): SvgViewBox |
 }
 
 export function svgPointsAlmostEqual(left: Point, right: Point) {
-  return (
-    Math.abs(left.x - right.x) < SVG_POINT_EPSILON && Math.abs(left.y - right.y) < SVG_POINT_EPSILON
-  );
+  return Math.abs(left.x - right.x) < SVG_POINT_EPSILON && Math.abs(left.y - right.y) < SVG_POINT_EPSILON;
 }
 
 export function isSvgPointCollinear(first: Point, second: Point, third: Point) {
-  const area =
-    (second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x);
+  const area = (second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x);
   return Math.abs(area) < SVG_POINT_EPSILON;
 }
 
@@ -179,12 +161,7 @@ export function simplifySvgContour(points: readonly Point[]) {
 
   const firstPoint = withoutDuplicates[0];
   const lastPoint = withoutDuplicates[withoutDuplicates.length - 1];
-  if (
-    firstPoint &&
-    lastPoint &&
-    withoutDuplicates.length > 1 &&
-    svgPointsAlmostEqual(firstPoint, lastPoint)
-  ) {
+  if (firstPoint && lastPoint && withoutDuplicates.length > 1 && svgPointsAlmostEqual(firstPoint, lastPoint)) {
     withoutDuplicates.pop();
   }
 
@@ -195,10 +172,7 @@ export function simplifySvgContour(points: readonly Point[]) {
     simplified = simplified.filter((point, index, list) => {
       const previous = list[(index - 1 + list.length) % list.length];
       const next = list[(index + 1) % list.length];
-      const keep =
-        previous !== undefined && next !== undefined
-          ? !isSvgPointCollinear(previous, point, next)
-          : false;
+      const keep = previous !== undefined && next !== undefined ? !isSvgPointCollinear(previous, point, next) : false;
       if (!keep) {
         changed = true;
       }
@@ -290,7 +264,5 @@ export function svgSubpathHasArea(subpath: SvgShapeSubpath) {
 
 export function closeSvgSubpath(subpath: SvgShapeSubpath) {
   const lastCommand = subpath.commands[subpath.commands.length - 1];
-  return lastCommand?.kind === 'close'
-    ? subpath
-    : { ...subpath, commands: [...subpath.commands, { kind: 'close' as const }] };
+  return lastCommand?.kind === 'close' ? subpath : { ...subpath, commands: [...subpath.commands, { kind: 'close' as const }] };
 }

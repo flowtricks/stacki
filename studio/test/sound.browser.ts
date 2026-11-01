@@ -2,8 +2,7 @@ import assert from 'node:assert/strict';
 import { chromium, type Page } from 'playwright';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
@@ -47,12 +46,7 @@ try {
   await openMenu(other, false);
   await openMenu(page, false);
   await toggle.click();
-  await other.waitForFunction(
-    () =>
-      document
-        .querySelector('[role="switch"][aria-label="Sound effects"]')
-        ?.getAttribute('aria-checked') === 'true',
-  );
+  await other.waitForFunction(() => document.querySelector('[role="switch"][aria-label="Sound effects"]')?.getAttribute('aria-checked') === 'true');
   await other.close();
   await page.keyboard.press('Escape');
   await checkPlayback(page, true);
@@ -65,9 +59,7 @@ try {
   await toggle.click();
   assert.equal(await toggle.getAttribute('aria-checked'), 'true');
   assert.deepEqual(errors, []);
-  console.log(
-    'Stacki audio plays by default, mutes, persists after reload, syncs between tabs, and toggles by keyboard and on mobile.',
-  );
+  console.log('Stacki audio plays by default, mutes, persists after reload, syncs between tabs, and toggles by keyboard and on mobile.');
 } finally {
   await browser.close();
 }
@@ -101,10 +93,7 @@ async function checkPlayback(target: Page, enabled: boolean) {
     .locator('.structure-node')
     .filter({ has: target.locator('.label', { hasText: /^Heading$/ }) })
     .click();
-  await target
-    .locator('.right-tabs')
-    .getByRole('button', { name: 'Settings', exact: true })
-    .click();
+  await target.locator('.right-tabs').getByRole('button', { name: 'Settings', exact: true }).click();
   const before = await voices();
   await target.locator('.props-group-head').filter({ hasText: 'Settings' }).click();
   if (enabled) {

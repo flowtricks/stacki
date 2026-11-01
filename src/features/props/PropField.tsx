@@ -1,12 +1,6 @@
 import { arrayItems, objectFields } from './arrayValue';
 import { looksLikeAssetPath } from '../../ui/AssetThumb';
-import {
-  type PropFieldProps,
-  isHrefName,
-  usePropField,
-  type PropState,
-  type PropControlState,
-} from './propFieldModel';
+import { type PropFieldProps, isHrefName, usePropField, type PropState, type PropControlState } from './propFieldModel';
 import {
   BindingControl,
   StyleControl,
@@ -48,21 +42,7 @@ function PropFieldControls({ state }: { readonly state: PropState }) {
   return propFieldControl(view);
 }
 function propFieldControl(view: PropControlState) {
-  const {
-    field,
-    value,
-    slotOptions,
-    assetContext,
-    linkContext,
-    name,
-    type,
-    isSet,
-    valueText,
-    assetBinding,
-    showExpr,
-    isExpr,
-    isMediaAttr,
-  } = view;
+  const { field, value, slotOptions, assetContext, linkContext, name, type, isSet, valueText, assetBinding, showExpr, isExpr, isMediaAttr } = view;
   if (showExpr) {
     return <BindingControl state={view} />;
   }
@@ -75,12 +55,7 @@ function propFieldControl(view: PropControlState) {
       return control;
     }
   }
-  if (
-    /class(es)?$/i.test(name) &&
-    name !== 'slot' &&
-    (type === 'string' || type === 'other') &&
-    value?.type !== 'expr'
-  ) {
+  if (/class(es)?$/i.test(name) && name !== 'slot' && (type === 'string' || type === 'other') && value?.type !== 'expr') {
     return <ClassControl state={view} />;
   }
   if (name === 'slot' && slotOptions?.length) {

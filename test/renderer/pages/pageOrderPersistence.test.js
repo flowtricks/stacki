@@ -4,9 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
 const loadRenderer = require('../../helpers/rendererModule');
-const { parsePageOrder, reorderPageEntries, PAGE_ORDER_LIMITS } = loadRenderer(
-  'shared/properties/pageOrder.ts',
-);
+const { parsePageOrder, reorderPageEntries, PAGE_ORDER_LIMITS } = loadRenderer('shared/properties/pageOrder.ts');
 const { PageOrderController } = loadRenderer('src/features/pages/pageOrderPersistence.ts');
 
 async function until(predicate) {
@@ -27,9 +25,7 @@ test('page-order parser rejects unsafe paths, duplicates, versions and oversized
     {},
     { ...good, version: 2 },
     { ...good, entries: {} },
-    ...['../x.astro', '/x.astro', 'a//b/', 'a/./', 'a\\b.astro', '', 'a.js', 'a\0/'].map(
-      (entry) => ({ version: 1, entries: [entry] }),
-    ),
+    ...['../x.astro', '/x.astro', 'a//b/', 'a/./', 'a\\b.astro', '', 'a.js', 'a\0/'].map((entry) => ({ version: 1, entries: [entry] })),
     { version: 1, entries: ['index.astro', 'index.astro'] },
     { version: 1, entries: ['x'.repeat(PAGE_ORDER_LIMITS.pathCharsMax) + '/'] },
     { version: 1, entries: Array(PAGE_ORDER_LIMITS.entriesMax + 1).fill('x.astro') },
@@ -49,13 +45,7 @@ test('folders and pages reorder together while retaining child order', () => {
     target: 'index.astro',
     position: 'before',
   });
-  assert.deepEqual(next.entries, [
-    'about/story.astro',
-    'about/index.astro',
-    'campus/',
-    'index.astro',
-    'about/',
-  ]);
+  assert.deepEqual(next.entries, ['about/story.astro', 'about/index.astro', 'campus/', 'index.astro', 'about/']);
   assert.equal(
     reorderPageEntries(next, siblings, {
       source: 'about/story.astro',
@@ -97,9 +87,7 @@ test('saved order reloads; stale and malformed disk data cannot be overwritten',
   try {
     first.reload();
     second.reload();
-    await until(
-      () => firstStates.at(-1)?.kind === 'ready' && secondStates.at(-1)?.kind === 'ready',
-    );
+    await until(() => firstStates.at(-1)?.kind === 'ready' && secondStates.at(-1)?.kind === 'ready');
     const order = { version: 1, entries: ['campus/', 'index.astro', 'about/'] };
     first.save(order);
     await until(() => firstStates.at(-1)?.kind === 'ready');

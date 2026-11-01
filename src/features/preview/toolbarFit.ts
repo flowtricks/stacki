@@ -9,12 +9,7 @@ export interface ToolbarMeasurement {
 // Toolbar controls are a small, fixed set; reject accidental unbounded menus.
 const ACTIONS_MAX = 16;
 
-export function toolbarOverflow(
-  items: readonly ToolbarMeasurement[],
-  available: number,
-  moreWidth: number,
-  gap: number,
-): readonly string[] {
+export function toolbarOverflow(items: readonly ToolbarMeasurement[], available: number, moreWidth: number, gap: number): readonly string[] {
   assert(items.length <= ACTIONS_MAX, 'Toolbar action limit exceeded');
   assert(new Set(items.map((item) => item.id)).size === items.length, 'Duplicate toolbar action');
   assert(Number.isFinite(available), 'Toolbar width must be finite');

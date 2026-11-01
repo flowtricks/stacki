@@ -33,11 +33,7 @@ export function runPushChecks(root: string): number {
     delete environment[key];
   }
   const commands: readonly (readonly string[])[] = [
-    [
-      path.join(root, 'node_modules/typescript/bin/tsc'),
-      '--project',
-      'scripts/tsconfig.build.json',
-    ],
+    [path.join(root, 'node_modules/typescript/bin/tsc'), '--project', 'scripts/tsconfig.build.json'],
     [path.join(root, 'dist/scripts/gate/runTests.js')],
   ];
   console.log('pre-push: running the full CI gate locally; this can take several minutes.');

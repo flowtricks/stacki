@@ -130,10 +130,7 @@ test('CMS reopens from cache and reports refresh failures', async () => {
       }),
     ),
   );
-  assert.ok(
-    document.querySelector('.cms-collection'),
-    'Previous collections render before the read',
-  );
+  assert.ok(document.querySelector('.cms-collection'), 'Previous collections render before the read');
   assert.doesNotMatch(document.body.textContent, /Loading collections|No collections to show/);
   await act(async () => rejectRead(new Error('CMS unavailable')));
   assert.match(document.body.textContent, /CMS unavailable/);

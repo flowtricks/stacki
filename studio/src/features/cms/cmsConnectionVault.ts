@@ -4,13 +4,7 @@
 // secret, and the forwarding rule that only the Worker ever names a target.
 // Routes and permissions are in src/cloudflare/cmsConnectionRoutes.ts.
 
-import {
-  CMS_CONNECTION_HEADER,
-  CMS_TARGET_HEADER,
-  parseStoredConnections,
-  sanityTarget,
-  type StoredConnection,
-} from './cmsConnectionBook';
+import { CMS_CONNECTION_HEADER, CMS_TARGET_HEADER, parseStoredConnections, sanityTarget, type StoredConnection } from './cmsConnectionBook';
 import { parseConnectionId } from '../../../vendor/stacki/shared/properties/cmsConnections';
 
 /** Where the list is kept: R2 in a deployment. */
@@ -39,10 +33,7 @@ export async function storedConnections(vault: Vault): Promise<StoredConnection[
   return parseStoredConnections(input);
 }
 
-export async function keepConnections(
-  vault: Vault,
-  entries: readonly StoredConnection[],
-): Promise<void> {
+export async function keepConnections(vault: Vault, entries: readonly StoredConnection[]): Promise<void> {
   await vault.store.put(STORE_KEY, JSON.stringify(entries));
 }
 
@@ -68,11 +59,7 @@ export async function cmsForwarded(request: Request, url: URL, vault: Vault): Pr
 /** A key sealed for the store: a fresh nonce, then the ciphertext, in base64. */
 export async function sealCmsSecret(vault: Pick<Vault, 'sessionSecret'>, secret: string) {
   const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
-  const sealed = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: nonce },
-    await sealingKey(vault.sessionSecret),
-    new TextEncoder().encode(secret),
-  );
+  const sealed = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, await sealingKey(vault.sessionSecret), new TextEncoder().encode(secret));
   const out = new Uint8Array(nonce.length + sealed.byteLength);
   out.set(nonce);
   out.set(new Uint8Array(sealed), nonce.length);
@@ -96,9 +83,7 @@ async function unsealCmsSecret(vault: Vault, sealed: string): Promise<string> {
 
 async function sealingKey(sessionSecret: string): Promise<CryptoKey> {
   const encoder = new TextEncoder();
-  const base = await crypto.subtle.importKey('raw', encoder.encode(sessionSecret), 'HKDF', false, [
-    'deriveKey',
-  ]);
+  const base = await crypto.subtle.importKey('raw', encoder.encode(sessionSecret), 'HKDF', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
     {
       name: 'HKDF',

@@ -20,12 +20,7 @@ import {
   type DragTarget,
 } from './clipPathTypes';
 import { KEYBOARD_STEP, CORNERS } from './clipPathConstants';
-import {
-  oppositeCorner,
-  oppositeInsetSide,
-  insetSideForHandle,
-  isPolygonPointHandle,
-} from './clipPathHandles';
+import { oppositeCorner, oppositeInsetSide, insetSideForHandle, isPolygonPointHandle } from './clipPathHandles';
 import { rawEditableHandlePoint } from './clipPathCanvasUnits';
 import { updateShapeForDrag } from './shapeDrag';
 
@@ -63,11 +58,7 @@ export function arrowDelta(key: string, step = KEYBOARD_STEP) {
   return undefined;
 }
 
-export function ellipseRadiusValueDelta(
-  handle: Extract<HandleTarget, { kind: 'ellipse-rx' | 'ellipse-ry' }>,
-  key: string,
-  step = KEYBOARD_STEP,
-) {
+export function ellipseRadiusValueDelta(handle: Extract<HandleTarget, { kind: 'ellipse-rx' | 'ellipse-ry' }>, key: string, step = KEYBOARD_STEP) {
   if (handle.kind === 'ellipse-rx') {
     if (key === 'ArrowRight' || key === 'ArrowUp') {
       return step;
@@ -159,12 +150,7 @@ export type ShapeKeyboardOptions = {
 // The shape after a key, and the circle radius handle's new angle when it moved.
 export type ShapeKeyboardResult = { shape: ClipShape; circleRadiusAngle?: number };
 
-export function updateShapeForKeyboard(
-  shape: ClipShape,
-  handle: HandleTarget,
-  key: string,
-  options: ShapeKeyboardOptions = {},
-): ShapeKeyboardResult {
+export function updateShapeForKeyboard(shape: ClipShape, handle: HandleTarget, key: string, options: ShapeKeyboardOptions = {}): ShapeKeyboardResult {
   const step = options.step || KEYBOARD_STEP;
   const delta = arrowDelta(key, step);
   if (!delta || shape.kind === 'none') {
@@ -205,63 +191,37 @@ export function keyRawShape(
   const target: DragTarget = {
     ...handle,
     before: shape,
-    ...(isPolygonPointHandle(handle) && options.polygonPointIndexes
-      ? { polygonPointIndexes: options.polygonPointIndexes }
-      : {}),
+    ...(isPolygonPointHandle(handle) && options.polygonPointIndexes ? { polygonPointIndexes: options.polygonPointIndexes } : {}),
   };
   const dragOptions = {
     canvas,
     ...(options.insetRadiusMode ? { insetRadiusMode: options.insetRadiusMode } : {}),
-    ...(options.insetRadiusUnlocked !== undefined
-      ? { insetRadiusUnlocked: options.insetRadiusUnlocked }
-      : {}),
+    ...(options.insetRadiusUnlocked !== undefined ? { insetRadiusUnlocked: options.insetRadiusUnlocked } : {}),
     ...(options.insetSideMode ? { insetSideMode: options.insetSideMode } : {}),
-    ...(options.ellipseScaleProportional !== undefined
-      ? { ellipseScaleProportional: options.ellipseScaleProportional }
-      : {}),
+    ...(options.ellipseScaleProportional !== undefined ? { ellipseScaleProportional: options.ellipseScaleProportional } : {}),
   };
   return {
-    shape: updateShapeForDrag(
-      shape,
-      target,
-      currentPoint.x + delta.x,
-      currentPoint.y + delta.y,
-      dragOptions,
-    ),
+    shape: updateShapeForDrag(shape, target, currentPoint.x + delta.x, currentPoint.y + delta.y, dragOptions),
   };
 }
 
 // Moves the selected polygon points (or the one with the key) by the key's step.
-export function keyPolygonPoints(
-  shape: PolygonShape,
-  index: number,
-  delta: Point,
-  options: ShapeKeyboardOptions,
-): ShapeKeyboardResult {
+export function keyPolygonPoints(shape: PolygonShape, index: number, delta: Point, options: ShapeKeyboardOptions): ShapeKeyboardResult {
   const point = shape.points[index];
   if (!point) {
     return { shape };
   }
-  const selectedIndexes = new Set(
-    options.polygonPointIndexes?.length ? options.polygonPointIndexes : [index],
-  );
+  const selectedIndexes = new Set(options.polygonPointIndexes?.length ? options.polygonPointIndexes : [index]);
   return {
     shape: {
       kind: 'polygon' as const,
-      points: shape.points.map((item, itemIndex) =>
-        selectedIndexes.has(itemIndex) ? { x: item.x + delta.x, y: item.y + delta.y } : item,
-      ),
+      points: shape.points.map((item, itemIndex) => (selectedIndexes.has(itemIndex) ? { x: item.x + delta.x, y: item.y + delta.y } : item)),
     },
   };
 }
 
 // Moves a circle's centre, or its radius handle around and away from the centre.
-export function keyCircle(
-  shape: CircleShape,
-  handle: HandleTarget,
-  delta: Point,
-  options: ShapeKeyboardOptions,
-): ShapeKeyboardResult {
+export function keyCircle(shape: CircleShape, handle: HandleTarget, delta: Point, options: ShapeKeyboardOptions): ShapeKeyboardResult {
   if (handle.kind === 'circle-center') {
     return { shape: { ...shape, cx: shape.cx + delta.x, cy: shape.cy + delta.y } };
   }

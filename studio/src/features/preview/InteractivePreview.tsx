@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-  type MutableRefObject,
-} from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject, type MutableRefObject } from 'react';
 import { PreviewIcon } from '../../../vendor/stacki/src/ui/Icons';
 import { request, routeFor, type Project } from '../project/projectClient';
 import { parsePreviewTarget } from './usePreview';
@@ -28,9 +21,7 @@ export function useInteractivePreview(options: Options) {
     setActive(false);
     setTarget(undefined);
     const route = path.current.split(/[?#]/)[0]?.replace(/\/$/, '') || '/';
-    const page = current.current.project.pages.find(
-      (file) => (routeFor(file).replace(/\/$/, '') || '/') === route,
-    );
+    const page = current.current.project.pages.find((file) => (routeFor(file).replace(/\/$/, '') || '/') === route);
     if (page && page !== current.current.previewFile) {
       current.current.open(page);
     }
@@ -42,12 +33,9 @@ export function useInteractivePreview(options: Options) {
     const controller = new AbortController();
     path.current = routeFor(current.current.previewFile);
     setTarget(undefined);
-    void request(
-      '/studio/api/preview-url?mode=interactive&page=' + encodeURIComponent(path.current),
-      {
-        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(240_000)]),
-      },
-    )
+    void request('/studio/api/preview-url?mode=interactive&page=' + encodeURIComponent(path.current), {
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(240_000)]),
+    })
       .then((value) => {
         if (!controller.signal.aborted) {
           setTarget(parsePreviewTarget(value));
@@ -65,13 +53,7 @@ export function useInteractivePreview(options: Options) {
   return { active, target, frame, toggle: () => (active ? exit() : setActive(true)) };
 }
 
-function usePreviewEvents(
-  active: boolean,
-  origin: string | undefined,
-  frame: RefObject<HTMLIFrameElement>,
-  path: MutableRefObject<string>,
-  exit: () => void,
-) {
+function usePreviewEvents(active: boolean, origin: string | undefined, frame: RefObject<HTMLIFrameElement>, path: MutableRefObject<string>, exit: () => void) {
   useEffect(() => {
     if (!active) {
       return;
@@ -95,12 +77,7 @@ function usePreviewEvents(
       if (value.type === 'studio:exit-preview') {
         exit();
       }
-      if (
-        value.type === 'avb:navigated' &&
-        'path' in value &&
-        typeof value.path === 'string' &&
-        value.path.length <= 4000
-      ) {
+      if (value.type === 'avb:navigated' && 'path' in value && typeof value.path === 'string' && value.path.length <= 4000) {
         path.current = value.path;
       }
       if (value.type === 'studio:interaction') {
@@ -134,13 +111,7 @@ export function PreviewButton({ preview }: { readonly preview: InteractivePrevie
   );
 }
 
-export function PreviewWorkspace({
-  preview,
-  children,
-}: {
-  readonly preview: InteractivePreviewState;
-  readonly children: ReactNode;
-}) {
+export function PreviewWorkspace({ preview, children }: { readonly preview: InteractivePreviewState; readonly children: ReactNode }) {
   return (
     <div className="studio-workspace">
       <div
@@ -156,11 +127,7 @@ export function PreviewWorkspace({
       {preview.active && (
         <div className="preview-mode">
           {preview.target ? (
-            <iframe
-              ref={preview.frame}
-              src={preview.target.url}
-              title="Site preview (interactive)"
-            />
+            <iframe ref={preview.frame} src={preview.target.url} title="Site preview (interactive)" />
           ) : (
             <div role="status">
               <span className="panel-loading-label">Loading preview…</span>

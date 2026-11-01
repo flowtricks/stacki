@@ -39,20 +39,13 @@ const flatten = (nodes, depth = 0) => {
   return nodes.flatMap((node) => [node, ...flatten(node.children || [], depth + 1)]);
 };
 async function checkFragment(syntax) {
-  const input =
-    syntax === 'shorthand'
-      ? source
-      : source.replace('<>', '<Fragment>').replace('</>', '</Fragment>');
+  const input = syntax === 'shorthand' ? source : source.replace('<>', '<Fragment>').replace('</>', '</Fragment>');
   const parsed = parsePage(input);
   assert.equal(parsed.editable, true);
   const nodes = flatten(parsed.model.nodes);
   const fragment = nodes.find((node) => node.name === 'Fragment');
   assert.ok(fragment, 'the conditional has a structured Fragment');
-  assert.equal(
-    !!fragment.shorthand,
-    syntax === 'shorthand',
-    'both Fragment spellings keep their source identity',
-  );
+  assert.equal(!!fragment.shorthand, syntax === 'shorthand', 'both Fragment spellings keep their source identity');
   assert.equal(fragment.kind, 'component');
   const textarea = nodes.find((node) => node.name === 'textarea');
   const button = nodes.find((node) => node.name === 'button');
@@ -60,10 +53,7 @@ async function checkFragment(syntax) {
   const shell = fragment.children.find((node) => node.name === 'div');
   const status = nodes.find((node) => node.props?.class?.value === 'sermon-search_status');
   const results = nodes.find((node) => node.props?.class?.value === 'sermon-search_results');
-  assert.ok(
-    textarea && button && modal && shell && status && results,
-    'all nested elements survive parsing',
-  );
+  assert.ok(textarea && button && modal && shell && status && results, 'all nested elements survive parsing');
   assert.equal(
     nodes.some((node) => node.kind === 'expr' && /<>|<Fragment>/.test(node.value)),
     false,
@@ -112,9 +102,7 @@ async function checkFragment(syntax) {
   const React = require('react');
   const { act } = React;
   const { createRoot } = require('react-dom/client');
-  const { StructurePanel, liveClassesById, createTreeIndex } = require(
-    path.join(buildDirectory, 'navigator.js'),
-  );
+  const { StructurePanel, liveClassesById, createTreeIndex } = require(path.join(buildDirectory, 'navigator.js'));
   const tree = createTreeIndex(parsed.model.nodes);
   const live = liveClassesById(
     {
@@ -123,11 +111,7 @@ async function checkFragment(syntax) {
     },
     parsed.model.nodes,
   );
-  assert.equal(
-    live.has(fragment.id),
-    false,
-    'the first rendered child does not lend Fragment its class',
-  );
+  assert.equal(live.has(fragment.id), false, 'the first rendered child does not lend Fragment its class');
   const selections = [];
   const opened = [];
   function Harness() {
@@ -168,9 +152,7 @@ async function checkFragment(syntax) {
     });
   const arrow = (key) =>
     act(async () => {
-      window.dispatchEvent(
-        new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
-      );
+      window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
     });
   try {
     await act(async () => root.render(React.createElement(Harness)));
@@ -179,35 +161,15 @@ async function checkFragment(syntax) {
       assert.ok(row(node), `${node.name} is exposed after expanding the Navigator`);
     }
     assert.equal(label(fragment), 'Fragment');
-    assert.equal(
-      row(fragment).classList.contains('is-component'),
-      false,
-      'Fragment uses neutral group styling',
-    );
-    assert.match(
-      row(fragment).title,
-      /inline group/i,
-      'Fragment explains that its contents are an inline group',
-    );
-    assert.match(
-      row(fragment).title,
-      /no separate (?:component )?file/i,
-      'Fragment explains why double-click cannot open a file',
-    );
-    assert.equal(
-      row(modal).classList.contains('is-component'),
-      true,
-      'real components retain their distinct styling',
-    );
+    assert.equal(row(fragment).classList.contains('is-component'), false, 'Fragment uses neutral group styling');
+    assert.match(row(fragment).title, /inline group/i, 'Fragment explains that its contents are an inline group');
+    assert.match(row(fragment).title, /no separate (?:component )?file/i, 'Fragment explains why double-click cannot open a file');
+    assert.equal(row(modal).classList.contains('is-component'), true, 'real components retain their distinct styling');
     assert.equal(label(shell), 'sermon-search_wrap');
     assert.equal(label(modal), 'Modal');
     for (const node of [textarea, button, status, results]) {
       await click(row(node));
-      assert.equal(
-        selections.at(-1),
-        node.id,
-        'selection points to the editable child, not the enclosing expression',
-      );
+      assert.equal(selections.at(-1), node.id, 'selection points to the editable child, not the enclosing expression');
       assert.ok(row(node).classList.contains('selected'));
     }
     await click(row(textarea));
@@ -220,20 +182,12 @@ async function checkFragment(syntax) {
     await click(row(fragment).querySelector('.drag-handle'));
     assert.ok(row(textarea) === null, 'Fragment can collapse its subtree');
     await arrow('ArrowDown');
-    assert.equal(
-      selections.at(-1),
-      shell.id,
-      'arrow navigation expands Fragment and enters its children',
-    );
+    assert.equal(selections.at(-1), shell.id, 'arrow navigation expands Fragment and enters its children');
     assert.ok(row(textarea));
     await click(row(fragment), 'dblclick');
     assert.deepEqual(opened, [], 'the built-in Fragment has no component file to open');
     await click(row(modal), 'dblclick');
-    assert.deepEqual(
-      opened,
-      [{ name: 'Modal', id: modal.id }],
-      'ordinary component drill-down remains available',
-    );
+    assert.deepEqual(opened, [{ name: 'Modal', id: modal.id }], 'ordinary component drill-down remains available');
   } finally {
     await act(async () => root.unmount());
     dom.window.close();
@@ -241,8 +195,5 @@ async function checkFragment(syntax) {
 }
 
 for (const syntax of ['shorthand', 'named']) {
-  test(
-    `conditional ${syntax} fragments expose ` + `editable Navigator groups and preserve identity`,
-    () => checkFragment(syntax),
-  );
+  test(`conditional ${syntax} fragments expose ` + `editable Navigator groups and preserve identity`, () => checkFragment(syntax));
 }

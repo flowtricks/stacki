@@ -57,10 +57,7 @@ test('review outcome preserves draft baseline and excludes deployment side effec
     assert.equal(result.kind, 'review-open');
     assert.deepEqual(parsePublishState(result), result);
     assert.equal(submitted, 1);
-    assert.equal(
-      await readFile(path.join(root, '.stacki/studio/state/github-base.json'), 'utf8'),
-      baseline,
-    );
+    assert.equal(await readFile(path.join(root, '.stacki/studio/state/github-base.json'), 'utf8'), baseline);
     assert.equal((await publisher.publish('hosting')).kind, 'failed');
     assert.equal(submitted, 1);
     await writeFile(path.join(root, '.stacki/studio/state/github-base.json'), '{"sha":"invalid"}');

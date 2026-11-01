@@ -34,15 +34,7 @@ const PAGE = [
   '',
 ].join('\n');
 
-const LAYOUT_PAGE = [
-  '---',
-  "import Base from '../layouts/Base.astro';",
-  '---',
-  '<Base>',
-  '  <main>m</main>',
-  '</Base>',
-  '',
-].join('\n');
+const LAYOUT_PAGE = ['---', "import Base from '../layouts/Base.astro';", '---', '<Base>', '  <main>m</main>', '</Base>', ''].join('\n');
 
 test('each converted gesture writes only its bytes; undo restores every byte', async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-step9-'));
@@ -63,13 +55,7 @@ test('each converted gesture writes only its bytes; undo restores every byte', a
   context.after(app.unmount);
   const disk = () => fs.readFileSync(file, 'utf8');
   const expectDisk = (lines, what) => assert.equal(disk(), lines.join('\n'), what);
-  const body = (rest) => [
-    '---',
-    "import Card from '../components/Card.astro';",
-    '---',
-    ...rest,
-    '',
-  ];
+  const body = (rest) => ['---', "import Card from '../components/Card.astro';", '---', ...rest, ''];
 
   // The note above the section, reworded: its words only.
   await select(app, [0, 1]);
@@ -192,9 +178,7 @@ test('paste and extract-to-component insert, remove and import as requests', asy
     return { path: created, rel: 'src/components/Two.astro', name: 'Two' };
   };
   await select(app, [0, 1]);
-  const components = [...document.querySelectorAll('.rail-btn')].find((button) =>
-    String(button.getAttribute('aria-label')).startsWith('Components'),
-  );
+  const components = [...document.querySelectorAll('.rail-btn')].find((button) => String(button.getAttribute('aria-label')).startsWith('Components'));
   assert.ok(components, 'the Components rail button');
   await app.act(async () => {
     components.click();
@@ -205,8 +189,7 @@ test('paste and extract-to-component insert, remove and import as requests', asy
   });
   assert.equal(
     disk(),
-    "---\nimport Two from '../components/Two.astro';\n---\n" +
-      '<main>\n  <p class="a">One</p>\n  <Two />\n</main>\n',
+    "---\nimport Two from '../components/Two.astro';\n---\n" + '<main>\n  <p class="a">One</p>\n  <Two />\n</main>\n',
     'extract: an instance where the markup was, and its import',
   );
 });
@@ -245,11 +228,7 @@ test('a layout renamed, removed and picked again reaches disk as requests', asyn
   await gesture(app, async () => {
     await __panels.StructurePanel.onChangeLayout('');
   });
-  assert.equal(
-    disk(),
-    '---\n---\n  <main>m</main>\n',
-    'removed: its tags and its import go, the page stays',
-  );
+  assert.equal(disk(), '---\n---\n  <main>m</main>\n', 'removed: its tags and its import go, the page stays');
   await gesture(app, async () => {
     await __panels.StructurePanel.onChangeLayout('Base');
   });

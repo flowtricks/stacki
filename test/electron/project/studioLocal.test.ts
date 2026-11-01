@@ -10,11 +10,7 @@ import os from 'node:os';
 import { studioEntryHTML } from '#dist/electron/previewServer/studioEntry.js';
 import { prepareStudioLocal } from '#dist/electron/previewServer/studioLocalMove.js';
 import { isStudioLocalPath } from '#dist/shared/properties/studioLocal.js';
-import {
-  createLocalStudio,
-  hasLocalStudio,
-  writeLocalStudioConfig,
-} from '#dist/electron/previewServer/studioLocal.js';
+import { createLocalStudio, hasLocalStudio, writeLocalStudioConfig } from '#dist/electron/previewServer/studioLocal.js';
 
 test('local configuration uses website source and leaves its Astro config intact', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'stacki-studio-local-'));
@@ -92,14 +88,8 @@ test("an older Studio's folders move into .stacki/studio once, whole", async () 
     await writeFile(path.join(root, '.stacki-studio/update.lock'), 'lock');
     prepareStudioLocal(root);
     assert.equal(await readFile(path.join(root, '.stacki/studio/.gitignore'), 'utf8'), '*\n');
-    assert.equal(
-      await readFile(path.join(root, '.stacki/studio/state/drafts/a.bin'), 'utf8'),
-      'draft',
-    );
-    assert.equal(
-      await readFile(path.join(root, '.stacki/studio/updates/update.lock'), 'utf8'),
-      'lock',
-    );
+    assert.equal(await readFile(path.join(root, '.stacki/studio/state/drafts/a.bin'), 'utf8'), 'draft');
+    assert.equal(await readFile(path.join(root, '.stacki/studio/updates/update.lock'), 'utf8'), 'lock');
     await mkdir(path.join(root, '.studio-state'));
     prepareStudioLocal(root);
     assert.equal(
@@ -113,20 +103,10 @@ test("an older Studio's folders move into .stacki/studio once, whole", async () 
 });
 
 test('only Studio-owned paths read as Studio state', () => {
-  for (const owned of [
-    '.stacki/studio',
-    '.stacki/studio/state/a.bin',
-    '.studio-state',
-    'x/.stacki-studio/y',
-  ]) {
+  for (const owned of ['.stacki/studio', '.stacki/studio/state/a.bin', '.studio-state', 'x/.stacki-studio/y']) {
     assert.equal(isStudioLocalPath(owned), true, owned);
   }
-  for (const site of [
-    '.stacki/components.json',
-    '.stacki/studios.json',
-    'studio/src/app.ts',
-    'src/studio-state.ts',
-  ]) {
+  for (const site of ['.stacki/components.json', '.stacki/studios.json', 'studio/src/app.ts', 'src/studio-state.ts']) {
     assert.equal(isStudioLocalPath(site), false, site);
   }
   assert.throws(() => isStudioLocalPath('.stacki\\studio'), /POSIX paths/);

@@ -80,11 +80,7 @@ async function openProject(signal: AbortSignal, progress: (attempt: number) => v
       return await loadProject(AbortSignal.any([signal, timeout.signal]));
     } catch (error) {
       signal.throwIfAborted();
-      if (
-        attempt === 3 ||
-        !(error instanceof StudioRequestError) ||
-        (error.status !== 0 && error.status < 500)
-      ) {
+      if (attempt === 3 || !(error instanceof StudioRequestError) || (error.status !== 0 && error.status < 500)) {
         throw error;
       }
     } finally {

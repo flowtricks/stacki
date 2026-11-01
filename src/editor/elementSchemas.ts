@@ -33,23 +33,7 @@ const SCHEMAS: Readonly<Record<string, readonly BuiltinField[]>> = {
     {
       name: 'type',
       type: 'enum',
-      options: [
-        'text',
-        'email',
-        'password',
-        'number',
-        'search',
-        'tel',
-        'url',
-        'checkbox',
-        'radio',
-        'date',
-        'time',
-        'file',
-        'hidden',
-        'range',
-        'color',
-      ],
+      options: ['text', 'email', 'password', 'number', 'search', 'tel', 'url', 'checkbox', 'radio', 'date', 'time', 'file', 'hidden', 'range', 'color'],
       default: 'text',
     },
     { name: 'name', type: 'string' },
@@ -370,19 +354,7 @@ export function canContainTag(parentTag: unknown, childTag: unknown): boolean {
   }
   // <li>, <div>, <section>, … take flow content; only list/table parts are
   // out of place without their proper parent.
-  return ![
-    'li',
-    'dt',
-    'dd',
-    'tr',
-    'td',
-    'th',
-    'thead',
-    'tbody',
-    'tfoot',
-    'option',
-    'optgroup',
-  ].includes(child);
+  return !['li', 'dt', 'dd', 'tr', 'td', 'th', 'thead', 'tbody', 'tfoot', 'option', 'optgroup'].includes(child);
 }
 
 // Attributes that stay valid on any element when its tag changes.

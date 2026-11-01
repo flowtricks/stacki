@@ -58,12 +58,7 @@ export function useProvenanceDismiss({
       }
       // Pressing back on the label that opened this popover toggles it closed —
       // flag it so that label's click doesn't immediately re-open it.
-      if (
-        event.clientX >= anchor.left &&
-        event.clientX <= anchor.right &&
-        event.clientY >= anchor.top &&
-        event.clientY <= anchor.bottom
-      ) {
+      if (event.clientX >= anchor.left && event.clientX <= anchor.right && event.clientY >= anchor.top && event.clientY <= anchor.bottom) {
         onAnchorReclick(prop);
       }
       onClose();

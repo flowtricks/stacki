@@ -50,9 +50,7 @@ async function performRequest(operation: string, payload: unknown, expectedData?
   if (Object.keys(incoming).length > 2000) {
     throw new Error('CMS version limit exceeded');
   }
-  const revision = Object.fromEntries(
-    Object.entries(incoming).map(([file, hash]) => [sourcePath(file), string(hash, 64)]),
-  );
+  const revision = Object.fromEntries(Object.entries(incoming).map(([file, hash]) => [sourcePath(file), string(hash, 64)]));
   if (operation === 'content:writeEntry') {
     const hash = revision[key];
     if (hash) {
@@ -97,8 +95,7 @@ export const cmsTransport = {
   listCms: invoke('cms:list'),
   readCms: invoke('cms:read'),
   cmsMeta: invoke('cms:meta'),
-  writeCms: (payload: unknown, expectedData?: unknown) =>
-    cmsRequest('cms:write', payload, expectedData),
+  writeCms: (payload: unknown, expectedData?: unknown) => cmsRequest('cms:write', payload, expectedData),
   createCms: invoke('cms:create'),
   setCmsMeta: invoke('cms:setMeta'),
   cmsUsage: invoke('cms:usage'),
@@ -109,8 +106,7 @@ export const cmsTransport = {
   contentRemoteRead: invoke('content:remoteRead'),
   contentRemoteEdit: invoke('content:remoteEdit'),
   contentTargets: invoke('content:targets'),
-  writeContentEntry: (payload: unknown, expected?: unknown) =>
-    cmsRequest('content:writeEntry', payload, expected),
+  writeContentEntry: (payload: unknown, expected?: unknown) => cmsRequest('content:writeEntry', payload, expected),
   validateContentEntry: invoke('content:validate'),
   contentRenamePlan: invoke('content:renamePlan'),
   renameContentEntry: invoke('content:rename'),

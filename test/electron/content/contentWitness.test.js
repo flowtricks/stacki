@@ -19,15 +19,9 @@ test('CMS text writes preserve other records and reject stale snapshots', () => 
     writeEntry(root, entry, [{ path: ['title'], value: 'New title' }], { expected });
     const saved = fs.readFileSync(file, 'utf8');
     assert.equal(saved, original.replace('Hello', 'New title'));
-    assert.throws(
-      () => writeEntry(root, entry, [{ path: ['title'], value: 'Stale edit' }], { expected }),
-      /Content changed/,
-    );
+    assert.throws(() => writeEntry(root, entry, [{ path: ['title'], value: 'Stale edit' }], { expected }), /Content changed/);
     assert.equal(fs.readFileSync(file, 'utf8'), saved);
-    assert.throws(
-      () => writeEntry(root, { ...entry, locator: [10] }, [], { expected }),
-      /Content changed/,
-    );
+    assert.throws(() => writeEntry(root, { ...entry, locator: [10] }, [], { expected }), /Content changed/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

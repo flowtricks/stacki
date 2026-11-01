@@ -23,25 +23,11 @@ import {
   type TransformType,
 } from './model/transform';
 import { transformAxisIcon, transformTypeIcon, LockIcon, UnlockIcon } from './transformIcons';
-import {
-  parseFilters,
-  serializeFilters,
-  blankFilter,
-  filterLabel,
-  type Filter,
-} from './model/filter';
+import { parseFilters, serializeFilters, blankFilter, filterLabel, type Filter } from './model/filter';
 import FilterEditor from './FilterFields';
 import { useExternalDraft } from './model/fieldHooks';
 import { displayOf } from './model/styleDisplay';
-import {
-  type Props,
-  type WriteOptions,
-  useLiveTimer,
-  draftInputHandlers,
-  writeValue,
-  useLayerRows,
-  EffLabel,
-} from './EffectsKit';
+import { type Props, type WriteOptions, useLiveTimer, draftInputHandlers, writeValue, useLayerRows, EffLabel } from './EffectsKit';
 
 // ─────────────── 2D & 3D transforms (layered, mirrors text-shadow) ───────────────
 
@@ -67,12 +53,7 @@ export const TransformPlusIcon = () => (
 
 export const FilterGlyph = () => (
   <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className="embed-editor_bg-glyph">
-    <path
-      d="M2.5 4h11l-4.2 5v3.5L6.7 14V9L2.5 4Z"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinejoin="round"
-    />
+    <path d="M2.5 4h11l-4.2 5v3.5L6.7 14V9L2.5 4Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
   </svg>
 );
 
@@ -84,8 +65,7 @@ export function FiltersRow({ prop, label, props }: { prop: string; label: string
   // Shared by Filters and Backdrop filters, so both get the eye from here.
   const rows = parseHideable(display.present ? display.value : '', ' ', parseFilters);
   const layers = rows.map((row) => row.item);
-  const write = (next: Array<Hideable<Filter>>, options: WriteOptions) =>
-    writeValue(prop, serializeHideable(next, ' ', serializeFilters), options, props);
+  const write = (next: Array<Hideable<Filter>>, options: WriteOptions) => writeValue(prop, serializeHideable(next, ' ', serializeFilters), options, props);
   const stack = useLayerRows({ rows, blank: blankFilter, write });
   const { openIndex } = stack;
   const openLayer = openIndex === undefined ? undefined : layers[openIndex];
@@ -123,11 +103,7 @@ export function FiltersRow({ prop, label, props }: { prop: string; label: string
       />
       {openIndex !== undefined && stack.anchorElement && openLayer ? (
         <LayerPopover anchorEl={stack.anchorElement} ariaLabel={label} onClose={stack.close}>
-          <FilterEditor
-            filter={openLayer}
-            busy={busy}
-            onChange={(next, live) => stack.update(openIndex, { live }, () => next)}
-          />
+          <FilterEditor filter={openLayer} busy={busy} onChange={(next, live) => stack.update(openIndex, { live }, () => next)} />
         </LayerPopover>
       ) : undefined}
     </div>
@@ -138,10 +114,7 @@ export function FiltersRow({ prop, label, props }: { prop: string; label: string
 // units), and how many slider steps map to one unit. The slider is integer-only, so
 // `scale` (0–2) runs in hundredths for sub-integer precision; the number field always
 // allows a precise value outside the range.
-export const AXIS_CONFIG: Record<
-  TransformType,
-  { unit: string; min: number; max: number; steps: number }
-> = {
+export const AXIS_CONFIG: Record<TransformType, { unit: string; min: number; max: number; steps: number }> = {
   // Move is in rem unless the value itself says otherwise — `steps` is how many
   // slider notches make one unit, so 100 gives hundredths of a rem across a
   // range wide enough to push something off its own width.
@@ -153,10 +126,7 @@ export const AXIS_CONFIG: Record<
 
 // Split "10px" / "1.5" / "45deg" into number + unit (bare number → the type's default
 // unit); undefined for var()/calc()/… so the slider disables but the field stays editable.
-export function parseAxis(
-  value: string,
-  fallbackUnit: string,
-): { num: number; unit: string } | undefined {
+export function parseAxis(value: string, fallbackUnit: string): { num: number; unit: string } | undefined {
   const match = value.trim().match(/^(-?\d*\.?\d+)\s*([a-z%]*)$/i);
   if (!match) {
     return undefined;
@@ -202,10 +172,7 @@ export function AxisInput(props: AxisInputProps) {
   });
   return (
     <div className="embed-editor_size-row">
-      <span
-        className="embed-editor_size-label embed-editor_bg-caption embed-editor_transform-axis"
-        aria-hidden="true"
-      >
+      <span className="embed-editor_size-label embed-editor_bg-caption embed-editor_transform-axis" aria-hidden="true">
         {transformAxisIcon(type, label === 'X' ? 'x' : label === 'Y' ? 'y' : 'z')}
       </span>
       <div className="embed-editor_shadow-field">
@@ -293,15 +260,7 @@ export function useAxisField({
 
 // The per-layer editor: a Type toggle (Move/Scale/Rotate/Skew) + X/Y/Z fields (Z is
 // hidden for Skew, which is 2D). Switching Type resets the axes to that type's identity.
-export function TransformEditor({
-  layer,
-  busy,
-  onChange,
-}: {
-  layer: Transform;
-  busy: boolean;
-  onChange: (patch: TransformPatch, live: boolean) => void;
-}) {
+export function TransformEditor({ layer, busy, onChange }: { layer: Transform; busy: boolean; onChange: (patch: TransformPatch, live: boolean) => void }) {
   const placeholder = IDENTITY[layer.type];
   // Scale defaults to linked X & Y (uniform scale, like Webflow); the lock toggles it.
   const [locked, setLocked] = useState(true);
@@ -324,12 +283,7 @@ export function TransformEditor({
     <div className="embed-editor_type-shadow-editor">
       <div className="embed-editor_size-row">
         <span className="embed-editor_size-label embed-editor_bg-caption">Type</span>
-        <SegmentedControl
-          value={layer.type}
-          options={TRANSFORM_TYPES}
-          onChange={retype}
-          ariaLabel="Transform type"
-        />
+        <SegmentedControl value={layer.type} options={TRANSFORM_TYPES} onChange={retype} ariaLabel="Transform type" />
       </div>
       {layer.type === 'scale' ? (
         <div className="embed-editor_transform-lock-group">
@@ -337,11 +291,7 @@ export function TransformEditor({
             <AxisInput type="scale" label="X" {...shared} {...axes.x} />
             <AxisInput type="scale" label="Y" {...shared} {...axes.y} />
           </div>
-          <ScaleLock
-            locked={locked}
-            busy={busy}
-            onToggle={() => setLocked((wasLocked) => !wasLocked)}
-          />
+          <ScaleLock locked={locked} busy={busy} onToggle={() => setLocked((wasLocked) => !wasLocked)} />
         </div>
       ) : (
         <>
@@ -375,10 +325,8 @@ export function axisFields({
   linkXY: boolean;
   handlersFor: (patchOf: (value: string) => TransformPatch) => Omit<AxisField, 'value'>;
 }): AxisFields {
-  const xPatch = (value: string): TransformPatch =>
-    linkXY ? { x: value, y: value } : { x: value };
-  const yPatch = (value: string): TransformPatch =>
-    linkXY ? { x: value, y: value } : { y: value };
+  const xPatch = (value: string): TransformPatch => (linkXY ? { x: value, y: value } : { x: value });
+  const yPatch = (value: string): TransformPatch => (linkXY ? { x: value, y: value } : { y: value });
   return {
     x: { value: values.x, ...handlersFor(xPatch) },
     y: { value: values.y, ...handlersFor(yPatch) },
@@ -416,15 +364,7 @@ export function useAxisValues(layer: Transform) {
   return { values, bump };
 }
 
-export function ScaleLock({
-  locked,
-  busy,
-  onToggle,
-}: {
-  locked: boolean;
-  busy: boolean;
-  onToggle: () => void;
-}) {
+export function ScaleLock({ locked, busy, onToggle }: { locked: boolean; busy: boolean; onToggle: () => void }) {
   return (
     <button
       type="button"
@@ -449,9 +389,7 @@ export function TransformsRow({ props }: { props: Props }) {
   // and parseTransforms drops every function it doesn't recognise — so lift it
   // out before the layers are read and put it back in front on the way out, or
   // it vanishes the next time any layer is touched. See lib/transform-settings.
-  const { distance: selfPerspective, rest } = takeSelfPerspective(
-    display.present ? display.value : '',
-  );
+  const { distance: selfPerspective, rest } = takeSelfPerspective(display.present ? display.value : '');
   // Rows rather than bare layers: a hidden one is still in the list and still
   // in the CSS, commented out (see lib/hideable.ts).
   const rows = parseHideable(rest, ' ', parseTransforms);
@@ -462,8 +400,7 @@ export function TransformsRow({ props }: { props: Props }) {
     const value = withSelfPerspective(serializeHideable(next, ' ', serializeTransforms), distance);
     writeValue('transform', value, options, props);
   };
-  const write = (next: Array<Hideable<Transform>>, options: WriteOptions) =>
-    put(next, selfPerspective, options);
+  const write = (next: Array<Hideable<Transform>>, options: WriteOptions) => put(next, selfPerspective, options);
   const stack = useLayerRows({ rows, blank: blankTransform, write });
   const { openIndex } = stack;
   const openLayer = openIndex === undefined ? undefined : layers[openIndex];
@@ -489,21 +426,11 @@ export function TransformsRow({ props }: { props: Props }) {
       />
       {openIndex !== undefined && stack.anchorElement && openLayer ? (
         <LayerPopover anchorEl={stack.anchorElement} ariaLabel="Transform" onClose={stack.close}>
-          <TransformEditor
-            layer={openLayer}
-            busy={busy}
-            onChange={(patch, live) =>
-              stack.update(openIndex, { live }, (item) => ({ ...item, ...patch }))
-            }
-          />
+          <TransformEditor layer={openLayer} busy={busy} onChange={(patch, live) => stack.update(openIndex, { live }, (item) => ({ ...item, ...patch }))} />
         </LayerPopover>
       ) : undefined}
       {settingsOpen && settingsRef.current ? (
-        <LayerPopover
-          anchorEl={settingsRef.current}
-          ariaLabel="Transform settings"
-          onClose={() => setSettingsOpen(false)}
-        >
+        <LayerPopover anchorEl={settingsRef.current} ariaLabel="Transform settings" onClose={() => setSettingsOpen(false)}>
           <TransformSettings
             read={read}
             busy={busy}
@@ -558,14 +485,7 @@ export function TransformsHead({
         >
           <MoreIcon />
         </button>
-        <button
-          type="button"
-          className="embed-editor_icon-btn"
-          onClick={onAdd}
-          disabled={busy}
-          title="Add a transform"
-          aria-label="Add a transform"
-        >
+        <button type="button" className="embed-editor_icon-btn" onClick={onAdd} disabled={busy} title="Add a transform" aria-label="Add a transform">
           <TransformPlusIcon />
         </button>
       </div>

@@ -38,12 +38,7 @@ export function pageRenameConflicts(change: PageRename, inventory: RenameInvento
   const targets =
     change.kind === 'page'
       ? [pageURLPath(change.to)]
-      : [
-          '/' + change.to,
-          ...pages
-            .filter((file) => file.startsWith(change.from + '/'))
-            .map((file) => pageURLPath(renamedPagePath(file, change))),
-        ];
+      : ['/' + change.to, ...pages.filter((file) => file.startsWith(change.from + '/')).map((file) => pageURLPath(renamedPagePath(file, change)))];
   const collision = targets.find((route) => occupied.has(collisionKey(route)));
   return collision === undefined
     ? ok(undefined)

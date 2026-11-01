@@ -18,7 +18,7 @@ import PreviewPane from '../../features/preview/PreviewPane';
 import { relativeTime } from '../../features/history/HistoryPanel';
 import SaveConflictNotice from '../SaveConflictNotice';
 import { nodeAtPath } from '../../editor/editorTree';
-import type { PickedAsset } from '../../ui/AssetField';
+import type { AssetReference, PickedAsset } from '../../ui/AssetField';
 import type { InlineNode } from '../../features/props/RichContent';
 import type { Rename } from '../../features/props/propNodeEditors';
 import type { PropValues } from '../../features/props/propRules';
@@ -27,14 +27,7 @@ import type { LoopTarget } from '../../editor/loopQueryPlan';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorNode } from '../../editor/pageView';
 import { useLiveValue } from '../../ui/liveValue';
-import {
-  PropsPanel,
-  StylePanel,
-  CodeWindow,
-  CmsView,
-  ContentView,
-  VariablesView,
-} from '../appPanels';
+import { PropsPanel, StylePanel, CodeWindow, CmsView, ContentView, VariablesView } from '../appPanels';
 import { holdsInlineText, commentAbove, trailOf } from '../model/pageGestures';
 import type { ShellView } from '../App';
 import { editLoopProperty, type LoopPropertyEdit } from '../state/loopPropertyEdit';
@@ -54,9 +47,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         devDiag={app.devDiag}
         route={app.pageUrlPath}
         onEditRoute={(route) => {
-          const page = app.scan.pages.find(
-            (entry) => (entry.route.replace(/\/$/, '') || '/') === route,
-          );
+          const page = app.scan.pages.find((entry) => (entry.route.replace(/\/$/, '') || '/') === route);
           if (page) {
             app.onSelectPage(page);
           } else {
@@ -134,11 +125,7 @@ function useCanvasContextMenu(app: ShellView) {
   };
 }
 
-function canvasContextPosition(
-  app: ShellView,
-  path: string | undefined,
-  point: ContextPoint & { readonly outside: boolean },
-): ContextPosition | undefined {
+function canvasContextPosition(app: ShellView, path: string | undefined, point: ContextPoint & { readonly outside: boolean }): ContextPosition | undefined {
   const action = canvasClickAction({
     path,
     outside: point.outside,
@@ -149,12 +136,7 @@ function canvasContextPosition(
     return undefined;
   }
   const nodes = app.pageState.model.nodes;
-  const node =
-    action.kind === 'layout'
-      ? findNodeById(nodes, 'layout')
-      : path
-        ? nodeAtPath(nodes, trailOf(path))
-        : undefined;
+  const node = action.kind === 'layout' ? findNodeById(nodes, 'layout') : path ? nodeAtPath(nodes, trailOf(path)) : undefined;
   if (!node) {
     return undefined;
   }
@@ -166,11 +148,7 @@ function canvasContextPosition(
 // path or with nothing, and nothing has two causes that want opposite things: a click
 // the open file doesn't own, and a click on something inside it the canvas couldn't
 // name.
-export function selectCanvasPath(
-  app: ShellView,
-  path: string | undefined,
-  info: { readonly outside: boolean } | undefined,
-): void {
+export function selectCanvasPath(app: ShellView, path: string | undefined, info: { readonly outside: boolean } | undefined): void {
   const reveal = (node: EditorNode | undefined) => {
     if (!node) {
       return;
@@ -311,8 +289,8 @@ export function OldVersionCover({ app }: { readonly app: ShellView }) {
     <div className="preview-mode old-version">
       <div className="preview-banner">
         <span className="preview-banner-text">
-          You’re looking at <strong>{previewInfo.subject}</strong> — how the site was{' '}
-          {relativeTime(previewInfo.when ?? '')}. This is a look, not a place to work.
+          You’re looking at <strong>{previewInfo.subject}</strong> — how the site was {relativeTime(previewInfo.when ?? '')}. This is a look, not a place to
+          work.
         </span>
         <button className="preview-banner-exit" onClick={app.onExitCommitPreview}>
           Back to now
@@ -389,9 +367,7 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
       onSelectNode={app.setSelectedId}
       onRecordUndo={app.pushCommand}
       onAddClass={(name) =>
-        selectedId
-          ? app.addClassToNode(selectedId, name, app.pathFor(selectedId))
-          : Promise.resolve({ tag: 'refused', message: 'no element is selected' })
+        selectedId ? app.addClassToNode(selectedId, name, app.pathFor(selectedId)) : Promise.resolve({ tag: 'refused', message: 'no element is selected' })
       }
       onSpacingHover={app.setSpacingHover}
       pathOf={app.pathFor}
@@ -430,9 +406,7 @@ export function settingsValues(app: ShellView) {
       selectedNode?.kind === 'element' ||
       // A dynamic tag renders a real element, so it takes attributes
       // even though it has no component file behind it.
-      (selectedNode !== undefined &&
-        selectedNode.kind !== 'frontmatter' &&
-        !!selectedNode.dynamicTag) ||
+      (selectedNode !== undefined && selectedNode.kind !== 'frontmatter' && !!selectedNode.dynamicTag) ||
       !!component?.hasRest,
     comment: noteText(commentAbove(app.model, selectedId)?.value),
     tagOptions: app.tagOptions,
@@ -478,10 +452,9 @@ export function settingsHandlers(app: ShellView) {
         app.setProp(selectedId, propName, value, immediate, app.pathFor(selectedId));
       }
     },
-    onSetProps: (nodeId: string, patch: PropValues) =>
-      app.setProps(nodeId, patch, true, app.pathFor(nodeId)),
-    onSetAssetProp: (nodeId: string, propName: string, picked: PickedAsset) => {
-      void app.setAssetProp(nodeId, propName, picked).catch(app.reportFailure);
+    onSetProps: (nodeId: string, patch: PropValues) => app.setProps(nodeId, patch, true, app.pathFor(nodeId)),
+    onSetAssetProp: (nodeId: string, propName: string, picked: PickedAsset, reference: AssetReference) => {
+      void app.setAssetProp(nodeId, propName, picked, reference).catch(app.reportFailure);
     },
     onRenameProp: (oldName: string, newName: string) => {
       if (selectedId) {
@@ -495,19 +468,12 @@ export function settingsHandlers(app: ShellView) {
       if (!selectedId) {
         return undefined;
       }
-      return /^[A-Z]/.test(tag)
-        ? app.changeNodeKind(selectedId, tag)
-        : app.changeElementTag(selectedId, tag);
+      return /^[A-Z]/.test(tag) ? app.changeNodeKind(selectedId, tag) : app.changeElementTag(selectedId, tag);
     },
     onOpenCode: app.openCodeWindow,
     onSetFrontmatter: app.setExtraFrontmatter,
-    onSetLoopSource: (
-      target: LoopTarget,
-      sanityClient: 'available' | 'unavailable',
-    ): LoopApplyResult =>
-      selectedId
-        ? app.setLoopSource(selectedId, target, sanityClient)
-        : { ok: false, message: 'Select the loop first.' },
+    onSetLoopSource: (target: LoopTarget, sanityClient: 'available' | 'unavailable'): LoopApplyResult =>
+      selectedId ? app.setLoopSource(selectedId, target, sanityClient) : { ok: false, message: 'Select the loop first.' },
     onEditLoopProperty: loopPropertyEditor(app),
     onOpenSymbol: app.onOpenSymbol,
     onToggleElse: (want: boolean) => {

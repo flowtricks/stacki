@@ -10,9 +10,7 @@ import test from 'node:test';
 import { prepareCloudflareAssets } from '../scripts/cloudflareAssets';
 
 const assetBytesMax = 25 * 1024 * 1024;
-const wrangler = fileURLToPath(
-  new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url),
-);
+const wrangler = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url));
 
 test('Cloudflare excludes oversized maps but still validates runtime asset sizes', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-cloudflare-assets-'));

@@ -5,16 +5,7 @@ import type { ResolvePathResult } from '../../shared/ipc/ipcContract';
 import { toProjectPath, toFilePath } from '../../shared/core/brand';
 // Asset cards only consume the entry list. Parse every entry before a path or
 // dimension reaches a DOM attribute; unrelated result metadata stays opaque.
-import {
-  boolean,
-  count,
-  list,
-  object,
-  optional,
-  pathText,
-  record,
-  text,
-} from '../../shared/core/boundary';
+import { boolean, count, list, object, optional, pathText, record, text } from '../../shared/core/boundary';
 import type { WireAssetEntry } from '../../shared/ipc/ipcResults';
 import type { Result } from '../../shared/core/result';
 
@@ -34,9 +25,7 @@ export function parseAssetEntry(input: unknown): WireAssetEntry {
 
 export const parseAssetEntries = object({ entries: list(parseAssetEntry) });
 
-export async function listAssetEntries(
-  _projectPath: string,
-): Promise<Result<readonly WireAssetEntry[], string>> {
+export async function listAssetEntries(_projectPath: string): Promise<Result<readonly WireAssetEntry[], string>> {
   let response: unknown;
   try {
     response = await request('/studio/api/assets');
@@ -53,11 +42,7 @@ export function onAssetEntriesChanged(callback: () => void): () => void {
 }
 
 // Transport failures mean an unavailable preview; a malformed result remains a contract bug.
-export async function resolveAssetImport(
-  projectPath: string,
-  fromFile: string,
-  spec: string,
-): Promise<ResolvePathResult> {
+export async function resolveAssetImport(projectPath: string, fromFile: string, spec: string): Promise<ResolvePathResult> {
   const payload = {
     projectPath: toProjectPath(projectPath),
     fromFile: toFilePath(fromFile),
@@ -87,10 +72,7 @@ export function parseAssetDimensions(input: unknown) {
   return optional(dimensions)(record(input)['dims']);
 }
 
-export async function readAssetDimensions(
-  projectPath: string,
-  rel: string,
-): Promise<Result<ReturnType<typeof parseAssetDimensions>, string>> {
+export async function readAssetDimensions(projectPath: string, rel: string): Promise<Result<ReturnType<typeof parseAssetDimensions>, string>> {
   const payload = { projectPath: toProjectPath(projectPath), rel: pathText(rel) };
   let response: unknown;
   try {

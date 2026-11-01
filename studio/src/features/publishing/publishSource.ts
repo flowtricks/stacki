@@ -15,11 +15,7 @@ import type { PublishedFile, PublishSource } from '../../shared/publishSource';
 export type { PublishedFile, PublishSource } from '../../shared/publishSource';
 
 /** Capture immutable Git objects while the collaboration coordinator holds edits. */
-export async function capturePublishSource(
-  root: string,
-  temporary: string,
-  options: { readonly assetRoot?: string } = {},
-): Promise<Result<PublishSource>> {
+export async function capturePublishSource(root: string, temporary: string, options: { readonly assetRoot?: string } = {}): Promise<Result<PublishSource>> {
   const starts = await sourceRoots(root).then(ok, publishFailure);
   if (!starts.ok) {
     return starts;
@@ -28,10 +24,7 @@ export async function capturePublishSource(
   if (!inventory.ok) {
     return inventory;
   }
-  const prepared = await mkdir(temporary, { recursive: true, mode: 0o700 }).then(
-    ok,
-    publishFailure,
-  );
+  const prepared = await mkdir(temporary, { recursive: true, mode: 0o700 }).then(ok, publishFailure);
   if (!prepared.ok) {
     return prepared;
   }
@@ -73,30 +66,25 @@ export async function publishTreeFiles(
   assert(/^[a-f0-9]{40}$/.test(tree), 'Captured tree has a valid identifier');
   const files: PublishedFile[] = [];
   let bytes = 0;
-  const read = await readPublishRecords(
-    git.root,
-    ['ls-tree', '-r', '-l', '-z', tree],
-    publishGitEnvironment(git),
-    async (record) => {
-      // Startup omits links from its checkout; captures still reject links by default.
-      // The record reader bounds every entry, including links omitted from the manifest.
-      if (options.symbolicLinks === 'skip') {
-        if (record.startsWith('120000 blob ')) {
-          return ok(undefined);
-        }
+  const read = await readPublishRecords(git.root, ['ls-tree', '-r', '-l', '-z', tree], publishGitEnvironment(git), async (record) => {
+    // Startup omits links from its checkout; captures still reject links by default.
+    // The record reader bounds every entry, including links omitted from the manifest.
+    if (options.symbolicLinks === 'skip') {
+      if (record.startsWith('120000 blob ')) {
+        return ok(undefined);
       }
-      const parsed = parsePublishTreeFile(record);
-      if (!parsed.ok) {
-        return parsed;
-      }
-      bytes += parsed.value.size;
-      if (bytes > limits.sourceBytesMax) {
-        return err({ code: 'size', message: 'Captured source exceeds 8 GiB.' });
-      }
-      files.push(parsed.value);
-      return ok(undefined);
-    },
-  );
+    }
+    const parsed = parsePublishTreeFile(record);
+    if (!parsed.ok) {
+      return parsed;
+    }
+    bytes += parsed.value.size;
+    if (bytes > limits.sourceBytesMax) {
+      return err({ code: 'size', message: 'Captured source exceeds 8 GiB.' });
+    }
+    files.push(parsed.value);
+    return ok(undefined);
+  });
   assert(files.length <= limits.filesMax, 'Captured file count remains bounded');
   return read.ok ? ok(files) : read;
 }
@@ -145,27 +133,14 @@ export async function sourceRoots(root: string): Promise<readonly string[]> {
   return starts;
 }
 
-async function capturePublishTree(
-  git: PublishGit,
-  files: readonly string[],
-  temporary: string,
-): Promise<Result<string>> {
+async function capturePublishTree(git: PublishGit, files: readonly string[], temporary: string): Promise<Result<string>> {
   const list = path.join(temporary, 'paths');
-  const written = await writeFile(list, files.join('\0') + (files.length ? '\0' : '')).then(
-    ok,
-    publishFailure,
-  );
+  const written = await writeFile(list, files.join('\0') + (files.length ? '\0' : '')).then(ok, publishFailure);
   if (!written.ok) {
     return written;
   }
   if (files.length > 0) {
-    const added = await publishGit(git, [
-      '--literal-pathspecs',
-      'add',
-      '--force',
-      '--pathspec-from-file=' + list,
-      '--pathspec-file-nul',
-    ]);
+    const added = await publishGit(git, ['--literal-pathspecs', 'add', '--force', '--pathspec-from-file=' + list, '--pathspec-file-nul']);
     if (!added.ok) {
       return added;
     }

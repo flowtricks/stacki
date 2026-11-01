@@ -4,10 +4,7 @@ import { RefreshIcon } from '../../ui/Icons';
 import Dropdown from '../../ui/Dropdown';
 import Popup from '../../ui/Popup';
 import { publishingRepositories } from '../../ipc/publishRepositoryBridge';
-import type {
-  PublishingRepositories,
-  RepositoryRequest,
-} from '../../../shared/ipc/publishRepository';
+import type { PublishingRepositories, RepositoryRequest } from '../../../shared/ipc/publishRepository';
 import { cleanError } from '../../lib/cleanError';
 
 type Connection = Extract<RepositoryRequest, { readonly action: 'connect' }>;
@@ -18,11 +15,8 @@ interface Props {
   readonly change: (selection: Connection | undefined) => void;
   readonly busy: (busy: boolean) => void;
 }
-type SettledState =
-  | { readonly kind: 'ready'; readonly value: PublishingRepositories }
-  | { readonly kind: 'failed'; readonly message: string };
-type State =
-  SettledState | { readonly kind: 'loading'; readonly previous: SettledState | undefined };
+type SettledState = { readonly kind: 'ready'; readonly value: PublishingRepositories } | { readonly kind: 'failed'; readonly message: string };
+type State = SettledState | { readonly kind: 'loading'; readonly previous: SettledState | undefined };
 
 export function PublishRepositories(props: Props) {
   const { state, setState, refresh } = useRepositoryList(props.projectPath, props.account);
@@ -31,11 +25,7 @@ export function PublishRepositories(props: Props) {
   const displayed = state.kind === 'loading' ? state.previous : state;
   const ready = displayed?.kind === 'ready' ? displayed.value : undefined;
   return (
-    <div
-      className="publish-field"
-      aria-busy={state.kind === 'loading' && !!account}
-      data-loading={state.kind === 'loading' && !!account && !displayed}
-    >
+    <div className="publish-field" aria-busy={state.kind === 'loading' && !!account} data-loading={state.kind === 'loading' && !!account && !displayed}>
       <div className="publish-field-heading">
         <div className="publish-label-refresh">
           <span className="publish-label">GitHub repository</span>
@@ -50,12 +40,7 @@ export function PublishRepositories(props: Props) {
           </button>
         </div>
         <div className="publish-field-actions">
-          <button
-            type="button"
-            className="publish-refresh"
-            disabled={!account || ready?.mode === 'managed'}
-            onClick={() => setAdding(true)}
-          >
+          <button type="button" className="publish-refresh" disabled={!account || ready?.mode === 'managed'} onClick={() => setAdding(true)}>
             Add repo
           </button>
         </div>
@@ -83,21 +68,13 @@ function RepositoryChoice(props: Props & { readonly state: SettledState | undefi
   const ready = props.state?.kind === 'ready' ? props.state.value : undefined;
   const selection = props.selection?.account === props.account ? props.selection : undefined;
   const selected = selection?.repository ?? ready?.connected ?? '';
-  const repositories = [
-    ...new Set([...(ready?.repositories ?? []), ...(selected ? [selected] : [])]),
-  ];
+  const repositories = [...new Set([...(ready?.repositories ?? []), ...(selected ? [selected] : [])])];
   return (
     <Dropdown
       ariaLabel="GitHub repository"
       value={selected}
       options={repositories.map((repository) => ({ value: repository, label: repository }))}
-      placeholder={
-        !props.account
-          ? 'Choose a GitHub account first'
-          : props.state === undefined
-            ? 'Loading repositories…'
-            : 'Choose repository…'
-      }
+      placeholder={!props.account ? 'Choose a GitHub account first' : props.state === undefined ? 'Loading repositories…' : 'Choose repository…'}
       disabled={props.state?.kind !== 'ready' || ready?.mode === 'managed'}
       searchable={repositories.length > 6}
       searchPlaceholder="Find repository…"
@@ -105,11 +82,7 @@ function RepositoryChoice(props: Props & { readonly state: SettledState | undefi
       livePreview={false}
       onChange={(repository) => {
         if (ready) {
-          props.change(
-            repository === ready.connected
-              ? undefined
-              : { action: 'connect', account: props.account, repository, revision: ready.revision },
-          );
+          props.change(repository === ready.connected ? undefined : { action: 'connect', account: props.account, repository, revision: ready.revision });
         }
       }}
     />
@@ -121,27 +94,16 @@ interface NewRepositoryProps extends Props {
   readonly created: (value: PublishingRepositories, repository: string) => void;
 }
 function NewRepository(props: NewRepositoryProps) {
-  const { name, setName, visibility, setVisibility, state, error, create } =
-    useNewRepository(props);
+  const { name, setName, visibility, setVisibility, state, error, create } = useNewRepository(props);
   return (
-    <Popup
-      className="modal publish-settings publish-new-repository"
-      label="Create repository"
-      onClose={props.close}
-      dismissible={state === 'editing'}
-    >
+    <Popup className="modal publish-settings publish-new-repository" label="Create repository" onClose={props.close} dismissible={state === 'editing'}>
       {({ close }) => (
         <>
           <div className="modal-header">Create repository</div>
           <div className="modal-body publish-fields" aria-busy={state === 'creating'}>
             <label>
               Repository name
-              <input
-                value={name}
-                maxLength={100}
-                disabled={state === 'creating'}
-                onChange={(event) => setName(event.target.value)}
-              />
+              <input value={name} maxLength={100} disabled={state === 'creating'} onChange={(event) => setName(event.target.value)} />
             </label>
             <div className="publish-field">
               <span className="publish-label">Visibility</span>
@@ -158,21 +120,14 @@ function NewRepository(props: NewRepositoryProps) {
                 disabled={state === 'creating'}
               />
             </div>
-            <p className="hint-text">
-              Creates an empty repo in {props.account}. Save Publish settings to connect it.
-            </p>
+            <p className="hint-text">Creates an empty repo in {props.account}. Save Publish settings to connect it.</p>
             {error && <ErrorToast message={error} />}
           </div>
           <div className="modal-footer">
             <button type="button" disabled={state === 'creating'} onClick={close}>
               Cancel
             </button>
-            <button
-              type="button"
-              className="primary"
-              disabled={!name || state === 'creating'}
-              onClick={() => void create()}
-            >
+            <button type="button" className="primary" disabled={!name || state === 'creating'} onClick={() => void create()}>
               {state === 'creating' ? 'Creating…' : 'Create repo'}
             </button>
           </div>
@@ -228,11 +183,7 @@ function useRepositoryList(projectPath: string, account: string) {
       void publishingRepositories(projectPath, { action: 'list', account })
         .then((result) => {
           if (active) {
-            setState(
-              result.ok
-                ? { kind: 'ready', value: result.value }
-                : { kind: 'failed', message: result.error },
-            );
+            setState(result.ok ? { kind: 'ready', value: result.value } : { kind: 'failed', message: result.error });
           }
         })
         .catch((failure: unknown) => {

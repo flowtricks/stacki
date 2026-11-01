@@ -30,15 +30,11 @@ export type Digest = Brand<string, 'Digest'>;
  * The renderer carries its own handles across parses (src/editor/nodeHandles.ts):
  * `s<16 hex>.<path>` names a node by the snapshot it first appeared in, and
  * `g<32 hex>` a node a gesture created, before any parse has seen it. */
-const NODE_ID_RE =
-  /^(?:n\d+(?:\.\d+)*|m\d+|layout|s[0-9a-f]{16}\.\d+(?:\.\d+)*(?:~\d+)?|g[0-9a-f]{32})$/;
+const NODE_ID_RE = /^(?:n\d+(?:\.\d+)*|m\d+|layout|s[0-9a-f]{16}\.\d+(?:\.\d+)*(?:~\d+)?|g[0-9a-f]{32})$/;
 
 export function toNodeId(value: string): NodeId {
   if (!NODE_ID_RE.test(value)) {
-    throw new Error(
-      `NodeId: expected 'n<path>', 'm<N>', 'layout', 's<snapshot>.<path>' or 'g<gesture>', ` +
-        `got ${JSON.stringify(value)}`,
-    );
+    throw new Error(`NodeId: expected 'n<path>', 'm<N>', 'layout', 's<snapshot>.<path>' or 'g<gesture>', ` + `got ${JSON.stringify(value)}`);
   }
   return value as NodeId;
 }

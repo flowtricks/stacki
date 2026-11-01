@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const auth = process.env['STUDIO_STORAGE_STATE'];
@@ -35,25 +34,13 @@ try {
   const pendingBox = await row('Choice').boundingBox();
   releaseCounts();
   await row('Choice').locator('.palette-instances').waitFor();
-  assert.deepEqual(
-    await row('Choice').boundingBox(),
-    pendingBox,
-    'Loading instance counts must not move or resize rows',
-  );
+  assert.deepEqual(await row('Choice').boundingBox(), pendingBox, 'Loading instance counts must not move or resize rows');
   await page.clock.install();
   await page.clock.pauseAt(new Date());
   await row('Choice').hover();
-  assert.equal(
-    await page.locator('.comp-preview').isVisible(),
-    true,
-    'The card opens without advancing any timer',
-  );
+  assert.equal(await page.locator('.comp-preview').isVisible(), true, 'The card opens without advancing any timer');
   await page.getByPlaceholder('Search components').hover();
-  assert.equal(
-    await page.locator('.comp-preview').count(),
-    0,
-    'Leaving dismisses the card immediately',
-  );
+  assert.equal(await page.locator('.comp-preview').count(), 0, 'Leaving dismisses the card immediately');
   await page.clock.resume();
 
   await row('Choice').hover();
@@ -94,18 +81,14 @@ try {
   assert.equal(await page.locator('.comp-preview').count(), 0);
   assert.equal(await source(page), before, 'Hover previews must never edit the page');
   assert.deepEqual(errors, []);
-  console.log(
-    'Instant component hover, content, defaults, fitting, switching, empty suppression, and dismissal passed.',
-  );
+  console.log('Instant component hover, content, defaults, fitting, switching, empty suppression, and dismissal passed.');
 } finally {
   releaseCounts();
   await browser.close();
 }
 
 async function source(page: Page) {
-  const response = await page.request.get(
-    new URL('/studio/api/file?file=src/pages/index.astro', page.url()).href,
-  );
+  const response = await page.request.get(new URL('/studio/api/file?file=src/pages/index.astro', page.url()).href);
   assert.ok(response.ok());
   return response.text();
 }
@@ -122,12 +105,7 @@ async function fitted(page: Page, name: string) {
       children.length > 0 &&
       children.every((child) => {
         const box = child.getBoundingClientRect();
-        return (
-          box.left >= 11 &&
-          box.top >= 11 &&
-          box.right <= innerWidth - 11 &&
-          box.bottom <= innerHeight - 11
-        );
+        return box.left >= 11 && box.top >= 11 && box.right <= innerWidth - 11 && box.bottom <= innerHeight - 11;
       })
     );
   });

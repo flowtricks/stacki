@@ -1,12 +1,7 @@
 import type { CanvasTextDocument } from '../../features/preview/useCanvasText';
 import { canvasContentBinding } from '../../features/preview/canvasContentBinding';
 import { canvasTextNodes, canvasTextTarget } from '../../features/preview/canvasTextSource';
-import {
-  readContentEntries,
-  validateContentEntry,
-  writeContentEntry,
-  type ContentEntry,
-} from '../../features/content/contentViewBridge';
+import { readContentEntries, validateContentEntry, writeContentEntry, type ContentEntry } from '../../features/content/contentViewBridge';
 
 import type { CanvasTextEdit } from '../../features/preview/canvasTextSource';
 
@@ -16,9 +11,7 @@ export async function canvasContentEdits(document: CanvasTextDocument): Promise<
     .filter((entry) => !entry.scoped)
     .flatMap(({ node, parent }) => {
       const binding = canvasContentBinding(document.source, node);
-      return binding && parent && ['element', 'component'].includes(parent.kind)
-        ? [{ node, parent, binding }]
-        : [];
+      return binding && parent && ['element', 'component'].includes(parent.kind) ? [{ node, parent, binding }] : [];
     });
   if (candidates.length > 32) {
     return [];
@@ -32,9 +25,7 @@ export async function canvasContentEdits(document: CanvasTextDocument): Promise<
     if (!loaded.ok || loaded.value.readOnly || loaded.value.idsAreGuesses) {
       continue;
     }
-    for (const { node, parent, binding } of candidates.filter(
-      (item) => item.binding.collection === name,
-    )) {
+    for (const { node, parent, binding } of candidates.filter((item) => item.binding.collection === name)) {
       const matches = loaded.value.entries.filter((entry) => entry.id === binding.entry);
       const entry = matches.length === 1 ? matches[0] : undefined;
       if (!entry || entry.error) {
@@ -44,13 +35,7 @@ export async function canvasContentEdits(document: CanvasTextDocument): Promise<
       if (typeof value !== 'string') {
         continue;
       }
-      const target = canvasTextTarget(
-        node,
-        parent,
-        value,
-        'Shared CMS content · changes other uses too',
-        document.pathFor,
-      );
+      const target = canvasTextTarget(node, parent, value, 'Shared CMS content · changes other uses too', document.pathFor);
       if (target) {
         edits.push({ target, apply: (next) => saveContentText(document, entry, binding, next) });
       }
@@ -71,17 +56,9 @@ async function saveContentText(
     throw new Error(validation.error);
   }
   if (validation.value.error || validation.value.issues.length) {
-    throw new Error(
-      validation.value.error ?? validation.value.issues[0]?.message ?? 'Invalid text',
-    );
+    throw new Error(validation.value.error ?? validation.value.issues[0]?.message ?? 'Invalid text');
   }
-  const saved = await writeContentEntry(
-    document.projectPath,
-    entry,
-    [{ path: binding.fields, value }],
-    undefined,
-    { data: entry.data, body: entry.body },
-  );
+  const saved = await writeContentEntry(document.projectPath, entry, [{ path: binding.fields, value }], undefined, { data: entry.data, body: entry.body });
   if (!saved.ok) {
     throw new Error(saved.error);
   }
@@ -105,12 +82,7 @@ function replaceField(input: unknown, fields: readonly string[], value: string):
   const parents: { readonly value: object; readonly field: string }[] = [];
   let current = input;
   for (const field of fields) {
-    if (
-      typeof current !== 'object' ||
-      current === null ||
-      Array.isArray(current) ||
-      !Object.hasOwn(current, field)
-    ) {
+    if (typeof current !== 'object' || current === null || Array.isArray(current) || !Object.hasOwn(current, field)) {
       throw new Error('The CMS field no longer exists');
     }
     parents.push({ value: current, field });

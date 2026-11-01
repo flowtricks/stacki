@@ -16,18 +16,11 @@ import { projectRelativePath } from '../../lib/projectPath';
 import { isOpenFile } from '../../editor/pageState';
 import { type EditorNode } from '../../editor/pageView';
 import { writeProjectFile, checkPreviewRender } from '../../ipc/appBridge';
-import {
-  judgeCanvasEvent,
-  type CheckRender,
-  type ShownFile,
-} from '../../features/preview/previewGate';
+import { judgeCanvasEvent, type CheckRender, type ShownFile } from '../../features/preview/previewGate';
 import { describePreviewStale, type PreviewVerdict } from '../../../shared/page/previewToken';
 import { PreviewOrigins, judgeRememberedClick } from '../../features/preview/previewSelection';
 import type { JudgeCanvasEvent } from '../../features/preview/previewRuntime';
-import {
-  describePreviewReload,
-  type PreviewReloadReason,
-} from '../../features/preview/previewMessages';
+import { describePreviewReload, type PreviewReloadReason } from '../../features/preview/previewMessages';
 import { trailOf } from '../model/pageGestures';
 import { emptyNodeIdsOf } from '../model/pageQueries';
 import { useCoreState } from './appLifecycle';
@@ -64,9 +57,7 @@ export function useCanvasGate(
       if (!projectPath || !saver) {
         return;
       }
-      saver.schedule(`${projectPath}|${area || 'public'}|${rel}`, () =>
-        writeProjectFile(area ?? 'public', projectPath, rel, text),
-      );
+      saver.schedule(`${projectPath}|${area || 'public'}|${rel}`, () => writeProjectFile(area ?? 'public', projectPath, rel, text));
     },
     [codeWin, fileSaverRef, projectRef, setFileText],
   );
@@ -101,9 +92,7 @@ export function useCanvasGate(
       };
       const projectPath = projectRef.current?.path;
       const check: CheckRender = (checked) =>
-        projectPath
-          ? checkPreviewRender(projectPath, checked)
-          : Promise.resolve<PreviewVerdict>({ tag: 'stale', reason: 'no-render', file: undefined });
+        projectPath ? checkPreviewRender(projectPath, checked) : Promise.resolve<PreviewVerdict>({ tag: 'stale', reason: 'no-render', file: undefined });
       return request.kind === 'click'
         ? judgeRememberedClick(token, render, request.path, origins.current, check, shown)
         : judgeCanvasEvent(token, render, check, shown);
@@ -114,10 +103,7 @@ export function useCanvasGate(
 }
 
 // Retain only this file session's saved models while its canvas catches up.
-function usePreviewOrigins({
-  currentPage,
-  pageState,
-}: Pick<ReturnType<typeof useCoreState>, 'currentPage' | 'pageState'>) {
+function usePreviewOrigins({ currentPage, pageState }: Pick<ReturnType<typeof useCoreState>, 'currentPage' | 'pageState'>) {
   const origins = useRef(new PreviewOrigins());
   origins.current.remember(currentPage?.path, pageState?.editable ? pageState.origin : undefined);
   return origins;
@@ -170,21 +156,12 @@ export function useCanvasNotices(
   );
 
   const editedRel =
-    editStack.length > 1 && project?.path
-      ? projectRelativePath(
-          project.path,
-          editStack[editStack.length - 1]?.path ?? '',
-          window.avb.platform,
-        )
-      : undefined;
+    editStack.length > 1 && project?.path ? projectRelativePath(project.path, editStack[editStack.length - 1]?.path ?? '', window.avb.platform) : undefined;
 
   // The reported classes, keyed by node id — same walk as the render report,
   // so a path only has to be resolved once.
   const liveClassesById = React.useMemo(
-    () =>
-      nodeClasses && model
-        ? classesByNodeId(nodeClasses, model.nodes, editedRel ? `${editedRel}|` : '')
-        : undefined,
+    () => (nodeClasses && model ? classesByNodeId(nodeClasses, model.nodes, editedRel ? `${editedRel}|` : '') : undefined),
     [nodeClasses, model, editedRel],
   );
 
@@ -255,8 +232,7 @@ export function useCrumbLabels(
 
   // The file being edited, relative to src/ — how the CMS addresses a page's
   // own data (`pages/index.astro#rotatingWords`).
-  const openEditableFile =
-    editStack[editStack.length - 1] ?? (currentPage?.kind === 'route' ? undefined : currentPage);
+  const openEditableFile = editStack[editStack.length - 1] ?? (currentPage?.kind === 'route' ? undefined : currentPage);
   const openFileSourceRel = (() => {
     const path = openEditableFile?.path;
     if (!path || !project?.path) {
@@ -309,11 +285,7 @@ export function useCanvasMarks(
     // A then has no row in the navigator, so the trail doesn't name it either —
     // "if command › then › hero-command" said "then" to no one (see
     // branches.js).
-    crumbs.push(
-      ...chain
-        .filter((node, i) => node !== thenBranch(chain[i - 1]))
-        .map((node) => ({ id: node.id, label: crumbLabel(node) })),
-    );
+    crumbs.push(...chain.filter((node, i) => node !== thenBranch(chain[i - 1])).map((node) => ({ id: node.id, label: crumbLabel(node) })));
   }
 
   // Canvas outlines: nodes are addressed by their index path in the tree
@@ -330,8 +302,7 @@ export function useCanvasMarks(
   // including nodes inside a component that never evaluated its slot, whose
   // markers were never emitted at all.
   const emptyNodeIds = React.useMemo(
-    () =>
-      renderedPaths && model ? emptyNodeIdsOf(renderedPaths, model.nodes, editedRel) : undefined,
+    () => (renderedPaths && model ? emptyNodeIdsOf(renderedPaths, model.nodes, editedRel) : undefined),
     [renderedPaths, model, editedRel],
   );
 
@@ -343,8 +314,7 @@ export function useCanvasMarks(
       return empty;
     }
     const prefix = editedRel ? `${editedRel}|` : '';
-    const local = (path: string): string =>
-      prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
+    const local = (path: string): string => (prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path);
     const ids = (paths: readonly string[]): ReadonlySet<string> => {
       const set = new Set<string>();
       for (const path of paths || []) {
@@ -410,16 +380,10 @@ export function useSelectionPaths(
           .slice(1)
           .map((entry, i) => {
             const host = relOf(editStack[i]?.path);
-            return entry.hostKey && host
-              ? `${host}#${trailOf(entry.hostKey).join('.')}`
-              : undefined;
+            return entry.hostKey && host ? `${host}#${trailOf(entry.hostKey).join('.')}` : undefined;
           })
           .filter((key): key is string => key !== undefined),
-        selectedId === 'frontmatter'
-          ? `${openRel}#frontmatter`
-          : leafPath !== undefined
-            ? `${openRel}#${leafPath}`
-            : `${openRel}#`,
+        selectedId === 'frontmatter' ? `${openRel}#frontmatter` : leafPath !== undefined ? `${openRel}#${leafPath}` : `${openRel}#`,
       ];
 
   // Position the Style/Settings highlight: on tab change, when the panel first
@@ -427,9 +391,7 @@ export function useSelectionPaths(
   useLayoutEffect(() => {
     const measure = () => {
       const tabButton = rightTabRefs.current[rightTab];
-      setRightTabInd(
-        tabButton ? { left: tabButton.offsetLeft, width: tabButton.offsetWidth } : undefined,
-      );
+      setRightTabInd(tabButton ? { left: tabButton.offsetLeft, width: tabButton.offsetWidth } : undefined);
     };
     measure();
     const strip = rightTabRefs.current[rightTab]?.parentElement;
@@ -461,8 +423,7 @@ export function useOverlayInfo(
     if (!node) {
       return undefined;
     }
-    const label =
-      node.id === 'layout' ? currentLayoutName || node.name || 'layout' : crumbLabel(node);
+    const label = node.id === 'layout' ? currentLayoutName || node.name || 'layout' : crumbLabel(node);
     // Fragments group inline content rather than referring to another component.
     // Their outlines use ordinary element styling, as dynamic tags already do.
     const kind = isFragmentNode(node)

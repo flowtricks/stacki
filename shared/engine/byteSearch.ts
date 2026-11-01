@@ -11,11 +11,7 @@ import type { ByteString } from '../core/span';
 
 /** How many times `needle` occurs in `haystack`, overlapping occurrences
  * included, counted up to `countMax` and no further. */
-export function countOccurrences(
-  haystack: ByteString,
-  needle: ByteString,
-  countMax: number,
-): number {
+export function countOccurrences(haystack: ByteString, needle: ByteString, countMax: number): number {
   assert(needle.length > 0, 'Only a non-empty needle is searched for');
   assert(haystack.length <= LIMITS.sourceBytesMax, 'The haystack is inside the source bound');
   assert(Number.isSafeInteger(countMax), 'The count bound is an integer');
@@ -56,12 +52,7 @@ function failureTable(needle: ByteString): Uint32Array {
 
 /** The matched prefix length after reading `byte`, falling back along the
  * failure table until the byte extends a prefix or none is left. */
-function extendMatch(
-  needle: ByteString,
-  failure: Uint32Array,
-  matched: number,
-  byte: number | undefined,
-): number {
+function extendMatch(needle: ByteString, failure: Uint32Array, matched: number, byte: number | undefined): number {
   assert(byte !== undefined, 'The byte read lies inside its array');
   assert(matched < needle.length, 'A full match was reset before the next byte');
   let length = matched;

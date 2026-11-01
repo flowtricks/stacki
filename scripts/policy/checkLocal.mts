@@ -18,12 +18,7 @@ const checks: readonly {
         { name: 'ESLint', run: () => runEslint(root, ['.']) },
         {
           name: 'Prettier',
-          run: () =>
-            runChild(
-              process.execPath,
-              [path.join(root, 'node_modules/prettier/bin/prettier.cjs'), '--check', '.'],
-              { cwd: root },
-            ),
+          run: () => runChild(process.execPath, [path.join(root, 'node_modules/prettier/bin/prettier.cjs'), '--check', '.'], { cwd: root }),
         },
         {
           name: 'Repository policy',

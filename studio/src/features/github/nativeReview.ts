@@ -3,10 +3,7 @@ import { publishGit, publishObject, type PublishGit } from '../publishing/publis
 import type { PublishSource } from '../publishing/publishSource';
 import type { PublishConnection } from '../../shared/publishConnection';
 import { err, type Result } from '../../../vendor/stacki/shared/core/result';
-import {
-  reviewBranch,
-  type ReviewReceipt,
-} from '../../../vendor/stacki/shared/properties/publishReview';
+import { reviewBranch, type ReviewReceipt } from '../../../vendor/stacki/shared/properties/publishReview';
 import { openPublishReview } from '../../../vendor/stacki/electron/project/publishReviewRequest';
 import { overlayPublishSource } from './nativePublish';
 
@@ -18,15 +15,7 @@ export async function nativeReview(
 ): Promise<Result<ReviewReceipt>> {
   const git = { ...source.git, authorization: connection.token };
   const remote = `https://github.com/${connection.repository}.git`;
-  const fetched = await publishGit(git, [
-    'fetch',
-    '--quiet',
-    '--depth=1',
-    '--filter=blob:none',
-    '--no-tags',
-    remote,
-    'refs/heads/' + connection.branch,
-  ]);
+  const fetched = await publishGit(git, ['fetch', '--quiet', '--depth=1', '--filter=blob:none', '--no-tags', remote, 'refs/heads/' + connection.branch]);
   if (!fetched.ok) {
     return fetched;
   }
@@ -70,13 +59,7 @@ export async function nativeReview(
   });
 }
 
-async function nativeReviewCommit(
-  git: PublishGit,
-  remote: string,
-  branch: string,
-  tree: string,
-  parent: string,
-): Promise<Result<string>> {
+async function nativeReviewCommit(git: PublishGit, remote: string, branch: string, tree: string, parent: string): Promise<Result<string>> {
   const existing = await publishGit(git, ['ls-remote', '--refs', remote, 'refs/heads/' + branch]);
   if (!existing.ok) {
     return existing;
@@ -98,18 +81,10 @@ async function nativeReviewCommit(
       ? commit
       : err({
           code: 'review-changed',
-          message:
-            'This review branch was changed externally. Review it on GitHub before retrying.',
+          message: 'This review branch was changed externally. Review it on GitHub before retrying.',
         });
   }
-  const created = await publishGit(git, [
-    'commit-tree',
-    tree,
-    '-p',
-    parent,
-    '-m',
-    'Submit website changes for review',
-  ]);
+  const created = await publishGit(git, ['commit-tree', tree, '-p', parent, '-m', 'Submit website changes for review']);
   if (!created.ok) {
     return created;
   }
@@ -117,11 +92,6 @@ async function nativeReviewCommit(
   if (!commit.ok) {
     return commit;
   }
-  const pushed = await publishGit(git, [
-    'push',
-    '--quiet',
-    remote,
-    `${commit.value}:refs/heads/${branch}`,
-  ]);
+  const pushed = await publishGit(git, ['push', '--quiet', remote, `${commit.value}:refs/heads/${branch}`]);
   return pushed.ok ? commit : pushed;
 }

@@ -7,14 +7,7 @@ import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import { toArray, toRecord } from '../../../shared/core/record';
 import { blankItem, contentFieldsOf, isExpr, titleOf, EXPR_KEY } from './cmsSchema';
-import {
-  ChevronRightIcon,
-  CloseIcon,
-  DragIcon,
-  PlusIcon,
-  TrashIcon,
-  VariableTextSizeIcon,
-} from '../../ui/Icons';
+import { ChevronRightIcon, CloseIcon, DragIcon, PlusIcon, TrashIcon, VariableTextSizeIcon } from '../../ui/Icons';
 import AssetField from '../../ui/AssetField';
 import AutoTextarea from '../../ui/AutoTextarea';
 import CalendarField from '../../ui/DateField';
@@ -82,11 +75,7 @@ export default function CmsField({ label, type, depth = 0, ...props }: CmsFieldP
     shown.current = type;
   }
   return (
-    <div
-      className={`cms-field ${shown.current}`}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-    >
+    <div className={`cms-field ${shown.current}`} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>
       <LocalField {...props} label={label} type={shown.current} depth={depth} />
     </div>
   );
@@ -168,46 +157,20 @@ function FieldControl(props: ControlProps) {
     case 'color':
       return <ColorField value={value} onChange={onChange} />;
     case 'longtext':
-      return (
-        <AutoTextarea
-          value={fieldText(value)}
-          minRows={3}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
+      return <AutoTextarea value={fieldText(value)} minRows={3} onChange={(event) => onChange(event.target.value)} />;
     case 'list':
       return <ListField value={toArray(value) ?? []} onChange={onChange} />;
     case 'object':
-      return (
-        <GroupEditor
-          {...context}
-          value={toRecord(value) ?? {}}
-          onChange={onChange}
-          depth={depth + 1}
-        />
-      );
+      return <GroupEditor {...context} value={toRecord(value) ?? {}} onChange={onChange} depth={depth + 1} />;
     case 'objects':
-      return (
-        <RepeaterEditor
-          {...context}
-          value={toArray(value) ?? []}
-          onChange={onChange}
-          depth={depth + 1}
-        />
-      );
+      return <RepeaterEditor {...context} value={toArray(value) ?? []} onChange={onChange} depth={depth + 1} />;
     case 'link':
     case 'email':
     case 'phone':
       return <AddressField {...props} type={type} />;
     case 'empty':
     case 'text':
-      return (
-        <input
-          value={fieldText(value)}
-          maxLength={BOUNDARY_LIMITS.textLengthMax}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
+      return <input value={fieldText(value)} maxLength={BOUNDARY_LIMITS.textLengthMax} onChange={(event) => onChange(event.target.value)} />;
     default: {
       const exhaustive: never = type;
       return exhaustive;
@@ -237,11 +200,7 @@ function CodeField({ value, onChange }: ScalarProps) {
 }
 function ToggleField({ value, onChange }: ScalarProps) {
   return (
-    <button
-      type="button"
-      className={`cms-toggle ${value ? 'on' : ''}`}
-      onClick={() => onChange(!value)}
-    >
+    <button type="button" className={`cms-toggle ${value ? 'on' : ''}`} onClick={() => onChange(!value)}>
       <span className="cms-toggle-knob" />
       <span className="cms-toggle-label">{value ? 'On' : 'Off'}</span>
     </button>
@@ -265,13 +224,7 @@ function NumberField({ value, onChange }: ScalarProps) {
     />
   );
 }
-function ImageField({
-  value,
-  onChange,
-  pickAsset,
-  projectPath,
-  baseDir: baseDirectory,
-}: ValueProps) {
+function ImageField({ value, onChange, pickAsset, projectPath, baseDir: baseDirectory }: ValueProps) {
   const asset = isExpr(value) ? value['__asset'] : undefined;
   const reference = typeof asset === 'string' ? asset : undefined;
   return (
@@ -343,11 +296,7 @@ function ListEditor({ value, onChange }: ListProps) {
               onChange(value.map((item, position) => (position === index ? next : item)));
             }}
           />
-          <button
-            className="ghost"
-            title="Remove"
-            onClick={() => onChange(value.filter((_, position) => position !== index))}
-          >
+          <button className="ghost" title="Remove" onClick={() => onChange(value.filter((_, position) => position !== index))}>
             <CloseIcon size={10} />
           </button>
         </div>
@@ -364,26 +313,14 @@ function ListEditor({ value, onChange }: ListProps) {
     </div>
   );
 }
-function ListValue({
-  value,
-  onChange,
-}: {
-  readonly value: string;
-  readonly onChange: (value: string) => void;
-}) {
+function ListValue({ value, onChange }: { readonly value: string; readonly onChange: (value: string) => void }) {
   if (containsHTML(value)) {
     return <HtmlField value={value} onChange={onChange} />;
   }
   if (calendarValue(value)) {
     return <CalendarField value={value} onChange={onChange} />;
   }
-  return (
-    <input
-      value={value}
-      maxLength={BOUNDARY_LIMITS.textLengthMax}
-      onChange={(event) => onChange(event.target.value)}
-    />
-  );
+  return <input value={value} maxLength={BOUNDARY_LIMITS.textLengthMax} onChange={(event) => onChange(event.target.value)} />;
 }
 function GroupEditor({ value, onChange, ...context }: GroupProps) {
   const fields = contentFieldsOf([value]);
@@ -456,12 +393,7 @@ function RepeaterEditor(props: RepeaterProps) {
   return (
     <div className="cms-repeater">
       {value.map((entry, index) => (
-        <div
-          key={index}
-          className={`cms-repeat-row ${reorder.rowClass(index)}`}
-          {...reorder.rowProps(index)}
-          onClick={() => setOpenIndex(index)}
-        >
+        <div key={index} className={`cms-repeat-row ${reorder.rowClass(index)}`} {...reorder.rowProps(index)} onClick={() => setOpenIndex(index)}>
           <span className="cms-repeat-grip">
             <DragIcon size={11} />
           </span>
@@ -487,9 +419,7 @@ function RepeaterEditor(props: RepeaterProps) {
           {...context}
           entry={value[openIndex]}
           title={titleOf(value[openIndex], openIndex)}
-          onChange={(next) =>
-            onChange(value.map((entry, index) => (index === openIndex ? next : entry)))
-          }
+          onChange={(next) => onChange(value.map((entry, index) => (index === openIndex ? next : entry)))}
           onDelete={() => removeAt(openIndex)}
           onClose={() => setOpenIndex(undefined)}
         />
@@ -521,11 +451,7 @@ function NestedItemDialog({ entry, title, onChange, onDelete, onClose, ...contex
                 onChange={(next) => onChange({ ...value, [field.key]: next })}
               />
             ))}
-            {fields.length === 0 && (
-              <div className="cms-empty-inline">
-                These items have no fields yet — add them in the collection's settings.
-              </div>
-            )}
+            {fields.length === 0 && <div className="cms-empty-inline">These items have no fields yet — add them in the collection's settings.</div>}
           </div>
           <div className="modal-footer cms-modal-footer">
             <button className="ghost danger cms-delete-action" onClick={onDelete}>

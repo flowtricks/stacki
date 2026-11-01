@@ -6,9 +6,7 @@ interface SlotBase {
   readonly block: VariableBlock;
   readonly bi: number;
 }
-export type VariableSlot =
-  | (SlotBase & { readonly kind: 'heading' | 'end' })
-  | (SlotBase & { readonly kind: 'row'; readonly row: VariableRow });
+export type VariableSlot = (SlotBase & { readonly kind: 'heading' | 'end' }) | (SlotBase & { readonly kind: 'row'; readonly row: VariableRow });
 export type VariableMove = {
   readonly file: string;
   readonly selector: string;
@@ -26,11 +24,7 @@ export interface VariableRename {
   readonly to: string;
 }
 
-export function dropPlan(
-  slots: readonly VariableSlot[],
-  from: number,
-  to: number,
-): DropPlan | undefined {
+export function dropPlan(slots: readonly VariableSlot[], from: number, to: number): DropPlan | undefined {
   assertSlots(slots, from, to);
   const source = slots[from];
   if (!source) {
@@ -57,11 +51,7 @@ export function dropPlan(
   return { kind: 'rows', moves: movesForDrop(slots, from, to) };
 }
 
-export function movesForDrop(
-  slots: readonly VariableSlot[],
-  from: number,
-  to: number,
-): readonly VariableMove[] {
+export function movesForDrop(slots: readonly VariableSlot[], from: number, to: number): readonly VariableMove[] {
   assertSlots(slots, from, to);
   const source = slots[from];
   if (!source || source.kind !== 'row') {
@@ -79,9 +69,7 @@ export function movesForDrop(
   if (landing?.kind === 'row' && landing.row === source.row) {
     return [];
   }
-  return source.row.cells.flatMap((cell, index) =>
-    cell ? [moveToSlot(cell, index, landing)] : [],
-  );
+  return source.row.cells.flatMap((cell, index) => (cell ? [moveToSlot(cell, index, landing)] : []));
 }
 
 export function stemOf(block: VariableBlock): string {
@@ -105,11 +93,7 @@ export function sectionPrefix(block: VariableBlock): string | undefined {
   }
   return rows.every((row) => row.name?.startsWith('--' + title + '-')) ? title : undefined;
 }
-export function rowRenames(
-  block: VariableBlock,
-  row: VariableRow,
-  typed: string,
-): readonly VariableRename[] {
+export function rowRenames(block: VariableBlock, row: VariableRow, typed: string): readonly VariableRename[] {
   assert(typed.length <= LIMITS.attrCharsMax, 'Variable rows: name limit exceeded');
   assert(row.cells.length <= LIMITS.scanEntriesMax, 'Variable rows: column limit exceeded');
   const next = typed.trim().replace(/^--/, '');
@@ -137,11 +121,7 @@ export function rowRenames(
   return to === row.name ? [] : [{ from: row.name, to }];
 }
 
-function moveToSlot(
-  cell: VariableCell,
-  index: number,
-  landing: VariableSlot | undefined,
-): VariableMove {
+function moveToSlot(cell: VariableCell, index: number, landing: VariableSlot | undefined): VariableMove {
   const base = { file: cell.file, selector: cell.selector, name: cell.name };
   if (landing?.kind === 'heading') {
     if (typeof landing.block.titleStart === 'number') {
@@ -172,10 +152,7 @@ export function buildSheetSlots(blocks: readonly VariableBlock[]) {
   const offsets: SlotOffset[] = [];
   blocks.forEach((block, index) => {
     const heading = block.title !== undefined ? 1 : 0;
-    assert(
-      slots.length + heading + block.rows.length + 1 <= LIMITS.scanEntriesMax,
-      'Variable rows: slot limit exceeded',
-    );
+    assert(slots.length + heading + block.rows.length + 1 <= LIMITS.scanEntriesMax, 'Variable rows: slot limit exceeded');
     offsets.push({ head: slots.length, rows: slots.length + heading });
     if (heading) {
       slots.push({ kind: 'heading', block, bi: index });

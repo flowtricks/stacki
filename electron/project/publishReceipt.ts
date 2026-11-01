@@ -14,9 +14,7 @@ export interface DeploymentReceipt {
 export function deploymentConfiguration(config: PublishConfig): string {
   // Account selection affects GitHub authentication, not the deployed website.
   const { hosting, buildScript, beforePublish, afterPublish } = config;
-  return createHash('sha256')
-    .update(JSON.stringify({ hosting, buildScript, beforePublish, afterPublish }))
-    .digest('hex');
+  return createHash('sha256').update(JSON.stringify({ hosting, buildScript, beforePublish, afterPublish })).digest('hex');
 }
 
 export function parseDeploymentReceipt(input: unknown): DeploymentReceipt {

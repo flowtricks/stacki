@@ -50,8 +50,7 @@ export interface ByteDiff {
   readonly distanceAfter: (x: number, y: number) => number | undefined;
 }
 
-export type DiffOutcome =
-  { readonly tag: 'computed'; readonly diff: ByteDiff } | { readonly tag: 'too-costly' };
+export type DiffOutcome = { readonly tag: 'computed'; readonly diff: ByteDiff } | { readonly tag: 'too-costly' };
 
 /** One region a minimum edit script replaces: `source` bytes out, `target` in. */
 export interface Hunk {
@@ -185,12 +184,7 @@ function checkPoint(source: ByteString, target: ByteString, x: number, y: number
 // Myers' greedy loop, keeping every row for the distance lookups. Row d is
 // complete when the loop stops, so a lookup at the final distance is exact on
 // every diagonal, not only on the one that reached the end.
-function runFrontiers(
-  source: Uint8Array,
-  target: Uint8Array,
-  budget: DiffBudget,
-  workStart: number,
-): FrontierRun | undefined {
+function runFrontiers(source: Uint8Array, target: Uint8Array, budget: DiffBudget, workStart: number): FrontierRun | undefined {
   const rows: Int32Array[] = [];
   let work = workStart;
   const endDiagonal = source.length - target.length;
@@ -228,13 +222,7 @@ function runFrontiers(
 // frontier costs at most that row's distance (the distance never decreases
 // along a diagonal), so a move may start from the last point that still has
 // room for it, not only from the frontier itself.
-function frontierStart(
-  rows: Frontiers,
-  distance: number,
-  diagonal: number,
-  sourceLength: number,
-  targetLength: number,
-): number {
+function frontierStart(rows: Frontiers, distance: number, diagonal: number, sourceLength: number, targetLength: number): number {
   if (distance === 0) {
     return 0;
   }
@@ -281,13 +269,7 @@ function frontierAt(rows: Frontiers, distance: number, diagonal: number): number
 /** Follow matching bytes from (x, y); undefined when the work budget ends first.
  * Each match costs one unit; the comparison that ends the snake is paid for by
  * the diagonal's frontier cell. */
-function snake(
-  source: Uint8Array,
-  target: Uint8Array,
-  x: number,
-  y: number,
-  workLeft: number,
-): number | undefined {
+function snake(source: Uint8Array, target: Uint8Array, x: number, y: number, workLeft: number): number | undefined {
   const stepsMax = Math.min(source.length - x, target.length - y);
   assert(stepsMax >= 0, 'A snake starts inside the grid');
   assert(workLeft >= 0, 'A snake starts inside the work budget');
@@ -305,12 +287,7 @@ function snake(
 // The distance of (x, y) is the first row whose frontier on its diagonal reaches
 // x. Rows on one diagonal share its parity and their frontiers never move back,
 // so a binary search over them finds it in log(D) probes.
-function frontierDistance(
-  rows: Frontiers,
-  distance: number,
-  x: number,
-  y: number,
-): number | undefined {
+function frontierDistance(rows: Frontiers, distance: number, x: number, y: number): number | undefined {
   const diagonal = x - y;
   const first = Math.abs(diagonal);
   if (first > distance) {

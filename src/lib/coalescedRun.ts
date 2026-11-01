@@ -22,8 +22,7 @@ interface Waiting<T> {
   readonly reject: (reason: unknown) => void;
 }
 
-type Phase<T> =
-  { readonly tag: 'idle' } | { readonly tag: 'running'; readonly waiting: Waiting<T> | undefined };
+type Phase<T> = { readonly tag: 'idle' } | { readonly tag: 'running'; readonly waiting: Waiting<T> | undefined };
 
 export function createCoalescedRun<T>(run: () => Promise<T>): CoalescedRun<T> {
   // The coordinator's one piece of state, owned here and never handed out.

@@ -85,16 +85,8 @@ const check = (what, condition, detail) => {
     attributes: { class: 'card is-active' },
   };
   const pruned = withoutClasses(snap, new Set(['is-active']));
-  check(
-    'the class is gone from the list',
-    pruned.classList.join(' ') === 'card',
-    pruned.classList.join(' '),
-  );
-  check(
-    'and from the class attribute selectors read',
-    pruned.attributes.class === 'card',
-    pruned.attributes.class,
-  );
+  check('the class is gone from the list', pruned.classList.join(' ') === 'card', pruned.classList.join(' '));
+  check('and from the class attribute selectors read', pruned.attributes.class === 'card', pruned.attributes.class);
   check('the original is left alone', snap.classList.length === 2, `${snap.classList.length}`);
   check('hiding nothing returns the same object', withoutClasses(snap, new Set()) === snap);
   check('no snapshot stays no snapshot', withoutClasses(undefined, new Set(['x'])) === undefined);
@@ -152,9 +144,7 @@ const check = (what, condition, detail) => {
   check('selecting another element carries nothing over', hidden() === '', hidden());
 
   if (failures.length) {
-    console.error(
-      `selectors-live: ${failures.length} of ${checked} failed\n${failures.join('\n')}`,
-    );
+    console.error(`selectors-live: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
   console.log(`selectors-live: ${checked} passed  [snapshot pruning, removal tracking]`);

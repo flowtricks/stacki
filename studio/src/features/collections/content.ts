@@ -36,8 +36,5 @@ function updateJson(source: string, key: string, value: unknown) {
   if (!root || errors.length || !findNodeAtLocation(root, [key])) {
     throw new Error('Collection changed. Reload its fields.');
   }
-  return applyEdits(
-    source,
-    modify(source, [key], value, { formattingOptions: { insertSpaces: true, tabSize: 2 } }),
-  );
+  return applyEdits(source, modify(source, [key], value, { formattingOptions: { insertSpaces: true, tabSize: 2 } }));
 }

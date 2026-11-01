@@ -39,9 +39,7 @@ const MODULES = {
 function loadFunctions() {
   assert.deepEqual(Object.keys(MODULES).sort(), [...FUNCTION_NAMES].sort());
   const folder = repoPath('src/features/style/clipPath');
-  const lines = Object.entries(MODULES).map(
-    ([name, module]) => `export { ${name} } from ${JSON.stringify(path.join(folder, module))};`,
-  );
+  const lines = Object.entries(MODULES).map(([name, module]) => `export { ${name} } from ${JSON.stringify(path.join(folder, module))};`);
   const outfile = repoPath('node_modules/.stacki-test/clip-path-model.bundle.cjs');
   esbuild.buildSync({
     stdin: { contents: lines.join('\n'), resolveDir: folder, loader: 'ts' },
@@ -88,9 +86,7 @@ test('the split editor reproduces every recorded clip-path behaviour', () => {
   for (const name of ['window', 'document', 'DOMParser', 'Element', 'Node', 'SVGElement']) {
     global[name] = name === 'window' ? dom.window : dom.window[name];
   }
-  const expected = JSON.parse(
-    fs.readFileSync(repoPath('test/fixtures/clipPath/characterization.json'), 'utf8'),
-  );
+  const expected = JSON.parse(fs.readFileSync(repoPath('test/fixtures/clipPath/characterization.json'), 'utf8'));
   const actual = runCases(loadFunctions());
   for (const section of ['css', 'svg', 'fit']) {
     assert.ok(Object.keys(expected[section]).length > 0, `${section} has recorded cases`);

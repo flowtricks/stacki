@@ -6,14 +6,7 @@ import path from 'path';
 import { MAIN_LIMITS } from './variableWorkspace';
 import { assert } from '../../shared/core/assert';
 import { toPosix, findStylesheets, type VarEntry, type Rule, readDeclarations } from './cssVarRead';
-import {
-  labelForRule,
-  commonStem,
-  namesOf,
-  groupRules,
-  findFamilies,
-  prefixSections,
-} from './cssVarGroups';
+import { labelForRule, commonStem, namesOf, groupRules, findFamilies, prefixSections } from './cssVarGroups';
 import { resolveValue, colorOf, isUncomputableColor, kindOf } from './cssVarValues';
 
 export interface Column {
@@ -101,21 +94,14 @@ export function buildGroup(members: readonly Rule[], file: string): Group {
   if (!rule) {
     return { kind: 'single', label: '', columns, blocks: [] };
   }
-  const blocks = commentSections(rule).flatMap((section) =>
-    sectionBlocks(section, rule, byName[0], file),
-  );
+  const blocks = commentSections(rule).flatMap((section) => sectionBlocks(section, rule, byName[0], file));
   return { kind: 'single', label: labelForRule(rule), columns, blocks };
 }
 
 // Several rules declaring the same names: the columns are the modes, so the names are the rows.
 // Sub-sections come from shared prefixes.
-export function modesGroup(
-  columns: Column[],
-  byName: readonly Map<string, TaggedVar>[],
-  file: string,
-): Group {
-  const cellsFor = (name: string): (Cell | undefined)[] =>
-    byName.map((map, index) => cellFor(map, name, file, columns[index]?.id ?? ''));
+export function modesGroup(columns: Column[], byName: readonly Map<string, TaggedVar>[], file: string): Group {
+  const cellsFor = (name: string): (Cell | undefined)[] => byName.map((map, index) => cellFor(map, name, file, columns[index]?.id ?? ''));
   const names: string[] = [];
   for (const map of byName) {
     for (const name of map.keys()) {
@@ -190,12 +176,7 @@ export function commentSections(rule: Rule): CommentSection[] {
 }
 
 // One heading's blocks: a matrix per family its names form, then a list of whatever is left.
-export function sectionBlocks(
-  section: CommentSection,
-  rule: Rule,
-  map: Map<string, TaggedVar> | undefined,
-  file: string,
-): Block[] {
+export function sectionBlocks(section: CommentSection, rule: Rule, map: Map<string, TaggedVar> | undefined, file: string): Block[] {
   const blocks: Block[] = [];
   const { families, used } = findFamilies(section.names);
   const claimed = new Set<string>();
@@ -232,9 +213,7 @@ export function sectionBlocks(
       rows: rows.filter((row) => row.cells.some(Boolean)),
       // The inner sections of a one-rule file carry their comment's span so
       // the heading can be renamed in place; a comment-less section has none.
-      ...(section.titleStart !== undefined
-        ? { titleStart: section.titleStart, titleEnd: section.titleEnd }
-        : {}),
+      ...(section.titleStart !== undefined ? { titleStart: section.titleStart, titleEnd: section.titleEnd } : {}),
     });
   }
   const leftovers = section.names.filter((name) => !claimed.has(name) && !used.has(name));
@@ -253,12 +232,7 @@ export function sectionBlocks(
   return blocks;
 }
 
-export function cellFor(
-  map: Map<string, TaggedVar> | undefined,
-  name: string,
-  file: string,
-  column: string,
-): Cell | undefined {
+export function cellFor(map: Map<string, TaggedVar> | undefined, name: string, file: string, column: string): Cell | undefined {
   const entry = map?.get(name);
   if (!entry) {
     return undefined;
@@ -286,10 +260,7 @@ export interface DescribedCell extends Cell {
 
 // A cell's value said three ways: what the file holds, what it comes out as,
 // and what colour to draw beside it (if any).
-export function describeCell(
-  cell: Cell | undefined,
-  map: Map<string, string>,
-): DescribedCell | undefined {
+export function describeCell(cell: Cell | undefined, map: Map<string, string>): DescribedCell | undefined {
   if (!cell) {
     return undefined;
   }
@@ -380,9 +351,7 @@ export function readVariables(projectPath: string): {
     for (const group of file.groups) {
       for (const block of group.blocks) {
         for (const row of block.rows) {
-          row.cells = row.cells.map((cell) =>
-            describeCell(cell, cell === undefined ? map : scopes.mapFor(cell)),
-          );
+          row.cells = row.cells.map((cell) => describeCell(cell, cell === undefined ? map : scopes.mapFor(cell)));
         }
       }
     }

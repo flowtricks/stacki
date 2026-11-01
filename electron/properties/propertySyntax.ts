@@ -29,13 +29,7 @@ export function readPropertySyntax(source: string): PropertySyntax {
     start,
     end: start + frontmatter.length,
     frontmatter,
-    syntax: ts.createSourceFile(
-      'component.ts',
-      frontmatter,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    ),
+    syntax: ts.createSourceFile('component.ts', frontmatter, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS),
   };
 }
 
@@ -45,9 +39,7 @@ export function replaceFrontmatter(document: PropertySyntax, frontmatter: string
   if (document.start === 0) {
     return `---\n${frontmatter}\n---\n${document.source}`;
   }
-  return (
-    document.source.slice(0, document.start) + frontmatter + document.source.slice(document.end)
-  );
+  return document.source.slice(0, document.start) + frontmatter + document.source.slice(document.end);
 }
 
 export function applySourceEdits(source: string, edits: readonly SourceEdit[]): string {
@@ -75,9 +67,7 @@ export function syntaxError(source: string): string | undefined {
       jsx: ts.JsxEmit.Preserve,
     },
   });
-  const diagnostic = result.diagnostics?.find(
-    (item) => item.category === ts.DiagnosticCategory.Error,
-  );
+  const diagnostic = result.diagnostics?.find((item) => item.category === ts.DiagnosticCategory.Error);
   return diagnostic ? ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n') : undefined;
 }
 
@@ -97,13 +87,7 @@ export function validatePropertyCode(type: string, expression: string): Result<v
   }
   if (expression.trim()) {
     const expressionSource = `const value = (${expression});`;
-    const expressionFile = ts.createSourceFile(
-      'default.ts',
-      expressionSource,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    );
+    const expressionFile = ts.createSourceFile('default.ts', expressionSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     if (expressionFile.statements.length !== 1) {
       return err({
         code: 'default',
@@ -141,12 +125,7 @@ export function isAstroProps(node: ts.Node | undefined): boolean {
   if (ts.isAsExpression(node) || ts.isParenthesizedExpression(node)) {
     return isAstroPropsUnwrap(node);
   }
-  return (
-    ts.isPropertyAccessExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    node.expression.text === 'Astro' &&
-    node.name.text === 'props'
-  );
+  return ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'Astro' && node.name.text === 'props';
 }
 // `(Astro.props as Props)` nests a wrapper or two; a hundred is a generated file.
 const PROPS_WRAPPER_DEPTH_MAX = 128;
@@ -161,9 +140,7 @@ function isAstroPropsUnwrap(node: ts.Node): boolean {
   }
   assert(false, 'Astro.props wrapper depth is bounded');
 }
-export function propertyKey(
-  node: ts.PropertyName | ts.BindingName | undefined,
-): string | undefined {
+export function propertyKey(node: ts.PropertyName | ts.BindingName | undefined): string | undefined {
   if (!node) {
     return undefined;
   }
@@ -174,15 +151,7 @@ export function propertyKey(
 }
 
 export function defaultExpression(source: string): string {
-  const syntax = ts.createSourceFile(
-    'default.ts',
-    `const value = (${source});`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
-  const comma = syntaxNodes(syntax).some(
-    (node) => ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.CommaToken,
-  );
+  const syntax = ts.createSourceFile('default.ts', `const value = (${source});`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const comma = syntaxNodes(syntax).some((node) => ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.CommaToken);
   return comma ? `(${source})` : source;
 }

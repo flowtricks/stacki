@@ -31,12 +31,7 @@ export default function HistoryCommitFiles({
   const counts = summarizeHistoryFiles(files);
   return (
     <>
-      <button
-        className="history-view-files"
-        aria-label={`View changed files (${files.length})`}
-        aria-haspopup="dialog"
-        onClick={() => setOpen(true)}
-      >
+      <button className="history-view-files" aria-label={`View changed files (${files.length})`} aria-haspopup="dialog" onClick={() => setOpen(true)}>
         <span className="history-file-summary">
           <span className="history-count-added" title={`${counts.added} files added`}>
             +{counts.added}
@@ -52,15 +47,7 @@ export default function HistoryCommitFiles({
           {files.length} {files.length === 1 ? 'file' : 'files'} <ChevronRightIcon size={12} />
         </span>
       </button>
-      {open && (
-        <HistoryFilesDialog
-          commit={commit}
-          projectPath={projectPath}
-          files={files}
-          onClose={() => setOpen(false)}
-          onRestoreFile={onRestoreFile}
-        />
-      )}
+      {open && <HistoryFilesDialog commit={commit} projectPath={projectPath} files={files} onClose={() => setOpen(false)} onRestoreFile={onRestoreFile} />}
     </>
   );
 }

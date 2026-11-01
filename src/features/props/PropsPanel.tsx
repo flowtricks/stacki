@@ -21,14 +21,7 @@ import {
   TextPanel,
 } from './SourcePanels';
 import { useElementProps, type ElementState } from './elementState';
-import {
-  ElementContent,
-  ElementLooseText,
-  ElementSchemaFields,
-  ElementExtraFields,
-  ElementSettingsHeader,
-  ElementSettings,
-} from './ElementFields';
+import { ElementContent, ElementLooseText, ElementSchemaFields, ElementExtraFields, ElementSettingsHeader, ElementSettings } from './ElementFields';
 
 export { type PropsPanelProps } from './propsPanelTypes';
 
@@ -37,16 +30,9 @@ export { BindField } from './propBindings';
 export default function PropsPanel(props: PropsPanelProps) {
   // Held union values survive selections of text, loops, and other special nodes.
   const stashRef = useRef(new Map<string, PropValues>());
-  return (
-    <PropValuePolicyContext.Provider value={props.valuePolicy ?? 'instance'}>
-      {renderPropsPanel(props, stashRef)}
-    </PropValuePolicyContext.Provider>
-  );
+  return <PropValuePolicyContext.Provider value={props.valuePolicy ?? 'instance'}>{renderPropsPanel(props, stashRef)}</PropValuePolicyContext.Provider>;
 }
-function renderPropsPanel(
-  props: PropsPanelProps,
-  stashRef: React.MutableRefObject<Map<string, PropValues>>,
-) {
+function renderPropsPanel(props: PropsPanelProps, stashRef: React.MutableRefObject<Map<string, PropValues>>) {
   const { node } = props;
   if (!node) {
     return <EmptyPanel {...props} />;
@@ -73,14 +59,7 @@ function renderPropsPanel(
     case 'element':
     case 'component':
     case 'chunk-group':
-      return (
-        <ElementPropsPanel
-          {...props}
-          node={node}
-          dataContext={panelDataContext(props)}
-          stashRef={stashRef}
-        />
-      );
+      return <ElementPropsPanel {...props} node={node} dataContext={panelDataContext(props)} stashRef={stashRef} />;
     default: {
       const exhaustive: never = node;
       return exhaustive;
@@ -92,16 +71,7 @@ function ElementPropsPanel(props: ElementPropsPanelProps) {
   return <ElementPanelView state={state} />;
 }
 function ElementPanelView({ state }: { readonly state: ElementState }) {
-  const {
-    node,
-    isLayout,
-    currentLayoutName,
-    schema,
-    allowAttrs,
-    extraProps,
-    showContentField,
-    rootRef,
-  } = state;
+  const { node, isLayout, currentLayoutName, schema, allowAttrs, extraProps, showContentField, rootRef } = state;
 
   return (
     // Every button in the panel taps, and every dropdown under it sounds its
@@ -117,8 +87,7 @@ function ElementPanelView({ state }: { readonly state: ElementState }) {
         ref={rootRef}
         style={{ flex: '1 1 50%', overflow: 'hidden' }}
         onClick={(event) => {
-          const button =
-            event.target instanceof Element ? event.target.closest('button') : undefined;
+          const button = event.target instanceof Element ? event.target.closest('button') : undefined;
           if (button && !button.disabled) {
             clickNote();
           }
@@ -151,18 +120,13 @@ function ElementPanelView({ state }: { readonly state: ElementState }) {
             opens on. Shut by default; the choice sticks while the app is up. */}
           <ElementSettingsHeader state={state} />
           <ElementSettings state={state} />
-          {!isLayout &&
-            !allowAttrs &&
-            schema.length === 0 &&
-            extraProps.length === 0 &&
-            !showContentField && (
-              <div className="props-empty">
-                {node.kind === 'element'
-                  ? 'This HTML element has no attributes set.'
-                  : 'This component declares no props (add an interface Props or ' +
-                    'an Astro.props destructure to expose some).'}
-              </div>
-            )}
+          {!isLayout && !allowAttrs && schema.length === 0 && extraProps.length === 0 && !showContentField && (
+            <div className="props-empty">
+              {node.kind === 'element'
+                ? 'This HTML element has no attributes set.'
+                : 'This component declares no props (add an interface Props or ' + 'an Astro.props destructure to expose some).'}
+            </div>
+          )}
         </div>
       </div>
     </SoundHere>

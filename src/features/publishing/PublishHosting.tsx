@@ -23,14 +23,10 @@ export function HostingChoice(props: Props) {
   useResolvedAccount(props);
   const account = hostingAccount(props.value);
   const projects =
-    props.provider === 'cloudflare'
-      ? props.projects.filter((project) => !account || hostingAccount(project.hosting) === account)
-      : props.projects;
+    props.provider === 'cloudflare' ? props.projects.filter((project) => !account || hostingAccount(project.hosting) === account) : props.projects;
   return (
     <>
-      {props.provider === 'cloudflare' && (
-        <CloudflareAccount {...props} add={() => setDialog('account')} />
-      )}
+      {props.provider === 'cloudflare' && <CloudflareAccount {...props} add={() => setDialog('account')} />}
       <HostingProject {...props} projects={projects} add={() => setDialog('worker')} />
       {dialog === 'account' && (
         <AddPublishAccount
@@ -64,9 +60,7 @@ function CloudflareAccount(props: Props & { readonly add: () => void }) {
   const selected = hostingAccount(props.value);
   const selectedName = useCloudflareAccountName(props, selected);
   const accounts =
-    props.accounts.some((account) => account.id === selected) || !selected
-      ? props.accounts
-      : [...props.accounts, { id: selected, name: selectedName }];
+    props.accounts.some((account) => account.id === selected) || !selected ? props.accounts : [...props.accounts, { id: selected, name: selectedName }];
   return (
     <div className="publish-field">
       <div className="publish-field-heading">
@@ -125,19 +119,10 @@ function HostingProject(props: Props & { readonly add: () => void }) {
     .map((project) => ({
       value: hostingKey(project.hosting),
       label: project.name,
-      group:
-        props.accounts.find((entry) => entry.id === hostingAccount(project.hosting))?.name ?? '',
-      description:
-        project.hosting.provider === 'cloudflare'
-          ? 'Pages'
-          : project.hosting.provider === 'cloudflare-workers'
-            ? 'Worker'
-            : '',
+      group: props.accounts.find((entry) => entry.id === hostingAccount(project.hosting))?.name ?? '',
+      description: project.hosting.provider === 'cloudflare' ? 'Pages' : project.hosting.provider === 'cloudflare-workers' ? 'Worker' : '',
     }))
-    .sort(
-      (left, right) =>
-        left.group.localeCompare(right.group) || left.label.localeCompare(right.label),
-    );
+    .sort((left, right) => left.group.localeCompare(right.group) || left.label.localeCompare(right.label));
   if (selected && !options.some((option) => option.value === selected)) {
     options.unshift({
       value: selected,
@@ -151,12 +136,7 @@ function HostingProject(props: Props & { readonly add: () => void }) {
       <div className="publish-field-heading">
         <HostingLabel label="Hosting project" busy={props.busy} refresh={props.refresh} />
         {props.provider === 'cloudflare' && (
-          <button
-            type="button"
-            className="publish-refresh"
-            disabled={!account || props.busy}
-            onClick={props.add}
-          >
+          <button type="button" className="publish-refresh" disabled={!account || props.busy} onClick={props.add}>
             Add Worker
           </button>
         )}
@@ -165,13 +145,7 @@ function HostingProject(props: Props & { readonly add: () => void }) {
         ariaLabel="Hosting project"
         value={selected}
         options={options}
-        placeholder={
-          props.provider === 'cloudflare' && !account
-            ? 'Choose a Cloudflare account first'
-            : props.busy
-              ? 'Loading projects…'
-              : 'Choose project…'
-        }
+        placeholder={props.provider === 'cloudflare' && !account ? 'Choose a Cloudflare account first' : props.busy ? 'Loading projects…' : 'Choose project…'}
         disabled={props.provider === 'cloudflare' && !account && !selected}
         menuClassName="publish-dropdown"
         livePreview={false}
@@ -195,11 +169,7 @@ function useResolvedAccount(props: Props): void {
     }
     const name = hostingName(props.value);
     if (name) {
-      const matches = props.projects.filter(
-        (project) =>
-          project.hosting.provider === props.value.provider &&
-          hostingName(project.hosting) === name,
-      );
+      const matches = props.projects.filter((project) => project.hosting.provider === props.value.provider && hostingName(project.hosting) === name);
       const match = matches.length === 1 ? matches[0] : undefined;
       if (match && hostingAccount(match.hosting)) {
         props.change(match.hosting);
@@ -214,11 +184,7 @@ function useResolvedAccount(props: Props): void {
   }, [props]);
 }
 
-function HostingLabel(props: {
-  readonly label: string;
-  readonly busy: boolean;
-  readonly refresh: () => void;
-}) {
+function HostingLabel(props: { readonly label: string; readonly busy: boolean; readonly refresh: () => void }) {
   return (
     <div className="publish-label-refresh">
       <span className="publish-label">{props.label}</span>

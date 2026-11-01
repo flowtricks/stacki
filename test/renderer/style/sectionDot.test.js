@@ -146,8 +146,7 @@ const check = (what, condition, detail) => {
   // The section by its title, and whether its header carries the dot.
   const sectionNamed = (label) =>
     [...panel.querySelectorAll('.embed-editor_section-block')].find(
-      (section) =>
-        section.querySelector('.embed-editor_section-title')?.textContent?.trim() === label,
+      (section) => section.querySelector('.embed-editor_section-title')?.textContent?.trim() === label,
     );
   const dotOn = (label) => !!sectionNamed(label)?.querySelector('.embed-editor_section-dot');
   const collapsed = (label) => !!sectionNamed(label)?.classList.contains('is-collapsed');
@@ -173,15 +172,9 @@ const check = (what, condition, detail) => {
   check(
     'the panel mounts with its sections',
     !!sectionNamed('Flex/Grid Child'),
-    [...panel.querySelectorAll('.embed-editor_section-title')]
-      .map((table) => table.textContent)
-      .join(' | '),
+    [...panel.querySelectorAll('.embed-editor_section-title')].map((table) => table.textContent).join(' | '),
   );
-  check(
-    'and Flex/Grid Child starts collapsed',
-    collapsed('Flex/Grid Child'),
-    'it is open, so the collapsed case is not being tested',
-  );
+  check('and Flex/Grid Child starts collapsed', collapsed('Flex/Grid Child'), 'it is open, so the collapsed case is not being tested');
 
   // Shift applies the clicked section's next state to every peer. An open
   // section therefore closes all; any closed section then opens all. A plain
@@ -193,32 +186,16 @@ const check = (what, condition, detail) => {
     collapsedLabels().join(' | '),
   );
   await clickSection({ label: 'Size', shiftKey: true });
-  check(
-    'Shift-clicking a closed header opens every section',
-    collapsedLabels().length === 0,
-    collapsedLabels().join(' | '),
-  );
+  check('Shift-clicking a closed header opens every section', collapsedLabels().length === 0, collapsedLabels().join(' | '));
   await clickSection({ label: 'Size' });
-  check(
-    'a plain click still changes only one section',
-    collapsedLabels().join(' | ') === 'Size',
-    collapsedLabels().join(' | '),
-  );
+  check('a plain click still changes only one section', collapsedLabels().join(' | ') === 'Size', collapsedLabels().join(' | '));
   await clickSection({ label: 'Size' });
   await clickSection({ label: 'Flex/Grid Child' });
-  check(
-    'the initial mixed state can still be restored',
-    collapsedLabels().join(' | ') === 'Flex/Grid Child',
-    collapsedLabels().join(' | '),
-  );
+  check('the initial mixed state can still be restored', collapsedLabels().join(' | ') === 'Flex/Grid Child', collapsedLabels().join(' | '));
 
   // `.card { order: 3 }` — the picked selector is one of the things styling this
   // section, so the dot is blue.
-  check(
-    'a section your own selector styles is blue',
-    dotOf('Flex/Grid Child') === 'blue',
-    dotOf('Flex/Grid Child'),
-  );
+  check('a section your own selector styles is blue', dotOf('Flex/Grid Child') === 'blue', dotOf('Flex/Grid Child'));
 
   // Open, the property labels inside say the same thing in the same colours, so
   // the dot stands down.
@@ -226,54 +203,30 @@ const check = (what, condition, detail) => {
   toggle.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
   await wait(120);
   check('and the section really opens', !collapsed('Flex/Grid Child'));
-  check(
-    'opening it puts the dot away',
-    dotOf('Flex/Grid Child') === 'none',
-    dotOf('Flex/Grid Child'),
-  );
+  check('opening it puts the dot away', dotOf('Flex/Grid Child') === 'none', dotOf('Flex/Grid Child'));
   toggle.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
   await wait(120);
-  check(
-    'closing it brings the dot back',
-    dotOf('Flex/Grid Child') === 'blue',
-    dotOf('Flex/Grid Child'),
-  );
+  check('closing it brings the dot back', dotOf('Flex/Grid Child') === 'blue', dotOf('Flex/Grid Child'));
 
   // It sits at the right edge, beside the chevron — not next to the label.
   const header = sectionNamed('Flex/Grid Child').querySelector('.embed-editor_section-header');
   const kids = [...header.children];
   const dotAt = kids.findIndex((element) => element.classList.contains('embed-editor_section-dot'));
-  const chevronAt = kids.findIndex((element) =>
-    element.classList.contains('embed-editor_section-chevron-btn'),
-  );
-  const titleAt = kids.findIndex((element) =>
-    element.classList.contains('embed-editor_section-toggle'),
-  );
+  const chevronAt = kids.findIndex((element) => element.classList.contains('embed-editor_section-chevron-btn'));
+  const titleAt = kids.findIndex((element) => element.classList.contains('embed-editor_section-toggle'));
   check('the dot sits after the label', dotAt > titleAt, `dot ${dotAt}, label ${titleAt}`);
-  check(
-    'and immediately before the chevron',
-    chevronAt === dotAt + 1,
-    `dot ${dotAt}, chevron ${chevronAt}`,
-  );
+  check('and immediately before the chevron', chevronAt === dotAt + 1, `dot ${dotAt}, chevron ${chevronAt}`);
 
   // `.plain` sets nothing in this section, but the bare `div` rule sets
   // `align-self`, which reaches the element from another selector.
   await select('n2');
-  check(
-    'a section styled only from elsewhere is orange',
-    dotOf('Flex/Grid Child') === 'orange',
-    dotOf('Flex/Grid Child'),
-  );
+  check('a section styled only from elsewhere is orange', dotOf('Flex/Grid Child') === 'orange', dotOf('Flex/Grid Child'));
   // …and it really is reaching the element, or the case above proves nothing.
   const openIt = sectionNamed('Flex/Grid Child').querySelector('.embed-editor_section-toggle');
   openIt.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
   await wait(150);
   const body = sectionNamed('Flex/Grid Child')?.textContent ?? '';
-  check(
-    'because the section is not empty for it',
-    body.length > 'Flex/Grid Child'.length,
-    body.slice(0, 120),
-  );
+  check('because the section is not empty for it', body.length > 'Flex/Grid Child'.length, body.slice(0, 120));
   openIt.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
   await wait(120);
 
@@ -285,9 +238,7 @@ const check = (what, condition, detail) => {
   check(
     'the empty sections are on screen to be checked',
     empties.every((label) => !!sectionNamed(label)),
-    [...panel.querySelectorAll('.embed-editor_section-title')]
-      .map((table) => table.textContent.trim())
-      .join(' | '),
+    [...panel.querySelectorAll('.embed-editor_section-title')].map((table) => table.textContent.trim()).join(' | '),
   );
   const bare = empties.map((label) => [label, dotOf(label)]).filter(([, dot]) => dot !== 'none');
   check('a section nothing styles has no dot', bare.length === 0, JSON.stringify(bare));

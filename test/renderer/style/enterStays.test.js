@@ -96,19 +96,14 @@ const check = (what, condition, detail) => {
 
   const type = async (text) => {
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        dom.window.HTMLInputElement.prototype,
-        'value',
-      ).set;
+      const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
       setter.call(field, text);
       field.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     });
   };
   const press = async (key, init = {}) => {
     await act(async () => {
-      field.dispatchEvent(
-        new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }),
-      );
+      field.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
     });
   };
 
@@ -119,17 +114,9 @@ const check = (what, condition, detail) => {
   await press('Enter');
 
   check('Enter commits the value', committed.includes('max-width=20rem'), committed.join(','));
-  check(
-    'and leaves the field focused',
-    document.activeElement === field,
-    String(document.activeElement?.tagName),
-  );
+  check('and leaves the field focused', document.activeElement === field, String(document.activeElement?.tagName));
   check('with the value still in it', field.value === '20rem', field.value);
-  check(
-    'and the caret where it was',
-    field.selectionStart === '20rem'.length,
-    `${field.selectionStart}`,
-  );
+  check('and the caret where it was', field.selectionStart === '20rem'.length, `${field.selectionStart}`);
 
   // The point of staying: the arrow keys work straight away.
   await press('ArrowUp');
@@ -155,16 +142,8 @@ const check = (what, condition, detail) => {
   await act(async () => {
     field.blur();
   });
-  check(
-    'blurring commits as it always did',
-    committed[committed.length - 1] === 'max-width=20.0625rem',
-    committed[committed.length - 1],
-  );
-  check(
-    'and leaves the field',
-    document.activeElement !== field,
-    String(document.activeElement?.tagName),
-  );
+  check('blurring commits as it always did', committed[committed.length - 1] === 'max-width=20.0625rem', committed[committed.length - 1]);
+  check('and leaves the field', document.activeElement !== field, String(document.activeElement?.tagName));
 
   // The helper itself, on a field with no selection to restore (a colour input
   // throws on setSelectionRange) — it must not take the caller down with it.

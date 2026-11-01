@@ -4,9 +4,7 @@ import assert from 'node:assert/strict';
 import type { Page } from 'playwright';
 
 export async function checkInteractivePreview(page: Page) {
-  const button = page
-    .locator('.studio-titlebar')
-    .getByRole('button', { name: 'Preview the site', exact: true });
+  const button = page.locator('.studio-titlebar').getByRole('button', { name: 'Preview the site', exact: true });
   assert.equal(await button.innerText(), '', 'Preview is an icon-only titlebar action');
   assert.equal(await button.locator('svg').count(), 1);
   assert.equal(await page.locator('.studio-preview-toggle').count(), 0);
@@ -23,29 +21,18 @@ export async function checkInteractivePreview(page: Page) {
     'clip',
     "Interactive preview restores the fixture site's own overflow behavior",
   );
-  assert.equal(
-    await preview.locator('h1').evaluate((node) => getComputedStyle(node).cursor),
-    'auto',
-  );
+  assert.equal(await preview.locator('h1').evaluate((node) => getComputedStyle(node).cursor), 'auto');
   const canvas = await page.locator('.preview-mode').boundingBox();
   const workspace = await page.locator('.studio-workspace').boundingBox();
   assert.deepEqual(canvas, workspace, 'Interactive preview covers the entire workspace');
-  assert.equal(
-    await page
-      .locator('.studio-workspace-panels')
-      .evaluate((node) => node instanceof HTMLElement && node.inert),
-    true,
-  );
+  assert.equal(await page.locator('.studio-workspace-panels').evaluate((node) => node instanceof HTMLElement && node.inert), true);
   await exit.focus();
   await page.keyboard.press('Backspace');
   await preview.locator('h1').click();
   await page.keyboard.press('Escape');
   await page.locator('.preview-mode').waitFor({ state: 'detached' });
   assert.equal(await designer.locator('h1').innerText(), initial);
-  assert.equal(
-    await designer.locator('h1').evaluate((node) => getComputedStyle(node).cursor),
-    'default',
-  );
+  assert.equal(await designer.locator('h1').evaluate((node) => getComputedStyle(node).cursor), 'default');
   await button.click();
   await preview.locator('h1').waitFor();
   await exit.click();

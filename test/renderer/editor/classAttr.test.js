@@ -49,14 +49,8 @@ const stringValue = (value) => ({ type: 'string', value });
   // --- a plain class ----------------------------------------------------------
   check('an element with no classes gets one', withClass({}, 'hero').value.value === 'hero');
   check('under the plain attribute', withClass({}, 'hero').key === 'class');
-  check(
-    'an element with classes keeps them',
-    withClass({ class: stringValue('card is-wide') }, 'hero').value.value === 'card is-wide hero',
-  );
-  check(
-    'a class it already has is not added twice',
-    withClass({ class: stringValue('card') }, 'card') === undefined,
-  );
+  check('an element with classes keeps them', withClass({ class: stringValue('card is-wide') }, 'hero').value.value === 'card is-wide hero');
+  check('a class it already has is not added twice', withClass({ class: stringValue('card') }, 'card') === undefined);
   check('and is reported as already there', hasClass({ class: stringValue('card') }, 'card'));
 
   // --- class:list -------------------------------------------------------------
@@ -68,14 +62,10 @@ const stringValue = (value) => ({ type: 'string', value });
   );
   check('and stays a list', withClass(oneLine, 'hero').key === 'class:list');
   check('a class already in the list is not added again', withClass(oneLine, 'card') === undefined);
-  check(
-    'an empty list still takes one',
-    withClass({ 'class:list': expr('[]') }, 'hero').value.value === '["hero"]',
-  );
+  check('an empty list still takes one', withClass({ 'class:list': expr('[]') }, 'hero').value.value === '["hero"]');
   check(
     'a list that is not written as a list is wrapped in one',
-    withClass({ 'class:list': expr('props.classes') }, 'hero').value.value ===
-      '[props.classes, "hero"]',
+    withClass({ 'class:list': expr('props.classes') }, 'hero').value.value === '[props.classes, "hero"]',
   );
 
   // The shape Lumos writes: one entry per line, trailing comma.
@@ -94,11 +84,7 @@ const stringValue = (value) => ({ type: 'string', value });
     JSON.stringify(grown.split('\n').find((line) => line.includes('"hero"'))),
   );
   check('with the list still closed', grown.trim().endsWith(']'), grown);
-  check(
-    'and everything that was in it still in it',
-    /"section"[\s\S]*className/.test(grown),
-    grown,
-  );
+  check('and everything that was in it still in it', /"section"[\s\S]*className/.test(grown), grown);
 
   // --- class as an expression -------------------------------------------------
   check(
@@ -106,16 +92,12 @@ const stringValue = (value) => ({ type: 'string', value });
     withClass({ class: expr('`card ${size}`') }, 'hero').value.value === '`card ${size} hero`',
     withClass({ class: expr('`card ${size}`') }, 'hero').value.value,
   );
-  check(
-    'a word already in it is not repeated',
-    withClass({ class: expr('`card ${size}`') }, 'card') === undefined,
-  );
+  check('a word already in it is not repeated', withClass({ class: expr('`card ${size}`') }, 'card') === undefined);
   check('a hole is not read as a name', !hasClass({ class: expr('`card ${size}`') }, 'size'));
   check(
     'class:list keeps the computed expression and adds the name',
     withClass({ class: expr('cx(base, extra)') }, 'hero').key === 'class:list' &&
-      withClass({ class: expr('cx(base, extra)') }, 'hero').value.value ===
-        '[(cx(base, extra)), "hero"]' &&
+      withClass({ class: expr('cx(base, extra)') }, 'hero').value.value === '[(cx(base, extra)), "hero"]' &&
       withClass({ class: expr('cx(base, extra)') }, 'hero').remove === 'class',
   );
   check('a name with a space in it is refused', withClass({}, 'a b') === undefined);
@@ -140,41 +122,25 @@ const { class: className } = Astro.props;
   const { editable, model } = parsePage(source);
   check('the component parses', editable && !!model);
   const section = model.nodes.find((node) => node.kind === 'element' && node.name === 'section');
-  check(
-    'its classes are a list, not a string',
-    !!section?.props?.['class:list'],
-    JSON.stringify(section?.props),
-  );
+  check('its classes are a list, not a string', !!section?.props?.['class:list'], JSON.stringify(section?.props));
 
   const edit = withClass(section.props, 'hero');
   section.props[edit.key] = edit.value;
   const written = serializePage(model, source);
   check('the file still has its frontmatter', written.startsWith('---\n'), written.slice(0, 40));
   check('the class landed in the list', /"hero"/.test(written), written);
-  check(
-    'inside class:list, not beside it',
-    /class:list=\{\[[\s\S]*"hero"[\s\S]*\]\}/.test(written) && !/\sclass="/.test(written),
-    written,
-  );
+  check('inside class:list, not beside it', /class:list=\{\[[\s\S]*"hero"[\s\S]*\]\}/.test(written) && !/\sclass="/.test(written), written);
   check(
     'the rest of the file is the rest of the file',
-    written.includes('const { class: className } = Astro.props;') &&
-      written.includes('<slot />') &&
-      /"section"[\s\S]*className[\s\S]*"hero"/.test(written),
+    written.includes('const { class: className } = Astro.props;') && written.includes('<slot />') && /"section"[\s\S]*className[\s\S]*"hero"/.test(written),
     written,
   );
 
   // Re-parsing what was written gives the class back — the round trip is what
   // the canvas re-renders from.
   const again = parsePage(written);
-  const again0 = again.model.nodes.find(
-    (node) => node.kind === 'element' && node.name === 'section',
-  );
-  check(
-    'and it reads back as a class the element has',
-    hasClass(again0.props, 'hero'),
-    JSON.stringify(again0.props),
-  );
+  const again0 = again.model.nodes.find((node) => node.kind === 'element' && node.name === 'section');
+  check('and it reads back as a class the element has', hasClass(again0.props, 'hero'), JSON.stringify(again0.props));
   check('once', (written.match(/"hero"/g) || []).length === 1, written);
 
   // --- the panel is wired to it ----------------------------------------------
@@ -198,20 +164,13 @@ const { class: className } = Astro.props;
     /await flushSave\(\);\s*return \{ tag: 'applied' \};/.test(app),
     'the style panel cannot tell whether the class reached the page',
   );
-  check(
-    'a typed class gates its rule',
-    /classGatesRef\.current\.set\(trimmed, gate\)/.test(embed),
-    'the rule is written whatever became of the class',
-  );
+  check('a typed class gates its rule', /classGatesRef\.current\.set\(trimmed, gate\)/.test(embed), 'the rule is written whatever became of the class');
   check(
     'and a refused class cancels the rule before it is written',
-    /if \(outcome\.tag !== 'refused'\) \{\s*return true;\s*\}[\s\S]{0,300}?return false;/.test(
-      embed,
-    ) &&
-      new RegExp(
-        'if \\(!\\(await passesClassGate\\(rule\\)\\)\\) \\{\\s*return;\\s*\\}' +
-          '[\\s\\S]{0,1600}?writeEmbedDocument\\(embedDocument\\)',
-      ).test(embed),
+    /if \(outcome\.tag !== 'refused'\) \{\s*return true;\s*\}[\s\S]{0,300}?return false;/.test(embed) &&
+      new RegExp('if \\(!\\(await passesClassGate\\(rule\\)\\)\\) \\{\\s*return;\\s*\\}' + '[\\s\\S]{0,1600}?writeEmbedDocument\\(embedDocument\\)').test(
+        embed,
+      ),
     'the rule is still written after the page refused the class',
   );
 

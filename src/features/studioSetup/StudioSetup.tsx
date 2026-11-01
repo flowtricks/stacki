@@ -82,31 +82,18 @@ function SetupDialog({
   const [step, setStep] = useSetupStep(setup.status);
   const busy = setup.activity.kind === 'busy';
   return (
-    <Popup
-      className="studio-setup"
-      labelledBy="studio-setup-title"
-      onClose={onClose}
-      dismissible={!busy}
-    >
+    <Popup className="studio-setup" labelledBy="studio-setup-title" onClose={onClose} dismissible={!busy}>
       {({ close }) => (
         <>
           <SetupHeader busy={busy} onClose={close} />
           <SetupSteps step={step} busy={busy} onStep={setStep} />
           <section className="studio-setup-content">
             {step === 0 && <InstallStep {...setup} />}
-            {step === 1 && (
-              <LocalStep installed={setup.status?.kind === 'installed'} previewURL={previewURL} />
-            )}
+            {step === 1 && <LocalStep installed={setup.status?.kind === 'installed'} previewURL={previewURL} />}
             {step === 2 && <CloudStep status={setup.status} />}
             {setup.activity.kind === 'error' && <ErrorToast message={setup.activity.message} />}
           </section>
-          <SetupFooter
-            busy={busy}
-            step={step}
-            installed={setup.status?.kind === 'installed'}
-            onClose={close}
-            onStep={setStep}
-          />
+          <SetupFooter busy={busy} step={step} installed={setup.status?.kind === 'installed'} onClose={close} onStep={setStep} />
         </>
       )}
     </Popup>
@@ -137,11 +124,7 @@ function SetupFooter({
         </button>
       )}
       {step < 2 && (
-        <button
-          className="primary"
-          disabled={busy}
-          onClick={() => onStep(step === 0 && !installed ? 2 : step + 1)}
-        >
+        <button className="primary" disabled={busy} onClick={() => onStep(step === 0 && !installed ? 2 : step + 1)}>
           {step === 0 && !installed ? 'Set up with an agent' : 'Continue'}
         </button>
       )}
@@ -167,9 +150,7 @@ function InstallStep({ status, activity, install }: ReturnType<typeof useSetup>)
       <p>Browser editing and collaboration, installed in /studio.</p>
       {!status && <p role="status">Checking this project…</p>}
       {status?.kind === 'blocked' && <ErrorToast message={status.message} />}
-      {status?.kind === 'installed' && (
-        <p role="status">Version {status.version}. Continue to local preview or cloud setup.</p>
-      )}
+      {status?.kind === 'installed' && <p role="status">Version {status.version}. Continue to local preview or cloud setup.</p>}
       {status?.kind === 'missing' && (
         <>
           <p className="studio-setup-note">Version {status.desktopVersion}</p>
@@ -185,24 +166,11 @@ function InstallStep({ status, activity, install }: ReturnType<typeof useSetup>)
   );
 }
 
-function SetupSteps({
-  step,
-  busy,
-  onStep,
-}: {
-  readonly step: number;
-  readonly busy: boolean;
-  readonly onStep: (step: number) => void;
-}) {
+function SetupSteps({ step, busy, onStep }: { readonly step: number; readonly busy: boolean; readonly onStep: (step: number) => void }) {
   return (
     <nav aria-label="Setup steps">
       {['Install', 'Local preview', 'Go live'].map((label, index) => (
-        <button
-          key={label}
-          aria-current={step === index ? 'step' : undefined}
-          disabled={busy}
-          onClick={() => onStep(index)}
-        >
+        <button key={label} aria-current={step === index ? 'step' : undefined} disabled={busy} onClick={() => onStep(index)}>
           <span>{index + 1}</span>
           {label}
         </button>

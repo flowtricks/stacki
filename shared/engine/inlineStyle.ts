@@ -39,11 +39,7 @@ interface Declaration {
 }
 
 /** Set or remove one property. Removing an absent property changes nothing. */
-export function editInlineStyle(
-  text: string,
-  property: string,
-  declaration: StyleDeclaration,
-): StyleEditResult {
+export function editInlineStyle(text: string, property: string, declaration: StyleDeclaration): StyleEditResult {
   assert(text.length <= LIMITS.attrCharsMax, 'A style value is inside the attribute bound');
   const declarations = scanDeclarations(text);
   if (declarations === undefined) {
@@ -54,10 +50,7 @@ export function editInlineStyle(
     return { tag: 'ambiguous' };
   }
   const [found] = matching;
-  const edits =
-    declaration.tag === 'set'
-      ? setEdits(text, declarations, found, property, declaration.value)
-      : removeEdits(text, declarations, found);
+  const edits = declaration.tag === 'set' ? setEdits(text, declarations, found, property, declaration.value) : removeEdits(text, declarations, found);
   return { tag: 'edited', edits, text: applyStyleEdits(text, edits) };
 }
 
@@ -65,10 +58,7 @@ export function editInlineStyle(
  * removed — when there is exactly one and editInlineStyle writes exactly
  * `after` for it; undefined for anything else (several changes, a reordered
  * or reformatted list), which is then a whole-attribute edit. */
-export function singleDeclarationChange(
-  before: string,
-  after: string,
-): { readonly property: string; readonly declaration: StyleDeclaration } | undefined {
+export function singleDeclarationChange(before: string, after: string): { readonly property: string; readonly declaration: StyleDeclaration } | undefined {
   const old = scanDeclarations(before);
   const next = scanDeclarations(after);
   if (old === undefined || next === undefined) {
@@ -84,16 +74,13 @@ export function singleDeclarationChange(
     return only === undefined ? undefined : text.slice(only.valueStart, only.valueEnd);
   };
   const properties = [...new Set([...old, ...next].map((entry) => entry.property))];
-  const changed = properties.filter(
-    (property) => value(old, before, property) !== value(next, after, property),
-  );
+  const changed = properties.filter((property) => value(old, before, property) !== value(next, after, property));
   const [property] = changed;
   if (changed.length !== 1 || property === undefined) {
     return undefined;
   }
   const set = value(next, after, property);
-  const declaration: StyleDeclaration =
-    set === undefined ? { tag: 'remove' } : { tag: 'set', value: set };
+  const declaration: StyleDeclaration = set === undefined ? { tag: 'remove' } : { tag: 'set', value: set };
   const edited = editInlineStyle(before, property, declaration);
   if (edited.tag !== 'edited') {
     return undefined;
@@ -136,11 +123,7 @@ function setEdits(
     : [{ start: last.valueEnd, end: last.valueEnd, text: `; ${property}: ${value}` }];
 }
 
-function removeEdits(
-  text: string,
-  declarations: readonly Declaration[],
-  found: Declaration | undefined,
-): readonly StyleTextEdit[] {
+function removeEdits(text: string, declarations: readonly Declaration[], found: Declaration | undefined): readonly StyleTextEdit[] {
   if (found === undefined) {
     return [];
   }

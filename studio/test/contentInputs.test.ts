@@ -34,12 +34,7 @@ test('invalid dates remain outside the calendar model', () => {
 });
 
 test('HTML fields recognize markup without mistaking plain comparisons for tags', () => {
-  for (const value of [
-    '<p>One</p><p>Two</p>',
-    '<strong>Bold</strong>',
-    'Text <br/> more',
-    '<h2 class="heading">Title</h2>',
-  ]) {
+  for (const value of ['<p>One</p><p>Two</p>', '<strong>Bold</strong>', 'Text <br/> more', '<h2 class="heading">Title</h2>']) {
     assert.equal(containsHTML(value), true);
   }
   for (const value of ['Plain text', 'a < b and c > d', '5 > 4', '&lt;p&gt;', '']) {

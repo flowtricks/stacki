@@ -13,11 +13,7 @@ import path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
-import type {
-  ComponentProperties,
-  PropertyChange,
-  PropertyOptionRename,
-} from '../../shared/properties/propertyEditing';
+import type { ComponentProperties, PropertyChange, PropertyOptionRename } from '../../shared/properties/propertyEditing';
 import { err, ok, type Result } from '../../shared/core/result';
 import { literalOptions } from '../../shared/properties/propertyOptions';
 import { sameFilesystemPath } from '../lib/platform';
@@ -94,11 +90,7 @@ export class PropertyUndoStore {
 
 /** Apply a recorded inverse batch; the batch undoing it is recorded in turn
  * (Redo), and its token returned. */
-export function revertComponentProperties(
-  token: string,
-  store: PropertyUndoStore,
-  writer: PropertyWriter,
-): Result<{ readonly undo: string }> {
+export function revertComponentProperties(token: string, store: PropertyUndoStore, writer: PropertyWriter): Result<{ readonly undo: string }> {
   const changes = store.take(token);
   if (changes === undefined) {
     return err({ code: 'expired', message: 'This property change can no longer be undone.' });
@@ -128,10 +120,7 @@ export function loadComponentProperties(location: PropertyLocation): Result<Comp
   return ok(readComponentProperties(source.value));
 }
 
-export function updateComponentProperties(
-  request: PropertyEditRequest,
-  writer: PropertyWriter,
-): Result<ComponentProperties> {
+export function updateComponentProperties(request: PropertyEditRequest, writer: PropertyWriter): Result<ComponentProperties> {
   const target = validateLocation(request);
   if (!target.ok) {
     return target;
@@ -182,10 +171,7 @@ function validateLocation(location: PropertyLocation): Result<PropertyLocation> 
   }
   return ok({ projectPath: path.dirname(root), file });
 }
-function planPropertyChanges(
-  request: PropertyEditRequest,
-  source: string,
-): Result<readonly FileChange[]> {
+function planPropertyChanges(request: PropertyEditRequest, source: string): Result<readonly FileChange[]> {
   const change = request.change;
   const first = { file: request.file, before: request.source, after: source };
   if (change.kind === 'remove') {
@@ -216,14 +202,7 @@ function planPropertyChanges(
     const own = sameFilesystemPath(file, request.file);
     const original = own ? source : consumer.source;
     const owner = own ? 'definition' : 'consumer';
-    const changed = planConsumerChange(
-      original,
-      names,
-      change,
-      propertyRename,
-      optionRenames,
-      owner,
-    );
+    const changed = planConsumerChange(original, names, change, propertyRename, optionRenames, owner);
     if (!changed.ok) {
       return err({
         code: changed.error.code,
@@ -245,15 +224,11 @@ function planPropertyChanges(
   return ok(changes);
 }
 
-function propertyRenameForChange(
-  change: PropertyChange,
-): { readonly from: string; readonly to: string } | undefined {
+function propertyRenameForChange(change: PropertyChange): { readonly from: string; readonly to: string } | undefined {
   if (change.kind !== 'save' || !change.originalName) {
     return undefined;
   }
-  return change.originalName === change.property.name
-    ? undefined
-    : { from: change.originalName, to: change.property.name };
+  return change.originalName === change.property.name ? undefined : { from: change.originalName, to: change.property.name };
 }
 
 function planConsumerChange(
@@ -264,9 +239,7 @@ function planConsumerChange(
   optionRenames: readonly PropertyOptionRename[],
   owner: 'definition' | 'consumer',
 ): Result<string> {
-  const renamed = propertyRename
-    ? renameComponentReferences(source, names, propertyRename, owner)
-    : ok(source);
+  const renamed = propertyRename ? renameComponentReferences(source, names, propertyRename, owner) : ok(source);
   if (!renamed.ok || optionRenames.length === 0) {
     return renamed;
   }
@@ -282,12 +255,8 @@ function validateOptionRenames(
   if (renames.length === 0) {
     return ok(undefined);
   }
-  const before = readComponentProperties(beforeSource).properties.find(
-    (property) => property.name === change.originalName,
-  );
-  const after = readComponentProperties(afterSource).properties.find(
-    (property) => property.name === change.property.name,
-  );
+  const before = readComponentProperties(beforeSource).properties.find((property) => property.name === change.originalName);
+  const after = readComponentProperties(afterSource).properties.find((property) => property.name === change.property.name);
   const beforeOptions = before ? literalOptions(before.type) : undefined;
   const afterOptions = after ? literalOptions(after.type) : undefined;
   if (!beforeOptions || !afterOptions) {
@@ -307,15 +276,9 @@ function validateOptionRenames(
   return ok(undefined);
 }
 
-function commitPropertyChanges(
-  changes: readonly FileChange[],
-  writer: PropertyWriter,
-): Result<void> {
+function commitPropertyChanges(changes: readonly FileChange[], writer: PropertyWriter): Result<void> {
   assert(changes.length <= PROPERTY_LIMITS.filesMax, 'Property transaction is bounded');
-  assert(
-    new Set(changes.map((change) => change.file)).size === changes.length,
-    'Property transaction writes each file once',
-  );
+  assert(new Set(changes.map((change) => change.file)).size === changes.length, 'Property transaction writes each file once');
   const leased = writer.documents.withLeases(changes, (ordered) => commitLeased(ordered, writer));
   if (!leased.ok) {
     return err({ code: 'filesystem', message: leased.error });
@@ -392,11 +355,7 @@ function failureOf(file: string, report: Exclude<WriteReport, { tag: 'applied' }
 // still holds exactly the bytes this batch wrote — the restore is an intent
 // witnessed by their checksum. A file somebody changed since is theirs now;
 // restoring it would destroy their edit, so it is named instead.
-function rollbackPropertyChanges(
-  written: readonly FileChange[],
-  cause: WriteFailure,
-  writer: PropertyWriter,
-): Result<never> {
+function rollbackPropertyChanges(written: readonly FileChange[], cause: WriteFailure, writer: PropertyWriter): Result<never> {
   assert(written.length <= PROPERTY_LIMITS.filesMax, 'Rollback is bounded by the batch');
   const failed: string[] = [];
   const changed: string[] = [];
@@ -421,10 +380,7 @@ function rollbackPropertyChanges(
   return err({ code: cause.code, message: `Save failed; changes restored. ${cause.message}` });
 }
 
-function restorePropertyFile(
-  change: FileChange,
-  writer: PropertyWriter,
-): 'restored' | 'changed' | 'failed' {
+function restorePropertyFile(change: FileChange, writer: PropertyWriter): 'restored' | 'changed' | 'failed' {
   writer.noteWrite(change.file);
   const report = writer.documents.writeText(change.file, change.before, digestOf(change.after));
   switch (report.tag) {
@@ -442,31 +398,20 @@ function restorePropertyFile(
   }
 }
 
-function planPropertyRemoval(
-  request: PropertyEditRequest,
-  change: FileChange,
-  name: string,
-): Result<readonly FileChange[]> {
+function planPropertyRemoval(request: PropertyEditRequest, change: FileChange, name: string): Result<readonly FileChange[]> {
   const consumers = readPropertyConsumers(request);
   if (!consumers.ok) {
     return consumers;
   }
   for (const consumer of consumers.value) {
-    const result = renameComponentReferences(
-      consumer.source,
-      consumer.names,
-      { from: name, to: '_stackiDeletedProperty' },
-      'consumer',
-    );
+    const result = renameComponentReferences(consumer.source, consumer.names, { from: name, to: '_stackiDeletedProperty' }, 'consumer');
     if (!result.ok) {
       return result;
     }
     if (result.value !== consumer.source) {
       return err({
         code: 'in-use',
-        message:
-          `${consumer.file} still passes ${name}. ` +
-          'Remove that instance value before deleting the prop.',
+        message: `${consumer.file} still passes ${name}. ` + 'Remove that instance value before deleting the prop.',
       });
     }
   }

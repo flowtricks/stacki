@@ -2,11 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import type { TrailingSlash } from '../../editor/pageState';
-import {
-  componentPreviewURL,
-  parseComponentPreviewMessage,
-  prettyComponentName,
-} from './paletteModel';
+import { componentPreviewURL, parseComponentPreviewMessage, prettyComponentName } from './paletteModel';
 
 interface PreviewTarget {
   readonly url: string;
@@ -23,10 +19,7 @@ const previewFramesMax = 4;
 
 type PreviewStatusHandler = (target: PreviewTarget, status: 'ready' | 'empty') => void;
 
-type PreviewURL =
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'ready'; readonly url: string }
-  | { readonly kind: 'empty' };
+type PreviewURL = { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly url: string } | { readonly kind: 'empty' };
 
 export function ComponentPreviewPopup({
   preview,
@@ -101,9 +94,7 @@ function usePreviewCache(target: PreviewTarget) {
   const receive = useCallback<PreviewStatusHandler>((readyTarget, status) => {
     setCache((current) => ({
       ...current,
-      frames: current.frames.map((entry) =>
-        entry.target.url === readyTarget.url ? { ...entry, status } : entry,
-      ),
+      frames: current.frames.map((entry) => (entry.target.url === readyTarget.url ? { ...entry, status } : entry)),
     }));
   }, []);
   return { frames, receive };
@@ -143,21 +134,10 @@ function ComponentPreviewFrame({
   if (resolvedURL.kind !== 'ready') {
     return undefined;
   }
-  return (
-    <iframe
-      ref={frameRef}
-      src={resolvedURL.url}
-      title={`${target.name} preview`}
-      style={{ opacity: visible ? 1 : 0 }}
-      aria-hidden={!visible}
-    />
-  );
+  return <iframe ref={frameRef} src={resolvedURL.url} title={`${target.name} preview`} style={{ opacity: visible ? 1 : 0 }} aria-hidden={!visible} />;
 }
 
-function useResolvedPreviewURL(
-  directURL: string,
-  resolvePreviewURL?: (url: string) => Promise<string>,
-): PreviewURL {
+function useResolvedPreviewURL(directURL: string, resolvePreviewURL?: (url: string) => Promise<string>): PreviewURL {
   const [resolvedURL, setResolvedURL] = useState<PreviewURL>({ kind: 'loading' });
   useEffect(() => {
     if (!resolvePreviewURL) {

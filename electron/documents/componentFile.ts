@@ -49,14 +49,7 @@ interface ComponentFileArgs {
  * the name can't be used — nothing is written here; the caller does that, so
  * every write to the project stays in one place.
  */
-function componentFile({
-  projectPath,
-  pagePath,
-  name,
-  nodes,
-  imports = [],
-  props = [],
-}: ComponentFileArgs): { path: string; rel: string; text: string } {
+function componentFile({ projectPath, pagePath, name, nodes, imports = [], props = [] }: ComponentFileArgs): { path: string; rel: string; text: string } {
   if (!VALID_NAME.test(String(name || ''))) {
     throw new Error('A component name has to be a word starting with a capital letter.');
   }
@@ -69,9 +62,7 @@ function componentFile({
   // Case-insensitively: on a Mac, Card.astro and card.astro are the same file,
   // and writing the second silently replaces the first.
   const clash = fs.existsSync(componentsDirectory)
-    ? fs
-        .readdirSync(componentsDirectory)
-        .find((fileName) => fileName.toLowerCase() === `${name.toLowerCase()}.astro`)
+    ? fs.readdirSync(componentsDirectory).find((fileName) => fileName.toLowerCase() === `${name.toLowerCase()}.astro`)
     : undefined;
   if (clash) {
     throw new Error(`There's already a component called ${path.basename(clash, '.astro')}.`);
@@ -81,10 +72,7 @@ function componentFile({
   // serialized markup rather than the node kinds, so a name used inside an
   // expression (`{items.map(…)}`, `<Fragment set:html={raw} />`) counts too.
   const markup = serializeNodes(nodes);
-  const used = imports.filter(
-    (imp) =>
-      imp?.name && new RegExp(`(^|[^A-Za-z0-9_$])${imp.name}([^A-Za-z0-9_$]|$)`).test(markup),
-  );
+  const used = imports.filter((imp) => imp?.name && new RegExp(`(^|[^A-Za-z0-9_$])${imp.name}([^A-Za-z0-9_$]|$)`).test(markup));
 
   // `@/components/Button.astro` and bare package names mean the same thing from
   // any file and travel untouched. A relative path was written from the page's
@@ -124,11 +112,7 @@ interface NewPageLayout {
 
 /** The text of a new, empty page: a frontmatter block, and the layout wrapper
  * when one is picked (imported relative to the page). */
-function newPageText(input: {
-  readonly pagePath: string;
-  readonly layout: NewPageLayout | undefined;
-  readonly eol: '\n' | '\r\n';
-}): string {
+function newPageText(input: { readonly pagePath: string; readonly layout: NewPageLayout | undefined; readonly eol: '\n' | '\r\n' }): string {
   const layout = input.layout;
   const base = {
     extraFrontmatter: '',

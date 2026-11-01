@@ -17,10 +17,7 @@ test('signed sessions verify only for their intended audience', async () => {
   assert.equal(await verifySession(token, secret + 'different', 'studio'), undefined);
 });
 test('expired and malformed sessions fail closed', async () => {
-  const token = await signSession(
-    { id: 123, login: 'editor', expires: Date.now() - 1, audience: 'studio' },
-    secret,
-  );
+  const token = await signSession({ id: 123, login: 'editor', expires: Date.now() - 1, audience: 'studio' }, secret);
   assert.equal(await verifySession(token, secret, 'studio'), undefined);
   for (const value of ['', 'a.b', '{}', '.']) {
     assert.equal(await verifySession(value, secret, 'studio'), undefined);

@@ -1,14 +1,7 @@
 import Select, { type SelectOption } from './components/Select';
 import { ShadowColorRow, ShadowLength } from './ShadowFields';
 import { AngleControl } from './GradientEditor';
-import {
-  FILTER_GROUPS,
-  FILTER_META,
-  retypeFilter,
-  type Filter,
-  type FilterPatch,
-  type FilterType,
-} from './model/filter';
+import { FILTER_GROUPS, FILTER_META, retypeFilter, type Filter, type FilterPatch, type FilterType } from './model/filter';
 
 // The per-filter editor (Webflow's Filters): a grouped Filter-type dropdown, then the
 // controls for that type — Amount (%/px/…, any unit), Hue rotate's Angle dial, or Drop
@@ -30,15 +23,7 @@ interface SetOptions {
 }
 type SetFilter = (patch: FilterPatch, options: SetOptions) => void;
 
-export default function FilterEditor({
-  filter,
-  busy,
-  onChange,
-}: {
-  filter: Filter;
-  busy: boolean;
-  onChange: (next: Filter, live: boolean) => void;
-}) {
+export default function FilterEditor({ filter, busy, onChange }: { filter: Filter; busy: boolean; onChange: (next: Filter, live: boolean) => void }) {
   const meta = FILTER_META[filter.type];
   const set: SetFilter = (patch, options) => onChange({ ...filter, ...patch }, options.live);
   return (
@@ -72,11 +57,7 @@ export default function FilterEditor({
       ) : meta.control === 'angle' ? (
         <div className="embed-editor_size-row">
           <span className="embed-editor_size-label embed-editor_bg-caption">Angle</span>
-          <AngleControl
-            angle={filter.amount || '0deg'}
-            busy={busy}
-            onChange={(angle, live) => set({ amount: angle }, { live })}
-          />
+          <AngleControl angle={filter.amount || '0deg'} busy={busy} onChange={(angle, live) => set({ amount: angle }, { live })} />
         </div>
       ) : (
         <DropShadowFields filter={filter} busy={busy} set={set} />
@@ -86,15 +67,7 @@ export default function FilterEditor({
 }
 
 // Drop shadow's X / Y / Blur / Color rows.
-function DropShadowFields({
-  filter,
-  busy,
-  set,
-}: {
-  filter: Filter;
-  busy: boolean;
-  set: SetFilter;
-}) {
+function DropShadowFields({ filter, busy, set }: { filter: Filter; busy: boolean; set: SetFilter }) {
   return (
     <>
       <ShadowLength
@@ -118,11 +91,7 @@ function DropShadowFields({
         onLive={(value) => set({ blur: value }, { live: true })}
         onCommit={(value) => set({ blur: value }, { live: false })}
       />
-      <ShadowColorRow
-        color={filter.color}
-        busy={busy}
-        onChange={(color, live) => set({ color }, { live })}
-      />
+      <ShadowColorRow color={filter.color} busy={busy} onChange={(color, live) => set({ color }, { live })} />
     </>
   );
 }

@@ -28,16 +28,7 @@ import {
   blank,
   findNode,
 } from './insertGestures';
-export {
-  withNode,
-  type InsertPlace,
-  insertGesture,
-  duplicateGesture,
-  removalGesture,
-  withoutNodes,
-  withInserted,
-  withChildren,
-} from './insertGestures';
+export { withNode, type InsertPlace, insertGesture, duplicateGesture, removalGesture, withoutNodes, withInserted, withChildren } from './insertGestures';
 
 /** Props to set (a value) or remove (undefined), by name. */
 export type PropPatch = Readonly<Record<string, Attr | undefined>>;
@@ -45,11 +36,7 @@ export type PropPatch = Readonly<Record<string, Attr | undefined>>;
 /** Set or remove attributes and props of one node: string values and
  * removals (the attribute step), expressions and bare props (the prop step).
  * A spread is rewritten through the gesture's minimal-node fallback. */
-export function propsGesture(
-  nodeId: string,
-  patch: PropPatch,
-  options: { readonly coalesceKey: string | undefined; readonly urgency: Urgency },
-): EditGesture {
+export function propsGesture(nodeId: string, patch: PropPatch, options: { readonly coalesceKey: string | undefined; readonly urgency: Urgency }): EditGesture {
   const names = Object.keys(patch);
   const [only] = names;
   return {
@@ -71,10 +58,7 @@ export function propsGesture(
       }
       return edits;
     },
-    apply: (model) =>
-      withNode(model, nodeId, (node) =>
-        Object.assign({}, node, { props: patchedProps(node.props, patch) }),
-      ),
+    apply: (model) => withNode(model, nodeId, (node) => Object.assign({}, node, { props: patchedProps(node.props, patch) })),
   };
 }
 
@@ -99,10 +83,7 @@ function attributeEdit(target: NodeRef, name: string, value: Attr | undefined): 
 
 /** Props in their order, patched: a set value keeps its slot, a new one goes
  * last, a removed one goes — what the legacy setProp did in place. */
-export function patchedProps(
-  props: Readonly<Record<string, Attr>> | undefined,
-  patch: PropPatch,
-): Record<string, Attr> {
+export function patchedProps(props: Readonly<Record<string, Attr>> | undefined, patch: PropPatch): Record<string, Attr> {
   const next: Record<string, Attr> = {};
   for (const [name, value] of Object.entries(props ?? {})) {
     if (Object.hasOwn(patch, name)) {
@@ -195,10 +176,7 @@ export function moveGesture(
   if (found === undefined) {
     return undefined;
   }
-  if (
-    place?.parentId === nodeId ||
-    (place?.parentId !== undefined && containsNode(found.node.children ?? [], place.parentId))
-  ) {
+  if (place?.parentId === nodeId || (place?.parentId !== undefined && containsNode(found.node.children ?? [], place.parentId))) {
     return undefined; // Into itself: nothing to do.
   }
   const previous = found.list[found.index - 1];
@@ -261,12 +239,7 @@ function moveRequest(
   });
   // Before a node, the note goes first and the node after it; after a node
   // or into a parent, the node goes first and the note lands in front of it.
-  const order =
-    noteRef === undefined
-      ? [target]
-      : beside.placement === 'before'
-        ? [noteRef, target]
-        : [target, noteRef];
+  const order = noteRef === undefined ? [target] : beside.placement === 'before' ? [noteRef, target] : [target, noteRef];
   edits.push(...order.map(moveOf));
   assert(edits.length > 0, 'A move states at least one edit');
   return edits;
@@ -295,10 +268,7 @@ function relocated(
   const removeAt = found.index - (moving.length - 1);
   const without = withoutNodes(model, moving);
   const parentId = place?.parentId;
-  const sameList =
-    parentId === undefined
-      ? found.list === model.nodes
-      : findNode(model.nodes, parentId)?.children === found.list;
+  const sameList = parentId === undefined ? found.list === model.nodes : findNode(model.nodes, parentId)?.children === found.list;
   let index = place?.index ?? Number.MAX_SAFE_INTEGER;
   if (sameList && index > removeAt) {
     index = Math.max(removeAt, index - moving.length);
@@ -327,8 +297,7 @@ function findWithList(
       readonly parentId: string | undefined;
     }
   | undefined {
-  const pending: { readonly list: readonly EditorNode[]; readonly parentId: string | undefined }[] =
-    [{ list, parentId: undefined }];
+  const pending: { readonly list: readonly EditorNode[]; readonly parentId: string | undefined }[] = [{ list, parentId: undefined }];
   for (let visited = 0; visited < pending.length; visited++) {
     assert(visited < LIMITS.treeNodesMax, 'A model stays inside its node bound');
     const entry = pending[visited];
@@ -429,10 +398,7 @@ export function loopRenameGesture(
     },
     apply: (current) =>
       withNode(current, nodeId, (loop) => {
-        const children = renames.reduce(
-          (list, { from, to }) => renamedLoopVar(list, from, to),
-          loop.children ?? [],
-        );
+        const children = renames.reduce((list, { from, to }) => renamedLoopVar(list, from, to), loop.children ?? []);
         return withChildren({ ...loop, head: change.head }, children);
       }),
   };
@@ -466,11 +432,7 @@ function onlyRenames(before: string, after: string, renames: readonly LoopRename
  * model. Rewording a note, typing a text, a loop head or a condition, the
  * style panel's `<style>` body, a branch added or removed. Restatements of one
  * node coalesce while unsent: each states the whole node, so the last wins. */
-export function nodeGesture(
-  nodeId: string,
-  next: EditorNode,
-  options: { readonly coalesceKey: string | undefined; readonly urgency: Urgency },
-): EditGesture {
+export function nodeGesture(nodeId: string, next: EditorNode, options: { readonly coalesceKey: string | undefined; readonly urgency: Urgency }): EditGesture {
   assert(next.id === nodeId, 'A restated node keeps its id');
   return {
     coalesceKey: options.coalesceKey,
@@ -491,11 +453,7 @@ export function nodeGesture(
 /** A prop renamed in place, keeping its value and its slot. A name the tag
  * already has gives up its slot to the rename (renamedAttr): its removal goes
  * first, since the engine never renames onto a name that is taken. */
-export function attributeRenameGesture(
-  model: EditorModel,
-  nodeId: string,
-  names: { readonly from: string; readonly to: string },
-): EditGesture | undefined {
+export function attributeRenameGesture(model: EditorModel, nodeId: string, names: { readonly from: string; readonly to: string }): EditGesture | undefined {
   const node = findNode(model.nodes, nodeId);
   const renamed = node === undefined ? undefined : renamedAttr(node, names.from, names.to);
   if (node === undefined || renamed === undefined) {
@@ -532,11 +490,7 @@ export function attributeRenameGesture(
  * side — void or self-closing, before or after — is restated instead:
  * renaming `<img>` to `<Image />` must close it, and a `<div>` becoming an
  * `<img>` loses its content, which only the printer knows how to write. */
-export function tagRenameGesture(
-  node: EditorNode,
-  next: EditorNode,
-  options: { readonly urgency: Urgency },
-): EditGesture {
+export function tagRenameGesture(node: EditorNode, next: EditorNode, options: { readonly urgency: Urgency }): EditGesture {
   const nodeId = node.id;
   assert(next.id === nodeId, 'A renamed node keeps its id');
   const name = next.name;
@@ -607,11 +561,7 @@ export function unwrapGesture(nodeId: string): EditGesture {
 
 // The list with the node replaced by its children; recursion bounded by the
 // tree's depth bound, asserted.
-function unwrappedIn(
-  list: readonly EditorNode[],
-  nodeId: string,
-  depth: number,
-): readonly EditorNode[] {
+function unwrappedIn(list: readonly EditorNode[], nodeId: string, depth: number): readonly EditorNode[] {
   assert(depth <= LIMITS.treeDepthMax, 'A model is no deeper than its bound');
   for (const [index, node] of list.entries()) {
     const children = node.children ?? [];

@@ -11,14 +11,10 @@ interface WarmupRoute {
 
 interface WarmupServer {
   readonly middlewares: {
-    readonly use: (
-      handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void,
-    ) => void;
+    readonly use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void;
   };
   readonly httpServer?: { readonly once: (event: 'close', callback: () => void) => void };
-  readonly environments?: Readonly<
-    Record<string, { readonly runner?: { readonly import: (file: string) => Promise<unknown> } }>
-  >;
+  readonly environments?: Readonly<Record<string, { readonly runner?: { readonly import: (file: string) => Promise<unknown> } }>>;
   readonly ssrLoadModule: (file: string) => Promise<unknown>;
 }
 
@@ -33,13 +29,7 @@ export function previewWarmupIntegration(project: string) {
       'astro:routes:resolved': ({ routes }: { readonly routes: readonly WarmupRoute[] }): void => {
         files = previewWarmupFiles(routes).map((file) => path.resolve(project, file));
       },
-      'astro:server:setup': ({
-        server,
-        logger,
-      }: {
-        readonly server: WarmupServer;
-        readonly logger: { readonly warn: (message: string) => void };
-      }): void => {
+      'astro:server:setup': ({ server, logger }: { readonly server: WarmupServer; readonly logger: { readonly warn: (message: string) => void } }): void => {
         previewWarmupAfterPage(
           server,
           () => files,
@@ -67,22 +57,13 @@ export function previewWarmupFiles(routes: readonly WarmupRoute[]): readonly str
   // Dynamic templates commonly share the site's largest layout. Prefer broad
   // routes before narrow ones, so one compilation benefits many destinations.
   const selected = [...files]
-    .sort(
-      (left, right) =>
-        Number(right.includes('[')) - Number(left.includes('[')) ||
-        left.length - right.length ||
-        left.localeCompare(right),
-    )
+    .sort((left, right) => Number(right.includes('[')) - Number(left.includes('[')) || left.length - right.length || left.localeCompare(right))
     .slice(0, PAGE_TEMPLATES_MAX);
   assert(selected.length <= PAGE_TEMPLATES_MAX, 'Warmup must not compile the entire site');
   return selected;
 }
 
-export function previewWarmupAfterPage(
-  server: WarmupServer,
-  files: () => readonly string[],
-  report: (error: unknown) => void,
-): void {
+export function previewWarmupAfterPage(server: WarmupServer, files: () => readonly string[], report: (error: unknown) => void): void {
   let state: 'waiting' | 'scheduled' | 'closed' = 'waiting';
   let timer: ReturnType<typeof setTimeout> | undefined;
   server.httpServer?.once('close', () => {
@@ -111,11 +92,7 @@ export function previewWarmupAfterPage(
   });
 }
 
-async function previewWarmupModules(
-  server: WarmupServer,
-  files: readonly string[],
-  closed: () => boolean,
-): Promise<void> {
+async function previewWarmupModules(server: WarmupServer, files: readonly string[], closed: () => boolean): Promise<void> {
   for (const file of files.slice(0, PAGE_TEMPLATES_MAX)) {
     if (closed()) {
       return;

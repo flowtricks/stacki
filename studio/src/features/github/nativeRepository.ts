@@ -19,9 +19,7 @@ export class NativeRepository implements RepositoryAccess {
   async historyConnection() {
     const connection = await this.access.publishConnection();
     const workspace = this.root ? await readGitWorkspace(this.root) : undefined;
-    return connection.ok && workspace
-      ? ok({ ...connection.value, branch: workspace.branch })
-      : connection;
+    return connection.ok && workspace ? ok({ ...connection.value, branch: workspace.branch }) : connection;
   }
   incoming(base: string) {
     return this.access.incoming(base);
@@ -41,22 +39,11 @@ export class NativeRepository implements RepositoryAccess {
     if (this.root && workspace) {
       const localParent = gitWorkspaceBranch(workspace).head;
       const local = gitWorkspaceContext(this.root, grant.value.value);
-      const imported = await gitWorkspaceRun(source.git)([
-        'fetch',
-        '--quiet',
-        '--update-shallow',
-        local.directory,
-        localParent,
-      ]).then(ok, publishFailure);
+      const imported = await gitWorkspaceRun(source.git)(['fetch', '--quiet', '--update-shallow', local.directory, localParent]).then(ok, publishFailure);
       if (!imported.ok) {
         return imported;
       }
-      return nativeReview(
-        source,
-        expectedHead,
-        { ...grant.value.value, branch: workspace.branch },
-        { localParent },
-      );
+      return nativeReview(source, expectedHead, { ...grant.value.value, branch: workspace.branch }, { localParent });
     }
     return nativeReview(source, expectedHead, grant.value.value);
   }
@@ -70,10 +57,7 @@ export class NativeRepository implements RepositoryAccess {
     }
     const workspace = this.root ? await readGitWorkspace(this.root) : undefined;
     if (this.root && workspace) {
-      return publishGitWorkspace(this.root, source, grant.value.value, workspace).then(
-        ok,
-        publishFailure,
-      );
+      return publishGitWorkspace(this.root, source, grant.value.value, workspace).then(ok, publishFailure);
     }
     return nativePublish(source, expectedHead, grant.value.value);
   }

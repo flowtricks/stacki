@@ -19,6 +19,7 @@ import {
   TextIcon,
   TrashIcon,
   ChevronRightIcon,
+  DragIcon,
 } from '../../ui/Icons';
 import { type LoopFieldKind } from '../../editor/loopQuery';
 import { type RowParts } from './loopSettingsModel';
@@ -28,6 +29,8 @@ export function ListRow(props: {
   readonly parts: RowParts;
   readonly open: boolean;
   readonly locked?: boolean;
+  /** Whether a drag can start on the row itself, in a list whose rows reorder. */
+  readonly dragThrough?: boolean;
   readonly removeLabel: string;
   /** The editor shown in a pop-up under the row while it is open. */
   readonly editor?: ReactNode;
@@ -39,15 +42,19 @@ export function ListRow(props: {
   // added) renders its pop-up in the same pass, before a ref would be set.
   const [row, setRow] = useState<HTMLDivElement | undefined>(undefined);
   // Stable, so React attaches it once rather than on every render.
-  const attach = useCallback<RefCallback<HTMLDivElement>>(
-    (element) => setRow(element ?? undefined),
-    [],
-  );
+  const attach = useCallback<RefCallback<HTMLDivElement>>((element) => setRow(element ?? undefined), []);
   return (
     <div ref={attach} className={`loop-settings-item${props.open ? ' open' : ''}`}>
+      {/* A row that drags shows its grip while pointed at, as a builder's list does. */}
+      {props.dragThrough === true && (
+        <span className="loop-settings-item-grip" aria-hidden="true">
+          <DragIcon size={12} />
+        </span>
+      )}
       <button
         type="button"
         className="loop-settings-item-main"
+        data-drag-through={props.dragThrough === true ? '' : undefined}
         title={`${parts.lead} ${parts.rest}`}
         disabled={props.locked === true}
         aria-expanded={props.open}
@@ -57,13 +64,7 @@ export function ListRow(props: {
         <span className="loop-settings-item-lead">{parts.lead}</span>
         <span className="loop-settings-item-rest">{parts.rest}</span>
       </button>
-      <button
-        type="button"
-        className="loop-settings-item-remove"
-        aria-label={props.removeLabel}
-        title="Remove"
-        onClick={props.onRemove}
-      >
+      <button type="button" className="loop-settings-item-remove" aria-label={props.removeLabel} title="Remove" onClick={props.onRemove}>
         <TrashIcon size={13} />
       </button>
       {props.open && props.editor !== undefined && (
@@ -86,17 +87,12 @@ export function RowPopup(props: {
   readonly onClose: () => void;
   readonly children: ReactNode;
 }) {
-  const [placed, setPlaced] = useState<
-    { readonly anchor: HTMLElement; readonly position: FieldPosition } | undefined
-  >(undefined);
+  const [placed, setPlaced] = useState<{ readonly anchor: HTMLElement; readonly position: FieldPosition } | undefined>(undefined);
   const { anchor } = props;
   const heightPxMax = props.heightPxMax ?? ROW_POPUP_HEIGHT_PX_MAX;
   useLayoutEffect(() => {
     if (anchor !== undefined) {
-      setPlaced({
-        anchor,
-        position: dataPickerPosition(anchor.getBoundingClientRect(), { heightPxMax }),
-      });
+      setPlaced({ anchor, position: dataPickerPosition(anchor.getBoundingClientRect(), { heightPxMax }) });
     }
   }, [anchor, heightPxMax]);
   if (placed === undefined) {
@@ -174,11 +170,7 @@ export function fieldIcon(kind: LoopFieldKind): ReactNode {
   }
 }
 
-export function EditorRow(props: {
-  readonly label: string;
-  readonly dot?: ReactNode;
-  readonly children: ReactNode;
-}) {
+export function EditorRow(props: { readonly label: string; readonly dot?: ReactNode; readonly children: ReactNode }) {
   return (
     <div className="loop-settings-editor-row">
       <span className="loop-settings-editor-label loop-settings-label">{props.label}</span>
@@ -200,14 +192,9 @@ export function LoopDetails(props: { readonly children: ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="loop-lineage">
-      <button
-        type="button"
-        className="loop-lineage-toggle"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <ChevronRightIcon size={10} className={`loop-lineage-chevron${open ? ' open' : ''}`} />
+      <button type="button" className="loop-lineage-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
         Details
+        <ChevronRightIcon size={10} className={`loop-lineage-chevron${open ? ' open' : ''}`} />
       </button>
       {open && <div className="loop-lineage-body">{props.children}</div>}
     </div>

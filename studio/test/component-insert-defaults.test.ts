@@ -14,19 +14,11 @@ test('real Lumos aliased tag defaults are recognized as text slots', async () =>
     ['Heading', 'h2'],
     ['Paragraph', 'p'],
   ]) {
-    const source = await readFile(
-      `test/fixtures/site/src/components/typography/${component}.astro`,
-      'utf8',
-    );
+    const source = await readFile(`test/fixtures/site/src/components/typography/${component}.astro`, 'utf8');
     assert.equal(defaultSlotInline(source), true, component);
     assert.deepEqual(rootTag(source), { prop: 'tag', tag });
   }
-  assert.equal(
-    defaultSlotInline(
-      await readFile('test/fixtures/site/src/components/wrapper/Section.astro', 'utf8'),
-    ),
-    false,
-  );
+  assert.equal(defaultSlotInline(await readFile('test/fixtures/site/src/components/wrapper/Section.astro', 'utf8')), false);
 });
 
 test('Stacki slot detection seeds text components and leaves structural wrappers empty', async () => {
@@ -41,11 +33,7 @@ test('Stacki slot detection seeds text components and leaves structural wrappers
   };
   try {
     await mkdir(path.join(root, 'src/components'), { recursive: true });
-    await Promise.all(
-      Object.entries(components).map(([name, source]) =>
-        writeFile(path.join(root, `src/components/${name}.astro`), source),
-      ),
-    );
+    await Promise.all(Object.entries(components).map(([name, source]) => writeFile(path.join(root, `src/components/${name}.astro`), source)));
     const project = await scanProject(root);
     for (const component of project.components) {
       const text = ['Heading', 'Paragraph', 'Button'].includes(component.name);
@@ -61,15 +49,10 @@ test('Stacki slot detection seeds text components and leaves structural wrappers
           paired: component.slots.includes('default') && component.slotText,
         }),
       );
-      assert.ok(
-        output.includes(
-          text ? `<${component.name}>Text</${component.name}>` : `<${component.name} />`,
-        ),
-      );
+      assert.ok(output.includes(text ? `<${component.name}>Text</${component.name}>` : `<${component.name} />`));
       assert.ok(!output.includes('New content'));
     }
-    const page =
-      "---\nimport Wrapper from '../components/Section.astro';\n---\n<main><Wrapper /></main>";
+    const page = "---\nimport Wrapper from '../components/Section.astro';\n---\n<main><Wrapper /></main>";
     assert.equal(
       pastePlacement(page, 'src/pages/index.astro', 'n0.0', project.components),
       'inside',

@@ -38,10 +38,7 @@ export function parsePublishAvailability(input: unknown): PublishAvailability {
 export function parseGitHubPush(input: unknown): GitHubPush {
   const value = object({ commits: count, repositoryUrl: text })(input);
   assert(value.commits <= 1_000_000, 'GitHub push commit count exceeds limit');
-  assert(
-    /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/.test(value.repositoryUrl),
-    'GitHub repository link must be a repository on github.com',
-  );
+  assert(/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/.test(value.repositoryUrl), 'GitHub repository link must be a repository on github.com');
   return value;
 }
 

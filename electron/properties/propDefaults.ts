@@ -6,13 +6,7 @@ import { readSource } from '../lib/mainLimits';
 import type { SchemaField } from '../parse/astroParserTypes';
 import * as path from 'path';
 import * as fs from 'fs';
-import {
-  parsePropSchema,
-  parseExtendsTag,
-  parseSlots,
-  defaultSlotInline,
-  rootTag,
-} from '../parse/astroParser';
+import { parsePropSchema, parseExtendsTag, parseSlots, defaultSlotInline, rootTag } from '../parse/astroParser';
 import { capture } from '../lib/mainHelpers';
 import { resolveImportPath } from './importPaths';
 
@@ -61,9 +55,7 @@ export function importedTypes(source: string, filePath: string, projectPath: str
     // Only the declarations that were actually imported, so an unrelated type
     // in the same file can't shadow one the component declares itself.
     for (const name of names) {
-      const decl = new RegExp(
-        `(?:^|\n)\\s*(?:export\\s+)?(?:type|interface)\\s+${name.replace(/[^\w$]/g, '')}\\b`,
-      ).exec(text);
+      const decl = new RegExp(`(?:^|\n)\\s*(?:export\\s+)?(?:type|interface)\\s+${name.replace(/[^\w$]/g, '')}\\b`).exec(text);
       if (!decl) {
         continue;
       }
@@ -194,15 +186,7 @@ export function resolveModuleFile(spec: string, fromFile: string, projectPath: s
   } else {
     return undefined;
   }
-  const candidates = [
-    base,
-    `${base}.ts`,
-    `${base}.js`,
-    `${base}.mjs`,
-    `${base}.mts`,
-    path.join(base, 'index.ts'),
-    path.join(base, 'index.js'),
-  ];
+  const candidates = [base, `${base}.ts`, `${base}.js`, `${base}.mjs`, `${base}.mts`, path.join(base, 'index.ts'), path.join(base, 'index.js')];
   for (const candidate of candidates) {
     try {
       if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
@@ -215,15 +199,14 @@ export function resolveModuleFile(spec: string, fromFile: string, projectPath: s
   return undefined;
 }
 
-export function resolveIdentifierDefaults(
-  schema: readonly SchemaField[],
-  source: string,
-  filePath: string,
-  projectPath: string,
-) {
+export function resolveIdentifierDefaults(schema: readonly SchemaField[], source: string, filePath: string, projectPath: string) {
   return schema.map((field): SchemaField => {
     if (!field.defaultExpr) {
       return field;
+    }
+    const defaultAsset = defaultAssetIn(source, String(field.default), filePath, projectPath);
+    if (defaultAsset !== undefined) {
+      return { ...field, defaultAsset };
     }
     const ident = String(field.default).trim();
     if (!/^[A-Za-z_$][\w$]*$/.test(ident)) {
@@ -251,9 +234,66 @@ export function resolveIdentifierDefaults(
     const resolved = { ...field, default: value };
     delete resolved.defaultExpr;
     if (resolved.type === 'other') {
-      resolved.type =
-        typeof value === 'number' ? 'number' : typeof value === 'boolean' ? 'boolean' : 'string';
+      resolved.type = typeof value === 'number' ? 'number' : typeof value === 'boolean' ? 'boolean' : 'string';
     }
     return resolved;
   });
+}
+
+// Media a default may import; the same set the props panel previews.
+const MEDIA_FILE_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|mp4|webm|mov|m4v|ogg|mp3|wav)$/i;
+const IDENTIFIER_SOURCE = '[A-Za-z_$][\\w$]*';
+// One alias step: `const IMAGE = photo.src` names the import `photo`.
+const ALIAS_STEPS_MAX = 1;
+
+// The project file an image default imports, as a project-relative rel
+// ("src/assets/hero.webp"), so the panel can show its thumbnail. It travels
+// beside the expression, never in place of it: the default stays
+// `heroImage.src`, which a page may not spell as a path. Follows
+// `= heroImage`, `= heroImage.src`, and one local const naming either.
+export function defaultAssetIn(source: string, expression: string, filePath: string, projectPath: string): string | undefined {
+  const frontmatter = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!frontmatter) {
+    return undefined;
+  }
+  const code = capture(frontmatter, 1);
+  let name = importedNameOf(expression);
+  for (let step = 0; name !== undefined && step <= ALIAS_STEPS_MAX; step++) {
+    const spec = defaultImportSpec(code, name);
+    if (spec !== undefined) {
+      return assetRelFor(spec, filePath, projectPath);
+    }
+    const alias = code.match(new RegExp(`(?:^|\\n)\\s*(?:export\\s+)?const\\s+${escapeIdentifier(name)}\\s*(?::[^=\\n]+)?=\\s*([^;\\n]+)`));
+    name = alias ? importedNameOf(capture(alias, 1)) : undefined;
+  }
+  return undefined;
+}
+
+// `photo` or `photo.src`, the two ways an expression names an imported image.
+function importedNameOf(expression: string): string | undefined {
+  const match = expression.trim().match(new RegExp(`^(${IDENTIFIER_SOURCE})(?:\\.src)?$`));
+  return match ? capture(match, 1) : undefined;
+}
+
+function defaultImportSpec(code: string, name: string): string | undefined {
+  const match = code.match(new RegExp(`import\\s+${escapeIdentifier(name)}\\s+from\\s*['"]([^'"]+)['"]`));
+  return match ? capture(match, 1) : undefined;
+}
+
+function assetRelFor(spec: string, filePath: string, projectPath: string): string | undefined {
+  const bare = spec.split('?')[0] ?? '';
+  if (!MEDIA_FILE_RE.test(bare)) {
+    return undefined;
+  }
+  const absolute = resolveImportPath(projectPath, filePath, bare);
+  if (absolute === undefined) {
+    return undefined;
+  }
+  const rel = path.relative(projectPath, absolute).split(path.sep).join('/');
+  return /^(src|public)\//.test(rel) ? rel : undefined;
+}
+
+// `$` is legal in an identifier and special in a pattern.
+function escapeIdentifier(name: string): string {
+  return name.replace(/\$/g, '\\$');
 }

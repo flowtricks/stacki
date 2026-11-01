@@ -259,8 +259,7 @@ function namesUsedByPage(model: FrontmatterPage): Set<string> {
 // A declaration that is safe to consider removing. Exported ones are the page's
 // interface to Astro — `getStaticPaths`, `prerender` — and belong to nobody
 // here. A destructure is not matched by the reader at all.
-const EXPORTED_RE = (name: string): RegExp =>
-  new RegExp(`(^|\\n)[ \\t]*export\\s+(const|let|var)\\s+${name.replace(/\$/g, '\\$')}\\b`);
+const EXPORTED_RE = (name: string): RegExp => new RegExp(`(^|\\n)[ \\t]*export\\s+(const|let|var)\\s+${name.replace(/\$/g, '\\$')}\\b`);
 
 /**
  * The top-level declarations in a page's frontmatter that nothing on the page
@@ -344,12 +343,7 @@ export function withoutDeclarations(code: unknown, names: readonly string[]): st
  * `has` says what the page being pasted into already has — a name it already
  * knows is its own, and is left alone rather than overwritten.
  */
-export function neededFrontmatter({
-  names,
-  frontmatter,
-  imports,
-  has,
-}: FrontmatterRequest): NeededFrontmatter {
+export function neededFrontmatter({ names, frontmatter, imports, has }: FrontmatterRequest): NeededFrontmatter {
   const known = has || (() => false);
   const code = String(frontmatter || '');
   const declared = parseDeclarations(code);
@@ -394,10 +388,7 @@ export function neededFrontmatter({
 }
 
 /** The frontmatter with those statements added at the end. */
-export function withStatements(
-  code: unknown,
-  statements: readonly Statement[] | undefined,
-): string {
+export function withStatements(code: unknown, statements: readonly Statement[] | undefined): string {
   const lines = (statements || []).map((entry) => entry.statement).filter(Boolean);
   if (!lines.length) {
     return String(code || '');

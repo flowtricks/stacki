@@ -18,13 +18,9 @@ import {
   referenceCallIn,
 } from './dataSource';
 import { sampleAt, sampleKey, type TreeNode, sampleNode, literalNode } from './dataSample';
-import {
-  queriesInScope,
-  namesInScope,
-  type DataContext,
-  type SchemaField,
-  autoQueryName,
-} from './dataScope';
+import { queriesInScope, namesInScope, type DataContext, type SchemaField, autoQueryName } from './dataScope';
+import { readLoop } from './loopQueryRead';
+import { parseExpression } from './loopSyntax';
 export {
   QUERY_MARK,
   type MarkedQuery,
@@ -42,15 +38,7 @@ export {
   importedCallsInScope,
 } from './dataScope';
 
-export {
-  sampleAt,
-  sampleKey,
-  type ReferenceNeed,
-  referencesInScope,
-  sampleKind,
-  samplePreview,
-  type TreeNode,
-} from './dataSample';
+export { sampleAt, sampleKey, type ReferenceNeed, referencesInScope, sampleKind, samplePreview, type TreeNode } from './dataSample';
 
 export {
   parseDeclarations,
@@ -142,8 +130,7 @@ function shapeNode(name: string, fields: readonly { key: string; kind: string }[
 // The pattern is assembled from two literal pieces only to fit the line width; each piece is a
 // complete regular expression on its own, and the joined source is the original pattern.
 const KEEPS_SHAPE = new RegExp(
-  /^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\.\s*/.source +
-    /(filter|slice|sort|reverse|concat|toSorted|toReversed|flat)\s*\(/.source,
+  /^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\.\s*/.source + /(filter|slice|sort|reverse|concat|toSorted|toReversed|flat)\s*\(/.source,
   '',
 );
 
@@ -152,8 +139,7 @@ const KEEPS_SHAPE = new RegExp(
 // nothing at all about `featured`: it offered it as a bare value with no fields
 // under it, so the one entry the page is actually built around was the one
 // thing you couldn't pick a title out of.
-const PICKS_ONE =
-  /^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*(?:\.\s*(?:find|at|pop|shift)\s*\(|\[\s*\d+\s*\])/;
+const PICKS_ONE = /^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*(?:\.\s*(?:find|at|pop|shift)\s*\(|\[\s*\d+\s*\])/;
 
 function addUnique(list: TreeNode[], node: TreeNode | undefined, seen: Set<string>): void {
   if (!node || seen.has(node.path)) {
@@ -197,41 +183,35 @@ function shapeChildren(field: SchemaField | undefined, base: string): TreeNode[]
 
 // 1. This file's own props. Real values when the canvas is showing an entry
 //    that carries them; the declared type otherwise.
-function buildPropNodes(
-  destructures: readonly Destructure[],
-  schema: readonly SchemaField[],
-  sample: unknown,
-  seen: Set<string>,
-): TreeNode[] {
+function buildPropNodes(destructures: readonly Destructure[], schema: readonly SchemaField[], sample: unknown, seen: Set<string>): TreeNode[] {
   const props: TreeNode[] = [];
   const sampleRecord = toRecord(sample);
-  const known = (name: string): boolean =>
-    sampleRecord !== undefined && Object.prototype.hasOwnProperty.call(sample, name);
+  const known = (name: string): boolean => sampleRecord !== undefined && Object.prototype.hasOwnProperty.call(sample, name);
+  const renamed = new Set<string>();
   for (const destructure of destructures) {
     if (!/^Astro\.props\b/.test(destructure.from)) {
       continue;
     }
-    if (known(destructure.name) && sampleRecord) {
-      addUnique(
-        props,
-        sampleNode(destructure.name, destructure.name, sampleRecord[destructure.name], 0),
-        seen,
-      );
+    // A renamed prop (`paddingTop: propPaddingTop`) is read by its local name,
+    // the one the code can use, with the value and type of the prop itself.
+    // Its prop name is then taken, so it is not listed again below as if it
+    // were a name in scope.
+    const prop = destructure.prop;
+    if (prop !== destructure.name) {
+      renamed.add(prop);
+    }
+    if (known(prop) && sampleRecord) {
+      addUnique(props, sampleNode(destructure.name, destructure.name, sampleRecord[prop], 0), seen);
       continue;
     }
-    const field = schema.find((field) => field.name === destructure.name);
+    const field = schema.find((field) => field.name === prop);
     const shape = shapeChildren(field, destructure.name);
     addUnique(
       props,
       {
         path: destructure.name,
         key: destructure.name,
-        kind:
-          shape && field?.shapeIsList
-            ? 'list'
-            : destructure.kind === 'rest'
-              ? 'rest props'
-              : field?.type || destructure.kind || 'prop',
+        kind: shape && field?.shapeIsList ? 'list' : destructure.kind === 'rest' ? 'rest props' : field?.type || destructure.kind || 'prop',
         preview: field?.default !== undefined ? String(field.default) : '',
         children: shape,
       },
@@ -241,7 +221,7 @@ function buildPropNodes(
   // A prop the file declares but destructures elsewhere (or reads off
   // Astro.props directly) is still a prop of this file.
   for (const field of schema) {
-    if (seen.has(field.name)) {
+    if (seen.has(field.name) || renamed.has(field.name)) {
       continue;
     }
     addUnique(
@@ -264,29 +244,21 @@ function buildPropNodes(
 // A reference followed through the data: `getEntry(post.data.author)` is this
 // post's author, so the fields shown are that author's. Undefined when the
 // declaration follows no reference the samples resolve.
-function referenceNode(
-  name: string,
-  value: string,
-  samples: Record<string, unknown>,
-  sample: unknown,
-): TreeNode | undefined {
+function referenceNode(name: string, value: string, samples: Record<string, unknown>, sample: unknown): TreeNode | undefined {
   const ref = referenceCallIn(value);
   if (ref === undefined) {
     return undefined;
   }
   const at = sampleAt(sample, ref.path);
   const targetList = toArray(at);
-  const target = targetList
-    ? targetList.find((candidate) => toRecord(candidate)?.['collection'])
-    : at;
+  const target = targetList ? targetList.find((candidate) => toRecord(candidate)?.['collection']) : at;
   const targetRecord = toRecord(target);
   const targetCollection = targetRecord?.['collection'];
   const targetId = targetRecord?.['id'];
   if (typeof targetCollection !== 'string') {
     return undefined;
   }
-  const resolved =
-    samples[sampleKey(targetCollection, typeof targetId === 'string' ? targetId : undefined)];
+  const resolved = samples[sampleKey(targetCollection, typeof targetId === 'string' ? targetId : undefined)];
   if (!resolved) {
     return undefined;
   }
@@ -300,12 +272,12 @@ function referenceNode(
 function buildValueNodes(
   decls: ReadonlyMap<string, string>,
   destructures: readonly Destructure[],
-  imports: readonly ImportLike[],
-  samples: Record<string, unknown>,
+  page: { readonly frontmatter: string; readonly imports: readonly ImportLike[]; readonly samples: Record<string, unknown> },
   sample: unknown,
   seen: Set<string>,
   valueSamples: Record<string, unknown> = {},
 ): TreeNode[] {
+  const { imports, samples } = page;
   const values: TreeNode[] = [];
   for (const [name, value] of decls) {
     if (looksCallable(value)) {
@@ -320,7 +292,10 @@ function buildValueNodes(
     }
     // A collection read by name gets the real thing: one entry, sampled, with
     // the query's own shape around it — `getCollection` hands back a list.
-    const call = collectionCallIn(value);
+    // An object or array written out (`{ campus: await getCollection(…) }`)
+    // holds lists; it is not one itself.
+    const written = /^[{[]/.test(value.trim());
+    const call = written ? undefined : collectionCallIn(value);
     const entry = call ? samples[call.name] : undefined;
     if (call && entry) {
       const many = call.fn !== 'getEntry';
@@ -328,6 +303,13 @@ function buildValueNodes(
       // "blog entries", not "1 item" — the sample is one of them, not all.
       node.preview = `${call.name} ${many ? 'entries' : 'entry'}`;
       addUnique(values, node, seen);
+      continue;
+    }
+    // A list the loop reader can follow to a collection, however the page
+    // reshapes it on the way (a builder export's `queryItems(collections[…])`).
+    const listed = value.includes('(') ? (written ? listsHolderNode(name, value, page) : collectionListNode(name, page)) : undefined;
+    if (listed !== undefined) {
+      addUnique(values, listed, seen);
       continue;
     }
     const referenced = referenceNode(name, value, samples, sample);
@@ -341,9 +323,7 @@ function buildValueNodes(
     if (/^Astro\.props\b/.test(destructure.from)) {
       continue;
     }
-    const shape = /\brender\s*\(/.test(destructure.from)
-      ? RENDER_SHAPE[destructure.name]
-      : undefined;
+    const shape = /\brender\s*\(/.test(destructure.from) ? RENDER_SHAPE[destructure.name] : undefined;
     addUnique(
       values,
       shape
@@ -363,12 +343,7 @@ function buildValueNodes(
 }
 
 // The imports that may hold data, for a value read straight from one.
-function addImportNodes(
-  values: TreeNode[],
-  decls: ReadonlyMap<string, string>,
-  imports: readonly ImportLike[],
-  seen: Set<string>,
-): void {
+function addImportNodes(values: TreeNode[], decls: ReadonlyMap<string, string>, imports: readonly ImportLike[], seen: Set<string>): void {
   for (const imp of imports) {
     if (imp.name === undefined || decls.has(imp.name)) {
       continue;
@@ -376,11 +351,7 @@ function addImportNodes(
     if (!mayHoldData(imp)) {
       continue;
     }
-    addUnique(
-      values,
-      { path: imp.name, key: imp.name, kind: 'import', preview: '', children: undefined },
-      seen,
-    );
+    addUnique(values, { path: imp.name, key: imp.name, kind: 'import', preview: '', children: undefined }, seen);
   }
 }
 
@@ -420,11 +391,7 @@ function withDerivedShapes(
 
 // The fields `node` takes from the value its declaration narrows or picks
 // from, or undefined when it reads no known shape.
-function derivedShape(
-  node: TreeNode,
-  declaration: string,
-  byName: ReadonlyMap<string, TreeNode>,
-): TreeNode | undefined {
+function derivedShape(node: TreeNode, declaration: string, byName: ReadonlyMap<string, TreeNode>): TreeNode | undefined {
   const name = node.path;
   const match = declaration.match(KEEPS_SHAPE);
   const baseName = match?.[1];
@@ -444,9 +411,7 @@ function derivedShape(
     return undefined;
   }
   // "portfolio entries" describes the list; this is one of them.
-  const preview = /\bentries$/.test(from?.preview ?? '')
-    ? (from?.preview ?? '').replace(/\bentries$/, 'entry')
-    : item.preview || '';
+  const preview = /\bentries$/.test(from?.preview ?? '') ? (from?.preview ?? '').replace(/\bentries$/, 'entry') : item.preview || '';
   return { ...node, kind: item.kind, preview, children: rebase(item.children, item.path, name) };
 }
 
@@ -509,10 +474,7 @@ function everyField(entries: readonly TreeNode[] | undefined, at = 0): TreeNode[
     // item name from there, and a path through `[3]` would name one particular
     // service rather than the item.
     const home = entries[at] ?? first;
-    const kids =
-      entry === home
-        ? (entry.children ?? [])
-        : (rebase(entry.children, entry.path, home.path) ?? []);
+    const kids = entry === home ? (entry.children ?? []) : (rebase(entry.children, entry.path, home.path) ?? []);
     for (const child of kids) {
       if (seenKeys.has(child.key)) {
         continue;
@@ -587,11 +549,7 @@ function buildLoopNodes(
     );
     const indexName = match[3];
     if (indexName !== undefined) {
-      addUnique(
-        loops,
-        { path: indexName, key: indexName, kind: 'number', preview: '0', children: undefined },
-        seen,
-      );
+      addUnique(loops, { path: indexName, key: indexName, kind: 'number', preview: '0', children: undefined }, seen);
     }
   }
   return loops;
@@ -625,25 +583,75 @@ export function dataTree(context: DataContext | undefined): TreeNode[] {
   const derived = withDerivedShapes(
     decls,
     buildPropNodes(destructures, schema, sample, seen),
-    buildValueNodes(decls, destructures, imports, samples, sample, seen, context?.valueSamples),
+    buildValueNodes(decls, destructures, { frontmatter: fm, imports, samples }, sample, seen, context?.valueSamples),
   );
   const props = derived.props;
-  const values = [
-    ...derived.values,
-    ...buildCollectionNodes(context?.collections ?? [], fm, imports, samples, seen),
-  ];
-  const loops = buildLoopNodes(
-    context?.ancestorHeads ?? [],
-    props,
-    values,
-    context?.itemIndex,
-    seen,
-  );
+  const values = [...derived.values, ...buildCollectionNodes(context?.collections ?? [], fm, imports, samples, seen)];
+  const loops = buildLoopNodes(context?.ancestorHeads ?? [], props, values, context?.itemIndex, seen);
 
   // The loop item leads: inside a loop, it is what the markup is FOR — every
   // field in there is a field of that item. Then this file's props, then
   // everything else it holds.
   return [...loops, ...props, ...values];
+}
+
+// `items1`, read through the loop reader to the collection it lists, with one
+// sampled entry in the shape the page gives its items: `{ id, fields }` for a
+// builder export's reshaped items, the entry itself otherwise.
+function collectionListNode(
+  name: string,
+  page: { readonly frontmatter: string; readonly imports: readonly ImportLike[]; readonly samples: Record<string, unknown> },
+): TreeNode | undefined {
+  const imports = page.imports.flatMap((entry) => (entry.name !== undefined && entry.path !== undefined ? [{ name: entry.name, path: entry.path }] : []));
+  const reading = readLoop({ frontmatter: page.frontmatter, imports, data: name });
+  if (reading.kind !== 'query' || reading.query.source.kind !== 'astro') {
+    return undefined;
+  }
+  const collection = reading.query.source.collection;
+  const entry = page.samples[collection];
+  if (entry === undefined || entry === null) {
+    return undefined;
+  }
+  const itemPath = reading.home === undefined ? ['data'] : reading.home.itemPath;
+  const data = toRecord(entry)?.['data'];
+  const id = toRecord(data)?.['_id'] ?? toRecord(entry)?.['id'];
+  const item = itemPath[0] === 'fields' ? { id, fields: data } : entry;
+  const node = sampleNode(name, name, [item], 0);
+  node.preview = `${collection} entries`;
+  assert(node.path === name, 'A collection list is named as the page names it');
+  return node;
+}
+
+// `const collections = { "campus": …, "nav-links": … }`: an object written out
+// whose entries are collection lists, each opening to one sampled item.
+// Undefined when none of its entries is one.
+const HOLDER_ENTRIES_MAX = 100;
+function listsHolderNode(
+  name: string,
+  value: string,
+  page: { readonly frontmatter: string; readonly imports: readonly ImportLike[]; readonly samples: Record<string, unknown> },
+): TreeNode | undefined {
+  const parsed = parseExpression(value);
+  const object = parsed?.expression;
+  if (object?.kind !== 'object') {
+    return undefined;
+  }
+  const children: TreeNode[] = [];
+  for (const entry of object.entries.slice(0, HOLDER_ENTRIES_MAX)) {
+    const key = entry.key;
+    if (key === undefined) {
+      continue;
+    }
+    const path = /^[A-Za-z_$][\w$]*$/.test(key) ? `${name}.${key}` : `${name}[${JSON.stringify(key)}]`;
+    const node = collectionListNode(path, page);
+    if (node !== undefined) {
+      children.push({ ...node, key });
+    }
+  }
+  assert(children.length <= HOLDER_ENTRIES_MAX, 'A holder lists a bounded number of lists');
+  return children.length === 0
+    ? undefined
+    : { path: name, key: name, kind: 'object', preview: `${children.length} ${children.length === 1 ? 'list' : 'lists'}`, children };
 }
 
 // What can be looped over: a list, or a value whose shape the app cannot see
@@ -680,12 +688,7 @@ function listsOnlyAt(nodes: readonly TreeNode[] | undefined, depth: number): Pic
 }
 
 // `posts[0].data.title` seen from inside the loop is `post.data.title`.
-function rebase(
-  nodes: readonly TreeNode[] | undefined,
-  from: string,
-  to: string,
-  depth = 0,
-): TreeNode[] | undefined {
+function rebase(nodes: readonly TreeNode[] | undefined, from: string, to: string, depth = 0): TreeNode[] | undefined {
   assert(depth <= LIMITS.treeDepthMax, 'Data tree exceeds depth limit');
   if (!nodes) {
     return undefined;

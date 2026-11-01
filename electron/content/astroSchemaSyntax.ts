@@ -29,11 +29,7 @@ export const CHAIN_STEPS_MAX = 32;
 
 // The object's properties written as `texts`, in the layout it already has: one
 // per line when it spans lines, side by side when it is written on one.
-export function propertyList(
-  object: ts.ObjectLiteralExpression,
-  file: ts.SourceFile,
-  texts: readonly string[],
-): SpanEdit {
+export function propertyList(object: ts.ObjectLiteralExpression, file: ts.SourceFile, texts: readonly string[]): SpanEdit {
   const open = object.getStart(file);
   const close = object.getEnd();
   const inner = file.text.slice(open + 1, close - 1);
@@ -62,11 +58,7 @@ export function referenceTarget(property: ts.ObjectLiteralElementLike): string |
     if (node === undefined) {
       continue;
     }
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === 'reference'
-    ) {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'reference') {
       const first = node.arguments[0];
       return first !== undefined && ts.isStringLiteralLike(first) ? first.text : undefined;
     }
@@ -80,13 +72,7 @@ export function locate(source: string, collection: string): Result<Located, stri
   if (source.length > CONFIG_CHARS_MAX) {
     return { ok: false, error: 'The content config is too large to edit here.' };
   }
-  const file = ts.createSourceFile(
-    'content.config.ts',
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const file = ts.createSourceFile('content.config.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const collections = collectionsObject(file);
   if (collections === undefined) {
     return {
@@ -118,15 +104,8 @@ export function collectionsObject(file: ts.SourceFile): ts.ObjectLiteralExpressi
 }
 
 // The defineCollection call a collection's entry names: inline, or by a const.
-export function defineCall(
-  entry: ts.ObjectLiteralElementLike,
-  file: ts.SourceFile,
-): ts.CallExpression | undefined {
-  const value = ts.isPropertyAssignment(entry)
-    ? unwrap(entry.initializer)
-    : ts.isShorthandPropertyAssignment(entry)
-      ? entry.name
-      : undefined;
+export function defineCall(entry: ts.ObjectLiteralElementLike, file: ts.SourceFile): ts.CallExpression | undefined {
+  const value = ts.isPropertyAssignment(entry) ? unwrap(entry.initializer) : ts.isShorthandPropertyAssignment(entry) ? entry.name : undefined;
   if (value !== undefined && ts.isCallExpression(value)) {
     return value;
   }
@@ -137,12 +116,7 @@ export function defineCall(
     if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
         const initial = unwrap(declaration.initializer);
-        if (
-          ts.isIdentifier(declaration.name) &&
-          declaration.name.text === value.text &&
-          initial !== undefined &&
-          ts.isCallExpression(initial)
-        ) {
+        if (ts.isIdentifier(declaration.name) && declaration.name.text === value.text && initial !== undefined && ts.isCallExpression(initial)) {
           return initial;
         }
       }
@@ -151,9 +125,7 @@ export function defineCall(
   return undefined;
 }
 
-export function schemaProperty(
-  call: ts.CallExpression | undefined,
-): ts.PropertyAssignment | undefined {
+export function schemaProperty(call: ts.CallExpression | undefined): ts.PropertyAssignment | undefined {
   const options = call?.arguments[0];
   if (options === undefined || !ts.isObjectLiteralExpression(options)) {
     return undefined;
@@ -162,9 +134,7 @@ export function schemaProperty(
   return schema !== undefined && ts.isPropertyAssignment(schema) ? schema : undefined;
 }
 
-export function schemaObject(
-  call: ts.CallExpression | undefined,
-): ts.ObjectLiteralExpression | undefined {
+export function schemaObject(call: ts.CallExpression | undefined): ts.ObjectLiteralExpression | undefined {
   const schema = schemaProperty(call);
   if (schema === undefined) {
     return undefined;
@@ -174,17 +144,9 @@ export function schemaObject(
     node = ts.isBlock(node.body) ? returned(node.body) : unwrap(node.body);
   }
   // Down the chain (`z.object({…}).passthrough()`) to the z.object call itself.
-  for (
-    let step = 0;
-    step < CHAIN_STEPS_MAX && node !== undefined && ts.isCallExpression(node);
-    step += 1
-  ) {
+  for (let step = 0; step < CHAIN_STEPS_MAX && node !== undefined && ts.isCallExpression(node); step += 1) {
     const callee = node.expression;
-    if (
-      ts.isPropertyAccessExpression(callee) &&
-      callee.name.text === 'object' &&
-      callee.expression.getText() === 'z'
-    ) {
+    if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'object' && callee.expression.getText() === 'z') {
       const shape = node.arguments[0];
       return shape !== undefined && ts.isObjectLiteralExpression(shape) ? shape : undefined;
     }
@@ -221,11 +183,7 @@ export function quoteOf(literal: ts.StringLiteralLike, file: ts.SourceFile): str
 export function unwrap(node: ts.Expression | undefined): ts.Expression | undefined {
   let current = node;
   for (let depth = 0; depth < CHAIN_STEPS_MAX && current !== undefined; depth += 1) {
-    if (
-      ts.isParenthesizedExpression(current) ||
-      ts.isAsExpression(current) ||
-      ts.isSatisfiesExpression(current)
-    ) {
+    if (ts.isParenthesizedExpression(current) || ts.isAsExpression(current) || ts.isSatisfiesExpression(current)) {
       current = current.expression;
     } else {
       return current;

@@ -4,8 +4,7 @@ import assert from 'node:assert/strict';
 import { chromium, type Page } from 'playwright';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const context = await browser.newContext({
@@ -72,9 +71,7 @@ try {
     .tap();
   await page.locator('.studio-right.mobile-open').waitFor();
   assert.deepEqual(errors, []);
-  console.log(
-    'Touch selection, both inspectors, client role and toolbar fitting at 10 widths passed.',
-  );
+  console.log('Touch selection, both inspectors, client role and toolbar fitting at 10 widths passed.');
 } finally {
   await browser.close();
 }
@@ -141,18 +138,14 @@ async function checkToolbarBounds(page: Page) {
   const layout = await page.locator('.preview-toolbar').evaluate((toolbar) => {
     const outer = toolbar.getBoundingClientRect();
     const controls = Array.from(
-      toolbar.querySelectorAll<HTMLElement>(
-        ':scope > .preview-toolbar-item:not(.is-overflow), :scope > .preview-toolbar-more:not(.is-overflow)',
-      ),
+      toolbar.querySelectorAll<HTMLElement>(':scope > .preview-toolbar-item:not(.is-overflow), :scope > .preview-toolbar-more:not(.is-overflow)'),
     );
     const boxes = controls.map((control) => control.getBoundingClientRect());
     return {
       screenFits: document.documentElement.scrollWidth <= window.innerWidth,
       toolbarFits: toolbar.scrollWidth <= toolbar.clientWidth,
       contained: boxes.every((box) => box.left >= outer.left && box.right <= outer.right),
-      separated: boxes.every(
-        (box, index) => index === 0 || box.left >= (boxes[index - 1]?.right ?? 0),
-      ),
+      separated: boxes.every((box, index) => index === 0 || box.left >= (boxes[index - 1]?.right ?? 0)),
       visible: controls.length,
     };
   });

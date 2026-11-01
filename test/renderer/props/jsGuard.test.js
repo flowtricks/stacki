@@ -61,23 +61,11 @@ const check = (what, condition, detail) => {
     check('a plain declaration passes', ok('const media = "x";'));
     check('a ternary passes', ok('const media = a === "card" ? ["card"] : [a];'));
     check('a template literal passes', ok('const media = `--_o: ${o}`;'));
-    check(
-      'top-level await passes',
-      ok('const rows = await load();'),
-      JSON.stringify(checkStatement('const rows = await load();')),
-    );
+    check('top-level await passes', ok('const rows = await load();'), JSON.stringify(checkStatement('const rows = await load();')));
     // The one that would make this feature worse than useless: Astro frontmatter
     // is TypeScript, and refusing correct TS would mean it could not be saved.
-    check(
-      'an annotated declaration passes',
-      ok('const media: string = "x";'),
-      JSON.stringify(checkStatement('const media: string = "x";')),
-    );
-    check(
-      'a generic passes',
-      ok('const rows: Array<string> = [];'),
-      JSON.stringify(checkStatement('const rows: Array<string> = [];')),
-    );
+    check('an annotated declaration passes', ok('const media: string = "x";'), JSON.stringify(checkStatement('const media: string = "x";')));
+    check('a generic passes', ok('const rows: Array<string> = [];'), JSON.stringify(checkStatement('const rows: Array<string> = [];')));
     check(
       'an interface-typed const passes',
       ok('const p: Props["media"] = undefined;'),
@@ -89,21 +77,13 @@ const check = (what, condition, detail) => {
     check('a stray token fails', !ok('const media = "x" ;; ='));
     check('an unfinished statement fails', !ok('const media = '));
     check('an unclosed brace fails', !ok('const media = {'));
-    check(
-      'an unclosed string fails',
-      !ok('const media = "x'),
-      JSON.stringify(checkStatement('const media = "x')),
-    );
+    check('an unclosed string fails', !ok('const media = "x'), JSON.stringify(checkStatement('const media = "x')));
 
     // The message has to name something you can go and look at.
     const stray = checkStatement('const media = "x" ;; =');
     check('a stray token is named', stray.message.includes('='), stray.message);
     const short = checkStatement('const media = ');
-    check(
-      'an unfinished statement says so',
-      /unfinished|stops early/i.test(short.message),
-      short.message,
-    );
+    check('an unfinished statement says so', /unfinished|stops early/i.test(short.message), short.message);
     const line = checkStatement('const a = 1;\nconst b = ;; =');
     check('and a multi-line mistake says which line', /line 2/.test(line.message), line.message);
   }
@@ -201,14 +181,8 @@ const check = (what, condition, detail) => {
   await act(async () => {
     chip.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
   });
-  const editRow = [...document.querySelectorAll('.bind-menu .dp-foot')].find((row) =>
-    row.textContent.includes('Edit media'),
-  );
-  check(
-    'the menu offers to edit it',
-    !!editRow,
-    [...document.querySelectorAll('.bind-menu .dp-foot')].map((row) => row.textContent).join(' | '),
-  );
+  const editRow = [...document.querySelectorAll('.bind-menu .dp-foot')].find((row) => row.textContent.includes('Edit media'));
+  check('the menu offers to edit it', !!editRow, [...document.querySelectorAll('.bind-menu .dp-foot')].map((row) => row.textContent).join(' | '));
   await act(async () => {
     editRow.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
   });
@@ -240,11 +214,7 @@ const check = (what, condition, detail) => {
   const isRed = () => !!cm()?.classList.contains('invalid');
   const message = () => box?.querySelector('.var-src-error')?.textContent?.trim() ?? '';
 
-  check(
-    'typing is possible at all',
-    await type('const media = "half'),
-    'no CodeMirror view to type into',
-  );
+  check('typing is possible at all', await type('const media = "half'), 'no CodeMirror view to type into');
 
   // Rule one: nothing goes to the file while typing.
   check('typing writes nothing to the file', writes.length === 0, JSON.stringify(writes));
@@ -255,34 +225,18 @@ const check = (what, condition, detail) => {
   check('leaving a broken statement writes nothing', writes.length === 0, JSON.stringify(writes));
   check('the field goes red', isRed(), cm()?.className);
   check('and says what to fix in a toast', toastMessages().length > 0, toastMessages());
-  check(
-    'the editor stays open to be fixed',
-    !!document.querySelector('.var-src'),
-    'it closed, taking the message with it',
-  );
+  check('the editor stays open to be fixed', !!document.querySelector('.var-src'), 'it closed, taking the message with it');
 
   // Fixing it clears the mark as you type — now that there is a mistake to watch.
   await type('const media = "half";');
   check('fixing it clears the mark', !isRed(), cm()?.className);
   check('and the message goes', message() === '', JSON.stringify(message()));
-  check(
-    'but still nothing is written until the field is left',
-    writes.length === 0,
-    JSON.stringify(writes),
-  );
+  check('but still nothing is written until the field is left', writes.length === 0, JSON.stringify(writes));
 
   await leaveField();
   check('leaving a good statement writes it', writes.length === 1, JSON.stringify(writes));
-  check(
-    'with the statement in it',
-    writes[0]?.includes('const media = "half";'),
-    JSON.stringify(writes[0]),
-  );
-  check(
-    'and the editor closes',
-    !document.querySelector('.var-src'),
-    'still open after a clean commit',
-  );
+  check('with the statement in it', writes[0]?.includes('const media = "half";'), JSON.stringify(writes[0]));
+  check('and the editor closes', !document.querySelector('.var-src'), 'still open after a clean commit');
 
   await act(async () => {
     root.unmount();

@@ -22,9 +22,7 @@ async function checkRecovery() {
   const browser = await chromium.launch({
     executablePath:
       process.env['CHROME_PATH'] ??
-      (process.platform === 'darwin'
-        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-        : chromium.executablePath()),
+      (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
     headless: true,
   });
   try {
@@ -45,10 +43,7 @@ async function checkRecovery() {
     assert.equal(await page.frameLocator('iframe').locator('h1').innerText(), 'Other page');
     await switchPage(page, 'src/pages/index.astro');
     await heading(page, 'Edit before navigating');
-    await writeFile(
-      path.join(fixture.root, 'src/pages/index.astro'),
-      '<main><h1>Outside edit</h1><p>Keep sibling</p></main>',
-    );
+    await writeFile(path.join(fixture.root, 'src/pages/index.astro'), '<main><h1>Outside edit</h1><p>Keep sibling</p></main>');
     await heading(page, 'Outside edit');
     await delayed.drain();
     assert.equal(await page.frameLocator('iframe').locator('h1').innerText(), 'Outside edit');

@@ -5,10 +5,7 @@ import path from 'node:path';
 import { propertyFixture, component, consumer, source, instance } from './propertyFixture';
 import { record, string } from '../src/shared/validation';
 import { scanProject } from '../src/features/project/projectServer';
-import {
-  editPropertyDefinition,
-  readComponentProperties,
-} from '../vendor/stacki/electron/properties/propertyDefinitions';
+import { editPropertyDefinition, readComponentProperties } from '../vendor/stacki/electron/properties/propertyDefinitions';
 
 const added = {
   name: 'count',
@@ -39,9 +36,7 @@ test('Stacki property definitions add, edit, reorder and remove while preserving
   );
   const remove = editPropertyDefinition(order.value, { kind: 'remove', name: 'count' });
   assert.ok(remove.ok);
-  assert.ok(
-    !readComponentProperties(remove.value).properties.some((property) => property.name === 'count'),
-  );
+  assert.ok(!readComponentProperties(remove.value).properties.some((property) => property.name === 'count'));
 });
 
 test('property API renames definition and aliased instances, persists drafts and supports undo/redo', async () => {
@@ -115,9 +110,7 @@ test('stale saves and undo preserve collaborator edits; paths cannot escape the 
     assert.equal(saved['ok'], true);
     const current = await fixture.rooms.read(component);
     const remote = current + '<!-- collaborator -->';
-    await fixture.rooms.coordinator.run(async () =>
-      (await fixture.rooms.get(component)).setSource(remote),
-    );
+    await fixture.rooms.coordinator.run(async () => (await fixture.rooms.get(component)).setSource(remote));
     const refused = await fixture.post({ undo: record(saved['value'])['undo'] });
     assert.ok(refused['error']);
     const stale = await fixture.post({
@@ -182,10 +175,7 @@ const extra = await slotContent(Astro.slots, 'aside');
 <Fragment set:html={content} /><Fragment set:html={extra} />`),
     );
     const project = await scanProject(fixture.root);
-    assert.deepEqual(project.components.find((item) => item.file === component)?.slots, [
-      'default',
-      'aside',
-    ]);
+    assert.deepEqual(project.components.find((item) => item.file === component)?.slots, ['default', 'aside']);
   } finally {
     await fixture.close();
   }

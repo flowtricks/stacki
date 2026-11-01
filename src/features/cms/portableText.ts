@@ -11,11 +11,7 @@
 // than dropped when the text is saved.
 
 import { assert } from '../../../shared/core/assert';
-import {
-  remoteList,
-  remoteObject,
-  type RemoteValue,
-} from '../../../shared/properties/cmsRemoteSchema';
+import { remoteList, remoteObject, type RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
 
 type Fields = { readonly [key: string]: RemoteValue };
 
@@ -97,9 +93,7 @@ export function htmlPortableText(
       flush();
       for (const item of Array.from(node.childNodes)) {
         const listItem = tag === 'ol' ? 'number' : 'bullet';
-        blocks.push(
-          blockOf(Array.from(item.childNodes), { style: 'normal', listItem }, { ...context, tick }),
-        );
+        blocks.push(blockOf(Array.from(item.childNodes), { style: 'normal', listItem }, { ...context, tick }));
       }
     } else if (tag !== undefined && ['p', 'div', ...BLOCK_STYLES].includes(tag)) {
       flush();
@@ -110,9 +104,7 @@ export function htmlPortableText(
     }
   }
   flush();
-  const kept = (remoteList(previous) ?? []).filter(
-    (item) => remoteObject(item)?.['_type'] !== 'block',
-  );
+  const kept = (remoteList(previous) ?? []).filter((item) => remoteObject(item)?.['_type'] !== 'block');
   assert(blocks.length <= BLOCKS_MAX, 'An edit stays within the block bound');
   return [...blocks, ...kept];
 }
@@ -156,11 +148,7 @@ interface Reading {
 // Sanity's name for a block's annotation definitions (links), written as it spells it.
 const MARK_DEFINITIONS = 'markDefs';
 
-function blockOf(
-  nodes: readonly Node[],
-  shape: { readonly style: string; readonly listItem?: string },
-  reading: Reading,
-): RemoteValue {
+function blockOf(nodes: readonly Node[], shape: { readonly style: string; readonly listItem?: string }, reading: Reading): RemoteValue {
   const children: Fields[] = [];
   const definitions: Fields[] = [];
   const queue: { readonly node: Node; readonly marks: readonly string[] }[] = nodes.map((node) => ({
@@ -216,11 +204,7 @@ function span(text: string, marks: readonly string[], reading: Reading): Fields 
 }
 
 function escapeHTML(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // By node type rather than `instanceof`, which fails across documents and windows.

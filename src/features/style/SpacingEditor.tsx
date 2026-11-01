@@ -15,15 +15,7 @@ import VariableConnect from './VariableConnect';
 import { type ResolvedProp } from './model/resolved';
 import { useDebouncedLive } from './model/fieldHooks';
 import { parseImportant } from './model/styleDisplay';
-import {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type Read,
-  type SelectSelector,
-  type Side,
-  displayOf,
-} from './spacingTypes';
+import { type SetProp, type ClearProp, type LiveSetProp, type Read, type SelectSelector, type Side, displayOf } from './spacingTypes';
 import { affectedSides, siblingProps } from './SpacingFill';
 import { withImportant } from './spacingValue';
 import { humanLabel } from './SpacingLabel';
@@ -145,23 +137,13 @@ export function SpacingResetButton({ onReset }: { onReset: () => void }) {
 
 // The editor's state and handlers: the draft (seeded once, when the popover
 // opens), live writes while typing, and the single commit when it closes.
-export function useSpacingEditor({
-  prop,
-  side,
-  read,
-  setProp,
-  clearProp,
-  liveSetProp,
-  onClose,
-}: SpacingEditorProps) {
+export function useSpacingEditor({ prop, side, read, setProp, clearProp, liveSetProp, onClose }: SpacingEditorProps) {
   const external = spacingExternal(read(prop));
   const { draft, draftRef, setDraftValue } = useEditorDraft(external);
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   useEditorFocus(rootRef, inputRef);
-  const { cancelLive, liveNow, scheduleLive } = useDebouncedLive((value, important) =>
-    liveSetProp(prop, value, important),
-  );
+  const { cancelLive, liveNow, scheduleLive } = useDebouncedLive((value, important) => liveSetProp(prop, value, important));
   const commit = useSpacingCommit({ prop, side, external, draftRef, setProp, clearProp });
   // Commit the latest draft and close — once, so blur + outside-click can't
   // double-fire.
@@ -284,10 +266,7 @@ export function spacingEditorHandlers({
 // the editor. Closing there took the popup down with it before anything could
 // be chosen. Checked a tick later because during a blur the focus has left one
 // element and not yet reached the next.
-export function closeUnlessInPopup(
-  rootRef: React.RefObject<HTMLDivElement>,
-  close: () => void,
-): void {
+export function closeUnlessInPopup(rootRef: React.RefObject<HTMLDivElement>, close: () => void): void {
   window.setTimeout(() => {
     if (hasOwnedPopup(rootRef.current ?? undefined)) {
       return;
@@ -373,11 +352,7 @@ export function useSpacingCommit({
     rebase: (value: string) => {
       originalRef.current = value;
     },
-    recordKey: (event: {
-      key: string;
-      shiftKey: boolean;
-      altKey: boolean;
-    }): 'commit' | 'abandon' | 'none' => {
+    recordKey: (event: { key: string; shiftKey: boolean; altKey: boolean }): 'commit' | 'abandon' | 'none' => {
       if (event.key === 'Enter') {
         commitRequested.current = true;
         commitProps.current = siblingProps(prop, side, affectedSides(side, event));
@@ -396,10 +371,7 @@ export function useSpacingCommit({
 // Opened to be typed in: focus the field it actually shows. With a variable in the
 // value that is the rich editor, and focusing the <input> hidden behind it left the
 // popup looking focused while the caret was nowhere.
-export function useEditorFocus(
-  rootRef: React.RefObject<HTMLDivElement>,
-  inputRef: React.RefObject<HTMLInputElement>,
-): void {
+export function useEditorFocus(rootRef: React.RefObject<HTMLDivElement>, inputRef: React.RefObject<HTMLInputElement>): void {
   useEffect(() => {
     const rich = rootRef.current?.querySelector<HTMLElement>('.embed-editor_varconnect-editor');
     if (rich) {
@@ -420,10 +392,7 @@ export function useEditorFocus(
 // the input. Padding stops at 0; a margin or an inset is free to go negative,
 // which is the whole point of pulling something out of its box. Returns the
 // stepped text, if any.
-export function stepSpacingKey(
-  event: ReactKeyboardEvent<HTMLInputElement>,
-  prop: string,
-): string | undefined {
+export function stepSpacingKey(event: ReactKeyboardEvent<HTMLInputElement>, prop: string): string | undefined {
   const stepped = handleArrowStep(event, isNonNegative(prop) ? 0 : undefined);
   if (!stepped) {
     return undefined;

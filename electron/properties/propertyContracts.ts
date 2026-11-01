@@ -51,9 +51,7 @@ export function readPropertyContracts(document: PropertySyntax): PropertyContrac
   const attributes = htmlAttributeImports(document.syntax);
   const imports = importedTypeNames(document.syntax);
   const publicContract = readContract(declarations.get('Props'), declarations, attributes, imports);
-  const runtimeContracts = assertions.map((node) =>
-    readContract(node.type, declarations, attributes, imports),
-  );
+  const runtimeContracts = assertions.map((node) => readContract(node.type, declarations, attributes, imports));
   const contracts = [publicContract, ...runtimeContracts];
   const editable = new Map<string, ts.PropertySignature>();
   const reasons = new Map<string, string>();
@@ -81,9 +79,7 @@ export function readPropertyContracts(document: PropertySyntax): PropertyContrac
             }
           : {
               kind: 'restricted',
-              reason:
-                reasons.get(name) ??
-                'This prop is inherited or imported. Edit its declaration in source.',
+              reason: reasons.get(name) ?? 'This prop is inherited or imported. Edit its declaration in source.',
             },
     conditions: (name) => contractConditions(publicContract, name),
   };
@@ -106,11 +102,7 @@ function inheritedAttributeCanOverride(name: string, contracts: readonly Contrac
   return contracts.every((contract) => contract.inheritedAttributes && !contract.members.has(name));
 }
 
-function commonMemberRestriction(
-  name: string,
-  contract: Contract,
-  runtimeContracts: readonly Contract[],
-): string | undefined {
+function commonMemberRestriction(name: string, contract: Contract, runtimeContracts: readonly Contract[]): string | undefined {
   const usages = contract.members.get(name) ?? [];
   if (usages.some((usage) => usage.conditional)) {
     return 'This prop has variant rules. Edit its declaration in source to preserve those rules.';
@@ -124,11 +116,7 @@ function commonMemberRestriction(
   const member = usages[0]?.member;
   for (const runtime of runtimeContracts) {
     const matches = runtime.members.get(name) ?? [];
-    if (
-      !runtime.complete ||
-      matches.length === 0 ||
-      matches.some((match) => match.member !== member || match.conditional)
-    ) {
+    if (!runtime.complete || matches.length === 0 || matches.some((match) => match.member !== member || match.conditional)) {
       return 'This prop has a separate runtime type. Edit both declarations together in source.';
     }
   }
@@ -179,11 +167,7 @@ function readContract(
   return { members, names, branches, complete, inheritedAttributes };
 }
 
-function isInheritedAstroAttributes(
-  node: ts.Node,
-  declarations: ReadonlyMap<string, Declaration>,
-  attributes: ReadonlySet<string>,
-): boolean {
+function isInheritedAstroAttributes(node: ts.Node, declarations: ReadonlyMap<string, Declaration>, attributes: ReadonlySet<string>): boolean {
   if (!ts.isTypeReferenceNode(node) && !ts.isExpressionWithTypeArguments(node)) {
     return false;
   }
@@ -211,9 +195,7 @@ function contractChildren(
     }
     return [
       ...node.members.map((member) => ({ ...next, node: member })),
-      ...(node.heritageClauses ?? [])
-        .flatMap((clause) => clause.types)
-        .map((type) => ({ ...next, node: type })),
+      ...(node.heritageClauses ?? []).flatMap((clause) => clause.types).map((type) => ({ ...next, node: type })),
     ];
   }
   if (ts.isTypeLiteralNode(node)) {
@@ -236,10 +218,7 @@ function contractChildren(
       return [];
     }
     // Omit only narrows known Astro attributes, so it cannot hide another local declaration.
-    if (
-      ts.isTypeReferenceNode(node) &&
-      isOmittedAstroAttributes(node, declarations, attributes, imports)
-    ) {
+    if (ts.isTypeReferenceNode(node) && isOmittedAstroAttributes(node, declarations, attributes, imports)) {
       return [];
     }
     const declaration = declarations.get(name);
@@ -283,11 +262,7 @@ function htmlAttributeImports(syntax: ts.SourceFile): ReadonlySet<string> {
   for (const statement of syntax.statements) {
     if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
       const bindings = statement.importClause?.namedBindings;
-      if (
-        statement.moduleSpecifier.text === 'astro/types' &&
-        bindings &&
-        ts.isNamedImports(bindings)
-      ) {
+      if (statement.moduleSpecifier.text === 'astro/types' && bindings && ts.isNamedImports(bindings)) {
         for (const specifier of bindings.elements) {
           if ((specifier.propertyName ?? specifier.name).text === 'HTMLAttributes') {
             names.add(specifier.name.text);
@@ -322,14 +297,10 @@ function importedTypeNames(syntax: ts.SourceFile): ReadonlySet<string> {
 
 function unionBranches(node: ts.UnionTypeNode): readonly Branch[] {
   const fields = node.types.map(branchFields);
-  const discriminator = [...(fields[0]?.keys() ?? [])].find((name) =>
-    fields.every((branch) => literalBranchValue(branch.get(name)?.type) !== undefined),
-  );
+  const discriminator = [...(fields[0]?.keys() ?? [])].find((name) => fields.every((branch) => literalBranchValue(branch.get(name)?.type) !== undefined));
   return fields.map((branch, index) => ({
     fields: branch,
-    condition: discriminator
-      ? `${discriminator} = ${literalBranchValue(branch.get(discriminator)?.type)}`
-      : `Variant branch ${index + 1}`,
+    condition: discriminator ? `${discriminator} = ${literalBranchValue(branch.get(discriminator)?.type)}` : `Variant branch ${index + 1}`,
   }));
 }
 

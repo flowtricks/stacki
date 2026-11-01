@@ -2817,6 +2817,9 @@ body > .embed-editor_provenance {
 
 .dp-list {
   overflow-y: auto;
+  /* Room for the scrollbar is kept whether or not it shows, so opening a row
+     that makes the list scroll doesn't shift every row sideways. */
+  scrollbar-gutter: stable;
   padding: 4px;
 }
 .dp-row {
@@ -3583,6 +3586,8 @@ body > .embed-editor_provenance {
 }
 .dd-popup.dd-searchable .dd-list {
   overflow-y: auto;
+  /* As the data picker's list: the scrollbar never moves the rows. */
+  scrollbar-gutter: stable;
   padding: 2px 4px 4px;
 }
 .dd-empty {
@@ -3890,13 +3895,13 @@ body > .embed-editor_provenance {
   background: var(--border);
   margin: 5px 4px;
 }
-.props-field textarea {
-  min-height: 64px;
-}
+/* A field is as tall as its text: one line until it has more. AutoTextarea
+   grows it from there, so no extra height is reserved for text not typed. */
 /* Rich inline Content editor + selection bubble */
 .rich-content {
   width: 100%;
-  min-height: 60px;
+  /* One line, as tall as the panel's other fields; it grows with its text. */
+  min-height: 30px;
   font-size: 12px;
   line-height: 1.55;
   color: var(--text);
@@ -7180,6 +7185,16 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   padding-bottom: 6px;
   margin-bottom: 4px;
 }
+/* A column heading is one line. Wrapped, a long name read as two headings and
+   pushed its row taller than the others; instead the sheet measures the widest
+   heading and widens every value column to fit it (see useVariableSheetScroll).
+   Past that width's cap the end is cut off, and the title holds the whole name. */
+.vars-scroll-head .vars-head {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .vars-grip {
   display: flex;
   align-items: center;
@@ -7240,6 +7255,13 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   color: var(--text-faint);
   font-size: 11px;
   padding-left: 8px;
+}
+/* The leading box starts where a row's text does — the field's 8px padding —
+   so swatches, curves, numbers and chips share one left edge down the column.
+   Flush with the cell, the boxes stood out 8px left of every value beside them. */
+.var-cell > .u-color-swatch,
+.var-cell > .var-ease {
+  margin-left: 8px;
 }
 .var-cell .u-color-swatch {
   width: 22px;

@@ -14,28 +14,14 @@ import ProvenanceList from './ProvenanceList';
 import { useHighlight } from './model/computedStyle';
 import { displayOf } from './model/styleDisplay';
 import { DecorNoneIcon } from './TypographyIcons';
-import {
-  type Props,
-  joinImportant,
-  LiveInput,
-  StackedField,
-  type Seg,
-  SegBar,
-  MoreIcon,
-} from './TypographyKit';
+import { type Props, joinImportant, LiveInput, StackedField, type Seg, SegBar, MoreIcon } from './TypographyKit';
 
 // ─────────────────────────── Columns advanced options ───────────────────────────
 
 // The multi-column properties owned by the "…" popover — used to light the trigger
 // when any is set on the picked selector (they're also excluded from the generic
 // row list in EmbedEditor's TYPOGRAPHY_CONTROL_PROPS).
-export const COLUMN_MORE_PROPS = [
-  'column-gap',
-  'column-rule-style',
-  'column-rule-width',
-  'column-rule-color',
-  'column-span',
-] as const;
+export const COLUMN_MORE_PROPS = ['column-gap', 'column-rule-style', 'column-rule-width', 'column-rule-color', 'column-span'] as const;
 // column-rule-style glyphs — a vertical divider drawn solid / dashed / dotted.
 export function RuleSolidIcon() {
   return (
@@ -138,23 +124,12 @@ export function LengthRow({
   prop: string;
   label: string;
   placeholder: string;
-} & Pick<
-  Props,
-  'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onProvenance' | 'onSelectSelector'
->) {
+} & Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onProvenance' | 'onSelectSelector'>) {
   const display = displayOf(read(prop));
   const external = display.present ? joinImportant(display) : '';
   return (
     <div className="embed-editor_size-row">
-      <PopLabel
-        label={label}
-        prop={prop}
-        read={read}
-        busy={busy}
-        clearProp={clearProp}
-        onProvenance={onProvenance}
-        onSelectSelector={onSelectSelector}
-      />
+      <PopLabel label={label} prop={prop} read={read} busy={busy} clearProp={clearProp} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
       <LiveInput
         value={external}
         busy={busy}
@@ -179,10 +154,7 @@ export function RuleStyleRow({
   liveSetProp,
   onProvenance,
   onSelectSelector,
-}: Pick<
-  Props,
-  'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onProvenance' | 'onSelectSelector'
->) {
+}: Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onProvenance' | 'onSelectSelector'>) {
   const display = displayOf(read('column-rule-style'));
   const current = useHighlight(
     display.present ? display.value.trim().toLowerCase() : '',
@@ -223,10 +195,7 @@ export function RuleColorRow({
   liveSetProp,
   onProvenance,
   onSelectSelector,
-}: Pick<
-  Props,
-  'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onProvenance' | 'onSelectSelector'
->) {
+}: Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onProvenance' | 'onSelectSelector'>) {
   const display = displayOf(read('column-rule-color'));
   const external = display.present ? joinImportant(display) : '';
   // A live drag writes to the canvas, not to the model this row reads — so the
@@ -288,26 +257,10 @@ export function SpanRow({
   onSelectSelector,
 }: Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'onProvenance' | 'onSelectSelector'>) {
   const display = displayOf(read('column-span'));
-  const value =
-    useHighlight(
-      display.present ? display.value.trim().toLowerCase() : '',
-      'column-span',
-      ['none', 'all'],
-      'none',
-    ) === 'all'
-      ? 'all'
-      : 'none';
+  const value = useHighlight(display.present ? display.value.trim().toLowerCase() : '', 'column-span', ['none', 'all'], 'none') === 'all' ? 'all' : 'none';
   return (
     <div className="embed-editor_size-row">
-      <PopLabel
-        label="Span"
-        prop="column-span"
-        read={read}
-        busy={busy}
-        clearProp={clearProp}
-        onProvenance={onProvenance}
-        onSelectSelector={onSelectSelector}
-      />
+      <PopLabel label="Span" prop="column-span" read={read} busy={busy} clearProp={clearProp} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
       <SegmentedControl
         options={[
           { value: 'none', label: "Don't" },
@@ -325,13 +278,7 @@ export function SpanRow({
 export function CloseIcon() {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M4 4l8 8M12 4l-8 8"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
+      <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
@@ -340,17 +287,7 @@ export function CloseIcon() {
 // absolutely positioned (left/right:0) against the nearest positioned ancestor —
 // the caller's row wrapper — so it spans the full row and never overflows the
 // panel. Reused by the Columns and Decoration advanced controls.
-export function MorePopover({
-  title,
-  active,
-  busy,
-  children,
-}: {
-  title: string;
-  active: boolean;
-  busy: boolean;
-  children: ReactNode;
-}) {
+export function MorePopover({ title, active, busy, children }: { title: string; active: boolean; busy: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   return (
@@ -367,22 +304,10 @@ export function MorePopover({
         <MoreIcon />
       </button>
       {open ? (
-        <Popup
-          mode="popover"
-          portal={false}
-          onClose={() => setOpen(false)}
-          className="embed-editor_more-popover"
-          role="dialog"
-          label={title}
-        >
+        <Popup mode="popover" portal={false} onClose={() => setOpen(false)} className="embed-editor_more-popover" role="dialog" label={title}>
           <div className="embed-editor_more-head">
             <span className="embed-editor_more-title">{title}</span>
-            <button
-              type="button"
-              className="embed-editor_more-close"
-              aria-label="Close"
-              onClick={() => setOpen(false)}
-            >
+            <button type="button" className="embed-editor_more-close" aria-label="Close" onClick={() => setOpen(false)}>
               <CloseIcon />
             </button>
           </div>

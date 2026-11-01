@@ -145,8 +145,7 @@ const filterStyleRule = (rule: CSSStyleRule | CSSKeyframeRule, depth: number): s
 
 // The original checks these the same way (type constants and property
 // truthiness); the predicates just make the branches type-narrow.
-const asImport = (rule: CSSRule): rule is CSSImportRule =>
-  rule.type === 3 || ('styleSheet' in rule && !!rule['styleSheet']);
+const asImport = (rule: CSSRule): rule is CSSImportRule => rule.type === 3 || ('styleSheet' in rule && !!rule['styleSheet']);
 const asStyleLike = (rule: CSSRule): rule is CSSStyleRule | CSSKeyframeRule => {
   if (!('style' in rule) || !rule['style']) {
     return false;

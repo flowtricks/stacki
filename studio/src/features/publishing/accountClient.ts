@@ -8,10 +8,7 @@ import {
 } from '../../../vendor/stacki/shared/ipc/publishAccount';
 import { request } from '../project/projectClient';
 
-export async function publishingAccount(
-  _project: string,
-  input: AccountRequest,
-): Promise<AccountState> {
+export async function publishingAccount(_project: string, input: AccountRequest): Promise<AccountState> {
   const body = JSON.stringify(parseAccountRequest(input));
   let result: unknown;
   try {

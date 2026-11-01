@@ -18,11 +18,7 @@ export function relativeImport(page: string, component: string) {
   }
   return (parent.length ? '../'.repeat(parent.length) : './') + target.join('/');
 }
-export function resolveImport(
-  page: string,
-  specifier: string | undefined,
-  components: readonly ComponentImport[] = [],
-): string | undefined {
+export function resolveImport(page: string, specifier: string | undefined, components: readonly ComponentImport[] = []): string | undefined {
   if (!specifier) {
     return undefined;
   }

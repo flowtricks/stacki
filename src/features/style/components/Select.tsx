@@ -62,8 +62,7 @@ function useSelectState<T extends string>(props: Props<T>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const optionsState = useSelectOptions({ options, value, query, searchable });
-  const { selectedOption, displayed, firstSelectable, lastSelectable, selectedIndex } =
-    optionsState;
+  const { selectedOption, displayed, firstSelectable, lastSelectable, selectedIndex } = optionsState;
   const highlight = usePreviewHighlight(selectedIndex);
   const { activeIndex, activity: previewActivity, activateIndex } = highlight;
 
@@ -174,15 +173,10 @@ function useSelectOptions<T extends string>({
 }) {
   // The trigger always reflects the real selected value, independent of any filter.
   const selectedOption = useMemo(
-    () =>
-      options.find((option) => !option.heading && option.value === value) ??
-      options.find((option) => !option.heading),
+    () => options.find((option) => !option.heading && option.value === value) ?? options.find((option) => !option.heading),
     [options, value],
   );
-  const displayed = useMemo(
-    () => filterOptions(options, query, { searchable }),
-    [options, query, searchable],
-  );
+  const displayed = useMemo(() => filterOptions(options, query, { searchable }), [options, query, searchable]);
   const { firstSelectable, lastSelectable } = selectableBounds(displayed);
   const found = displayed.findIndex((option) => !option.heading && option.value === value);
   const selectedIndex = found >= 0 ? found : firstSelectable;
@@ -205,13 +199,7 @@ type SelectRefs = {
 };
 
 function selectClass<T extends string>(props: Props<T>, state: { readonly open: boolean }) {
-  return [
-    'u-select',
-    props.variant === 'link' ? 'is-link' : '',
-    state.open ? 'is-open' : '',
-    props.disabled ? 'is-disabled' : '',
-    props.className,
-  ]
+  return ['u-select', props.variant === 'link' ? 'is-link' : '', state.open ? 'is-open' : '', props.disabled ? 'is-disabled' : '', props.className]
     .filter(Boolean)
     .join(' ');
 }
@@ -221,11 +209,7 @@ function selectClass<T extends string>(props: Props<T>, state: { readonly open: 
 // whole group shows — or the row's own label. The heading is included whenever any
 // of its rows show. This lets you search by component name even when every embed
 // in a group has the same label ("Embed", "Embed #1", …).
-function filterOptions<T extends string>(
-  options: SelectOption<T>[],
-  query: string,
-  mode: { readonly searchable: boolean },
-): SelectOption<T>[] {
+function filterOptions<T extends string>(options: SelectOption<T>[], query: string, mode: { readonly searchable: boolean }): SelectOption<T>[] {
   if (!mode.searchable || !query.trim()) {
     return options;
   }
@@ -411,9 +395,7 @@ function useMenuActions<T extends string>(input: MenuActionsInput<T>) {
       }
       setActiveIndex(firstRealRow(displayed, clampIndex(index, displayed.length)));
       setOpen(true);
-      window.requestAnimationFrame(() =>
-        (searchable ? refs.search.current : refs.list.current)?.focus({ preventScroll: true }),
-      );
+      window.requestAnimationFrame(() => (searchable ? refs.search.current : refs.list.current)?.focus({ preventScroll: true }));
     },
     [disabled, displayed, selectedIndex, searchable, refs, setActiveIndex, setOpen],
   );
@@ -466,11 +448,7 @@ function firstRealRow<T extends string>(displayed: SelectOption<T>[], start: num
   return start;
 }
 
-function useTypeahead<T extends string>(
-  activeIndex: number,
-  displayed: SelectOption<T>[],
-  setActiveIndex: (index: number) => void,
-) {
+function useTypeahead<T extends string>(activeIndex: number, displayed: SelectOption<T>[], setActiveIndex: (index: number) => void) {
   const typeahead = useRef('');
   const typeaheadTimer = useRef<number | undefined>(undefined);
   useEffect(
@@ -618,11 +596,7 @@ function clampLinkMenu(trigger: HTMLDivElement, listElement: HTMLDivElement): vo
   const naturalLeft = rect.left; // menu is anchored left:0 to the trigger
   const naturalRight = rect.left + listElement.offsetWidth;
   const next =
-    naturalRight > bounds.right - margin
-      ? bounds.right - margin - naturalRight
-      : naturalLeft < bounds.left + margin
-        ? bounds.left + margin - naturalLeft
-        : 0;
+    naturalRight > bounds.right - margin ? bounds.right - margin - naturalRight : naturalLeft < bounds.left + margin ? bounds.left + margin - naturalLeft : 0;
   listElement.style.transform = next ? `translateX(${next}px)` : '';
 }
 
@@ -630,22 +604,15 @@ function clampLinkMenu(trigger: HTMLDivElement, listElement: HTMLDivElement): vo
 // axis would slide the whole panel sideways). On OPEN, bring the selected option's
 // group heading right under the (sticky) search so the selection sits near the top;
 // while navigating, just keep the active option in view.
-function scrollActiveIntoList(
-  listElement: HTMLDivElement,
-  moment: { readonly opening: boolean },
-): void {
+function scrollActiveIntoList(listElement: HTMLDivElement, moment: { readonly opening: boolean }): void {
   const active = listElement.querySelector<HTMLElement>('[data-active="true"]');
   if (!active) {
     return;
   }
-  const searchHeight =
-    listElement.querySelector<HTMLElement>('.u-select-search')?.offsetHeight ?? 0;
+  const searchHeight = listElement.querySelector<HTMLElement>('.u-select-search')?.offsetHeight ?? 0;
   if (moment.opening) {
     let node = active.previousElementSibling;
-    while (
-      isHTMLElementInDocument(node, active.ownerDocument) &&
-      !node.classList.contains('u-select-heading')
-    ) {
+    while (isHTMLElementInDocument(node, active.ownerDocument) && !node.classList.contains('u-select-heading')) {
       node = node.previousElementSibling;
     }
     const heading = isHTMLElementInDocument(node, active.ownerDocument) ? node : undefined;
@@ -702,9 +669,7 @@ function selectKeyHandlers(input: KeyInput) {
         if (!input.searchable && input.runTypeahead(event.key)) {
           event.preventDefault();
           input.setOpen(true);
-          window.requestAnimationFrame(() =>
-            input.refs.list.current?.focus({ preventScroll: true }),
-          );
+          window.requestAnimationFrame(() => input.refs.list.current?.focus({ preventScroll: true }));
         }
     }
   };

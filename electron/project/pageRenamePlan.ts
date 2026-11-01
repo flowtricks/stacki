@@ -44,10 +44,7 @@ export function planPageRename(
     }
   }
   const origins = renameOrigins(inventory.texts);
-  const aliases = projectAliases.map(
-    ([prefix, targets]) =>
-      [prefix.replace(/\/$/, ''), targets.map((target) => target.replace(/\/$/, ''))] as const,
-  );
+  const aliases = projectAliases.map(([prefix, targets]) => [prefix.replace(/\/$/, ''), targets.map((target) => target.replace(/\/$/, ''))] as const);
   const texts = inventory.texts.flatMap(({ file, source }) => {
     const linked = renamePageLinks(source, { change, origins, file });
     const imported = renamePageImports(linked, file, relocated, aliases);
@@ -72,9 +69,7 @@ function renameOrigins(files: readonly RenameFile[]): readonly string[] {
   const origins = new Set<string>();
   for (const { file, source } of files) {
     if (/^astro\.config\./.test(file) || file === '.stacki/publish.json') {
-      const pattern = file.endsWith('.json')
-        ? /"(?:url|publishedSite)"\s*:\s*"(https?:\/\/[^"\s]+)"/g
-        : /\bsite\s*:\s*['"](https?:\/\/[^'"\s]+)['"]/g;
+      const pattern = file.endsWith('.json') ? /"(?:url|publishedSite)"\s*:\s*"(https?:\/\/[^"\s]+)"/g : /\bsite\s*:\s*['"](https?:\/\/[^'"\s]+)['"]/g;
       for (const match of source.matchAll(pattern)) {
         if (match[1]) {
           origins.add(new URL(match[1]).origin);

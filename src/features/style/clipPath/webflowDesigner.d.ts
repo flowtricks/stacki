@@ -14,18 +14,9 @@ export type StyleTargetOptions = { breakpoint?: BreakpointId };
 export type StyleHandle = {
   readonly id?: string;
   getName?: () => Promise<string>;
-  setProperty?: (
-    property: string,
-    value: string,
-    options?: StyleTargetOptions,
-  ) => Promise<null | void>;
-  getProperty?: (
-    property: string,
-    options?: StyleTargetOptions,
-  ) => Promise<string | null | undefined>;
-  getProperties?: (
-    options?: StyleTargetOptions,
-  ) => Promise<Record<string, unknown> | null | undefined>;
+  setProperty?: (property: string, value: string, options?: StyleTargetOptions) => Promise<null | void>;
+  getProperty?: (property: string, options?: StyleTargetOptions) => Promise<string | null | undefined>;
+  getProperties?: (options?: StyleTargetOptions) => Promise<Record<string, unknown> | null | undefined>;
   removeProperty?: (property: string, options?: StyleTargetOptions) => Promise<null | void>;
   getParent?: () => Promise<StyleHandle | null>;
 };

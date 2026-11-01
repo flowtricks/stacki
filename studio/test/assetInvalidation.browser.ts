@@ -10,10 +10,7 @@ import { startStyleFixture } from './stylePanelFixture';
 const fixture = await startStyleFixture();
 const browser = await chromium.launch({
   executablePath:
-    process.env['CHROME_PATH'] ??
-    (process.platform === 'darwin'
-      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-      : chromium.executablePath()),
+    process.env['CHROME_PATH'] ?? (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
   headless: true,
 });
 try {
@@ -38,10 +35,7 @@ try {
       'An ordinary source edit must not invalidate the asset catalog',
     );
   }
-  await writeFile(
-    path.join(fixture.root, 'public/pattern.svg'),
-    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"/>',
-  );
+  await writeFile(path.join(fixture.root, 'public/pattern.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"/>');
   for (const page of pages) {
     await page.waitForFunction(() => performance.getEntriesByName('asset-change').length > 0);
     await page.evaluate(() => performance.clearMarks('asset-change'));

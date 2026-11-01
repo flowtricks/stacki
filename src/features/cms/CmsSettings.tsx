@@ -12,15 +12,7 @@ import { cleanError } from '../../lib/cleanError';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import useListReorder from '../../ui/useListReorder';
 import { FIELD_TYPES } from './cmsFieldTypes';
-import {
-  PlusIcon,
-  CloseIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  TrashIcon,
-  DragIcon,
-  CheckIcon,
-} from '../../ui/Icons';
+import { PlusIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, DragIcon, CheckIcon } from '../../ui/Icons';
 
 export interface SchemaOperations {
   readonly onAddField: (path: readonly string[], key: string, type: FieldType) => void;
@@ -47,8 +39,7 @@ export interface CmsSettingsProps extends SchemaOperations {
 // The types you can choose for a new field.
 const CREATABLE_TYPES = FIELD_TYPES.filter((entry) => entry.value !== 'code');
 
-const typeInfo = (type: FieldType) =>
-  FIELD_TYPES.find((entry) => entry.value === type) ?? FIELD_TYPES[0];
+const typeInfo = (type: FieldType) => FIELD_TYPES.find((entry) => entry.value === type) ?? FIELD_TYPES[0];
 
 export default function CmsSettings({
   collection,
@@ -84,9 +75,7 @@ export default function CmsSettings({
         <div className="cms-card">
           <h3>Collection fields</h3>
           <p className="cms-note">
-            {collection.single
-              ? 'This file holds one set of fields.'
-              : `Shared by all ${items.length} ${items.length === 1 ? 'item' : 'items'}.`}
+            {collection.single ? 'This file holds one set of fields.' : `Shared by all ${items.length} ${items.length === 1 ? 'item' : 'items'}.`}
           </p>
           <FieldSchema
             items={items}
@@ -99,36 +88,23 @@ export default function CmsSettings({
           />
         </div>
 
-        <DeleteCollectionCard
-          collection={collection}
-          project={project}
-          showToast={showToast}
-          onDeleted={onDeleted}
-        />
+        <DeleteCollectionCard collection={collection} project={project} showToast={showToast} onDeleted={onDeleted} />
       </div>
     </div>
   );
 }
 
-function DeleteCollectionCard({
-  collection,
-  project,
-  showToast,
-  onDeleted,
-}: Pick<CmsSettingsProps, 'collection' | 'project' | 'showToast' | 'onDeleted'>) {
+function DeleteCollectionCard({ collection, project, showToast, onDeleted }: Pick<CmsSettingsProps, 'collection' | 'project' | 'showToast' | 'onDeleted'>) {
   return (
     <div className="cms-card cms-danger">
       <h3>Delete collection</h3>
       <p className="cms-note">
-        {collectionDeletionMessage} Pages that import src/{collection.rel} keep working — they
-        switch to an empty list.
+        {collectionDeletionMessage} Pages that import src/{collection.rel} keep working — they switch to an empty list.
       </p>
       <button
         className="ghost danger"
         onClick={() => {
-          void deleteCollection(collection, project, showToast, onDeleted).catch((error: unknown) =>
-            showToast(cleanError(error), 'error'),
-          );
+          void deleteCollection(collection, project, showToast, onDeleted).catch((error: unknown) => showToast(cleanError(error), 'error'));
         }}
       >
         <TrashIcon size={12} /> Delete {collection.label}
@@ -204,22 +180,10 @@ function FieldSchema({ items, declared, path, ...operations }: SchemaProps) {
   return (
     <div className="cms-schema">
       {fields.map((field, index) => (
-        <SchemaRow
-          key={field.key}
-          field={field}
-          index={index}
-          reorder={reorder}
-          items={items}
-          declared={declared}
-          path={path}
-          {...operations}
-        />
+        <SchemaRow key={field.key} field={field} index={index} reorder={reorder} items={items} declared={declared} path={path} {...operations} />
       ))}
       {fields.length === 0 && <div className="cms-empty-inline">No fields yet.</div>}
-      <AddFieldRow
-        compact={path.length > 0}
-        onAdd={(key, type) => operations.onAddField(path, key, type)}
-      />
+      <AddFieldRow compact={path.length > 0} onAdd={(key, type) => operations.onAddField(path, key, type)} />
     </div>
   );
 }
@@ -242,11 +206,7 @@ function SchemaRow({ field, index, reorder, ...props }: SchemaRowProps) {
           <DragIcon size={11} />
         </span>
         {nested ? (
-          <button
-            className="ghost cms-schema-expand"
-            title={open ? 'Hide its fields' : 'Show its fields'}
-            onClick={() => setOpen(!open)}
-          >
+          <button className="ghost cms-schema-expand" title={open ? 'Hide its fields' : 'Show its fields'} onClick={() => setOpen(!open)}>
             <ChevronRightIcon size={10} className={open ? 'rotated' : ''} />
           </button>
         ) : (
@@ -267,11 +227,7 @@ function SchemaRow({ field, index, reorder, ...props }: SchemaRowProps) {
     </div>
   );
 }
-function SchemaName({
-  field,
-  path,
-  onRenameField,
-}: Pick<SchemaRowProps, 'field' | 'path' | 'onRenameField'>) {
+function SchemaName({ field, path, onRenameField }: Pick<SchemaRowProps, 'field' | 'path' | 'onRenameField'>) {
   return (
     <input
       key={field.key}
@@ -302,11 +258,7 @@ function setInputText(inputElement: HTMLInputElement, text: string): void {
   inputElement.value = text;
 }
 
-function SchemaDelete({
-  field,
-  path,
-  onRemoveField,
-}: Pick<SchemaRowProps, 'field' | 'path' | 'onRemoveField'>) {
+function SchemaDelete({ field, path, onRemoveField }: Pick<SchemaRowProps, 'field' | 'path' | 'onRemoveField'>) {
   return (
     <button
       className="ghost danger"
@@ -364,11 +316,7 @@ function NewFieldDialog({ onAdd, onClose }: NewFieldProps) {
         <>
           <div className="modal-header cms-modal-header">
             {type && (
-              <button
-                className="ghost"
-                title="Back to field types"
-                onClick={() => setType(undefined)}
-              >
+              <button className="ghost" title="Back to field types" onClick={() => setType(undefined)}>
                 <ChevronLeftIcon size={13} />
               </button>
             )}

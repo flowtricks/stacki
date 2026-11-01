@@ -39,15 +39,7 @@ function fixture(context, component = 'DesktopPublishStatus') {
     await act(async () => root.unmount());
     dom.window.close();
   });
-  return (input) =>
-    act(async () =>
-      root.render(
-        React.createElement(
-          Component,
-          component === 'DesktopPublishStatus' ? { state: input, close() {} } : input,
-        ),
-      ),
-    );
+  return (input) => act(async () => root.render(React.createElement(Component, component === 'DesktopPublishStatus' ? { state: input, close() {} } : input)));
 }
 
 function desktopFixture(context, dirty) {
@@ -104,20 +96,13 @@ test('Dirty changes prompt after saving and use the entered message', async (con
   await clickGitHubPush();
   assert.deepEqual(view.order, ['saved', 'checked']);
   assert.equal(view.starts.length, 0);
-  assert.equal(
-    document.querySelector('.publish-commit-message button[type="submit"]').disabled,
-    true,
-  );
+  assert.equal(document.querySelector('.publish-commit-message button[type="submit"]').disabled, true);
   const input = document.querySelector('.publish-commit-message textarea');
   await act(async () => {
     input.value = 'Update homepage heading';
     require('react-dom/test-utils').Simulate.change(input);
   });
-  await act(async () =>
-    document
-      .querySelector('.publish-commit-message form')
-      .dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })),
-  );
+  await act(async () => document.querySelector('.publish-commit-message form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })));
   assert.deepEqual(view.starts, [
     {
       projectPath: '/project',
@@ -139,9 +124,7 @@ test('Cancelling the message prompt never starts publishing', async (context) =>
   const view = desktopFixture(context, true);
   await view.show();
   await clickGitHubPush();
-  await act(async () =>
-    document.querySelector('.publish-commit-message button[type="button"]').click(),
-  );
+  await act(async () => document.querySelector('.publish-commit-message button[type="button"]').click());
   assert.equal(view.starts.length, 0);
 });
 

@@ -25,28 +25,14 @@
 import { createHash } from 'node:crypto';
 import { assert } from '#dist/shared/core/assert.js';
 import { toFilePath, toIntentId, type Digest, type FilePath } from '#dist/shared/core/brand.js';
-import {
-  toIntent,
-  type Intent,
-  type Operation,
-  type Outcome,
-  type RejectionReason,
-  type SourceEdit,
-} from '#dist/shared/engine/intent.js';
+import { toIntent, type Intent, type Operation, type Outcome, type RejectionReason, type SourceEdit } from '#dist/shared/engine/intent.js';
 import { changedRanges, inverseEdits, orderedSplices } from '#dist/shared/engine/splice.js';
 import { diffCodePatch } from '#dist/shared/engine/codePatch.js';
 import { LIMITS } from '#dist/shared/core/limits.js';
 import { toAnchorRef, toChildIndex } from '#dist/shared/page/ref.js';
 import type { Snapshot } from '#dist/shared/page/snapshot.js';
 import type { ProjectedNode } from '#dist/shared/page/sourceProjection.js';
-import {
-  type ByteString,
-  decodeUtf8,
-  encodeUtf8,
-  toByteSpan,
-  toByteString,
-  utf8ByteLength,
-} from '#dist/shared/core/span.js';
+import { type ByteString, decodeUtf8, encodeUtf8, toByteSpan, toByteString, utf8ByteLength } from '#dist/shared/core/span.js';
 import {
   actorHasWork,
   crashActor,
@@ -64,34 +50,13 @@ import {
 import { SIMULATOR_PROJECTOR } from './candidate.ts';
 import { planEngine } from './enginePlanner.ts';
 import { FakeDisk } from './fakeDisk.ts';
-import {
-  checkBounds,
-  checkCommitted,
-  checkGeneration,
-  checkOutcome,
-  checkQuiescent,
-} from './invariants.ts';
+import { checkBounds, checkCommitted, checkGeneration, checkOutcome, checkQuiescent } from './invariants.ts';
 import { oracleIntent, oracleSplices } from './oracleIntent.ts';
 import { ORACLE_SCENARIOS, type OracleScenario } from './oracles.ts';
 import { Prng } from './prng.ts';
 import { sha256, snapshotOf } from './project.ts';
-import {
-  OriginSource,
-  insertOrigins,
-  lineEndingOrigins,
-  moveOrigins,
-  restoreOrigins,
-  spliceOrigins,
-  type Origins,
-} from './provenance.ts';
-import {
-  checkMappingReference,
-  judgeBlockRemap,
-  judgeOracleRemap,
-  judgeRemap,
-  type RemapDecision,
-  type RemapVerdict,
-} from './remapJudge.ts';
+import { OriginSource, insertOrigins, lineEndingOrigins, moveOrigins, restoreOrigins, spliceOrigins, type Origins } from './provenance.ts';
+import { checkMappingReference, judgeBlockRemap, judgeOracleRemap, judgeRemap, type RemapDecision, type RemapVerdict } from './remapJudge.ts';
 
 export interface SimulationFile {
   /** Fixture name; the file lives at `/project/<name>` on the fake disk. */
@@ -226,10 +191,7 @@ class World {
   private readonly blocks = new Set<string>();
   // Step 10: undos in flight and the origins their write restores (see
   // Undoable.restores). Cleared at the write or the outcome.
-  private readonly restorations = new Map<
-    string,
-    { readonly origins: readonly Origins[]; readonly generation: number }
-  >();
+  private readonly restorations = new Map<string, { readonly origins: readonly Origins[]; readonly generation: number }>();
   // The origins each tracked write replaced, per splice, by the generation it
   // wrote, for the undo entry its commit becomes — a later actor step, after
   // other files' writes, so keyed. Consumed at the commit; bounded.
@@ -385,10 +347,7 @@ class World {
       const fresh = before.phase.base.checksum === intent.authoredChecksum;
       const restoration = this.restorations.get(intent.id);
       this.restorations.delete(intent.id);
-      const intact =
-        restoration !== undefined &&
-        fresh &&
-        !this.rewrittenBetween(before.path, restoration.generation, generationBefore);
+      const intact = restoration !== undefined && fresh && !this.rewrittenBetween(before.path, restoration.generation, generationBefore);
       const restored = intact ? restoration.origins : undefined;
       let next: Origins;
       if (intent.operation.tag === 'move-node') {
@@ -399,9 +358,7 @@ class World {
         next = spliceOrigins(origins, splices, this.originSource);
       }
       this.keepOrigins(generation, next);
-      const replaced = orderedSplices(splices).map((splice) =>
-        origins.slice(splice.range.start, splice.range.end),
-      );
+      const replaced = orderedSplices(splices).map((splice) => origins.slice(splice.range.start, splice.range.end));
       this.replacedBy.set(generation, replaced);
       if (this.replacedBy.size > REPLACED_RETAINED_MAX) {
         const [oldest] = this.replacedBy.keys();
@@ -415,10 +372,7 @@ class World {
     if (BYTE_HUNK_OPERATIONS.includes(phase.intent.operation.tag)) {
       if (phase.plan.splices.some((splice) => slidable(phase.base.bytes, splice))) {
         this.count('code:slidable');
-        this.slidPatches.set(before.path, [
-          ...(this.slidPatches.get(before.path) ?? []),
-          generation,
-        ]);
+        this.slidPatches.set(before.path, [...(this.slidPatches.get(before.path) ?? []), generation]);
       }
     }
   }
@@ -578,10 +532,7 @@ class World {
 
   // Every applied edit but a program's rewrite or a revert can be undone: its
   // inverse, authored against the bytes it left (plan §11 step 6).
-  private rememberUndoable(
-    effect: Extract<ActorEffect, { tag: 'committed' }>,
-    path: FilePath,
-  ): void {
+  private rememberUndoable(effect: Extract<ActorEffect, { tag: 'committed' }>, path: FilePath): void {
     const tag = effect.intent.operation.tag;
     if (NOT_UNDOABLE.includes(tag)) {
       return;
@@ -660,26 +611,18 @@ class World {
       return;
     }
     const origins = this.origins.get(result.state.generation);
-    const replaced = this.rewrittenBetween(
-      entry.file,
-      entry.view.generation,
-      result.state.generation,
-    );
+    const replaced = this.rewrittenBetween(entry.file, entry.view.generation, result.state.generation);
     if (origins === undefined || replaced) {
       this.count('undo:unjudged');
       return;
     }
-    const inside = (at: number) =>
-      decision.plan.splices.some((splice) => splice.range.start <= at && at < splice.range.end);
+    const inside = (at: number) => decision.plan.splices.some((splice) => splice.range.start <= at && at < splice.range.end);
     const foreign = origins.some((origin, at) => inside(at) && !entry.written.has(origin));
     if (foreign) {
       // The edit's own bytes surviving outside what the revert replaces means
       // it replaced a copy; surviving only inside it, the place is right.
       const elsewhere = origins.some((origin, at) => !inside(at) && entry.written.has(origin));
-      assert(
-        !elsewhere,
-        `Undo reverts its own bytes, not a copy of them (seed ${this.input.seed})`,
-      );
+      assert(!elsewhere, `Undo reverts its own bytes, not a copy of them (seed ${this.input.seed})`);
       const own = origins.some((origin, at) => inside(at) && entry.written.has(origin));
       this.count(own ? 'undo:planned-over-rewrite' : 'undo:unjudged');
       return;
@@ -827,9 +770,7 @@ class World {
       return;
     }
     const targets = projection.nodes.flatMap((node) =>
-      node.attributes
-        .filter((attribute) => attribute.type === 'string')
-        .map((attribute) => ({ node, attribute })),
+      node.attributes.filter((attribute) => attribute.type === 'string').map((attribute) => ({ node, attribute })),
     );
     if (targets.length === 0) {
       this.log('  skip: no string attribute in view');
@@ -913,11 +854,7 @@ class World {
     }
   }
 
-  private markdownOperation(
-    bytes: ByteString,
-    nodes: readonly ProjectedNode[],
-    node: ProjectedNode,
-  ): Operation {
+  private markdownOperation(bytes: ByteString, nodes: readonly ProjectedNode[], node: ProjectedNode): Operation {
     if (node.list === 'inline') {
       // Typed at the end of the text: a word, or a new line of it.
       const typed = this.prng.pick([' typed', '\nand a line']);
@@ -1068,11 +1005,7 @@ class World {
 
   // A gesture's next step goes out only after the previous one is applied, and
   // only while its own file still holds the oracle's input bytes (plan §3.3).
-  private continueGesture(
-    scenario: OracleScenario,
-    index: number,
-    previous: Outcome | undefined,
-  ): void {
+  private continueGesture(scenario: OracleScenario, index: number, previous: Outcome | undefined): void {
     if (previous !== undefined) {
       if (previous.tag !== 'applied') {
         this.log(`  gesture cancelled after ${previous.tag}`);
@@ -1100,12 +1033,7 @@ class World {
 
   // --- Other writers -----------------------------------------------------------
 
-  private writeOutside(
-    path: FilePath,
-    bytes: ReturnType<typeof encodeUtf8>,
-    origins: Origins | undefined,
-    what: string,
-  ): void {
+  private writeOutside(path: FilePath, bytes: ReturnType<typeof encodeUtf8>, origins: Origins | undefined, what: string): void {
     const generation = this.disk.writeExternally(path, bytes);
     if (origins !== undefined) {
       assert(origins.length === bytes.length, 'Origins describe the written bytes');
@@ -1184,10 +1112,7 @@ class World {
     next.set(inserted, at);
     next.set(bytes.subarray(at), at + inserted.length);
     const origins = this.origins.get(this.disk.generationOf(path));
-    const nextOrigins =
-      origins === undefined
-        ? undefined
-        : insertOrigins(origins, at, this.originSource.fresh(inserted.length));
+    const nextOrigins = origins === undefined ? undefined : insertOrigins(origins, at, this.originSource.fresh(inserted.length));
     this.writeOutside(path, toByteString(next), nextOrigins, what);
   }
 
@@ -1198,10 +1123,7 @@ class World {
     const rewritten = toLf ? text.replaceAll('\r\n', '\n') : text.replaceAll('\n', '\r\n');
     const origins = this.origins.get(this.disk.generationOf(path));
     const direction = toLf ? 'to-lf' : 'to-crlf';
-    const next =
-      origins === undefined
-        ? undefined
-        : lineEndingOrigins(this.diskBytes(path), origins, direction, this.originSource);
+    const next = origins === undefined ? undefined : lineEndingOrigins(this.diskBytes(path), origins, direction, this.originSource);
     this.writeOutside(path, encodeUtf8(rewritten), next, 'ai-rewrite');
   }
 
@@ -1331,8 +1253,7 @@ function codePatchVerdict(
 ): 'mapped' | 'unjudged' | 'wrong-site' {
   const { before, now } = origins;
   assert(hunks.length === splices.length, 'A code patch plans one splice per hunk');
-  const inside = (at: number) =>
-    splices.some((splice) => splice.range.start <= at && at < splice.range.end);
+  const inside = (at: number) => splices.some((splice) => splice.range.start <= at && at < splice.range.end);
   let unjudged = false;
   for (const [index, hunk] of hunks.entries()) {
     const splice = splices[index];
@@ -1457,11 +1378,7 @@ function markdownBlockIntent(intent: Intent, authored: Snapshot): boolean {
     return false;
   }
   const path = intent.anchor.path;
-  const node = projection.nodes.find(
-    (candidate) =>
-      candidate.path.length === path.length &&
-      candidate.path.every((step, index) => step === path[index]),
-  );
+  const node = projection.nodes.find((candidate) => candidate.path.length === path.length && candidate.path.every((step, index) => step === path[index]));
   return node?.syntax === 'markdown';
 }
 

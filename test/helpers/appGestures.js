@@ -67,16 +67,7 @@ async function mountApp(root, files, build, options = {}) {
     pretendToBeVisual: true,
   });
   const { window } = dom;
-  for (const key of [
-    'window',
-    'document',
-    'navigator',
-    'HTMLElement',
-    'Element',
-    'Node',
-    'MutationObserver',
-    'KeyboardEvent',
-  ]) {
+  for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'MutationObserver', 'KeyboardEvent']) {
     global[key] = key === 'window' ? window : window[key];
   }
   global.getComputedStyle = window.getComputedStyle;
@@ -104,16 +95,8 @@ async function mountApp(root, files, build, options = {}) {
     {
       pendingProject: async () => undefined,
       scanProject: async () => files.scan,
-      projectMetadata: async (input) =>
-        require('#dist/electron/project/projectMetadata.js').readProjectMetadata(
-          input.projectPath,
-          input.kind,
-        ),
-      writeProjectMetadata: async (input) =>
-        require('#dist/electron/project/projectMetadata.js').writeProjectMetadata(
-          input.projectPath,
-          input.write,
-        ),
+      projectMetadata: async (input) => require('#dist/electron/project/projectMetadata.js').readProjectMetadata(input.projectPath, input.kind),
+      writeProjectMetadata: async (input) => require('#dist/electron/project/projectMetadata.js').writeProjectMetadata(input.projectPath, input.write),
       startDevServer: async () => ({ url: 'http://localhost:4321' }),
       listProjectClasses: async () => [],
       readPage: async (file) => read(file),
@@ -138,8 +121,7 @@ async function mountApp(root, files, build, options = {}) {
         return { ok: true, ...read(pagePath), inverse: report.inverse };
       },
       importPathFor: async ({ targetPath }) => ({
-        relative:
-          '../' + path.relative(path.join(root, 'src'), targetPath).split(path.sep).join('/'),
+        relative: '../' + path.relative(path.join(root, 'src'), targetPath).split(path.sep).join('/'),
         srcRelative: undefined,
       }),
       onFsChanged: () => () => {},
@@ -149,12 +131,7 @@ async function mountApp(root, files, build, options = {}) {
       ...options.bridge,
     },
     {
-      get: (target, key) =>
-        key in target
-          ? target[key]
-          : String(key).startsWith('on')
-            ? () => () => {}
-            : async () => undefined,
+      get: (target, key) => (key in target ? target[key] : String(key).startsWith('on') ? () => () => {} : async () => undefined),
     },
   );
   window.avb = bridge;
@@ -205,9 +182,7 @@ async function gesture(app, run) {
 
 async function undo(app) {
   await gesture(app, async () => {
-    document.dispatchEvent(
-      new app.window.KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true }),
-    );
+    document.dispatchEvent(new app.window.KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true }));
   });
 }
 

@@ -1,11 +1,6 @@
 import { useLayoutEffect, useState } from 'react';
 
-export function usePreviewLoading(
-  url: string | undefined,
-  container: React.RefObject<HTMLElement>,
-  canvas: boolean,
-  refresh: () => void,
-) {
+export function usePreviewLoading(url: string | undefined, container: React.RefObject<HTMLElement>, canvas: boolean, refresh: () => void) {
   const [readyKey, setReadyKey] = useState('');
   const [slowKey, setSlowKey] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -25,12 +20,7 @@ export function usePreviewLoading(
         return;
       }
       const data: unknown = event.data;
-      if (
-        data &&
-        typeof data === 'object' &&
-        'type' in data &&
-        data.type === 'studio:preview-ready'
-      ) {
+      if (data && typeof data === 'object' && 'type' in data && data.type === 'studio:preview-ready') {
         setReadyKey(key);
       }
     };
@@ -51,13 +41,7 @@ export function usePreviewLoading(
   };
 }
 
-export function PreviewLoading({
-  slow,
-  retry,
-}: {
-  readonly slow: boolean;
-  readonly retry: () => void;
-}) {
+export function PreviewLoading({ slow, retry }: { readonly slow: boolean; readonly retry: () => void }) {
   return (
     <div className="studio-preview-loading" role="status">
       <span className="studio-preview-spinner" aria-hidden="true" />

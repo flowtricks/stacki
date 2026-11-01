@@ -70,27 +70,15 @@ export default function DateTimePicker(props: Props) {
     commit(localValue({ day, hour: picked?.hour ?? NOON, minute: picked?.minute ?? 0 }));
     setTab('time');
   };
-  const pickTime = (hour: number, minute: number) =>
-    commit(localValue({ day: picked?.day ?? today(), hour, minute }));
+  const pickTime = (hour: number, minute: number) => commit(localValue({ day: picked?.day ?? today(), hour, minute }));
   const toggle = () => {
     setShown(monthOf(picked?.day ?? today()));
     setTab('date');
     setOpen(!open);
   };
   return (
-    <div
-      ref={root}
-      className="date-time-picker"
-      onKeyDown={(event) => event.key === 'Escape' && open && setOpen(false)}
-    >
-      <PickerControl
-        {...props}
-        draft={draft}
-        open={open}
-        onDraft={setDraft}
-        onCommit={commit}
-        onToggle={toggle}
-      />
+    <div ref={root} className="date-time-picker" onKeyDown={(event) => event.key === 'Escape' && open && setOpen(false)}>
+      <PickerControl {...props} draft={draft} open={open} onDraft={setDraft} onCommit={commit} onToggle={toggle} />
       {open && (
         <div className="date-time-popover" role="dialog" aria-label={props.label}>
           {tab === 'date' ? (
@@ -167,21 +155,13 @@ function CalendarPane(props: {
   return (
     <div className="date-time-calendar">
       <div className="date-time-month">
-        <button
-          type="button"
-          aria-label="Previous month"
-          onClick={() => props.onShow(shiftMonth(props.shown, -1))}
-        >
+        <button type="button" aria-label="Previous month" onClick={() => props.onShow(shiftMonth(props.shown, -1))}>
           <ChevronLeftIcon size={14} />
         </button>
         <span aria-live="polite">
           <strong>{monthName(props.shown.month)}</strong> {props.shown.year}
         </span>
-        <button
-          type="button"
-          aria-label="Next month"
-          onClick={() => props.onShow(shiftMonth(props.shown, 1))}
-        >
+        <button type="button" aria-label="Next month" onClick={() => props.onShow(shiftMonth(props.shown, 1))}>
           <ChevronRightIcon size={14} />
         </button>
       </div>
@@ -210,15 +190,8 @@ function CalendarPane(props: {
       </div>
       {/* The chosen day in words, so the jump to today never reads as the value. */}
       <div className="date-time-footer">
-        <span className="date-time-chosen">
-          {props.selected === undefined ? 'No date chosen' : longDay(props.selected)}
-        </span>
-        <button
-          type="button"
-          className="date-time-today"
-          title="Go to today"
-          onClick={() => props.onPick(now)}
-        >
+        <span className="date-time-chosen">{props.selected === undefined ? 'No date chosen' : longDay(props.selected)}</span>
+        <button type="button" className="date-time-today" title="Go to today" onClick={() => props.onPick(now)}>
           Today
         </button>
       </div>
@@ -226,10 +199,7 @@ function CalendarPane(props: {
   );
 }
 
-function TimePane(props: {
-  readonly picked: LocalDateTime | undefined;
-  readonly onPick: (hour: number, minute: number) => void;
-}) {
+function TimePane(props: { readonly picked: LocalDateTime | undefined; readonly onPick: (hour: number, minute: number) => void }) {
   const hour = props.picked?.hour ?? NOON;
   const minute = props.picked?.minute ?? 0;
   const clock = clockHour(hour);
@@ -253,12 +223,7 @@ function TimePane(props: {
       <span className="date-time-heading">Minute</span>
       <div className="date-time-grid">
         {CLOCK_MINUTES.map((option) => (
-          <button
-            key={option}
-            type="button"
-            className={set && option === minute ? 'on' : ''}
-            onClick={() => props.onPick(hour, option)}
-          >
+          <button key={option} type="button" className={set && option === minute ? 'on' : ''} onClick={() => props.onPick(hour, option)}>
             :{String(option).padStart(2, '0')}
           </button>
         ))}
@@ -282,20 +247,10 @@ function TimePane(props: {
 function PickerTabs(props: { readonly tab: Tab; readonly onTab: (tab: Tab) => void }) {
   return (
     <div className="date-time-tabs" role="tablist">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={props.tab === 'date'}
-        onClick={() => props.onTab('date')}
-      >
+      <button type="button" role="tab" aria-selected={props.tab === 'date'} onClick={() => props.onTab('date')}>
         <CalendarIcon size={14} /> Date
       </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={props.tab === 'time'}
-        onClick={() => props.onTab('time')}
-      >
+      <button type="button" role="tab" aria-selected={props.tab === 'time'} onClick={() => props.onTab('time')}>
         <ClockIcon size={14} /> Time
       </button>
     </div>
@@ -311,15 +266,6 @@ function pickedOf(mode: PickerMode, value: string): LocalDateTime | undefined {
   return typed ? { day: typed, hour: NOON, minute: 0 } : undefined;
 }
 
-function dayClass(state: {
-  readonly outside: boolean;
-  readonly selected: boolean;
-  readonly current: boolean;
-}): string {
-  return [
-    'date-time-day',
-    state.outside ? 'outside' : '',
-    state.selected ? 'on' : '',
-    state.current ? 'today' : '',
-  ].join(' ');
+function dayClass(state: { readonly outside: boolean; readonly selected: boolean; readonly current: boolean }): string {
+  return ['date-time-day', state.outside ? 'outside' : '', state.selected ? 'on' : '', state.current ? 'today' : ''].join(' ');
 }

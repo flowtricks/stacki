@@ -135,9 +135,7 @@ test('a drag reports its value to the canvas; the hover stays silent meanwhile',
       label('top').dispatchEvent(event);
       await wait(POLL_MS * 2);
     };
-    const chip = await until('the class chip', () =>
-      panel.querySelector('.embed-editor_selector-chip'),
-    );
+    const chip = await until('the class chip', () => panel.querySelector('.embed-editor_selector-chip'));
     chip.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
     await until('the value on the top label', () => label('top')?.textContent === '2rem');
     await until('the label to be ready', () => !label('top').disabled);
@@ -156,9 +154,7 @@ test('a drag reports its value to the canvas; the hover stays silent meanwhile',
 
     // Shift mid-drag: the hover sees the modifier change too, and must not answer.
     await send('pointermove', { clientY: 60, shiftKey: true });
-    const all = await until('the four sides to report', () =>
-      reports.at(-1).sides.length === 4 ? reports.at(-1) : undefined,
-    );
+    const all = await until('the four sides to report', () => (reports.at(-1).sides.length === 4 ? reports.at(-1) : undefined));
     assert.deepEqual([...all.sides].sort(), ['bottom', 'left', 'right', 'top']);
     assert.equal(new Set(Object.values(all.labels)).size, 1, 'one value on the four bands');
     assert.deepEqual(all.live, all.labels);

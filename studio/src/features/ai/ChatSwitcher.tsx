@@ -2,35 +2,18 @@ import { useState } from 'react';
 import { selectChat, deleteChat, type ChatThread } from './chatState';
 import { ChatIcon } from './ChatIcon';
 
-export function ChatSwitcher({
-  chats,
-  active,
-}: {
-  readonly chats: readonly ChatThread[];
-  readonly active: ChatThread;
-}) {
+export function ChatSwitcher({ chats, active }: { readonly chats: readonly ChatThread[]; readonly active: ChatThread }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="chat-switcher">
-      <button
-        className="chat-switcher-button"
-        aria-label="Chat history"
-        aria-expanded={open}
-        aria-controls="chat-history"
-        onClick={() => setOpen(!open)}
-      >
+      <button className="chat-switcher-button" aria-label="Chat history" aria-expanded={open} aria-controls="chat-history" onClick={() => setOpen(!open)}>
         <ChatIcon name="chat" />
         <span>{active.title}</span>
         <ChatIcon name="chevron" />
       </button>
       {open && (
         <>
-          <button
-            className="chat-menu-backdrop"
-            aria-label="Close chat history"
-            tabIndex={-1}
-            onClick={() => setOpen(false)}
-          />
+          <button className="chat-menu-backdrop" aria-label="Close chat history" tabIndex={-1} onClick={() => setOpen(false)} />
           <div
             id="chat-history"
             className="chat-history"
@@ -51,12 +34,7 @@ export function ChatSwitcher({
       )}
       <div className="chat-tabs" aria-label="Open chats">
         {chats.map((thread) => (
-          <button
-            key={thread.id}
-            aria-current={thread.id === active.id ? 'page' : undefined}
-            onClick={() => selectChat(thread.id)}
-            title={thread.title}
-          >
+          <button key={thread.id} aria-current={thread.id === active.id ? 'page' : undefined} onClick={() => selectChat(thread.id)} title={thread.title}>
             {thread.status !== 'idle' && <span className="chat-running-dot" />}
             <span>{thread.title}</span>
           </button>
@@ -65,15 +43,7 @@ export function ChatSwitcher({
     </div>
   );
 }
-function ChatRow({
-  chat,
-  active,
-  close,
-}: {
-  readonly chat: ChatThread;
-  readonly active: string;
-  readonly close: () => void;
-}) {
+function ChatRow({ chat, active, close }: { readonly chat: ChatThread; readonly active: string; readonly close: () => void }) {
   const [deleting, setDeleting] = useState(false);
   return (
     <div className="chat-history-row">
@@ -85,20 +55,9 @@ function ChatRow({
         }}
       >
         <span>{chat.title}</span>
-        <small>
-          {chat.status === 'idle'
-            ? chat.messages.length
-              ? `${chat.messages.length} messages`
-              : chat.draft || 'No messages yet'
-            : 'Working…'}
-        </small>
+        <small>{chat.status === 'idle' ? (chat.messages.length ? `${chat.messages.length} messages` : chat.draft || 'No messages yet') : 'Working…'}</small>
       </button>
-      <button
-        className="chat-icon-button"
-        disabled={chat.status !== 'idle'}
-        aria-label={`Delete ${chat.title}`}
-        onClick={() => setDeleting(true)}
-      >
+      <button className="chat-icon-button" disabled={chat.status !== 'idle'} aria-label={`Delete ${chat.title}`} onClick={() => setDeleting(true)}>
         <ChatIcon name="trash" />
       </button>
       {deleting && (

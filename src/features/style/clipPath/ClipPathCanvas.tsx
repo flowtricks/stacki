@@ -9,12 +9,7 @@ import { cornerLabel } from './clipPathHandles';
 import { shapeResizeCornerPoint } from './shapeFunctionModel';
 import { formatCssCoordinateValueForPreview } from './clipPathPreview';
 import { rawEditableHandleCssPoint } from './clipPathCanvasUnits';
-import {
-  HANDLE_ADJUST_HINT,
-  POINT_HANDLE_HINT,
-  INSET_EDGE_HANDLE_HINT,
-  INSET_RADIUS_HANDLE_HINT,
-} from './clipPathStyleWrite';
+import { HANDLE_ADJUST_HINT, POINT_HANDLE_HINT, INSET_EDGE_HANDLE_HINT, INSET_RADIUS_HANDLE_HINT } from './clipPathStyleWrite';
 import { type EditorProps } from './clipPathWriteActions';
 
 // The shortcuts for the current shape, grouped.
@@ -50,22 +45,14 @@ export function ClipPathCanvas({ editor }: EditorProps) {
   const { canvasWrapRef, beginPolygonSelectionDrag, isCodeTransitioning, canvasRef } = editor;
   const { shape, onAddPoint, previewCss } = editor;
   return (
-    <div
-      className="clip-path_canvas-wrap"
-      ref={canvasWrapRef}
-      onPointerDown={beginPolygonSelectionDrag}
-    >
+    <div className="clip-path_canvas-wrap" ref={canvasWrapRef} onPointerDown={beginPolygonSelectionDrag}>
       <div
-        className={['clip-path_canvas', isCodeTransitioning ? 'is-code-transitioning' : '']
-          .filter(Boolean)
-          .join(' ')}
+        className={['clip-path_canvas', isCodeTransitioning ? 'is-code-transitioning' : ''].filter(Boolean).join(' ')}
         ref={canvasRef}
         onDoubleClick={shape.kind === 'polygon' ? onAddPoint : undefined}
       >
         <div
-          className={['clip-path_preview', isCodeTransitioning ? 'is-code-transitioning' : '']
-            .filter(Boolean)
-            .join(' ')}
+          className={['clip-path_preview', isCodeTransitioning ? 'is-code-transitioning' : ''].filter(Boolean).join(' ')}
           style={{ clipPath: previewCss, WebkitClipPath: previewCss }}
         />
         <CanvasGuides editor={editor} />
@@ -123,9 +110,7 @@ export function ShapeBoundsControls({ editor }: EditorProps) {
   return (
     <>
       <div
-        className={['clip-path_shape-bounds', isShapeTransformSelected ? 'is-selected' : '']
-          .filter(Boolean)
-          .join(' ')}
+        className={['clip-path_shape-bounds', isShapeTransformSelected ? 'is-selected' : ''].filter(Boolean).join(' ')}
         style={shapeBoundsStyle}
         aria-hidden="true"
       />
@@ -143,13 +128,7 @@ export function ShapeBoundsControls({ editor }: EditorProps) {
           <button
             key={corner}
             type="button"
-            className={[
-              'clip-path_shape-resize',
-              `is-${corner}`,
-              isShapeTransformSelected ? 'is-selected' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
+            className={['clip-path_shape-resize', `is-${corner}`, isShapeTransformSelected ? 'is-selected' : ''].filter(Boolean).join(' ')}
             style={handlePositionStyle(point.x, point.y)}
             onPointerDown={beginShapeTransformDrag('resize', corner)}
             aria-label={`Resize shape from ${cornerLabel(corner)} corner`}
@@ -205,10 +184,7 @@ export function RawPolygonHandles({ editor }: EditorProps) {
         key={index}
         editor={editor}
         handle={handle}
-        style={handleCssPositionStyle(
-          formatCssCoordinateValueForPreview(point.x),
-          formatCssCoordinateValueForPreview(point.y),
-        )}
+        style={handleCssPositionStyle(formatCssCoordinateValueForPreview(point.x), formatCssCoordinateValueForPreview(point.y))}
         label={`Point ${index + 1}. Drag or use arrow keys to move.`}
       />
     );
@@ -255,22 +231,14 @@ export function RawEllipseHandles({ editor }: EditorProps) {
     return undefined;
   }
   const editable = shape.editable;
-  const handles: HandleTarget[] = [
-    { kind: 'ellipse-center' },
-    { kind: 'ellipse-rx' },
-    { kind: 'ellipse-ry' },
-  ];
+  const handles: HandleTarget[] = [{ kind: 'ellipse-center' }, { kind: 'ellipse-rx' }, { kind: 'ellipse-ry' }];
   return handles.map((handle) => {
     const point = rawEditableHandleCssPoint(editable, handle);
     if (!point) {
       return undefined;
     }
     const handleLabel =
-      handle.kind === 'ellipse-center'
-        ? 'Ellipse center'
-        : handle.kind === 'ellipse-rx'
-          ? 'Ellipse horizontal radius'
-          : 'Ellipse vertical radius';
+      handle.kind === 'ellipse-center' ? 'Ellipse center' : handle.kind === 'ellipse-rx' ? 'Ellipse horizontal radius' : 'Ellipse vertical radius';
     return (
       <HandleButton
         key={handle.kind}
@@ -291,12 +259,7 @@ export function RawInsetHandles({ editor }: EditorProps) {
     return undefined;
   }
   const editable = shape.editable;
-  const sides: HandleTarget[] = [
-    { kind: 'inset-top' },
-    { kind: 'inset-right' },
-    { kind: 'inset-bottom' },
-    { kind: 'inset-left' },
-  ];
+  const sides: HandleTarget[] = [{ kind: 'inset-top' }, { kind: 'inset-right' }, { kind: 'inset-bottom' }, { kind: 'inset-left' }];
   const cornerHandle = (corner: CornerName): HandleTarget => ({ kind: 'inset-radius', corner });
   return (
     <>
@@ -348,12 +311,7 @@ export function PolygonHandles({ editor }: EditorProps) {
   }
   return shape.points.map((point, i) => {
     const handle: HandleTarget = { kind: 'polygon-point', index: i };
-    const display = polygonHandleDisplayPoint(
-      shape.points,
-      i,
-      handleBounds,
-      polygonDisplayProjectionsRef.current.get(i),
-    );
+    const display = polygonHandleDisplayPoint(shape.points, i, handleBounds, polygonDisplayProjectionsRef.current.get(i));
     if (display.projection) {
       polygonDisplayProjectionsRef.current.set(i, display.projection);
     } else {

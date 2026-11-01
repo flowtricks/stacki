@@ -4,13 +4,7 @@
 // text is characters, on a list is items, on a number is the value.
 
 import { assert } from '../../../shared/core/assert';
-import {
-  remoteList,
-  remoteObject,
-  type RemoteRule,
-  type RemoteSchemaField,
-  type RemoteValue,
-} from '../../../shared/properties/cmsRemoteSchema';
+import { remoteList, remoteObject, type RemoteRule, type RemoteSchemaField, type RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
 import type { RemoteDocument } from '../../../shared/properties/cmsRemote';
 import { fieldTitle, isEmptyValue } from './remoteValues';
 
@@ -20,10 +14,7 @@ export interface RemoteProblem {
 }
 
 /** What is wrong with one field's value, by its rules; nothing when it passes. */
-export function problemsOf(
-  field: Pick<RemoteSchemaField, 'rules'>,
-  value: RemoteValue | undefined,
-): RemoteProblem[] {
+export function problemsOf(field: Pick<RemoteSchemaField, 'rules'>, value: RemoteValue | undefined): RemoteProblem[] {
   const problems: RemoteProblem[] = [];
   for (const rule of field.rules) {
     const message = check(rule, value);
@@ -57,17 +48,13 @@ function check(rule: RemoteRule, value: RemoteValue | undefined): string | undef
     case 'length':
       return limitProblem(rule.kind, rule.limit, value);
     case 'email':
-      return typeof value === 'string' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
-        ? 'Not an email address'
-        : undefined;
+      return typeof value === 'string' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? 'Not an email address' : undefined;
     case 'uri':
       return typeof value === 'string' && !validLink(value, rule) ? 'Not a valid link' : undefined;
     case 'unique':
       return duplicated(value) ? 'Items must be unique' : undefined;
     case 'integer':
-      return typeof value === 'number' && !Number.isInteger(value)
-        ? 'Must be a whole number'
-        : undefined;
+      return typeof value === 'number' && !Number.isInteger(value) ? 'Must be a whole number' : undefined;
     case 'positive':
       return typeof value === 'number' && value < 0 ? 'Must be positive' : undefined;
     default: {
@@ -77,11 +64,7 @@ function check(rule: RemoteRule, value: RemoteValue | undefined): string | undef
   }
 }
 
-function limitProblem(
-  kind: 'min' | 'max' | 'length',
-  limit: number,
-  value: RemoteValue | undefined,
-): string | undefined {
+function limitProblem(kind: 'min' | 'max' | 'length', limit: number, value: RemoteValue | undefined): string | undefined {
   const list = remoteList(value);
   const measured = list?.length ?? (typeof value === 'string' ? value.length : value);
   if (typeof measured !== 'number') {

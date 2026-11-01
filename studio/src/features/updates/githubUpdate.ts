@@ -27,13 +27,7 @@ function parseTree(input: unknown): readonly TreeEntry[] {
 
 // Create a review branch from the current head. The previous Studio remains in
 // Git history and the deployed project is unchanged until its owner merges it.
-export async function prepareStudioBranch(
-  repository: string,
-  head: string,
-  release: StudioRelease,
-  request: Request,
-  baseBranch = 'main',
-) {
+export async function prepareStudioBranch(repository: string, head: string, release: StudioRelease, request: Request, baseBranch = 'main') {
   const prefix = `/repos/${repository}/git`;
   const original = record(await request(`${prefix}/commits/${head}`));
   const base = string(record(original['tree'])['sha'], 64);
@@ -42,9 +36,7 @@ export async function prepareStudioBranch(
   if (studio && studio.type !== 'tree') {
     throw new Error('Studio must be a repository directory');
   }
-  const existing = studio
-    ? parseTree(await request(`${prefix}/trees/${studio.sha}?recursive=1`))
-    : [];
+  const existing = studio ? parseTree(await request(`${prefix}/trees/${studio.sha}?recursive=1`)) : [];
   const files = release.files.map((file) => ({
     path: file.path,
     mode: '100644',

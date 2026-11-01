@@ -67,3 +67,37 @@ export function createScrollSync() {
   };
   return { register, broadcast, fit, dispose };
 }
+
+export type ScrollSync = ReturnType<typeof createScrollSync>;
+
+// Tables scroll together only when their columns line up: the same column
+// count means the same tracks, so a value sits under the same heading in each.
+// A table with its own count (a matrix of prefixes) scrolled with the sheet
+// before, which slid its columns past values they had nothing to do with.
+// One lane per count; a lane is created the first time a table asks for it.
+export function createScrollLanes() {
+  const lanes = new Map<number, ScrollSync>();
+  const lane = (columnCount: number) => {
+    assert(Number.isSafeInteger(columnCount), 'Variable scroll: column count must be an integer');
+    assert(columnCount >= 0, 'Variable scroll: column count must be nonnegative');
+    const existing = lanes.get(columnCount);
+    if (existing) {
+      return existing;
+    }
+    // Every table could be a lane of its own, and no more than that.
+    assert(lanes.size < SCROLL_PEERS_MAX, 'Variable scroll: lane limit exceeded');
+    const created = createScrollSync();
+    lanes.set(columnCount, created);
+    return created;
+  };
+  // Each lane is reset rather than dropped, so a table that renders again
+  // after a dispose (React's development remount) finds the lane it registered
+  // with instead of a fresh one the others never joined.
+  const dispose = () => {
+    for (const sync of lanes.values()) {
+      sync.dispose();
+    }
+  };
+  return { lane, dispose };
+}
+export type ScrollLanes = ReturnType<typeof createScrollLanes>;

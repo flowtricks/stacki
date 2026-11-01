@@ -19,11 +19,7 @@ test('concurrent style scans share HTTP reads without caching later edits or fai
   assert.ok(address && typeof address !== 'string');
   const url = `http://127.0.0.1:${address.port}/styles`;
   try {
-    const results = await Promise.all([
-      readStyleResource(url),
-      readStyleResource(url),
-      readStyleResource(url),
-    ]);
+    const results = await Promise.all([readStyleResource(url), readStyleResource(url), readStyleResource(url)]);
     assert.equal(reads, 1);
     assert.deepEqual(results, [{ source }, { source }, { source }]);
     source = '.heading { color: blue; }';

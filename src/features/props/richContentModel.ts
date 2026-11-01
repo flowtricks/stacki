@@ -10,9 +10,7 @@ export interface InlineCandidate {
   readonly kind: string;
   readonly name?: string;
   readonly value?: string;
-  readonly props?: Readonly<
-    Record<string, { readonly type: string; readonly value?: string } | undefined>
-  >;
+  readonly props?: Readonly<Record<string, { readonly type: string; readonly value?: string } | undefined>>;
   readonly children?: readonly InlineCandidate[] | undefined;
 }
 export interface InlineExpression {
@@ -30,40 +28,18 @@ export type InlineNode =
       readonly children: readonly InlineNode[] | undefined;
     };
 
-export const INLINE_TAGS: ReadonlySet<string> = new Set([
-  'strong',
-  'em',
-  'b',
-  'i',
-  'sup',
-  'sub',
-  'code',
-  'a',
-  'span',
-  'br',
-  'small',
-  'mark',
-  'u',
-  's',
-]);
+export const INLINE_TAGS: ReadonlySet<string> = new Set(['strong', 'em', 'b', 'i', 'sup', 'sub', 'code', 'a', 'span', 'br', 'small', 'mark', 'u', 's']);
 
 // A simple interpolation like {index + 1}: single braces, no JSX inside —
 // editable as literal text (Astro re-parses braces as an expression anyway).
 export const isSimpleExpr = (node: InlineCandidate): node is InlineExpression =>
-  node.kind === 'expr' &&
-  typeof node.value === 'string' &&
-  /^\{[^{}]*\}$/.test(node.value) &&
-  !node.value.includes('<');
+  node.kind === 'expr' && typeof node.value === 'string' && /^\{[^{}]*\}$/.test(node.value) && !node.value.includes('<');
 
-export function isInlineOnly<T extends InlineCandidate>(
-  children: readonly T[] | undefined,
-): children is readonly (T & InlineNode)[] {
+export function isInlineOnly<T extends InlineCandidate>(children: readonly T[] | undefined): children is readonly (T & InlineNode)[] {
   if (!children?.length) {
     return false;
   }
-  const pending: { readonly node: InlineCandidate; readonly depth: number }[] = children.map(
-    (node) => ({ node, depth: 0 }),
-  );
+  const pending: { readonly node: InlineCandidate; readonly depth: number }[] = children.map((node) => ({ node, depth: 0 }));
   for (let index = 0; index < pending.length; index++) {
     assert(pending.length <= LIMITS.treeNodesMax, 'RichContent: node limit exceeded');
     const next = pending[index];
@@ -78,10 +54,7 @@ export function isInlineOnly<T extends InlineCandidate>(
     }
     if (
       !Object.values(node.props || {}).every(
-        (value) =>
-          value === undefined ||
-          value.type === 'bare' ||
-          (value.type === 'string' && typeof value.value === 'string'),
+        (value) => value === undefined || value.type === 'bare' || (value.type === 'string' && typeof value.value === 'string'),
       )
     ) {
       return false;
@@ -91,10 +64,7 @@ export function isInlineOnly<T extends InlineCandidate>(
     if (!('children' in node)) {
       return false;
     }
-    assert(
-      pending.length + (node.children?.length ?? 0) <= LIMITS.treeNodesMax,
-      'RichContent: node limit exceeded',
-    );
+    assert(pending.length + (node.children?.length ?? 0) <= LIMITS.treeNodesMax, 'RichContent: node limit exceeded');
     for (const child of node.children ?? []) {
       pending.push({ node: child, depth: next.depth + 1 });
     }
@@ -102,8 +72,7 @@ export function isInlineOnly<T extends InlineCandidate>(
   return true;
 }
 
-const esc = (text: string | undefined) =>
-  String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (text: string | undefined) => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // Which expressions become chips: a PLAIN PATH does — `{post.data.title}` is
 // one thing, and the way to change it is to choose another, not to retype it
@@ -121,10 +90,7 @@ export function isChippable(inner: string | undefined) {
   return BIND_PATH_RE.test(text);
 }
 
-export function nodesToHtml(
-  nodes: readonly InlineNode[] | undefined,
-  chippable: (text: string) => boolean = isChippable,
-): string {
+export function nodesToHtml(nodes: readonly InlineNode[] | undefined, chippable: (text: string) => boolean = isChippable): string {
   return richSerialize(nodes ?? [], new Budget(LIMITS.treeNodesMax), 0, chippable);
 }
 // The node count one walk may still visit, shared by every level of that walk.
@@ -139,12 +105,7 @@ class Budget {
     this.remaining -= count;
   }
 }
-function richSerialize(
-  nodes: readonly InlineNode[],
-  budget: Budget,
-  depth: number,
-  chippable: (text: string) => boolean,
-): string {
+function richSerialize(nodes: readonly InlineNode[], budget: Budget, depth: number, chippable: (text: string) => boolean): string {
   assert(depth <= LIMITS.treeDepthMax, 'RichContent: serialization depth limit exceeded');
   let out = '';
   for (const node of nodes) {
@@ -158,28 +119,20 @@ function richSerialize(
       // label reads better without them.
       const inner = node.value.replace(/^\{|\}$/g, '').trim();
       if (chippable(inner)) {
-        out += `<span class="expr-chip" contenteditable="false" data-expr="${esc(
-          node.value,
-        ).replace(/"/g, '&quot;')}">${esc(node.preview ?? inner)}</span>`;
+        out += `<span class="expr-chip" contenteditable="false" data-expr="${esc(node.value).replace(/"/g, '&quot;')}">${esc(node.preview ?? inner)}</span>`;
       } else {
         out += esc(node.value); // shown as literal {expr} text
       }
     } else {
       const attrs = Object.entries(node.props || {})
-        .map(([key, value]) =>
-          value === undefined || value.type === 'bare'
-            ? ` ${key}`
-            : ` ${key}="${esc(value.value).replace(/"/g, '&quot;')}"`,
-        )
+        .map(([key, value]) => (value === undefined || value.type === 'bare' ? ` ${key}` : ` ${key}="${esc(value.value).replace(/"/g, '&quot;')}"`))
         .join('');
       out +=
         node.children === undefined || node.children.length === 0
           ? node.name === 'br'
             ? '<br>'
             : `<${node.name}${attrs}></${node.name}>`
-          : `<${node.name}${attrs}>` +
-            richSerialize(node.children, budget, depth + 1, chippable) +
-            `</${node.name}>`;
+          : `<${node.name}${attrs}>` + richSerialize(node.children, budget, depth + 1, chippable) + `</${node.name}>`;
     }
     assert(out.length <= LIMITS.ipcFieldCharsMax, 'RichContent: HTML limit exceeded');
   }

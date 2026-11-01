@@ -5,14 +5,7 @@
 import { useEffect, useId, useState } from 'react';
 import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl';
 import useScrub from './components/useScrub';
-import {
-  colorOverlayImage,
-  colorOverlayOf,
-  serializeLayers,
-  splitTopLevelSpaces,
-  type BgLayer,
-  type LayerKind,
-} from './model/background';
+import { colorOverlayImage, colorOverlayOf, serializeLayers, splitTopLevelSpaces, type BgLayer, type LayerKind } from './model/background';
 import VariableConnect from './VariableConnect';
 import { requestAsset } from '../../ui/assetPick';
 import { assetValueFor } from '../../ui/assetPath';
@@ -21,14 +14,7 @@ import { getHost } from './model/host';
 import ColorSwatch from './components/ColorSwatch';
 import { commitInPlace } from './model/commitInPlace';
 import { useExternalDraft } from './model/fieldHooks';
-import {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type WriteOptions,
-  replaceLayer,
-  stepInPlace,
-} from './BackgroundKit';
+import { type SetProp, type ClearProp, type LiveSetProp, type WriteOptions, replaceLayer, stepInPlace } from './BackgroundKit';
 
 // ─────────────────────────── Layer editor ───────────────────────────
 
@@ -68,13 +54,7 @@ export function LayerLonghandField({
   });
 
   return (
-    <VariableConnect
-      code
-      ariaLabel={`Connect ${label} to a variable`}
-      disabled={busy}
-      prop={prop}
-      onPick={(binding) => setProp(prop, binding, false)}
-    >
+    <VariableConnect code ariaLabel={`Connect ${label} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
       <input
         {...scrub.input}
         className="u-input embed-editor_size-input"
@@ -107,12 +87,7 @@ export function LayerLonghandField({
 
 // Write one longhand's whole comma list: live writes skip an empty list; a committed
 // empty list clears the property.
-export function writeLayerList(
-  prop: string,
-  list: string,
-  options: WriteOptions,
-  writers: Pick<LayerFieldProps, 'setProp' | 'clearProp' | 'liveSetProp'>,
-) {
+export function writeLayerList(prop: string, list: string, options: WriteOptions, writers: Pick<LayerFieldProps, 'setProp' | 'clearProp' | 'liveSetProp'>) {
   if (options.live) {
     if (list) {
       writers.liveSetProp(prop, list, false);
@@ -126,9 +101,7 @@ export function writeLayerList(
   }
 }
 
-export const BACKGROUND_IMAGE_ICON_FIRST_PATH =
-  'M6 7C6.55228 7 7 6.55228 7 6C7 5.44772 6.55228 5 6 5C5.44772 5 5 5.44772 5 6' +
-  'C5 6.55228 5.44772 7 6 7Z';
+export const BACKGROUND_IMAGE_ICON_FIRST_PATH = 'M6 7C6.55228 7 7 6.55228 7 6C7 5.44772 6.55228 5 6 5C5.44772 5 5 5.44772 5 6' + 'C5 6.55228 5.44772 7 6 7Z';
 export const BACKGROUND_IMAGE_ICON_SECOND_PATH =
   'M2 3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3' +
   'C2.44772 14 2 13.5523 2 13V3ZM13 3L3 3V12.2929L8 7.29289L13 12.2929V3ZM8 8.70711' +
@@ -140,18 +113,12 @@ export function BgImageIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d={BACKGROUND_IMAGE_ICON_FIRST_PATH} fill="currentColor" />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={BACKGROUND_IMAGE_ICON_SECOND_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={BACKGROUND_IMAGE_ICON_SECOND_PATH} fill="currentColor" />
     </svg>
   );
 }
 export const BACKGROUND_LINEAR_ICON_PATH =
-  'M2 3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3' +
-  'C2.44772 14 2 13.5523 2 13V3Z';
+  'M2 3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3' + 'C2.44772 14 2 13.5523 2 13V3Z';
 
 export function BgLinearIcon() {
   const id = useId();
@@ -168,8 +135,7 @@ export function BgLinearIcon() {
   );
 }
 export const BACKGROUND_RADIAL_ICON_PATH =
-  'M2 3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3' +
-  'C2.44772 14 2 13.5523 2 13V3Z';
+  'M2 3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3' + 'C2.44772 14 2 13.5523 2 13V3Z';
 
 export function BgRadialIcon() {
   const id = useId();
@@ -177,14 +143,7 @@ export function BgRadialIcon() {
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d={BACKGROUND_RADIAL_ICON_PATH} fill={`url(#${id})`} />
       <defs>
-        <radialGradient
-          id={id}
-          cx="0"
-          cy="0"
-          r="1"
-          gradientUnits="userSpaceOnUse"
-          gradientTransform="translate(8 8) rotate(90) scale(6)"
-        >
+        <radialGradient id={id} cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(8 8) rotate(90) scale(6)">
           <stop stopColor="currentColor" stopOpacity="0" />
           <stop offset="0.166246" stopColor="currentColor" stopOpacity="0" />
           <stop offset="1" stopColor="currentColor" />
@@ -194,8 +153,7 @@ export function BgRadialIcon() {
   );
 }
 export const BACKGROUND_COLOR_ICON_PATH =
-  'M2 3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3' +
-  'C2.44772 14 2 13.5523 2 13V3Z';
+  'M2 3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3' + 'C2.44772 14 2 13.5523 2 13V3Z';
 
 export function BgColorIcon() {
   return (
@@ -326,14 +284,7 @@ export const SIZE_MODE_OPTIONS: ReadonlyArray<SegmentedOption<SizeMode>> = [
   { value: 'cover', label: 'Cover' },
   { value: 'contain', label: 'Contain' },
 ];
-export function LayerSizeField({
-  layers,
-  index,
-  busy,
-  setProp,
-  clearProp,
-  liveSetProp,
-}: LayerFieldProps) {
+export function LayerSizeField({ layers, index, busy, setProp, clearProp, liveSetProp }: LayerFieldProps) {
   const parsed = parseSize(layers[index]?.size ?? '');
   const writeSize = (value: string, options: WriteOptions) => {
     const list = serializeLayers(replaceLayer(layers, index, { size: value })).size;
@@ -347,9 +298,7 @@ export function LayerSizeField({
       <SegmentedControl
         options={SIZE_MODE_OPTIONS}
         value={parsed.mode}
-        onChange={(mode) =>
-          writeSize(serializeSize(mode, parsed.width, parsed.height), { live: false })
-        }
+        onChange={(mode) => writeSize(serializeSize(mode, parsed.width, parsed.height), { live: false })}
         ariaLabel="Background size"
         disabled={busy}
       />
@@ -361,12 +310,8 @@ export function LayerSizeField({
             label="Width"
             busy={busy}
             disabled={!isCustom}
-            onLive={(next) =>
-              writeSize(serializeSize('custom', next, parsed.height), { live: true })
-            }
-            onCommit={(next) =>
-              writeSize(serializeSize('custom', next, parsed.height), { live: false })
-            }
+            onLive={(next) => writeSize(serializeSize('custom', next, parsed.height), { live: true })}
+            onCommit={(next) => writeSize(serializeSize('custom', next, parsed.height), { live: false })}
           />
           <span className="embed-editor_bg-pair-cap">Width</span>
         </label>
@@ -377,12 +322,8 @@ export function LayerSizeField({
             label="Height"
             busy={busy}
             disabled={!isCustom}
-            onLive={(next) =>
-              writeSize(serializeSize('custom', parsed.width, next), { live: true })
-            }
-            onCommit={(next) =>
-              writeSize(serializeSize('custom', parsed.width, next), { live: false })
-            }
+            onLive={(next) => writeSize(serializeSize('custom', parsed.width, next), { live: true })}
+            onCommit={(next) => writeSize(serializeSize('custom', parsed.width, next), { live: false })}
           />
           <span className="embed-editor_bg-pair-cap">Height</span>
         </label>
@@ -394,14 +335,7 @@ export function LayerSizeField({
 // Position: a 3×3 preset grid + Left/Top offsets.
 export function axisIndex(token: string): number {
   const normalized = token.trim().toLowerCase();
-  if (
-    normalized === '' ||
-    normalized === 'left' ||
-    normalized === 'top' ||
-    normalized === '0' ||
-    normalized === '0%' ||
-    normalized === '0px'
-  ) {
+  if (normalized === '' || normalized === 'left' || normalized === 'top' || normalized === '0' || normalized === '0%' || normalized === '0px') {
     return 0;
   }
   if (normalized === 'center' || normalized === '50%') {
@@ -413,14 +347,7 @@ export function axisIndex(token: string): number {
   return -1;
 }
 export const AXIS_PERCENTS = ['0%', '50%', '100%'];
-export function LayerPositionField({
-  layers,
-  index,
-  busy,
-  setProp,
-  clearProp,
-  liveSetProp,
-}: LayerFieldProps) {
+export function LayerPositionField({ layers, index, busy, setProp, clearProp, liveSetProp }: LayerFieldProps) {
   const parts = splitTopLevelSpaces((layers[index]?.position ?? '').trim());
   const x = parts[0] ?? '';
   const y = parts[1] ?? '';
@@ -481,15 +408,10 @@ export function PositionPresets({
           <button
             key={`${row}-${col}`}
             type="button"
-            className={
-              'embed-editor_bg-poscell ' +
-              (activeCol === col && activeRow === row ? 'is-active' : '')
-            }
+            className={'embed-editor_bg-poscell ' + (activeCol === col && activeRow === row ? 'is-active' : '')}
             disabled={busy}
             aria-label={`${['Left', 'Center', 'Right'][col]} ${['top', 'center', 'bottom'][row]}`}
-            onClick={() =>
-              writePosition(`${AXIS_PERCENTS[col]} ${AXIS_PERCENTS[row]}`, { live: false })
-            }
+            onClick={() => writePosition(`${AXIS_PERCENTS[col]} ${AXIS_PERCENTS[row]}`, { live: false })}
           />
         )),
       )}
@@ -576,15 +498,7 @@ export function assetSourceCandidates(url: string | undefined): string[] {
 }
 
 // An <img> that works through a list of sources until one loads.
-export function FallbackImg({
-  srcs,
-  alt = '',
-  onLoad,
-}: {
-  srcs: string[];
-  alt?: string;
-  onLoad?: (size: { w: number; h: number }) => void;
-}) {
+export function FallbackImg({ srcs, alt = '', onLoad }: { srcs: string[]; alt?: string; onLoad?: (size: { w: number; h: number }) => void }) {
   const [sourceIndex, setSourceIndex] = useState(0);
   // A new list starts again from its first source.
   const sourcesKey = srcs.join('|');
@@ -599,9 +513,7 @@ export function FallbackImg({
       src={srcs[sourceIndex]}
       alt={alt}
       draggable={false}
-      onLoad={(event) =>
-        onLoad?.({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })
-      }
+      onLoad={(event) => onLoad?.({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })}
       onError={() => setSourceIndex((previous) => previous + 1)}
     />
   );
@@ -680,12 +592,9 @@ export function LayerColorField({
   setProp: SetProp;
   liveSetProp: LiveSetProp;
 }) {
-  const { draft, setDraft, focused } = useExternalDraft(
-    colorOverlayOf(layers[index]?.image ?? '') ?? '',
-  );
+  const { draft, setDraft, focused } = useExternalDraft(colorOverlayOf(layers[index]?.image ?? '') ?? '');
 
-  const listFor = (color: string): string =>
-    serializeLayers(replaceLayer(layers, index, { image: colorOverlayImage(color) })).image;
+  const listFor = (color: string): string => serializeLayers(replaceLayer(layers, index, { image: colorOverlayImage(color) })).image;
   // An empty colour writes the overlay's default tint.
   const write = (color: string, options: WriteOptions) => {
     const value = listFor(color.trim() || 'rgba(0, 0, 0, 0.5)');
@@ -717,13 +626,7 @@ export function LayerColorField({
           setProp('background-image', listFor(binding), false);
         }}
       >
-        <OverlayColorInput
-          draft={draft}
-          busy={busy}
-          focusedRef={focused}
-          setDraft={setDraft}
-          write={write}
-        />
+        <OverlayColorInput draft={draft} busy={busy} focusedRef={focused} setDraft={setDraft} write={write} />
       </VariableConnect>
     </div>
   );

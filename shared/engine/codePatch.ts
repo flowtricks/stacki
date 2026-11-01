@@ -19,15 +19,7 @@ import { assert } from '../core/assert';
 import { DIFF_BUDGET, diffBytes, diffHunks, type Hunk } from './diff';
 import { LIMITS } from '../core/limits';
 import { err, ok, type Result } from '../core/result';
-import {
-  decodeUtf8,
-  encodeUtf8,
-  toByteSpan,
-  toByteString,
-  utf8ByteLength,
-  type ByteSpan,
-  type ByteString,
-} from '../core/span';
+import { decodeUtf8, encodeUtf8, toByteSpan, toByteString, utf8ByteLength, type ByteSpan, type ByteString } from '../core/span';
 
 /** Replace the baseline bytes at `span`, which hold `expected`, with `text`. */
 export interface CodeHunk {
@@ -47,10 +39,7 @@ const CONTINUATION_BYTES_MAX = 3;
 
 /** The patch from `baseline` to `next`, as ascending, disjoint hunks of the
  * baseline on code-point boundaries. Empty when the texts are equal. */
-export function diffCodePatch(
-  baseline: string,
-  next: string,
-): Result<readonly CodeHunk[], 'resource-limit'> {
+export function diffCodePatch(baseline: string, next: string): Result<readonly CodeHunk[], 'resource-limit'> {
   // Measured in UTF-16 units first: every unit is at least one byte, and the
   // text travels to main as one IPC field, bounded in units.
   if (next.length > LIMITS.ipcFieldCharsMax) {
@@ -102,11 +91,7 @@ export function applyCodePatch(baseline: string, hunks: readonly CodeHunk[]): st
  * (an outside edit mapped through, an earlier visual edit rebased). Changes
  * that touch or overlap cannot be ordered and are a `merge-conflict`: the
  * user decides, the app never picks a side. */
-export function mergeTyping(
-  base: string,
-  ours: string,
-  theirs: string,
-): Result<string, 'merge-conflict' | 'resource-limit'> {
+export function mergeTyping(base: string, ours: string, theirs: string): Result<string, 'merge-conflict' | 'resource-limit'> {
   if (ours === base || ours === theirs) {
     return ok(theirs);
   }
@@ -128,9 +113,7 @@ export function mergeTyping(
       }
     }
   }
-  const both = [...mine.value, ...other.value].sort(
-    (left, right) => left.span.start - right.span.start,
-  );
+  const both = [...mine.value, ...other.value].sort((left, right) => left.span.start - right.span.start);
   const merged = applyCodePatch(base, both);
   assert(merged !== base, 'Two changes merged are a change');
   return ok(merged);
@@ -178,10 +161,7 @@ function trimmedMiddle(source: ByteString, target: ByteString): Region | undefin
     return undefined; // Equal.
   }
   let suffix = 0;
-  while (
-    suffix < shorter - prefix &&
-    source[source.length - 1 - suffix] === target[target.length - 1 - suffix]
-  ) {
+  while (suffix < shorter - prefix && source[source.length - 1 - suffix] === target[target.length - 1 - suffix]) {
     suffix++;
   }
   const region = {
@@ -193,14 +173,8 @@ function trimmedMiddle(source: ByteString, target: ByteString): Region | undefin
 
 function shiftHunk(hunk: Hunk, middle: Region): Region {
   return {
-    source: toByteSpan(
-      hunk.source.start + middle.source.start,
-      hunk.source.end + middle.source.start,
-    ),
-    target: toByteSpan(
-      hunk.target.start + middle.target.start,
-      hunk.target.end + middle.target.start,
-    ),
+    source: toByteSpan(hunk.source.start + middle.source.start, hunk.source.end + middle.source.start),
+    target: toByteSpan(hunk.target.start + middle.target.start, hunk.target.end + middle.target.start),
   };
 }
 
@@ -265,9 +239,7 @@ function joinRegions(regions: readonly Region[]): readonly Region[] {
 }
 
 function codeHunk(source: ByteString, target: ByteString, region: Region): CodeHunk {
-  const expected = decodeUtf8(
-    toByteString(source.subarray(region.source.start, region.source.end)),
-  );
+  const expected = decodeUtf8(toByteString(source.subarray(region.source.start, region.source.end)));
   const text = decodeUtf8(toByteString(target.subarray(region.target.start, region.target.end)));
   assert(expected.ok, 'A widened region holds whole code points of the baseline');
   assert(text.ok, 'A widened region holds whole code points of the text');

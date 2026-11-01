@@ -9,20 +9,8 @@ import { parseData } from '../app/mainValidation';
 import type { CmsFile } from '../lib/mainTypes';
 import * as path from 'path';
 import * as fs from 'fs';
-import {
-  findCollections,
-  replaceCollection,
-  readGeneral,
-  writeGeneral,
-  GENERAL,
-} from '../content/jsCollections';
-import {
-  defaultImports,
-  addImport,
-  importName,
-  importSpecFor,
-  withAssets,
-} from '../project/assetRefs';
+import { findCollections, replaceCollection, readGeneral, writeGeneral, GENERAL } from '../content/jsCollections';
+import { defaultImports, addImport, importName, importSpecFor, withAssets } from '../project/assetRefs';
 import { importersOf } from '../content/cmsRefs';
 import { toPosix, capture, readJson, parseDataList } from '../lib/mainHelpers';
 import { resolveImportPath } from '../properties/importPaths';
@@ -128,11 +116,7 @@ function registerCmsReadHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
     }
     const col = findCollections(source, scan).find((candidate) => candidate.name === exportName);
     if (!col) {
-      throw new Error(
-        page
-          ? `${exportName} is no longer declared in src/${fileRel}.`
-          : `${exportName} is no longer exported from src/${fileRel}.`,
-      );
+      throw new Error(page ? `${exportName} is no longer declared in src/${fileRel}.` : `${exportName} is no longer exported from src/${fileRel}.`);
     }
     if (!col.data) {
       throw new Error(`${exportName} isn't plain data — ${col.reason}.`);
@@ -215,11 +199,7 @@ function registerCmsWriteHandler({ ipcMain, send }: Pick<MainHost, 'ipcMain' | '
       const scan = page ? PAGE_SCAN : undefined;
       const written =
         exportName === GENERAL
-          ? writeGeneral(
-              source,
-              data && typeof data === 'object' && !Array.isArray(data) ? data : {},
-              scan,
-            )
+          ? writeGeneral(source, data && typeof data === 'object' && !Array.isArray(data) ? data : {}, scan)
           : replaceCollection(source, exportName, parseDataList(data), scan);
       if (written === undefined) {
         throw new Error(`Couldn't write ${exportName} back into src/${fileRel}.`);
@@ -254,11 +234,7 @@ function registerCmsWriteHandler({ ipcMain, send }: Pick<MainHost, 'ipcMain' | '
   });
 }
 
-function registerCmsCreateHandlers({
-  ipcMain,
-  send,
-  shell,
-}: Pick<MainHost, 'ipcMain' | 'send' | 'shell'>): void {
+function registerCmsCreateHandlers({ ipcMain, send, shell }: Pick<MainHost, 'ipcMain' | 'send' | 'shell'>): void {
   // New collections land in src/data/, the conventional home for Astro content
   // that isn't a content collection.
   ipcMain.handle('cms:create', async (_event, { projectPath, name }) => {

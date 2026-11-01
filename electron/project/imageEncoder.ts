@@ -7,10 +7,7 @@ const IMAGE_PIXELS_MAX = 40_000_000;
 
 // Chromium canvas does not guarantee AVIF encoding. Sharp provides both codecs,
 // orientation handling and decode limits, with a portable WASM packaging fallback.
-export async function encodeImage(
-  bytes: Buffer,
-  format: ImageFormat,
-): Promise<Result<Buffer, string>> {
+export async function encodeImage(bytes: Buffer, format: ImageFormat): Promise<Result<Buffer, string>> {
   if (bytes.length > IMAGE_BYTES_MAX) {
     return { ok: false, error: 'Choose an image smaller than 50 MB.' };
   }

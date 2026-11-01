@@ -34,19 +34,8 @@ import {
   type ActorEffect,
   type ActorState,
 } from '../../shared/engine/documentActor';
-import {
-  describeRejection,
-  intentPayloadBytes,
-  toIntent,
-  type Intent,
-  type RejectionReason,
-} from '../../shared/engine/intent';
-import {
-  commitChain,
-  minimalSplices,
-  rebaseIntent,
-  type CommitRecord,
-} from '../../shared/engine/rebase';
+import { describeRejection, intentPayloadBytes, toIntent, type Intent, type RejectionReason } from '../../shared/engine/intent';
+import { commitChain, minimalSplices, rebaseIntent, type CommitRecord } from '../../shared/engine/rebase';
 import type { Snapshot } from '../../shared/page/snapshot';
 import { inverseEdits } from '../../shared/engine/splice';
 import { LIMITS } from '../../shared/core/limits';
@@ -65,17 +54,7 @@ import {
   type DiskState,
   type CurrentError,
 } from './documentReports';
-import {
-  Entry,
-  type Settled,
-  STEPS_PER_INTENT,
-  type Rewrite,
-  UNCHANGED,
-  rewriteHunks,
-  editHistory,
-  entryBytes,
-  compareKeys,
-} from './documentEntry';
+import { Entry, type Settled, STEPS_PER_INTENT, type Rewrite, UNCHANGED, rewriteHunks, editHistory, entryBytes, compareKeys } from './documentEntry';
 
 export {
   type WriteReport,
@@ -92,10 +71,7 @@ export {
 
 /** The app's host: the real disk, the shipping planner, the real parser, and
  * one structured telemetry line per outcome on `log`. */
-export function createNodeDocumentActors(input: {
-  readonly log: (line: string) => void;
-  readonly schedule: (task: () => void) => void;
-}): DocumentActors {
+export function createNodeDocumentActors(input: { readonly log: (line: string) => void; readonly schedule: (task: () => void) => void }): DocumentActors {
   return new DocumentActors({
     disk: new NodeDocumentDisk(),
     projector: NODE_PROJECTOR,
@@ -150,11 +126,7 @@ export class DocumentActors {
    * rebased through them exactly; one authored before an outside write is
    * submitted with its authored snapshot and mapped through the diff by the
    * planner. Without the authored bytes, it is refused: never guessed. */
-  submitEdit(
-    file: string,
-    stated: EditStatement,
-    build: (base: EditBase) => Result<BuiltEdit, RejectionReason>,
-  ): EditReport {
+  submitEdit(file: string, stated: EditStatement, build: (base: EditBase) => Result<BuiltEdit, RejectionReason>): EditReport {
     assert(this.#options.drain === 'immediate', 'A deferred host takes submitDeferred');
     const entry = this.#entry(file);
     if (!entry.ok) {
@@ -279,10 +251,7 @@ export class DocumentActors {
   /** Lease the actors of `items`' files in sorted canonical order and run
    * `run` with the items in that order; every write inside goes through those
    * actors, and no other intent reaches them until `run` returns. */
-  withLeases<Item extends { readonly file: string }, T>(
-    items: readonly Item[],
-    run: (ordered: readonly Item[]) => T,
-  ): Result<T, string> {
+  withLeases<Item extends { readonly file: string }, T>(items: readonly Item[], run: (ordered: readonly Item[]) => T): Result<T, string> {
     assert(items.length <= LIMITS.documentActorsMax, 'A batch fits in the actor bound');
     const named: { readonly item: Item; readonly key: string }[] = [];
     for (const item of items) {
@@ -428,15 +397,11 @@ export class DocumentActors {
     const { authoredChecksum } = stated;
     const current = entry.state.snapshot;
     assert(current !== undefined, 'A refreshed actor holds a snapshot');
-    const authored =
-      current.checksum === authoredChecksum
-        ? current
-        : entry.retained.find((snapshot) => snapshot.checksum === authoredChecksum);
+    const authored = current.checksum === authoredChecksum ? current : entry.retained.find((snapshot) => snapshot.checksum === authoredChecksum);
     if (authored === undefined) {
       return err(stated.gone); // The authored bytes are gone: re-read, never guess.
     }
-    const chain =
-      authored === current ? [] : commitChain(entry.log, authoredChecksum, current.checksum);
+    const chain = authored === current ? [] : commitChain(entry.log, authoredChecksum, current.checksum);
     const history = editHistory(authored, current, chain);
     const built = build({ authored, current, history });
     if (!built.ok) {
@@ -468,11 +433,7 @@ export class DocumentActors {
     return rebased.ok ? ok({ intent: rebased.value, authored: undefined }) : rebased;
   }
 
-  #enqueue(
-    entry: Entry,
-    intent: Intent,
-    authored: Snapshot | undefined = undefined,
-  ): 'accepted' | 'backpressured' {
+  #enqueue(entry: Entry, intent: Intent, authored: Snapshot | undefined = undefined): 'accepted' | 'backpressured' {
     const submitted = submitIntent(entry.state, { intent, authored });
     entry.setState(submitted.state);
     if (submitted.result.tag === 'backpressured') {
@@ -586,9 +547,7 @@ export class DocumentActors {
         const commit = settled.committed;
         assert(commit !== undefined, 'An applied intent was committed');
         // A replacement of bytes with the same bytes changes nothing: no hunk.
-        const changed = minimalSplices(commit.plan.splices).filter(
-          (splice) => splice.range.start < splice.range.end || splice.replacementBytes.length > 0,
-        );
+        const changed = minimalSplices(commit.plan.splices).filter((splice) => splice.range.start < splice.range.end || splice.replacementBytes.length > 0);
         return { tag: 'applied', checksum: outcome.checksum, inverse: inverseEdits(changed) };
       }
       case 'rejected': {
@@ -632,8 +591,7 @@ export class DocumentActors {
     const bytes = encodeUtf8(text);
     const created = this.#options.disk.create(entry.document.path, bytes);
     if (!created.ok) {
-      const reason =
-        created.error.code === 'exists' ? 'region-externally-modified' : 'write-failed';
+      const reason = created.error.code === 'exists' ? 'region-externally-modified' : 'write-failed';
       return { tag: 'rejected', reason, message: created.error.message, diskChecksum: undefined };
     }
     const current = this.#current(entry);
@@ -680,10 +638,7 @@ export class DocumentActors {
     this.#evict();
     const entry = new Entry(document.value, createActor(document.value.path), this.#clock);
     this.#entries.set(document.value.key, entry);
-    assert(
-      this.#entries.size <= LIMITS.documentActorsMax,
-      'The actor count stays inside its bound',
-    );
+    assert(this.#entries.size <= LIMITS.documentActorsMax, 'The actor count stays inside its bound');
     return ok(entry);
   }
 
@@ -726,10 +681,7 @@ export class DocumentActors {
     if (previous.checksum === next.snapshot?.checksum) {
       return;
     }
-    const retained = [
-      ...entry.retained.filter((snapshot) => snapshot.checksum !== previous.checksum),
-      previous,
-    ].slice(-LIMITS.authoredSnapshotsMax);
+    const retained = [...entry.retained.filter((snapshot) => snapshot.checksum !== previous.checksum), previous].slice(-LIMITS.authoredSnapshotsMax);
     // Oldest first out, until the bytes fit too; the loop ends because each
     // pass drops one snapshot.
     let bytes = retained.reduce((total, snapshot) => total + snapshot.bytes.length, 0);

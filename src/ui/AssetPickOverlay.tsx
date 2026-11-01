@@ -7,17 +7,9 @@ import type { ReactNode } from 'react';
 import Popup from './Popup';
 import './assetPickOverlay.css';
 
-export function AssetPickOverlay(props: {
-  readonly title: string;
-  readonly onClose: () => void;
-  readonly children: ReactNode;
-}) {
+export function AssetPickOverlay(props: { readonly title: string; readonly onClose: () => void; readonly children: ReactNode }) {
   return (
-    <Popup
-      className="asset-pick-overlay"
-      labelledBy="asset-pick-overlay-title"
-      onClose={props.onClose}
-    >
+    <Popup className="asset-pick-overlay" labelledBy="asset-pick-overlay-title" onClose={props.onClose}>
       {({ close }) => (
         <>
           <header>
@@ -35,7 +27,5 @@ export function AssetPickOverlay(props: {
 
 /** The overlay's heading for a request of this kind. */
 export function assetPickTitle(mediaKind: 'image' | 'video' | 'audio' | 'asset'): string {
-  return mediaKind === 'asset'
-    ? 'Choose a file'
-    : `Choose an ${mediaKind === 'image' ? 'image' : mediaKind}`;
+  return mediaKind === 'asset' ? 'Choose a file' : `Choose an ${mediaKind === 'image' ? 'image' : mediaKind}`;
 }

@@ -40,9 +40,7 @@ export function saveTerminalClipboardImage(bytes: Uint8Array, mime: string) {
   if (bytes.byteLength > TERMINAL_IMAGE_BYTES_MAX) {
     return Promise.resolve({ ok: false, error: 'Clipboard image exceeds 20 MB.' } as const);
   }
-  return terminalRequest(parseClipboardResult, () =>
-    window.avb.terminalClipboardImage(bytes, text(mime)),
-  );
+  return terminalRequest(parseClipboardResult, () => window.avb.terminalClipboardImage(bytes, text(mime)));
 }
 
 export function sendTerminalInput(id: string, data: string): void {
@@ -117,10 +115,7 @@ function parseSuccess(input: unknown): { readonly ok: true } {
   return { ok: true };
 }
 
-async function terminalRequest<Value>(
-  parse: Parser<Value>,
-  invoke: () => Promise<unknown>,
-): Promise<Result<Value, string>> {
+async function terminalRequest<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<Result<Value, string>> {
   let response: unknown;
   try {
     response = await invoke();

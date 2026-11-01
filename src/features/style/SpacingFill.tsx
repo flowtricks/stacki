@@ -6,14 +6,7 @@ import { useEffect, useId, useRef } from 'react';
 import { getHost } from './model/host';
 import { getModifiers, onModifiers, setModifiers } from '../../editor/heldModifiers';
 import { assert } from '../../../shared/core/assert';
-import {
-  type SetProp,
-  type LiveSetProp,
-  type Read,
-  type Side,
-  type Display,
-  displayOf,
-} from './spacingTypes';
+import { type SetProp, type LiveSetProp, type Read, type Side, type Display, displayOf } from './spacingTypes';
 
 // Shared "spacing box" primitives: Webflow's masked-SVG frame with draggable side
 // handles, click-to-edit value labels, and a popover editor. Used by SpacingSection
@@ -93,8 +86,7 @@ export function pxPerUnit(unit: string): number {
 
 /** Round to a sensible precision for the unit and re-attach it. */
 export function formatLength(amount: number, unit: string): string {
-  const rounded =
-    unit === 'px' || unit === '%' ? Math.round(amount) : Math.round(amount * 100) / 100;
+  const rounded = unit === 'px' || unit === '%' ? Math.round(amount) : Math.round(amount * 100) / 100;
   return `${rounded}${unit}`;
 }
 
@@ -259,18 +251,7 @@ function useDragReport(
   };
 }
 
-export function useSideDrag({
-  propFor,
-  inward,
-  kind,
-  read,
-  busy,
-  setProp,
-  liveSetProp,
-  onLive,
-  onLiveEnd,
-  threshold = 0,
-}: SideDragOptions) {
+export function useSideDrag({ propFor, inward, kind, read, busy, setProp, liveSetProp, onLive, onLiveEnd, threshold = 0 }: SideDragOptions) {
   const dragRef = useRef<SideDrag | undefined>(undefined);
   const dragged = useRef(false);
   const report = useDragReport(dragRef, { kind, propFor });
@@ -477,9 +458,7 @@ export function followPointer(
   if (drag.active) {
     return true;
   }
-  const far =
-    Math.abs(event.clientX - drag.startX) >= threshold ||
-    Math.abs(event.clientY - drag.startY) >= threshold;
+  const far = Math.abs(event.clientX - drag.startX) >= threshold || Math.abs(event.clientY - drag.startY) >= threshold;
   if (far) {
     drag.active = true;
   }
@@ -526,10 +505,7 @@ export function useLiveFrame(
 // While a drag is live, Shift and Option are read as they are pressed rather
 // than as they were at the start: reach for one mid-drag and the other sides
 // join in from that moment.
-export function useDragModifiers(
-  dragRef: React.MutableRefObject<SideDrag | undefined>,
-  apply: () => void,
-): void {
+export function useDragModifiers(dragRef: React.MutableRefObject<SideDrag | undefined>, apply: () => void): void {
   // The listeners below are registered once; this keeps them calling the
   // current `apply`, with the props of the render that is on screen.
   const applyRef = useRef(apply);
@@ -549,8 +525,7 @@ export function useDragModifiers(
     };
     // Read off any key event, not just the modifiers themselves, and through
     // the shared store — see the hover hook below for both reasons.
-    const onKey = (event: KeyboardEvent) =>
-      setModifiers({ shiftKey: event.shiftKey, altKey: event.altKey });
+    const onKey = (event: KeyboardEvent) => setModifiers({ shiftKey: event.shiftKey, altKey: event.altKey });
     window.addEventListener('keydown', onKey, true);
     window.addEventListener('keyup', onKey, true);
     const offModifiers = onModifiers(follow);
@@ -566,15 +541,7 @@ export function useDragModifiers(
 // pointer is over — the strip of the page that side is holding open — so the
 // panel has to say which sides those are, and keep saying it while Shift or
 // Option change the answer under a pointer that hasn't moved.
-export function useSideHover({
-  propFor,
-  kind,
-  read,
-}: {
-  propFor: (side: Side) => string;
-  kind: 'padding' | 'margin';
-  read: Read;
-}) {
+export function useSideHover({ propFor, kind, read }: { propFor: (side: Side) => string; kind: 'padding' | 'margin'; read: Read }) {
   const overRef = useRef<HoveredSide | undefined>(undefined);
 
   const report = () => {
@@ -640,10 +607,7 @@ export type HoveredSide = { side: Side; shiftKey: boolean; altKey: boolean };
 
 // Keeps the hovered sides following Shift and Option while the pointer stands
 // still, and clears the canvas when the panel goes away mid-hover.
-export function useHoverModifiers(
-  overRef: React.MutableRefObject<HoveredSide | undefined>,
-  report: () => void,
-): void {
+export function useHoverModifiers(overRef: React.MutableRefObject<HoveredSide | undefined>, report: () => void): void {
   // The listener below is registered once; this keeps it calling the current
   // report, which reads the values as they are now rather than as they were when
   // the panel first rendered.
@@ -673,8 +637,7 @@ export function useHoverModifiers(
     // from travelling must not stop the canvas from following the modifier. And
     // the answer goes through the shared store, because the other place these
     // are pressed is the canvas — see setModifiers.
-    const onKey = (event: KeyboardEvent) =>
-      setModifiers({ shiftKey: event.shiftKey, altKey: event.altKey });
+    const onKey = (event: KeyboardEvent) => setModifiers({ shiftKey: event.shiftKey, altKey: event.altKey });
     const onBlur = () => setModifiers({ shiftKey: false, altKey: false });
     window.addEventListener('keydown', onKey, true);
     window.addEventListener('keyup', onKey, true);
@@ -709,31 +672,10 @@ export function SpacingFill({ frame, inward = false, ...dragOptions }: FillProps
   const hover = useSideHover({ propFor: dragOptions.propFor, kind, read: dragOptions.read });
 
   return (
-    <svg
-      className="embed-editor_spacing-fill"
-      viewBox={`0 0 ${geometry.w} ${geometry.h}`}
-      preserveAspectRatio="none"
-      aria-hidden="true"
-    >
+    <svg className="embed-editor_spacing-fill" viewBox={`0 0 ${geometry.w} ${geometry.h}`} preserveAspectRatio="none" aria-hidden="true">
       <mask id={maskId} maskContentUnits="userSpaceOnUse">
-        <rect
-          x="0"
-          y="0"
-          width={geometry.w}
-          height={geometry.h}
-          rx={geometry.or}
-          ry={geometry.or}
-          fill="#fff"
-        />
-        <rect
-          x={geometry.mask.x}
-          y={geometry.mask.y}
-          width={geometry.mask.w}
-          height={geometry.mask.h}
-          rx={geometry.ir}
-          ry={geometry.ir}
-          fill="#000"
-        />
+        <rect x="0" y="0" width={geometry.w} height={geometry.h} rx={geometry.or} ry={geometry.or} fill="#fff" />
+        <rect x={geometry.mask.x} y={geometry.mask.y} width={geometry.mask.w} height={geometry.mask.h} rx={geometry.ir} ry={geometry.ir} fill="#000" />
       </mask>
       <g mask={`url(#${maskId})`}>
         {(['top', 'right', 'bottom', 'left'] satisfies Side[]).map((side) => (

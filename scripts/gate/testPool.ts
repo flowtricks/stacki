@@ -4,12 +4,7 @@
 // it failed. Why not interleave: 150 commands writing at once is unreadable,
 // and the failure is the part anyone needs.
 
-import {
-  spawn,
-  type SpawnOptionsWithStdioTuple,
-  type StdioNull,
-  type StdioPipe,
-} from 'node:child_process';
+import { spawn, type SpawnOptionsWithStdioTuple, type StdioNull, type StdioPipe } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 
 export interface TestCommand {

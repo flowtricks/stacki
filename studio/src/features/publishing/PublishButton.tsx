@@ -61,14 +61,7 @@ export function PublishButton({ report }: { report: (error: unknown) => void }) 
         refreshAvailability={availability.refresh}
         settingsClosed={availability.refresh}
       />
-      {visible && (
-        <PublishProgress
-          state={state}
-          busy={busy}
-          failed={failed}
-          dismiss={() => setVisible(false)}
-        />
-      )}
+      {visible && <PublishProgress state={state} busy={busy} failed={failed} dismiss={() => setVisible(false)} />}
     </div>
   );
 }

@@ -73,14 +73,7 @@ export function useResolvedColor(value: string): string {
   const raw = String(value ?? '').trim();
   const [, bump] = useState(0);
   const host = getHost();
-  cache.setScope([
-    host.projectPath,
-    host.openFilePath,
-    host.nodes,
-    host.selectedId,
-    host.device,
-    host.historyTick,
-  ]);
+  cache.setScope([host.projectPath, host.openFilePath, host.nodes, host.selectedId, host.device, host.historyTick]);
   const path = pathOfSelection();
   const pageDependent = needsPage(raw);
   const enabled = pageDependent && hasCanvas();
@@ -107,11 +100,5 @@ export function useResolvedColor(value: string): string {
   });
 
   const resolved = cached?.kind === 'settled' ? cached.answer : undefined;
-  return useStableStyleValue(resolved || raw, { pending: cached?.kind === 'pending' }, [
-    host.projectPath,
-    host.openFilePath,
-    host.selectedId,
-    path,
-    raw,
-  ]);
+  return useStableStyleValue(resolved || raw, { pending: cached?.kind === 'pending' }, [host.projectPath, host.openFilePath, host.selectedId, path, raw]);
 }

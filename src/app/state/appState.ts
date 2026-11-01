@@ -109,25 +109,14 @@ export function useCanvasReportState() {
   const [nodeStates, setNodeStatesState] = useState<NodeStates | undefined>(undefined);
   // Path to the classes that node rendered with, for labelling rows whose
   // class is an expression the source can't resolve.
-  const [nodeClasses, setNodeClassesState] = useState<
-    Readonly<Record<string, readonly string[]>> | undefined
-  >(undefined);
+  const [nodeClasses, setNodeClassesState] = useState<Readonly<Record<string, readonly string[]>> | undefined>(undefined);
   // The canvas re-reports after every walk of the page, mostly with what it
   // said last time. A report equal to the one held keeps the held one, and
   // React skips the render a new array or object would have cost the app.
-  const setRenderedPaths = useCallback(
-    (next: readonly string[] | undefined) =>
-      setRenderedPathsState((held) => (sameReport(held, next) ? held : next)),
-    [],
-  );
-  const setNodeStates = useCallback(
-    (next: NodeStates | undefined) =>
-      setNodeStatesState((held) => (sameReport(held, next) ? held : next)),
-    [],
-  );
+  const setRenderedPaths = useCallback((next: readonly string[] | undefined) => setRenderedPathsState((held) => (sameReport(held, next) ? held : next)), []);
+  const setNodeStates = useCallback((next: NodeStates | undefined) => setNodeStatesState((held) => (sameReport(held, next) ? held : next)), []);
   const setNodeClasses = useCallback(
-    (next: Readonly<Record<string, readonly string[]>> | undefined) =>
-      setNodeClassesState((held) => (sameReport(held, next) ? held : next)),
+    (next: Readonly<Record<string, readonly string[]>> | undefined) => setNodeClassesState((held) => (sameReport(held, next) ? held : next)),
     [],
   );
   return {
@@ -240,10 +229,7 @@ export function useDataState() {
 }
 
 // The left panel, the CMS views and the interactive preview.
-export function usePanelState(
-  canvasReportState: ReturnType<typeof useCanvasReportState>,
-  projectState: ReturnType<typeof useProjectState>,
-) {
+export function usePanelState(canvasReportState: ReturnType<typeof useCanvasReportState>, projectState: ReturnType<typeof useProjectState>) {
   const { setHoverNodeId } = canvasReportState;
   const { currentPage } = projectState;
 
@@ -389,10 +375,7 @@ export function useSessionRefs(projectState: ReturnType<typeof useProjectState>)
   // know about the component named X" has to search both lists, or a placed
   // layout would come back with no props, no slots and no rest support.
   // Components win a name collision: they're the more likely intent.
-  const insertables = useMemo(
-    () => [...scan.components, ...scan.layouts],
-    [scan.components, scan.layouts],
-  );
+  const insertables = useMemo(() => [...scan.components, ...scan.layouts], [scan.components, scan.layouts]);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const devLogRef = useRef('');

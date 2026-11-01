@@ -65,8 +65,7 @@ function listenForTooltip(root: HTMLElement, show: (tip: Tip | undefined) => voi
     show(undefined);
   };
   const enter = (event: Event) => {
-    const target =
-      event.target instanceof Element ? event.target.closest('[data-tooltip]') : undefined;
+    const target = event.target instanceof Element ? event.target.closest('[data-tooltip]') : undefined;
     if (!(target instanceof HTMLElement) || !root.contains(target) || target === anchor) {
       return;
     }

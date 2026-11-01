@@ -34,15 +34,7 @@ import { mapSpanThroughDiff } from '../../shared/engine/mapSpan';
 import type { PageModel, PageNode } from '../../shared/page/pageNode';
 import type { Splice } from '../../shared/engine/planner';
 import { rebaseSpan } from '../../shared/engine/rebase';
-import {
-  byteStringsEqual,
-  encodeUtf8,
-  toByteSpan,
-  toByteString,
-  utf16ToByteOffsets,
-  type ByteSpan,
-  type ByteString,
-} from '../../shared/core/span';
+import { byteStringsEqual, encodeUtf8, toByteSpan, toByteString, utf16ToByteOffsets, type ByteSpan, type ByteString } from '../../shared/core/span';
 import { applySplices, witnessesHold } from '../../shared/engine/splice';
 
 /** A parse and the text it is a parse of: node ranges are UTF-16 offsets into it. */
@@ -189,11 +181,7 @@ function withByteSpans(source: string, found: readonly Ordered[]): readonly Entr
 // (each names bytes of `after` and the text of `before` they replaced) —
 // undefined when applying them to `before` does not give `after`: another
 // writer's edit was merged into the reply, and only the diff can map.
-function ownSplices(
-  own: readonly SourceEdit[],
-  before: ByteString,
-  after: ByteString,
-): readonly Splice[] | undefined {
+function ownSplices(own: readonly SourceEdit[], before: ByteString, after: ByteString): readonly Splice[] | undefined {
   let delta = 0;
   const splices: Splice[] = [];
   for (const hunk of own) {
@@ -214,11 +202,7 @@ function ownSplices(
   return byteStringsEqual(applySplices(before, splices), after) ? splices : undefined;
 }
 
-function spanMapper(
-  before: ByteString,
-  after: ByteString,
-  splices: readonly Splice[] | undefined,
-): SpanMap {
+function spanMapper(before: ByteString, after: ByteString, splices: readonly Splice[] | undefined): SpanMap {
   if (splices !== undefined) {
     return (span) => rebaseSpan(span, splices);
   }
@@ -283,9 +267,7 @@ function pairCreated(
   predicted: PageModel,
   assign: (entry: Entry, handle: string) => void,
 ): void {
-  const inside = (span: ByteSpan | undefined): boolean =>
-    span !== undefined &&
-    created.some((range) => range.start <= span.start && span.end <= range.end);
+  const inside = (span: ByteSpan | undefined): boolean => span !== undefined && created.some((range) => range.start <= span.start && span.end <= range.end);
   const unpaired = afters.filter((entry) => !handles.has(entry.key) && inside(entry.span));
   // The predicted tree's ranges are stale (edits moved them): only its order
   // and its handles are read.
@@ -333,10 +315,7 @@ function rekeyed(model: PageModel, handles: ReadonlyMap<string, string>): PageMo
       const key = prefix === '' ? String(index) : `${prefix}.${index}`;
       const handle = handles.get(key);
       assert(handle !== undefined, 'Every node has a handle');
-      const children =
-        'children' in node && Array.isArray(node.children)
-          ? { children: visit(node.children, key, depth + 1) }
-          : {};
+      const children = 'children' in node && Array.isArray(node.children) ? { children: visit(node.children, key, depth + 1) } : {};
       return Object.assign({}, node, { id: toNodeId(handle) }, children);
     });
   };

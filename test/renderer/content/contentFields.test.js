@@ -19,17 +19,11 @@ const path = require('path');
 const os = require('os');
 const { LIMITS } = require('#dist/shared/core/limits.js');
 const loadRenderer = require('../../helpers/rendererModule.js');
-const {
-  readContentConfig,
-  stopAllServices,
-  validateEntry,
-} = require('#dist/electron/content/contentConfig.js');
+const { readContentConfig, stopAllServices, validateEntry } = require('#dist/electron/content/contentConfig.js');
 const { listEntries } = require('#dist/electron/content/contentEntries.js');
 
 const DEFAULT_FIXTURE = path.join(os.homedir(), 'Downloads', 'awesome-client-main');
-const source = path.resolve(
-  process.argv[2] || process.env.STACKI_CONTENT_FIXTURE || DEFAULT_FIXTURE,
-);
+const source = path.resolve(process.argv[2] || process.env.STACKI_CONTENT_FIXTURE || DEFAULT_FIXTURE);
 
 const failures = [];
 let checked = 0;
@@ -48,8 +42,7 @@ const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.
     return;
   }
   // The renderer's module, loaded the way the renderer loads it.
-  const { collectionFields, describeField, fieldIssue, editsBetween, memberFor, hintFor } =
-    loadRenderer('src/features/content/contentSchema.ts');
+  const { collectionFields, describeField, fieldIssue, editsBetween, memberFor, hintFor } = loadRenderer('src/features/content/contentSchema.ts');
 
   const config = await readContentConfig(source, { force: true });
   if (config.error) {
@@ -100,18 +93,12 @@ const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.
       continue;
     }
 
-    const fields = shape.union
-      ? shape.union.members.flatMap((member) => member.fields)
-      : shape.fields;
+    const fields = shape.union ? shape.union.members.flatMap((member) => member.fields) : shape.fields;
     check(`${collection.name}: has fields`, fields.length > 0);
     for (const field of fields) {
       fieldsSeen++;
       controls.add(field.control);
-      check(
-        `${collection.name}.${field.key}: has a control`,
-        field.control !== 'unknown',
-        field.control,
-      );
+      check(`${collection.name}.${field.key}: has a control`, field.control !== 'unknown', field.control);
       check(`${collection.name}.${field.key}: has a label`, !!field.label);
     }
 
@@ -129,11 +116,7 @@ const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.
           walk(field, entry.data[field.key], field.key, 0, report);
         }
       }
-      check(
-        `${collection.name}/${entry.id}: valid content reads as valid`,
-        complaints.length === 0,
-        complaints.slice(0, 3).join('\n    '),
-      );
+      check(`${collection.name}/${entry.id}: valid content reads as valid`, complaints.length === 0, complaints.slice(0, 3).join('\n    '));
     }
   }
 
@@ -156,11 +139,7 @@ const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.
     'record',
     'url',
   ]) {
-    check(
-      `the ${control} control is used by this project`,
-      controls.has(control),
-      [...controls].join(', '),
-    );
+    check(`the ${control} control is used by this project`, controls.has(control), [...controls].join(', '));
   }
 
   // Editing nothing writes nothing. This is the rule that keeps a save from
@@ -171,16 +150,10 @@ const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.
       continue;
     }
     const entry = listed.entries[0];
-    check(
-      `${collection.name}: an untouched entry produces no edits`,
-      editsBetween(entry.data, entry.data).length === 0,
-    );
+    check(`${collection.name}: an untouched entry produces no edits`, editsBetween(entry.data, entry.data).length === 0);
     // And a copy of the same data is still no edits: the comparison is by
     // value, not by identity.
-    check(
-      `${collection.name}: a copy produces no edits either`,
-      editsBetween(entry.data, JSON.parse(JSON.stringify(entry.data))).length === 0,
-    );
+    check(`${collection.name}: a copy produces no edits either`, editsBetween(entry.data, JSON.parse(JSON.stringify(entry.data))).length === 0);
   }
 
   // The zod round trip agrees with the form: what the fixture holds parses.
@@ -188,11 +161,7 @@ const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.
     const blog = config.collections.find((collection) => collection.name === 'blog');
     const entry = listEntries(source, blog).entries[0];
     const result = await validateEntry(source, { collection: 'blog', data: entry.data });
-    check(
-      'a real entry parses against its real schema',
-      (result.issues || []).length === 0,
-      JSON.stringify(result.issues),
-    );
+    check('a real entry parses against its real schema', (result.issues || []).length === 0, JSON.stringify(result.issues));
     const broken = await validateEntry(source, {
       collection: 'blog',
       data: { ...entry.data, category: 'nope' },
@@ -229,8 +198,7 @@ const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.
     );
     check(
       "and the message is the project's own words",
-      (salary.issues || [])[0]?.message?.length > 10 &&
-        !/zod/i.test((salary.issues || [])[0]?.message || ''),
+      (salary.issues || [])[0]?.message?.length > 10 && !/zod/i.test((salary.issues || [])[0]?.message || ''),
     );
   }
 
@@ -241,11 +209,7 @@ const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.
     const theme = brand.fields.find((field) => field.key === 'themeColor');
     check('a regex becomes a sentence', /hex colour/.test(hintFor(theme) || ''), hintFor(theme));
     const field = describeField({ type: 'string', pattern: '^[a-z0-9-]+$' }, 'slug', {});
-    check(
-      'and an unknown one still says something',
-      /lowercase/.test(hintFor(field) || ''),
-      hintFor(field),
-    );
+    check('and an unknown one still says something', /lowercase/.test(hintFor(field) || ''), hintFor(field));
     const products = config.collections.find((collection) => collection.name === 'products');
     const sku = collectionFields(products.schema)
       .fields.find((field) => field.key === 'variants')
@@ -254,15 +218,11 @@ const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.
   }
 
   if (failures.length) {
-    console.error(
-      `\ncontent-fields: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\ncontent-fields: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     stopAllServices();
     process.exit(1);
   }
-  console.log(
-    `content-fields: ${checked} passed  [${fieldsSeen} fields, ${controls.size} controls]`,
-  );
+  console.log(`content-fields: ${checked} passed  [${fieldsSeen} fields, ${controls.size} controls]`);
   stopAllServices();
 })();

@@ -58,10 +58,7 @@ const LOG_FORMAT = RS + ['%H', '%h', '%an', '%ae', '%aI', '%s', '%P', '%D'].join
 const DIFF_FLAGS = ['--diff-merges=first-parent', '-M'];
 
 /** True when the failure is "this repository has no commits yet". */
-const isEmptyRepo = (error: unknown): boolean =>
-  /does not have any commits yet|bad default revision|unknown revision/i.test(
-    gitErrorDetail(error),
-  );
+const isEmptyRepo = (error: unknown): boolean => /does not have any commits yet|bad default revision|unknown revision/i.test(gitErrorDetail(error));
 
 export interface FileChange {
   readonly status: string;
@@ -106,14 +103,7 @@ async function log(
 ): Promise<{ commits: CommitInfo[]; atEnd: boolean }> {
   // Topological order keeps every parent below its children even when clocks
   // disagree. Exclude stashes because their synthetic commits are not history.
-  const args = [
-    'log',
-    '--topo-order',
-    '--decorate=short',
-    `--format=${LOG_FORMAT}`,
-    `-n${limit}`,
-    `--skip=${skip}`,
-  ];
+  const args = ['log', '--topo-order', '--decorate=short', `--format=${LOG_FORMAT}`, `-n${limit}`, `--skip=${skip}`];
   // One call for the whole page, files included. The alternative — a `git
   // show` per commit to find out what it touched — is fifty processes to draw
   // one screen, and the panel needs the files to say "you changed Home"
@@ -206,10 +196,7 @@ export interface StatusFile {
  * chip; this is the one that has to be complete, because a file missing from
  * it is a file that silently cannot be committed.
  */
-async function status(
-  git: Git,
-  { projectPath }: { readonly projectPath: string },
-): Promise<StatusFile[]> {
+async function status(git: Git, { projectPath }: { readonly projectPath: string }): Promise<StatusFile[]> {
   const { stdout } = await git(projectPath, ['status', '--porcelain']);
   const files: StatusFile[] = [];
   for (const line of stdout.split('\n')) {
@@ -245,8 +232,7 @@ async function status(
 // quotes are undone here — a path that needed the full C-style unescaping is
 // rare enough that showing it slightly wrong beats getting the common case
 // wrong by hand-rolling an unescaper.
-const unquote = (text: string): string =>
-  text.startsWith('"') && text.endsWith('"') ? text.slice(1, -1) : text;
+const unquote = (text: string): string => (text.startsWith('"') && text.endsWith('"') ? text.slice(1, -1) : text);
 
 export interface ProjectFile {
   readonly path: string;
@@ -267,16 +253,8 @@ export interface ProjectFile {
  * Status comes from the same porcelain the file picker reads, so a file cannot
  * appear as changed in one place and clean in another.
  */
-async function allFiles(
-  git: Git,
-  { projectPath }: { readonly projectPath: string },
-): Promise<ProjectFile[]> {
-  const { stdout } = await git(projectPath, [
-    'ls-files',
-    '--cached',
-    '--others',
-    '--exclude-standard',
-  ]);
+async function allFiles(git: Git, { projectPath }: { readonly projectPath: string }): Promise<ProjectFile[]> {
+  const { stdout } = await git(projectPath, ['ls-files', '--cached', '--others', '--exclude-standard']);
   const changed = new Map((await status(git, { projectPath })).map((entry) => [entry.path, entry]));
   const paths = [
     ...new Set(
@@ -313,10 +291,7 @@ export interface WorktreeInfo {
 }
 
 /** Every worktree of this repository, the main one first. */
-async function worktrees(
-  git: Git,
-  { projectPath }: { readonly projectPath: string },
-): Promise<WorktreeInfo[]> {
+async function worktrees(git: Git, { projectPath }: { readonly projectPath: string }): Promise<WorktreeInfo[]> {
   const { stdout } = await git(projectPath, ['worktree', 'list', '--porcelain']);
   // Blank-line-separated records of "key value" lines. `detached` and `bare`
   // are bare keys with no value.
@@ -369,20 +344,9 @@ async function worktrees(
 // convention (src/pages, src/components, src/layouts) rather than something
 // this has to go to disk to learn, which is what keeps it testable.
 
-const TITLE = (seg: string): string =>
-  seg.replace(/-/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
+const TITLE = (seg: string): string => seg.replace(/-/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
 
-export type FileKind =
-  | 'page'
-  | 'component'
-  | 'layout'
-  | 'content'
-  | 'asset'
-  | 'style'
-  | 'config'
-  | 'script'
-  | 'doc'
-  | 'file';
+export type FileKind = 'page' | 'component' | 'layout' | 'content' | 'asset' | 'style' | 'config' | 'script' | 'doc' | 'file';
 
 export interface FileDescription {
   readonly path: string;
@@ -439,9 +403,7 @@ function describeFile(relPath: unknown): FileDescription {
     return { path: posixPath, kind: 'asset', label: base };
   }
   // Config and lockfiles are the ones a designer should not be asked to read.
-  if (
-    /^(package(-lock)?\.json|astro\.config\.[a-z]+|tsconfig\.json|\.gitignore)$/i.test(posixPath)
-  ) {
+  if (/^(package(-lock)?\.json|astro\.config\.[a-z]+|tsconfig\.json|\.gitignore)$/i.test(posixPath)) {
     return { path: posixPath, kind: 'config', label: base };
   }
   // Script and prose get named rather than falling into the catch-all. Both
@@ -461,7 +423,6 @@ function describeFile(relPath: unknown): FileDescription {
 /** Every file in a list, described. Renames keep where they came from. */
 const describeFiles = <T extends { readonly path: string; readonly from?: string | undefined }>(
   files: readonly T[] | undefined,
-): (T & FileDescription & { readonly from: string | undefined })[] =>
-  (files ?? []).map((file) => ({ ...file, ...describeFile(file.path), from: file.from }));
+): (T & FileDescription & { readonly from: string | undefined })[] => (files ?? []).map((file) => ({ ...file, ...describeFile(file.path), from: file.from }));
 
 export { allFiles, log, status, worktrees, parseNameStatus, describeFile, describeFiles };

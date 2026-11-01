@@ -107,9 +107,7 @@ for (const text of mainSide) {
 // The channel each exposed method invokes, so a method that is exposed but has
 // no handler is caught too — that fails at runtime with "no handler registered".
 const channels = new Map();
-for (const match of bridgeText.matchAll(
-  /^\s+([A-Za-z_$][\w$]*)\s*:\s*invoke\(\s*['"]([^'"]+)['"]/gm,
-)) {
+for (const match of bridgeText.matchAll(/^\s+([A-Za-z_$][\w$]*)\s*:\s*invoke\(\s*['"]([^'"]+)['"]/gm)) {
   channels.set(match[1], match[2]);
 }
 
@@ -117,11 +115,7 @@ check('the preload exposes something', exposed.size > 20, `${exposed.size}`);
 check('the renderer calls something', used.size > 20, `${used.size}`);
 
 for (const [method, files] of [...used].sort()) {
-  check(
-    `window.avb.${method} exists on the bridge`,
-    exposed.has(method),
-    `called from ${files.join(', ')} — add it to electron/preload/preloadBridge.ts`,
-  );
+  check(`window.avb.${method} exists on the bridge`, exposed.has(method), `called from ${files.join(', ')} — add it to electron/preload/preloadBridge.ts`);
 }
 
 for (const [method, channel] of [...channels].sort()) {
@@ -189,13 +183,7 @@ const propsDeclared = (base) => {
     // Parse the exported component itself. A regex can drift into a private
     // hook's destructuring when the component accepts a typed props object.
     const ts = require('typescript');
-    const source = ts.createSourceFile(
-      file,
-      fs.readFileSync(file, 'utf8'),
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TSX,
-    );
+    const source = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     const declaration = bridgeComponent(ts, source);
     const binding = declaration?.parameters[0]?.name;
     if (!binding) {
@@ -209,9 +197,7 @@ const propsDeclared = (base) => {
         return undefined;
       }
       const name = parameterType.typeName.getText(source);
-      const contract = source.statements.find(
-        (node) => ts.isInterfaceDeclaration(node) && node.name.text === name,
-      );
+      const contract = source.statements.find((node) => ts.isInterfaceDeclaration(node) && node.name.text === name);
       if (!contract || contract.heritageClauses?.length) {
         return undefined;
       }
@@ -223,18 +209,14 @@ const propsDeclared = (base) => {
     if (binding.elements.some((element) => element.dotDotDotToken)) {
       return undefined;
     }
-    return new Set(
-      binding.elements.map((element) => (element.propertyName || element.name).getText(source)),
-    );
+    return new Set(binding.elements.map((element) => (element.propertyName || element.name).getText(source)));
   }
   return undefined;
 };
 
 function bridgeComponent(ts, source) {
   const direct = source.statements.find(
-    (node) =>
-      ts.isFunctionDeclaration(node) &&
-      node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword),
+    (node) => ts.isFunctionDeclaration(node) && node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword),
   );
   if (direct) {
     return direct;
@@ -246,27 +228,19 @@ function bridgeComponent(ts, source) {
   let expression = assignment.expression;
   if (ts.isIdentifier(expression)) {
     const name = expression.text;
-    const named = source.statements.find(
-      (node) => ts.isFunctionDeclaration(node) && node.name?.text === name,
-    );
+    const named = source.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === name);
     if (named) {
       return named;
     }
-    const variables = source.statements
-      .filter(ts.isVariableStatement)
-      .flatMap((node) => [...node.declarationList.declarations]);
+    const variables = source.statements.filter(ts.isVariableStatement).flatMap((node) => [...node.declarationList.declarations]);
     expression = variables.find((node) => node.name.getText(source) === name)?.initializer;
   }
   // React wrappers take the component as a direct argument; do not inspect
   // unrelated function bodies for a parameter that happens to look like props.
   if (expression && ts.isCallExpression(expression)) {
-    expression = expression.arguments.find(
-      (node) => ts.isFunctionExpression(node) || ts.isArrowFunction(node),
-    );
+    expression = expression.arguments.find((node) => ts.isFunctionExpression(node) || ts.isArrowFunction(node));
   }
-  return expression && (ts.isFunctionExpression(expression) || ts.isArrowFunction(expression))
-    ? expression
-    : undefined;
+  return expression && (ts.isFunctionExpression(expression) || ts.isArrowFunction(expression)) ? expression : undefined;
 }
 
 let wired = 0;
@@ -284,11 +258,7 @@ for (const file of sources) {
   // Lazy-loading changes when a panel loads, not its prop contract. Follow
   // those module references too so startup optimization cannot erase coverage.
   for (const match of text.matchAll(
-    new RegExp(
-      /const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:React\.)?lazy(?:Panel)?/.source +
-        /\(\s*\(\s*\)\s*=>\s*import\(\s*['"](\.[^'"]+)['"]\s*\)/.source,
-      'g',
-    ),
+    new RegExp(/const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:React\.)?lazy(?:Panel)?/.source + /\(\s*\(\s*\)\s*=>\s*import\(\s*['"](\.[^'"]+)['"]\s*\)/.source, 'g'),
   )) {
     imported.set(match[1], path.resolve(path.dirname(file), match[2]));
   }
@@ -310,8 +280,7 @@ for (const file of sources) {
       check(
         `<${match[1]} ${prop}> is a prop it takes`,
         declared.has(prop),
-        `${where} passes ${prop}, which ${path.relative(root, target)} never reads — it goes ` +
-          `nowhere`,
+        `${where} passes ${prop}, which ${path.relative(root, target)} never reads — it goes ` + `nowhere`,
       );
     }
   }
@@ -323,7 +292,4 @@ if (failures.length) {
   console.error(failures.join('\n') + '\n');
   process.exit(1);
 }
-console.log(
-  `bridge: ${checked} passed  [${used.size} methods called, ${exposed.size} exposed,` +
-    ` ${wired} props wired]`,
-);
+console.log(`bridge: ${checked} passed  [${used.size} methods called, ${exposed.size} exposed,` + ` ${wired} props wired]`);

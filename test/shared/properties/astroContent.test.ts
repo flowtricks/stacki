@@ -15,11 +15,7 @@ import {
   parseAstroRemoteRead,
 } from '#dist/shared/properties/astroContent.js';
 import { parseConnectionId } from '#dist/shared/properties/cmsConnections.js';
-import {
-  parseRemoteColumns,
-  parseRemoteDocument,
-  remoteCell,
-} from '#dist/shared/properties/cmsRemote.js';
+import { parseRemoteColumns, parseRemoteDocument, remoteCell } from '#dist/shared/properties/cmsRemote.js';
 import { parseRemoteType } from '#dist/shared/properties/cmsRemoteSchema.js';
 
 test('the content source has an id every connection parser accepts', () => {
@@ -33,10 +29,7 @@ test('the content source has an id every connection parser accepts', () => {
     dataset: 'd',
   } as const;
   assert.equal(isAstroContent(sanity), false);
-  assert.throws(
-    () => isAstroContent({ ...sanity, id: ASTRO_CONTENT_ID }),
-    /No saved connection takes/,
-  );
+  assert.throws(() => isAstroContent({ ...sanity, id: ASTRO_CONTENT_ID }), /No saved connection takes/);
 });
 
 test('reads name a collection or an entry, and nothing else', () => {
@@ -48,14 +41,8 @@ test('reads name a collection or an entry, and nothing else', () => {
     collection: 'blog',
     columns: [],
   });
-  assert.deepEqual(
-    parseAstroRemoteRead({ operation: 'documents', collection: 'blog', columns: ['author'] })
-      .operation,
-    'documents',
-  );
-  assert.throws(() =>
-    parseAstroRemoteRead({ operation: 'documents', collection: 'blog', columns: ['_id'] }),
-  );
+  assert.deepEqual(parseAstroRemoteRead({ operation: 'documents', collection: 'blog', columns: ['author'] }).operation, 'documents');
+  assert.throws(() => parseAstroRemoteRead({ operation: 'documents', collection: 'blog', columns: ['_id'] }));
   assert.deepEqual(parseAstroRemoteRead({ operation: 'document', id: 'blog.0123456789abcdef' }), {
     operation: 'document',
     id: 'blog.0123456789abcdef',
@@ -85,9 +72,7 @@ test('edits write one field, make or remove entries, or add a collection', () =>
     name: 'blogPosts',
   });
   assert.throws(() => parseAstroRemoteEdit({ operation: 'publish', id: 'a' }), /Unknown/);
-  assert.throws(() =>
-    parseAstroRemoteEdit({ operation: 'write', write: { ...write, field: '_id' } }),
-  );
+  assert.throws(() => parseAstroRemoteEdit({ operation: 'write', write: { ...write, field: '_id' } }));
   assert.throws(() => parseAstroRemoteEdit({ operation: 'delete', ids: [] }), /at least one/);
   assert.throws(() => parseAstroRemoteEdit({ operation: 'delete', ids: ['a', 'a'] }), /twice/);
 });
@@ -97,10 +82,7 @@ test('a typed collection name becomes a camel-case identifier', () => {
   assert.equal(parseAstroCollectionName('  team '), 'team');
   assert.equal(parseAstroCollectionName('FAQ — answers!'), 'fAQAnswers');
   assert.equal(parseAstroCollectionName('sermon-speakers_2'), 'sermonSpeakers2');
-  assert.equal(
-    parseAstroCollectionName('a'.repeat(ASTRO_CONTENT_LIMITS.collectionNameCharsMax)).length,
-    64,
-  );
+  assert.equal(parseAstroCollectionName('a'.repeat(ASTRO_CONTENT_LIMITS.collectionNameCharsMax)).length, 64);
 });
 
 test('a collection name that leaves nothing usable is refused with its reason', () => {
@@ -131,10 +113,7 @@ test('an image path is a string field marked as one, and a document may name its
     assets: [],
   };
   assert.equal(parseRemoteDocument(document).file, undefined);
-  assert.equal(
-    parseRemoteDocument({ ...document, file: 'src/content/a.md' }).file,
-    'src/content/a.md',
-  );
+  assert.equal(parseRemoteDocument({ ...document, file: 'src/content/a.md' }).file, 'src/content/a.md');
   for (const file of ['', '/etc/passwd', '../outside.md', 'src//a.md', 'src\\a.md']) {
     assert.throws(() => parseRemoteDocument({ ...document, file }), /document file/, file);
   }
@@ -151,10 +130,7 @@ test('a list asks for a few named columns, and each comes back as a short cell',
   assert.deepEqual(parseRemoteColumns(['author', 'sort-order']), ['author', 'sort-order']);
   assert.throws(() => parseRemoteColumns(['a', 'a']), /twice/);
   assert.throws(() => parseRemoteColumns(['_id']), /field name/);
-  assert.throws(
-    () => parseRemoteColumns(Array.from({ length: 13 }, (_, i) => `f${i}`)),
-    /Too many/,
-  );
+  assert.throws(() => parseRemoteColumns(Array.from({ length: 13 }, (_, i) => `f${i}`)), /Too many/);
   assert.equal(remoteCell('Ada'), 'Ada');
   assert.equal(remoteCell(3), 3);
   assert.equal(remoteCell(false), false);

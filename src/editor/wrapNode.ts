@@ -8,11 +8,7 @@ import { canWrapNode, type WrapperTag } from './wrapRules';
 export { canWrapNode, type WrapperTag } from './wrapRules';
 
 /** One undoable wrap, retaining the selected node's identity and named slot. */
-export function wrapNodeGesture(
-  model: EditorModel,
-  nodeId: string,
-  wrapper: { readonly id: NodeId; readonly name: WrapperTag },
-): EditGesture {
+export function wrapNodeGesture(model: EditorModel, nodeId: string, wrapper: { readonly id: NodeId; readonly name: WrapperTag }): EditGesture {
   assert(canWrapNode(model.nodes, nodeId, wrapper.name), 'The node accepts this wrapper');
   assert(wrapper.id !== nodeId, 'A wrapper has its own identity');
   const node = findEditorNodeById(model.nodes, nodeId);
@@ -39,10 +35,7 @@ export function wrapNodeGesture(
   };
 }
 
-function wrappedNode(
-  node: EditorNode,
-  wrapper: { readonly id: NodeId; readonly name: WrapperTag },
-): EditorNode {
+function wrappedNode(node: EditorNode, wrapper: { readonly id: NodeId; readonly name: WrapperTag }): EditorNode {
   assert(node.kind === 'element' || node.kind === 'component', 'A wrapper contains a tag');
   assert(wrapper.id.length > 0, 'A wrapper has an id');
   const { slot, ...props } = node.props ?? {};

@@ -4,10 +4,7 @@ import { parsePublishSource } from '../../../shared/properties/publishConfig';
 import { CheckIcon, CloseIcon, UploadCloudIcon } from '../../ui/Icons';
 import { PublishProviderIcon } from '../../features/publishing/PublishProviderIcon';
 import { useEffect, useRef, useState } from 'react';
-import {
-  parsePublishCommitMessage,
-  type PublishTarget,
-} from '../../../shared/properties/publishConfig';
+import { parsePublishCommitMessage, type PublishTarget } from '../../../shared/properties/publishConfig';
 import type { DesktopPublishState } from '../../../shared/properties/publishState';
 import { PublishControl } from '../../features/publishing/PublishControl';
 import { startPublish, readPublishState } from '../../features/publishing/publishBridge';
@@ -35,13 +32,7 @@ function DesktopPublishSession({ projectPath, flushSave, refresh, saveState, rep
   const [state, setState] = useState<DesktopPublishState>({ kind: 'idle' });
   const [settingsRevision, setSettingsRevision] = useState(0);
   const action = useDesktopPublishAction({ projectPath, flushSave, refresh }, state, setState);
-  const availability = usePublishAvailability(
-    projectPath,
-    state.kind,
-    saveState,
-    repository,
-    settingsRevision,
-  );
+  const availability = usePublishAvailability(projectPath, state.kind, saveState, repository, settingsRevision);
   usePublishPolling(projectPath, state, setState, refresh);
   return (
     <div className="stacki-publish-control">
@@ -53,10 +44,7 @@ function DesktopPublishSession({ projectPath, flushSave, refresh, saveState, rep
         publish={(target) => void action.publish(target)}
       />
       {(action.visible || state.kind === 'running') && (
-        <DesktopPublishStatus
-          state={action.starting ? { kind: 'running', step: 'Preparing publish…' } : state}
-          close={() => action.setVisible(false)}
-        />
+        <DesktopPublishStatus state={action.starting ? { kind: 'running', step: 'Preparing publish…' } : state} close={() => action.setVisible(false)} />
       )}
       {action.setup?.kind === 'commit' && (
         <PublishCommitMessage
@@ -69,20 +57,12 @@ function DesktopPublishSession({ projectPath, flushSave, refresh, saveState, rep
         />
       )}
       {action.setup?.kind === 'repository' &&
-        createPortal(
-          <PublishRepositorySetup
-            projectPath={projectPath}
-            flushSave={flushSave}
-            close={() => action.setSetup(undefined)}
-          />,
-          document.body,
-        )}
+        createPortal(<PublishRepositorySetup projectPath={projectPath} flushSave={flushSave} close={() => action.setSetup(undefined)} />, document.body)}
     </div>
   );
 }
 
-type PublishSetup =
-  { readonly kind: 'repository' } | { readonly kind: 'commit'; readonly target: PublishTarget };
+type PublishSetup = { readonly kind: 'repository' } | { readonly kind: 'commit'; readonly target: PublishTarget };
 
 function useDesktopPublishAction(
   { projectPath, flushSave, refresh }: Pick<Props, 'projectPath' | 'flushSave' | 'refresh'>,
@@ -133,11 +113,7 @@ function useDesktopPublishAction(
   return { starting, visible, setVisible, setup, setSetup, publish };
 }
 
-async function publishSetup(
-  projectPath: string,
-  target: PublishTarget,
-  message: string | undefined,
-): Promise<PublishSetup | undefined> {
+async function publishSetup(projectPath: string, target: PublishTarget, message: string | undefined): Promise<PublishSetup | undefined> {
   if (target === 'hosting') {
     return undefined;
   }
@@ -158,13 +134,7 @@ async function publishSetup(
   return undefined;
 }
 
-export function PublishCommitMessage({
-  close,
-  submit,
-}: {
-  readonly close: () => void;
-  readonly submit: (message: string) => void;
-}) {
+export function PublishCommitMessage({ close, submit }: { readonly close: () => void; readonly submit: (message: string) => void }) {
   const [message, setMessage] = useState('');
   return (
     <Popup className="modal publish-commit-message" label="Commit changes" onClose={close}>
@@ -205,13 +175,7 @@ export function PublishCommitMessage({
   );
 }
 
-export function DesktopPublishStatus({
-  state,
-  close,
-}: {
-  readonly state: DesktopPublishState;
-  readonly close: () => void;
-}) {
+export function DesktopPublishStatus({ state, close }: { readonly state: DesktopPublishState; readonly close: () => void }) {
   const busy = state.kind === 'idle' || state.kind === 'running';
   const title =
     state.kind === 'review-open'
@@ -222,23 +186,12 @@ export function DesktopPublishStatus({
           ? 'Publish needs attention'
           : 'Publishing';
   return (
-    <Popup
-      className="modal desktop-publish-status"
-      label={title}
-      onClose={close}
-      dismissible={!busy}
-    >
+    <Popup className="modal desktop-publish-status" label={title} onClose={close} dismissible={!busy}>
       {({ close: dismiss }) => (
         <>
           <div className="modal-body publish-status-body" data-state={state.kind}>
             <div className="publish-status-symbol" aria-hidden="true">
-              {state.kind === 'done' ? (
-                <CheckIcon size={24} />
-              ) : state.kind === 'failed' ? (
-                <CloseIcon size={24} />
-              ) : (
-                <UploadCloudIcon size={24} />
-              )}
+              {state.kind === 'done' ? <CheckIcon size={24} /> : state.kind === 'failed' ? <CloseIcon size={24} /> : <UploadCloudIcon size={24} />}
             </div>
             <h2>{title}</h2>
             {busy ? (
@@ -281,17 +234,8 @@ function PublishRunning({ state }: { readonly state: DesktopPublishState }) {
       <p role="status" aria-live="polite">
         {message}
       </p>
-      <progress
-        max={progress?.total ?? 1}
-        value={progress?.completed}
-        aria-label="Publish progress"
-        aria-valuetext={message}
-      />
-      <small>
-        {progress
-          ? `Step ${progress.completed + 1} of ${progress.total}`
-          : 'Preparing your project'}
-      </small>
+      <progress max={progress?.total ?? 1} value={progress?.completed} aria-label="Publish progress" aria-valuetext={message} />
+      <small>{progress ? `Step ${progress.completed + 1} of ${progress.total}` : 'Preparing your project'}</small>
     </div>
   );
 }
@@ -320,12 +264,7 @@ function PublishResults({ state }: { readonly state: DesktopPublishState }) {
   );
 }
 
-function usePublishPolling(
-  projectPath: string,
-  state: DesktopPublishState,
-  setState: (state: DesktopPublishState) => void,
-  refresh: () => Promise<unknown>,
-) {
+function usePublishPolling(projectPath: string, state: DesktopPublishState, setState: (state: DesktopPublishState) => void, refresh: () => Promise<unknown>) {
   useEffect(() => {
     let disposed = false;
     void readPublishState(projectPath)

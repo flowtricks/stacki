@@ -72,10 +72,7 @@ function checkCodeWindowRule({ codeWindowFor }) {
   assert.equal(codeWindowFor(component('c1', 'Card')), undefined);
   // The parser only ever makes <style> and <script> raw. Any other name is a
   // broken invariant, not a language to guess.
-  assert.throws(
-    () => codeWindowFor(raw('t1', 'template')),
-    /Assertion failed: raw node <template> has no code language/,
-  );
+  assert.throws(() => codeWindowFor(raw('t1', 'template')), /Assertion failed: raw node <template> has no code language/);
   assert.throws(() => codeWindowFor(raw('', 'style')), /Assertion failed: raw node has an id/);
 }
 
@@ -101,10 +98,7 @@ async function checkNavigator(StructurePanel) {
   const container = dom.window.document.getElementById('root');
   const reactRoot = createRoot(container);
   const opened = { code: [], component: [] };
-  const nodes = [
-    element('page', 'main', [raw('s1', 'style'), element('e1', 'div'), component('c1', 'Card')]),
-    raw('j1', 'script'),
-  ];
+  const nodes = [element('page', 'main', [raw('s1', 'style'), element('e1', 'div'), component('c1', 'Card')]), raw('j1', 'script')];
   await act(async () => {
     reactRoot.render(
       React.createElement(StructurePanel, {
@@ -158,13 +152,8 @@ async function checkNavigator(StructurePanel) {
 
 (async () => {
   fs.mkdirSync(buildDirectory, { recursive: true });
-  checkCodeWindowRule(
-    await bundle('src/features/code/codeWindowTarget.ts', 'code-window-target.cjs'),
-  );
-  const { default: StructurePanel } = await bundle(
-    'src/features/structure/StructurePanel.tsx',
-    'navigator-open-code.cjs',
-  );
+  checkCodeWindowRule(await bundle('src/features/code/codeWindowTarget.ts', 'code-window-target.cjs'));
+  const { default: StructurePanel } = await bundle('src/features/structure/StructurePanel.tsx', 'navigator-open-code.cjs');
   await checkNavigator(StructurePanel);
   console.log('navigator-open-code: all checks passed');
 })().catch((error) => {

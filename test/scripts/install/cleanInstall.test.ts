@@ -55,11 +55,7 @@ for (const [manifest, lockfile] of INPUTS) {
           },
         );
         assert.equal(result.error, undefined, `${manifest}: ${String(result.error)}`);
-        assert.equal(
-          result.status,
-          0,
-          `${manifest} (${target.os}/${target.cpu}):\n${result.stderr}\n${result.stdout}`,
-        );
+        assert.equal(result.status, 0, `${manifest} (${target.os}/${target.cpu}):\n${result.stderr}\n${result.stdout}`);
       }
       assert.deepEqual(readFileSync(join(directory, 'package-lock.json')), readFileSync(lockfile));
     } finally {

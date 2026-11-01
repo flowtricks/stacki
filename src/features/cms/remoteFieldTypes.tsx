@@ -16,12 +16,7 @@ import {
   TagIcon,
   TextIcon,
 } from '../../ui/Icons';
-import {
-  ElementImageIcon,
-  ElementLinkIcon,
-  ElementListDefaultIcon,
-  ElementSelectIcon,
-} from '../../ui/ElementIcons';
+import { ElementImageIcon, ElementLinkIcon, ElementListDefaultIcon, ElementSelectIcon } from '../../ui/ElementIcons';
 
 type Icon = (props: IconProps) => ReactElement;
 
@@ -32,9 +27,7 @@ export function fieldTypeOf(type: RemoteType): { readonly icon: Icon; readonly l
       if (type.asset === 'image') {
         return { icon: ElementImageIcon, label: 'Image' };
       }
-      return type.options.length > 0
-        ? { icon: ElementSelectIcon, label: 'Option' }
-        : { icon: TextIcon, label: 'Plain text' };
+      return type.options.length > 0 ? { icon: ElementSelectIcon, label: 'Option' } : { icon: TextIcon, label: 'Plain text' };
     case 'text':
       return { icon: TextIcon, label: 'Long text' };
     case 'url':

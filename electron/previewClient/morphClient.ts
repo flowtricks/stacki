@@ -25,22 +25,9 @@
 import { stripTemplateMarkers, asDocument } from './morphNodes';
 import { parsePreviewRoute } from '../../shared/properties/previewRoute';
 import { type ReloadReason, OverCap, refillMorphWork, checkMarkerCap } from './morphBudget';
-import {
-  previewHost,
-  stripAnchors,
-  stripPreviewInstrumentation,
-  syncAnchors,
-  syncStamps,
-} from './morphAnchors';
+import { previewHost, stripAnchors, stripPreviewInstrumentation, syncAnchors, syncStamps } from './morphAnchors';
 import { patchAttrs, patchChildren } from './morphPatch';
-import {
-  addedScripts,
-  noteScripts,
-  runScripts,
-  noteStyles,
-  loadStyles,
-  refreshDevStyles,
-} from './morphAssets';
+import { addedScripts, noteScripts, runScripts, noteStyles, loadStyles, refreshDevStyles } from './morphAssets';
 
 declare global {
   // Vite's import.meta.hot; only .on is used here, so only .on is declared.
@@ -64,19 +51,15 @@ if (host === 'browser') {
 function fetchDocument(initialHTML?: string, signal?: AbortSignal): Promise<FetchedDocument> {
   const rendering =
     initialHTML === undefined
-      ? fetch(location.href, { cache: 'no-store', ...(signal ? { signal } : {}) }).then(
-          (response) => {
-            // Studio edits authored 404 pages too. Reject transport/server failures,
-            // but retain Astro's intentional 404 status for an HTML page rendering.
-            const html404 =
-              response.status === 404 &&
-              response.headers.get('content-type')?.includes('text/html');
-            if (!response.ok && !html404) {
-              throw new Error('dev server answered ' + response.status);
-            }
-            return response.text();
-          },
-        )
+      ? fetch(location.href, { cache: 'no-store', ...(signal ? { signal } : {}) }).then((response) => {
+          // Studio edits authored 404 pages too. Reject transport/server failures,
+          // but retain Astro's intentional 404 status for an HTML page rendering.
+          const html404 = response.status === 404 && response.headers.get('content-type')?.includes('text/html');
+          if (!response.ok && !html404) {
+            throw new Error('dev server answered ' + response.status);
+          }
+          return response.text();
+        })
       : Promise.resolve(initialHTML);
   return rendering.then((html) => {
     const withAnchors = new DOMParser().parseFromString(html, 'text/html');
@@ -186,11 +169,7 @@ document.addEventListener('studio:render-pending', () => {
   }, 20_000);
 });
 document.addEventListener('studio:render-html', (event) => {
-  if (
-    !(event instanceof CustomEvent) ||
-    typeof event.detail !== 'string' ||
-    event.detail.length > 4_000_000
-  ) {
+  if (!(event instanceof CustomEvent) || typeof event.detail !== 'string' || event.detail.length > 4_000_000) {
     return;
   }
   clearFallback();
@@ -343,12 +322,7 @@ window.addEventListener('message', (event: MessageEvent) => {
       return;
     }
   }
-  if (
-    typeof data === 'object' &&
-    data !== null &&
-    'type' in data &&
-    data['type'] === 'avb:patch-now'
-  ) {
+  if (typeof data === 'object' && data !== null && 'type' in data && data['type'] === 'avb:patch-now') {
     // A connected Studio already renders accepted writes. Starting a second
     // render here competes for container CPU; Desktop still pulls immediately.
     requestUpdate();

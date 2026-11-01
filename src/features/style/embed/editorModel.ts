@@ -6,13 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { type RuleModel } from '../model/cascade';
 import { snapshotTokens, tokensToSelector } from '../model/elementTokens';
-import {
-  selectorsMatch,
-  stateForSelector,
-  STATES,
-  type MatchedSelector,
-  type StyleContext,
-} from '../model/resolved';
+import { selectorsMatch, stateForSelector, STATES, type MatchedSelector, type StyleContext } from '../model/resolved';
 import type { Declaration } from 'postcss';
 import {
   directDecls,
@@ -42,13 +36,7 @@ import {
   type PageScan,
 } from '../model/webflow';
 import type { ElementSnapshot, NativeModel, ParsedRule } from '../model/styleTypes';
-import {
-  type ScanState,
-  type PropWrite,
-  EMPTY_RULE_MODEL,
-  type Placeholder,
-  computePlaceholders,
-} from './EditorBasics';
+import { type ScanState, type PropWrite, EMPTY_RULE_MODEL, type Placeholder, computePlaceholders } from './EditorBasics';
 import { selectorOrder, styledSelectorsFor } from './editorSignatures';
 export {
   BG_REFRESH_THROTTLE_MS,
@@ -66,10 +54,7 @@ export {
 // than waiting for the whole batch. Emits are coalesced (≤ ~1/100ms) so the re-resolve
 // per partial can't thrash. Dedupe by key because a page and component scan can
 // surface the same embed. Returns the per-document callback.
-export function streamDocs(
-  pageScan: EmbedScan,
-  onPartial: ((content: Content) => void) | undefined,
-): (embedDocument: EmbedDocument) => void {
+export function streamDocs(pageScan: EmbedScan, onPartial: ((content: Content) => void) | undefined): (embedDocument: EmbedDocument) => void {
   const streamed: EmbedDocument[] = [];
   const streamedKeys = new Set<string>();
   let lastEmitAt = 0;
@@ -105,9 +90,7 @@ export function streamDocs(
 // page's <style> and a second, disk-read copy of the component after drilling in,
 // so edits went to blocks the open file does not hold (issue #72). Listing is
 // in-memory work; only the reads touch disk, and those always ran.
-export async function loadComponentDocs(
-  onDocument: (embedDocument: EmbedDocument) => void,
-): Promise<{ docs: EmbedDocument[]; errors: Content['errors'] }> {
+export async function loadComponentDocs(onDocument: (embedDocument: EmbedDocument) => void): Promise<{ docs: EmbedDocument[]; errors: Content['errors'] }> {
   const docs: EmbedDocument[] = [];
   const errors: Content['errors'] = [];
   await scanAllComponents(async (embeds) => {
@@ -119,10 +102,7 @@ export async function loadComponentDocs(
 }
 
 // The full scan's content: page docs then component docs, each embed once.
-export function mergedContent(
-  pageScan: EmbedScan,
-  results: ReadonlyArray<{ docs: EmbedDocument[]; errors: Content['errors'] }>,
-): Content {
+export function mergedContent(pageScan: EmbedScan, results: ReadonlyArray<{ docs: EmbedDocument[]; errors: Content['errors'] }>): Content {
   const seenDocs = new Set<string>();
   const docs = results
     .flatMap((result) => result.docs)
@@ -225,9 +205,7 @@ export function chipsFor(inputs: ChipInputs): MatchedSelector[] {
   return inChipOrder(list, inputs.classList, { byOrder: true }).map((selector) =>
     // In a query context, show the display with an `@` at the query position;
     // on Base / other contexts show the plain nested display.
-    currentContext.embedAtContext && selector.inContext !== false && selector.queryDisplay
-      ? { ...selector, display: selector.queryDisplay }
-      : selector,
+    currentContext.embedAtContext && selector.inContext !== false && selector.queryDisplay ? { ...selector, display: selector.queryDisplay } : selector,
   );
 }
 
@@ -267,11 +245,7 @@ export function pendingActiveChip(
 
 // Selectors in chip display order (see selectorOrder), then by specificity; with
 // `byOrder`, a selector's own source order breaks the tie before its text does.
-export function inChipOrder(
-  selectors: MatchedSelector[],
-  classList: string[],
-  { byOrder }: { readonly byOrder: boolean },
-): MatchedSelector[] {
+export function inChipOrder(selectors: MatchedSelector[], classList: string[], { byOrder }: { readonly byOrder: boolean }): MatchedSelector[] {
   return selectors
     .map((entry) => ({ s: entry, rank: selectorOrder(entry.text, classList) }))
     .sort(
@@ -280,9 +254,7 @@ export function inChipOrder(
         left.rank[1] - right.rank[1] ||
         left.rank[2] - right.rank[2] ||
         compareSpecificity(left.s.specificity, right.s.specificity) ||
-        (byOrder && left.s.order !== undefined && right.s.order !== undefined
-          ? left.s.order - right.s.order
-          : 0) ||
+        (byOrder && left.s.order !== undefined && right.s.order !== undefined ? left.s.order - right.s.order : 0) ||
         left.s.text.localeCompare(right.s.text),
     )
     .map((ranked) => ranked.s);
@@ -314,9 +286,7 @@ export function upgradedDefault(
     .filter((token) => token.kind === 'class')
     .map((token) => token.name)
     .flatMap((tok) => {
-      const found = local.find((entry) =>
-        selectorsMatch(entry.text, tokensToSelector([tok], tokens)),
-      );
+      const found = local.find((entry) => selectorsMatch(entry.text, tokensToSelector([tok], tokens)));
       return found ? [found] : [];
     })[0];
   // Otherwise the FIRST selector in chip display order after the tag — the element's
@@ -348,20 +318,13 @@ export function embedWriteTarget(
   if (inContext === undefined) {
     anchor = selectedEmbedKey ? matched.find(ofSelected) : matched[0];
   } else if (selectedEmbedKey) {
-    anchor =
-      matched.find((rule) => ofSelected(rule) && inContext(rule)) ?? matched.find(ofSelected);
+    anchor = matched.find((rule) => ofSelected(rule) && inContext(rule)) ?? matched.find(ofSelected);
   } else {
     anchor = matched.find(inContext) ?? matched[0];
   }
-  const embedDocument = selectedEmbedKey
-    ? documentByKey.get(selectedEmbedKey)
-    : anchor
-      ? documentByKey.get(anchor.embedKey)
-      : [...documentByKey.values()][0];
+  const embedDocument = selectedEmbedKey ? documentByKey.get(selectedEmbedKey) : anchor ? documentByKey.get(anchor.embedKey) : [...documentByKey.values()][0];
   const region =
-    anchor && embedDocument && anchor.embedKey === embedDocument.source.key
-      ? embedDocument.regions[anchor.regionIndex]
-      : embedDocument?.regions[0];
+    anchor && embedDocument && anchor.embedKey === embedDocument.source.key ? embedDocument.regions[anchor.regionIndex] : embedDocument?.regions[0];
   return embedDocument && region ? { embedDocument, region } : undefined;
 }
 
@@ -389,9 +352,7 @@ export function createRuleForWrite(
   if (!embedContext) {
     return createRuleAtRoot(region, selector, prop, { value, important });
   }
-  const block = listAtRuleBlocks(region).find(
-    (entry) => entry.atContext.join(' › ') === embedContext,
-  );
+  const block = listAtRuleBlocks(region).find((entry) => entry.atContext.join(' › ') === embedContext);
   return block
     ? createRuleInAtRule(block.node, selector, prop, { value, important })
     : createRuleInQuery(region, embedContext, selector, prop, { value, important });
@@ -400,9 +361,7 @@ export function createRuleForWrite(
 // A rule's own declarations of `prop`, looked up in the live postcss AST.
 export function declsFor(rule: ParsedRule, prop: string): Declaration[] {
   const key = prop.toLowerCase();
-  return directDecls(rule.node).filter(
-    (declaration) => declaration.prop.trim().toLowerCase() === key,
-  );
+  return directDecls(rule.node).filter((declaration) => declaration.prop.trim().toLowerCase() === key);
 }
 
 // The last of them — the one that applies.
@@ -436,9 +395,7 @@ export function scanStateFor(
   return {
     rootSnapshot,
     model,
-    placeholders: content.scan.inComponentContext
-      ? computePlaceholders(content.docs, rootSnapshot.classList)
-      : [],
+    placeholders: content.scan.inComponentContext ? computePlaceholders(content.docs, rootSnapshot.classList) : [],
     embedCount: content.embedCount,
     componentEmbedCount: content.componentEmbedCount,
     rememberedPageEmbedCount: content.scan.inComponentContext ? rememberedPageEmbedCount : 0,
@@ -452,16 +409,12 @@ export function scanStateFor(
 export function resolveStatus(content: Content, model: RuleModel): string {
   const count = model.matchedRuleCount;
   if (content.partial) {
-    return count > 0
-      ? `${count} matching rule${count === 1 ? '' : 's'} so far — scanning components…`
-      : 'Scanning component embeds…';
+    return count > 0 ? `${count} matching rule${count === 1 ? '' : 's'} so far — scanning components…` : 'Scanning component embeds…';
   }
   if (count > 0) {
     return `${count} matching rule${count === 1 ? '' : 's'}.`;
   }
-  return content.embedCount
-    ? 'No embed styles target this element.'
-    : 'No HTML embeds with <style> blocks found.';
+  return content.embedCount ? 'No embed styles target this element.' : 'No HTML embeds with <style> blocks found.';
 }
 
 // ─────────────────────────── Main component ───────────────────────────
@@ -490,18 +443,12 @@ export type Content = {
 
 /** Reuse parsed CSS when a page gesture changes only the tree. A fresh scan
  * gives new nodes their ancestry without waiting to re-read every stylesheet. */
-export function contentForCurrentTree(
-  cached: Content,
-  current: PageScan,
-  selected: unknown,
-): Content | undefined {
+export function contentForCurrentTree(cached: Content, current: PageScan, selected: unknown): Content | undefined {
   const selectedId = serializeElementId(selected);
   if (!current.elementByKey.has(selectedId)) {
     return undefined;
   }
-  const samePage = [...cached.scan.elementByKey].some(
-    ([id, node]) => current.elementByKey.get(id) === node,
-  );
+  const samePage = [...cached.scan.elementByKey].some(([id, node]) => current.elementByKey.get(id) === node);
   if (!samePage || cached.scan.embeds.length !== current.pageEmbeds.length) {
     return undefined;
   }
@@ -573,12 +520,7 @@ export const editorSession: {
 
 export const viewKeyMatches = (view: PersistedView | undefined) => {
   const host = getHost();
-  return (
-    !!view &&
-    !!host.selectedId &&
-    view.hostId === host.selectedId &&
-    view.filePath === (host.openFilePath ?? undefined)
-  );
+  return !!view && !!host.selectedId && view.hostId === host.selectedId && view.filePath === (host.openFilePath ?? undefined);
 };
 
 // The selected node's authored classes, straight from the page model. A `class` set by
@@ -649,19 +591,13 @@ export const EMPTY_CLASSES: ReadonlySet<string> = new Set();
 
 // The same snapshot without the classes that have just been removed — what the
 // element is now, rather than what the preview last saw.
-export function withoutClasses(
-  snapshot: ElementSnapshot | undefined,
-  hidden: ReadonlySet<string>,
-): ElementSnapshot | undefined {
+export function withoutClasses(snapshot: ElementSnapshot | undefined, hidden: ReadonlySet<string>): ElementSnapshot | undefined {
   if (!snapshot || !hidden.size) {
     return snapshot;
   }
   const classes = snapshot.classes.filter((name) => !hidden.has(name));
   const classList = snapshot.classList.filter((name) => !hidden.has(name));
-  if (
-    classes.length === snapshot.classes.length &&
-    classList.length === snapshot.classList.length
-  ) {
+  if (classes.length === snapshot.classes.length && classList.length === snapshot.classList.length) {
     return snapshot;
   }
   return {

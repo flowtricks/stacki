@@ -36,11 +36,7 @@ test('remote cleanup retries safely and retains newer drafts at published paths'
         await writeFile(filename, bytes);
       }
     }
-    const cleanup = new StorageCleanup(
-      root,
-      new SerialQueue(),
-      new CleanupStore(root, 'https://r2.test', 'test-token'),
-    );
+    const cleanup = new StorageCleanup(root, new SerialQueue(), new CleanupStore(root, 'https://r2.test', 'test-token'));
     const snapshot: readonly PublishedFile[] = [...files, 'src/assets/newer.webp'].map((file) => ({
       path: file,
       sha: gitBlob(committed),

@@ -42,17 +42,7 @@ export function projectAliases(projectPath: string) {
   return [];
 }
 
-export const SOURCE_EXTENSIONS = [
-  '',
-  '.ts',
-  '.js',
-  '.mjs',
-  '.mts',
-  '.tsx',
-  '.jsx',
-  '.json',
-  '.astro',
-];
+export const SOURCE_EXTENSIONS = ['', '.ts', '.js', '.mjs', '.mts', '.tsx', '.jsx', '.json', '.astro'];
 
 export function firstExisting(base: string) {
   for (const ext of SOURCE_EXTENSIONS) {
@@ -80,8 +70,7 @@ export function resolveImportPath(projectPath: string, fromFile: string, spec: s
   }
   for (const source of readComponentSources(projectPath)) {
     if (specifier.startsWith(source.importPrefix)) {
-      const relative =
-        componentSourceRoot(source) + '/' + specifier.slice(source.importPrefix.length);
+      const relative = componentSourceRoot(source) + '/' + specifier.slice(source.importPrefix.length);
       packageSourcePath(projectPath, relative);
       return path.resolve(projectPath, relative);
     }
@@ -115,8 +104,7 @@ export function declarationLine(text: string, name: string) {
   const re = new RegExp(
     // `[ \t]*`, not `\s*`: with the m flag `\s` eats the newlines before the
     // declaration, and the match would start on a blank line above it.
-    `^[ \\t]*(?:export\\s+)?(?:const|let|var|function|class)\\s+` +
-      `${String(name).replace(/[^\w$]/g, '')}\\b`,
+    `^[ \\t]*(?:export\\s+)?(?:const|let|var|function|class)\\s+` + `${String(name).replace(/[^\w$]/g, '')}\\b`,
     'm',
   );
   const match = re.exec(text);
@@ -132,10 +120,7 @@ export function parseAliases(input: unknown): readonly (readonly [string, readon
   if (!paths) {
     return [];
   }
-  return Object.entries(
-    dictionary((value) => list(text)(typeof value === 'string' ? [value] : value))(paths),
-  ).map(
-    ([key, values]) =>
-      [key.replace(/\*$/, ''), values.map((value) => value.replace(/\*$/, ''))] as const,
+  return Object.entries(dictionary((value) => list(text)(typeof value === 'string' ? [value] : value))(paths)).map(
+    ([key, values]) => [key.replace(/\*$/, ''), values.map((value) => value.replace(/\*$/, ''))] as const,
   );
 }

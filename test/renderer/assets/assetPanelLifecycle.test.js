@@ -74,10 +74,7 @@ test('asset listings ignore stale projects and coalesce watcher bursts', async (
       await Promise.resolve();
     });
   await render('/one');
-  assert.equal(
-    document.querySelector('[role="status"]').getAttribute('aria-label'),
-    'Loading assets…',
-  );
+  assert.equal(document.querySelector('[role="status"]').getAttribute('aria-label'), 'Loading assets…');
   assert.doesNotMatch(document.body.textContent, /Loading assets/);
   assert.doesNotMatch(document.body.textContent, /Empty folder/);
   await render('/two');

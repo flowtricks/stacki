@@ -8,8 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { connectRepository } = require('#dist/electron/git/githubRepository.js');
-const git = (cwd, args) =>
-  execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+const git = (cwd, args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
 test('existing repositories accept safe pushes and refuse unrelated history', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-connect-'));
@@ -62,9 +61,7 @@ test('existing repositories accept safe pushes and refuse unrelated history', as
 });
 
 test('clone handler creates a new Astro checkout and refuses an existing directory', async () => {
-  const {
-    registerGitRepositoryHandlers,
-  } = require('#dist/electron/handlers/gitRepositoryHandlers.js');
+  const { registerGitRepositoryHandlers } = require('#dist/electron/handlers/gitRepositoryHandlers.js');
   const tools = require('#dist/electron/lib/nodeTools.js');
   const originalRun = tools.run;
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-clone-'));
@@ -76,10 +73,7 @@ test('clone handler creates a new Astro checkout and refuses an existing directo
     git(source, ['init', '--initial-branch=main']);
     git(source, ['config', 'user.name', 'Test']);
     git(source, ['config', 'user.email', 'test@example.com']);
-    fs.writeFileSync(
-      path.join(source, 'package.json'),
-      JSON.stringify({ dependencies: { astro: '*' } }),
-    );
+    fs.writeFileSync(path.join(source, 'package.json'), JSON.stringify({ dependencies: { astro: '*' } }));
     git(source, ['add', 'package.json']);
     git(source, ['commit', '--message', 'Astro site']);
     // The CLI boundary clones a real local repository, without GitHub mutations.
@@ -96,10 +90,7 @@ test('clone handler creates a new Astro checkout and refuses an existing directo
     const clone = handlers.get('git:clone');
     const result = await clone({}, { repository: 'owner/site' });
     assert.deepEqual(result, { canceled: false, projectPath: path.join(parent, 'site') });
-    assert.equal(
-      git(result.projectPath, ['rev-parse', 'HEAD']),
-      git(source, ['rev-parse', 'HEAD']),
-    );
+    assert.equal(git(result.projectPath, ['rev-parse', 'HEAD']), git(source, ['rev-parse', 'HEAD']));
     await assert.rejects(clone({}, { repository: 'owner/site' }), /EEXIST/);
     assert.equal(fs.existsSync(path.join(result.projectPath, 'package.json')), true);
   } finally {

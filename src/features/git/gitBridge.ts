@@ -2,23 +2,9 @@ import { gitTransport } from '../../ipc/gitTransport';
 // Renderer Git actions parse invoke results before deciding whether a merge can
 // continue. Payload types share the main-process inventory; responses stay unknown
 // until this boundary because preload does not validate response data.
-import {
-  boolean,
-  count,
-  BOUNDARY_LIMITS,
-  pathText,
-  list,
-  object,
-  optional,
-  record,
-  text,
-} from '../../../shared/core/boundary';
+import { boolean, count, BOUNDARY_LIMITS, pathText, list, object, optional, record, text } from '../../../shared/core/boundary';
 import type { IpcPayloads } from '../../../shared/ipc/ipcPayloads';
-import type {
-  WireMergeOutcome,
-  WireDeleteOutcome,
-  WireConflictPart,
-} from '../../../shared/ipc/ipcResults';
+import type { WireMergeOutcome, WireDeleteOutcome, WireConflictPart } from '../../../shared/ipc/ipcResults';
 
 const mergeFile = object({ path: pathText });
 const commonPart = object({ text });
@@ -104,9 +90,7 @@ export function parseDeleteResult(input: unknown): WireDeleteOutcome {
 export async function gitMerge(payload: IpcPayloads['git:merge']): Promise<WireMergeOutcome> {
   return parseMergeResult(await gitTransport.gitMerge(payload));
 }
-export async function gitDeleteBranch(
-  payload: IpcPayloads['git:deleteBranch'],
-): Promise<WireDeleteOutcome> {
+export async function gitDeleteBranch(payload: IpcPayloads['git:deleteBranch']): Promise<WireDeleteOutcome> {
   return parseDeleteResult(await gitTransport.gitDeleteBranch(payload));
 }
 export async function gitPark(payload: IpcPayloads['git:park']) {

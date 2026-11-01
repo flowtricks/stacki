@@ -5,11 +5,7 @@ import { elementClasses } from './classNames';
 import { tellCanvas } from './canvasQuery';
 import type { Attr } from '../../shared/page/pageNode';
 
-export function previewClassProps(
-  path: string | undefined,
-  before: ClassNode | undefined,
-  patch: Readonly<Record<string, Attr | undefined>>,
-): void {
+export function previewClassProps(path: string | undefined, before: ClassNode | undefined, patch: Readonly<Record<string, Attr | undefined>>): void {
   if (!('class' in patch) && !('class:list' in patch)) {
     return;
   }
@@ -23,11 +19,7 @@ export function previewClassProps(
   previewClassChange(path, before, { props });
 }
 
-export function previewClassChange(
-  path: string | undefined,
-  before: ClassNode | undefined,
-  after: ClassNode | undefined,
-): void {
+export function previewClassChange(path: string | undefined, before: ClassNode | undefined, after: ClassNode | undefined): void {
   if (!path) {
     return;
   }
@@ -45,10 +37,7 @@ function staticClassNames(node: ClassNode | undefined): readonly string[] {
   const props = node?.props;
   const classAttr = props?.['class'];
   const classList = props?.['class:list'];
-  return [
-    ...elementClasses({ props: classAttr ? { class: classAttr } : {} }),
-    ...elementClasses({ props: classList ? { 'class:list': classList } : {} }),
-  ];
+  return [...elementClasses({ props: classAttr ? { class: classAttr } : {} }), ...elementClasses({ props: classList ? { 'class:list': classList } : {} })];
 }
 
 export function previewAddedClass(path: string | undefined, className: string): void {

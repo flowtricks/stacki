@@ -17,12 +17,7 @@ export interface NativeTextResult {
   readonly keep: () => void;
 }
 
-export function openNativeText(
-  match: TextMatch,
-  event: MouseEvent,
-  changed: (value: string) => void,
-  done: (result: NativeTextResult) => void,
-) {
+export function openNativeText(match: TextMatch, event: MouseEvent, changed: (value: string) => void, done: (result: NativeTextResult) => void) {
   const root = textEditorRoot(match);
   if (!root || match.nodes.map((node) => node.data).join('').length > 10_000) {
     return undefined;

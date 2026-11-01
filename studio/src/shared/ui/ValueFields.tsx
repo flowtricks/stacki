@@ -3,21 +3,8 @@ import HtmlField from '../../../vendor/stacki/src/ui/HtmlField';
 import { calendarValue } from '../../../vendor/stacki/src/ui/dateFieldModel';
 import { containsHTML } from '../../../vendor/stacki/src/ui/htmlFieldModel';
 import { useId } from 'react';
-import {
-  DndContext,
-  PointerSensor,
-  TouchSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-  arrayMove,
-} from '@dnd-kit/sortable';
+import { DndContext, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { record } from '../validation';
 
@@ -33,9 +20,7 @@ export function ValueFields({ value, change, label, depth = 0, template }: Props
     return <p>Open source to edit deeply nested content.</p>;
   }
   if (Array.isArray(value)) {
-    return (
-      <ListFields value={value} change={change} label={label} depth={depth} template={template} />
-    );
+    return <ListFields value={value} change={change} label={label} depth={depth} template={template} />;
   }
   if (value !== null && typeof value === 'object') {
     const fields = record(value);
@@ -46,12 +31,7 @@ export function ValueFields({ value, change, label, depth = 0, template }: Props
           .map(([key, child]) => (
             <div className="studio-field" key={key}>
               <span>{key}</span>
-              <ValueFields
-                value={child}
-                label={label + '.' + key}
-                depth={depth + 1}
-                change={(next) => change({ ...fields, [key]: next })}
-              />
+              <ValueFields value={child} label={label + '.' + key} depth={depth + 1} change={(next) => change({ ...fields, [key]: next })} />
             </div>
           ))}
       </div>
@@ -59,11 +39,7 @@ export function ValueFields({ value, change, label, depth = 0, template }: Props
   }
   if (typeof value === 'boolean') {
     return (
-      <select
-        aria-label={label}
-        value={String(value)}
-        onChange={(event) => change(event.target.value === 'true')}
-      >
+      <select aria-label={label} value={String(value)} onChange={(event) => change(event.target.value === 'true')}>
         <option value="true">True</option>
         <option value="false">False</option>
       </select>
@@ -94,14 +70,7 @@ function StringField({ value, label, change }: Pick<Props, 'value' | 'label' | '
   if (calendarValue(text)) {
     return <DateField value={text} label={label} onChange={change} />;
   }
-  return (
-    <textarea
-      aria-label={label}
-      rows={2}
-      value={typeof value === 'string' ? value : ''}
-      onChange={(event) => change(event.target.value)}
-    />
-  );
+  return <textarea aria-label={label} rows={2} value={typeof value === 'string' ? value : ''} onChange={(event) => change(event.target.value)} />;
 }
 function ListFields({ value, change, label, depth = 0, template }: Props & { value: unknown[] }) {
   const prefix = useId();
@@ -135,35 +104,19 @@ function ListFields({ value, change, label, depth = 0, template }: Props & { val
                 value={item}
                 label={`${label}.${index}`}
                 depth={depth + 1}
-                change={(next) =>
-                  change(value.map((previous, position) => (position === index ? next : previous)))
-                }
+                change={(next) => change(value.map((previous, position) => (position === index ? next : previous)))}
               />
             </ListItem>
           ))}
         </SortableContext>
       </DndContext>
-      <button
-        type="button"
-        disabled={value.length >= 200}
-        onClick={() => change([...value, template ?? emptyValue(value[0])])}
-      >
+      <button type="button" disabled={value.length >= 200} onClick={() => change([...value, template ?? emptyValue(value[0])])}>
         Add item
       </button>
     </div>
   );
 }
-function ListItem({
-  id,
-  label,
-  remove,
-  children,
-}: {
-  id: string;
-  label: string;
-  remove: () => void;
-  children: React.ReactNode;
-}) {
+function ListItem({ id, label, remove, children }: { id: string; label: string; remove: () => void; children: React.ReactNode }) {
   const sortable = useSortable({ id });
   return (
     <div
@@ -176,13 +129,7 @@ function ListItem({
       }}
     >
       <div className="value-list-controls">
-        <button
-          type="button"
-          aria-label={`Drag ${label}`}
-          style={{ touchAction: 'none' }}
-          {...sortable.attributes}
-          {...sortable.listeners}
-        >
+        <button type="button" aria-label={`Drag ${label}`} style={{ touchAction: 'none' }} {...sortable.attributes} {...sortable.listeners}>
           ⠿
         </button>
         <button type="button" aria-label={`Remove ${label}`} onClick={remove}>
@@ -201,9 +148,7 @@ function emptyValue(value: unknown, depth = 0): unknown {
     return [];
   }
   if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, child]) => [key, emptyValue(child, depth + 1)]),
-    );
+    return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, emptyValue(child, depth + 1)]));
   }
   if (typeof value === 'number') {
     return 0;

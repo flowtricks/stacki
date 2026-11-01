@@ -55,11 +55,7 @@ export async function measureStyleInput(page: Page, frame: Frame, input: Locator
   const response = await saved;
   assert.ok(response.ok(), 'The measured edit must be saved successfully');
   await response.finished();
-  await frame.waitForFunction(
-    (identifier) => performance.getEntriesByName(identifier).length > 0,
-    identifier,
-    { timeout: 10_000 },
-  );
+  await frame.waitForFunction((identifier) => performance.getEntriesByName(identifier).length > 0, identifier, { timeout: 10_000 });
   const started = await page.evaluate(readMark, identifier);
   const observed = await frame.evaluate(readMark, identifier);
   const write = await page.evaluate(readWriteTiming, started);
@@ -78,9 +74,7 @@ function observeStyle(observation: StyleObservation): void {
   const inspect = () => {
     const element = document.querySelector(observation.selector);
     if (element) {
-      if (
-        getComputedStyle(element).getPropertyValue(observation.property) === observation.expected
-      ) {
+      if (getComputedStyle(element).getPropertyValue(observation.property) === observation.expected) {
         performance.mark(observation.identifier);
         return;
       }
@@ -146,10 +140,7 @@ export async function measureTextInput(
       const observer = new MutationObserver(() => {
         // Rich text can contain nonbreaking spaces with the same visible wording.
         const element = document.querySelector(selector);
-        if (
-          element instanceof HTMLElement &&
-          element.innerText.replace(/\s+/g, ' ').trim() === expected
-        ) {
+        if (element instanceof HTMLElement && element.innerText.replace(/\s+/g, ' ').trim() === expected) {
           performance.mark(identifier);
           observer.disconnect();
         }
@@ -160,11 +151,7 @@ export async function measureTextInput(
     { identifier, selector: observation.selector, expected: observation.expected },
   );
   await input.pressSequentially(observation.text, { delay: 15 });
-  await frame.waitForFunction(
-    (identifier) => performance.getEntriesByName(identifier).length > 0,
-    identifier,
-    { timeout: 10_000 },
-  );
+  await frame.waitForFunction((identifier) => performance.getEntriesByName(identifier).length > 0, identifier, { timeout: 10_000 });
   const first = await page.evaluate(readMark, identifier + '-first');
   const last = await page.evaluate(readMark, identifier + '-last');
   const observed = await frame.evaluate(readMark, identifier);

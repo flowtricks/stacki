@@ -4,10 +4,7 @@ import { assert } from '../../shared/core/assert';
 
 // Astro's logs command requires a running daemon. Read its bounded log tail
 // directly after startup failure, when that command can no longer help.
-export async function readDevServerLog(
-  projectPath: string,
-  startedAtMs: number,
-): Promise<string | undefined> {
+export async function readDevServerLog(projectPath: string, startedAtMs: number): Promise<string | undefined> {
   assert(projectPath.length > 0, 'Dev server logs require a project path');
   assert(Number.isFinite(startedAtMs), 'Dev server logs require a start time');
   try {

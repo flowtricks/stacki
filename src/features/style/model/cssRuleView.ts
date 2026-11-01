@@ -78,9 +78,7 @@ function formatRule(matched: MatchedRule): RuleCode {
     selectors.push({ from: selectorFrom, to: selectorFrom + matched.rule.selectorText.length });
   }
   for (const declaration of matched.rule.declarations) {
-    const line =
-      `${indent(depth + 1)}${declaration.prop}: ${declaration.value}` +
-      `${declaration.important ? ' !important' : ''};`;
+    const line = `${indent(depth + 1)}${declaration.prop}: ${declaration.value}` + `${declaration.important ? ' !important' : ''};`;
     const from = length;
     append(`${line}\n`);
     if (matched.declStatus[declaration.declId]?.winning === false) {
@@ -101,11 +99,7 @@ export function buildCssRuleView(rules: readonly MatchedRule[]): CssRuleView {
     matched,
     specificity: strongestSpecificity(matched),
   }));
-  ranked.sort(
-    (first, second) =>
-      compareSpecificity(second.specificity, first.specificity) ||
-      second.matched.rule.order - first.matched.rule.order,
-  );
+  ranked.sort((first, second) => compareSpecificity(second.specificity, first.specificity) || second.matched.rule.order - first.matched.rule.order);
 
   const parts: string[] = [];
   const highlights: CssRuleHighlight[] = [];

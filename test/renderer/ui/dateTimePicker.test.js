@@ -92,14 +92,8 @@ test('values show as the picker writes them, and unknown text shows as it is', (
   assert.equal(picker.formatPicked('datetime', '2026-08-16T08:30'), '08/16/2026 08:30 AM');
   assert.equal(picker.formatPicked('datetime', '2026-08-15T19:00'), '08/15/2026 07:00 PM');
   assert.equal(picker.formatPicked('datetime', 'soon'), 'soon');
-  assert.throws(
-    () => picker.localValue({ day: '2026-02-30', hour: 1, minute: 0 }),
-    /A date-time has a real day/,
-  );
-  assert.throws(
-    () => picker.localValue({ day: '2026-02-01', hour: 1, minute: 60 }),
-    /A minute is at most 59/,
-  );
+  assert.throws(() => picker.localValue({ day: '2026-02-30', hour: 1, minute: 0 }), /A date-time has a real day/);
+  assert.throws(() => picker.localValue({ day: '2026-02-01', hour: 1, minute: 60 }), /A minute is at most 59/);
 });
 
 test('a chosen day is named in words, and only a real day is', () => {
@@ -148,10 +142,7 @@ async function mount(props) {
   return { root, changes };
 }
 
-const button = (text) =>
-  [...document.querySelectorAll('.date-time-popover button')].find(
-    (element) => element.textContent.trim() === text,
-  );
+const button = (text) => [...document.querySelectorAll('.date-time-popover button')].find((element) => element.textContent.trim() === text);
 const click = (element) => act(async () => element.click());
 
 test('a date-time is picked day first, then hour, minute and half of the day', async () => {
@@ -164,16 +155,10 @@ test('a date-time is picked day first, then hour, minute and half of the day', a
     await click(document.querySelector('.date-time-open'));
     assert.match(document.querySelector('.date-time-month').textContent, /August\s+2026/);
     assert.equal(document.querySelector('.date-time-day.on').textContent, '15');
-    assert.equal(
-      document.querySelector('.date-time-chosen').textContent,
-      'Saturday, August 15, 2026',
-      'the footer names the chosen day, not today',
-    );
+    assert.equal(document.querySelector('.date-time-chosen').textContent, 'Saturday, August 15, 2026', 'the footer names the chosen day, not today');
     await click(document.querySelector('[aria-label="Next month"]'));
     assert.match(document.querySelector('.date-time-month').textContent, /September\s+2026/);
-    const sixth = [...document.querySelectorAll('.date-time-day:not(.outside)')].find(
-      (element) => element.textContent === '6',
-    );
+    const sixth = [...document.querySelectorAll('.date-time-day:not(.outside)')].find((element) => element.textContent === '6');
     await click(sixth);
     assert.equal(changes.at(-1), '2026-09-06T19:00', 'the day changes, the time stays');
     assert.ok(document.querySelector('.date-time-clock'), 'a picked day moves on to the time');
@@ -182,11 +167,7 @@ test('a date-time is picked day first, then hour, minute and half of the day', a
     await click(button('AM'));
     assert.equal(changes.at(-1), '2026-09-06T08:30');
     assert.equal(document.querySelector('.date-time-control input').value, '09/06/2026 08:30 AM');
-    await act(async () =>
-      document
-        .querySelector('.date-time-picker')
-        .dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
-    );
+    await act(async () => document.querySelector('.date-time-picker').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     assert.ok(document.querySelector('.date-time-popover') === null, 'Escape closes it');
   } finally {
     await act(async () => root.unmount());
@@ -211,15 +192,11 @@ test('a date closes on its day, and typed text that names none is put back', asy
         input.dispatchEvent(new window.Event('input', { bubbles: true }));
       });
     await type('02/30/2026');
-    await act(async () =>
-      input.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true })),
-    );
+    await act(async () => input.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true })));
     assert.equal(changes.length, 1, 'no such day is written');
     assert.equal(input.value, picker.formatPicked('date', changes[0]));
     await type('12/25/2026');
-    await act(async () =>
-      input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })),
-    );
+    await act(async () => input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
     assert.equal(changes.at(-1), '2026-12-25');
   } finally {
     await act(async () => root.unmount());
@@ -232,21 +209,9 @@ test('a timestamp is edited as written, keeping its zone and separator', () => {
   const value = '2026-09-09T18:41:47.843Z';
   assert.equal(picker.replaceCalendarLocal(value, '2026-09-12T18:41'), '2026-09-12T18:41:47.843Z');
   assert.equal(picker.replaceCalendarLocal(value, '2026-09-09T07:05'), '2026-09-09T07:05Z');
-  assert.equal(
-    picker.replaceCalendarLocal('2026-01-02 10:00+02:00', '2026-01-03T11:30'),
-    '2026-01-03 11:30+02:00',
-  );
-  assert.equal(
-    picker.replaceCalendarLocal('2026-01-02T10:00', '2026-01-02T23:59'),
-    '2026-01-02T23:59',
-  );
-  assert.throws(
-    () => picker.calendarLocalValue({ day: '2026-01-02', suffix: '' }),
-    /only a timestamp has a time/,
-  );
-  assert.throws(
-    () => picker.replaceCalendarLocal('2026-01-02', '2026-01-02T10:00'),
-    /only a timestamp/,
-  );
+  assert.equal(picker.replaceCalendarLocal('2026-01-02 10:00+02:00', '2026-01-03T11:30'), '2026-01-03 11:30+02:00');
+  assert.equal(picker.replaceCalendarLocal('2026-01-02T10:00', '2026-01-02T23:59'), '2026-01-02T23:59');
+  assert.throws(() => picker.calendarLocalValue({ day: '2026-01-02', suffix: '' }), /only a timestamp has a time/);
+  assert.throws(() => picker.replaceCalendarLocal('2026-01-02', '2026-01-02T10:00'), /only a timestamp/);
   assert.throws(() => picker.replaceCalendarLocal(value, '2026-02-31T10:00'), /a real day/);
 });

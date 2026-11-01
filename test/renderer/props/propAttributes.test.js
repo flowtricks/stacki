@@ -40,13 +40,7 @@ dom.window.Range.prototype.getClientRects = () => [];
 const React = require('react');
 const { createRoot } = require('react-dom/client');
 const { act } = React;
-const {
-  AttributesSection,
-  ObjectAttrsField,
-  parseObjectLiteral,
-  serializeObjectLiteral,
-  parseAttrPaste,
-} = require(output);
+const { AttributesSection, ObjectAttrsField, parseObjectLiteral, serializeObjectLiteral, parseAttrPaste } = require(output);
 assert.deepEqual(parseAttrPaste('id="hero" tabindex={2} disabled'), [
   { name: 'id', value: 'hero' },
   { name: 'tabindex', value: '{2}' },
@@ -65,14 +59,8 @@ assert.equal(parseObjectLiteral(`{ ${Array(257).fill('a: 1').join(', ')} }`), un
 assert.deepEqual(parseAttrPaste('x'.repeat(8193)), []);
 assert.deepEqual(parseAttrPaste(Array(257).fill('x="y"').join(' ')), []);
 assert.equal(serializeObjectLiteral([{ key: 'data-id', raw: '"hero"' }]), '{ "data-id": "hero" }');
-assert.throws(
-  () => serializeObjectLiteral(Array(257).fill({ key: 'a', raw: '1' })),
-  /Object attributes: entry limit exceeded/,
-);
-assert.throws(
-  () => serializeObjectLiteral([{ key: 'a', raw: 'x'.repeat(8192) }]),
-  /Object attributes: output limit exceeded/,
-);
+assert.throws(() => serializeObjectLiteral(Array(257).fill({ key: 'a', raw: '1' })), /Object attributes: entry limit exceeded/);
+assert.throws(() => serializeObjectLiteral([{ key: 'a', raw: 'x'.repeat(8192) }]), /Object attributes: output limit exceeded/);
 const root = createRoot(document.getElementById('root'));
 let entries = Object.freeze([
   { key: 'id', raw: '"old"' },
@@ -97,9 +85,7 @@ const render = () =>
   );
 const press = async (element) => {
   assert.ok(element);
-  await act(async () =>
-    element.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })),
-  );
+  await act(async () => element.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
   await render();
 };
 const paste = async (text) => {
@@ -151,39 +137,22 @@ const paste = async (text) => {
       }),
     ),
   );
-  await act(async () =>
-    document
-      .querySelector('.attr-row')
-      .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })),
-  );
+  await act(async () => document.querySelector('.attr-row').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
   const activeRow = document.querySelector('.attr-row');
   await act(async () => {
     activeRow.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
     activeRow.dispatchEvent(new dom.window.MouseEvent('mouseup', { bubbles: true }));
     activeRow.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
   });
-  assert.ok(
-    document.querySelector('.attr-editor') === null,
-    'clicking the active attribute row closes its editor without reopening it',
-  );
-  await act(async () =>
-    activeRow.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })),
-  );
+  assert.ok(document.querySelector('.attr-editor') === null, 'clicking the active attribute row closes its editor without reopening it');
+  await act(async () => activeRow.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
   const valueField = document.querySelector('.attr-value-field');
   assert.ok(valueField);
   valueField.getBoundingClientRect = () => new dom.window.DOMRect(600, 300, 280, 40);
-  await act(async () =>
-    valueField.dispatchEvent(
-      new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true }),
-    ),
-  );
+  await act(async () => valueField.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true })));
   assert.ok(document.querySelector('.attr-editor.var-src') === null);
   assert.ok(valueField.querySelector('.cm-lineWrapping'));
-  await act(async () =>
-    document
-      .querySelector('button[title="Expand value"]')
-      .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })),
-  );
+  await act(async () => document.querySelector('button[title="Expand value"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
   const expanded = document.querySelector('.attr-editor.var-src');
   assert.ok(expanded);
   assert.equal(expanded.style.width, '760px');
@@ -191,9 +160,7 @@ const paste = async (text) => {
   assert.equal(spreadRow.querySelector('.attr-name').textContent, '{...rest}');
   assert.ok(spreadRow.querySelector('.attr-eq') === null);
   assert.ok(spreadRow.querySelector('.attr-value') === null);
-  await act(async () =>
-    spreadRow.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })),
-  );
+  await act(async () => spreadRow.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
   const spreadEditor = document.querySelector('.attr-editor');
   const spreadName = spreadEditor.querySelector('input');
   assert.equal(spreadName.value, '{...rest}');
@@ -202,9 +169,7 @@ const paste = async (text) => {
   assert.doesNotMatch(spreadEditor.textContent, /Value/);
   await act(async () => root.unmount());
   dom.window.close();
-  console.log(
-    'prop-attributes: parse bounds, single/bulk object pastes and row preservation passed',
-  );
+  console.log('prop-attributes: parse bounds, single/bulk object pastes and row preservation passed');
   process.exit(0);
 })().catch((error) => {
   console.error(error);

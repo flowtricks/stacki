@@ -6,8 +6,7 @@ import { mkdir } from 'node:fs/promises';
 import { record, string } from '../src/shared/validation';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const auth = process.env['STUDIO_STORAGE_STATE'];
@@ -34,16 +33,8 @@ try {
   await editFromLabel(page);
   await selectedHeading(page);
   assert.equal(navigations, 0);
-  assert.ok(
-    await frameElement.evaluate(
-      (element) => element === document.querySelector('iframe[title="Site preview"]'),
-    ),
-  );
-  assert.deepEqual(
-    await preview.locator('h1').boundingBox(),
-    before,
-    'Component entry preserves the viewport',
-  );
+  assert.ok(await frameElement.evaluate((element) => element === document.querySelector('iframe[title="Site preview"]')));
+  assert.deepEqual(await preview.locator('h1').boundingBox(), before, 'Component entry preserves the viewport');
   await page.getByRole('button', { name: 'Code', exact: true }).click();
   await page.locator('.code-panel-path').filter({ hasText: 'Heading.astro' }).waitFor();
   await page.locator('.code-panel-lines').waitFor();
@@ -75,14 +66,9 @@ try {
   await mkdir('test-results', { recursive: true });
   await page.screenshot({ path: 'test-results/component-entry.png' });
   assert.equal(await readSource(page, 'src/pages/index.astro'), originalPage);
-  assert.equal(
-    await readSource(page, 'src/components/typography/Heading.astro'),
-    originalComponent,
-  );
+  assert.equal(await readSource(page, 'src/components/typography/Heading.astro'), originalComponent);
   assert.deepEqual(errors, []);
-  console.log(
-    'Component entry preserves the iframe and viewport, selects rendered markup, follows repeated instances and switches source correctly.',
-  );
+  console.log('Component entry preserves the iframe and viewport, selects rendered markup, follows repeated instances and switches source correctly.');
 } finally {
   await browser.close();
 }
@@ -117,11 +103,7 @@ async function editFromLabel(page: Page) {
   await label.screenshot({ path: 'test-results/component-label-hover.png' });
   await button.click();
   await selectedHeading(page);
-  assert.equal(
-    await page.locator('.node-outline-edit').count(),
-    0,
-    'HTML tags have no edit action',
-  );
+  assert.equal(await page.locator('.node-outline-edit').count(), 0, 'HTML tags have no edit action');
 }
 async function selectedHeading(page: Page) {
   await page.locator('.comp-back').filter({ hasText: 'Heading.astro' }).waitFor();
@@ -132,9 +114,7 @@ async function selectedHeading(page: Page) {
     .waitFor();
 }
 async function readSource(page: Page, file: string) {
-  const result = await page.request.get(
-    new URL('/studio/api/file?file=' + encodeURIComponent(file), page.url()).href,
-  );
+  const result = await page.request.get(new URL('/studio/api/file?file=' + encodeURIComponent(file), page.url()).href);
   return string(record(await result.json())['source']);
 }
 async function assertOutlineOn(page: Page, heading: ReturnType<Page['locator']>) {

@@ -29,9 +29,7 @@ export default function PageSwitcher<T extends Page>(props: PageSwitcherProps<T>
     <>
       <button
         ref={state.buttonRef}
-        className={`page-switch-btn ${
-          isCollectionRoute(props.currentPage?.name) ? 'collection' : ''
-        }`}
+        className={`page-switch-btn ${isCollectionRoute(props.currentPage?.name) ? 'collection' : ''}`}
         title="Switch page"
         aria-label="Current page"
         aria-haspopup="listbox"
@@ -40,9 +38,7 @@ export default function PageSwitcher<T extends Page>(props: PageSwitcherProps<T>
         onClick={() => state.setOpen((open) => !open)}
       >
         <PageGlyph page={props.currentPage} size={12} />
-        <span className="page-switch-label">
-          {props.currentPage ? pretty(props.currentPage) : 'No page'}
-        </span>
+        <span className="page-switch-label">{props.currentPage ? pretty(props.currentPage) : 'No page'}</span>
         <ChevronDownIcon size={10} className="page-switch-chevron" />
       </button>
       {state.open && state.position && <PageMenu state={state} currentPage={props.currentPage} />}
@@ -91,23 +87,15 @@ function usePageSwitcher<T extends Page>({ pages, currentPage, onSelect }: PageS
   };
 }
 
-function usePagePosition(
-  buttonRef: RefObject<HTMLButtonElement>,
-  { open }: { readonly open: boolean },
-) {
-  const [position, setPosition] = useState<
-    { readonly left: number; readonly top: number } | undefined
-  >(undefined);
+function usePagePosition(buttonRef: RefObject<HTMLButtonElement>, { open }: { readonly open: boolean }) {
+  const [position, setPosition] = useState<{ readonly left: number; readonly top: number } | undefined>(undefined);
   useLayoutEffect(() => {
     if (!open || !buttonRef.current) {
       return;
     }
     const rectangle = buttonRef.current.getBoundingClientRect();
     setPosition({
-      left: Math.max(
-        8,
-        Math.min(window.innerWidth - 288, rectangle.left + rectangle.width / 2 - 140),
-      ),
+      left: Math.max(8, Math.min(window.innerWidth - 288, rectangle.left + rectangle.width / 2 - 140)),
       top: rectangle.bottom + 6,
     });
   }, [open, buttonRef]);
@@ -115,13 +103,7 @@ function usePagePosition(
 }
 
 type PageState<T extends Page> = ReturnType<typeof usePageSwitcher<T>>;
-function PageMenu<T extends Page>({
-  state,
-  currentPage,
-}: {
-  readonly state: PageState<T>;
-  readonly currentPage: T | undefined;
-}) {
+function PageMenu<T extends Page>({ state, currentPage }: { readonly state: PageState<T>; readonly currentPage: T | undefined }) {
   const onInputKey = (event: React.KeyboardEvent<HTMLInputElement>): void => {
     switch (event.key) {
       case 'ArrowDown':
@@ -141,14 +123,7 @@ function PageMenu<T extends Page>({
     }
   };
   return (
-    <Popup
-      mode="popover"
-      portal={false}
-      onClose={() => state.setOpen(false)}
-      ref={state.popupRef}
-      className="page-menu"
-      style={state.position ?? undefined}
-    >
+    <Popup mode="popover" portal={false} onClose={() => state.setOpen(false)} ref={state.popupRef} className="page-menu" style={state.position ?? undefined}>
       <input
         ref={state.inputRef}
         className="page-menu-search"
@@ -198,9 +173,7 @@ function PageRow({
       role="option"
       aria-selected={current}
       data-file={page.path}
-      className={`page-menu-item ${collection} ${highlighted ? 'highlight' : ''} ${
-        current ? 'current' : ''
-      }`}
+      className={`page-menu-item ${collection} ${highlighted ? 'highlight' : ''} ${current ? 'current' : ''}`}
       onMouseEnter={onHover}
       onPointerDown={(event) => {
         if (event.pointerType === 'mouse' && event.button === 0) {
@@ -222,11 +195,7 @@ function pageSwitcherFilter<T extends Page>(pages: readonly T[] | undefined, que
   const search = query.trim().toLowerCase();
   return (pages || [])
     .filter(
-      (page) =>
-        !search ||
-        page.name.toLowerCase().includes(search) ||
-        pretty(page).toLowerCase().includes(search) ||
-        page.route.toLowerCase().includes(search),
+      (page) => !search || page.name.toLowerCase().includes(search) || pretty(page).toLowerCase().includes(search) || page.route.toLowerCase().includes(search),
     )
     .sort((left, right) => comparePageNames(left.name, right.name));
 }

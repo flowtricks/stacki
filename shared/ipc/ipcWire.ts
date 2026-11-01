@@ -189,9 +189,7 @@ export type WireGitInfo = {
 };
 
 export type WireCommitInfo = {
-  readonly files:
-    | undefined
-    | ReadonlyArray<WireFileChange & WireFileDescription & { readonly from: undefined | string }>;
+  readonly files: undefined | ReadonlyArray<WireFileChange & WireFileDescription & { readonly from: undefined | string }>;
   readonly hash: undefined | string;
   readonly shortHash: undefined | string;
   readonly author: undefined | string;
@@ -294,6 +292,7 @@ export type WireSchemaField = {
   readonly optional: boolean;
   readonly default: undefined | string | number | boolean;
   readonly defaultExpr?: boolean;
+  readonly defaultAsset?: string;
   readonly hint?: string;
   readonly options?: undefined | ReadonlyArray<string>;
   readonly numeric?: undefined | boolean;
@@ -341,17 +340,7 @@ export type WireRule = {
   readonly entries: ReadonlyArray<WireCssEntry>;
 };
 
-export type WireFileKind =
-  | 'content'
-  | 'asset'
-  | 'layout'
-  | 'page'
-  | 'component'
-  | 'file'
-  | 'style'
-  | 'config'
-  | 'script'
-  | 'doc';
+export type WireFileKind = 'content' | 'asset' | 'layout' | 'page' | 'component' | 'file' | 'style' | 'config' | 'script' | 'doc';
 
 export type WireConflictPart =
   | { readonly kind: 'same'; readonly text: string }

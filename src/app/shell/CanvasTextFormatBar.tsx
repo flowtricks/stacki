@@ -7,16 +7,8 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLiveValue } from '../../ui/liveValue';
-import {
-  RichFormatButtons,
-  RichLinkField,
-  richBubblePlace,
-  type BubblePosition,
-} from '../../features/props/RichFormatButtons';
-import {
-  canvasTextSelection,
-  type CanvasTextSelectionState,
-} from '../../features/preview/canvasTextSelection';
+import { RichFormatButtons, RichLinkField, richBubblePlace, type BubblePosition } from '../../features/props/RichFormatButtons';
+import { canvasTextSelection, type CanvasTextSelectionState } from '../../features/preview/canvasTextSelection';
 
 type BubbleStyle = React.CSSProperties & { readonly '--arrow-x': string };
 
@@ -25,10 +17,7 @@ export function CanvasTextFormatBar() {
   if (!selection) {
     return undefined;
   }
-  return createPortal(
-    <CanvasTextBubble key={selection.session} selection={selection} />,
-    document.body,
-  );
+  return createPortal(<CanvasTextBubble key={selection.session} selection={selection} />, document.body);
 }
 
 function CanvasTextBubble({ selection }: { readonly selection: CanvasTextSelectionState }) {
@@ -52,20 +41,9 @@ function CanvasTextBubble({ selection }: { readonly selection: CanvasTextSelecti
     selection.endLink(value);
   };
   return (
-    <div
-      ref={element}
-      className={`rich-bubble ${position?.below ? 'below' : ''}`}
-      style={style}
-      onMouseDown={(event) => event.stopPropagation()}
-    >
+    <div ref={element} className={`rich-bubble ${position?.below ? 'below' : ''}`} style={style} onMouseDown={(event) => event.stopPropagation()}>
       {linking ? (
-        <RichLinkField
-          value={url}
-          onChange={setURL}
-          onApply={() => endLink(url)}
-          onCancel={() => endLink(undefined)}
-          onBlur={() => endLink(undefined)}
-        />
+        <RichLinkField value={url} onChange={setURL} onApply={() => endLink(url)} onCancel={() => endLink(undefined)} onBlur={() => endLink(undefined)} />
       ) : (
         <RichFormatButtons
           states={selection.states}

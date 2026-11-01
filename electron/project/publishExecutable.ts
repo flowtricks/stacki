@@ -91,12 +91,7 @@ function installedPublishTool(root: string, executable: string): string | undefi
   }
   // Desktop and Studio can share an installed CLI without downloading code during discovery.
   const resolver = createRequire(path.join(process.cwd(), 'package.json'));
-  const directories = [
-    root,
-    process.cwd(),
-    path.join(process.cwd(), 'studio'),
-    path.dirname(process.argv[1] ?? process.cwd()),
-  ];
+  const directories = [root, process.cwd(), path.join(process.cwd(), 'studio'), path.dirname(process.argv[1] ?? process.cwd())];
   for (const directory of directories) {
     let manifest: string;
     try {

@@ -5,13 +5,7 @@ import type { Data } from '../../../shared/core/boundary';
 import type { IpcResults, WireValidationIssue } from '../../../shared/ipc/ipcResults';
 import { collectionFields, describeField, editsBetween, labelize } from './contentSchema';
 import type { FieldDescriptor } from './contentSchema';
-import {
-  planContentRename,
-  readContentEntries,
-  renameContentEntry,
-  validateContentEntry,
-  writeContentEntry,
-} from './contentViewBridge';
+import { planContentRename, readContentEntries, renameContentEntry, validateContentEntry, writeContentEntry } from './contentViewBridge';
 import type { ContentEntries, ContentEntry } from './contentViewBridge';
 import CodeEditor from '../../ui/CodeEditor';
 import { CheckIcon, ChevronRightIcon, CloseIcon, HelpCircleIcon, HideIcon } from '../../ui/Icons';
@@ -51,19 +45,10 @@ function directoryOf(file: string): string {
 
 export default function ContentView(props: ContentViewProps) {
   const editor = useContentEditor(props);
-  const shape = useMemo(
-    () => collectionFields(editor.state?.collection.schema),
-    [editor.state?.collection.schema],
-  );
-  const freeformFields = useMemo(
-    () => (shape.freeform ? describeFreeformFields(editor.data) : []),
-    [editor.data, shape.freeform],
-  );
+  const shape = useMemo(() => collectionFields(editor.state?.collection.schema), [editor.state?.collection.schema]);
+  const freeformFields = useMemo(() => (shape.freeform ? describeFreeformFields(editor.data) : []), [editor.data, shape.freeform]);
   const context = useFieldContext(props.project.path, editor);
-  const formIssues = editor.issues.filter(
-    (issue) =>
-      issue.path.length === 0 || !shape.fields.some((field) => field.key === issue.path[0]),
-  );
+  const formIssues = editor.issues.filter((issue) => issue.path.length === 0 || !shape.fields.some((field) => field.key === issue.path[0]));
   if (!editor.state) {
     return <div className={`cms-view ${props.hidden ? 'hidden' : ''}`} />;
   }
@@ -78,15 +63,7 @@ export default function ContentView(props: ContentViewProps) {
         onQuery={editor.setQuery}
         onSelect={editor.setSelected}
       />
-      <EntryDetail
-        {...props}
-        {...editor}
-        state={editor.state}
-        shape={shape}
-        freeformFields={freeformFields}
-        context={context}
-        formIssues={formIssues}
-      />
+      <EntryDetail {...props} {...editor} state={editor.state} shape={shape} freeformFields={freeformFields} context={context} formIssues={formIssues} />
     </div>
   );
 }
@@ -95,9 +72,7 @@ function describeFreeformFields(value: Data): readonly FieldDescriptor[] {
   if (!isPlainObject(value)) {
     return [];
   }
-  return Object.keys(value).map((key) =>
-    describeField(typeof value[key] === 'number' ? { type: 'number' } : { type: 'string' }, key),
-  );
+  return Object.keys(value).map((key) => describeField(typeof value[key] === 'number' ? { type: 'number' } : { type: 'string' }, key));
 }
 
 function useContentEditor(props: ContentViewProps) {
@@ -174,10 +149,7 @@ function useEditorTimers(): EditorTimers {
     pending.current = undefined;
     apply?.();
   }, []);
-  const timers = useMemo(
-    () => ({ save, check, saved, validationGeneration, pending, flush }),
-    [flush],
-  );
+  const timers = useMemo(() => ({ save, check, saved, validationGeneration, pending, flush }), [flush]);
   useEffect(
     () => () => {
       flush();
@@ -240,13 +212,10 @@ function useContentSave(
       if (edits.length === 0 && !bodyChanged) {
         return;
       }
-      const result = await writeContentEntry(
-        projectPath,
-        { file: entry.file, locator: entry.locator },
-        edits,
-        bodyChanged ? next.body : undefined,
-        { data: entry.data, body: entry.body },
-      );
+      const result = await writeContentEntry(projectPath, { file: entry.file, locator: entry.locator }, edits, bodyChanged ? next.body : undefined, {
+        data: entry.data,
+        body: entry.body,
+      });
       if (!result.ok) {
         showToast?.(result.error, 'error');
         return;
@@ -260,20 +229,13 @@ function useContentSave(
   );
 }
 
-function showSaved(
-  setSaved: React.Dispatch<React.SetStateAction<boolean>>,
-  timerRef: TimerRef,
-): void {
+function showSaved(setSaved: React.Dispatch<React.SetStateAction<boolean>>, timerRef: TimerRef): void {
   clearTimer(timerRef);
   setSaved(true);
   timerRef.current = setTimeout(() => setSaved(false), SAVED_DELAY_MS);
 }
 
-function updateSavedEntry(
-  state: ContentEntries | undefined,
-  selected: ContentEntry,
-  next: Draft,
-): ContentEntries | undefined {
+function updateSavedEntry(state: ContentEntries | undefined, selected: ContentEntry, next: Draft): ContentEntries | undefined {
   if (!state) {
     return undefined;
   }
@@ -298,11 +260,7 @@ function useContentChange(
 ) {
   return useCallback(
     (next: Draft): void => {
-      const {
-        save: saveTimerRef,
-        check: checkTimerRef,
-        validationGeneration: generationRef,
-      } = timers;
+      const { save: saveTimerRef, check: checkTimerRef, validationGeneration: generationRef } = timers;
       setDraft(next);
       clearTimer(saveTimerRef);
       const { pending } = timers;
@@ -311,10 +269,7 @@ function useContentChange(
       clearTimer(checkTimerRef);
       generationRef.current += 1;
       const generation = generationRef.current;
-      checkTimerRef.current = setTimeout(
-        () => void checkContent(props, next, generation, timers, setIssues),
-        CHECK_DELAY_MS,
-      );
+      checkTimerRef.current = setTimeout(() => void checkContent(props, next, generation, timers, setIssues), CHECK_DELAY_MS);
     },
     [props, save, setDraft, setIssues, timers],
   );
@@ -385,9 +340,7 @@ interface EntryListProps {
 function EntryList(props: EntryListProps) {
   const filtered = useMemo(() => {
     const query = props.query.trim().toLowerCase();
-    return props.entries
-      .map((entry, index) => ({ entry, index }))
-      .filter(({ entry }) => !query || `${entry.title} ${entry.id}`.toLowerCase().includes(query));
+    return props.entries.map((entry, index) => ({ entry, index })).filter(({ entry }) => !query || `${entry.title} ${entry.id}`.toLowerCase().includes(query));
   }, [props.entries, props.query]);
   return (
     <div className="cms-items">
@@ -397,30 +350,18 @@ function EntryList(props: EntryListProps) {
       </div>
       {props.entries.length > 7 && (
         <div className="cms-search">
-          <input
-            value={props.query}
-            placeholder="Search entries"
-            onChange={(event) => props.onQuery(event.target.value)}
-          />
+          <input value={props.query} placeholder="Search entries" onChange={(event) => props.onQuery(event.target.value)} />
         </div>
       )}
       <div className="cms-item-list">
         {filtered.map(({ entry, index }) => (
-          <div
-            key={entry.id}
-            className={`cms-item ${index === props.selected ? 'on' : ''}`}
-            onClick={() => props.onSelect(index)}
-          >
+          <div key={entry.id} className={`cms-item ${index === props.selected ? 'on' : ''}`} onClick={() => props.onSelect(index)}>
             <span className="cms-item-title">{entry.title}</span>
             <ChevronRightIcon size={10} />
           </div>
         ))}
         {props.entries.length === 0 && (
-          <div className="props-empty">
-            {props.readOnly
-              ? 'Nothing to show — this collection is built, not stored.'
-              : 'No entries yet.'}
-          </div>
+          <div className="props-empty">{props.readOnly ? 'Nothing to show — this collection is built, not stored.' : 'No entries yet.'}</div>
         )}
       </div>
     </div>
@@ -447,9 +388,7 @@ function EntryDetail(props: EntryDetailProps) {
         <FormIssues issues={props.formIssues} />
         {props.entry && <EntryForm {...props} entry={props.entry} />}
         {props.entry?.hasBody && <BodyEditor {...props} entry={props.entry} />}
-        {!props.entry && !props.state.readOnly && (
-          <div className="props-empty">Select an entry to edit it.</div>
-        )}
+        {!props.entry && !props.state.readOnly && <div className="props-empty">Select an entry to edit it.</div>}
       </div>
     </div>
   );
@@ -461,9 +400,7 @@ function DetailHeader(props: EntryDetailProps) {
       <button className="ghost cms-back" title="Close" onClick={props.onClose}>
         <CloseIcon size={13} />
       </button>
-      <span className="cms-detail-title">
-        {props.entry ? props.entry.title : labelize(props.name)}
-      </span>
+      <span className="cms-detail-title">{props.entry ? props.entry.title : labelize(props.name)}</span>
       <span className={`cms-saved ${props.saved ? 'on' : ''}`}>
         <CheckIcon size={11} /> Saved
       </span>
@@ -471,16 +408,12 @@ function DetailHeader(props: EntryDetailProps) {
         <button
           className="ghost content-id"
           title="The id other entries point at"
-          onClick={() =>
-            props.setRename({ to: props.entry?.id ?? '', plan: undefined, error: undefined })
-          }
+          onClick={() => props.setRename({ to: props.entry?.id ?? '', plan: undefined, error: undefined })}
         >
           {props.entry.id}
         </button>
       )}
-      <span className="cms-detail-path">
-        {props.entry ? props.entry.file : (props.state.collection.loader?.file ?? '')}
-      </span>
+      <span className="cms-detail-path">{props.entry ? props.entry.file : (props.state.collection.loader?.file ?? '')}</span>
     </div>
   );
 }
@@ -515,13 +448,7 @@ function FormIssues({ issues }: { readonly issues: readonly WireValidationIssue[
   if (issues.length === 0) {
     return undefined;
   }
-  return (
-    <ErrorToast
-      message={issues
-        .map((issue) => `${issue.path.length ? `${issue.path.join(' › ')}: ` : ''}${issue.message}`)
-        .join('\n')}
-    />
-  );
+  return <ErrorToast message={issues.map((issue) => `${issue.path.length ? `${issue.path.join(' › ')}: ` : ''}${issue.message}`).join('\n')} />;
 }
 
 function EntryForm(props: EntryDetailProps & { readonly entry: ContentEntry }) {
@@ -540,9 +467,7 @@ function EntryForm(props: EntryDetailProps & { readonly entry: ContentEntry }) {
       ) : (
         fields.map((field) => <RootField key={field.key} {...props} field={field} />)
       )}
-      {!props.shape.union && fields.length === 0 && (
-        <div className="props-empty">This collection has no fields.</div>
-      )}
+      {!props.shape.union && fields.length === 0 && <div className="props-empty">This collection has no fields.</div>}
     </div>
   );
 }
@@ -573,16 +498,9 @@ function BodyEditor(props: EntryDetailProps & { readonly entry: ContentEntry }) 
   return (
     <div className="cms-card">
       <h3>Body</h3>
-      <div className="content-body-note">
-        Markdown, written to the file exactly as it is typed here.
-      </div>
+      <div className="content-body-note">Markdown, written to the file exactly as it is typed here.</div>
       <div className="content-body-editor">
-        <CodeEditor
-          key={props.entry.id}
-          language="markdown"
-          value={props.body ?? ''}
-          onChange={(body: string) => props.change({ data: props.data, body })}
-        />
+        <CodeEditor key={props.entry.id} language="markdown" value={props.body ?? ''} onChange={(body: string) => props.change({ data: props.data, body })} />
       </div>
     </div>
   );
@@ -607,15 +525,9 @@ function RenameEditor(props: EntryDetailProps & { readonly entry: ContentEntry }
           autoFocus
           value={rename.to}
           spellCheck={false}
-          onChange={(event) =>
-            props.setRename({ to: event.target.value, plan: undefined, error: undefined })
-          }
+          onChange={(event) => props.setRename({ to: event.target.value, plan: undefined, error: undefined })}
         />
-        <button
-          className="ghost"
-          disabled={!rename.to.trim() || rename.to === props.entry.id}
-          onClick={check}
-        >
+        <button className="ghost" disabled={!rename.to.trim() || rename.to === props.entry.id} onClick={check}>
           Check
         </button>
         <button className="ghost" onClick={() => props.setRename(undefined)}>
@@ -628,35 +540,13 @@ function RenameEditor(props: EntryDetailProps & { readonly entry: ContentEntry }
   );
 }
 
-async function checkRename(
-  props: EntryDetailProps,
-  rename: RenameState,
-  entry: ContentEntry,
-): Promise<void> {
-  const result = await planContentRename(
-    props.project.path,
-    props.name,
-    entry.id,
-    rename.to.trim(),
-  );
-  props.setRename(
-    result.ok
-      ? { ...rename, plan: result.value, error: undefined }
-      : { ...rename, plan: undefined, error: result.error },
-  );
+async function checkRename(props: EntryDetailProps, rename: RenameState, entry: ContentEntry): Promise<void> {
+  const result = await planContentRename(props.project.path, props.name, entry.id, rename.to.trim());
+  props.setRename(result.ok ? { ...rename, plan: result.value, error: undefined } : { ...rename, plan: undefined, error: result.error });
 }
 
-async function executeRename(
-  props: EntryDetailProps,
-  rename: RenameState,
-  entry: ContentEntry,
-): Promise<void> {
-  const result = await renameContentEntry(
-    props.project.path,
-    props.name,
-    entry.id,
-    rename.to.trim(),
-  );
+async function executeRename(props: EntryDetailProps, rename: RenameState, entry: ContentEntry): Promise<void> {
+  const result = await renameContentEntry(props.project.path, props.name, entry.id, rename.to.trim());
   if (!result.ok) {
     props.setRename({ ...rename, error: result.error });
     return;
@@ -666,13 +556,7 @@ async function executeRename(
   props.onSaved?.();
 }
 
-function RenamePlan({
-  plan,
-  onRename,
-}: {
-  readonly plan: IpcResults['content:renamePlan'];
-  readonly onRename: () => void;
-}) {
+function RenamePlan({ plan, onRename }: { readonly plan: IpcResults['content:renamePlan']; readonly onRename: () => void }) {
   return (
     <div className="content-rename-plan">
       <div>{moveDescription(plan.move)}</div>
@@ -682,15 +566,10 @@ function RenamePlan({
           {pointer.collection} › {pointer.entryTitle} › {pointer.path.join('.')}
         </div>
       ))}
-      {plan.pointers.length > RENAME_POINTERS_SHOWN_MAX && (
-        <div className="content-pointer">
-          and {plan.pointers.length - RENAME_POINTERS_SHOWN_MAX} more
-        </div>
-      )}
+      {plan.pointers.length > RENAME_POINTERS_SHOWN_MAX && <div className="content-pointer">and {plan.pointers.length - RENAME_POINTERS_SHOWN_MAX} more</div>}
       {plan.imageEdits.length > 0 && (
         <div>
-          {plan.imageEdits.length} image path{plan.imageEdits.length === 1 ? '' : 's'} rewritten for
-          the new folder.
+          {plan.imageEdits.length} image path{plan.imageEdits.length === 1 ? '' : 's'} rewritten for the new folder.
         </div>
       )}
       <button className="primary" onClick={onRename}>
@@ -715,7 +594,5 @@ function moveDescription(move: IpcResults['content:renamePlan']['move']): string
 }
 
 function pointerDescription(count: number): string {
-  return count === 0
-    ? 'Nothing else points at this entry.'
-    : `${count} reference${count === 1 ? '' : 's'} will be updated:`;
+  return count === 0 ? 'Nothing else points at this entry.' : `${count} reference${count === 1 ? '' : 's'} will be updated:`;
 }

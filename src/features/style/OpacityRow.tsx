@@ -183,16 +183,7 @@ export function OpacityNumberField(props: OpacityFieldProps) {
 
 // The field's scrub (a scrub commits a number, or puts the percent back) and its
 // commit on blur.
-export function useOpacityField({
-  text,
-  setText,
-  fieldText,
-  opacity,
-  busy,
-  live,
-  commit,
-  setProp,
-}: OpacityFieldProps) {
+export function useOpacityField({ text, setText, fieldText, opacity, busy, live, commit, setProp }: OpacityFieldProps) {
   const commitScrub = (next: string) => {
     setText(next);
     const value = parseOpacity(next);

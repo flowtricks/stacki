@@ -32,10 +32,7 @@ interface Occurrence {
 const SLACK = 1;
 
 const covers = (outer: Box, inner: Box): boolean =>
-  inner.x >= outer.x - SLACK &&
-  inner.y >= outer.y - SLACK &&
-  inner.x + inner.w <= outer.x + outer.w + SLACK &&
-  inner.y + inner.h <= outer.y + outer.h + SLACK;
+  inner.x >= outer.x - SLACK && inner.y >= outer.y - SLACK && inner.x + inner.w <= outer.x + outer.w + SLACK && inner.y + inner.h <= outer.y + outer.h + SLACK;
 
 /**
  * The boxes worth drawing, in the order they were reported — which is document
@@ -121,10 +118,7 @@ export function unionBox(boxes: readonly Box[]): Box | undefined {
  * Navigator hover and selection supply occurrence zero; this fallback still
  * handles a selection before a particular occurrence is known.
  */
-export function hoverIsSelection(
-  hover: Occurrence | undefined,
-  selection: Occurrence | undefined,
-): boolean {
+export function hoverIsSelection(hover: Occurrence | undefined, selection: Occurrence | undefined): boolean {
   if (!hover?.path || !selection?.path) {
     return false;
   }

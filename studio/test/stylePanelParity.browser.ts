@@ -8,8 +8,7 @@ import { record, string } from '../src/shared/validation';
 
 const fixture = await startStyleFixture();
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1500, height: 1050 } });
@@ -35,17 +34,13 @@ try {
     return image instanceof HTMLImageElement && image.complete && image.naturalWidth === 32;
   });
   await checkStyleControls(page);
-  await selectChip(
-    page.locator('.embed-editor_selector-chip').filter({ hasText: /^\.component$/ }),
-  );
+  await selectChip(page.locator('.embed-editor_selector-chip').filter({ hasText: /^\.component$/ }));
   await checkWriteUndo(page);
   await checkClassAdd(page);
   await mkdir('test-results', { recursive: true });
   await page.screenshot({ path: 'test-results/style-panel-parity.png' });
   assert.deepEqual(errors, []);
-  console.log(
-    'Green/blue/gray chip states, query dimming, all panel sections, component writes/undo, and class-list additions passed.',
-  );
+  console.log('Green/blue/gray chip states, query dimming, all panel sections, component writes/undo, and class-list additions passed.');
 } catch (error) {
   console.error(await page.locator('.style-panel-host').innerText(), errors);
   await mkdir('test-results', { recursive: true });
@@ -83,22 +78,8 @@ async function selectChip(chip: Locator) {
   await chip.and(chip.page().locator('[aria-pressed="true"]')).waitFor();
 }
 async function checkSections(page: Page) {
-  for (const name of [
-    'Flex/Grid Child',
-    'Layout',
-    'Spacing',
-    'Size',
-    'Position',
-    'Typography',
-    'Backgrounds',
-    'Borders',
-    'Effects',
-    'Other properties',
-  ]) {
-    await page
-      .getByRole('button', { name, exact: true })
-      .and(page.locator('.embed-editor_section-toggle'))
-      .waitFor();
+  for (const name of ['Flex/Grid Child', 'Layout', 'Spacing', 'Size', 'Position', 'Typography', 'Backgrounds', 'Borders', 'Effects', 'Other properties']) {
+    await page.getByRole('button', { name, exact: true }).and(page.locator('.embed-editor_section-toggle')).waitFor();
   }
   await page.getByRole('button', { name: 'Expand CSS Code', exact: true }).click();
   await page.locator('.style-panel-host .cm-content').waitFor();
@@ -135,9 +116,7 @@ async function checkClassAdd(page: Page) {
   assert.match(written, /class:list=\{\["sheet", "component", "query-only", "new-style"\]\}/);
 }
 async function source(page: Page, file: string) {
-  const response = await page.request.get(
-    new URL('/studio/api/file?file=' + encodeURIComponent(file), fixture.url).href,
-  );
+  const response = await page.request.get(new URL('/studio/api/file?file=' + encodeURIComponent(file), fixture.url).href);
   assert.ok(response.ok());
   return string(record(await response.json())['source']);
 }
@@ -145,8 +124,5 @@ async function source(page: Page, file: string) {
 async function chipColor(chip: Locator, color: string) {
   await chip
     .page()
-    .waitForFunction(
-      ({ element, color }) => element && getComputedStyle(element).backgroundColor === color,
-      { element: await chip.elementHandle(), color },
-    );
+    .waitForFunction(({ element, color }) => element && getComputedStyle(element).backgroundColor === color, { element: await chip.elementHandle(), color });
 }

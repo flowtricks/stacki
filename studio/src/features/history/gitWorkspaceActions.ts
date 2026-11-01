@@ -3,12 +3,7 @@ import { published } from '../publishing/publishFailure';
 import { publishGit } from '../publishing/publishGit';
 import { gitBranchName, gitWorkspaceBranch } from './gitWorkspaceContract';
 import type { GitWorkspaceState } from './gitWorkspace';
-import {
-  gitWorkspaceCommit,
-  gitWorkspaceRun,
-  snapshotGitWorkspace,
-  fetchGitWorkspaceHeads,
-} from './gitWorkspaceObjects';
+import { gitWorkspaceCommit, gitWorkspaceRun, snapshotGitWorkspace, fetchGitWorkspaceHeads } from './gitWorkspaceObjects';
 import { mergeGitWorkspace } from './gitWorkspaceMerge';
 import { checkpointGitWorkspace } from './gitWorkspaceCheckpoint';
 
@@ -18,11 +13,7 @@ export async function pullGitWorkspace(state: GitWorkspaceState) {
   if (!target) {
     throw new Error('This branch has not been pushed to GitHub yet.');
   }
-  const result = await mergeGitWorkspace(
-    state,
-    'refs/remotes/origin/' + state.manifest.branch,
-    target.head,
-  );
+  const result = await mergeGitWorkspace(state, 'refs/remotes/origin/' + state.manifest.branch, target.head);
   return result.manifest
     ? {
         ...result,
@@ -32,9 +23,7 @@ export async function pullGitWorkspace(state: GitWorkspaceState) {
           branches: [
             ...result.manifest.branches,
             ...remote
-              .filter(
-                (entry) => !result.manifest.branches.some((local) => local.name === entry.name),
-              )
+              .filter((entry) => !result.manifest.branches.some((local) => local.name === entry.name))
               .map((entry) => ({ ...entry, workspace: randomUUID() })),
           ],
         },
@@ -55,9 +44,7 @@ export async function parkGitWorkspace(state: GitWorkspaceState) {
     manifest: {
       ...manifest,
       draft: current.head,
-      parked: parked
-        ? [...manifest.parked, { name: current.name, head: snapshot }]
-        : manifest.parked,
+      parked: parked ? [...manifest.parked, { name: current.name, head: snapshot }] : manifest.parked,
     },
     target: current.head,
     result: { ok: true, parked, branch: current.name },
@@ -80,12 +67,7 @@ export async function unparkGitWorkspace(state: GitWorkspaceState) {
   }
   const run = gitWorkspaceRun(git);
   const tree = await run(['rev-parse', merged.target + '^{tree}']);
-  const draft = await gitWorkspaceCommit(
-    run,
-    tree,
-    [gitWorkspaceBranch(manifest).head],
-    'Restored Studio draft',
-  );
+  const draft = await gitWorkspaceCommit(run, tree, [gitWorkspaceBranch(manifest).head], 'Restored Studio draft');
   return {
     manifest: {
       ...manifest,
@@ -96,10 +78,7 @@ export async function unparkGitWorkspace(state: GitWorkspaceState) {
     result: { restored: true },
   };
 }
-export async function deleteGitWorkspaceBranch(
-  state: GitWorkspaceState,
-  input: { readonly branch: string; readonly force?: boolean },
-) {
+export async function deleteGitWorkspaceBranch(state: GitWorkspaceState, input: { readonly branch: string; readonly force?: boolean }) {
   const name = gitBranchName(input.branch);
   const { manifest, git } = state;
   if ([manifest.branch, 'main', 'master'].includes(name)) {
@@ -109,12 +88,7 @@ export async function deleteGitWorkspaceBranch(
   if (!branch) {
     throw new Error('This branch no longer exists.');
   }
-  const merged = await publishGit(git, [
-    'merge-base',
-    '--is-ancestor',
-    branch.head,
-    gitWorkspaceBranch(manifest).head,
-  ]);
+  const merged = await publishGit(git, ['merge-base', '--is-ancestor', branch.head, gitWorkspaceBranch(manifest).head]);
   if (!merged.ok && !input.force) {
     return {
       ok: false as const,

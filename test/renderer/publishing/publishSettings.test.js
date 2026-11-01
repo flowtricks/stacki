@@ -61,10 +61,7 @@ function fixture(context, source) {
     await act(async () => root.unmount());
     dom.window.close();
   });
-  const show = () =>
-    act(async () =>
-      root.render(React.createElement(PublishSettings, { projectPath: '/project', close() {} })),
-    );
+  const show = () => act(async () => root.render(React.createElement(PublishSettings, { projectPath: '/project', close() {} })));
   return { discovery, writes, show, root };
 }
 
@@ -95,13 +92,8 @@ test('GitHub loads during hosting discovery and keeps its account', async (conte
         projects: [],
       }),
   );
-  assert.match(
-    document.querySelector('[aria-label="GitHub repository"]').textContent,
-    /owner\/site/,
-  );
-  await act(async () =>
-    discovery.find((call) => call.request.provider === 'linked').resolve(linked),
-  );
+  assert.match(document.querySelector('[aria-label="GitHub repository"]').textContent, /owner\/site/);
+  await act(async () => discovery.find((call) => call.request.provider === 'linked').resolve(linked));
   const hosting = document.querySelector('[aria-label="Hosting project"]');
   assert.match(hosting.textContent, /website/);
   assert.equal(hosting.closest('[data-loading]').dataset.loading, 'false');
@@ -114,9 +106,7 @@ test('an explicit None selection wins over late hosting discovery', async (conte
   const { discovery, writes, show } = fixture(context, undefined);
   await show();
   await act(async () => document.querySelector('[aria-label="Hosting provider"]').click());
-  const none = [...document.querySelectorAll('.dd-option')].find((option) =>
-    option.textContent.includes('None'),
-  );
+  const none = [...document.querySelectorAll('.dd-option')].find((option) => option.textContent.includes('None'));
   assert.ok(none);
   await act(async () => {
     none.click();
@@ -187,11 +177,7 @@ test('Add account opens browser sign-in and refreshes the account picker', async
   const opened = [];
   window.avb.publishingAccount = async ({ request }) => {
     actions.push(request.action);
-    return request.action === 'start'
-      ? { kind: 'waiting', code: 'ABCD-1234' }
-      : request.action === 'status'
-        ? { kind: 'complete' }
-        : { kind: 'cancelled' };
+    return request.action === 'start' ? { kind: 'waiting', code: 'ABCD-1234' } : request.action === 'status' ? { kind: 'complete' } : { kind: 'cancelled' };
   };
   window.avb.openExternal = async (url) => {
     opened.push(url);
@@ -207,9 +193,7 @@ test('Add account opens browser sign-in and refreshes the account picker', async
         projects: [],
       }),
   );
-  const add = [...document.querySelectorAll('button')].find(
-    (button) => button.textContent === 'Add account',
-  );
+  const add = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Add account');
   assert.ok(add);
   await act(async () => add.click());
   assert.equal(document.querySelector('.publish-account-code').value, 'ABCD-1234');
@@ -230,11 +214,7 @@ test('Add account opens browser sign-in and refreshes the account picker', async
     }),
   );
   await act(async () => document.querySelector('[aria-label="GitHub account"]').click());
-  assert.ok(
-    [...document.querySelectorAll('.dd-option-label')].some(
-      (option) => option.textContent === 'new',
-    ),
-  );
+  assert.ok([...document.querySelectorAll('.dd-option-label')].some((option) => option.textContent === 'new'));
   assert.deepEqual(actions, ['start', 'status', 'cancel']);
 });
 
@@ -246,13 +226,9 @@ test('cancelling Add account stops its pending sign-in', async (context) => {
     return { kind: request.action === 'cancel' ? 'cancelled' : 'starting' };
   };
   await show();
-  const add = [...document.querySelectorAll('button')].find(
-    (button) => button.textContent === 'Add account',
-  );
+  const add = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Add account');
   await act(async () => add.click());
-  await act(async () =>
-    document.querySelector('.publish-add-account .modal-footer button').click(),
-  );
+  await act(async () => document.querySelector('.publish-add-account .modal-footer button').click());
   await act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
   assert.equal(document.querySelector('.publish-add-account') ?? undefined, undefined);
   assert.deepEqual(actions, ['start', 'cancel']);
@@ -279,9 +255,7 @@ const cloudflareInventory = {
 
 async function choose(label, name) {
   await act(async () => document.querySelector(`[aria-label="${label}"]`).click());
-  const option = [...document.querySelectorAll('.dd-option')].find(
-    (entry) => entry.querySelector('.dd-option-label')?.textContent === name,
-  );
+  const option = [...document.querySelectorAll('.dd-option')].find((entry) => entry.querySelector('.dd-option-label')?.textContent === name);
   assert.ok(option, `Expected ${name} in ${label}`);
   await act(async () => option.click());
 }
@@ -291,9 +265,7 @@ function cloudflareSettings() {
 }
 
 async function loadCloudflare(discovery) {
-  await act(async () =>
-    discovery.find((call) => call.request.provider === 'cloudflare').resolve(cloudflareInventory),
-  );
+  await act(async () => discovery.find((call) => call.request.provider === 'cloudflare').resolve(cloudflareInventory));
 }
 
 test('Switching Cloudflare accounts clears and filters projects', async (context) => {
@@ -302,20 +274,13 @@ test('Switching Cloudflare accounts clears and filters projects', async (context
   await loadCloudflare(discovery);
   assert.match(document.querySelector('[aria-label="Cloudflare account"]').textContent, /Personal/);
   await choose('Cloudflare account', 'Team');
-  assert.doesNotMatch(
-    document.querySelector('[aria-label="Hosting project"]').textContent,
-    /website/,
-  );
+  assert.doesNotMatch(document.querySelector('[aria-label="Hosting project"]').textContent, /website/);
   await act(async () => document.querySelector('[aria-label="Hosting project"]').click());
   assert.equal(
-    [...document.querySelectorAll('.dd-option-label')].some(
-      (entry) => entry.textContent === 'website',
-    ),
+    [...document.querySelectorAll('.dd-option-label')].some((entry) => entry.textContent === 'website'),
     false,
   );
-  const team = [...document.querySelectorAll('.dd-option')].find(
-    (entry) => entry.querySelector('.dd-option-label')?.textContent === 'team-site',
-  );
+  const team = [...document.querySelectorAll('.dd-option')].find((entry) => entry.querySelector('.dd-option-label')?.textContent === 'team-site');
   await act(async () => team.click());
   await act(async () => document.querySelector('.modal-footer .primary').click());
   assert.deepEqual(writes[0].hosting, cloudflareInventory.projects[1].hosting);
@@ -325,9 +290,7 @@ test('Add Worker validates and stages its destination until Save', async (contex
   const { discovery, writes, show } = fixture(context, cloudflareSettings());
   await show();
   await loadCloudflare(discovery);
-  const add = [...document.querySelectorAll('button')].find(
-    (entry) => entry.textContent === 'Add Worker',
-  );
+  const add = [...document.querySelectorAll('button')].find((entry) => entry.textContent === 'Add Worker');
   await act(async () => add.click());
   const input = document.querySelector('.publish-new-worker input');
   const submit = document.querySelector('.publish-new-worker .primary');
@@ -362,11 +325,7 @@ test('Cloudflare sign-in opens authorization and refreshes accounts', async (con
   const opened = [];
   window.avb.publishingAccount = async ({ request }) => {
     actions.push(request);
-    return request.action === 'start'
-      ? { kind: 'browser', url }
-      : request.action === 'status'
-        ? { kind: 'complete' }
-        : { kind: 'cancelled' };
+    return request.action === 'start' ? { kind: 'browser', url } : request.action === 'status' ? { kind: 'complete' } : { kind: 'cancelled' };
   };
   window.avb.openExternal = async (target) => {
     opened.push(target);
@@ -374,12 +333,8 @@ test('Cloudflare sign-in opens authorization and refreshes accounts', async (con
   };
   await show();
   await loadCloudflare(discovery);
-  const field = document
-    .querySelector('[aria-label="Cloudflare account"]')
-    .closest('.publish-field');
-  const add = [...field.querySelectorAll('button')].find(
-    (entry) => entry.textContent === 'Add account',
-  );
+  const field = document.querySelector('[aria-label="Cloudflare account"]').closest('.publish-field');
+  const add = [...field.querySelectorAll('button')].find((entry) => entry.textContent === 'Add account');
   await act(async () => add.click());
   await act(async () => document.querySelector('.publish-add-account .primary').click());
   assert.deepEqual(opened, [url]);
@@ -443,10 +398,7 @@ test('An unavailable Cloudflare name does not masquerade as an ID', async (conte
 test('Hosting projects omit unresolved account IDs from dropdown headings', async (context) => {
   const accountId = '3ce2a94f4915358f35e4ec80d6f0cd77';
   const hosting = { ...linked.projects[0].hosting, accountId };
-  const { discovery, show } = fixture(
-    context,
-    JSON.stringify({ ...DEFAULT_PUBLISH_CONFIG, hosting }),
-  );
+  const { discovery, show } = fixture(context, JSON.stringify({ ...DEFAULT_PUBLISH_CONFIG, hosting }));
   await show();
   await act(async () =>
     discovery
@@ -474,9 +426,7 @@ test('an explicit published URL is saved for the selected hosting destination', 
     input.value = 'https://example.com/';
     Simulate.change(input);
   });
-  const save = [...document.querySelectorAll('button')].find(
-    (button) => button.textContent === 'Save',
-  );
+  const save = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save');
   await act(async () => save.click());
   assert.deepEqual(view.writes[0].publishedSite, {
     hosting,

@@ -18,11 +18,7 @@ export function parseDeclaredTypes(input: unknown): DeclaredTypes {
   })(input);
 }
 
-export function withDeclaredTypes(
-  fields: readonly CmsField[],
-  declared: DeclaredTypes | undefined,
-  path: readonly string[],
-): readonly CmsField[] {
+export function withDeclaredTypes(fields: readonly CmsField[], declared: DeclaredTypes | undefined, path: readonly string[]): readonly CmsField[] {
   assert(fields.length <= BOUNDARY_LIMITS.itemsMax, 'CMS fields: count limit exceeded');
   assert(path.length <= BOUNDARY_LIMITS.depthMax, 'CMS fields: path limit exceeded');
   if (!declared) {

@@ -22,11 +22,7 @@ await page.routeWebSocket('**/*', (socket) => {
   server.onMessage((message) => {
     const raw = String(message);
     if (started && events.length < 100) {
-      const type = raw.includes('"event":"studio:render"')
-        ? 'render'
-        : raw.includes('"type":"update"')
-          ? 'source'
-          : undefined;
+      const type = raw.includes('"event":"studio:render"') ? 'render' : raw.includes('"type":"update"') ? 'source' : undefined;
       if (type) {
         events.push({ at: Math.round(performance.now() - started), type });
       }

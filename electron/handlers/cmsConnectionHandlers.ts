@@ -24,9 +24,7 @@ export function registerCmsConnectionHandlers(
     host.assertInProject(path.join(canonical, 'package.json'));
     return canonical;
   };
-  host.ipcMain.handle('cmsConnections:list', (_event, input) =>
-    store.list(root(input.projectPath)),
-  );
+  host.ipcMain.handle('cmsConnections:list', (_event, input) => store.list(root(input.projectPath)));
   host.ipcMain.handle('cmsConnections:save', (_event, input): CmsSaveResult => {
     const project = root(input.projectPath);
     try {
@@ -42,67 +40,32 @@ export function registerCmsConnectionHandlers(
     store.remove(project, input.id);
     return store.list(project);
   });
-  host.ipcMain.handle('cmsConnections:sanityLogin', (_event, input) =>
-    login.request(root(input.projectPath), input.request),
-  );
+  host.ipcMain.handle('cmsConnections:sanityLogin', (_event, input) => login.request(root(input.projectPath), input.request));
   registerCmsRemoteHandlers(host, store, root);
   // A video link's card in a CMS field; the payload parser admits video host links only.
-  host.ipcMain.handle('cmsRemote:linkPreview', (_event, input) =>
-    remote(() => fetchLinkPreview(input.url)),
-  );
+  host.ipcMain.handle('cmsRemote:linkPreview', (_event, input) => remote(() => fetchLinkPreview(input.url)));
 }
 
 // The CMS panel's reads and draft writes, against one saved connection
 // (cmsRemoteService.ts). Its key is decrypted here, for the request, and never
 // returned.
-function registerCmsRemoteHandlers(
-  host: Pick<MainHost, 'ipcMain' | 'showOpenDialog'>,
-  store: CmsConnectionStore,
-  root: (projectPath: string) => string,
-): void {
+function registerCmsRemoteHandlers(host: Pick<MainHost, 'ipcMain' | 'showOpenDialog'>, store: CmsConnectionStore, root: (projectPath: string) => string): void {
   const service = connectionService(store, root);
   const { ipcMain } = host;
-  ipcMain.handle('cmsRemote:collections', (_event, input) =>
-    remote(() => service(input.projectPath, input.connectionId).collections()),
-  );
+  ipcMain.handle('cmsRemote:collections', (_event, input) => remote(() => service(input.projectPath, input.connectionId).collections()));
   ipcMain.handle('cmsRemote:documents', (_event, input) =>
-    remote(() =>
-      service(input.projectPath, input.connectionId).documents(
-        input.collection,
-        input.columns ?? [],
-      ),
-    ),
+    remote(() => service(input.projectPath, input.connectionId).documents(input.collection, input.columns ?? [])),
   );
-  ipcMain.handle('cmsRemote:create', (_event, input) =>
-    remote(() => service(input.projectPath, input.connectionId).create(input.collection)),
-  );
-  ipcMain.handle('cmsRemote:delete', (_event, input) =>
-    remote(() => service(input.projectPath, input.connectionId).remove(input.ids)),
-  );
-  ipcMain.handle('cmsRemote:move', (_event, input) =>
-    remote(() => service(input.projectPath, input.connectionId).move(input.move)),
-  );
-  ipcMain.handle('cmsRemote:document', (_event, input) =>
-    remote(() => service(input.projectPath, input.connectionId).document(input.id)),
-  );
-  ipcMain.handle('cmsRemote:template', (_event, input) =>
-    remote(() => service(input.projectPath, input.connectionId).template(input.collection)),
-  );
-  ipcMain.handle('cmsRemote:write', (_event, input) =>
-    remote(() => service(input.projectPath, input.connectionId).write(input.write)),
-  );
-  ipcMain.handle('cmsRemote:act', (_event, input) =>
-    remote(() => service(input.projectPath, input.connectionId).act(input.id, input.action)),
-  );
-  ipcMain.handle('cmsRemote:history', (_event, input) =>
-    remote(() => service(input.projectPath, input.connectionId).history(input.id)),
-  );
-  ipcMain.handle('cmsRemote:restore', (_event, input) =>
-    remote(() => service(input.projectPath, input.connectionId).restore(input.id, input.revision)),
-  );
-  ipcMain.handle('cmsRemote:references', (_event, input) =>
-    remote(() => service(input.projectPath, input.connectionId).references(input.types)),
-  );
+  ipcMain.handle('cmsRemote:create', (_event, input) => remote(() => service(input.projectPath, input.connectionId).create(input.collection)));
+  ipcMain.handle('cmsRemote:delete', (_event, input) => remote(() => service(input.projectPath, input.connectionId).remove(input.ids)));
+  ipcMain.handle('cmsRemote:move', (_event, input) => remote(() => service(input.projectPath, input.connectionId).move(input.move)));
+  ipcMain.handle('cmsRemote:document', (_event, input) => remote(() => service(input.projectPath, input.connectionId).document(input.id)));
+  ipcMain.handle('cmsRemote:template', (_event, input) => remote(() => service(input.projectPath, input.connectionId).template(input.collection)));
+  ipcMain.handle('cmsRemote:write', (_event, input) => remote(() => service(input.projectPath, input.connectionId).write(input.write)));
+  ipcMain.handle('cmsRemote:act', (_event, input) => remote(() => service(input.projectPath, input.connectionId).act(input.id, input.action)));
+  ipcMain.handle('cmsRemote:history', (_event, input) => remote(() => service(input.projectPath, input.connectionId).history(input.id)));
+  ipcMain.handle('cmsRemote:restore', (_event, input) => remote(() => service(input.projectPath, input.connectionId).restore(input.id, input.revision)));
+  ipcMain.handle('cmsRemote:references', (_event, input) => remote(() => service(input.projectPath, input.connectionId).references(input.types)));
   // The person picks the file in the system dialog; a cancel is no asset, not a failure.
   ipcMain.handle('cmsRemote:upload', (_event, input) =>
     remote(async () => {

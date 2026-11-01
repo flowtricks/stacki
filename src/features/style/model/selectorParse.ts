@@ -83,9 +83,7 @@ export function isPseudoElement(value: string): boolean {
     return true;
   }
   // Legacy single-colon pseudo-elements.
-  return /^:(before|after|first-line|first-letter|placeholder|selection|marker|backdrop)$/i.test(
-    value,
-  );
+  return /^:(before|after|first-line|first-letter|placeholder|selection|marker|backdrop)$/i.test(value);
 }
 
 /** Parse a full selector list (comma-separated) into display + match info. */
@@ -224,20 +222,11 @@ export function canonicalCompound(selectorText: string): CanonicalCompound {
   const pseudoClasses = subject.pseudoClasses;
   const pseudoElement = normalizePseudoElement(first.pseudoElement);
   const oneCompound = first.compounds.length === 1 && first.combinators.length === 0;
-  const noFunctionalPseudo =
-    subject.negations.length === 0 &&
-    subject.requireAny.length === 0 &&
-    subject.hasGroups.length === 0;
+  const noFunctionalPseudo = subject.negations.length === 0 && subject.requireAny.length === 0 && subject.hasGroups.length === 0;
   // Only bare state pseudos keep a compound "simple"; a structural pseudo (:nth-child …)
   // isn't a Webflow class state, so it must read as complex to keep its full text.
   const stateOnly = pseudoClasses.every((pseudo) => STATE_PSEUDO_CLASSES.has(pseudo));
-  const simple =
-    oneCompound &&
-    !pseudoElement &&
-    !subject.universal &&
-    subject.id === undefined &&
-    noFunctionalPseudo &&
-    stateOnly;
+  const simple = oneCompound && !pseudoElement && !subject.universal && subject.id === undefined && noFunctionalPseudo && stateOnly;
   // Like `simple`, but a pseudo-element is allowed (it's the whole point of splitting
   // `.a::before`). A bare universal (`::before`) is never splittable — it's hidden.
   const splittable = oneCompound && !subject.universal && noFunctionalPseudo;
@@ -250,11 +239,7 @@ export function canonicalCompound(selectorText: string): CanonicalCompound {
   subject.attrs.forEach((attr) => {
     // Presence `[data-x]` → `attr:data-x` (matches a chip); a valued/operator
     // form `[data-x="y"]` gets a distinct token so it stays orange-only.
-    tokens.push(
-      attr.operator && attr.value !== undefined
-        ? `attr:${attr.name}${attr.operator}"${attr.value}"`
-        : `attr:${attr.name}`,
-    );
+    tokens.push(attr.operator && attr.value !== undefined ? `attr:${attr.name}${attr.operator}"${attr.value}"` : `attr:${attr.name}`);
   });
   return {
     simple,
@@ -270,9 +255,7 @@ export function canonicalCompound(selectorText: string): CanonicalCompound {
 /** True when the selector's subject is qualified by a parent or ancestor. */
 export function selectorDependsOnAncestor(selectorText: string): boolean {
   const selectors = compileSelectorList(selectorText);
-  return selectors.some((selector) =>
-    selector.combinators.some((combinator) => combinator === ' ' || combinator === '>'),
-  );
+  return selectors.some((selector) => selector.combinators.some((combinator) => combinator === ' ' || combinator === '>'));
 }
 
 /** Normalize a pseudo-element to its `::name` form (handles legacy `:before`), or ''. */
@@ -460,10 +443,7 @@ export class SelectorBuilder {
     if (this.started) {
       this.pushCurrent();
     }
-    assert(
-      this.combinators.length <= Math.max(0, this.compounds.length - 1),
-      'SelectorBuilder: a combinator sits between two compounds',
-    );
+    assert(this.combinators.length <= Math.max(0, this.compounds.length - 1), 'SelectorBuilder: a combinator sits between two compounds');
     return {
       text,
       compounds: this.compounds,
@@ -507,8 +487,7 @@ export function compileHasArg(node: selectorParser.Pseudo): HasCond[] {
       return;
     }
     const first = child.nodes[0];
-    const axis: HasAxis =
-      first && first.type === 'combinator' ? axisFromCombinator(first.value) : 'descendant';
+    const axis: HasAxis = first && first.type === 'combinator' ? axisFromCombinator(first.value) : 'descendant';
     // compileSelector ignores a leading combinator, so `sel` is the arg minus it.
     out.push({ axis, sel: compileSelector(child) });
   });

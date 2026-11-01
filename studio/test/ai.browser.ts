@@ -3,8 +3,7 @@ import { chromium } from 'playwright';
 import type { Page } from 'playwright';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
@@ -30,10 +29,7 @@ try {
   const composer = await page.locator('.chat-composer').boundingBox();
   assert.ok(composer && composer.x >= 0 && composer.x + composer.width <= 390);
   assert.ok(await page.getByRole('button', { name: 'Voice input', exact: true }).isVisible());
-  assert.equal(
-    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    true,
-  );
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   assert.deepEqual(errors, []);
   console.log(
     'Chat drafts, switching, image preparation/removal, reload persistence, and mobile composer passed. Live AI and microphone recognition require a configured provider and an interactive microphone.',
@@ -61,19 +57,14 @@ async function verifyDrafts(page: Page) {
   assert.equal(await prompt.inputValue(), 'First draft');
   assert.equal(await page.locator('.chat-tabs button').count(), 2);
   if (await page.getByText('No model connected', { exact: true }).count()) {
-    assert.equal(
-      await page.getByRole('button', { name: 'Send message', exact: true }).isDisabled(),
-      true,
-    );
+    assert.equal(await page.getByRole('button', { name: 'Send message', exact: true }).isDisabled(), true);
     await prompt.press('Enter');
     assert.equal(await prompt.inputValue(), 'First draft');
   }
 }
 async function verifyImages(page: Page) {
   const image = await page.screenshot({ clip: { x: 0, y: 0, width: 100, height: 100 } });
-  await page
-    .getByLabel('Attach image files', { exact: true })
-    .setInputFiles({ name: 'reference.png', mimeType: 'image/png', buffer: image });
+  await page.getByLabel('Attach image files', { exact: true }).setInputFiles({ name: 'reference.png', mimeType: 'image/png', buffer: image });
   await page.getByRole('img', { name: 'reference.png', exact: true }).waitFor();
   await page.getByLabel('Attach image files', { exact: true }).setInputFiles({
     name: 'bad.txt',
@@ -81,9 +72,7 @@ async function verifyImages(page: Page) {
     buffer: Buffer.from('not an image'),
   });
   await page.getByRole('alert').filter({ hasText: 'Choose PNG' }).waitFor();
-  await page
-    .getByLabel('Attach image files', { exact: true })
-    .setInputFiles({ name: 'second.png', mimeType: 'image/png', buffer: image });
+  await page.getByLabel('Attach image files', { exact: true }).setInputFiles({ name: 'second.png', mimeType: 'image/png', buffer: image });
   await page.getByRole('img', { name: 'second.png', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Remove second.png', exact: true }).click();
   await page.waitForTimeout(250); // IndexedDB persistence is debounced by 150 ms.

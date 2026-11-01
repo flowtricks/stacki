@@ -229,20 +229,10 @@ test('edits queued during a move keep the moved element and child selected', asy
   const [main, aside] = box.state.model.nodes;
   const target = main.children[0];
   const child = target.children[0];
-  const move = editGestures.moveGesture(
-    box.state.model,
-    target.id,
-    { parentId: aside.id, index: 0 },
-    { keepsSlot: () => true },
-    { urgency: true },
-  );
+  const move = editGestures.moveGesture(box.state.model, target.id, { parentId: aside.id, index: 0 }, { keepsSlot: () => true }, { urgency: true });
   assert.ok(move);
   const options = { coalesceKey: undefined, urgency: true };
-  const gestures = [
-    move,
-    editGestures.propsGesture(target.id, titled('Moved'), options),
-    editGestures.propsGesture(child.id, titled('Child'), options),
-  ];
+  const gestures = [move, editGestures.propsGesture(target.id, titled('Moved'), options), editGestures.propsGesture(child.id, titled('Child'), options)];
   for (const gesture of gestures) {
     queue.addGesture(PATH, gesture, step());
     box.state = { ...box.state, model: gesture.apply(box.state.model) };
@@ -250,11 +240,7 @@ test('edits queued during a move keep the moved element and child selected', asy
   for (const _gesture of gestures) {
     assert.deepEqual(await send(PATH, queue.shift(PATH)), { tag: 'sent' });
   }
-  assert.equal(
-    disk.text,
-    `<main>${card}</main><aside><article title="Moved">` +
-      '<p title="Child">Same</p></article></aside>',
-  );
+  assert.equal(disk.text, `<main>${card}</main><aside><article title="Moved">` + '<p title="Child">Same</p></article></aside>');
   const moved = box.state.model.nodes[1].children[0];
   assert.equal(moved.id, target.id, 'selection follows the moved element');
   assert.equal(moved.children[0].id, child.id, 'selection also follows its child');
@@ -326,10 +312,7 @@ test('a failed request preserves undo for earlier writes in the same gesture', a
   });
   assert.ok(undone.ok);
   assert.equal(disk.text, PAGE, 'undo restores the bytes before the partial save');
-  assert.deepEqual(box.notices, [
-    'Stacki couldn’t apply this edit. ' +
-      'Stacki encountered an editor error while applying the change.',
-  ]);
+  assert.deepEqual(box.notices, ['Stacki couldn’t apply this edit. ' + 'Stacki encountered an editor error while applying the change.']);
 });
 
 test('refused over changed bytes: the conflict notice with the reason', async () => {
@@ -378,11 +361,7 @@ test('a preview plans every queued gesture as splices, chained, and writes nothi
     request: () => undefined,
     apply: (model) => model,
   };
-  const queued = [
-    editGestures.propsGesture(heading.id, titled('a'), options),
-    unchanged,
-    editGestures.propsGesture(paragraph.id, titled('b'), options),
-  ];
+  const queued = [editGestures.propsGesture(heading.id, titled('a'), options), unchanged, editGestures.propsGesture(paragraph.id, titled('b'), options)];
   const planned = [];
   const preview = async (request, source) => {
     planned.push(request.authoredChecksum);

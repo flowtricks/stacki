@@ -15,13 +15,7 @@
 
 import { assert } from '../../shared/core/assert';
 import { toRecord } from '../../shared/core/record';
-import {
-  LINK_PREVIEW_LIMITS,
-  videoHostOf,
-  videoLinkOf,
-  type LinkPreview,
-  type VideoLink,
-} from '../../shared/properties/linkPreview';
+import { LINK_PREVIEW_LIMITS, videoHostOf, videoLinkOf, type LinkPreview, type VideoLink } from '../../shared/properties/linkPreview';
 
 export const LINK_PREVIEW_FETCH = {
   timeoutMs: 8_000,
@@ -36,18 +30,14 @@ type Fetch = (url: string, init: RequestInit) => Promise<Response>;
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
 
 /** A video link's card, or undefined when its host will not describe it. */
-export async function fetchLinkPreview(
-  url: string,
-  fetcher: Fetch = fetch,
-): Promise<LinkPreview | undefined> {
+export async function fetchLinkPreview(url: string, fetcher: Fetch = fetch): Promise<LinkPreview | undefined> {
   const link = videoLinkOf(url);
   assert(link !== undefined, 'A link preview is asked for a video host link');
   const described = await fetchLinkPreviewDescribed(link, fetcher);
   if (described === undefined) {
     return undefined;
   }
-  const description =
-    textOf(described['description']) ?? (await fetchLinkPreviewDescription(link, fetcher));
+  const description = textOf(described['description']) ?? (await fetchLinkPreviewDescription(link, fetcher));
   const thumbnail = await fetchLinkPreviewThumbnail(described['thumbnail_url'], fetcher);
   const title = textOf(described['title']) ?? link.url;
   const author = textOf(described['author_name']);
@@ -55,9 +45,7 @@ export async function fetchLinkPreview(
     url: link.url,
     title: clip(title, LINK_PREVIEW_LIMITS.titleCharsMax),
     source: link.host.name,
-    ...(description === undefined
-      ? {}
-      : { description: clip(description, LINK_PREVIEW_LIMITS.descriptionCharsMax) }),
+    ...(description === undefined ? {} : { description: clip(description, LINK_PREVIEW_LIMITS.descriptionCharsMax) }),
     ...(author === undefined ? {} : { author: clip(author, LINK_PREVIEW_LIMITS.authorCharsMax) }),
     ...(thumbnail === undefined ? {} : { thumbnail }),
   };
@@ -65,10 +53,7 @@ export async function fetchLinkPreview(
   return preview;
 }
 
-async function fetchLinkPreviewDescribed(
-  link: VideoLink,
-  fetcher: Fetch,
-): Promise<Record<string, unknown> | undefined> {
+async function fetchLinkPreviewDescribed(link: VideoLink, fetcher: Fetch): Promise<Record<string, unknown> | undefined> {
   const endpoint = new URL(link.host.oembed);
   endpoint.searchParams.set('url', link.url);
   assert(endpoint.protocol === 'https:', 'oEmbed endpoints are HTTPS');
@@ -88,10 +73,7 @@ async function fetchLinkPreviewDescribed(
   return toRecord(parsed);
 }
 
-async function fetchLinkPreviewDescription(
-  link: VideoLink,
-  fetcher: Fetch,
-): Promise<string | undefined> {
+async function fetchLinkPreviewDescription(link: VideoLink, fetcher: Fetch): Promise<string | undefined> {
   try {
     const response = await fetcher(link.url, request('text/html'));
     const landed = URL.canParse(response.url) ? new URL(response.url).hostname : '';
@@ -109,10 +91,7 @@ async function fetchLinkPreviewDescription(
   }
 }
 
-async function fetchLinkPreviewThumbnail(
-  input: unknown,
-  fetcher: Fetch,
-): Promise<string | undefined> {
+async function fetchLinkPreviewThumbnail(input: unknown, fetcher: Fetch): Promise<string | undefined> {
   const address = textOf(input);
   if (address === undefined || !URL.canParse(address)) {
     return undefined;
@@ -128,9 +107,7 @@ async function fetchLinkPreviewThumbnail(
       return undefined;
     }
     const bytes = await readBounded(response, LINK_PREVIEW_FETCH.thumbnailBytesMax);
-    return bytes === undefined
-      ? undefined
-      : `data:${known};base64,${Buffer.from(bytes).toString('base64')}`;
+    return bytes === undefined ? undefined : `data:${known};base64,${Buffer.from(bytes).toString('base64')}`;
   } catch {
     // The thumbnail is optional: the card shows without one.
     return undefined;
@@ -140,9 +117,7 @@ async function fetchLinkPreviewThumbnail(
 /** The page's own summary, from its Open Graph or standard description tag. */
 export function metaDescription(html: string): string | undefined {
   for (const property of ['og:description', 'description', 'twitter:description']) {
-    const tag = new RegExp(`<meta[^>]+(?:property|name)=["']${property}["'][^>]*>`, 'i').exec(
-      html,
-    )?.[0];
+    const tag = new RegExp(`<meta[^>]+(?:property|name)=["']${property}["'][^>]*>`, 'i').exec(html)?.[0];
     const content = tag === undefined ? undefined : /content=["']([^"']*)["']/i.exec(tag)?.[1];
     const text = content === undefined ? undefined : decodeEntities(content).trim();
     if (text !== undefined && text.length > 0) {

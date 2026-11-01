@@ -23,10 +23,7 @@ export interface ConflictDraft {
 }
 export type ConflictDrafts = Readonly<Record<string, ConflictDraft>>;
 
-export function conflictChoiceText(
-  clash: Extract<NonNullable<WireMergeClash['parts']>[number], { readonly kind: 'clash' }>,
-  choice: ConflictChoice,
-): string {
+export function conflictChoiceText(clash: Extract<NonNullable<WireMergeClash['parts']>[number], { readonly kind: 'clash' }>, choice: ConflictChoice): string {
   switch (choice) {
     case 'ours':
       return clash.ours;
@@ -54,10 +51,7 @@ export function createConflictDraft(file: WireMergeClash): ConflictDraft {
     const text = part.kind === 'same' ? part.text : conflictChoiceText(part, defaultChoice(part));
     if (part.kind === 'clash' && choice !== undefined) {
       const additions = createConflictRegions(part, length, choice);
-      assert(
-        regions.length + additions.length <= BOUNDARY_LIMITS.itemsMax,
-        'Merge result: region limit exceeded',
-      );
+      assert(regions.length + additions.length <= BOUNDARY_LIMITS.itemsMax, 'Merge result: region limit exceeded');
       regions.push(...additions);
     }
     pieces.push(text);
@@ -73,9 +67,7 @@ export function editConflictDraft(draft: ConflictDraft, changes: ChangeSet): Con
   const touched = new Set<number>();
   const detached = new Set<number>();
   changes.iterChangedRanges((from, to) => {
-    const hits = draft.regions.flatMap((region, index) =>
-      from <= region.to && to >= region.from ? [index] : [],
-    );
+    const hits = draft.regions.flatMap((region, index) => (from <= region.to && to >= region.from ? [index] : []));
     for (const index of hits) {
       touched.add(index);
       if (hits.length > 1) {
@@ -108,26 +100,16 @@ export function chooseConflictRegion(
   const region = draft.regions[index];
   assert(region !== undefined, 'Merge result: region exists');
   assert(region.selectable, 'Merge result: region can be replaced independently');
-  const changes = ChangeSet.of(
-    { from: region.from, to: region.to, insert: replacement.text },
-    draft.text.length,
-    '\n',
-  );
+  const changes = ChangeSet.of({ from: region.from, to: region.to, insert: replacement.text }, draft.text.length, '\n');
   const changed = editConflictDraft(draft, changes);
   return {
     ...changed,
     mode: draft.mode,
-    regions: changed.regions.map((entry, position) =>
-      position === index ? { ...entry, choice: replacement.choice, review: 'done' } : entry,
-    ),
+    regions: changed.regions.map((entry, position) => (position === index ? { ...entry, choice: replacement.choice, review: 'done' } : entry)),
   };
 }
 
-export function conflictDraftsForSend(
-  conflict: Conflict,
-  drafts: ConflictDrafts,
-  whole: Readonly<Record<string, 'ours' | 'theirs'>>,
-): ConflictChoices {
+export function conflictDraftsForSend(conflict: Conflict, drafts: ConflictDrafts, whole: Readonly<Record<string, 'ours' | 'theirs'>>): ConflictChoices {
   return Object.fromEntries(
     conflict.files.map((file): readonly [string, MergeResolution] => {
       const draft = drafts[file.path];
@@ -148,11 +130,7 @@ export function conflictDraftsForSend(
   );
 }
 
-function createConflictRegions(
-  clash: Clash,
-  offset: number,
-  choice: ConflictChoice,
-): readonly ConflictRegion[] {
+function createConflictRegions(clash: Clash, offset: number, choice: ConflictChoice): readonly ConflictRegion[] {
   const text = conflictChoiceText(clash, choice);
   const basic: ConflictRegion = {
     clash,

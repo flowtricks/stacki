@@ -12,11 +12,7 @@
 import { record, text } from '../core/boundary';
 import { assert } from '../core/assert';
 import type { CmsConnection } from './cmsConnections';
-import {
-  parseSettingsChange,
-  type CollectionSettings,
-  type SettingsChange,
-} from './collectionSettings';
+import { parseSettingsChange, type CollectionSettings, type SettingsChange } from './collectionSettings';
 import {
   parseRemoteCollectionName,
   type RemoteCollection,
@@ -66,12 +62,10 @@ export type AstroRemoteRead =
   | { readonly operation: 'settings'; readonly collection: string };
 
 /** What a read answers: the collections, one collection's entries, or one entry. */
-export type AstroRemoteReadAnswer =
-  readonly RemoteCollection[] | RemoteDocumentList | RemoteDocument | CollectionSettings;
+export type AstroRemoteReadAnswer = readonly RemoteCollection[] | RemoteDocumentList | RemoteDocument | CollectionSettings;
 
 /** What an edit answers: the entry written, the entry made, how many went, the new collection. */
-export type AstroRemoteEditAnswer =
-  RemoteDocument | RemoteDocumentSummary | number | RemoteCollection | CollectionSettings;
+export type AstroRemoteEditAnswer = RemoteDocument | RemoteDocumentSummary | number | RemoteCollection | CollectionSettings;
 
 /** What the panel changes in them: a field, a new or removed entry, a new collection. */
 export type AstroRemoteEdit =
@@ -212,13 +206,7 @@ export function parseAstroCollectionName(input: unknown): string {
     throw new Error('A collection name is at most 80 characters.');
   }
   const words = label.split(/[^A-Za-z0-9]+/).filter((word) => word.length > 0);
-  const name = words
-    .map((word, index) =>
-      index === 0
-        ? word.charAt(0).toLowerCase() + word.slice(1)
-        : word.charAt(0).toUpperCase() + word.slice(1),
-    )
-    .join('');
+  const name = words.map((word, index) => (index === 0 ? word.charAt(0).toLowerCase() + word.slice(1) : word.charAt(0).toUpperCase() + word.slice(1))).join('');
   if (!/^[a-z][A-Za-z0-9]*$/.test(name)) {
     throw new Error('A collection name starts with a letter.');
   }

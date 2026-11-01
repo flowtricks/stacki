@@ -37,8 +37,7 @@
   align-items: flex-start;
   bottom: 0;
   width: 100%;
-  transform: translateY(calc(var(--toast-index) * -10px))
-    scale(calc(1 - var(--toast-index) * 0.045));
+  transform: translateY(calc(var(--toast-index) * -10px)) scale(calc(1 - var(--toast-index) * 0.045));
   transform-origin: center top;
   transition: transform 220ms ease;
 }

@@ -19,10 +19,7 @@ test('duplicate selects its clone and remaps other collaborators to the same ori
 test('deletion uses Stacki next, previous, parent, then empty selection rules', () => {
   assert.equal(selection(source, { kind: 'delete', node: 'n0.1' })('n0.1', true), 'n0.1');
   assert.equal(selection(source, { kind: 'delete', node: 'n0.2' })('n0.2', true), 'n0.1');
-  assert.equal(
-    selection('<main><h1>Only</h1></main>', { kind: 'delete', node: 'n0.0' })('n0.0', true),
-    'n0',
-  );
+  assert.equal(selection('<main><h1>Only</h1></main>', { kind: 'delete', node: 'n0.0' })('n0.0', true), 'n0');
   assert.equal(selection('<h1>Only</h1>', { kind: 'delete', node: 'n0' })('n0', true), '');
   assert.equal(selection(source, { kind: 'delete', node: 'n0.0' })('n0.2', true), 'n0.1');
 });
@@ -38,8 +35,7 @@ test('inserting a component selects it even when an import is added ahead of the
   assert.equal(select('n0.1', false), 'n0.1');
 });
 test('an empty container receives appended children and selects the new child', () => {
-  const source =
-    "---\nimport Section from '../components/Section.astro';\n---\n<main><Section /></main>";
+  const source = "---\nimport Section from '../components/Section.astro';\n---\n<main><Section /></main>";
   const target = dropTarget(nodesOf(source), { parentId: 'n0.0', index: 0 });
   assert.deepEqual(target, { target: 'n0.0', placement: 'inside' });
   const select = selection(source, {

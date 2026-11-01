@@ -43,10 +43,7 @@ export function SelectTrigger<T extends string>({
     onClick: onToggle,
     onKeyDown,
   };
-  const icon =
-    !props.hideTriggerIcon && present(triggerIcon) ? (
-      <span className="u-select-icon">{triggerIcon}</span>
-    ) : undefined;
+  const icon = !props.hideTriggerIcon && present(triggerIcon) ? <span className="u-select-icon">{triggerIcon}</span> : undefined;
   if (present(props.customInput)) {
     return (
       <div className="u-select-button is-custom">
@@ -170,9 +167,7 @@ export function SelectRow<T extends string>({
   onChoose: () => void;
   onCancel: () => void;
 }) {
-  const icon = present(option.icon) ? (
-    <span className="u-select-icon">{option.icon}</span>
-  ) : undefined;
+  const icon = present(option.icon) ? <span className="u-select-icon">{option.icon}</span> : undefined;
   if (option.heading) {
     return (
       <div className="u-select-heading" role="presentation">
@@ -184,14 +179,7 @@ export function SelectRow<T extends string>({
   return (
     <div
       id={id}
-      className={[
-        'u-select-option',
-        active ? 'is-active' : '',
-        selected ? 'is-selected' : '',
-        option.indent ? 'is-indented' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
+      className={['u-select-option', active ? 'is-active' : '', selected ? 'is-selected' : '', option.indent ? 'is-indented' : ''].filter(Boolean).join(' ')}
       role="option"
       aria-selected={selected}
       data-active={active || undefined}
@@ -217,23 +205,11 @@ export function SelectRow<T extends string>({
 
 export const CHECK = (
   <svg viewBox="0 0 16 16" width="14" height="14" fill="none">
-    <path
-      d="M13.5 4.5 6.5 11.5 3 8"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
+    <path d="M13.5 4.5 6.5 11.5 3 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
-export function RowAction({
-  action,
-  onCancel,
-}: {
-  action: NonNullable<SelectOption<string>['action']>;
-  onCancel: () => void;
-}) {
+export function RowAction({ action, onCancel }: { action: NonNullable<SelectOption<string>['action']>; onCancel: () => void }) {
   return (
     <button
       type="button"

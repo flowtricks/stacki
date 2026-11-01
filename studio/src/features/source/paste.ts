@@ -7,11 +7,7 @@ import { insertFragment } from './sourceOperations';
 import { nodesOf, type TreeAction } from './source';
 import { carriedBindings } from './pasteBindings';
 
-export function pasteEdits(
-  source: string,
-  file: string,
-  action: Extract<TreeAction, { kind: 'paste' }>,
-) {
+export function pasteEdits(source: string, file: string, action: Extract<TreeAction, { kind: 'paste' }>) {
   const clip = action.clipboard;
   const nodes = parsePageTree(nodesOf(clip.fragment));
   const edits = [insertFragment(source, action, clip.fragment, false)];

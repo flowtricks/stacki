@@ -19,9 +19,7 @@ async function measureFixture(url: string) {
   const browser = await chromium.launch({
     executablePath:
       process.env['CHROME_PATH'] ??
-      (process.platform === 'darwin'
-        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-        : chromium.executablePath()),
+      (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
     headless: true,
   });
   try {
@@ -37,9 +35,7 @@ async function measureFixture(url: string) {
       .locator('#target')
       .click({ position: { x: 5, y: 5 } });
     await page.getByRole('button', { name: 'Style', exact: true }).click();
-    const selector = page
-      .locator('.embed-editor_selector-chip')
-      .filter({ hasText: /^\.component$/ });
+    const selector = page.locator('.embed-editor_selector-chip').filter({ hasText: /^\.component$/ });
     await selector.and(page.locator(':enabled')).waitFor();
     await selector.click();
     const input = page.getByRole('textbox', { name: 'Opacity', exact: true });

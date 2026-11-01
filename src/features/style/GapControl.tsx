@@ -53,12 +53,7 @@ type Axis = {
 };
 
 // One axis's state: where its value comes from, and what a write should touch.
-function axisState(
-  modern: string,
-  legacy: string,
-  axis: 'row' | 'col',
-  read: (prop: string) => ResolvedProp | undefined,
-): Axis {
+function axisState(modern: string, legacy: string, axis: 'row' | 'col', read: (prop: string) => ResolvedProp | undefined): Axis {
   const modernResolved = read(modern);
   const legacyResolved = read(legacy);
   const modernSet = modernResolved?.source === 'selected';
@@ -100,10 +95,7 @@ function rawEffective(resolved: ResolvedProp | undefined): { value: string; impo
   if (!resolved) {
     return { value: '', important: false };
   }
-  const effective =
-    resolved.source === 'selected' && resolved.selectedValue
-      ? resolved.selectedValue
-      : resolved.winner;
+  const effective = resolved.source === 'selected' && resolved.selectedValue ? resolved.selectedValue : resolved.winner;
   return { value: effective.value, important: effective.important };
 }
 
@@ -111,13 +103,7 @@ function LockedIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <rect x="3.5" y="7" width="9" height="6" rx="1.5" fill="currentColor" />
-      <path
-        d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        fill="none"
-        strokeLinecap="round"
-      />
+      <path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round" />
     </svg>
   );
 }
@@ -125,13 +111,7 @@ function UnlockedIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <rect x="3.5" y="7" width="9" height="6" rx="1.5" fill="currentColor" />
-      <path
-        d="M5.5 7V5.2a2.5 2.5 0 0 1 4.9-.6"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        fill="none"
-        strokeLinecap="round"
-      />
+      <path d="M5.5 7V5.2a2.5 2.5 0 0 1 4.9-.6" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round" />
     </svg>
   );
 }
@@ -172,14 +152,7 @@ function GapInput({
       prop={field.prop}
       onPick={(binding) => field.onCommit(binding)}
     >
-      <input
-        {...inputProps}
-        className="u-input embed-editor_size-input"
-        disabled={field.busy}
-        spellCheck={false}
-        placeholder="0"
-        aria-label={ariaLabel}
-      />
+      <input {...inputProps} className="u-input embed-editor_size-input" disabled={field.busy} spellCheck={false} placeholder="0" aria-label={ariaLabel} />
     </VariableConnect>
   );
 }
@@ -362,13 +335,7 @@ export default function GapControl(props: GapControlProps) {
             onCommit={(next) => writeBoth(next, { live: false })}
           />
         ) : (
-          <SplitGapFields
-            rowAxis={rowAxis}
-            columnAxis={columnAxis}
-            {...labelProps}
-            clearProp={clearProp}
-            writeAxis={writeAxis}
-          />
+          <SplitGapFields rowAxis={rowAxis} columnAxis={columnAxis} {...labelProps} clearProp={clearProp} writeAxis={writeAxis} />
         )}
         <GapLinkButton linked={linked} busy={busy} onToggle={toggleLink} />
       </div>
@@ -377,11 +344,7 @@ export default function GapControl(props: GapControlProps) {
 }
 
 // Write an axis: update whatever form(s) it already uses, or add the modern longhand.
-function axisWriter({
-  setProp,
-  liveSetProp,
-  clearProp,
-}: Pick<GapControlProps, 'setProp' | 'liveSetProp' | 'clearProp'>) {
+function axisWriter({ setProp, liveSetProp, clearProp }: Pick<GapControlProps, 'setProp' | 'liveSetProp' | 'clearProp'>) {
   return (axis: Axis, fallback: string, next: string, options: WriteOptions) => {
     const trimmed = next.trim();
     const targets = axis.targets.length ? axis.targets : [fallback];
@@ -477,24 +440,14 @@ function GapCell({
   );
 }
 
-function GapLinkButton({
-  linked,
-  busy,
-  onToggle,
-}: {
-  linked: boolean;
-  busy: boolean;
-  onToggle: () => void;
-}) {
+function GapLinkButton({ linked, busy, onToggle }: { linked: boolean; busy: boolean; onToggle: () => void }) {
   return (
     <button
       type="button"
       className={`embed-editor_icon-btn embed-editor_gap-link ${linked ? 'is-active' : ''}`}
       disabled={busy}
       aria-pressed={linked}
-      title={
-        linked ? 'Linked — one gap for rows and columns' : 'Unlinked — separate row and column gaps'
-      }
+      title={linked ? 'Linked — one gap for rows and columns' : 'Unlinked — separate row and column gaps'}
       onClick={onToggle}
     >
       {linked ? <LockedIcon /> : <UnlockedIcon />}

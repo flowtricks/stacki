@@ -90,10 +90,7 @@ const check = (what, condition, detail) => {
   check('nothing open, nothing locked', !locked());
 
   // --- portaled to <body>, which is where a picker or a modal lands ------------
-  const picker = await put(
-    dom.window.document.body,
-    '<div role="dialog" aria-label="Color picker"></div>',
-  );
+  const picker = await put(dom.window.document.body, '<div role="dialog" aria-label="Color picker"></div>');
   check('a colour picker locks the panel', locked());
   picker.remove();
   await settle();
@@ -101,20 +98,14 @@ const check = (what, condition, detail) => {
 
   // A modal portals a backdrop with the dialog INSIDE it, so the thing that
   // counts is not always the node that was added.
-  const backdrop = await put(
-    dom.window.document.body,
-    '<div class="embed-editor_bg-modal-backdrop"><div role="dialog"></div></div>',
-  );
+  const backdrop = await put(dom.window.document.body, '<div class="embed-editor_bg-modal-backdrop"><div role="dialog"></div></div>');
   check('a dialog nested in a backdrop counts too', locked());
   backdrop.remove();
   await settle();
   check('and unlocks with it', !locked());
 
   // --- rendered inline, which is where the display/direction menus land --------
-  const inline = await put(
-    dom.window.document.querySelector('.embed-editor_root'),
-    '<div role="menu"></div>',
-  );
+  const inline = await put(dom.window.document.querySelector('.embed-editor_root'), '<div role="menu"></div>');
   check('a menu inside the panel locks it', locked());
   inline.remove();
   await settle();
@@ -131,10 +122,7 @@ const check = (what, condition, detail) => {
   tip.remove();
   await settle();
 
-  const group = await put(
-    dom.window.document.querySelector('.embed-editor_root'),
-    '<div role="group"><button role="radio">Block</button></div>',
-  );
+  const group = await put(dom.window.document.querySelector('.embed-editor_root'), '<div role="group"><button role="radio">Block</button></div>');
   check('nor does an ordinary control', !locked());
   group.remove();
   await settle();
@@ -156,22 +144,14 @@ const check = (what, condition, detail) => {
 
   // --- the rule that does the work ---------------------------------------------
   const css = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
-  check(
-    'the locked panel stops scrolling',
-    /\.style-panel-host\.is-locked > \* \{\s*overflow-y: hidden;\s*\}/.test(css),
-  );
-  check(
-    'and its gutter is reserved, so losing the bar costs no layout',
-    /scrollbar-gutter:\s*stable/.test(css),
-  );
+  check('the locked panel stops scrolling', /\.style-panel-host\.is-locked > \* \{\s*overflow-y: hidden;\s*\}/.test(css));
+  check('and its gutter is reserved, so losing the bar costs no layout', /scrollbar-gutter:\s*stable/.test(css));
   const panel = fs.readFileSync(repoPath('src/features/style/StylePanel.tsx'), 'utf8');
   check('the panel asks', /usePopupOpen\(hostRef\)/.test(panel));
   check('and wears the answer', /popupOpen \? 'is-locked' : ''/.test(panel));
 
   if (failures.length) {
-    console.error(
-      `\npopup-scroll: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\npopup-scroll: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

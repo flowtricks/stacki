@@ -10,19 +10,8 @@ export async function restartPropPreview(root: string, port: string): Promise<vo
   const execute = promisify(execFile);
   const astro = path.join(root, 'node_modules/astro/bin/astro.mjs');
   await execute(process.execPath, [astro, 'dev', 'stop'], { cwd: root, timeout: 20_000 });
-  await execute(
-    process.execPath,
-    [
-      astro,
-      'dev',
-      '--background',
-      '--config',
-      './astro.studio.config.ts',
-      '--port',
-      port,
-      '--host',
-      '127.0.0.1',
-    ],
-    { cwd: root, timeout: 60_000 },
-  );
+  await execute(process.execPath, [astro, 'dev', '--background', '--config', './astro.studio.config.ts', '--port', port, '--host', '127.0.0.1'], {
+    cwd: root,
+    timeout: 60_000,
+  });
 }

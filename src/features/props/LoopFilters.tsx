@@ -4,28 +4,15 @@
 import { useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import Dropdown from '../../ui/Dropdown';
-import {
-  LOOP_QUERY_LIMITS,
-  operatorsFor,
-  type LoopCondition,
-  type LoopFieldKind,
-  type LoopOperator,
-  type LoopQuery,
-} from '../../editor/loopQuery';
+import { LOOP_QUERY_LIMITS, operatorsFor, type LoopCondition, type LoopFieldKind, type LoopOperator, type LoopQuery } from '../../editor/loopQuery';
 import { type CatalogField, type LoopCatalog } from './loopCatalog';
-import {
-  conditionOf,
-  conditionParts,
-  draftFor,
-  draftOf,
-  fieldNamed,
-  operatorLabel,
-  type ConditionDraft,
-} from './loopSettingsModel';
+import { conditionOf, conditionParts, draftFor, draftOf, fieldNamed, operatorLabel, type ConditionDraft } from './loopSettingsModel';
 import { EditorRow, ListRow, SectionHeader, fieldIcon } from './LoopRows';
 import { useReferenceChoices } from './loopSettingsData';
-import { SettingDot, type BindingContext } from './LoopBinding';
+import { SettingDot, type BindingContext, type DraftEditor } from './LoopBinding';
 import { LinkedSetting } from './LoopLinked';
+import { moved, staysPut } from './LoopItems';
+import useListReorder from '../../ui/useListReorder';
 // ---------------------------------------------------------------------------
 // Filters.
 // ---------------------------------------------------------------------------
@@ -49,14 +36,18 @@ type FilterSectionProps = SectionProps & {
 export function FilterSection(props: FilterSectionProps) {
   const { binding } = props;
   return binding?.settings.filter.kind === 'prop' ? (
-    <LinkedSetting
-      setting="filter"
-      binding={binding}
-      editor={<FilterEditor {...props} binding={undefined} />}
-    />
+    <LinkedSetting setting="filter" binding={binding} editor={<FilterEditor {...props} binding={undefined} />} draft={filterDraft(props)} />
   ) : (
     <FilterEditor {...props} />
   );
+}
+
+// The filters as a new property's default: the same editor over a draft.
+function filterDraft(props: FilterSectionProps): DraftEditor {
+  return {
+    query: props.query,
+    render: (query, onChange) => <FilterEditor {...props} query={query} binding={undefined} label={undefined} onChange={onChange} />,
+  };
 }
 
 function FilterEditor(props: FilterSectionProps) {
@@ -64,6 +55,17 @@ function FilterEditor(props: FilterSectionProps) {
   const [open, setOpen] = useState<number | 'new' | undefined>(undefined);
   const filterable = (fields ?? []).filter((field) => operatorsFor(field.kind).length > 0);
   const full = query.conditions.length >= LOOP_QUERY_LIMITS.conditionsMax;
+  // Filters drag into the order they read in; a drop back in place writes nothing.
+  const reorder = useListReorder({
+    count: query.conditions.length,
+    onMove: (source, target) => {
+      if (staysPut(source, target)) {
+        return;
+      }
+      setOpen(undefined);
+      props.onChange({ ...query, conditions: moved(query.conditions, source, target) });
+    },
+  });
   const replace = (index: number, condition: LoopCondition | undefined): void => {
     const conditions =
       condition === undefined
@@ -76,27 +78,28 @@ function FilterEditor(props: FilterSectionProps) {
       <SectionHeader
         title="Filters"
         label={props.label}
-        dot={<SettingDot setting="filter" binding={props.binding} />}
+        dot={<SettingDot setting="filter" binding={props.binding} draft={filterDraft(props)} />}
         addable={!full && filterable.length > 0}
-        extra={
-          query.conditions.length > 1 ? (
-            <MatchMenu query={query} onChange={props.onChange} />
-          ) : undefined
-        }
+        extra={query.conditions.length > 1 ? <MatchMenu query={query} onChange={props.onChange} /> : undefined}
         onAdd={() => setOpen('new')}
       />
       {(query.conditions.length > 0 || open === 'new') && (
         <div className="loop-settings-list">
           {query.conditions.map((condition, index) => (
-            <FilterChip
+            <div
               key={`${index}:${condition.kind === 'custom' ? condition.code : condition.field}`}
-              condition={condition}
-              fields={fields}
-              context={props}
-              open={open === index}
-              onToggle={() => setOpen(open === index ? undefined : index)}
-              onChange={(next) => replace(index, next)}
-            />
+              {...reorder.rowProps(index)}
+              className={`loop-settings-sortable ${reorder.rowClass(index)}`}
+            >
+              <FilterChip
+                condition={condition}
+                fields={fields}
+                context={props}
+                open={open === index}
+                onToggle={() => setOpen(open === index ? undefined : index)}
+                onChange={(next) => replace(index, next)}
+              />
+            </div>
           ))}
           {open === 'new' && filterable[0] !== undefined && (
             <NewFilterRow
@@ -119,10 +122,7 @@ function FilterEditor(props: FilterSectionProps) {
 }
 
 // "Match all" or "Match any", beside the add button once there are two filters.
-function MatchMenu(props: {
-  readonly query: LoopQuery;
-  readonly onChange: (query: LoopQuery) => void;
-}) {
+function MatchMenu(props: { readonly query: LoopQuery; readonly onChange: (query: LoopQuery) => void }) {
   return (
     <Dropdown<'all' | 'any'>
       livePreview={false}
@@ -152,14 +152,7 @@ function NewFilterRow(props: {
       parts={{ lead: props.first.title, rest: 'New filter' }}
       open={true}
       removeLabel="Discard filter"
-      editor={
-        <ConditionEditor
-          draft={draftFor(props.first)}
-          fields={props.fields}
-          context={props.context}
-          onCommit={props.onCommit}
-        />
-      }
+      editor={<ConditionEditor draft={draftFor(props.first)} fields={props.fields} context={props.context} onCommit={props.onCommit} />}
       onToggle={props.onClose}
       onRemove={props.onClose}
     />
@@ -179,9 +172,7 @@ export type OperatorSet = 'code' | 'data';
 
 function operatorsIn(kind: LoopFieldKind, set: OperatorSet): readonly LoopOperator[] {
   const operators = operatorsFor(kind);
-  return set === 'code'
-    ? operators
-    : operators.filter((operator) => operator !== 'inPast' && operator !== 'inFuture');
+  return set === 'code' ? operators : operators.filter((operator) => operator !== 'inPast' && operator !== 'inFuture');
 }
 
 function FilterChip(props: {
@@ -198,6 +189,7 @@ function FilterChip(props: {
   return (
     <>
       <ListRow
+        dragThrough={true}
         parts={conditionParts(condition, fields, choices)}
         open={props.open}
         locked={condition.kind === 'custom'}
@@ -252,11 +244,7 @@ function ConditionEditor(props: {
           value={draft.field}
           ariaLabel="Field"
           searchable={props.fields.length > 10}
-          options={props.fields.map((candidate) => ({
-            value: candidate.path,
-            label: candidate.title,
-            icon: fieldIcon(candidate.kind),
-          }))}
+          options={props.fields.map((candidate) => ({ value: candidate.path, label: candidate.title, icon: fieldIcon(candidate.kind) }))}
           onChange={changeField}
         />
       </EditorRow>
@@ -265,10 +253,7 @@ function ConditionEditor(props: {
           livePreview={false}
           value={draft.operator}
           ariaLabel="When"
-          options={operatorsIn(kind, props.context.operatorSet).map((operator) => ({
-            value: operator,
-            label: operatorLabel(operator),
-          }))}
+          options={operatorsIn(kind, props.context.operatorSet).map((operator) => ({ value: operator, label: operatorLabel(operator) }))}
           onChange={(operator) => commit({ ...draft, operator })}
         />
       </EditorRow>
@@ -295,14 +280,12 @@ function ValueRow(props: {
   const { draft, kind } = props;
   const operator = draft.operator;
   const valueless =
-    conditionOf({ ...draft, value: '' }, kind)?.kind === 'test' &&
-    ['isSet', 'isEmpty', 'isTrue', 'isFalse', 'inPast', 'inFuture'].includes(operator);
+    conditionOf({ ...draft, value: '' }, kind)?.kind === 'test' && ['isSet', 'isEmpty', 'isTrue', 'isFalse', 'inPast', 'inFuture'].includes(operator);
   if (valueless) {
     return undefined;
   }
   const options = [...(props.field?.options ?? []), ...props.choices];
-  const usesChoices =
-    (operator === 'is' || operator === 'isNot' || operator === 'has') && options.length > 0;
+  const usesChoices = (operator === 'is' || operator === 'isNot' || operator === 'has') && options.length > 0;
   const enter = (event: KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === 'Enter') {
       props.onCommit(event.currentTarget.value);
@@ -322,20 +305,9 @@ function ValueRow(props: {
       />
     );
   } else if (operator === 'before' || operator === 'after') {
-    control = (
-      <input
-        type="date"
-        value={draft.value}
-        onChange={(event) => props.onCommit(event.target.value)}
-      />
-    );
+    control = <input type="date" value={draft.value} onChange={(event) => props.onCommit(event.target.value)} />;
   } else {
-    const numeric =
-      kind === 'number' ||
-      operator === 'greater' ||
-      operator === 'less' ||
-      operator === 'atLeast' ||
-      operator === 'atMost';
+    const numeric = kind === 'number' || operator === 'greater' || operator === 'less' || operator === 'atLeast' || operator === 'atMost';
     control = (
       <input
         type={numeric ? 'number' : 'text'}

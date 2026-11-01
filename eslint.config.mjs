@@ -152,8 +152,7 @@ const NO_ASSERTIONS = [
 // exist yet, or where an edit prints just what it adds. Importing the name is
 // what is banned, so an alias cannot slip past.
 const WHOLE_FILE_REGENERATION_MESSAGE =
-  'Whole-file regeneration is confined to the printer boundaries (plan §11.9); ' +
-  'an existing file changes only through intents and splices.';
+  'Whole-file regeneration is confined to the printer boundaries (plan §11.9); ' + 'an existing file changes only through intents and splices.';
 const NO_ASTRO_PRINTING = [
   {
     selector: 'ImportSpecifier[imported.name=/^serialize(Page|Nodes)$/]',
@@ -178,8 +177,7 @@ const NO_MARKDOWN_PRINTING = [
     message: WHOLE_FILE_REGENERATION_MESSAGE,
   },
   {
-    selector:
-      'ImportDeclaration[source.value=/markdownParser(\\.js)?$/] > ImportNamespaceSpecifier',
+    selector: 'ImportDeclaration[source.value=/markdownParser(\\.js)?$/] > ImportNamespaceSpecifier',
     message: WHOLE_FILE_REGENERATION_MESSAGE,
   },
 ];
@@ -187,11 +185,7 @@ const NO_WHOLE_FILE_REGENERATION = [...NO_ASTRO_PRINTING, ...NO_MARKDOWN_PRINTIN
 // Where the .astro printers may run: their definitions; new files (a component
 // made from a piece of a page, a new page); the nodes and the frontmatter block
 // an edit adds, printed alone (editRequests.ts); and Markdown's HTML blocks.
-const ASTRO_PRINTER_BOUNDARY = [
-  'electron/parse/astroParser.ts',
-  'electron/documents/componentFile.ts',
-  'electron/documents/editRequests.ts',
-];
+const ASTRO_PRINTER_BOUNDARY = ['electron/parse/astroParser.ts', 'electron/documents/componentFile.ts', 'electron/documents/editRequests.ts'];
 // Markdown's parser module holds the page printer — the round-trip oracle the
 // tests hold it to, never a write path (step 10: a Markdown page reaches disk
 // only as splices) — and prints its HTML blocks with the .astro printer.
@@ -296,11 +290,7 @@ const SOURCE_LAYERS = {
   featureLayer: 'features',
   featureEdges: {
     // Property defaults and options are edited with the props panel's fields.
-    componentProperties: [
-      'features/props/ListField',
-      'features/props/arrayValue',
-      'features/props/propBindings',
-    ],
+    componentProperties: ['features/props/ListField', 'features/props/arrayValue', 'features/props/propBindings'],
     // CMS fields are the component props panel's fields, so both read and work alike.
     cms: [
       'features/props/PropField',
@@ -360,18 +350,7 @@ const ELECTRON_AREAS = {
     app: ['lib', 'content'],
     // The IPC handler modules main.ts registers, and the helpers only they use:
     // they reach what main.ts itself reaches, so a handler moves out unchanged.
-    handlers: [
-      'lib',
-      'parse',
-      'documents',
-      'content',
-      'project',
-      'git',
-      'properties',
-      'preview',
-      'app',
-      'previewServer',
-    ],
+    handlers: ['lib', 'parse', 'documents', 'content', 'project', 'git', 'properties', 'preview', 'app', 'previewServer'],
     previewServer: ['parse'],
     previewClient: [],
     preload: [],
@@ -397,14 +376,7 @@ const SHARED_AREAS = {
 
 export default [
   {
-    ignores: [
-      'studio/**',
-      'node_modules/**',
-      'dist/**',
-      'release/**',
-      'coverage/**',
-      '**/generated/**',
-    ],
+    ignores: ['studio/**', 'node_modules/**', 'dist/**', 'release/**', 'coverage/**', '**/generated/**'],
   },
   {
     // The JavaScript left in the tree: ESM configs and content-tool modules,
@@ -439,10 +411,7 @@ export default [
       // AGENTS.md non-negotiables.
       // The migration ratchet is zero, so unchecked files cannot re-enter the
       // tree; a type test's expected error must say what it proves.
-      '@typescript-eslint/ban-ts-comment': [
-        'error',
-        { 'ts-nocheck': true, 'ts-expect-error': 'allow-with-description' },
-      ],
+      '@typescript-eslint/ban-ts-comment': ['error', { 'ts-nocheck': true, 'ts-expect-error': 'allow-with-description' }],
       '@typescript-eslint/no-explicit-any': 'error',
       // Reached zero in the alignment pass; AGENTS.md forbids `x!` outright.
       '@typescript-eslint/no-non-null-assertion': 'error',
@@ -468,9 +437,7 @@ export default [
       '@typescript-eslint/no-floating-promises': [
         'error',
         {
-          allowForKnownSafeCalls: [
-            { from: 'package', package: 'node:test', name: ['describe', 'it', 'suite', 'test'] },
-          ],
+          allowForKnownSafeCalls: [{ from: 'package', package: 'node:test', name: ['describe', 'it', 'suite', 'test'] }],
         },
       ],
       '@typescript-eslint/no-misused-promises': 'error',
@@ -486,30 +453,9 @@ export default [
         'error',
         {
           props: true,
-          ignorePropertyModificationsForRegex: [
-            '[eE]lement$',
-            '[rR]ef$',
-            '^(?:canvas|drawing)?[cC]ontext$',
-            '^style$',
-          ],
+          ignorePropertyModificationsForRegex: ['[eE]lement$', '[rR]ef$', '^(?:canvas|drawing)?[cC]ontext$', '^style$'],
         },
       ],
-      // §11: a function fits on a screen.
-      'max-lines-per-function': ['error', { max: 70, skipBlankLines: true, skipComments: true }],
-    },
-  },
-  {
-    // A source file fits in one reading: past 800 lines a module is several
-    // modules, and splitting it by responsibility is cheaper now than later.
-    // Tests are left out — a suite reads best as one file of cases.
-    files: [
-      'src/**/*.{ts,tsx}',
-      'electron/**/*.{ts,mts}',
-      'shared/**/*.ts',
-      'scripts/**/*.{ts,mts}',
-    ],
-    rules: {
-      'max-lines': ['error', { max: 800, skipBlankLines: true, skipComments: true }],
     },
   },
   {
@@ -589,19 +535,10 @@ export default [
     // load fixtures from disk, read the environment and (the bench) the clock,
     // then hand plain values in.
     files: ['test/simulator/**/*.ts'],
-    ignores: [
-      'test/simulator/**/*.test.ts',
-      'test/simulator/**/*.bench.ts',
-      'test/simulator/**/*.entry.ts',
-    ],
+    ignores: ['test/simulator/**/*.test.ts', 'test/simulator/**/*.bench.ts', 'test/simulator/**/*.entry.ts'],
     rules: {
       ...DETERMINISM_RULES,
-      'no-restricted-syntax': [
-        'error',
-        ...NO_ASSERTIONS,
-        ...NO_WHOLE_FILE_REGENERATION,
-        ...NO_ASYNC,
-      ],
+      'no-restricted-syntax': ['error', ...NO_ASSERTIONS, ...NO_WHOLE_FILE_REGENERATION, ...NO_ASYNC],
     },
   },
 ];

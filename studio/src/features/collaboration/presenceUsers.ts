@@ -18,17 +18,9 @@ export function presenceUsers<T extends PresenceIdentity>(peers: readonly T[]): 
 
 // The viewer's account comes from the session, not from an asynchronously updated peer list.
 // Exclude every connection for that account before choosing one connection per collaborator.
-export function otherPresenceUsers<T extends PresenceIdentity>(
-  peers: readonly T[],
-  selfId: string,
-  githubId?: number,
-): T[] {
+export function otherPresenceUsers<T extends PresenceIdentity>(peers: readonly T[], selfId: string, githubId?: number): T[] {
   if (!selfId && githubId === undefined) {
     return [];
   }
-  return presenceUsers(
-    peers.filter(
-      (peer) => peer.id !== selfId && (githubId === undefined || peer.githubId !== githubId),
-    ),
-  );
+  return presenceUsers(peers.filter((peer) => peer.id !== selfId && (githubId === undefined || peer.githubId !== githubId)));
 }

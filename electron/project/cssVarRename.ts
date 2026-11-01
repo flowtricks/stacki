@@ -25,8 +25,7 @@ import { CSS_VARIABLE_LIMITS, SKIPPED_DIRECTORIES, findStylesheets } from './css
 // Where a name can be written. CSS files hold most of them; an Astro component
 // keeps its rules in a `<style>` block, and a `style="--x: 1"` can sit in markup
 // or a template — a token spelled `--x` in any of these is that variable.
-export const RENAME_EXTS =
-  /\.(css|s[ac]ss|less|pcss|postcss|astro|html|htm|md|mdx|mdoc|svelte|vue|jsx|tsx|[cm]?[jt]s)$/i;
+export const RENAME_EXTS = /\.(css|s[ac]ss|less|pcss|postcss|astro|html|htm|md|mdx|mdoc|svelte|vue|jsx|tsx|[cm]?[jt]s)$/i;
 
 /**
  * Every file in the project that could spell a variable's name.
@@ -174,10 +173,7 @@ export function renameBatchProblem(list: readonly Rename[]): string | undefined 
 
 // Taken names, minus the ones this batch is freeing up: renaming a group means
 // every member moves at once, and a swap within it is legitimate.
-export function renameTakenProblem(
-  projectPath: string,
-  list: readonly Rename[],
-): string | undefined {
+export function renameTakenProblem(projectPath: string, list: readonly Rename[]): string | undefined {
   const froms = new Set(list.map(({ from }) => from));
   const declared = new Set<string>();
   for (const abs of findStylesheets(projectPath)) {

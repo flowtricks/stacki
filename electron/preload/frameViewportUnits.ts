@@ -6,15 +6,12 @@ const DIMENSION = '(?<![\\w-])([-+]?(?:\\d*\\.)?\\d+(?:e[-+]?\\d+)?)(?:s|l|d)?vh
 const VIEWPORT_UNITS = new RegExp(`(${LITERALS})|${DIMENSION}`, 'gi');
 
 export function freezeViewportValue(value: string): string {
-  return value.replace(
-    VIEWPORT_UNITS,
-    (match: string, literal: string | undefined, amount: string | undefined): string => {
-      if (literal !== undefined || amount === undefined) {
-        return match;
-      }
-      return `calc(${amount} * var(--avb-vh))`;
-    },
-  );
+  return value.replace(VIEWPORT_UNITS, (match: string, literal: string | undefined, amount: string | undefined): string => {
+    if (literal !== undefined || amount === undefined) {
+      return match;
+    }
+    return `calc(${amount} * var(--avb-vh))`;
+  });
 }
 
 export function parseViewportHeight(value: unknown): number | undefined {

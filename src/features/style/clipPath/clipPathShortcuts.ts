@@ -136,14 +136,10 @@ export const SHORTCUTS_BY_KIND: Partial<Record<string, ShortcutHelpGroup[]>> = {
 };
 
 // The shortcut help for the shape being edited, then the general shortcuts.
-export function clipPathShortcutGroups(
-  shape: ClipShape,
-  shapeFitMode: ShapeFitMode,
-): ShortcutHelpGroup[] {
+export function clipPathShortcutGroups(shape: ClipShape, shapeFitMode: ShapeFitMode): ShortcutHelpGroup[] {
   const kind = shortcutShapeKind(shape);
   if (kind === 'shape') {
-    const shapeGroups =
-      shapeFitMode === 'contain' ? SCALED_SHAPE_SHORTCUTS : STRETCHED_SHAPE_SHORTCUTS;
+    const shapeGroups = shapeFitMode === 'contain' ? SCALED_SHAPE_SHORTCUTS : STRETCHED_SHAPE_SHORTCUTS;
     return [...shapeGroups, GENERAL_SHORTCUTS];
   }
   return [...(SHORTCUTS_BY_KIND[kind] ?? CUSTOM_SHORTCUTS), GENERAL_SHORTCUTS];

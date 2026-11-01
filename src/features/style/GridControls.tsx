@@ -10,17 +10,7 @@ import type { ResolvedProp } from './model/resolved';
 import { useHighlight } from './model/computedStyle';
 import { commitInPlace } from './model/commitInPlace';
 import { countTracks, NEW_COLUMN, NEW_ROW, repeatTracks, isUniformTracks } from './gridTracks';
-import {
-  GRID_ITEM_ALIGN,
-  gridKeyword,
-  GridAlignIcon,
-  X_ALIGN_ICONS,
-  Y_ALIGN_ICONS,
-  X_ALIGN_LABELS,
-  Y_ALIGN_LABELS,
-  cap,
-  CustomizeIcon,
-} from './GridIcons';
+import { GRID_ITEM_ALIGN, gridKeyword, GridAlignIcon, X_ALIGN_ICONS, Y_ALIGN_ICONS, X_ALIGN_LABELS, Y_ALIGN_LABELS, cap, CustomizeIcon } from './GridIcons';
 import { GridDirectionControl, GridContentControl, CountField } from './GridFlowControls';
 
 // The grid controls in the Layout section (shown when Display is grid). Mirrors
@@ -82,11 +72,7 @@ function GridAlignBox({
           )),
         )}
       </div>
-      <div
-        className="embed-editor_grid-align-preview"
-        style={{ justifyItems: ji, alignItems: ai }}
-        aria-hidden="true"
-      >
+      <div className="embed-editor_grid-align-preview" style={{ justifyItems: ji, alignItems: ai }} aria-hidden="true">
         <span className="embed-editor_grid-align-item" style={itemStyle} />
       </div>
     </div>
@@ -196,8 +182,7 @@ function GridAlignAxis(props: GridAlignAxisProps) {
   const shownAlign = useHighlight('', present ? '' : prop, GRID_ITEM_ALIGN, 'stretch');
   const options = alignAxisOptions(axis);
   // "Custom" has no value of its own to show, so landing on it reverts the preview.
-  const preview = (option: string | undefined) =>
-    onPreview(option === AXIS_CUSTOM ? undefined : option);
+  const preview = (option: string | undefined) => onPreview(option === AXIS_CUSTOM ? undefined : option);
   const pick = (choice: string) => {
     if (choice === AXIS_CUSTOM) {
       setForceCustom(true);
@@ -264,10 +249,7 @@ function resolvedValue(read: Read, prop: string): string {
   if (!resolved) {
     return '';
   }
-  const source =
-    resolved.source === 'selected' && resolved.selectedValue
-      ? resolved.selectedValue
-      : resolved.winner;
+  const source = resolved.source === 'selected' && resolved.selectedValue ? resolved.selectedValue : resolved.winner;
   return source.value.trim();
 }
 
@@ -284,12 +266,7 @@ export default function GridControls(props: GridControlsProps) {
     <>
       <GridTracksRow props={props} onConfigure={() => setSettingsOpen(true)} />
       <div className="embed-editor_size-row">
-        <GroupLabel
-          label="Direction"
-          props={['grid-auto-flow']}
-          {...labelProps}
-          onClear={() => clearProp('grid-auto-flow')}
-        />
+        <GroupLabel label="Direction" props={['grid-auto-flow']} {...labelProps} onClear={() => clearProp('grid-auto-flow')} />
         <GridDirectionControl
           value={resolvedValue(read, 'grid-auto-flow')}
           busy={busy}
@@ -316,13 +293,7 @@ export default function GridControls(props: GridControlsProps) {
 }
 
 // Columns / Rows track counts and the gear that opens the Configure-grid modal.
-function GridTracksRow({
-  props,
-  onConfigure,
-}: {
-  props: GridControlsProps;
-  onConfigure: () => void;
-}) {
+function GridTracksRow({ props, onConfigure }: { props: GridControlsProps; onConfigure: () => void }) {
   const { read, busy, setProp, clearProp } = props;
   const labelProps = {
     read,
@@ -334,8 +305,7 @@ function GridTracksRow({
   const rowsRaw = resolvedValue(read, 'grid-template-rows');
   // The gear lights up when a track list isn't just N equal tracks — those can't be
   // represented as a count, so per-track sizing / reordering lives in the modal.
-  const customTracks =
-    (!!columnsRaw && !isUniformTracks(columnsRaw)) || (!!rowsRaw && !isUniformTracks(rowsRaw));
+  const customTracks = (!!columnsRaw && !isUniformTracks(columnsRaw)) || (!!rowsRaw && !isUniformTracks(rowsRaw));
   return (
     <div className="embed-editor_size-row embed-editor_bg-row-top">
       <GroupLabel
@@ -352,16 +322,9 @@ function GridTracksRow({
             value={countTracks(columnsRaw)}
             busy={busy}
             ariaLabel="Grid columns"
-            onCommit={(count) =>
-              setProp('grid-template-columns', repeatTracks(count, NEW_COLUMN), false)
-            }
+            onCommit={(count) => setProp('grid-template-columns', repeatTracks(count, NEW_COLUMN), false)}
           />
-          <GroupLabel
-            label="Columns"
-            props={['grid-template-columns']}
-            {...labelProps}
-            onClear={() => clearProp('grid-template-columns')}
-          />
+          <GroupLabel label="Columns" props={['grid-template-columns']} {...labelProps} onClear={() => clearProp('grid-template-columns')} />
         </div>
         <div className="embed-editor_gap-cell">
           <CountField
@@ -370,12 +333,7 @@ function GridTracksRow({
             ariaLabel="Grid rows"
             onCommit={(count) => setProp('grid-template-rows', repeatTracks(count, NEW_ROW), false)}
           />
-          <GroupLabel
-            label="Rows"
-            props={['grid-template-rows']}
-            {...labelProps}
-            onClear={() => clearProp('grid-template-rows')}
-          />
+          <GroupLabel label="Rows" props={['grid-template-rows']} {...labelProps} onClear={() => clearProp('grid-template-rows')} />
         </div>
         <ConfigureGridButton busy={busy} customTracks={customTracks} onOpen={onConfigure} />
       </div>
@@ -385,15 +343,7 @@ function GridTracksRow({
 
 // The gear, with a rich "Configure grid" tooltip shown after a short hover (matches the
 // Direction / Content segmented tooltips instead of the OS-native `title`).
-function ConfigureGridButton({
-  busy,
-  customTracks,
-  onOpen,
-}: {
-  busy: boolean;
-  customTracks: boolean;
-  onOpen: () => void;
-}) {
+function ConfigureGridButton({ busy, customTracks, onOpen }: { busy: boolean; customTracks: boolean; onOpen: () => void }) {
   const gearRef = useRef<HTMLButtonElement>(null);
   const [gearTip, setGearTip] = useState(false);
   const gearTimer = useRef<number | undefined>(undefined);
@@ -409,9 +359,7 @@ function ConfigureGridButton({
       <button
         ref={gearRef}
         type="button"
-        className={
-          'embed-editor_icon-btn embed-editor_grid-gear ' + (customTracks ? 'is-active' : '')
-        }
+        className={'embed-editor_icon-btn embed-editor_grid-gear ' + (customTracks ? 'is-active' : '')}
         disabled={busy}
         aria-label="Configure grid"
         onMouseEnter={() => {
@@ -430,9 +378,7 @@ function ConfigureGridButton({
       >
         <CustomizeIcon />
       </button>
-      {gearTip && gearRef.current ? (
-        <HoverTooltip anchor={gearRef.current}>Configure grid</HoverTooltip>
-      ) : undefined}
+      {gearTip && gearRef.current ? <HoverTooltip anchor={gearRef.current}>Configure grid</HoverTooltip> : undefined}
     </>
   );
 }
@@ -484,17 +430,7 @@ function GridAlignRow({ props }: { props: GridControlsProps }) {
 
 // Content distribution as a Webflow-style icon segmented control. `vertical` rotates
 // the glyphs for the Rows (align-content) axis; the row's label owns clear/provenance.
-function ContentRow({
-  label,
-  prop,
-  vertical,
-  props,
-}: {
-  label: string;
-  prop: string;
-  vertical: boolean;
-  props: GridControlsProps;
-}) {
+function ContentRow({ label, prop, vertical, props }: { label: string; prop: string; vertical: boolean; props: GridControlsProps }) {
   const { read, busy, setProp, clearProp } = props;
   return (
     <div className="embed-editor_size-row">

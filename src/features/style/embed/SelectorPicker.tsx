@@ -65,13 +65,7 @@ export function SelectorPicker({
             </div>
           ) : undefined}
           {view.shownSelectors.length ? (
-            <SelectorChips
-              entries={view.shownSelectors}
-              activeSelector={activeSelector}
-              busy={busy}
-              onSelect={onSelect}
-              onDeselect={onDeselect}
-            />
+            <SelectorChips entries={view.shownSelectors} activeSelector={activeSelector} busy={busy} onSelect={onSelect} onDeselect={onDeselect} />
           ) : undefined}
           {showInput ? (
             <SelectorAddField
@@ -92,15 +86,7 @@ export function SelectorPicker({
 }
 
 // Keep the highlighted row visible while arrowing through a long list.
-export function useHighlightInView({
-  listRef,
-  highlight,
-  showList,
-}: {
-  listRef: React.RefObject<HTMLDivElement>;
-  highlight: number;
-  showList: boolean;
-}) {
+export function useHighlightInView({ listRef, highlight, showList }: { listRef: React.RefObject<HTMLDivElement>; highlight: number; showList: boolean }) {
   useEffect(() => {
     if (!showList || highlight < 0) {
       return;
@@ -123,10 +109,7 @@ export function useAddSelectorField({
   onSelect,
   onDeselect,
   onAdd,
-}: Pick<
-  SelectorPickerProps,
-  'selectors' | 'suggestions' | 'activeSelector' | 'busy' | 'onSelect' | 'onDeselect' | 'onAdd'
->) {
+}: Pick<SelectorPickerProps, 'selectors' | 'suggestions' | 'activeSelector' | 'busy' | 'onSelect' | 'onDeselect' | 'onAdd'>) {
   const [draft, setDraft] = useState('');
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
@@ -257,10 +240,7 @@ export function useSelectorView({
       }),
     [classified, showGlobals, showInherited, activeSelector, activePicked],
   );
-  const visibleSelectorTexts = useMemo(
-    () => shownSelectors.map((entry) => entry.selector.text),
-    [shownSelectors],
-  );
+  const visibleSelectorTexts = useMemo(() => shownSelectors.map((entry) => entry.selector.text), [shownSelectors]);
   useEffect(() => {
     onVisibleSelectorsChange?.(visibleSelectorTexts);
   }, [onVisibleSelectorsChange, visibleSelectorTexts]);
@@ -282,22 +262,13 @@ export function useSelectorView({
 // list would bury the handful that describe this element. Selectors already in the
 // well aren't suggestions — picking one would just be the chip that's already sitting
 // above the input.
-export function useSelectorSuggestions({
-  selectors,
-  suggestions,
-  draft,
-}: Pick<SelectorPickerProps, 'selectors' | 'suggestions'> & { draft: string }) {
+export function useSelectorSuggestions({ selectors, suggestions, draft }: Pick<SelectorPickerProps, 'selectors' | 'suggestions'> & { draft: string }) {
   const projectClasses = useProjectClasses();
   const query = draft.trim().toLowerCase();
-  const chipKeys = useMemo(
-    () => new Set(selectors.map((entry) => selectorKey(entry.text))),
-    [selectors],
-  );
+  const chipKeys = useMemo(() => new Set(selectors.map((entry) => selectorKey(entry.text))), [selectors]);
   return useMemo(() => {
     const own = suggestions.filter(
-      (suggestion) =>
-        (!query || suggestion.selector.toLowerCase().includes(query)) &&
-        !chipKeys.has(selectorKey(suggestion.selector)),
+      (suggestion) => (!query || suggestion.selector.toLowerCase().includes(query)) && !chipKeys.has(selectorKey(suggestion.selector)),
     );
     if (!query) {
       return own;
@@ -460,11 +431,7 @@ export function SelectorAddField({
 // The add input's keys: ↓/↑ move the highlight (opening the list), Enter adds the
 // highlighted suggestion or the typed text, Tab fills the highlighted (or first)
 // suggestion in to keep editing, Escape closes the list.
-export function selectorKeyDown(
-  event: ReactKeyboardEvent<HTMLInputElement>,
-  add: AddSelectorState,
-  apply: (text: string) => void,
-) {
+export function selectorKeyDown(event: ReactKeyboardEvent<HTMLInputElement>, add: AddSelectorState, apply: (text: string) => void) {
   const { highlight, filtered, showList } = add;
   if (event.key === 'ArrowDown') {
     event.preventDefault();
@@ -501,9 +468,7 @@ export function SelectorFilterToggles({ view, busy }: { view: SelectorView; busy
   return (
     <>
       <label
-        className={
-          'embed-editor_check embed-editor_selector-filter ' + (globals.length ? '' : 'is-empty')
-        }
+        className={'embed-editor_check embed-editor_selector-filter ' + (globals.length ? '' : 'is-empty')}
         title="Tags, universal selectors, and broad states can match many elements"
       >
         <input
@@ -515,9 +480,7 @@ export function SelectorFilterToggles({ view, busy }: { view: SelectorView; busy
         <span>Show global selectors ({globals.length})</span>
       </label>
       <label
-        className={
-          'embed-editor_check embed-editor_selector-filter ' + (inherited.length ? '' : 'is-empty')
-        }
+        className={'embed-editor_check embed-editor_selector-filter ' + (inherited.length ? '' : 'is-empty')}
         title="Selectors that apply because this element is inside a matching parent or ancestor"
       >
         <input
@@ -549,13 +512,7 @@ export const ADD_QUERY = '\0add-query';
 export function PlusIcon() {
   return (
     <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-      <path
-        d="M8 3.5v9M3.5 8h9"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
+      <path d="M8 3.5v9M3.5 8h9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }
@@ -639,9 +596,7 @@ function SelectorSuggestions({
           onClick={() => apply(suggestion.selector)}
         >
           <span className="embed-editor_suggest-sel">{suggestion.selector}</span>
-          <span className="embed-editor_suggest-kind">
-            {SUGGESTION_KIND_LABEL[suggestion.kind]}
-          </span>
+          <span className="embed-editor_suggest-kind">{SUGGESTION_KIND_LABEL[suggestion.kind]}</span>
         </button>
       ))}
     </Popup>

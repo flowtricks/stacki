@@ -7,8 +7,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const { repoPath } = require('../../helpers/sources.js');
 
-const settle = (milliseconds = 0) =>
-  new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+const settle = (milliseconds = 0) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
 (async () => {
   const esbuild = require('esbuild');
@@ -67,9 +66,7 @@ const settle = (milliseconds = 0) =>
     document.querySelector('.u-select-button').click();
     await settle();
   });
-  const relative = [...document.querySelectorAll('.u-select-option')].find((option) =>
-    option.textContent.includes('Relative'),
-  );
+  const relative = [...document.querySelectorAll('.u-select-option')].find((option) => option.textContent.includes('Relative'));
   const list = document.querySelector('.u-select-list');
   assert.ok(relative, 'the option to preview is rendered');
   assert.ok(list, 'the open menu is rendered');

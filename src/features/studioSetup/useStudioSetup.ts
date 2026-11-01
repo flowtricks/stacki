@@ -43,9 +43,7 @@ export function useStudioSetup(projectPath: string, revision: number) {
         return;
       }
       if (progress.requestId === requestId && progress.projectPath === projectPath) {
-        setActivity((previous) =>
-          previous.kind === 'busy' ? { kind: 'busy', progress } : previous,
-        );
+        setActivity((previous) => (previous.kind === 'busy' ? { kind: 'busy', progress } : previous));
       }
     });
     subscription.current = unsubscribe;

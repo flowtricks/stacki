@@ -75,38 +75,23 @@ const FOOTER = `
     // its blank text nodes in different places from the fresh rendering's. One
     // trailing newline and none in between is enough: matching any text against
     // any text sent the cursor past both elements to reach it.
-    live.innerHTML =
-      '<div class="container">above</div><div class="site-footer_fine">© 2026</div>\n';
+    live.innerHTML = '<div class="container">above</div><div class="site-footer_fine">© 2026</div>\n';
     dom.window.document.body.append(live, server);
 
     syncAnchors(live, server);
 
     const kids = [...live.childNodes];
     const at = (data) => kids.findIndex((child) => child.nodeType === 8 && child.data === data);
-    const elementAt = (cls) =>
-      kids.findIndex((child) => child.nodeType === 1 && child.className === cls);
+    const elementAt = (cls) => kids.findIndex((child) => child.nodeType === 1 && child.className === cls);
     check('every marker is put back', at('avb-s:0.1') >= 0 && at('avb-e:0.1') >= 0, live.innerHTML);
-    check(
-      "the comment's markers stay together",
-      at('avb-e:0.1') === at('avb-s:0.1') + 1,
-      live.innerHTML,
-    );
-    check(
-      'and the element after it is outside them',
-      at('avb-e:0.1') < elementAt('site-footer_fine'),
-      live.innerHTML,
-    );
+    check("the comment's markers stay together", at('avb-e:0.1') === at('avb-s:0.1') + 1, live.innerHTML);
+    check('and the element after it is outside them', at('avb-e:0.1') < elementAt('site-footer_fine'), live.innerHTML);
     check(
       'each element is still wrapped by its own pair',
-      at('avb-s:0.2') < elementAt('site-footer_fine') &&
-        at('avb-e:0.2') > elementAt('site-footer_fine'),
+      at('avb-s:0.2') < elementAt('site-footer_fine') && at('avb-e:0.2') > elementAt('site-footer_fine'),
       live.innerHTML,
     );
-    check(
-      'and so is the one before it',
-      at('avb-s:0.0') < elementAt('container') && at('avb-e:0.0') > elementAt('container'),
-      live.innerHTML,
-    );
+    check('and so is the one before it', at('avb-s:0.0') < elementAt('container') && at('avb-e:0.0') > elementAt('container'), live.innerHTML);
     delete global.document;
   }
 
@@ -115,11 +100,10 @@ const FOOTER = `
   // print resolve to?
   {
     const { JSDOM } = require('jsdom');
-    const dom = new JSDOM(
-      `<!doctype html><body><!--avb-s:0--><footer class="site-footer">${FOOTER}</footer>` +
-        `<!--avb-e:0--></body>`,
-      { url: 'http://localhost:4321/#avb-design', pretendToBeVisual: true },
-    );
+    const dom = new JSDOM(`<!doctype html><body><!--avb-s:0--><footer class="site-footer">${FOOTER}</footer>` + `<!--avb-e:0--></body>`, {
+      url: 'http://localhost:4321/#avb-design',
+      pretendToBeVisual: true,
+    });
     const { window } = dom;
     const NO_BOX = { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
     window.Element.prototype.getBoundingClientRect = function () {
@@ -187,26 +171,16 @@ const FOOTER = `
     await settle(20);
 
     const fine2 = document.querySelector('.site-footer_fine');
-    check(
-      'a marker with no close claims nothing',
-      !(fine2.getAttribute('data-avb-p') || '').split(' ').includes('0.1'),
-      fine2.getAttribute('data-avb-p'),
-    );
+    check('a marker with no close claims nothing', !(fine2.getAttribute('data-avb-p') || '').split(' ').includes('0.1'), fine2.getAttribute('data-avb-p'));
     sent.length = 0;
     fine2.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
     await settle(20);
     const click2 = sent.filter((message) => message.type === 'avb:click-node').pop();
-    check(
-      'so the click still reports the element that was clicked',
-      click2?.path === '0.2',
-      JSON.stringify(click2),
-    );
+    check('so the click still reports the element that was clicked', click2?.path === '0.2', JSON.stringify(click2));
   }
 
   if (failures.length) {
-    console.error(
-      `\ncomment-region: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\ncomment-region: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

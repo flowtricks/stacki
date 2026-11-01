@@ -48,10 +48,7 @@ export function EditorRail({ panel, toggle, componentOpen }: Props) {
   return (
     <nav className="rail studio-rail" aria-label="Editor panels">
       {panels
-        .filter(
-          ({ id }) =>
-            (id !== 'properties' || componentOpen) && (role !== 'client' || clientPanel(id)),
-        )
+        .filter(({ id }) => (id !== 'properties' || componentOpen) && (role !== 'client' || clientPanel(id)))
         .map(({ id, label, shortcut, Icon }) => (
           <button
             key={id}
@@ -108,10 +105,7 @@ function useRailKeys({ panel, toggle, componentOpen }: Props) {
         event.metaKey ||
         event.ctrlKey ||
         event.repeat ||
-        (event.target instanceof Element &&
-          event.target.closest(
-            'input, textarea, select, [contenteditable=true], .cm-editor, [role=dialog]',
-          ))
+        (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable=true], .cm-editor, [role=dialog]'))
       ) {
         return;
       }

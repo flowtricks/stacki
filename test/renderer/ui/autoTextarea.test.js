@@ -44,9 +44,7 @@ Object.defineProperty(window.HTMLTextAreaElement.prototype, 'scrollHeight', {
 async function measure(props, textPx) {
   scrollPx = textPx;
   const root = createRoot(document.getElementById('root'));
-  await act(async () =>
-    root.render(React.createElement(AutoTextarea, { value: 'x', onChange() {}, ...props })),
-  );
+  await act(async () => root.render(React.createElement(AutoTextarea, { value: 'x', onChange() {}, ...props })));
   const area = document.querySelector('textarea');
   const shown = { height: area.style.height, overflowY: area.style.overflowY };
   await act(async () => root.unmount());
@@ -70,9 +68,6 @@ test('long text stops at the bound and scrolls inside the field', async () => {
 });
 
 test('a height bound must be a positive number', async () => {
-  await assert.rejects(
-    () => measure({ heightPxMax: 0 }, 10),
-    /A textarea height bound is positive/,
-  );
+  await assert.rejects(() => measure({ heightPxMax: 0 }, 10), /A textarea height bound is positive/);
   await assert.rejects(() => measure({ heightPxMax: Number.NaN }, 10), /is a number/);
 });

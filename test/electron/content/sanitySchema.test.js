@@ -9,13 +9,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {
-  definedTypes,
-  iconSymbol,
-  sanityConstantLists,
-  sanityDocumentSchema,
-  sanityNamedTypes,
-} = require('#dist/electron/content/sanitySchema.js');
+const { definedTypes, iconSymbol, sanityConstantLists, sanityDocumentSchema, sanityNamedTypes } = require('#dist/electron/content/sanitySchema.js');
 
 const CAMPUS = `import { defineField, defineType, defineArrayMember } from "sanity";
 // The campus's own page: don't rename "name", it's the URL's source.
@@ -80,9 +74,7 @@ test('fields come in schema order, with titles, help and required, hidden ones o
 });
 
 test('types resolve: lists, groups, options, images, references and named rich text', () => {
-  const types = Object.fromEntries(
-    sanityDocumentSchema(named(), 'campus').fields.map((field) => [field.name, field.type]),
-  );
+  const types = Object.fromEntries(sanityDocumentSchema(named(), 'campus').fields.map((field) => [field.name, field.type]));
   assert.deepEqual(types.serviceTimes, {
     kind: 'array',
     of: [
@@ -167,10 +159,7 @@ test('choices spread from a project constant, and the bare rank field, read as S
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-lists-'));
   try {
     fs.mkdirSync(path.join(root, 'src'), { recursive: true });
-    fs.writeFileSync(
-      path.join(root, 'src/consts.ts'),
-      'export const SERVICES = ["Sunday", "Wednesday"] as const;\nconst MIXED = ["a", b];\n',
-    );
+    fs.writeFileSync(path.join(root, 'src/consts.ts'), 'export const SERVICES = ["Sunday", "Wednesday"] as const;\nconst MIXED = ["a", b];\n');
     const lists = sanityConstantLists(root);
     assert.deepEqual(lists.get('SERVICES'), ['Sunday', 'Wednesday']);
     assert.equal(lists.get('MIXED'), undefined, 'a list with code in it is not a list of text');
@@ -223,14 +212,88 @@ export const logo = defineType({ name: "logo", fields: [
 ] });`;
   const fields = sanityDocumentSchema(new Map(definedTypes(text)), 'logo').fields;
   const [icon, logo, times] = fields;
-  assert.deepEqual(
-    [icon.name, icon.title, logo.name, logo.title],
-    ['icon1', 'Icon — main colour', 'logo1', 'Logo — main colour'],
-  );
+  assert.deepEqual([icon.name, icon.title, logo.name, logo.title], ['icon1', 'Icon — main colour', 'logo1', 'Logo — main colour']);
   assert.equal(icon.type.columns, 2);
   assert.deepEqual(
     icon.type.fields.map((field) => field.name),
     ['svg', 'png'],
   );
   assert.deepEqual(times.type.of[0].preview, { title: 'day', parts: ['campus.name', 'time'] });
+});
+
+test('field groups become tabs in schema order, hidden and empty groups out', () => {
+  const grouped = `export const campus = defineType({
+  name: "campus", type: "document",
+  groups: [
+    { name: "media", title: "Media" },
+    { name: "details", title: "Details", default: true },
+    { name: "empty", title: "Nothing here" },
+    { name: "secret", title: "Secret", hidden: true },
+    { name: "links" },
+  ],
+  fields: [
+    defineField({ name: "name", type: "string", group: "details" }),
+    { ...orderRankField({ type: "campus" }), group: "empty", hidden: true },
+    defineField({ name: "image", type: "image", group: ["media", "details"] }),
+    defineField({ name: "token", type: "string", group: "secret" }),
+    defineField({ name: "site", type: "url", group: "links" }),
+    defineField({ name: "loose", type: "string" }),
+    defineField({ name: "times", type: "object", group: "details", fields: [{ name: "label", type: "string", group: "inner" }] }),
+  ],
+});`;
+  const schema = sanityDocumentSchema(new Map(definedTypes(grouped)), 'campus');
+  assert.ok(schema);
+  assert.deepEqual(
+    schema.fieldGroups,
+    [
+      { name: 'media', title: 'Media' },
+      { name: 'details', title: 'Details' },
+      { name: 'links', title: 'links' },
+    ],
+    'the default group keeps its place: the panel opens on all fields',
+  );
+  assert.deepEqual(
+    schema.fields.map((field) => [field.name, field.groups]),
+    [
+      ['name', ['details']],
+      ['image', ['media', 'details']],
+      ['token', ['secret']],
+      ['site', ['links']],
+      ['loose', []],
+      ['times', ['details']],
+    ],
+  );
+  assert.equal('groups' in schema.fields[5].type.fields[0], false, 'an inner field carries no tab');
+  assert.equal(sanityDocumentSchema(named(), 'campus').fieldGroups, undefined, 'no groups, no tabs');
+});
+
+test('read-only fields: true always, a value check once set, any other callback stays editable', () => {
+  const locked = `export const order = defineType({
+  name: "order", type: "document",
+  fields: [
+    defineField({ name: "fixed", type: "string", readOnly: true }),
+    defineField({ name: "open", type: "string", readOnly: false }),
+    defineField({ name: "chosen", type: "reference", to: [{ type: "navCategory" }], readOnly: ({ value }) => value !== undefined }),
+    defineField({ name: "loose", type: "string", readOnly: ({ value }) => !!value }),
+    defineField({ name: "byUser", type: "string", readOnly: ({ currentUser }) => !isAdmin(currentUser) }),
+    defineField({ name: "named", type: "string", readOnly: sharedLink }),
+    defineField({ name: "rows", type: "array", of: [defineArrayMember({ type: "object", name: "row", fields: [
+      defineField({ name: "category", type: "string", readOnly: ({ value }) => value != null }),
+    ] })] }),
+  ],
+});`;
+  const fields = sanityDocumentSchema(new Map(definedTypes(locked)), 'order').fields;
+  assert.deepEqual(
+    fields.map((field) => [field.name, field.readOnly]),
+    [
+      ['fixed', 'always'],
+      ['open', undefined],
+      ['chosen', 'when-set'],
+      ['loose', 'when-set'],
+      ['byUser', undefined],
+      ['named', undefined],
+      ['rows', undefined],
+    ],
+  );
+  assert.equal(fields[6].type.of[0].fields[0].readOnly, 'when-set', 'a nested field keeps its lock');
 });

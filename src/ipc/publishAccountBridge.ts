@@ -1,17 +1,9 @@
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 import { parseOkResult } from '../../shared/ipc/ipcContract';
 import { GITHUB_DEVICE_URL } from '../../shared/ipc/publishAccount';
-import {
-  parseAccountState,
-  parseCloudflareSignInURL,
-  type AccountRequest,
-  type AccountState,
-} from '../../shared/ipc/publishAccount';
+import { parseAccountState, parseCloudflareSignInURL, type AccountRequest, type AccountState } from '../../shared/ipc/publishAccount';
 
-export async function publishingAccount(
-  projectPath: string,
-  request: AccountRequest,
-): Promise<AccountState> {
+export async function publishingAccount(projectPath: string, request: AccountRequest): Promise<AccountState> {
   const input = parseIpcPayload('publish:account', { projectPath, request });
   let result: unknown;
   try {

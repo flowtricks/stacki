@@ -86,16 +86,13 @@ export function parsePublishConfig(input: unknown): PublishConfig {
   }
   return {
     version: 1,
-    ...(value['publishedSite'] === undefined
-      ? {}
-      : { publishedSite: parsePublishedSite(value['publishedSite']) }),
+    ...(value['publishedSite'] === undefined ? {} : { publishedSite: parsePublishedSite(value['publishedSite']) }),
     ...(value['githubWorkflow'] === undefined
       ? {}
       : {
           githubWorkflow: parseGitHubWorkflow(value['githubWorkflow']),
         }),
-    defaultTarget:
-      value['defaultTarget'] === undefined ? 'all' : parsePublishTarget(value['defaultTarget']),
+    defaultTarget: value['defaultTarget'] === undefined ? 'all' : parsePublishTarget(value['defaultTarget']),
     githubAccount,
     hosting: parseHosting(value['hosting']),
     buildScript: identifier(value['buildScript']),

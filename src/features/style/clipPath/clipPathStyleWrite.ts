@@ -2,21 +2,9 @@
 // clip-path belongs to, finding or creating it, the cascade's winner, and the
 // write itself (ClipPath.tsx).
 
-import type {
-  ApiNullable,
-  BreakpointId,
-  StyleHandle,
-  StyleTargetOptions,
-  WebflowStyleEditor,
-  WebflowStyleLookup,
-} from './webflowDesigner';
+import type { ApiNullable, BreakpointId, StyleHandle, StyleTargetOptions, WebflowStyleEditor, WebflowStyleLookup } from './webflowDesigner';
 import { type StylePropertyRead, type ClipPathStyleOrigin } from './clipPathTypes';
-import {
-  STYLE_LOOKUP_TIMEOUT_MS,
-  STYLE_PROPERTY_LOOKUP_TIMEOUT_MS,
-  SHAPE_STRETCH_PROPERTY,
-  SHAPE_CONTAIN_PROPERTY,
-} from './clipPathConstants';
+import { STYLE_LOOKUP_TIMEOUT_MS, STYLE_PROPERTY_LOOKUP_TIMEOUT_MS, SHAPE_STRETCH_PROPERTY, SHAPE_CONTAIN_PROPERTY } from './clipPathConstants';
 import { parseClipPathInput } from './shapeFunctionModel';
 import { isNoneClipPathValue } from './svgContours';
 import {
@@ -42,9 +30,7 @@ export function hasClipPathDeclaration(value: string | undefined) {
   return Boolean(value && value.trim());
 }
 
-export function styleOptionsForBreakpoint(
-  breakpoint: BreakpointId | undefined,
-): StyleTargetOptions | undefined {
+export function styleOptionsForBreakpoint(breakpoint: BreakpointId | undefined): StyleTargetOptions | undefined {
   return breakpoint && breakpoint !== 'main' ? { breakpoint } : undefined;
 }
 
@@ -70,28 +56,18 @@ export function inheritedBreakpointChain(breakpoint: BreakpointId | undefined) {
   return ['main'] as const;
 }
 
-export function clipPathStyleOriginFromSource(
-  sourceBreakpoint: BreakpointId | undefined,
-  activeBreakpoint: BreakpointId,
-): ClipPathStyleOrigin {
+export function clipPathStyleOriginFromSource(sourceBreakpoint: BreakpointId | undefined, activeBreakpoint: BreakpointId): ClipPathStyleOrigin {
   if (!sourceBreakpoint) {
     return 'none';
   }
   return sourceBreakpoint === activeBreakpoint ? 'current' : 'inherited';
 }
 
-export async function readStylePropertyDeclarationAt(
-  style: StyleHandle,
-  property: string,
-  options?: StyleTargetOptions,
-) {
+export async function readStylePropertyDeclarationAt(style: StyleHandle, property: string, options?: StyleTargetOptions) {
   let propertiesWereRead = false;
 
   try {
-    const properties = await readOptionalWithTimeout(
-      () => style.getProperties?.(options),
-      STYLE_PROPERTY_LOOKUP_TIMEOUT_MS,
-    );
+    const properties = await readOptionalWithTimeout(() => style.getProperties?.(options), STYLE_PROPERTY_LOOKUP_TIMEOUT_MS);
     propertiesWereRead = true;
     const raw = normalizeStylePropertyValue(properties?.[property]);
     if (hasClipPathDeclaration(raw)) {
@@ -102,12 +78,7 @@ export async function readStylePropertyDeclarationAt(
   }
 
   try {
-    const raw = normalizeStylePropertyValue(
-      await readOptionalWithTimeout(
-        () => style.getProperty?.(property, options),
-        STYLE_PROPERTY_LOOKUP_TIMEOUT_MS,
-      ),
-    );
+    const raw = normalizeStylePropertyValue(await readOptionalWithTimeout(() => style.getProperty?.(property, options), STYLE_PROPERTY_LOOKUP_TIMEOUT_MS));
     if (!hasClipPathDeclaration(raw)) {
       return undefined;
     }
@@ -126,11 +97,7 @@ export async function readStylePropertyDeclarationWithSource(
   options?: StyleTargetOptions,
 ): Promise<StylePropertyRead | undefined> {
   for (const breakpoint of inheritedBreakpointChain(options?.breakpoint || 'main')) {
-    const value = await readStylePropertyDeclarationAt(
-      style,
-      property,
-      styleOptionsForBreakpoint(breakpoint),
-    );
+    const value = await readStylePropertyDeclarationAt(style, property, styleOptionsForBreakpoint(breakpoint));
     if (value && hasClipPathDeclaration(value)) {
       return { value, breakpoint };
     }
@@ -138,20 +105,11 @@ export async function readStylePropertyDeclarationWithSource(
   return undefined;
 }
 
-export async function readStylePropertyDeclaration(
-  style: StyleHandle,
-  property: string,
-  options?: StyleTargetOptions,
-) {
-  return (
-    (await readStylePropertyDeclarationWithSource(style, property, options))?.value || undefined
-  );
+export async function readStylePropertyDeclaration(style: StyleHandle, property: string, options?: StyleTargetOptions) {
+  return (await readStylePropertyDeclarationWithSource(style, property, options))?.value || undefined;
 }
 
-export async function readClipPathDeclarationWithSource(
-  style: StyleHandle,
-  options?: StyleTargetOptions,
-) {
+export async function readClipPathDeclarationWithSource(style: StyleHandle, options?: StyleTargetOptions) {
   return readStylePropertyDeclarationWithSource(style, 'clip-path', options);
 }
 
@@ -171,10 +129,7 @@ export async function readPastedShapeMetadata(style: StyleHandle, options?: Styl
   return stretch && contain ? { source: 'style', stretch, contain } : undefined;
 }
 
-export async function findClipPathStyle(
-  styles: StyleHandleList | undefined,
-  options?: StyleTargetOptions,
-) {
+export async function findClipPathStyle(styles: StyleHandleList | undefined, options?: StyleTargetOptions) {
   const styleHandles = getStyleHandles(styles);
   if (!styleHandles.length) {
     return undefined;
@@ -203,10 +158,7 @@ export async function debugStyleSummary(style: StyleHandle, options?: StyleTarge
   const [path, properties, directClipPath, inheritedClipPath] = await Promise.all([
     getStyleNamePath(style),
     readOptionalWithTimeout(() => style.getProperties?.(options), STYLE_PROPERTY_LOOKUP_TIMEOUT_MS),
-    readOptionalWithTimeout(
-      () => style.getProperty?.('clip-path', options),
-      STYLE_PROPERTY_LOOKUP_TIMEOUT_MS,
-    ),
+    readOptionalWithTimeout(() => style.getProperty?.('clip-path', options), STYLE_PROPERTY_LOOKUP_TIMEOUT_MS),
     readClipPathDeclarationWithSource(style, options),
   ]);
   return {
@@ -221,10 +173,7 @@ export async function debugStyleSummary(style: StyleHandle, options?: StyleTarge
   };
 }
 
-export async function debugStyleSummaries(
-  styles: StyleHandleList | undefined,
-  options?: StyleTargetOptions,
-) {
+export async function debugStyleSummaries(styles: StyleHandleList | undefined, options?: StyleTargetOptions) {
   return Promise.all(getStyleHandles(styles).map((style) => debugStyleSummary(style, options)));
 }
 
@@ -241,9 +190,7 @@ export async function resolveWritableClipPathStyleForElement(
   const primaryStyles = await getElementPrimaryStyleHandles(element);
   const primaryMatch = await findClipPathStyle(primaryStyles, options);
   const classStyles = await getElementClassStyleHandles(element, webflowApi, primaryStyles);
-  const classMatch = classStyles.length
-    ? await findClipPathStyle([...classStyles, ...primaryStyles], options)
-    : undefined;
+  const classMatch = classStyles.length ? await findClipPathStyle([...classStyles, ...primaryStyles], options) : undefined;
   const candidates: StyleHandle[] = [];
   const seenRefs = new Set<StyleHandle>();
   const seenIds = new Set<string>();
@@ -274,10 +221,7 @@ export async function resolveWritableClipPathStyleForElement(
 // → standalone `.clip-path`, not the combo `.hero.clip-path` that also ends in
 // `clip-path`). getStyleByName can hand back a combo whose leaf matches, so we
 // verify the resolved path before trusting it. Read-only (never creates).
-export async function findStyleForClassPath(
-  names: string[],
-  api: WebflowStyleLookup,
-): Promise<StyleHandle | undefined> {
+export async function findStyleForClassPath(names: string[], api: WebflowStyleLookup): Promise<StyleHandle | undefined> {
   if (!names.length) {
     return undefined;
   }
@@ -285,26 +229,17 @@ export async function findStyleForClassPath(
   if (!candidate) {
     return undefined;
   }
-  const existing = await readOptionalWithTimeout(
-    () => api.getStyleByName?.(candidate),
-    STYLE_LOOKUP_TIMEOUT_MS,
-  );
+  const existing = await readOptionalWithTimeout(() => api.getStyleByName?.(candidate), STYLE_LOOKUP_TIMEOUT_MS);
   if (!isStyleHandle(existing)) {
     return undefined;
   }
   const path = await getStyleNamePath(existing);
-  return path.length === names.length && path.every((name, index) => name === names[index])
-    ? existing
-    : undefined;
+  return path.length === names.length && path.every((name, index) => name === names[index]) ? existing : undefined;
 }
 
 // Like findStyleForClassPath, but creates the exact standalone/combo (and any
 // missing parent in the chain) when it doesn't exist yet.
-export async function resolveOrCreateStyleForClassPath(
-  names: string[],
-  api: WebflowStyleEditor,
-  depth = 0,
-): Promise<StyleHandle | undefined> {
+export async function resolveOrCreateStyleForClassPath(names: string[], api: WebflowStyleEditor, depth = 0): Promise<StyleHandle | undefined> {
   if (!names.length) {
     return undefined;
   }
@@ -399,9 +334,7 @@ export async function readDeclaringCascadeCandidates(
   options: StyleTargetOptions | undefined,
   api: WebflowStyleLookup,
 ): Promise<CascadeCandidate[]> {
-  const standalones = await Promise.all(
-    classNames.map((name) => findStyleForClassPath([name], api)),
-  );
+  const standalones = await Promise.all(classNames.map((name) => findStyleForClassPath([name], api)));
   const candidates: StyleHandle[] = [];
   const seenRefs = new Set<StyleHandle>();
   const seenIds = new Set<string>();
@@ -436,10 +369,7 @@ export async function readDeclaringCascadeCandidates(
 
 // Among equally specific candidates, the one defined latest in the stylesheet wins.
 // The (potentially large) full style list is fetched only when there's a real tie.
-export async function latestInStylesheet(
-  topTier: CascadeCandidate[],
-  api: WebflowStyleLookup,
-): Promise<CascadeCandidate | undefined> {
+export async function latestInStylesheet(topTier: CascadeCandidate[], api: WebflowStyleLookup): Promise<CascadeCandidate | undefined> {
   const firstWinner = topTier[0];
   if (!firstWinner) {
     return undefined;
@@ -447,16 +377,14 @@ export async function latestInStylesheet(
   if (topTier.length <= 1) {
     return firstWinner;
   }
-  const allStyles =
-    (await readOptionalWithTimeout(() => api.getAllStyles?.(), STYLE_LOOKUP_TIMEOUT_MS)) || [];
+  const allStyles = (await readOptionalWithTimeout(() => api.getAllStyles?.(), STYLE_LOOKUP_TIMEOUT_MS)) || [];
   const orderById = new Map<string, number>();
   allStyles.forEach((style, index) => {
     if (style?.id) {
       orderById.set(style.id, index);
     }
   });
-  const orderOf = (entry: CascadeCandidate) =>
-    entry.style.id ? (orderById.get(entry.style.id) ?? -1) : -1;
+  const orderOf = (entry: CascadeCandidate) => (entry.style.id ? (orderById.get(entry.style.id) ?? -1) : -1);
   let winner = firstWinner;
   for (const entry of topTier.slice(1)) {
     if (orderOf(entry) > orderOf(winner)) {
@@ -468,11 +396,8 @@ export async function latestInStylesheet(
 
 // The keyboard and pointer hints read out after each canvas handle's name.
 export const HANDLE_ADJUST_HINT = 'Drag or use arrow keys to adjust.';
-export const POINT_HANDLE_HINT =
-  'Drag to move, double-click to remove. Use arrow keys to move when selected.';
-export const INSET_EDGE_HANDLE_HINT =
-  'Drag or use arrow keys to resize. ' +
-  'Hold Shift for all sides or Option for this side and the opposite side.';
+export const POINT_HANDLE_HINT = 'Drag to move, double-click to remove. Use arrow keys to move when selected.';
+export const INSET_EDGE_HANDLE_HINT = 'Drag or use arrow keys to resize. ' + 'Hold Shift for all sides or Option for this side and the opposite side.';
 export const INSET_RADIUS_HANDLE_HINT =
   'Drag or use arrow keys to adjust. ' +
   'Hold U to unlock separate horizontal and vertical radii. ' +

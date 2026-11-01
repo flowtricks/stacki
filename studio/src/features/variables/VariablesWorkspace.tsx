@@ -5,13 +5,7 @@ import type { VariableUndo } from '../../../vendor/stacki/src/features/variables
 import type { SharedDocument } from '../collaboration/useDocument';
 import type { EditorProps } from '../../app/Editor';
 
-export function VariablesWorkspace({
-  props,
-  document,
-}: {
-  readonly props: EditorProps;
-  readonly document: SharedDocument | undefined;
-}) {
+export function VariablesWorkspace({ props, document }: { readonly props: EditorProps; readonly document: SharedDocument | undefined }) {
   const { report } = props;
   const toast = useCallback((message: string) => report(message), [report]);
   const record = useCallback(
@@ -45,11 +39,5 @@ export function VariablesWorkspace({
   );
 }
 export function VariableNavigation({ view }: { readonly view: EditorProps['view'] }) {
-  return (
-    <VariablesPanel
-      project={{ path: 'studio' }}
-      selected={view.variable}
-      onSelect={view.setVariable}
-    />
-  );
+  return <VariablesPanel project={{ path: 'studio' }} selected={view.variable} onSelect={view.setVariable} />;
 }

@@ -79,10 +79,7 @@ export function Editor(props: EditorProps) {
   }
   return (
     <CodeAccess.Provider value={props.view.role !== 'client'}>
-      <div
-        className="app studio-app"
-        onKeyDown={interactivePreview.active ? (event) => event.stopPropagation() : undefined}
-      >
+      <div className="app studio-app" onKeyDown={interactivePreview.active ? (event) => event.stopPropagation() : undefined}>
         <EditorHeader
           closeDefaults={() => void defaultsCanvas.run('done')}
           defaultsMode={defaultsCanvas.state.kind !== 'idle'}
@@ -104,12 +101,7 @@ export function Editor(props: EditorProps) {
             }}
           />
           <Sidebar props={titledProps} model={scopedModel} defaultsCanvas={defaultsCanvas} />
-          <EditorContent
-            props={titledProps}
-            model={scopedModel}
-            mobileSettings={mobileSettings}
-            setMobileSettings={setMobileSettings}
-          />
+          <EditorContent props={titledProps} model={scopedModel} mobileSettings={mobileSettings} setMobileSettings={setMobileSettings} />
         </PreviewWorkspace>
       </div>
     </CodeAccess.Provider>
@@ -228,20 +220,13 @@ function EditorContent({
         close={() => setMobileSettings(false)}
       />
       <CmsWorkspace props={props} document={model.document} />
-      {props.view.role !== 'client' && (
-        <VariablesWorkspace props={props} document={model.document} />
-      )}
+      {props.view.role !== 'client' && <VariablesWorkspace props={props} document={model.document} />}
       {props.view.role !== 'client' && <CodePopup editor={model.codeWindow} />}
       <QuickInsert
         key={props.file}
         model={model}
         project={props.project}
-        enabled={
-          !model.collection &&
-          !(props.view.panel === 'collections' && props.view.cms) &&
-          props.view.panel !== 'variables' &&
-          !props.view.pick
-        }
+        enabled={!model.collection && !(props.view.panel === 'collections' && props.view.cms) && props.view.panel !== 'variables' && !props.view.pick}
         report={props.report}
       />
     </div>
@@ -268,10 +253,7 @@ function Inspector({
     return null;
   }
   return (
-    <aside
-      aria-label="Element inspector"
-      className={`studio-right ${visible ? 'mobile-open' : ''} ${client ? 'client-inspector' : ''}`}
-    >
+    <aside aria-label="Element inspector" className={`studio-right ${visible ? 'mobile-open' : ''} ${client ? 'client-inspector' : ''}`}>
       <button className="mobile-close ghost" onClick={close} aria-label="Close settings">
         ×
       </button>
@@ -348,10 +330,7 @@ function PausedEditor({ resume }: { resume: () => void }) {
   );
 }
 
-function defaultsSelection(
-  model: ReturnType<typeof useEditor>,
-  canvas: ReturnType<typeof useStudioDefaultsCanvas>,
-): ReturnType<typeof useEditor> {
+function defaultsSelection(model: ReturnType<typeof useEditor>, canvas: ReturnType<typeof useStudioDefaultsCanvas>): ReturnType<typeof useEditor> {
   return {
     ...model,
     select: (id, occurrence) => {
@@ -367,14 +346,8 @@ function defaultsSelection(
   };
 }
 
-function editCanvasRoute(
-  props: EditorProps,
-  model: ReturnType<typeof useEditor>,
-  route: string,
-): void {
-  const page = props.project.pages.find(
-    (file) => (routeFor(file).replace(/\/$/, '') || '/') === route,
-  );
+function editCanvasRoute(props: EditorProps, model: ReturnType<typeof useEditor>, route: string): void {
+  const page = props.project.pages.find((file) => (routeFor(file).replace(/\/$/, '') || '/') === route);
   if (page) {
     props.open(page);
   } else {

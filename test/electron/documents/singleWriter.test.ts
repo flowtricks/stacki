@@ -202,20 +202,10 @@ test('the write primitives, the actor disk and the host each have one owner', ()
     sources(ROOT)
       .filter((file) => pattern.test(fs.readFileSync(file, 'utf8')))
       .map(repositoryPath);
-  assert.deepEqual(users(/\b(replaceFileAtomic|createFileExclusive)\b/), [
-    'electron/documents/atomicWrite.ts',
-    'electron/documents/documentDisk.ts',
-  ]);
+  assert.deepEqual(users(/\b(replaceFileAtomic|createFileExclusive)\b/), ['electron/documents/atomicWrite.ts', 'electron/documents/documentDisk.ts']);
   assert.deepEqual(users(/new NodeDocumentDisk\b/), ['electron/documents/documentActors.ts']);
-  assert.deepEqual(users(/\bcreateNodeDocumentActors\(/), [
-    'electron/documents/documentActors.ts',
-    'electron/documents/documentWrites.ts',
-    'electron/main.ts',
-  ]);
-  assert.deepEqual(users(/\binstallDocumentHost\(/), [
-    'electron/documents/documentWrites.ts',
-    'electron/main.ts',
-  ]);
+  assert.deepEqual(users(/\bcreateNodeDocumentActors\(/), ['electron/documents/documentActors.ts', 'electron/documents/documentWrites.ts', 'electron/main.ts']);
+  assert.deepEqual(users(/\binstallDocumentHost\(/), ['electron/documents/documentWrites.ts', 'electron/main.ts']);
   // The old unverified writer is gone, not merely unused.
   assert.deepEqual(users(/\bwriteFileAtomic\b/), []);
 });
@@ -224,11 +214,7 @@ test('the renderer and the shared contracts hold no file-writing API', () => {
   for (const directory of ['src', 'shared']) {
     for (const file of sources(path.resolve(directory))) {
       const text = fs.readFileSync(file, 'utf8');
-      assert.equal(
-        /from ['"](node:)?fs(\/promises)?['"]/.test(text),
-        false,
-        `${file} imports node:fs`,
-      );
+      assert.equal(/from ['"](node:)?fs(\/promises)?['"]/.test(text), false, `${file} imports node:fs`);
     }
   }
 });

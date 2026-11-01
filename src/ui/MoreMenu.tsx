@@ -26,12 +26,7 @@ interface MoreMenuProps {
   readonly className?: string;
   readonly width?: number;
 }
-export default function MoreMenu({
-  items,
-  title = 'Options',
-  className = '',
-  width = 150,
-}: MoreMenuProps) {
+export default function MoreMenu({ items, title = 'Options', className = '', width = 150 }: MoreMenuProps) {
   const [open, setOpen] = useState(false);
   const [box, setBox] = useState<CSSProperties | undefined>(undefined);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -82,15 +77,7 @@ export default function MoreMenu({
         <MoreIcon size={13} />
       </button>
       {box ? (
-        <MenuSurface
-          open={open}
-          anchor={buttonRef.current ?? undefined}
-          rows={rows}
-          box={box}
-          width={width}
-          menuRef={menuRef}
-          close={() => setOpen(false)}
-        />
+        <MenuSurface open={open} anchor={buttonRef.current ?? undefined} rows={rows} box={box} width={width} menuRef={menuRef} close={() => setOpen(false)} />
       ) : undefined}
     </>
   );

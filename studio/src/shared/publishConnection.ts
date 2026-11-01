@@ -15,12 +15,7 @@ export function parsePublishConnection(input: unknown): Result<PublishConnection
     return err({ code: 'connection', message: 'Incomplete publish connection.' });
   }
   const { repository, branch, token } = input;
-  if (
-    typeof repository !== 'string' ||
-    repository.length > 200 ||
-    !/^[\w.-]+\/[\w.-]+$/.test(repository) ||
-    repository.split('/').includes('..')
-  ) {
+  if (typeof repository !== 'string' || repository.length > 200 || !/^[\w.-]+\/[\w.-]+$/.test(repository) || repository.split('/').includes('..')) {
     return err({ code: 'connection', message: 'Invalid publish repository.' });
   }
   if (
@@ -34,12 +29,7 @@ export function parsePublishConnection(input: unknown): Result<PublishConnection
   ) {
     return err({ code: 'connection', message: 'Invalid publish branch.' });
   }
-  if (
-    typeof token !== 'string' ||
-    token.length < 1 ||
-    token.length > 500 ||
-    /[\s\x00-\x1f]/.test(token)
-  ) {
+  if (typeof token !== 'string' || token.length < 1 || token.length > 500 || /[\s\x00-\x1f]/.test(token)) {
     return err({ code: 'connection', message: 'Invalid publish credentials.' });
   }
   return ok({ repository, branch, token });

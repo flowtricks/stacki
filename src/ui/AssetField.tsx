@@ -46,13 +46,7 @@ const remoteHost = (url: string) => {
 // An image the project doesn't hold, shown from wherever it is hosted — the
 // card is the same one a local file gets, so pointing a field at a CDN still
 // shows what it points at.
-function RemoteThumb({
-  url,
-  onLoad,
-}: {
-  readonly url: string;
-  readonly onLoad?: (dimensions: AssetDimensions) => void;
-}) {
+function RemoteThumb({ url, onLoad }: { readonly url: string; readonly onLoad?: (dimensions: AssetDimensions) => void }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [url]);
   if (failed) {
@@ -63,9 +57,7 @@ function RemoteThumb({
       src={url}
       alt=""
       draggable={false}
-      onLoad={(event) =>
-        onLoad?.({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })
-      }
+      onLoad={(event) => onLoad?.({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })}
       onError={() => setFailed(true)}
     />
   );
@@ -81,6 +73,9 @@ export interface PickedAsset {
   readonly rel: string;
   readonly root: string;
 }
+// How a picked src/ asset is written into a prop: `hero.src`, the built URL,
+// or `hero`, the imported ImageMetadata object.
+export type AssetReference = 'url' | 'module';
 export interface AssetFieldProps {
   readonly value?: string | undefined;
   readonly fallbackValue?: string | undefined;
@@ -102,9 +97,7 @@ export interface AssetFieldProps {
 export default function AssetField(props: AssetFieldProps) {
   const { showModeToggle = true, plainLabel = 'URL', mediaKind = 'asset', onChange } = props;
   const state = useAssetField(props);
-  const toggle = showModeToggle && (
-    <AssetMode mode={state.mode} onMode={state.setMode} plainLabel={plainLabel} />
-  );
+  const toggle = showModeToggle && <AssetMode mode={state.mode} onMode={state.setMode} plainLabel={plainLabel} />;
   const remoteCard = state.external && <RemoteCard state={state} />;
   if (state.mode === 'url') {
     return (
@@ -151,9 +144,7 @@ function useAssetField({
   const current = value ?? fallbackValue ?? '';
   const isFallback = value === undefined && Boolean(fallbackValue);
   const external = isExternalAsset(current);
-  const [mode, setMode] = useState(
-    () => initialMode || (showModeToggle && external ? 'url' : 'asset'),
-  );
+  const [mode, setMode] = useState(() => initialMode || (showModeToggle && external ? 'url' : 'asset'));
   const entries = useAssetEntries(projectPath);
   const [dims, setDims] = useState<AssetDimensions | undefined>(undefined);
   const justPicked = React.useRef(false);
@@ -170,10 +161,7 @@ function useAssetField({
 
   // Which project file the value names. A src/ asset reached through an import
   // is never spelled out in the value — the host resolves that one (srcRel).
-  const candidates = useMemo(
-    () => (sourceRel ? [sourceRel] : assetRelCandidates(current, baseDirectory)),
-    [sourceRel, current, baseDirectory],
-  );
+  const candidates = useMemo(() => (sourceRel ? [sourceRel] : assetRelCandidates(current, baseDirectory)), [sourceRel, current, baseDirectory]);
   const byRel = useMemo(() => {
     const map = new Map<string, Extract<WireAssetEntry, { readonly isDir: false }>>();
     for (const entry of entries) {
@@ -183,10 +171,7 @@ function useAssetField({
     }
     return map;
   }, [entries]);
-  const entry = useMemo(
-    () => candidates.map((candidate) => byRel.get(candidate)).find(Boolean) || undefined,
-    [candidates, byRel],
-  );
+  const entry = useMemo(() => candidates.map((candidate) => byRel.get(candidate)).find(Boolean) || undefined, [candidates, byRel]);
   // Where it should have been, for the picker's starting folder and for
   // saying which tree came up empty.
   const target = candidates[0] || undefined;
@@ -243,11 +228,7 @@ function AssetMode({
 }) {
   return (
     <div className="af-mode">
-      <button
-        className={`af-mode-btn ${mode === 'asset' ? 'on' : ''}`}
-        title="Choose a file from this project"
-        onClick={() => onMode('asset')}
-      >
+      <button className={`af-mode-btn ${mode === 'asset' ? 'on' : ''}`} title="Choose a file from this project" onClick={() => onMode('asset')}>
         Asset
       </button>
       <button
@@ -282,23 +263,11 @@ function RemoteCard({ state }: { readonly state: AssetFieldState }) {
     </div>
   );
 }
-function LocalCard({
-  state,
-  srcRel: sourceRel,
-}: {
-  readonly state: AssetFieldState;
-  readonly srcRel: string | undefined;
-}) {
+function LocalCard({ state, srcRel: sourceRel }: { readonly state: AssetFieldState; readonly srcRel: string | undefined }) {
   const { entry, noteDims, current, dims, target } = state;
   return (
     <div className="af-card">
-      <div className="af-thumb">
-        {entry ? (
-          <AssetThumb file={entry} onImageLoad={noteDims} />
-        ) : (
-          <ElementImageIcon size={18} />
-        )}
-      </div>
+      <div className="af-thumb">{entry ? <AssetThumb file={entry} onImageLoad={noteDims} /> : <ElementImageIcon size={18} />}</div>
       <div className="af-meta">
         <div className="af-name" title={sourceRel || current}>
           {entry ? entry.name : sourceRel || current || 'No asset selected'}
@@ -311,11 +280,7 @@ function LocalCard({
         )}
         {entry && <div className="af-sub">{fmtSize(entry.size)}</div>}
         {!entry && (sourceRel || current) && (
-          <div className="af-sub">
-            {target
-              ? `not found in ${target.startsWith('src/') ? 'src/' : 'public/'}`
-              : 'file not found'}
-          </div>
+          <div className="af-sub">{target ? `not found in ${target.startsWith('src/') ? 'src/' : 'public/'}` : 'file not found'}</div>
         )}
       </div>
     </div>

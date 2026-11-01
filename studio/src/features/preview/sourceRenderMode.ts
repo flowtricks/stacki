@@ -12,10 +12,5 @@ export function sourceRenderMode(file: string, before: string, after: string): S
   if (!previous.editable || !current.editable) {
     return 'immediate';
   }
-  return hasOnlyLiteralTextChanges(
-    { source: before, nodes: previous.model.nodes },
-    { source: after, nodes: current.model.nodes },
-  )
-    ? 'typing'
-    : 'immediate';
+  return hasOnlyLiteralTextChanges({ source: before, nodes: previous.model.nodes }, { source: after, nodes: current.model.nodes }) ? 'typing' : 'immediate';
 }

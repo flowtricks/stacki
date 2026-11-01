@@ -21,36 +21,18 @@ interface SidebarProps {
   readonly props: EditorProps;
   readonly model: ReturnType<typeof useEditor>;
 }
-export function EditorSidebar({
-  panel,
-  close,
-  props,
-  model,
-  openCode,
-  showNavigator,
-  defaultsCanvas,
-}: SidebarProps) {
+export function EditorSidebar({ panel, close, props, model, openCode, showNavigator, defaultsCanvas }: SidebarProps) {
   const { project, file, open, refresh, report } = props;
   const { selected, document, openComponent } = model;
   return (
     <aside
       className={`studio-left ${panel === 'code' ? 'code-panel-shell' : ''}`}
-      data-variable-selected={
-        (panel === 'variables' && !!props.view.variable) ||
-        (panel === 'collections' && !!props.view.cms)
-      }
+      data-variable-selected={(panel === 'variables' && !!props.view.variable) || (panel === 'collections' && !!props.view.cms)}
     >
       <button className="mobile-close ghost" onClick={() => close()} aria-label="Close panel">
         ×
       </button>
-      {panel === 'navigator' && (
-        <DefaultsNavigator
-          props={props}
-          model={model}
-          defaultsCanvas={defaultsCanvas}
-          openCode={openCode}
-        />
-      )}
+      {panel === 'navigator' && <DefaultsNavigator props={props} model={model} defaultsCanvas={defaultsCanvas} openCode={openCode} />}
       {panel === 'collections' && <CmsNavigation props={props} />}
       {panel === 'pages' && (
         <PagesPanel
@@ -64,9 +46,7 @@ export function EditorSidebar({
           collection={false}
         />
       )}
-      {panel === 'components' && (
-        <ComponentsSidebar props={props} model={model} showNavigator={showNavigator} />
-      )}
+      {panel === 'components' && <ComponentsSidebar props={props} model={model} showNavigator={showNavigator} />}
       {panel === 'assets' && (
         <AssetsPanel
           key={`${selected}:${props.view.pick?.current ?? ''}:${props.view.pick?.mediaKind ?? ''}`}
@@ -77,20 +57,14 @@ export function EditorSidebar({
         />
       )}
       {panel === 'code' && <CodePanel {...model} openComponent={openComponent} />}
-      {panel === 'properties' && document && !file.startsWith('src/pages/') && (
-        <ComponentProperties key={file} document={document} refresh={refresh} />
-      )}
+      {panel === 'properties' && document && !file.startsWith('src/pages/') && <ComponentProperties key={file} document={document} refresh={refresh} />}
       {panel === 'variables' && <VariableNavigation view={props.view} />}
       {panel === 'history' && <HistorySidebar props={props} model={model} />}
       {panel === 'ai' && <ChatPanel file={file} refresh={refresh} error={report} />}
     </aside>
   );
 }
-function ComponentsSidebar({
-  props,
-  model,
-  showNavigator,
-}: Pick<SidebarProps, 'props' | 'model' | 'showNavigator'>) {
+function ComponentsSidebar({ props, model, showNavigator }: Pick<SidebarProps, 'props' | 'model' | 'showNavigator'>) {
   return (
     <ComponentsPanel
       project={props.project}
@@ -110,12 +84,7 @@ function ComponentsSidebar({
   );
 }
 
-function DefaultsNavigator({
-  props,
-  model,
-  defaultsCanvas,
-  openCode,
-}: Pick<SidebarProps, 'props' | 'model' | 'defaultsCanvas' | 'openCode'>) {
+function DefaultsNavigator({ props, model, defaultsCanvas, openCode }: Pick<SidebarProps, 'props' | 'model' | 'defaultsCanvas' | 'openCode'>) {
   const { project, report } = props;
   const { selected, select, action, insert, document, openComponent } = model;
   return (

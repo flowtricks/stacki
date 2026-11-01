@@ -13,15 +13,11 @@ import { sharedPublishingFixture } from './sharedPublishingFixture';
 
 const fixture = await sharedPublishingFixture();
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 try {
-  await writeFile(
-    path.join(fixture.root, 'wrangler.json'),
-    JSON.stringify({ name: 'website', account_id: 'account' }),
-  );
+  await writeFile(path.join(fixture.root, 'wrangler.json'), JSON.stringify({ name: 'website', account_id: 'account' }));
   await writeFile(path.join(fixture.root, 'src/pages/broken.astro'), '---\nconst = ;\n---');
   const page = await browser.newPage();
   await page.route('**/studio/api/publish/discover', async (route) => {

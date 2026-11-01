@@ -4,10 +4,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { readJson, parseRecord } from '../lib/mainHelpers';
-import {
-  parsePackageManagerField,
-  type PackageManager,
-} from '../../shared/properties/packageManager';
+import { parsePackageManagerField, type PackageManager } from '../../shared/properties/packageManager';
 
 // By default `pnpm` blocks dependency build scripts and, since v11, exits with an error when it
 // does, though everything else is installed. Keep them blocked; just don't fail the install.
@@ -43,10 +40,7 @@ export function detectPackageManager(directory: string): PackageManager {
   if (fs.existsSync(path.join(directory, 'yarn.lock'))) {
     return 'yarn';
   }
-  if (
-    fs.existsSync(path.join(directory, 'bun.lockb')) ||
-    fs.existsSync(path.join(directory, 'bun.lock'))
-  ) {
+  if (fs.existsSync(path.join(directory, 'bun.lockb')) || fs.existsSync(path.join(directory, 'bun.lock'))) {
     return 'bun';
   }
   return 'npm';

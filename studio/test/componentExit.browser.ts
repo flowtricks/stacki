@@ -17,10 +17,7 @@ const component = '<section style="padding:30px"><h1>Inside the component</h1></
 const fixture = await startStyleFixture({ page: source, component });
 const browser = await chromium.launch({
   executablePath:
-    process.env['CHROME_PATH'] ??
-    (process.platform === 'darwin'
-      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-      : chromium.executablePath()),
+    process.env['CHROME_PATH'] ?? (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
   headless: true,
 });
 try {
@@ -32,13 +29,7 @@ try {
     const server = socket.connectToServer();
     server.onMessage((message) => {
       const value: unknown = JSON.parse(String(message));
-      if (
-        holdSaves &&
-        value &&
-        typeof value === 'object' &&
-        'type' in value &&
-        value.type === 'saved'
-      ) {
+      if (holdSaves && value && typeof value === 'object' && 'type' in value && value.type === 'saved') {
         assert.ok(savedReplies.length < 10, 'Delayed acknowledgments are bounded');
         savedReplies.push(() => socket.send(message));
       } else {
@@ -60,16 +51,9 @@ try {
   await frame.locator('#outside').click();
   await back.waitFor({ state: 'hidden' });
   await page.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
-  assert.ok(
-    await element.evaluate(
-      (node) => node === document.querySelector('iframe[title="Site preview"]'),
-    ),
-  );
+  assert.ok(await element.evaluate((node) => node === document.querySelector('iframe[title="Site preview"]')));
   assert.equal(await readFile(path.join(fixture.root, 'src/pages/index.astro'), 'utf8'), source);
-  assert.equal(
-    await readFile(path.join(fixture.root, 'src/components/Card.astro'), 'utf8'),
-    component,
-  );
+  assert.equal(await readFile(path.join(fixture.root, 'src/components/Card.astro'), 'utf8'), component);
   await frame.getByRole('heading', { name: 'Inside the component' }).dblclick();
   await back.waitFor();
   await page.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
@@ -90,10 +74,7 @@ try {
     reply();
   }
   await back.waitFor({ state: 'hidden' });
-  assert.equal(
-    await readFile(path.join(fixture.root, 'src/components/Card.astro'), 'utf8'),
-    component.replace('Inside the component', 'Saved before leaving'),
-  );
+  assert.equal(await readFile(path.join(fixture.root, 'src/components/Card.astro'), 'utf8'), component.replace('Inside the component', 'Saved before leaving'));
   await page.screenshot({ path: '/tmp/stacki-component-exit-verified.png' });
   console.log('Outside canvas click exits the component, keeps the iframe and preserves source.');
 } finally {

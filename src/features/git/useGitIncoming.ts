@@ -5,18 +5,13 @@ import { createCoalescedRun } from '../../lib/coalescedRun';
 import { onWindowReturn } from '../../lib/windowReturn';
 
 export type GitIncomingState =
-  | { readonly kind: 'checking' }
-  | { readonly kind: 'ready'; readonly commits: number }
-  | { readonly kind: 'unavailable'; readonly message: string };
+  { readonly kind: 'checking' } | { readonly kind: 'ready'; readonly commits: number } | { readonly kind: 'unavailable'; readonly message: string };
 
 const CHECK_INTERVAL_MS = 30_000;
 const checking = { kind: 'checking' } as const;
 
 /** Mounted with the project so incoming changes are found even with the Git panel closed. */
-export function useGitIncoming(
-  projectPath: string | undefined,
-  info: IpcResults['git:info'] | undefined,
-): GitIncomingState {
+export function useGitIncoming(projectPath: string | undefined, info: IpcResults['git:info'] | undefined): GitIncomingState {
   const repository = info?.isRepo ? info : undefined;
   const branch = repository?.branch;
   const remote = repository?.remote;
@@ -41,9 +36,7 @@ export function useGitIncoming(
       }
       setSnapshot({
         key,
-        value: result.ok
-          ? { kind: 'ready', commits: result.value }
-          : { kind: 'unavailable', message: result.error },
+        value: result.ok ? { kind: 'ready', commits: result.value } : { kind: 'unavailable', message: result.error },
       });
     });
     const refresh = (): void => {

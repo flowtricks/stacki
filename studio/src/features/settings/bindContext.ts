@@ -5,10 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { RichContext } from '../../../vendor/stacki/src/features/props/RichContent';
-import {
-  importedCallsInScope,
-  type ImportedCall,
-} from '../../../vendor/stacki/src/editor/dataSuggest';
+import { importedCallsInScope, type ImportedCall } from '../../../vendor/stacki/src/editor/dataSuggest';
 import { assert } from '../../../vendor/stacki/shared/core/assert';
 import { parsePage, type ParserNode } from '../source/source';
 import { request } from '../project/projectClient';
@@ -17,12 +14,7 @@ import { record } from '../../shared/validation';
 // Loops around one node at most: deeper nesting is not a page anyone edits.
 const LOOP_DEPTH_MAX = 32;
 
-export function useBindContext(
-  file: string,
-  source: string,
-  nodes: readonly ParserNode[],
-  selected: string,
-): RichContext {
+export function useBindContext(file: string, source: string, nodes: readonly ParserNode[], selected: string): RichContext {
   const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(source)?.[1] ?? '';
   const imports = useMemo(() => importsOf(source), [source]);
   const valueSamples = useValueSamples(file, frontmatter, imports);
@@ -71,16 +63,10 @@ function trailTo(nodes: readonly ParserNode[], id: string): ParserNode[] | undef
 }
 
 // What each of the file's import calls returns, asked once per file and call.
-function useValueSamples(
-  file: string,
-  frontmatter: string,
-  imports: ReturnType<typeof importsOf>,
-): Record<string, unknown> {
+function useValueSamples(file: string, frontmatter: string, imports: ReturnType<typeof importsOf>): Record<string, unknown> {
   const [samples, setSamples] = useState<Record<string, unknown>>({});
   useEffect(() => {
-    const wanted = importedCallsInScope(frontmatter, imports).filter(
-      (call) => !(`${file}|${call.name}` in samples),
-    );
+    const wanted = importedCallsInScope(frontmatter, imports).filter((call) => !(`${file}|${call.name}` in samples));
     if (!wanted.length) {
       return undefined;
     }

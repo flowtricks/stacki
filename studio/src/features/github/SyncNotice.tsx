@@ -2,13 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { request } from '../project/projectClient';
 import { record, string } from '../../shared/validation';
 
-export function SyncNotice({
-  refresh,
-  report,
-}: {
-  readonly refresh: () => void;
-  readonly report: (problem: unknown) => void;
-}) {
+export function SyncNotice({ refresh, report }: { readonly refresh: () => void; readonly report: (problem: unknown) => void }) {
   const callback = useRef(refresh);
   callback.current = refresh;
   const [conflict, setConflict] = useState<{ sha: string; files: string[] }>();
@@ -72,9 +66,7 @@ function SyncConflict({
 }) {
   return (
     <div className="sync-notice" role="status">
-      <p>
-        GitHub and the draft changed the same content. Choose which version to keep for these files.
-      </p>
+      <p>GitHub and the draft changed the same content. Choose which version to keep for these files.</p>
       {conflict.files.map((file) => (
         <code key={file}>{file}</code>
       ))}

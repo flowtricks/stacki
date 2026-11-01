@@ -19,11 +19,7 @@ export function setGitWorkspaceBusy(root: string, state: 'working' | 'recovery' 
     operations.set(root, state);
   }
 }
-export async function withGitWorkspaceLease<T>(
-  root: string,
-  expected: string | undefined,
-  work: () => Promise<T>,
-): Promise<T> {
+export async function withGitWorkspaceLease<T>(root: string, expected: string | undefined, work: () => Promise<T>): Promise<T> {
   if (gitWorkspaceNeedsRecovery(root)) {
     throw new Error('Git storage needs recovery. Leave Studio idle so its container can restart.');
   }
@@ -44,7 +40,5 @@ export async function verifyGitWorkspaceLease(root: string): Promise<void> {
 }
 
 export function isGitWorkspaceRead(pathname: string): boolean {
-  return ['/studio/api/git/info', '/studio/api/git/status', '/studio/api/git/incoming'].includes(
-    pathname,
-  );
+  return ['/studio/api/git/info', '/studio/api/git/status', '/studio/api/git/incoming'].includes(pathname);
 }

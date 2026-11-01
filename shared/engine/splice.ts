@@ -8,14 +8,7 @@ import { assert } from '../core/assert';
 import type { SourceEdit } from './intent';
 import { LIMITS } from '../core/limits';
 import type { Splice } from './planner';
-import {
-  byteStringsEqual,
-  decodeUtf8,
-  toByteSpan,
-  toByteString,
-  type ByteSpan,
-  type ByteString,
-} from '../core/span';
+import { byteStringsEqual, decodeUtf8, toByteSpan, toByteString, type ByteSpan, type ByteString } from '../core/span';
 
 /** Whether every splice's range holds its expected bytes (plan §5.2 step 4). */
 export function witnessesHold(bytes: ByteString, splices: readonly Splice[]): boolean {
@@ -102,8 +95,5 @@ export function inverseEdits(splices: readonly Splice[]): readonly SourceEdit[] 
 }
 
 function sizeDelta(splices: readonly Splice[]): number {
-  return splices.reduce(
-    (total, splice) => total + splice.replacementBytes.length - splice.expectedBytes.length,
-    0,
-  );
+  return splices.reduce((total, splice) => total + splice.replacementBytes.length - splice.expectedBytes.length, 0);
 }

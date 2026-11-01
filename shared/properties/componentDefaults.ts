@@ -49,10 +49,7 @@ export interface DefaultsSnapshot {
 
 export function componentFile(input: unknown): string {
   const value = text(input);
-  if (
-    value.length > 500 ||
-    !/^(src\/|node_modules\/(?:@[\w.-]+\/)?[\w.-]+\/)[\w./ -]+\.astro$/.test(value)
-  ) {
+  if (value.length > 500 || !/^(src\/|node_modules\/(?:@[\w.-]+\/)?[\w.-]+\/)[\w./ -]+\.astro$/.test(value)) {
     throw new Error('Component defaults: expected a project-relative component .astro path');
   }
   if (value.split('/').some((part) => part.startsWith('.') || part === '')) {
@@ -77,9 +74,7 @@ export function parseComponentDefaults(input: unknown): ComponentDefaults {
       throw new Error('Component defaults exceed the stored node limit');
     }
   };
-  const components = Object.fromEntries(
-    entries.map(([file, recipe]) => [componentFile(file), parseRecipe(recipe, 0, takeNode)]),
-  );
+  const components = Object.fromEntries(entries.map(([file, recipe]) => [componentFile(file), parseRecipe(recipe, 0, takeNode)]));
   assert(Object.keys(components).length === entries.length, 'Recipe parsing preserves every owner');
   assert(nodes <= DEFAULT_LIMITS.storedNodesMax, 'Parsed recipes fit the total node budget');
   return { version: 1, components };
@@ -177,11 +172,7 @@ function parseRecipeProps(input: unknown): Readonly<Record<string, DefaultValue>
   );
 }
 
-function parseRecipeChildren(
-  input: unknown,
-  depth: number,
-  takeNode: () => void,
-): readonly RecipeChild[] {
+function parseRecipeChildren(input: unknown, depth: number, takeNode: () => void): readonly RecipeChild[] {
   const values = list(record)(input);
   if (values.length > DEFAULT_LIMITS.childrenMax) {
     throw new Error('Too many default children');
@@ -220,29 +211,18 @@ function parseRecipeChildren(
 export interface ResolvedContent {
   readonly props: Readonly<Record<string, DefaultValue>>;
   readonly content:
-    | { readonly kind: 'empty' }
-    | { readonly kind: 'text'; readonly text: string }
-    | { readonly kind: 'children'; readonly children: readonly ResolvedNode[] };
+    { readonly kind: 'empty' } | { readonly kind: 'text'; readonly text: string } | { readonly kind: 'children'; readonly children: readonly ResolvedNode[] };
 }
 export interface ResolvedRecipe extends ResolvedContent {
   readonly component: string;
 }
-export type ResolvedNode =
-  ResolvedRecipe | (ResolvedContent & { readonly element: string }) | { readonly literal: string };
+export type ResolvedNode = ResolvedRecipe | (ResolvedContent & { readonly element: string }) | { readonly literal: string };
 
-export function resolveComponentRecipe(
-  file: string,
-  config: ComponentDefaults,
-  catalog: readonly DefaultComponent[],
-): Result<ResolvedRecipe> {
+export function resolveComponentRecipe(file: string, config: ComponentDefaults, catalog: readonly DefaultComponent[]): Result<ResolvedRecipe> {
   assertRecipeCatalog(config, catalog);
   // Each insertion owns its budget; expansion cannot grow exponentially without a cap.
   let remaining = DEFAULT_LIMITS.nodesMax;
-  const resolveChild = (
-    child: RecipeChild,
-    ancestors: readonly string[],
-    depth: number,
-  ): Result<ResolvedNode> => {
+  const resolveChild = (child: RecipeChild, ancestors: readonly string[], depth: number): Result<ResolvedNode> => {
     if ('component' in child) {
       return resolve(child.component, child, ancestors, depth);
     }
@@ -263,12 +243,7 @@ export function resolveComponentRecipe(
     if (depth > DEFAULT_LIMITS.depthMax || remaining-- <= 0) {
       return err({ code: 'recipe-limit', message: 'Default children exceed the insertion limit.' });
     }
-    if (
-      override.inherit !== false &&
-      ancestors.includes(target) &&
-      override.children === undefined &&
-      override.text === undefined
-    ) {
+    if (override.inherit !== false && ancestors.includes(target) && override.children === undefined && override.text === undefined) {
       return err({ code: 'recipe-cycle', message: `Default children form a cycle at ${target}.` });
     }
     const component = catalog.find((item) => item.file === target);
@@ -287,9 +262,7 @@ export function resolveComponentRecipe(
     if (recipe.children === undefined) {
       return ok({ component: target, props, content: { kind: 'empty' } });
     }
-    return resolveComponentChildren(target, props, recipe.children, component.slots, (child) =>
-      resolveChild(child, [...ancestors, target], depth + 1),
-    );
+    return resolveComponentChildren(target, props, recipe.children, component.slots, (child) => resolveChild(child, [...ancestors, target], depth + 1));
   };
   return resolve(file, {}, [], 0);
 }
@@ -297,14 +270,8 @@ export function resolveComponentRecipe(
 function assertRecipeCatalog(config: ComponentDefaults, catalog: readonly DefaultComponent[]) {
   assert(catalog.length <= 10_000, 'Component catalog is bounded');
   assert(config.version === 1, 'Resolver supports recipe version 1');
-  assert(
-    new Set(catalog.map((item) => item.file)).size === catalog.length,
-    'Each component path has one catalog entry',
-  );
-  assert(
-    Object.keys(config.components).length <= DEFAULT_LIMITS.componentsMax,
-    'Parsed recipes have bounded owners',
-  );
+  assert(new Set(catalog.map((item) => item.file)).size === catalog.length, 'Each component path has one catalog entry');
+  assert(Object.keys(config.components).length <= DEFAULT_LIMITS.componentsMax, 'Parsed recipes have bounded owners');
 }
 
 function resolveComponentChildren(
@@ -320,8 +287,7 @@ function resolveComponentChildren(
     if (!resolved.ok) {
       return resolved;
     }
-    const slot =
-      'literal' in resolved.value ? 'default' : (resolved.value.props['slot'] ?? 'default');
+    const slot = 'literal' in resolved.value ? 'default' : (resolved.value.props['slot'] ?? 'default');
     if (typeof slot !== 'string' || !slots.includes(slot)) {
       return err({ code: 'missing-slot', message: `${target} has no slot "${String(slot)}".` });
     }
@@ -332,10 +298,7 @@ function resolveComponentChildren(
   return ok({ component: target, props, content: { kind: 'children', children } });
 }
 
-function resolveElement(
-  recipe: ElementChild,
-  resolve: (child: RecipeChild) => Result<ResolvedNode>,
-): Result<ResolvedNode> {
+function resolveElement(recipe: ElementChild, resolve: (child: RecipeChild) => Result<ResolvedNode>): Result<ResolvedNode> {
   const base = { element: recipe.element, props: recipe.props ?? {} };
   if (recipe.text !== undefined) {
     return ok({ ...base, content: { kind: 'text', text: recipe.text } });
@@ -366,15 +329,9 @@ function recipeOverride(base: ComponentRecipe, override: ComponentRecipe): Compo
   return { ...base, props };
 }
 
-export function defaultsIssues(
-  config: ComponentDefaults,
-  catalog: readonly DefaultComponent[],
-): readonly string[] {
+export function defaultsIssues(config: ComponentDefaults, catalog: readonly DefaultComponent[]): readonly string[] {
   assert(config.version === 1, 'Diagnostics use the current recipe version');
-  assert(
-    Object.keys(config.components).length <= DEFAULT_LIMITS.componentsMax,
-    'Diagnostics have bounded work',
-  );
+  assert(Object.keys(config.components).length <= DEFAULT_LIMITS.componentsMax, 'Diagnostics have bounded work');
   return Object.keys(config.components).flatMap((file) => {
     const result = resolveComponentRecipe(file, config, catalog);
     return result.ok ? [] : [result.error.message];
@@ -382,16 +339,9 @@ export function defaultsIssues(
 }
 
 /** Relinking after a move updates owners and every nested child reference together. */
-export function relinkDefaults(
-  config: ComponentDefaults,
-  from: string,
-  to: string,
-): Result<ComponentDefaults> {
+export function relinkDefaults(config: ComponentDefaults, from: string, to: string): Result<ComponentDefaults> {
   assert(config.version === 1, 'Relink only changes the current recipe format');
-  assert(
-    Object.keys(config.components).length <= DEFAULT_LIMITS.componentsMax,
-    'Relink starts from bounded parsed configuration',
-  );
+  assert(Object.keys(config.components).length <= DEFAULT_LIMITS.componentsMax, 'Relink starts from bounded parsed configuration');
   if (from !== to && config.components[to] !== undefined) {
     return err({
       code: 'duplicate-defaults',
@@ -410,9 +360,7 @@ export function relinkDefaults(
                 ? child
                 : {
                     ...rename(child, depth + 1),
-                    ...('component' in child
-                      ? { component: child.component === from ? to : child.component }
-                      : { element: child.element }),
+                    ...('component' in child ? { component: child.component === from ? to : child.component } : { element: child.element }),
                   }),
             })),
           }),
@@ -420,11 +368,6 @@ export function relinkDefaults(
   };
   return ok({
     version: 1,
-    components: Object.fromEntries(
-      Object.entries(config.components).map(([file, recipe]) => [
-        file === from ? to : file,
-        rename(recipe, 0),
-      ]),
-    ),
+    components: Object.fromEntries(Object.entries(config.components).map(([file, recipe]) => [file === from ? to : file, rename(recipe, 0)])),
   });
 }

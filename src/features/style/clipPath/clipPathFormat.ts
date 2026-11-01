@@ -28,19 +28,8 @@ import {
   DEFAULT_SHAPE_VALUE,
 } from './clipPathConstants';
 import { formatPercent, formatCssScaleNumber } from './clipPathMeasure';
-import {
-  makeInsetRadii,
-  hasRoundedCorners,
-  formatRadii,
-  formatInsetSides,
-  formatRawEditableClipPath,
-} from './clipPathHandles';
-import {
-  formatShapeValueFromCssSubpaths,
-  resolveShapeScaleVarNames,
-  type ShapeOffsetBounds,
-  formatShapeOffsetPoint,
-} from './shapeFunctionModel';
+import { makeInsetRadii, hasRoundedCorners, formatRadii, formatInsetSides, formatRawEditableClipPath } from './clipPathHandles';
+import { formatShapeValueFromCssSubpaths, resolveShapeScaleVarNames, type ShapeOffsetBounds, formatShapeOffsetPoint } from './shapeFunctionModel';
 
 export const PRESETS: Record<string, ClipShape> = {
   [NONE_PRESET]: NONE_SHAPE,
@@ -62,9 +51,7 @@ export const PRESETS: Record<string, ClipShape> = {
 export const PRESET_NAMES = Object.keys(PRESETS);
 
 export function formatPolygon(points: Point[]) {
-  const coords = points
-    .map((point) => `${formatPercent(point.x)} ${formatPercent(point.y)}`)
-    .join(', ');
+  const coords = points.map((point) => `${formatPercent(point.x)} ${formatPercent(point.y)}`).join(', ');
   return `polygon(${coords})`;
 }
 
@@ -81,10 +68,7 @@ export function formatShapeValueFromPoints(points: Point[]) {
   ].join(', ');
 }
 
-export function mapShapeSubpathsToCss(
-  subpaths: SvgShapeSubpath[],
-  mapPoint: (point: Point) => ShapeCssPoint,
-): ShapeCssSubpath[] {
+export function mapShapeSubpathsToCss(subpaths: SvgShapeSubpath[], mapPoint: (point: Point) => ShapeCssPoint): ShapeCssSubpath[] {
   return subpaths.map((subpath) => ({
     start: mapPoint(subpath.start),
     commands: subpath.commands.map((command) => {
@@ -119,11 +103,7 @@ export function formatPathDataFromPoints(points: Point[]) {
     return DEFAULT_SHAPE_PATH_DATA;
   }
 
-  return [
-    `M${firstPoint.x} ${firstPoint.y}`,
-    ...restPoints.map((point) => `L${point.x} ${point.y}`),
-    'Z',
-  ].join('');
+  return [`M${firstPoint.x} ${firstPoint.y}`, ...restPoints.map((point) => `L${point.x} ${point.y}`), 'Z'].join('');
 }
 
 export function formatPathDataFromSubpaths(subpaths: SvgShapeSubpath[]) {
@@ -135,9 +115,7 @@ export function formatPathDataFromSubpaths(subpaths: SvgShapeSubpath[]) {
       }
       if (command.kind === 'curve') {
         return command.control2
-          ? `C${command.control1.x} ${command.control1.y} ` +
-              `${command.control2.x} ${command.control2.y} ` +
-              `${command.to.x} ${command.to.y}`
+          ? `C${command.control1.x} ${command.control1.y} ` + `${command.control2.x} ${command.control2.y} ` + `${command.to.x} ${command.to.y}`
           : `Q${command.control1.x} ${command.control1.y} ${command.to.x} ${command.to.y}`;
       }
       return 'Z';
@@ -155,10 +133,7 @@ export function shapeFromPolygonPoints(points: Point[]): ShapeFunctionShape {
   };
 }
 
-export function shapeFromSvgSubpaths(
-  subpaths: SvgShapeSubpath[],
-  fillRule?: ShapeFunctionShape['fillRule'],
-): ShapeFunctionShape {
+export function shapeFromSvgSubpaths(subpaths: SvgShapeSubpath[], fillRule?: ShapeFunctionShape['fillRule']): ShapeFunctionShape {
   if (!subpaths.length) {
     return shapeFromPolygonPoints([]);
   }
@@ -182,10 +157,7 @@ export function svgShapeCommandPoints(command: SvgShapeCommand) {
 }
 
 export function svgShapeSubpathPoints(subpaths: SvgShapeSubpath[]) {
-  return subpaths.flatMap((subpath) => [
-    subpath.start,
-    ...subpath.commands.flatMap(svgShapeCommandPoints),
-  ]);
+  return subpaths.flatMap((subpath) => [subpath.start, ...subpath.commands.flatMap(svgShapeCommandPoints)]);
 }
 
 export function svgShapeSubpathBounds(subpaths: SvgShapeSubpath[]): SvgShapeBounds | undefined {
@@ -221,10 +193,7 @@ export function svgShapeBoundsFromViewBox(viewBox: SvgViewBox): SvgShapeBounds |
   };
 }
 
-export function mapSvgShapeCommandPoints(
-  command: SvgShapeCommand,
-  mapper: (point: Point) => Point,
-): SvgShapeCommand {
+export function mapSvgShapeCommandPoints(command: SvgShapeCommand, mapper: (point: Point) => Point): SvgShapeCommand {
   if (command.kind === 'close') {
     return command;
   }
@@ -239,10 +208,7 @@ export function mapSvgShapeCommandPoints(
   };
 }
 
-export function fitShapeSubpathsToPercentBox(
-  subpaths: SvgShapeSubpath[],
-  preferredBounds?: SvgShapeBounds | undefined,
-) {
+export function fitShapeSubpathsToPercentBox(subpaths: SvgShapeSubpath[], preferredBounds?: SvgShapeBounds | undefined) {
   const bounds = preferredBounds || svgShapeSubpathBounds(subpaths);
   if (!bounds) {
     return undefined;
@@ -320,9 +286,7 @@ export function formatClipPath(shape: ClipShape) {
     return `ellipse(${radii} at ${center})`;
   }
   const sides = formatInsetSides(shape);
-  return hasRoundedCorners(shape.radii)
-    ? `inset(${sides} round ${formatRadii(shape.radii)})`
-    : `inset(${sides})`;
+  return hasRoundedCorners(shape.radii) ? `inset(${sides} round ${formatRadii(shape.radii)})` : `inset(${sides})`;
 }
 
 export function formatCodeValue(shape: ClipShape) {
@@ -360,20 +324,10 @@ export function previewUnitPx(unit: string, axis: 'x' | 'y', size: CanvasSize) {
   if (normalized === 'vh' || normalized === 'svh' || normalized === 'lvh' || normalized === 'dvh') {
     return size.height / 100;
   }
-  if (
-    normalized === 'vmin' ||
-    normalized === 'svmin' ||
-    normalized === 'lvmin' ||
-    normalized === 'dvmin'
-  ) {
+  if (normalized === 'vmin' || normalized === 'svmin' || normalized === 'lvmin' || normalized === 'dvmin') {
     return Math.min(size.width, size.height) / 100;
   }
-  if (
-    normalized === 'vmax' ||
-    normalized === 'svmax' ||
-    normalized === 'lvmax' ||
-    normalized === 'dvmax'
-  ) {
+  if (normalized === 'vmax' || normalized === 'svmax' || normalized === 'lvmax' || normalized === 'dvmax') {
     return Math.max(size.width, size.height) / 100;
   }
   if (normalized === 'cqw' || normalized === 'cqi') {
@@ -428,16 +382,11 @@ export function previewCssLengthPercentageToken(token: string, axis: 'x' | 'y', 
   if (axisSize <= 0) {
     return token;
   }
-  const percent =
-    unit === '%' ? value : ((value * previewUnitPx(unit, axis, size)) / axisSize) * 100;
+  const percent = unit === '%' ? value : ((value * previewUnitPx(unit, axis, size)) / axisSize) * 100;
   return `${formatCssScaleNumber(percent)}%`;
 }
 
-export function addPreviewVariableFallbacksForAxis(
-  value: string,
-  axis: 'x' | 'y',
-  size: CanvasSize,
-) {
+export function addPreviewVariableFallbacksForAxis(value: string, axis: 'x' | 'y', size: CanvasSize) {
   const fallback = previewCssLengthPercentageToken('1rem', axis, size);
   return value.replace(/var\(\s*(--[a-zA-Z0-9_-]+)\s*\)/g, `var($1, ${fallback})`);
 }

@@ -13,14 +13,7 @@
 
 import type { Suite } from './testDiscovery';
 
-export type BuildStage =
-  | 'build:contracts'
-  | 'build:electron'
-  | 'build:scripts'
-  | 'build:morph'
-  | 'build:preload'
-  | 'stage:runtime'
-  | 'build:web';
+export type BuildStage = 'build:contracts' | 'build:electron' | 'build:scripts' | 'build:morph' | 'build:preload' | 'stage:runtime' | 'build:web';
 
 export interface GatePlan {
   // `full`: clean the output tree first, then every static check after the
@@ -36,25 +29,13 @@ export interface GatePlan {
   readonly beside: readonly BuildStage[];
 }
 
-const CHAIN_FULL: readonly BuildStage[] = [
-  'build:contracts',
-  'build:electron',
-  'build:scripts',
-  'build:morph',
-  'build:preload',
-  'stage:runtime',
-];
+const CHAIN_FULL: readonly BuildStage[] = ['build:contracts', 'build:electron', 'build:scripts', 'build:morph', 'build:preload', 'stage:runtime'];
 
 // `npm test` builds the scripts before the runner starts (package.json), and a
 // targeted run keeps the tree, so the scripts are already current.
-const CHAIN_TARGETED: readonly BuildStage[] = CHAIN_FULL.filter(
-  (stage) => stage !== 'build:scripts',
-);
+const CHAIN_TARGETED: readonly BuildStage[] = CHAIN_FULL.filter((stage) => stage !== 'build:scripts');
 
-export function gatePlanFor(input: {
-  readonly queries: readonly string[];
-  readonly selected: readonly Suite[];
-}): GatePlan {
+export function gatePlanFor(input: { readonly queries: readonly string[]; readonly selected: readonly Suite[] }): GatePlan {
   if (input.selected.length === 0) {
     throw new Error('gatePlanFor: no suite is selected');
   }

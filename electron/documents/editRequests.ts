@@ -22,35 +22,14 @@ import type { BuiltEdit, EditBase, IntentDraft } from './documentActors';
 import { TAG_NAME_RE } from '../../shared/engine/intent';
 import type { Operation, Placement, RejectionReason, SourceEdit } from '../../shared/engine/intent';
 import { renameSites } from '../../shared/engine/loopScope';
-import {
-  closeTagStart,
-  lineIndent,
-  nodeAtPath,
-  openTagEnd,
-  tagNameEnd,
-  textOf,
-} from '../../shared/engine/planSupport';
+import { closeTagStart, lineIndent, nodeAtPath, openTagEnd, tagNameEnd, textOf } from '../../shared/engine/planSupport';
 import { parsePageResult, type PageNode } from '../../shared/page/pageNode';
 import { toAnchorRef, type AnchorRef } from '../../shared/page/ref';
 import { err, ok, type Result } from '../../shared/core/result';
 import type { Snapshot } from '../../shared/page/snapshot';
-import {
-  byteStringsEqual,
-  decodeUtf8,
-  encodeUtf8,
-  spansAscending,
-  toByteSpan,
-  toByteString,
-} from '../../shared/core/span';
+import { byteStringsEqual, decodeUtf8, encodeUtf8, spansAscending, toByteSpan, toByteString } from '../../shared/core/span';
 import { parsePage, serializeNodes, serializePage } from '../parse/astroParser';
-import {
-  frontmatterSlot,
-  pageFormat,
-  placedHunks,
-  resolveRef,
-  shiftedHunks,
-  type Authored,
-} from './editAnchors';
+import { frontmatterSlot, pageFormat, placedHunks, resolveRef, shiftedHunks, type Authored } from './editAnchors';
 import { markdownEditDraft, markdownPageNodes } from './markdownEdits';
 
 /** The intent an edit is. Every edit is built against the snapshot it names,
@@ -70,10 +49,7 @@ export function buildEdit(edit: Edit, base: EditBase): Result<BuiltEdit, Rejecti
 }
 
 /** The intent an edit is, against the snapshot it names. */
-export function buildEditIntent(
-  edit: Edit,
-  snapshot: Snapshot,
-): Result<IntentDraft, RejectionReason> {
+export function buildEditIntent(edit: Edit, snapshot: Snapshot): Result<IntentDraft, RejectionReason> {
   const decoded = decodeUtf8(snapshot.bytes);
   assert(decoded.ok, 'A page the renderer read decodes');
   if (edit.tag === 'revert') {
@@ -89,9 +65,7 @@ export function buildEditIntent(
   const format = pageFormat(snapshot.path);
   const authored: Authored = { snapshot, text: decoded.value, projection, format };
   if (edit.tag === 'replace-page') {
-    return format === 'astro'
-      ? replacePageDraft(authored, edit.model)
-      : err('unsupported-operation');
+    return format === 'astro' ? replacePageDraft(authored, edit.model) : err('unsupported-operation');
   }
   if (format !== 'astro') {
     // Markdown's own drafts first (markdownEdits.ts); what it leaves — markup
@@ -106,10 +80,7 @@ export function buildEditIntent(
 }
 
 // A gesture's edit of the page's nodes, stated against their parse.
-function nodeEditDraft(
-  edit: Exclude<Edit, { readonly tag: 'revert' | 'code-patch' }>,
-  authored: Authored,
-): Result<IntentDraft, RejectionReason> {
+function nodeEditDraft(edit: Exclude<Edit, { readonly tag: 'revert' | 'code-patch' }>, authored: Authored): Result<IntentDraft, RejectionReason> {
   switch (edit.tag) {
     case 'set-attribute':
     case 'remove-attribute':
@@ -122,30 +93,20 @@ function nodeEditDraft(
       return withAnchor(authored, edit.target, (anchor) => insertDraft(authored, anchor, edit));
     case 'move-node':
       return withAnchor(authored, edit.target, (anchor) =>
-        withAnchor(authored, edit.destination, (destination) =>
-          ok({ anchor, operation: { tag: 'move-node', destination, placement: edit.placement } }),
-        ),
+        withAnchor(authored, edit.destination, (destination) => ok({ anchor, operation: { tag: 'move-node', destination, placement: edit.placement } })),
       );
     case 'rename-binding':
       return withAnchor(authored, edit.target, (anchor) => renameDraft(authored, anchor, edit));
     case 'rename-tag':
-      return withAnchor(authored, edit.target, (anchor) =>
-        tagRenameDraft(authored, anchor, edit.to),
-      );
+      return withAnchor(authored, edit.target, (anchor) => tagRenameDraft(authored, anchor, edit.to));
     case 'rename-attribute':
       return withAnchor(authored, edit.target, (anchor) =>
-        tagAnchor(anchor)
-          ? ok({ anchor, operation: { tag: 'rename-attribute', from: edit.from, to: edit.to } })
-          : err('unsupported-operation'),
+        tagAnchor(anchor) ? ok({ anchor, operation: { tag: 'rename-attribute', from: edit.from, to: edit.to } }) : err('unsupported-operation'),
       );
     case 'replace-node':
-      return withAnchor(authored, edit.target, (anchor) =>
-        replaceDraft(authored, anchor, edit.node),
-      );
+      return withAnchor(authored, edit.target, (anchor) => replaceDraft(authored, anchor, edit.node));
     case 'wrap-nodes':
-      return withAnchor(authored, edit.target, (anchor) =>
-        withAnchor(authored, edit.last, (last) => wrapDraft(authored, anchor, last, edit.name)),
-      );
+      return withAnchor(authored, edit.target, (anchor) => withAnchor(authored, edit.last, (last) => wrapDraft(authored, anchor, last, edit.name)));
     case 'unwrap-node':
       return withAnchor(authored, edit.target, (anchor) => unwrapDraft(authored, anchor));
     case 'append-body':
@@ -164,10 +125,7 @@ function nodeEditDraft(
 // The last-resort visual edit is still a bounded hunk edit, not a regenerated
 // file. The old printed model identifies semantic changes; placedHunks maps
 // only those ranges onto the authored formatting and refuses ambiguous ones.
-function replacePageDraft(
-  authored: Authored,
-  next: Extract<Edit, { tag: 'replace-page' }>['model'],
-): Result<IntentDraft, RejectionReason> {
+function replacePageDraft(authored: Authored, next: Extract<Edit, { tag: 'replace-page' }>['model']): Result<IntentDraft, RejectionReason> {
   const parsed = parsePageResult(parsePage(authored.text, { locs: true }));
   if (!parsed.editable) {
     return err('source-invalid');
@@ -203,25 +161,16 @@ function appendDraft(authored: Authored, nodes: readonly PageNode[]): IntentDraf
 // The renderer's node reference, checked against the projection of the same
 // bytes (editAnchors.ts): a mismatch means the renderer's parse is not of
 // these bytes.
-function withAnchor(
-  authored: Authored,
-  ref: NodeRef,
-  next: (anchor: AnchorRef) => Result<IntentDraft, RejectionReason>,
-): Result<IntentDraft, RejectionReason> {
+function withAnchor(authored: Authored, ref: NodeRef, next: (anchor: AnchorRef) => Result<IntentDraft, RejectionReason>): Result<IntentDraft, RejectionReason> {
   const resolved = resolveRef(authored, ref);
   return resolved.ok ? next(resolved.value.anchor) : resolved;
 }
 
 // New nodes print with the legacy printer, their continuation lines indented
 // to where they land; a copy is the source node's own bytes.
-function insertDraft(
-  authored: Authored,
-  anchor: AnchorRef,
-  edit: Extract<Edit, { tag: 'insert-node' }>,
-): Result<IntentDraft, RejectionReason> {
+function insertDraft(authored: Authored, anchor: AnchorRef, edit: Extract<Edit, { tag: 'insert-node' }>): Result<IntentDraft, RejectionReason> {
   const eol = authored.text.includes('\r\n') ? '\r\n' : '\n';
-  const indent =
-    lineIndent(authored.snapshot.bytes, anchor.span.start) + (inside(edit.placement) ? '  ' : '');
+  const indent = lineIndent(authored.snapshot.bytes, anchor.span.start) + (inside(edit.placement) ? '  ' : '');
   const content = edit.content;
   if (content.tag === 'copy') {
     return withAnchor(authored, content.source, (source) => {
@@ -239,11 +188,7 @@ function insertDraft(
   return ok({ anchor, operation });
 }
 
-function renameDraft(
-  authored: Authored,
-  anchor: AnchorRef,
-  edit: Extract<Edit, { tag: 'rename-binding' }>,
-): Result<IntentDraft, RejectionReason> {
+function renameDraft(authored: Authored, anchor: AnchorRef, edit: Extract<Edit, { tag: 'rename-binding' }>): Result<IntentDraft, RejectionReason> {
   const loop = nodeAtPath(authored.projection, anchor.path);
   assert(loop !== undefined, 'A checked anchor names a projected node');
   if (loop.kind !== 'map') {
@@ -259,11 +204,7 @@ function renameDraft(
 // A tag's new name: the old one is read off the authored bytes, where the
 // planner will find it again (its witness). A `<style>` or `<script>` is raw
 // text by its name, and `<>` has none: neither is renamed visually.
-function tagRenameDraft(
-  authored: Authored,
-  anchor: AnchorRef,
-  to: string,
-): Result<IntentDraft, RejectionReason> {
+function tagRenameDraft(authored: Authored, anchor: AnchorRef, to: string): Result<IntentDraft, RejectionReason> {
   const node = nodeAtPath(authored.projection, anchor.path);
   assert(node !== undefined, 'A checked anchor names a projected node');
   if (node.kind !== 'element' && node.kind !== 'component') {
@@ -287,11 +228,7 @@ function tagRenameDraft(
 // on the bytes through a diff between the two (the span mapper, which refuses
 // rather than guesses). A range the formatting itself changed has no place:
 // the edit is refused, and the node is never reprinted.
-function replaceDraft(
-  authored: Authored,
-  anchor: AnchorRef,
-  next: PageNode,
-): Result<IntentDraft, RejectionReason> {
+function replaceDraft(authored: Authored, anchor: AnchorRef, next: PageNode): Result<IntentDraft, RejectionReason> {
   const projected = nodeAtPath(authored.projection, anchor.path);
   assert(projected !== undefined, 'A checked anchor names a projected node');
   const previous = pageNodeAt(authored, anchor.path);
@@ -324,12 +261,7 @@ function tagAnchor(anchor: AnchorRef): boolean {
 // A run of siblings inside a new tag: the opening tag on its own line before
 // the first, the closing tag on its own line after the last, at the first
 // one's indentation. The run's own bytes are not re-indented.
-function wrapDraft(
-  authored: Authored,
-  anchor: AnchorRef,
-  last: AnchorRef,
-  name: string,
-): Result<IntentDraft, RejectionReason> {
+function wrapDraft(authored: Authored, anchor: AnchorRef, last: AnchorRef, name: string): Result<IntentDraft, RejectionReason> {
   const eol = authored.text.includes('\r\n') ? '\r\n' : '\n';
   const indent = lineIndent(authored.snapshot.bytes, anchor.span.start);
   const operation: Operation = {
@@ -399,8 +331,7 @@ function lineStartBefore(bytes: Uint8Array, to: number, floor: number): number |
 // The parsed node at a projection path: projections index the same tree. A
 // Markdown page's markup is found in the Markdown parse, which holds it.
 function pageNodeAt(authored: Authored, path: readonly number[]): PageNode | undefined {
-  const roots =
-    authored.format === 'astro' ? astroPageNodes(authored.text) : markdownPageNodes(authored);
+  const roots = authored.format === 'astro' ? astroPageNodes(authored.text) : markdownPageNodes(authored);
   if (roots === undefined) {
     return undefined;
   }
@@ -424,10 +355,7 @@ function astroPageNodes(text: string): readonly PageNode[] | undefined {
   return parsed.editable ? parsed.model.nodes : undefined;
 }
 
-function frontmatterDraft(
-  authored: Authored,
-  model: Extract<Edit, { tag: 'set-frontmatter' }>['model'],
-): Result<IntentDraft, RejectionReason> {
+function frontmatterDraft(authored: Authored, model: Extract<Edit, { tag: 'set-frontmatter' }>['model']): Result<IntentDraft, RejectionReason> {
   const block = authored.projection.frontmatter;
   const page = serializePage({ ...model, nodes: [] });
   if (block === undefined) {
@@ -443,9 +371,7 @@ function frontmatterDraft(
     });
     return ok({ anchor, operation: { tag: 'insert-frontmatter', source: printed } });
   }
-  const before = Buffer.from(authored.snapshot.bytes.subarray(block.start, block.end)).toString(
-    'utf8',
-  );
+  const before = Buffer.from(authored.snapshot.bytes.subarray(block.start, block.end)).toString('utf8');
   const printed = printedBlock(page, before);
   if (printed === undefined) {
     return err('unsupported-operation');
@@ -468,10 +394,7 @@ function printedBlock(page: string, before: string): string | undefined {
   return before.endsWith('\n') ? `${block}${eol}` : block;
 }
 
-function revertDraft(
-  snapshot: Snapshot,
-  hunks: Extract<Edit, { tag: 'revert' }>['hunks'],
-): Result<IntentDraft, RejectionReason> {
+function revertDraft(snapshot: Snapshot, hunks: Extract<Edit, { tag: 'revert' }>['hunks']): Result<IntentDraft, RejectionReason> {
   const inside = hunks.every((hunk) => hunk.span.end <= snapshot.bytes.length);
   if (!inside || !spansAscending(hunks.map((hunk) => hunk.span)) || hunks.length === 0) {
     return err('anchor-moved'); // Not hunks of these bytes.
@@ -488,10 +411,7 @@ function revertDraft(
 // hunk inside them, on code-point boundaries, holding the text it says it
 // replaces. A hunk that does not is not a diff of these bytes — the editor's
 // text descends from some other version — and it cannot be merged.
-function codePatchDraft(
-  snapshot: Snapshot,
-  hunks: Extract<Edit, { tag: 'code-patch' }>['hunks'],
-): Result<IntentDraft, RejectionReason> {
+function codePatchDraft(snapshot: Snapshot, hunks: Extract<Edit, { tag: 'code-patch' }>['hunks']): Result<IntentDraft, RejectionReason> {
   assert(hunks.length > 0, 'The wire parser requires a hunk');
   assert(spansAscending(hunks.map((hunk) => hunk.span)), 'The wire parser orders the hunks');
   const bytes = snapshot.bytes;

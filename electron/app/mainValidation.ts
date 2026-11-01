@@ -1,18 +1,6 @@
 // Disk and dev-server data are untrusted, even when a previous app run wrote
 // them. Keep bounds and parsing separate from handlers so failures are testable.
-import {
-  boolean,
-  count,
-  data,
-  dictionary,
-  list,
-  nullable,
-  object,
-  optional,
-  pathText,
-  record,
-  text,
-} from '../../shared/core/boundary';
+import { boolean, count, data, dictionary, list, nullable, object, optional, pathText, record, text } from '../../shared/core/boundary';
 import type { Data } from '../../shared/core/boundary';
 import type { ContentCollection } from '../content/contentEntries';
 import type { DynamicEntry } from '../lib/mainTypes';
@@ -36,19 +24,14 @@ export function parseSettings(input: unknown): AppSettings {
   if (value.usageNoticeVersion !== undefined && value.usageNoticeVersion > 10) {
     throw new Error('Settings: invalid usage notice version');
   }
-  if (
-    value.usageLastAttemptDay !== undefined &&
-    !/^\d{4}-\d{2}-\d{2}$/.test(value.usageLastAttemptDay)
-  ) {
+  if (value.usageLastAttemptDay !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(value.usageLastAttemptDay)) {
     throw new Error('Settings: invalid usage day');
   }
   return {
     sound: value.sound,
     usageCountsEnabled: value.usageCountsEnabled ?? true,
     usageNoticeVersion: value.usageNoticeVersion ?? 0,
-    ...(value.usageLastAttemptDay === undefined
-      ? {}
-      : { usageLastAttemptDay: value.usageLastAttemptDay }),
+    ...(value.usageLastAttemptDay === undefined ? {} : { usageLastAttemptDay: value.usageLastAttemptDay }),
   };
 }
 export const parseRecents = list(object({ path: pathText, name: text, openedAt: count }));
@@ -160,9 +143,7 @@ export function parseSampleValue(input: unknown): {
 export const parseValidationResult = object({
   issues: list(
     object({
-      path: list((input): string | number =>
-        typeof input === 'number' ? count(input) : text(input),
-      ),
+      path: list((input): string | number => (typeof input === 'number' ? count(input) : text(input))),
       message: text,
       code: text,
     }),

@@ -3,50 +3,19 @@
 
 import { useEffect } from 'react';
 import { hslaToRgba } from '../model/colorWrite';
-import {
-  contextKeyOf,
-  editableRuleFor,
-  selectedRulesSetting,
-  type SourceKey,
-} from '../model/resolved';
+import { contextKeyOf, editableRuleFor, selectedRulesSetting, type SourceKey } from '../model/resolved';
 import { mediaParamsForBreakpoint, optionsFor } from '../model/nativeStyles';
 import { ensureNestPath, ensureQueryBlock, parseNestedInput, type NestStep } from '../model/css';
-import {
-  applyNativePropertyAt,
-  applyNativeToNewBaseClass,
-  removeNativePropertyAt,
-  webflowApi,
-  writeEmbedDocument,
-  type EmbedDocument,
-} from '../model/webflow';
+import { applyNativePropertyAt, applyNativeToNewBaseClass, removeNativePropertyAt, webflowApi, writeEmbedDocument, type EmbedDocument } from '../model/webflow';
 import { type PropWrite } from './EditorBasics';
-import {
-  upgradedDefault,
-  type EmbedRegion,
-  embedWriteTarget,
-  createRuleForWrite,
-  type NativeAttempt,
-  styledSelectorsFor,
-} from './editorModel';
+import { upgradedDefault, type EmbedRegion, embedWriteTarget, createRuleForWrite, type NativeAttempt, styledSelectorsFor } from './editorModel';
 import { EMBED_ONLY_PROPS } from './ResolvedRows';
 import { isGlobalSelector } from './LayoutRows';
 import { asQuery } from './SelectorPicker';
-import {
-  useEditorRefs,
-  useBusyState,
-  useScanState,
-  useSelectionState,
-  useNativeState,
-  usePendingWrites,
-} from './useEditorFoundation';
+import { useEditorRefs, useBusyState, useScanState, useSelectionState, useNativeState, usePendingWrites } from './useEditorFoundation';
 import { useRefresh, useRefreshDerived } from './useEditorScanning';
 import { usePropEdits, useElementTokens } from './useEditorRuleEdits';
-import {
-  useTokenDefault,
-  useActiveSelector,
-  useSelectorPick,
-  useTypedSelector,
-} from './useEditorElement';
+import { useTokenDefault, useActiveSelector, useSelectorPick, useTypedSelector } from './useEditorElement';
 import { useStyleContexts, useNativeTarget, useResolved } from './useEditorContexts';
 import { useNativeRefresh, useNativeOps } from './useEditorNative';
 export { useNativeRefresh, useNativeOps } from './useEditorNative';
@@ -86,9 +55,7 @@ export function useDefaultUpgrade(
     if (!activeContext) {
       return;
     }
-    const styled = styledSelectorsFor(model, nativeModel, activeContext).filter(
-      (entry) => entry.inContext !== false,
-    );
+    const styled = styledSelectorsFor(model, nativeModel, activeContext).filter((entry) => entry.inContext !== false);
     // Nothing styled yet — likely mid-scan (embeds still streaming). Leave the default
     // armed so we retry as they arrive, instead of committing to the unstyled combo.
     if (!styled.length) {
@@ -157,12 +124,8 @@ export function useFocusResync(
       if (busyRef.current) {
         return;
       }
-      const active =
-        document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
-      if (
-        active &&
-        (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)
-      ) {
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
         return;
       }
       if (timer !== undefined) {
@@ -239,10 +202,7 @@ export function useWriteNewRule(
     // (a stuck busy would disable every button in the panel).
     try {
       const typed = typedPathRef.current;
-      const nested =
-        typed && typed.selector === fullSelector && typed.ctx === (embedContext ?? '')
-          ? typed.path
-          : undefined;
+      const nested = typed && typed.selector === fullSelector && typed.ctx === (embedContext ?? '') ? typed.path : undefined;
       if (nested) {
         typedPathRef.current = undefined;
       }
@@ -293,17 +253,12 @@ export function useCreateRule(
     // synthesized @media block; otherwise the embed's base or existing query block.
     const embedContext = currentContext.embedAtContext;
     const bpMedia =
-      embedContext === undefined &&
-      currentContext.breakpoint &&
-      currentContext.breakpoint !== 'main'
+      embedContext === undefined && currentContext.breakpoint && currentContext.breakpoint !== 'main'
         ? mediaParamsForBreakpoint(currentContext.breakpoint)
         : undefined;
     // Write into the chosen embed when one is selected; otherwise the embed of a
     // matching rule in this context (or the first embed).
-    const where = embedWriteTarget(
-      { model, selectedEmbedKey, documentByKey },
-      (rule) => contextKeyOf(rule) === (embedContext ?? ''),
-    );
+    const where = embedWriteTarget({ model, selectedEmbedKey, documentByKey }, (rule) => contextKeyOf(rule) === (embedContext ?? ''));
     if (!where) {
       setStatus('No embed here to write to — add an HTML embed first.');
       return;
@@ -335,13 +290,7 @@ export function useEmptyContext(
   // scaffolds a top-level `@query {}`; `path` (nest) scaffolds `selector { @query {} }`.
   // Targets the same embed createSelectedRule would; if there's no embed to write into
   // yet, it no-ops and the query stays a pending local context until the first edit.
-  const writeEmptyContext = ({
-    path,
-    contextKey,
-  }: {
-    readonly path?: NestStep[];
-    readonly contextKey?: string;
-  }) => {
+  const writeEmptyContext = ({ path, contextKey }: { readonly path?: NestStep[]; readonly contextKey?: string }) => {
     const where = embedWriteTarget({ model, selectedEmbedKey, documentByKey }, undefined);
     // No embed here yet — keep it as a pending local context.
     if (!where) {
@@ -354,11 +303,7 @@ export function useEmptyContext(
       // try/finally so a throw while scaffolding the query block can't leave `busy` stuck
       // true — that would wrongly disable every add button (transforms, shadows, …).
       try {
-        const ok = path
-          ? ensureNestPath(region, path)
-          : contextKey
-            ? ensureQueryBlock(region, contextKey)
-            : false;
+        const ok = path ? ensureNestPath(region, path) : contextKey ? ensureQueryBlock(region, contextKey) : false;
         if (!ok) {
           setStatus('Couldn’t add the query.');
           return;
@@ -435,19 +380,14 @@ export function useAddQuery(
   // new one. Also the fallback target when a native value won't apply.
   const writeEmbedProp = (write: PropWrite) => {
     const rule = ruleFor(write.prop);
-    return rule
-      ? onSetProp(rule, write.prop, write.value, write.important)
-      : createSelectedRule(write);
+    return rule ? onSetProp(rule, write.prop, write.value, write.important) : createSelectedRule(write);
   };
 
   // Native edits go to the picked class style. Webflow accepts nearly any
   // property/value (storing unsupported ones as custom properties), so "regular"
   // and "custom property" are one call; we verify it actually applied and, if not,
   // move the property to custom code (an embed) — the try-native-else-custom-code chain.
-  const nativeHandle = () =>
-    nativeModel && selectedNativeIndex !== undefined
-      ? nativeModel.styles[selectedNativeIndex]?.style
-      : undefined;
+  const nativeHandle = () => (nativeModel && selectedNativeIndex !== undefined ? nativeModel.styles[selectedNativeIndex]?.style : undefined);
   // Where a property's edit goes: the layer that currently holds its editable
   // value (native when the class sets it, the picked embed when it fell back);
   // a brand-new property defaults to native-first when the selection allows it.
@@ -495,10 +435,7 @@ export function useNativeAttempt(
   // Run one native write attempt with the panel busy. The busy flag disables every
   // control — it must always clear, even if the Designer call hangs or throws, or the
   // panel freezes. A throw is a failed attempt, with its message as the reason.
-  const attemptNative = async (
-    status: string,
-    attempt: () => Promise<NativeAttempt>,
-  ): Promise<NativeAttempt> => {
+  const attemptNative = async (status: string, attempt: () => Promise<NativeAttempt>): Promise<NativeAttempt> => {
     try {
       setBusyBoth(true);
       setStatus(status);
@@ -517,12 +454,7 @@ export function useNativeAttempt(
   const clearCoercedNative = async (index: number, prop: string) => {
     try {
       setBusyBoth(true);
-      await removeNativePropertyAt(
-        selectedRef.current,
-        nativeWriteTargetAt(index),
-        [prop],
-        optionsFor(currentContext, stateKey),
-      );
+      await removeNativePropertyAt(selectedRef.current, nativeWriteTargetAt(index), [prop], optionsFor(currentContext, stateKey));
     } catch {
       /* best-effort cleanup */
     } finally {
@@ -558,13 +490,7 @@ export function useNativeSet(
     void runNativeOp(async () => {
       setNativeFallback(undefined); // clear any prior fallback notice as this edit begins
       const { applied, reason } = await attemptNative('Saving…', async () => {
-        const result = await applyNativePropertyAt(
-          selectedRef.current,
-          nativeWriteTargetAt(index),
-          prop,
-          value,
-          optionsFor(currentContext, stateKey),
-        );
+        const result = await applyNativePropertyAt(selectedRef.current, nativeWriteTargetAt(index), prop, value, optionsFor(currentContext, stateKey));
         return { applied: result.applied, reason: result.error ?? '' };
       });
       if (applied) {
@@ -573,16 +499,10 @@ export function useNativeSet(
         return;
       }
       await clearCoercedNative(index, prop);
-      setStatus(
-        `Couldn’t set ${prop} as a Webflow style${reason ? ` (${reason})` : ''}` +
-          ' — moving it to an embed.',
-      );
+      setStatus(`Couldn’t set ${prop} as a Webflow style${reason ? ` (${reason})` : ''}` + ' — moving it to an embed.');
       // The status line isn't rendered, so surface the reason inline — otherwise the
       // fall-through to an embed is invisible and looks like "it always writes code".
-      setNativeFallback(
-        `Webflow wouldn’t apply ${prop} to this class natively${reason ? ` (${reason})` : ''}` +
-          ' — saved it to the embed instead.',
-      );
+      setNativeFallback(`Webflow wouldn’t apply ${prop} to this class natively${reason ? ` (${reason})` : ''}` + ' — saved it to the embed instead.');
       writeEmbedProp({ ...write, value });
     });
   };
@@ -607,13 +527,7 @@ export function useCreateNativeClass(
 
   const createNativeClass = async (className: string, write: PropWrite): Promise<NativeAttempt> => {
     const options = optionsFor(currentContext, stateKey);
-    const result = await applyNativeToNewBaseClass(
-      selectedRef.current,
-      className,
-      write.prop,
-      write.value,
-      options,
-    );
+    const result = await applyNativeToNewBaseClass(selectedRef.current, className, write.prop, write.value, options);
     const reason = result.error ?? '';
     // The class already exists — almost always because the edit landed before the
     // native scan finished, so we didn't yet know `.className` was a real Webflow
@@ -623,20 +537,11 @@ export function useCreateNativeClass(
       return { applied: result.applied, created: result.applied, reason };
     }
     await refreshNative();
-    const baseIndex =
-      nativeModelRef.current?.styles.findIndex(
-        (entry) => !entry.isCombo && entry.namePath.length === 1 && entry.className === className,
-      ) ?? -1;
+    const baseIndex = nativeModelRef.current?.styles.findIndex((entry) => !entry.isCombo && entry.namePath.length === 1 && entry.className === className) ?? -1;
     if (baseIndex < 0) {
       return { applied: false, created: false, reason };
     }
-    const retry = await applyNativePropertyAt(
-      selectedRef.current,
-      nativeWriteTargetAt(baseIndex),
-      write.prop,
-      write.value,
-      options,
-    );
+    const retry = await applyNativePropertyAt(selectedRef.current, nativeWriteTargetAt(baseIndex), write.prop, write.value, options);
     return { applied: retry.applied, created: false, reason: retry.error ?? '' };
   };
   return { createNativeClass };
@@ -665,25 +570,14 @@ export function useNativeCreate(
     const value = hslaToRgba(write.value); // see nativeSetOrFallback
     void runNativeOp(async () => {
       setNativeFallback(undefined);
-      const { applied, created, reason } = await attemptNative(
-        'Creating Webflow class…',
-        async () => createNativeClass(className, { ...write, value }),
-      );
+      const { applied, created, reason } = await attemptNative('Creating Webflow class…', async () => createNativeClass(className, { ...write, value }));
       if (applied) {
         await refreshNative();
-        setStatus(
-          created ? `Created Webflow class .${className}.` : 'Saved to Webflow class style.',
-        );
+        setStatus(created ? `Created Webflow class .${className}.` : 'Saved to Webflow class style.');
         return;
       }
-      setStatus(
-        `Couldn’t create .${className} as a Webflow class${reason ? ` (${reason})` : ''}` +
-          ' — moving it to an embed.',
-      );
-      setNativeFallback(
-        `Webflow wouldn’t create .${className} as a class${reason ? ` (${reason})` : ''}` +
-          ' — saved it to the embed instead.',
-      );
+      setStatus(`Couldn’t create .${className} as a Webflow class${reason ? ` (${reason})` : ''}` + ' — moving it to an embed.');
+      setNativeFallback(`Webflow wouldn’t create .${className} as a class${reason ? ` (${reason})` : ''}` + ' — saved it to the embed instead.');
       writeEmbedProp({ ...write, value });
     });
   };

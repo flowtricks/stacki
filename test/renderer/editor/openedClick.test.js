@@ -60,8 +60,7 @@ const ROOT_PATH = `${SCOPE}0.0.0`;
   // another one's slot, or whose root is a conditional, can only be tagged.
   // Every instance carries the component's own root path, because in the
   // component's file they are all that one node.
-  const instance = (page, label) =>
-    `<button data-avb-p="${ROOT_PATH} ${page}" class="button">${label}</button>`;
+  const instance = (page, label) => `<button data-avb-p="${ROOT_PATH} ${page}" class="button">${label}</button>`;
   const dom = new JSDOM(
     `<!doctype html><body>
       <div class="row">
@@ -146,21 +145,9 @@ const ROOT_PATH = `${SCOPE}0.0.0`;
   // --- the report ---------------------------------------------------------------
   {
     const message = clickOn(buttons[1]);
-    check(
-      'a click on the open instance is placed',
-      message?.path === ROOT_PATH,
-      JSON.stringify(message),
-    );
-    check(
-      'and is not read as landing outside it',
-      message?.outside === false,
-      JSON.stringify(message),
-    );
-    check(
-      'so the click selects rather than closes',
-      actionFor(message) === 'inner',
-      actionFor(message),
-    );
+    check('a click on the open instance is placed', message?.path === ROOT_PATH, JSON.stringify(message));
+    check('and is not read as landing outside it', message?.outside === false, JSON.stringify(message));
+    check('so the click selects rather than closes', actionFor(message) === 'inner', actionFor(message));
   }
 
   // The instance a marker pair DID wrap works the same way when it is the one
@@ -168,11 +155,7 @@ const ROOT_PATH = `${SCOPE}0.0.0`;
   {
     open('0.1');
     const message = clickOn(buttons[0]);
-    check(
-      'the instance with a marker pair is placed too',
-      message?.path === ROOT_PATH,
-      JSON.stringify(message),
-    );
+    check('the instance with a marker pair is placed too', message?.path === ROOT_PATH, JSON.stringify(message));
     check('and selects', actionFor(message, '0.1') === 'inner', actionFor(message, '0.1'));
     open('0.2');
   }
@@ -184,19 +167,13 @@ const ROOT_PATH = `${SCOPE}0.0.0`;
   // instance, and it is what the dimming has been saying all along.
   {
     const message = clickOn(buttons[2]);
-    check(
-      'a click on another copy leaves the component',
-      actionFor(message) === 'close',
-      JSON.stringify(message),
-    );
+    check('a click on another copy leaves the component', actionFor(message) === 'close', JSON.stringify(message));
   }
 
   // The tag has to still be ON the element — this is what was being taken away.
   check(
     'every instance still carries the component’s own path',
-    buttons.every((button) =>
-      (button.getAttribute('data-avb-p') || '').split(' ').includes(ROOT_PATH),
-    ),
+    buttons.every((button) => (button.getAttribute('data-avb-p') || '').split(' ').includes(ROOT_PATH)),
     buttons.map((button) => button.getAttribute('data-avb-p')).join(' | '),
   );
 
@@ -213,10 +190,7 @@ const ROOT_PATH = `${SCOPE}0.0.0`;
     // walk, which is why they are written again for the second pass.
     const wrap = (element) => {
       element.parentNode.insertBefore(window.document.createComment(`avb-s:${OTHER}`), element);
-      element.parentNode.insertBefore(
-        window.document.createComment(`avb-e:${OTHER}`),
-        element.nextSibling,
-      );
+      element.parentNode.insertBefore(window.document.createComment(`avb-e:${OTHER}`), element.nextSibling);
       window.document.dispatchEvent(new window.CustomEvent('avb:morphed'));
     };
     const first = window.document.createElement('span');
@@ -226,11 +200,7 @@ const ROOT_PATH = `${SCOPE}0.0.0`;
     row.append(first, second);
 
     wrap(first);
-    check(
-      'a node inside a region is tagged for it',
-      (first.getAttribute('data-avb-p') || '').includes(OTHER),
-      String(first.getAttribute('data-avb-p')),
-    );
+    check('a node inside a region is tagged for it', (first.getAttribute('data-avb-p') || '').includes(OTHER), String(first.getAttribute('data-avb-p')));
 
     // The region is somewhere else now — that tag is stale, and it is ours.
     wrap(second);
@@ -239,24 +209,16 @@ const ROOT_PATH = `${SCOPE}0.0.0`;
       !(first.getAttribute('data-avb-p') || '').includes(OTHER),
       String(first.getAttribute('data-avb-p')),
     );
-    check(
-      'which the node it moved to now carries',
-      (second.getAttribute('data-avb-p') || '').includes(OTHER),
-      String(second.getAttribute('data-avb-p')),
-    );
+    check('which the node it moved to now carries', (second.getAttribute('data-avb-p') || '').includes(OTHER), String(second.getAttribute('data-avb-p')));
     check(
       'while the markup’s own tags are left alone',
-      buttons.every((button) =>
-        (button.getAttribute('data-avb-p') || '').split(' ').includes(ROOT_PATH),
-      ),
+      buttons.every((button) => (button.getAttribute('data-avb-p') || '').split(' ').includes(ROOT_PATH)),
       buttons.map((button) => button.getAttribute('data-avb-p')).join(' | '),
     );
   }
 
   if (failures.length) {
-    console.error(
-      `\nopened-click: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\nopened-click: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

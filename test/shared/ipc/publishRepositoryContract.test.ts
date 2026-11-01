@@ -3,10 +3,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseIpcPayload } from '#dist/shared/ipc/ipcPayloads.js';
-import {
-  parseRepositoryRequest,
-  parseRepositoryResult,
-} from '#dist/shared/ipc/publishRepository.js';
+import { parseRepositoryRequest, parseRepositoryResult } from '#dist/shared/ipc/publishRepository.js';
 const revision = 'a'.repeat(64);
 test('repository requests and results round-trip', () => {
   for (const request of [

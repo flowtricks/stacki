@@ -39,11 +39,7 @@ const parseData = (text: string): unknown => parse(text).data;
  * A file with no frontmatter grows one; a file whose body is not passed keeps
  * the bytes it had.
  */
-function applyEdits(
-  text: string,
-  edits: readonly yaml.Edit[],
-  { body }: { readonly body?: string | undefined } = {},
-): string {
+function applyEdits(text: string, edits: readonly yaml.Edit[], { body }: { readonly body?: string | undefined } = {}): string {
   const match = text.match(FRONTMATTER);
   const block = match?.[3];
   if (!match || block === undefined) {

@@ -15,21 +15,14 @@ import { parsePage } from '../src/features/source/source';
 import { scanComponentUsage } from '../src/features/components/componentUsageServer';
 import { componentSpecifier } from '../vendor/stacki/electron/properties/componentImports';
 import { componentPreviewURL } from '../vendor/stacki/src/features/palette/paletteModel';
-import {
-  packageComponentFiles,
-  readPackageSource,
-} from '../vendor/stacki/electron/lib/componentSources';
+import { packageComponentFiles, readPackageSource } from '../vendor/stacki/electron/lib/componentSources';
 
 const file = 'node_modules/@ffnext/site-kit/src/lumos/components/Button.astro';
 const component =
   '---\nimport type { ButtonProps } from "../types";\ninterface Props extends ButtonProps {}\nconst { variant = "primary" } = Astro.props;\n---\n<button data-variant={variant}><slot /></button>';
 
 test('package preview links retain identity across Desktop and Studio path formats', () => {
-  for (const componentPath of [
-    file,
-    '/project/' + file,
-    'C:\\project\\' + file.replaceAll('/', '\\'),
-  ]) {
+  for (const componentPath of [file, '/project/' + file, 'C:\\project\\' + file.replaceAll('/', '\\')]) {
     const url = new URL(
       componentPreviewURL(
         'http://localhost:4321',
@@ -75,10 +68,7 @@ async function fixture() {
     path.join(root, 'node_modules/@ffnext/site-kit/src/lumos/types.ts'),
     'export interface ButtonProps { variant?: "primary" | "secondary"; disabled?: boolean; }',
   );
-  await writeFile(
-    path.join(root, 'src/pages/index.astro'),
-    '---\nimport Button from "@/components/Button.astro";\n---\n<Button variant="secondary" />',
-  );
+  await writeFile(path.join(root, 'src/pages/index.astro'), '---\nimport Button from "@/components/Button.astro";\n---\n<Button variant="secondary" />');
   return root;
 }
 
@@ -89,16 +79,10 @@ test('package scan resolves schemas, instance identity and usage without local c
     const button = project.components.find((entry) => entry.file === file);
     assert.equal(button?.importPath, '@/components/Button.astro');
     assert.equal(button?.origin?.kind, 'package');
-    assert.deepEqual(button?.fields.find((field) => field.name === 'variant')?.options, [
-      'primary',
-      'secondary',
-    ]);
+    assert.deepEqual(button?.fields.find((field) => field.name === 'variant')?.options, ['primary', 'secondary']);
     const source = await readFile(path.join(root, 'src/pages/index.astro'), 'utf8');
     const parsed = parsePage(source);
-    assert.equal(
-      componentAt(parseProject(project), 'src/pages/index.astro', parsed, 'n0')?.file,
-      file,
-    );
+    assert.equal(componentAt(parseProject(project), 'src/pages/index.astro', parsed, 'n0')?.file, file);
     assert.equal((await scanComponentUsage(root, file))[0]?.total, 1);
     await assert.rejects(safePath(root, file), /Invalid project path/);
     assert.equal(await readFile(path.join(root, file), 'utf8'), component);
@@ -156,23 +140,14 @@ test('an alias for installed components cannot silently select a local copy', as
   try {
     await mkdir(path.join(root, 'src/components'));
     await writeFile(path.join(root, 'src/components/Button.astro'), '<button>Local</button>');
-    await writeFile(
-      path.join(root, 'tsconfig.json'),
-      JSON.stringify({ compilerOptions: { paths: { '@/*': ['./src/*'] } } }),
-    );
+    await writeFile(path.join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { paths: { '@/*': ['./src/*'] } } }));
     assert.equal(componentSpecifier(root, file), '@/components/Button.astro');
     assert.equal(componentSpecifier(root, 'src/components/Button.astro'), undefined);
     await writeFile(path.join(root, 'src/components/Local.astro'), '<div />');
     // The explicit package prefix still owns this namespace even when its file is missing.
     assert.equal(componentSpecifier(root, 'src/components/Local.astro'), undefined);
-    await writeFile(
-      path.join(root, '.stacki/component-sources.json'),
-      '{"version":1,"sources":[]}',
-    );
-    assert.equal(
-      componentSpecifier(root, 'src/components/Local.astro'),
-      '@/components/Local.astro',
-    );
+    await writeFile(path.join(root, '.stacki/component-sources.json'), '{"version":1,"sources":[]}');
+    assert.equal(componentSpecifier(root, 'src/components/Local.astro'), '@/components/Local.astro');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -188,10 +163,7 @@ test('configured package links are readable but internal escaping links fail clo
     await symlink(linked, path.join(root, 'node_modules/@ffnext/site-kit'), 'dir');
     assert.equal(packageComponentFiles(root).length, 1);
     assert.equal(readPackageSource(root, file.replace('Button', 'Link')), '<a><slot /></a>');
-    await symlink(
-      path.join(root, 'src/pages/index.astro'),
-      path.join(linked, 'src/lumos/components/Escape.astro'),
-    );
+    await symlink(path.join(root, 'src/pages/index.astro'), path.join(linked, 'src/lumos/components/Escape.astro'));
     assert.throws(() => packageComponentFiles(root), /Links within/);
     assert.throws(() => readPackageSource(root, file.replace('Button', 'Escape')), /Links within/);
   } finally {

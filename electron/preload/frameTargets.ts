@@ -5,28 +5,9 @@
 import { canvasSelects, canvasDragged, trackCanvas } from './frameInteraction';
 import { inlineTextPathAt } from './inlineText';
 import { isElement } from './frameBasics';
-import {
-  PATH_ATTR,
-  announceMapped,
-  collectRegions,
-  inFocus,
-  inScope,
-  pathsOf,
-  regions,
-  renderToken,
-  runsOf,
-  taggedAncestor,
-} from './frameRegions';
+import { PATH_ATTR, announceMapped, collectRegions, inFocus, inScope, pathsOf, regions, renderToken, runsOf, taggedAncestor } from './frameRegions';
 import { thinAt } from './frameMeasure';
-import {
-  LOOK_EVERY,
-  mutationKind,
-  occurrenceOf,
-  queueRects,
-  remeasure,
-  remeasureStyles,
-  watchMotion,
-} from './frameReports';
+import { LOOK_EVERY, mutationKind, occurrenceOf, queueRects, remeasure, remeasureStyles, watchMotion } from './frameReports';
 
 // The app tracks a node, so the frame is the canvas: clicks select.
 export function enterDesignMode(): void {
@@ -38,11 +19,7 @@ let lastHover: { readonly path: string | undefined; readonly occurrence: number 
 
 // Deepest marked node whose rendered DOM contains the target, plus which
 // instance of it was hit — the app outlines only that one.
-const nodeAt = (
-  target: Node | undefined,
-  x?: number,
-  y?: number,
-): { path: string | undefined; occurrence: number; outside: boolean } => {
+const nodeAt = (target: Node | undefined, x?: number, y?: number): { path: string | undefined; occurrence: number; outside: boolean } => {
   const tagged = taggedFor(target, x, y);
   // Whether anything at all was under the pointer, focus aside. No path
   // means the canvas could not place the click; `outside` means it could,
@@ -101,12 +78,7 @@ const holdsPoint = (element: Element, x: number | undefined, y: number | undefin
   if (rect.width === 0 && rect.height === 0) {
     return true;
   }
-  return (
-    x >= rect.left - EDGE &&
-    x <= rect.right + EDGE &&
-    y >= rect.top - EDGE &&
-    y <= rect.bottom + EDGE
-  );
+  return x >= rect.left - EDGE && x <= rect.right + EDGE && y >= rect.top - EDGE && y <= rect.bottom + EDGE;
 };
 
 // The tagged element that answers for the target. Clones the page's own
@@ -114,8 +86,7 @@ const holdsPoint = (element: Element, x: number | undefined, y: number | undefin
 // reach them — without this, clicking a split paragraph would select its
 // parent instead.
 const taggedFor = (target: Node | undefined, x?: number, y?: number): Element | undefined => {
-  let tagged =
-    target instanceof Element ? (target.closest(`[${PATH_ATTR}]`) ?? undefined) : undefined;
+  let tagged = target instanceof Element ? (target.closest(`[${PATH_ATTR}]`) ?? undefined) : undefined;
   while (x !== undefined && tagged && !holdsPoint(tagged, x, y)) {
     tagged = taggedAncestor(tagged);
   }
@@ -131,12 +102,7 @@ const taggedFor = (target: Node | undefined, x?: number, y?: number): Element | 
 
 // The deepest in-scope path whose marker run holds the target, or the path
 // the tag named when no run goes deeper.
-const deepestRegionAt = (
-  target: Node | undefined,
-  x: number | undefined,
-  y: number | undefined,
-  tagPath: string | undefined,
-): string | undefined => {
+const deepestRegionAt = (target: Node | undefined, x: number | undefined, y: number | undefined, tagPath: string | undefined): string | undefined => {
   let best = tagPath;
   let bestDepth = best ? best.split('.').length : -1;
   for (const nodePath of regions.keys()) {
@@ -149,12 +115,7 @@ const deepestRegionAt = (
       continue;
     }
     for (const run of runs) {
-      const hit = run.some(
-        (node) =>
-          node.isConnected &&
-          node.nodeType === 1 &&
-          (node === target || (target !== undefined && node.contains(target))),
-      );
+      const hit = run.some((node) => node.isConnected && node.nodeType === 1 && (node === target || (target !== undefined && node.contains(target))));
       if (hit) {
         // Same rule for a node addressed by markers rather than by a tag:
         // its run has to be where the pointer is.
@@ -177,16 +138,12 @@ const deepestRegionAt = (
 // whole carousel however deep you click. Hit-test the cursor instead; a
 // synthesised event with no coordinates keeps e.target.
 const targetAt = (event: MouseEvent): Node | undefined =>
-  (event.clientX || event.clientY
-    ? document.elementFromPoint(event.clientX, event.clientY)
-    : undefined) || (event.target instanceof window.Node ? event.target : undefined);
+  (event.clientX || event.clientY ? document.elementFromPoint(event.clientX, event.clientY) : undefined) ||
+  (event.target instanceof window.Node ? event.target : undefined);
 
 // Same resolution for hover, click and dblclick, so what lights up under the
 // cursor is exactly what a click selects.
-const nodeAtEvent = (event: MouseEvent) =>
-  event.clientX || event.clientY
-    ? nodeAt(targetAt(event), event.clientX, event.clientY)
-    : nodeAt(targetAt(event));
+const nodeAtEvent = (event: MouseEvent) => (event.clientX || event.clientY ? nodeAt(targetAt(event), event.clientX, event.clientY) : nodeAt(targetAt(event)));
 
 export const startOutlines = () => {
   // A page edit now patches the document instead of reloading it, so the
@@ -261,12 +218,7 @@ const lookForMotion = () => {
   // open — the suites run this file in jsdom, and a page's heartbeat is not
   // a reason for `node test/…` never to come back. In the browser the handle
   // is a number and this does nothing — both are checked without asserting.
-  if (
-    typeof look === 'object' &&
-    look !== null &&
-    'unref' in look &&
-    typeof look['unref'] === 'function'
-  ) {
+  if (typeof look === 'object' && look !== null && 'unref' in look && typeof look['unref'] === 'function') {
     look['unref']();
   }
 };
@@ -275,11 +227,7 @@ const lookForMotion = () => {
 const listenForPointer = () => {
   document.addEventListener('mousemove', (event) => {
     const { path: nodePath, occurrence } = nodeAtEvent(event);
-    if (
-      lastHover === undefined ||
-      nodePath !== lastHover.path ||
-      occurrence !== lastHover.occurrence
-    ) {
+    if (lastHover === undefined || nodePath !== lastHover.path || occurrence !== lastHover.occurrence) {
       lastHover = { path: nodePath, occurrence };
       postLocated('avb:hover-node', { path: nodePath, occurrence });
     }

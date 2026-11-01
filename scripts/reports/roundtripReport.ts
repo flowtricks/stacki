@@ -177,8 +177,7 @@ for (const row of rows) {
   const tag = known ? `  (known: ${known.severity})` : '';
   console.log(`  ${marks[row.status]}  ${row.name.padEnd(width)}${tag}`);
 }
-const percentage = (count: number): string =>
-  files.length > 0 ? `${Math.round((count / files.length) * 100)}%` : '0%';
+const percentage = (count: number): string => (files.length > 0 ? `${Math.round((count / files.length) * 100)}%` : '0%');
 console.log(
   `\n  ${files.length} files — ${counts.identical} round-trip clean ` +
     `(${percentage(counts.identical)}), ${counts.differs} rewritten ` +
@@ -187,9 +186,7 @@ console.log(
 );
 
 if (!target) {
-  const known = Object.entries(expectations).sort((left, right) =>
-    left[1].severity.localeCompare(right[1].severity),
-  );
+  const known = Object.entries(expectations).sort((left, right) => left[1].severity.localeCompare(right[1].severity));
   const corruption = known.filter((entry) => entry[1].severity === 'corruption');
   console.log(`  Known defects: ${known.length} (${corruption.length} change meaning)\n`);
   for (const [name, information] of known) {

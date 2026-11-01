@@ -5,11 +5,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const {
-  isAppPage,
-  isBrowserLink,
-  isPrivatePermission,
-} = require('#dist/electron/app/windowSecurity.js');
+const { isAppPage, isBrowserLink, isPrivatePermission } = require('#dist/electron/app/windowSecurity.js');
 
 const PACKAGED_PAGE = 'file:///Applications/Stacki.app/Contents/Resources/app.asar/index.html';
 const DEV_PAGE = 'http://localhost:5173/';
@@ -82,13 +78,7 @@ test('permissions that reveal the user or reach their devices are refused', () =
 });
 
 test('the permissions Stacki relies on, and other harmless ones, stay granted', () => {
-  for (const permission of [
-    'clipboard-sanitized-write',
-    'fullscreen',
-    'notifications',
-    'pointerLock',
-    'openExternal',
-  ]) {
+  for (const permission of ['clipboard-sanitized-write', 'fullscreen', 'notifications', 'pointerLock', 'openExternal']) {
     assert.equal(isPrivatePermission(permission), false, permission);
   }
 });

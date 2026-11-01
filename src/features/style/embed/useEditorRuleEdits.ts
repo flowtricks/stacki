@@ -6,33 +6,15 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { snapshotTokens } from '../model/elementTokens';
 import { selectorsMatch } from '../model/resolved';
 import type { Declaration } from 'postcss';
-import {
-  addDeclaration,
-  appendDecl,
-  directDecls,
-  removeRule,
-  removeRuleIfEmpty,
-  replaceRuleCss,
-  splitRuleSelectorAt,
-} from '../model/css';
+import { addDeclaration, appendDecl, directDecls, removeRule, removeRuleIfEmpty, replaceRuleCss, splitRuleSelectorAt } from '../model/css';
 import { canonicalCompound, parseSelectorList } from '../model/selectors';
-import {
-  clearPaddingSides,
-  isPaddingProperty,
-  setPaddingDeclaration,
-} from '../model/spacingShorthand';
+import { clearPaddingSides, isPaddingProperty, setPaddingDeclaration } from '../model/spacingShorthand';
 import { getHost, type ClassOutcome } from '../model/host';
 import { type EmbedDocument, navigateToEmbed, writeEmbedDocument } from '../model/webflow';
 import type { ParsedDeclaration, ParsedRule } from '../model/styleTypes';
 import { declsFor, lastDeclFor, editorSession, withoutClasses } from './editorModel';
 import { type SelectorSuggestion } from './LayoutRows';
-import {
-  useEditorRefs,
-  useBusyState,
-  useScanState,
-  useNativeState,
-  usePendingWrites,
-} from './useEditorFoundation';
+import { useEditorRefs, useBusyState, useScanState, useNativeState, usePendingWrites } from './useEditorFoundation';
 import { useRefreshDerived } from './useEditorScanning';
 
 // Scope an edit of a grouped rule to the active selector alone.
@@ -51,9 +33,7 @@ export function useSplitForEdit(nativeState: ReturnType<typeof useNativeState>) 
       if (!selectors || selectors.length <= 1 || !active) {
         return false;
       }
-      return selectors.some(
-        (selector) => selectorsMatch(selector, active) && canonicalCompound(selector).splittable,
-      );
+      return selectors.some((selector) => selectorsMatch(selector, active) && canonicalCompound(selector).splittable);
     },
     [activeSelectorRef],
   );
@@ -75,9 +55,7 @@ export function useSplitForEdit(nativeState: ReturnType<typeof useNativeState>) 
       if (!selectors || selectors.length <= 1 || !active) {
         return identity;
       }
-      const index = selectors.findIndex(
-        (selector) => selectorsMatch(selector, active) && canonicalCompound(selector).splittable,
-      );
+      const index = selectors.findIndex((selector) => selectorsMatch(selector, active) && canonicalCompound(selector).splittable);
       if (index < 0) {
         return identity;
       }
@@ -182,12 +160,7 @@ export function useApplyEdit(
         if (!settleEmbedWrite(embedDocument, writeResult, 'rule')) {
           return;
         }
-        setStatus(
-          rule.fromComponent
-            ? 'Saved. This embed is shared by every instance of ' +
-                `${rule.componentName ?? 'the component'}.`
-            : 'Saved to embed.',
-        );
+        setStatus(rule.fromComponent ? 'Saved. This embed is shared by every instance of ' + `${rule.componentName ?? 'the component'}.` : 'Saved to embed.');
       } finally {
         setBusyBoth(false);
       }
@@ -198,10 +171,7 @@ export function useApplyEdit(
 }
 
 // Set and clear a property on an embed rule.
-export function usePropEdits(
-  splitForEditHook: ReturnType<typeof useSplitForEdit>,
-  applyEditHook: ReturnType<typeof useApplyEdit>,
-) {
+export function usePropEdits(splitForEditHook: ReturnType<typeof useSplitForEdit>, applyEditHook: ReturnType<typeof useApplyEdit>) {
   const { splitForEdit } = splitForEditHook;
   const { applyEdit } = applyEditHook;
 
@@ -267,9 +237,7 @@ export function useLiveEdits(
   // What a live write overwrote, per property — captured on the FIRST live write since
   // the last commit, so onRevertProp can put it back if the edit is abandoned (scrubbing
   // out of a dropdown without picking). `undefined` records "the property wasn't there".
-  const liveOriginRef = useRef(
-    new Map<string, { value: string; important: boolean } | undefined>(),
-  );
+  const liveOriginRef = useRef(new Map<string, { value: string; important: boolean } | undefined>());
   // Live set while typing: mutate (or append) the AST node and write straight to
   // the embed so the canvas updates in real time — no busy flag, no model rebuild
   // (blur runs the authoritative onSetProp). Mirrors onLiveCommitValue.
@@ -295,10 +263,7 @@ export function useLiveEdits(
         const matches = declsFor(rule, prop);
         const target = matches[matches.length - 1];
         if (!liveOriginRef.current.has(prop)) {
-          liveOriginRef.current.set(
-            prop,
-            target ? { value: target.value, important: !!target.important } : undefined,
-          );
+          liveOriginRef.current.set(prop, target ? { value: target.value, important: !!target.important } : undefined);
         }
         if (target) {
           target.value = value;
@@ -449,10 +414,7 @@ export function useElementTokens(scanState: ReturnType<typeof useScanState>) {
   // the chips show while the scan is still running. Either can still carry a class
   // the element has just lost (both union in what the preview last reported), so
   // those are taken out here rather than waited out.
-  const snapshot = useMemo(
-    () => withoutClasses(scan?.rootSnapshot ?? quickSnapshot ?? undefined, removedClasses),
-    [scan, quickSnapshot, removedClasses],
-  );
+  const snapshot = useMemo(() => withoutClasses(scan?.rootSnapshot ?? quickSnapshot ?? undefined, removedClasses), [scan, quickSnapshot, removedClasses]);
 
   const model = scan?.model;
   const tokens = useMemo(() => snapshotTokens(snapshot), [snapshot]);
@@ -466,15 +428,11 @@ export function useElementTokens(scanState: ReturnType<typeof useScanState>) {
     if (tagTok) {
       out.push({ selector: tagTok.label ?? tagTok.name, kind: 'tag' });
     }
-    const classNames = tokens
-      .filter((token) => token.kind === 'class')
-      .map((token) => token.label ?? token.name.slice('class:'.length));
+    const classNames = tokens.filter((token) => token.kind === 'class').map((token) => token.label ?? token.name.slice('class:'.length));
     for (const cls of classNames) {
       out.push({ selector: `.${cls}`, kind: 'class' });
     }
-    const attrNames = tokens
-      .filter((token) => token.kind === 'attribute')
-      .map((token) => token.label ?? token.name.slice('attr:'.length));
+    const attrNames = tokens.filter((token) => token.kind === 'attribute').map((token) => token.label ?? token.name.slice('attr:'.length));
     for (const name of attrNames) {
       out.push({ selector: `[${name}]`, kind: 'attribute' });
     }

@@ -25,8 +25,7 @@ export class SaveWatch {
   }
 
   saved(sequence: number | undefined): boolean {
-    const index =
-      sequence === undefined ? 0 : this.deadlines.findIndex((item) => item.sequence === sequence);
+    const index = sequence === undefined ? 0 : this.deadlines.findIndex((item) => item.sequence === sequence);
     if (!this.deadlines[index]) {
       return false;
     }
@@ -44,9 +43,6 @@ export class SaveWatch {
   private schedule(): void {
     clearTimeout(this.timer);
     const deadline = this.deadlines[0]?.deadline;
-    this.timer =
-      deadline === undefined
-        ? undefined
-        : setTimeout(this.expired, Math.max(0, deadline - Date.now()));
+    this.timer = deadline === undefined ? undefined : setTimeout(this.expired, Math.max(0, deadline - Date.now()));
   }
 }

@@ -9,11 +9,7 @@ import type { PublishReceipt } from '../../shared/publishSource';
 export type { PublishReceipt } from '../../shared/publishSource';
 
 /** Fetch trees, overlay immutable captured blobs, then send only objects missing from the parent. */
-export async function nativePublish(
-  source: PublishSource,
-  expectedHead: string,
-  connection: PublishConnection,
-): Promise<Result<PublishReceipt>> {
+export async function nativePublish(source: PublishSource, expectedHead: string, connection: PublishConnection): Promise<Result<PublishReceipt>> {
   assert(/^[a-f0-9]{40}$/.test(expectedHead), 'Publish parent is a validated commit');
   assert(source.files.length <= limits.filesMax, 'Publish manifest is bounded');
   const git = { ...source.git, authorization: connection.token };
@@ -32,14 +28,7 @@ export async function nativePublish(
       url: `https://github.com/${connection.repository}/commit/${expectedHead}`,
     });
   }
-  const committed = await publishGit(git, [
-    'commit-tree',
-    tree.value,
-    '-p',
-    expectedHead,
-    '-m',
-    'Publish website from Stacki Studio',
-  ]);
+  const committed = await publishGit(git, ['commit-tree', tree.value, '-p', expectedHead, '-m', 'Publish website from Stacki Studio']);
   if (!committed.ok) {
     return committed;
   }
@@ -65,11 +54,7 @@ export async function nativePublish(
   });
 }
 
-export async function overlayPublishSource(
-  git: PublishGit,
-  source: PublishSource,
-  parent: string,
-): Promise<Result<string>> {
+export async function overlayPublishSource(git: PublishGit, source: PublishSource, parent: string): Promise<Result<string>> {
   assert(source.deleted.length <= 1000, 'Asset deletion manifest is bounded');
   const loaded = await publishGit(git, ['read-tree', parent]);
   if (!loaded.ok) {
@@ -87,21 +72,8 @@ export async function overlayPublishSource(
   return written.ok ? publishObject(written.value) : written;
 }
 
-async function fetchPublishParent(
-  git: PublishGit,
-  remote: string,
-  branch: string,
-  expectedHead: string,
-): Promise<Result<string>> {
-  const fetched = await publishGit(git, [
-    'fetch',
-    '--quiet',
-    '--depth=1',
-    '--filter=blob:none',
-    '--no-tags',
-    remote,
-    'refs/heads/' + branch,
-  ]);
+async function fetchPublishParent(git: PublishGit, remote: string, branch: string, expectedHead: string): Promise<Result<string>> {
+  const fetched = await publishGit(git, ['fetch', '--quiet', '--depth=1', '--filter=blob:none', '--no-tags', remote, 'refs/heads/' + branch]);
   if (!fetched.ok) {
     return fetched;
   }

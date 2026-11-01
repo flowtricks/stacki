@@ -68,8 +68,7 @@ export function escapeHtml(text: string): string {
 export type Chip = { text: string; name: string; type: string };
 
 // What the chips amount to, for the effects that redraw when they change.
-export const chipKey = (chips: Chip[]): string =>
-  chips.map((chip) => `${chip.text}|${chip.name}|${chip.type}`).join(',');
+export const chipKey = (chips: Chip[]): string => chips.map((chip) => `${chip.text}|${chip.name}|${chip.type}`).join(',');
 
 // The chip markup embedded in the contentEditable. `contenteditable="false"` makes it
 // atomic (a single backspace removes it); `data-chip` marks it for serialization, and
@@ -154,10 +153,7 @@ export function fieldText(root: HTMLElement): string {
     node.childNodes.forEach((child) => {
       if (child.nodeType === 3) {
         out += child.textContent ?? '';
-      } else if (
-        isHTMLElementInDocument(child, root.ownerDocument) &&
-        child.dataset['chip'] !== undefined
-      ) {
+      } else if (isHTMLElementInDocument(child, root.ownerDocument) && child.dataset['chip'] !== undefined) {
         out += CHIP_MARK;
       } else if (isHTMLElementInDocument(child, root.ownerDocument) && child.tagName === 'BR') {
         // A line break is browser filler, not text.
@@ -181,12 +177,7 @@ export function chipsOf(root: HTMLElement): Chip[] {
 }
 
 /** Re-draw the field from `text`, keeping its chips, and put the caret at `at`. */
-export function paint(
-  rootElement: HTMLElement,
-  text: string,
-  at: number | undefined,
-  chips: Chip[],
-): void {
+export function paint(rootElement: HTMLElement, text: string, at: number | undefined, chips: Chip[]): void {
   const parts = text.split(CHIP_MARK);
   let html = highlightCss(parts[0] ?? '');
   for (let i = 1; i < parts.length; i++) {
@@ -227,10 +218,7 @@ export function serializeTokens(root: HTMLElement, bare: string, varForm: string
         if (text.replace(/\u200B/g, '').trim() !== '') {
           hasText = true;
         }
-      } else if (
-        isHTMLElementInDocument(child, root.ownerDocument) &&
-        child.dataset['chip'] !== undefined
-      ) {
+      } else if (isHTMLElementInDocument(child, root.ownerDocument) && child.dataset['chip'] !== undefined) {
         chips.push(child.dataset['binding'] ?? '');
         out += '\u0000'; // the variable — resolved below once we know if it stands alone
       } else if (isHTMLElementInDocument(child, root.ownerDocument) && child.tagName === 'BR') {
@@ -280,10 +268,8 @@ export function jumpCaretPastChip(root: HTMLElement, direction: 'left' | 'right'
   // Caret is immediately before the chip (end of the preceding text node, or the root
   // slot just before it) → drop it just after the chip, and vice-versa.
   const beforeLength = before?.textContent?.length ?? 0;
-  const rightAdjacent =
-    (node === before && off === beforeLength) || (node === root && root.childNodes[off] === chip);
-  const leftAdjacent =
-    (node === after && off === 0) || (node === root && root.childNodes[off - 1] === chip);
+  const rightAdjacent = (node === before && off === beforeLength) || (node === root && root.childNodes[off] === chip);
+  const leftAdjacent = (node === after && off === 0) || (node === root && root.childNodes[off - 1] === chip);
   if (direction === 'right' && rightAdjacent && after) {
     place(after, 0);
     return true;
@@ -359,10 +345,7 @@ export function TokenField({
       }}
       onKeyDown={(event) => tokenFieldKeyDown(event, { code: !!code, stepMin, report })}
       onMouseDown={(event) => {
-        if (
-          isHTMLElementInDocument(event.target, event.currentTarget.ownerDocument) &&
-          event.target.closest('[data-chip]')
-        ) {
+        if (isHTMLElementInDocument(event.target, event.currentTarget.ownerDocument) && event.target.closest('[data-chip]')) {
           event.preventDefault();
           onChipClick();
         }
@@ -402,12 +385,7 @@ export type TokenFieldProps = {
 // Keeps the field's markup in step with `value`. Returns the value the DOM already
 // reflects, so our own edits (which round-trip back through `value`) don't rebuild
 // innerHTML and reset the caret.
-export function useTokenFieldSync({
-  value,
-  chips,
-  code,
-  editorRef,
-}: Pick<TokenFieldProps, 'value' | 'chips' | 'editorRef'> & { code: boolean | undefined }) {
+export function useTokenFieldSync({ value, chips, code, editorRef }: Pick<TokenFieldProps, 'value' | 'chips' | 'editorRef'> & { code: boolean | undefined }) {
   const synced = useRef<string | undefined>(undefined);
   // The chips are compared by what they amount to, not by array identity (the
   // caller builds a fresh array every render); the effects read the latest ones.
@@ -456,11 +434,7 @@ export function useTokenFieldSync({
 // the arrow keys step the number under the caret; Left/Right step over a chip.
 export function tokenFieldKeyDown(
   event: React.KeyboardEvent<HTMLDivElement>,
-  {
-    code,
-    stepMin,
-    report,
-  }: { code: boolean; stepMin: number | undefined; report: (element: HTMLElement) => void },
+  { code, stepMin, report }: { code: boolean; stepMin: number | undefined; report: (element: HTMLElement) => void },
 ): void {
   if (event.key === 'Enter') {
     event.preventDefault();
@@ -521,11 +495,7 @@ export function codeKeyEdit(
 }
 
 // The bracket pairing for one key at caret `at`, or undefined when it doesn't apply.
-export function bracketEdit(
-  text: string,
-  at: number,
-  key: string,
-): { text: string; caret: number } | undefined {
+export function bracketEdit(text: string, at: number, key: string): { text: string; caret: number } | undefined {
   if (key === '(') {
     return { text: `${text.slice(0, at)}()${text.slice(at)}`, caret: at + 1 };
   }

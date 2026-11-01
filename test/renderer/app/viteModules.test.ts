@@ -77,10 +77,7 @@ function createModuleLoader(server: ViteDevServer): (url: string) => Promise<Sou
   };
 }
 
-async function createModuleLoaderTransform(
-  server: ViteDevServer,
-  url: string,
-): Promise<SourceTextModule> {
+async function createModuleLoaderTransform(server: ViteDevServer, url: string): Promise<SourceTextModule> {
   const transformed = await server.transformRequest(url);
   assert.ok(transformed, `Vite must serve ${url}`);
   assert.ok(transformed.code.length > 0, `${url} must contain executable JavaScript`);

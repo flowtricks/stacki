@@ -61,11 +61,7 @@ function changedRegion(beforeText, afterText) {
   const beforeLines = beforeText.split('\n');
   const afterLines = afterText.split('\n');
   let start = 0;
-  while (
-    start < beforeLines.length &&
-    start < afterLines.length &&
-    beforeLines[start] === afterLines[start]
-  ) {
+  while (start < beforeLines.length && start < afterLines.length && beforeLines[start] === afterLines[start]) {
     start++;
   }
   let end = 0;
@@ -84,8 +80,7 @@ function changedRegion(beforeText, afterText) {
 }
 
 function formatRegion(region) {
-  const show = (lines) =>
-    lines.length ? lines.map((line) => JSON.stringify(line)).join('\n      ') : '(nothing)';
+  const show = (lines) => (lines.length ? lines.map((line) => JSON.stringify(line)).join('\n      ') : '(nothing)');
   return `at line ${region.start + 1}\n    - ${show(region.before)}\n    + ${show(region.after)}`;
 }
 
@@ -129,10 +124,8 @@ describe('editability matches expectation', () => {
         !!result.editable,
         expect.editable,
         expect.editable
-          ? `expected this fixture to be visually editable, but ` +
-              `the parser bailed to code view: ${result.reason}`
-          : 'expected this fixture to fall back to code view, but the parser now accepts it — ' +
-              'if that is a real improvement, update expectations.json',
+          ? `expected this fixture to be visually editable, but ` + `the parser bailed to code view: ${result.reason}`
+          : 'expected this fixture to fall back to code view, but the parser now accepts it — ' + 'if that is a real improvement, update expectations.json',
       );
     });
   }
@@ -156,11 +149,7 @@ describe('parse -> serialize returns the original bytes', () => {
       const output = serializePage(model);
 
       if (expect.identity === 'pass') {
-        assert.equal(
-          output,
-          source,
-          `round-trip changed a file nobody edited ${formatRegion(changedRegion(source, output))}`,
-        );
+        assert.equal(output, source, `round-trip changed a file nobody edited ${formatRegion(changedRegion(source, output))}`);
         return;
       }
 
@@ -168,8 +157,7 @@ describe('parse -> serialize returns the original bytes', () => {
       assert.notEqual(
         output,
         source,
-        `${name} now round-trips cleanly — delete its entry from test/corpus/expectations.json ` +
-          `so this fixture starts guarding the fix.`,
+        `${name} now round-trips cleanly — delete its entry from test/corpus/expectations.json ` + `so this fixture starts guarding the fix.`,
       );
     });
   }
@@ -196,11 +184,7 @@ describe('serialization is idempotent', () => {
       assert.ok(second.editable, 'serialized output no longer parses as editable');
       const twice = serializePage(second.model);
 
-      assert.equal(
-        twice,
-        once,
-        `saving twice keeps changing the file ${formatRegion(changedRegion(once, twice))}`,
-      );
+      assert.equal(twice, once, `saving twice keeps changing the file ${formatRegion(changedRegion(once, twice))}`);
     });
   }
 });
@@ -244,11 +228,7 @@ describe('an edited inline run keeps its boundary spaces', () => {
       assert.ok(second.editable, 'edited output no longer parses as editable');
       const echoed = second.model.nodes[0]?.children?.[0];
       assert.ok(echoed && echoed.kind === 'text', 'edited run lost its text child');
-      assert.equal(
-        echoed.value,
-        editedValue,
-        `the save echo lost the boundary space of ${JSON.stringify(editedValue)}`,
-      );
+      assert.equal(echoed.value, editedValue, `the save echo lost the boundary space of ${JSON.stringify(editedValue)}`);
 
       // And the round trip is stable: the next save changes nothing.
       const twice = serializePage(second.model);
@@ -289,20 +269,9 @@ describe('a single prop edit produces a single-line diff', () => {
       const output = serializePage(edited);
       const region = changedRegion(baseline, output);
 
-      assert.equal(
-        region.before.length,
-        1,
-        `editing one attribute rewrote ${region.before.length} lines ${formatRegion(region)}`,
-      );
-      assert.equal(
-        region.after.length,
-        1,
-        `editing one attribute produced ${region.after.length} lines ${formatRegion(region)}`,
-      );
-      assert.ok(
-        region.after[0].includes('data-probe="1"'),
-        'the changed line should be the one carrying the new attribute',
-      );
+      assert.equal(region.before.length, 1, `editing one attribute rewrote ${region.before.length} lines ${formatRegion(region)}`);
+      assert.equal(region.after.length, 1, `editing one attribute produced ${region.after.length} lines ${formatRegion(region)}`);
+      assert.ok(region.after[0].includes('data-probe="1"'), 'the changed line should be the one carrying the new attribute');
     });
   }
 });
@@ -320,60 +289,49 @@ describe('a single prop edit produces a single-line diff', () => {
 describe('external corpus sweep', () => {
   const root = process.env.STACKI_CORPUS;
 
-  test(
-    'parses every .astro file without throwing',
-    { skip: !root && 'set STACKI_CORPUS to run' },
-    () => {
-      const files = [];
-      const skipDirectories = new Set(['node_modules', '.git', 'dist', '.astro', 'release']);
-      // A corpus is a project tree: folders nest a handful deep, and a walk past
-      // this has met a cycle or a generated tree.
-      const WALK_LIMITS = { directoryDepthMax: 32 };
-      const walk = (directory, depth) => {
-        assert.ok(depth <= WALK_LIMITS.directoryDepthMax, 'walk: depth limit');
-        for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-          if (entry.isDirectory()) {
-            if (!skipDirectories.has(entry.name)) {
-              walk(path.join(directory, entry.name), depth + 1);
-            }
-          } else if (entry.name.endsWith('.astro')) {
-            files.push(path.join(directory, entry.name));
+  test('parses every .astro file without throwing', { skip: !root && 'set STACKI_CORPUS to run' }, () => {
+    const files = [];
+    const skipDirectories = new Set(['node_modules', '.git', 'dist', '.astro', 'release']);
+    // A corpus is a project tree: folders nest a handful deep, and a walk past
+    // this has met a cycle or a generated tree.
+    const WALK_LIMITS = { directoryDepthMax: 32 };
+    const walk = (directory, depth) => {
+      assert.ok(depth <= WALK_LIMITS.directoryDepthMax, 'walk: depth limit');
+      for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          if (!skipDirectories.has(entry.name)) {
+            walk(path.join(directory, entry.name), depth + 1);
           }
-        }
-      };
-      walk(root, 0);
-
-      const stats = { total: files.length, identical: 0, differs: 0, notEditable: 0 };
-      const crashes = [];
-
-      for (const file of files) {
-        const source = fs.readFileSync(file, 'utf8');
-        try {
-          const { editable, model } = parsePage(source);
-          if (!editable) {
-            stats.notEditable++;
-            continue;
-          }
-          if (serializePage(model) === source) {
-            stats.identical++;
-          } else {
-            stats.differs++;
-          }
-        } catch (error) {
-          crashes.push(`${file}: ${error.message}`);
+        } else if (entry.name.endsWith('.astro')) {
+          files.push(path.join(directory, entry.name));
         }
       }
+    };
+    walk(root, 0);
 
-      console.log(
-        `\n  ${root}\n  ${stats.total} files — ${stats.identical} identical, ` +
-          `${stats.differs} differ, ${stats.notEditable} not editable\n`,
-      );
+    const stats = { total: files.length, identical: 0, differs: 0, notEditable: 0 };
+    const crashes = [];
 
-      assert.deepEqual(
-        crashes,
-        [],
-        `parser threw on ${crashes.length} file(s):\n${crashes.join('\n')}`,
-      );
-    },
-  );
+    for (const file of files) {
+      const source = fs.readFileSync(file, 'utf8');
+      try {
+        const { editable, model } = parsePage(source);
+        if (!editable) {
+          stats.notEditable++;
+          continue;
+        }
+        if (serializePage(model) === source) {
+          stats.identical++;
+        } else {
+          stats.differs++;
+        }
+      } catch (error) {
+        crashes.push(`${file}: ${error.message}`);
+      }
+    }
+
+    console.log(`\n  ${root}\n  ${stats.total} files — ${stats.identical} identical, ` + `${stats.differs} differ, ${stats.notEditable} not editable\n`);
+
+    assert.deepEqual(crashes, [], `parser threw on ${crashes.length} file(s):\n${crashes.join('\n')}`);
+  });
 });

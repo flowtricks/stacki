@@ -20,22 +20,8 @@ export interface ConditionContext {
   readonly fieldKind: FieldKindOf | undefined;
 }
 
-const COMPARISONS: Readonly<Record<string, 'greater' | 'less' | 'atLeast' | 'atMost'>> = {
-  '>': 'greater',
-  '<': 'less',
-  '>=': 'atLeast',
-  '<=': 'atMost',
-};
-const MIRRORED: Readonly<Record<string, string>> = {
-  '>': '<',
-  '<': '>',
-  '>=': '<=',
-  '<=': '>=',
-  '===': '===',
-  '==': '==',
-  '!==': '!==',
-  '!=': '!=',
-};
+const COMPARISONS: Readonly<Record<string, 'greater' | 'less' | 'atLeast' | 'atMost'>> = { '>': 'greater', '<': 'less', '>=': 'atLeast', '<=': 'atMost' };
+const MIRRORED: Readonly<Record<string, string>> = { '>': '<', '<': '>', '>=': '<=', '<=': '>=', '===': '===', '==': '==', '!==': '!==', '!=': '!=' };
 
 /** One clause as a condition, or kept as written when it is anything else. */
 export function conditionOf(node: Js, context: ConditionContext): LoopCondition {
@@ -47,15 +33,11 @@ export function conditionOf(node: Js, context: ConditionContext): LoopCondition 
 function recognisedCondition(node: Js, context: ConditionContext): LoopCondition | undefined {
   if (node.kind === 'unary' && node.operator === '!') {
     const field = fieldOf(node.value, context);
-    return field !== undefined && truthyField(field, context)
-      ? { kind: 'test', field, operator: 'isFalse' }
-      : undefined;
+    return field !== undefined && truthyField(field, context) ? { kind: 'test', field, operator: 'isFalse' } : undefined;
   }
   const bare = fieldOf(node, context);
   if (bare !== undefined) {
-    return truthyField(bare, context)
-      ? { kind: 'test', field: bare, operator: 'isTrue' }
-      : undefined;
+    return truthyField(bare, context) ? { kind: 'test', field: bare, operator: 'isTrue' } : undefined;
   }
   if (node.kind === 'call') {
     return callCondition(node, context);
@@ -86,12 +68,7 @@ function valueField(node: Js, context: ConditionContext): FieldValue | undefined
   let current = node;
   let date = false;
   for (let depth = 0; depth < 4; depth++) {
-    if (
-      current.kind === 'new' &&
-      isName(current.callee, 'Date') &&
-      current.args.length === 1 &&
-      current.args[0]
-    ) {
+    if (current.kind === 'new' && isName(current.callee, 'Date') && current.args.length === 1 && current.args[0]) {
       date = true;
       current = current.args[0];
     } else if (
@@ -119,10 +96,7 @@ function valueField(node: Js, context: ConditionContext): FieldValue | undefined
   if (field === undefined) {
     return undefined;
   }
-  if (
-    field.endsWith('.id') &&
-    context.fieldKind?.(context.collection, field.slice(0, -3)) === 'reference'
-  ) {
+  if (field.endsWith('.id') && context.fieldKind?.(context.collection, field.slice(0, -3)) === 'reference') {
     return { path: field.slice(0, -3), date, referenceId: true };
   }
   return { path: field, date, referenceId: false };
@@ -135,12 +109,7 @@ function referenceIdOf(node: Js): readonly string[] | undefined {
   }
   const left = namePath(node.left);
   const right = namePath(node.right);
-  if (
-    left === undefined ||
-    right === undefined ||
-    left[left.length - 1] !== 'id' ||
-    left.length !== right.length + 1
-  ) {
+  if (left === undefined || right === undefined || left[left.length - 1] !== 'id' || left.length !== right.length + 1) {
     return undefined;
   }
   return right.every((segment, index) => left[index] === segment) ? right : undefined;
@@ -151,10 +120,7 @@ function fieldOf(node: Js, context: ConditionContext): string | undefined {
   return path === undefined ? undefined : relativeField(path, context.base);
 }
 
-export function relativeField(
-  path: readonly string[],
-  base: readonly string[],
-): string | undefined {
+export function relativeField(path: readonly string[], base: readonly string[]): string | undefined {
   if (path.length <= base.length || base.some((segment, index) => path[index] !== segment)) {
     return undefined;
   }
@@ -169,18 +135,8 @@ function truthyField(field: string, context: ConditionContext): boolean {
   return kind === undefined || kind === 'boolean';
 }
 
-function binaryCondition(
-  field: FieldValue,
-  operator: string,
-  other: Js,
-  context: ConditionContext,
-): LoopCondition | undefined {
-  const equality =
-    operator === '===' || operator === '=='
-      ? 'is'
-      : operator === '!==' || operator === '!='
-        ? 'isNot'
-        : undefined;
+function binaryCondition(field: FieldValue, operator: string, other: Js, context: ConditionContext): LoopCondition | undefined {
+  const equality = operator === '===' || operator === '==' ? 'is' : operator === '!==' || operator === '!=' ? 'isNot' : undefined;
   if (equality !== undefined) {
     return equalityCondition(field, equality, operator, other, context);
   }
@@ -189,10 +145,7 @@ function binaryCondition(
     return undefined;
   }
   // A builder's relative date, "0 days in the past": the moment the page is built.
-  if (
-    isNow(other) ||
-    (other.kind === 'string' && /^0 days? in the (?:past|future)$/i.test(other.value.trim()))
-  ) {
+  if (isNow(other) || (other.kind === 'string' && /^0 days? in the (?:past|future)$/i.test(other.value.trim()))) {
     return comparison === 'less' || comparison === 'atMost'
       ? { kind: 'test', field: field.path, operator: 'inPast' }
       : { kind: 'test', field: field.path, operator: 'inFuture' };
@@ -202,31 +155,18 @@ function binaryCondition(
     if (comparison === 'less') {
       return { kind: 'test', field: field.path, operator: 'before', value: date };
     }
-    return comparison === 'greater'
-      ? { kind: 'test', field: field.path, operator: 'after', value: date }
-      : undefined;
+    return comparison === 'greater' ? { kind: 'test', field: field.path, operator: 'after', value: date } : undefined;
   }
-  return other.kind === 'number' && !field.date
-    ? { kind: 'test', field: field.path, operator: comparison, value: other.value }
-    : undefined;
+  return other.kind === 'number' && !field.date ? { kind: 'test', field: field.path, operator: comparison, value: other.value } : undefined;
 }
 
-function equalityCondition(
-  field: FieldValue,
-  equality: 'is' | 'isNot',
-  operator: string,
-  other: Js,
-  context: ConditionContext,
-): LoopCondition | undefined {
+function equalityCondition(field: FieldValue, equality: 'is' | 'isNot', operator: string, other: Js, context: ConditionContext): LoopCondition | undefined {
   if (field.date) {
     return undefined;
   }
   // `!= null` and `!= undefined` both mean "has a value"; `!== null` alone does not.
   const loose = operator === '==' || operator === '!=';
-  if (
-    (other.kind === 'name' && other.name === 'undefined' && loose) ||
-    (other.kind === 'null' && loose)
-  ) {
+  if ((other.kind === 'name' && other.name === 'undefined' && loose) || (other.kind === 'null' && loose)) {
     return { kind: 'test', field: field.path, operator: equality === 'is' ? 'isEmpty' : 'isSet' };
   }
   if (other.kind === 'boolean') {
@@ -236,16 +176,10 @@ function equalityCondition(
     return { kind: 'test', field: field.path, operator: equality === 'is' ? 'isTrue' : 'isFalse' };
   }
   const literal = literalOf(other, field, context);
-  return literal === undefined
-    ? undefined
-    : { kind: 'test', field: field.path, operator: equality, value: literal };
+  return literal === undefined ? undefined : { kind: 'test', field: field.path, operator: equality, value: literal };
 }
 
-function literalOf(
-  node: Js,
-  field: FieldValue,
-  context: ConditionContext,
-): LoopLiteral | undefined {
+function literalOf(node: Js, field: FieldValue, context: ConditionContext): LoopLiteral | undefined {
   if (node.kind === 'number') {
     return field.referenceId ? undefined : { kind: 'number', number: node.value };
   }
@@ -261,10 +195,7 @@ function literalOf(
 
 // `X.includes('a')`, `String(X ?? '').toLowerCase().includes('a')`,
 // `(X ?? []).includes('a')`, `(X ?? []).some((tag) => tag.id === 'a')`.
-function callCondition(
-  node: Extract<Js, { readonly kind: 'call' }>,
-  context: ConditionContext,
-): LoopCondition | undefined {
+function callCondition(node: Extract<Js, { readonly kind: 'call' }>, context: ConditionContext): LoopCondition | undefined {
   if (node.callee.kind !== 'member' || node.args.length !== 1) {
     return undefined;
   }
@@ -277,14 +208,8 @@ function callCondition(
   if (method !== 'includes' || argument === undefined) {
     return undefined;
   }
-  const lowered =
-    target.kind === 'call' &&
-    target.callee.kind === 'member' &&
-    target.callee.property === 'toLowerCase' &&
-    target.args.length === 0;
-  const text = unwrapString(
-    lowered && target.callee.kind === 'member' ? target.callee.object : target,
-  );
+  const lowered = target.kind === 'call' && target.callee.kind === 'member' && target.callee.property === 'toLowerCase' && target.args.length === 0;
+  const text = unwrapString(lowered && target.callee.kind === 'member' ? target.callee.object : target);
   const field = fieldOf(text, context);
   if (field === undefined) {
     return undefined;
@@ -292,47 +217,25 @@ function callCondition(
   const kind = context.fieldKind?.(context.collection, field);
   if (kind === 'list') {
     if (argument.kind === 'string') {
-      return {
-        kind: 'test',
-        field,
-        operator: 'has',
-        value: { kind: 'text', text: argument.value },
-      };
+      return { kind: 'test', field, operator: 'has', value: { kind: 'text', text: argument.value } };
     }
-    return argument.kind === 'number'
-      ? { kind: 'test', field, operator: 'has', value: { kind: 'number', number: argument.value } }
-      : undefined;
+    return argument.kind === 'number' ? { kind: 'test', field, operator: 'has', value: { kind: 'number', number: argument.value } } : undefined;
   }
-  if (
-    argument.kind !== 'string' ||
-    argument.value === '' ||
-    argument.value.length > LOOP_QUERY_LIMITS.valueCharsMax
-  ) {
+  if (argument.kind !== 'string' || argument.value === '' || argument.value.length > LOOP_QUERY_LIMITS.valueCharsMax) {
     return undefined;
   }
   return { kind: 'test', field, operator: 'contains', value: argument.value };
 }
 
-function someReference(
-  target: Js,
-  callback: Extract<Js, { readonly kind: 'function' }>,
-  context: ConditionContext,
-): LoopCondition | undefined {
+function someReference(target: Js, callback: Extract<Js, { readonly kind: 'function' }>, context: ConditionContext): LoopCondition | undefined {
   const field = fieldOf(target, context);
   const parameter = callback.parameters[0];
   const body = callback.body;
-  if (
-    field === undefined ||
-    parameter?.kind !== 'name' ||
-    body?.kind !== 'binary' ||
-    (body.operator !== '===' && body.operator !== '==')
-  ) {
+  if (field === undefined || parameter?.kind !== 'name' || body?.kind !== 'binary' || (body.operator !== '===' && body.operator !== '==')) {
     return undefined;
   }
   const plain = namePath(body.left);
-  const path =
-    referenceIdOf(body.left) ??
-    (plain?.[plain.length - 1] === 'id' ? plain.slice(0, -1) : undefined);
+  const path = referenceIdOf(body.left) ?? (plain?.[plain.length - 1] === 'id' ? plain.slice(0, -1) : undefined);
   const id = body.right;
   const named = path?.length === 1 && path[0] === parameter.name;
   if (!named || id.kind !== 'string' || !isDocumentId(id.value)) {
@@ -351,12 +254,7 @@ function unwrapFallback(node: Js): Js {
 
 // `String(X ?? '')` → `X`.
 function unwrapString(node: Js): Js {
-  if (
-    node.kind === 'call' &&
-    isName(node.callee, 'String') &&
-    node.args.length === 1 &&
-    node.args[0]
-  ) {
+  if (node.kind === 'call' && isName(node.callee, 'String') && node.args.length === 1 && node.args[0]) {
     return unwrapFallback(node.args[0]);
   }
   return unwrapFallback(node);
@@ -371,19 +269,12 @@ function isNow(node: Js): boolean {
   if (node.kind === 'new') {
     return isName(node.callee, 'Date') && node.args.length === 0;
   }
-  return (
-    node.kind === 'call' &&
-    node.args.length === 0 &&
-    namePath(node.callee)?.join('.') === 'Date.now'
-  );
+  return node.kind === 'call' && node.args.length === 0 && namePath(node.callee)?.join('.') === 'Date.now';
 }
 
 // `new Date('2024-01-01')` or the string alone.
 function dateLiteral(node: Js): string | undefined {
-  const inner =
-    node.kind === 'new' && isName(node.callee, 'Date') && node.args.length === 1
-      ? node.args[0]
-      : node;
+  const inner = node.kind === 'new' && isName(node.callee, 'Date') && node.args.length === 1 ? node.args[0] : node;
   if (inner?.kind !== 'string') {
     return undefined;
   }

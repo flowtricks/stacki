@@ -18,13 +18,7 @@ import SegmentPill from './components/SegmentPill';
 import { ChevronIcon, MenuItem } from './components/MenuParts';
 import { displayOf, type Display } from './model/styleDisplay';
 import { LiveInput } from './LiveTextInput';
-export {
-  LiveInput,
-  type LiveInputProps,
-  useLiveInputEditing,
-  useDebouncedLive,
-  stepLiveKey,
-} from './LiveTextInput';
+export { LiveInput, type LiveInputProps, useLiveInputEditing, useDebouncedLive, stepLiveKey } from './LiveTextInput';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
@@ -41,8 +35,7 @@ export type Props = {
   onSelectSelector: (selector: string, prop?: string) => void;
 };
 
-export const joinImportant = ({ value, important }: { value: string; important: boolean }) =>
-  important ? `${value} !important` : value;
+export const joinImportant = ({ value, important }: { value: string; important: boolean }) => (important ? `${value} !important` : value);
 
 export const CUSTOM = '__custom__';
 
@@ -75,15 +68,7 @@ export function PropLabel({
 }) {
   const tip = tipProps ?? [prop];
   if (display.present && !display.isSelected) {
-    return (
-      <ProvenanceLabel
-        label={label}
-        props={tip}
-        anchorProp={prop}
-        busy={busy}
-        onProvenance={onProvenance}
-      />
-    );
+    return <ProvenanceLabel label={label} props={tip} anchorProp={prop} busy={busy} onProvenance={onProvenance} />;
   }
   return (
     <FieldLabel
@@ -133,10 +118,7 @@ export function GroupLabel({
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
-  const prop =
-    props.find((name) => read(name)?.source === 'selected') ??
-    props.find((name) => read(name) !== undefined) ??
-    props[0];
+  const prop = props.find((name) => read(name)?.source === 'selected') ?? props.find((name) => read(name) !== undefined) ?? props[0];
   if (prop === undefined) {
     throw new Error('Group label requires at least one property');
   }
@@ -322,21 +304,10 @@ export function SegBar(props: SegBarProps) {
   };
 
   return (
-    <div
-      ref={rootRef}
-      className={`embed-editor_display ${customMode ? 'is-custom' : ''}`}
-      role="group"
-      aria-label={ariaLabel}
-    >
+    <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label={ariaLabel}>
       <SegmentPill />
       {customMode ? (
-        <SegBarCustomInput
-          bar={props}
-          seed={seed}
-          inputRef={inputRef}
-          onSeedDone={() => setSeed(undefined)}
-          onBackToBar={() => setForceCustom(false)}
-        />
+        <SegBarCustomInput bar={props} seed={seed} inputRef={inputRef} onSeedDone={() => setSeed(undefined)} onBackToBar={() => setForceCustom(false)} />
       ) : (
         <SegBarSegments
           segs={segs}
@@ -517,23 +488,9 @@ export function SegBarMenu({
         <ChevronIcon />
       </button>
       {open ? (
-        <Popup
-          mode="popover"
-          portal={false}
-          onClose={onToggle}
-          ref={menuRef}
-          className={`embed-editor_display-menu ${dropUp ? 'is-up' : ''}`}
-          role="menu"
-        >
+        <Popup mode="popover" portal={false} onClose={onToggle} ref={menuRef} className={`embed-editor_display-menu ${dropUp ? 'is-up' : ''}`} role="menu">
           {customMode ? (
-            segs.map((seg) => (
-              <MenuItem
-                key={seg.value}
-                label={seg.label}
-                selected={current === seg.value}
-                onClick={() => onPick(seg.value)}
-              />
-            ))
+            segs.map((seg) => <MenuItem key={seg.value} label={seg.label} selected={current === seg.value} onClick={() => onPick(seg.value)} />)
           ) : (
             <MenuItem label="Custom" selected={false} onClick={onEnterCustom} />
           )}
@@ -568,11 +525,7 @@ export function useSegMenuClamp({
     const naturalLeft = rootRect.right - menu.offsetWidth;
     const naturalRight = rootRect.right;
     const shift =
-      naturalLeft < bounds.left + margin
-        ? bounds.left + margin - naturalLeft
-        : naturalRight > bounds.right - margin
-          ? bounds.right - margin - naturalRight
-          : 0;
+      naturalLeft < bounds.left + margin ? bounds.left + margin - naturalLeft : naturalRight > bounds.right - margin ? bounds.right - margin - naturalRight : 0;
     menu.style.transform = shift ? `translateX(${shift}px)` : '';
     const overflowsBelow = rootRect.bottom + menu.offsetHeight + margin > bounds.bottom;
     setDropUp(overflowsBelow && rootRect.top - bounds.top > bounds.bottom - rootRect.bottom);

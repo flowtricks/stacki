@@ -10,10 +10,7 @@ const EXCLUDE_LINES = ['.stacki/preview/', '.stacki/canvas/', '.stacki/io/'];
  * user's own project — in the file picker, in the commit box, in every status
  * the app reads — and the first thing they would do is commit it.
  */
-export function ensureExcluded(
-  projectPath: string,
-  options: { readonly ignoredPaths: readonly string[] } = { ignoredPaths: [] },
-): boolean {
+export function ensureExcluded(projectPath: string, options: { readonly ignoredPaths: readonly string[] } = { ignoredPaths: [] }): boolean {
   if (options.ignoredPaths.length > 4096) {
     return false;
   }
@@ -55,17 +52,12 @@ export function ensureExcluded(
       .filter((line) => line.trim() !== '.stacki/')
       .join('\n');
     const existing = new Set(current.split('\n'));
-    const missing = [...new Set([...EXCLUDE_LINES, ...inherited])].filter(
-      (entry) => !existing.has(entry),
-    );
+    const missing = [...new Set([...EXCLUDE_LINES, ...inherited])].filter((entry) => !existing.has(entry));
     if (missing.length === 0 && current === previous) {
       return true;
     }
     const sep = current && !current.endsWith('\n') ? '\n' : '';
-    const next =
-      missing.length === 0
-        ? current
-        : current + sep + '# Stacki local generated files.\n' + missing.join('\n') + '\n';
+    const next = missing.length === 0 ? current : current + sep + '# Stacki local generated files.\n' + missing.join('\n') + '\n';
     if (Buffer.byteLength(next) > 1_000_000) {
       return false;
     }

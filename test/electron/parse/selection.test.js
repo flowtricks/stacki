@@ -68,27 +68,21 @@ describe('locateSelection', () => {
         if (parent) {
           assert.ok(
             at.startLine >= parent.startLine && at.endLine <= parent.endLine,
-            `${key}: ${at.startLine}-${at.endLine} escapes ` +
-              `its parent's ${parent.startLine}-${parent.endLine}`,
+            `${key}: ${at.startLine}-${at.endLine} escapes ` + `its parent's ${parent.startLine}-${parent.endLine}`,
           );
         }
         ranges.set(key, at);
 
         if (node.kind === 'element' || node.kind === 'component' || node.kind === 'raw') {
           const opening = node.shorthand ? '<>' : `<${node.name}`;
-          assert.ok(
-            lines[at.startLine - 1].includes(opening),
-            `${key}: ${opening} is not on line ${at.startLine}: ${lines[at.startLine - 1]}`,
-          );
+          assert.ok(lines[at.startLine - 1].includes(opening), `${key}: ${opening} is not on line ${at.startLine}: ${lines[at.startLine - 1]}`);
         }
       }
     });
   }
 
   test('the frontmatter block is the file up to its closing ---', () => {
-    const file = fixtures
-      .map((entry) => entry.file)
-      .find((file) => fs.readFileSync(file, 'utf8').startsWith('---'));
+    const file = fixtures.map((entry) => entry.file).find((file) => fs.readFileSync(file, 'utf8').startsWith('---'));
     const lines = fs.readFileSync(file, 'utf8').split('\n');
     const at = locateSelection(file, 'frontmatter');
     assert.equal(at.startLine, 1);

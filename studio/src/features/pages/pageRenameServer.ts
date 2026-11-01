@@ -3,24 +3,14 @@ import { studioRenameWriter } from './pageRenameWriter';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { parsePageRename } from '../../../vendor/stacki/shared/properties/pageRename';
-import {
-  planPageRename,
-  type PageRenamePlan,
-} from '../../../vendor/stacki/electron/project/pageRenamePlan';
-import {
-  applyPageRename,
-  undoPageRename,
-} from '../../../vendor/stacki/electron/project/pageRenameWrite';
+import { planPageRename, type PageRenamePlan } from '../../../vendor/stacki/electron/project/pageRenamePlan';
+import { applyPageRename, undoPageRename } from '../../../vendor/stacki/electron/project/pageRenameWrite';
 import type { createRooms } from '../collaboration/rooms';
 import { githubFromEnvironment } from '../publishing/publish';
 import { GitWorkspace, type GitWorkspaceState } from '../history/gitWorkspace';
 import { gitWorkspaceBranch } from '../history/gitWorkspaceContract';
 import { checkpointGitWorkspace } from '../history/gitWorkspaceCheckpoint';
-import {
-  snapshotGitWorkspace,
-  gitWorkspaceCommit,
-  gitWorkspaceRun,
-} from '../history/gitWorkspaceObjects';
+import { snapshotGitWorkspace, gitWorkspaceCommit, gitWorkspaceRun } from '../history/gitWorkspaceObjects';
 import { gitWorkspaceNeedsRecovery, setGitWorkspaceBusy } from '../history/gitWorkspaceLease';
 import { readWorkspaceId } from '../project/projectIdentity';
 
@@ -67,10 +57,7 @@ async function renameWorkspace(root: string): Promise<GitWorkspaceState | undefi
   }
   return new GitWorkspace(root, () => repository.historyConnection()).load();
 }
-export async function persistPageRename(
-  plan: PageRenamePlan,
-  state: GitWorkspaceState | undefined,
-) {
+export async function persistPageRename(plan: PageRenamePlan, state: GitWorkspaceState | undefined) {
   if (!state) {
     return;
   }
@@ -78,20 +65,13 @@ export async function persistPageRename(
     const { git, manifest } = state;
     const branch = gitWorkspaceBranch(manifest);
     const tree = await snapshotGitWorkspace(git, branch.head);
-    const draft = await gitWorkspaceCommit(
-      gitWorkspaceRun(git),
-      tree,
-      [branch.head],
-      'Studio page rename draft',
-    );
+    const draft = await gitWorkspaceCommit(gitWorkspaceRun(git), tree, [branch.head], 'Studio page rename draft');
     // One durable checkpoint records deletions AND switches the draft namespace;
     // startup cannot resurrect old paths from stale collaboration snapshots.
     await checkpointGitWorkspace(git, manifest, {
       ...manifest,
       draft,
-      branches: manifest.branches.map((entry) =>
-        entry.name === manifest.branch ? { ...entry, workspace: randomUUID() } : entry,
-      ),
+      branches: manifest.branches.map((entry) => (entry.name === manifest.branch ? { ...entry, workspace: randomUUID() } : entry)),
     });
   } catch (error: unknown) {
     if (gitWorkspaceNeedsRecovery(plan.root)) {

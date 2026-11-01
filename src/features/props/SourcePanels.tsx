@@ -13,18 +13,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import AutoTextarea from '../../ui/AutoTextarea';
 import ExprInput from '../../ui/ExprInput';
 import { scopeChips, scopeCompletions } from '../../editor/dataSuggest';
-import {
-  VariableTextSizeIcon,
-  CommentIcon,
-  CodeIcon,
-  BranchIcon,
-  CornerIcon,
-} from '../../ui/Icons';
-import {
-  type PropsPanelProps,
-  type NodePanelProps,
-  type SourceDimensionsOptions,
-} from './propsPanelTypes';
+import { VariableTextSizeIcon, CommentIcon, CodeIcon, BranchIcon, CornerIcon } from '../../ui/Icons';
+import { type PropsPanelProps, type NodePanelProps, type SourceDimensionsOptions } from './propsPanelTypes';
 
 // Edits the props of the selected node. Fields come from the component's
 // prop schema (interface Props / Astro.props destructure), plus any props
@@ -38,8 +28,7 @@ import {
 // the prop. The label has nothing to activate, so it activates nothing.
 //
 // Attributes rows avoid labels; these keep the tag because styling depends on it.
-export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) =>
-  event.preventDefault();
+export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) => event.preventDefault();
 export function panelDataContext(props: PropsPanelProps): SourceContext {
   return {
     frontmatter: props.loopContext?.frontmatter || '',
@@ -56,13 +45,7 @@ export function panelDataContext(props: PropsPanelProps): SourceContext {
 // the write is coalesced and the save debounced (see setComment), so a burst of
 // typing is still one save and one undo step. Clearing the field removes the
 // comment node.
-export function CommentField({
-  value,
-  onCommit,
-}: {
-  readonly value?: string | undefined;
-  readonly onCommit: (text: string) => void;
-}) {
+export function CommentField({ value, onCommit }: { readonly value?: string | undefined; readonly onCommit: (text: string) => void }) {
   const [draft, setDraft] = useState(value ?? '');
   // Re-sync when the model changes underneath (undo, external edit) — but not
   // while typing, or the caret would jump.
@@ -132,8 +115,7 @@ export function FrontmatterPanel(props: NodePanelProps<'frontmatter'>) {
           <CodeIcon size={13} /> Edit code
         </button>
         <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.5 }}>
-          Imports, constants, and data for this page. Opens in a floating editor you can move and
-          resize while working with the canvas.
+          Imports, constants, and data for this page. Opens in a floating editor you can move and resize while working with the canvas.
         </div>
       </div>
     </div>
@@ -152,13 +134,7 @@ export function ExprPanel(props: NodePanelProps<'expr'>) {
         <label onClick={noLabelActivation}>
           <span className="prop-label">Code</span>
         </label>
-        <ExprInput
-          key={node.id}
-          value={node.value}
-          syncValue={node.value}
-          completions={scope}
-          onCommit={(next) => next !== node.value && onSetText(next)}
-        />
+        <ExprInput key={node.id} value={node.value} syncValue={node.value} completions={scope} onCommit={(next) => next !== node.value && onSetText(next)} />
       </div>
     </div>
   );
@@ -189,8 +165,7 @@ export function RawLinePanel(props: NodePanelProps<'raw-line'>) {
         />
         <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 6, lineHeight: 1.5 }}>
           {isDoctype
-            ? 'Written out verbatim at the top of the page. ' +
-              'Not an element — it has no tag or attributes.'
+            ? 'Written out verbatim at the top of the page. ' + 'Not an element — it has no tag or attributes.'
             : 'Written out verbatim, exactly as typed.'}
         </div>
       </div>
@@ -241,14 +216,7 @@ export function CondPanel(props: NodePanelProps<'cond'>) {
             Show when
           </span>
         </label>
-        <ConditionField
-          key={node.id}
-          test={node.test}
-          scope={scope}
-          chipsOf={chipsInScope}
-          bindContext={bindContext || loopContext}
-          onSetText={onSetText}
-        />
+        <ConditionField key={node.id} test={node.test} scope={scope} chipsOf={chipsInScope} bindContext={bindContext || loopContext} onSetText={onSetText} />
         <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.5 }}>
           True renders <strong>then</strong>
           {hasElse ? (
@@ -281,9 +249,7 @@ export function BranchPanel(props: NodePanelProps<'branch'>) {
         <CornerIcon size={14} className="props-title-icon" />
         {isElse ? 'else' : 'then'}
       </div>
-      <div className="props-empty">
-        {isElse ? 'Rendered when the condition is false.' : 'Rendered when the condition is true.'}
-      </div>
+      <div className="props-empty">{isElse ? 'Rendered when the condition is false.' : 'Rendered when the condition is true.'}</div>
     </div>
   );
 }
@@ -302,26 +268,13 @@ export function CommentPanel(props: NodePanelProps<'comment'>) {
             Comment
           </span>
         </label>
-        <AutoTextarea
-          minRows={3}
-          value={node.value}
-          onChange={(event) => onSetText(event.target.value)}
-        />
+        <AutoTextarea minRows={3} value={node.value} onChange={(event) => onSetText(event.target.value)} />
       </div>
     </div>
   );
 }
 export function RawPanel(props: NodePanelProps<'raw'>) {
-  const {
-    node,
-    loopContext,
-    bindContext,
-    onSetProp,
-    onSetProps,
-    onRenameProp,
-    onOpenCode,
-    projectPath,
-  } = props;
+  const { node, loopContext, bindContext, onSetProp, onSetProps, onRenameProp, onOpenCode, projectPath } = props;
 
   const language = node.name === 'style' ? 'css' : 'javascript';
   const attrs = Object.keys(node.props || {});
@@ -351,8 +304,7 @@ export function RawPanel(props: NodePanelProps<'raw'>) {
           <CodeIcon size={13} /> Edit code
         </button>
         <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.5 }}>
-          Opens the {language} in a floating editor you can move and resize while working with the
-          canvas.
+          Opens the {language} in a floating editor you can move and resize while working with the canvas.
         </div>
       </div>
     </div>
@@ -373,19 +325,12 @@ export function TextPanel(props: NodePanelProps<'text'>) {
             Content
           </span>
         </label>
-        <AutoTextarea
-          minRows={3}
-          value={node.value}
-          onChange={(event) => onSetText(event.target.value)}
-        />
+        <AutoTextarea minRows={3} value={node.value} onChange={(event) => onSetText(event.target.value)} />
       </div>
     </div>
   );
 }
-export function sourceKind(
-  source: Attr | undefined,
-  imports: unknown,
-): 'svg' | 'public' | 'remote' | 'asset' | undefined {
+export function sourceKind(source: Attr | undefined, imports: unknown): 'svg' | 'public' | 'remote' | 'asset' | undefined {
   if (!source || source.type === 'bare') {
     return undefined;
   }
@@ -406,13 +351,7 @@ export function sourceKind(
   }
   return isSVG(binding.spec) ? 'svg' : 'asset';
 }
-export function useSourceDimensions({
-  source,
-  projectPath,
-  filePath,
-  imports,
-  setSourceDimensions,
-}: SourceDimensionsOptions) {
+export function useSourceDimensions({ source, projectPath, filePath, imports, setSourceDimensions }: SourceDimensionsOptions) {
   // Primitive dependencies also refresh dimensions when an import changes in place.
   const sourceType = source?.type;
   const sourceValue = source?.type === 'bare' ? undefined : source?.value;

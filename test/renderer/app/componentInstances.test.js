@@ -20,16 +20,7 @@ const PARAGRAPH =
   'ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ' +
   'ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in ' +
   'reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.';
-const NAMES = [
-  'Heading',
-  'Paragraph',
-  'Button',
-  'ButtonWrapper',
-  'ContentWrapper',
-  'Grid',
-  'Slider',
-  'Card',
-];
+const NAMES = ['Heading', 'Paragraph', 'Button', 'ButtonWrapper', 'ContentWrapper', 'Grid', 'Slider', 'Card'];
 const PAGE = '<main><!-- Preserve this existing content. --></main>\n';
 
 function fixture(context) {
@@ -108,9 +99,7 @@ test('instance defaults and imports save and undo together', async (context) => 
   const originals = setup.components.map((component) => fs.readFileSync(component.path, 'utf8'));
   const app = await mountApp(setup.root, { scan: setup.scan }, 'component-instances');
   context.after(app.unmount);
-  const palette = [...document.querySelectorAll('.rail-btn')].find((button) =>
-    String(button.getAttribute('aria-label')).startsWith('Components'),
-  );
+  const palette = [...document.querySelectorAll('.rail-btn')].find((button) => String(button.getAttribute('aria-label')).startsWith('Components'));
   assert.ok(palette);
   await app.act(async () => {
     palette.click();
@@ -178,12 +167,7 @@ test('partial libraries and occupied import names stay valid', async (context) =
   assert.equal(componentInstance(custom, []).node.children[0].value, 'Text');
   assert.deepEqual(componentInstance({ ...custom, name: 'Card' }, []).node.props, {});
   assert.equal(componentInstance({ ...find('Heading'), slots: [] }, []).node.children, undefined);
-  const model = parsePage(
-    ['---', "import Tile from '../components/Card.astro';", 'const Grid = 1;', '---', PAGE].join(
-      '\n',
-    ),
-    { locs: true },
-  ).model;
+  const model = parsePage(['---', "import Tile from '../components/Card.astro';", 'const Grid = 1;', '---', PAGE].join('\n'), { locs: true }).model;
   const resolved = grid.components.map((component) => ({
     component,
     paths: {
@@ -236,9 +220,7 @@ test('project recipes preserve literal text and one-step undo', async (context) 
   );
   const app = await mountApp(setup.root, { scan: setup.scan }, 'project-component-defaults');
   context.after(app.unmount);
-  const palette = [...document.querySelectorAll('.rail-btn')].find((button) =>
-    String(button.getAttribute('aria-label')).startsWith('Components'),
-  );
+  const palette = [...document.querySelectorAll('.rail-btn')].find((button) => String(button.getAttribute('aria-label')).startsWith('Components'));
   assert.ok(palette);
   await app.act(async () => {
     palette.click();

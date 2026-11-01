@@ -39,16 +39,7 @@ import {
 import { type OpenFileOptions, openFileSelection, parseTrailingSlash } from '../model/nodeFactory';
 import { savedForNavigation } from '../model/appKeys';
 import { keepsAcrossPages } from '../model/pageQueries';
-import {
-  useProjectState,
-  useCanvasReportState,
-  useDevState,
-  useDataState,
-  usePanelState,
-  useWindowState,
-  useSessionRefs,
-  useTypedCodeRefs,
-} from './appState';
+import { useProjectState, useCanvasReportState, useDevState, useDataState, usePanelState, useWindowState, useSessionRefs, useTypedCodeRefs } from './appState';
 
 // The app’s state.
 export function useCoreState() {
@@ -160,10 +151,7 @@ export function useToasts() {
     },
     [push],
   );
-  const reportFailure = useCallback(
-    (error: unknown) => showToast(cleanError(error), 'error'),
-    [showToast],
-  );
+  const reportFailure = useCallback((error: unknown) => showToast(cleanError(error), 'error'), [showToast]);
   useEffect(
     () =>
       onFilesChanged(({ astroChanges }) => {
@@ -177,10 +165,7 @@ export function useToasts() {
 }
 
 // Progress, dev server output, and recovering the preview after an error.
-export function useDevEvents(
-  coreState: ReturnType<typeof useCoreState>,
-  assetPickScope: ReturnType<typeof useAssetPick>,
-) {
+export function useDevEvents(coreState: ReturnType<typeof useCoreState>, assetPickScope: ReturnType<typeof useAssetPick>) {
   const { devLogRef, setBusy, setDevLog, setDevStatus, setDevUrl } = coreState;
   const { diagnose } = assetPickScope;
   const recovery = usePreviewRecovery(coreState);
@@ -239,10 +224,7 @@ function usePreviewRecovery(coreState: ReturnType<typeof useCoreState>) {
     // renderer does (see VITE_DEV_SERVER_URL): a renderer newer than the bridge
     // would call undefined and take the app down with it. Absent means there is
     // nothing to ask, which is the same answer as having no dev server.
-    if (
-      typeof window.avb.probeDevPage !== 'function' ||
-      typeof window.avb.onPageMaybeChanged !== 'function'
-    ) {
+    if (typeof window.avb.probeDevPage !== 'function' || typeof window.avb.onPageMaybeChanged !== 'function') {
       return undefined;
     }
     const watch = createPreviewWatch({
@@ -282,11 +264,7 @@ function usePreviewRecovery(coreState: ReturnType<typeof useCoreState>) {
 
 // Only the currently displayed page may trigger recovery; a late failure from
 // a previous page or another iframe must not interrupt the user's navigation.
-function subscribePreviewFailure(
-  origin: string,
-  path: { readonly current: string | undefined },
-  watch: ReturnType<typeof createPreviewWatch>,
-): () => void {
+function subscribePreviewFailure(origin: string, path: { readonly current: string | undefined }, watch: ReturnType<typeof createPreviewWatch>): () => void {
   if (typeof window.avb.onPreviewFailed !== 'function') {
     return () => {};
   }
@@ -391,27 +369,14 @@ export function usePreviewStart(
         diagnose();
       }
     },
-    [
-      showToast,
-      diagnose,
-      devLogRef,
-      setBusy,
-      setDevDiag,
-      setDevLog,
-      setDevStatus,
-      setDevUrl,
-      setTrailingSlash,
-    ],
+    [showToast, diagnose, devLogRef, setBusy, setDevDiag, setDevLog, setDevStatus, setDevUrl, setTrailingSlash],
   );
   return { startPreview };
 }
 
 // A checkout temporarily removes drafts and may replace the Astro configuration.
 // Keep the iframe and dev watcher out of that intermediate filesystem state.
-export function useBranchPreview(
-  coreState: ReturnType<typeof useCoreState>,
-  startPreview: (projectPath: string) => Promise<void>,
-) {
+export function useBranchPreview(coreState: ReturnType<typeof useCoreState>, startPreview: (projectPath: string) => Promise<void>) {
   const { projectRef, setDevStatus, setDevUrl } = coreState;
   return useCallback(
     async <Value>(work: () => Promise<Value>): Promise<Value> => {
@@ -434,10 +399,7 @@ export function useBranchPreview(
 }
 
 // The page and file savers, and the page’s unsent edit requests.
-export function useSavers(
-  toasts: ReturnType<typeof useToasts>,
-  coreState: ReturnType<typeof useCoreState>,
-) {
+export function useSavers(toasts: ReturnType<typeof useToasts>, coreState: ReturnType<typeof useCoreState>) {
   const { showToast } = toasts;
   const { pageStateRef, setPageState } = coreState;
 
@@ -462,10 +424,7 @@ export function useSavers(
     // A change to the open page's state from the saver: seen at once through
     // the ref (the next entry is stated against the origin it installs), and
     // applied to whatever React holds by then.
-    const updatePage = (
-      path: string,
-      change: (current: EditorPageState) => EditorPageState,
-    ): void => {
+    const updatePage = (path: string, change: (current: EditorPageState) => EditorPageState): void => {
       const now = pageStateRef.current;
       if (now.currentPage?.path !== path || !now.pageState) {
         return; // Another page opened meanwhile: this one's outcome is not shown.
@@ -505,20 +464,13 @@ export function useSavers(
 }
 
 // Saving before moving on, the page history’s owner, and leaving the project.
-export function useFlushing(
-  savers: ReturnType<typeof useSavers>,
-  coreState: ReturnType<typeof useCoreState>,
-  toasts: ReturnType<typeof useToasts>,
-) {
+export function useFlushing(savers: ReturnType<typeof useSavers>, coreState: ReturnType<typeof useCoreState>, toasts: ReturnType<typeof useToasts>) {
   const { fileSaver, pageSaver } = savers;
   const { pageStateRef, saveTimer } = coreState;
   const { showToast } = toasts;
 
   // Autosave: a conflicted page simply stays unsaved (plan §7).
-  const autosave = useCallback(
-    () => Promise.all([pageSaver.flush(), fileSaver.flush()]),
-    [fileSaver, pageSaver],
-  );
+  const autosave = useCallback(() => Promise.all([pageSaver.flush(), fileSaver.flush()]), [fileSaver, pageSaver]);
   // Everything else that flushes needs the edits on disk before it goes on:
   // navigating away, committing, reading lines back off the file. A conflicted
   // page's edits are not there, so the caller must stop rather than discard or
@@ -528,10 +480,7 @@ export function useFlushing(
     const [page] = await autosave();
     if (page === 'conflicted') {
       const name = pageStateRef.current.currentPage?.name ?? 'This page';
-      throw new Error(
-        `${name} has unsaved edits that conflict with a change on disk. ` +
-          'Reload it or review it in code first.',
-      );
+      throw new Error(`${name} has unsaved edits that conflict with a change on disk. ` + 'Reload it or review it in code first.');
     }
   }, [autosave, pageStateRef, saveTimer]);
 
@@ -577,11 +526,7 @@ export function useFlushing(
 }
 
 // Opening a page or a component file for editing.
-export function useOpenFile(
-  flushing: ReturnType<typeof useFlushing>,
-  toasts: ReturnType<typeof useToasts>,
-  coreState: ReturnType<typeof useCoreState>,
-) {
+export function useOpenFile(flushing: ReturnType<typeof useFlushing>, toasts: ReturnType<typeof useToasts>, coreState: ReturnType<typeof useCoreState>) {
   const { dropPageHistory, flushSave, pageLoadRef } = flushing;
   const { showToast } = toasts;
   const { pageStateRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState } = coreState;
@@ -620,11 +565,7 @@ export function useOpenFile(
       const latest = pageStateRef.current;
       // Reopening the same file must not replace an edit made during the read
       // with the older snapshot that read returned.
-      if (
-        latest.currentPage?.path === entry.path &&
-        latest.pageState &&
-        latest.pageState !== beforeRead.pageState
-      ) {
+      if (latest.currentPage?.path === entry.path && latest.pageState && latest.pageState !== beforeRead.pageState) {
         result = latest.pageState;
       }
       const nextState = result;
@@ -639,18 +580,7 @@ export function useOpenFile(
       setSelectedId(start?.id ?? undefined);
       dropPageHistory(); // page snapshots don't apply to another page; commands stay
     },
-    [
-      flushSave,
-      showToast,
-      dropPageHistory,
-      pageLoadRef,
-      pageStateRef,
-      setCurrentPage,
-      setEditStack,
-      setHoverNodeId,
-      setPageState,
-      setSelectedId,
-    ],
+    [flushSave, showToast, dropPageHistory, pageLoadRef, pageStateRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState, setSelectedId],
   );
   return { openFile };
 }

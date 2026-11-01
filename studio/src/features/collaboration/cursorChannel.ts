@@ -1,9 +1,4 @@
-import {
-  parseCursorPacket,
-  parseCursorState,
-  type CursorPacket,
-  type CursorState,
-} from './cursorPresence';
+import { parseCursorPacket, parseCursorState, type CursorPacket, type CursorState } from './cursorPresence';
 
 export function participantId(): string {
   const saved = sessionStorage.getItem('studio-participant');

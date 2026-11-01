@@ -26,9 +26,7 @@ export interface ComponentProperty {
   readonly conditions?: readonly string[];
 }
 export type PropertyEditing =
-  | { readonly kind: 'editable' }
-  | { readonly kind: 'override'; readonly reason: string }
-  | { readonly kind: 'restricted'; readonly reason: string };
+  { readonly kind: 'editable' } | { readonly kind: 'override'; readonly reason: string } | { readonly kind: 'restricted'; readonly reason: string };
 export interface PropertySource {
   readonly label: string;
   readonly expression: string;
@@ -151,9 +149,7 @@ export function parsePropertyChange(input: unknown): PropertyChange {
           property: parseEditableProperty,
         })(input),
       } as const;
-      const optionRenames = optional((item) => propertyList(item, parsePropertyOptionRename))(
-        value['optionRenames'],
-      );
+      const optionRenames = optional((item) => propertyList(item, parsePropertyOptionRename))(value['optionRenames']);
       return optionRenames === undefined ? saved : { ...saved, optionRenames };
     }
     case 'remove':

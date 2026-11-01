@@ -37,10 +37,7 @@ test('CMS inspection releases the project queue before executing project code', 
       await delay(10);
     }
     assert.ok(started, 'The content config is executing in its isolated child');
-    const result = await Promise.race([
-      fixture.rooms.coordinator.run(async () => 'available'),
-      delay(1000).then(() => 'blocked'),
-    ]);
+    const result = await Promise.race([fixture.rooms.coordinator.run(async () => 'available'), delay(1000).then(() => 'blocked')]);
     assert.equal(result, 'available', 'CMS reads must not retain the shared writer queue');
   } finally {
     await writeFile(release, 'continue');

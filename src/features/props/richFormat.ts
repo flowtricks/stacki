@@ -125,10 +125,7 @@ function richUnwrapTag(target: RichTarget, tag: string): boolean {
   assert(parent !== null, 'RichContent: inline wrapper has a parent');
   const first = element.firstChild;
   const last = element.lastChild;
-  assert(
-    element.childNodes.length <= LIMITS.treeNodesMax,
-    'RichContent: unwrap child limit exceeded',
-  );
+  assert(element.childNodes.length <= LIMITS.treeNodesMax, 'RichContent: unwrap child limit exceeded');
   for (const child of Array.from(element.childNodes)) {
     parent.insertBefore(child, element);
   }

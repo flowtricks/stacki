@@ -66,8 +66,7 @@ function fakeSanity(calls, { tokenStatus = 201 } = {}) {
       return realFetch(url, init);
     }
     calls.push(`${init.method ?? 'GET'} ${new URL(href).pathname}`);
-    const reply = (status, body) =>
-      new Response(body === undefined ? '' : JSON.stringify(body), { status });
+    const reply = (status, body) => new Response(body === undefined ? '' : JSON.stringify(body), { status });
     if (href.includes('/auth/fetch?sid=good-sid')) {
       return reply(200, { token: 'login-token-123', label: 'x' });
     }
@@ -82,9 +81,7 @@ function fakeSanity(calls, { tokenStatus = 201 } = {}) {
       assert.deepEqual(JSON.parse(init.body).roleName, 'editor');
       // Every key gets a new label: Sanity refuses a second key with the same one.
       assert.match(JSON.parse(init.body).label, /^Stacki \(.+\) \d{4}-\d\d-\d\d \d\d:\d\d UTC$/);
-      return tokenStatus === 201
-        ? reply(201, { key: 'editor-key-456' })
-        : reply(tokenStatus, { message: 'Forbidden' });
+      return tokenStatus === 201 ? reply(201, { key: 'editor-key-456' }) : reply(tokenStatus, { message: 'Forbidden' });
     }
     if (href.endsWith('/auth/logout')) {
       return reply(200, {});
@@ -117,10 +114,7 @@ async function signIn(login, root, back = 'cli') {
     assert.match(handoff, /\/callback\?sid=/);
   }
   // The browser's return: the CLI's form (`url`) or the SDK's (`sid` in the query).
-  const query =
-    back === 'cli'
-      ? `url=${encodeURIComponent('https://api.sanity.io/v1/auth/done?sid=good-sid')}`
-      : 'sid=good-sid';
+  const query = back === 'cli' ? `url=${encodeURIComponent('https://api.sanity.io/v1/auth/done?sid=good-sid')}` : 'sid=good-sid';
   const answer = await fetch(`${origin}?${query}`, { redirect: 'manual' });
   assert.equal(answer.status, 303);
   return id;
@@ -141,10 +135,7 @@ test('signing in saves an Editor key for the chosen project and logs the login o
   withFolder(async (folder) => {
     const root = path.join(folder, 'site');
     fs.mkdirSync(root);
-    fs.writeFileSync(
-      path.join(root, '.env'),
-      'SANITY_PROJECT_ID=abc123\nSANITY_DATASET=production\n',
-    );
+    fs.writeFileSync(path.join(root, '.env'), 'SANITY_PROJECT_ID=abc123\nSANITY_DATASET=production\n');
     const calls = [];
     const realFetch = globalThis.fetch;
     const store = new CmsConnectionStore(crypt(), () => folder);

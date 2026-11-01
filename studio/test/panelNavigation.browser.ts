@@ -10,10 +10,7 @@ const fixture = await startStyleFixture({
 });
 const browser = await chromium.launch({
   executablePath:
-    process.env['CHROME_PATH'] ??
-    (process.platform === 'darwin'
-      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-      : chromium.executablePath()),
+    process.env['CHROME_PATH'] ?? (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
   headless: true,
 });
 try {
@@ -70,29 +67,17 @@ async function checkPanel(
       if (phase === 'initial') {
         await rail.getByRole('status', { name: panel.loading, exact: false }).waitFor();
         assert.equal(await rail.locator('.panel-loading').innerText(), '');
-        assert.equal(
-          await rail
-            .locator('.panel-loading')
-            .evaluate((element) => getComputedStyle(element).padding),
-          '0px',
-        );
+        assert.equal(await rail.locator('.panel-loading').evaluate((element) => getComputedStyle(element).padding), '0px');
       } else {
         if (panel.name === 'Collections') {
           // The cached folder list appears before the default single-folder selection.
           assert.ok(await rail.locator('.cms-collection').count());
         } else {
-          assert.ok(
-            (await rail.innerText()).toLowerCase().includes(panel.content.toLowerCase()),
-            `${panel.name} reopens immediately`,
-          );
+          assert.ok((await rail.innerText()).toLowerCase().includes(panel.content.toLowerCase()), `${panel.name} reopens immediately`);
         }
         assert.ok(!(await rail.innerText()).includes(panel.loading));
       }
-      assert.ok(
-        !/Empty folder|No collections to show|No CSS custom properties/.test(
-          await rail.innerText(),
-        ),
-      );
+      assert.ok(!/Empty folder|No collections to show|No CSS custom properties/.test(await rail.innerText()));
       release();
       await rail.getByText(panel.content, { exact: false }).first().waitFor();
       await page.getByRole('button', { name: 'Navigator', exact: true }).click();
@@ -101,7 +86,5 @@ async function checkPanel(
       await page.unrouteAll({ behavior: 'wait' });
     }
   }
-  console.log(
-    `${panel.name}: loading on first visit, cached content on reopen, fresh background read.`,
-  );
+  console.log(`${panel.name}: loading on first visit, cached content on reopen, fresh background read.`);
 }

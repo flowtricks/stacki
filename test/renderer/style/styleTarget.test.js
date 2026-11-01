@@ -99,21 +99,12 @@ const check = (what, condition, detail) => {
     setHost({ nodes: [original, clone, style] });
     const current = await scanPage();
     const reused = contentForCurrentTree(cached, current, clone);
-    check(
-      'a duplicate reuses CSS with fresh ancestry',
-      reused?.scan.elementByKey.get('clone') === clone,
-    );
+    check('a duplicate reuses CSS with fresh ancestry', reused?.scan.elementByKey.get('clone') === clone);
 
     setHost({ nodes: [{ ...original }, { ...clone }, { ...style }] });
-    check(
-      'another page with matching ids cannot reuse the old CSS scan',
-      contentForCurrentTree(cached, await scanPage(), clone) === undefined,
-    );
+    check('another page with matching ids cannot reuse the old CSS scan', contentForCurrentTree(cached, await scanPage(), clone) === undefined);
     setHost({ nodes: [original, clone, { ...style, inner: '.card { color: blue }' }] });
-    check(
-      'an edited style block forces fresh CSS',
-      contentForCurrentTree(cached, await scanPage(), clone) === undefined,
-    );
+    check('an edited style block forces fresh CSS', contentForCurrentTree(cached, await scanPage(), clone) === undefined);
     setHost({ nodes: [], openFilePath: undefined });
   }
 
@@ -130,18 +121,12 @@ const check = (what, condition, detail) => {
       openFileKind: 'component',
     });
     const componentSource = (await scanPage()).pageEmbeds[0];
-    check(
-      'a style tag in an open component is component-authored',
-      componentSource?.fromComponent === true,
-    );
+    check('a style tag in an open component is component-authored', componentSource?.fromComponent === true);
     check('and carries the component name', componentSource?.componentName === 'Card');
 
     setHost({ openFilePath: '/project/src/pages/index.astro', openFileKind: 'page' });
     const pageSource = (await scanPage()).pageEmbeds[0];
-    check(
-      'the same style shape in a page stays page-authored',
-      pageSource?.fromComponent === false,
-    );
+    check('the same style shape in a page stays page-authored', pageSource?.fromComponent === false);
     setHost({ nodes: [], openFilePath: undefined, openFileKind: undefined });
   }
 
@@ -151,9 +136,7 @@ const check = (what, condition, detail) => {
     // and a disk-read copy of the now-open component would both be offered,
     // and writes to them fail or race the model.
     const statsPath = '/project/src/components/profile/Stats.astro';
-    const astroFiles = [
-      { rel: 'src/components/profile/Stats.astro', name: 'Stats.astro', path: statsPath, size: 1 },
-    ];
+    const astroFiles = [{ rel: 'src/components/profile/Stats.astro', name: 'Stats.astro', path: statsPath, size: 1 }];
     const pageStyle = { id: 'n1', kind: 'raw', name: 'style', inner: '.a { color: red }' };
     setHost({
       nodes: [pageStyle],
@@ -172,11 +155,7 @@ const check = (what, condition, detail) => {
     setHost({ nodes: [statsStyle], openFilePath: statsPath, openFileKind: 'component' });
     const { docs } = await loadComponentDocs(() => {});
     const keys = docs.map((document) => document.source.key);
-    check(
-      'an opened component lists only its own block',
-      keys.length === 1 && keys[0] === `node:${statsPath}:n1`,
-      JSON.stringify(keys),
-    );
+    check('an opened component lists only its own block', keys.length === 1 && keys[0] === `node:${statsPath}:n1`, JSON.stringify(keys));
     setHost({ nodes: [], astroFiles: [], openFilePath: undefined, openFileKind: undefined });
   }
 
@@ -203,15 +182,10 @@ const check = (what, condition, detail) => {
     answer: { identity, matched: {} },
     askedFor: new Map(),
   });
-  const matches = async (target, selector) =>
-    (await matchSelectorList(selector, target))[0].matched;
+  const matches = async (target, selector) => (await matchSelectorList(selector, target))[0].matched;
 
   {
-    const { target, rootSnapshot } = await resolveTarget(
-      node,
-      scan,
-      answer({ tag: 'html', classes: ['theme-dark'], attributes: { lang: 'en' } }),
-    );
+    const { target, rootSnapshot } = await resolveTarget(node, scan, answer({ tag: 'html', classes: ['theme-dark'], attributes: { lang: 'en' } }));
     check('the header reads the rendered tag', rootSnapshot.tag === 'html', rootSnapshot.tag);
     const seen = await target.view.snapshot(target.rootKey);
     check('and so does the matcher', seen?.tag === 'html', JSON.stringify(seen?.tag));
@@ -236,15 +210,8 @@ const check = (what, condition, detail) => {
     // A component instance: `<Section>` renders `<section class="section">`.
     const section = { id: 'n1', kind: 'component', name: 'Section', props: {}, children: [] };
     const sectionScan = { ...scan, elementByKey: new Map([['n1', section]]) };
-    const { target } = await resolveTarget(
-      section,
-      sectionScan,
-      answer({ tag: 'section', classes: ['section'], attributes: {} }),
-    );
-    check(
-      'a component instance matches by what it renders',
-      await matches(target, 'section.section'),
-    );
+    const { target } = await resolveTarget(section, sectionScan, answer({ tag: 'section', classes: ['section'], attributes: {} }));
+    check('a component instance matches by what it renders', await matches(target, 'section.section'));
     check('and by the tag alone', await matches(target, 'section'));
     check('but not by another tag', !(await matches(target, 'div')));
   }
@@ -255,11 +222,7 @@ const check = (what, condition, detail) => {
     // rather than being waved through.
     const { target } = await resolveTarget(node, scan, { kind: 'unasked' });
     const seen = await target.view.snapshot(target.rootKey);
-    check(
-      'with no answer the snapshot is the source one',
-      seen?.tag === undefined,
-      JSON.stringify(seen?.tag),
-    );
+    check('with no answer the snapshot is the source one', seen?.tag === undefined, JSON.stringify(seen?.tag));
     check('an unverifiable tag selector does not match', !(await matches(target, 'html')));
     check('the classes it does know still match', await matches(target, '.theme-dark'));
   }
@@ -280,22 +243,14 @@ const check = (what, condition, detail) => {
     const before = getHost().historyTick;
     check('the host carries a history tick', typeof before === 'number', typeof before);
     setHost({ historyTick: before + 1 });
-    check(
-      'it reads back at once',
-      getHost().historyTick === before + 1,
-      `${getHost().historyTick}`,
-    );
+    check('it reads back at once', getHost().historyTick === before + 1, `${getHost().historyTick}`);
     check('without calling anyone mid-render', notified === 0, `${notified} notifications`);
     await settle();
     check('moving it notifies', notified === 1, `${notified} notifications`);
     const after = notified;
     setHost({ historyTick: before + 1 });
     await settle();
-    check(
-      'setting the same value again says nothing',
-      notified === after,
-      `${notified} vs ${after}, tick=${getHost().historyTick}`,
-    );
+    check('setting the same value again says nothing', notified === after, `${notified} vs ${after}, tick=${getHost().historyTick}`);
     const beforeOff = notified;
     off();
     setHost({ historyTick: before + 2 });
@@ -318,67 +273,31 @@ const check = (what, condition, detail) => {
     const attr = (name) => ({ name: `attr:${name}`, label: name, kind: 'attribute' });
     const target = (tokens) => tokensToSelector(defaultSelectorTokens(tokens), tokens);
 
-    const lumos = [
-      tag('div'),
-      cls('layout'),
-      cls('card'),
-      cls('theme-dark'),
-      cls('flex-grow'),
-      cls('theme-brand'),
-    ];
-    check(
-      'an element with five classes is styled through the first',
-      target(lumos) === '.layout',
-      target(lumos),
-    );
-    check(
-      'one class is that class',
-      target([tag('div'), cls('hero')]) === '.hero',
-      target([tag('div'), cls('hero')]),
-    );
-    check(
-      'a combo is never the default — it takes picking one',
-      !target(lumos).includes('.card'),
-      target(lumos),
-    );
+    const lumos = [tag('div'), cls('layout'), cls('card'), cls('theme-dark'), cls('flex-grow'), cls('theme-brand')];
+    check('an element with five classes is styled through the first', target(lumos) === '.layout', target(lumos));
+    check('one class is that class', target([tag('div'), cls('hero')]) === '.hero', target([tag('div'), cls('hero')]));
+    check('a combo is never the default — it takes picking one', !target(lumos).includes('.card'), target(lumos));
 
     // The rest of the ladder, unchanged: no classes falls to the last data
     // attribute, then to the tag, and an element with nothing has nothing.
     const dataOnly = [tag('section'), attr('data-theme'), attr('data-variant')];
-    check(
-      'no classes falls to the last data attribute',
-      target(dataOnly) === '[data-variant]',
-      target(dataOnly),
-    );
+    check('no classes falls to the last data attribute', target(dataOnly) === '[data-variant]', target(dataOnly));
     check('and then to the tag', target([tag('section')]) === 'section', target([tag('section')]));
     check('nothing at all targets nothing', target([]) === '', JSON.stringify(target([])));
 
     // A component instance renders markup this side can't see, so it has no tag
     // — its classes are all there is.
     const noTag = [cls('card_component'), cls('is-featured')];
-    check(
-      'a tagless element still targets its first class',
-      target(noTag) === '.card_component',
-      target(noTag),
-    );
+    check('a tagless element still targets its first class', target(noTag) === '.card_component', target(noTag));
 
     // …and the panel actually asks.
     // The style editor and the modules it was split into (src/features/style/embed).
-    const editor = readSourceFolder(
-      'src/features/style/EmbedEditor.tsx',
-      'src/features/style/embed',
-    );
-    check(
-      'the panel defaults through it',
-      /const next = defaultSelectorTokens\(tokens\)/.test(editor),
-    );
+    const editor = readSourceFolder('src/features/style/EmbedEditor.tsx', 'src/features/style/embed');
+    check('the panel defaults through it', /const next = defaultSelectorTokens\(tokens\)/.test(editor));
     // The upgrade that follows looks for a class that is already styled — across
     // every class, not just the defaulted one, or an element whose first class
     // has no rules would fall through to a selector picked by specificity.
-    check(
-      'and the upgrade still searches every class',
-      /const primaryStyled = tokens[\s\S]{0,120}kind === 'class'/.test(editor),
-    );
+    check('and the upgrade still searches every class', /const primaryStyled = tokens[\s\S]{0,120}kind === 'class'/.test(editor));
   }
 
   // Astro stamps `data-astro-cid-*` on every element of a file with scoped
@@ -408,11 +327,7 @@ const check = (what, condition, detail) => {
       attributes: { ...unclassed.attributes, 'data-variant': 'lead' },
     });
     const authoredPick = tokensToSelector(defaultSelectorTokens(authored), authored);
-    check(
-      "the author's own data attribute still counts",
-      authoredPick === '[data-variant]',
-      authoredPick,
-    );
+    check("the author's own data attribute still counts", authoredPick === '[data-variant]', authoredPick);
   }
 
   if (failures.length) {

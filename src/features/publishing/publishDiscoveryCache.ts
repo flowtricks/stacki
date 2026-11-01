@@ -1,8 +1,5 @@
 import { discoverPublishing } from '../../ipc/publishDiscoveryBridge';
-import type {
-  DiscoveryRequest,
-  PublishDiscovery,
-} from '../../../shared/properties/publishDiscovery';
+import type { DiscoveryRequest, PublishDiscovery } from '../../../shared/properties/publishDiscovery';
 
 type Entry =
   | { readonly kind: 'loading'; readonly promise: Promise<PublishDiscovery> }
@@ -14,19 +11,12 @@ const ENTRIES_MAX = 32;
 const LIFETIME_MS = 60_000;
 const entries = new Map<string, Entry>();
 
-export function invalidatePublishingAccounts(
-  projectPath: string,
-  provider: 'github' | 'cloudflare' = 'github',
-): void {
+export function invalidatePublishingAccounts(projectPath: string, provider: 'github' | 'cloudflare' = 'github'): void {
   // A sign-in can finish while an older inventory is loading; it must not hide the new account.
   entries.delete(JSON.stringify([projectPath, provider, '']));
 }
 
-export function cachedPublishingDiscovery(
-  projectPath: string,
-  request: DiscoveryRequest,
-  freshness: 'reuse' | 'refresh',
-): Promise<PublishDiscovery> {
+export function cachedPublishingDiscovery(projectPath: string, request: DiscoveryRequest, freshness: 'reuse' | 'refresh'): Promise<PublishDiscovery> {
   const key = JSON.stringify([projectPath, request.provider, request.account]);
   const previous = entries.get(key);
   if (previous?.kind === 'loading') {

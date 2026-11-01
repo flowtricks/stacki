@@ -9,12 +9,7 @@ import path from 'node:path';
 import { git, setToolPathHome } from '#dist/electron/lib/nodeTools.js';
 import { readPublishAvailability } from '#dist/electron/project/publishAvailability.js';
 import { readPublishTree, createPublishSnapshot } from '#dist/electron/project/publishSnapshot.js';
-import {
-  deploymentConfiguration,
-  parseDeploymentReceipt,
-  readDeploymentReceipt,
-  recordDeployment,
-} from '#dist/electron/project/publishReceipt.js';
+import { deploymentConfiguration, parseDeploymentReceipt, readDeploymentReceipt, recordDeployment } from '#dist/electron/project/publishReceipt.js';
 import { DesktopPublisher } from '#dist/electron/project/publisher.js';
 import commands from '#dist/electron/project/publishCommands.js';
 import { DEFAULT_PUBLISH_CONFIG } from '#dist/shared/properties/publishConfig.js';
@@ -103,15 +98,9 @@ for (const branch of ['main', 'feature/new-page']) {
       hosting: false,
     });
     const head = (await git(root, ['rev-parse', 'HEAD'])).stdout.trim();
-    assert.equal(
-      (await git(root, ['log', '-1', '--format=%B'])).stdout.trim(),
-      'Update the homepage',
-    );
+    assert.equal((await git(root, ['log', '-1', '--format=%B'])).stdout.trim(), 'Update the homepage');
     assert.equal((await git(remote, ['rev-parse', `refs/heads/${branch}`])).stdout.trim(), head);
-    assert.equal(
-      (await git(root, ['rev-parse', `refs/remotes/origin/${branch}`])).stdout.trim(),
-      head,
-    );
+    assert.equal((await git(root, ['rev-parse', `refs/remotes/origin/${branch}`])).stdout.trim(), head);
     assert.deepEqual(await readPublishAvailability(root), {
       github: 'current',
       hosting: 'pending',

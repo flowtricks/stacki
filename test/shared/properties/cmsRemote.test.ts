@@ -7,16 +7,13 @@ import {
   CMS_REMOTE_LIMITS,
   parseRemoteDocument,
   parseRemoteDocumentAction,
+  parseRemoteReferenceOptions,
   parseRemoteDocuments,
   parseRemoteResult,
   parseRemoteRevisionId,
   parseRemoteWrite,
 } from '#dist/shared/properties/cmsRemote.js';
-import {
-  REMOTE_SCHEMA_LIMITS,
-  parseRemoteRule,
-  parseRemoteType,
-} from '#dist/shared/properties/cmsRemoteSchema.js';
+import { REMOTE_SCHEMA_LIMITS, isLocked, parseRemoteRule, parseRemoteSchemaField, parseRemoteType } from '#dist/shared/properties/cmsRemoteSchema.js';
 
 test('a write names a published document, one top-level field and a JSON value', () => {
   const write = { id: 'abc-1', field: 'location', value: { _type: 'geopoint', lat: 30.1 } };
@@ -84,10 +81,7 @@ test('documents parse with typed fields and assets; unknown types and statuses a
   assert.throws(() => parseRemoteDocument({ ...document, fields: [unflagged] }), /required/);
   const asset = { id: 'image-1', url: 'http://cdn.example.com/x.png', filename: 'x' };
   assert.throws(() => parseRemoteDocument({ ...document, assets: [asset] }), /editor address/);
-  assert.throws(
-    () => parseRemoteDocument({ ...document, editURL: 'http://studio.example.com' }),
-    /editor address/,
-  );
+  assert.throws(() => parseRemoteDocument({ ...document, editURL: 'http://studio.example.com' }), /editor address/);
   const many = Array.from({ length: CMS_REMOTE_LIMITS.documentsMax + 1 }, () => ({
     id: 'a',
     title: 't',
@@ -141,8 +135,48 @@ test('results carry a value or a short message', () => {
       message: 'Offline',
     },
   );
-  assert.throws(
-    () => parseRemoteResult({ ok: false, message: '' }, () => 1),
-    /says what went wrong/,
-  );
+  assert.throws(() => parseRemoteResult({ ok: false, message: '' }, () => 1), /says what went wrong/);
+});
+
+test('field groups parse as tabs in order; a doubled, unknown or overlong group is refused', () => {
+  const field = { name: 'name', title: '', description: '', required: false, rules: [], type: { kind: 'string', options: [] }, value: 'St. Amant' };
+  const fieldGroups = [
+    { name: 'details', title: 'Details' },
+    { name: 'media', title: 'Media' },
+  ];
+  const document = { id: 'abc', type: 'campus', status: 'published', fields: [{ ...field, groups: ['details'] }], assets: [], fieldGroups };
+  const parsed = parseRemoteDocument(document);
+  assert.deepEqual(parsed.fieldGroups, fieldGroups);
+  assert.deepEqual(parsed.fields[0]?.groups, ['details']);
+  assert.equal('groups' in (parseRemoteDocument({ ...document, fields: [field] }).fields[0] ?? {}), false, 'ungrouped stays ungrouped');
+  assert.equal(parseRemoteDocument({ ...document, fieldGroups: undefined }).fieldGroups, undefined);
+  const bad = (groups: unknown) => () => parseRemoteDocument({ ...document, fieldGroups: groups });
+  assert.throws(bad({ groups: fieldGroups }), /Expected a list/, 'the old shape is refused');
+  assert.throws(bad([...fieldGroups, { name: 'media', title: 'Again' }]), /named twice/);
+  assert.throws(bad([{ name: 'a b', title: 'A' }]), /group name/);
+  assert.throws(bad([{ name: 'a', title: '' }]), /group title/);
+  const many = Array.from({ length: CMS_REMOTE_LIMITS.fieldGroupsMax + 1 }, (_, index) => ({ name: `g${index}`, title: 'G' }));
+  assert.throws(bad(many), /Too many/);
+  assert.throws(() => parseRemoteDocument({ ...document, fields: [{ ...field, groups: ['a.b'] }] }), /group name/);
+});
+
+test('a reference option names its picture over https only', () => {
+  const option = { id: 'link-1', type: 'navLink', title: 'Story', imageURL: 'https://cdn.sanity.io/images/p/d/a.png' };
+  assert.deepEqual(parseRemoteReferenceOptions([option]), [option]);
+  assert.equal(parseRemoteReferenceOptions([{ ...option, imageURL: undefined }])[0]?.imageURL, undefined, 'a document with no picture');
+  assert.throws(() => parseRemoteReferenceOptions([{ ...option, imageURL: 'http://cdn.example.com/a.png' }]), /address/);
+  assert.throws(() => parseRemoteReferenceOptions([{ ...option, imageURL: 'not a url' }]), /Invalid URL/);
+});
+
+test('a read-only rule parses as one of its two kinds, and locks by the value', () => {
+  const field = { name: 'category', title: '', description: '', required: false, rules: [], type: { kind: 'reference', to: ['navCategory'] } };
+  assert.equal(parseRemoteSchemaField({ ...field, readOnly: 'when-set' }).readOnly, 'when-set');
+  assert.equal('readOnly' in parseRemoteSchemaField(field), false, 'an editable field says nothing');
+  assert.throws(() => parseRemoteSchemaField({ ...field, readOnly: true }), /read-only/);
+  assert.throws(() => parseRemoteSchemaField({ ...field, readOnly: 'sometimes' }), /read-only/);
+  const reference = { _type: 'reference', _ref: 'care' };
+  assert.equal(isLocked({ readOnly: 'when-set' }, undefined), false, 'unset, it can be chosen');
+  assert.equal(isLocked({ readOnly: 'when-set' }, reference), true, 'once chosen, it is kept');
+  assert.equal(isLocked({ readOnly: 'always' }, undefined), true);
+  assert.equal(isLocked({}, reference), false);
 });

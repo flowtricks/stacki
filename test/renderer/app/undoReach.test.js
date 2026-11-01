@@ -43,22 +43,11 @@ const preload = readFolderSource('electron/preload');
 const main = read('dist/electron/main.js');
 
 // The handler, from the line that registers it to the one that registers redo.
-const undoHandler = app.slice(
-  app.indexOf("window.avb.onMenu('undo'"),
-  app.indexOf("window.avb.onMenu('copy'"),
-);
+const undoHandler = app.slice(app.indexOf("window.avb.onMenu('undo'"), app.indexOf("window.avb.onMenu('copy'"));
 
 check('undo is wired to the menu at all', undoHandler.length > 0, 'no onMenu(undo) handler');
-check(
-  'a page being open is no longer the price of undoing',
-  !/pageStateRef\.current\.pageState\s*&&/.test(undoHandler),
-  undoHandler.slice(0, 400),
-);
-check(
-  'and neither is the CMS being closed',
-  !/cmsOpenRef\.current/.test(undoHandler),
-  undoHandler.slice(0, 400),
-);
+check('a page being open is no longer the price of undoing', !/pageStateRef\.current\.pageState\s*&&/.test(undoHandler), undoHandler.slice(0, 400));
+check('and neither is the CMS being closed', !/cmsOpenRef\.current/.test(undoHandler), undoHandler.slice(0, 400));
 check('undo still runs', /\bundo\(\);/.test(undoHandler), undoHandler.slice(0, 400));
 check('and redo', /\bredo\(\);/.test(undoHandler), undoHandler.slice(0, 400));
 
@@ -67,11 +56,7 @@ check(
   /if \(inEditable\(\)\) \{\s*runNativeEdit\('undo'\)/.test(undoHandler),
   'a field would lose its undo to the app’s stack',
 );
-check(
-  'and its own redo',
-  /if \(inEditable\(\)\) \{\s*runNativeEdit\('redo'\)/.test(undoHandler),
-  undoHandler.slice(0, 600),
-);
+check('and its own redo', /if \(inEditable\(\)\) \{\s*runNativeEdit\('redo'\)/.test(undoHandler), undoHandler.slice(0, 600));
 // inEditable is what "typing" means here, and it is already used by copy and
 // paste for the same reason.
 check(
@@ -90,10 +75,7 @@ check(
   /ipcMain\.handle\('native:undo'[\s\S]{0,120}webContents\.undo\(\)/.test(main),
   'native:undo does not reach webContents',
 );
-check(
-  'and the same for redo',
-  /ipcMain\.handle\('native:redo'[\s\S]{0,120}webContents\.redo\(\)/.test(main),
-);
+check('and the same for redo', /ipcMain\.handle\('native:redo'[\s\S]{0,120}webContents\.redo\(\)/.test(main));
 
 // --- what the panels record ------------------------------------------------------
 //
@@ -101,9 +83,7 @@ check(
 // inverse; nothing else can work it out afterwards. These are the ones that do,
 // and the check is that they still do — the variables panel had three edits
 // that wrote and said nothing, which is what "undo doesn't work here" was.
-const vars =
-  read('src/features/variables/VariablesView.tsx') +
-  read('src/features/variables/variableHistory.ts');
+const vars = read('src/features/variables/VariablesView.tsx') + read('src/features/variables/variableHistory.ts');
 for (const [what, near] of [
   ['a value', 'const save = useCallback'],
   ['a new variable', 'const add = useCallback'],
@@ -115,11 +95,7 @@ for (const [what, near] of [
 ]) {
   const at = vars.indexOf(near);
   const body = at === -1 ? '' : vars.slice(at, at + 1400);
-  check(
-    `the variables panel records ${what}`,
-    at !== -1 && /writeWithUndo\(/.test(body),
-    at === -1 ? `${near} is gone` : body.slice(0, 200),
-  );
+  check(`the variables panel records ${what}`, at !== -1 && /writeWithUndo\(/.test(body), at === -1 ? `${near} is gone` : body.slice(0, 200));
 }
 // A rename is the exception, and says so: its inverse is the rename backwards
 // rather than a file put back, because it reaches files this panel never opened.
@@ -132,10 +108,7 @@ check(
 // file an edit touched rather than the first one it happened to name.
 check(
   'a multi-file edit is recorded as all of its files',
-  new RegExp(
-    /const paths = \[\.\.\.new Set\(typeof files ===/.source +
-      / 'string' \? \[files\] : \(files \?\? \[\]\)\)/.source,
-  ).test(vars),
+  new RegExp(/const paths = \[\.\.\.new Set\(typeof files ===/.source + / 'string' \? \[files\] : \(files \?\? \[\]\)\)/.source).test(vars),
   'writeWithUndo still takes one file',
 );
 

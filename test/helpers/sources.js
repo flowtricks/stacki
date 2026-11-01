@@ -109,10 +109,7 @@ const PANEL_SOURCES = Object.freeze([
  * or undefined to keep the real component.
  */
 function stubPanels(name, stub) {
-  const stubs = PANEL_SOURCES.map((file) => [
-    file,
-    () => stub(path.basename(file, path.extname(file))),
-  ]);
+  const stubs = PANEL_SOURCES.map((file) => [file, () => stub(path.basename(file, path.extname(file)))]);
   return stubSources(name, Object.fromEntries(stubs));
 }
 

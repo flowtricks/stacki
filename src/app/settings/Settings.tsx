@@ -39,14 +39,10 @@ export default function Settings(props: Props) {
       settingsOpeners.delete(opener);
     };
   }, []);
-  return open ? (
-    <SettingsDialog {...props} section={open} onClose={() => setOpen(undefined)} />
-  ) : undefined;
+  return open ? <SettingsDialog {...props} section={open} onClose={() => setOpen(undefined)} /> : undefined;
 }
 
-function SettingsDialog(
-  props: Props & { readonly section: SettingsSection; readonly onClose: () => void },
-) {
+function SettingsDialog(props: Props & { readonly section: SettingsSection; readonly onClose: () => void }) {
   const cmsSection = useRef<HTMLDivElement>(null);
   // Opened to add a CMS connection: that section is what the person came for.
   useEffect(() => {
@@ -72,12 +68,7 @@ function SettingsDialog(
               </div>
             )}
             {props.projectPath ? (
-              <StudioSetup
-                key={props.projectPath}
-                projectPath={props.projectPath}
-                previewURL={props.previewURL}
-                onClose={props.onClose}
-              />
+              <StudioSetup key={props.projectPath} projectPath={props.projectPath} previewURL={props.previewURL} onClose={props.onClose} />
             ) : (
               <p>Open a project to add Stacki Studio.</p>
             )}

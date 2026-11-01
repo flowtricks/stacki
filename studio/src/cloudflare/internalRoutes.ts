@@ -1,9 +1,4 @@
-import {
-  draftKey,
-  readCloudGitWorkspace,
-  gitWorkspaceRoute,
-  gitBundleRoute,
-} from './gitWorkspaceRoutes';
+import { draftKey, readCloudGitWorkspace, gitWorkspaceRoute, gitBundleRoute } from './gitWorkspaceRoutes';
 import { modelConfiguration } from '../features/ai/chatContracts';
 import { parseAssetState, emptyAssetState } from '../features/assets/assetStateTypes';
 import { authorizeConnection } from '../features/auth/connectionAuthorization';
@@ -13,26 +8,16 @@ import { sourcePath, filePath, record, string } from '../shared/validation';
 import type { Environment } from './environment';
 
 export async function internal(request: Request, environment: Environment): Promise<Response> {
-  if (
-    !environment.CONTAINER_TOKEN ||
-    request.headers.get('x-studio-token') !== environment.CONTAINER_TOKEN
-  ) {
+  if (!environment.CONTAINER_TOKEN || request.headers.get('x-studio-token') !== environment.CONTAINER_TOKEN) {
     return new Response('Forbidden', { status: 403 });
   }
   const url = new URL(request.url);
   const handler = routes[url.pathname];
   return handler ? handler(request, environment, url) : new Response('Not found', { status: 404 });
 }
-const routes: Readonly<
-  Record<string, (request: Request, environment: Environment, url: URL) => Promise<Response>>
-> = {
+const routes: Readonly<Record<string, (request: Request, environment: Environment, url: URL) => Promise<Response>>> = {
   '/studio/internal/ai/models': async (_request, environment) =>
-    Response.json(
-      modelConfiguration(
-        environment.AI_BASE_URL ? environment.AI_MODEL : undefined,
-        environment.AI_BASE_URL ? environment.AI_MODELS : undefined,
-      ),
-    ),
+    Response.json(modelConfiguration(environment.AI_BASE_URL ? environment.AI_MODEL : undefined, environment.AI_BASE_URL ? environment.AI_MODELS : undefined)),
   '/studio/internal/authorize': authorizeConnection,
   '/studio/internal/storage': storageInventory,
   '/studio/internal/storage-baseline': storageBaseline,
@@ -52,11 +37,7 @@ const routes: Readonly<
   '/studio/internal/bootstrap': internalBootstrap,
 };
 
-async function internalBase(
-  request: Request,
-  environment: Environment,
-  url: URL,
-): Promise<Response> {
+async function internalBase(request: Request, environment: Environment, url: URL): Promise<Response> {
   if (url.pathname === '/studio/internal/base' && request.method === 'POST') {
     const input = record(await request.json());
     const sha = string(input['sha'], 64);
@@ -69,11 +50,7 @@ async function internalBase(
   return new Response('Not found', { status: 404 });
 }
 
-async function internalIncoming(
-  request: Request,
-  environment: Environment,
-  url: URL,
-): Promise<Response> {
+async function internalIncoming(request: Request, environment: Environment, url: URL): Promise<Response> {
   if (url.pathname === '/studio/internal/incoming' && request.method === 'POST') {
     try {
       const input = record(await request.json());
@@ -86,20 +63,13 @@ async function internalIncoming(
       });
       return Response.json(await repository.incoming(string(input['base'], 64)));
     } catch (error) {
-      return Response.json(
-        { error: error instanceof Error ? error.message : 'GitHub sync failed' },
-        { status: 409 },
-      );
+      return Response.json({ error: error instanceof Error ? error.message : 'GitHub sync failed' }, { status: 409 });
     }
   }
   return new Response('Not found', { status: 404 });
 }
 
-async function internalCompletions(
-  request: Request,
-  environment: Environment,
-  url: URL,
-): Promise<Response> {
+async function internalCompletions(request: Request, environment: Environment, url: URL): Promise<Response> {
   if (url.pathname === '/studio/internal/chat/completions' && request.method === 'POST') {
     if (!environment.AI_BASE_URL || !environment.AI_MODEL) {
       return new Response('Configure AI_BASE_URL and AI_MODEL', { status: 503 });
@@ -115,11 +85,7 @@ async function internalCompletions(
       throw new Error('Model is not configured');
     }
     const messages = input['messages'];
-    if (
-      !Array.isArray(messages) ||
-      messages.length > 26 ||
-      JSON.stringify(messages).length > 1_500_000
-    ) {
+    if (!Array.isArray(messages) || messages.length > 26 || JSON.stringify(messages).length > 1_500_000) {
       throw new Error('Invalid AI context');
     }
     return fetch(endpoint, {
@@ -135,29 +101,19 @@ async function internalCompletions(
   return new Response('Not found', { status: 404 });
 }
 
-async function internalAssets(
-  request: Request,
-  environment: Environment,
-  url: URL,
-): Promise<Response> {
+async function internalAssets(request: Request, environment: Environment, url: URL): Promise<Response> {
   if (url.pathname === '/studio/internal/assets') {
     const prefix = draftKey(request, 'assets/');
     const objects = await environment.DRAFTS.list({ prefix, limit: 1000 });
     if (objects.truncated) {
       throw new Error('Asset inventory exceeds limit');
     }
-    return Response.json(
-      objects.objects.map((object) => filePath(object.key.slice(prefix.length))),
-    );
+    return Response.json(objects.objects.map((object) => filePath(object.key.slice(prefix.length))));
   }
   return new Response('Not found', { status: 404 });
 }
 
-async function internalAsset(
-  request: Request,
-  environment: Environment,
-  url: URL,
-): Promise<Response> {
+async function internalAsset(request: Request, environment: Environment, url: URL): Promise<Response> {
   if (url.pathname === '/studio/internal/asset') {
     const file = filePath(url.searchParams.get('file'));
     if (request.method === 'DELETE') {
@@ -180,10 +136,7 @@ async function internalAsset(
   return new Response('Not found', { status: 404 });
 }
 
-async function internalPublishConnection(
-  request: Request,
-  environment: Environment,
-): Promise<Response> {
+async function internalPublishConnection(request: Request, environment: Environment): Promise<Response> {
   if (request.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
@@ -195,19 +148,13 @@ async function internalPublishConnection(
     branch: (await readCloudGitWorkspace(environment))?.branch ?? environment.GITHUB_BRANCH,
   });
   const connection =
-    new URL(request.url).pathname === '/studio/internal/review-connection'
-      ? await repository.reviewConnection()
-      : await repository.publishConnection();
+    new URL(request.url).pathname === '/studio/internal/review-connection' ? await repository.reviewConnection() : await repository.publishConnection();
   return connection.ok
     ? Response.json(connection.value, { headers: { 'Cache-Control': 'no-store' } })
     : Response.json({ error: connection.error.message }, { status: 400 });
 }
 
-async function internalState(
-  request: Request,
-  environment: Environment,
-  url: URL,
-): Promise<Response> {
+async function internalState(request: Request, environment: Environment, url: URL): Promise<Response> {
   if (url.pathname === '/studio/internal/state') {
     const file = sourcePath(url.searchParams.get('file'));
     const key = draftKey(request, 'documents/' + file);
@@ -231,20 +178,14 @@ async function internalState(
   return new Response('Not found', { status: 404 });
 }
 
-async function internalFiles(
-  request: Request,
-  environment: Environment,
-  url: URL,
-): Promise<Response> {
+async function internalFiles(request: Request, environment: Environment, url: URL): Promise<Response> {
   if (url.pathname === '/studio/internal/files') {
     const prefix = draftKey(request, 'documents/');
     const objects = await environment.DRAFTS.list({ prefix, limit: 1000 });
     if (objects.truncated) {
       throw new Error('Draft file limit exceeded');
     }
-    return Response.json(
-      objects.objects.map((object) => sourcePath(object.key.slice(prefix.length))),
-    );
+    return Response.json(objects.objects.map((object) => sourcePath(object.key.slice(prefix.length))));
   }
   return new Response('Not found', { status: 404 });
 }
@@ -276,10 +217,7 @@ async function internalBootstrap(request: Request, environment: Environment): Pr
   if (!existing) {
     await environment.DRAFTS.put(draftKey(request, 'metadata/base-sha'), sha);
   }
-  return Response.json(
-    { ...connection.value, sha, workspace },
-    { headers: { 'Cache-Control': 'no-store' } },
-  );
+  return Response.json({ ...connection.value, sha, workspace }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 async function internalAssetState(request: Request, environment: Environment): Promise<Response> {

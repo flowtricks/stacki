@@ -6,15 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { HoverTooltip } from './components/SegmentedControl';
 import type { ProjectVariable } from './model/webflow';
 import { type ResolvedProp } from './model/resolved';
-import {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type Read,
-  type Side,
-  displayOf,
-  isWrappedValue,
-} from './spacingTypes';
+import { type SetProp, type ClearProp, type LiveSetProp, type Read, type Side, displayOf, isWrappedValue } from './spacingTypes';
 import { siblingProps, useSideDrag, useSideHover } from './SpacingFill';
 import { withImportant } from './spacingValue';
 import { useStyleHint } from './model/computedStyle';
@@ -26,10 +18,7 @@ export function labelFor(value: string, empty: string): string {
   return text || empty;
 }
 
-export function variableFor(
-  value: string,
-  variables: ProjectVariable[],
-): ProjectVariable | undefined {
+export function variableFor(value: string, variables: ProjectVariable[]): ProjectVariable | undefined {
   const raw = value.trim().replace(/\s*!important$/i, '');
   const binding = raw.match(/var\(\s*--[A-Za-z0-9_-]+[^)]*\)/i)?.[0];
   // Purple is reserved for a direct variable value. Expressions that merely contain
@@ -106,34 +95,18 @@ export function SpacingLabel(props: SpacingLabelProps) {
       >
         {look.text}
       </button>
-      {tooltip.shown && look.hasValue && buttonRef.current ? (
-        <SpacingLabelTooltip anchor={buttonRef.current} look={look} />
-      ) : undefined}
+      {tooltip.shown && look.hasValue && buttonRef.current ? <SpacingLabelTooltip anchor={buttonRef.current} look={look} /> : undefined}
     </>
   );
 }
 
 // The label's tooltip: a variable's full name, an override's winner, or the
 // value spelled out.
-export function SpacingLabelTooltip({
-  anchor,
-  look,
-}: {
-  anchor: HTMLElement;
-  look: { variableFullName: string; tooltipContent: string };
-}) {
+export function SpacingLabelTooltip({ anchor, look }: { anchor: HTMLElement; look: { variableFullName: string; tooltipContent: string } }) {
   return (
     <HoverTooltip anchor={anchor}>
       <span className="embed-editor_spacing-tooltip">
-        <span
-          className={
-            look.variableFullName
-              ? 'embed-editor_spacing-tooltip-meta'
-              : 'embed-editor_spacing-tooltip-value'
-          }
-        >
-          {look.tooltipContent}
-        </span>
+        <span className={look.variableFullName ? 'embed-editor_spacing-tooltip-meta' : 'embed-editor_spacing-tooltip-value'}>{look.tooltipContent}</span>
       </span>
     </HoverTooltip>
   );
@@ -151,10 +124,7 @@ export function useLabelGesture({
   liveSetProp,
   onLive,
   onLiveEnd,
-}: Pick<
-  SpacingLabelProps,
-  'prop' | 'side' | 'read' | 'busy' | 'setProp' | 'liveSetProp' | 'onLive' | 'onLiveEnd'
->) {
+}: Pick<SpacingLabelProps, 'prop' | 'side' | 'read' | 'busy' | 'setProp' | 'liveSetProp' | 'onLive' | 'onLiveEnd'>) {
   const propForSide = (other: Side) => siblingProps(prop, side, [other])[0] ?? prop;
   // `padding-top` → padding, `margin-top` → margin, a bare inset (`top`) → the
   // box it is drawn in, which is the margin frame.
@@ -220,19 +190,11 @@ export function labelLook({
   const overridden = override === undefined && display.overridden && !hasWrappedValue;
   const selected = override !== undefined || (display.present && display.isSelected);
   const color = selected ? 'is-selected' : display.present ? 'is-other' : '';
-  const variable =
-    override === undefined && variableLabels && !hasWrappedValue
-      ? variableFor(value, variables)
-      : undefined;
+  const variable = override === undefined && variableLabels && !hasWrappedValue ? variableFor(value, variables) : undefined;
   const state = `${color}${variable ? ' is-variable' : ''}${overridden ? ' is-overridden' : ''}`;
-  const variableFullName = variable
-    ? variable.group
-      ? `${variable.group}/${variable.name}`
-      : variable.name
-    : '';
+  const variableFullName = variable ? (variable.group ? `${variable.group}/${variable.name}` : variable.name) : '';
   const tooltipValue = variable ? variable.name : labelFor(value, emptyLabel);
-  const tooltipContent =
-    variableFullName || (overridden ? `Overridden by ${display.winnerSelector}` : tooltipValue);
+  const tooltipContent = variableFullName || (overridden ? `Overridden by ${display.winnerSelector}` : tooltipValue);
   // A side with nothing set already reads "Auto" / "0" on its face; a tooltip saying
   // the same thing is noise over every empty side of the box. Only a value worth
   // spelling out — one that's authored, a variable's full name, an override — gets one.

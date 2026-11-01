@@ -58,23 +58,12 @@ export default function PalettePanel(props: PalettePanelProps) {
         preview={preview}
         openUsage={usage.open}
       />
-      <PalettePopups
-        props={props}
-        creating={creating}
-        setCreating={setCreating}
-        usage={usage}
-        usageRef={usageRef}
-        preview={preview.value}
-      />
+      <PalettePopups props={props} creating={creating} setCreating={setCreating} usage={usage} usageRef={usageRef} preview={preview.value} />
     </div>
   );
 }
 
-function useCreateRequest(
-  request: number,
-  source: ComponentCreationSource,
-  setCreating: React.Dispatch<React.SetStateAction<boolean>>,
-): void {
+function useCreateRequest(request: number, source: ComponentCreationSource, setCreating: React.Dispatch<React.SetStateAction<boolean>>): void {
   const firstRequest = useRef(request);
   useEffect(() => {
     if (request === firstRequest.current) {
@@ -94,10 +83,7 @@ function useDelayedTooltip() {
   const show = useCallback((event: React.MouseEvent<HTMLElement>): void => {
     const rect = event.currentTarget.getBoundingClientRect();
     clearTimeout(timer.current);
-    timer.current = setTimeout(
-      () => setValue({ left: rect.left + rect.width / 2, top: rect.bottom + 8 }),
-      TOOLTIP_DELAY_MS,
-    );
+    timer.current = setTimeout(() => setValue({ left: rect.left + rect.width / 2, top: rect.bottom + 8 }), TOOLTIP_DELAY_MS);
   }, []);
   const hide = useCallback((): void => {
     clearTimeout(timer.current);
@@ -107,9 +93,7 @@ function useDelayedTooltip() {
 }
 
 function useComponentPreview() {
-  const [value, setValue] = useState<(Point & { readonly component: ScanComponent }) | undefined>(
-    undefined,
-  );
+  const [value, setValue] = useState<(Point & { readonly component: ScanComponent }) | undefined>(undefined);
   const show = useCallback((component: ScanComponent, anchor: HTMLElement): void => {
     const rect = anchor.getBoundingClientRect();
     const left = rect.right + 10;
@@ -194,30 +178,17 @@ function PaletteHeader({
       </div>
       {tooltip.value && (
         <div className="rail-tooltip below" style={tooltip.value}>
-          {canCreate
-            ? `New component (${shortcutLabel('A', 'primary-shift', currentDesktopPlatform())})`
-            : source.reason}
+          {canCreate ? `New component (${shortcutLabel('A', 'primary-shift', currentDesktopPlatform())})` : source.reason}
         </div>
       )}
     </>
   );
 }
 
-function PaletteSearch({
-  query,
-  setQuery,
-}: {
-  readonly query: string;
-  readonly setQuery: React.Dispatch<React.SetStateAction<string>>;
-}) {
+function PaletteSearch({ query, setQuery }: { readonly query: string; readonly setQuery: React.Dispatch<React.SetStateAction<string>> }) {
   return (
     <div style={{ padding: '0 12px 8px' }}>
-      <input
-        value={query}
-        placeholder="Search components"
-        spellCheck={false}
-        onChange={(event) => setQuery(event.currentTarget.value)}
-      />
+      <input value={query} placeholder="Search components" spellCheck={false} onChange={(event) => setQuery(event.currentTarget.value)} />
     </div>
   );
 }
@@ -249,13 +220,7 @@ function PaletteList(props: PaletteListProps) {
   );
 }
 
-function PaletteItem({
-  component,
-  props,
-}: {
-  readonly component: ScanComponent;
-  readonly props: PaletteListProps;
-}) {
+function PaletteItem({ component, props }: { readonly component: ScanComponent; readonly props: PaletteListProps }) {
   return (
     <div
       className="palette-item"
@@ -266,9 +231,7 @@ function PaletteItem({
       onDragEnd={clearDrag}
       onDoubleClick={() => props.onInsert(component.path)}
     >
-      <span className="icon">
-        {component.isLayout ? <LayoutIcon size={14} /> : <ElementComponentIcon size={14} />}
-      </span>
+      <span className="icon">{component.isLayout ? <LayoutIcon size={14} /> : <ElementComponentIcon size={14} />}</span>
       <span className="label">
         {prettyComponentName(component.name)}
         <div className="sub">
@@ -296,11 +259,7 @@ function PaletteItem({
   );
 }
 
-function startComponentDrag(
-  event: React.DragEvent<HTMLDivElement>,
-  component: ScanComponent,
-  props: PaletteListProps,
-): void {
+function startComponentDrag(event: React.DragEvent<HTMLDivElement>, component: ScanComponent, props: PaletteListProps): void {
   props.preview.cancel();
   event.dataTransfer.setData('avb/component', component.name);
   event.dataTransfer.setData('avb/component-path', component.path);

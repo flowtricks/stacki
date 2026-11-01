@@ -3,31 +3,19 @@
 import path from 'node:path';
 
 import { definedFields } from '../../shared/core/boundary';
-import {
-  parseValidationResult,
-  parseContentConfig,
-  parseSampleEntry,
-  parseSampleValue,
-} from '../app/mainValidation';
+import { parseValidationResult, parseContentConfig, parseSampleEntry, parseSampleValue } from '../app/mainValidation';
 import { resolveImport } from '../content/cmsRefs';
 import { readContentConfig, validateEntry } from '../content/contentConfig';
 import { listEntries, writeEntry, countEntries, coveredPaths } from '../content/contentEntries';
 import { planRename, applyRename } from '../content/contentRefs';
 import { astroRemoteService, type AstroRemoteService } from '../content/astroRemoteService';
-import type {
-  AstroRemoteEdit,
-  AstroRemoteEditAnswer,
-  AstroRemoteRead,
-  AstroRemoteReadAnswer,
-} from '../../shared/properties/astroContent';
+import type { AstroRemoteEdit, AstroRemoteEditAnswer, AstroRemoteRead, AstroRemoteReadAnswer } from '../../shared/properties/astroContent';
 import type { RemoteResult } from '../../shared/properties/cmsRemote';
 import { errorMessage, toPosix } from '../lib/mainHelpers';
 import { collectionOf } from './cmsFiles';
 import type { MainHost } from './mainHost';
 
-export function registerContentHandlers(
-  host: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send' | 'shell'>,
-): void {
+export function registerContentHandlers(host: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send' | 'shell'>): void {
   registerContentConfigHandlers(host);
   registerContentRenameHandlers(host);
   registerContentRemoteHandlers(host);
@@ -37,20 +25,13 @@ export function registerContentHandlers(
 // connected CMS's are (astroRemoteService.ts): an expected failure — a config
 // that will not load, an entry deleted meanwhile — is an answer the panel
 // shows, not a crash.
-function registerContentRemoteHandlers({
-  ipcMain,
-  noteAppWrite,
-  send,
-  shell,
-}: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send' | 'shell'>): void {
+function registerContentRemoteHandlers({ ipcMain, noteAppWrite, send, shell }: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send' | 'shell'>): void {
   const service = (projectPath: string) =>
     astroRemoteService(projectPath, {
       readConfig: async () => parseContentConfig(await readContentConfig(projectPath)),
       trash: (file) => shell.trashItem(file),
     });
-  ipcMain.handle('content:remoteRead', async (_event, { projectPath, request }) =>
-    answered(() => readRemote(service(projectPath), request)),
-  );
+  ipcMain.handle('content:remoteRead', async (_event, { projectPath, request }) => answered(() => readRemote(service(projectPath), request)));
   ipcMain.handle('content:remoteEdit', async (_event, { projectPath, request }) => {
     const result = await answered(() => editRemote(service(projectPath), request));
     noteAppWrite();
@@ -59,10 +40,7 @@ function registerContentRemoteHandlers({
   });
 }
 
-function readRemote(
-  service: AstroRemoteService,
-  request: AstroRemoteRead,
-): Promise<AstroRemoteReadAnswer> {
+function readRemote(service: AstroRemoteService, request: AstroRemoteRead): Promise<AstroRemoteReadAnswer> {
   switch (request.operation) {
     case 'collections':
       return service.collections();
@@ -81,10 +59,7 @@ function readRemote(
   }
 }
 
-function editRemote(
-  service: AstroRemoteService,
-  request: AstroRemoteEdit,
-): Promise<AstroRemoteEditAnswer> {
+function editRemote(service: AstroRemoteService, request: AstroRemoteEdit): Promise<AstroRemoteEditAnswer> {
   switch (request.operation) {
     case 'write':
       return service.write(request.write);
@@ -112,19 +87,13 @@ async function answered<T>(run: () => Promise<T>): Promise<RemoteResult<T>> {
   }
 }
 
-function registerContentConfigHandlers({
-  ipcMain,
-  noteAppWrite,
-  send,
-}: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send'>): void {
+function registerContentConfigHandlers({ ipcMain, noteAppWrite, send }: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send'>): void {
   // What the project's content config declares: every collection, where its
   // entries live, whether they can be written at all, and the JSON Schema its
   // zod schema amounts to. Read from the config itself rather than inferred from
   // the data, so the editor enforces the same rules the build does — see
   // contentConfig.js for how, and why it happens in a child process.
-  ipcMain.handle('content:config', async (_event, { projectPath, force }) =>
-    parseContentConfig(await readContentConfig(projectPath, { force: !!force })),
-  );
+  ipcMain.handle('content:config', async (_event, { projectPath, force }) => parseContentConfig(await readContentConfig(projectPath, { force: !!force })));
 
   ipcMain.handle('content:collections', async (_event, projectPath) => {
     const config = parseContentConfig(await readContentConfig(projectPath));
@@ -154,15 +123,12 @@ function registerContentConfigHandlers({
 
   // A save is a list of edits against one entry, not a new copy of the file: see
   // contentEntries.js and ./formats for what that protects.
-  ipcMain.handle(
-    'content:writeEntry',
-    async (_event, { projectPath, entry, edits, body, expected }) => {
-      const result = writeEntry(projectPath, entry, edits || [], definedFields({ body, expected }));
-      noteAppWrite();
-      send('cms:changed', {});
-      return result;
-    },
-  );
+  ipcMain.handle('content:writeEntry', async (_event, { projectPath, entry, edits, body, expected }) => {
+    const result = writeEntry(projectPath, entry, edits || [], definedFields({ body, expected }));
+    noteAppWrite();
+    send('cms:changed', {});
+    return result;
+  });
 
   ipcMain.handle('content:validate', async (_event, { projectPath, collection, data }) =>
     parseValidationResult(await validateEntry(projectPath, { collection, data })),
@@ -188,11 +154,7 @@ function registerContentConfigHandlers({
   });
 }
 
-function registerContentRenameHandlers({
-  ipcMain,
-  noteAppWrite,
-  send,
-}: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send'>): void {
+function registerContentRenameHandlers({ ipcMain, noteAppWrite, send }: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send'>): void {
   ipcMain.handle('content:rename', async (_event, { projectPath, name, from, to }) => {
     const config = parseContentConfig(await readContentConfig(projectPath));
     const plan = planRename(
@@ -242,27 +204,24 @@ function registerContentRenameHandlers({
   // What a page's own data call returns — `await getCampusPastors()` — sampled
   // by the dev server, which runs it as the page's render does. The import is
   // resolved here, so only a project module under src is ever asked for.
-  ipcMain.handle(
-    'content:sampleValue',
-    async (_event, { projectPath, devUrl, pagePath, spec, name }) => {
-      const target = devUrl ? resolveImport(projectPath, pagePath, spec) : undefined;
-      const rel = target ? toPosix(path.relative(projectPath, target)) : '';
-      if (!devUrl || !rel.startsWith('src/')) {
-        return { value: undefined };
+  ipcMain.handle('content:sampleValue', async (_event, { projectPath, devUrl, pagePath, spec, name }) => {
+    const target = devUrl ? resolveImport(projectPath, pagePath, spec) : undefined;
+    const rel = target ? toPosix(path.relative(projectPath, target)) : '';
+    if (!devUrl || !rel.startsWith('src/')) {
+      return { value: undefined };
+    }
+    try {
+      const query = `m=${encodeURIComponent('/' + rel)}&f=${encodeURIComponent(name)}`;
+      const response = await fetch(`${devUrl}/__avb/value?${query}`);
+      if (!response.ok) {
+        return { value: undefined, error: `Dev server returned ${response.status}` };
       }
-      try {
-        const query = `m=${encodeURIComponent('/' + rel)}&f=${encodeURIComponent(name)}`;
-        const response = await fetch(`${devUrl}/__avb/value?${query}`);
-        if (!response.ok) {
-          return { value: undefined, error: `Dev server returned ${response.status}` };
-        }
-        const input: unknown = await response.json();
-        return parseSampleValue(input);
-      } catch (error: unknown) {
-        return { value: undefined, error: errorMessage(error) };
-      }
-    },
-  );
+      const input: unknown = await response.json();
+      return parseSampleValue(input);
+    } catch (error: unknown) {
+      return { value: undefined, error: errorMessage(error) };
+    }
+  });
 
   // Where an import in a page actually points. The tag name is only a local
   // binding — `import Layout from '@/layouts/BaseLayout.astro'` renders as

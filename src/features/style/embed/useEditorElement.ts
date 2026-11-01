@@ -4,42 +4,17 @@
 // and suggested (EmbedEditor.tsx).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  defaultSelectorTokens,
-  selectorToClassTokens,
-  tokensToSelector,
-} from '../model/elementTokens';
+import { defaultSelectorTokens, selectorToClassTokens, tokensToSelector } from '../model/elementTokens';
 import { stateForSelector, STATES, type ContextKey } from '../model/resolved';
-import {
-  listAtRuleBlocks,
-  parseNestedInput,
-  type NestStep,
-  renameAtRuleQuery,
-  atRuleQueryText,
-  queryKey,
-  splitQuery,
-} from '../model/css';
+import { listAtRuleBlocks, parseNestedInput, type NestStep, renameAtRuleQuery, atRuleQueryText, queryKey, splitQuery } from '../model/css';
 import { canonicalCompound } from '../model/selectors';
 import { getHost } from '../model/host';
-import {
-  readNativeStyleByName,
-  readNativeStyles,
-  resolveIdentityElement,
-  writeEmbedDocument,
-  type EmbedDocument,
-} from '../model/webflow';
+import { readNativeStyleByName, readNativeStyles, resolveIdentityElement, writeEmbedDocument, type EmbedDocument } from '../model/webflow';
 import type { NativeModel } from '../model/styleTypes';
 import { standaloneNativeClass } from './EditorBasics';
 import { loneTypedClass, type NestedInput, nativeModelCache } from './editorModel';
 import { asQuery, type QuerySuggestion, COMMON_QUERIES } from './SelectorPicker';
-import {
-  useEditorRefs,
-  useBusyState,
-  useScanState,
-  useSelectionState,
-  useNativeState,
-  usePendingWrites,
-} from './useEditorFoundation';
+import { useEditorRefs, useBusyState, useScanState, useSelectionState, useNativeState, usePendingWrites } from './useEditorFoundation';
 import { useRefreshDerived } from './useEditorScanning';
 import { useApplyEdit, useElementTokens } from './useEditorRuleEdits';
 
@@ -50,15 +25,7 @@ export function useTokenDefault(
   elementTokens: ReturnType<typeof useElementTokens>,
 ) {
   const { setNativeFallback } = scanState;
-  const {
-    defaultTokensRef,
-    pendingDefaultRef,
-    setSelectedSelectorText,
-    setSelectedTokens,
-    setStateKey,
-    tokenIdentityRef,
-    typedClassRef,
-  } = selectionState;
+  const { defaultTokensRef, pendingDefaultRef, setSelectedSelectorText, setSelectedTokens, setStateKey, tokenIdentityRef, typedClassRef } = selectionState;
   const { tokens } = elementTokens;
 
   // Re-default the picked selector when the element changes: the element's FIRST
@@ -210,14 +177,7 @@ export function useNativeRead(
     return () => {
       cancelled = true;
     };
-  }, [
-    elementIdentity,
-    serveCachedNative,
-    nativeIdentityRef,
-    nativeModelRef,
-    selectedRef,
-    setNativeModel,
-  ]);
+  }, [elementIdentity, serveCachedNative, nativeIdentityRef, nativeModelRef, selectedRef, setNativeModel]);
 }
 
 // The selector being edited, and a typed standalone class's native styles.
@@ -232,10 +192,7 @@ export function useActiveSelector(
   const { activeSelectorRef, nativeIdentityRef, nativeModelRef, setNativeModel } = nativeState;
   const { tokens } = elementTokens;
 
-  const selectedSelector = useMemo(
-    () => tokensToSelector(selectedTokens, tokens),
-    [selectedTokens, tokens],
-  );
+  const selectedSelector = useMemo(() => tokensToSelector(selectedTokens, tokens), [selectedTokens, tokens]);
   // The full selector currently being edited: an explicit chip/typed pick when set,
   // else the one composed from the token chips.
   const activeSelector = selectedSelectorText ?? selectedSelector;
@@ -246,8 +203,7 @@ export function useActiveSelector(
   // With no canvas selection, a typed standalone class is still a complete native
   // target: look it up directly in the project's Style API so its values and state
   // styles can be shown and edited just like an applied class.
-  const standaloneClass =
-    phase === 'no-selection' ? standaloneNativeClass(activeSelector) : undefined;
+  const standaloneClass = phase === 'no-selection' ? standaloneNativeClass(activeSelector) : undefined;
   useEffect(() => {
     if (phase !== 'no-selection') {
       return;
@@ -281,8 +237,7 @@ export function useSelectorPick(
   elementTokens: ReturnType<typeof useElementTokens>,
 ) {
   const { selectedRef } = editorRefs;
-  const { pendingDefaultRef, setContext, setSelectedSelectorText, setSelectedTokens, setStateKey } =
-    selectionState;
+  const { pendingDefaultRef, setContext, setSelectedSelectorText, setSelectedTokens, setStateKey } = selectionState;
   const { tokens } = elementTokens;
 
   // Pick any matched selector (a chip, an override-note jump, or a typed one) as the
@@ -294,9 +249,7 @@ export function useSelectorPick(
   const [typedContexts, setTypedContexts] = useState<string[]>([]);
   // The nesting path from a typed selector (`.hero { @container { .title } }`), so the
   // first edit writes NESTED source into the embed rather than a flat selector.
-  const typedPathRef = useRef<{ selector: string; ctx: string; path: NestStep[] } | undefined>(
-    undefined,
-  );
+  const typedPathRef = useRef<{ selector: string; ctx: string; path: NestStep[] } | undefined>(undefined);
   const selectActiveSelector = useCallback(
     (text: string) => {
       const trimmed = text.trim();
@@ -312,14 +265,7 @@ export function useSelectorPick(
       setSelectedTokens(matchedTokens ?? (standalone ? [`class:${standalone}`] : []));
       setStateKey(stateForSelector(trimmed));
     },
-    [
-      tokens,
-      pendingDefaultRef,
-      selectedRef,
-      setSelectedSelectorText,
-      setSelectedTokens,
-      setStateKey,
-    ],
+    [tokens, pendingDefaultRef, selectedRef, setSelectedSelectorText, setSelectedTokens, setStateKey],
   );
   // Add a selector typed in the field — supports CSS nesting / a query, e.g.
   // `.hero { .title }`, `.hero { @container (width < 50em) { .title } }`, or
@@ -332,9 +278,7 @@ export function useSelectorPick(
     (parsed: NestedInput) => {
       const contextKey = parsed.atContext.join(' › ');
       if (contextKey) {
-        setTypedContexts((previous) =>
-          previous.includes(contextKey) ? previous : [...previous, contextKey],
-        );
+        setTypedContexts((previous) => (previous.includes(contextKey) ? previous : [...previous, contextKey]));
         setContext(contextKey);
       } else {
         setContext('');
@@ -361,13 +305,7 @@ export function useTypedSelector(
   selectorPick: ReturnType<typeof useSelectorPick>,
 ) {
   const { primedRef } = editorRefs;
-  const {
-    pendingDefaultRef,
-    setSelectedSelectorText,
-    setSelectedTokens,
-    setStateKey,
-    typedClassRef,
-  } = selectionState;
+  const { pendingDefaultRef, setSelectedSelectorText, setSelectedTokens, setStateKey, typedClassRef } = selectionState;
   const { classGatesRef } = applyEditHook;
   const { selectActiveSelector, selectNested } = selectorPick;
 
@@ -414,10 +352,7 @@ export function useTypedSelector(
 }
 
 // Jump to a selector and focus one of its property fields.
-export function useFocusProp(
-  editorRefs: ReturnType<typeof useEditorRefs>,
-  selectorPick: ReturnType<typeof useSelectorPick>,
-) {
+export function useFocusProp(editorRefs: ReturnType<typeof useEditorRefs>, selectorPick: ReturnType<typeof useSelectorPick>) {
   const { rootRef } = editorRefs;
   const { selectActiveSelector } = selectorPick;
 
@@ -455,10 +390,7 @@ export function useFocusProp(
 }
 
 // The stylesheet new rules land in, and its queries' uses.
-export function useSourceDocument(
-  nativeState: ReturnType<typeof useNativeState>,
-  pendingWrites: ReturnType<typeof usePendingWrites>,
-) {
+export function useSourceDocument(nativeState: ReturnType<typeof useNativeState>, pendingWrites: ReturnType<typeof usePendingWrites>) {
   const { sourceSelection } = nativeState;
   const { documentByKey } = pendingWrites;
 
@@ -469,9 +401,7 @@ export function useSourceDocument(
     if (sourceSelection && documentByKey.has(sourceSelection)) {
       return documentByKey.get(sourceSelection);
     }
-    return [...documentByKey.values()].sort(
-      (left, right) => left.source.order - right.source.order,
-    )[0];
+    return [...documentByKey.values()].sort((left, right) => left.source.order - right.source.order)[0];
   }, [sourceSelection, documentByKey]);
   // How many blocks in that stylesheet each query is written in. Drives the edit
   // pencil in the query dropdown (a query this file doesn't hold can't be renamed
@@ -598,9 +528,7 @@ export function useContextKeys(
       }
     };
     if (model) {
-      const matchedDocumentKeys = new Set(
-        [...model.base, ...model.conditional].map((matched) => matched.rule.embedKey),
-      );
+      const matchedDocumentKeys = new Set([...model.base, ...model.conditional].map((matched) => matched.rule.embedKey));
       for (const [key, embedDocument] of documentByKey) {
         if (!matchedDocumentKeys.has(key)) {
           continue;
@@ -667,8 +595,7 @@ export function useQuerySuggestions(pendingWrites: ReturnType<typeof usePendingW
     // and the prefers-* queries are set once and left. Sorting is stable, so
     // within each group the file's own queries still come before the suggested
     // ones, in the order the file has them.
-    const bySize = (query: string) =>
-      /@container\b/.test(query) || /\b(width|height)\b/.test(query) ? 0 : 1;
+    const bySize = (query: string) => (/@container\b/.test(query) || /\b(width|height)\b/.test(query) ? 0 : 1);
     return out.sort((left, right) => bySize(left.query) - bySize(right.query));
   }, [documentByKey]);
   return { querySuggestions };

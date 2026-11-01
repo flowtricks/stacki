@@ -4,9 +4,7 @@
 const assert = require('node:assert/strict');
 const { JSDOM } = require('jsdom');
 const loadRenderer = require('../../helpers/rendererModule.js');
-const { renderedPageImage, renderedPageType } = loadRenderer(
-  'electron/preload/framePageMetadata.ts',
-);
+const { renderedPageImage, renderedPageType } = loadRenderer('electron/preload/framePageMetadata.ts');
 const { parsePageImage, parsePageType } = loadRenderer('shared/properties/pageMetadata.ts');
 const { parseCanvasReply } = loadRenderer('src/editor/canvasReply.ts');
 const dom = new JSDOM('<!doctype html><head></head>', { url: 'http://localhost:4321/about' });

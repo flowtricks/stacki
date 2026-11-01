@@ -8,24 +8,11 @@ import SegmentedControl from './components/SegmentedControl';
 import { useHighlight } from './model/computedStyle';
 import { commitInPlace } from './model/commitInPlace';
 import { parseFlow, buildFlow, isPresetFlow } from './gridTracks';
-import {
-  GRID_FLOW,
-  GRID_CONTENT,
-  GRID_SYNONYMS,
-  gridKeyword,
-  LABELS,
-  cap,
-  contentOptions,
-  ChevUp,
-  ChevDown,
-  DenseIcon,
-} from './GridIcons';
+import { GRID_FLOW, GRID_CONTENT, GRID_SYNONYMS, gridKeyword, LABELS, cap, contentOptions, ChevUp, ChevDown, DenseIcon } from './GridIcons';
 
 export function parseImportant(input: string): { value: string; important: boolean } {
   const match = input.match(/!\s*important\s*$/i);
-  return match
-    ? { value: input.slice(0, match.index).trim(), important: true }
-    : { value: input.trim(), important: false };
+  return match ? { value: input.slice(0, match.index).trim(), important: true } : { value: input.trim(), important: false };
 }
 
 // The grid Direction control: the row/column segments (with Horizontal/Vertical
@@ -37,12 +24,7 @@ export interface GridDirectionControlProps {
   onSet: (value: string) => void;
   onCommitCustom: (value: string, important: boolean) => void;
 }
-export function GridDirectionControl({
-  value,
-  busy,
-  onSet,
-  onCommitCustom,
-}: GridDirectionControlProps) {
+export function GridDirectionControl({ value, busy, onSet, onCommitCustom }: GridDirectionControlProps) {
   const { direction, dense } = value ? parseFlow(value) : { direction: 'row', dense: false };
   const [forceCustom, setForceCustom] = useState(false);
   const customMode = forceCustom || (!!value.trim() && !isPresetFlow(value));
@@ -83,28 +65,12 @@ export function GridDirectionControl({
             onChange={(next) => onSet(buildFlow({ direction: next, dense }))}
           />
         )}
-        <MenuArrow
-          open={menu.open}
-          busy={busy}
-          ariaLabel="More direction options"
-          onToggle={menu.toggle}
-        />
+        <MenuArrow open={menu.open} busy={busy} ariaLabel="More direction options" onToggle={menu.toggle} />
         {menu.open ? (
-          <DirectionMenu
-            onClose={() => menu.setOpen(false)}
-            customMode={customMode}
-            pickPreset={pickPreset}
-            enterCustom={enterCustom}
-          />
+          <DirectionMenu onClose={() => menu.setOpen(false)} customMode={customMode} pickPreset={pickPreset} enterCustom={enterCustom} />
         ) : undefined}
       </div>
-      {!customMode ? (
-        <DenseToggle
-          dense={dense}
-          busy={busy}
-          onToggle={() => onSet(buildFlow({ direction, dense: !dense }))}
-        />
-      ) : undefined}
+      {!customMode ? <DenseToggle dense={dense} busy={busy} onToggle={() => onSet(buildFlow({ direction, dense: !dense }))} /> : undefined}
     </div>
   );
 }
@@ -122,13 +88,7 @@ export function DirectionMenu({
   readonly onClose: () => void;
 }) {
   return (
-    <Popup
-      mode="popover"
-      portal={false}
-      onClose={onClose}
-      className="embed-editor_display-menu"
-      role="menu"
-    >
+    <Popup mode="popover" portal={false} onClose={onClose} className="embed-editor_display-menu" role="menu">
       {customMode ? (
         <>
           <MenuButton label="Horizontal" onClick={() => pickPreset('row')} />
@@ -141,15 +101,7 @@ export function DirectionMenu({
   );
 }
 
-export function DenseToggle({
-  dense,
-  busy,
-  onToggle,
-}: {
-  dense: boolean;
-  busy: boolean;
-  onToggle: () => void;
-}) {
+export function DenseToggle({ dense, busy, onToggle }: { dense: boolean; busy: boolean; onToggle: () => void }) {
   return (
     <button
       type="button"
@@ -249,17 +201,7 @@ export function GridCustomInput({
   );
 }
 
-export function MenuArrow({
-  open,
-  busy,
-  ariaLabel,
-  onToggle,
-}: {
-  open: boolean;
-  busy: boolean;
-  ariaLabel: string;
-  onToggle: () => void;
-}) {
+export function MenuArrow({ open, busy, ariaLabel, onToggle }: { open: boolean; busy: boolean; ariaLabel: string; onToggle: () => void }) {
   return (
     <button
       type="button"
@@ -277,12 +219,7 @@ export function MenuArrow({
 
 export function MenuButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button
-      type="button"
-      role="menuitem"
-      className="embed-editor_display-menu-item"
-      onClick={onClick}
-    >
+    <button type="button" role="menuitem" className="embed-editor_display-menu-item" onClick={onClick}>
       {label}
     </button>
   );
@@ -305,14 +242,7 @@ export interface GridContentControlProps {
 export function GridContentControl(props: GridContentControlProps) {
   const { value, prop, vertical, ariaLabel, busy, onSet, onCommitCustom } = props;
   const current = gridKeyword(value.trim().toLowerCase());
-  const shownContent = gridKeyword(
-    useHighlight(
-      '',
-      current ? '' : prop,
-      [...GRID_CONTENT, ...Object.keys(GRID_SYNONYMS)],
-      'stretch',
-    ),
-  );
+  const shownContent = gridKeyword(useHighlight('', current ? '' : prop, [...GRID_CONTENT, ...Object.keys(GRID_SYNONYMS)], 'stretch'));
   const [forceCustom, setForceCustom] = useState(false);
   const customMode = forceCustom || (!!current && !GRID_CONTENT.includes(current));
   const menu = useCustomMenu({ customMode, busy });
@@ -331,41 +261,15 @@ export function GridContentControl(props: GridContentControlProps) {
   const segValue = current ? (GRID_CONTENT.includes(current) ? current : '') : shownContent;
 
   return (
-    <div
-      ref={menu.rootRef}
-      className={`embed-editor_grid-dir-bar ${customMode ? 'is-custom' : ''}`}
-    >
+    <div ref={menu.rootRef} className={`embed-editor_grid-dir-bar ${customMode ? 'is-custom' : ''}`}>
       {customMode ? (
-        <GridCustomInput
-          value={value}
-          busy={busy}
-          inputRef={menu.inputRef}
-          placeholder="custom value"
-          ariaLabel={ariaLabel}
-          onCommitCustom={onCommitCustom}
-        />
+        <GridCustomInput value={value} busy={busy} inputRef={menu.inputRef} placeholder="custom value" ariaLabel={ariaLabel} onCommitCustom={onCommitCustom} />
       ) : (
-        <SegmentedControl
-          value={segValue}
-          options={contentOptions({ vertical })}
-          ariaLabel={ariaLabel}
-          disabled={busy}
-          onChange={onSet}
-        />
+        <SegmentedControl value={segValue} options={contentOptions({ vertical })} ariaLabel={ariaLabel} disabled={busy} onChange={onSet} />
       )}
-      <MenuArrow
-        open={menu.open}
-        busy={busy}
-        ariaLabel={`More ${ariaLabel} options`}
-        onToggle={menu.toggle}
-      />
+      <MenuArrow open={menu.open} busy={busy} ariaLabel={`More ${ariaLabel} options`} onToggle={menu.toggle} />
       {menu.open ? (
-        <GridContentMenu
-          customMode={customMode}
-          pickPreset={pickPreset}
-          enterCustom={enterCustom}
-          onClose={() => menu.setOpen(false)}
-        />
+        <GridContentMenu customMode={customMode} pickPreset={pickPreset} enterCustom={enterCustom} onClose={() => menu.setOpen(false)} />
       ) : undefined}
     </div>
   );
@@ -373,30 +277,14 @@ export function GridContentControl(props: GridContentControlProps) {
 
 // From custom mode: every preset, to switch back to the bar.
 export function ContentPresetItems({ pickPreset }: { pickPreset: (option: string) => void }) {
-  return GRID_CONTENT.map((option) => (
-    <MenuButton
-      key={option}
-      label={LABELS[option] ?? cap(option)}
-      onClick={() => pickPreset(option)}
-    />
-  ));
+  return GRID_CONTENT.map((option) => <MenuButton key={option} label={LABELS[option] ?? cap(option)} onClick={() => pickPreset(option)} />);
 }
 
 // A track count stays between 1 and 500.
 export const clampCount = (count: number) => Math.min(500, Math.max(1, count));
 
 // A whole-number track-count field with ▲▼ steppers (Webflow's Columns/Rows inputs).
-export function CountField({
-  value,
-  busy,
-  ariaLabel,
-  onCommit,
-}: {
-  value: number;
-  busy: boolean;
-  ariaLabel: string;
-  onCommit: (n: number) => void;
-}) {
+export function CountField({ value, busy, ariaLabel, onCommit }: { value: number; busy: boolean; ariaLabel: string; onCommit: (n: number) => void }) {
   const [text, setText] = useState(value > 0 ? String(value) : '');
   const focused = useRef(false);
   useEffect(() => {
@@ -462,22 +350,10 @@ export function CountField({
 export function CountSteppers({ busy, step }: { busy: boolean; step: (delta: number) => void }) {
   return (
     <div className="embed-editor_grid-count-steppers">
-      <button
-        type="button"
-        tabIndex={-1}
-        disabled={busy}
-        aria-label="Increase"
-        onClick={() => step(1)}
-      >
+      <button type="button" tabIndex={-1} disabled={busy} aria-label="Increase" onClick={() => step(1)}>
         <ChevUp />
       </button>
-      <button
-        type="button"
-        tabIndex={-1}
-        disabled={busy}
-        aria-label="Decrease"
-        onClick={() => step(-1)}
-      >
+      <button type="button" tabIndex={-1} disabled={busy} aria-label="Decrease" onClick={() => step(-1)}>
         <ChevDown />
       </button>
     </div>
@@ -496,18 +372,8 @@ function GridContentMenu({
   readonly onClose: () => void;
 }) {
   return (
-    <Popup
-      mode="popover"
-      portal={false}
-      onClose={onClose}
-      className="embed-editor_display-menu"
-      role="menu"
-    >
-      {customMode ? (
-        <ContentPresetItems pickPreset={pickPreset} />
-      ) : (
-        <MenuButton label="Custom" onClick={enterCustom} />
-      )}
+    <Popup mode="popover" portal={false} onClose={onClose} className="embed-editor_display-menu" role="menu">
+      {customMode ? <ContentPresetItems pickPreset={pickPreset} /> : <MenuButton label="Custom" onClick={enterCustom} />}
     </Popup>
   );
 }

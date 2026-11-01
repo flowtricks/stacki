@@ -6,11 +6,7 @@ import type { PublishCommand } from '../../shared/properties/publishCommands';
 import { resolvePublishExecutable } from './publishExecutable';
 import { withWorkerAccount } from './publishWorkerConfig';
 
-export async function runPublishScripts(
-  root: string,
-  scripts: readonly string[],
-  environment: Readonly<Record<string, string>> = {},
-): Promise<void> {
+export async function runPublishScripts(root: string, scripts: readonly string[], environment: Readonly<Record<string, string>> = {}): Promise<void> {
   if (scripts.length > PUBLISH_LIMITS.hooksMax) {
     throw new Error('Publish hook exceeds eight scripts.');
   }
@@ -75,24 +71,17 @@ export async function runPublishCommand(root: string, command: PublishCommand): 
     };
     child.stdout.on('data', collect);
     child.stderr.on('data', collect);
-    const timer = setTimeout(
-      () => stop('Command exceeded the ten-minute time limit.'),
-      PUBLISH_LIMITS.commandTimeoutMs,
-    );
+    const timer = setTimeout(() => stop('Command exceeded the ten-minute time limit.'), PUBLISH_LIMITS.commandTimeoutMs);
     child.once('error', () => {
       clearTimeout(timer);
-      reject(
-        new Error(`Could not start ${command.executable}. Install and authenticate it first.`),
-      );
+      reject(new Error(`Could not start ${command.executable}. Install and authenticate it first.`));
     });
     child.once('close', (code) => {
       clearTimeout(timer);
       if (code === 0 && !failure) {
         resolve();
       } else {
-        reject(
-          new Error(failure || `${command.executable} failed (exit ${code}). Check its setup.`),
-        );
+        reject(new Error(failure || `${command.executable} failed (exit ${code}). Check its setup.`));
       }
     });
   });

@@ -38,9 +38,7 @@ export function publishGitEnvironment(context: PublishGit): NodeJS.ProcessEnv {
     ...(context.authorization
       ? {
           GIT_CONFIG_KEY_5: 'http.https://github.com/.extraHeader',
-          GIT_CONFIG_VALUE_5:
-            'Authorization: Basic ' +
-            Buffer.from('x-access-token:' + context.authorization).toString('base64'),
+          GIT_CONFIG_VALUE_5: 'Authorization: Basic ' + Buffer.from('x-access-token:' + context.authorization).toString('base64'),
         }
       : {}),
     GIT_AUTHOR_NAME: 'Stacki Studio',
@@ -70,13 +68,7 @@ export function publishGit(
     detached: process.platform !== 'win32',
     stdio: ['pipe', 'pipe', 'pipe'],
   });
-  return collectPublishCommand(
-    child,
-    path.dirname(context.directory),
-    args[0] ?? 'command',
-    input,
-    options.output ?? 'trimmed',
-  );
+  return collectPublishCommand(child, path.dirname(context.directory), args[0] ?? 'command', input, options.output ?? 'trimmed');
 }
 
 function collectPublishCommand(
@@ -134,10 +126,7 @@ function monitorPublishCommand(child: ChildProcessWithoutNullStreams, root: stri
     stopPublishProcess(child.pid);
     child.kill('SIGKILL');
   };
-  const timeout = setTimeout(
-    () => stop('Git exceeded the ten-minute time limit.'),
-    limits.commandTimeoutMs,
-  );
+  const timeout = setTimeout(() => stop('Git exceeded the ten-minute time limit.'), limits.commandTimeoutMs);
   // At most one disk request is outstanding, even if the filesystem is slow.
   const timer = setInterval(() => {
     if (checking) {
@@ -169,7 +158,5 @@ function monitorPublishCommand(child: ChildProcessWithoutNullStreams, root: stri
 }
 
 export function publishObject(value: string): Result<string> {
-  return /^[a-f0-9]{40}$/.test(value)
-    ? ok(value)
-    : err({ code: 'git-object', message: 'Git returned an invalid object identifier.' });
+  return /^[a-f0-9]{40}$/.test(value) ? ok(value) : err({ code: 'git-object', message: 'Git returned an invalid object identifier.' });
 }

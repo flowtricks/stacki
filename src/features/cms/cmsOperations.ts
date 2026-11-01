@@ -1,16 +1,6 @@
 import type { SchemaOperations } from './CmsSettings';
 import type { DeclaredTypes } from './cmsTypes';
-import {
-  applyToItems,
-  fieldsAt,
-  objectsAt,
-  putKey,
-  seedEntry,
-  labelize,
-  renameKey,
-  dropKey,
-  orderKeys,
-} from './cmsSchema';
+import { applyToItems, fieldsAt, objectsAt, putKey, seedEntry, labelize, renameKey, dropKey, orderKeys } from './cmsSchema';
 import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 
@@ -58,12 +48,7 @@ export function createCmsSchemaOperations(options: OperationOptions): SchemaOper
       if (entries.some(([key]) => key === fromPath || key.startsWith(fromPath + '.'))) {
         void saveDeclared(
           Object.fromEntries(
-            entries.map(([key, type]) => [
-              key === fromPath || key.startsWith(fromPath + '.')
-                ? toPath + key.slice(fromPath.length)
-                : key,
-              type,
-            ]),
+            entries.map(([key, type]) => [key === fromPath || key.startsWith(fromPath + '.') ? toPath + key.slice(fromPath.length) : key, type]),
           ),
         );
       }

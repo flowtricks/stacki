@@ -14,11 +14,7 @@ interface StatusOptions {
   readonly transport?: typeof fetch;
 }
 
-export function availabilityRoutes(
-  root: string,
-  repository: Pick<NativeRepository, 'historyConnection'> | undefined,
-  options: StatusOptions = {},
-) {
+export function availabilityRoutes(root: string, repository: Pick<NativeRepository, 'historyConnection'> | undefined, options: StatusOptions = {}) {
   const source = new PublishStatusSource(root);
   let pending: Promise<PublishAvailability> | undefined;
   let cached: { readonly at: number; readonly value: PublishAvailability } | undefined;
@@ -70,11 +66,8 @@ async function readAvailability(
   }
   const connection = published(await repository.historyConnection());
   const workspace = await readGitWorkspace(root);
-  const unpublished =
-    workspace && !workspace.remote.some((entry) => entry.name === workspace.branch);
-  const remote = unpublished
-    ? { sha: '', files: new Map() }
-    : await readPublishedStatusTree(connection, options.transport);
+  const unpublished = workspace && !workspace.remote.some((entry) => entry.name === workspace.branch);
+  const remote = unpublished ? { sha: '', files: new Map() } : await readPublishedStatusTree(connection, options.transport);
   // Inspect persisted source only; status must never write drafts, Git objects, or deployment data.
   const pending = workspace
     ? await gitWorkspaceAvailability(root, source, connection, workspace)

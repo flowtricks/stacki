@@ -8,26 +8,10 @@ import { assert } from '../core/assert';
 import type { Operation, RejectionReason, SourceEdit } from './intent';
 import { LIMITS } from '../core/limits';
 import type { CandidatePolicy, Plan, Splice } from './planner';
-import {
-  nodeEditable,
-  nodeRewriteable,
-  nodeUnchanged,
-  resolveTarget,
-  sameSpan,
-  slice,
-  validProjections,
-  type PlanContext,
-} from './planSupport';
+import { nodeEditable, nodeRewriteable, nodeUnchanged, resolveTarget, sameSpan, slice, validProjections, type PlanContext } from './planSupport';
 import type { AnchorRef } from '../page/ref';
 import { err, ok, type Result } from '../core/result';
-import {
-  byteStringsEqual,
-  encodeUtf8,
-  spansAscending,
-  toByteSpan,
-  type ByteSpan,
-  type ByteString,
-} from '../core/span';
+import { byteStringsEqual, encodeUtf8, spansAscending, toByteSpan, type ByteSpan, type ByteString } from '../core/span';
 
 /** Bytes of context each side of a hunk when it is mapped through the diff.
  * A hunk of a few bytes (`Old`, a closing brace) repeats everywhere, and the
@@ -95,10 +79,7 @@ export function planRewriteNode(
   const splices = operation.hunks.map((hunk) => {
     const moved = toByteSpan(hunk.span.start + shift, hunk.span.end + shift);
     const splice = spliceAt(context.current.bytes, moved, hunk.text);
-    assert(
-      byteStringsEqual(splice.expectedBytes, slice(context.authored.bytes, hunk.span)),
-      'A rewritten range holds its authored bytes',
-    );
+    assert(byteStringsEqual(splice.expectedBytes, slice(context.authored.bytes, hunk.span)), 'A rewritten range holds its authored bytes');
     return splice;
   });
   assert(spansAscending(splices.map((splice) => splice.range)), 'Moved hunks keep their order');
@@ -249,12 +230,7 @@ interface HunkPolicy {
   readonly candidate: CandidatePolicy;
 }
 
-function planHunks(
-  context: PlanContext,
-  anchor: AnchorRef,
-  hunks: readonly SourceEdit[],
-  policy: HunkPolicy,
-): Result<Plan, RejectionReason> {
+function planHunks(context: PlanContext, anchor: AnchorRef, hunks: readonly SourceEdit[], policy: HunkPolicy): Result<Plan, RejectionReason> {
   assert(anchor.expectedKind === 'document', 'Hunks anchor the whole document');
   const authored = context.authored.bytes;
   if (anchor.span.end !== authored.length) {
@@ -269,10 +245,7 @@ function planHunks(
     }
     const splice = spliceAt(context.current.bytes, mapped.value, hunk.text);
     // The witness: what the hunk replaces is what it replaced when authored.
-    assert(
-      byteStringsEqual(splice.expectedBytes, slice(authored, hunk.span)),
-      'A mapped hunk holds its authored bytes',
-    );
+    assert(byteStringsEqual(splice.expectedBytes, slice(authored, hunk.span)), 'A mapped hunk holds its authored bytes');
     splices.push(splice);
   }
   if (!spansAscending(splices.map((splice) => splice.range))) {
@@ -283,16 +256,9 @@ function planHunks(
 
 // A hunk with up to HUNK_CONTEXT_BYTES of neighbourhood each side, mapped as
 // one region; the hunk sits at the same offset inside it.
-function mapHunk(
-  context: PlanContext,
-  span: ByteSpan,
-  stale: RejectionReason,
-): Result<ByteSpan, RejectionReason> {
+function mapHunk(context: PlanContext, span: ByteSpan, stale: RejectionReason): Result<ByteSpan, RejectionReason> {
   const length = context.authored.bytes.length;
-  const region = toByteSpan(
-    Math.max(0, span.start - HUNK_CONTEXT_BYTES),
-    Math.min(length, span.end + HUNK_CONTEXT_BYTES),
-  );
+  const region = toByteSpan(Math.max(0, span.start - HUNK_CONTEXT_BYTES), Math.min(length, span.end + HUNK_CONTEXT_BYTES));
   if (region.start === region.end) {
     return err(stale); // An empty file has no neighbourhood to find.
   }

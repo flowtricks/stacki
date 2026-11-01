@@ -1,19 +1,13 @@
 import { parseRenameFolders } from '../../../vendor/stacki/shared/properties/pageRenameConflicts';
 import { parseWorkspaceId } from '../../shared/workspaceIdentity';
-import {
-  parseScanPages,
-  type ScanPage,
-} from '../../../vendor/stacki/shared/properties/projectScan';
+import { parseScanPages, type ScanPage } from '../../../vendor/stacki/shared/properties/projectScan';
 import { parseNumericBindings, type NumericStyleBinding } from '../preview/numericStyleProtocol';
 import { responseError, StudioRequestError } from './responseError';
 import { parseField, type PropField } from '../../../vendor/stacki/shared/properties/propSchema';
 import { beginOperation } from '../session/activity';
 import { record, string } from '../../shared/validation';
 import { componentFile } from '../../../vendor/stacki/shared/properties/componentDefaults';
-import {
-  parseComponentOrigin,
-  type ComponentOrigin,
-} from '../../../vendor/stacki/shared/properties/componentSources';
+import { parseComponentOrigin, type ComponentOrigin } from '../../../vendor/stacki/shared/properties/componentSources';
 
 export interface Component {
   readonly origin?: ComponentOrigin;
@@ -55,11 +49,7 @@ export async function request(url: string, options?: RequestInit): Promise<unkno
       throw responseError(response);
     }
     const data: unknown = await response.json();
-    if (
-      response.ok &&
-      revision === workspaceRevision &&
-      (url.startsWith('/studio/api/git/') || url === '/studio/api/pages/rename')
-    ) {
+    if (response.ok && revision === workspaceRevision && (url.startsWith('/studio/api/git/') || url === '/studio/api/pages/rename')) {
       const identity = response.headers.get('x-studio-workspace');
       if (identity) {
         const parsed = parseWorkspaceId(identity) ?? '';
@@ -70,21 +60,12 @@ export async function request(url: string, options?: RequestInit): Promise<unkno
       }
     }
     if (!response.ok) {
-      throw new StudioRequestError(
-        string(record(data)['error'] ?? responseError(response).message),
-        response.status,
-      );
+      throw new StudioRequestError(string(record(data)['error'] ?? responseError(response).message), response.status);
     }
     return data;
   } catch (error) {
-    if (
-      error instanceof TypeError ||
-      (error instanceof DOMException && error.name === 'TimeoutError')
-    ) {
-      throw new StudioRequestError(
-        'The connection to Studio was interrupted. Please retry shortly.',
-        0,
-      );
+    if (error instanceof TypeError || (error instanceof DOMException && error.name === 'TimeoutError')) {
+      throw new StudioRequestError('The connection to Studio was interrupted. Please retry shortly.', 0);
     }
     throw error;
   } finally {
@@ -99,9 +80,7 @@ function strings(input: unknown): string[] {
 }
 export async function loadProject(signal?: AbortSignal): Promise<Project> {
   const revision = workspaceRevision;
-  const project = parseProject(
-    await request('/studio/api/project', signal ? { signal } : undefined),
-  );
+  const project = parseProject(await request('/studio/api/project', signal ? { signal } : undefined));
   if (revision !== workspaceRevision) {
     throw new StudioRequestError('The shared branch changed while loading. Please retry.', 409);
   }
@@ -169,7 +148,4 @@ export function routeFor(file: string) {
     .replace(/(^|\/)index$/, '');
   return '/' + relative;
 }
-import {
-  isDefaultsCanvas,
-  defaultsCanvasRoute,
-} from '../../../vendor/stacki/shared/properties/defaultsCanvas';
+import { isDefaultsCanvas, defaultsCanvasRoute } from '../../../vendor/stacki/shared/properties/defaultsCanvas';

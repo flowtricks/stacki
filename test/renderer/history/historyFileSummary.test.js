@@ -21,8 +21,5 @@ test('summaries count additions, deletions, and updates without losing renamed f
 test('file counts enforce the shared collection boundary', () => {
   const files = Array(BOUNDARY_LIMITS.itemsMax).fill({ status: 'A' });
   assert.equal(summarizeHistoryFiles(files).added, files.length);
-  assert.throws(
-    () => summarizeHistoryFiles([...files, { status: 'M' }]),
-    /History files: file limit exceeded/,
-  );
+  assert.throws(() => summarizeHistoryFiles([...files, { status: 'M' }]), /History files: file limit exceeded/);
 });

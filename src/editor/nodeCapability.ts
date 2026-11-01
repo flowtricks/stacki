@@ -26,10 +26,7 @@ export function nodeCapability(model: EditorModel, nodeId: string): Capability |
   // The projection's own rule: a node inside a loop body is one source node
   // rendered once per item, whatever its kind.
   const capability = classifyNode(found.node, { repeated: found.insideLoop });
-  assert(
-    found.insideLoop ? capability === 'repeated-source-node' : true,
-    'A node inside a loop classifies as repeated',
-  );
+  assert(found.insideLoop ? capability === 'repeated-source-node' : true, 'A node inside a loop classifies as repeated');
   return capability;
 }
 

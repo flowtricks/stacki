@@ -114,11 +114,7 @@ const settle = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms));
 
   // --- the first question is answered in full ---------------------------------
   await track(['0']);
-  check(
-    'the canvas says where the tracked node is',
-    count('avb:rects') >= 1,
-    `${count('avb:rects')} rect answers`,
-  );
+  check('the canvas says where the tracked node is', count('avb:rects') >= 1, `${count('avb:rects')} rect answers`);
   check('and what the page holds', pageAnswers() > 0, 'the page was never described');
 
   // --- and then the pointer moves ----------------------------------------------
@@ -132,11 +128,7 @@ const settle = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms));
     count('avb:rects') >= rectsAfterFirst + 3,
     `${count('avb:rects') - rectsAfterFirst} rect answers for 3 hovers`,
   );
-  check(
-    'and none of them re-walks the page',
-    pageAnswers() === afterFirst,
-    `${pageAnswers() - afterFirst} extra page answers for three hovers`,
-  );
+  check('and none of them re-walks the page', pageAnswers() === afterFirst, `${pageAnswers() - afterFirst} extra page answers for three hovers`);
 
   // --- and when the page itself moves ------------------------------------------
   const beforeEdit = pageAnswers();
@@ -144,11 +136,7 @@ const settle = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms));
   window.document.querySelector('[data-box="rest"]').classList.add('is-new');
   await settle(400); // the mutation observer's own settle, then the rAF
 
-  check(
-    'a change to the page asks again',
-    pageAnswers() > beforeEdit,
-    'an edit leaves the navigator describing the page as it was',
-  );
+  check('a change to the page asks again', pageAnswers() > beforeEdit, 'an edit leaves the navigator describing the page as it was');
 
   // --- unless the question really did change -----------------------------------
   // Opening a component narrows everything to one instance: which nodes count
@@ -158,27 +146,15 @@ const settle = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms));
     scope: 'src/components/Card.astro|',
     focus: 'src/components/Card.astro|0',
   });
-  check(
-    'stepping into a component asks again',
-    pageAnswers() > beforeScope,
-    'the page-wide answers are stale inside a component',
-  );
+  check('stepping into a component asks again', pageAnswers() > beforeScope, 'the page-wide answers are stale inside a component');
 
   // --- a scroll is not a change ---------------------------------------------------
   const beforeScroll = pageAnswers();
   const rectsBeforeScroll = count('avb:rects');
   window.dispatchEvent(new window.Event('scroll'));
   await settle(60);
-  check(
-    'scrolling re-measures the boxes',
-    count('avb:rects') > rectsBeforeScroll,
-    'the outline would stay behind',
-  );
-  check(
-    'and nothing else',
-    pageAnswers() === beforeScroll,
-    `${pageAnswers() - beforeScroll} page answers for a scroll`,
-  );
+  check('scrolling re-measures the boxes', count('avb:rects') > rectsBeforeScroll, 'the outline would stay behind');
+  check('and nothing else', pageAnswers() === beforeScroll, `${pageAnswers() - beforeScroll} page answers for a scroll`);
 
   // Counting the messages is not enough, and believing it cost half a second a
   // frame on a real page: the page-wide answers are only SENT when they have
@@ -222,14 +198,9 @@ const settle = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms));
     // on Windows. A page refresh costs several extra walks; one query is
     // bounded scheduling noise rather than the regression this pins out.
     forScroll <= forTrack + 1,
-    `${forScroll} document queries for a scroll against ${forTrack} for a re-measure ` +
-      `— the scroll is walking the page`,
+    `${forScroll} document queries for a scroll against ${forTrack} for a re-measure ` + `— the scroll is walking the page`,
   );
-  check(
-    'while a change to the page really does walk it',
-    forEdit > forTrack,
-    `${forEdit} for an edit against ${forTrack} for a re-measure`,
-  );
+  check('while a change to the page really does walk it', forEdit > forTrack, `${forEdit} for an edit against ${forTrack} for a re-measure`);
 
   // --- the canvas's own writes are not changes to the page ----------------------
   // The canvas writes to the page too: a probe element the style panel's
@@ -243,30 +214,18 @@ const settle = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms));
     post({ type: 'avb:query', id: 7, compute: ['rgb(1, 2, 3)'] });
     await settle(200);
   });
-  check(
-    'computing a colour for the style panel walks nothing',
-    forProbe <= forIdle,
-    `${forProbe} document queries after a probe`,
-  );
+  check('computing a colour for the style panel walks nothing', forProbe <= forIdle, `${forProbe} document queries after a probe`);
   const forViewport = await asksOf(async () => {
     post({ type: 'avb:set-vh', px: 812 });
     await settle(200);
   });
-  check(
-    'freezing the viewport height walks nothing',
-    forViewport <= forIdle,
-    `${forViewport} document queries after set-vh`,
-  );
+  check('freezing the viewport height walks nothing', forViewport <= forIdle, `${forViewport} document queries after set-vh`);
   const opened = window.document.querySelector('[data-box="copy"]');
   const forOwnClass = await asksOf(async () => {
     opened.classList.add('stacki-opened');
     await settle(200);
   });
-  check(
-    'a class of the canvas’s own walks nothing',
-    forOwnClass <= forIdle,
-    `${forOwnClass} document queries after stacki-opened`,
-  );
+  check('a class of the canvas’s own walks nothing', forOwnClass <= forIdle, `${forOwnClass} document queries after stacki-opened`);
   const forMixedClass = await asksOf(async () => {
     opened.classList.remove('stacki-opened');
     opened.classList.add('is-mixed');
@@ -287,16 +246,8 @@ const settle = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms));
     await settle(200);
   });
   const states = sent.filter((message) => message.type === 'avb:node-states').pop();
-  check(
-    'a restyle reports a node it hid',
-    (states?.hidden ?? []).includes('1'),
-    JSON.stringify(states),
-  );
-  check(
-    'and costs less than a change to the page',
-    forRestyle < forEdit,
-    `${forRestyle} for a restyle against ${forEdit} for an edit`,
-  );
+  check('a restyle reports a node it hid', (states?.hidden ?? []).includes('1'), JSON.stringify(states));
+  check('and costs less than a change to the page', forRestyle < forEdit, `${forRestyle} for a restyle against ${forEdit} for an edit`);
 
   if (failures.length) {
     console.error(`\nhover-cost: ${failures.length} failed, ${checked - failures.length} passed\n`);

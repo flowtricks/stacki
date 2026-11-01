@@ -16,11 +16,7 @@ const UPLOAD_TIMEOUT_MS = 120_000;
 export const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'svg', 'tif', 'tiff'];
 
 /** Uploads a file the system dialog picked (Desktop). */
-export async function sanityUpload(
-  target: SanityDataset,
-  kind: RemoteAssetKind,
-  file: string,
-): Promise<RemoteAsset> {
+export async function sanityUpload(target: SanityDataset, kind: RemoteAssetKind, file: string): Promise<RemoteAsset> {
   assert(path.isAbsolute(file), 'An upload reads an absolute path the dialog returned');
   if (fs.statSync(file).size > UPLOAD_BYTES_MAX) {
     throw new Error('This file is larger than 100 MB.');
@@ -29,12 +25,7 @@ export async function sanityUpload(
 }
 
 /** Uploads a file's bytes under its name (Desktop's dialog, or a browser in Studio). */
-export async function sanityUploadBytes(
-  target: SanityDataset,
-  kind: RemoteAssetKind,
-  name: string,
-  bytes: Uint8Array,
-): Promise<RemoteAsset> {
+export async function sanityUploadBytes(target: SanityDataset, kind: RemoteAssetKind, name: string, bytes: Uint8Array): Promise<RemoteAsset> {
   const filename = path.basename(name).slice(0, 200) || 'upload';
   if (bytes.byteLength > UPLOAD_BYTES_MAX) {
     throw new Error('This file is larger than 100 MB.');
@@ -68,12 +59,9 @@ export async function sanityUploadBytes(
 export const SANITY_UPLOAD_BYTES_MAX = UPLOAD_BYTES_MAX;
 
 function assetOf(body: unknown, filename: string): RemoteAsset {
-  const document: unknown =
-    typeof body === 'object' && body !== null ? Reflect.get(body, 'document') : undefined;
-  const id: unknown =
-    typeof document === 'object' && document !== null ? Reflect.get(document, '_id') : undefined;
-  const url: unknown =
-    typeof document === 'object' && document !== null ? Reflect.get(document, 'url') : undefined;
+  const document: unknown = typeof body === 'object' && body !== null ? Reflect.get(body, 'document') : undefined;
+  const id: unknown = typeof document === 'object' && document !== null ? Reflect.get(document, '_id') : undefined;
+  const url: unknown = typeof document === 'object' && document !== null ? Reflect.get(document, 'url') : undefined;
   if (typeof id !== 'string' || typeof url !== 'string' || !url.startsWith('https://')) {
     throw new Error('Sanity returned an unexpected asset.');
   }

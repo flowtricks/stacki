@@ -46,9 +46,7 @@ const cache = createQueryCache(async (path, keys) => {
         return [key, source?.path];
       }
       const computed = answer?.computedProps[property];
-      const value = key.startsWith(AUTHORED_PREFIX)
-        ? answer?.authoredProps[property] || computed
-        : computed;
+      const value = key.startsWith(AUTHORED_PREFIX) ? answer?.authoredProps[property] || computed : computed;
       return [key, value?.trim()];
     }),
   );
@@ -56,14 +54,7 @@ const cache = createQueryCache(async (path, keys) => {
 
 function currentCache() {
   const host = getHost();
-  cache.setScope([
-    host.projectPath,
-    host.openFilePath,
-    host.nodes,
-    host.selectedId,
-    host.device,
-    host.historyTick,
-  ]);
+  cache.setScope([host.projectPath, host.openFilePath, host.nodes, host.selectedId, host.device, host.historyTick]);
   return cache;
 }
 
@@ -156,13 +147,7 @@ function useComputedAnswer(prop: string): Answer {
   });
 
   const host = getHost();
-  const value = useStableStyleValue(answer.value, { pending: answer.pending }, [
-    host.projectPath,
-    host.openFilePath,
-    host.selectedId,
-    answer.path,
-    prop,
-  ]);
+  const value = useStableStyleValue(answer.value, { pending: answer.pending }, [host.projectPath, host.openFilePath, host.selectedId, answer.path, prop]);
   return { ...answer, value };
 }
 
@@ -218,12 +203,7 @@ export function useComputedChoice(prop: string, values: readonly string[]): stri
  * holds while an answer is actually coming: with no canvas to ask, `fallback` is
  * the best there is and it is used immediately.
  */
-export function useHighlight(
-  authored: string,
-  prop: string,
-  values: readonly string[],
-  fallback: string,
-): string {
+export function useHighlight(authored: string, prop: string, values: readonly string[], fallback: string): string {
   const answer = useComputedAnswer(authored || !prop ? '' : prop);
   const computed = answer.value.toLowerCase();
   const known = computed && values.includes(computed) ? computed : '';

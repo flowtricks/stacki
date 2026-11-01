@@ -15,9 +15,7 @@ test('horizontal toast dismissal, expanded stack layout, and overflow', async ()
   const outfile = path.join(directory, 'toast.cjs');
   await esbuild.build({
     stdin: {
-      contents: `export { ToastStack } from ${sourceSpecifier(
-        'src/features/notifications/ToastStack.tsx',
-      )};`,
+      contents: `export { ToastStack } from ${sourceSpecifier('src/features/notifications/ToastStack.tsx')};`,
       resolveDir: repoPath('src'),
       loader: 'tsx',
     },
@@ -53,8 +51,7 @@ test('horizontal toast dismissal, expanded stack layout, and overflow', async ()
     });
     element.dispatchEvent(event);
   };
-  const send = (element, type, x, y, properties) =>
-    act(() => pointer(element, type, x, y, properties));
+  const send = (element, type, x, y, properties) => act(() => pointer(element, type, x, y, properties));
   const render = async () => {
     sequence += 1;
     await act(() =>

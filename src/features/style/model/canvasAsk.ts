@@ -51,10 +51,7 @@ export const PSEUDO_ELEMENT_NAMES = [
   'backdrop',
   'file-selector-button',
 ] as const;
-export const PSEUDO_ELEMENT_RE = new RegExp(
-  `::?(?:${PSEUDO_ELEMENT_NAMES.join('|')})(?![\\w-])|::(?:part|slotted)\\([^)]*\\)`,
-  'g',
-);
+export const PSEUDO_ELEMENT_RE = new RegExp(`::?(?:${PSEUDO_ELEMENT_NAMES.join('|')})(?![\\w-])|::(?:part|slotted)\\([^)]*\\)`, 'g');
 
 export function askableForm(text: string): string | undefined {
   const bare = text.replace(PSEUDO_ELEMENT_RE, '').replace(STATE_PSEUDO_RE, '').trim();
@@ -200,9 +197,7 @@ export async function primeDomMatches(
   target.domMatched = matched;
 }
 
-export function* matchedTexts(
-  ask: Extract<CanvasAsk, { kind: 'asked' }>,
-): Generator<[string, boolean]> {
+export function* matchedTexts(ask: Extract<CanvasAsk, { kind: 'asked' }>): Generator<[string, boolean]> {
   for (const [selector, texts] of ask.askedFor) {
     const hit = ask.answer?.matched[selector];
     if (typeof hit !== 'boolean') {

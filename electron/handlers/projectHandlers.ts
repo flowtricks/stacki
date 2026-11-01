@@ -7,13 +7,7 @@ import { assert } from '../../shared/core/assert';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import {
-  createStarter,
-  newSiteDirectory,
-  runCreateCommand,
-  startSiteHistory,
-  STARTERS,
-} from '../project/starter';
+import { createStarter, newSiteDirectory, runCreateCommand, startSiteHistory, STARTERS } from '../project/starter';
 import { isWin } from '../lib/mainHelpers';
 import { ensureToolPath, run } from '../lib/nodeTools';
 import { isAstroProject } from '../project/projectFiles';
@@ -21,18 +15,13 @@ import { detectPackageManager, installArguments } from '../project/packageManage
 import { packageManagerLabel, type PackageManager } from '../../shared/properties/packageManager';
 import type { MainHost } from './mainHost';
 
-export function registerProjectHandlers(
-  host: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>,
-): void {
+export function registerProjectHandlers(host: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>): void {
   registerProjectOpenDialogHandlers(host);
   registerProjectCreateAstroHandlers(host);
   registerProjectCreateStarterHandlers(host);
 }
 
-function registerProjectOpenDialogHandlers({
-  ipcMain,
-  showOpenDialog,
-}: Pick<MainHost, 'ipcMain' | 'showOpenDialog'>): void {
+function registerProjectOpenDialogHandlers({ ipcMain, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'showOpenDialog'>): void {
   ipcMain.handle('project:openDialog', async () => {
     const result = await showOpenDialog({
       title: 'Open an Astro project',
@@ -46,20 +35,14 @@ function registerProjectOpenDialogHandlers({
     if (!isAstroProject(directory)) {
       return {
         canceled: false as const,
-        error:
-          'That folder does not look like an Astro project ' +
-          '(no astro dependency or astro.config found).',
+        error: 'That folder does not look like an Astro project ' + '(no astro dependency or astro.config found).',
       };
     }
     return { canceled: false as const, projectPath: directory };
   });
 }
 
-function registerProjectCreateAstroHandlers({
-  ipcMain,
-  send,
-  showOpenDialog,
-}: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>): void {
+function registerProjectCreateAstroHandlers({ ipcMain, send, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>): void {
   // Runs the real `npm create astro@latest`, answering the questions the CLI
   // would ask interactively with the choices collected in the app's wizard.
   // Output is streamed to the renderer so the user sees the same progress the
@@ -67,15 +50,7 @@ function registerProjectCreateAstroHandlers({
   // empty, and create-astro runs in it with "." as the target rather than
   // guessing a name.
   ipcMain.handle('project:createAstro', async (_event, options) => {
-    const {
-      parentPath,
-      name,
-      template = 'basics',
-      install = true,
-      git = true,
-      ai = false,
-      packageManager = 'npm',
-    } = options || {};
+    const { parentPath, name, template = 'basics', install = true, git = true, ai = false, packageManager = 'npm' } = options || {};
     const directory = newSiteDirectory(parentPath, name);
     ensureToolPath(); // npm is a Node shim — same PATH problem as astro
     if (install) {
@@ -122,41 +97,31 @@ function registerProjectCreateAstroHandlers({
   });
 }
 
-function registerProjectCreateStarterHandlers({
-  ipcMain,
-  send,
-}: Pick<MainHost, 'ipcMain' | 'send'>): void {
+function registerProjectCreateStarterHandlers({ ipcMain, send }: Pick<MainHost, 'ipcMain' | 'send'>): void {
   // Starting from a starter. The scaffolder, the first commit and the package's
   // name are in ./starter.js; what is here is the install that follows and the
   // log the wizard reads.
-  ipcMain.handle(
-    'project:createStarter',
-    async (_event, { starter = 'lumos', parentPath, name, packageManager = 'npm' }) => {
-      ensureToolPath(); // npm and git are both on the PATH the Dock does not have
-      await requirePackageManager(packageManager);
-      const result = await createStarter({
-        starter,
-        parentPath,
-        name,
-        onLog: (text) => send('create:log', text),
-      });
-      const label = STARTERS[starter]?.label ?? starter;
-      await finishNewSite({ send }, result.projectPath, {
-        install: true,
-        manager: packageManager,
-        history: true,
-        label,
-      });
-      return result;
-    },
-  );
+  ipcMain.handle('project:createStarter', async (_event, { starter = 'lumos', parentPath, name, packageManager = 'npm' }) => {
+    ensureToolPath(); // npm and git are both on the PATH the Dock does not have
+    await requirePackageManager(packageManager);
+    const result = await createStarter({
+      starter,
+      parentPath,
+      name,
+      onLog: (text) => send('create:log', text),
+    });
+    const label = STARTERS[starter]?.label ?? starter;
+    await finishNewSite({ send }, result.projectPath, {
+      install: true,
+      manager: packageManager,
+      history: true,
+      label,
+    });
+    return result;
+  });
 }
 
-export async function installDependencies(
-  { send }: Pick<MainHost, 'send'>,
-  directory: string,
-  pm: PackageManager = detectPackageManager(directory),
-) {
+export async function installDependencies({ send }: Pick<MainHost, 'send'>, directory: string, pm: PackageManager = detectPackageManager(directory)) {
   ensureToolPath(); // npm/pnpm/yarn are Node shims — same PATH problem as astro
   send('progress', { message: `Installing dependencies (${pm} install)…` });
   try {
@@ -166,9 +131,7 @@ export async function installDependencies(
     });
   } catch (error: unknown) {
     if (toRecord(error)?.['code'] === 'ENOENT') {
-      throw new Error(
-        `This project uses ${pm}, but ${pm} is not installed. Install it and try again.`,
-      );
+      throw new Error(`This project uses ${pm}, but ${pm} is not installed. Install it and try again.`);
     }
     throw new Error(`${pm} install failed: ${gitErrorDetail(error).slice(-400)}`);
   }
@@ -221,11 +184,7 @@ export const PROGRESS_CLEARED = { message: undefined } as const;
 // A run that wrote nothing leaves no folder behind, so Try again can reuse the
 // name. Anything it did write stays for the user to inspect; nothing is deleted
 // recursively.
-async function runCreateAstroInNewFolder(
-  { send }: Pick<MainHost, 'send'>,
-  directory: string,
-  args: readonly string[],
-): Promise<void> {
+async function runCreateAstroInNewFolder({ send }: Pick<MainHost, 'send'>, directory: string, args: readonly string[]): Promise<void> {
   try {
     await runCreateAstro({ send }, directory, args);
   } catch (error: unknown) {
@@ -238,11 +197,7 @@ async function runCreateAstroInNewFolder(
 
 // The create-astro run itself, its output streamed to the wizard's log. It
 // settles once the CLI exits and a package.json has landed in `directory`.
-async function runCreateAstro(
-  { send }: Pick<MainHost, 'send'>,
-  directory: string,
-  args: readonly string[],
-): Promise<void> {
+async function runCreateAstro({ send }: Pick<MainHost, 'send'>, directory: string, args: readonly string[]): Promise<void> {
   const npm = isWin ? 'npm.cmd' : 'npm';
   await runCreateCommand(npm, args, directory, (text) => send('create:log', text));
   if (!fs.existsSync(path.join(directory, 'package.json'))) {

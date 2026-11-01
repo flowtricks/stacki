@@ -9,11 +9,7 @@ import { assert } from '../../shared/core/assert';
 const CONFIG_BYTES_MAX = 65_536;
 
 /** A sibling config preserves asset paths while overriding Wrangler's account precedence. */
-export async function withWorkerAccount(
-  root: string,
-  accountId: string,
-  deploy: (configuration: string) => Promise<void>,
-): Promise<void> {
+export async function withWorkerAccount(root: string, accountId: string, deploy: (configuration: string) => Promise<void>): Promise<void> {
   assert(accountId.length > 0, 'Worker deployment has a selected account');
   assert(accountId.length <= 100, 'Worker account identifier stays bounded');
   const filename = await workerConfigPath(root);

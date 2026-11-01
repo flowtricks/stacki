@@ -78,16 +78,8 @@ const commit = async (directory, subject) => {
     const result = await history.log(git, { projectPath: directory });
     // `git` exits 128 here. An editor that surfaced that would greet every new
     // project with an error where its history should be.
-    check(
-      'a repo with no commits has an empty history',
-      Array.isArray(result.commits),
-      JSON.stringify(result),
-    );
-    check(
-      'and it is empty rather than failing',
-      result.commits.length === 0,
-      JSON.stringify(result),
-    );
+    check('a repo with no commits has an empty history', Array.isArray(result.commits), JSON.stringify(result));
+    check('and it is empty rather than failing', result.commits.length === 0, JSON.stringify(result));
     check('and it reports the end of the list', result.atEnd === true);
 
     // Nothing committed, but files on disk — the file picker must still see
@@ -109,29 +101,14 @@ const commit = async (directory, subject) => {
     await commit(directory, 'about page');
 
     const { commits } = await history.log(git, { projectPath: directory });
-    check(
-      'the log comes back newest first',
-      commits[0].subject === 'about page',
-      commits[0]?.subject,
-    );
+    check('the log comes back newest first', commits[0].subject === 'about page', commits[0]?.subject);
     check('with both commits', commits.length === 2, String(commits.length));
     check('the author is carried', commits[0].author === 'Tim Ricks', commits[0].author);
     check('the date parses', !Number.isNaN(Date.parse(commits[0].when)), commits[0].when);
-    check(
-      'the short hash is a prefix of the full one',
-      commits[0].hash.startsWith(commits[0].shortHash),
-    );
+    check('the short hash is a prefix of the full one', commits[0].hash.startsWith(commits[0].shortHash));
     check('an ordinary commit is not a merge', commits[0].isMerge === false);
-    check(
-      'the branch it is on is carried as a ref',
-      commits[0].refs.join(',').includes('main'),
-      commits[0].refs.join(','),
-    );
-    check(
-      'the root commit has no parents',
-      commits[1].parents.length === 0,
-      JSON.stringify(commits[1].parents),
-    );
+    check('the branch it is on is carried as a ref', commits[0].refs.join(',').includes('main'), commits[0].refs.join(','));
+    check('the root commit has no parents', commits[1].parents.length === 0, JSON.stringify(commits[1].parents));
 
     const listed = (await history.log(git, { projectPath: directory, withFiles: true })).commits;
     const files = listed[0].files;
@@ -142,11 +119,7 @@ const commit = async (directory, subject) => {
     // The root commit: no parent to diff against, and git handles it, but only
     // if the flags do not assume there is one.
     const rootFiles = listed[1].files;
-    check(
-      'the very first commit lists its files too',
-      rootFiles.length === 1,
-      JSON.stringify(rootFiles),
-    );
+    check('the very first commit lists its files too', rootFiles.length === 1, JSON.stringify(rootFiles));
   }
 
   // --- A subject line that fights the parser -------------------------------
@@ -159,16 +132,8 @@ const commit = async (directory, subject) => {
     // after it — the author becomes part of the message, silently.
     await commit(directory, 'fix\tthe "quoted" thing | and > that');
     const { commits } = await history.log(git, { projectPath: directory });
-    check(
-      'a subject with tabs and quotes survives intact',
-      commits[0].subject === 'fix\tthe "quoted" thing | and > that',
-      JSON.stringify(commits[0].subject),
-    );
-    check(
-      'and the fields after it are not shifted',
-      commits[0].author === 'Tim Ricks',
-      commits[0].author,
-    );
+    check('a subject with tabs and quotes survives intact', commits[0].subject === 'fix\tthe "quoted" thing | and > that', JSON.stringify(commits[0].subject));
+    check('and the fields after it are not shifted', commits[0].author === 'Tim Ricks', commits[0].author);
   }
 
   // Branch graphs must include work that has not reached the current branch.
@@ -198,10 +163,7 @@ const commit = async (directory, subject) => {
       all.commits.some((item) => item.hash === main),
     );
     check('stash commits are excluded', !all.commits.some((item) => item.hash === stash));
-    check(
-      'decoration format is independent of user Git configuration',
-      all.commits.find((item) => item.hash === feature).refs.includes('feature'),
-    );
+    check('decoration format is independent of user Git configuration', all.commits.find((item) => item.hash === feature).refs.includes('feature'));
     const baseIndex = all.commits.findIndex((item) => item.hash === base);
     check('parents follow both children', baseIndex === 2);
     const current = await history.log(git, { projectPath: directory, ref: 'HEAD' });
@@ -236,16 +198,8 @@ const commit = async (directory, subject) => {
 
     const { commits } = await history.log(git, { projectPath: directory });
     const merge = commits.find((commit) => commit.isMerge);
-    check(
-      'a merge commit is in the log',
-      !!merge,
-      commits.map((commit) => commit.subject).join(' | '),
-    );
-    check(
-      'and is marked as a merge',
-      merge && merge.parents.length === 2,
-      JSON.stringify(merge?.parents),
-    );
+    check('a merge commit is in the log', !!merge, commits.map((commit) => commit.subject).join(' | '));
+    check('and is marked as a merge', merge && merge.parents.length === 2, JSON.stringify(merge?.parents));
 
     // The whole point of this file. Bare `git show --name-status` returns an
     // empty string here, and every merge in the panel would read as a commit
@@ -283,33 +237,17 @@ const commit = async (directory, subject) => {
   {
     const directory = await repo('rename');
     cleanup.push(directory);
-    write(
-      directory,
-      'src/pages/about.astro',
-      'a page with enough text in it to match on\n'.repeat(4),
-    );
+    write(directory, 'src/pages/about.astro', 'a page with enough text in it to match on\n'.repeat(4));
     await commit(directory, 'about');
     await sh(directory, 'mv', 'src/pages/about.astro', 'src/pages/contact.astro');
     const ref = await commit(directory, 'renamed');
 
     const listed = (await history.log(git, { projectPath: directory, withFiles: true })).commits;
     const files = listed.find((item) => item.hash === ref)?.files ?? [];
-    check(
-      'a rename is one entry, not a delete and an add',
-      files.length === 1,
-      JSON.stringify(files),
-    );
+    check('a rename is one entry, not a delete and an add', files.length === 1, JSON.stringify(files));
     check('marked as a rename', files[0].status === 'R', JSON.stringify(files[0]));
-    check(
-      'with the new path',
-      files[0].path === 'src/pages/contact.astro',
-      JSON.stringify(files[0]),
-    );
-    check(
-      'and where it came from',
-      files[0].from === 'src/pages/about.astro',
-      JSON.stringify(files[0]),
-    );
+    check('with the new path', files[0].path === 'src/pages/contact.astro', JSON.stringify(files[0]));
+    check('and where it came from', files[0].from === 'src/pages/about.astro', JSON.stringify(files[0]));
   }
 
   // --- The working tree right now ------------------------------------------
@@ -328,26 +266,14 @@ const commit = async (directory, subject) => {
     const st = await history.status(git, { projectPath: directory });
     const by = Object.fromEntries(st.map((file) => [file.path, file]));
     check('an edited file is listed', !!by['edit.txt'], JSON.stringify(st));
-    check(
-      'a deleted file is listed',
-      by['gone.txt']?.status === 'D',
-      JSON.stringify(by['gone.txt']),
-    );
+    check('a deleted file is listed', by['gone.txt']?.status === 'D', JSON.stringify(by['gone.txt']));
     check('a new file is listed', by['new.txt']?.status === 'A', JSON.stringify(by['new.txt']));
     check('an untouched file is not listed', !by['keep.txt'], JSON.stringify(st));
     // Worktree-only changes have a leading space in the porcelain code. If the
     // line were trimmed before slicing, the path would lose its first
     // character and every unstaged file would come back misnamed.
-    check(
-      'the path of an unstaged edit is intact',
-      by['edit.txt']?.path === 'edit.txt',
-      JSON.stringify(by['edit.txt']),
-    );
-    check(
-      'and it is not marked staged',
-      by['edit.txt']?.staged === false,
-      JSON.stringify(by['edit.txt']),
-    );
+    check('the path of an unstaged edit is intact', by['edit.txt']?.path === 'edit.txt', JSON.stringify(by['edit.txt']));
+    check('and it is not marked staged', by['edit.txt']?.staged === false, JSON.stringify(by['edit.txt']));
   }
 
   // --- Paging --------------------------------------------------------------
@@ -364,25 +290,15 @@ const commit = async (directory, subject) => {
     check('newest first', first.commits[0].subject === 'commit 6', first.commits[0].subject);
 
     const second = await history.log(git, { projectPath: directory, limit: 3, skip: 3 });
-    check(
-      'the next page continues',
-      second.commits[0].subject === 'commit 3',
-      second.commits[0].subject,
-    );
+    check('the next page continues', second.commits[0].subject === 'commit 3', second.commits[0].subject);
     check(
       'and does not repeat the first page',
-      !second.commits.some((commit) =>
-        first.commits.some((earlier) => earlier.hash === commit.hash),
-      ),
+      !second.commits.some((commit) => first.commits.some((earlier) => earlier.hash === commit.hash)),
       second.commits.map((commit) => commit.subject).join(','),
     );
 
     const last = await history.log(git, { projectPath: directory, limit: 3, skip: 6 });
-    check(
-      'the final short page is the end',
-      last.atEnd === true,
-      JSON.stringify(last.commits.length),
-    );
+    check('the final short page is the end', last.atEnd === true, JSON.stringify(last.commits.length));
   }
 
   // --- Worktrees -----------------------------------------------------------
@@ -408,10 +324,7 @@ const commit = async (directory, subject) => {
     check('a detached one is marked detached', det?.detached === true, JSON.stringify(det));
     check('and has no branch', det?.branch === undefined, JSON.stringify(det));
     await sh(directory, 'worktree', 'remove', '--force', extra);
-    check(
-      'and it is gone once removed',
-      (await history.worktrees(git, { projectPath: directory })).length === 1,
-    );
+    check('and it is gone once removed', (await history.worktrees(git, { projectPath: directory })).length === 1);
   }
 
   // --- A page of commits with their files, in one call ----------------------
@@ -442,19 +355,12 @@ const commit = async (directory, subject) => {
         .join(',') === 'src/pages/index.astro,src/pages/two.astro',
       JSON.stringify(top.files),
     );
-    check(
-      'an edit reads as modified',
-      top.files.find((file) => file.path === 'src/pages/index.astro').status === 'M',
-    );
+    check('an edit reads as modified', top.files.find((file) => file.path === 'src/pages/index.astro').status === 'M');
 
     // The same merge trap, on the path the panel actually uses. A page drawn
     // from this call would show every merge as touching nothing.
     const merge = commits.find((commit) => commit.isMerge);
-    check(
-      'a merge in a page carries its files too',
-      merge?.files?.length > 0,
-      JSON.stringify(merge?.files),
-    );
+    check('a merge in a page carries its files too', merge?.files?.length > 0, JSON.stringify(merge?.files));
     // The same trap on the paged call the panel actually uses.
     check(
       'and the merged branch’s own commit is in the page',
@@ -466,51 +372,23 @@ const commit = async (directory, subject) => {
     // commit it belongs to. If it trailed, every file list would attach to the
     // NEXT commit — every row wrong, none of them empty, nothing to notice.
     const first = commits.find((commit) => commit.subject === 'first');
-    check(
-      'files land on the right commit',
-      first.files.length === 1 && first.files[0].path === 'src/pages/index.astro',
-      JSON.stringify(first.files),
-    );
+    check('files land on the right commit', first.files.length === 1 && first.files[0].path === 'src/pages/index.astro', JSON.stringify(first.files));
 
     // Without the flag there is no files key at all, rather than an empty
     // array that would read as "this commit changed nothing".
     const plain = await history.log(git, { projectPath: directory });
-    check(
-      'files are absent unless asked for',
-      plain.commits[0].files === undefined,
-      JSON.stringify(plain.commits[0].files),
-    );
+    check('files are absent unless asked for', plain.commits[0].files === undefined, JSON.stringify(plain.commits[0].files));
   }
 
   // --- Saying what a file is ------------------------------------------------
   {
     const describe = (filePath) => history.describeFile(filePath);
-    check(
-      'the index page is Home',
-      describe('src/pages/index.astro').label === 'Home',
-      describe('src/pages/index.astro').label,
-    );
-    check(
-      'a page is its route, in words',
-      describe('src/pages/about.astro').label === 'About',
-      describe('src/pages/about.astro').label,
-    );
-    check(
-      'dashes become spaces',
-      describe('src/pages/about-us.astro').label === 'About us',
-      describe('src/pages/about-us.astro').label,
-    );
+    check('the index page is Home', describe('src/pages/index.astro').label === 'Home', describe('src/pages/index.astro').label);
+    check('a page is its route, in words', describe('src/pages/about.astro').label === 'About', describe('src/pages/about.astro').label);
+    check('dashes become spaces', describe('src/pages/about-us.astro').label === 'About us', describe('src/pages/about-us.astro').label);
     // A folder's index is that folder's page, not a page called "index".
-    check(
-      'a folder index is the folder',
-      describe('src/pages/blog/index.astro').label === 'Blog',
-      describe('src/pages/blog/index.astro').label,
-    );
-    check(
-      'a component is its name',
-      describe('src/components/Card.astro').label === 'Card',
-      describe('src/components/Card.astro').label,
-    );
+    check('a folder index is the folder', describe('src/pages/blog/index.astro').label === 'Blog', describe('src/pages/blog/index.astro').label);
+    check('a component is its name', describe('src/components/Card.astro').label === 'Card', describe('src/components/Card.astro').label);
     check('and is marked a component', describe('src/components/Card.astro').kind === 'component');
     check('a layout is marked a layout', describe('src/layouts/Base.astro').kind === 'layout');
     check('something in public is an asset', describe('public/logo.svg').kind === 'asset');
@@ -518,32 +396,14 @@ const commit = async (directory, subject) => {
     check('package.json is config', describe('package.json').kind === 'config');
     // A path this knows nothing about keeps its own name. Guessing a label for
     // it would be worse than saying the path.
-    check(
-      'an unknown path keeps its path',
-      describe('scripts/deploy.sh').label === 'scripts/deploy.sh',
-      describe('scripts/deploy.sh').label,
-    );
+    check('an unknown path keeps its path', describe('scripts/deploy.sh').label === 'scripts/deploy.sh', describe('scripts/deploy.sh').label);
     check('and no invented kind', describe('scripts/deploy.sh').kind === 'file');
     // Windows separators reach this from a checkout made there.
-    check(
-      'backslashes are understood',
-      describe('src\\pages\\index.astro').label === 'Home',
-      describe('src\\pages\\index.astro').label,
-    );
+    check('backslashes are understood', describe('src\\pages\\index.astro').label === 'Home', describe('src\\pages\\index.astro').label);
 
-    const described = history.describeFiles([
-      { status: 'R', path: 'src/pages/contact.astro', from: 'src/pages/about.astro' },
-    ]);
-    check(
-      'describing a list keeps the status',
-      described[0].status === 'R',
-      JSON.stringify(described[0]),
-    );
-    check(
-      'and keeps where a rename came from',
-      described[0].from === 'src/pages/about.astro',
-      JSON.stringify(described[0]),
-    );
+    const described = history.describeFiles([{ status: 'R', path: 'src/pages/contact.astro', from: 'src/pages/about.astro' }]);
+    check('describing a list keeps the status', described[0].status === 'R', JSON.stringify(described[0]));
+    check('and keeps where a rename came from', described[0].from === 'src/pages/about.astro', JSON.stringify(described[0]));
     check('and labels it', described[0].label === 'Contact', JSON.stringify(described[0]));
   }
 

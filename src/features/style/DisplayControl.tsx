@@ -71,8 +71,7 @@ const TOOLTIPS: Record<string, ReactNode> = {
   ),
   contents: (
     <>
-      <strong>Contents</strong> removes the element's own box. Its children stay, and lay out as
-      though they were children of its parent.
+      <strong>Contents</strong> removes the element's own box. Its children stay, and lay out as though they were children of its parent.
     </>
   ),
   'inline-block': (
@@ -82,20 +81,17 @@ const TOOLTIPS: Record<string, ReactNode> = {
   ),
   'inline-flex': (
     <>
-      <strong>Inline-flex</strong> behaves as an inline element. It stacks its content horizontally
-      or vertically.
+      <strong>Inline-flex</strong> behaves as an inline element. It stacks its content horizontally or vertically.
     </>
   ),
   'inline-grid': (
     <>
-      <strong>Inline-grid</strong> behaves as an inline element. It stacks its content in rows and
-      columns.
+      <strong>Inline-grid</strong> behaves as an inline element. It stacks its content in rows and columns.
     </>
   ),
   inline: (
     <>
-      <strong>Inline</strong> is the default for text content. The text's font size and line height
-      determine its size.
+      <strong>Inline</strong> is the default for text content. The text's font size and line height determine its size.
     </>
   ),
 };
@@ -107,8 +103,7 @@ export function isDisplayValueSupported(value: string): boolean {
   return SUPPORTED.has(value.trim().toLowerCase());
 }
 
-const joinImportant = (parsed: { readonly value: string; readonly important: boolean }) =>
-  parsed.important ? `${parsed.value} !important` : parsed.value;
+const joinImportant = (parsed: { readonly value: string; readonly important: boolean }) => (parsed.important ? `${parsed.value} !important` : parsed.value);
 
 // Editable text field for a custom display value, shown next to the arrow.
 function CustomValueField({
@@ -217,34 +212,15 @@ export default function DisplayControl({
   const tooltip = useSegmentTooltip(rootRef);
 
   return (
-    <div
-      ref={rootRef}
-      className={`embed-editor_display ${customMode ? 'is-custom' : ''}`}
-      role="group"
-      aria-label="Display"
-    >
+    <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label="Display">
       {customMode ? (
-        <CustomValueField
-          value={value}
-          important={important}
-          busy={busy}
-          inputRef={inputRef}
-          onCommit={onCommit}
-        />
+        <CustomValueField value={value} important={important} busy={busy} inputRef={inputRef} onCommit={onCommit} />
       ) : (
         <DisplaySegments current={current} busy={busy} tooltip={tooltip} pick={pick} />
       )}
 
       <MenuArrow open={open} busy={busy} onToggle={() => setOpen((value) => !value)} />
-      {open ? (
-        <DisplayMenu
-          onClose={() => setOpen(false)}
-          customMode={customMode}
-          current={current}
-          pick={pick}
-          enterCustom={enterCustom}
-        />
-      ) : undefined}
+      {open ? <DisplayMenu onClose={() => setOpen(false)} customMode={customMode} current={current} pick={pick} enterCustom={enterCustom} /> : undefined}
       <SegmentTooltipBubble tooltip={tooltip} />
     </div>
   );
@@ -294,15 +270,7 @@ function useSegmentTooltip(rootRef: React.RefObject<HTMLDivElement>): SegmentToo
   return { hoveredValue, arrowRight, startHover, endHover };
 }
 
-function MenuArrow({
-  open,
-  busy,
-  onToggle,
-}: {
-  open: boolean;
-  busy: boolean;
-  onToggle: () => void;
-}) {
+function MenuArrow({ open, busy, onToggle }: { open: boolean; busy: boolean; onToggle: () => void }) {
   return (
     <button
       type="button"
@@ -327,11 +295,7 @@ function SegmentTooltipBubble({ tooltip }: { tooltip: SegmentTooltip }) {
     return undefined;
   }
   return (
-    <div
-      className="u-segmented-tooltip"
-      role="tooltip"
-      style={tooltipArrowStyle(tooltip.arrowRight)}
-    >
+    <div className="u-segmented-tooltip" role="tooltip" style={tooltipArrowStyle(tooltip.arrowRight)}>
       {text}
       <span className="u-segmented-tooltip-arrow" aria-hidden="true" />
     </div>
@@ -339,17 +303,7 @@ function SegmentTooltipBubble({ tooltip }: { tooltip: SegmentTooltip }) {
 }
 
 // The bar: Block / Flex / Grid, then the 4th slot.
-function DisplaySegments({
-  current,
-  busy,
-  tooltip,
-  pick,
-}: {
-  current: string;
-  busy: boolean;
-  tooltip: SegmentTooltip;
-  pick: (next: string) => void;
-}) {
+function DisplaySegments({ current, busy, tooltip, pick }: { current: string; busy: boolean; tooltip: SegmentTooltip; pick: (next: string) => void }) {
   const isPrimary = PRIMARY.some((value) => value === current);
   // The 4th segment shows the chosen inline/none value, or None as the default.
   const fourth = isPrimary ? 'none' : current;
@@ -395,13 +349,7 @@ function DisplaySegments({
 
 function DisplayMenu(props: Parameters<typeof DisplayMenuContent>[0]) {
   return (
-    <Popup
-      mode="popover"
-      portal={false}
-      role="menu"
-      className="embed-editor_display-menu"
-      onClose={props.onClose}
-    >
+    <Popup mode="popover" portal={false} role="menu" className="embed-editor_display-menu" onClose={props.onClose}>
       <DisplayMenuContent {...props} />
     </Popup>
   );
@@ -425,51 +373,26 @@ function DisplayMenuContent({
         // From a custom value: offer every built-in to switch back to the bar.
         <>
           {PRIMARY.map((option) => (
-            <MenuItem
-              key={option}
-              label={cap(option)}
-              selected={current === option}
-              onClick={() => pick(option)}
-            />
+            <MenuItem key={option} label={cap(option)} selected={current === option} onClick={() => pick(option)} />
           ))}
           <div className="embed-editor_display-menu-divider" />
           {INLINE.map((option) => (
-            <MenuItem
-              key={option}
-              label={FULL[option] ?? cap(option)}
-              selected={current === option}
-              onClick={() => pick(option)}
-            />
+            <MenuItem key={option} label={FULL[option] ?? cap(option)} selected={current === option} onClick={() => pick(option)} />
           ))}
           <div className="embed-editor_display-menu-divider" />
           {BOXLESS.map((option) => (
-            <MenuItem
-              key={option}
-              label={FULL[option] ?? cap(option)}
-              selected={current === option}
-              onClick={() => pick(option)}
-            />
+            <MenuItem key={option} label={FULL[option] ?? cap(option)} selected={current === option} onClick={() => pick(option)} />
           ))}
         </>
       ) : (
         // From the bar: inline values, None, and an escape hatch to Custom.
         <>
           {INLINE.map((option) => (
-            <MenuItem
-              key={option}
-              label={FULL[option] ?? cap(option)}
-              selected={current === option}
-              onClick={() => pick(option)}
-            />
+            <MenuItem key={option} label={FULL[option] ?? cap(option)} selected={current === option} onClick={() => pick(option)} />
           ))}
           <div className="embed-editor_display-menu-divider" />
           {BOXLESS.map((option) => (
-            <MenuItem
-              key={option}
-              label={FULL[option] ?? cap(option)}
-              selected={current === option}
-              onClick={() => pick(option)}
-            />
+            <MenuItem key={option} label={FULL[option] ?? cap(option)} selected={current === option} onClick={() => pick(option)} />
           ))}
           <div className="embed-editor_display-menu-divider" />
           <MenuItem label="Custom" selected={false} onClick={enterCustom} />

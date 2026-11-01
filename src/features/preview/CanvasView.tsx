@@ -35,11 +35,7 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
-export default function CanvasView({
-  url: renderURL,
-  refreshKey,
-  onPreviewLoaded,
-}: CanvasViewProps) {
+export default function CanvasView({ url: renderURL, refreshKey, onPreviewLoaded }: CanvasViewProps) {
   const startDrag = usePointerDrag();
   const wrapRef = React.useRef<HTMLDivElement>(null);
   const iframesRef = React.useRef<FrameElements>({});
@@ -69,14 +65,9 @@ export default function CanvasView({
   React.useEffect(() => setHeights({}), [refreshKey, url]);
   useCanvasWheel(wrapRef, viewRef, userMovedRef, setView);
   const onPointerDown = useCanvasPointer(startDrag, viewRef, userMovedRef, setView, setPanning);
-  const zoomTo = (scale: number): void =>
-    zoomCanvas(wrapRef.current ?? undefined, viewRef.current, scale, userMovedRef, setView);
+  const zoomTo = (scale: number): void => zoomCanvas(wrapRef.current ?? undefined, viewRef.current, scale, userMovedRef, setView);
   return (
-    <div
-      ref={wrapRef}
-      className={`canvas-view ${panning ? 'panning' : ''}`}
-      onPointerDown={onPointerDown}
-    >
+    <div ref={wrapRef} className={`canvas-view ${panning ? 'panning' : ''}`} onPointerDown={onPointerDown}>
       {view && (
         <CanvasFrames
           frames={frames}
@@ -140,26 +131,17 @@ function layoutFrames(heights: FrameHeights) {
   return BREAKPOINTS.map((breakpoint) => {
     // The frame freezes viewport units to viewportHeight before growing. Its
     // visible height can therefore follow the full page without enlarging heroes.
-    const height = clamp(
-      heights[breakpoint.key] ?? breakpoint.viewportHeight,
-      PAGE_HEIGHT_PX_MIN,
-      PAGE_HEIGHT_PX_MAX,
-    );
+    const height = clamp(heights[breakpoint.key] ?? breakpoint.viewportHeight, PAGE_HEIGHT_PX_MIN, PAGE_HEIGHT_PX_MAX);
     const frame = { ...breakpoint, x, height };
     x += breakpoint.width + GAP_PX;
     return frame;
   });
 }
 
-function useFrameHeights(
-  iframesRef: React.MutableRefObject<FrameElements>,
-  setHeights: React.Dispatch<React.SetStateAction<FrameHeights>>,
-): void {
+function useFrameHeights(iframesRef: React.MutableRefObject<FrameElements>, setHeights: React.Dispatch<React.SetStateAction<FrameHeights>>): void {
   React.useEffect(() => {
     const onMessage = (event: MessageEvent<unknown>): void => {
-      const match = Object.entries(iframesRef.current).find(
-        ([, iframe]) => iframe?.contentWindow === event.source,
-      );
+      const match = Object.entries(iframesRef.current).find(([, iframe]) => iframe?.contentWindow === event.source);
       const key = match?.[0];
       if (!isBreakpointKey(key)) {
         return;
@@ -170,10 +152,7 @@ function useFrameHeights(
         if (breakpoint && iframe) {
           // Ready precedes window.load when images are slow. Freeze before the
           // first height report can stretch an unfrozen viewport-sized section.
-          iframe.contentWindow?.postMessage(
-            { type: 'avb:set-vh', px: breakpoint.viewportHeight },
-            new URL(iframe.src).origin,
-          );
+          iframe.contentWindow?.postMessage({ type: 'avb:set-vh', px: breakpoint.viewportHeight }, new URL(iframe.src).origin);
         }
       }
       const height = parsePageHeight(event.data);
@@ -193,12 +172,7 @@ function isFrameReady(input: unknown): boolean {
   }
   // Studio canvas copies do not install the editable selection tracker, so
   // their preview client announces document readiness independently.
-  return (
-    typeof input === 'object' &&
-    input !== null &&
-    'type' in input &&
-    input.type === 'studio:preview-ready'
-  );
+  return typeof input === 'object' && input !== null && 'type' in input && input.type === 'studio:preview-ready';
 }
 
 export function parsePageHeight(input: unknown): number | undefined {
@@ -230,14 +204,7 @@ function useFitCanvas(
     }
     const { width, height } = worldRef.current;
     const paddingPx = 56;
-    const scale = clamp(
-      Math.min(
-        (element.clientWidth - paddingPx * 2) / width,
-        (element.clientHeight - paddingPx * 2) / height,
-      ),
-      ZOOM_MIN,
-      1,
-    );
+    const scale = clamp(Math.min((element.clientWidth - paddingPx * 2) / width, (element.clientHeight - paddingPx * 2) / height), ZOOM_MIN, 1);
     setView({
       scale,
       x: (element.clientWidth - width * scale) / 2,
@@ -289,9 +256,7 @@ function useCanvasWheel(
       event.preventDefault();
       userMovedRef.current = true;
       const bounds = element.getBoundingClientRect();
-      setView((view) =>
-        wheelView(view, event, event.clientX - bounds.left, event.clientY - bounds.top),
-      );
+      setView((view) => wheelView(view, event, event.clientX - bounds.left, event.clientY - bounds.top));
     };
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);
@@ -349,20 +314,10 @@ function CanvasFrames({
   readonly onPreviewLoaded?: () => void;
 }) {
   return (
-    <div
-      className="canvas-world"
-      style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
-    >
+    <div className="canvas-world" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
       {frames.map((frame) => (
-        <div
-          key={frame.key}
-          className="canvas-frame"
-          style={{ left: frame.x, top: 0, width: frame.width, height: frame.height }}
-        >
-          <div
-            className="canvas-frame-label"
-            style={{ fontSize: 13 / view.scale, paddingBottom: 8 / view.scale }}
-          >
+        <div key={frame.key} className="canvas-frame" style={{ left: frame.x, top: 0, width: frame.width, height: frame.height }}>
+          <div className="canvas-frame-label" style={{ fontSize: 13 / view.scale, paddingBottom: 8 / view.scale }}>
             {frame.label} · {frame.width}px
           </div>
           <PreviewFrame
@@ -377,10 +332,7 @@ function CanvasFrames({
             url={url}
             title={`${frame.label} preview`}
             onLoad={(event) => {
-              event.currentTarget.contentWindow?.postMessage(
-                { type: 'avb:set-vh', px: frame.viewportHeight },
-                new URL(url, window.location.href).origin,
-              );
+              event.currentTarget.contentWindow?.postMessage({ type: 'avb:set-vh', px: frame.viewportHeight }, new URL(url, window.location.href).origin);
               onPreviewLoaded?.();
             }}
           />
@@ -391,15 +343,7 @@ function CanvasFrames({
   );
 }
 
-function CanvasControls({
-  view,
-  onZoom,
-  onFit,
-}: {
-  readonly view: ViewState;
-  readonly onZoom: (scale: number) => void;
-  readonly onFit: () => void;
-}) {
+function CanvasControls({ view, onZoom, onFit }: { readonly view: ViewState; readonly onZoom: (scale: number) => void; readonly onFit: () => void }) {
   return (
     <div className="canvas-controls" onPointerDown={(event) => event.stopPropagation()}>
       <button title="Zoom out" onClick={() => onZoom(view.scale / 1.25)}>
@@ -423,27 +367,16 @@ function useStudioPatches(frames: React.MutableRefObject<FrameElements>, url: st
   React.useEffect(() => {
     const origin = new URL(url, window.location.href).origin;
     const patch = (event?: Event) => {
-      const message =
-        event instanceof CustomEvent && event.detail === 'structure'
-          ? { type: 'avb:patch-now', immediate: true }
-          : { type: 'avb:patch-now' };
+      const message = event instanceof CustomEvent && event.detail === 'structure' ? { type: 'avb:patch-now', immediate: true } : { type: 'avb:patch-now' };
       for (const frame of Object.values(frames.current)) {
         frame?.contentWindow?.postMessage(message, origin);
       }
     };
     const receive = (event: MessageEvent<unknown>) => {
-      if (
-        event.origin !== origin ||
-        !Object.values(frames.current).some((frame) => frame?.contentWindow === event.source)
-      ) {
+      if (event.origin !== origin || !Object.values(frames.current).some((frame) => frame?.contentWindow === event.source)) {
         return;
       }
-      if (
-        event.data &&
-        typeof event.data === 'object' &&
-        'type' in event.data &&
-        event.data.type === 'studio:invalidate'
-      ) {
+      if (event.data && typeof event.data === 'object' && 'type' in event.data && event.data.type === 'studio:invalidate') {
         patch();
       }
     };

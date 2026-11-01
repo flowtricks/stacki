@@ -9,10 +9,7 @@ import { sourceRenderMode } from '../src/features/preview/sourceRenderMode';
 
 test('only literal source changes use the typing render window', () => {
   const before = '<Heading size="large">Hello <strong>world</strong></Heading>';
-  assert.equal(
-    sourceRenderMode('src/pages/index.astro', before, before.replace('Hello', 'Hi')),
-    'typing',
-  );
+  assert.equal(sourceRenderMode('src/pages/index.astro', before, before.replace('Hello', 'Hi')), 'typing');
   for (const after of [
     before.replace('large', 'small'),
     before.replace('strong', 'em'),

@@ -33,9 +33,7 @@ const check = (what, condition, detail) => {
 const HERO = { r: 220, g: 40, b: 60 }; // the hero band
 const BELOW = { r: 20, g: 120, b: 220 }; // everything under it
 const near = (actual, expected, tolerance = 24) =>
-  Math.abs(actual.r - expected.r) <= tolerance &&
-  Math.abs(actual.g - expected.g) <= tolerance &&
-  Math.abs(actual.b - expected.b) <= tolerance;
+  Math.abs(actual.r - expected.r) <= tolerance && Math.abs(actual.g - expected.g) <= tolerance && Math.abs(actual.b - expected.b) <= tolerance;
 
 const PAGE = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Fixture</title><style>
@@ -140,8 +138,7 @@ app.whenReady().then(async () => {
     check(
       'the top of the picture is the top of the page',
       near(top, HERO),
-      `expected the hero's colour, got rgb(${top.r},${top.g},${top.b}) ` +
-        `— the page was photographed where it scrolled to`,
+      `expected the hero's colour, got rgb(${top.r},${top.g},${top.b}) ` + `— the page was photographed where it scrolled to`,
     );
     // The viewport is 1440×900 and the hero is exactly 900 tall, so the bottom
     // of the frame is the last of the hero — proof the whole viewport was
@@ -156,10 +153,7 @@ app.whenReady().then(async () => {
   // A change made with the app closed is still a change.
   await new Promise((resolve) => setTimeout(resolve, 1100)); // mtime granularity
   fs.writeFileSync(path.join(projectDirectory, 'src', 'pages', 'about.astro'), '<h1>About</h1>\n');
-  check(
-    'a page added outside the app makes it stale',
-    thumbs.isStale(userData, projectDirectory) === true,
-  );
+  check('a page added outside the app makes it stale', thumbs.isStale(userData, projectDirectory) === true);
 
   await thumbs.capture(userData, projectDirectory, url);
   check('and taking it again clears that', thumbs.isStale(userData, projectDirectory) === false);

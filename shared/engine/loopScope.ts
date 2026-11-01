@@ -14,16 +14,7 @@
 // refuses rather than guesses.
 import { assert } from '../core/assert';
 import { LIMITS } from '../core/limits';
-import {
-  ancestorsOf,
-  byteOffsetsIn,
-  startsWith,
-  subtreeOf,
-  tagNameEnd,
-  textOf,
-  whitespaceBefore,
-  type ValidProjection,
-} from './planSupport';
+import { ancestorsOf, byteOffsetsIn, startsWith, subtreeOf, tagNameEnd, textOf, whitespaceBefore, type ValidProjection } from './planSupport';
 import type { StructuralPath } from '../page/ref';
 import type { ProjectedNode } from '../page/sourceProjection';
 import { toByteSpan, type ByteSpan, type ByteString } from '../core/span';
@@ -65,11 +56,7 @@ const TEST_RE = /^(\s*)([\s\S]*?)(\s*(?:&&|\?)\s*\(?\s*)$/;
 const BRACES_RE = /\{([^{}]*)\}/g;
 
 /** The head of a `map` node, or undefined when it is not the form above. */
-export function loopHead(
-  projection: ValidProjection,
-  bytes: ByteString,
-  node: ProjectedNode,
-): LoopHead | undefined {
+export function loopHead(projection: ValidProjection, bytes: ByteString, node: ProjectedNode): LoopHead | undefined {
   assert(node.kind === 'map', 'Only a loop has a head');
   const text = textOf(bytes, node.span);
   const match = HEAD_RE.exec(text);
@@ -115,11 +102,7 @@ function parameterAt(text: string, head: string, name: string): number {
   return mapAt + found.index;
 }
 
-function bodyRegion(
-  projection: ValidProjection,
-  node: ProjectedNode,
-  headEnd: number,
-): ByteSpan | undefined {
+function bodyRegion(projection: ValidProjection, node: ProjectedNode, headEnd: number): ByteSpan | undefined {
   const [first] = childrenOf(projection, node);
   if (first === undefined) {
     return undefined;
@@ -129,11 +112,7 @@ function bodyRegion(
 
 /** The loop variables in scope at a node: every enclosing loop's parameters.
  * Undefined when an enclosing loop's head cannot be read. */
-export function scopeAt(
-  projection: ValidProjection,
-  bytes: ByteString,
-  path: StructuralPath,
-): readonly string[] | undefined {
+export function scopeAt(projection: ValidProjection, bytes: ByteString, path: StructuralPath): readonly string[] | undefined {
   const names: string[] = [];
   for (const ancestor of ancestorsOf(projection, path)) {
     if (ancestor.kind === 'map') {
@@ -150,12 +129,7 @@ export function scopeAt(
 /** Every place a rename of the loop's parameter `from` must touch: the
  * declaration, then each reference below the loop, skipping loops that
  * declare the name again (they shadow it). The model rule is renamedLoopVar. */
-export function renameSites(
-  projection: ValidProjection,
-  bytes: ByteString,
-  loop: ProjectedNode,
-  from: string,
-): readonly ByteSpan[] | undefined {
+export function renameSites(projection: ValidProjection, bytes: ByteString, loop: ProjectedNode, from: string): readonly ByteSpan[] | undefined {
   const head = loopHead(projection, bytes, loop);
   if (head === undefined) {
     return undefined;
@@ -202,9 +176,7 @@ function referencesIn(
       sites.push(...identifierSpans(bytes, innerOf(node.span), name));
       return { sites, shadows: false };
     case 'text':
-      sites.push(
-        ...braceSpans(bytes, node.span).flatMap((inner) => identifierSpans(bytes, inner, name)),
-      );
+      sites.push(...braceSpans(bytes, node.span).flatMap((inner) => identifierSpans(bytes, inner, name)));
       return { sites, shadows: false };
     case 'cond': {
       const test = testRegion(projection, bytes, node);
@@ -257,9 +229,7 @@ export function stripEdits(
   // Loops below the root narrow the active names for their own subtrees.
   const narrowed: { readonly path: StructuralPath; readonly active: readonly string[] }[] = [];
   for (const node of subtreeOf(projection, root)) {
-    const scope = narrowed.filter(
-      (entry) => startsWith(node.path, entry.path) && node.path.length > entry.path.length,
-    );
+    const scope = narrowed.filter((entry) => startsWith(node.path, entry.path) && node.path.length > entry.path.length);
     const innermost = scope[scope.length - 1];
     const active = innermost === undefined ? lost : innermost.active;
     if (active.length === 0) {
@@ -346,9 +316,7 @@ function stripLoop(
   node: ProjectedNode,
   active: readonly string[],
   edits: SourceReplacement[],
-):
-  | { readonly edits: readonly SourceReplacement[]; readonly remaining: readonly string[] }
-  | undefined {
+): { readonly edits: readonly SourceReplacement[]; readonly remaining: readonly string[] } | undefined {
   const head = loopHead(projection, bytes, node);
   if (head === undefined) {
     return undefined;
@@ -368,11 +336,7 @@ function stripLoop(
 
 // The test of `{test && (` or `{test ? (`: from after the brace to the first
 // branch, without the operator.
-function testRegion(
-  projection: ValidProjection,
-  bytes: ByteString,
-  node: ProjectedNode,
-): ByteSpan | undefined {
+function testRegion(projection: ValidProjection, bytes: ByteString, node: ProjectedNode): ByteSpan | undefined {
   const [first] = childrenOf(projection, node);
   if (first === undefined) {
     return undefined;
@@ -395,10 +359,7 @@ function testRegion(
 }
 
 function childrenOf(projection: ValidProjection, node: ProjectedNode): readonly ProjectedNode[] {
-  return projection.nodes.filter(
-    (candidate) =>
-      candidate.path.length === node.path.length + 1 && startsWith(candidate.path, node.path),
-  );
+  return projection.nodes.filter((candidate) => candidate.path.length === node.path.length + 1 && startsWith(candidate.path, node.path));
 }
 
 // `{…}` without its braces.

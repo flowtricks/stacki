@@ -84,10 +84,7 @@ class CmsReader {
   private async read(): Promise<void> {
     const { writer, projectPath, rel, publish, report } = this.options;
     const revision = writer.revision();
-    const [content, metadata] = await Promise.all([
-      readCms(projectPath, rel),
-      readCmsMeta(projectPath),
-    ]);
+    const [content, metadata] = await Promise.all([readCms(projectPath, rel), readCmsMeta(projectPath)]);
     if (this.disposed()) {
       return;
     }

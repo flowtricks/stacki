@@ -53,21 +53,13 @@ const output = repoPath('node_modules/.stacki-test/code-panel-model.cjs');
     { from: 0, to: model.bodyStart },
     'frontmatter participates in the same selection model',
   );
-  assert.equal(
-    modelTools.sourceNodeAtOffset(model.nodes, source.indexOf('<h2') + 1).id,
-    heading.id,
-    'the narrowest nested node wins code hit-testing',
-  );
+  assert.equal(modelTools.sourceNodeAtOffset(model.nodes, source.indexOf('<h2') + 1).id, heading.id, 'the narrowest nested node wins code hit-testing');
   assert.equal(
     modelTools.sourceNodeAtOffset(model.nodes, source.indexOf('Hello') + 1).id,
     heading.id,
     'plain text selects its containing element for the canvas outline',
   );
-  assert.equal(
-    modelTools.sourceNodeAtOffset(model.nodes, source.indexOf('horizontal') + 1).id,
-    eyebrow.id,
-    'plain text in a component selects that component',
-  );
+  assert.equal(modelTools.sourceNodeAtOffset(model.nodes, source.indexOf('horizontal') + 1).id, eyebrow.id, 'plain text in a component selects that component');
   assert.deepEqual(modelTools.componentSourceRanges(model.nodes, source), [
     {
       id: card.id,
@@ -83,11 +75,7 @@ const output = repoPath('node_modules/.stacki-test/code-panel-model.cjs');
     },
   ]);
   assert.equal(modelTools.sourceLineLabel(source, { from: card.start, to: card.end }), 'L6–8');
-  assert.equal(
-    modelTools.sourceRangeForSelection(model, card.id, card.end - 1),
-    undefined,
-    'stale ranges never escape the current document',
-  );
+  assert.equal(modelTools.sourceRangeForSelection(model, card.id, card.end - 1), undefined, 'stale ranges never escape the current document');
   console.log('code-panel-model: passed [selection, links, nesting, bounds]');
 })().catch((error) => {
   console.error(error);

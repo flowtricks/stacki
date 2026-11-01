@@ -91,10 +91,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   await render(ids);
   check('the trigger reads as a generated route', !!find('.dd-trigger.collection'));
   check('and carries a page glyph', !!find('.dd-trigger .dd-icon svg'));
-  check(
-    'showing the current entry',
-    /editorial-calendar-notes/.test(find('.dd-label')?.textContent || ''),
-  );
+  check('showing the current entry', /editorial-calendar-notes/.test(find('.dd-label')?.textContent || ''));
 
   await act(async () => {
     find('.dd-trigger').click();
@@ -102,30 +99,19 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   });
   check('the popup opens', !!find('.dd-popup'));
   check('purple carries into the list', !!find('.dd-popup.collection'));
-  check(
-    'every option has a glyph',
-    all('.dd-option .dd-icon svg').length === ids.length,
-    `${all('.dd-option .dd-icon svg').length}`,
-  );
+  check('every option has a glyph', all('.dd-option .dd-icon svg').length === ids.length, `${all('.dd-option .dd-icon svg').length}`);
   check('the current one is ticked', !!find('.dd-option.selected .dd-check svg'));
   check('the list has a filter box', !!find('.dd-search'));
 
   // Typing narrows it.
   await act(async () => {
     const input = find('.dd-search');
-    const setter = Object.getOwnPropertyDescriptor(
-      dom.window.HTMLInputElement.prototype,
-      'value',
-    ).set;
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
     setter.call(input, 'spring');
     input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     await settle(20);
   });
-  check(
-    'the filter narrows the list',
-    all('.dd-option').length === 3,
-    `${all('.dd-option').length} shown`,
-  );
+  check('the filter narrows the list', all('.dd-option').length === 3, `${all('.dd-option').length} shown`);
   check(
     'to the options that match',
     all('.dd-option').every((node) => /spring/.test(node.textContent)),
@@ -134,9 +120,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   // And Enter picks what the filtered list is highlighting, not what the
   // unfiltered one would have.
   await act(async () => {
-    find('.dd-search').dispatchEvent(
-      new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-    );
+    find('.dd-search').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await settle(20);
   });
   check('Enter picks from the filtered list', picked === 2, `picked index ${picked}`);
@@ -157,10 +141,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   // capped and its full content height otherwise. The position calculation
   // must not feed that changing measurement back into the cap and render
   // forever when a real collection has hundreds of entries.
-  const scrollHeight = Object.getOwnPropertyDescriptor(
-    dom.window.HTMLElement.prototype,
-    'scrollHeight',
-  );
+  const scrollHeight = Object.getOwnPropertyDescriptor(dom.window.HTMLElement.prototype, 'scrollHeight');
   Object.defineProperty(dom.window.HTMLElement.prototype, 'scrollHeight', {
     configurable: true,
     get() {
@@ -193,10 +174,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     all('.dd-option')[295].click();
     await settle(20);
   });
-  check(
-    'a large controlled picker switches entries',
-    find('.dd-label')?.textContent === 'sermon-295',
-  );
+  check('a large controlled picker switches entries', find('.dd-label')?.textContent === 'sermon-295');
   check('and closes after switching', !find('.dd-popup'));
   if (scrollHeight) {
     Object.defineProperty(dom.window.HTMLElement.prototype, 'scrollHeight', scrollHeight);
@@ -254,8 +232,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
       find('.dd-trigger').click();
       await settle(20);
     });
-    const option = (label) =>
-      all('.dd-option').find((option) => option.textContent.trim() === label);
+    const option = (label) => all('.dd-option').find((option) => option.textContent.trim() === label);
     // React synthesises mouseenter from a bubbling mouseover, so that is what
     // a pointer arriving on an option looks like from here.
     const hover = (label) =>
@@ -270,21 +247,13 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
       });
 
     await hover('play');
-    check(
-      'hovering an option applies it, so the canvas can show it',
-      applied.join() === 'play',
-      applied.join(),
-    );
+    check('hovering an option applies it, so the canvas can show it', applied.join() === 'play', applied.join());
 
     await act(async () => {
       option('play')?.click();
       await settle(20);
     });
-    check(
-      'and picking the option you hovered does not ask for it again',
-      applied.join() === 'play',
-      applied.join(),
-    );
+    check('and picking the option you hovered does not ask for it again', applied.join() === 'play', applied.join());
     check('the popup closes on the pick', !find('.dd-popup'), 'still open');
 
     // A pick that was never hovered — the keyboard, or a click straight onto an
@@ -338,11 +307,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
       }
       await settle(70);
     });
-    check(
-      'moving across options previews only the latest one within a frame',
-      applied.join() === 'play,pause,play,pause',
-      applied.join(),
-    );
+    check('moving across options previews only the latest one within a frame', applied.join() === 'play,pause,play,pause', applied.join());
     await act(async () => {
       body.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
       await settle(20);

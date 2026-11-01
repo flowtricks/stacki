@@ -110,8 +110,7 @@ function useVariableCell({ cell, onSave, fluidOf, onDraft }: PopulatedCellProps)
   // most of what there is to click, and swapping a variable you cannot see the
   // rest of is not what that press means. It opens the value instead, where the
   // chip is there to click at full size.
-  const alwaysOwn = (target: EventTarget) =>
-    target instanceof Element && !!target.closest('.embed-editor_varconnect-dot, .u-color-swatch');
+  const alwaysOwn = (target: EventTarget) => target instanceof Element && !!target.closest('.embed-editor_varconnect-dot, .u-color-swatch');
 
   const openCustom = (node: Element) => setCustom(node.getBoundingClientRect());
 
@@ -203,18 +202,13 @@ function CellCurveButton({ state }: { readonly state: CellState }) {
           // panel beside it — so it is handed the sheet's own box. Read at the
           // press rather than held in state: the sheet is resizable.
           onClick={(event) => {
-            const sheet =
-              event.currentTarget.closest('.vars-view') || event.currentTarget.closest('.cms-view');
+            const sheet = event.currentTarget.closest('.vars-view') || event.currentTarget.closest('.cms-view');
             const box = sheet?.getBoundingClientRect();
             // Always framed, even when the sheet measures nothing (a mid-layout
             // read): the window is the fallback, never the style panel's box —
             // the shared backdrop is pinned to that panel, and a popup opened
             // from here has nothing to do with it.
-            setCurve(
-              box?.width
-                ? { left: box.left, width: box.width }
-                : { left: 0, width: typeof window === 'undefined' ? 0 : window.innerWidth },
-            );
+            setCurve(box?.width ? { left: box.left, width: box.width } : { left: 0, width: typeof window === 'undefined' ? 0 : window.innerWidth });
           }}
         >
           {/* The value's own curve, at glyph size — the same drawing the

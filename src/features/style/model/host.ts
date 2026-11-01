@@ -46,8 +46,7 @@ export type StyleNodeTarget = {
   readonly filePath: string | undefined;
 };
 
-export type ClassOutcome =
-  { readonly tag: 'applied' } | { readonly tag: 'refused'; readonly message: string };
+export type ClassOutcome = { readonly tag: 'applied' } | { readonly tag: 'refused'; readonly message: string };
 
 export type HostState = {
   projectPath: string | undefined;
@@ -92,8 +91,7 @@ export type HostState = {
    *  that node isn't in the file currently open (a page's block while a component
    *  is being edited) — the panel then keeps the edit and flushes it on exit
    *  rather than reporting a save that never happened. */
-  writeStyleNode:
-    ((target: StyleNodeTarget, css: string, immediate?: boolean) => boolean | void) | undefined;
+  writeStyleNode: ((target: StyleNodeTarget, css: string, immediate?: boolean) => boolean | void) | undefined;
   /** Select a node in the app (used when navigating from a provenance chip). */
   selectNode: ((nodeId: string) => void) | undefined;
   /** Put a class on the selected element. Typing a bare class in the selector
@@ -201,10 +199,7 @@ export function onHostChange(listener: () => void): () => void {
 
 // Depth-first walk of the page model. Page trees are parsed at the boundary with
 // LIMITS.treeDepthMax, so a deeper walk means the model was built wrong.
-export function walkNodes(
-  nodes: readonly HostNode[] | undefined,
-  visit: (node: HostNode, parent: HostNode | undefined) => void,
-) {
+export function walkNodes(nodes: readonly HostNode[] | undefined, visit: (node: HostNode, parent: HostNode | undefined) => void) {
   walkNodesFrom(nodes, undefined, 0, visit);
 }
 
@@ -223,11 +218,7 @@ function walkNodesFrom(
   }
 }
 
-export function findNode(
-  nodes: readonly HostNode[] | undefined,
-  id: string,
-  depth = 0,
-): HostNode | undefined {
+export function findNode(nodes: readonly HostNode[] | undefined, id: string, depth = 0): HostNode | undefined {
   assert(depth <= LIMITS.treeDepthMax, 'findNode: depth limit');
   for (const node of nodes || []) {
     if (node.id === id) {

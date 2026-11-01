@@ -9,8 +9,7 @@ export const browserBoundary: Plugin = {
       namespace: 'server-only',
     }));
     builder.onLoad({ filter: /.*/, namespace: 'server-only' }, () => ({
-      contents:
-        'const unavailable = () => { throw new Error("File resolution is server-only"); }; export default new Proxy({}, {get: () => unavailable});',
+      contents: 'const unavailable = () => { throw new Error("File resolution is server-only"); }; export default new Proxy({}, {get: () => unavailable});',
     }));
   },
 };

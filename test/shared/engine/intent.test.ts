@@ -57,17 +57,11 @@ const GOOD: readonly (readonly [object, object])[] = [
       ],
     },
   ],
-  [
-    element,
-    { tag: 'set-inline-style', property: '--gap', declaration: { tag: 'set', value: '1rem' } },
-  ],
+  [element, { tag: 'set-inline-style', property: '--gap', declaration: { tag: 'set', value: '1rem' } }],
   [element, { tag: 'set-inline-style', property: 'color', declaration: { tag: 'remove' } }],
   [documentAnchor, { tag: 'apply-code-patch', hunks: [{ span: { start: 3, end: 5 }, text: 'x' }] }],
   [documentAnchor, { tag: 'revert-splices', hunks: [{ span: { start: 3, end: 5 }, text: 'x' }] }],
-  [
-    frontmatter,
-    { tag: 'edit-frontmatter-slot', slot: { start: 4, end: 20 }, text: 'const a = 1;' },
-  ],
+  [frontmatter, { tag: 'edit-frontmatter-slot', slot: { start: 4, end: 20 }, text: 'const a = 1;' }],
   [documentAnchor, { tag: 'rewrite-text', hunks: [{ span: { start: 3, end: 5 }, text: 'x' }] }],
   // Step 9.
   [element, { tag: 'rename-tag', from: 'div', to: 'Card' }],
@@ -138,10 +132,7 @@ test('malformed intents fail at the field that is wrong', () => {
       }),
       /CSS property/,
     ],
-    [
-      wire(element, { tag: 'set-inline-style', property: 'color', declaration: { tag: 'toggle' } }),
-      /declaration.tag/,
-    ],
+    [wire(element, { tag: 'set-inline-style', property: 'color', declaration: { tag: 'toggle' } }), /declaration.tag/],
     [
       wire(loop, {
         tag: 'rename-binding',
@@ -151,22 +142,13 @@ test('malformed intents fail at the field that is wrong', () => {
       }),
       /must change/,
     ],
-    [
-      wire(loop, { tag: 'rename-binding', from: 'it em', to: 'x', sites: [] }),
-      /expected an identifier/,
-    ],
+    [wire(loop, { tag: 'rename-binding', from: 'it em', to: 'x', sites: [] }), /expected an identifier/],
     [wire(documentAnchor, { tag: 'apply-code-patch', hunks: {} }), /hunks: expected array/],
     [wire(element, { tag: 'rename-tag', from: 'div', to: 'my div' }), /expected a tag name/],
     [wire(element, { tag: 'rename-tag', from: 'div', to: 'div' }), /must change the name/],
     [wire(element, { tag: 'rename-attribute', from: 'a', to: 'a' }), /must change/],
-    [
-      wire(element, { tag: 'rewrite-node', hunks: [{ span: { start: 0, end: 1 }, text: '' }] }),
-      /outside its anchor/,
-    ],
-    [
-      wire(element, { tag: 'wrap-nodes', last: frontmatter, open: '', close: '' }),
-      /wrap-nodes cannot/,
-    ],
+    [wire(element, { tag: 'rewrite-node', hunks: [{ span: { start: 0, end: 1 }, text: '' }] }), /outside its anchor/],
+    [wire(element, { tag: 'wrap-nodes', last: frontmatter, open: '', close: '' }), /wrap-nodes cannot/],
     [wire({ ...element, path: 'x' }, set), /path: expected array/],
     [wire({ ...element, expectedKind: 'widget' }, set), /unknown anchor kind/],
   ];
@@ -184,27 +166,11 @@ test('the operation must fit its anchor', () => {
     [element, { tag: 'insert-frontmatter', source: '---\n---\n' }, /insert-frontmatter cannot/],
     // Step 10 retired the whole-file replacement: no such operation parses.
     [documentAnchor, { tag: 'replace-source', text: '' }, /unknown operation/],
-    [
-      element,
-      { tag: 'apply-code-patch', hunks: [{ span: { start: 0, end: 1 }, text: '' }] },
-      /apply-code-patch cannot/,
-    ],
-    [
-      element,
-      { tag: 'rename-binding', from: 'a', to: 'b', sites: [{ start: 12, end: 13 }] },
-      /rename-binding cannot/,
-    ],
+    [element, { tag: 'apply-code-patch', hunks: [{ span: { start: 0, end: 1 }, text: '' }] }, /apply-code-patch cannot/],
+    [element, { tag: 'rename-binding', from: 'a', to: 'b', sites: [{ start: 12, end: 13 }] }, /rename-binding cannot/],
     [documentAnchor, { tag: 'insert-node', placement: 'after', source: '' }, /insert-node cannot/],
-    [
-      element,
-      { tag: 'move-node', destination: frontmatter, placement: 'after' },
-      /move-node cannot/,
-    ],
-    [
-      element,
-      { tag: 'edit-frontmatter-slot', slot: { start: 0, end: 1 }, text: '' },
-      /edit-frontmatter-slot cannot/,
-    ],
+    [element, { tag: 'move-node', destination: frontmatter, placement: 'after' }, /move-node cannot/],
+    [element, { tag: 'edit-frontmatter-slot', slot: { start: 0, end: 1 }, text: '' }, /edit-frontmatter-slot cannot/],
   ];
   for (const [anchor, operation, message] of cases) {
     assert.throws(() => parseIntent(wire(anchor, operation)), message);
@@ -212,8 +178,7 @@ test('the operation must fit its anchor', () => {
 });
 
 test('multi-span sites lie inside the anchor, ascend, do not overlap, and are bounded', () => {
-  const rename = (sites: readonly object[]) =>
-    wire(loop, { tag: 'rename-binding', from: 'a', to: 'b', sites });
+  const rename = (sites: readonly object[]) => wire(loop, { tag: 'rename-binding', from: 'a', to: 'b', sites });
   assert.throws(() => parseIntent(rename([])), /needs at least one site/);
   assert.throws(() => parseIntent(rename([{ start: 5, end: 8 }])), /outside its anchor/);
   assert.throws(
@@ -250,9 +215,7 @@ test('the summed payload is bounded in UTF-8 bytes, not characters', () => {
   assert.ok(text.length <= LIMITS.intentPayloadBytesMax, 'the character count alone fits');
   const rewrite = { tag: 'rewrite-text', hunks: [{ span: { start: 0, end: 0 }, text }] };
   assert.throws(() => parseIntent(wire(documentAnchor, rewrite)), /payload exceeds/);
-  const intent = parseIntent(
-    wire(element, { tag: 'set-attribute', name: 'title', value: { type: 'string', value: 'é' } }),
-  );
+  const intent = parseIntent(wire(element, { tag: 'set-attribute', name: 'title', value: { type: 'string', value: 'é' } }));
   assert.equal(intentPayloadBytes(intent.operation), 'title'.length + 2);
 });
 
@@ -265,10 +228,7 @@ test('anchors: path length and kind agree, documents start at zero, depth is bou
     [{ ...element, path: [-1] }, /ChildIndex/],
     [{ ...element, path: [LIMITS.treeNodesMax] }, /ChildIndex/],
     [{ ...element, path: ['0'] }, /expected number/],
-    [
-      { ...element, path: Array.from({ length: STRUCTURAL_PATH_STEPS_MAX + 1 }, () => 0) },
-      /exceeds/,
-    ],
+    [{ ...element, path: Array.from({ length: STRUCTURAL_PATH_STEPS_MAX + 1 }, () => 0) }, /exceeds/],
     [{ ...element, span: { start: 4, end: 2 } }, /end must not precede start/],
   ];
   for (const [input, message] of cases) {

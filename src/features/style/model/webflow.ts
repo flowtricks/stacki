@@ -29,13 +29,7 @@ import { variableEdit } from '../../../ipc/variableEditBridge';
 import { type AnyElement, serializeElementId, nodeById, buildSnapshot } from './webflowElement';
 import { type CanvasAsk, canvasIdentityOf } from './canvasAsk';
 import { isGlobalRegion } from './projectResources';
-export {
-  type ProjectVariable,
-  streamProjectVariables,
-  getProjectFontFamilies,
-  type ImageAsset,
-  getImageAssets,
-} from './projectResources';
+export { type ProjectVariable, streamProjectVariables, getProjectFontFamilies, type ImageAsset, getImageAssets } from './projectResources';
 
 export {
   nativeStylingAvailable,
@@ -50,14 +44,7 @@ export {
 
 export { type CanvasIdentity, type CanvasAsk, askCanvasAbout, primeDomMatches } from './canvasAsk';
 
-export {
-  serializeElementId,
-  webflowClassToCss,
-  webflowApi,
-  buildSnapshot,
-  resolveIdentityElement,
-  getCurrentBreakpoint,
-} from './webflowElement';
+export { serializeElementId, webflowClassToCss, webflowApi, buildSnapshot, resolveIdentityElement, getCurrentBreakpoint } from './webflowElement';
 
 // ───────────────────────────── Style sources ─────────────────────────────
 
@@ -72,10 +59,7 @@ export type EmbedSource = {
   instance?: AnyElement;
   /** Where the CSS lives — the panel writes back through this. `astro` is a
    *  component file whose `<style is:global>` blocks are edited in place. */
-  origin:
-    | { kind: 'file'; path: string }
-    | { kind: 'node'; nodeId: string; filePath: string | undefined }
-    | { kind: 'astro'; path: string };
+  origin: { kind: 'file'; path: string } | { kind: 'node'; nodeId: string; filePath: string | undefined } | { kind: 'astro'; path: string };
 };
 
 /** One source's CSS, parsed into live regions. Its code advances only through its own
@@ -245,9 +229,7 @@ export async function scanPage(): Promise<PageScan> {
   };
 }
 
-export async function scanAllComponents(
-  onEmbeds?: (embeds: EmbedSource[]) => void | Promise<void>,
-): Promise<EmbedSource[]> {
+export async function scanAllComponents(onEmbeds?: (embeds: EmbedSource[]) => void | Promise<void>): Promise<EmbedSource[]> {
   const embeds = styleSources();
   if (onEmbeds) {
     await onEmbeds(embeds);
@@ -381,10 +363,7 @@ export async function writeEmbedDocument(
   // doc.code is advanced below.
   const before = embedDocument.code;
   try {
-    if (
-      embedDocument.source.origin.kind === 'file' ||
-      embedDocument.source.origin.kind === 'astro'
-    ) {
+    if (embedDocument.source.origin.kind === 'file' || embedDocument.source.origin.kind === 'astro') {
       const { path } = embedDocument.source.origin;
       await styleTransport.writeStyleFile({ filePath: path, css: code, base: before });
       // A <style> node's write goes through the page model, which the app
@@ -432,11 +411,7 @@ export function onDocsReloaded(listener: () => void): () => void {
   };
 }
 
-async function writeStyleFileAndReload(
-  embedDocument: EmbedDocument,
-  path: string,
-  text: string,
-): Promise<void> {
+async function writeStyleFileAndReload(embedDocument: EmbedDocument, path: string, text: string): Promise<void> {
   embedWriteCount += 1;
   await styleTransport.writeStyleFile({ filePath: path, css: text, base: embedDocument.code });
   // Re-derive the doc from what the file now holds, the same way it was first
@@ -478,10 +453,7 @@ export function rebuildRules(docs: EmbedDocument[]): ParsedRule[] {
 
 // Selecting the <style> node a rule lives in; a stylesheet isn't in the tree,
 // so there is nothing to navigate to.
-export async function navigateToEmbed(
-  source: EmbedSource,
-  _pageInstances?: unknown,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function navigateToEmbed(source: EmbedSource, _pageInstances?: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
   if (source.origin.kind === 'astro') {
     return {
       ok: false,

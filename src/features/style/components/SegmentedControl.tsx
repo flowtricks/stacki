@@ -2,10 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom';
 import type { CSSProperties, MutableRefObject, ReactNode, RefObject } from 'react';
 
-function tooltipStyle(
-  style: CSSProperties,
-  arrowLeft: number,
-): CSSProperties & { readonly '--tip-arrow-left': string } {
+function tooltipStyle(style: CSSProperties, arrowLeft: number): CSSProperties & { readonly '--tip-arrow-left': string } {
   return { ...style, '--tip-arrow-left': `${arrowLeft}px` };
 }
 
@@ -44,15 +41,7 @@ type Props<T extends string> = {
  * real geometry, so it lands correctly whether segments are equal-width ('fill')
  * or content-width ('hug'). Fills its container width; constrain via `className`.
  */
-export default function SegmentedControl<T extends string>({
-  options,
-  value,
-  onChange,
-  ariaLabel,
-  className,
-  widthMode = 'fill',
-  disabled = false,
-}: Props<T>) {
+export default function SegmentedControl<T extends string>({ options, value, onChange, ariaLabel, className, widthMode = 'fill', disabled = false }: Props<T>) {
   // -1 when nothing matches (an unset control) → the indicator hides.
   const selectedIndex = options.findIndex((option) => option.value === value);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -79,11 +68,7 @@ export default function SegmentedControl<T extends string>({
       <span
         className={`u-segmented-indicator${animated ? ' is-animated' : ''}`}
         aria-hidden="true"
-        style={
-          indicator
-            ? { transform: `translateX(${indicator.x}px)`, width: `${indicator.width}px` }
-            : { opacity: 0 }
-        }
+        style={indicator ? { transform: `translateX(${indicator.x}px)`, width: `${indicator.width}px` } : { opacity: 0 }}
       />
       {options.map((option, index) => (
         <button
@@ -108,9 +93,7 @@ export default function SegmentedControl<T extends string>({
         </button>
       ))}
 
-      {activeTooltip && hoveredButton ? (
-        <HoverTooltip anchor={hoveredButton}>{activeTooltip}</HoverTooltip>
-      ) : undefined}
+      {activeTooltip && hoveredButton ? <HoverTooltip anchor={hoveredButton}>{activeTooltip}</HoverTooltip> : undefined}
     </div>
   );
 }
@@ -124,14 +107,7 @@ function segmentedClass({
   readonly disabled: boolean;
   readonly className: string | undefined;
 }): string {
-  return [
-    'u-segmented',
-    widthMode === 'hug' ? 'is-hug' : '',
-    disabled ? 'is-disabled' : '',
-    className,
-  ]
-    .filter(Boolean)
-    .join(' ');
+  return ['u-segmented', widthMode === 'hug' ? 'is-hug' : '', disabled ? 'is-disabled' : '', className].filter(Boolean).join(' ');
 }
 
 type IndicatorInput = {
@@ -145,13 +121,7 @@ type IndicatorInput = {
 // Measure the active button and park the indicator over it. Re-runs on selection
 // change and observes both the track and the button so it keeps up with layout
 // shifts (container resize, font load, label change).
-function useSegmentIndicator({
-  rootRef,
-  buttonsRef,
-  selectedIndex,
-  optionCount,
-  widthMode,
-}: IndicatorInput) {
+function useSegmentIndicator({ rootRef, buttonsRef, selectedIndex, optionCount, widthMode }: IndicatorInput) {
   const [indicator, setIndicator] = useState<{ x: number; width: number } | undefined>(undefined);
   const [animated, setAnimated] = useState(false);
   useLayoutEffect(() => {
@@ -240,10 +210,7 @@ export function HoverTooltip({ anchor, children }: { anchor: HTMLElement; childr
       const anchorRect = anchor.getBoundingClientRect();
       const { width, height } = element.getBoundingClientRect();
       const centerX = anchorRect.left + anchorRect.width / 2;
-      const left = Math.max(
-        margin,
-        Math.min(centerX - width / 2, window.innerWidth - margin - width),
-      );
+      const left = Math.max(margin, Math.min(centerX - width / 2, window.innerWidth - margin - width));
       const fitsAbove = anchorRect.top - gap - height >= margin;
       const top = fitsAbove ? anchorRect.top - gap - height : anchorRect.bottom + gap;
       const arrowLeft = Math.max(12, Math.min(centerX - left, width - 12));
@@ -255,10 +222,7 @@ export function HoverTooltip({ anchor, children }: { anchor: HTMLElement; childr
     // line once the page answers what it computes for that property (see PropTip),
     // and a box placed ABOVE its anchor grows downward — over the very label it
     // describes — unless it's measured again.
-    const ro =
-      typeof ResizeObserver !== 'undefined' && ref.current
-        ? new ResizeObserver(() => place())
-        : undefined;
+    const ro = typeof ResizeObserver !== 'undefined' && ref.current ? new ResizeObserver(() => place()) : undefined;
     if (ref.current) {
       ro?.observe(ref.current);
     }
@@ -272,12 +236,7 @@ export function HoverTooltip({ anchor, children }: { anchor: HTMLElement; childr
   }, [anchor]);
 
   return createPortal(
-    <div
-      ref={ref}
-      className={`u-segmented-popup ${arrow.above ? 'is-above' : 'is-below'}`}
-      role="tooltip"
-      style={tooltipStyle(style, arrow.left)}
-    >
+    <div ref={ref} className={`u-segmented-popup ${arrow.above ? 'is-above' : 'is-below'}`} role="tooltip" style={tooltipStyle(style, arrow.left)}>
       {children}
       <span className="u-segmented-popup-arrow" aria-hidden="true" />
     </div>,

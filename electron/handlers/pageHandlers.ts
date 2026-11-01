@@ -22,26 +22,15 @@ import { newPageText } from '../documents/componentFile';
 import { toPosix, errorMessage } from '../lib/mainHelpers';
 import type { MainHost } from './mainHost';
 import { routeForPage } from '../project/projectFiles';
-import {
-  parsePageSource,
-  pageEditError,
-  resolvePagesDirectory,
-  fillRoute,
-} from '../documents/pageRequests';
+import { parsePageSource, pageEditError, resolvePagesDirectory, fillRoute } from '../documents/pageRequests';
 
-export function registerPageHandlers(
-  host: Pick<MainHost, 'documents' | 'ipcMain' | 'noteAppWrite'>,
-): void {
+export function registerPageHandlers(host: Pick<MainHost, 'documents' | 'ipcMain' | 'noteAppWrite'>): void {
   registerPageReadHandlers(host);
   registerPageMoveHandlers(host);
   registerProjectInjectedRoutesHandlers(host);
 }
 
-function registerPageReadHandlers({
-  ipcMain,
-  documents,
-  noteAppWrite,
-}: Pick<MainHost, 'ipcMain' | 'documents' | 'noteAppWrite'>): void {
+function registerPageReadHandlers({ ipcMain, documents, noteAppWrite }: Pick<MainHost, 'ipcMain' | 'documents' | 'noteAppWrite'>): void {
   // Read through the page's actor (step 6): the bytes the renderer is shown are
   // the bytes its edits will name, so the host must hold them — as its current
   // snapshot, and retained once an outside write replaces them — or an edit
@@ -90,26 +79,23 @@ function registerPageReadHandlers({
   // shows its unsaved gestures as the splices they are. The reply has page:edit's
   // shape, so the renderer states the next request against it as it would
   // against a write.
-  ipcMain.handle(
-    'page:previewEdit',
-    async (_event, { pagePath, authoredChecksum, edit, source }) => {
-      const refused = (reason: RejectionReason) => {
-        const error = { code: 'rejected' as const, reason, message: describeRejection(reason) };
-        return { ok: false as const, error: { ...error, diskChecksum: undefined } };
-      };
-      const planned = previewEdit(pagePath, encodeUtf8(source), authoredChecksum, edit);
-      if (!planned.ok) {
-        return refused(planned.error);
-      }
-      const decoded = decodeUtf8(planned.value.bytes);
-      assert(decoded.ok, 'A plan of UTF-8 text is UTF-8');
-      const reply = {
-        ...parsePageSource(pagePath, decoded.value),
-        checksum: planned.value.checksum,
-      };
-      return { ok: true as const, ...reply, inverse: planned.value.inverse };
-    },
-  );
+  ipcMain.handle('page:previewEdit', async (_event, { pagePath, authoredChecksum, edit, source }) => {
+    const refused = (reason: RejectionReason) => {
+      const error = { code: 'rejected' as const, reason, message: describeRejection(reason) };
+      return { ok: false as const, error: { ...error, diskChecksum: undefined } };
+    };
+    const planned = previewEdit(pagePath, encodeUtf8(source), authoredChecksum, edit);
+    if (!planned.ok) {
+      return refused(planned.error);
+    }
+    const decoded = decodeUtf8(planned.value.bytes);
+    assert(decoded.ok, 'A plan of UTF-8 text is UTF-8');
+    const reply = {
+      ...parsePageSource(pagePath, decoded.value),
+      checksum: planned.value.checksum,
+    };
+    return { ok: true as const, ...reply, inverse: planned.value.inverse };
+  });
 
   ipcMain.handle('page:create', async (_event, { projectPath, name, layout }) => {
     const pagesDirectory = path.join(projectPath, 'src', 'pages');
@@ -137,10 +123,7 @@ function registerPageReadHandlers({
   });
 }
 
-function registerPageMoveHandlers({
-  ipcMain,
-  noteAppWrite,
-}: Pick<MainHost, 'ipcMain' | 'noteAppWrite'>): void {
+function registerPageMoveHandlers({ ipcMain, noteAppWrite }: Pick<MainHost, 'ipcMain' | 'noteAppWrite'>): void {
   // Moves/renames a page within src/pages. `to` is the new path relative to
   // the pages dir (with extension). When the folder changes, relative imports
   // in the file's frontmatter are rewritten so they keep resolving.
@@ -223,10 +206,7 @@ function registerProjectInjectedRoutesHandlers({ ipcMain }: Pick<MainHost, 'ipcM
   });
 }
 
-function readThroughActor(
-  { documents }: Pick<MainHost, 'documents'>,
-  pagePath: string,
-): { readonly text: string; readonly checksum: Digest } {
+function readThroughActor({ documents }: Pick<MainHost, 'documents'>, pagePath: string): { readonly text: string; readonly checksum: Digest } {
   const current = documents.current(pagePath);
   if (!current.ok) {
     throw new Error(current.error.message);

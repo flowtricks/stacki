@@ -10,25 +10,9 @@ import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import { toRecord } from '../../../shared/core/record';
 import { importCmsAsset, writeCmsMeta } from './cmsBridge';
 import { confirmDialog } from '../../ui/ConfirmDialog';
-import {
-  PlusIcon,
-  CloseIcon,
-  FileIcon,
-  ChevronRightIcon,
-  CopyIcon,
-  TrashIcon,
-  DragIcon,
-  CheckIcon,
-} from '../../ui/Icons';
+import { PlusIcon, CloseIcon, FileIcon, ChevronRightIcon, CopyIcon, TrashIcon, DragIcon, CheckIcon } from '../../ui/Icons';
 import useListReorder from '../../ui/useListReorder';
-import {
-  contentFieldsOf,
-  titleOf,
-  blankItem,
-  duplicateItem,
-  inferType,
-  isPlainObject,
-} from './cmsSchema';
+import { contentFieldsOf, titleOf, blankItem, duplicateItem, inferType, isPlainObject } from './cmsSchema';
 import CmsSettings from './CmsSettings';
 import FieldRow from './CmsField';
 import { bestType, withDeclaredTypes } from './cmsTypes';
@@ -48,8 +32,7 @@ export interface CmsViewProps {
   readonly onClose?: (() => void) | undefined;
   readonly onRecordUndo?: ((command: CmsUndo) => void) | undefined;
 }
-type DocumentState =
-  { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly snapshot: CmsSnapshot };
+type DocumentState = { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly snapshot: CmsSnapshot };
 
 export default function CmsView(props: CmsViewProps) {
   // A file owns its pending edits and cleanup. Switching files remounts this
@@ -153,14 +136,7 @@ interface ReloadOptions {
   readonly setState: React.Dispatch<React.SetStateAction<DocumentState>>;
   readonly setSelection: React.Dispatch<React.SetStateAction<number>>;
 }
-function useCmsReload({
-  props,
-  writer,
-  callbacks,
-  reloadRef,
-  setState,
-  setSelection,
-}: ReloadOptions) {
+function useCmsReload({ props, writer, callbacks, reloadRef, setState, setSelection }: ReloadOptions) {
   useEffect(() => {
     const reader = createCmsReader({
       projectPath: props.project.path,
@@ -172,11 +148,7 @@ function useCmsReload({
         const snapshot = result.ok
           ? result.value
           : {
-              collection: cmsCollection(
-                props.rel,
-                undefined,
-                `This file can't be read as content — ${detail}`,
-              ),
+              collection: cmsCollection(props.rel, undefined, `This file can't be read as content — ${detail}`),
               items: [],
               declared: {},
             };
@@ -230,9 +202,7 @@ function CmsContent({ model, snapshot }: ContentProps) {
   return (
     <div className={`cms-view ${model.hidden ? 'hidden' : ''}`}>
       {/* One object (not a list) has nothing to choose between: its fields fill the view. */}
-      {!snapshot.collection.single && (
-        <CmsItems model={model} snapshot={snapshot} actions={actions} />
-      )}
+      {!snapshot.collection.single && <CmsItems model={model} snapshot={snapshot} actions={actions} />}
       <div className="cms-detail">
         <CmsDetailHead model={model} snapshot={snapshot} actions={actions} />
         <CmsDetailBody model={model} snapshot={snapshot} />
@@ -292,9 +262,7 @@ function useCmsItems(model: CmsModel, snapshot: CmsSnapshot) {
   const reorder = useListReorder({ count: items.length, onMove: move, disabled: Boolean(query) });
   const filtered = useMemo(() => {
     const text = query.trim().toLowerCase();
-    return items
-      .map((item, index) => ({ item, index }))
-      .filter(({ item, index }) => !text || titleOf(item, index).toLowerCase().includes(text));
+    return items.map((item, index) => ({ item, index })).filter(({ item, index }) => !text || titleOf(item, index).toLowerCase().includes(text));
   }, [items, query]);
   return { addItem, duplicate, removeItem, reorder, filtered };
 }
@@ -328,11 +296,7 @@ function CmsItems({ model, snapshot, actions }: ItemProps) {
         {actions.filtered.map(({ item, index }) => (
           <div
             key={index}
-            className={[
-              'cms-item',
-              index === model.selection ? 'on' : '',
-              actions.reorder.rowClass(index),
-            ].join(' ')}
+            className={['cms-item', index === model.selection ? 'on' : '', actions.reorder.rowClass(index)].join(' ')}
             {...actions.reorder.rowProps(index)}
             onClick={() => model.setSelection(index)}
           >
@@ -353,9 +317,7 @@ function CmsItems({ model, snapshot, actions }: ItemProps) {
             </div>
           </div>
         )}
-        {items.length > 0 && actions.filtered.length === 0 && (
-          <div className="props-empty">No items match “{model.query}”.</div>
-        )}
+        {items.length > 0 && actions.filtered.length === 0 && <div className="props-empty">No items match “{model.query}”.</div>}
       </div>
     </div>
   );
@@ -373,11 +335,7 @@ function CmsDetailHead({ model, snapshot, actions }: ItemProps) {
           <FileIcon size={14} />
         </span>
       )}
-      <span className="cms-detail-title">
-        {item !== undefined && !collection.single
-          ? titleOf(item, model.selection)
-          : collection.label}
-      </span>
+      <span className="cms-detail-title">{item !== undefined && !collection.single ? titleOf(item, model.selection) : collection.label}</span>
       <span className={`cms-saved ${model.saved ? 'on' : ''}`}>
         <CheckIcon size={11} /> Saved
       </span>
@@ -418,11 +376,7 @@ function CmsDetailBody({ model, snapshot }: ContentProps) {
   const setItemValue = (key: string, value: unknown) => {
     const object = toRecord(item);
     assert(object !== undefined, 'CMS field: selected item must be an object');
-    model.commit(
-      items.map((entry, index) =>
-        index === model.selection ? { ...object, [key]: value } : entry,
-      ),
-    );
+    model.commit(items.map((entry, index) => (index === model.selection ? { ...object, [key]: value } : entry)));
   };
   return (
     <div className="cms-detail-body">
@@ -435,9 +389,7 @@ function CmsDetailBody({ model, snapshot }: ContentProps) {
             label="Value"
             type={inferType(item)}
             value={item}
-            onChange={(value) =>
-              model.commit(items.map((entry, index) => (index === model.selection ? value : entry)))
-            }
+            onChange={(value) => model.commit(items.map((entry, index) => (index === model.selection ? value : entry)))}
           />
         </div>
       )}
@@ -450,23 +402,15 @@ function CmsDetailBody({ model, snapshot }: ContentProps) {
               key={field.key}
               {...context}
               label={field.label}
-              type={
-                item[field.key] === undefined ? field.type : bestType(field.type, item[field.key])
-              }
+              type={item[field.key] === undefined ? field.type : bestType(field.type, item[field.key])}
               value={item[field.key]}
               onChange={(value) => setItemValue(field.key, value)}
             />
           ))}
-          {fields.length === 0 && (
-            <div className="props-empty">
-              This collection has no fields yet — add them in its settings.
-            </div>
-          )}
+          {fields.length === 0 && <div className="props-empty">This collection has no fields yet — add them in its settings.</div>}
         </div>
       )}
-      {item === undefined && !collection.error && (
-        <div className="props-empty">Select an item to edit it.</div>
-      )}
+      {item === undefined && !collection.error && <div className="props-empty">Select an item to edit it.</div>}
     </div>
   );
 }

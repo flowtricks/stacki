@@ -44,10 +44,7 @@ export function NewPageModal({
               <label>Layout</label>
               <Dropdown
                 value={layout}
-                options={[
-                  { value: '', label: '(no layout)', dim: true },
-                  ...layouts.map((item) => ({ value: item.name, label: item.name })),
-                ]}
+                options={[{ value: '', label: '(no layout)', dim: true }, ...layouts.map((item) => ({ value: item.name, label: item.name }))]}
                 onChange={setLayout}
               />
             </div>

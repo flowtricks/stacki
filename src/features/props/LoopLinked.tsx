@@ -12,21 +12,14 @@
 
 import { useCallback, useState } from 'react';
 import type { ReactNode, RefCallback } from 'react';
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  CloseIcon,
-  ComponentIcon,
-  GearIcon,
-  PlusIcon,
-  UnlinkIcon,
-} from '../../ui/Icons';
+import { CheckIcon, ChevronDownIcon, CloseIcon, ComponentIcon, GearIcon, PlusIcon, UnlinkIcon } from '../../ui/Icons';
 import { assert } from '../../../shared/core/assert';
 import { SETTING_TITLES } from '../../editor/optionsBinding';
 import type { LoopSetting } from '../../editor/optionsQuery';
 import { titled } from './loopCatalog';
 import { RowPopup } from './LoopRows';
-import { NewProperty, settingIcon, type BindingContext } from './LoopBinding';
+import AutoTextarea from '../../ui/AutoTextarea';
+import { NewProperty, settingIcon, type BindingContext, type DraftEditor } from './LoopBinding';
 
 const SETTINGS_HEIGHT_PX_MAX = 560;
 
@@ -38,16 +31,15 @@ export function LinkedSetting(props: {
   readonly binding: BindingContext;
   /** The setting's editor, writing the property's default. */
   readonly editor: ReactNode;
+  /** The same editor over a draft, for a new property's default. */
+  readonly draft: DraftEditor;
 }) {
   const { binding, setting } = props;
   const home = binding.settings[setting];
   assert(home.kind === 'prop', 'A linked setting names its property');
   const [panel, setPanel] = useState<Panel>(undefined);
   const [bar, setBar] = useState<HTMLButtonElement | undefined>(undefined);
-  const attach = useCallback<RefCallback<HTMLButtonElement>>(
-    (element) => setBar(element ?? undefined),
-    [],
-  );
+  const attach = useCallback<RefCallback<HTMLButtonElement>>((element) => setBar(element ?? undefined), []);
   const title = SETTING_TITLES[setting];
   const close = (): void => setPanel(undefined);
   return (
@@ -69,34 +61,18 @@ export function LinkedSetting(props: {
         <ChevronDownIcon size={11} />
       </button>
       {panel === 'menu' && (
-        <RowPopup
-          anchor={bar}
-          heightPxMax={SETTINGS_HEIGHT_PX_MAX}
-          label={`${title} property`}
-          onClose={close}
-        >
+        <RowPopup anchor={bar} heightPxMax={SETTINGS_HEIGHT_PX_MAX} label={`${title} property`} onClose={close}>
           <LinkedMenu setting={setting} binding={binding} current={home.key} onPanel={setPanel} />
         </RowPopup>
       )}
       {panel === 'new' && (
         <RowPopup anchor={bar} label={`New ${title} property`} onClose={close}>
-          <NewProperty setting={setting} binding={binding} onDone={close} />
+          <NewProperty setting={setting} binding={binding} draft={props.draft} onDone={close} />
         </RowPopup>
       )}
       {panel === 'settings' && (
-        <RowPopup
-          anchor={bar}
-          heightPxMax={SETTINGS_HEIGHT_PX_MAX}
-          label="Property settings"
-          onClose={close}
-        >
-          <PropertySettings
-            setting={setting}
-            binding={binding}
-            propKey={home.key}
-            editor={props.editor}
-            onClose={close}
-          />
+        <RowPopup anchor={bar} heightPxMax={SETTINGS_HEIGHT_PX_MAX} label="Property settings" onClose={close}>
+          <PropertySettings setting={setting} binding={binding} propKey={home.key} editor={props.editor} onClose={close} />
         </RowPopup>
       )}
     </div>
@@ -117,30 +93,15 @@ function LinkedMenu(props: {
   };
   return (
     <div className="loop-linked-menu" role="menu">
-      <button
-        type="button"
-        role="menuitem"
-        className="loop-linked-item"
-        onClick={() => props.onPanel('settings')}
-      >
+      <button type="button" role="menuitem" className="loop-linked-item" onClick={() => props.onPanel('settings')}>
         <GearIcon size={14} />
         Edit settings
       </button>
-      <button
-        type="button"
-        role="menuitem"
-        className="loop-linked-item"
-        onClick={() => choose(() => binding.onChange({ kind: 'unbind', setting }))}
-      >
+      <button type="button" role="menuitem" className="loop-linked-item" onClick={() => choose(() => binding.onChange({ kind: 'unbind', setting }))}>
         <UnlinkIcon size={14} />
         Disconnect
       </button>
-      <button
-        type="button"
-        role="menuitem"
-        className="loop-linked-item accent"
-        onClick={() => props.onPanel('new')}
-      >
+      <button type="button" role="menuitem" className="loop-linked-item accent" onClick={() => props.onPanel('new')}>
         <PlusIcon size={14} />
         New {title} property
       </button>
@@ -156,13 +117,7 @@ function LinkedMenu(props: {
           role="menuitemradio"
           aria-checked={key === props.current}
           className="loop-linked-item loop-linked-prop"
-          onClick={() =>
-            choose(() =>
-              key === props.current
-                ? undefined
-                : binding.onChange({ kind: 'connect', setting, key }),
-            )
-          }
+          onClick={() => choose(() => (key === props.current ? undefined : binding.onChange({ kind: 'connect', setting, key })))}
         >
           {settingIcon(setting)}
           <span className="loop-linked-name">{titled(key)}</span>
@@ -190,13 +145,7 @@ function PropertySettings(props: {
     <div className="loop-bind-dialog loop-property-settings">
       <div className="loop-property-head">
         <span className="loop-bind-title">Property settings</span>
-        <button
-          type="button"
-          className="loop-settings-remove"
-          aria-label="Close property settings"
-          title="Close"
-          onClick={props.onClose}
-        >
+        <button type="button" className="loop-settings-remove" aria-label="Close property settings" title="Close" onClick={props.onClose}>
           <CloseIcon size={12} />
         </button>
       </div>
@@ -217,9 +166,8 @@ function PropertySettings(props: {
       </label>
       <label className="loop-bind-name top">
         <span className="loop-settings-editor-label">Tooltip</span>
-        <textarea
+        <AutoTextarea
           value={tooltip}
-          rows={3}
           placeholder="Describe how to use this property…"
           disabled={locked}
           onChange={(event) => identity.setTooltip(event.target.value)}
@@ -227,9 +175,7 @@ function PropertySettings(props: {
         />
       </label>
       {state.kind === 'error' && <div className="loop-bind-problem">{state.message}</div>}
-      {name.trim() !== props.propKey && state.kind !== 'error' && (
-        <div className="loop-bind-note">Renaming updates every page that sets this property.</div>
-      )}
+      {name.trim() !== props.propKey && state.kind !== 'error' && <div className="loop-bind-note">Renaming updates every page that sets this property.</div>}
       <div className="loop-property-default">
         <div className="loop-bind-title">Default {SETTING_TITLES[props.setting]}</div>
         {props.editor}
@@ -238,10 +184,7 @@ function PropertySettings(props: {
   );
 }
 
-type SaveState =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'saving' }
-  | { readonly kind: 'error'; readonly message: string };
+type SaveState = { readonly kind: 'idle' } | { readonly kind: 'saving' } | { readonly kind: 'error'; readonly message: string };
 
 // The name and tooltip being edited, saved together when a field is left and
 // either differs from what the file says.
@@ -260,9 +203,7 @@ function usePropertyIdentity(binding: BindingContext, propKey: string) {
       return;
     }
     setState({ kind: 'saving' });
-    void edit(propKey, next).then((message) =>
-      setState(message === undefined ? { kind: 'idle' } : { kind: 'error', message }),
-    );
+    void edit(propKey, next).then((message) => setState(message === undefined ? { kind: 'idle' } : { kind: 'error', message }));
   };
   return { name, setName, tooltip, setTooltip, state, save };
 }

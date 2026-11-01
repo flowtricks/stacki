@@ -51,10 +51,7 @@ const TERNARY = {
   kind: 'cond',
   op: '?',
   test: 'user',
-  children: [
-    branch('t-then', 'then', [elementNode('signed-in', 'a')]),
-    branch('t-else', 'else', [elementNode('signed-out', 'b')]),
-  ],
+  children: [branch('t-then', 'then', [elementNode('signed-in', 'a')]), branch('t-else', 'else', [elementNode('signed-out', 'b')])],
 };
 
 // `{href ? (<a/>) : (heading)}` — the shape a Lumos card is written in. The
@@ -64,10 +61,7 @@ const VALUE_ELSE = {
   kind: 'cond',
   op: '?',
   test: 'href',
-  children: [
-    branch('v-then', 'then', [elementNode('card-link', 'a')]),
-    branch('v-else', 'else', [{ id: 'v-heading', kind: 'expr', value: '{heading}' }]),
-  ],
+  children: [branch('v-then', 'then', [elementNode('card-link', 'a')]), branch('v-else', 'else', [{ id: 'v-heading', kind: 'expr', value: '{heading}' }])],
 };
 // An element whose only child is the same kind of value: this one HAS a
 // Content field, so the tree leaves it to the panel.
@@ -103,31 +97,20 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
     rowChildren(TERNARY)[0]?.id === 'signed-in',
     JSON.stringify(rowChildren(TERNARY).map((node) => node.id)),
   );
-  check(
-    'and the else after it, as a row of its own',
-    rowChildren(TERNARY)[1]?.id === 't-else',
-    JSON.stringify(rowChildren(TERNARY).map((node) => node.id)),
-  );
+  check('and the else after it, as a row of its own', rowChildren(TERNARY)[1]?.id === 't-else', JSON.stringify(rowChildren(TERNARY).map((node) => node.id)));
   check('two rows, not three', rowChildren(TERNARY).length === 2, `${rowChildren(TERNARY).length}`);
-  check(
-    'the else keeps its own children',
-    rowChildren(elseBranch(TERNARY))[0]?.id === 'signed-out',
-  );
+  check('the else keeps its own children', rowChildren(elseBranch(TERNARY))[0]?.id === 'signed-out');
   check('and there is none to draw without one', elseBranch(AND) === undefined);
 
   check('a plain element is only ever itself', rowHost(elementNode('x', 'div')).id === 'x');
   check(
     'a condition with nothing in it hides nothing',
-    thenBranch({ kind: 'cond', children: [] }) === undefined &&
-      rowChildren({ kind: 'cond', children: [] }).length === 0,
+    thenBranch({ kind: 'cond', children: [] }) === undefined && rowChildren({ kind: 'cond', children: [] }).length === 0,
   );
   check(
     'and one with only an else keeps that else',
-    rowChildren({ kind: 'cond', children: [branch('e', 'else', [elementNode('x', 'i')])] })[0]
-      ?.id === 'e',
-    JSON.stringify(
-      rowChildren({ kind: 'cond', children: [branch('e', 'else', [elementNode('x', 'i')])] }),
-    ),
+    rowChildren({ kind: 'cond', children: [branch('e', 'else', [elementNode('x', 'i')])] })[0]?.id === 'e',
+    JSON.stringify(rowChildren({ kind: 'cond', children: [branch('e', 'else', [elementNode('x', 'i')])] })),
   );
 
   // --- the rows ---------------------------------------------------------------
@@ -208,9 +191,7 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
       await settle(20);
     });
 
-  const defaultSection = elementNode('default-section', 'section', [
-    elementNode('default-content', 'div'),
-  ]);
+  const defaultSection = elementNode('default-section', 'section', [elementNode('default-content', 'div')]);
   const defaultLayout = {
     ...elementNode('default-layout', 'BaseLayout', [defaultSection]),
     kind: 'component',
@@ -255,17 +236,9 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
     at('signed-in').indent - at('if-ternary').indent === 16,
     `${at('signed-in').indent - at('if-ternary').indent}px`,
   );
-  check(
-    'the else sits beside it, at the same level',
-    at('t-else').indent === at('signed-in').indent,
-    `${at('t-else').indent} vs ${at('signed-in').indent}`,
-  );
+  check('the else sits beside it, at the same level', at('t-else').indent === at('signed-in').indent, `${at('t-else').indent} vs ${at('signed-in').indent}`);
   check('with its own markup under it', at('signed-out').indent - at('t-else').indent === 16);
-  check(
-    'and no row anywhere says "then"',
-    labels.filter((label) => label === 'then').length === 0,
-    labels.join(' | '),
-  );
+  check('and no row anywhere says "then"', labels.filter((label) => label === 'then').length === 0, labels.join(' | '));
 
   // An else that renders a value has to draw it. There is no Content field on a
   // branch — its panel says what the branch is for and nothing else — so hiding
@@ -279,11 +252,7 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
   );
   // Where there IS a Content field, the words stay in it: showing them twice is
   // the noise this rule exists to avoid.
-  check(
-    'an element with words in it still leaves them to the panel',
-    !at('w-text'),
-    labels.join(' | '),
-  );
+  check('an element with words in it still leaves them to the panel', !at('w-text'), labels.join(' | '));
 
   // --- a drop on the condition ------------------------------------------------
   {
@@ -305,11 +274,7 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
       await settle(20);
     });
     check('dropping on the condition is allowed', dropped.length === 1, JSON.stringify(dropped));
-    check(
-      'and lands in the branch, which is where the markup lives',
-      dropped[0]?.parentId === 'and-then',
-      JSON.stringify(dropped[0]),
-    );
+    check('and lands in the branch, which is where the markup lives', dropped[0]?.parentId === 'and-then', JSON.stringify(dropped[0]));
   }
 
   // Moving between descendants must not erase the destination between two
@@ -327,12 +292,7 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
     };
     const fire = (element, type, relatedTarget = undefined) =>
       act(async () => {
-        element.dispatchEvent(
-          Object.assign(
-            new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, relatedTarget }),
-            { dataTransfer },
-          ),
-        );
+        element.dispatchEvent(Object.assign(new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, relatedTarget }), { dataTransfer }));
       });
     await fire(source, 'dragstart');
     check('dragging keeps the source in its original place', rowFor('hero-command') === source);
@@ -342,15 +302,9 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
     check('entering the marker does not erase it', !!gap.querySelector('.drop-indicator'));
     await fire(rowFor('if-and'), 'dragover');
     await fire(gap, 'dragleave', rowFor('if-and').querySelector('.label'));
-    check(
-      'entering a row preserves the new child destination',
-      rowFor('if-and').style.borderColor !== '',
-    );
+    check('entering a row preserves the new child destination', rowFor('if-and').style.borderColor !== '');
     await fire(rowFor('if-and'), 'dragleave', document.body);
-    check(
-      'leaving the panel clears the child destination',
-      rowFor('if-and').style.borderColor === '',
-    );
+    check('leaving the panel clears the child destination', rowFor('if-and').style.borderColor === '');
     await fire(gap, 'dragover');
     await fire(container.querySelector('.panel-body'), 'dragover');
     check('blank space clears the previous marker', !container.querySelector('.drop-indicator'));
@@ -410,32 +364,15 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
       });
       return selected[0];
     };
-    check(
-      'down from the condition reaches what is inside it',
-      (await press('ArrowDown', 'if-and')) === 'hero-command',
-    );
-    check(
-      'and up from there reaches the condition',
-      (await press('ArrowUp', 'hero-command')) === 'if-and',
-    );
-    check(
-      'down from a condition with an else reaches its markup, not a branch row',
-      (await press('ArrowDown', 'if-ternary')) === 'signed-in',
-    );
+    check('down from the condition reaches what is inside it', (await press('ArrowDown', 'if-and')) === 'hero-command');
+    check('and up from there reaches the condition', (await press('ArrowUp', 'hero-command')) === 'if-and');
+    check('down from a condition with an else reaches its markup, not a branch row', (await press('ArrowDown', 'if-ternary')) === 'signed-in');
     // ← and → step between siblings, ↑ goes out. The else and the markup the
     // `if` renders are siblings now, so one press moves between them.
     const leftOfElse = await press('ArrowLeft', 't-else');
-    check(
-      'left from the else reaches the markup beside it',
-      leftOfElse === 'signed-in',
-      String(leftOfElse),
-    );
+    check('left from the else reaches the markup beside it', leftOfElse === 'signed-in', String(leftOfElse));
     const outOfElse = await press('ArrowUp', 't-else');
-    check(
-      'and up from it goes out to the condition',
-      outOfElse === 'if-ternary',
-      String(outOfElse),
-    );
+    check('and up from it goes out to the condition', outOfElse === 'if-ternary', String(outOfElse));
   }
 
   // A condition dropped from the palette starts as the one thing it is: a
@@ -443,16 +380,9 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
   {
     // The app shell and the modules it was split into (src/app).
     const app = readAppSource();
-    const insert = app.slice(
-      app.indexOf("item.type === 'cond'"),
-      app.indexOf("item.type === 'comment'"),
-    );
+    const insert = app.slice(app.indexOf("item.type === 'cond'"), app.indexOf("item.type === 'comment'"));
     check('a new condition is `test && (…)`', /op: '&&'/.test(insert), insert.slice(0, 400));
-    check(
-      'with one branch in it',
-      (insert.match(/kind: 'branch'/g) || []).length === 1,
-      insert.slice(0, 400),
-    );
+    check('with one branch in it', (insert.match(/kind: 'branch'/g) || []).length === 1, insert.slice(0, 400));
     check('and no else until one is asked for', !/name: 'else'/.test(insert));
   }
 
@@ -469,9 +399,7 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
     const rule = css.slice(css.indexOf('.node-note {'));
     const note = /color:\s*rgba\(([^)]+)\)/.exec(rule.slice(0, rule.indexOf('}')));
     check('the note is written as a colour with alpha', !!note, rule.slice(0, rule.indexOf('}')));
-    const [red, green, blue, alpha] = (note?.[1] ?? '0,0,0,1')
-      .split(',')
-      .map((part) => parseFloat(part));
+    const [red, green, blue, alpha] = (note?.[1] ?? '0,0,0,1').split(',').map((part) => parseFloat(part));
 
     const over = (fg, alpha, bg) => fg.map((channel, i) => channel * alpha + bg[i] * (1 - alpha));
     const lum = (color) => {
@@ -497,11 +425,7 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
     check('while staying quieter than the label beside it', on(panel) < 8, on(panel).toFixed(2));
     // The old grey, for the record: this is the case it failed.
     const grey = (bg) => ratio(over([102, 102, 102], 1, bg), bg);
-    check(
-      'better on green than the flat grey it replaced',
-      on(greenRow) > grey(greenRow),
-      `${on(greenRow).toFixed(2)} vs ${grey(greenRow).toFixed(2)}`,
-    );
+    check('better on green than the flat grey it replaced', on(greenRow) > grey(greenRow), `${on(greenRow).toFixed(2)} vs ${grey(greenRow).toFixed(2)}`);
   }
 
   // --- a page that does not parse (plan §3.6, step 8) ----------------------------

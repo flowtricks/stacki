@@ -10,13 +10,7 @@
 import { record, text } from '../core/boundary';
 import { assert } from '../core/assert';
 import { parseConnectionId } from './cmsConnections';
-import {
-  parseProjectFile,
-  parseRemoteSchemaField,
-  parseRemoteValue,
-  type RemoteSchemaField,
-  type RemoteValue,
-} from './cmsRemoteSchema';
+import { parseProjectFile, parseRemoteSchemaField, parseRemoteValue, type RemoteSchemaField, type RemoteValue } from './cmsRemoteSchema';
 
 export const CMS_REMOTE_LIMITS = {
   collectionsMax: 200,
@@ -30,6 +24,8 @@ export const CMS_REMOTE_LIMITS = {
   revisionsMax: 100,
   referenceTypesMax: 24,
   previewCharsMax: 200,
+  /** Tabs a document's fields are split into (Sanity's `groups`). */
+  fieldGroupsMax: 24,
 } as const;
 
 export interface RemoteCollection {
@@ -82,6 +78,14 @@ export interface RemoteMove {
 /** A document's field: its schema, and the document's value for it, if any. */
 export interface RemoteDocumentField extends RemoteSchemaField {
   readonly value: RemoteValue | undefined;
+  /** The tabs it shows under besides all fields (its schema's `group`); absent shows it under all fields only. */
+  readonly groups?: readonly string[];
+}
+
+/** One tab of a document's fields, from its schema's `groups`, as Sanity Studio shows it. */
+export interface RemoteFieldGroup {
+  readonly name: string;
+  readonly title: string;
 }
 
 /** A stored image or file a document points at, by its asset id. */
@@ -110,6 +114,8 @@ export interface RemoteReferenceOption {
   readonly id: string;
   readonly type: string;
   readonly title: string;
+  /** Its picture, from its type's preview `media`, as the Studio's reference row shows it. */
+  readonly imageURL: string | undefined;
 }
 
 export interface RemoteDocument {
@@ -126,14 +132,18 @@ export interface RemoteDocument {
   /** Where the document opens in the CMS's own editor, when that is known. */
   readonly editURL: string | undefined;
   /**
+   * The tabs its fields are split into, when its schema groups them: each
+   * group that holds a field, in schema order. All fields always come first.
+   */
+  readonly fieldGroups?: readonly RemoteFieldGroup[];
+  /**
    * The project file it is stored in, relative to the project, when it is one
    * (an Astro content entry): its image paths are relative to that file's folder.
    */
   readonly file?: string;
 }
 
-export type RemoteResult<T> =
-  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string };
+export type RemoteResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string };
 
 /** One top-level field's new value; `undefined` removes the field. */
 export interface RemoteWrite {
@@ -191,10 +201,7 @@ export function parseRemoteWrite(input: unknown): RemoteWrite {
 
 export const parseRemoteConnection = parseConnectionId;
 
-export function parseRemoteResult<T>(
-  input: unknown,
-  parseValue: (value: unknown) => T,
-): RemoteResult<T> {
+export function parseRemoteResult<T>(input: unknown, parseValue: (value: unknown) => T): RemoteResult<T> {
   const value = record(input);
   if (value['ok'] === true) {
     return { ok: true, value: parseValue(value['value']) };
@@ -228,9 +235,7 @@ export function parseRemoteDocuments(input: unknown): RemoteDocumentSummary[] {
       title: preview(value['title']),
       subtitle: value['subtitle'] === undefined ? undefined : preview(value['subtitle']),
       imageURL: value['imageURL'] === undefined ? undefined : parseHTTPS(value['imageURL']),
-      ...(value['imageFile'] === undefined
-        ? {}
-        : { imageFile: parseProjectFile(value['imageFile']) }),
+      ...(value['imageFile'] === undefined ? {} : { imageFile: parseProjectFile(value['imageFile']) }),
       status: parseStatus(value['status']),
       updatedAt: preview(value['updatedAt']),
       ...(value['cells'] === undefined ? {} : { cells: parseCells(value['cells']) }),
@@ -276,9 +281,7 @@ function parseCells(input: unknown): Readonly<Record<string, RemoteCell>> {
 export function remoteCell(value: unknown, depth = 0): RemoteCell | undefined {
   assert(depth <= CMS_REMOTE_LIMITS.cellDepthMax, 'A cell looks into a value boundedly');
   if (typeof value === 'string') {
-    return value.length > CMS_REMOTE_LIMITS.previewCharsMax
-      ? value.slice(0, CMS_REMOTE_LIMITS.previewCharsMax)
-      : value;
+    return value.length > CMS_REMOTE_LIMITS.previewCharsMax ? value.slice(0, CMS_REMOTE_LIMITS.previewCharsMax) : value;
   }
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : undefined;
@@ -298,9 +301,7 @@ export function remoteCell(value: unknown, depth = 0): RemoteCell | undefined {
     return names.length === 0 ? undefined : remoteCell(names.join(', '), depth + 1);
   }
   if (typeof value === 'object' && value !== null && depth < CMS_REMOTE_LIMITS.cellDepthMax) {
-    const named = ['current', 'title', 'name', 'label'].map((key): unknown =>
-      Reflect.get(value, key),
-    );
+    const named = ['current', 'title', 'name', 'label'].map((key): unknown => Reflect.get(value, key));
     const first = named.find((part) => typeof part === 'string');
     return first === undefined ? undefined : remoteCell(first, depth + 1);
   }
@@ -319,6 +320,7 @@ export function parseRemoteDocument(input: unknown): RemoteDocument {
     editedAt: optionalTime(value['editedAt']),
     publishedAt: optionalTime(value['publishedAt']),
     editURL: editURL === undefined ? undefined : parseHTTPS(editURL),
+    ...(value['fieldGroups'] === undefined ? {} : { fieldGroups: parseRemoteFieldGroups(value['fieldGroups']) }),
     ...(value['file'] === undefined ? {} : { file: parseProjectFile(value['file']) }),
   };
 }
@@ -327,7 +329,40 @@ function parseField(input: unknown): RemoteDocumentField {
   const value = record(input);
   const field = parseRemoteSchemaField(value);
   assert(!field.name.startsWith('_'), 'System keys are not fields');
-  return { ...field, value: parseRemoteValue(value['value']) };
+  const groups = value['groups'];
+  return {
+    ...field,
+    value: parseRemoteValue(value['value']),
+    ...(groups === undefined ? {} : { groups: boundedList(groups, CMS_REMOTE_LIMITS.fieldGroupsMax).map(parseGroupName) }),
+  };
+}
+
+export function parseRemoteFieldGroups(input: unknown): RemoteFieldGroup[] {
+  const groups = boundedList(input, CMS_REMOTE_LIMITS.fieldGroupsMax).map((entry) => {
+    const group = record(entry);
+    const title = text(group['title']);
+    if (title.length === 0 || title.length > CMS_REMOTE_LIMITS.previewCharsMax) {
+      throw new Error('Invalid field group title.');
+    }
+    return { name: parseGroupName(group['name']), title };
+  });
+  const names = groups.map((group) => group.name);
+  if (new Set(names).size !== names.length) {
+    throw new Error('A field group is named twice.');
+  }
+  assert(groups.length <= CMS_REMOTE_LIMITS.fieldGroupsMax, 'A document has few field groups');
+  assert(new Set(names).size === groups.length, 'Each tab is named once');
+  return groups;
+}
+
+// A group's name as a schema writes it: `pastor`, `seo`, `main-details`.
+function parseGroupName(input: unknown): string {
+  const name = text(input);
+  if (!/^[A-Za-z_][\w-]{0,63}$/.test(name)) {
+    throw new Error('Invalid field group name.');
+  }
+  assert(name.length <= 64, 'A group name is short');
+  return name;
 }
 
 export function parseRemoteAsset(input: unknown): RemoteAsset {
@@ -352,15 +387,14 @@ export function parseRemoteReferenceOptions(input: unknown): RemoteReferenceOpti
       id: parseRemoteDocumentId(value['id']),
       type: parseRemoteCollectionName(value['type']),
       title: preview(value['title']),
+      imageURL: value['imageURL'] === undefined ? undefined : parseHTTPS(value['imageURL']),
     };
   });
 }
 
 /** The document types a reference may point at: a few names, at least one. */
 export function parseRemoteTypes(input: unknown): readonly string[] {
-  const types = boundedList(input, CMS_REMOTE_LIMITS.referenceTypesMax).map(
-    parseRemoteCollectionName,
-  );
+  const types = boundedList(input, CMS_REMOTE_LIMITS.referenceTypesMax).map(parseRemoteCollectionName);
   assert(types.length <= CMS_REMOTE_LIMITS.referenceTypesMax, 'Reference types are bounded');
   return types;
 }
@@ -438,10 +472,7 @@ function parseHTTPS(input: unknown): string {
 
 function preview(input: unknown): string {
   const value = text(input);
-  const shown =
-    value.length > CMS_REMOTE_LIMITS.previewCharsMax
-      ? value.slice(0, CMS_REMOTE_LIMITS.previewCharsMax)
-      : value;
+  const shown = value.length > CMS_REMOTE_LIMITS.previewCharsMax ? value.slice(0, CMS_REMOTE_LIMITS.previewCharsMax) : value;
   assert(shown.length <= CMS_REMOTE_LIMITS.previewCharsMax, 'A preview is cut to its bound');
   return shown;
 }

@@ -33,10 +33,7 @@ export function useEditorSelection(
     if (!ready) {
       return;
     }
-    previewSelection(current.current.preview, file, current.current.nodes, focus).select(
-      selected,
-      occurrence,
-    );
+    previewSelection(current.current.preview, file, current.current.nodes, focus).select(selected, occurrence);
   }, [file, selected, occurrence, ready, focus, preview.url, nodes]);
   const select = (id: string, occurrence = 0) => {
     if (!id || !ready || !document?.select(id, page, occurrence)) {

@@ -15,12 +15,7 @@ import {
   type ShapeFitMode,
   type ShapeScaleOptions,
 } from './clipPathTypes';
-import {
-  DEFAULT_SHAPE_SCALE_OPTIONS,
-  SVG_PARSE_CELL_LIMIT,
-  SVG_POINT_EPSILON,
-  NONE_SHAPE,
-} from './clipPathConstants';
+import { DEFAULT_SHAPE_SCALE_OPTIONS, SVG_PARSE_CELL_LIMIT, SVG_POINT_EPSILON, NONE_SHAPE } from './clipPathConstants';
 import { distanceSquared } from './clipPathMeasure';
 import { formatShapeValueFromCssSubpaths, parseClipPathInput } from './shapeFunctionModel';
 import {
@@ -104,23 +99,14 @@ export function applySvgShapeCommand(reader: SvgShapePathReader, cursor: SvgPath
   }
 }
 
-export function svgShapeTo(
-  reader: SvgShapePathReader,
-  x: number,
-  y: number,
-  { relative }: { relative: boolean },
-): Point {
+export function svgShapeTo(reader: SvgShapePathReader, x: number, y: number, { relative }: { relative: boolean }): Point {
   const current = reader.current;
   return relative ? { x: current.x + x, y: current.y + y } : { x, y };
 }
 
 // A move-to ends the subpath being drawn and starts the next; numbers after it are
 // line-tos.
-export function svgShapeMove(
-  reader: SvgShapePathReader,
-  cursor: SvgPathCursor,
-  { relative }: { relative: boolean },
-): boolean {
+export function svgShapeMove(reader: SvgShapePathReader, cursor: SvgPathCursor, { relative }: { relative: boolean }): boolean {
   const numbers = cursor.readNumbers(2);
   if (!numbers) {
     return false;
@@ -157,11 +143,7 @@ export function svgShapeLines(
 
 // Cubic curves (C); a smooth one (S) reflects the previous curve's second control
 // point for its first.
-export function svgShapeCubics(
-  reader: SvgShapePathReader,
-  cursor: SvgPathCursor,
-  { relative, smooth }: { relative: boolean; smooth: boolean },
-): boolean {
+export function svgShapeCubics(reader: SvgShapePathReader, cursor: SvgPathCursor, { relative, smooth }: { relative: boolean; smooth: boolean }): boolean {
   while (cursor.hasNumber()) {
     const numbers = cursor.readNumbers(smooth ? 4 : 6);
     if (!numbers) {
@@ -185,11 +167,7 @@ export function svgShapeCubics(
 }
 
 // Quadratic curves (Q); a smooth one (T) reflects the previous curve's control point.
-export function svgShapeQuadratics(
-  reader: SvgShapePathReader,
-  cursor: SvgPathCursor,
-  { relative, smooth }: { relative: boolean; smooth: boolean },
-): boolean {
+export function svgShapeQuadratics(reader: SvgShapePathReader, cursor: SvgPathCursor, { relative, smooth }: { relative: boolean; smooth: boolean }): boolean {
   while (cursor.hasNumber()) {
     const numbers = cursor.readNumbers(smooth ? 2 : 4);
     if (!numbers) {
@@ -212,11 +190,7 @@ export function svgShapeQuadratics(
 }
 
 // Elliptical arcs, drawn as the cubic curves that approximate them.
-export function svgShapeArcs(
-  reader: SvgShapePathReader,
-  cursor: SvgPathCursor,
-  { relative }: { relative: boolean },
-): boolean {
+export function svgShapeArcs(reader: SvgShapePathReader, cursor: SvgPathCursor, { relative }: { relative: boolean }): boolean {
   while (cursor.hasNumber()) {
     const numbers = cursor.readNumbers(7);
     if (!numbers) {
@@ -224,14 +198,7 @@ export function svgShapeArcs(
     }
     const [rx = 0, ry = 0, rotation = 0, largeArc = 0, sweep = 0, x = 0, y = 0] = numbers;
     const to = svgShapeTo(reader, x, y, { relative });
-    const arcCommands = svgArcToCubicCurves(
-      reader.current,
-      rx,
-      ry,
-      rotation,
-      { largeArc: largeArc !== 0, sweep: sweep !== 0 },
-      to,
-    );
+    const arcCommands = svgArcToCubicCurves(reader.current, rx, ry, rotation, { largeArc: largeArc !== 0, sweep: sweep !== 0 }, to);
     reader.arcTo(arcCommands);
   }
   reader.recordCommand('A');
@@ -241,11 +208,7 @@ export function svgShapeArcs(
 export function isAxisAlignedSvgContour(points: Point[]) {
   return points.every((point, index) => {
     const next = points[(index + 1) % points.length];
-    return (
-      next !== undefined &&
-      (Math.abs(point.x - next.x) < SVG_POINT_EPSILON ||
-        Math.abs(point.y - next.y) < SVG_POINT_EPSILON)
-    );
+    return next !== undefined && (Math.abs(point.x - next.x) < SVG_POINT_EPSILON || Math.abs(point.y - next.y) < SVG_POINT_EPSILON);
   });
 }
 
@@ -260,11 +223,7 @@ export function polygonArea(points: Point[]) {
 
 export function pointInsidePolygon(point: Point, polygon: Point[]) {
   let inside = false;
-  for (
-    let index = 0, previousIndex = polygon.length - 1;
-    index < polygon.length;
-    previousIndex = index, index += 1
-  ) {
+  for (let index = 0, previousIndex = polygon.length - 1; index < polygon.length; previousIndex = index, index += 1) {
     const current = polygon[index];
     const previous = polygon[previousIndex];
     if (!current || !previous) {
@@ -275,8 +234,7 @@ export function pointInsidePolygon(point: Point, polygon: Point[]) {
       continue;
     }
 
-    const x =
-      ((previous.x - current.x) * (point.y - current.y)) / (previous.y - current.y) + current.x;
+    const x = ((previous.x - current.x) * (point.y - current.y)) / (previous.y - current.y) + current.x;
     if (point.x < x) {
       inside = !inside;
     }
@@ -286,9 +244,7 @@ export function pointInsidePolygon(point: Point, polygon: Point[]) {
 }
 
 export function sortedUniqueSvgValues(values: number[]) {
-  return [...new Set(values.map((value) => Math.round(value * 100000) / 100000))].sort(
-    (left, right) => left - right,
-  );
+  return [...new Set(values.map((value) => Math.round(value * 100000) / 100000))].sort((left, right) => left - right);
 }
 
 export function svgGridPointKey(point: Point) {
@@ -495,11 +451,7 @@ export function svgGridCell(xs: number[], ys: number[], xIndex: number, yIndex: 
 
 // The grid cells (by key) whose centres fall inside any of the contours. Undefined
 // when the grid is malformed.
-export function filledSvgGridCells(
-  xs: number[],
-  ys: number[],
-  contours: Point[][],
-): Set<string> | undefined {
+export function filledSvgGridCells(xs: number[], ys: number[], contours: Point[][]): Set<string> | undefined {
   const filled = new Set<string>();
   for (let xIndex = 0; xIndex < xs.length - 1; xIndex += 1) {
     for (let yIndex = 0; yIndex < ys.length - 1; yIndex += 1) {
@@ -518,11 +470,7 @@ export function filledSvgGridCells(
 
 // The outline of the filled cells: every cell side that has no filled neighbour
 // across it, oriented clockwise. Undefined when the grid is malformed.
-export function svgGridBoundaryEdges(
-  xs: number[],
-  ys: number[],
-  filled: Set<string>,
-): SvgBoundaryEdge[] | undefined {
+export function svgGridBoundaryEdges(xs: number[], ys: number[], filled: Set<string>): SvgBoundaryEdge[] | undefined {
   const isFilled = (xIndex: number, yIndex: number) => filled.has(svgGridCellKey(xIndex, yIndex));
   const edges: SvgBoundaryEdge[] = [];
   const addEdge = (fromPoint: Point, toPoint: Point) => {
@@ -605,14 +553,8 @@ export function parseSvgElementShape(element: Element) {
   return undefined;
 }
 
-export function svgShapeFillRule(
-  svg: Element,
-  elements: Element[],
-): ShapeFunctionShape['fillRule'] | undefined {
-  const values = [svg, ...elements].map(
-    (element) =>
-      inheritedSvgAttribute(element, 'fill-rule') || inheritedSvgAttribute(element, 'clip-rule'),
-  );
+export function svgShapeFillRule(svg: Element, elements: Element[]): ShapeFunctionShape['fillRule'] | undefined {
+  const values = [svg, ...elements].map((element) => inheritedSvgAttribute(element, 'fill-rule') || inheritedSvgAttribute(element, 'clip-rule'));
   return values.some((value) => value?.trim().toLowerCase() === 'evenodd') ? 'evenodd' : undefined;
 }
 
@@ -622,10 +564,7 @@ export function normalizeSvgContourToPercent(points: Point[], viewBox: SvgViewBo
     y: ((point.y - viewBox.y) / viewBox.height) * 100,
   }));
 
-  return normalized.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y)) &&
-    normalized.length >= 3
-    ? normalized
-    : undefined;
+  return normalized.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y)) && normalized.length >= 3 ? normalized : undefined;
 }
 
 export function parseSvgDocument(value: string) {
@@ -639,10 +578,7 @@ export function parseSvgDocument(value: string) {
     return undefined;
   }
 
-  const svg =
-    svgTagName(document.documentElement) === 'svg'
-      ? document.documentElement
-      : document.querySelector('svg');
+  const svg = svgTagName(document.documentElement) === 'svg' ? document.documentElement : document.querySelector('svg');
   return svg ? { document, svg } : undefined;
 }
 
@@ -701,9 +637,7 @@ export function parseSvgClipPathOutline(value: string): SvgClipPathOutline | und
   }
 
   const points = normalizeSvgContourToPercent(outline.points, viewBox);
-  const loops = outline.loops
-    .map((loop) => normalizeSvgContourToPercent(loop, viewBox))
-    .filter((loop): loop is Point[] => Boolean(loop?.length));
+  const loops = outline.loops.map((loop) => normalizeSvgContourToPercent(loop, viewBox)).filter((loop): loop is Point[] => Boolean(loop?.length));
   return points && loops.length ? { points, loops } : undefined;
 }
 
@@ -718,9 +652,7 @@ export function parseSvgClipPathShape(
   }
   const { svg } = parsedDocument;
 
-  const supportedElements = Array.from(
-    svg.querySelectorAll('rect, circle, ellipse, polygon, polyline, path'),
-  );
+  const supportedElements = Array.from(svg.querySelectorAll('rect, circle, ellipse, polygon, polyline, path'));
   const unsupportedElements = Array.from(svg.querySelectorAll('image, text, use, line')).filter(
     (element) => !isInsideSkippedSvgElement(element) && isRenderableSvgElement(element),
   );

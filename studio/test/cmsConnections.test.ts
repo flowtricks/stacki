@@ -12,18 +12,8 @@ import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import {
-  CMS_TARGET_HEADER,
-  parseSanityTarget,
-  publicList,
-  withConnection,
-} from '../src/features/cms/cmsConnectionBook';
-import {
-  CmsUnavailable,
-  cmsForwarded,
-  sealCmsSecret,
-  type Vault,
-} from '../src/features/cms/cmsConnectionVault';
+import { CMS_TARGET_HEADER, parseSanityTarget, publicList, withConnection } from '../src/features/cms/cmsConnectionBook';
+import { CmsUnavailable, cmsForwarded, sealCmsSecret, type Vault } from '../src/features/cms/cmsConnectionVault';
 import { cmsRemoteRoutes } from '../src/features/cms/cmsRemoteServer';
 
 const DRAFT = {
@@ -49,11 +39,7 @@ test('one connection per target, never more than the limit, and no key in the li
   );
   assert.equal(second.length, 1, 'the same project and dataset replaces the old one');
   assert.equal(second[0]?.connection.label, 'Again');
-  assert.equal(
-    JSON.stringify(publicList(second)).includes('sealed-key'),
-    false,
-    'keys never listed',
-  );
+  assert.equal(JSON.stringify(publicList(second)).includes('sealed-key'), false, 'keys never listed');
   assert.throws(() => parseSanityTarget({ projectId: 'ABC!', dataset: 'x', token: 't' }));
 });
 
@@ -77,10 +63,7 @@ test('the Worker removes a client target and adds its own, decrypted, for CMS ca
   const id = '00000000-0000-4000-8000-000000000003';
   const sealed = await sealCmsSecret(environment, DRAFT.secret);
   assert.equal(sealed.includes(DRAFT.secret), false, 'the stored key is ciphertext');
-  environment.objects.set(
-    'cms/connections.json',
-    JSON.stringify(withConnection([], DRAFT, { id, secret: sealed })),
-  );
+  environment.objects.set('cms/connections.json', JSON.stringify(withConnection([], DRAFT, { id, secret: sealed })));
   const forged = { [CMS_TARGET_HEADER]: '{"projectId":"evil","dataset":"x","token":"t"}' };
   const page = new Request('https://studio.test/studio/api/pages', { headers: forged });
   const plain = await cmsForwarded(page, new URL(page.url), environment);
@@ -94,10 +77,7 @@ test('the Worker removes a client target and adds its own, decrypted, for CMS ca
   const target = parseSanityTarget(JSON.parse(forwarded.headers.get(CMS_TARGET_HEADER) ?? '{}'));
   assert.deepEqual(target, { projectId: 'abc123', dataset: 'production', token: 'sk-editor' });
   const rotated = fakeVault('another-secret');
-  rotated.objects.set(
-    'cms/connections.json',
-    environment.objects.get('cms/connections.json') ?? '',
-  );
+  rotated.objects.set('cms/connections.json', environment.objects.get('cms/connections.json') ?? '');
   const again = new Request(call.url, {
     method: 'POST',
     headers: { 'x-stacki-cms-connection': id },
@@ -151,9 +131,7 @@ test('a local Studio keeps its connections privately and uses them for CMS calls
   };
   try {
     const post = (url: string, body: object, headers: Record<string, string> = {}) =>
-      fetch(base + url, { method: 'POST', body: JSON.stringify(body), headers }).then(
-        (response) => response.json() as Promise<Record<string, unknown>>,
-      );
+      fetch(base + url, { method: 'POST', body: JSON.stringify(body), headers }).then((response) => response.json() as Promise<Record<string, unknown>>);
     const saved = await post('/studio/api/cms-connections/save', { draft: DRAFT });
     assert.equal(saved['ok'], true);
     assert.equal(JSON.stringify(saved).includes(DRAFT.secret), false, 'the key is not returned');

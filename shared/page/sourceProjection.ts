@@ -14,16 +14,7 @@ import type { Capability } from './capability';
 import { LIMITS } from '../core/limits';
 import type { Attr, AttrSpan, PageModel, PageNode, ParsePageResult } from './pageNode';
 import { toChildIndex, type NodeKind, type StructuralPath } from './ref';
-import {
-  encodeUtf8,
-  spanContains,
-  spansAscending,
-  toByteSpan,
-  utf16ToByteOffsets,
-  utf8ByteLength,
-  type ByteSpan,
-  type Utf16Span,
-} from '../core/span';
+import { encodeUtf8, spanContains, spansAscending, toByteSpan, utf16ToByteOffsets, utf8ByteLength, type ByteSpan, type Utf16Span } from '../core/span';
 
 export interface ProjectedAttribute {
   readonly name: string;
@@ -175,17 +166,10 @@ type SpanConverter = (span: Utf16Span) => ByteSpan;
 // Iterative preorder walk: the depth bound is the tree's, not the call stack's.
 // `markdown` is the page's text when it is a Markdown page: its root nodes are
 // blocks, and what a node's children are depends on how the node is written.
-function collectNodes(
-  roots: readonly PageNode[],
-  markdown: string | undefined,
-): readonly PendingNode[] {
+function collectNodes(roots: readonly PageNode[], markdown: string | undefined): readonly PendingNode[] {
   const out: PendingNode[] = [];
   const stack: Omit<PendingNode, 'span'>[] = [];
-  const pushChildren = (
-    children: readonly PageNode[],
-    parent: Pick<PendingNode, 'path' | 'repeated'>,
-    list: NodeList,
-  ) => {
+  const pushChildren = (children: readonly PageNode[], parent: Pick<PendingNode, 'path' | 'repeated'>, list: NodeList) => {
     for (let index = children.length - 1; index >= 0; index--) {
       const child = children[index];
       assert(child !== undefined, 'Child index lies inside its list');
@@ -300,11 +284,7 @@ function frontmatterSpan(text: string, model: PageModel): Utf16Span | undefined 
 // collected in a typed array and sorted natively: a Set, a spread and a
 // comparator sort over a few hundred thousand offsets cost more than the
 // conversion itself. Lookups are a binary search over the unique offsets.
-function spanConverter(
-  text: string,
-  pending: readonly PendingNode[],
-  frontmatter: Utf16Span | undefined,
-): SpanConverter {
+function spanConverter(text: string, pending: readonly PendingNode[], frontmatter: Utf16Span | undefined): SpanConverter {
   const collected: number[] = [];
   const add = (span: Utf16Span): void => {
     collected.push(span.start, span.end);
@@ -418,19 +398,14 @@ function projectNode(entry: PendingNode, convert: SpanConverter): ProjectedNode 
     capability,
     syntax: entry.syntax,
     list: entry.list,
-    ...(entry.node.kind === 'map' && entry.node.bodyParts !== undefined
-      ? { callback: true as const }
-      : {}),
+    ...(entry.node.kind === 'map' && entry.node.bodyParts !== undefined ? { callback: true as const } : {}),
   };
 }
 
 /** Plan §6: native elements, component invocations, text, comments, a page's
  * own `<style>` and the structural nodes are visually editable; opaque code is
  * not; anything inside a loop body is one source node rendered many times. */
-export function classifyNode(
-  node: PageNode,
-  placement: { readonly repeated: boolean },
-): Capability {
+export function classifyNode(node: PageNode, placement: { readonly repeated: boolean }): Capability {
   if (placement.repeated) {
     return 'repeated-source-node';
   }
@@ -484,7 +459,5 @@ function classifyAttribute(attribute: AttrSpan, node: Capability): Capability {
 }
 
 function clip(message: string): string {
-  return message.length <= LIMITS.diagnosticCharsMax
-    ? message
-    : message.slice(0, LIMITS.diagnosticCharsMax);
+  return message.length <= LIMITS.diagnosticCharsMax ? message : message.slice(0, LIMITS.diagnosticCharsMax);
 }

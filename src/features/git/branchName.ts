@@ -43,10 +43,7 @@ export function sanitizeBranchName(text: unknown): string {
  *
  * `existing` is the branches the project already has.
  */
-export function branchNameError(
-  name: unknown,
-  existing: readonly string[] = [],
-): string | undefined {
+export function branchNameError(name: unknown, existing: readonly string[] = []): string | undefined {
   const trimmed = String(name ?? '').trim();
   if (!trimmed) {
     return undefined;

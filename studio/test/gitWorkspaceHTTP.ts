@@ -2,21 +2,13 @@
 // Method: bind an ephemeral loopback listener backed by a disposable local origin.
 import { createServer } from 'node:http';
 import { gitWorkspaceRoutes } from '../src/features/history/gitWorkspaceRoutes';
-import {
-  withGitWorkspaceLease,
-  isGitWorkspaceRead,
-} from '../src/features/history/gitWorkspaceLease';
+import { withGitWorkspaceLease, isGitWorkspaceRead } from '../src/features/history/gitWorkspaceLease';
 import { createRooms } from '../src/features/collaboration/rooms';
 import type { PublishConnection } from '../src/shared/publishConnection';
 
 export async function startGitWorkspaceHTTP(root: string, connection: PublishConnection) {
   const rooms = createRooms(root);
-  const route = gitWorkspaceRoutes(
-    root,
-    { historyConnection: async () => ({ ok: true, value: connection }) },
-    rooms,
-    () => false,
-  );
+  const route = gitWorkspaceRoutes(root, { historyConnection: async () => ({ ok: true, value: connection }) }, rooms, () => false);
   const server = createServer((request, response) => {
     void (async () => {
       let body = '';
@@ -27,27 +19,15 @@ export async function startGitWorkspaceHTTP(root: string, connection: PublishCon
         body += chunk.toString('utf8');
       }
       const expected = request.headers['x-studio-workspace'];
-      const work = () =>
-        route(
-          request,
-          response,
-          new URL(request.url ?? '/', 'http://local').pathname,
-          async () => body,
-        );
+      const work = () => route(request, response, new URL(request.url ?? '/', 'http://local').pathname, async () => body);
       if (isGitWorkspaceRead(new URL(request.url ?? '/', 'http://local').pathname)) {
         await work();
       } else {
-        await withGitWorkspaceLease(
-          root,
-          typeof expected === 'string' ? expected : undefined,
-          work,
-        );
+        await withGitWorkspaceLease(root, typeof expected === 'string' ? expected : undefined, work);
       }
     })().catch((error: unknown) => {
       response.writeHead(409, { 'Content-Type': 'application/json' });
-      response.end(
-        JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
-      );
+      response.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
     });
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -62,9 +42,7 @@ export async function startGitWorkspaceHTTP(root: string, connection: PublishCon
     async stop() {
       await rooms.resetWorkspace();
       rooms.sockets.close();
-      await new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
-      );
+      await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     },
   };
 }

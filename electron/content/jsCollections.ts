@@ -83,8 +83,7 @@ function skipQuoted(source: string, start: number, depth = 0): number {
 // What can only be the start of the next statement, never a continuation of
 // this one — so an expression written across lines without semicolons still
 // ends where it should.
-const NEXT_STATEMENT =
-  /^(?:(?:export|import|const|let|var|function|class|return|if|for|while|switch|try)\b|\}|---)/;
+const NEXT_STATEMENT = /^(?:(?:export|import|const|let|var|function|class|return|if|for|while|switch|try)\b|\}|---)/;
 
 /**
  * End of the expression starting at `i`: its `;`, or the line break that ends
@@ -231,9 +230,7 @@ function parseValue(source: string, start: number, depth = 0): Parsed {
   if (word !== undefined) {
     return word;
   }
-  const numberMatch = /^-?(?:0[xX][\da-fA-F]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?|\.\d+)/.exec(
-    source.slice(i),
-  );
+  const numberMatch = /^-?(?:0[xX][\da-fA-F]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?|\.\d+)/.exec(source.slice(i));
   if (numberMatch) {
     return { value: Number(numberMatch[0].replace(/_/g, '')), next: i + numberMatch[0].length };
   }
@@ -355,11 +352,7 @@ interface ScanOptions {
 }
 
 const declRe = (tail: string, { requireExport }: { readonly requireExport: boolean }): RegExp =>
-  new RegExp(
-    `${requireExport ? 'export\\s+' : '(?:^|[\\n;{])[ \\t]*(?:export\\s+)?'}` +
-      `const\\s+([A-Za-z_$][\\w$]*)\\s*(?::[^=]+)?=\\s*${tail}`,
-    'g',
-  );
+  new RegExp(`${requireExport ? 'export\\s+' : '(?:^|[\\n;{])[ \\t]*(?:export\\s+)?'}` + `const\\s+([A-Za-z_$][\\w$]*)\\s*(?::[^=]+)?=\\s*${tail}`, 'g');
 
 export interface Collection {
   readonly name: string;
@@ -407,11 +400,8 @@ function findCollections(source: string, options: ScanOptions = {}): Collection[
     const list: unknown[] = value;
     // A collection is a list of records; an array of bare strings is a
     // setting in a data file (General's list field), but content in a page.
-    const isRecords =
-      list.length > 0 &&
-      list.every((item) => item !== null && typeof item === 'object' && !Array.isArray(item));
-    const isPlainList =
-      allowPlainLists && list.every((item) => item === null || typeof item !== 'object');
+    const isRecords = list.length > 0 && list.every((item) => item !== null && typeof item === 'object' && !Array.isArray(item));
+    const isPlainList = allowPlainLists && list.every((item) => item === null || typeof item !== 'object');
     if (!isRecords && !isPlainList) {
       continue;
     }
@@ -430,8 +420,7 @@ function findCollections(source: string, options: ScanOptions = {}): Collection[
 // ReferenceError instead of answering it, and the save failed.
 const WIDTH = 80;
 
-const quote = (value: unknown): string =>
-  `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
+const quote = (value: unknown): string => `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
 
 // The source text for `value`. It came from the renderer, so its nesting is
 // checked here rather than trusted: past the bound the write fails.
@@ -473,8 +462,7 @@ function literal(value: unknown, indent: string, pad: string, depth = 0): string
   if (!entries.length) {
     return '{}';
   }
-  const pair = ([name, value]: [string, unknown]): string =>
-    `${ID_KEY.test(name) ? name : quote(name)}: ${literal(value, indent, pad + indent, depth + 1)}`;
+  const pair = ([name, value]: [string, unknown]): string => `${ID_KEY.test(name) ? name : quote(name)}: ${literal(value, indent, pad + indent, depth + 1)}`;
   // Keep short records on one line — that's how these files are written by
   // hand, and expanding every one would churn the whole file on first save.
   // WIDTH matches Prettier's default so re-saving a formatted file is a no-op;
@@ -525,12 +513,7 @@ function indentOf(text: string, fallback: string): string {
 }
 
 /** Replace one collection's array in `source`, leaving everything else alone. */
-function replaceCollection(
-  source: string,
-  name: string,
-  data: readonly unknown[],
-  options?: ScanOptions,
-): string | undefined {
+function replaceCollection(source: string, name: string, data: readonly unknown[], options?: ScanOptions): string | undefined {
   const found = findCollections(source, options).find((collection) => collection.name === name);
   if (!found || found.data === undefined) {
     return undefined;
@@ -621,14 +604,8 @@ function readGeneral(source: string, options?: ScanOptions): Record<string, unkn
  * rewritten, and each is replaced in place — so an untouched export keeps its
  * exact formatting, including a string the file wrapped onto its own line.
  */
-function writeGeneral(
-  source: string,
-  data: Record<string, unknown>,
-  options?: ScanOptions,
-): string {
-  const found = findScalarExports(source, options).filter((scalar) =>
-    Object.prototype.hasOwnProperty.call(data, scalar.name),
-  );
+function writeGeneral(source: string, data: Record<string, unknown>, options?: ScanOptions): string {
+  const found = findScalarExports(source, options).filter((scalar) => Object.prototype.hasOwnProperty.call(data, scalar.name));
   let out = source;
   // Back to front, so each replacement can't shift the spans still to come.
   for (const scalar of [...found].reverse()) {
@@ -650,14 +627,4 @@ function writeGeneral(
   return out;
 }
 
-export {
-  EXPR,
-  isExpr,
-  findCollections,
-  replaceCollection,
-  serializeCollection,
-  findScalarExports,
-  readGeneral,
-  writeGeneral,
-  GENERAL,
-};
+export { EXPR, isExpr, findCollections, replaceCollection, serializeCollection, findScalarExports, readGeneral, writeGeneral, GENERAL };

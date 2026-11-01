@@ -60,9 +60,7 @@ function slotApiUses(source: string): { slot: string; varName: string | undefine
     }
     // `const content = await slotContent(...)` — the name that now holds it,
     // which is what the template puts back with `set:html`.
-    const decl = text
-      .slice(0, match.index)
-      .match(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?[^;\n]*$/);
+    const decl = text.slice(0, match.index).match(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?[^;\n]*$/);
     uses.push({
       slot: name || 'default',
       varName: decl ? required(decl[1], 'Slot variable capture') : undefined,
@@ -118,9 +116,7 @@ export function parseSlots(source: string): string[] {
   const re = /<slot\b((?:[^>"'{]|"[^"]*"|'[^']*'|\{[^}]*\})*?)\/?>/g;
   let match;
   while ((match = re.exec(body)) !== null) {
-    const nameMatch = required(match[1], 'Slot attributes capture').match(
-      /\bname\s*=\s*(?:"([^"]*)"|'([^']*)')/,
-    );
+    const nameMatch = required(match[1], 'Slot attributes capture').match(/\bname\s*=\s*(?:"([^"]*)"|'([^']*)')/);
     found.add(nameMatch ? required(nameMatch[1] ?? nameMatch[2], 'Slot name capture') : 'default');
   }
   for (const use of slotApiUses(source)) {
@@ -181,9 +177,9 @@ function dynamicTagLiterals(frontmatter: string, name: string): string[] {
   if (!decl) {
     return [];
   }
-  const literals = [
-    ...required(decl[1], 'Dynamic tag expression capture').matchAll(/["'`]([A-Za-z][\w-]*)["'`]/g),
-  ].map((match) => required(match[1], 'Tag literal capture'));
+  const literals = [...required(decl[1], 'Dynamic tag expression capture').matchAll(/["'`]([A-Za-z][\w-]*)["'`]/g)].map((match) =>
+    required(match[1], 'Tag literal capture'),
+  );
   if (literals.length) {
     return literals;
   }
@@ -194,26 +190,15 @@ function dynamicTagLiterals(frontmatter: string, name: string): string[] {
     return [];
   }
   // `const Tag = tag` — the default sits in the destructure or its own const.
-  const viaDefault = frontmatter.match(
-    new RegExp(`\\b${ident[1]}\\s*=\\s*["'\`]([A-Za-z][\\w-]*)["'\`]`),
-  );
+  const viaDefault = frontmatter.match(new RegExp(`\\b${ident[1]}\\s*=\\s*["'\`]([A-Za-z][\\w-]*)["'\`]`));
   return viaDefault ? [required(viaDefault[1], 'Dynamic tag default capture')] : [];
 }
 
 // Lumos also declares dynamic tags directly in Astro.props: `tag: Tag = "h2"`.
-function destructuredTag(
-  frontmatter: string,
-  name: string,
-): { prop: string; tag: string } | undefined {
-  const declarations = frontmatter.matchAll(
-    /\b(?:const|let|var)\s*\{([^{}]*)\}\s*=\s*Astro\.props\b/g,
-  );
+function destructuredTag(frontmatter: string, name: string): { prop: string; tag: string } | undefined {
+  const declarations = frontmatter.matchAll(/\b(?:const|let|var)\s*\{([^{}]*)\}\s*=\s*Astro\.props\b/g);
   for (const declaration of declarations) {
-    const match = declaration[1]?.match(
-      new RegExp(
-        `(?:^|,)\\s*([A-Za-z_$][\\w$]*)\\s*:\\s*${name}\\s*=\\s*["']([A-Za-z][\\w-]*)["']`,
-      ),
-    );
+    const match = declaration[1]?.match(new RegExp(`(?:^|,)\\s*([A-Za-z_$][\\w$]*)\\s*:\\s*${name}\\s*=\\s*["']([A-Za-z][\\w-]*)["']`));
     if (match?.[1] && match[2]) {
       return { prop: match[1], tag: match[2].toLowerCase() };
     }
@@ -252,9 +237,7 @@ export function rootTag(source: string): RenderTag | undefined {
     if (alias) {
       return alias;
     }
-    const decl = frontmatter.match(
-      new RegExp(`\\b(?:const|let|var)\\s+${name}\\s*=\\s*([^;\\n]+)`),
-    );
+    const decl = frontmatter.match(new RegExp(`\\b(?:const|let|var)\\s+${name}\\s*=\\s*([^;\\n]+)`));
     if (!decl) {
       return undefined;
     }
@@ -264,18 +247,12 @@ export function rootTag(source: string): RenderTag | undefined {
     const ident = expr.match(/^([A-Za-z_$][\w$]*)$/);
     if (ident) {
       const prop = required(ident[1], 'Dynamic tag prop capture');
-      const dflt = frontmatter.match(
-        new RegExp(`\\b${prop}\\s*=\\s*["'\`]([A-Za-z][\\w-]*)["'\`]`),
-      );
-      return dflt
-        ? { prop, tag: required(dflt[1], 'Root tag default capture').toLowerCase() }
-        : { prop };
+      const dflt = frontmatter.match(new RegExp(`\\b${prop}\\s*=\\s*["'\`]([A-Za-z][\\w-]*)["'\`]`));
+      return dflt ? { prop, tag: required(dflt[1], 'Root tag default capture').toLowerCase() } : { prop };
     }
     // `const Tag = isLink ? "a" : "button"` — it's one of these, and which
     // one depends on values only the page knows.
-    const lits = [...expr.matchAll(/["'`]([A-Za-z][\w-]*)["'`]/g)].map((x) =>
-      required(x[1], 'Root tag literal capture').toLowerCase(),
-    );
+    const lits = [...expr.matchAll(/["'`]([A-Za-z][\w-]*)["'`]/g)].map((x) => required(x[1], 'Root tag literal capture').toLowerCase());
     if (lits.length === 1) {
       return { tag: required(lits[0], 'Root has exactly one literal tag') };
     }
@@ -316,8 +293,7 @@ export function defaultSlotInline(source: string): boolean {
     const isSlot = tag.toLowerCase() === 'slot' && !closing && !/\bname\s*=/.test(attrs);
     // A <Fragment> renders nothing of its own, so what wraps the content is
     // the tag above it. Anything else IS the wrapper.
-    const placeholder =
-      isSlot || (html && heldBy.has(required(html[1], 'Slot content variable capture')));
+    const placeholder = isSlot || (html && heldBy.has(required(html[1], 'Slot content variable capture')));
     if (placeholder) {
       const parent = isSlot || tag === 'Fragment' ? stack[stack.length - 1] : tag;
       if (!parent) {
@@ -349,12 +325,6 @@ export function defaultSlotInline(source: string): boolean {
 export function parseExtendsTag(source: string): string | undefined {
   const fm = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   const frontmatter = fm ? required(fm[1], 'Frontmatter capture') : '';
-  const match = frontmatter.match(
-    new RegExp(
-      'interface\\s+Props\\s+extends\\s+(?:astroHTML\\.JSX\\' +
-        '.)?HTMLAttributes\\s*<\\s*[\'"](\\w+)[\'"]\\s*>',
-      '',
-    ),
-  );
+  const match = frontmatter.match(new RegExp('interface\\s+Props\\s+extends\\s+(?:astroHTML\\.JSX\\' + '.)?HTMLAttributes\\s*<\\s*[\'"](\\w+)[\'"]\\s*>', ''));
   return match ? required(match[1], 'Extended HTML tag capture') : undefined;
 }

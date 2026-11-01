@@ -182,11 +182,7 @@ export function canvasTextFolded(text: string, offset: number): number {
  * start, at the next shown character; for an end, right after the last one.
  * Undefined when the text shows fewer characters than that.
  */
-export function canvasTextUnfolded(
-  text: string,
-  folded: number,
-  edge: 'start' | 'end',
-): number | undefined {
+export function canvasTextUnfolded(text: string, folded: number, edge: 'start' | 'end'): number | undefined {
   if (!Number.isSafeInteger(folded) || folded < 0) {
     throw new Error('Canvas text position must be a non-negative integer');
   }

@@ -1,9 +1,6 @@
 import { useErrorToasts } from '../../../vendor/stacki/src/ui/errorNotices';
 import { useCallback } from 'react';
-import {
-  useToastStack,
-  type ToastNotice,
-} from '../../../vendor/stacki/src/features/notifications/useToastStack';
+import { useToastStack, type ToastNotice } from '../../../vendor/stacki/src/features/notifications/useToastStack';
 import { ActionableNotice, type NoticeDetails } from './notice';
 
 export type StudioNotice = ToastNotice & NoticeDetails;
@@ -18,8 +15,7 @@ export function useNotifications() {
         push({
           id: crypto.randomUUID(),
           message,
-          kind:
-            problem instanceof Error && !(problem instanceof ActionableNotice) ? 'error' : 'info',
+          kind: problem instanceof Error && !(problem instanceof ActionableNotice) ? 'error' : 'info',
           ...(problem instanceof ActionableNotice ? problem.details : {}),
         });
       }

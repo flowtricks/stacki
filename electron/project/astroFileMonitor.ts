@@ -1,18 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  ASTRO_FILES_MAX,
-  diffAstroFiles,
-  type AstroFileChange,
-} from '../../shared/properties/astroFileChanges';
+import { ASTRO_FILES_MAX, diffAstroFiles, type AstroFileChange } from '../../shared/properties/astroFileChanges';
 import type { Result } from '../../shared/core/result';
 
 // A settled inventory distinguishes creation/deletion from an editor's atomic replacement.
 // Initial contents establish a silent baseline; unreadable scans never imply mass deletion.
-export function createAstroFileMonitor(
-  root: string,
-  report: (changes: readonly AstroFileChange[]) => void,
-) {
+export function createAstroFileMonitor(root: string, report: (changes: readonly AstroFileChange[]) => void) {
   const initial = readAstroFiles(root);
   let previous = initial.ok ? initial.value : undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;

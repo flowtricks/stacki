@@ -10,9 +10,7 @@ const { JSDOM } = require('jsdom');
 const load = require('../../helpers/rendererModule');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
 const { parseMergeResult, parseConflictPart } = load('src/features/git/gitBridge.ts');
-const { initialConflictPicks, choicesForSend, conflictHunks } = load(
-  'src/features/git/gitConflictModel.ts',
-);
+const { initialConflictPicks, choicesForSend, conflictHunks } = load('src/features/git/gitConflictModel.ts');
 const { parseConflict } = require('#dist/electron/git/conflicts.js');
 const { repoPath } = require('../../helpers/sources.js');
 
@@ -46,33 +44,17 @@ test('real conflict output survives the renderer parser and preserves each choic
 });
 
 test('merge contracts reject unknown parts and bound total files plus parts', () => {
-  for (const part of [
-    jsonNull,
-    {},
-    { kind: 'same', text: 1 },
-    { ...clash, changedBy: 'someone' },
-    { ...clash, ours: jsonNull },
-    { ...clash, merged: false },
-  ]) {
+  for (const part of [jsonNull, {}, { kind: 'same', text: 1 }, { ...clash, changedBy: 'someone' }, { ...clash, ours: jsonNull }, { ...clash, merged: false }]) {
     assert.throws(() => parseConflictPart(part));
   }
   assert.throws(() => parseMergeResult(conflict([])), /at least one conflict/);
   assert.throws(() => parseMergeResult(conflict([file([{ kind: 'unknown' }])])));
   assert.throws(() => parseMergeResult(conflict([file(Array(100001).fill(clash))])), /limit/);
   assert.throws(
-    () =>
-      parseMergeResult(
-        conflict([
-          file(Array(50000).fill(clash)),
-          { ...file(Array(50000).fill(clash)), path: 'b.astro' },
-        ]),
-      ),
+    () => parseMergeResult(conflict([file(Array(50000).fill(clash)), { ...file(Array(50000).fill(clash)), path: 'b.astro' }])),
     /item limit exceeded/,
   );
-  assert.throws(
-    () => parseConflictPart({ kind: 'same', text: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) }),
-    /String exceeds limit/,
-  );
+  assert.throws(() => parseConflictPart({ kind: 'same', text: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) }), /String exceeds limit/);
   assert.throws(() => initialConflictPicks(conflict([])), /at least one file/);
   assert.throws(() => conflictHunks(Array(100001).fill(clash)), /part limit exceeded/);
 });
@@ -116,10 +98,7 @@ test('merge dialog sends exact selected choices and locks binary choices while b
   const { createRoot } = require('react-dom/client');
   const { default: Modal, EditorView, undo, redo } = require(output);
   const root = createRoot(document.getElementById('root'));
-  const value = conflict([
-    file([clash, { ...clash, merged: 'combined' }]),
-    { ...file(undefined), path: 'image.png' },
-  ]);
+  const value = conflict([file([clash, { ...clash, merged: 'combined' }]), { ...file(undefined), path: 'image.png' }]);
   const resolutions = [];
   let cancellations = 0;
   const show = (busy) =>
@@ -134,8 +113,7 @@ test('merge dialog sends exact selected choices and locks binary choices while b
       ),
     );
   const click = (element) => act(async () => element.click());
-  const button = (selector, label) =>
-    [...document.querySelectorAll(selector)].find((entry) => entry.textContent.trim() === label);
+  const button = (selector, label) => [...document.querySelectorAll(selector)].find((entry) => entry.textContent.trim() === label);
   try {
     await show();
     assert.equal(document.querySelectorAll('.merge-result-editor .cm-editor').length, 1);
@@ -159,9 +137,7 @@ test('merge dialog sends exact selected choices and locks binary choices while b
 
     await click(button('.merge-change-options button', 'Keep both blocks'));
     assert.equal(view.state.doc.toString(), 'ours\ntheirs\ncombined');
-    await act(async () =>
-      view.dispatch({ changes: { from: view.state.doc.length, insert: '\n<!-- Override -->' } }),
-    );
+    await act(async () => view.dispatch({ changes: { from: view.state.doc.length, insert: '\n<!-- Override -->' } }));
     assert.match(view.state.doc.toString(), /Override/);
     await act(async () => undo(view));
     assert.equal(view.state.doc.toString(), 'ours\ntheirs\ncombined');
@@ -174,18 +150,14 @@ test('merge dialog sends exact selected choices and locks binary choices while b
     assert.equal(resolutions[0]['a.astro'].text, 'ours\ntheirs\ncombined\n<!-- Override -->');
     assert.equal(resolutions[0]['image.png'], 'theirs');
     await click(document.querySelector('[title="a.astro"]'));
-    const restored = EditorView.findFromDOM(
-      document.querySelector('.merge-result-editor .cm-editor'),
-    );
+    const restored = EditorView.findFromDOM(document.querySelector('.merge-result-editor .cm-editor'));
     assert.match(restored.state.doc.toString(), /Override/);
     await show('Merging…');
     const beforeBusy = restored.state.doc.toString();
     await act(async () => restored.dispatch({ changes: { from: 0, insert: 'Blocked' } }));
     assert.equal(restored.state.doc.toString(), beforeBusy);
     await click(document.querySelector('[title="image.png"]'));
-    assert.ok(
-      [...document.querySelectorAll('.conflict-whole button')].every((entry) => entry.disabled),
-    );
+    assert.ok([...document.querySelectorAll('.conflict-whole button')].every((entry) => entry.disabled));
     await act(async () => {
       const dialog = document.querySelector('dialog.popup-dialog');
       dialog.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true }));

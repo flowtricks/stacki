@@ -57,10 +57,7 @@ export function AutoSection({ title, prop, axis, setProp, labels }: TrackSection
               className="embed-editor_grid-track-main"
               onClick={(event) => {
                 setOpen((wasOpen) => !wasOpen);
-                setAnchorElement(
-                  event.currentTarget.closest<HTMLElement>('.embed-editor_grid-track-list') ??
-                    event.currentTarget,
-                );
+                setAnchorElement(event.currentTarget.closest<HTMLElement>('.embed-editor_grid-track-list') ?? event.currentTarget);
               }}
               disabled={busy}
             >
@@ -73,14 +70,7 @@ export function AutoSection({ title, prop, axis, setProp, labels }: TrackSection
         </div>
       </div>
       {open && anchorElement ? (
-        <AutoTrackPopover
-          anchorElement={anchorElement}
-          track={current}
-          axis={axis}
-          busy={busy}
-          onChange={setSize}
-          onClose={() => setOpen(false)}
-        />
+        <AutoTrackPopover anchorElement={anchorElement} track={current} axis={axis} busy={busy} onChange={setSize} onClose={() => setOpen(false)} />
       ) : undefined}
     </section>
   );
@@ -102,10 +92,7 @@ export function AutoTrackPopover({
   onChange: (size: TrackSize) => void;
   onClose: () => void;
 }) {
-  const note =
-    axis === 'column'
-      ? 'Define the sizing for all automatically created columns.'
-      : 'Define the sizing for all automatically created rows.';
+  const note = axis === 'column' ? 'Define the sizing for all automatically created columns.' : 'Define the sizing for all automatically created rows.';
   return (
     <TrackPopover anchorElement={anchorElement} onClose={onClose}>
       <TrackSizeEditor track={track} busy={busy} onChange={onChange} />
@@ -129,12 +116,7 @@ export function Modal({ onClose, children }: { onClose: () => void; children: Re
         <>
           <div className="embed-editor_grid-modal-head">
             <span className="embed-editor_grid-modal-title">Grid settings</span>
-            <button
-              type="button"
-              className="embed-editor_bg-modal-close"
-              onClick={close}
-              aria-label="Close"
-            >
+            <button type="button" className="embed-editor_bg-modal-close" onClick={close} aria-label="Close">
               <CloseIcon />
             </button>
           </div>

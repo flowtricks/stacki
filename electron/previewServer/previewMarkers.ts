@@ -35,10 +35,7 @@ export interface MarkedSource {
 /** The marked copy of `file`, or undefined when it is not a project .astro file the
  * parser can mark — Vite then loads it unchanged, with no markers and no stamp,
  * and nothing on the canvas can address a node inside it. */
-export function markSourceFile(
-  file: string,
-  projectDirectories: readonly string[],
-): MarkedSource | undefined {
+export function markSourceFile(file: string, projectDirectories: readonly string[]): MarkedSource | undefined {
   if (!file.endsWith('.astro')) {
     return undefined;
   }
@@ -64,16 +61,11 @@ export function markSourceFile(
   }
   resolveChunks(parsed.model, file);
   const relativePath = projectFile.relative;
-  assert(
-    stampPathProblem(relativePath) === undefined,
-    'A file under src has a project-relative path',
-  );
+  assert(stampPathProblem(relativePath) === undefined, 'A file under src has a project-relative path');
   const page = relativePath.startsWith('src/pages/') || isDefaultsCanvas(relativePath);
   const checksum = toDigest(createHash('sha256').update(bytes).digest('hex'));
   const stamp: PreviewStamp = { file: relativePath, checksum };
-  const marked = page
-    ? serializePageMarked(parsed.model, '', stamp)
-    : serializePageMarked(parsed.model, `${relativePath}|`, stamp);
+  const marked = page ? serializePageMarked(parsed.model, '', stamp) : serializePageMarked(parsed.model, `${relativePath}|`, stamp);
   assert(marked.endsWith('\n'), 'The marked serializer ends on a line of its own');
   // Last, at the top level of the file's template, where the compiler keeps a
   // plain comment: after `</html>` for a page, which leaves the doctype alone.
@@ -83,11 +75,7 @@ export function markSourceFile(
 /** The marked copy of a chunk imported as `?raw` (see serializePageMarked's
  * chunk marks), or undefined when it cannot be marked. A `group` chunk also
  * gets a marker pair of its own, since nothing in the page wraps it. */
-export function markChunkFile(
-  file: string,
-  prefix: string,
-  { group }: { readonly group: boolean },
-): string | undefined {
+export function markChunkFile(file: string, prefix: string, { group }: { readonly group: boolean }): string | undefined {
   const bytes = readFileSync(file);
   if (LIMITS.sourceBytesMax < bytes.length) {
     return undefined;

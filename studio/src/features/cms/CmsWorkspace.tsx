@@ -29,18 +29,12 @@ export function CmsNavigation({ props }: { readonly props: EditorProps }) {
         selectedRel={cms?.kind === 'data' ? cms.rel : undefined}
         selectedContent={cms?.kind === 'content' ? cms.name : undefined}
         selectedRemote={cms?.kind === 'remote' ? cms.selection : undefined}
-        onSelectRemote={(selection) =>
-          setCms(selection === undefined ? undefined : { kind: 'remote', selection })
-        }
+        onSelectRemote={(selection) => setCms(selection === undefined ? undefined : { kind: 'remote', selection })}
         onConnect={() => setConnecting(true)}
         currentFile={props.file.replace(/^src\//, '')}
         refreshKey={`${props.project.pages.length}:${connectionsRevision}`}
-        onSelect={(rel) =>
-          setCms(rel === undefined ? undefined : { kind: 'data', rel, settings: false })
-        }
-        onSelectContent={(name) =>
-          setCms(name === undefined ? undefined : { kind: 'content', name })
-        }
+        onSelect={(rel) => setCms(rel === undefined ? undefined : { kind: 'data', rel, settings: false })}
+        onSelectContent={(name) => setCms(name === undefined ? undefined : { kind: 'content', name })}
         onOpenSettings={(rel) => setCms({ kind: 'data', rel, settings: true })}
         showToast={props.report}
       />
@@ -55,13 +49,7 @@ export function CmsNavigation({ props }: { readonly props: EditorProps }) {
     </>
   );
 }
-export function CmsWorkspace({
-  props,
-  document,
-}: {
-  readonly props: EditorProps;
-  readonly document: SharedDocument | undefined;
-}) {
+export function CmsWorkspace({ props, document }: { readonly props: EditorProps; readonly document: SharedDocument | undefined }) {
   const { cms, setCms, panel, setPanel } = props.view;
   const record = useCallback(
     (command: CmsUndo) => {
@@ -88,14 +76,7 @@ export function CmsWorkspace({
   }
   if (cms.kind === 'content') {
     return (
-      <ContentView
-        key={cms.name}
-        project={{ path: 'studio' }}
-        name={cms.name}
-        hidden={panel !== 'collections'}
-        showToast={props.report}
-        onClose={close}
-      />
+      <ContentView key={cms.name} project={{ path: 'studio' }} name={cms.name} hidden={panel !== 'collections'} showToast={props.report} onClose={close} />
     );
   }
   return (
@@ -118,13 +99,7 @@ export function CmsWorkspace({
 
 // A connected CMS's collection, or the project's content collections; an
 // entry's image is chosen in a pop-up over it, so the entry stays open.
-function RemoteWorkspace({
-  props,
-  selection,
-}: {
-  readonly props: EditorProps;
-  readonly selection: RemoteCmsSelection;
-}) {
+function RemoteWorkspace({ props, selection }: { readonly props: EditorProps; readonly selection: RemoteCmsSelection }) {
   const { panel, setCms, pick } = props.view;
   return (
     <>
@@ -133,18 +108,11 @@ function RemoteWorkspace({
         projectPath="studio"
         selection={selection}
         hidden={panel !== 'collections'}
-        onSelect={(next) =>
-          setCms(next === undefined ? undefined : { kind: 'remote', selection: next })
-        }
+        onSelect={(next) => setCms(next === undefined ? undefined : { kind: 'remote', selection: next })}
       />
       {pick?.presentation === 'overlay' && (
         <AssetPickOverlay title={assetPickTitle(pick.mediaKind)} onClose={clearAssetRequest}>
-          <AssetsPanel
-            project={props.project}
-            refresh={props.refresh}
-            error={props.report}
-            pick={pick}
-          />
+          <AssetsPanel project={props.project} refresh={props.refresh} error={props.report} pick={pick} />
         </AssetPickOverlay>
       )}
     </>

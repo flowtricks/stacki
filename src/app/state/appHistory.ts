@@ -12,23 +12,12 @@ import { assert } from '../../../shared/core/assert';
 import { scanContainsFile } from '../../editor/pagePersistence';
 import { createCoalescedRun } from '../../lib/coalescedRun';
 import { type EditGesture, type EditsRecord } from '../../editor/pageEdits';
-import {
-  saveStateAccepted,
-  saveStateBase,
-  saveStateEdited,
-  saveStateNeedsWrite,
-  saveStateRefused,
-} from '../../editor/saveState';
+import { saveStateAccepted, saveStateBase, saveStateEdited, saveStateNeedsWrite, saveStateRefused } from '../../editor/saveState';
 import type { Digest } from '../../../shared/core/brand';
 import { cleanError } from '../../lib/cleanError';
 import { sourceNodeAtOffset } from '../../features/code/codePanelModel';
 import { type EditsEntry, type HistoryEntry, type UndoCommand } from '../appTypes';
-import {
-  findEditorNodeById as findNodeById,
-  toEditorPageState,
-  carriedParse,
-  type EditorPageState,
-} from '../../editor/pageState';
+import { findEditorNodeById as findNodeById, toEditorPageState, carriedParse, type EditorPageState } from '../../editor/pageState';
 import { type EditorModel } from '../../editor/pageView';
 import { onFilesChanged } from '../../ipc/appBridge';
 import { tellCanvas } from '../../editor/canvasQuery';
@@ -37,22 +26,10 @@ import { reviewedSource, saveDelay } from '../model/nodeFactory';
 import { effective } from '../model/pageGestures';
 import { revertedSteps, reloadChangedPage } from '../model/appKeys';
 import { useCoreState } from './appLifecycle';
-import {
-  useLifecycle,
-  useSelectPage,
-  useProjectMenu,
-  useGoToUrl,
-  useReload,
-  useOpenComponent,
-  useCommitPreview,
-  useGitInfo,
-} from './appNavigation';
+import { useLifecycle, useSelectPage, useProjectMenu, useGoToUrl, useReload, useOpenComponent, useCommitPreview, useGitInfo } from './appNavigation';
 
 // Opening files, pages and components.
-export function useNavigation(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useNavigation(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
   const selectPageScope = useSelectPage(lifecycle, coreState);
   const projectMenu = useProjectMenu(coreState, lifecycle, selectPageScope);
   const goToUrlScope = useGoToUrl(selectPageScope, coreState, lifecycle);
@@ -74,10 +51,7 @@ export function useNavigation(
 }
 
 // Recording undo steps.
-export function useHistoryPush(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useHistoryPush(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
   const { pageStateRef } = coreState;
   const { historyRef } = lifecycle;
 
@@ -96,10 +70,7 @@ export function useHistoryPush(
       const history = historyRef.current;
       const now = Date.now();
       const previous = history.past[history.past.length - 1];
-      const coalesce =
-        coalesceKey !== undefined &&
-        coalesceKey === history.lastKey &&
-        now - history.lastPush < 800;
+      const coalesce = coalesceKey !== undefined && coalesceKey === history.lastKey && now - history.lastPush < 800;
       history.future = [];
       history.lastKey = coalesceKey;
       history.lastPush = now;
@@ -149,18 +120,13 @@ export function useHistoryPush(
     },
     [historyRef],
   );
-  const pushCommandRef = useRef<((command: Omit<UndoCommand, 'kind'>) => void) | undefined>(
-    undefined,
-  );
+  const pushCommandRef = useRef<((command: Omit<UndoCommand, 'kind'>) => void) | undefined>(undefined);
   pushCommandRef.current = pushCommand;
   return { pushCommand, pushEditHistory };
 }
 
 // Undoing a component property batch.
-export function usePropertyUndo(
-  navigation: ReturnType<typeof useNavigation>,
-  historyPush: ReturnType<typeof useHistoryPush>,
-) {
+export function usePropertyUndo(navigation: ReturnType<typeof useNavigation>, historyPush: ReturnType<typeof useHistoryPush>) {
   const { completePropertySave } = navigation;
   const { pushCommand } = historyPush;
 
@@ -187,10 +153,7 @@ export function usePropertyUndo(
 }
 
 // Installing the parse of typed code.
-export function useTypedParse(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useTypedParse(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
   const { pageStateRef, setPageState, setSelectedId, typedSourceRef } = coreState;
   const { showToast } = lifecycle;
 
@@ -237,8 +200,7 @@ export function useTypedParse(
         return { editable: true, model, source, parsedFrom: source, save: current.save, origin };
       };
       if (carried.editable) {
-        const inFrontmatter =
-          carried.model.bodyStart !== undefined && position < carried.model.bodyStart;
+        const inFrontmatter = carried.model.bodyStart !== undefined && position < carried.model.bodyStart;
         const selected = sourceNodeAtOffset(carried.model.nodes, position);
         setSelectedId(inFrontmatter ? 'frontmatter' : (selected?.id ?? undefined));
       } else {
@@ -246,9 +208,7 @@ export function useTypedParse(
       }
       // The save state is whatever is current when this lands: a conflicted
       // page stays conflicted, and a save that landed meanwhile keeps its base.
-      setPageState((current) =>
-        current && current.source === source ? installed(current) : current,
-      );
+      setPageState((current) => (current && current.source === source ? installed(current) : current));
     },
     [showToast, pageStateRef, setPageState, setSelectedId, typedSourceRef],
   );
@@ -263,10 +223,7 @@ export function useTypedParse(
 }
 
 // Undoing or redoing one step of page edits.
-export function useStepEdits(
-  lifecycle: ReturnType<typeof useLifecycle>,
-  coreState: ReturnType<typeof useCoreState>,
-) {
+export function useStepEdits(lifecycle: ReturnType<typeof useLifecycle>, coreState: ReturnType<typeof useCoreState>) {
   const { autosave, editDrafts, historyRef, showToast } = lifecycle;
   const { pageStateRef, setPageState, setSelectedId } = coreState;
 
@@ -278,10 +235,8 @@ export function useStepEdits(
   const stepEdits = useCallback(
     async (entry: EditsEntry, direction: 'undo' | 'redo') => {
       const history = historyRef.current;
-      const back = (next: EditsEntry) =>
-        (direction === 'undo' ? history.past : history.future).push(next);
-      const forth = (next: HistoryEntry) =>
-        (direction === 'undo' ? history.future : history.past).push(next);
+      const back = (next: EditsEntry) => (direction === 'undo' ? history.past : history.future).push(next);
+      const forth = (next: HistoryEntry) => (direction === 'undo' ? history.future : history.past).push(next);
       try {
         await autosave(); // Its own writes' answers first.
       } catch {
@@ -315,10 +270,7 @@ export function useStepEdits(
       }
       forth({ kind: 'edits', record: { outcome: { tag: 'applied', applied: done } } });
       const reply = written;
-      const shown =
-        origin === undefined
-          ? toEditorPageState(carriedParse(state, reply))
-          : toEditorPageState({ ...reply, editable: true, model: origin.model });
+      const shown = origin === undefined ? toEditorPageState(carriedParse(state, reply)) : toEditorPageState({ ...reply, editable: true, model: origin.model });
       // Installed only over the state the undo started from: a newer edit
       // made meanwhile keeps its model, and main rebases it past the revert.
       setPageState((current) => (current === state ? shown : current));
@@ -363,10 +315,7 @@ export function useUndoRedo(
       try {
         await entry.undo();
       } catch (error: unknown) {
-        showToast(
-          `Couldn’t undo${entry.label ? ` ${entry.label}` : ''}: ${cleanError(error)}`,
-          'error',
-        );
+        showToast(`Couldn’t undo${entry.label ? ` ${entry.label}` : ''}: ${cleanError(error)}`, 'error');
       }
       return;
     }
@@ -390,10 +339,7 @@ export function useUndoRedo(
       try {
         await entry.redo();
       } catch (error: unknown) {
-        showToast(
-          `Couldn’t redo${entry.label ? ` ${entry.label}` : ''}: ${cleanError(error)}`,
-          'error',
-        );
+        showToast(`Couldn’t redo${entry.label ? ` ${entry.label}` : ''}: ${cleanError(error)}`, 'error');
       }
       return;
     }
@@ -471,9 +417,7 @@ export function useScheduleSave(
         const record = pushEditHistory('code-source');
         const typed = { save: latest.save, source, origin: latest.origin };
         editDrafts.typeCode(open.path, typed, record);
-        setPageState((current) =>
-          current?.editable && current.model === state.model ? { ...current, source } : current,
-        );
+        setPageState((current) => (current?.editable && current.model === state.model ? { ...current, source } : current));
       }
     }
     setLeftTab('code');
@@ -501,11 +445,7 @@ export function useCommitEdit(
     if (path) {
       editDrafts.acceptDisk(path);
     } // typed code now patches the disk's text
-    setPageState((current) =>
-      current?.save.tag === 'conflicted'
-        ? { ...current, save: saveStateAccepted(current.save) }
-        : current,
-    );
+    setPageState((current) => (current?.save.tag === 'conflicted' ? { ...current, save: saveStateAccepted(current.save) } : current));
     scheduleSave(true);
   }, [scheduleSave, editDrafts, pageStateRef, setConflictReason, setPageState]);
 
@@ -542,24 +482,11 @@ export function useCommitEdit(
       const record = pushEditHistory(gesture.coalesceKey);
       const queued = editDrafts.addGesture(path, gesture, record);
       assert(queued === 'queued', 'A gesture inside the bound is queued');
-      setPageState((current) =>
-        current?.editable
-          ? { ...current, model: gesture.apply(current.model), save: saveStateEdited(current.save) }
-          : current,
-      );
+      setPageState((current) => (current?.editable ? { ...current, model: gesture.apply(current.model), save: saveStateEdited(current.save) } : current));
       scheduleSave(gesture.urgency);
       return true;
     },
-    [
-      scheduleSave,
-      pushEditHistory,
-      propertySave.saving,
-      editDrafts,
-      typedCodeUnparsed,
-      showToast,
-      pageStateRef,
-      setPageState,
-    ],
+    [scheduleSave, pushEditHistory, propertySave.saving, editDrafts, typedCodeUnparsed, showToast, pageStateRef, setPageState],
   );
   return { commitEdit, keepLocalVersion };
 }
@@ -598,30 +525,17 @@ export function useCodeSource(
       typedSourceRef.current = source;
       // The origin stays: typed text is no bytes on disk, and the code save's
       // reply moves the origin on.
-      setPageState((current) =>
-        current ? { ...current, source, save: saveStateEdited(current.save) } : current,
-      );
+      setPageState((current) => (current ? { ...current, source, save: saveStateEdited(current.save) } : current));
       scheduleSave('live');
       return parseTypedCode(open.path, source, position);
     },
-    [
-      pushEditHistory,
-      scheduleSave,
-      editDrafts,
-      parseTypedCode,
-      pageStateRef,
-      setPageState,
-      typedSourceRef,
-    ],
+    [pushEditHistory, scheduleSave, editDrafts, parseTypedCode, pageStateRef, setPageState, typedSourceRef],
   );
   return { changeCodeSource };
 }
 
 // An edit made outside the app to a page with unsaved edits.
-export function useOutsideEdit(
-  lifecycle: ReturnType<typeof useLifecycle>,
-  coreState: ReturnType<typeof useCoreState>,
-) {
+export function useOutsideEdit(lifecycle: ReturnType<typeof useLifecycle>, coreState: ReturnType<typeof useCoreState>) {
   const { editDrafts, pageSaverRef, setConflictReason } = lifecycle;
   const { pageStateRef, setPageState } = coreState;
 
@@ -657,11 +571,7 @@ export function useOutsideEdit(
         return; // gone or unreadable: the next save reports it
       }
       const latest = pageStateRef.current;
-      if (
-        latest.currentPage?.path !== pagePath ||
-        !latest.pageState ||
-        !saveStateNeedsWrite(latest.pageState.save)
-      ) {
+      if (latest.currentPage?.path !== pagePath || !latest.pageState || !saveStateNeedsWrite(latest.pageState.save)) {
         return;
       }
       // A save that started or finished during the read moved the base, and its
@@ -672,9 +582,7 @@ export function useOutsideEdit(
       }
       setConflictReason(undefined);
       setPageState((current) =>
-        current && saveStateNeedsWrite(current.save)
-          ? { ...current, save: saveStateRefused(current.save, base, diskChecksum) }
-          : current,
+        current && saveStateNeedsWrite(current.save) ? { ...current, save: saveStateRefused(current.save, base, diskChecksum) } : current,
       );
     },
     [editDrafts, pageSaverRef, pageStateRef, setConflictReason, setPageState],
@@ -739,30 +647,14 @@ export function useFileEvents(
       const reload = { pageStateRef, surfaceOutsideEdit, setPageState, dropPageHistory };
       await reloadChangedPage(reload, { path: page.path, state, chunk }, () => closed);
     });
-    const off = onFilesChanged(({ files }) =>
-      queueExternalFiles(files, pendingFiles, reconcile.request),
-    );
-    const offFocus = watchExternalFilesOnReturn(
-      { projectRef, pageStateRef },
-      pendingFiles,
-      reconcile.request,
-    );
+    const off = onFilesChanged(({ files }) => queueExternalFiles(files, pendingFiles, reconcile.request));
+    const offFocus = watchExternalFilesOnReturn({ projectRef, pageStateRef }, pendingFiles, reconcile.request);
     return () => {
       closed = true;
       off();
       offFocus();
     };
-  }, [
-    rescan,
-    surfaceOutsideEdit,
-    dropPageHistory,
-    pageLoadRef,
-    pageStateRef,
-    projectRef,
-    setCurrentPage,
-    setPageState,
-    setSelectedId,
-  ]);
+  }, [rescan, surfaceOutsideEdit, dropPageHistory, pageLoadRef, pageStateRef, projectRef, setCurrentPage, setPageState, setSelectedId]);
 }
 
 function watchExternalFilesOnReturn(
@@ -786,11 +678,7 @@ function watchExternalFilesOnReturn(
   });
 }
 
-function queueExternalFiles(
-  files: readonly string[],
-  pendingFiles: Set<string>,
-  request: () => Promise<void>,
-): void {
+function queueExternalFiles(files: readonly string[], pendingFiles: Set<string>, request: () => Promise<void>): void {
   for (const file of files) {
     pendingFiles.add(file);
   }
@@ -799,8 +687,7 @@ function queueExternalFiles(
 }
 
 function clearDeletedOpenPage(
-  context: Pick<ReturnType<typeof useLifecycle>, 'pageLoadRef'> &
-    Pick<ReturnType<typeof useCoreState>, 'setCurrentPage' | 'setPageState' | 'setSelectedId'>,
+  context: Pick<ReturnType<typeof useLifecycle>, 'pageLoadRef'> & Pick<ReturnType<typeof useCoreState>, 'setCurrentPage' | 'setPageState' | 'setSelectedId'>,
 ): void {
   context.pageLoadRef.current = {};
   context.setCurrentPage(undefined);

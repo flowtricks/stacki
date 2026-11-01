@@ -18,15 +18,7 @@ import { err, ok, type Result } from '../core/result';
 import type { RejectionReason } from './intent';
 import type { Snapshot } from '../page/snapshot';
 import type { ProjectedNode, Projection } from '../page/sourceProjection';
-import {
-  byteStringsEqual,
-  decodeUtf8,
-  toByteSpan,
-  toByteString,
-  utf16ToByteOffsets,
-  type ByteSpan,
-  type ByteString,
-} from '../core/span';
+import { byteStringsEqual, decodeUtf8, toByteSpan, toByteString, utf16ToByteOffsets, type ByteSpan, type ByteString } from '../core/span';
 import { toUtf16Offset } from '../core/brand';
 
 export type SpanMapper = (span: ByteSpan) => SpanMapping;
@@ -56,12 +48,7 @@ const SLASH = 0x2f; // `/`
 const NEWLINE = 0x0a;
 
 /** Both projections, when both parse; a visual intent needs both. */
-export function validProjections(
-  context: PlanContext,
-): Result<
-  { readonly authored: ValidProjection; readonly current: ValidProjection },
-  RejectionReason
-> {
+export function validProjections(context: PlanContext): Result<{ readonly authored: ValidProjection; readonly current: ValidProjection }, RejectionReason> {
   const authored = context.authored.projection;
   const current = context.current.projection;
   if (current.tag === 'parse-error') {
@@ -77,10 +64,7 @@ export function validProjections(
  * current bytes through its identity region. Every rejection of resolution is
  * decided here, so each operation starts from a node known to be the one the
  * intent named. Capabilities are the operation's to check. */
-export function resolveTarget(
-  context: PlanContext,
-  anchor: AnchorRef,
-): Result<Target, RejectionReason> {
+export function resolveTarget(context: PlanContext, anchor: AnchorRef): Result<Target, RejectionReason> {
   const projections = validProjections(context);
   if (!projections.ok) {
     return projections;
@@ -100,10 +84,7 @@ export function resolveTarget(
   switch (mapped.tag) {
     case 'resolved': {
       // The consumer side of the mapper's postcondition: a region moves whole.
-      assert(
-        mapped.span.end - mapped.span.start === region.end - region.start,
-        'A resolved region keeps its length',
-      );
+      assert(mapped.span.end - mapped.span.start === region.end - region.start, 'A resolved region keeps its length');
       const shift = mapped.span.start - region.start;
       return currentTarget(context, projections.value.current, authored, mapped.span, shift);
     }
@@ -131,9 +112,7 @@ function currentTarget(
   shift: number,
 ): Result<Target, RejectionReason> {
   const start = authored.span.start + shift;
-  const found = current.nodes.filter(
-    (node) => node.span.start === start && node.kind === authored.kind,
-  );
+  const found = current.nodes.filter((node) => node.span.start === start && node.kind === authored.kind);
   const [node, ...others] = found.length > 1 ? atDepthOf(found, authored) : found;
   if (node === undefined) {
     return err(found.length > 1 ? 'anchor-ambiguous' : 'anchor-moved');
@@ -161,10 +140,7 @@ function currentTarget(
 // first item (step 10). One holds the other, so they differ in depth: the node
 // at the anchor's depth is the one it named, and anything else is refused
 // rather than chosen.
-function atDepthOf(
-  found: readonly ProjectedNode[],
-  authored: ProjectedNode,
-): readonly ProjectedNode[] {
+function atDepthOf(found: readonly ProjectedNode[], authored: ProjectedNode): readonly ProjectedNode[] {
   assert(found.length > 1, 'Only several candidates need their depth compared');
   return found.filter((node) => node.path.length === authored.path.length);
 }
@@ -189,10 +165,7 @@ export function identityRegion(bytes: ByteString, node: ProjectedNode): ByteSpan
   if (writtenAsTag(node)) {
     assert(bytes[node.span.start] === TAG_OPEN, 'A tag opens with `<`');
     const nameEnd = tagNameEnd(bytes, node);
-    const end = node.attributes.reduce<number>(
-      (last, attribute) => Math.max(last, attribute.span.end),
-      nameEnd,
-    );
+    const end = node.attributes.reduce<number>((last, attribute) => Math.max(last, attribute.span.end), nameEnd);
     assert(end <= node.span.end, 'Attributes lie inside their node');
     if (end > nameEnd) {
       return toByteSpan(node.span.start + 1, end);
@@ -241,16 +214,10 @@ export function tagNameEnd(bytes: ByteString, node: ProjectedNode): number {
 }
 
 /** One past the `>` that ends a tag's opening, and whether it closes itself. */
-export function openTagEnd(
-  bytes: ByteString,
-  node: ProjectedNode,
-): { readonly end: number; readonly selfClosing: boolean } {
+export function openTagEnd(bytes: ByteString, node: ProjectedNode): { readonly end: number; readonly selfClosing: boolean } {
   assert(isTagKind(node.kind), 'Only a tag has an opening tag');
   // Past the name and every attribute: a `>` inside a quoted value is not it.
-  let index = node.attributes.reduce<number>(
-    (last, attribute) => Math.max(last, attribute.span.end),
-    tagNameEnd(bytes, node),
-  );
+  let index = node.attributes.reduce<number>((last, attribute) => Math.max(last, attribute.span.end), tagNameEnd(bytes, node));
   while (index < node.span.end) {
     const byte = bytes[index];
     assert(byte !== undefined, 'The tag lies inside the bytes');
@@ -263,11 +230,7 @@ export function openTagEnd(
 }
 
 /** Where a paired tag's closing tag starts: the last `</` inside the node. */
-export function closeTagStart(
-  bytes: ByteString,
-  node: ProjectedNode,
-  from: number,
-): number | undefined {
+export function closeTagStart(bytes: ByteString, node: ProjectedNode, from: number): number | undefined {
   for (let index = node.span.end - 2; index >= from; index--) {
     if (bytes[index] === TAG_OPEN) {
       if (bytes[index + 1] === SLASH) {
@@ -278,10 +241,7 @@ export function closeTagStart(
   return undefined;
 }
 
-export function nodeAtPath(
-  projection: ValidProjection,
-  path: StructuralPath,
-): ProjectedNode | undefined {
+export function nodeAtPath(projection: ValidProjection, path: StructuralPath): ProjectedNode | undefined {
   assert(projection.nodes.length <= LIMITS.treeNodesMax, 'The projection is inside its bound');
   return projection.nodes.find((candidate) => samePath(candidate.path, path));
 }
@@ -309,29 +269,18 @@ export function blankText(bytes: ByteString, node: ProjectedNode): boolean {
 }
 
 /** The node's siblings in document order, itself included. */
-export function siblingsOf(
-  projection: ValidProjection,
-  node: ProjectedNode,
-): readonly ProjectedNode[] {
+export function siblingsOf(projection: ValidProjection, node: ProjectedNode): readonly ProjectedNode[] {
   const parent = parentPath(node.path);
-  return projection.nodes.filter(
-    (candidate) => candidate.path.length === node.path.length && startsWith(candidate.path, parent),
-  );
+  return projection.nodes.filter((candidate) => candidate.path.length === node.path.length && startsWith(candidate.path, parent));
 }
 
 /** The nodes of the subtree rooted at `node`, itself first, in document order. */
-export function subtreeOf(
-  projection: ValidProjection,
-  node: ProjectedNode,
-): readonly ProjectedNode[] {
+export function subtreeOf(projection: ValidProjection, node: ProjectedNode): readonly ProjectedNode[] {
   return projection.nodes.filter((candidate) => startsWith(candidate.path, node.path));
 }
 
 /** Proper ancestors, outermost first. */
-export function ancestorsOf(
-  projection: ValidProjection,
-  path: StructuralPath,
-): readonly ProjectedNode[] {
+export function ancestorsOf(projection: ValidProjection, path: StructuralPath): readonly ProjectedNode[] {
   const found: ProjectedNode[] = [];
   for (let depth = 1; depth < path.length; depth++) {
     const ancestor = nodeAtPath(projection, path.slice(0, depth));

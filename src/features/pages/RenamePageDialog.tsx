@@ -2,10 +2,7 @@ import { cleanError } from '../../lib/cleanError';
 import { useId, useRef, useState } from 'react';
 import Popup from '../../ui/Popup';
 import { parsePageRename, type PageRename } from '../../../shared/properties/pageRename';
-import {
-  pageRenameConflicts,
-  type RenameInventory,
-} from '../../../shared/properties/pageRenameConflicts';
+import { pageRenameConflicts, type RenameInventory } from '../../../shared/properties/pageRenameConflicts';
 import { err, ok, type Result } from '../../../shared/core/result';
 import { pageExtension, stripPageExtension } from './pageTree';
 
@@ -15,20 +12,12 @@ export interface RenamePageDialogProps {
   readonly save: (change: PageRename) => Promise<void>;
   readonly close: () => void;
 }
-type SaveState =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'saving' }
-  | { readonly kind: 'error'; readonly message: string };
+type SaveState = { readonly kind: 'idle' } | { readonly kind: 'saving' } | { readonly kind: 'error'; readonly message: string };
 
 export function RenamePageDialog(props: RenamePageDialogProps) {
   const model = useRenameDialog(props);
   return (
-    <Popup
-      className="modal"
-      label={`Rename ${props.item.kind}`}
-      onClose={props.close}
-      dismissible={!model.busy}
-    >
+    <Popup className="modal" label={`Rename ${props.item.kind}`} onClose={props.close} dismissible={!model.busy}>
       {({ close }) => (
         <form
           onSubmit={(event) => {
@@ -108,10 +97,7 @@ function useRenameDialog({ item, inventory, save, close }: RenamePageDialogProps
   };
   return { name, change, error, busy, canApply, submit };
 }
-function renameCandidate(
-  item: Pick<PageRename, 'kind' | 'from'>,
-  name: string,
-): Result<PageRename> {
+function renameCandidate(item: Pick<PageRename, 'kind' | 'from'>, name: string): Result<PageRename> {
   const clean = name.trim();
   if (!clean || clean.includes('/') || clean.includes('\\')) {
     return err({ code: 'name', message: 'Enter a name without folder separators.' });

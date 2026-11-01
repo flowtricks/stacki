@@ -12,11 +12,7 @@ export function gitBranchColor(color: number): string {
   return PALETTE[color] ?? `hsl(${(color * 137.508) % 360} 65% 72%)`;
 }
 
-export function gitBranchColors(
-  branches: readonly string[],
-  trunk: string,
-  references: readonly string[] = [],
-): ReadonlyMap<string, number> {
+export function gitBranchColors(branches: readonly string[], trunk: string, references: readonly string[] = []): ReadonlyMap<string, number> {
   assert(branches.length <= BRANCHES_MAX, 'History colors: branch limit exceeded');
   assert(references.length <= REFERENCES_MAX, 'History colors: reference limit exceeded');
   const colors = new Map<string, number>([[trunk, 0]]);
@@ -39,10 +35,7 @@ export function gitBranchColors(
   return colors;
 }
 
-export function gitRefColor(
-  reference: string,
-  colors: ReadonlyMap<string, number>,
-): number | undefined {
+export function gitRefColor(reference: string, colors: ReadonlyMap<string, number>): number | undefined {
   const branch = gitRefBranch(reference, colors);
   return branch === undefined ? undefined : colors.get(branch);
 }

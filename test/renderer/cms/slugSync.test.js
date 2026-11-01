@@ -38,14 +38,7 @@ buildSync({
 const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
 require('../../helpers/popupDom').installPopupDOM(dom.window);
 global.window = dom.window;
-for (const name of [
-  'document',
-  'navigator',
-  'HTMLElement',
-  'HTMLInputElement',
-  'Element',
-  'Node',
-]) {
+for (const name of ['document', 'navigator', 'HTMLElement', 'HTMLInputElement', 'Element', 'Node']) {
   global[name] = dom.window[name];
 }
 global.IS_REACT_ACT_ENVIRONMENT = true;

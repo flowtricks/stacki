@@ -55,10 +55,7 @@ export function operatorLabel(operator: LoopOperator): string {
 }
 
 /** The ways to order a field's values, named for what they are. */
-export function orderLabels(order: LoopSortOrder): {
-  readonly ascending: string;
-  readonly descending: string;
-} {
+export function orderLabels(order: LoopSortOrder): { readonly ascending: string; readonly descending: string } {
   switch (order) {
     case 'text':
       return { ascending: 'A to Z', descending: 'Z to A' };
@@ -76,8 +73,7 @@ export function orderLabels(order: LoopSortOrder): {
 }
 
 /** The key the Source menu knows the current list by. */
-export type SourceKey =
-  'empty' | 'custom' | `astro:${string}` | `sanity:${string}` | `value:${string}`;
+export type SourceKey = 'empty' | 'custom' | `astro:${string}` | `sanity:${string}` | `value:${string}`;
 
 export function sourceKey(source: LoopSource): SourceKey {
   return source.kind === 'astro' ? `astro:${source.collection}` : `sanity:${source.collection}`;
@@ -106,18 +102,9 @@ export function readingKey(reading: LoopReading, data: string): SourceKey {
 /** A Source menu key back as what it names. */
 export function parseSourceKey(
   key: string,
-):
-  | { readonly kind: 'empty' }
-  | { readonly kind: 'list' }
-  | { readonly kind: 'collection'; readonly source: LoopSource }
-  | { readonly kind: 'value'; readonly data: string }
-  | undefined {
+): { readonly kind: 'empty' } | { readonly kind: 'collection'; readonly source: LoopSource } | { readonly kind: 'value'; readonly data: string } | undefined {
   if (key === 'empty') {
     return { kind: 'empty' };
-  }
-  // A list typed in place, edited as rows (LoopLiteralItems.tsx).
-  if (key === 'list') {
-    return { kind: 'list' };
   }
   const at = key.indexOf(':');
   const prefix = key.slice(0, at);
@@ -131,10 +118,7 @@ export function parseSourceKey(
   return prefix === 'value' ? { kind: 'value', data: rest } : undefined;
 }
 
-export function fieldNamed(
-  fields: readonly CatalogField[] | undefined,
-  path: string,
-): CatalogField | undefined {
+export function fieldNamed(fields: readonly CatalogField[] | undefined, path: string): CatalogField | undefined {
   return fields?.find((field) => field.path === path);
 }
 
@@ -161,10 +145,7 @@ export function conditionParts(
   const field = fieldTitle(fields, condition.field);
   const symbol = OPERATOR_SYMBOLS[condition.operator];
   const verb = symbol ?? OPERATOR_LABELS[condition.operator].toLowerCase();
-  const value =
-    'value' in condition
-      ? valueText(condition.value, fieldNamed(fields, condition.field), choices)
-      : '';
+  const value = 'value' in condition ? valueText(condition.value, fieldNamed(fields, condition.field), choices) : '';
   assert(field.length > 0, 'A condition names its field');
   return { lead: field, rest: value === '' ? verb : `${verb} ${value}` };
 }
@@ -176,9 +157,7 @@ export function conditionSummary(
   choices: readonly { readonly title: string; readonly value: string }[],
 ): string {
   const parts = conditionParts(condition, fields, choices);
-  return condition.kind === 'custom'
-    ? `${parts.lead}: ${parts.rest}`
-    : `${parts.lead} ${parts.rest}`;
+  return condition.kind === 'custom' ? `${parts.lead}: ${parts.rest}` : `${parts.lead} ${parts.rest}`;
 }
 
 function valueText(
@@ -196,17 +175,9 @@ function valueText(
     case 'number':
       return String(value.number);
     case 'text':
-      return (
-        field?.options.find((option) => option.value === value.text)?.title ??
-        choices.find((choice) => choice.value === value.text)?.title ??
-        value.text
-      );
+      return field?.options.find((option) => option.value === value.text)?.title ?? choices.find((choice) => choice.value === value.text)?.title ?? value.text;
     case 'reference':
-      return (
-        field?.options.find((option) => option.value === value.id)?.title ??
-        choices.find((choice) => choice.value === value.id)?.title ??
-        value.id
-      );
+      return field?.options.find((option) => option.value === value.id)?.title ?? choices.find((choice) => choice.value === value.id)?.title ?? value.id;
     default: {
       const exhaustive: never = value;
       return exhaustive;
@@ -216,12 +187,7 @@ function valueText(
 
 function dateText(value: string): string {
   const date = new Date(`${value}T00:00:00Z`);
-  return date.toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
+  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 export function sortParts(sort: LoopSort, fields: readonly CatalogField[] | undefined): RowParts {
@@ -252,9 +218,7 @@ export function draftFor(field: CatalogField): ConditionDraft {
 }
 
 /** A condition as the editor shows it. */
-export function draftOf(
-  condition: Extract<LoopCondition, { readonly kind: 'test' }>,
-): ConditionDraft {
+export function draftOf(condition: Extract<LoopCondition, { readonly kind: 'test' }>): ConditionDraft {
   if (!('value' in condition)) {
     return { field: condition.field, operator: condition.operator, value: '' };
   }
@@ -265,8 +229,7 @@ export function draftOf(
   if (typeof value === 'string') {
     return { field: condition.field, operator: condition.operator, value };
   }
-  const text =
-    value.kind === 'number' ? String(value.number) : value.kind === 'text' ? value.text : value.id;
+  const text = value.kind === 'number' ? String(value.number) : value.kind === 'text' ? value.text : value.id;
   return { field: condition.field, operator: condition.operator, value: text };
 }
 
@@ -294,28 +257,20 @@ export function conditionOf(draft: ConditionDraft, kind: LoopFieldKind): LoopCon
     case 'isNot':
     case 'has': {
       const value = literalOf(text, kind);
-      return value === undefined
-        ? undefined
-        : { kind: 'test', field, operator: draft.operator, value };
+      return value === undefined ? undefined : { kind: 'test', field, operator: draft.operator, value };
     }
     case 'contains':
-      return text.trim() === ''
-        ? undefined
-        : { kind: 'test', field, operator: 'contains', value: text };
+      return text.trim() === '' ? undefined : { kind: 'test', field, operator: 'contains', value: text };
     case 'greater':
     case 'less':
     case 'atLeast':
     case 'atMost': {
       const number = numberOf(text);
-      return number === undefined
-        ? undefined
-        : { kind: 'test', field, operator: draft.operator, value: number };
+      return number === undefined ? undefined : { kind: 'test', field, operator: draft.operator, value: number };
     }
     case 'before':
     case 'after':
-      return isDateValue(text)
-        ? { kind: 'test', field, operator: draft.operator, value: text }
-        : undefined;
+      return isDateValue(text) ? { kind: 'test', field, operator: draft.operator, value: text } : undefined;
     default: {
       const exhaustive: never = draft.operator;
       return exhaustive;
@@ -347,16 +302,11 @@ function numberOf(text: string): number | undefined {
 }
 
 /** A whole number typed into Show or Skip, held to the bounds a query allows. */
-export function wholeNumberOf(
-  text: string,
-  bounds: { readonly min: number; readonly max: number },
-): number | undefined {
+export function wholeNumberOf(text: string, bounds: { readonly min: number; readonly max: number }): number | undefined {
   if (!/^\s*\d+\s*$/.test(text)) {
     return undefined;
   }
   const number = Number(text);
   assert(bounds.min <= bounds.max, 'Bounds are ordered');
-  return Number.isSafeInteger(number)
-    ? Math.min(bounds.max, Math.max(bounds.min, number))
-    : undefined;
+  return Number.isSafeInteger(number) ? Math.min(bounds.max, Math.max(bounds.min, number)) : undefined;
 }

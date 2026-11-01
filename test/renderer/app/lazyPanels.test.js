@@ -56,14 +56,7 @@ const LAZY_PANELS = [
   'CodePanel',
 ];
 const LAZY_IMPORT = /lazyPanel\(\(\) => import\('([^']+)'\)\)/g;
-const REAL_PREVIEW = new Set([
-  'PreviewPane',
-  'CanvasView',
-  'DevOffline',
-  'PreviewOverlays',
-  'PreviewToolbar',
-  'PreviewSizeControls',
-]);
+const REAL_PREVIEW = new Set(['PreviewPane', 'CanvasView', 'DevOffline', 'PreviewOverlays', 'PreviewToolbar', 'PreviewSizeControls']);
 const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
 
 test('all optional editors load without hiding the app or replacing its preview', async () => {
@@ -83,11 +76,7 @@ test('all optional editors load without hiding the app or replacing its preview'
       await settle();
     });
   try {
-    await act(() =>
-      root.render(
-        React.createElement(React.Suspense, { fallback: undefined }, React.createElement(App)),
-      ),
-    );
+    await act(() => root.render(React.createElement(React.Suspense, { fallback: undefined }, React.createElement(App))));
     await act(() => __lazyPanels.WelcomeScreen.onOpen('/project'));
     const stable = captureEditor();
     const context = { act, gates, stable, bridge: window.avb };
@@ -166,11 +155,7 @@ async function checkCodePanel(context) {
   await context.act(() => new Promise((resolve) => setTimeout(resolve, 200)));
   await context.act(() => __lazyPanels.PropsPanel.onSetContent('Visual edit'));
   await context.act(() => new Promise((resolve) => setTimeout(resolve, 350)));
-  assert.match(
-    __lazyPanels.CodePanel.source,
-    /<h1>Visual edit<\/h1>/,
-    'visual edits serialize back into the code panel',
-  );
+  assert.match(__lazyPanels.CodePanel.source, /<h1>Visual edit<\/h1>/, 'visual edits serialize back into the code panel');
   const shown = __lazyPanels.CodePanel.source;
   assert.equal(context.bridge.disk(), shown, 'as the request left the disk');
   context.stable();
@@ -294,9 +279,7 @@ async function buildApp() {
           loader: 'tsx',
         }),
       }),
-      stubPanels('lazy-panel-bodies', (name) =>
-        REAL_PREVIEW.has(name) ? undefined : { contents: panelStub(name), loader: 'tsx' },
-      ),
+      stubPanels('lazy-panel-bodies', (name) => (REAL_PREVIEW.has(name) ? undefined : { contents: panelStub(name), loader: 'tsx' })),
     ],
   });
   return bundle;
@@ -319,14 +302,7 @@ function installDOM() {
     pretendToBeVisual: true,
   });
   global.window = dom.window;
-  const browserGlobals = [
-    'document',
-    'navigator',
-    'HTMLElement',
-    'Element',
-    'Node',
-    'MutationObserver',
-  ];
+  const browserGlobals = ['document', 'navigator', 'HTMLElement', 'Element', 'Node', 'MutationObserver'];
   for (const name of browserGlobals) {
     global[name] = dom.window[name];
   }

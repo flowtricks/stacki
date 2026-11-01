@@ -36,11 +36,7 @@ import {
   type RemoteRevision,
   type RemoteWrite,
 } from '../../shared/properties/cmsRemote';
-import {
-  parseLinkPreview,
-  parseVideoLinkURL,
-  type LinkPreview,
-} from '../../shared/properties/linkPreview';
+import { parseLinkPreview, parseVideoLinkURL, type LinkPreview } from '../../shared/properties/linkPreview';
 
 /** What this host can offer: Desktop signs in to Sanity in the browser. */
 export interface CmsConnectionHost {
@@ -54,26 +50,17 @@ export async function listCmsConnections(projectPath: string): Promise<CmsConnec
   return parseCmsConnectionList(await window.avb.cmsConnections(input));
 }
 
-export async function saveCmsConnection(
-  projectPath: string,
-  draft: CmsConnectionDraft,
-): Promise<CmsSaveResult> {
+export async function saveCmsConnection(projectPath: string, draft: CmsConnectionDraft): Promise<CmsSaveResult> {
   const input = parseIpcPayload('cmsConnections:save', { projectPath, draft });
   return parseCmsSaveResult(await window.avb.saveCmsConnection(input));
 }
 
-export async function removeCmsConnection(
-  projectPath: string,
-  id: string,
-): Promise<CmsConnectionList> {
+export async function removeCmsConnection(projectPath: string, id: string): Promise<CmsConnectionList> {
   const input = parseIpcPayload('cmsConnections:remove', { projectPath, id });
   return parseCmsConnectionList(await window.avb.removeCmsConnection(input));
 }
 
-export async function sanityLogin(
-  projectPath: string,
-  request: SanityLoginRequest,
-): Promise<SanityLoginState> {
+export async function sanityLogin(projectPath: string, request: SanityLoginRequest): Promise<SanityLoginState> {
   const input = parseIpcPayload('cmsConnections:sanityLogin', { projectPath, request });
   let result: unknown;
   try {
@@ -91,10 +78,7 @@ export async function openSanitySignIn(url: string): Promise<void> {
 
 // The CMS panel's reads and draft writes against one connection.
 
-export async function remoteCollections(
-  projectPath: string,
-  connectionId: string,
-): Promise<RemoteResult<readonly RemoteCollection[]>> {
+export async function remoteCollections(projectPath: string, connectionId: string): Promise<RemoteResult<readonly RemoteCollection[]>> {
   const input = parseIpcPayload('cmsRemote:collections', { projectPath, connectionId });
   return parseRemoteResult(await window.avb.remoteCollections(input), parseRemoteCollections);
 }
@@ -114,11 +98,7 @@ export async function remoteDocuments(
   return parseRemoteResult(await window.avb.remoteDocuments(input), parseRemoteDocumentList);
 }
 
-export async function createRemoteDocument(
-  projectPath: string,
-  connectionId: string,
-  collection: string,
-): Promise<RemoteResult<RemoteDocumentSummary>> {
+export async function createRemoteDocument(projectPath: string, connectionId: string, collection: string): Promise<RemoteResult<RemoteDocumentSummary>> {
   const input = parseIpcPayload('cmsRemote:create', { projectPath, connectionId, collection });
   return parseRemoteResult(await window.avb.createRemoteDocument(input), (value) => {
     const [summary] = parseRemoteDocuments([value]);
@@ -129,11 +109,7 @@ export async function createRemoteDocument(
   });
 }
 
-export async function deleteRemoteDocuments(
-  projectPath: string,
-  connectionId: string,
-  ids: readonly string[],
-): Promise<RemoteResult<number>> {
+export async function deleteRemoteDocuments(projectPath: string, connectionId: string, ids: readonly string[]): Promise<RemoteResult<number>> {
   const input = parseIpcPayload('cmsRemote:delete', { projectPath, connectionId, ids });
   return parseRemoteResult(await window.avb.deleteRemoteDocuments(input), (value) => {
     if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
@@ -143,39 +119,23 @@ export async function deleteRemoteDocuments(
   });
 }
 
-export async function moveRemoteDocument(
-  projectPath: string,
-  connectionId: string,
-  move: RemoteMove,
-): Promise<RemoteResult<RemoteDocumentList>> {
+export async function moveRemoteDocument(projectPath: string, connectionId: string, move: RemoteMove): Promise<RemoteResult<RemoteDocumentList>> {
   const input = parseIpcPayload('cmsRemote:move', { projectPath, connectionId, move });
   return parseRemoteResult(await window.avb.moveRemoteDocument(input), parseRemoteDocumentList);
 }
 
-export async function remoteDocument(
-  projectPath: string,
-  connectionId: string,
-  id: string,
-): Promise<RemoteResult<RemoteDocument>> {
+export async function remoteDocument(projectPath: string, connectionId: string, id: string): Promise<RemoteResult<RemoteDocument>> {
   const input = parseIpcPayload('cmsRemote:document', { projectPath, connectionId, id });
   return parseRemoteResult(await window.avb.remoteDocument(input), parseRemoteDocument);
 }
 
 /** A collection's fields with no values: what a new item is edited as before it is created. */
-export async function remoteTemplate(
-  projectPath: string,
-  connectionId: string,
-  collection: string,
-): Promise<RemoteResult<RemoteDocument>> {
+export async function remoteTemplate(projectPath: string, connectionId: string, collection: string): Promise<RemoteResult<RemoteDocument>> {
   const input = parseIpcPayload('cmsRemote:template', { projectPath, connectionId, collection });
   return parseRemoteResult(await window.avb.remoteTemplate(input), parseRemoteDocument);
 }
 
-export async function writeRemoteDocument(
-  projectPath: string,
-  connectionId: string,
-  write: RemoteWrite,
-): Promise<RemoteResult<RemoteDocument>> {
+export async function writeRemoteDocument(projectPath: string, connectionId: string, write: RemoteWrite): Promise<RemoteResult<RemoteDocument>> {
   const input = parseIpcPayload('cmsRemote:write', { projectPath, connectionId, write });
   return parseRemoteResult(await window.avb.writeRemoteDocument(input), parseRemoteDocument);
 }
@@ -186,22 +146,13 @@ export async function remoteReferenceOptions(
   types: readonly string[],
 ): Promise<RemoteResult<readonly RemoteReferenceOption[]>> {
   const input = parseIpcPayload('cmsRemote:references', { projectPath, connectionId, types });
-  return parseRemoteResult(
-    await window.avb.remoteReferenceOptions(input),
-    parseRemoteReferenceOptions,
-  );
+  return parseRemoteResult(await window.avb.remoteReferenceOptions(input), parseRemoteReferenceOptions);
 }
 
 /** Asks for a file in the system dialog and stores it in the CMS; undefined when cancelled. */
-export async function uploadRemoteAsset(
-  projectPath: string,
-  connectionId: string,
-  kind: RemoteAssetKind,
-): Promise<RemoteResult<RemoteAsset | undefined>> {
+export async function uploadRemoteAsset(projectPath: string, connectionId: string, kind: RemoteAssetKind): Promise<RemoteResult<RemoteAsset | undefined>> {
   const input = parseIpcPayload('cmsRemote:upload', { projectPath, connectionId, kind });
-  return parseRemoteResult(await window.avb.uploadRemoteAsset(input), (value) =>
-    value === undefined ? undefined : parseRemoteAsset(value),
-  );
+  return parseRemoteResult(await window.avb.uploadRemoteAsset(input), (value) => (value === undefined ? undefined : parseRemoteAsset(value)));
 }
 
 export async function actOnRemoteDocument(
@@ -213,11 +164,7 @@ export async function actOnRemoteDocument(
   return parseRemoteResult(await window.avb.actOnRemoteDocument(input), parseRemoteActedDocument);
 }
 
-export async function remoteHistory(
-  projectPath: string,
-  connectionId: string,
-  id: string,
-): Promise<RemoteResult<readonly RemoteRevision[]>> {
+export async function remoteHistory(projectPath: string, connectionId: string, id: string): Promise<RemoteResult<readonly RemoteRevision[]>> {
   const input = parseIpcPayload('cmsRemote:history', { projectPath, connectionId, id });
   return parseRemoteResult(await window.avb.remoteHistory(input), parseRemoteRevisions);
 }
@@ -234,9 +181,7 @@ export async function restoreRemoteRevision(
 /** A video link's card (thumbnail, title, description); undefined when its host has none. */
 export async function linkPreview(url: string): Promise<RemoteResult<LinkPreview | undefined>> {
   const input = parseIpcPayload('cmsRemote:linkPreview', { url });
-  return parseRemoteResult(await window.avb.linkPreview(input), (value) =>
-    value === undefined ? undefined : parseLinkPreview(value),
-  );
+  return parseRemoteResult(await window.avb.linkPreview(input), (value) => (value === undefined ? undefined : parseLinkPreview(value)));
 }
 
 /** Opens a previewed video in the browser. */

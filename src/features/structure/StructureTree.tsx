@@ -67,19 +67,12 @@ export function NodeList({ nodes, parentId, depth, ...context }: NodeListProps) 
       {nodes.map((node, index) =>
         folded.has(index) ? undefined : (
           <React.Fragment key={node.id}>
-            <Gap
-              parentId={parentId}
-              index={noteFor.has(index) ? index - 1 : index}
-              depth={depth}
-              {...context}
-            />
+            <Gap parentId={parentId} index={noteFor.has(index) ? index - 1 : index} depth={depth} {...context} />
             <TreeNode node={node} note={noteFor.get(index)} depth={depth} {...context} />
           </React.Fragment>
         ),
       )}
-      {nodes.length > 0 && (
-        <Gap parentId={parentId} index={nodes.length} depth={depth} {...context} />
-      )}
+      {nodes.length > 0 && <Gap parentId={parentId} index={nodes.length} depth={depth} {...context} />}
     </>
   );
 }
@@ -108,8 +101,7 @@ interface GapProps extends StructureTreeContext {
 
 function Gap(props: GapProps) {
   const { parentId, index, depth, dropTarget, setDropTarget, isDndPayload, performDrop } = props;
-  const active =
-    dropTarget?.kind === 'gap' && dropTarget.parentId === parentId && dropTarget.index === index;
+  const active = dropTarget?.kind === 'gap' && dropTarget.parentId === parentId && dropTarget.index === index;
   const accepted = acceptsDrag(parentId === undefined ? undefined : props.nodeById(parentId));
   const location = { parentId, index };
   if (props.editRootId && (!parentId || !props.canEdit(parentId))) {
@@ -167,9 +159,7 @@ function TreeNode(props: TreeNodeProps) {
   return (
     <>
       <TreeRow {...props} {...view} rowRef={rowRef} />
-      {showChildren && !view.collapsed && (
-        <NodeList {...context} nodes={children} parentId={host.id} depth={depth + 1} />
-      )}
+      {showChildren && !view.collapsed && <NodeList {...context} nodes={children} parentId={host.id} depth={depth + 1} />}
     </>
   );
 }
@@ -215,10 +205,7 @@ interface NodeView {
   readonly hint: string | undefined;
 }
 
-function nodeView(
-  props: TreeNodeProps,
-  shape: Pick<NodeView, 'children' | 'host' | 'showChildren' | 'selected'>,
-): NodeView {
+function nodeView(props: TreeNodeProps, shape: Pick<NodeView, 'children' | 'host' | 'showChildren' | 'selected'>): NodeView {
   const { children, host, showChildren, selected } = shape;
   const { node } = props;
   const fragment = isFragmentNode(node);
@@ -229,10 +216,7 @@ function nodeView(
   if (layout) {
     const label = node.kind === 'component' || node.kind === 'element' ? node.name : '';
     description = { icon: <LayoutIcon size={13} />, label: label || props.currentLayoutName };
-    hint =
-      props.currentLayoutName && props.currentLayoutName !== description.label
-        ? props.currentLayoutName
-        : undefined;
+    hint = props.currentLayoutName && props.currentLayoutName !== description.label ? props.currentLayoutName : undefined;
   }
   return {
     children,
@@ -275,11 +259,7 @@ function TreeRow(props: TreeRowProps) {
       }
       {...handlers}
     >
-      <TreeDragHandle
-        {...(props.showChildren
-          ? { expansion: { collapsed: props.collapsed, toggle: () => props.toggleCollapse(node) } }
-          : {})}
-      />
+      <TreeDragHandle {...(props.showChildren ? { expansion: { collapsed: props.collapsed, toggle: () => props.toggleCollapse(node) } } : {})} />
       <span className="icon">{description.icon}</span>
       <RowLabel node={node} label={description.label} note={props.note} />
       {props.hint && (
@@ -300,11 +280,7 @@ function treeRowHandlers(props: TreeRowProps) {
   const { node } = props;
   return {
     onDragStart: (event: React.DragEvent<HTMLDivElement>): void => {
-      if (
-        !props.canEdit(node.id) ||
-        node.id === props.editRootId ||
-        (props.clientMode && node.id === 'layout')
-      ) {
+      if (!props.canEdit(node.id) || node.id === props.editRootId || (props.clientMode && node.id === 'layout')) {
         event.preventDefault();
         return;
       }
@@ -374,31 +350,16 @@ function treeRowDropBehavior(props: TreeRowProps) {
   return {
     active: props.dropInto,
     accepts: (event: React.DragEvent<HTMLDivElement>) =>
-      props.canEdit(props.node.id) &&
-      props.canHostChildren &&
-      acceptsDrag(props.node) &&
-      props.isDndPayload(event),
+      props.canEdit(props.node.id) && props.canHostChildren && acceptsDrag(props.node) && props.isDndPayload(event),
     enter: () => props.setDropTarget({ kind: 'into', intoId: props.node.id }),
-    drop: (event: React.DragEvent<HTMLDivElement>) =>
-      props.performDrop(event, { parentId: props.host.id, index: props.children.length }),
+    drop: (event: React.DragEvent<HTMLDivElement>) => props.performDrop(event, { parentId: props.host.id, index: props.children.length }),
   };
 }
 
-function RowLabel({
-  node,
-  label,
-  note,
-}: {
-  readonly node: NavigatorNode;
-  readonly label: string;
-  readonly note: NavigatorNode | undefined;
-}) {
+function RowLabel({ node, label, note }: { readonly node: NavigatorNode; readonly label: string; readonly note: NavigatorNode | undefined }) {
   const noteValue = note?.kind === 'comment' ? note.value : undefined;
   return (
-    <span
-      className="label"
-      style={node.kind === 'text' ? { fontWeight: 400, fontStyle: 'italic' } : {}}
-    >
+    <span className="label" style={node.kind === 'text' ? { fontWeight: 400, fontStyle: 'italic' } : {}}>
       {label}
       {noteValue !== undefined && (
         <span className="node-note" title={noteValue.trim()}>
@@ -410,15 +371,7 @@ function RowLabel({
   );
 }
 
-function NodeStatus({
-  rendersNothing,
-  hidden,
-  inert,
-}: {
-  readonly rendersNothing: boolean;
-  readonly hidden: boolean;
-  readonly inert: boolean;
-}) {
+function NodeStatus({ rendersNothing, hidden, inert }: { readonly rendersNothing: boolean; readonly hidden: boolean; readonly inert: boolean }) {
   if (!rendersNothing && !hidden && !inert) {
     return undefined;
   }
@@ -456,11 +409,7 @@ function canHostChildren(node: NavigatorNode): boolean {
 
 function rowClassName(view: NodeView & { readonly node: NavigatorNode }): string {
   const { node } = view;
-  const mapped =
-    node.kind === 'map' ||
-    node.kind === 'cond' ||
-    node.kind === 'branch' ||
-    (nodeIsDataBound(node) && !view.component);
+  const mapped = node.kind === 'map' || node.kind === 'cond' || node.kind === 'branch' || (nodeIsDataBound(node) && !view.component);
   return [
     'structure-node',
     view.component ? 'is-component' : '',
@@ -470,10 +419,7 @@ function rowClassName(view: NodeView & { readonly node: NavigatorNode }): string
   ].join(' ');
 }
 
-function describeNode(
-  node: NavigatorNode,
-  live: readonly string[] | undefined,
-): { readonly icon: React.ReactNode; readonly label: string } {
+function describeNode(node: NavigatorNode, live: readonly string[] | undefined): { readonly icon: React.ReactNode; readonly label: string } {
   if (isFragmentNode(node)) {
     return { icon: <CustomElementIcon size={12} />, label: 'Fragment' };
   }
@@ -539,7 +485,6 @@ function truncate(value: string, lengthMax: number): string {
   return value.length > lengthMax ? `${value.slice(0, lengthMax - 1)}…` : value;
 }
 
-const fragmentTitle =
-  'Inline group in this file. Expand it to edit its children; there is no separate file to open.';
+const fragmentTitle = 'Inline group in this file. Expand it to edit its children; there is no separate file to open.';
 
 export { defaultCollapsed };

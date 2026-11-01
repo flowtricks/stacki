@@ -38,12 +38,7 @@ export default function HistoryFilesToolbar({
       </div>
       <div className="history-file-sort">
         <span>Sort</span>
-        <Dropdown<HistoryFileSort>
-          ariaLabel="Sort changed files"
-          value={sort}
-          options={SORTS}
-          onChange={onSort}
-        />
+        <Dropdown<HistoryFileSort> ariaLabel="Sort changed files" value={sort} options={SORTS} onChange={onSort} />
       </div>
     </div>
   );

@@ -4,10 +4,7 @@ import { parseDefaultsSource } from '../../../vendor/stacki/shared/properties/co
 import { starterDefaults } from '../../../vendor/stacki/shared/properties/componentStarterDefaults';
 
 export async function loadInsertionDefaults(root: string) {
-  const [project, stored] = await Promise.all([
-    scanProject(root),
-    readMetadataSource(root, 'components'),
-  ]);
+  const [project, stored] = await Promise.all([scanProject(root), readMetadataSource(root, 'components')]);
   const catalog = project.components.map((component) => ({
     file: component.file,
     name: component.name,

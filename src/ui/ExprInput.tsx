@@ -1,13 +1,6 @@
 import { useCodeAccess, ManagedValue } from './CodeAccess';
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  EditorView,
-  keymap,
-  drawSelection,
-  placeholder as cmPlaceholder,
-  Decoration,
-  WidgetType,
-} from '@codemirror/view';
+import { EditorView, keymap, drawSelection, placeholder as cmPlaceholder, Decoration, WidgetType } from '@codemirror/view';
 import type { MutableRefObject } from 'react';
 import type { DecorationSet, KeyBinding } from '@codemirror/view';
 import type { Extension, Range } from '@codemirror/state';
@@ -316,10 +309,7 @@ function exprEvents(refs: ExprRefs): Extension {
       const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
       const ranges = view.state.field(chipsOfField)?.(view.state.doc.toString()) || [];
       assert(ranges.length <= LIMITS.treeNodesMax, 'ExprInput: chip limit exceeded');
-      const hit =
-        position === null
-          ? undefined
-          : ranges.find((range) => position >= range.from && position <= range.to);
+      const hit = position === null ? undefined : ranges.find((range) => position >= range.from && position <= range.to);
       refs.latest.current.onChipClick?.(hit || undefined);
       return true;
     },
@@ -347,9 +337,7 @@ function useExprAPI(apiRef: ExprInputProps['apiRef'], refs: ExprRefs): void {
           return undefined;
         }
         const end = view.state.doc.length;
-        const { from, to } = refs.touched.current
-          ? view.state.selection.main
-          : { from: end, to: end };
+        const { from, to } = refs.touched.current ? view.state.selection.main : { from: end, to: end };
         const value = exprReplace(view, from, to, text);
         view.focus();
         return value;
@@ -361,12 +349,7 @@ function useExprAPI(apiRef: ExprInputProps['apiRef'], refs: ExprRefs): void {
   });
 }
 
-function exprReplace(
-  view: EditorView | undefined,
-  from: number,
-  to: number,
-  text: string,
-): string | undefined {
+function exprReplace(view: EditorView | undefined, from: number, to: number, text: string): string | undefined {
   if (!view) {
     return undefined;
   }

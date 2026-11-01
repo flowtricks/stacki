@@ -25,19 +25,12 @@ export const EMPTY_NATIVE: NativeModel = { styles: [], read: false };
 
 export type NativeWriteTarget = { namePath: string[]; index: number | undefined };
 
-export async function readNativeStyles(
-  _element: AnyElement,
-  _states: readonly StateKey[],
-  onPhase?: (model: NativeModel) => void,
-): Promise<NativeModel> {
+export async function readNativeStyles(_element: AnyElement, _states: readonly StateKey[], onPhase?: (model: NativeModel) => void): Promise<NativeModel> {
   onPhase?.(EMPTY_NATIVE);
   return EMPTY_NATIVE;
 }
 
-export async function readNativeStyleByName(
-  _className: string,
-  _states: readonly StateKey[],
-): Promise<NativeModel> {
+export async function readNativeStyleByName(_className: string, _states: readonly StateKey[]): Promise<NativeModel> {
   return EMPTY_NATIVE;
 }
 
@@ -80,11 +73,6 @@ export async function applyNativeToNewBaseClass(
   return NO_NATIVE;
 }
 
-export async function liveSetNativeProperty(
-  _handle: unknown,
-  _prop: string,
-  _value: string,
-  _options?: NativeStyleOptions,
-): Promise<typeof NO_NATIVE> {
+export async function liveSetNativeProperty(_handle: unknown, _prop: string, _value: string, _options?: NativeStyleOptions): Promise<typeof NO_NATIVE> {
   return NO_NATIVE;
 }

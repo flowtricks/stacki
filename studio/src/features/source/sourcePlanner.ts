@@ -20,18 +20,15 @@ export function sourcePlanner(source: string) {
   if (projection.tag !== 'valid') {
     throw new Error('Fix the source before editing its structure.');
   }
-  const snapshot = createSnapshot(
-    { path: toFilePath('/studio/source.astro'), bytes: toByteString(bytes), projection },
-    (value) => toDigest(createHash('sha256').update(value).digest('hex')),
+  const snapshot = createSnapshot({ path: toFilePath('/studio/source.astro'), bytes: toByteString(bytes), projection }, (value) =>
+    toDigest(createHash('sha256').update(value).digest('hex')),
   );
   const anchor = (node: ParserNode) => {
     assert(node.start !== undefined, 'A structural target has a source start');
     assert(node.end !== undefined, 'A structural target has a source end');
     const start = Buffer.byteLength(source.slice(0, node.start));
     const end = Buffer.byteLength(source.slice(0, node.end));
-    const projected = projection.nodes.find(
-      (item) => item.span.start === start && item.span.end === end && item.kind === node.kind,
-    );
+    const projected = projection.nodes.find((item) => item.span.start === start && item.span.end === end && item.kind === node.kind);
     if (!projected) {
       throw new Error('Selection changed. Select the element again.');
     }

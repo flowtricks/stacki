@@ -141,11 +141,7 @@ test('render failures tell the client to use the normal fetch fallback', async (
     push.subscribe('/404', { send: (event) => events.push(event) });
     push.invalidate();
     await setTimeout(10);
-    assert.deepEqual(events, [
-      'studio:render-ready',
-      'studio:render-pending',
-      'studio:render-failed',
-    ]);
+    assert.deepEqual(events, ['studio:render-ready', 'studio:render-pending', 'studio:render-failed']);
   } finally {
     push.close();
   }

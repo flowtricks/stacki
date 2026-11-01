@@ -8,9 +8,7 @@
 // doesn't care whether the field is focused.
 
 // Created once; a canvas without a 2d context is remembered so it is not retried.
-type Measurer =
-  | { readonly kind: 'unmade' }
-  | { readonly kind: 'made'; readonly context: CanvasRenderingContext2D | undefined };
+type Measurer = { readonly kind: 'unmade' } | { readonly kind: 'made'; readonly context: CanvasRenderingContext2D | undefined };
 
 let measurer: Measurer = { kind: 'unmade' };
 

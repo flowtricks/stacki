@@ -7,11 +7,7 @@ import Popup from '../../ui/Popup';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { SanityIcon } from '../../ui/Icons';
 import { openSanitySignIn, sanityLogin } from '../../ipc/cmsConnectionsBridge';
-import {
-  SANITY_LOGIN_TIMEOUT_MS,
-  type SanityLoginState,
-  type SanityProjectChoice,
-} from '../../../shared/properties/cmsConnections';
+import { SANITY_LOGIN_TIMEOUT_MS, type SanityLoginState, type SanityProjectChoice } from '../../../shared/properties/cmsConnections';
 
 const POLL_INTERVAL_MS = 1000;
 const POLLS_MAX = Math.ceil(SANITY_LOGIN_TIMEOUT_MS / POLL_INTERVAL_MS);
@@ -27,12 +23,7 @@ export function SanitySignIn(props: { readonly projectPath: string; readonly clo
     }
   }, [state?.kind, close]);
   return (
-    <Popup
-      className="modal publish-settings cms-sanity-sign-in"
-      label="Log in with Sanity"
-      onClose={close}
-      dismissible
-    >
+    <Popup className="modal publish-settings cms-sanity-sign-in" label="Log in with Sanity" onClose={close} dismissible>
       {() => (
         <>
           <div className="modal-header">
@@ -58,11 +49,7 @@ export function SanitySignIn(props: { readonly projectPath: string; readonly clo
   );
 }
 
-function SignInStep(props: {
-  readonly state: SanityLoginState;
-  readonly choose: (projectId: string, dataset: string) => void;
-  readonly retry: () => void;
-}) {
+function SignInStep(props: { readonly state: SanityLoginState; readonly choose: (projectId: string, dataset: string) => void; readonly retry: () => void }) {
   const { state } = props;
   switch (state.kind) {
     case 'starting':
@@ -70,15 +57,8 @@ function SignInStep(props: {
     case 'browser':
       return (
         <>
-          <p>
-            Sign in on Sanity’s page in your browser, then come back here. Stacki creates an Editor
-            key for this site’s project and keeps only that key.
-          </p>
-          <button
-            type="button"
-            className="primary"
-            onClick={() => void openSanitySignIn(state.url)}
-          >
+          <p>Sign in on Sanity’s page in your browser, then come back here. Stacki creates an Editor key for this site’s project and keeps only that key.</p>
+          <button type="button" className="primary" onClick={() => void openSanitySignIn(state.url)}>
             Open the browser again
           </button>
         </>
@@ -146,12 +126,7 @@ function ProjectChoice(props: {
           ))}
         </select>
       </label>
-      <button
-        type="button"
-        className="primary"
-        disabled={!project || !datasets.includes(dataset)}
-        onClick={() => props.choose(projectId, dataset)}
-      >
+      <button type="button" className="primary" disabled={!project || !datasets.includes(dataset)} onClick={() => props.choose(projectId, dataset)}>
         Connect
       </button>
     </>
@@ -168,10 +143,7 @@ function useSanitySession(projectPath: string, id: string): SanityLoginState | u
     setState(undefined);
     async function poll(): Promise<void> {
       for (let count = 0; count < POLLS_MAX && active; count++) {
-        const result = await sanityLogin(
-          projectPath,
-          count === 0 ? { action: 'start', id } : { action: 'status', id },
-        );
+        const result = await sanityLogin(projectPath, count === 0 ? { action: 'start', id } : { action: 'status', id });
         if (!active) {
           return;
         }

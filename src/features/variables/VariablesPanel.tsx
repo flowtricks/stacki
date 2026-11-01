@@ -3,12 +3,7 @@ import { createPanelCache, usePanelData } from '../../lib/usePanelData';
 import { readCSSVariables } from './variablesBridge';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { onVariablesChanged } from '../../ipc/editorEnvironment';
-import type {
-  VariableFile,
-  VariableGroup,
-  VariableSelection,
-  VariablesSnapshot,
-} from './variablesBridge';
+import type { VariableFile, VariableGroup, VariableSelection, VariablesSnapshot } from './variablesBridge';
 import { ChevronLeftIcon, ChevronRightIcon, VariableIcon, FileIcon } from '../../ui/Icons';
 
 export interface VariablesPanelProps {
@@ -61,33 +56,13 @@ function VariableFilesPanel(props: VariablesPanelProps) {
         </div>
       </div>
       <div className="panel-body">
-        {!open &&
-          files.map((file) => (
-            <VariableFileRow
-              key={file.rel}
-              file={file}
-              selected={selected}
-              onOpen={setOpenFile}
-              onSelect={onSelect}
-            />
-          ))}
+        {!open && files.map((file) => <VariableFileRow key={file.rel} file={file} selected={selected} onOpen={setOpenFile} onSelect={onSelect} />)}
         {open &&
           open.groups.map((group, index) => (
-            <VariableGroupRow
-              key={`${group.label}-${index}`}
-              group={group}
-              file={open.rel}
-              index={index}
-              selected={selected}
-              onSelect={onSelect}
-            />
+            <VariableGroupRow key={`${group.label}-${index}`} group={group} file={open.rel} index={index} selected={selected} onSelect={onSelect} />
           ))}
         <PanelReadStatus state={state} label="CSS variables" retry={refresh} />
-        {state.kind === 'ready' && files.length === 0 && (
-          <div className="props-empty">
-            No CSS custom properties found in this project&rsquo;s stylesheets.
-          </div>
-        )}
+        {state.kind === 'ready' && files.length === 0 && <div className="props-empty">No CSS custom properties found in this project&rsquo;s stylesheets.</div>}
       </div>
     </div>
   );
@@ -96,18 +71,11 @@ function VariableFilesPanel(props: VariablesPanelProps) {
 function useVariableFiles(projectPath: string) {
   const read = useCallback(() => readCSSVariables(projectPath), [projectPath]);
   const { state, refresh } = usePanelData(variableCache, projectPath, read, onVariablesChanged);
-  const files =
-    state.kind === 'ready'
-      ? state.value.files.filter((file) => file.error || (file.count ?? 0) > 0)
-      : EMPTY_FILES;
+  const files = state.kind === 'ready' ? state.value.files.filter((file) => file.error || (file.count ?? 0) > 0) : EMPTY_FILES;
   return { state, refresh, files };
 }
 
-function useDefaultVariableSelection(
-  files: readonly VariableFile[],
-  selected: VariableSelection | undefined,
-  onSelect: VariablesPanelProps['onSelect'],
-): void {
+function useDefaultVariableSelection(files: readonly VariableFile[], selected: VariableSelection | undefined, onSelect: VariablesPanelProps['onSelect']): void {
   const initialized = useRef(false);
   useEffect(() => {
     if (initialized.current) {
@@ -139,9 +107,7 @@ interface FileRowProps {
 function VariableFileRow({ file, selected, onOpen, onSelect }: FileRowProps) {
   return (
     <div
-      className={`cms-collection ${file.error ? 'broken' : ''} ${
-        onlyGroup(file) && selected?.file === file.rel ? 'on' : ''
-      }`}
+      className={`cms-collection ${file.error ? 'broken' : ''} ${onlyGroup(file) && selected?.file === file.rel ? 'on' : ''}`}
       title={file.rel}
       onClick={() => {
         if (!file.groups.length) {
@@ -155,9 +121,7 @@ function VariableFileRow({ file, selected, onOpen, onSelect }: FileRowProps) {
     >
       <FileIcon size={14} />
       <span className="cms-collection-name">{file.name}</span>
-      <span className="cms-collection-count">
-        {file.error ? '' : file.count === 1 ? '1 variable' : `${file.count} variables`}
-      </span>
+      <span className="cms-collection-count">{file.error ? '' : file.count === 1 ? '1 variable' : `${file.count} variables`}</span>
       {!onlyGroup(file) && (
         <span className="cms-collection-chevron">
           <ChevronRightIcon size={10} />
@@ -176,20 +140,14 @@ interface GroupRowProps {
 function VariableGroupRow({ group, file, index, selected, onSelect }: GroupRowProps) {
   return (
     <div
-      className={`cms-collection ${
-        selected && selected.file === file && selected.index === index ? 'on' : ''
-      }`}
+      className={`cms-collection ${selected && selected.file === file && selected.index === index ? 'on' : ''}`}
       title={group.columns.map((column) => column.selector).join(',\n')}
       onClick={() => onSelect({ file, index })}
     >
       <VariableIcon size={14} />
       <span className="cms-collection-name">{group.label}</span>
       <span className="cms-collection-count">
-        {group.kind === 'modes'
-          ? `${group.columns.length} modes`
-          : countOf(group) === 1
-            ? '1 variable'
-            : `${countOf(group)} variables`}
+        {group.kind === 'modes' ? `${group.columns.length} modes` : countOf(group) === 1 ? '1 variable' : `${countOf(group)} variables`}
       </span>
       <span className="cms-collection-chevron">
         <ChevronRightIcon size={10} />
@@ -201,9 +159,5 @@ function onlyGroup(file: VariableFile): boolean {
   return file.groups.length === 1;
 }
 function countOf(group: VariableGroup): number {
-  return group.blocks.reduce(
-    (sum, block) =>
-      sum + block.rows.reduce((count, row) => count + row.cells.filter(Boolean).length, 0),
-    0,
-  );
+  return group.blocks.reduce((sum, block) => sum + block.rows.reduce((count, row) => count + row.cells.filter(Boolean).length, 0), 0);
 }

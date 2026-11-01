@@ -41,11 +41,7 @@ export interface WriteOptions {
 }
 
 // The layers with one layer's fields replaced.
-export function replaceLayer<K extends keyof BgLayer>(
-  layers: BgLayer[],
-  index: number,
-  patch: Pick<BgLayer, K>,
-): BgLayer[] {
+export function replaceLayer<K extends keyof BgLayer>(layers: BgLayer[], index: number, patch: Pick<BgLayer, K>): BgLayer[] {
   return layers.map((layer, i) => (i === index ? { ...layer, ...patch } : layer));
 }
 
@@ -165,20 +161,11 @@ export function BgField({
   swatchLabel?: string;
 } & Props) {
   const display = displayOf(read(prop));
-  const external = display.present
-    ? display.important
-      ? `${display.value} !important`
-      : display.value
-    : '';
+  const external = display.present ? (display.important ? `${display.value} !important` : display.value) : '';
   const field = useBgFieldEditing({ prop, external, busy, setProp, clearProp, liveSetProp });
   const input = <BgFieldInput prop={prop} label={label} placeholder={placeholder} field={field} />;
   const swatch = swatchLabel ? (
-    <ColorSwatch
-      value={field.shown}
-      busy={busy}
-      ariaLabel={swatchLabel}
-      onChange={(color, live) => field.swatchChange(color, { live })}
-    />
+    <ColorSwatch value={field.shown} busy={busy} ariaLabel={swatchLabel} onChange={(color, live) => field.swatchChange(color, { live })} />
   ) : undefined;
   const before = swatch ?? prefix;
 
@@ -321,25 +308,9 @@ export function useBgFieldEditing({
   return { busy, shown, cleared, scrub, inputHandlers, pick, swatchChange };
 }
 
-export function BgFieldInput({
-  prop,
-  label,
-  placeholder,
-  field,
-}: {
-  prop: string;
-  label: string;
-  placeholder: string;
-  field: BgFieldEditing;
-}) {
+export function BgFieldInput({ prop, label, placeholder, field }: { prop: string; label: string; placeholder: string; field: BgFieldEditing }) {
   return (
-    <VariableConnect
-      code
-      ariaLabel={`Connect ${label} to a variable`}
-      disabled={field.busy}
-      prop={prop}
-      onPick={field.pick}
-    >
+    <VariableConnect code ariaLabel={`Connect ${label} to a variable`} disabled={field.busy} prop={prop} onPick={field.pick}>
       <input
         {...field.scrub.input}
         className="u-input embed-editor_size-input"
@@ -361,13 +332,7 @@ export function BgFieldInput({
 // rather than expanding inline. Portaled to <body> so it escapes the panel's
 // clipping / stacking; closes on backdrop click or Escape. No header — the rows
 // (label left / control right, divider-separated) run edge to edge like Webflow.
-export function LayerEditorModal({
-  onClose,
-  children,
-}: {
-  onClose: () => void;
-  children: ReactNode;
-}) {
+export function LayerEditorModal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
   return (
     <Popup
       className="embed-editor_bg-modal u-surface-surface"

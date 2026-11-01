@@ -37,8 +37,7 @@ export function createAstroNotifications(server: ViteDevServer, root: string) {
     }
     clients.clear();
   });
-  return (response: ServerResponse, authorize?: () => Promise<boolean>) =>
-    subscribe(clients, response, authorize);
+  return (response: ServerResponse, authorize?: () => Promise<boolean>) => subscribe(clients, response, authorize);
 }
 
 function createProjectUpdates(clients: ReadonlySet<ServerResponse>, root: string) {
@@ -59,9 +58,7 @@ function createProjectUpdates(clients: ReadonlySet<ServerResponse>, root: string
       // One notification per burst also covers Markdown, collections, assets and empty folders.
       timer = setTimeout(() => {
         timer = undefined;
-        const events =
-          'event: project-changed\ndata: {}\n\n' +
-          (assetsChanged ? 'event: assets-changed\ndata: {}\n\n' : '');
+        const events = 'event: project-changed\ndata: {}\n\n' + (assetsChanged ? 'event: assets-changed\ndata: {}\n\n' : '');
         assetsChanged = false;
         for (const client of clients) {
           if (!client.write(events)) {
@@ -74,11 +71,7 @@ function createProjectUpdates(clients: ReadonlySet<ServerResponse>, root: string
   };
 }
 
-function subscribe(
-  clients: Set<ServerResponse>,
-  response: ServerResponse,
-  authorize?: () => Promise<boolean>,
-) {
+function subscribe(clients: Set<ServerResponse>, response: ServerResponse, authorize?: () => Promise<boolean>) {
   if (clients.size >= 100) {
     response.writeHead(503);
     response.end('Too many notification connections');

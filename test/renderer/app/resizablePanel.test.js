@@ -33,19 +33,7 @@ test('stored widths reject malformed values and enforce each panel minimum', () 
   ]) {
     assert.equal(parsePanelWidth(String(minimum), kind), minimum);
     assert.equal(parsePanelWidth('600', kind), 600);
-    for (const invalid of [
-      undefined,
-      {},
-      400,
-      '',
-      'NaN',
-      'Infinity',
-      '400.5',
-      '601',
-      '-1',
-      String(minimum - 1),
-      ' '.repeat(1000),
-    ]) {
+    for (const invalid of [undefined, {}, 400, '', 'NaN', 'Infinity', '400.5', '601', '-1', String(minimum - 1), ' '.repeat(1000)]) {
       assert.equal(parsePanelWidth(invalid, kind), undefined);
     }
   }
@@ -66,16 +54,7 @@ test('panel gestures clamp, persist, isolate code widths, and clean up', async (
     cancelAnimationFrame: dom.window.cancelAnimationFrame.bind(dom.window),
   });
   const root = createRoot(document.getElementById('root'));
-  const render = (kind) =>
-    act(() =>
-      root.render(
-        React.createElement(
-          ResizablePanel,
-          { kind },
-          React.createElement('div', undefined, 'Content'),
-        ),
-      ),
-    );
+  const render = (kind) => act(() => root.render(React.createElement(ResizablePanel, { kind }, React.createElement('div', undefined, 'Content'))));
   const handle = () => document.querySelector('[role="separator"]');
   const panel = () => handle().parentElement;
   const width = () => Number(handle().getAttribute('aria-valuenow'));
@@ -85,10 +64,7 @@ test('panel gestures clamp, persist, isolate code widths, and clean up', async (
       Object.defineProperty(event, 'pointerId', { value: extra.pointerId ?? 1 });
       target.dispatchEvent(event);
     });
-  const key = (value) =>
-    act(() =>
-      handle().dispatchEvent(new window.KeyboardEvent('keydown', { bubbles: true, key: value })),
-    );
+  const key = (value) => act(() => handle().dispatchEvent(new window.KeyboardEvent('keydown', { bubbles: true, key: value })));
   const start = () => {
     const value = width();
     panel().getBoundingClientRect = () => ({ width: value });

@@ -6,12 +6,7 @@
 // line, text or path past its limit) must throw.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  parseOkResult,
-  parseResolvePathResult,
-  parseSymbolReadResult,
-  parseTextResult,
-} from '#dist/shared/ipc/ipcContract.js';
+import { parseOkResult, parseResolvePathResult, parseSymbolReadResult, parseTextResult } from '#dist/shared/ipc/ipcContract.js';
 import { BOUNDARY_LIMITS } from '#dist/shared/core/boundary.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.

@@ -25,10 +25,7 @@ test('open testing still requires a valid session and stops allowing testers whe
     const session = await signSession({ ...identity, audience }, config.SESSION_SECRET);
     assert.equal((await authorizeConnection(request(session, audience), testing)).status, 204);
     assert.equal((await authorizeConnection(request(session, audience), config)).status, 403);
-    const expired = await signSession(
-      { ...identity, audience, expires: Date.now() - 1_000 },
-      config.SESSION_SECRET,
-    );
+    const expired = await signSession({ ...identity, audience, expires: Date.now() - 1_000 }, config.SESSION_SECRET);
     assert.equal((await authorizeConnection(request(expired, audience), testing)).status, 401);
   }
   assert.equal((await authorizeConnection(request('forged'), testing)).status, 401);

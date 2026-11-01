@@ -3,10 +3,7 @@ import { setToolPathHome } from '../../../vendor/stacki/electron/lib/nodeTools';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash } from 'node:crypto';
 import { publishingRepositories } from '../../../vendor/stacki/electron/project/publishRepositories';
-import {
-  parseRepositoryRequest,
-  parseRepositoryResult,
-} from '../../../vendor/stacki/shared/ipc/publishRepository';
+import { parseRepositoryRequest, parseRepositoryResult } from '../../../vendor/stacki/shared/ipc/publishRepository';
 import { parseGitHubRepository } from '../../../vendor/stacki/shared/ipc/githubRepository';
 
 export async function repositoryRoute(
@@ -28,9 +25,7 @@ export async function repositoryRoute(
   const input: unknown = JSON.parse(await readBody());
   const action = parseRepositoryRequest(input);
   const managed = process.env['GITHUB_REPOSITORY'];
-  const result = managed
-    ? managedRepository(managed, action.action)
-    : await publishingRepositories(root, action);
+  const result = managed ? managedRepository(managed, action.action) : await publishingRepositories(root, action);
   response.setHeader('Content-Type', 'application/json');
   response.setHeader('Cache-Control', 'no-store');
   response.end(JSON.stringify(result));

@@ -31,20 +31,13 @@ export const RADIAL_SIZES = [
   },
 ] as const;
 
-export const RADIAL_SIZE_FARTHEST_SIDE_SECOND_PATH =
-  'M13.85 5a7.465 7.465 0 00-1.35-3H2v10.5A7.503 7.503 0 0013.85 8H8.5a2.5 2.5 0 110-3h5.35z';
+export const RADIAL_SIZE_FARTHEST_SIDE_SECOND_PATH = 'M13.85 5a7.465 7.465 0 00-1.35-3H2v10.5A7.503 7.503 0 0013.85 8H8.5a2.5 2.5 0 110-3h5.35z';
 
 // Webflow's radial-extent icons (closest/farthest × side/corner).
 export const RADIAL_SIZE_ICONS: Record<string, ReactNode> = {
   'closest-side': (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-      <path
-        opacity=".6"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M1 3v12h14V3h-1v11H2V3H1z"
-        fill="currentColor"
-      />
+      <path opacity=".6" fillRule="evenodd" clipRule="evenodd" d="M1 3v12h14V3h-1v11H2V3H1z" fill="currentColor" />
       <path
         opacity=".4"
         fillRule="evenodd"
@@ -52,30 +45,14 @@ export const RADIAL_SIZE_ICONS: Record<string, ReactNode> = {
         d="M8 4.5a2.5 2.5 0 11-3 0V2H3.337A5.53 5.53 0 002 3.337v6.326A5.5 5.5 0 109.663 2H8v2.5z"
         fill="currentColor"
       />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M1 1h14v1H7v2.05a2.51 2.51 0 00-1 0V2H1V1z"
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d="M1 1h14v1H7v2.05a2.51 2.51 0 00-1 0V2H1V1z" fill="currentColor" />
       <circle cx="1.5" cy="1.5" r="1.5" transform="translate(5 5)" fill="currentColor" />
     </svg>
   ),
   'closest-corner': (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-      <path
-        opacity=".6"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M14 2H5V1h10v14H1V5h1v9h12V2z"
-        fill="currentColor"
-      />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M2 1H1v3h1V2.707L4.414 5.12c.186-.28.427-.52.707-.706L2.71 2H4V1H2z"
-        fill="currentColor"
-      />
+      <path opacity=".6" fillRule="evenodd" clipRule="evenodd" d="M14 2H5V1h10v14H1V5h1v9h12V2z" fill="currentColor" />
+      <path fillRule="evenodd" clipRule="evenodd" d="M2 1H1v3h1V2.707L4.414 5.12c.186-.28.427-.52.707-.706L2.71 2H4V1H2z" fill="currentColor" />
       <circle cx="1.5" cy="1.5" r="1.5" transform="translate(5 5)" fill="currentColor" />
       <path
         opacity=".4"
@@ -88,38 +65,15 @@ export const RADIAL_SIZE_ICONS: Record<string, ReactNode> = {
   ),
   'farthest-side': (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-      <path
-        opacity=".6"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M13 2H2v12h11v1H1V1h12v1z"
-        fill="currentColor"
-      />
-      <path
-        opacity=".4"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={RADIAL_SIZE_FARTHEST_SIDE_SECOND_PATH}
-        fill="currentColor"
-      />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M14 1h1v14h-1V7H8.95a2.513 2.513 0 000-1H14V1z"
-        fill="currentColor"
-      />
+      <path opacity=".6" fillRule="evenodd" clipRule="evenodd" d="M13 2H2v12h11v1H1V1h12v1z" fill="currentColor" />
+      <path opacity=".4" fillRule="evenodd" clipRule="evenodd" d={RADIAL_SIZE_FARTHEST_SIDE_SECOND_PATH} fill="currentColor" />
+      <path fillRule="evenodd" clipRule="evenodd" d="M14 1h1v14h-1V7H8.95a2.513 2.513 0 000-1H14V1z" fill="currentColor" />
       <circle cx="1.5" cy="1.5" r="1.5" transform="translate(5 5)" fill="currentColor" />
     </svg>
   ),
   'farthest-corner': (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-      <path
-        opacity=".6"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M14 2H2v12h9v1H1V1h14v10h-1V2z"
-        fill="currentColor"
-      />
+      <path opacity=".6" fillRule="evenodd" clipRule="evenodd" d="M14 2H2v12h9v1H1V1h14v10h-1V2z" fill="currentColor" />
       <path
         opacity=".4"
         fillRule="evenodd"
@@ -128,26 +82,13 @@ export const RADIAL_SIZE_ICONS: Record<string, ReactNode> = {
         fill="currentColor"
       />
       <circle cx="1.5" cy="1.5" r="1.5" transform="translate(5 5)" fill="currentColor" />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M8.586 7.88c-.186.28-.427.52-.707.706L13.29 14H12v1h3v-3h-1v1.293L8.586 7.88z"
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d="M8.586 7.88c-.186.28-.427.52-.707.706L13.29 14H12v1h3v-3h-1v1.293L8.586 7.88z" fill="currentColor" />
     </svg>
   ),
 };
 
 // Radial extent presets with Webflow's icons + delayed description tooltips.
-export function RadialSizeControl({
-  value,
-  busy,
-  onChange,
-}: {
-  value: string;
-  busy: boolean;
-  onChange: (value: string) => void;
-}) {
+export function RadialSizeControl({ value, busy, onChange }: { value: string; busy: boolean; onChange: (value: string) => void }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<string | undefined>(undefined);
   const [arrowRight, setArrowRight] = useState(0);
@@ -223,50 +164,20 @@ export const RepeatIcon = () => (
 );
 export const RotateCcwIcon = () => (
   <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
-    <path
-      d="M4 4v3h3"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M4.2 7A4.4 4.4 0 1 1 3.9 9.6"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
+    <path d="M4 4v3h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M4.2 7A4.4 4.4 0 1 1 3.9 9.6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
   </svg>
 );
 export const RotateCwIcon = () => (
   <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
-    <path
-      d="M12 4v3H9"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M11.8 7A4.4 4.4 0 1 0 12.1 9.6"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
+    <path d="M12 4v3H9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M11.8 7A4.4 4.4 0 1 0 12.1 9.6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
   </svg>
 );
 
 // The angle dial (linear): drag the dot around the circle to set the gradient's
 // direction (0° = up, 90° = right — CSS convention), matching Webflow's control.
-export function AngleDial({
-  deg,
-  busy,
-  onChange,
-}: {
-  deg: number;
-  busy: boolean;
-  onChange: (deg: number, live: boolean) => void;
-}) {
+export function AngleDial({ deg, busy, onChange }: { deg: number; busy: boolean; onChange: (deg: number, live: boolean) => void }) {
   const ref = useRef<HTMLButtonElement>(null);
   const dragging = useRef(false);
   const angleFrom = (event: React.PointerEvent) => {
@@ -313,10 +224,7 @@ export function AngleDial({
       aria-label="Gradient angle"
       title="Drag to set the angle"
     >
-      <span
-        className="embed-editor_grad-dial-dot"
-        style={{ left: `${50 + 38 * Math.sin(rad)}%`, top: `${50 - 38 * Math.cos(rad)}%` }}
-      />
+      <span className="embed-editor_grad-dial-dot" style={{ left: `${50 + 38 * Math.sin(rad)}%`, top: `${50 - 38 * Math.cos(rad)}%` }} />
     </button>
   );
 }
@@ -327,18 +235,9 @@ export interface WriteOptions {
 }
 
 // Linear angle control: the dial + ±45° rotate buttons + a DEG number field.
-export function AngleControl({
-  angle,
-  busy,
-  onChange,
-}: {
-  angle: string;
-  busy: boolean;
-  onChange: (angle: string, live: boolean) => void;
-}) {
+export function AngleControl({ angle, busy, onChange }: { angle: string; busy: boolean; onChange: (angle: string, live: boolean) => void }) {
   const deg = angleToDegrees(angle);
-  const set = (degrees: number, options: WriteOptions) =>
-    onChange(degreesToAngle(degrees), options.live);
+  const set = (degrees: number, options: WriteOptions) => onChange(degreesToAngle(degrees), options.live);
   return (
     <div className="embed-editor_grad-angle">
       <AngleDial deg={deg} busy={busy} onChange={(degrees, live) => set(degrees, { live })} />

@@ -57,15 +57,7 @@ export default function VariableTypeIcon({
 }) {
   const path = PATHS[kind] || PATHS['size'];
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      className={className}
-      style={{ display: 'block', flexShrink: 0 }}
-      aria-hidden="true"
-    >
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className} style={{ display: 'block', flexShrink: 0 }} aria-hidden="true">
       <title>{LABELS[kind] || LABELS['size']}</title>
       <path fillRule="evenodd" clipRule="evenodd" d={path} fill="currentColor" />
     </svg>

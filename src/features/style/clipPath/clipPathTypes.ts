@@ -47,14 +47,7 @@ export type RawClipPathShape = {
   editable?: RawEditableClipPath;
 };
 export type NoneShape = { kind: 'none' };
-export type ClipShape =
-  | NoneShape
-  | PolygonShape
-  | CircleShape
-  | EllipseShape
-  | InsetShape
-  | ShapeFunctionShape
-  | RawClipPathShape;
+export type ClipShape = NoneShape | PolygonShape | CircleShape | EllipseShape | InsetShape | ShapeFunctionShape | RawClipPathShape;
 export type InsetSide = 'top' | 'right' | 'bottom' | 'left';
 export type InsetSideMode = 'single' | 'opposite' | 'all';
 export type InsetRadiusMode = 'single' | 'all' | 'opposite';
@@ -130,10 +123,7 @@ export type SvgLoopPair = {
 };
 export type SvgLoopPoint = { targetLoopIndex: number; targetIndex: number; distance: number };
 export type SvgClipPathOutline = { points: Point[]; loops: Point[][] };
-export type SvgShapeCommand =
-  | { kind: 'line'; to: Point }
-  | { kind: 'curve'; to: Point; control1: Point; control2?: Point }
-  | { kind: 'close' };
+export type SvgShapeCommand = { kind: 'line'; to: Point } | { kind: 'curve'; to: Point; control1: Point; control2?: Point } | { kind: 'close' };
 export type SvgShapeSubpath = { start: Point; commands: SvgShapeCommand[] };
 export type ShapeFitMode = 'stretch' | 'contain';
 export type ShapeScaleOptions = {
@@ -170,9 +160,7 @@ export type ShapeContainModel = {
 };
 export type ShapeCssPoint = { x: string; y: string };
 export type ShapeCssCommand =
-  | { kind: 'line'; to: ShapeCssPoint }
-  | { kind: 'curve'; to: ShapeCssPoint; control1: ShapeCssPoint; control2?: ShapeCssPoint }
-  | { kind: 'close' };
+  { kind: 'line'; to: ShapeCssPoint } | { kind: 'curve'; to: ShapeCssPoint; control1: ShapeCssPoint; control2?: ShapeCssPoint } | { kind: 'close' };
 export type ShapeCssSubpath = { start: ShapeCssPoint; commands: ShapeCssCommand[] };
 export type ClipPathStyleOrigin = 'none' | 'current' | 'inherited';
 export type SelectionReadOptions = {

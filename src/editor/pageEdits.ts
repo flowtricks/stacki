@@ -321,12 +321,7 @@ export function recordApplied(record: EditsRecord, applied: AppliedEdit): void {
   }
   assert(outcome.waiting > 0, 'An answer arrives for a write the step waits on');
   const done = [...outcome.applied, applied];
-  writeOutcome(
-    record,
-    outcome.waiting === 1
-      ? { tag: 'applied', applied: done }
-      : { tag: 'pending', waiting: outcome.waiting - 1, applied: done },
-  );
+  writeOutcome(record, outcome.waiting === 1 ? { tag: 'applied', applied: done } : { tag: 'pending', waiting: outcome.waiting - 1, applied: done });
 }
 
 /** Settle a request that changed no bytes without erasing earlier undo information. */
@@ -336,12 +331,7 @@ export function recordNoChange(record: EditsRecord): void {
     return;
   }
   assert(outcome.waiting > 0, 'A settled request was owed an answer');
-  writeOutcome(
-    record,
-    outcome.waiting === 1
-      ? { tag: 'applied', applied: outcome.applied }
-      : { ...outcome, waiting: outcome.waiting - 1 },
-  );
+  writeOutcome(record, outcome.waiting === 1 ? { tag: 'applied', applied: outcome.applied } : { ...outcome, waiting: outcome.waiting - 1 });
 }
 
 /** The one writer of an undo step's outcome. A step is a cell shared by the
@@ -397,9 +387,7 @@ export function nodeRefIn(origin: PageOrigin, nodeId: string): NodeRef | undefin
     }
     if ('children' in node && Array.isArray(node.children)) {
       const children: readonly PageNode[] = node.children;
-      children.forEach((child, index) =>
-        pending.push({ node: child, path: [...entry.path, index] }),
-      );
+      children.forEach((child, index) => pending.push({ node: child, path: [...entry.path, index] }));
     }
   }
   return undefined;
@@ -457,10 +445,7 @@ export async function sendGesture(input: GestureSendInput): Promise<GestureSent>
   return sendReplacement(input, refOf);
 }
 
-async function sendReplacement(
-  input: GestureSendInput,
-  refOf: (nodeId: string) => NodeRef | undefined,
-): Promise<GestureSent> {
+async function sendReplacement(input: GestureSendInput, refOf: (nodeId: string) => NodeRef | undefined): Promise<GestureSent> {
   const predicted = input.gesture.apply(input.origin.model);
   const replacements = replacementEdits(input.origin, predicted, refOf);
   if (replacements !== undefined && replacements.length > 0) {
@@ -482,10 +467,7 @@ async function sendReplacement(
   return sendRequests(input, [page]);
 }
 
-async function sendRequests(
-  input: GestureSendInput,
-  requests: readonly Edit[],
-): Promise<GestureSent> {
+async function sendRequests(input: GestureSendInput, requests: readonly Edit[]): Promise<GestureSent> {
   const replies: PageEdited[] = [];
   for (const edit of requests) {
     // The queue reserves one write per gesture. A composed gesture can send
@@ -515,11 +497,7 @@ async function sendRequests(
  * parent, while a structural change (insert, remove, reorder, or move) selects
  * the parent whose child list changed. Main turns each replacement into hunks
  * inside that node, preserving every untouched byte around and within it. */
-function replacementEdits(
-  origin: PageOrigin,
-  predicted: EditorModel,
-  refOf: (nodeId: string) => NodeRef | undefined,
-): readonly Edit[] | undefined {
+function replacementEdits(origin: PageOrigin, predicted: EditorModel, refOf: (nodeId: string) => NodeRef | undefined): readonly Edit[] | undefined {
   const afterById = nodesById(predicted.nodes);
   const pending: PageNode[] = [...origin.model.nodes];
   const edits: Edit[] = [];
@@ -627,11 +605,7 @@ function childNodes(node: PageNode): readonly PageNode[] {
 }
 
 // A request did not apply: refused over changed bytes, or not written.
-function stopped(
-  error: PageEditError,
-  authored: Digest,
-  replies: readonly PageEdited[],
-): GestureSent {
+function stopped(error: PageEditError, authored: Digest, replies: readonly PageEdited[]): GestureSent {
   const disk = replies[replies.length - 1]?.checksum ?? authored;
   switch (error.code) {
     case 'rejected':
@@ -646,9 +620,7 @@ function stopped(
     case 'backpressured':
       // Refused before anything was written: safe to send again, when none of
       // the gesture's requests applied yet.
-      return replies.length === 0
-        ? { tag: 'retry', message: error.message }
-        : { tag: 'uncertain', message: error.message, replies };
+      return replies.length === 0 ? { tag: 'retry', message: error.message } : { tag: 'uncertain', message: error.message, replies };
     case 'write-race':
     case 'uncertain':
       return { tag: 'uncertain', message: error.message, replies };

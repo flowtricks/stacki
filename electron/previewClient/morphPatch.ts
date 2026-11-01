@@ -103,10 +103,7 @@ export function diffChildren(before: readonly string[], after: readonly string[]
         continue;
       }
       for (let col = afterCount - start - 1; col >= 0; col--) {
-        currentRow[col] =
-          before[row + start] === after[col + start]
-            ? (next[col + 1] ?? 0) + 1
-            : Math.max(next[col] ?? 0, currentRow[col + 1] ?? 0);
+        currentRow[col] = before[row + start] === after[col + start] ? (next[col + 1] ?? 0) + 1 : Math.max(next[col] ?? 0, currentRow[col + 1] ?? 0);
       }
     }
   }
@@ -157,8 +154,7 @@ function Ambiguous(what: string): Error {
 // contradicted wins, and scanning past one for a "better" match is exactly the
 // mistake. A same-tag node is still remembered as a last resort, for the case
 // where client code took one of the server's own classes away.
-const classesOf = (node: Element): string[] =>
-  (node.getAttribute('class') || '').split(/\s+/).filter(Boolean);
+const classesOf = (node: Element): string[] => (node.getAttribute('class') || '').split(/\s+/).filter(Boolean);
 
 // Every class the server put on the node is still on the live one. A node the
 // server gave no class to has to have none either — otherwise the test is
@@ -286,16 +282,9 @@ function patchNode(live: Node, previous: Node, next: Node): void {
     // Only when the server changed it, and only if the live copy still says
     // what the server last said — client code that rewrote this text keeps it.
     const liveText = asText(live) ? live : asComment(live) ? live : undefined;
-    const previousData = (asText(previous) ? previous : asComment(previous) ? previous : undefined)
-      ?.data;
+    const previousData = (asText(previous) ? previous : asComment(previous) ? previous : undefined)?.data;
     const nextData = (asText(next) ? next : asComment(next) ? next : undefined)?.data;
-    if (
-      liveText &&
-      previousData !== undefined &&
-      nextData !== undefined &&
-      previousData !== nextData &&
-      liveText.data === previousData
-    ) {
+    if (liveText && previousData !== undefined && nextData !== undefined && previousData !== nextData && liveText.data === previousData) {
       liveText.data = nextData;
     }
     return;
@@ -312,11 +301,7 @@ function patchNode(live: Node, previous: Node, next: Node): void {
   patchChildren(live, previous, next);
 }
 
-export function patchChildren(
-  liveParent: Element,
-  previousParent: Element,
-  nextParent: Element,
-): void {
+export function patchChildren(liveParent: Element, previousParent: Element, nextParent: Element): void {
   const before: Node[] = [];
   for (let node = previousParent.firstChild; node; node = node.nextSibling) {
     before.push(node);
@@ -357,13 +342,7 @@ export function patchChildren(
         live = target.nextSibling;
       }
       // remove() lives on the leaf kinds, not on Node itself.
-      const removal = asElement(target)
-        ? target
-        : asText(target)
-          ? target
-          : asComment(target)
-            ? target
-            : undefined;
+      const removal = asElement(target) ? target : asText(target) ? target : asComment(target) ? target : undefined;
       removal?.remove();
     } else {
       const nextNode = after[j];

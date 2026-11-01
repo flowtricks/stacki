@@ -46,8 +46,7 @@ const { repoPath } = require('../../helpers/sources.js');
 const { readSourceGroup } = require('../../helpers/sourceText.js');
 
 const SCAN = { requireExport: false, allowPlainLists: true };
-const read = (source) =>
-  jc.findCollections(source, SCAN).find((collection) => collection.name === 'SCREENS');
+const read = (source) => jc.findCollections(source, SCAN).find((collection) => collection.name === 'SCREENS');
 // The write, as something to compare against — a collection that cannot be read
 // and a writer that throws are both answers this file has to be able to report
 // rather than die on.
@@ -81,21 +80,9 @@ const SCREENS = [
 {
   const col = read(FM);
   check('a collection of imported pictures is readable at all', !!col?.data, col?.reason);
-  check(
-    'and the name travels as the source it is',
-    col?.data?.[0]?.image?.__expr === 'dailyDevotionals',
-    JSON.stringify(col?.data?.[0]),
-  );
-  check(
-    'the rest of the row is ordinary data',
-    col?.data?.[1]?.label === 'And much more',
-    JSON.stringify(col?.data?.[1]),
-  );
-  check(
-    'and writing it back changes nothing',
-    writeBack(FM, col?.data) === FM,
-    writeBack(FM, col?.data),
-  );
+  check('and the name travels as the source it is', col?.data?.[0]?.image?.__expr === 'dailyDevotionals', JSON.stringify(col?.data?.[0]));
+  check('the rest of the row is ordinary data', col?.data?.[1]?.label === 'And much more', JSON.stringify(col?.data?.[1]));
+  check('and writing it back changes nothing', writeBack(FM, col?.data) === FM, writeBack(FM, col?.data));
 }
 {
   // The boundary: a name IS the value, or the collection stays read-only. None
@@ -107,18 +94,10 @@ const SCREENS = [
     ['...defaults', 'a spread'],
   ]) {
     const source = `const SCREENS = [\n  { image: ${expr} },\n];\n`;
-    check(
-      `${what} keeps the collection read-only`,
-      read(source) !== undefined && read(source).data === undefined,
-      JSON.stringify(read(source)?.data),
-    );
+    check(`${what} keeps the collection read-only`, read(source) !== undefined && read(source).data === undefined, JSON.stringify(read(source)?.data));
   }
   const dotted = read('const SCREENS = [\n  { image: icons.mail },\n];\n');
-  check(
-    'a name with a dot in it is still one name',
-    dotted?.data?.[0]?.image?.__expr === 'icons.mail',
-    JSON.stringify(dotted?.data),
-  );
+  check('a name with a dot in it is still one name', dotted?.data?.[0]?.image?.__expr === 'icons.mail', JSON.stringify(dotted?.data));
 }
 
 // --- what the writer used to do to this file ---------------------------------------
@@ -137,32 +116,15 @@ const SCREENS = [
   // The indent comes from the rows being rewritten. Sniffing the file at large
   // finds ` * …` inside the comment above them.
   const out = writeBack(FM, read(FM)?.data);
-  check(
-    'a block comment above the rows does not set the indent',
-    /\n  \{ label: "Daily/.test(out),
-    out.split('\n').slice(-4).join('\n'),
-  );
+  check('a block comment above the rows does not set the indent', /\n  \{ label: "Daily/.test(out), out.split('\n').slice(-4).join('\n'));
   const tabbed = 'const SCREENS = [\n\t{ label: "One" },\n];\n';
-  check(
-    'a file indented with tabs keeps them',
-    writeBack(tabbed, read(tabbed)?.data) === tabbed,
-    writeBack(tabbed, read(tabbed)?.data),
-  );
+  check('a file indented with tabs keeps them', writeBack(tabbed, read(tabbed)?.data) === tabbed, writeBack(tabbed, read(tabbed)?.data));
   const four = 'const SCREENS = [\n    { label: "One" },\n];\n';
-  check(
-    'and one indented four keeps four',
-    writeBack(four, read(four)?.data) === four,
-    writeBack(four, read(four)?.data),
-  );
+  check('and one indented four keeps four', writeBack(four, read(four)?.data) === four, writeBack(four, read(four)?.data));
   // The rows answer for themselves: the code above them may be indented some
   // other way, and it is not the thing being rewritten.
-  const mixed =
-    'function pad() {\n    return 1;\n}\n\nconst SCREENS = [\n  { label: "One" },\n];\n';
-  check(
-    'code above the rows does not set it either',
-    writeBack(mixed, read(mixed)?.data) === mixed,
-    writeBack(mixed, read(mixed)?.data),
-  );
+  const mixed = 'function pad() {\n    return 1;\n}\n\nconst SCREENS = [\n  { label: "One" },\n];\n';
+  check('code above the rows does not set it either', writeBack(mixed, read(mixed)?.data) === mixed, writeBack(mixed, read(mixed)?.data));
 }
 
 {
@@ -180,28 +142,12 @@ const SCREENS = [
 // --- reading the import above it ------------------------------------------------
 {
   const imports = ar.defaultImports(FM);
-  check(
-    'every default import is found',
-    imports.map((i) => i.name).join() === 'Section,dailyDevotionals,muchMore',
-    imports.map((i) => i.name).join(),
-  );
-  check(
-    'with the path it names',
-    ar.importedAs(FM, 'muchMore')?.spec === '@/assets/images/app-more.webp',
-    JSON.stringify(ar.importedAs(FM, 'muchMore')),
-  );
-  check(
-    'a name nothing imports is not one',
-    ar.importedAs(FM, 'nowhere') === undefined,
-    'it found something',
-  );
+  check('every default import is found', imports.map((i) => i.name).join() === 'Section,dailyDevotionals,muchMore', imports.map((i) => i.name).join());
+  check('with the path it names', ar.importedAs(FM, 'muchMore')?.spec === '@/assets/images/app-more.webp', JSON.stringify(ar.importedAs(FM, 'muchMore')));
+  check('a name nothing imports is not one', ar.importedAs(FM, 'nowhere') === undefined, 'it found something');
   // A name that stands for something INSIDE a module is not a file to swap.
   const other = "import { CONTACTS } from '../consts';\nimport * as icons from './icons';\n";
-  check(
-    'a named or namespace import is not a file',
-    ar.defaultImports(other).length === 0,
-    JSON.stringify(ar.defaultImports(other)),
-  );
+  check('a named or namespace import is not a file', ar.defaultImports(other).length === 0, JSON.stringify(ar.defaultImports(other)));
   check(
     'but a default beside a named one is',
     ar.defaultImports("import hero, { alt } from './hero.png';\n")[0]?.name === 'hero',
@@ -214,26 +160,10 @@ const SCREENS = [
   // than reading into nothing.
   const withAssets = ar.withAssets(read(FM)?.data || [], resolve);
   check('there are rows to bind at all', withAssets.length === 2, `${withAssets.length} rows`);
-  check(
-    'a name bound to a picture carries the picture',
-    withAssets[1]?.image?.__asset === 'src/assets/images/app-more.webp',
-    JSON.stringify(withAssets[1]),
-  );
-  check(
-    'and still says which name it was',
-    withAssets[1]?.image?.__expr === 'muchMore',
-    JSON.stringify(withAssets[1]),
-  );
-  check(
-    'a name bound to something else is left alone',
-    withAssets[0]?.image?.__asset === undefined,
-    JSON.stringify(withAssets[0]),
-  );
-  check(
-    'and the data around it is untouched',
-    withAssets[0]?.label === 'Daily devotionals',
-    JSON.stringify(withAssets[0]),
-  );
+  check('a name bound to a picture carries the picture', withAssets[1]?.image?.__asset === 'src/assets/images/app-more.webp', JSON.stringify(withAssets[1]));
+  check('and still says which name it was', withAssets[1]?.image?.__expr === 'muchMore', JSON.stringify(withAssets[1]));
+  check('a name bound to something else is left alone', withAssets[0]?.image?.__asset === undefined, JSON.stringify(withAssets[0]));
+  check('and the data around it is untouched', withAssets[0]?.label === 'Daily devotionals', JSON.stringify(withAssets[0]));
 }
 
 // --- writing the import for a picked one -------------------------------------------
@@ -288,27 +218,15 @@ const SCREENS = [
     lines[3] === "import appPastSermons from '@/assets/images/app-past-sermons.webp';",
     lines.slice(0, 5).join('\n'),
   );
-  check(
-    'and nothing else moves',
-    next.replace(/^.*app-past-sermons.*\n/m, '') === FM,
-    'the file changed around it',
-  );
-  check(
-    'it reads back as an import',
-    ar.importedAs(next, 'appPastSermons')?.spec === '@/assets/images/app-past-sermons.webp',
-    'not found',
-  );
+  check('and nothing else moves', next.replace(/^.*app-past-sermons.*\n/m, '') === FM, 'the file changed around it');
+  check('it reads back as an import', ar.importedAs(next, 'appPastSermons')?.spec === '@/assets/images/app-past-sermons.webp', 'not found');
   const bare = 'const SCREENS = [\n  { label: "One" },\n];\n';
   check(
     'a file with no imports gets one at the top',
     ar.addImport(bare, 'hero', './hero.png').startsWith("import hero from './hero.png';\n"),
     ar.addImport(bare, 'hero', './hero.png').split('\n')[0],
   );
-  check(
-    'and the collection under it still parses',
-    read(ar.addImport(bare, 'hero', './hero.png'))?.data?.length === 1,
-    'the file was broken by the import',
-  );
+  check('and the collection under it still parses', read(ar.addImport(bare, 'hero', './hero.png'))?.data?.length === 1, 'the file was broken by the import');
 }
 
 // --- what the panel does with it -----------------------------------------------------
@@ -335,11 +253,7 @@ const SCREENS = [
     inferType({ __expr: 'muchMore', __asset: 'src/assets/images/app-more.webp' }) === 'image',
     inferType({ __expr: 'muchMore', __asset: 'src/assets/images/app-more.webp' }),
   );
-  check(
-    'a name bound to nothing is still code',
-    inferType({ __expr: 'FOUNDED' }) === 'code',
-    inferType({ __expr: 'FOUNDED' }),
-  );
+  check('a name bound to nothing is still code', inferType({ __expr: 'FOUNDED' }) === 'code', inferType({ __expr: 'FOUNDED' }));
   check(
     'and a name bound to a file that is not a picture is code',
     inferType({ __expr: 'data', __asset: 'src/data/site.json' }) === 'code',
@@ -349,11 +263,7 @@ const SCREENS = [
 {
   const view = fs.readFileSync(repoPath('src/features/cms/CmsView.tsx'), 'utf8');
   const field = fs.readFileSync(repoPath('src/features/cms/CmsField.tsx'), 'utf8');
-  check(
-    'the image field shows the file the name is bound to',
-    /srcRel=\{reference\}/.test(field),
-    'the card would show the word instead of the picture',
-  );
+  check('the image field shows the file the name is bound to', /srcRel=\{reference\}/.test(field), 'the card would show the word instead of the picture');
   check(
     'and picking one goes through the file rather than writing a path',
     /if \(result\.ok\) \{\s*onChange\(result\.value\)/.test(field),
@@ -364,25 +274,14 @@ const SCREENS = [
     /pickAsset: model\.rel\.includes\('#'\) \? model\.pickAsset : undefined/.test(view),
     'a JSON file would be handed an identifier',
   );
-  const main = readSourceGroup([
-    'electron/handlers/cmsHandlers.ts',
-    'electron/handlers/cmsFiles.ts',
-  ]);
+  const main = readSourceGroup(['electron/handlers/cmsHandlers.ts', 'electron/handlers/cmsFiles.ts']);
   check(
     'a picked public/ file is a URL, not an import',
     /if \(root === 'public'\) \{\s*return \{ value: '\/' \+/.test(main),
     'public assets would be imported',
   );
-  check(
-    'the same picture twice is one import',
-    /const already = imports\.find\(/.test(main),
-    'a second import of the same file',
-  );
-  check(
-    'and what is read carries what each name is bound to',
-    /withAssets\(col\.data, assetOfImport\(/.test(main),
-    'the read hands over bare names',
-  );
+  check('the same picture twice is one import', /const already = imports\.find\(/.test(main), 'a second import of the same file');
+  check('and what is read carries what each name is bound to', /withAssets\(col\.data, assetOfImport\(/.test(main), 'the read hands over bare names');
 }
 
 if (failures.length) {

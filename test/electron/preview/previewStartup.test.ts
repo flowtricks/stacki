@@ -4,11 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { EventEmitter } from 'node:events';
 import { createServer } from 'node:http';
-import {
-  portAnswers,
-  previewPort,
-  serverResponds,
-} from '#dist/electron/preview/devServerChecks.js';
+import { portAnswers, previewPort, serverResponds } from '#dist/electron/preview/devServerChecks.js';
 import { listenForPreviewFailures } from '#dist/electron/preview/previewFailure.js';
 
 class Contents extends EventEmitter {
@@ -44,9 +40,7 @@ test('a listening port is not ready until HTTP responds', async () => {
     assert.deepEqual(requests, ['/@vite/client', '/@vite/client']);
   } finally {
     server.closeAllConnections();
-    await new Promise<void>((resolve, reject) =>
-      server.close((error) => (error ? reject(error) : resolve())),
-    );
+    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
   assert.equal(await serverResponds(url), false);
 });

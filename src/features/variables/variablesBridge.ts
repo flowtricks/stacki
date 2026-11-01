@@ -1,16 +1,7 @@
 import type { Parser } from '../../../shared/core/boundary';
 import type { Result } from '../../../shared/core/result';
 import type { WireCell, WireColumn } from '../../../shared/ipc/ipcResults';
-import {
-  boolean,
-  count,
-  dictionary,
-  object,
-  optional,
-  pathText,
-  record,
-  text,
-} from '../../../shared/core/boundary';
+import { boolean, count, dictionary, object, optional, pathText, record, text } from '../../../shared/core/boundary';
 import { toArray } from '../../../shared/core/record';
 import { readVariables } from '../../ipc/editorEnvironment';
 
@@ -37,10 +28,7 @@ interface VariableBlockBase {
   readonly rows: readonly VariableRow[];
 }
 export type VariableBlock = VariableBlockBase &
-  (
-    | { readonly kind: 'rows'; readonly columns?: readonly WireColumn[] }
-    | { readonly kind: 'matrix'; readonly columns: readonly WireColumn[] }
-  );
+  ({ readonly kind: 'rows'; readonly columns?: readonly WireColumn[] } | { readonly kind: 'matrix'; readonly columns: readonly WireColumn[] });
 export interface VariableGroup {
   readonly kind: 'modes' | 'single';
   readonly label: string;
@@ -74,9 +62,7 @@ export function parseCSSVariables(input: unknown): Result<VariablesSnapshot, str
   return { ok: true, value: { files, values: dictionary(variableText)(source['values']) } };
 }
 
-export async function readCSSVariables(
-  projectPath: string,
-): Promise<Result<VariablesSnapshot, string>> {
+export async function readCSSVariables(projectPath: string): Promise<Result<VariablesSnapshot, string>> {
   let response: unknown;
   try {
     response = await readVariables(projectPath);
@@ -103,9 +89,7 @@ function variableFileForPanel(file: VariableFile): VariableFile {
   const groups = file.groups
     .map((group) => ({
       ...group,
-      blocks: group.blocks
-        .map(variableBlockForPanel)
-        .filter((block): block is VariableBlock => block !== undefined),
+      blocks: group.blocks.map(variableBlockForPanel).filter((block): block is VariableBlock => block !== undefined),
     }))
     .filter((group) => variableGroupCount(group) > 0);
   const count = groups.reduce((total, group) => total + variableGroupCount(group), 0);
@@ -114,20 +98,13 @@ function variableFileForPanel(file: VariableFile): VariableFile {
 
 function variableGroupCount(group: VariableGroup): number {
   return group.blocks.reduce(
-    (blockTotal, block) =>
-      blockTotal +
-      block.rows.reduce(
-        (rowTotal, row) => rowTotal + row.cells.filter((cell) => cell !== undefined).length,
-        0,
-      ),
+    (blockTotal, block) => blockTotal + block.rows.reduce((rowTotal, row) => rowTotal + row.cells.filter((cell) => cell !== undefined).length, 0),
     0,
   );
 }
 
 function variableBlockForPanel(block: VariableBlock): VariableBlock | undefined {
-  const rows = block.rows
-    .map(variableRowForPanel)
-    .filter((row): row is VariableRow => row !== undefined);
+  const rows = block.rows.map(variableRowForPanel).filter((row): row is VariableRow => row !== undefined);
   if (block.rows.length > 0 && rows.length === 0) {
     return undefined;
   }
@@ -138,9 +115,7 @@ function variableBlockForPanel(block: VariableBlock): VariableBlock | undefined 
 }
 
 function variableRowForPanel(row: VariableRow): VariableRow | undefined {
-  const cells = row.cells.map((cell) =>
-    cell?.name.startsWith(PRIVATE_VARIABLE_PREFIX) ? undefined : cell,
-  );
+  const cells = row.cells.map((cell) => (cell?.name.startsWith(PRIVATE_VARIABLE_PREFIX) ? undefined : cell));
   if (!cells.some((cell) => cell !== undefined)) {
     return undefined;
   }
@@ -227,9 +202,7 @@ function variableFileParser(budget: VariablesBudget): Parser<VariableFile> {
     label: variableText,
     name: optional(variableText),
     // JSON transports sparse cells as null rather than Electron's undefined.
-    cells: budget.list((input) =>
-      input === null ? undefined : optional(parseVariableCell)(input),
-    ),
+    cells: budget.list((input) => (input === null ? undefined : optional(parseVariableCell)(input))),
   });
   const blockShape = object({
     kind: blockKind,

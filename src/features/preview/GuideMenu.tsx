@@ -68,19 +68,12 @@ export function GuideMenu(props: GuideMenuProps) {
         aria-haspopup="dialog"
         aria-expanded={anchor !== undefined}
         disabled={!props.available}
-        onClick={() =>
-          setAnchor(anchor === undefined ? (buttonRef.current ?? undefined) : undefined)
-        }
+        onClick={() => setAnchor(anchor === undefined ? (buttonRef.current ?? undefined) : undefined)}
       >
         <GuideIcon size={13} />
       </button>
       {anchor !== undefined ? (
-        <LayerPopover
-          anchorEl={anchor}
-          ariaLabel="Column guide"
-          span={menuSpan(anchor)}
-          onClose={close}
-        >
+        <LayerPopover anchorEl={anchor} ariaLabel="Column guide" span={menuSpan(anchor)} onClose={close}>
           <GuideMenuRows {...props} />
         </LayerPopover>
       ) : undefined}
@@ -95,19 +88,11 @@ function GuideMenuRows({ settings, update, metrics, guide, persistence }: GuideM
   return (
     <div className="guide-menu style-panel-surface">
       {persistence?.message && <ErrorToast message={persistence.message} />}
-      <SwitchRow
-        label="Guide"
-        value={settings.visible}
-        onChange={(visible) => update((previous) => ({ ...previous, visible }))}
-      />
+      <SwitchRow label="Guide" value={settings.visible} onChange={(visible) => update((previous) => ({ ...previous, visible }))} />
       <ColumnsRow settings={settings} update={update} metrics={metrics} />
       <ColorRow settings={settings} update={update} />
       <OpacityRow settings={settings} update={update} />
-      <SwitchRow
-        label="Numbers"
-        value={settings.numbers}
-        onChange={(numbers) => update((previous) => ({ ...previous, numbers }))}
-      />
+      <SwitchRow label="Numbers" value={settings.numbers} onChange={(numbers) => update((previous) => ({ ...previous, numbers }))} />
       <div className="embed-editor_display-menu-divider" />
       <SizeRow
         label="Margin"
@@ -140,13 +125,8 @@ function GuideMenuRows({ settings, update, metrics, guide, persistence }: GuideM
 
 // Show the automatic binding only when it supplies a usable count, so the
 // field describes the overlay even on projects without layout variables.
-function ColumnsRow({
-  settings,
-  update,
-  metrics,
-}: Pick<GuideMenuProps, 'settings' | 'update' | 'metrics'>) {
-  const reset = (): void =>
-    update((previous) => ({ ...previous, columns: GUIDE_DEFAULTS.columns }));
+function ColumnsRow({ settings, update, metrics }: Pick<GuideMenuProps, 'settings' | 'update' | 'metrics'>) {
+  const reset = (): void => update((previous) => ({ ...previous, columns: GUIDE_DEFAULTS.columns }));
   const commit = (text: string): void => {
     if (text.trim() === '') {
       reset();
@@ -198,8 +178,7 @@ function ColorRow({ settings, update }: Pick<GuideMenuProps, 'settings' | 'updat
 }
 
 function OpacityRow({ settings, update }: Pick<GuideMenuProps, 'settings' | 'update'>) {
-  const commit = (value: number): void =>
-    update((previous) => ({ ...previous, opacity: clampGuideOpacity(value) }));
+  const commit = (value: number): void => update((previous) => ({ ...previous, opacity: clampGuideOpacity(value) }));
   return (
     <div className="embed-editor_size-row">
       <ResetLabel
@@ -237,15 +216,7 @@ function OpacityRow({ settings, update }: Pick<GuideMenuProps, 'settings' | 'upd
 
 // The panel's clearable caption: dim at the default, a blue pill once changed,
 // whose menu (or an Option-click) puts the default back.
-function ResetLabel({
-  label,
-  changed,
-  onReset,
-}: {
-  readonly label: string;
-  readonly changed: boolean;
-  readonly onReset: () => void;
-}) {
+function ResetLabel({ label, changed, onReset }: { readonly label: string; readonly changed: boolean; readonly onReset: () => void }) {
   return (
     <FieldLabel className="embed-editor_size-label" active={changed} onReset={onReset}>
       {label}
@@ -253,25 +224,11 @@ function ResetLabel({
   );
 }
 
-function SwitchRow({
-  label,
-  value,
-  onChange,
-}: {
-  readonly label: string;
-  readonly value: boolean;
-  readonly onChange: (value: boolean) => void;
-}) {
+function SwitchRow({ label, value, onChange }: { readonly label: string; readonly value: boolean; readonly onChange: (value: boolean) => void }) {
   return (
     <div className="embed-editor_size-row">
       <span className="u-field-label embed-editor_size-label">{label}</span>
-      <button
-        type="button"
-        className={`cms-toggle ${value ? 'on' : ''}`}
-        aria-pressed={value}
-        aria-label={label}
-        onClick={() => onChange(!value)}
-      >
+      <button type="button" className={`cms-toggle ${value ? 'on' : ''}`} aria-pressed={value} aria-label={label} onClick={() => onChange(!value)}>
         <span className="cms-toggle-knob" />
         <span className="cms-toggle-label">{value ? 'On' : 'Off'}</span>
       </button>
@@ -312,11 +269,7 @@ function SizeRow({
   };
   return (
     <div className="embed-editor_size-row">
-      <ResetLabel
-        label={label}
-        changed={setting !== undefined}
-        onReset={() => onChange(undefined)}
-      />
+      <ResetLabel label={label} changed={setting !== undefined} onReset={() => onChange(undefined)} />
       <div className="embed-editor_field">
         <GuideField
           value={sizeShown(value, setting, projectVariable, fallback)}
@@ -333,20 +286,13 @@ function SizeRow({
 // The notes under the menu: which of the menu's variables the page does not
 // declare, so the field's text is not what the guide draws with. The column
 // variable must also hold a whole number.
-function GuideMenuNotes({
-  settings,
-  guide,
-  metrics,
-}: Pick<GuideMenuProps, 'settings' | 'guide' | 'metrics'>) {
+function GuideMenuNotes({ settings, guide, metrics }: Pick<GuideMenuProps, 'settings' | 'guide' | 'metrics'>) {
   const missing = guide === undefined ? [] : missingVariables(settings, guide);
   const countNotes = metrics === undefined ? [] : columnCountNotes(settings, metrics);
   return (
     <>
       {missing.map((name) => (
-        <ErrorToast
-          key={name}
-          message={`${name} is not declared on this page, so its default is used.`}
-        />
+        <ErrorToast key={name} message={`${name} is not declared on this page, so its default is used.`} />
       ))}
       {countNotes.map((note) => (
         <ErrorToast key={note} message={note} />
@@ -367,9 +313,7 @@ function columnCountNotes(settings: GuideSettings, metrics: GuideMetrics): reado
 
 function columnCountNote(name: string, declared: number | undefined): string | undefined {
   if (declared === undefined) {
-    return (
-      `${name} is not declared on this page, or is not a whole number, so its default is ` + 'used.'
-    );
+    return `${name} is not declared on this page, or is not a whole number, so its default is ` + 'used.';
   }
   if (isGuideColumnPick(declared)) {
     return undefined;
@@ -455,19 +399,9 @@ function GuideField({
 
 // A picked variable replaces the value and is committed at once, as in the
 // panel. The property narrows the list to the variables that fit it.
-function withVariables(
-  input: ReactElement,
-  button: { readonly label: string; readonly property: string },
-  onPick: (binding: string) => void,
-) {
+function withVariables(input: ReactElement, button: { readonly label: string; readonly property: string }, onPick: (binding: string) => void) {
   return (
-    <VariableConnect
-      code
-      className="is-fill"
-      ariaLabel={button.label}
-      prop={button.property}
-      onPick={onPick}
-    >
+    <VariableConnect code className="is-fill" ariaLabel={button.label} prop={button.property} onPick={onPick}>
       {input}
     </VariableConnect>
   );
@@ -475,12 +409,7 @@ function withVariables(
 
 // The field's text: the menu's own value, else the project's variable it
 // defaults to (shown as a chip), else the fixed rem default.
-function sizeShown(
-  value: GuideValue | undefined,
-  setting: GuideSize | undefined,
-  projectVariable: string,
-  fallback: GuideLength,
-): string {
+function sizeShown(value: GuideValue | undefined, setting: GuideSize | undefined, projectVariable: string, fallback: GuideLength): string {
   if (setting !== undefined) {
     return guideSizeText(setting);
   }
@@ -489,11 +418,7 @@ function sizeShown(
 
 // The field's tooltip: where the value comes from, what it is at this width,
 // and what the field takes.
-function sizeTitle(
-  value: GuideValue | undefined,
-  setting: GuideSize | undefined,
-  projectVariable: string,
-): string {
+function sizeTitle(value: GuideValue | undefined, setting: GuideSize | undefined, projectVariable: string): string {
   const accepts = 'A length (32px, 2rem) or a project variable (--name).';
   if (value === undefined) {
     return accepts;

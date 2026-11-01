@@ -59,16 +59,9 @@ for (const autoCRLF of ['false', 'true']) {
       });
       const result = await resolveMerge(git, payload);
       assert.equal(result.ok, true);
-      assert.equal(
-        await fs.readFile(path.join(value.directory, 'index.astro'), 'utf8'),
-        value.result,
-      );
+      assert.equal(await fs.readFile(path.join(value.directory, 'index.astro'), 'utf8'), value.result);
       assert.match(value.result, /id="custom" class="new">Hello world/);
-      assert.equal(
-        (await command(value.directory, 'rev-list', '--parents', '-n', '1', 'HEAD')).split(' ')
-          .length,
-        3,
-      );
+      assert.equal((await command(value.directory, 'rev-list', '--parents', '-n', '1', 'HEAD')).split(' ').length, 3);
       assert.equal(await command(value.directory, 'status', '--porcelain'), '');
     } finally {
       await fs.rm(value.directory, { recursive: true, force: true });
@@ -91,19 +84,13 @@ test('stale source, target branch, and clean reruns never commit an outdated res
     assert.equal(await command(value.directory, 'rev-parse', 'HEAD'), before);
     await value.save('<Heading id="hero" class="old">Newer work</Heading>\n');
     const newer = await command(value.directory, 'rev-parse', 'HEAD');
-    await assert.rejects(
-      resolveMerge(git, { projectPath: value.directory, branch: 'topic', choices: value.choices }),
-      /changed since review/,
-    );
+    await assert.rejects(resolveMerge(git, { projectPath: value.directory, branch: 'topic', choices: value.choices }), /changed since review/);
     assert.equal(await command(value.directory, 'rev-parse', 'HEAD'), newer);
     assert.equal(await command(value.directory, 'status', '--porcelain'), '');
     await command(value.directory, 'checkout', 'topic');
     await command(value.directory, 'merge', 'main', '--strategy=ours', '--no-edit');
     await command(value.directory, 'checkout', 'main');
-    await assert.rejects(
-      resolveMerge(git, { projectPath: value.directory, branch: 'topic', choices: value.choices }),
-      /changed since review/,
-    );
+    await assert.rejects(resolveMerge(git, { projectPath: value.directory, branch: 'topic', choices: value.choices }), /changed since review/);
     assert.equal(await command(value.directory, 'rev-parse', 'HEAD'), newer);
     assert.equal(await command(value.directory, 'status', '--porcelain'), '');
   } finally {

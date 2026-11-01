@@ -1,8 +1,4 @@
-import {
-  claimLoginAttempt,
-  LoginAttempts,
-  type LoginClaim,
-} from '../src/features/auth/loginAttempts';
+import { claimLoginAttempt, LoginAttempts, type LoginClaim } from '../src/features/auth/loginAttempts';
 
 export function loginAttemptFixture() {
   let claims: readonly LoginClaim[] | undefined;

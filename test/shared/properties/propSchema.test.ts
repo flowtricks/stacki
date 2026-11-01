@@ -16,14 +16,8 @@ import { LIMITS } from '#dist/shared/core/limits.js';
 const jsonNull: unknown = JSON.parse('null');
 
 const goodSchema = new Map<string, unknown>([
-  [
-    'title',
-    { name: 'title', type: 'string', optional: false, default: 'Home', doc: 'Page title.' },
-  ],
-  [
-    'level',
-    { name: 'level', type: 'number', optional: true, numeric: true, min: 1, max: 6, step: 1 },
-  ],
+  ['title', { name: 'title', type: 'string', optional: false, default: 'Home', doc: 'Page title.' }],
+  ['level', { name: 'level', type: 'number', optional: true, numeric: true, min: 1, max: 6, step: 1 }],
   ['tag', { name: 'tag', type: 'HeadingTag', optional: true, options: ['h1', 'h2', 'h3'] }],
   [
     'items',
@@ -54,44 +48,16 @@ test('a real schema passes intact', () => {
 test('negative space: wrong container, wrong key, wrong field', () => {
   assert.throws(() => parsePropSchema({ title: {} }), /expected Map/);
   assert.throws(() => parsePropSchema(new Map([[7, {}]])), /expected string keys/);
-  assert.throws(
-    () => parsePropSchema(new Map([['title', { name: 'other', type: 'string', optional: true }]])),
-    /does not match its key/,
-  );
-  assert.throws(
-    () => parsePropSchema(new Map([['title', { type: 'string', optional: true }]])),
-    /name: expected non-empty string/,
-  );
-  assert.throws(
-    () => parsePropSchema(new Map([['title', { name: 'title', optional: true }]])),
-    /type: expected string/,
-  );
-  assert.throws(
-    () =>
-      parsePropSchema(new Map([['title', { name: 'title', type: 'string', optional: 'maybe' }]])),
-    /optional: expected boolean/,
-  );
-  assert.throws(
-    () =>
-      parsePropSchema(
-        new Map([['tag', { name: 'tag', type: 'T', optional: true, options: ['a', 2] }]]),
-      ),
-    /options: expected string array/,
-  );
-  assert.throws(
-    () =>
-      parsePropSchema(new Map([['n', { name: 'n', type: 'number', optional: true, min: '1' }]])),
-    /min: expected number/,
-  );
+  assert.throws(() => parsePropSchema(new Map([['title', { name: 'other', type: 'string', optional: true }]])), /does not match its key/);
+  assert.throws(() => parsePropSchema(new Map([['title', { type: 'string', optional: true }]])), /name: expected non-empty string/);
+  assert.throws(() => parsePropSchema(new Map([['title', { name: 'title', optional: true }]])), /type: expected string/);
+  assert.throws(() => parsePropSchema(new Map([['title', { name: 'title', type: 'string', optional: 'maybe' }]])), /optional: expected boolean/);
+  assert.throws(() => parsePropSchema(new Map([['tag', { name: 'tag', type: 'T', optional: true, options: ['a', 2] }]])), /options: expected string array/);
+  assert.throws(() => parsePropSchema(new Map([['n', { name: 'n', type: 'number', optional: true, min: '1' }]])), /min: expected number/);
 });
 
 test('bounds: schema size and option count fail at LIMITS', () => {
-  const big = new Map(
-    Array.from({ length: LIMITS.propSchemaFieldsMax + 1 }, (_, i) => [
-      `p${i}`,
-      { name: `p${i}`, type: 'string', optional: true },
-    ]),
-  );
+  const big = new Map(Array.from({ length: LIMITS.propSchemaFieldsMax + 1 }, (_, i) => [`p${i}`, { name: `p${i}`, type: 'string', optional: true }]));
   assert.throws(() => parsePropSchema(big), /exceeds \d+ fields/);
   const manyOptions = new Map([
     [
@@ -126,18 +92,12 @@ test('Astro parser metadata survives the shared boundary', () => {
       pages: [],
       pageFolders: [],
       layouts: [],
-      components: [
-        { name: 'Button', path: 'src/components/Button.astro', folder: '', schema: produced },
-      ],
+      components: [{ name: 'Button', path: 'src/components/Button.astro', folder: '', schema: produced }],
     }),
   );
   const fields = scan.components[0]?.schema;
   assert.ok(fields);
-  const expected = produced.map((field) =>
-    Object.fromEntries(
-      Object.entries(field).filter(([key, value]) => key === 'default' || value !== undefined),
-    ),
-  );
+  const expected = produced.map((field) => Object.fromEntries(Object.entries(field).filter(([key, value]) => key === 'default' || value !== undefined)));
   assert.deepEqual(fields, expected);
   const parsed = parsePropSchema(new Map(fields.map((field) => [field.name, field])));
   assert.ok(parsed.get('label')?.unions?.length);
@@ -150,6 +110,7 @@ test('control hints, expression defaults and exclusive bounds are preserved', ()
     optional: true,
     default: 4,
     defaultExpr: true,
+    defaultAsset: 'src/assets/width.webp',
     hint: 'inferred',
     min: 0,
     max: 10,
@@ -180,6 +141,8 @@ test('nested schema metadata rejects invalid shapes and values', () => {
     { hint: false },
     { doc: 0 },
     { defaultExpr: 1 },
+    { defaultAsset: 1 },
+    { defaultAsset: 'x'.repeat(LIMITS.attrCharsMax + 1) },
     { min: NaN },
     { max: Infinity },
     { step: -Infinity },
@@ -228,8 +191,5 @@ test('nested schema collections and text have explicit bounds', () => {
   for (const metadata of metadataCases) {
     assert.throws(() => parseField({ ...base, ...metadata }, 'item'), /exceed/);
   }
-  assert.equal(
-    parseField({ ...base, doc: 'x'.repeat(LIMITS.attrCharsMax) }, 'item').doc?.length,
-    LIMITS.attrCharsMax,
-  );
+  assert.equal(parseField({ ...base, doc: 'x'.repeat(LIMITS.attrCharsMax) }, 'item').doc?.length, LIMITS.attrCharsMax);
 });

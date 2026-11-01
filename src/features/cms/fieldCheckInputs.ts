@@ -2,11 +2,7 @@
 // becomes one (RemoteCollectionSettings.tsx): a length is in characters for
 // text and in items for a list, a range is a value for numbers.
 import type { SettingsFieldKind } from '../../../shared/properties/collectionSettings';
-import {
-  FIELD_CHECKS,
-  type FieldCheckKey,
-  type FieldChecks,
-} from '../../../shared/properties/fieldChecks';
+import { FIELD_CHECKS, type FieldCheckKey, type FieldChecks } from '../../../shared/properties/fieldChecks';
 
 const LIST_KINDS: readonly SettingsFieldKind[] = ['list', 'multiImage', 'multiReference'];
 
@@ -57,10 +53,7 @@ export function choicesFor(kind: 'sign' | 'case'): readonly { value: string; lab
 }
 
 /** A typed value as its check holds it; an empty or unreadable one clears the check. */
-export function typedValue(
-  kind: (typeof FIELD_CHECKS)[FieldCheckKey],
-  typed: string,
-): FieldChecks[FieldCheckKey] {
+export function typedValue(kind: (typeof FIELD_CHECKS)[FieldCheckKey], typed: string): FieldChecks[FieldCheckKey] {
   if (typed.trim() === '') {
     return undefined;
   }
@@ -72,11 +65,7 @@ export function typedValue(
 }
 
 /** The checks with one set or, given undefined, cleared. */
-export function withCheck(
-  checks: FieldChecks,
-  key: FieldCheckKey,
-  value: FieldChecks[FieldCheckKey],
-): FieldChecks {
+export function withCheck(checks: FieldChecks, key: FieldCheckKey, value: FieldChecks[FieldCheckKey]): FieldChecks {
   const rest = Object.fromEntries(Object.entries(checks).filter(([name]) => name !== key));
   return value === undefined ? rest : { ...rest, [key]: value };
 }

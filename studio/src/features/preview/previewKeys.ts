@@ -29,11 +29,7 @@ export function forwardPreviewKeys(post: (message: unknown) => void, interactive
       !keys.has(event.key.toLowerCase()) ||
       (['f', 'e'].includes(event.key.toLowerCase()) && !insert) ||
       event.altKey ||
-      (!insert &&
-        event.target instanceof Element &&
-        event.target.closest(
-          'input, textarea, select, [contenteditable=true], [contenteditable=plaintext-only]',
-        ))
+      (!insert && event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable=true], [contenteditable=plaintext-only]'))
     ) {
       return;
     }

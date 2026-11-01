@@ -7,27 +7,9 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { RemoteColumnPicker } from './RemoteColumnPicker';
 import { RemoteCollectionSettings } from './RemoteCollectionSettings';
-import {
-  cellText,
-  nextSort,
-  sortItems,
-  tableGrid,
-  useColumnChoice,
-  type RemoteColumn,
-  type RemoteSort,
-  type RemoteSortKey,
-} from './remoteColumns';
+import { cellText, nextSort, sortItems, tableGrid, useColumnChoice, type RemoteColumn, type RemoteSort, type RemoteSortKey } from './remoteColumns';
 import './remoteCms.css';
-import {
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  CmsIcon,
-  DragIcon,
-  ElementImageIcon,
-  PlusIcon,
-  SearchIcon,
-  TrashIcon,
-} from '../../ui/Icons';
+import { ChevronDownIcon, ChevronLeftIcon, CmsIcon, DragIcon, ElementImageIcon, PlusIcon, SearchIcon, TrashIcon } from '../../ui/Icons';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { reportErrorToast } from '../../ui/errorNotices';
 import { confirmDialog } from '../../ui/ConfirmDialog';
@@ -35,11 +17,7 @@ import useListReorder from '../../ui/useListReorder';
 import { moveRemoteDocument } from '../../ipc/cmsConnectionsBridge';
 import { deleteRemoteDocuments, remoteDocuments, remoteTemplate } from '../../ipc/remoteSource';
 import { duplicateOf, RemotePendingItem, type PendingItem } from './RemotePendingItem';
-import type {
-  RemoteDocumentList,
-  RemoteDocumentSummary,
-  RemoteResult,
-} from '../../../shared/properties/cmsRemote';
+import type { RemoteDocumentList, RemoteDocumentSummary, RemoteResult } from '../../../shared/properties/cmsRemote';
 import { labelize } from './cmsSchema';
 import { STATUS_LABELS } from './RemoteCmsBrowser';
 import { isAstroContent } from '../../../shared/properties/astroContent';
@@ -66,18 +44,14 @@ export function RemoteCmsView(props: Props) {
   // The fields shown as columns: the list is read with their values (remoteColumns.ts).
   const [columns, setColumns] = useColumnChoice(`${connection.id}:${collection}`);
   const names = columns.map((column) => column.name);
-  const { result, retry, replace } = useRemote(
-    DOCUMENT_LISTS,
-    `${listKey(connection.id, collection)}${names.length > 0 ? `|${names.join(',')}` : ''}`,
-    () => remoteDocuments(projectPath, connection.id, collection, names),
+  const { result, retry, replace } = useRemote(DOCUMENT_LISTS, `${listKey(connection.id, collection)}${names.length > 0 ? `|${names.join(',')}` : ''}`, () =>
+    remoteDocuments(projectPath, connection.id, collection, names),
   );
   const list = result?.ok ? result.value : undefined;
   const reload = retry;
   // The column waits for the list, so a collection of one item never flashes it.
   // A content collection keeps its column, so a second entry can always be added.
-  const single = isAstroContent(connection)
-    ? list === undefined
-    : list === undefined || list.documents.length <= 1;
+  const single = isAstroContent(connection) ? list === undefined : list === undefined || list.documents.length <= 1;
   // A new item, or a copy, being made: in memory until Create (RemotePendingItem.tsx).
   const [pending, setPending] = useState<PendingItem | undefined>(undefined);
   // Opening any item leaves a new one uncreated.
@@ -90,22 +64,9 @@ export function RemoteCmsView(props: Props) {
     <ProjectImagesScope projectPath={projectPath} source={connection}>
       <div className={`cms-view remote-cms-view ${props.hidden ? 'hidden' : ''}`}>
         {selection.mode === 'settings' ? (
-          <RemoteCollectionSettings
-            projectPath={projectPath}
-            selection={selection}
-            onSelect={props.onSelect}
-          />
+          <RemoteCollectionSettings projectPath={projectPath} selection={selection} onSelect={props.onSelect} onSaved={reload} />
         ) : selection.item !== undefined || pending !== undefined ? (
-          <OpenItem
-            {...props}
-            list={list}
-            single={single}
-            pending={pending}
-            setPending={setPending}
-            openItem={openItem}
-            reload={reload}
-            onCreate={startNew}
-          />
+          <OpenItem {...props} list={list} single={single} pending={pending} setPending={setPending} openItem={openItem} reload={reload} onCreate={startNew} />
         ) : (
           <Loading result={result} retry={retry}>
             {(loaded) => (
@@ -174,9 +135,7 @@ function OpenItem(
           onBack={back}
           onRemoved={() => props.openItem(undefined)}
           onSaved={props.reload}
-          onDuplicate={(document) =>
-            props.setPending(duplicateOf(document, selection.item?.title ?? 'Item'))
-          }
+          onDuplicate={(document) => props.setPending(duplicateOf(document, selection.item?.title ?? 'Item'))}
         />
       )}
     </>
@@ -184,9 +143,7 @@ function OpenItem(
 }
 
 // A new item opens as its collection's template: nothing is written until Create.
-async function newItem(
-  context: Props & { readonly setPending: (pending: PendingItem | undefined) => void },
-) {
+async function newItem(context: Props & { readonly setPending: (pending: PendingItem | undefined) => void }) {
   const { projectPath, selection } = context;
   const template = await remoteTemplate(projectPath, selection.connection.id, selection.collection);
   if (template.ok) {
@@ -237,23 +194,14 @@ function ItemTable(
             role="row"
             className={`remote-cms-row ${reorder.rowClass(index)}`}
             {...(draggable ? reorder.rowProps(index) : {})}
-            onMouseEnter={() =>
-              prefetchDocument(props.projectPath, selection.connection.id, item.id)
-            }
+            onMouseEnter={() => prefetchDocument(props.projectPath, selection.connection.id, item.id)}
             onClick={() => (chosen ? setChosen(toggled(chosen, item.id)) : props.onOpen(item))}
           >
             {lead && <RowLead chosen={chosen?.has(item.id)} draggable={draggable} />}
             <RowCells item={item} icon={icon} shape={shape} pictures={pictures} />
           </div>
         ))}
-        {shown.length === 0 && (
-          <EmptyTable
-            title={labelize(selection.collection)}
-            query={query}
-            onCreate={props.onCreate}
-            onClear={() => setQuery('')}
-          />
-        )}
+        {shown.length === 0 && <EmptyTable title={labelize(selection.collection)} query={query} onCreate={props.onCreate} onClear={() => setQuery('')} />}
       </div>
     </div>
   );
@@ -272,10 +220,7 @@ function useItemTable(
   const [chosen, setChosen] = useState<ReadonlySet<string> | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const [sort, setSort] = useState<RemoteSort | undefined>(undefined);
-  const shown = useMemo(
-    () => sortItems(matching(list.documents, query), sort),
-    [list.documents, query, sort],
-  );
+  const shown = useMemo(() => sortItems(matching(list.documents, query), sort), [list.documents, query, sort]);
   const choosing = { chosen, ids: shown.map((item) => item.id), onChoose: setChosen };
   // A sorted table shows an order of its own; only the CMS's order can be dragged.
   const draggable = list.orderable && query === '' && chosen === undefined && sort === undefined;
@@ -321,9 +266,7 @@ function TableHead(props: {
     // Choosing is its own mode: what is chosen, Delete once there is something, and Cancel.
     return (
       <div className="cms-detail-head remote-cms-toolbar is-choosing">
-        <span className="cms-detail-title">
-          {chosen.size === 0 ? `Select ${props.title}…` : `${chosen.size} ${props.title} selected`}
-        </span>
+        <span className="cms-detail-title">{chosen.size === 0 ? `Select ${props.title}…` : `${chosen.size} ${props.title} selected`}</span>
         {chosen.size > 0 && (
           <button className="danger" onClick={props.onDelete}>
             <TrashIcon size={12} /> Delete
@@ -337,21 +280,13 @@ function TableHead(props: {
     <div className="cms-detail-head remote-cms-toolbar">
       {/* Beside the collections list, its row closes it again; where the list gives way,
           this is the way back to it (remoteCms.css). */}
-      <button
-        className="ghost cms-back remote-cms-collections-back"
-        title="All collections"
-        onClick={props.onClose}
-      >
+      <button className="ghost cms-back remote-cms-collections-back" title="All collections" onClick={props.onClose}>
         <ChevronLeftIcon size={13} />
       </button>
       <span className="cms-detail-title">{props.title}</span>
       <label className="remote-cms-search">
         <SearchIcon size={12} />
-        <input
-          value={props.query}
-          placeholder={`Search ${props.title.toLowerCase()}…`}
-          onChange={(event) => props.onQuery(event.target.value)}
-        />
+        <input value={props.query} placeholder={`Search ${props.title.toLowerCase()}…`} onChange={(event) => props.onQuery(event.target.value)} />
       </label>
       <button onClick={() => props.onChoose(new Set())}>Select…</button>
       <button className="primary" onClick={props.onCreate}>
@@ -390,30 +325,17 @@ function TableColumns(
   },
 ) {
   const { shape, table } = props;
-  const sortBy = (key: RemoteSortKey, label: string) => (
-    <SortHeader label={label} sortKey={key} sort={table.sort} onSort={table.onSort} />
-  );
+  const sortBy = (key: RemoteSortKey, label: string) => <SortHeader label={label} sortKey={key} sort={table.sort} onSort={table.onSort} />;
   return (
     <div className="remote-cms-row remote-cms-row-head" role="row">
       {shape.lead && <LeadHeader choosing={table.choosing} />}
       {sortBy('title', 'Name')}
       {!shape.files && sortBy('status', 'Status')}
       {shape.columns.map((column) => (
-        <SortHeader
-          key={column.name}
-          label={column.title}
-          sortKey={`cell:${column.name}`}
-          sort={table.sort}
-          onSort={table.onSort}
-        />
+        <SortHeader key={column.name} label={column.title} sortKey={`cell:${column.name}`} sort={table.sort} onSort={table.onSort} />
       ))}
       {sortBy('updated', 'Updated')}
-      <RemoteColumnPicker
-        projectPath={props.projectPath}
-        selection={props.selection}
-        columns={shape.columns}
-        onColumns={props.onColumns}
-      />
+      <RemoteColumnPicker projectPath={props.projectPath} selection={props.selection} columns={shape.columns} onColumns={props.onColumns} />
     </div>
   );
 }
@@ -424,14 +346,7 @@ function LeadHeader(props: { readonly choosing: Choosing }) {
     return <span />;
   }
   const all = ids.length > 0 && ids.every((id) => chosen.has(id));
-  return (
-    <input
-      type="checkbox"
-      aria-label="Choose every item"
-      checked={all}
-      onChange={() => props.choosing.onChoose(new Set(all ? [] : ids))}
-    />
-  );
+  return <input type="checkbox" aria-label="Choose every item" checked={all} onChange={() => props.choosing.onChoose(new Set(all ? [] : ids))} />;
 }
 
 // A column's name, sorting by it: an arrow shows the direction while it does.
@@ -457,28 +372,15 @@ function SortHeader(props: {
 
 // Nothing to list: a collection with no items yet offers the first one; a search
 // that matched nothing says what was searched and offers to clear it.
-function EmptyTable(props: {
-  readonly title: string;
-  readonly query: string;
-  readonly onCreate: () => void;
-  readonly onClear: () => void;
-}) {
+function EmptyTable(props: { readonly title: string; readonly query: string; readonly onCreate: () => void; readonly onClear: () => void }) {
   const searching = props.query.trim().length > 0;
   return (
     <div className="props-empty remote-cms-empty">
       <div className="cms-empty-icon" aria-hidden="true">
         {searching ? <SearchIcon size={22} /> : <CmsIcon size={22} />}
       </div>
-      <h3 className="cms-empty-title">
-        {searching
-          ? `No items match “${props.query.trim()}”`
-          : `No ${props.title.toLowerCase()} yet`}
-      </h3>
-      <p>
-        {searching
-          ? 'Try another word, or clear the search to see every item.'
-          : 'Add the first item to start filling this collection.'}
-      </p>
+      <h3 className="cms-empty-title">{searching ? `No items match “${props.query.trim()}”` : `No ${props.title.toLowerCase()} yet`}</h3>
+      <p>{searching ? 'Try another word, or clear the search to see every item.' : 'Add the first item to start filling this collection.'}</p>
       <div className="cms-empty-action">
         {searching ? (
           <button onClick={props.onClear}>Clear search</button>
@@ -493,19 +395,12 @@ function EmptyTable(props: {
 }
 
 // A row's preview, status and date.
-function RowCells(props: {
-  readonly item: RemoteDocumentSummary;
-  readonly icon: string | undefined;
-  readonly shape: TableShape;
-  readonly pictures: boolean;
-}) {
+function RowCells(props: { readonly item: RemoteDocumentSummary; readonly icon: string | undefined; readonly shape: TableShape; readonly pictures: boolean }) {
   const { item, shape } = props;
   return (
     <>
       <ItemPreview item={item} icon={props.icon} pictures={props.pictures} />
-      {!shape.files && (
-        <span className={`remote-cms-status is-${item.status}`}>{STATUS_LABELS[item.status]}</span>
-      )}
+      {!shape.files && <span className={`remote-cms-status is-${item.status}`}>{STATUS_LABELS[item.status]}</span>}
       {shape.columns.map((column) => (
         <span key={column.name} className="remote-cms-cell">
           {cellText(item.cells?.[column.name])}
@@ -541,11 +436,7 @@ function ItemColumn(props: {
     <div className="cms-items remote-cms-column">
       <div className="cms-detail-head remote-cms-toolbar">
         {/* Shown only where the collections list gives way to this one (remoteCms.css). */}
-        <button
-          className="ghost remote-cms-collections-back"
-          title="All collections"
-          onClick={props.onClose}
-        >
+        <button className="ghost remote-cms-collections-back" title="All collections" onClick={props.onClose}>
           <ChevronLeftIcon size={13} />
         </button>
         <span className="cms-detail-title">{labelize(props.selection.collection)}</span>
@@ -562,16 +453,10 @@ function ItemColumn(props: {
             key={item.id}
             role="row"
             className={`remote-cms-row ${item.id === props.selection.item?.id ? 'on' : ''}`}
-            onMouseEnter={() =>
-              prefetchDocument(props.projectPath, props.selection.connection.id, item.id)
-            }
+            onMouseEnter={() => prefetchDocument(props.projectPath, props.selection.connection.id, item.id)}
             onClick={() => props.onOpen(item)}
           >
-            <ItemPreview
-              item={item}
-              icon={typeIcons(props.selection.connection.id).get(props.selection.collection)}
-              pictures={pictures}
-            />
+            <ItemPreview item={item} icon={typeIcons(props.selection.connection.id).get(props.selection.collection)} pictures={pictures} />
           </div>
         ))}
       </div>
@@ -604,13 +489,7 @@ function ItemPreview(props: {
         </span>
       )}
       {item.imageURL && (
-        <img
-          className="remote-cms-preview-media"
-          src={`${item.imageURL}?w=96&h=96&fit=crop&auto=format`}
-          alt=""
-          loading="lazy"
-          draggable={false}
-        />
+        <img className="remote-cms-preview-media" src={`${item.imageURL}?w=96&h=96&fit=crop&auto=format`} alt="" loading="lazy" draggable={false} />
       )}
       <span className="remote-cms-preview-text">
         <span className="remote-cms-name">{item.title}</span>
@@ -627,9 +506,7 @@ function tableClass(table: TableShape): string {
 
 // The table's grid and the width it scrolls sideways below (remoteColumns.ts), as
 // variables the rows read, so many columns scroll rather than squeeze.
-function gridStyle(
-  table: TableShape,
-): CSSProperties & { readonly '--remote-cms-grid': string; readonly '--remote-cms-width': string } {
+function gridStyle(table: TableShape): CSSProperties & { readonly '--remote-cms-grid': string; readonly '--remote-cms-width': string } {
   const grid = tableGrid({ lead: table.lead, status: !table.files, columns: table.columns.length });
   return { '--remote-cms-grid': grid.columns, '--remote-cms-width': `${grid.widthPx}px` };
 }
@@ -686,8 +563,7 @@ async function deleteChosen(
       `${names.length > 5 ? ' and more' : ''} will be deleted ` +
       (isAstroContent(context.selection.connection)
         ? `from the project. ${entryDeletionMessage}`
-        : `from ${context.selection.connection.label}, published and draft. ` +
-          'Sanity keeps their history.'),
+        : `from ${context.selection.connection.label}, published and draft. ` + 'Sanity keeps their history.'),
     confirmLabel: 'Delete',
     danger: true,
   });
@@ -708,10 +584,7 @@ async function deleteChosen(
   return deleted.ok ? undefined : deleted.message;
 }
 
-function matching(
-  items: readonly RemoteDocumentSummary[],
-  query: string,
-): readonly RemoteDocumentSummary[] {
+function matching(items: readonly RemoteDocumentSummary[], query: string): readonly RemoteDocumentSummary[] {
   const words = query.toLowerCase().trim();
   return words ? items.filter((item) => item.title.toLowerCase().includes(words)) : items;
 }
@@ -726,7 +599,5 @@ function toggled(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
 
 function shortDate(iso: string): string {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? ''
-    : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }

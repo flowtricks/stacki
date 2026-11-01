@@ -10,10 +10,7 @@ const path = require('node:path');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
-const {
-  readComponentProperties,
-  editPropertyDefinition,
-} = require('#dist/electron/properties/propertyDefinitions.js');
+const { readComponentProperties, editPropertyDefinition } = require('#dist/electron/properties/propertyDefinitions.js');
 
 test('component properties lifecycle and controls', async () => {
   const directory = repoPath('node_modules/.stacki-test/properties');
@@ -43,17 +40,7 @@ test('component properties lifecycle and controls', async () => {
     pretendToBeVisual: true,
   });
   require('../../helpers/popupDom').installPopupDOM(dom.window);
-  for (const key of [
-    'window',
-    'document',
-    'navigator',
-    'HTMLElement',
-    'Element',
-    'Node',
-    'MutationObserver',
-    'Window',
-    'DOMRect',
-  ]) {
+  for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'MutationObserver', 'Window', 'DOMRect']) {
     global[key] = key === 'window' ? dom.window : dom.window[key];
   }
   global.IS_REACT_ACT_ENVIRONMENT = true;
@@ -103,12 +90,7 @@ test('component properties lifecycle and controls', async () => {
   assert(document.querySelector('[aria-label="Properties (K)"]'));
   await key('k');
   assert.deepEqual(clicked, ['properties']);
-  for (const options of [
-    { ctrlKey: true },
-    { metaKey: true },
-    { altKey: true },
-    { shiftKey: true },
-  ]) {
+  for (const options of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, { shiftKey: true }]) {
     await key('k', options);
   }
   const input = document.createElement('input');
@@ -175,9 +157,7 @@ test('component properties lifecycle and controls', async () => {
         data = {
           ...data,
           source: `${data.source}\noptions:${request.change.type}`,
-          properties: data.properties.map((field) =>
-            field.name === request.change.name ? { ...field, type: request.change.type } : field,
-          ),
+          properties: data.properties.map((field) => (field.name === request.change.name ? { ...field, type: request.change.type } : field)),
         };
         return { ok: true, value: data };
       }
@@ -188,9 +168,7 @@ test('component properties lifecycle and controls', async () => {
       if (request.change.kind === 'order') {
         data = {
           ...data,
-          properties: request.change.names.map((name) =>
-            data.properties.find((field) => field.name === name),
-          ),
+          properties: request.change.names.map((name) => data.properties.find((field) => field.name === name)),
         };
         return { ok: true, value: data };
       }
@@ -244,10 +222,7 @@ test('component properties lifecycle and controls', async () => {
     await pointer(window, 'pointermove', gap * 40);
     await pointer(window, 'pointerup', gap * 40);
   };
-  const optionValues = () =>
-    [...document.querySelectorAll('.property-options .list-field-text')].map((row) =>
-      row.textContent.trim(),
-    );
+  const optionValues = () => [...document.querySelectorAll('.property-options .list-field-text')].map((row) => row.textContent.trim());
   const dragOptions = async (from, gap) => {
     const rows = [...document.querySelectorAll('.property-options .list-field-row')];
     rows.forEach((row, index) => {
@@ -284,24 +259,14 @@ test('component properties lifecycle and controls', async () => {
   assert.deepEqual(order.slice(-5), ['saving', 'flush', 'write', 'refresh', 'idle']);
   await act(async () => document.querySelector('[aria-label="Add property"]').click());
   assert.match(document.body.textContent, /New property/);
-  const save = [...document.querySelectorAll('button')].find(
-    (button) => button.textContent === 'Save property',
-  );
+  const save = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property');
   await act(async () => save.click());
   assert.match(toastMessages(), /Use a name/);
   assert.equal(edits.length, 1);
   await act(async () => document.querySelector('[aria-label="Close property settings"]').click());
-  await act(async () =>
-    [...document.querySelectorAll('.property-row-main')]
-      .find((button) => button.textContent.includes('title'))
-      .click(),
-  );
+  await act(async () => [...document.querySelectorAll('.property-row-main')].find((button) => button.textContent.includes('title')).click());
   assert.equal(document.querySelector('[aria-label="Default text"]').value, 'Hello');
-  await act(async () =>
-    [...document.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Save property')
-      .click(),
-  );
+  await act(async () => [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property').click());
   assert.match(toastMessages(), /Write failed/);
   assert.match(document.body.textContent, /Property settings/);
   assert.deepEqual(literalOptions('"One | two" | "Three"'), ['"One | two"', '"Three"']);
@@ -328,11 +293,7 @@ test('component properties lifecycle and controls', async () => {
   await act(async () => document.querySelector('.property-options .list-field-remove').click());
   assert.equal(optionValues()[0], 'Outline');
   assert.equal(document.querySelector('.property-options .list-field-remove').disabled, true);
-  await act(async () =>
-    [...document.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Save property')
-      .click(),
-  );
+  await act(async () => [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property').click());
   assert.equal(edits.at(-1).change.property.type, '"Outline"');
   const previousReads = reads;
   const flushCount = order.filter((item) => item === 'flush').length;
@@ -412,19 +373,12 @@ test('component properties lifecycle and controls', async () => {
     properties: [{ ...property, name: 'reconciled' }],
   };
   failure = { code: 'conflict', message: 'Changed on disk' };
-  await act(async () =>
-    [...document.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Save property')
-      .click(),
-  );
+  await act(async () => [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property').click());
   assert.match(document.querySelector('.property-list').textContent, /reconciled/);
   assert.ok(document.querySelector('.property-editor') === null);
 
   // Exercise the actual inherited-contract reader and writer through the controls.
-  const {
-    readComponentProperties,
-    editPropertyDefinition,
-  } = require('#dist/electron/properties/propertyDefinitions.js');
+  const { readComponentProperties, editPropertyDefinition } = require('#dist/electron/properties/propertyDefinitions.js');
   const inherited = `---
 import type { HTMLAttributes } from 'astro/types';
 type ContainerGap = 'small' | 'medium' | 'large';
@@ -449,15 +403,11 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   assert.equal(optionValues()[0], 'small');
   const setValue = async (element, value) =>
     act(async () => {
-      const prototype =
-        element.tagName === 'TEXTAREA'
-          ? window.HTMLTextAreaElement.prototype
-          : window.HTMLInputElement.prototype;
+      const prototype = element.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
       Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value);
       element.dispatchEvent(new window.Event('input', { bubbles: true }));
     });
-  const pressDown = async (element) =>
-    act(async () => element.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true })));
+  const pressDown = async (element) => act(async () => element.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true })));
   assert.ok(document.querySelector('.property-options input') === null);
   await act(async () => document.querySelector('.property-options .list-field-text').click());
   const firstOption = document.querySelector('.list-item-field input');
@@ -476,11 +426,7 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   assert.equal(document.querySelectorAll('.dd-option').length, 1);
   await pressDown(document.querySelector('.dd-option'));
   assert.ok(document.querySelector('.property-editor'));
-  await act(async () =>
-    document
-      .querySelector('.dd-option')
-      .dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })),
-  );
+  await act(async () => document.querySelector('.dd-option').dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })));
   assert.equal(defaultLabel(), 'compact');
   await act(async () => document.querySelector('.dd-option').click());
   assert.equal(defaultLabel(), 'medium');
@@ -496,11 +442,7 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
     .querySelector('textarea');
   await setValue(tooltip, 'Choose space between items.');
   await act(async () => document.querySelector('.property-flags input').click());
-  await act(async () =>
-    [...document.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Save property')
-      .click(),
-  );
+  await act(async () => [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property').click());
   const editedGap = data.properties.find((field) => field.name === 'spacing');
   assert.equal(editedGap.required, true);
   assert.equal(editedGap.description, 'Choose space between items.');
@@ -514,8 +456,7 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   // mode toggles. Browsing choices does not replace the current union.
   await act(async () => document.querySelector('.property-row-main').click());
   assert.match(document.querySelector('.property-type .dd-trigger').textContent, /Options/);
-  const toggleType = async (label) =>
-    act(async () => document.querySelector(`[aria-label="${label}"]`).click());
+  const toggleType = async (label) => act(async () => document.querySelector(`[aria-label="${label}"]`).click());
   await toggleType('Write a type expression');
   assert.equal(document.querySelector('input[aria-label="Type expression"]').value, editedGap.type);
   await toggleType('Use the type dropdown');
@@ -524,11 +465,7 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   assert(document.querySelector('.dd-search'));
   await setValue(document.querySelector('.dd-search'), 'boolean');
   assert.equal(document.querySelectorAll('.dd-option').length, 1);
-  await act(async () =>
-    document
-      .querySelector('.dd-option')
-      .dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })),
-  );
+  await act(async () => document.querySelector('.dd-option').dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })));
   assert.equal(optionValues()[0], 'large');
   await key('Escape', {}, document.querySelector('.dd-search'));
   assert.equal(optionValues()[0], 'large');
@@ -538,20 +475,11 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   assert.ok(document.querySelector('.property-options .list-field') === null);
   await toggleType('Write a type expression');
   assert.equal(document.querySelector('input[aria-label="Type expression"]').value, 'boolean');
-  await setValue(
-    document.querySelector('input[aria-label="Type expression"]'),
-    'typeof designTheme',
-  );
+  await setValue(document.querySelector('input[aria-label="Type expression"]'), 'typeof designTheme');
   await toggleType('Use the type dropdown');
-  assert.match(
-    document.querySelector('.property-type .dd-trigger').textContent,
-    /typeof designTheme/,
-  );
+  assert.match(document.querySelector('.property-type .dd-trigger').textContent, /typeof designTheme/);
   await toggleType('Write a type expression');
-  assert.equal(
-    document.querySelector('input[aria-label="Type expression"]').value,
-    'typeof designTheme',
-  );
+  assert.equal(document.querySelector('input[aria-label="Type expression"]').value, 'typeof designTheme');
   // Existing unsupported types open directly as ordinary inputs.
   data = {
     ...data,
@@ -560,10 +488,7 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   };
   await notify();
   await act(async () => document.querySelector('.property-row-main').click());
-  assert.equal(
-    document.querySelector('input[aria-label="Type expression"]').value,
-    'typeof designTheme',
-  );
+  assert.equal(document.querySelector('input[aria-label="Type expression"]').value, 'typeof designTheme');
   // A default that names another frontmatter value is shown as a binding. Its
   // chip opens the same scoped picker used by prop values and can be repointed.
   const boundDefault = `---
@@ -577,27 +502,15 @@ const { tag = 'h2', variant = tag } = Astro.props;
 <h1>{variant}</h1>`;
   data = readComponentProperties(boundDefault);
   await notify();
-  await act(async () =>
-    [...document.querySelectorAll('.property-row-main')]
-      .find((button) => button.textContent.includes('variant'))
-      .click(),
-  );
+  await act(async () => [...document.querySelectorAll('.property-row-main')].find((button) => button.textContent.includes('variant')).click());
   const defaultChip = document.querySelector('.property-default .cm-chip');
   assert.equal(defaultChip.textContent, 'tag');
   assert.ok(document.querySelector('.property-default textarea') === null);
   await pressDown(defaultChip);
   assert.equal(document.querySelector('.bind-menu .dp-row.selected .dp-key').textContent, 'tag');
-  await act(async () =>
-    [...document.querySelectorAll('.bind-menu .dp-row')]
-      .find((row) => row.title.startsWith('fallback'))
-      .click(),
-  );
+  await act(async () => [...document.querySelectorAll('.bind-menu .dp-row')].find((row) => row.title.startsWith('fallback')).click());
   assert.equal(document.querySelector('.property-default .cm-content').textContent, 'fallback');
-  await act(async () =>
-    [...document.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Save property')
-      .click(),
-  );
+  await act(async () => [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property').click());
   assert.equal(data.properties.find((field) => field.name === 'variant').defaultValue, 'fallback');
   assert.match(data.source, /variant = fallback/);
   // The shared editor handles add/edit/remove and drag while the adapter keeps
@@ -618,20 +531,14 @@ const { tag = 'h2', variant = tag } = Astro.props;
   await act(async () => document.querySelector('.property-row-main').click());
   await dragOptions(4, 0);
   await toggleType('Write a type expression');
-  assert.equal(
-    document.querySelector('input[aria-label="Type expression"]').value,
-    '"1" | true | false | "true" | 1',
-  );
+  assert.equal(document.querySelector('input[aria-label="Type expression"]').value, '"1" | true | false | "true" | 1');
   await toggleType('Use the type dropdown');
   await act(async () => document.querySelectorAll('.property-options .list-field-text')[4].click());
   await setValue(document.querySelector('.list-item-field input'), '-');
   await setValue(document.querySelector('.list-item-field input'), '-2');
   await act(async () => document.querySelector('.list-item-editor [title="Close"]').click());
   await toggleType('Write a type expression');
-  assert.equal(
-    document.querySelector('input[aria-label="Type expression"]').value,
-    '"1" | true | false | "true" | -2',
-  );
+  assert.equal(document.querySelector('input[aria-label="Type expression"]').value, '"1" | true | false | "true" | -2');
   await toggleType('Use the type dropdown');
   await act(async () => document.querySelector('.property-options .list-field-add').click());
   assert.equal(document.querySelector('.list-item-field input').value, '');
@@ -641,9 +548,7 @@ const { tag = 'h2', variant = tag } = Astro.props;
   await key('Enter', {}, document.querySelector('.list-item-field input'));
   assert.equal(optionValues().at(-1), added);
   assert.ok(document.querySelector('.list-item-editor') === null);
-  await act(async () =>
-    [...document.querySelectorAll('.property-options .list-field-remove')].at(-1).click(),
-  );
+  await act(async () => [...document.querySelectorAll('.property-options .list-field-remove')].at(-1).click());
   assert.equal(optionValues().length, 5);
   await act(async () => document.querySelectorAll('.property-options .list-field-text')[1].click());
   await setValue(document.querySelector('.list-item-field input'), 'false');
@@ -758,10 +663,7 @@ const { tag = 'h2', variant = tag } = Astro.props;
   assert.equal(document.querySelector('.property-editor fieldset').disabled, false);
   assert.ok(document.querySelector('.property-readonly-fields') === null);
   assert.equal(document.querySelector('.property-editor label input').disabled, true);
-  assert.equal(
-    document.querySelector('textarea[placeholder="Describe how to use this property…"]').readOnly,
-    false,
-  );
+  assert.equal(document.querySelector('textarea[placeholder="Describe how to use this property…"]').readOnly, false);
   assert.match(document.querySelector('.property-editor').textContent, /declared locally/);
   assert.ok(document.querySelector('.property-actions .danger') === null);
   await act(async () => document.querySelector('[aria-label="Close property settings"]').click());

@@ -1,8 +1,5 @@
 import { useState } from 'react';
-import {
-  renamedPagePath,
-  type PageRename,
-} from '../../../vendor/stacki/shared/properties/pageRename';
+import { renamedPagePath, type PageRename } from '../../../vendor/stacki/shared/properties/pageRename';
 import { request } from '../project/projectClient';
 
 export function usePageRename({

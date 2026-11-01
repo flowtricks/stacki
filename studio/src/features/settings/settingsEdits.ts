@@ -4,29 +4,12 @@ import { parsePage } from '../source/source';
 import type { Attr } from '../../../vendor/stacki/shared/page/pageNode';
 import type { InlineNode } from '../../../vendor/stacki/src/features/props/RichContent';
 import { serializeNodes } from '../../../vendor/stacki/electron/parse/astroSerialize';
-import {
-  applyEdits,
-  attributeEdit,
-  bounds,
-  nodeAt,
-  type Edit,
-  type ParserNode,
-} from '../source/source';
+import { applyEdits, attributeEdit, bounds, nodeAt, type Edit, type ParserNode } from '../source/source';
 
-export function setAttributes(
-  source: string,
-  id: string,
-  values: Readonly<Record<string, Attr | undefined>>,
-) {
+export function setAttributes(source: string, id: string, values: Readonly<Record<string, Attr | undefined>>) {
   for (const [name, value] of Object.entries(values)) {
     source = applyEdits(source, [
-      attributeEdit(
-        source,
-        id,
-        name,
-        value?.type === 'bare' ? 'true' : value?.value,
-        value?.type === 'expr' || value?.type === 'bare',
-      ),
+      attributeEdit(source, id, name, value?.type === 'bare' ? 'true' : value?.value, value?.type === 'expr' || value?.type === 'bare'),
     ]);
   }
   return source;
@@ -41,10 +24,7 @@ function serializeInline(nodes: readonly InlineNode[], depth = 0): string {
   return nodes
     .map((node): string => {
       if (node.kind === 'text') {
-        return node.value
-          .replaceAll('&', '&amp;')
-          .replaceAll('<', '&lt;')
-          .replaceAll('{', '&#123;');
+        return node.value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('{', '&#123;');
       }
       if (node.kind === 'expr') {
         return node.value;
@@ -61,9 +41,7 @@ function serializeInline(nodes: readonly InlineNode[], depth = 0): string {
               : ` ${key}="${value.value.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"`;
         })
         .join('');
-      return node.name === 'br'
-        ? '<br>'
-        : `<${node.name}${attrs}>${serializeInline(node.children ?? [], depth + 1)}</${node.name}>`;
+      return node.name === 'br' ? '<br>' : `<${node.name}${attrs}>${serializeInline(node.children ?? [], depth + 1)}</${node.name}>`;
     })
     .join('');
 }
@@ -118,9 +96,7 @@ export function renameTag(source: string, id: string, name: string): string {
     throw new Error('This node has no tag');
   }
   const range = bounds(node);
-  const edits: Edit[] = [
-    { start: range.start + 1, end: range.start + 1 + node.name.length, text: name },
-  ];
+  const edits: Edit[] = [{ start: range.start + 1, end: range.start + 1 + node.name.length, text: name }];
   const closing = source.lastIndexOf('</' + node.name, range.end);
   if (closing >= range.start) {
     edits.push({ start: closing + 2, end: closing + 2 + node.name.length, text: name });
@@ -163,18 +139,12 @@ export function assetProp(source: string, id: string, file: string, name: string
     const eol = parsed.model.eol;
     const offset = source.startsWith('---\r\n') ? 5 : 4;
     const line = `import ${binding} from ${JSON.stringify(specifier)};${eol}`;
-    source = parsed.model.hadFrontmatter
-      ? source.slice(0, offset) + line + source.slice(offset)
-      : `---${eol}${line}---${eol}${source}`;
+    source = parsed.model.hadFrontmatter ? source.slice(0, offset) + line + source.slice(offset) : `---${eol}${line}---${eol}${source}`;
   }
   return source;
 }
 
-function headEdit(
-  source: string,
-  node: Extract<ParserNode, { kind: 'map' | 'cond' }>,
-  value: string,
-): Edit {
+function headEdit(source: string, node: Extract<ParserNode, { kind: 'map' | 'cond' }>, value: string): Edit {
   const range = bounds(node);
   if (node.kind === 'cond') {
     const offset = source.indexOf(node.test, range.start + 1);

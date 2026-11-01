@@ -3,11 +3,7 @@
 // typed. A drag in the picker previews in the swatch and is saved on release.
 import ColorSwatch from '../style/components/ColorSwatch';
 
-export function CmsColorInput(props: {
-  readonly value: string;
-  readonly label: string;
-  readonly onChange: (value: string) => void;
-}) {
+export function CmsColorInput(props: { readonly value: string; readonly label: string; readonly onChange: (value: string) => void }) {
   return (
     <div className="cms-color-input">
       <ColorSwatch
@@ -19,12 +15,7 @@ export function CmsColorInput(props: {
           }
         }}
       />
-      <input
-        value={props.value}
-        placeholder="#000000"
-        spellCheck={false}
-        onChange={(event) => props.onChange(event.target.value)}
-      />
+      <input value={props.value} placeholder="#000000" spellCheck={false} onChange={(event) => props.onChange(event.target.value)} />
     </div>
   );
 }

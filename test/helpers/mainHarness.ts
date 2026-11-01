@@ -16,11 +16,7 @@ export interface MainHarness {
 
 /** `entryPath` loads another build's main — the step-5 parity run drives the
  * legacy build's handlers beside the current ones. */
-export function mainHarness(
-  userData: string,
-  sourcePath?: string,
-  entryPath = path.resolve('dist/electron/main.js'),
-): MainHarness {
+export function mainHarness(userData: string, sourcePath?: string, entryPath = path.resolve('dist/electron/main.js')): MainHarness {
   const entry = entryPath;
   const require = createRequire(entry);
   const handlers = new Map<string, (event: unknown, input?: unknown) => unknown>();
@@ -38,12 +34,7 @@ export function mainHarness(
       "imageSizeOf: require('./project/assetFiles.js').imageSizeOf, " +
       "satisfiesRange: require('./preview/devServerChecks.js').satisfiesRange });",
     {
-      require: (name: string): unknown =>
-        name === 'electron'
-          ? electron
-          : name === 'electron-updater'
-            ? { autoUpdater: {} }
-            : require(name),
+      require: (name: string): unknown => (name === 'electron' ? electron : name === 'electron-updater' ? { autoUpdater: {} } : require(name)),
       exports: {},
       __dirname: path.dirname(entry),
       process,
@@ -92,10 +83,7 @@ function isCallable(input: unknown): input is (...args: readonly unknown[]) => u
   return typeof input === 'function';
 }
 
-function mainHarnessElectron(
-  userData: string,
-  handlers: Map<string, (event: unknown, input?: unknown) => unknown>,
-) {
+function mainHarnessElectron(userData: string, handlers: Map<string, (event: unknown, input?: unknown) => unknown>) {
   const app = Object.assign(new EventEmitter(), {
     getPath: () => userData,
     getVersion: () => '0.1.48',
@@ -107,8 +95,7 @@ function mainHarnessElectron(
   const electron = {
     app,
     ipcMain: {
-      handle: (channel: string, handler: (event: unknown, input?: unknown) => unknown) =>
-        handlers.set(channel, handler),
+      handle: (channel: string, handler: (event: unknown, input?: unknown) => unknown) => handlers.set(channel, handler),
     },
     protocol: { registerSchemesAsPrivileged: () => undefined },
     clipboard: { writeText: () => undefined },

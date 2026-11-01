@@ -82,9 +82,7 @@ export function useLayoutChange(
   const { commitEdit } = history;
 
   const isMarkdownFormatRef = useRef(false);
-  isMarkdownFormatRef.current =
-    pageState?.editable === true &&
-    (pageState.model.format === 'md' || pageState.model.format === 'mdx');
+  isMarkdownFormatRef.current = pageState?.editable === true && (pageState.model.format === 'md' || pageState.model.format === 'mdx');
 
   // The latest layout change, as an identity token (see pageLoadRef).
   const layoutSeq = useRef<object>({});
@@ -96,9 +94,7 @@ export function useLayoutChange(
       // from the `layout:` frontmatter key, as a path relative to the file.
       // Same picker, different place to write the answer.
       if (isMarkdownFormatRef.current) {
-        const layout = layoutName
-          ? scan.layouts.find((candidate) => candidate.name === layoutName)
-          : undefined;
+        const layout = layoutName ? scan.layouts.find((candidate) => candidate.name === layoutName) : undefined;
         if (layoutName && !layout) {
           return;
         }
@@ -192,9 +188,7 @@ export function usePageCreation(
       if (
         !(await confirmDialog({
           title: `Delete ${page.name}?`,
-          body:
-            'This removes the file from disk. ' +
-            'It can be brought back from History if it was saved in a version.',
+          body: 'This removes the file from disk. ' + 'It can be brought back from History if it was saved in a version.',
           confirmLabel: 'Delete page',
           danger: true,
         }))
@@ -304,9 +298,7 @@ export function useRenamePageFolder(
       // Re-select the current page if it lived inside the renamed folder.
       const open = pageStateRef.current.currentPage;
       if (open && !result.pages.some((candidate) => candidate.path === open.path)) {
-        const newName = open.name.startsWith(from + '/')
-          ? to + open.name.slice(from.length)
-          : undefined;
+        const newName = open.name.startsWith(from + '/') ? to + open.name.slice(from.length) : undefined;
         const np = newName && result.pages.find((candidate) => candidate.name === newName);
         if (np) {
           // Opening a page reports its own failures.
@@ -331,9 +323,7 @@ export function useDeletePageFolder(
 
   const deletePageFolder = useCallback(
     async (directory: string, pageCount: number) => {
-      const inside = pageCount
-        ? `the ${pageCount} page${pageCount === 1 ? '' : 's'} inside it and `
-        : '';
+      const inside = pageCount ? `the ${pageCount} page${pageCount === 1 ? '' : 's'} inside it and ` : '';
       if (
         !(await confirmDialog({
           title: `Delete the folder “${directory}”?`,
@@ -386,10 +376,7 @@ export function useSelectionModel(
   // ----------------------------------------------------------------
 
   const tree = useMemo(() => createTreeIndex(model?.nodes), [model?.nodes]);
-  const selectedAncestors = useMemo(
-    () => (selectedId ? tree.ancestors(selectedId) || [] : []),
-    [tree, selectedId],
-  );
+  const selectedAncestors = useMemo(() => (selectedId ? tree.ancestors(selectedId) || [] : []), [tree, selectedId]);
 
   // The frontmatter as one editable code block (imports + everything else,
   // matching how the file is serialized).
@@ -427,9 +414,7 @@ export function useSelectionModel(
     // Step 9: the frontmatter gesture — the import and the query line, as the
     // slot of the block that differs.
     const queried = (pageModel: EditorModel): EditorModel => {
-      const reads = pageModel.imports.some(
-        (i) => i.name === 'getCollection' && i.path === 'astro:content',
-      );
+      const reads = pageModel.imports.some((i) => i.name === 'getCollection' && i.path === 'astro:content');
       const entry = {
         name: 'getCollection',
         imported: 'getCollection',
@@ -528,10 +513,7 @@ export function useCreateFrom(
     if (classesForRef.current === selectedId) {
       return undefined;
     }
-    const timer = setTimeout(
-      () => setSelectedClasses((previous) => (previous.length ? [] : previous)),
-      600,
-    );
+    const timer = setTimeout(() => setSelectedClasses((previous) => (previous.length ? [] : previous)), 600);
     return () => clearTimeout(timer);
   }, [selectedId, classesTick, classesForRef, setSelectedClasses]);
   return { createFrom, selectedNode };
@@ -561,9 +543,7 @@ export function useSelectedSchema(
     if (isMarkdownFormatRef.current) {
       // Read back out of the frontmatter text, not a cached field: editing
       // that text by hand has to move the picker too.
-      const match = (model?.extraFrontmatter || '').match(
-        /^[ \t]*layout[ \t]*:[ \t]*(.+?)[ \t]*$/m,
-      );
+      const match = (model?.extraFrontmatter || '').match(/^[ \t]*layout[ \t]*:[ \t]*(.+?)[ \t]*$/m);
       const base = match?.[1]
         ?.replace(/^['"]|['"]$/g, '')
         .split('/')
@@ -607,10 +587,7 @@ export function useSelectedSchema(
   return { currentLayoutName, layoutNode, selectedSchema, selectedComponent, listProps };
 }
 
-function selectedFields(
-  node: ReturnType<typeof useCreateFrom>['selectedNode'],
-  component: ScanComponent | undefined,
-): readonly FieldDefinition[] {
+function selectedFields(node: ReturnType<typeof useCreateFrom>['selectedNode'], component: ScanComponent | undefined): readonly FieldDefinition[] {
   if (!node) {
     return [];
   }

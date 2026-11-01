@@ -18,17 +18,7 @@ import { type Props, joinImportant, CUSTOM, PropLabel, LiveInput } from './Typog
 
 // Webflow's built-in web fonts — real project fonts, so picking one applies natively
 // (an arbitrary web-safe name Webflow doesn't stock would be dropped on the native write).
-export const WEB_FONTS = [
-  'Arial',
-  'Georgia',
-  'Impact',
-  'Palatino Linotype',
-  'Tahoma',
-  'Times New Roman',
-  'Trebuchet MS',
-  'Verdana',
-  'system-ui',
-];
+export const WEB_FONTS = ['Arial', 'Georgia', 'Impact', 'Palatino Linotype', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana', 'system-ui'];
 
 // Webflow's Google fonts.
 export const GOOGLE_FONTS = [
@@ -257,9 +247,7 @@ export function WeightField(props: Props) {
         value={customMode ? CUSTOM : (matched ?? '')}
         options={WEIGHT_OPTIONS}
         onChange={pick}
-        onPreview={(value) =>
-          liveSetProp('font-weight', value === CUSTOM ? undefined : (value ?? undefined), false)
-        }
+        onPreview={(value) => liveSetProp('font-weight', value === CUSTOM ? undefined : (value ?? undefined), false)}
         ariaLabel="Font weight"
         disabled={busy}
         customInput={

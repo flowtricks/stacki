@@ -32,12 +32,9 @@ const CAPTURE_TIMEOUT_MS = 3000;
 const CAPTURE_RETRY_MS = 150;
 
 const thumbsDirectory = (userDataPath: string): string => path.join(userDataPath, 'thumbs');
-const keyFor = (projectPath: string): string =>
-  crypto.createHash('sha1').update(projectPath).digest('hex').slice(0, 16);
-const thumbPathFor = (userDataPath: string, projectPath: string): string =>
-  path.join(thumbsDirectory(userDataPath), `${keyFor(projectPath)}.png`);
-const metaPathFor = (userDataPath: string, projectPath: string): string =>
-  path.join(thumbsDirectory(userDataPath), `${keyFor(projectPath)}.json`);
+const keyFor = (projectPath: string): string => crypto.createHash('sha1').update(projectPath).digest('hex').slice(0, 16);
+const thumbPathFor = (userDataPath: string, projectPath: string): string => path.join(thumbsDirectory(userDataPath), `${keyFor(projectPath)}.png`);
+const metaPathFor = (userDataPath: string, projectPath: string): string => path.join(thumbsDirectory(userDataPath), `${keyFor(projectPath)}.json`);
 
 // What the site is made of, as one number that changes when any of it does.
 // Only the directories a page can be built from — a thumbnail does not go stale
@@ -57,9 +54,7 @@ function fingerprint(projectPath: string): string {
       // Count + newest timestamp misses changes to every older file whenever
       // another file has a future timestamp. Include each path and its own
       // metadata so renames and edits both invalidate the thumbnail.
-      hash.update(
-        JSON.stringify([path.relative(projectPath, full), stat.size, stat.mtimeMs, stat.ctimeMs]),
-      );
+      hash.update(JSON.stringify([path.relative(projectPath, full), stat.size, stat.mtimeMs, stat.ctimeMs]));
     } catch {
       /* raced with a write */
     }
@@ -90,14 +85,7 @@ function fingerprint(projectPath: string): string {
   for (const directory of SOURCE_DIRECTORIES) {
     walk(path.join(projectPath, directory), 0);
   }
-  for (const name of [
-    'astro.config.mjs',
-    'astro.config.ts',
-    'astro.config.js',
-    'astro.config.mts',
-    'astro.config.cjs',
-    'package.json',
-  ]) {
+  for (const name of ['astro.config.mjs', 'astro.config.ts', 'astro.config.js', 'astro.config.mts', 'astro.config.cjs', 'package.json']) {
     include(path.join(projectPath, name));
   }
   return hash.digest('hex');
@@ -105,9 +93,7 @@ function fingerprint(projectPath: string): string {
 
 function readMeta(userDataPath: string, projectPath: string): Record<string, unknown> | undefined {
   try {
-    const raw: unknown = JSON.parse(
-      fs.readFileSync(metaPathFor(userDataPath, projectPath), 'utf8'),
-    );
+    const raw: unknown = JSON.parse(fs.readFileSync(metaPathFor(userDataPath, projectPath), 'utf8'));
     return toRecord(raw);
   } catch {
     return undefined;
@@ -204,10 +190,7 @@ async function captureImage(contents: WebContents): Promise<Result<NativeImage, 
 
 function captureImageAttempt(contents: WebContents): Promise<Result<NativeImage, string>> {
   return within(
-    contents.capturePage(
-      { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height },
-      { stayHidden: false, stayAwake: false },
-    ),
+    contents.capturePage({ x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height }, { stayHidden: false, stayAwake: false }),
     CAPTURE_TIMEOUT_MS,
     'the page capture did not finish',
   ).then(ok, (error: unknown) => err(error instanceof Error ? error.message : String(error)));
@@ -220,11 +203,7 @@ type CaptureResult = { readonly ok: true } | { readonly ok: false; readonly erro
  * A thumbnail is never worth throwing over, so every failure comes back as a
  * value and the old picture stays.
  */
-async function capture(
-  userDataPath: string,
-  projectPath: string,
-  url: string,
-): Promise<CaptureResult> {
+async function capture(userDataPath: string, projectPath: string, url: string): Promise<CaptureResult> {
   let win: BrowserWindow | undefined = undefined;
   try {
     win = makeWindow();
@@ -283,14 +262,8 @@ async function capture(
     }
 
     fs.mkdirSync(thumbsDirectory(userDataPath), { recursive: true });
-    fs.writeFileSync(
-      thumbPathFor(userDataPath, projectPath),
-      image.resize({ width: THUMB_WIDTH }).toPNG(),
-    );
-    fs.writeFileSync(
-      metaPathFor(userDataPath, projectPath),
-      JSON.stringify({ fingerprint: capturedFingerprint, capturedAt: Date.now(), url }, null, 2),
-    );
+    fs.writeFileSync(thumbPathFor(userDataPath, projectPath), image.resize({ width: THUMB_WIDTH }).toPNG());
+    fs.writeFileSync(metaPathFor(userDataPath, projectPath), JSON.stringify({ fingerprint: capturedFingerprint, capturedAt: Date.now(), url }, null, 2));
     return { ok: true };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);

@@ -67,12 +67,7 @@ test('shared popup motion, dismissal and nested focus', async () => {
       start.dispatchEvent(new window.MouseEvent('pointerdown', { bubbles: true }));
       end.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
     });
-  const escape = () =>
-    act(async () =>
-      document.dispatchEvent(
-        new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-      ),
-    );
+  const escape = () => act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
   const trigger = document.getElementById('trigger');
   try {
     trigger.focus();
@@ -150,11 +145,7 @@ test('shared popup motion, dismissal and nested focus', async () => {
       await new Promise((resolve) => setTimeout(resolve, 60));
     });
     await tick(180);
-    assert.equal(
-      document.querySelector('dialog') === null,
-      true,
-      'Opening cannot cancel dismissal',
-    );
+    assert.equal(document.querySelector('dialog') === null, true, 'Opening cannot cancel dismissal');
   } finally {
     await act(async () => root.unmount());
     dom.window.close();

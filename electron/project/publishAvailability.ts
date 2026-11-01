@@ -1,10 +1,5 @@
 import type { PublishConfig } from '../../shared/properties/publishConfig';
-import {
-  UNKNOWN_PUBLISH_AVAILABILITY,
-  parseGitHubPush,
-  type PublishAvailability,
-  type PublishDestinationState,
-} from '../../shared/properties/publishState';
+import { UNKNOWN_PUBLISH_AVAILABILITY, parseGitHubPush, type PublishAvailability, type PublishDestinationState } from '../../shared/properties/publishState';
 import { ensureToolPath, git } from '../lib/nodeTools';
 import { readPublishConfig } from './publishConfig';
 import { publishingGitRemote } from './publishGitHub';
@@ -27,10 +22,7 @@ export async function readPublishAvailability(root: string): Promise<PublishAvai
   return { ...github, hosting };
 }
 
-async function githubAvailability(
-  root: string,
-  config: PublishConfig,
-): Promise<Pick<PublishAvailability, 'github' | 'githubPush'>> {
+async function githubAvailability(root: string, config: PublishConfig): Promise<Pick<PublishAvailability, 'github' | 'githubPush'>> {
   const remoteUrl = await publishingGitRemote(root, config);
   const branch = (await git(root, ['symbolic-ref', '--short', 'HEAD'])).stdout.trim();
   const head = await git(root, ['rev-parse', '--verify', 'HEAD'])
@@ -39,20 +31,8 @@ async function githubAvailability(
   const remote = await git(root, ['rev-parse', '--verify', `refs/remotes/origin/${branch}`])
     .then((result) => result.stdout.trim())
     .catch(() => undefined);
-  const count =
-    head === undefined
-      ? '0'
-      : (
-          await git(root, [
-            'rev-list',
-            '--count',
-            remote === undefined ? head : `${remote}..${head}`,
-          ])
-        ).stdout.trim();
-  const headTree =
-    head === undefined
-      ? undefined
-      : (await git(root, ['rev-parse', `${head}^{tree}`])).stdout.trim();
+  const count = head === undefined ? '0' : (await git(root, ['rev-list', '--count', remote === undefined ? head : `${remote}..${head}`])).stdout.trim();
+  const headTree = head === undefined ? undefined : (await git(root, ['rev-parse', `${head}^{tree}`])).stdout.trim();
   // Publish stages the complete worktree, so staged-only differences must not add a
   // phantom commit. Its isolated index compares exactly the snapshot Publish will use.
   const source = await readPublishTree(root);
@@ -62,17 +42,12 @@ async function githubAvailability(
   const dirty = headTree !== source.value;
   const githubPush = parseGitHubPush({
     commits: Number(count) + (dirty ? 1 : 0),
-    repositoryUrl: remoteUrl
-      .replace(/^git@github\.com:/, 'https://github.com/')
-      .replace(/\.git$/, ''),
+    repositoryUrl: remoteUrl.replace(/^git@github\.com:/, 'https://github.com/').replace(/\.git$/, ''),
   });
   return { github: !dirty && head === remote ? 'current' : 'pending', githubPush };
 }
 
-async function hostingAvailability(
-  root: string,
-  config: PublishConfig,
-): Promise<PublishDestinationState> {
+async function hostingAvailability(root: string, config: PublishConfig): Promise<PublishDestinationState> {
   if (config.hosting.provider === 'none') {
     return 'unconfigured';
   }

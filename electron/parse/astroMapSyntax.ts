@@ -41,8 +41,7 @@ export function readMapSyntax(source: string): MapSyntax | undefined {
     return undefined;
   }
   const callback = unwrapExpression(argument);
-  const body =
-    ts.isArrowFunction(callback) || ts.isFunctionExpression(callback) ? callback.body : callback;
+  const body = ts.isArrowFunction(callback) || ts.isFunctionExpression(callback) ? callback.body : callback;
   const markup = mapMarkup(body, syntax);
   if (markup === undefined) {
     return undefined;
@@ -77,13 +76,7 @@ function mapSourceFile(source: string): ts.SourceFile | undefined {
   // Parser recursion is a resource failure caused by external source. Only
   // that library call is caught; our own assertions must remain loud.
   try {
-    return ts.createSourceFile(
-      'callback.tsx',
-      `(${source})`,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TSX,
-    );
+    return ts.createSourceFile('callback.tsx', `(${source})`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   } catch (error: unknown) {
     if (error instanceof RangeError) {
       return undefined;
@@ -118,10 +111,7 @@ function conditionalMarkupCount(expression: ts.Expression, depth: number): numbe
     return 1;
   }
   if (ts.isConditionalExpression(node)) {
-    return (
-      conditionalMarkupCount(node.whenTrue, depth + 1) +
-      conditionalMarkupCount(node.whenFalse, depth + 1)
-    );
+    return conditionalMarkupCount(node.whenTrue, depth + 1) + conditionalMarkupCount(node.whenFalse, depth + 1);
   }
   if (ts.isBinaryExpression(node)) {
     if (node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {

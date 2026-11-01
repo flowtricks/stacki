@@ -17,14 +17,10 @@ test('component entry skips control flow, fragments and inert markup', () => {
 });
 
 test('layout entry selects body while pages retain their outer wrapper', () => {
-  const layout = parsePage(
-    '<html><head><title>Site</title></head><body><main><slot /></main></body></html>',
-  );
+  const layout = parsePage('<html><head><title>Site</title></head><body><main><slot /></main></body></html>');
   assert.ok(layout.editable);
   assert.equal(openingSelection('src/layouts/BaseLayout.astro', layout.model.nodes)?.name, 'body');
-  const page = parsePage(
-    '---\nimport Layout from "@/layouts/BaseLayout.astro";\n---\n<Layout><h1>Hello</h1></Layout>',
-  );
+  const page = parsePage('---\nimport Layout from "@/layouts/BaseLayout.astro";\n---\n<Layout><h1>Hello</h1></Layout>');
   assert.ok(page.editable);
   assert.equal(openingSelection('src/pages/index.astro', page.model.nodes)?.id, 'layout');
   assert.equal(openingSelection('src/components/Empty.astro', []), undefined);
@@ -42,14 +38,9 @@ test('component entry resolves local import aliases instead of matching a duplic
       { file: 'src/components/two/Card.astro', name: 'Card', fields: [], slots: [] },
     ],
   };
-  const parsed = parsePage(
-    '---\nimport Feature from "../components/two/Card.astro";\n---\n<Feature />',
-  );
+  const parsed = parsePage('---\nimport Feature from "../components/two/Card.astro";\n---\n<Feature />');
   assert.ok(parsed.editable);
   const node = parsed.model.nodes.find((node) => node.name === 'Feature');
   assert.ok(node?.id);
-  assert.equal(
-    componentAt(project, 'src/pages/index.astro', parsed, node.id)?.file,
-    'src/components/two/Card.astro',
-  );
+  assert.equal(componentAt(project, 'src/pages/index.astro', parsed, node.id)?.file, 'src/components/two/Card.astro');
 });

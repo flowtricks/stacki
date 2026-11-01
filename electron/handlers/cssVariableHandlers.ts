@@ -45,10 +45,7 @@ function registerCssVariablesHandlers({ ipcMain, send }: Pick<MainHost, 'ipcMain
     let last: { ok: boolean; error?: string; name?: string; changed?: boolean } = { ok: true };
     for (const move of moves || []) {
       // A group carries its heading and every line under it; a row is one line.
-      last =
-        'names' in move
-          ? cssVars.moveSection(projectPath, move)
-          : cssVars.moveVariable(projectPath, move);
+      last = 'names' in move ? cssVars.moveSection(projectPath, move) : cssVars.moveVariable(projectPath, move);
       if (!last.ok) {
         break;
       }
@@ -88,10 +85,7 @@ function registerCssVariablesHandlers({ ipcMain, send }: Pick<MainHost, 'ipcMain
   });
 }
 
-function registerCssAddSectionHandlers({
-  ipcMain,
-  send,
-}: Pick<MainHost, 'ipcMain' | 'send'>): void {
+function registerCssAddSectionHandlers({ ipcMain, send }: Pick<MainHost, 'ipcMain' | 'send'>): void {
   ipcMain.handle('css:addSection', async (_event, { projectPath, ...edit }) => {
     const result = cssVars.addSection(projectPath, edit);
     if (result.ok) {

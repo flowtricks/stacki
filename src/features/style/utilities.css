@@ -755,11 +755,7 @@ body.is-scrubbing * {
   top: 50%;
   height: 8px;
   transform: translateY(-50%);
-  background: repeating-linear-gradient(
-    to right,
-    var(--color-border-strong) 0 1px,
-    transparent 1px calc(100% / var(--u-slider-ticks, 1))
-  );
+  background: repeating-linear-gradient(to right, var(--color-border-strong) 0 1px, transparent 1px calc(100% / var(--u-slider-ticks, 1)));
   pointer-events: none;
   opacity: 0;
   transition: opacity var(--transition-fast);

@@ -22,8 +22,7 @@ function setUp() {
   const dom = new JSDOM(`<body>${PAGE}</body>`);
   const { window } = dom;
   for (const name of ['document', 'window', 'HTMLElement', 'Node', 'Element', 'Text', 'Comment']) {
-    global[name] =
-      name === 'document' ? window.document : name === 'window' ? window : window[name];
+    global[name] = name === 'document' ? window.document : name === 'window' ? window : window[name];
   }
   global.NodeFilter = window.NodeFilter;
   // Frames run at once; a zero handle reads as "none pending", as after a real frame.
@@ -93,10 +92,8 @@ const select = (...paths) => {
   focus = new Set(paths);
   redraw();
 };
-const move = (x, y) =>
-  dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { clientX: x, clientY: y }));
-const click = (x, y) =>
-  dom.window.dispatchEvent(new dom.window.MouseEvent('click', { clientX: x, clientY: y }));
+const move = (x, y) => dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { clientX: x, clientY: y }));
+const click = (x, y) => dom.window.dispatchEvent(new dom.window.MouseEvent('click', { clientX: x, clientY: y }));
 
 test('only the selected instance marks its text, dashed at rest', () => {
   select('0.3');
@@ -137,11 +134,7 @@ test('the text being typed in stays picked while the editor is open', () => {
   move(50, 60);
   const typing = posted.at(-1);
   assert.equal(typing.picked.label, 'Heading', 'its parent keeps the picked look');
-  assert.deepEqual(
-    typing.hover,
-    typing.picked,
-    'the pointer over the editor is on the picked text, which the app neither tints nor outlines',
-  );
+  assert.deepEqual(typing.hover, typing.picked, 'the pointer over the editor is on the picked text, which the app neither tints nor outlines');
   assert.equal(layer().children.length, 0, 'no dash under the editor');
   editing = undefined;
   editingElement.firstChild.data = 'Here for you.';

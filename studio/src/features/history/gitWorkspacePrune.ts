@@ -2,11 +2,7 @@ import { readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { GitWorkspaceManifest } from './gitWorkspaceContract';
 
-export async function pruneLocalGitBundles(
-  root: string,
-  current: GitWorkspaceManifest,
-  previous: GitWorkspaceManifest | undefined,
-): Promise<void> {
+export async function pruneLocalGitBundles(root: string, current: GitWorkspaceManifest, previous: GitWorkspaceManifest | undefined): Promise<void> {
   const directory = path.join(root, '.stacki/studio/state');
   const names = await readdir(directory);
   if (names.length > 10_000) {

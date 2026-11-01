@@ -8,11 +8,7 @@
 // they go with it.
 import { useState } from 'react';
 import { assert } from '../../../shared/core/assert';
-import {
-  remoteObject,
-  type RemoteSchemaField,
-  type RemoteValue,
-} from '../../../shared/properties/cmsRemoteSchema';
+import { remoteObject, type RemoteSchemaField, type RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
 import type { RemoteAsset } from '../../../shared/properties/cmsRemote';
 import { uploadRemoteAsset } from '../../ipc/cmsConnectionsBridge';
 import { ErrorToast } from '../../ui/ErrorToast';
@@ -47,23 +43,11 @@ export function RemoteAssetInput(
           onRemove={() => props.onChange(undefined)}
         />
       ) : (
-        <FileRow
-          name={asset?.filename}
-          reference={reference}
-          busy={upload.busy}
-          onChoose={choose}
-          onRemove={() => props.onChange(undefined)}
-        />
+        <FileRow name={asset?.filename} reference={reference} busy={upload.busy} onChoose={choose} onRemove={() => props.onChange(undefined)} />
       )}
       {upload.error && <ErrorToast message={upload.error} />}
       {props.fields.length > 0 && reference !== undefined && (
-        <RemoteObjectEditor
-          fields={props.fields}
-          typeName={kind}
-          value={value}
-          context={context}
-          onChange={props.onChange}
-        />
+        <RemoteObjectEditor fields={props.fields} typeName={kind} value={value} context={context} onChange={props.onChange} />
       )}
     </div>
   );
@@ -104,13 +88,7 @@ export function ImageTile(props: {
   const [loaded, setLoaded] = useState(false);
   if (props.reference === undefined) {
     return (
-      <button
-        type="button"
-        className="remote-cms-tile is-empty"
-        title="Upload an image"
-        disabled={props.busy}
-        onClick={props.onChoose}
-      >
+      <button type="button" className="remote-cms-tile is-empty" title="Upload an image" disabled={props.busy} onClick={props.onChoose}>
         {props.busy ? (
           'Uploading…'
         ) : (
@@ -170,9 +148,7 @@ function FileRow(props: {
   const action = empty ? 'Upload' : 'Replace';
   return (
     <div className="remote-cms-asset-row">
-      <span className="remote-cms-asset-name">
-        {empty ? 'No file' : (props.name ?? props.reference)}
-      </span>
+      <span className="remote-cms-asset-name">{empty ? 'No file' : (props.name ?? props.reference)}</span>
       <div className="remote-cms-asset-actions">
         <button type="button" disabled={props.busy} onClick={props.onChoose}>
           <UploadIcon size={12} /> {props.busy ? 'Uploading…' : action}
@@ -188,13 +164,8 @@ function FileRow(props: {
 }
 
 /** An image's pixel size, which Sanity writes into its asset id: `image-<hash>-1200x800-jpg`. */
-export function imageSize(
-  reference: string | undefined,
-): { readonly width: number; readonly height: number } | undefined {
-  const match =
-    reference === undefined
-      ? undefined
-      : (/-(\d{1,5})x(\d{1,5})-[a-z0-9]+$/.exec(reference) ?? undefined);
+export function imageSize(reference: string | undefined): { readonly width: number; readonly height: number } | undefined {
+  const match = reference === undefined ? undefined : (/-(\d{1,5})x(\d{1,5})-[a-z0-9]+$/.exec(reference) ?? undefined);
   const width = Number(match?.[1]);
   const height = Number(match?.[2]);
   if (width > 0 && height > 0) {
@@ -213,14 +184,8 @@ export function assetReference(value: RemoteValue | undefined): string | undefin
 const REPLACED_KEYS = ['asset', 'crop', 'hotspot'];
 
 // The field's new value: the stored asset, with the field's own fields kept.
-export function pointingAt(
-  previous: { readonly [key: string]: RemoteValue } | undefined,
-  kind: 'image' | 'file',
-  asset: RemoteAsset,
-): RemoteValue {
+export function pointingAt(previous: { readonly [key: string]: RemoteValue } | undefined, kind: 'image' | 'file', asset: RemoteAsset): RemoteValue {
   assert(asset.id.startsWith(`${kind}-`), 'An uploaded asset is of the field kind');
-  const own = Object.fromEntries(
-    Object.entries(previous ?? {}).filter(([key]) => !REPLACED_KEYS.includes(key)),
-  );
+  const own = Object.fromEntries(Object.entries(previous ?? {}).filter(([key]) => !REPLACED_KEYS.includes(key)));
   return { ...own, _type: kind, asset: { _type: 'reference', _ref: asset.id } };
 }

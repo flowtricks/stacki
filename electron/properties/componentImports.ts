@@ -22,9 +22,7 @@ export function componentSpecifier(root: string, file: string): string | undefin
         continue;
       }
       const specifier = alias.prefix + relative;
-      const effective = aliases.find((entry) =>
-        entry.wildcard ? specifier.startsWith(entry.prefix) : specifier === entry.prefix,
-      );
+      const effective = aliases.find((entry) => (entry.wildcard ? specifier.startsWith(entry.prefix) : specifier === entry.prefix));
       const resolved = effective?.targets
         .map((directory) => path.resolve(directory, specifier.slice(effective.prefix.length)))
         .find((candidate) => fs.existsSync(candidate));

@@ -39,22 +39,10 @@ export interface PropWrite {
 
 // A live write previews a value without committing it; `undefined` drops the preview
 // and puts back what the live writes overwrote.
-export type LiveSetProp = (
-  prop: string | readonly string[],
-  value: string | undefined,
-  important: boolean,
-) => void;
+export type LiveSetProp = (prop: string | readonly string[], value: string | undefined, important: boolean) => void;
 
 export function isBreakpointId(value: unknown): value is BreakpointId {
-  return (
-    value === 'xxl' ||
-    value === 'xl' ||
-    value === 'large' ||
-    value === 'main' ||
-    value === 'medium' ||
-    value === 'small' ||
-    value === 'tiny'
-  );
+  return value === 'xxl' || value === 'xl' || value === 'large' || value === 'main' || value === 'medium' || value === 'small' || value === 'tiny';
 }
 
 // Placeholder resolved-style so the panel frame (chips, selectors, sections) can
@@ -116,9 +104,7 @@ export function computePlaceholders(docs: EmbedDocument[], classList: string[]):
             continue;
           }
           out.push({
-            key:
-              `${embedDocument.source.key}:${regionIndex}:` +
-              `${block.atContext.join('>')}:${selector}`,
+            key: `${embedDocument.source.key}:${regionIndex}:` + `${block.atContext.join('>')}:${selector}`,
             atContext: block.atContext,
             selector,
             embedKey: embedDocument.source.key,
@@ -136,25 +122,14 @@ export function computePlaceholders(docs: EmbedDocument[], classList: string[]):
 export function PencilIcon() {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true" width="13" height="13">
-      <path
-        d="M11.5 2.5l2 2L6 12l-2.5.5L4 10l7.5-7.5z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinejoin="round"
-      />
+      <path d="M11.5 2.5l2 2L6 12l-2.5.5L4 10l7.5-7.5z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
     </svg>
   );
 }
-export const EMBED_ICON_SECOND_PATH =
-  'M6.35352 6.85352L5.20703 8L6.35352 9.14648L5.64648 9.85352L3.79297 8L5.64648 6.14648' +
-  'L6.35352 6.85352Z';
-export const EMBED_ICON_THIRD_PATH =
-  'M12.207 8L10.3535 9.85352L9.64648 9.14648L10.793 8L9.64648 6.85352L10.3535 6.14648' +
-  'L12.207 8Z';
+export const EMBED_ICON_SECOND_PATH = 'M6.35352 6.85352L5.20703 8L6.35352 9.14648L5.64648 9.85352L3.79297 8L5.64648 6.14648' + 'L6.35352 6.85352Z';
+export const EMBED_ICON_THIRD_PATH = 'M12.207 8L10.3535 9.85352L9.64648 9.14648L10.793 8L9.64648 6.85352L10.3535 6.14648' + 'L12.207 8Z';
 export const EMBED_ICON_FOURTH_PATH =
-  'M13 2C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3C2.44772 14 2 13.5523 2 13' +
-  'V3C2 2.44772 2.44772 2 3 2H13ZM3 13H13V3H3V13Z';
+  'M13 2C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3C2.44772 14 2 13.5523 2 13' + 'V3C2 2.44772 2.44772 2 3 2H13ZM3 13H13V3H3V13Z';
 
 export function EmbedIcon() {
   return (
@@ -200,13 +175,7 @@ export function SpinnerIcon() {
 export function CheckIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M3.5 8.5 6.5 11.5 12.5 5"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M3.5 8.5 6.5 11.5 12.5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -217,15 +186,7 @@ export function UnsavedIcon() {
     </svg>
   );
 }
-export function SaveIndicator({
-  busy,
-  error,
-  pending,
-}: {
-  busy: boolean;
-  error: string | undefined;
-  pending: string | undefined;
-}) {
+export function SaveIndicator({ busy, error, pending }: { busy: boolean; error: string | undefined; pending: string | undefined }) {
   const [target, setTarget] = useState<HTMLElement | undefined>(undefined);
   // Re-acquire the slot every render (no dep array) so the indicator follows it if the
   // selector row remounts; the functional update no-ops when it's unchanged, so there's
@@ -264,8 +225,7 @@ export function SaveIndicator({
 }
 
 export const TABLET_BREAKPOINT_ICON_SECOND_PATH =
-  'M3 3C3 2.44772 3.44772 2 4 2H12C12.5523 2 13 2.44772 13 3V13C13 13.5523 12.5523 14 12 14H4' +
-  'C3.44772 14 3 13.5523 3 13V3ZM4 3H12V13H4V3Z';
+  'M3 3C3 2.44772 3.44772 2 4 2H12C12.5523 2 13 2.44772 13 3V13C13 13.5523 12.5523 14 12 14H4' + 'C3.44772 14 3 13.5523 3 13V3ZM4 3H12V13H4V3Z';
 
 // Webflow's native breakpoint glyphs (tablet / mobile-landscape / mobile),
 // shown beside the responsive contexts in the style-context dropdown.
@@ -273,12 +233,7 @@ export function TabletBreakpointIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M9.5 11H6.5V12H9.5V11Z" fill="currentColor" />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={TABLET_BREAKPOINT_ICON_SECOND_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={TABLET_BREAKPOINT_ICON_SECOND_PATH} fill="currentColor" />
     </svg>
   );
 }
@@ -291,12 +246,7 @@ export function MobileLandscapeBreakpointIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M12 9V7H11V9H12Z" fill="currentColor" />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={MOBILE_LANDSCAPE_BREAKPOINT_ICON_SECOND_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={MOBILE_LANDSCAPE_BREAKPOINT_ICON_SECOND_PATH} fill="currentColor" />
     </svg>
   );
 }
@@ -309,12 +259,7 @@ export function MobileBreakpointIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M7 12H9V11H7V12Z" fill="currentColor" />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={MOBILE_BREAKPOINT_ICON_SECOND_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={MOBILE_BREAKPOINT_ICON_SECOND_PATH} fill="currentColor" />
     </svg>
   );
 }
@@ -327,10 +272,7 @@ export function DesktopBreakpointIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d={DESKTOP_BREAKPOINT_ICON_FIRST_PATH} fill="currentColor" />
-      <path
-        d="M3 4H8V5H3V12H13V9H14V12H16V13H0V12H2V5C2 4.44772 2.44772 4 3 4Z"
-        fill="currentColor"
-      />
+      <path d="M3 4H8V5H3V12H13V9H14V12H16V13H0V12H2V5C2 4.44772 2.44772 4 3 4Z" fill="currentColor" />
     </svg>
   );
 }

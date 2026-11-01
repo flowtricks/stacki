@@ -36,9 +36,7 @@ async function checkVariants(url: string) {
   const browser = await chromium.launch({
     executablePath:
       process.env['CHROME_PATH'] ??
-      (process.platform === 'darwin'
-        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-        : chromium.executablePath()),
+      (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
     headless: true,
   });
   try {
@@ -79,9 +77,7 @@ async function checkVariants(url: string) {
     await checkBranch(page, 'plain');
     await checkBranch(observer, 'plain');
     assert.equal(await readSource(page), source, 'Undo restores the exact shared source');
-    console.log(
-      'Variant classes, conditional children, cancel, slots, sibling, shared commit and undo passed.',
-    );
+    console.log('Variant classes, conditional children, cancel, slots, sibling, shared commit and undo passed.');
   } finally {
     await browser.close();
   }
@@ -98,9 +94,7 @@ async function measureHover(page: Page, value: string) {
         performance.mark('variant-input');
         const started = performance.now();
         const inspect = () => {
-          const section = document
-            .querySelector<HTMLIFrameElement>('iframe[title="Site preview"]')
-            ?.contentDocument?.querySelector('section');
+          const section = document.querySelector<HTMLIFrameElement>('iframe[title="Site preview"]')?.contentDocument?.querySelector('section');
           if (section?.className === element.textContent?.trim()) {
             performance.mark('variant-observed');
           } else if (performance.now() - started < 10_000) {
@@ -142,17 +136,12 @@ async function checkBranch(page: Page, value: string) {
   assert.equal(await canvas.locator('section').nth(1).getAttribute('class'), 'plain');
   assert.equal(await canvas.locator('section').nth(1).locator('em').textContent(), 'Sibling slot');
   if (value === 'accent') {
-    assert.equal(
-      await first.evaluate((element) => getComputedStyle(element).color),
-      'rgb(120, 30, 90)',
-    );
+    assert.equal(await first.evaluate((element) => getComputedStyle(element).color), 'rgb(120, 30, 90)');
   }
 }
 
 async function readSource(page: Page) {
-  const response = await page.request.get(
-    new URL('/studio/api/file?file=src/pages/index.astro', fixture.url).href,
-  );
+  const response = await page.request.get(new URL('/studio/api/file?file=src/pages/index.astro', fixture.url).href);
   assert.ok(response.ok(), 'Fixture source must be readable');
   const data: unknown = await response.json();
   return string(record(data)['source']);

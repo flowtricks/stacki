@@ -9,10 +9,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createAstroFileMonitor } from '#dist/electron/project/astroFileMonitor.js';
 import { watchProject } from '#dist/electron/project/projectWatcher.js';
 import { list, pathText, record } from '#dist/shared/core/boundary.js';
-import {
-  parseAstroFileChanges,
-  type AstroFileChange,
-} from '#dist/shared/properties/astroFileChanges.js';
+import { parseAstroFileChanges, type AstroFileChange } from '#dist/shared/properties/astroFileChanges.js';
 
 test('Baseline, add, atomic save, directory rename, delete, and close', async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-astro-notices-'));
@@ -148,10 +145,7 @@ async function waitForWatcher(root: string, ready: () => boolean): Promise<void>
   assert.fail('Expected the filesystem watcher to become ready within three seconds');
 }
 
-async function waitForFolderNotification(
-  notifications: readonly unknown[],
-  folder: string,
-): Promise<void> {
+async function waitForFolderNotification(notifications: readonly unknown[], folder: string): Promise<void> {
   for (let attempt = 0; attempt < 30; attempt++) {
     // FSEvents may also report parent directories; wait for the specific folder's event.
     if (notifications.some((value) => list(pathText)(record(value)['files']).includes(folder))) {

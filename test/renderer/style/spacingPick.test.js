@@ -87,10 +87,7 @@ const check = (what, condition, detail) => {
   // at length. It is noise, and loud enough to bury the failures below it.
   const realError = console.error;
   console.error = (...args) => {
-    if (
-      typeof args[0] === 'string' &&
-      args[0].includes('flushSync was called from inside a lifecycle')
-    ) {
+    if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle')) {
       return;
     }
     realError(...args);
@@ -143,11 +140,7 @@ const check = (what, condition, detail) => {
 
   const field = () => host.querySelector('input.embed-editor_spacing-editor');
   check('the popover has its field', !!field(), host.innerHTML.slice(0, 200));
-  check(
-    'and it starts empty, with nothing set',
-    field()?.value === '',
-    JSON.stringify(field()?.value),
-  );
+  check('and it starts empty, with nothing set', field()?.value === '', JSON.stringify(field()?.value));
 
   // Open the variable picker the way the purple dot does.
   const dot = host.querySelector('.embed-editor_varconnect-dot');
@@ -168,26 +161,19 @@ const check = (what, condition, detail) => {
   // It reaches the element:
   check(
     'picking it writes the property',
-    committed.some(
-      ([property, value]) => property === 'padding-top' && value === 'var(--site-margin)',
-    ),
+    committed.some(([property, value]) => property === 'padding-top' && value === 'var(--site-margin)'),
     JSON.stringify(committed),
   );
   // …and it is IN THE FIELD, which is the whole bug.
   check(
     'and the field shows it',
     field()?.value === 'var(--site-margin)',
-    `the field holds ${JSON.stringify(field()?.value)} ` +
-      `— the pick landed on the element but not in the field`,
+    `the field holds ${JSON.stringify(field()?.value)} ` + `— the pick landed on the element but not in the field`,
   );
   // The rich editor is what is actually visible once a value has a variable in
   // it, so it has to be carrying the name too.
   const shown = host.querySelector('.embed-editor_varconnect-editor')?.textContent ?? '';
-  check(
-    'and it is legible in the visible editor',
-    shown.includes('site-margin'),
-    JSON.stringify(shown),
-  );
+  check('and it is legible in the visible editor', shown.includes('site-margin'), JSON.stringify(shown));
 
   // Closing afterwards must not write it a second time: `close()` commits when
   // the draft differs from what the popover opened with, and the pick is
@@ -197,11 +183,7 @@ const check = (what, condition, detail) => {
     dom.window.document.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true }));
   });
   await settle();
-  check(
-    'closing after a pick writes nothing further',
-    committed.length === before,
-    JSON.stringify(committed),
-  );
+  check('closing after a pick writes nothing further', committed.length === before, JSON.stringify(committed));
   check('and clears nothing', cleared.length === 0, JSON.stringify(cleared));
 
   await act(async () => {

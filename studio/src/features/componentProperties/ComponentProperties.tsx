@@ -3,13 +3,7 @@ import ComponentPropertiesPanel from '../../../vendor/stacki/src/features/compon
 import type { SharedDocument } from '../collaboration/useDocument';
 import { revertComponentProperties } from './propertyTransport';
 
-export function ComponentProperties({
-  document,
-  refresh,
-}: {
-  readonly document: SharedDocument;
-  readonly refresh: () => void;
-}) {
+export function ComponentProperties({ document, refresh }: { readonly document: SharedDocument; readonly refresh: () => void }) {
   const { phase, changePhase } = usePropertySaveGuard();
   return (
     <>

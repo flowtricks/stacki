@@ -45,9 +45,7 @@ function ruleOf(name: string, args: string, level: RemoteRule['level']): RemoteR
     }
     case 'uri': {
       const schemes = /scheme\s*:\s*\[([^\]]*)\]/.exec(args)?.[1];
-      const named = [...(schemes ?? '').matchAll(/["'`]([a-z][a-z0-9+.-]{0,31})["'`]/g)].map(
-        (scheme) => scheme[1] ?? '',
-      );
+      const named = [...(schemes ?? '').matchAll(/["'`]([a-z][a-z0-9+.-]{0,31})["'`]/g)].map((scheme) => scheme[1] ?? '');
       return {
         level,
         kind: 'uri',

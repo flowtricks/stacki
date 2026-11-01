@@ -1,8 +1,4 @@
-import type {
-  Hosting,
-  PublishConfig,
-  PublishTarget,
-} from '../../../shared/properties/publishConfig';
+import type { Hosting, PublishConfig, PublishTarget } from '../../../shared/properties/publishConfig';
 import { ExternalIcon, GearIcon, UploadCloudIcon } from '../../ui/Icons';
 import { PublishProviderIcon } from './PublishProviderIcon';
 import type { PublishAvailability } from '../../../shared/properties/publishState';
@@ -19,32 +15,11 @@ interface Props {
   readonly config: PublishConfig | undefined;
 }
 
-export function PublishMenuOptions({
-  projectPath,
-  publish,
-  openSettings,
-  availability,
-  repositoryURL,
-  busy,
-  provider,
-  config,
-}: Props) {
+export function PublishMenuOptions({ projectPath, publish, openSettings, availability, repositoryURL, busy, provider, config }: Props) {
   return (
     <>
-      <GitHubPushOption
-        availability={availability}
-        repositoryURL={repositoryURL}
-        busy={busy}
-        publish={publish}
-      />
-      <HostingDeployOption
-        projectPath={projectPath}
-        provider={provider}
-        config={config}
-        availability={availability}
-        busy={busy}
-        publish={publish}
-      />
+      <GitHubPushOption availability={availability} repositoryURL={repositoryURL} busy={busy} publish={publish} />
+      <HostingDeployOption projectPath={projectPath} provider={provider} config={config} availability={availability} busy={busy} publish={publish} />
       <hr />
       <button onClick={openSettings}>
         <GearIcon />
@@ -71,10 +46,7 @@ function HostingDeployOption({
     unconfigured: 'Choose a hosting provider',
   } as const;
   return (
-    <span
-      className="stacki-publish-option stacki-publish-hosting"
-      title={current ? 'All changes are up to date' : undefined}
-    >
+    <span className="stacki-publish-option stacki-publish-hosting" title={current ? 'All changes are up to date' : undefined}>
       <button disabled={busy || current} onClick={() => publish('hosting')}>
         {provider === 'none' ? <UploadCloudIcon /> : <PublishProviderIcon provider={provider} />}
         <span>
@@ -83,14 +55,7 @@ function HostingDeployOption({
         </span>
       </button>
       {url !== undefined && (
-        <a
-          className="stacki-publish-repository"
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Open published site"
-          title={`Open ${url}`}
-        >
+        <a className="stacki-publish-repository" href={url} target="_blank" rel="noopener noreferrer" aria-label="Open published site" title={`Open ${url}`}>
           <ExternalIcon size={12} />
         </a>
       )}
@@ -98,12 +63,7 @@ function HostingDeployOption({
   );
 }
 
-function GitHubPushOption({
-  availability,
-  repositoryURL,
-  busy,
-  publish,
-}: Pick<Props, 'availability' | 'repositoryURL' | 'busy' | 'publish'>) {
+function GitHubPushOption({ availability, repositoryURL, busy, publish }: Pick<Props, 'availability' | 'repositoryURL' | 'busy' | 'publish'>) {
   const current = availability.github === 'current';
   const details = availability.githubPush;
   const description = current
@@ -112,10 +72,7 @@ function GitHubPushOption({
       ? 'Commit count unavailable'
       : `${details.commits} commit${details.commits === 1 ? '' : 's'} to push`;
   return (
-    <span
-      className="stacki-publish-option stacki-publish-github"
-      title={current ? 'All changes are up to date' : undefined}
-    >
+    <span className="stacki-publish-option stacki-publish-github" title={current ? 'All changes are up to date' : undefined}>
       <button disabled={busy || current} onClick={() => publish('github')}>
         <PublishProviderIcon provider="github" />
         <span>

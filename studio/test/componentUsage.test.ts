@@ -45,20 +45,11 @@ test('Stacki counts and usage agree across aliases, duplicates, layouts and mark
     assert.equal(results.find((result) => result.file.endsWith('/Unused.astro'))?.total, 0);
     assert.equal(results.find((result) => result.file.endsWith('/other/Card.astro'))?.total, 2);
     assert.deepEqual(await scanComponentUsage(root, card.file), [card]);
-    await writeFile(
-      path.join(root, 'src/pages/guide.mdx'),
-      files['src/pages/guide.mdx'] + '\n<Tile />',
-    );
+    await writeFile(path.join(root, 'src/pages/guide.mdx'), files['src/pages/guide.mdx'] + '\n<Tile />');
     assert.equal((await scanComponentUsage(root, card.file))[0]?.total, 6);
     await assert.rejects(scanComponentUsage(root, '../../outside.astro'), /Select a component/);
-    await symlink(
-      path.join(root, 'src/components/Card.astro'),
-      path.join(root, 'src/components/Link.astro'),
-    );
-    await assert.rejects(
-      scanComponentUsage(root, 'src/components/Link.astro'),
-      /Select a component/,
-    );
+    await symlink(path.join(root, 'src/components/Card.astro'), path.join(root, 'src/components/Link.astro'));
+    await assert.rejects(scanComponentUsage(root, 'src/components/Link.astro'), /Select a component/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -209,9 +209,7 @@ export function attrsAsWritten(node: ParserNode): string | undefined {
     return undefined;
   }
   const flat = (text: string) => text.replace(/\s+/g, ' ').trim();
-  return flat(node.attrSource) === flat(serializeAttrs(node.props, node.attrOrder))
-    ? node.attrSource
-    : undefined;
+  return flat(node.attrSource) === flat(serializeAttrs(node.props, node.attrOrder)) ? node.attrSource : undefined;
 }
 
 // A tag's attributes and the order the file wrote them in. An object remembers
@@ -223,10 +221,7 @@ export function attrsAsWritten(node: ParserNode): string | undefined {
 //
 // `attrsAt` is where the attribute string starts in the file, or undefined when no
 // offsets were asked for; with it, every attribute also reports its spans.
-export function tagProps(
-  attrs: string,
-  attrsAt: number | undefined,
-): { props: Record<string, Attr>; attrOrder?: string[]; attrSpans?: AttrSpan[] } {
+export function tagProps(attrs: string, attrsAt: number | undefined): { props: Record<string, Attr>; attrOrder?: string[]; attrSpans?: AttrSpan[] } {
   // One scan serves both the props and their spans: scanning twice doubled the
   // cost of every tag with attributes.
   const scanned = scanAttrs(attrs);
@@ -240,10 +235,7 @@ export function tagProps(
 }
 
 // What the file had, where it had it, then anything added since.
-function orderedProps(
-  props: Readonly<Record<string, Attr>> | undefined,
-  order?: readonly string[],
-): ReadonlyArray<readonly [string, Attr]> {
+function orderedProps(props: Readonly<Record<string, Attr>> | undefined, order?: readonly string[]): ReadonlyArray<readonly [string, Attr]> {
   const entries = Object.entries(props || {});
   if (!order || !order.length) {
     return entries;
@@ -264,10 +256,7 @@ function orderedProps(
   return out;
 }
 
-export function serializeAttrs(
-  props: Readonly<Record<string, Attr>> | undefined,
-  order?: readonly string[],
-): string {
+export function serializeAttrs(props: Readonly<Record<string, Attr>> | undefined, order?: readonly string[]): string {
   const parts = [];
   for (const [name, attr] of orderedProps(props, order)) {
     if (attr?.type === 'spread') {

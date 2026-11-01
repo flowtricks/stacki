@@ -32,12 +32,7 @@ export function parsePublishedSiteURL(input: unknown): string {
   assert(url.username === '', 'Published site URL cannot contain a username');
   assert(url.password === '', 'Published site URL cannot contain a password');
   assert(url.hostname.length <= 253, 'Published site domain exceeds limit');
-  assert(
-    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(
-      url.hostname,
-    ),
-    'Published site URL must have a domain',
-  );
+  assert(/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(url.hostname), 'Published site URL must have a domain');
   assert(url.port === '', 'Published site URL cannot contain a port');
   assert(url.pathname === '/', 'Published site URL must be an origin');
   assert(url.search === '', 'Published site URL cannot contain a query');

@@ -7,13 +7,7 @@ import { PageOrderNotice } from './PageOrderNotice';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { WireInjectedRoute } from '../../../shared/ipc/ipcResults';
 import type { ScanPage, ScanResult } from '../../../shared/properties/projectScan';
-import {
-  buildPageTree,
-  collectPageTreeDirectories,
-  pageDirectory,
-  parsePageDragText,
-  pageDisplayName,
-} from './pageTree';
+import { buildPageTree, collectPageTreeDirectories, pageDirectory, parsePageDragText, pageDisplayName } from './pageTree';
 import { comparePageNames, isCollectionRoute } from './pageOrder';
 import { CollectionIcon, FileIcon, FolderIcon, FolderPlusIcon, PlusIcon } from '../../ui/Icons';
 import { NewPageModal } from './PageDialogs';
@@ -44,20 +38,7 @@ export default function PagesPanel(props: PagesPanelProps) {
     save: ordering.save,
   });
   const model = usePagesPanel(props);
-  const {
-    showNew,
-    setShowNew,
-    query,
-    setQuery,
-    tree,
-    searchResults,
-    collapsed,
-    editing,
-    dropDirectory,
-    setDropDirectory,
-    actions,
-    openFolder,
-  } = model;
+  const { showNew, setShowNew, query, setQuery, tree, searchResults, collapsed, editing, dropDirectory, setDropDirectory, actions, openFolder } = model;
 
   return (
     <div className="panel-section grow">
@@ -71,12 +52,7 @@ export default function PagesPanel(props: PagesPanelProps) {
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
       </div>
-      <PageTreeRenameDialog
-        editing={editing}
-        scan={props.scan}
-        save={props.onRename}
-        close={() => actions.setEditing({ kind: 'none' })}
-      />
+      <PageTreeRenameDialog editing={editing} scan={props.scan} save={props.onRename} close={() => actions.setEditing({ kind: 'none' })} />
       <PageOrderNotice state={ordering.state} reload={ordering.reload} />
       <PageBody
         order={ordering.state.order}
@@ -112,23 +88,15 @@ function usePagesPanel(props: PagesPanelProps) {
   const [editing, setEditing] = useState<PageEditing>({ kind: 'none' });
   const [dropDirectory, setDropDirectory] = useState<string | undefined>(undefined);
   useTreeDragCleanup(() => setDropDirectory(undefined));
-  const tree = useMemo(
-    () => buildPageTree(props.scan.pages, props.scan.pageFolders),
-    [props.scan.pageFolders, props.scan.pages],
-  );
+  const tree = useMemo(() => buildPageTree(props.scan.pages, props.scan.pageFolders), [props.scan.pageFolders, props.scan.pages]);
   const directories = useMemo(() => collectPageTreeDirectories(tree), [tree]);
-  const searchResults = useMemo(
-    () => pagesForQuery(props.scan.pages, query),
-    [props.scan.pages, query],
-  );
+  const searchResults = useMemo(() => pagesForQuery(props.scan.pages, query), [props.scan.pages, query]);
   const { onCreateFolder } = props;
 
   useEffect(() => {
     setCollapsed((previous) => new Set([...previous].filter((rel) => directories.has(rel))));
     setEditing((previous) => validEditing(previous, props.scan.pages, directories));
-    setDropDirectory((previous) =>
-      previous !== undefined && directories.has(previous) ? previous : undefined,
-    );
+    setDropDirectory((previous) => (previous !== undefined && directories.has(previous) ? previous : undefined));
   }, [directories, props.scan.pages]);
 
   const actions = usePageTreeActions(props, setCollapsed, setEditing, setDropDirectory);
@@ -240,9 +208,7 @@ interface PageBodyProps extends PagesPanelProps {
 function PageBody(props: PageBodyProps) {
   return (
     <div
-      className={`panel-body ${
-        props.dropDirectory === '' && props.reorder.target === undefined ? 'pages-root-drop' : ''
-      }`}
+      className={`panel-body ${props.dropDirectory === '' && props.reorder.target === undefined ? 'pages-root-drop' : ''}`}
       onDragLeave={(event) => {
         if (event.currentTarget === event.target) {
           props.clearDrop();
@@ -252,12 +218,7 @@ function PageBody(props: PageBodyProps) {
       onDrop={(event) => props.searchResults === undefined && props.actions.drop(event, '')}
     >
       {props.searchResults ? (
-        <SearchResults
-          pages={props.searchResults}
-          query={props.query}
-          currentPage={props.currentPage}
-          select={props.onSelect}
-        />
+        <SearchResults pages={props.searchResults} query={props.query} currentPage={props.currentPage} select={props.onSelect} />
       ) : (
         <>
           <PageTreeView
@@ -272,16 +233,10 @@ function PageBody(props: PageBodyProps) {
             dropDirectory={props.dropDirectory}
             actions={props.actions}
           />
-          {props.scan.pages.length === 0 &&
-            props.scan.pageFolders.length === 0 &&
-            (props.injectedRoutes?.length ?? 0) === 0 && (
-              <div className="props-empty">No pages yet. Create one with +.</div>
-            )}
-          <InjectedRoutes
-            routes={props.injectedRoutes ?? []}
-            currentPage={props.currentPage}
-            select={props.onSelectRoute}
-          />
+          {props.scan.pages.length === 0 && props.scan.pageFolders.length === 0 && (props.injectedRoutes?.length ?? 0) === 0 && (
+            <div className="props-empty">No pages yet. Create one with +.</div>
+          )}
+          <InjectedRoutes routes={props.injectedRoutes ?? []} currentPage={props.currentPage} select={props.onSelectRoute} />
         </>
       )}
     </div>
@@ -305,14 +260,10 @@ function SearchResults({
   return pages.map((page) => (
     <div
       key={page.path}
-      className={`list-item ${isCollectionRoute(page.name) ? 'collection' : ''} ${
-        currentPage?.path === page.path ? 'active' : ''
-      }`}
+      className={`list-item ${isCollectionRoute(page.name) ? 'collection' : ''} ${currentPage?.path === page.path ? 'active' : ''}`}
       onClick={() => select(page)}
     >
-      <span className="icon">
-        {isCollectionRoute(page.name) ? <CollectionIcon size={13} /> : <FileIcon size={13} />}
-      </span>
+      <span className="icon">{isCollectionRoute(page.name) ? <CollectionIcon size={13} /> : <FileIcon size={13} />}</span>
       <span className="page-list-copy">
         <span className="label">{pageDisplayName(page)}</span>
         <PageSearchPath path={page.route} query={query} />
@@ -360,13 +311,7 @@ function InjectedRoutes({
   );
 }
 
-function PagesHeader({
-  createFolder,
-  createPage,
-}: {
-  readonly createFolder: () => void;
-  readonly createPage: () => void;
-}) {
+function PagesHeader({ createFolder, createPage }: { readonly createFolder: () => void; readonly createPage: () => void }) {
   return (
     <div className="panel-header">
       <h2>Pages</h2>
@@ -388,19 +333,11 @@ function pagesForQuery(pages: readonly ScanPage[], query: string): readonly Scan
     return undefined;
   }
   return pages
-    .filter((page) =>
-      [page.name, page.route, pageDisplayName(page)].some((value) =>
-        value.toLowerCase().includes(clean),
-      ),
-    )
+    .filter((page) => [page.name, page.route, pageDisplayName(page)].some((value) => value.toLowerCase().includes(clean)))
     .sort((left, right) => comparePageNames(left.name, right.name));
 }
 
-function validEditing(
-  editing: PageEditing,
-  pages: readonly ScanPage[],
-  directories: ReadonlySet<string>,
-): PageEditing {
+function validEditing(editing: PageEditing, pages: readonly ScanPage[], directories: ReadonlySet<string>): PageEditing {
   if (editing.kind === 'page') {
     return pages.some((page) => page.path === editing.key) ? editing : { kind: 'none' };
   }

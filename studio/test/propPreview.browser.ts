@@ -5,8 +5,7 @@ import { flatten, parsePage } from '../src/features/source/source';
 import { setAttributes } from '../src/features/settings/settingsEdits';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const auth = process.env['STUDIO_STORAGE_STATE'];
@@ -60,10 +59,7 @@ try {
   // Hold actual HTTP page fetches. The new prop preview must arrive via the socket
   // while this gate is closed, without a fake rendering or a page navigation.
   await page.route('**/*', async (route) => {
-    if (
-      new URL(route.request().url()).pathname === '/' &&
-      route.request().resourceType() === 'fetch'
-    ) {
+    if (new URL(route.request().url()).pathname === '/' && route.request().resourceType() === 'fetch') {
       pageFetches++;
       if (requirePush) {
         await gate;
@@ -81,9 +77,7 @@ try {
   const started = performance.now();
   await page.locator('.dd-option').filter({ hasText: /^h2$/ }).hover();
   await preview.locator('h1.text-style-h2').waitFor();
-  console.log(
-    `Hover preview painted in ${Math.round(performance.now() - started)} ms (${requirePush ? 'page fetches blocked' : 'normal network'}).`,
-  );
+  console.log(`Hover preview painted in ${Math.round(performance.now() - started)} ms (${requirePush ? 'page fetches blocked' : 'normal network'}).`);
   await page.keyboard.press('Escape');
   await preview.locator('h1.text-style-display').waitFor();
   await page.getByRole('button', { name: 'display', exact: true }).click();
@@ -96,17 +90,12 @@ try {
     await checkFallback();
   }
   assert.deepEqual(errors, []);
-  console.log(
-    `Prop hover, cancel and commit passed (${requirePush ? 'socket with fetch fallback' : 'comparison run'}).`,
-  );
+  console.log(`Prop hover, cancel and commit passed (${requirePush ? 'socket with fetch fallback' : 'comparison run'}).`);
 } finally {
   release();
   if (original !== undefined) {
     const base = await readSource();
-    assert.ok(
-      expectedSources.has(base),
-      'A collaborator changed this draft; do not overwrite their source',
-    );
+    assert.ok(expectedSources.has(base), 'A collaborator changed this draft; do not overwrite their source');
     const result = await page.request.post(new URL('/studio/api/source', url).href, {
       headers: { Origin: new URL(url).origin },
       data: { file: 'src/pages/index.astro', source: original, base },
@@ -128,9 +117,7 @@ function rememberExpected(source: string) {
 }
 
 async function readSource() {
-  const response = await page.request.get(
-    new URL('/studio/api/file?file=src/pages/index.astro', url).href,
-  );
+  const response = await page.request.get(new URL('/studio/api/file?file=src/pages/index.astro', url).href);
   assert.ok(response.ok());
   return string(record(await response.json())['source']);
 }
@@ -141,8 +128,5 @@ async function checkFallback() {
   await page.getByRole('button', { name: 'h3', exact: true }).click();
   await page.locator('.dd-option').filter({ hasText: /^h4$/ }).click();
   await page.frameLocator('iframe[title="Site preview"]').locator('h1.text-style-h4').waitFor();
-  assert.ok(
-    pageFetches > before,
-    'A lost pushed render must recover through the normal page fetch',
-  );
+  assert.ok(pageFetches > before, 'A lost pushed render must recover through the normal page fetch');
 }

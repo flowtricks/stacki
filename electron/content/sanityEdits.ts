@@ -12,21 +12,13 @@
 
 import { randomUUID } from 'node:crypto';
 import { assert } from '../../shared/core/assert';
-import type {
-  RemoteDocumentAction,
-  RemoteDocumentSummary,
-  RemoteMove,
-} from '../../shared/properties/cmsRemote';
+import type { RemoteDocumentAction, RemoteDocumentSummary, RemoteMove } from '../../shared/properties/cmsRemote';
 import { sanityQuery, sanityRequest, type SanityDataset } from './sanityContent';
 import { isRank, rankBetween } from './sanityRank';
 
 type SanityAction = Readonly<Record<string, unknown>>;
 
-export async function sanityCreateDraft(
-  target: SanityDataset,
-  type: string,
-  ordered: { readonly orderable: boolean },
-): Promise<RemoteDocumentSummary> {
+export async function sanityCreateDraft(target: SanityDataset, type: string, ordered: { readonly orderable: boolean }): Promise<RemoteDocumentSummary> {
   const id = randomUUID();
   const last = ordered.orderable ? await lastRank(target, type) : undefined;
   const attributes = {
@@ -90,9 +82,7 @@ export async function sanityMove(target: SanityDataset, move: RemoteMove): Promi
   }
   const orderRank = rankBetween(after, before);
   const existing = await existingIds(target, [move.id]);
-  const patches = [move.id, `drafts.${move.id}`]
-    .filter((id) => existing.has(id))
-    .map((id) => ({ patch: { id, set: { orderRank } } }));
+  const patches = [move.id, `drafts.${move.id}`].filter((id) => existing.has(id)).map((id) => ({ patch: { id, set: { orderRank } } }));
   assert(patches.length > 0, 'A moved document exists');
   await sanityRequest(target, `mutate/${target.dataset}`, { mutations: patches });
 }
@@ -105,18 +95,13 @@ async function existingIds(target: SanityDataset, ids: readonly string[]): Promi
 }
 
 // Each document's rank: its published document's, which the plugin writes, else its draft's.
-async function ranksOf(
-  target: SanityDataset,
-  ids: readonly string[],
-): Promise<Map<string, string>> {
+async function ranksOf(target: SanityDataset, ids: readonly string[]): Promise<Map<string, string>> {
   const all = ids.flatMap((id) => [id, `drafts.${id}`]);
   const rows = await sanityQuery(target, '*[_id in $ids]{_id, orderRank}', { ids: all }, 'raw');
   const ranks = new Map<string, string>();
   for (const row of Array.isArray(rows) ? rows : []) {
-    const id: unknown =
-      typeof row === 'object' && row !== null ? Reflect.get(row, '_id') : undefined;
-    const rank: unknown =
-      typeof row === 'object' && row !== null ? Reflect.get(row, 'orderRank') : undefined;
+    const id: unknown = typeof row === 'object' && row !== null ? Reflect.get(row, '_id') : undefined;
+    const rank: unknown = typeof row === 'object' && row !== null ? Reflect.get(row, 'orderRank') : undefined;
     if (typeof id === 'string' && isRank(rank)) {
       const published = id.replace(/^drafts\./, '');
       if (!ranks.has(published) || id === published) {
@@ -128,12 +113,7 @@ async function ranksOf(
 }
 
 async function lastRank(target: SanityDataset, type: string): Promise<string | undefined> {
-  const rank = await sanityQuery(
-    target,
-    '*[_type == $type && defined(orderRank)] | order(orderRank desc) [0].orderRank',
-    { type },
-    'raw',
-  );
+  const rank = await sanityQuery(target, '*[_type == $type && defined(orderRank)] | order(orderRank desc) [0].orderRank', { type }, 'raw');
   return isRank(rank) ? rank : undefined;
 }
 
@@ -143,11 +123,7 @@ async function lastRank(target: SanityDataset, type: string): Promise<string | u
  * that was never published removes the document; unpublishing keeps its
  * content as a draft.
  */
-export async function sanityAct(
-  target: SanityDataset,
-  id: string,
-  action: RemoteDocumentAction,
-): Promise<void> {
+export async function sanityAct(target: SanityDataset, id: string, action: RemoteDocumentAction): Promise<void> {
   assert(!id.startsWith('drafts.'), 'An action names the published id');
   const existing = await existingIds(target, [id]);
   const draft = existing.has(`drafts.${id}`);

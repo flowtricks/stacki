@@ -102,9 +102,7 @@ test('a fresh rewrite-text applies through idle → planned → written → idle
   );
   const checksum = sha256(encodeUtf8(next));
   const range = toByteSpan(13, 16); // `Old` → `New`: only the bytes that differ.
-  assert.deepEqual(outcomes, [
-    { tag: 'applied', intentId: intent.id, changedRanges: [range], checksum },
-  ]);
+  assert.deepEqual(outcomes, [{ tag: 'applied', intentId: intent.id, changedRanges: [range], checksum }]);
   assert.equal(state.snapshot?.checksum, checksum, 'the candidate is committed');
   assert.equal(disk.lockHeld(PAGE), false, 'the lock is released');
 });
@@ -129,9 +127,7 @@ test('an intent authored against other bytes is refused without its authored byt
   const disk = fakeWith(`${TEXT}<!-- outside -->\n`);
   const intent = rewriteIntent(TEXT, 'mine');
   const { outcomes } = run(submitted(intent), setup(disk));
-  assert.deepEqual(outcomes, [
-    { tag: 'rejected', intentId: intent.id, reason: 'region-externally-modified' },
-  ]);
+  assert.deepEqual(outcomes, [{ tag: 'rejected', intentId: intent.id, reason: 'region-externally-modified' }]);
 });
 
 test('a cooperating writer holding the lock is a write-race, and nothing is written', () => {
@@ -150,9 +146,7 @@ test('an outside write between planning and the lock is caught by the re-read', 
   assert.equal(planned.state.phase.tag, 'planned');
   disk.writeExternally(PAGE, encodeUtf8('outside\n'));
   const { outcomes } = run(planned.state, setup(disk));
-  assert.deepEqual(outcomes, [
-    { tag: 'rejected', intentId: intent.id, reason: 'region-externally-modified' },
-  ]);
+  assert.deepEqual(outcomes, [{ tag: 'rejected', intentId: intent.id, reason: 'region-externally-modified' }]);
   assert.equal(readText(disk), 'outside\n', 'the outside edit survives');
 });
 
@@ -160,17 +154,13 @@ test('a failed replace is write-failed; a replace without a durable directory is
   const failed = fakeWith(TEXT);
   failed.failNextReplace(PAGE, 'failed');
   const first = rewriteIntent(TEXT, 'mine');
-  assert.deepEqual(run(submitted(first), setup(failed)).outcomes, [
-    { tag: 'rejected', intentId: first.id, reason: 'write-failed' },
-  ]);
+  assert.deepEqual(run(submitted(first), setup(failed)).outcomes, [{ tag: 'rejected', intentId: first.id, reason: 'write-failed' }]);
   assert.equal(readText(failed), TEXT);
   const fragile = fakeWith(TEXT);
   fragile.failNextReplace(PAGE, 'not-durable');
   const second = rewriteIntent(TEXT, 'mine');
   const candidateChecksum = sha256(encodeUtf8('mine'));
-  assert.deepEqual(run(submitted(second), setup(fragile)).outcomes, [
-    { tag: 'uncertain', intentId: second.id, candidateChecksum },
-  ]);
+  assert.deepEqual(run(submitted(second), setup(fragile)).outcomes, [{ tag: 'uncertain', intentId: second.id, candidateChecksum }]);
   assert.equal(fragile.lockHeld(PAGE), false, 'the lock is released on every path');
 });
 
@@ -179,9 +169,7 @@ test('the verifying read: another writer is a write-race, an unreadable file is 
   const first = rewriteIntent(TEXT, 'mine');
   const written = run2(submitted(first), setup(raced));
   raced.writeExternally(PAGE, encodeUtf8('theirs'));
-  assert.deepEqual(run(written, setup(raced)).outcomes, [
-    { tag: 'rejected', intentId: first.id, reason: 'write-race' },
-  ]);
+  assert.deepEqual(run(written, setup(raced)).outcomes, [{ tag: 'rejected', intentId: first.id, reason: 'write-race' }]);
   const broken = fakeWith(TEXT);
   const second = rewriteIntent(TEXT, 'mine');
   const unreadable: DocumentDisk = {
@@ -192,9 +180,7 @@ test('the verifying read: another writer is a write-race, an unreadable file is 
   };
   const midway = run2(submitted(second), setup(broken));
   const candidateChecksum = sha256(encodeUtf8('mine'));
-  assert.deepEqual(run(midway, setup(unreadable)).outcomes, [
-    { tag: 'uncertain', intentId: second.id, candidateChecksum },
-  ]);
+  assert.deepEqual(run(midway, setup(unreadable)).outcomes, [{ tag: 'uncertain', intentId: second.id, candidateChecksum }]);
   assert.equal(broken.lockHeld(PAGE), false);
 });
 
@@ -220,15 +206,9 @@ test('reconcileUncertain compares checksums: applied, not applied, changed again
 test('preconditions assert: an intent goes to its own actor with its own snapshot', () => {
   const other = createActor(toFilePath('/project/other.astro'));
   const intent = rewriteIntent(TEXT, 'x');
-  assert.throws(
-    () => submitIntent(other, { intent, authored: undefined }),
-    /Assertion failed: An intent is submitted to its own file actor/,
-  );
+  assert.throws(() => submitIntent(other, { intent, authored: undefined }), /Assertion failed: An intent is submitted to its own file actor/);
   const wrong = SIMULATOR_PROJECTOR.snapshot(PAGE, encodeUtf8('not the authored bytes'));
-  assert.throws(
-    () => submitIntent(createActor(PAGE), { intent, authored: wrong }),
-    /Assertion failed: The authored snapshot is the one the intent names/,
-  );
+  assert.throws(() => submitIntent(createActor(PAGE), { intent, authored: wrong }), /Assertion failed: The authored snapshot is the one the intent names/);
 });
 
 // Run to the `written` phase: the replace has landed, the verify has not run.
@@ -308,9 +288,7 @@ test('malformed tags inside expressions never expose a false native edit target'
   const snapshot = SIMULATOR_PROJECTOR.snapshot(PAGE, encodeUtf8(COMMENTS_IN_TAGS));
   assert.equal(snapshot.projection.tag, 'valid');
   assert.ok(snapshot.projection.tag === 'valid');
-  const image = snapshot.projection.nodes.find(
-    (node) => node.span.start === COMMENTS_IN_TAGS.indexOf('<img'),
-  );
+  const image = snapshot.projection.nodes.find((node) => node.span.start === COMMENTS_IN_TAGS.indexOf('<img'));
   assert.equal(image, undefined, 'an unfinished tag cannot become an editable image');
   const held = disk.read(PAGE);
   assert.ok(held.ok);
@@ -331,14 +309,7 @@ test('a lazy snapshot derives its projection once, on first read, and checks it'
   assert.equal(snapshot.projection, snapshot.projection, 'memoized');
   assert.equal(derivations, 1);
   const wrong = createLazySnapshot({ path: PAGE, bytes }, () => project(), sha256);
-  const short = createLazySnapshot(
-    { path: PAGE, bytes: encodeUtf8(`${TEXT} `) },
-    () => SIMULATOR_PROJECTOR.snapshot(PAGE, bytes).projection,
-    sha256,
-  );
+  const short = createLazySnapshot({ path: PAGE, bytes: encodeUtf8(`${TEXT} `) }, () => SIMULATOR_PROJECTOR.snapshot(PAGE, bytes).projection, sha256);
   assert.equal(wrong.projection.byteLength, bytes.length);
-  assert.throws(
-    () => short.projection,
-    /Assertion failed: The projection was derived from bytes of this length/,
-  );
+  assert.throws(() => short.projection, /Assertion failed: The projection was derived from bytes of this length/);
 });

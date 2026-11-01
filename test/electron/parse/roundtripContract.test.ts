@@ -148,9 +148,7 @@ function loose(node: GeneratedNode): unknown {
     case 'component':
     case 'element': {
       const props = Object.fromEntries(Object.entries(node.props ?? {}));
-      const children = (node.children ?? [])
-        .filter((child) => !(child.kind === 'text' && (child.value ?? '').trim() === ''))
-        .map(loose);
+      const children = (node.children ?? []).filter((child) => !(child.kind === 'text' && (child.value ?? '').trim() === '')).map(loose);
       return {
         kind: node.kind,
         name: node.name,
@@ -179,17 +177,12 @@ test('serialize ∘ parse roundtrip: generated trees survive the real parser', (
     assert.equal(result.editable, true, `seed ${seed} bailed on: ${source.slice(0, 120)}`);
     if (result.editable) {
       assertTreeInvariants(result.model.nodes);
-      const actual = result.model.nodes
-        .filter((node) => !(node.kind === 'text' && node.value.trim() === ''))
-        .map((node) => loose(node));
-      const expected = tree
-        .filter((node) => !(node.kind === 'text' && (node.value ?? '').trim() === ''))
-        .map((node) => loose(node));
+      const actual = result.model.nodes.filter((node) => !(node.kind === 'text' && node.value.trim() === '')).map((node) => loose(node));
+      const expected = tree.filter((node) => !(node.kind === 'text' && (node.value ?? '').trim() === '')).map((node) => loose(node));
       assert.deepEqual(
         actual,
         expected,
-        `seed ${seed} drifted\nSOURCE: ${source}\nACTUAL: ${JSON.stringify(actual)}\n` +
-          `EXPECTED: ${JSON.stringify(expected)}`,
+        `seed ${seed} drifted\nSOURCE: ${source}\nACTUAL: ${JSON.stringify(actual)}\n` + `EXPECTED: ${JSON.stringify(expected)}`,
       );
     }
   }

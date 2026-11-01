@@ -28,18 +28,12 @@ import { componentSpecifier } from '../properties/componentImports';
 // carries the token Undo sends back (componentProperties.ts).
 const propertyUndo = new PropertyUndoStore();
 
-export function registerComponentHandlers(
-  host: Pick<MainHost, 'clipboard' | 'documents' | 'ipcMain' | 'noteAppWrite'>,
-): void {
+export function registerComponentHandlers(host: Pick<MainHost, 'clipboard' | 'documents' | 'ipcMain' | 'noteAppWrite'>): void {
   registerComponentCreateHandlers(host);
   registerSelectionCopyHandler(host);
 }
 
-function registerComponentCreateHandlers({
-  ipcMain,
-  documents,
-  noteAppWrite,
-}: Pick<MainHost, 'ipcMain' | 'documents' | 'noteAppWrite'>): void {
+function registerComponentCreateHandlers({ ipcMain, documents, noteAppWrite }: Pick<MainHost, 'ipcMain' | 'documents' | 'noteAppWrite'>): void {
   // Turn a piece of a page into a component of its own. The file is worked out
   // in componentFile.js; writing it belongs here, with every other write.
   ipcMain.handle('component:create', async (_event, options) => {
@@ -67,14 +61,10 @@ function registerComponentCreateHandlers({
     assert(undo !== undefined, 'An applied batch recorded its inverse');
     return ok({ ...result.value, undo });
   });
-  ipcMain.handle('component:revertProperties', (_event, { token }) =>
-    revertComponentProperties(token, propertyUndo, { documents, noteWrite: noteAppWrite }),
-  );
+  ipcMain.handle('component:revertProperties', (_event, { token }) => revertComponentProperties(token, propertyUndo, { documents, noteWrite: noteAppWrite }));
 
   // Which files hold instances of a component — the palette’s instance count.
-  ipcMain.handle('component:usage', async (_event, { projectPath, name, exclude }) =>
-    componentUsage(definedFields({ projectPath, name, exclude })),
-  );
+  ipcMain.handle('component:usage', async (_event, { projectPath, name, exclude }) => componentUsage(definedFields({ projectPath, name, exclude })));
 
   ipcMain.handle('page:importPathFor', async (_event, { pagePath, targetPath, projectPath }) => {
     const preferred = projectPath ? componentSpecifier(projectPath, targetPath) : undefined;
@@ -114,10 +104,7 @@ function registerComponentCreateHandlers({
   });
 }
 
-function registerSelectionCopyHandler({
-  ipcMain,
-  clipboard,
-}: Pick<MainHost, 'clipboard' | 'ipcMain'>): void {
+function registerSelectionCopyHandler({ ipcMain, clipboard }: Pick<MainHost, 'clipboard' | 'ipcMain'>): void {
   ipcMain.handle('selection:copy', async (_event, state) => {
     const trail = selectionTrail(state);
     if (!trail) {

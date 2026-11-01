@@ -29,11 +29,7 @@ export function pickerSpan(anchor: HTMLElement): { left: number; width: number }
   const margin = 8;
   const row = (anchor.parentElement ?? anchor).getBoundingClientRect();
   // At least readable, at most not a curtain — and never wider than the window.
-  const width = Math.min(
-    Math.max(row.width, FREE_MIN_WIDTH),
-    FREE_MAX_WIDTH,
-    window.innerWidth - margin * 2,
-  );
+  const width = Math.min(Math.max(row.width, FREE_MIN_WIDTH), FREE_MAX_WIDTH, window.innerWidth - margin * 2);
   // Left-aligned with the row, pushed back in if that would hang off the edge.
   const left = Math.max(margin, Math.min(row.left, window.innerWidth - width - margin));
   return { left, width };
@@ -132,26 +128,15 @@ export function useCollapsedSet(): [ReadonlySet<string>, (name: string) => void]
 
 // Type-filter for the property being edited, then sort for a stable Collection →
 // Group → name view, then keep what the search matches.
-export function pickerVariables(
-  vars: ProjectVariable[],
-  prop: string | undefined,
-  query: string,
-): ProjectVariable[] {
+export function pickerVariables(vars: ProjectVariable[], prop: string | undefined, query: string): ProjectVariable[] {
   const typed = vars.filter((variable) => varTypeAllowed(prop, variable.type));
   const sorted = [...typed].sort(
-    (left, right) =>
-      left.collection.localeCompare(right.collection) ||
-      left.group.localeCompare(right.group) ||
-      left.name.localeCompare(right.name),
+    (left, right) => left.collection.localeCompare(right.collection) || left.group.localeCompare(right.group) || left.name.localeCompare(right.name),
   );
   if (!query) {
     return sorted;
   }
-  return sorted.filter((variable) =>
-    `${variable.collection}/${variable.group}/${variable.name} ${variable.value}`
-      .toLowerCase()
-      .includes(query),
-  );
+  return sorted.filter((variable) => `${variable.collection}/${variable.group}/${variable.name} ${variable.value}`.toLowerCase().includes(query));
 }
 
 // The list: one collapsible head per collection, its groups beneath.
@@ -177,12 +162,7 @@ export function PickerCollections({
     const open = !!query || !collapsed.has(collection);
     return (
       <div key={collection} className="embed-editor_varpicker-collection">
-        <button
-          type="button"
-          className="embed-editor_varpicker-collection-head"
-          aria-expanded={open}
-          onClick={() => onToggleCollapse(collection)}
-        >
+        <button type="button" className="embed-editor_varpicker-collection-head" aria-expanded={open} onClick={() => onToggleCollapse(collection)}>
           <span className="embed-editor_varpicker-collection-name">{collection}</span>
           <span className={`embed-editor_varpicker-collection-arrow ${open ? 'is-open' : ''}`}>
             <ChevronRightIcon />
@@ -191,9 +171,7 @@ export function PickerCollections({
         {open
           ? groups.map(({ group, items }) => (
               <div key={group || '_'} className="embed-editor_varpicker-group">
-                {group ? (
-                  <div className="embed-editor_varpicker-group-name">{group}</div>
-                ) : undefined}
+                {group ? <div className="embed-editor_varpicker-group-name">{group}</div> : undefined}
                 {items.map((variable) => (
                   <PickerItem
                     key={variable.binding}
@@ -288,10 +266,7 @@ export function usePickerFocus(searchRef: React.RefObject<HTMLInputElement>): vo
 // Drops below the row that owns the anchor (the dot's wrapper, or the chip's cell),
 // flipping above only if it would overflow the bottom. Its width and left edge come
 // from pickerSpan: the style panel's span inside the panel, the row's own otherwise.
-export function usePickerPosition(
-  ref: React.RefObject<HTMLDivElement>,
-  anchor: HTMLElement,
-): CSSProperties {
+export function usePickerPosition(ref: React.RefObject<HTMLDivElement>, anchor: HTMLElement): CSSProperties {
   // Measure the hidden first pass at the final width, so the height the positioning
   // effect reads is the height it will actually have.
   const [style, setStyle] = useState<CSSProperties>(() => ({

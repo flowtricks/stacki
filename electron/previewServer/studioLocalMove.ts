@@ -5,10 +5,7 @@
 
 import { existsSync, lstatSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import {
-  STUDIO_LEGACY_DIRECTORIES,
-  STUDIO_LOCAL_DIRECTORY,
-} from '../../shared/properties/studioLocal';
+import { STUDIO_LEGACY_DIRECTORIES, STUDIO_LOCAL_DIRECTORY } from '../../shared/properties/studioLocal';
 import { assert } from '../../shared/core/assert';
 
 export function prepareStudioLocal(project: string): void {

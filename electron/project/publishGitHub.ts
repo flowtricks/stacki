@@ -2,11 +2,7 @@ import { git, run } from '../lib/nodeTools';
 import type { PublishConfig } from '../../shared/properties/publishConfig';
 
 /** URL-based pushes need an explicit tracking update so availability sees the confirmed commit. */
-export async function recordPublishedGitHub(
-  root: string,
-  branch: string,
-  commit: string,
-): Promise<void> {
+export async function recordPublishedGitHub(root: string, branch: string, commit: string): Promise<void> {
   const reference = `refs/remotes/origin/${branch}`;
   const previous = await git(root, ['rev-parse', '--verify', reference])
     .then((result) => result.stdout.trim())
@@ -25,10 +21,7 @@ export async function recordPublishedGitHub(
 }
 
 /** Resolve the selected account without changing gh's global active account. */
-export async function publishingGitEnvironment(
-  root: string,
-  config: PublishConfig,
-): Promise<NodeJS.ProcessEnv> {
+export async function publishingGitEnvironment(root: string, config: PublishConfig): Promise<NodeJS.ProcessEnv> {
   if (!config.githubAccount) {
     return { ...process.env, GIT_TERMINAL_PROMPT: '0' };
   }
@@ -37,12 +30,7 @@ export async function publishingGitEnvironment(
   delete environment['GITHUB_TOKEN'];
   let token: string;
   try {
-    const result = await run(
-      'gh',
-      ['auth', 'token', '--hostname', 'github.com', '--user', config.githubAccount],
-      root,
-      { env: environment },
-    );
+    const result = await run('gh', ['auth', 'token', '--hostname', 'github.com', '--user', config.githubAccount], root, { env: environment });
     token = result.stdout.trim();
   } catch {
     throw new Error(`Sign in once with gh auth login for ${config.githubAccount}.`);
@@ -68,9 +56,7 @@ export async function publishingGitEnvironment(
 export async function publishingGitRemote(root: string, config: PublishConfig): Promise<string> {
   // Validate the configured identity; transport URL rewrites still apply when Git connects.
   const remote = (await git(root, ['config', '--get', 'remote.origin.url'])).stdout.trim();
-  const match = /^(?:https:\/\/github\.com\/|git@github\.com:)([\w.-]+\/[\w.-]+?)(?:\.git)?$/.exec(
-    remote,
-  );
+  const match = /^(?:https:\/\/github\.com\/|git@github\.com:)([\w.-]+\/[\w.-]+?)(?:\.git)?$/.exec(remote);
   if (!match?.[1]) {
     throw new Error('Connect a github.com repository from the branch menu before publishing.');
   }

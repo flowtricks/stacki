@@ -60,11 +60,7 @@ const PIECES_MAX = 1_000;
 
 const HEADER = '---\nconst title = "Large fixture";\n---\n';
 
-export function generateLargeFixtures(
-  limits: FixtureLimits,
-  corpus: ReadonlyMap<string, string>,
-  countNodes: NodeCounter,
-): readonly LargeFixture[] {
+export function generateLargeFixtures(limits: FixtureLimits, corpus: ReadonlyMap<string, string>, countNodes: NodeCounter): readonly LargeFixture[] {
   const pieces = standalonePieces(corpus, countNodes);
   if (pieces.length === 0) {
     throw new Error('Large fixtures: no corpus piece parses on its own');
@@ -91,11 +87,7 @@ export function generateLargeFixtures(
   return fixtures;
 }
 
-export function manifestEntry(
-  fixture: LargeFixture,
-  limits: FixtureLimits,
-  countNodes: NodeCounter,
-): ManifestEntry {
+export function manifestEntry(fixture: LargeFixture, limits: FixtureLimits, countNodes: NodeCounter): ManifestEntry {
   const nodes = countNodes(fixture.text);
   if (nodes === undefined) {
     throw new Error(`Large fixture ${fixture.name} does not parse`);
@@ -121,10 +113,7 @@ interface Piece {
 // The template part of each corpus file, wrapped in a section so pieces sit
 // side by side as blocks. Only pieces that parse alone are used; the node count
 // is measured on the wrapped piece, which is exactly what it adds to a fixture.
-function standalonePieces(
-  corpus: ReadonlyMap<string, string>,
-  countNodes: NodeCounter,
-): readonly Piece[] {
+function standalonePieces(corpus: ReadonlyMap<string, string>, countNodes: NodeCounter): readonly Piece[] {
   const names = [...corpus.keys()].sort();
   if (names.length > PIECES_MAX) {
     throw new Error(`Large fixtures: more than ${PIECES_MAX} corpus files`);

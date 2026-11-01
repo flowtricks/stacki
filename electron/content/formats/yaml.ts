@@ -31,8 +31,7 @@ const parseData = (text: string): unknown => YAML.parse(text);
 const parseDocument = (text: string): YAML.Document => YAML.parseDocument(text, PARSE_OPTIONS);
 
 // A YAML scalar: `null` here is the file's own null, not our absence.
-const isPrimitive = (value: unknown): boolean =>
-  value === null || ['string', 'number', 'boolean'].includes(typeof value);
+const isPrimitive = (value: unknown): boolean => value === null || ['string', 'number', 'boolean'].includes(typeof value);
 
 const DELETE = Symbol('delete');
 
@@ -59,12 +58,9 @@ function applyEdits(text: string, edits: readonly Edit[]): string {
     // A key renamed where it stands: the pair keeps its comments, its style and
     // its place among the others.
     if (rename !== undefined) {
-      const parent =
-        path.length > 1 ? yamlDocument.getIn(path.slice(0, -1), true) : yamlDocument.contents;
+      const parent = path.length > 1 ? yamlDocument.getIn(path.slice(0, -1), true) : yamlDocument.contents;
       const items = toArray(toRecord(parent)?.['items']);
-      const pair = items
-        ?.map((item) => toRecord(item))
-        .find((item) => toRecord(item?.['key'])?.['value'] === path[path.length - 1]);
+      const pair = items?.map((item) => toRecord(item)).find((item) => toRecord(item?.['key'])?.['value'] === path[path.length - 1]);
       const pairKey = toRecord(pair?.['key']);
       if (pairKey) {
         pairKey['value'] = rename;
@@ -88,12 +84,7 @@ function applyEdits(text: string, edits: readonly Edit[]): string {
     const nodeValue = nodeRecord?.['value'];
     // Writing into the node that is already there keeps its style — the block
     // scalar, the quoting, the comment sitting beside it.
-    if (
-      nodeRecord &&
-      nodeValue !== undefined &&
-      isPrimitive(value) &&
-      typeof nodeValue === typeof value
-    ) {
+    if (nodeRecord && nodeValue !== undefined && isPrimitive(value) && typeof nodeValue === typeof value) {
       nodeRecord['value'] = value;
       continue;
     }

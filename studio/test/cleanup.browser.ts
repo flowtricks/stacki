@@ -4,15 +4,12 @@ import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { parseReport } from '../src/features/storage/cleanupTypes';
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const context = await browser.newContext({
   viewport: { width: 1440, height: 1000 },
-  ...(process.env['STUDIO_STORAGE_STATE']
-    ? { storageState: process.env['STUDIO_STORAGE_STATE'] }
-    : {}),
+  ...(process.env['STUDIO_STORAGE_STATE'] ? { storageState: process.env['STUDIO_STORAGE_STATE'] } : {}),
 });
 const page = await context.newPage();
 const name = `studio-cleanup-test-${Date.now()}.png`;
@@ -40,10 +37,7 @@ try {
   ).setFiles({
     name,
     mimeType: 'image/png',
-    buffer: Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=',
-      'base64',
-    ),
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=', 'base64'),
   });
   assert.equal((await upload).status(), 201);
   uploaded = true;
@@ -68,9 +62,7 @@ try {
   );
   uploaded = false;
   assert.deepEqual(errors, []);
-  console.log(
-    `Asset deletion, automatic ${report.location} upload cleanup and retained drafts passed.`,
-  );
+  console.log(`Asset deletion, automatic ${report.location} upload cleanup and retained drafts passed.`);
 } finally {
   // Remove only this test's upload through the same checked cleanup endpoint.
   if (uploaded) {

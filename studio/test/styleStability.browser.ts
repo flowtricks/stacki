@@ -6,8 +6,7 @@ import assert from 'node:assert/strict';
 
 const fixture = await startStyleFixture();
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1500, height: 1050 } });
@@ -27,9 +26,7 @@ try {
   await page.getByRole('button', { name: 'Style', exact: true }).click();
   const chip = page.locator('.embed-editor_selector-chip').filter({ hasText: /^\.component$/ });
   await chip.waitFor();
-  await page.waitForFunction(
-    () => document.querySelector<HTMLInputElement>('input[aria-label="Opacity"]')?.value === '0.9',
-  );
+  await page.waitForFunction(() => document.querySelector<HTMLInputElement>('input[aria-label="Opacity"]')?.value === '0.9');
   await page.waitForTimeout(2000);
   await observePanel(page);
   // Cross two normal refresh intervals, then move between canvas and inspector.
@@ -59,9 +56,7 @@ try {
   await checkRecovery(page, fixture.url);
   await checkEditingStability(page);
   assert.deepEqual(errors, []);
-  console.log(
-    'Stable idle/hover panel; failed stylesheet reads retain chips and values; successful background reads still update styles.',
-  );
+  console.log('Stable idle/hover panel; failed stylesheet reads retain chips and values; successful background reads still update styles.');
 } finally {
   await browser.close();
   await fixture.stop();
@@ -79,11 +74,7 @@ async function observePanel(page: Page) {
     new MutationObserver((records) => {
       for (const record of records) {
         for (const node of record.removedNodes) {
-          if (
-            node instanceof Element &&
-            (node.matches('.embed-editor_selector-chip') ||
-              node.querySelector('.embed-editor_selector-chip'))
-          ) {
+          if (node instanceof Element && (node.matches('.embed-editor_selector-chip') || node.querySelector('.embed-editor_selector-chip'))) {
             removals++;
           }
         }
@@ -99,16 +90,12 @@ async function observePanel(page: Page) {
 }
 async function checkRecovery(page: Page, url: string) {
   const file = 'src/components/Card.astro';
-  const response = await page.request.get(
-    new URL('/studio/api/file?file=' + encodeURIComponent(file), url).href,
-  );
+  const response = await page.request.get(new URL('/studio/api/file?file=' + encodeURIComponent(file), url).href);
   assert.ok(response.ok());
   const base = string(record(await response.json())['source']);
   const write = await page.request.post(new URL('/studio/api/source', url).href, {
     data: { file, base, source: base.replace('opacity: 0.9', 'opacity: 0.55') },
   });
   assert.ok(write.ok());
-  await page.waitForFunction(
-    () => document.querySelector<HTMLInputElement>('input[aria-label="Opacity"]')?.value === '0.55',
-  );
+  await page.waitForFunction(() => document.querySelector<HTMLInputElement>('input[aria-label="Opacity"]')?.value === '0.55');
 }

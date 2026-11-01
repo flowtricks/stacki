@@ -33,9 +33,7 @@ const check = (what, condition, detail) => {
   const entry = path.join(buildDirectory, 'asset-delete.entry.jsx');
   fs.writeFileSync(
     entry,
-    `export { default as AssetsPanel } from ${JSON.stringify(
-      repoPath('src/features/assets/AssetsPanel.tsx'),
-    )};\n` +
+    `export { default as AssetsPanel } from ${JSON.stringify(repoPath('src/features/assets/AssetsPanel.tsx'))};\n` +
       `export { ConfirmHost } from ${JSON.stringify(repoPath('src/ui/ConfirmDialog.tsx'))};\n`,
   );
   const bundle = path.join(buildDirectory, 'asset-delete.bundle.js');
@@ -162,16 +160,13 @@ const check = (what, condition, detail) => {
   // The panel opens above the roots, where there are only folders. Step into
   // the one holding the files.
   await act(async () => {
-    container
-      .querySelector('.asset-folder')
-      ?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    container.querySelector('.asset-folder')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     await settle(30);
   });
 
   const tiles = () => [...container.querySelectorAll('.asset-tile')];
   const menuButton = (i) => tiles()[i]?.querySelector('.asset-tile-menu');
-  const rows = () =>
-    [...document.querySelectorAll('.more-menu-item')].map((item) => item.textContent.trim());
+  const rows = () => [...document.querySelectorAll('.more-menu-item')].map((item) => item.textContent.trim());
   // A missing button is a FAILURE to report, not a stack trace: every check
   // after it would otherwise be lost.
   const press = async (element, what = 'something to press') => {
@@ -192,11 +187,7 @@ const check = (what, condition, detail) => {
     'every tile has a menu button',
     tiles().every((tile) => tile.querySelector('.asset-tile-menu')),
   );
-  check(
-    'which says what it is for',
-    /photo\.jpg/.test(menuButton(0)?.getAttribute('aria-label') || ''),
-    menuButton(0)?.getAttribute('aria-label'),
-  );
+  check('which says what it is for', /photo\.jpg/.test(menuButton(0)?.getAttribute('aria-label') || ''), menuButton(0)?.getAttribute('aria-label'));
   check('and nothing is open yet', rows().length === 0, rows().join());
 
   await press(menuButton(0), 'a menu button on the first tile');
@@ -210,9 +201,7 @@ const check = (what, condition, detail) => {
   // pressed. Answering no is the case that matters most here.
   const dialog = () => document.querySelector('.confirm-dialog, .confirm, [role="alertdialog"]');
   const answer = async (label) => {
-    const button = [...document.querySelectorAll('button')].find(
-      (button) => button.textContent.trim().toLowerCase() === label,
-    );
+    const button = [...document.querySelectorAll('button')].find((button) => button.textContent.trim().toLowerCase() === label);
     if (!button) {
       return false;
     }
@@ -223,35 +212,20 @@ const check = (what, condition, detail) => {
     return true;
   };
 
-  const deleteRow = () =>
-    [...document.querySelectorAll('.more-menu-item')].find(
-      (button) => button.textContent.trim() === 'Delete',
-    );
+  const deleteRow = () => [...document.querySelectorAll('.more-menu-item')].find((button) => button.textContent.trim() === 'Delete');
   await press(deleteRow(), 'a Delete row');
   check('choosing Delete asks first', !!dialog(), document.body.innerHTML.slice(-200));
   check('and has not deleted anything yet', deleted.length === 0, deleted.join());
 
-  check(
-    'the dialog says where it went',
-    /moves to your Bin/.test(dialog()?.textContent ?? ''),
-    'the confirm does not say what happens',
-  );
+  check('the dialog says where it went', /moves to your Bin/.test(dialog()?.textContent ?? ''), 'the confirm does not say what happens');
   const said = await answer('cancel');
-  check(
-    'the dialog can be answered',
-    said,
-    [...document.querySelectorAll('button')].map((button) => button.textContent).join('|'),
-  );
+  check('the dialog can be answered', said, [...document.querySelectorAll('button')].map((button) => button.textContent).join('|'));
   check('saying no deletes nothing', deleted.length === 0, deleted.join());
 
   await press(menuButton(0), 'the menu button again');
   await press(deleteRow(), 'the Delete row again');
   await answer('delete');
-  check(
-    'saying yes deletes the file it was opened on',
-    deleted.join() === 'public/photo.jpg',
-    deleted.join(),
-  );
+  check('saying yes deletes the file it was opened on', deleted.join() === 'public/photo.jpg', deleted.join());
 
   // Selection uses the whole tile and excludes files the encoder cannot handle.
   await answer('select assets');
@@ -264,17 +238,11 @@ const check = (what, condition, detail) => {
   await press(tiles()[1]);
   check('clicking a disabled tile leaves it unchecked', !tiles()[1].querySelector('input').checked);
   await press(tiles()[0].querySelector('.asset-name'));
-  check(
-    'clicking the name selects the entire image tile',
-    tiles()[0].querySelector('input').checked,
-  );
+  check('clicking the name selects the entire image tile', tiles()[0].querySelector('input').checked);
   await press(tiles()[0].querySelector('input'));
   check('clicking the checkbox toggles only once', !tiles()[0].querySelector('input').checked);
   await press(container.querySelector('.asset-select-all'));
-  check(
-    'select all includes only eligible images',
-    tiles()[0].querySelector('input').checked && !tiles()[1].querySelector('input').checked,
-  );
+  check('select all includes only eligible images', tiles()[0].querySelector('input').checked && !tiles()[1].querySelector('input').checked);
   await press(container.querySelector('[aria-label="Compress selected assets"]'));
   const compression = () => document.querySelector('.asset-compression-dialog');
   check('compression opens one format dialog', !!compression());
@@ -288,9 +256,7 @@ const check = (what, condition, detail) => {
   await press(compression().querySelector('button.primary'));
   check(
     'compress converts exactly the eligible selection in the chosen format',
-    converted.length === 1 &&
-      converted[0].rel === 'public/photo.jpg' &&
-      converted[0].format === 'webp',
+    converted.length === 1 && converted[0].rel === 'public/photo.jpg' && converted[0].format === 'webp',
   );
   check('compression closes its dialog without a second confirmation', !compression() && !dialog());
   await answer('cancel');
@@ -308,26 +274,13 @@ const check = (what, condition, detail) => {
 
   // --- the file goes somewhere it can be got back from --------------------------------
   const handlers = readSource('electron/handlers/assetHandlers.ts');
-  const handler = handlers.slice(
-    handlers.indexOf("ipcMain.handle('assets:delete'"),
-    handlers.indexOf('// Text assets (css/js'),
-  );
-  check(
-    'deleting sends the file to the bin',
-    /shell\.trashItem\(abs\)/.test(handler),
-    handler.slice(0, 300),
-  );
+  const handler = handlers.slice(handlers.indexOf("ipcMain.handle('assets:delete'"), handlers.indexOf('// Text assets (css/js'));
+  check('deleting sends the file to the bin', /shell\.trashItem\(abs\)/.test(handler), handler.slice(0, 300));
   check('never unlinks it outright', !/unlinkSync|rmSync/.test(handler), handler.slice(0, 300));
-  check(
-    'and only inside the asset roots',
-    /assetAbs\(projectPath, rel\)/.test(handler),
-    handler.slice(0, 200),
-  );
+  check('and only inside the asset roots', /assetAbs\(projectPath, rel\)/.test(handler), handler.slice(0, 200));
 
   if (failures.length) {
-    console.error(
-      `\nasset-delete: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\nasset-delete: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

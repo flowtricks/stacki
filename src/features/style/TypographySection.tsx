@@ -20,25 +20,11 @@ import {
 import { type Props, PropLabel, TextField, type Seg, SegBar } from './TypographyKit';
 import { FontFamilyField, WeightField } from './FontFields';
 import { MorePopover, ColumnsRow } from './TypographyColumns';
-import {
-  LINE_ORDER,
-  DECOR_PROPS,
-  parseDecoration,
-  composeDecoration,
-  DecorationPopover,
-} from './DecorationPopover';
+import { LINE_ORDER, DECOR_PROPS, parseDecoration, composeDecoration, DecorationPopover } from './DecorationPopover';
 import { BreakingRow, WrapRow, TruncateRow } from './TextWrapRows';
 import { StrokeRow, TextShadowsRow } from './TextStrokeShadow';
 
-export {
-  type Props,
-  PropLabel,
-  GroupLabel,
-  LiveInput,
-  StackedField,
-  type Seg,
-  SegBar,
-} from './TypographyKit';
+export { type Props, PropLabel, GroupLabel, LiveInput, StackedField, type Seg, SegBar } from './TypographyKit';
 
 const ALIGN_SEGS: readonly Seg[] = [
   { value: 'left', icon: <AlignLeftIcon />, label: 'Left' },
@@ -47,15 +33,7 @@ const ALIGN_SEGS: readonly Seg[] = [
   { value: 'justify', icon: <AlignJustifyIcon />, label: 'Justify' },
 ];
 
-function AlignRow({
-  read,
-  busy,
-  setProp,
-  clearProp,
-  liveSetProp,
-  onProvenance,
-  onSelectSelector,
-}: Props) {
+function AlignRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Props) {
   const display = displayOf(read('text-align'));
   // Nothing set here → what the page computes for this element (text-align inherits,
   // so that's usually a parent's), falling back to `left` (start, LTR).
@@ -65,19 +43,8 @@ function AlignRow({
     [...ALIGN_SEGS.map((segment) => segment.value), 'start', 'end'],
     'left',
   );
-  const direction = useComputedValue(
-    current === 'start' ? 'direction' : current === 'end' ? 'direction' : '',
-  );
-  const aligned =
-    current === 'start'
-      ? direction === 'rtl'
-        ? 'right'
-        : 'left'
-      : current === 'end'
-        ? direction === 'rtl'
-          ? 'left'
-          : 'right'
-        : current;
+  const direction = useComputedValue(current === 'start' ? 'direction' : current === 'end' ? 'direction' : '');
+  const aligned = current === 'start' ? (direction === 'rtl' ? 'right' : 'left') : current === 'end' ? (direction === 'rtl' ? 'left' : 'right') : current;
   return (
     <div className="embed-editor_size-row">
       <PropLabel
@@ -125,21 +92,12 @@ function DecorRow(props: Props) {
   // The bar reflects only the line facet — a single keyword, or None (X). Combos and
   // the divider style/color live in the "…" popover, so picking a segment recomposes
   // the shorthand while preserving any style/color already set.
-  const current = parts.lines.length
-    ? (LINE_ORDER.find((line) => parts.lines.includes(line)) ?? 'none')
-    : 'none';
-  const writeLine = (
-    { value, important }: { value: string; important: boolean },
-    mode: 'live' | 'commit',
-  ) => {
+  const current = parts.lines.length ? (LINE_ORDER.find((line) => parts.lines.includes(line)) ?? 'none') : 'none';
+  const writeLine = ({ value, important }: { value: string; important: boolean }, mode: 'live' | 'commit') => {
     const put = mode === 'live' ? liveSetProp : setProp;
     const low = value.trim().toLowerCase();
     if (DECOR_KEYWORDS.includes(low)) {
-      put(
-        'text-decoration',
-        composeDecoration({ ...parts, lines: low === 'none' ? [] : [low] }),
-        important,
-      );
+      put('text-decoration', composeDecoration({ ...parts, lines: low === 'none' ? [] : [low] }), important);
     } else {
       // A custom value typed in the bar.
       put('text-decoration', value, important);
@@ -254,13 +212,7 @@ function SegCell({
 function ColorField(props: Props) {
   return (
     <div className="embed-editor_size-row">
-      <TextField
-        prop="color"
-        label="Color"
-        placeholder="currentColor"
-        swatchLabel="Text color"
-        {...props}
-      />
+      <TextField prop="color" label="Color" placeholder="currentColor" swatchLabel="Text color" {...props} />
     </div>
   );
 }
@@ -281,30 +233,9 @@ export default function TypographySection(props: Props) {
       <DecorRow {...props} />
       <ColumnsRow {...props} />
       <div className="embed-editor_type-triple embed-editor_type-segs">
-        <SegCell
-          prop="font-style"
-          label="Italicize"
-          ariaLabel="Font style"
-          segs={ITALIC_SEGS}
-          fallback="normal"
-          {...props}
-        />
-        <SegCell
-          prop="text-transform"
-          label="Capitalize"
-          ariaLabel="Text transform"
-          segs={TRANSFORM_SEGS}
-          fallback="none"
-          {...props}
-        />
-        <SegCell
-          prop="direction"
-          label="Direction"
-          ariaLabel="Text direction"
-          segs={DIRECTION_SEGS}
-          fallback="ltr"
-          {...props}
-        />
+        <SegCell prop="font-style" label="Italicize" ariaLabel="Font style" segs={ITALIC_SEGS} fallback="normal" {...props} />
+        <SegCell prop="text-transform" label="Capitalize" ariaLabel="Text transform" segs={TRANSFORM_SEGS} fallback="none" {...props} />
+        <SegCell prop="direction" label="Direction" ariaLabel="Text direction" segs={DIRECTION_SEGS} fallback="ltr" {...props} />
       </div>
       <BreakingRow {...props} />
       <WrapRow {...props} />

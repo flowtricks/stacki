@@ -7,9 +7,7 @@ import { readAssetState } from './assetState';
 import type { WireAssetEntry } from '../../../vendor/stacki/shared/ipc/ipcResults';
 
 export async function assetCatalog(root: string) {
-  const files = [...(await walk(root, 'public')), ...(await walk(root, 'src'))].filter((file) =>
-    MEDIA_EXT.test(file),
-  );
+  const files = [...(await walk(root, 'public')), ...(await walk(root, 'src'))].filter((file) => MEDIA_EXT.test(file));
   const state = await readAssetState(root);
   const directories = new Set<string>(state.directories);
   // Include the default folders even when empty; file discovery cannot infer them.

@@ -18,20 +18,12 @@ export function projectPageLabel(project: Project, file: string): string | undef
   return page ? pageDisplayName(page) : undefined;
 }
 
-export function livePageTitles(
-  project: Project,
-  file: string,
-  model: { readonly editable: boolean; readonly nodes: readonly ParserNode[] },
-): Project {
+export function livePageTitles(project: Project, file: string, model: { readonly editable: boolean; readonly nodes: readonly ParserNode[] }): Project {
   if (!model.editable || !project.pages.includes(file)) {
     return project;
   }
   return {
     ...project,
-    pageMetadata: projectPages(project).map((page) =>
-      page.path === file
-        ? { ...page, title: layoutPageTitle(model.nodes, page.inheritedTitle) }
-        : page,
-    ),
+    pageMetadata: projectPages(project).map((page) => (page.path === file ? { ...page, title: layoutPageTitle(model.nodes, page.inheritedTitle) } : page)),
   };
 }

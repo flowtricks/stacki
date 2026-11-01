@@ -8,9 +8,6 @@ export async function loginWait(request: Request, secret: string): Promise<numbe
 }
 
 export async function waitCookie(until: number, secret: string): Promise<string> {
-  const token = await signSession(
-    { id: 1, login: 'rate-limit', expires: until, audience: 'login' },
-    secret,
-  );
+  const token = await signSession({ id: 1, login: 'rate-limit', expires: until, audience: 'login' }, secret);
   return sessionCookie(cookieName, token, Math.max(1, Math.ceil((until - Date.now()) / 1000)));
 }

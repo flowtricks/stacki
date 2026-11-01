@@ -4,13 +4,7 @@
 // bytes. The two are different types, and utf16ToByteOffsets is the only place
 // one becomes the other — mixing them anywhere else is a compile error.
 import { assert } from './assert';
-import {
-  toByteOffset,
-  toUtf16Offset,
-  type Brand,
-  type ByteOffset,
-  type Utf16Offset,
-} from './brand';
+import { toByteOffset, toUtf16Offset, type Brand, type ByteOffset, type Utf16Offset } from './brand';
 import { LIMITS } from './limits';
 import { toRecord } from './record';
 import { err, ok, type Result } from './result';
@@ -117,10 +111,7 @@ export function spansAscending(spans: readonly (ByteSpan | Utf16Span)[]): boolea
  * span of a projection is linear in the file, not quadratic. A lone surrogate
  * counts as the three bytes of U+FFFD, which is what TextEncoder writes for it;
  * an offset that splits a surrogate pair names no byte and is a caller bug. */
-export function utf16ToByteOffsets(
-  text: string,
-  offsets: readonly Utf16Offset[],
-): readonly ByteOffset[] {
+export function utf16ToByteOffsets(text: string, offsets: readonly Utf16Offset[]): readonly ByteOffset[] {
   assert(text.length <= LIMITS.ipcFieldCharsMax, 'Converted text is inside the source bound');
   const result: ByteOffset[] = [];
   let bytes = 0;

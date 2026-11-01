@@ -1,9 +1,6 @@
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import {
-  readComponentProperties,
-  editPropertyDefinition,
-} from '../../../vendor/stacki/electron/properties/propertyDefinitions';
+import { readComponentProperties, editPropertyDefinition } from '../../../vendor/stacki/electron/properties/propertyDefinitions';
 import { planPropertyChanges } from '../../../vendor/stacki/electron/properties/propertyPlan';
 import { parsePropertyChange } from '../../../vendor/stacki/shared/properties/propertyEditing';
 import { err, ok } from '../../../vendor/stacki/shared/core/result';
@@ -15,28 +12,19 @@ import { PropertyBatches, commitProperties } from './propertyBatches';
 type Rooms = ReturnType<typeof createRooms>;
 export function propertyRoutes(root: string, rooms: Rooms) {
   const batches = new PropertyBatches();
-  return async (
-    request: IncomingMessage,
-    response: ServerResponse,
-    pathname: string,
-    readBody: () => Promise<string>,
-  ) => {
+  return async (request: IncomingMessage, response: ServerResponse, pathname: string, readBody: () => Promise<string>) => {
     if (pathname !== '/studio/api/component-properties') {
       return false;
     }
     const input = request.method === 'POST' ? record(JSON.parse(await readBody())) : undefined;
     const result = await rooms.coordinator.run(async () => {
       if (input) {
-        return input['undo'] === undefined
-          ? editProperties(root, rooms, batches, input)
-          : restoreProperties(rooms, batches, string(input['undo'], 36));
+        return input['undo'] === undefined ? editProperties(root, rooms, batches, input) : restoreProperties(rooms, batches, string(input['undo'], 36));
       }
       if (request.method !== 'GET') {
         throw new Error('Use GET or POST for component properties');
       }
-      const file = componentFile(
-        new URL(request.url ?? '/', 'http://studio').searchParams.get('file'),
-      );
+      const file = componentFile(new URL(request.url ?? '/', 'http://studio').searchParams.get('file'));
       return ok(readComponentProperties(await rooms.read(file)));
     });
     response.setHeader('Content-Type', 'application/json');
@@ -51,12 +39,7 @@ function componentFile(input: unknown) {
   }
   return file;
 }
-async function editProperties(
-  root: string,
-  rooms: Rooms,
-  batches: PropertyBatches,
-  input: Record<string, unknown>,
-) {
+async function editProperties(root: string, rooms: Rooms, batches: PropertyBatches, input: Record<string, unknown>) {
   const file = componentFile(input['file']);
   const source = string(input['source']);
   if ((await rooms.read(file)) !== source) {
@@ -69,10 +52,7 @@ async function editProperties(
   }
   // The coordinator excludes shared writes while Stacki scans persisted draft sources.
   const absolute = await safePath(root, file);
-  const plan = planPropertyChanges(
-    { projectPath: root, file: absolute, source, change },
-    edited.value,
-  );
+  const plan = planPropertyChanges({ projectPath: root, file: absolute, source, change }, edited.value);
   if (!plan.ok) {
     return plan;
   }

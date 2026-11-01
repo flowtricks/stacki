@@ -85,11 +85,7 @@ export function findDeclaration(code: unknown, name: unknown): DeclarationSpan |
   if (!/^[A-Za-z_$][\w$]*$/.test(ident)) {
     return undefined;
   }
-  const re = new RegExp(
-    `(?:^|\\n)([ \\t]*)((?:export\\s+)?(?:const|let|var)\\s+` +
-      `${ident.replace(/\$/g, '\\$')}\\s*=\\s*)`,
-    'g',
-  );
+  const re = new RegExp(`(?:^|\\n)([ \\t]*)((?:export\\s+)?(?:const|let|var)\\s+` + `${ident.replace(/\$/g, '\\$')}\\s*=\\s*)`, 'g');
   const match = re.exec(source);
   const lead = match?.[1];
   const head = match?.[2];
@@ -114,10 +110,7 @@ export function findDeclaration(code: unknown, name: unknown): DeclarationSpan |
  * Covers `import x from`, `import { a, b as c } from`, `import * as ns from`
  * and type-only imports — everything a page's frontmatter can carry.
  */
-export function findImportOf(
-  code: unknown,
-  name: unknown,
-): { name: string; spec: string } | undefined {
+export function findImportOf(code: unknown, name: unknown): { name: string; spec: string } | undefined {
   const ident = String(name || '');
   if (!/^[A-Za-z_$][\w$]*$/.test(ident)) {
     return undefined;
@@ -306,11 +299,7 @@ export function kindOf(value: string | undefined): string {
 // Modules that can't be looped over, by what they are rather than by naming
 // luck: markup, styles, and media. A PascalCase default import is Astro's
 // component convention, which catches the rest.
-export const NON_DATA_EXT = new RegExp(
-  '\\.(astro|md|mdx|css|s[ac]ss|less|svg|png|jpe?g|gif|webp|avif|ico|bmp|' +
-    'mp4|webm|mov|woff2?|ttf|otf)(\\?.*)?$',
-  'i',
-);
+export const NON_DATA_EXT = new RegExp('\\.(astro|md|mdx|css|s[ac]ss|less|svg|png|jpe?g|gif|webp|avif|ico|bmp|' + 'mp4|webm|mov|woff2?|ttf|otf)(\\?.*)?$', 'i');
 
 // The framework's own modules hold functions and types — `getCollection`,
 // `render`, `GetStaticPaths`. They are how data is FETCHED, never data itself,
@@ -378,7 +367,10 @@ export function topIndexOf(text: string, ch: string): number {
 }
 
 export interface Destructure {
+  /** The local name the code reads it by. */
   readonly name: string;
+  /** The property it is read from: `filters` in `{ filters: propFilters }`, else the name. */
+  readonly prop: string;
   readonly from: string;
   readonly kind: string;
 }
@@ -437,7 +429,7 @@ export function parseDestructures(code: unknown): Destructure[] {
       if (entry.startsWith('...')) {
         const rest = entry.slice(3).trim();
         if (/^[A-Za-z_$][\w$]*$/.test(rest)) {
-          out.push({ name: rest, from, kind: 'rest' });
+          out.push({ name: rest, prop: rest, from, kind: 'rest' });
         }
         continue;
       }
@@ -451,7 +443,8 @@ export function parseDestructures(code: unknown): Destructure[] {
       if (!/^[A-Za-z_$][\w$]*$/.test(local)) {
         continue;
       }
-      out.push({ name: local, from, kind: kindOf(defaultText) });
+      const key = colon === -1 ? local : entry.slice(0, colon).trim();
+      out.push({ name: local, prop: /^[A-Za-z_$][\w$]*$/.test(key) ? key : local, from, kind: kindOf(defaultText) });
     }
   }
   return out;
@@ -463,9 +456,7 @@ export function parseDestructures(code: unknown): Destructure[] {
 export function looksCallable(value: unknown): boolean {
   const raw = String(value || '').trim();
   const test = (candidate: string): boolean =>
-    /^(async\s+)?function\b/.test(candidate) ||
-    /^(async\s*)?\([^()]*\)\s*(:[^=]*)?=>/.test(candidate) ||
-    /^(async\s+)?[A-Za-z_$][\w$]*\s*=>/.test(candidate);
+    /^(async\s+)?function\b/.test(candidate) || /^(async\s*)?\([^()]*\)\s*(:[^=]*)?=>/.test(candidate) || /^(async\s+)?[A-Za-z_$][\w$]*\s*=>/.test(candidate);
   // Both as written and with an opening paren dropped: `(href) => …` is an
   // arrow, and so is the `(async () => {…}) satisfies GetStaticPaths` that
   // wraps one.

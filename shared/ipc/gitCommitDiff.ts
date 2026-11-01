@@ -30,14 +30,8 @@ export function parseCommitDiffResult(input: unknown): CommitDiffResult {
   const value = record(input);
   if (boolean(value['ok'])) {
     const patch = text(value['value']);
-    assert(
-      patch.length <= COMMIT_DIFF_LIMITS.charactersMax,
-      'Commit diff: character limit exceeded',
-    );
-    assert(
-      patch.split('\n').length <= COMMIT_DIFF_LIMITS.linesMax,
-      'Commit diff: line limit exceeded',
-    );
+    assert(patch.length <= COMMIT_DIFF_LIMITS.charactersMax, 'Commit diff: character limit exceeded');
+    assert(patch.split('\n').length <= COMMIT_DIFF_LIMITS.linesMax, 'Commit diff: line limit exceeded');
     return { ok: true, value: patch };
   }
   return { ok: false, error: text(value['error']) };

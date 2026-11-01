@@ -25,19 +25,14 @@ const history = new HistoryRepository(
   (context, args, input, options) =>
     publishGit(
       context,
-      args.map((argument) =>
-        argument === 'https://github.com/test/history.git' ? pathToFileURL(origin).href : argument,
-      ),
+      args.map((argument) => (argument === 'https://github.com/test/history.git' ? pathToFileURL(origin).href : argument)),
       input,
       options,
     ),
 );
 const browser = await chromium.launch({
   executablePath:
-    process.env['CHROME_PATH'] ??
-    (process.platform === 'darwin'
-      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-      : chromium.executablePath()),
+    process.env['CHROME_PATH'] ?? (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
   headless: true,
 });
 try {
@@ -64,10 +59,7 @@ try {
       return;
     }
     const value = url.pathname.endsWith('/log')
-      ? await history.read(
-          Number(url.searchParams.get('skip') ?? 0),
-          url.searchParams.get('scope') === 'current' ? 'current' : 'all',
-        )
+      ? await history.read(Number(url.searchParams.get('skip') ?? 0), url.searchParams.get('scope') === 'current' ? 'current' : 'all')
       : await history.diff(parseCommitDiffRequest(input));
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(value) });
   });
@@ -92,22 +84,14 @@ try {
   assert.equal(await page.locator('.draft-chip').count(), 0);
   assert.equal(await page.locator('.studio-titlebar-end .save-state').count(), 0);
   await page.getByRole('button', { name: 'Git', exact: true }).click();
-  assert.equal(
-    await page.locator('aside').getByRole('button', { name: 'Undo', exact: true }).count(),
-    0,
-  );
-  assert.equal(
-    await page.locator('aside').getByRole('button', { name: 'Redo', exact: true }).count(),
-    0,
-  );
+  assert.equal(await page.locator('aside').getByRole('button', { name: 'Undo', exact: true }).count(), 0);
+  assert.equal(await page.locator('aside').getByRole('button', { name: 'Redo', exact: true }).count(), 0);
   await page.getByText('Change heading', { exact: true }).waitFor();
   assert.equal(details, 0, 'Opening the graph does not load changed files');
   await page.getByText('Change heading', { exact: true }).click();
   await page.getByRole('button', { name: 'View changed files (1)', exact: true }).click();
   assert.equal(details, 1, 'Only the expanded commit loads its files');
-  await page
-    .getByRole('button', { name: 'View diff for src/pages/index.astro', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'View diff for src/pages/index.astro', exact: true }).click();
   await page.locator('.history-diff-line.added').filter({ hasText: '<h1>After</h1>' }).waitFor();
   await page.locator('.history-diff-line.deleted').filter({ hasText: '<h1>Before</h1>' }).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Restore file…', exact: true }).count(), 0);
@@ -117,22 +101,15 @@ try {
   await page.getByRole('button', { name: 'Git', exact: true }).click();
   await page.getByText('Change heading', { exact: true }).waitFor({ timeout: 1000 });
   assert.equal(await page.getByText('Reading history…', { exact: true }).count(), 0);
-  assert.equal(
-    await page.getByRole('status', { name: 'Loading Git history…', exact: true }).count(),
-    0,
-  );
+  assert.equal(await page.getByRole('status', { name: 'Loading Git history…', exact: true }).count(), 0);
   holdGraph = false;
   for (const release of releaseGraph.splice(0)) {
     release();
   }
   await page.setViewportSize({ width: 390, height: 844 });
   assert.ok(await page.locator('.studio-titlebar-start .save-state').isVisible());
-  assert.ok(
-    await page.locator('header').evaluate((header) => header.scrollWidth <= header.clientWidth + 1),
-  );
-  console.log(
-    'Shared Git graph and exact file diff render; status replaces Draft at desktop and phone widths.',
-  );
+  assert.ok(await page.locator('header').evaluate((header) => header.scrollWidth <= header.clientWidth + 1));
+  console.log('Shared Git graph and exact file diff render; status replaces Draft at desktop and phone widths.');
 } finally {
   await browser.close();
   await fixture.stop();

@@ -87,15 +87,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const travel = (by) => {
     travelled += by;
   };
-  const MOVES = new Set([
-    'track',
-    'panel-one',
-    'text-one',
-    'icon-one',
-    'panel-two',
-    'text-two',
-    'icon-two',
-  ]);
+  const MOVES = new Set(['track', 'panel-one', 'text-one', 'icon-one', 'panel-two', 'text-two', 'icon-two']);
   window.Element.prototype.getBoundingClientRect = function () {
     const name = this.getAttribute('data-box');
     const [x, y, width, height] = boxes[name] || [0, 0, 0, 0];
@@ -147,8 +139,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   };
   post({ type: 'avb:design', on: true });
   const ICON = '0.1.1';
-  const lastRects = () =>
-    (sent.filter((message) => message.type === 'avb:rects').pop()?.rects || {})[ICON] || [];
+  const lastRects = () => (sent.filter((message) => message.type === 'avb:rects').pop()?.rects || {})[ICON] || [];
   post({ type: 'avb:track', paths: [ICON] });
   await wait(30);
 
@@ -156,27 +147,15 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   {
     const drawn = lastRects();
     check('the strip and its copy are two boxes', drawn.length === 2, JSON.stringify(drawn));
-    check(
-      'in the order they are across the page',
-      drawn.map((rect) => rect.x).join(',') === '300,1500',
-      JSON.stringify(drawn.map((rect) => rect.x)),
-    );
+    check('in the order they are across the page', drawn.map((rect) => rect.x).join(',') === '300,1500', JSON.stringify(drawn.map((rect) => rect.x)));
     const clickOn = (name) => {
       const element = document.querySelector(`[data-box="${name}"]`);
       sent.length = 0;
       element.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
       return sent.filter((message) => message.type === 'avb:click-node').pop();
     };
-    check(
-      'clicking the first copy says the first',
-      clickOn('icon-one')?.occurrence === 0,
-      JSON.stringify(clickOn('icon-one')),
-    );
-    check(
-      'clicking the copy in the second panel says the second',
-      clickOn('icon-two')?.occurrence === 1,
-      JSON.stringify(clickOn('icon-two')),
-    );
+    check('clicking the first copy says the first', clickOn('icon-one')?.occurrence === 0, JSON.stringify(clickOn('icon-one')));
+    check('clicking the copy in the second panel says the second', clickOn('icon-two')?.occurrence === 1, JSON.stringify(clickOn('icon-two')));
   }
 
   // --- and the boxes follow the strip -----------------------------------------
@@ -201,16 +180,8 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     travel(-240);
     await wait(400);
     const after = lastRects();
-    check(
-      'the box goes where the strip went',
-      after[0]?.x === before[0]?.x - 240,
-      `${JSON.stringify(before[0])} → ${JSON.stringify(after[0])}`,
-    );
-    check(
-      'and so does the copy of it',
-      after[1]?.x === before[1]?.x - 240,
-      `${JSON.stringify(before[1])} → ${JSON.stringify(after[1])}`,
-    );
+    check('the box goes where the strip went', after[0]?.x === before[0]?.x - 240, `${JSON.stringify(before[0])} → ${JSON.stringify(after[0])}`);
+    check('and so does the copy of it', after[1]?.x === before[1]?.x - 240, `${JSON.stringify(before[1])} → ${JSON.stringify(after[1])}`);
     check('both of them, still', after.length === 2, JSON.stringify(after));
 
     // Travelling again is followed again — a strip runs for as long as the page
@@ -218,11 +189,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     travel(-360);
     await wait(400);
     const later = lastRects();
-    check(
-      'a strip that keeps going keeps being followed',
-      later[0]?.x === after[0]?.x - 360,
-      JSON.stringify(later[0]),
-    );
+    check('a strip that keeps going keeps being followed', later[0]?.x === after[0]?.x - 360, JSON.stringify(later[0]));
 
     // Following measures. It must not WRITE: the canvas re-measures on any
     // mutation, so a class painted once a frame would answer itself for as
@@ -236,11 +203,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     await wait(500); // let the frames settle after the last move
     const before = sent.length;
     await wait(500);
-    check(
-      'a page that is not moving reports nothing',
-      sent.length === before,
-      `${sent.length - before} messages with nothing happening`,
-    );
+    check('a page that is not moving reports nothing', sent.length === before, `${sent.length - before} messages with nothing happening`);
   }
 
   // --- what "the node" means in the navigator ------------------------------------
@@ -251,8 +214,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const overlays = fs.readFileSync(repoPath('src/features/preview/PreviewOverlays.tsx'), 'utf8');
   check(
     'a selection from anywhere but the canvas means the node',
-    /setSelectedOccurrence\(undefined\)/.test(runtime) &&
-      /useState<number \| undefined>\(undefined\)/.test(runtime),
+    /setSelectedOccurrence\(undefined\)/.test(runtime) && /useState<number \| undefined>\(undefined\)/.test(runtime),
     'a navigator selection still means the first copy',
   );
   check(
@@ -270,19 +232,11 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     /selOcc \?\? 0/.test(`${runtime}\n${overlays}`),
     'the spacing box and the class list have no instance to read',
   );
-  check(
-    'a hover on any copy of an all-copies selection is already outlined',
-    hoverIsSelection({ path: '0.1.1', occ: 1 }, { path: '0.1.1', occ: undefined }),
-  );
-  check(
-    'while a hover on another copy of ONE selected copy still draws',
-    !hoverIsSelection({ path: '0.1.1', occ: 1 }, { path: '0.1.1', occ: 0 }),
-  );
+  check('a hover on any copy of an all-copies selection is already outlined', hoverIsSelection({ path: '0.1.1', occ: 1 }, { path: '0.1.1', occ: undefined }));
+  check('while a hover on another copy of ONE selected copy still draws', !hoverIsSelection({ path: '0.1.1', occ: 1 }, { path: '0.1.1', occ: 0 }));
 
   if (failures.length) {
-    console.error(
-      `\nmoving-page: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\nmoving-page: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

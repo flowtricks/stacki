@@ -41,9 +41,7 @@ export function countTracks(value: string): number {
     }
     const rep = track.match(/^repeat\(\s*(\d+)\s*,(.*)\)$/i);
     if (rep) {
-      count +=
-        parseInt(rep[1] ?? '0', 10) *
-        Math.max(1, splitTracks(rep[2] ?? '').filter((x) => !x.startsWith('[')).length);
+      count += parseInt(rep[1] ?? '0', 10) * Math.max(1, splitTracks(rep[2] ?? '').filter((x) => !x.startsWith('[')).length);
     } else {
       count += 1;
     }
@@ -59,8 +57,7 @@ export const NEW_ROW = 'auto';
 // `repeat()` form — e.g. 2 columns → `repeat(2, minmax(0, 1fr))`. It's the "how many
 // tracks" control, so it normalises ALL tracks, not just newly-added ones; per-track
 // custom sizes are set/kept in the Configure-grid modal instead (its "+" preserves them).
-export const repeatTracks = (count: number, cell: string) =>
-  `repeat(${Math.max(1, count)}, ${cell})`;
+export const repeatTracks = (count: number, cell: string) => `repeat(${Math.max(1, count)}, ${cell})`;
 
 // grid-auto-flow is a direction (row | column) optionally packed `dense`.
 export interface Flow {
@@ -100,7 +97,5 @@ export function isPresetFlow(value: string): boolean {
   if (!normalized) {
     return true;
   }
-  return normalized
-    .split(/\s+/)
-    .every((token) => token === 'row' || token === 'column' || token === 'dense');
+  return normalized.split(/\s+/).every((token) => token === 'row' || token === 'column' || token === 'dense');
 }

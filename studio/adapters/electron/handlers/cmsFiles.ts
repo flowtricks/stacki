@@ -19,8 +19,7 @@ import { MEDIA_EXT } from '../project/assetFiles';
 // ---------------------------------------------------------------------------
 
 // Config files that happen to live in src/ aren't content.
-export const CMS_SKIP =
-  /^(tsconfig|jsconfig|package|package-lock|studio-cms-schema|studio-cms-deleted|env\.d)\.json$/i;
+export const CMS_SKIP = /^(tsconfig|jsconfig|package|package-lock|studio-cms-schema|studio-cms-deleted|env\.d)\.json$/i;
 
 // How a page's frontmatter is scanned: no exports there, and a list of plain
 // strings is the content itself rather than a constant.
@@ -53,9 +52,7 @@ export function frontmatterOf(source: string) {
 // the same form: `pages/index.astro#rotatingWords`.
 export function splitCmsRel(rel: string) {
   const at = String(rel || '').lastIndexOf('#');
-  return at === -1
-    ? { fileRel: String(rel || ''), exportName: undefined }
-    : { fileRel: String(rel).slice(0, at), exportName: String(rel).slice(at + 1) };
+  return at === -1 ? { fileRel: String(rel || ''), exportName: undefined } : { fileRel: String(rel).slice(0, at), exportName: String(rel).slice(at + 1) };
 }
 
 // Refuses paths that escape src/.
@@ -91,8 +88,7 @@ export function assetOfImport(projectPath: string, abs: string, source: string) 
 // A field's type is inferred from its values, which can't tell a phone number
 // from a line of text — or anything at all from an empty field. Types the user
 // picked explicitly are remembered here, keyed by collection and field path.
-export const cmsMetaPath = (projectPath: string) =>
-  path.join(projectPath, 'src', 'data', 'studio-cms-schema.json');
+export const cmsMetaPath = (projectPath: string) => path.join(projectPath, 'src', 'data', 'studio-cms-schema.json');
 
 export function readCmsMeta(projectPath: string) {
   try {
@@ -116,11 +112,7 @@ export const collectionOf = async (projectPath: string, name: string) => {
 // A file's single values go by the file's own name: they are what the file is.
 const fileName = (rel: string): string => rel.slice(rel.lastIndexOf('/') + 1);
 
-export function readCmsSource(
-  full: string,
-  entryRel: string,
-  options: { readonly page: boolean; readonly includeGeneralOnly?: boolean },
-): CmsFile[] {
+export function readCmsSource(full: string, entryRel: string, options: { readonly page: boolean; readonly includeGeneralOnly?: boolean }): CmsFile[] {
   let source: string;
   try {
     if (fs.statSync(full).size > MAIN_LIMITS.cmsFileBytesMax) {
@@ -156,9 +148,7 @@ export function readCmsSource(
     ...(options.page ? { fromPage: true } : {}),
   };
   const general = readGeneral(source, scan);
-  const files: CmsFile[] = general
-    ? [{ ...metadata, rel: `${entryRel}#${GENERAL}`, name: fileName(entryRel), data: general }]
-    : [];
+  const files: CmsFile[] = general ? [{ ...metadata, rel: `${entryRel}#${GENERAL}`, name: fileName(entryRel), data: general }] : [];
   for (const collection of collections) {
     if (collection.data) {
       files.push({

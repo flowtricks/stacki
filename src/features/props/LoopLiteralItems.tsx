@@ -11,26 +11,16 @@ import { LOOP_LITERAL_LIMITS } from '../../editor/loopLiteral';
 import { SectionHeader } from './LoopRows';
 import { moved } from './LoopItems';
 
-export function LiteralItemsSection(props: {
-  readonly items: readonly string[];
-  readonly onChange: (items: readonly string[]) => void;
-}) {
+export function LiteralItemsSection(props: { readonly items: readonly string[]; readonly onChange: (items: readonly string[]) => void }) {
   const { items } = props;
   const write = (next: readonly string[]): void => {
     assert(next.length <= LOOP_LITERAL_LIMITS.itemsMax, 'A typed list is bounded');
     props.onChange(next);
   };
-  const reorder = useListReorder({
-    count: items.length,
-    onMove: (source, target) => write(moved(items, source, target)),
-  });
+  const reorder = useListReorder({ count: items.length, onMove: (source, target) => write(moved(items, source, target)) });
   return (
     <div className="loop-settings-section">
-      <SectionHeader
-        title="Items"
-        addable={items.length < LOOP_LITERAL_LIMITS.itemsMax}
-        onAdd={() => write([...items, `Item ${items.length + 1}`])}
-      />
+      <SectionHeader title="Items" addable={items.length < LOOP_LITERAL_LIMITS.itemsMax} onAdd={() => write([...items, `Item ${items.length + 1}`])} />
       {items.length > 0 ? (
         <div className="loop-settings-list">
           {items.map((item, index) => (
@@ -43,12 +33,7 @@ export function LiteralItemsSection(props: {
               <span className="loop-settings-item-drag" aria-hidden="true">
                 <DragIcon size={12} />
               </span>
-              <LiteralInput
-                value={item}
-                onCommit={(value) =>
-                  write(items.map((entry, at) => (at === index ? value : entry)))
-                }
-              />
+              <LiteralInput value={item} onCommit={(value) => write(items.map((entry, at) => (at === index ? value : entry)))} />
               <button
                 type="button"
                 className="loop-settings-item-remove"
@@ -69,10 +54,7 @@ export function LiteralItemsSection(props: {
 }
 
 // The draft is local until it is committed; Escape puts the saved text back.
-function LiteralInput(props: {
-  readonly value: string;
-  readonly onCommit: (value: string) => void;
-}) {
+function LiteralInput(props: { readonly value: string; readonly onCommit: (value: string) => void }) {
   const [draft, setDraft] = useState(props.value);
   const commit = (): void => {
     if (draft === props.value) {

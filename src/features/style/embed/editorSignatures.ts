@@ -3,12 +3,7 @@
 // the throttle and polling intervals that read them (editorModel.ts).
 
 import { type RuleModel } from '../model/cascade';
-import {
-  listMatchedSelectors,
-  selectorKey,
-  type MatchedSelector,
-  type StyleContext,
-} from '../model/resolved';
+import { listMatchedSelectors, selectorKey, type MatchedSelector, type StyleContext } from '../model/resolved';
 import { nativeSelectorChips } from '../model/nativeStyles';
 import { canonicalCompound, compareSpecificity } from '../model/selectors';
 import { getHost } from '../model/host';
@@ -30,8 +25,7 @@ export const DESIGNER_SYNC_INTERVAL_MS = 1500;
 /** The selectors currently in play, as one comparable string: what the canvas was
  *  last asked about. Values aren't in it — changing one doesn't change which rules
  *  target the element, so it doesn't warrant asking again. */
-export const selectorKeyOf = (rules: ParsedRule[]): string =>
-  rules.map((rule) => rule.selectorText).join('\n');
+export const selectorKeyOf = (rules: ParsedRule[]): string => rules.map((rule) => rule.selectorText).join('\n');
 
 // A fingerprint of the selected element's identity (tag + id + classes + attrs) —
 // changes when a class or data attribute is added/removed in the Designer.
@@ -50,12 +44,7 @@ export function nativeSignature(model: NativeModel | undefined): string {
         `${style.className}:${[...style.propsByContext]
           .map(
             ([contextKey, props]) =>
-              `${contextKey}{${[...props]
-                .map(
-                  ([prop, declared]) =>
-                    `${prop}=${declared.value}${declared.isVariable ? '~' : ''}`,
-                )
-                .join(';')}}`,
+              `${contextKey}{${[...props].map(([prop, declared]) => `${prop}=${declared.value}${declared.isVariable ? '~' : ''}`).join(';')}}`,
           )
           .join('|')}`,
     )
@@ -94,9 +83,7 @@ export function chainPrefixDepth(classes: string[], classList: string[]): number
 // comparable [category, depth, pseudo] tuple.
 export function selectorOrder(text: string, classList: string[]): [number, number, number] {
   const canon = canonicalCompound(text);
-  const classes = canon.tokens
-    .filter((token) => token.startsWith('class:'))
-    .map((token) => token.slice('class:'.length));
+  const classes = canon.tokens.filter((token) => token.startsWith('class:')).map((token) => token.slice('class:'.length));
   const hasTag = canon.tokens.some((token) => token.startsWith('tag:'));
   const hasAttr = canon.tokens.some((token) => token.startsWith('attr:'));
   const pseudo = text.includes(':') ? 1 : 0; // a pseudo variant sorts after its plain selector
@@ -131,11 +118,7 @@ export function selectorOrder(text: string, classList: string[]): [number, numbe
   return [4, 0, 0];
 }
 
-export function styledSelectorsFor(
-  model: RuleModel | undefined,
-  nativeModel: NativeModel | undefined,
-  context: StyleContext,
-): MatchedSelector[] {
+export function styledSelectorsFor(model: RuleModel | undefined, nativeModel: NativeModel | undefined, context: StyleContext): MatchedSelector[] {
   const byKey = new Map<string, MatchedSelector>();
   const add = (chip: MatchedSelector) => {
     if (!byKey.has(chip.key)) {
@@ -172,9 +155,5 @@ export function styledSelectorsFor(
       fromComponent: false,
     });
   }
-  return [...byKey.values()].sort(
-    (left, right) =>
-      compareSpecificity(left.specificity, right.specificity) ||
-      left.text.localeCompare(right.text),
-  );
+  return [...byKey.values()].sort((left, right) => compareSpecificity(left.specificity, right.specificity) || left.text.localeCompare(right.text));
 }

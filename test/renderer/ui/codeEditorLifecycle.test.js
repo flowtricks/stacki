@@ -34,16 +34,7 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
   const dom = new JSDOM('<!doctype html><div id="root"></div>', {
     pretendToBeVisual: true,
   });
-  for (const name of [
-    'window',
-    'Window',
-    'document',
-    'navigator',
-    'HTMLElement',
-    'Element',
-    'Node',
-    'MutationObserver',
-  ]) {
+  for (const name of ['window', 'Window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'MutationObserver']) {
     Object.defineProperty(global, name, {
       value: name === 'window' ? dom.window : dom.window[name],
       configurable: true,
@@ -105,19 +96,12 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
     const view = EditorView.findFromDOM(document.querySelector('.cm-editor'));
     assert.ok(highlightingFor(view.state, [tags.keyword]), 'JavaScript keeps its syntax colors');
     assert.equal(view.state.selection.main.head, 4, 'initial reveal goes to the requested line');
-    assert.ok(
-      document.querySelector('.cm-code-muted'),
-      'code outside the selected range is dimmed',
-    );
+    assert.ok(document.querySelector('.cm-code-muted'), 'code outside the selected range is dimmed');
     assert.ok(document.querySelector('.cm-component-link'), 'component names receive link marks');
     view.posAtCoords = () => 1;
-    document
-      .querySelector('.cm-content')
-      .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, metaKey: true }));
+    document.querySelector('.cm-content').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, metaKey: true }));
     assert.deepEqual(components, [{ name: 'One', id: 'one' }], 'Command-click opens a component');
-    document
-      .querySelector('.cm-content')
-      .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    document.querySelector('.cm-content').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     assert.deepEqual(positions, [1], 'ordinary code clicks report the source position');
     await React.act(async () =>
       view.dispatch({
@@ -128,11 +112,7 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
     assert.deepEqual(changes, ['one\ntwo\nthree!'], 'user edits emit exactly once');
     const caret = view.state.selection.main.head;
     await render('one\ntwo\nthree!');
-    assert.equal(
-      view.state.selection.main.head,
-      caret,
-      'controlled typing does not jump back to the revealed line',
-    );
+    assert.equal(view.state.selection.main.head, caret, 'controlled typing does not jump back to the revealed line');
     await render('external\nupdated\nsource');
     assert.equal(view.state.doc.toString(), 'external\nupdated\nsource');
     assert.equal(changes.length, 1, 'external reloads and app undo do not echo a new edit');
@@ -147,11 +127,7 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
     assert.equal(changes.length, 1, 'neither echoes as an edit');
     await render('external\nupdated\nsource');
     await render('external\nupdated\nsource', { revealLine: 3 });
-    assert.equal(
-      view.state.selection.main.head,
-      view.state.doc.line(3).from,
-      'a new reveal request still moves the caret',
-    );
+    assert.equal(view.state.selection.main.head, view.state.doc.line(3).from, 'a new reveal request still moves the caret');
     const astroSource = '<Heading tag="h1" maxWidth={17}>Find hope.</Heading>';
     const astroOptions = { revealLine: undefined, ranges: false, language: 'astro' };
     // Highlighting runs in the background and is bounded per line (Shiki's
@@ -161,8 +137,7 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
     // so a warm pass highlights it again, and wait for that pass's last token.
     // Each wait is bounded at five seconds.
     const HIGHLIGHT_WAIT_MS_MAX = 5_000;
-    const tokenTexts = () =>
-      [...document.querySelectorAll('.cm-astro-token')].map((token) => token.textContent);
+    const tokenTexts = () => [...document.querySelectorAll('.cm-astro-token')].map((token) => token.textContent);
     const waitFor = async (ready) => {
       for (let waitedMs = 0; waitedMs < HIGHLIGHT_WAIT_MS_MAX && !ready(); waitedMs += 100) {
         await React.act(() => new Promise((resolve) => setTimeout(resolve, 100)));
@@ -192,22 +167,10 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
     assert.ok(component, 'the Astro grammar recognizes a component tag');
     assert.ok(attribute, 'the Astro grammar recognizes an attribute');
     assert.ok(number, 'the Astro grammar recognizes a number inside an expression');
-    assert.match(
-      component.getAttribute('style'),
-      /rgb\(127, 166, 184\)/,
-      'components use muted blue',
-    );
-    assert.match(
-      attribute.getAttribute('style'),
-      /rgb\(170, 148, 192\)/,
-      'attributes use muted purple',
-    );
+    assert.match(component.getAttribute('style'), /rgb\(127, 166, 184\)/, 'components use muted blue');
+    assert.match(attribute.getAttribute('style'), /rgb\(170, 148, 192\)/, 'attributes use muted purple');
     assert.match(number.getAttribute('style'), /rgb\(201, 148, 112\)/, 'numbers use muted orange');
-    assert.match(
-      punctuation.getAttribute('style'),
-      /rgb\(174, 120, 159\)/,
-      'tag punctuation uses muted pink',
-    );
+    assert.match(punctuation.getAttribute('style'), /rgb\(174, 120, 159\)/, 'tag punctuation uses muted pink');
     assert.deepEqual(errors, [], 'the editor reports no asynchronous errors');
   } finally {
     await React.act(async () => root.unmount());

@@ -15,8 +15,7 @@ import { deleteChipAtCaret } from './chipKeys';
 // keystroke. Outside changes (undo, a different node) are applied only while
 // it isn't focused.
 
-const esc = (text: string | undefined) =>
-  String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (text: string | undefined) => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // `data-expr` is what the chip WRITES; `data-full` is what it MEANS. They are
 // the same for an ordinary chip, and differ for one reached through a `?`:
@@ -24,9 +23,7 @@ const esc = (text: string | undefined) =>
 // last chip writes `.data.title` while standing for `featured.data.title`. The
 // picker needs the second one to know which value is the current one.
 const chipHtml = (path: string, full?: string) =>
-  `<span class="expr-chip" contenteditable="false" data-expr="${esc(path)}"${
-    full && full !== path ? ` data-full="${esc(full)}"` : ''
-  }>${esc(path)}</span>`;
+  `<span class="expr-chip" contenteditable="false" data-expr="${esc(path)}"${full && full !== path ? ` data-full="${esc(full)}"` : ''}>${esc(path)}</span>`;
 
 const partsToHtml = (parts: readonly Part[] | undefined): string => {
   assert((parts?.length ?? 0) <= LIMITS.treeNodesMax, 'BindInput: part limit exceeded');
@@ -127,10 +124,7 @@ const BindInput = forwardRef<BindInputHandle, BindInputProps>(function BindInput
       }}
       onMouseDown={(event) => {
         const ElementType = event.currentTarget.ownerDocument.defaultView?.Element;
-        const chip =
-          ElementType && event.target instanceof ElementType
-            ? event.target.closest('.expr-chip')
-            : undefined;
+        const chip = ElementType && event.target instanceof ElementType ? event.target.closest('.expr-chip') : undefined;
         if (!chip) {
           return;
         }

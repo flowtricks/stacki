@@ -40,9 +40,7 @@ const check = (what, condition, detail) => {
     }
   })();
   if (typeof electronPath !== 'string') {
-    console.log(
-      'panel-surface: skipped  [needs a Chromium — see test/renderer/style/computedColor.test.js]',
-    );
+    console.log('panel-surface: skipped  [needs a Chromium — see test/renderer/style/computedColor.test.js]');
     return;
   }
 
@@ -87,12 +85,7 @@ const check = (what, condition, detail) => {
   // resolve to nothing and the measurements are of a page that never existed.
   fs.writeFileSync(
     path.join(pageDirectory, 'app.css'),
-    [
-      'src/features/style/tokens.css',
-      'src/app/styles.css',
-      'src/features/style/utilities.css',
-      'src/features/style/embedEditor.css',
-    ]
+    ['src/features/style/tokens.css', 'src/app/styles.css', 'src/features/style/utilities.css', 'src/features/style/embedEditor.css']
       .map((file) => fs.readFileSync(path.join(root, file), 'utf8'))
       .join('\n'),
   );
@@ -161,49 +154,25 @@ const check = (what, condition, detail) => {
     const { resting, hovered } = JSON.parse(line);
 
     // The premise: this really is a surface outside the host.
-    check(
-      'the modal is portaled out of the panel host',
-      resting.portaledOutOfHost,
-      'it is inside the host — this test is no longer testing anything',
-    );
-    check(
-      'and carries the panel-surface scope',
-      resting.inSurface,
-      'without it the global button rules apply',
-    );
+    check('the modal is portaled out of the panel host', resting.portaledOutOfHost, 'it is inside the host — this test is no longer testing anything');
+    check('and carries the panel-surface scope', resting.inSurface, 'without it the global button rules apply');
 
     // Left-aligned: the label starts at the row's left, not the middle of it.
     check('a track label is not centred', resting.justify !== 'center', resting.justify);
-    check(
-      'it sits at the left of its row',
-      resting.labelInset < resting.mainWidth / 4,
-      `label is ${resting.labelInset}px into a ${resting.mainWidth}px row`,
-    );
+    check('it sits at the left of its row', resting.labelInset < resting.mainWidth / 4, `label is ${resting.labelInset}px into a ${resting.mainWidth}px row`);
 
     // Hover highlights the row, not a shape inside it.
     const painted = (color) => color && color !== 'rgba(0, 0, 0, 0)' && color !== 'transparent';
-    check(
-      'nothing is highlighted at rest',
-      !painted(resting.rowBg) && !painted(resting.mainBg),
-      JSON.stringify([resting.rowBg, resting.mainBg]),
-    );
+    check('nothing is highlighted at rest', !painted(resting.rowBg) && !painted(resting.mainBg), JSON.stringify([resting.rowBg, resting.mainBg]));
     check('hovering highlights the row', painted(hovered.rowBg), hovered.rowBg);
-    check(
-      'and not the button inside it',
-      !painted(hovered.mainBg),
-      `the button painted ${hovered.mainBg} — that is the pill`,
-    );
+    check('and not the button inside it', !painted(hovered.mainBg), `the button painted ${hovered.mainBg} — that is the pill`);
 
     // Every heading starts at the same edge. A head holding only its title had
     // that title as its last child too, and the rule that pushes a trailing
     // control right pushed the heading itself to the far edge.
     const lefts = resting.headingLefts;
     check('there are several sections to compare', lefts.length >= 3, JSON.stringify(lefts));
-    check(
-      'every section heading starts at the same left edge',
-      new Set(lefts).size === 1,
-      `${JSON.stringify(lefts)} — one of them is pushed out`,
-    );
+    check('every section heading starts at the same left edge', new Set(lefts).size === 1, `${JSON.stringify(lefts)} — one of them is pushed out`);
   }
 
   if (failures.length) {

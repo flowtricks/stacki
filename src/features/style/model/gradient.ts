@@ -44,15 +44,9 @@ export type GradientPatch =
 export type GradientStopPatch = Pick<GradientStop, 'color'> | Pick<GradientStop, 'pos'>;
 
 const GRADIENT_RE = /^(repeating-)?(linear|radial|conic)-gradient\s*\(([\s\S]*)\)\s*$/i;
-const RADIAL_SIZE_KW = new Set([
-  'closest-side',
-  'closest-corner',
-  'farthest-side',
-  'farthest-corner',
-]);
+const RADIAL_SIZE_KW = new Set(['closest-side', 'closest-corner', 'farthest-side', 'farthest-corner']);
 const isAngle = (token: string) => /^-?[\d.]+(deg|grad|rad|turn)$/i.test(token.trim());
-const isLength = (token: string) =>
-  /^-?[\d.]+(px|%|em|rem|vw|vh|vmin|vmax|ch|fr)?$/i.test(token.trim());
+const isLength = (token: string) => /^-?[\d.]+(px|%|em|rem|vw|vh|vmin|vmax|ch|fr)?$/i.test(token.trim());
 const POSITION_KEYWORDS: Record<string, string> = {
   left: '0%',
   right: '100%',
@@ -112,22 +106,14 @@ function isPrelude(type: GradientType, part: string): boolean {
   // one stop, which is not a gradient, and the whole thing came back
   // unparseable: `radial-gradient(red 0%, blue 100%)` — ordinary, valid CSS —
   // could not be read by the editor at all.
-  if (
-    normalized.startsWith('circle') ||
-    normalized.startsWith('ellipse') ||
-    normalized.includes(' at ') ||
-    normalized.startsWith('at ')
-  ) {
+  if (normalized.startsWith('circle') || normalized.startsWith('ellipse') || normalized.includes(' at ') || normalized.startsWith('at ')) {
     return true;
   }
   if (RADIAL_SIZE_KW.has(normalized)) {
     return true;
   }
   const tokens = splitTopLevelSpaces(normalized);
-  return (
-    tokens.length > 0 &&
-    tokens.every((token) => RADIAL_SIZE_KW.has(token.toLowerCase()) || isLength(token))
-  );
+  return tokens.length > 0 && tokens.every((token) => RADIAL_SIZE_KW.has(token.toLowerCase()) || isLength(token));
 }
 
 export function parseGradient(image: string): Gradient | undefined {
@@ -231,17 +217,8 @@ export function blankGradientOf(type: GradientType): Gradient {
 
 export function serializeGradient(gradient: Gradient): string {
   const functionName = `${gradient.repeating ? 'repeating-' : ''}${gradient.type}-gradient`;
-  const prelude =
-    gradient.type === 'linear'
-      ? gradient.angle.trim()
-      : gradient.type === 'radial'
-        ? radialPrelude(gradient)
-        : conicPrelude(gradient);
-  const stops = gradient.stops
-    .map((stop) =>
-      stop.pos.trim() ? `${stop.color.trim()} ${stop.pos.trim()}` : stop.color.trim(),
-    )
-    .join(', ');
+  const prelude = gradient.type === 'linear' ? gradient.angle.trim() : gradient.type === 'radial' ? radialPrelude(gradient) : conicPrelude(gradient);
+  const stops = gradient.stops.map((stop) => (stop.pos.trim() ? `${stop.color.trim()} ${stop.pos.trim()}` : stop.color.trim())).join(', ');
   return `${functionName}(${prelude ? `${prelude}, ` : ''}${stops})`;
 }
 
@@ -415,11 +392,7 @@ export function colorAt(stops: GradientStop[], percent: number): string {
     }
     if (percent >= leftPercent && percent <= rightPercent) {
       const span = rightPercent - leftPercent;
-      return mixColors(
-        leftStop.color,
-        rightStop.color,
-        span === 0 ? 0 : (percent - leftPercent) / span,
-      );
+      return mixColors(leftStop.color, rightStop.color, span === 0 ? 0 : (percent - leftPercent) / span);
     }
   }
   return lastStop.color;

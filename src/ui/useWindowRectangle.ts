@@ -1,12 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import { usePointerDrag } from './usePointerDrag';
-import {
-  fitWindowRectangle,
-  resizeWindowRectangle,
-  type WindowEdge,
-  type WindowSize,
-} from './windowGeometry';
+import { fitWindowRectangle, resizeWindowRectangle, type WindowEdge, type WindowSize } from './windowGeometry';
 import { readWindowRectangle, storeWindowRectangle } from './windowPreferences';
 
 // Tool windows and the code editor share geometry, without knowing their dock location.
@@ -18,10 +13,7 @@ export function useWindowRectangle(minimum: WindowSize, storageKey?: string) {
     if (event.button !== 0 || event.isPrimary === false) {
       return;
     }
-    if (
-      event.target instanceof Element &&
-      event.target.closest('button, input, select, textarea, a, [contenteditable], [role=button]')
-    ) {
+    if (event.target instanceof Element && event.target.closest('button, input, select, textarea, a, [contenteditable], [role=button]')) {
       return;
     }
     event.preventDefault();
@@ -34,11 +26,7 @@ export function useWindowRectangle(minimum: WindowSize, storageKey?: string) {
         setRectangle(
           edge
             ? resizeWindowRectangle(rectangle, edge, delta, viewportSize(), minimum)
-            : fitWindowRectangle(
-                { ...rectangle, x: rectangle.x + delta.x, y: rectangle.y + delta.y },
-                viewportSize(),
-                minimum,
-              ),
+            : fitWindowRectangle({ ...rectangle, x: rectangle.x + delta.x, y: rectangle.y + delta.y }, viewportSize(), minimum),
         );
       },
       onEnd: () => setDragging(false),
@@ -56,11 +44,7 @@ export function useWindowRectangle(minimum: WindowSize, storageKey?: string) {
     setRectangle((current) =>
       edge
         ? resizeWindowRectangle(current, edge, delta, viewportSize(), minimum)
-        : fitWindowRectangle(
-            { ...current, x: current.x + delta.x, y: current.y + delta.y },
-            viewportSize(),
-            minimum,
-          ),
+        : fitWindowRectangle({ ...current, x: current.x + delta.x, y: current.y + delta.y }, viewportSize(), minimum),
     );
   };
   return { rectangle, dragging, start, onKeyDown };
@@ -76,9 +60,7 @@ function useWindowPlacement(
     readonly dragging: boolean;
   },
 ) {
-  const [rectangle, setRectangle] = useState(() =>
-    readWindowRectangle(storageKey, viewportSize(), minimum),
-  );
+  const [rectangle, setRectangle] = useState(() => readWindowRectangle(storageKey, viewportSize(), minimum));
   const { width, height } = minimum;
   useEffect(() => {
     const fit = (): void => {

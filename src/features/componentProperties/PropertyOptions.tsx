@@ -43,20 +43,14 @@ export function PropertyOptions({ type, disabled, onChange }: PropertyOptionsPro
       scalarKind.current = undefined;
     }
     const nextType = next.options.join(' | ');
-    onChange(
-      listChange.kind === 'move'
-        ? { kind: 'reorder', type: nextType }
-        : { kind: 'draft', type: nextType, rename: next.rename },
-    );
+    onChange(listChange.kind === 'move' ? { kind: 'reorder', type: nextType } : { kind: 'draft', type: nextType, rename: next.rename });
   };
   return (
     <div className="property-options props-field">
       <span>Options</span>
       <ListField
         value={value}
-        onChange={(text, immediate, listChange) =>
-          change(text, immediate ? 'immediate' : 'draft', listChange)
-        }
+        onChange={(text, immediate, listChange) => change(text, immediate ? 'immediate' : 'draft', listChange)}
         disabled={disabled}
         itemsMin={1}
         itemsMax={PROPERTY_LIMITS.fieldsMax}

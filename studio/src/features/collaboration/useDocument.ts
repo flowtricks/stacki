@@ -42,9 +42,7 @@ export class SharedDocument {
   error = '';
   get selectionNotice(): ActionableNotice | undefined {
     const owner = selectionOwner(this.peers, this.selfId, this.file, this.selected);
-    return owner
-      ? this.lockNotice(owner, this.selected, this.page || this.file, this.selectedOccurrence)
-      : undefined;
+    return owner ? this.lockNotice(owner, this.selected, this.page || this.file, this.selectedOccurrence) : undefined;
   }
   ready = false;
   private socket: WebSocket | undefined;
@@ -61,22 +59,17 @@ export class SharedDocument {
   private readonly selectionIntent = new SelectionIntent();
   private epoch = '';
   private readonly persistence: IndexeddbPersistence;
-  private readonly name =
-    sessionStorage.getItem('studio-name') ?? `Editor ${Math.floor(Math.random() * 900 + 100)}`;
+  private readonly name = sessionStorage.getItem('studio-name') ?? `Editor ${Math.floor(Math.random() * 900 + 100)}`;
   constructor(
     readonly file: string,
     readonly workspaceId?: string,
   ) {
-    this.persistence = new IndexeddbPersistence(
-      documentStorageName(location.origin, file, workspaceId),
-      this.doc,
-    );
+    this.persistence = new IndexeddbPersistence(documentStorageName(location.origin, file, workspaceId), this.doc);
     sessionStorage.setItem('studio-name', this.name);
     this.doc.on('update', (update: Uint8Array, origin: unknown) => {
       this.revision++;
       if (origin === LOCAL || origin === this.undo) {
-        this.status =
-          this.socket?.readyState === WebSocket.OPEN ? 'Saving' : 'Offline · edits pending';
+        this.status = this.socket?.readyState === WebSocket.OPEN ? 'Saving' : 'Offline · edits pending';
         this.send({ type: 'update', epoch: this.epoch, update: encode(update) });
       }
       this.emit();
@@ -135,16 +128,11 @@ export class SharedDocument {
       this.saves.reset();
       if (event.code === 4001) {
         this.status = 'Sign-in required';
-        this.error =
-          'Your session expired or repository access changed. Your local edits are preserved. Sign in again.';
+        this.error = 'Your session expired or repository access changed. Your local edits are preserved. Sign in again.';
         this.emit();
         return;
       }
-      this.status = this.suspended
-        ? this.status
-        : navigator.onLine
-          ? 'Reconnecting…'
-          : 'Offline · edits pending';
+      this.status = this.suspended ? this.status : navigator.onLine ? 'Reconnecting…' : 'Offline · edits pending';
       this.selected = '';
       this.emit();
       if (!this.closed && !this.suspended) {
@@ -180,8 +168,7 @@ export class SharedDocument {
     } else {
       this.disconnectConnection();
       this.status = 'Needs attention';
-      this.error =
-        'Save confirmation did not arrive. Your local edits are preserved. Reload Studio to retry.';
+      this.error = 'Save confirmation did not arrive. Your local edits are preserved. Reload Studio to retry.';
       this.emit();
     }
   }
@@ -195,8 +182,7 @@ export class SharedDocument {
         if (message['type'] === 'sync') {
           const epoch = string(message['epoch'], 100);
           if (this.epoch && this.epoch !== epoch) {
-            this.error =
-              'The server draft was replaced. This browser still has the previous draft; export its source before clearing this site’s stored data.';
+            this.error = 'The server draft was replaced. This browser still has the previous draft; export its source before clearing this site’s stored data.';
             // A different document identity cannot converge by reconnecting. Keep
             // the local draft intact and stop transport recovery until it is resolved.
             this.ready = false;
@@ -237,9 +223,7 @@ export class SharedDocument {
         this.error = string(message['message']);
         this.status = 'Needs attention';
       } else if (message['type'] === 'presence' && Array.isArray(message['peers'])) {
-        this.peers = message['peers']
-          .slice(0, 3000)
-          .map((peer: unknown) => parsePeer(peer, this.file));
+        this.peers = message['peers'].slice(0, 3000).map((peer: unknown) => parsePeer(peer, this.file));
       }
       this.emit();
     } catch (error) {
@@ -283,11 +267,7 @@ export class SharedDocument {
     if (ownAction) {
       this.undo.stopCapturing();
     }
-    Y.applyUpdate(
-      this.doc,
-      decode(string(message['update'], 12_000_000)),
-      ownAction ? STRUCTURE : 'remote',
-    );
+    Y.applyUpdate(this.doc, decode(string(message['update'], 12_000_000)), ownAction ? STRUCTURE : 'remote');
     if (ownAction) {
       this.undo.stopCapturing();
     }
@@ -381,11 +361,7 @@ export class SharedDocument {
     }
     if (getEditorRole() === 'client') {
       const source = this.text.toString();
-      assertClientSourceChange(
-        this.file,
-        source,
-        source.slice(0, edit.start) + edit.text + source.slice(edit.end),
-      );
+      assertClientSourceChange(this.file, source, source.slice(0, edit.start) + edit.text + source.slice(edit.end));
     }
     const previous = this.text.toString().slice(edit.start, edit.end);
     const minimal = textChange(previous, edit.text);
@@ -412,28 +388,15 @@ export class SharedDocument {
     if (source !== this.text.toString()) {
       throw new Error('The page changed; repeat the action');
     }
-    const checksum = [...new Uint8Array(digest)]
-      .map((byte) => byte.toString(16).padStart(2, '0'))
-      .join('');
+    const checksum = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
     this.send({ type: 'action', epoch: this.epoch, checksum, action });
   }
   private send(data: unknown) {
     if (this.socket?.readyState === WebSocket.OPEN) {
-      if (
-        data &&
-        typeof data === 'object' &&
-        'type' in data &&
-        data.type === 'cursor' &&
-        this.socket.bufferedAmount > 64000
-      ) {
+      if (data && typeof data === 'object' && 'type' in data && data.type === 'cursor' && this.socket.bufferedAmount > 64000) {
         return;
       }
-      if (
-        data &&
-        typeof data === 'object' &&
-        'type' in data &&
-        (data.type === 'update' || data.type === 'action')
-      ) {
+      if (data && typeof data === 'object' && 'type' in data && (data.type === 'update' || data.type === 'action')) {
         // The sync handshake replays the complete local document, including edits
         // made while the new socket was open but had not received its epoch yet.
         if (!this.synchronized) {
@@ -507,8 +470,7 @@ function encode(bytes: Uint8Array) {
 function notifySourceUpdated(message: Readonly<Record<string, unknown>>): void {
   window.dispatchEvent(
     new CustomEvent('studio:source-updated', {
-      detail:
-        message['structural'] === true || message['ownAction'] === true ? 'structure' : undefined,
+      detail: message['structural'] === true || message['ownAction'] === true ? 'structure' : undefined,
     }),
   );
 }

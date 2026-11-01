@@ -15,13 +15,7 @@ import type { AnchorRef, StructuralPath } from '#dist/shared/page/ref.js';
 import { err, ok, type Result } from '#dist/shared/core/result.js';
 import type { Snapshot } from '#dist/shared/page/snapshot.js';
 import type { ProjectedNode, Projection } from '#dist/shared/page/sourceProjection.js';
-import {
-  byteStringsEqual,
-  encodeUtf8,
-  toByteString,
-  type ByteSpan,
-  type ByteString,
-} from '#dist/shared/core/span.js';
+import { byteStringsEqual, encodeUtf8, toByteString, type ByteSpan, type ByteString } from '#dist/shared/core/span.js';
 import type { CandidatePolicy, Plan, PostKind } from '#dist/shared/engine/planner.js';
 import type { Splice } from '#dist/shared/engine/planner.js';
 
@@ -180,10 +174,7 @@ function planVisual(snapshot: Snapshot, intent: Intent): Result<Plan, RejectionR
 
 /** Resolution without mapping: the node at the authored path must still have
  * the authored span and kind, or the anchor has moved. */
-export function resolveNode(
-  projection: Extract<Projection, { tag: 'valid' }>,
-  anchor: AnchorRef,
-): Result<ProjectedNode, RejectionReason> {
+export function resolveNode(projection: Extract<Projection, { tag: 'valid' }>, anchor: AnchorRef): Result<ProjectedNode, RejectionReason> {
   const node = projection.nodes.find((candidate) => samePath(candidate.path, anchor.path));
   if (node === undefined) {
     return err('anchor-moved');

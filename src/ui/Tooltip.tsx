@@ -10,17 +10,10 @@ type TooltipState =
     };
 
 // Retain the last placement during exit so the tooltip fades where it was opened.
-export default function Tooltip({
-  text,
-  className,
-}: {
-  readonly text: string;
-  readonly className?: string;
-}) {
+export default function Tooltip({ text, className }: { readonly text: string; readonly className?: string }) {
   const id = useId();
   const [state, setState] = useState<TooltipState>({ kind: 'idle' });
-  const close = () =>
-    setState((previous) => (previous.kind === 'idle' ? previous : { ...previous, kind: 'closed' }));
+  const close = () => setState((previous) => (previous.kind === 'idle' ? previous : { ...previous, kind: 'closed' }));
   return (
     <>
       <span

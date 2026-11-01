@@ -30,22 +30,14 @@ import {
 } from './sanityContent';
 import { sanityAct, sanityCreateDraft, sanityDelete, sanityMove } from './sanityEdits';
 import { sanityRestore, sanityRevisions } from './sanityHistory';
-import {
-  sanityConstantLists,
-  sanityDocumentSchema,
-  sanityNamedTypes,
-  sanityTypeIcons,
-} from './sanitySchema';
+import { sanityConstantLists, sanityDocumentSchema, sanityNamedTypes, sanityTypeIcons } from './sanitySchema';
 import { inStructureOrder, sanityStructureOrder } from './sanityStructure';
 import { sanityUploadBytes } from './sanityUpload';
 
 export interface CmsRemoteService {
   readonly collections: () => Promise<RemoteCollection[]>;
   /** One collection's items, each with the `columns` fields' values to show beside it. */
-  readonly documents: (
-    collection: string,
-    columns?: readonly string[],
-  ) => Promise<RemoteDocumentList>;
+  readonly documents: (collection: string, columns?: readonly string[]) => Promise<RemoteDocumentList>;
   readonly create: (collection: string) => Promise<RemoteDocumentSummary>;
   readonly remove: (ids: readonly string[]) => Promise<number>;
   readonly move: (move: RemoteMove) => Promise<RemoteDocumentList>;
@@ -57,10 +49,7 @@ export interface CmsRemoteService {
   readonly history: (id: string) => Promise<RemoteRevision[]>;
   readonly restore: (id: string, revision: string) => Promise<RemoteDocument>;
   readonly references: (types: readonly string[]) => Promise<RemoteReferenceOption[]>;
-  readonly upload: (
-    kind: RemoteAssetKind,
-    file: { readonly name: string; readonly bytes: Uint8Array },
-  ) => Promise<RemoteAsset>;
+  readonly upload: (kind: RemoteAssetKind, file: { readonly name: string; readonly bytes: Uint8Array }) => Promise<RemoteAsset>;
 }
 
 export function cmsRemoteService(root: string, target: SanityDataset): CmsRemoteService {
@@ -72,8 +61,7 @@ export function cmsRemoteService(root: string, target: SanityDataset): CmsRemote
     return (type: string) => sanityDocumentSchema(named, type, lists);
   };
   const previewFor = (type: string) => sanityDocumentSchema(sanityNamedTypes(root), type)?.preview;
-  const documents = (collection: string, columns: readonly string[] = []) =>
-    sanityDocuments(target, collection, previewFor(collection), columns);
+  const documents = (collection: string, columns: readonly string[] = []) => sanityDocuments(target, collection, previewFor(collection), columns);
   const document = (id: string) => sanityDocument(target, id, schemaOf());
   return {
     // In the order the site's own Studio lists them, each with its schema's icon.
@@ -82,11 +70,7 @@ export function cmsRemoteService(root: string, target: SanityDataset): CmsRemote
       const names = collections.map((collection) => collection.name);
       const order = inStructureOrder(names, sanityStructureOrder(root, names));
       const icons = sanityTypeIcons(root);
-      return order.flatMap((name) =>
-        collections
-          .filter((entry) => entry.name === name)
-          .map((entry) => ({ ...entry, icon: icons.get(name) })),
-      );
+      return order.flatMap((name) => collections.filter((entry) => entry.name === name).map((entry) => ({ ...entry, icon: icons.get(name) })));
     },
     documents,
     create: async (collection) => {
@@ -114,7 +98,11 @@ export function cmsRemoteService(root: string, target: SanityDataset): CmsRemote
       await sanityRestore(target, id, revision);
       return document(id);
     },
-    references: (types) => sanityReferenceOptions(target, types),
+    // Each choice with its picture, read by its type's own preview.
+    references: (types) => {
+      const named = sanityNamedTypes(root);
+      return sanityReferenceOptions(target, types, (type) => sanityDocumentSchema(named, type)?.preview?.media);
+    },
     upload: (kind, file) => sanityUploadBytes(target, kind, file.name, file.bytes),
   };
 }

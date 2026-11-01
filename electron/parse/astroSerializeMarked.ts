@@ -5,11 +5,7 @@
 import type { Attr } from '../../shared/page/pageNode';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
-import {
-  PREVIEW_STAMP_ATTRIBUTE,
-  stampData,
-  type PreviewStamp,
-} from '../../shared/page/previewToken';
+import { PREVIEW_STAMP_ATTRIBUTE, stampData, type PreviewStamp } from '../../shared/page/previewToken';
 import type { ParserNode, MapNode, CondNode } from './astroParserTypes';
 import { serializeAttrs } from './astroAttrs';
 import { blockHead } from './astroScan';
@@ -48,14 +44,8 @@ interface MarkedPlace {
 // A <Fragment> takes attributes and renders no element of its own, so it can
 // carry both the slot and the comment: what lands in that slot is a comment
 // and nothing else.
-const markerFor = (
-  path: string,
-  kind: 's' | 'e',
-  { inSlotContent, slotAttr = '' }: { readonly inSlotContent: boolean; readonly slotAttr?: string },
-) =>
-  inSlotContent || slotAttr
-    ? `<Fragment${slotAttr} set:html={${JSON.stringify(`<!--avb-${kind}:${path}-->`)}} />`
-    : `<!--avb-${kind}:${path}-->`;
+const markerFor = (path: string, kind: 's' | 'e', { inSlotContent, slotAttr = '' }: { readonly inSlotContent: boolean; readonly slotAttr?: string }) =>
+  inSlotContent || slotAttr ? `<Fragment${slotAttr} set:html={${JSON.stringify(`<!--avb-${kind}:${path}-->`)}} />` : `<!--avb-${kind}:${path}-->`;
 
 // `inSlot` says this node is a direct child of a component, i.e. slot content —
 // which decides how the marker has to be written, since Astro's compiler drops
@@ -96,12 +86,7 @@ const markerFor = (
 // The markers stay either way: they are what works when nothing interferes,
 // they say where a node ENDS, and they carry the nodes an attribute can't
 // (text, a loop, a branch).
-export function serializeNodeMarked(
-  node: ParserNode,
-  indent: string,
-  lines: string[],
-  place: MarkedPlace,
-): void {
+export function serializeNodeMarked(node: ParserNode, indent: string, lines: string[], place: MarkedPlace): void {
   const { path, inSlot, atRoot, depth, stamp } = place;
   assert(depth <= LIMITS.treeDepthMax, 'serializeNodeMarked: depth limit');
   if (node.kind === 'chunk-group') {
@@ -136,8 +121,7 @@ export function serializeNodeMarked(
   // CSS written for the children a component is given — which is most CSS
   // written for a component — sees one child that isn't there in the real
   // build. Nothing this writes may be a child.
-  const { tagInPlace, markWithin, slotAttr, carryPath, markedProps, attrOrder } =
-    serializeNodeMarkedRoute(node, place);
+  const { tagInPlace, markWithin, slotAttr, carryPath, markedProps, attrOrder } = serializeNodeMarkedRoute(node, place);
   if (!tagInPlace && !markWithin) {
     lines.push(indent + markerFor(path, 's', { inSlotContent: inSlot, slotAttr }));
   }
@@ -201,12 +185,7 @@ export function serializeNodeMarked(
   }
 }
 
-function serializeNodeMarkedMap(
-  node: MapNode,
-  indent: string,
-  lines: string[],
-  { path, atRoot, depth, stamp }: MarkedPlace,
-): 'complete' | 'continue' {
+function serializeNodeMarkedMap(node: MapNode, indent: string, lines: string[], { path, atRoot, depth, stamp }: MarkedPlace): 'complete' | 'continue' {
   if (node.bodyParts !== undefined) {
     const text = serializeMapCallback(node, (child, index) => {
       const marked: string[] = [];
@@ -270,12 +249,7 @@ function serializeNodeMarkedMap(
   return 'continue';
 }
 
-function serializeNodeMarkedCond(
-  node: CondNode,
-  indent: string,
-  lines: string[],
-  { path, atRoot, depth, stamp }: MarkedPlace,
-): void {
+function serializeNodeMarkedCond(node: CondNode, indent: string, lines: string[], { path, atRoot, depth, stamp }: MarkedPlace): void {
   // Both branches keep their parens here whether or not they hold anything:
   // the branch's own marker templates are inside them, so they're never the
   // empty `()` the plain writer has to avoid.
@@ -333,10 +307,7 @@ function serializeNodeMarkedRoute(node: ParserNode, { path, atRoot, depth, stamp
     Array.isArray(node.children) &&
     node.children.length > 0 &&
     !isInlineRun(node.children, depth + 1);
-  const carryPath =
-    (node.kind === 'element' || node.kind === 'component') &&
-    node.name !== 'Fragment' &&
-    node.name !== 'slot';
+  const carryPath = (node.kind === 'element' || node.kind === 'component') && node.name !== 'Fragment' && node.name !== 'slot';
   // Where the node forwards its rest props, the caller's path for this
   // instance arrives inside the spread, and both want the same attribute. So
   // the one written here names BOTH — its own path and whatever came in on
@@ -367,16 +338,11 @@ function serializeNodeMarkedRoute(node: ParserNode, { path, atRoot, depth, stamp
   const stampProp: Attr | undefined = carriesStamp
     ? {
         type: 'expr',
-        value:
-          `[${JSON.stringify(stampData(stamp))}, ` +
-          `Astro.props[${JSON.stringify(PREVIEW_STAMP_ATTRIBUTE)}]]` +
-          '.filter(Boolean).join("\\n")',
+        value: `[${JSON.stringify(stampData(stamp))}, ` + `Astro.props[${JSON.stringify(PREVIEW_STAMP_ATTRIBUTE)}]]` + '.filter(Boolean).join("\\n")',
       }
     : undefined;
   const markerNames = carriesStamp ? ['data-avb-p', PREVIEW_STAMP_ATTRIBUTE] : ['data-avb-p'];
-  const markerProps = stampProp
-    ? { 'data-avb-p': pathProp, [PREVIEW_STAMP_ATTRIBUTE]: stampProp }
-    : { 'data-avb-p': pathProp };
+  const markerProps = stampProp ? { 'data-avb-p': pathProp, [PREVIEW_STAMP_ATTRIBUTE]: stampProp } : { 'data-avb-p': pathProp };
   // The path attribute is put where this function decided to put it, not where
   // the file's order would have it — it was never in the file.
   const attrOrder =
@@ -385,11 +351,7 @@ function serializeNodeMarkedRoute(node: ParserNode, { path, atRoot, depth, stamp
       : forwards && node.kind === 'element'
         ? [...markerNames, ...node.attrOrder]
         : [...node.attrOrder, ...markerNames];
-  const markedProps = !carryPath
-    ? node.props
-    : forwards && node.kind === 'element'
-      ? { ...markerProps, ...node.props }
-      : { ...node.props, ...markerProps };
+  const markedProps = !carryPath ? node.props : forwards && node.kind === 'element' ? { ...markerProps, ...node.props } : { ...node.props, ...markerProps };
   return {
     tagInPlace,
     markWithin,
@@ -400,12 +362,7 @@ function serializeNodeMarkedRoute(node: ParserNode, { path, atRoot, depth, stamp
   };
 }
 
-function serializeNodeMarkedInline(
-  base: ParserNode,
-  indent: string,
-  lines: string[],
-  { path, atRoot, depth }: MarkedPlace,
-): void {
+function serializeNodeMarkedInline(base: ParserNode, indent: string, lines: string[], { path, atRoot, depth }: MarkedPlace): void {
   const inlineKids =
     (base.kind === 'component' || base.kind === 'element') &&
     !base.chunkFile &&

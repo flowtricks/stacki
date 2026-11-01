@@ -28,9 +28,7 @@ async function fixture(entries: readonly Entry[]) {
   assert(entries.length <= 10, 'Bootstrap fixture entry count is bounded');
   for (const entry of entries) {
     const blob = published(await publishGit(git, ['hash-object', '-w', '--stdin'], entry.content));
-    published(
-      await publishGit(git, ['update-index', '--add', '--cacheinfo', entry.mode, blob, entry.path]),
-    );
+    published(await publishGit(git, ['update-index', '--add', '--cacheinfo', entry.mode, blob, entry.path]));
   }
   const tree = published(await publishGit(git, ['write-tree']));
   const head = published(await publishGit(git, ['commit-tree', tree, '-m', 'Bootstrap fixture']));
@@ -40,13 +38,7 @@ async function fixture(entries: readonly Entry[]) {
 
 async function redirectRemote(git: PublishGit, remote: string) {
   published(await publishGit(git, ['init', '--bare', git.directory]));
-  published(
-    await publishGit(git, [
-      'config',
-      'url.' + pathToFileURL(remote).href + '.insteadOf',
-      'https://github.com/owner/site.git',
-    ]),
-  );
+  published(await publishGit(git, ['config', 'url.' + pathToFileURL(remote).href + '.insteadOf', 'https://github.com/owner/site.git']));
 }
 
 async function restore(state: Awaited<ReturnType<typeof fixture>>) {
@@ -83,21 +75,13 @@ test('startup omits links while publishing preserves them', async (context) => {
     code: 'ENOENT',
   });
   await writeFile(path.join(state.workspace, 'src/index.astro'), '<h1>Published edit</h1>');
-  const source = published(
-    await capturePublishSource(state.workspace, path.join(state.root, 'capture')),
-  );
+  const source = published(await capturePublishSource(state.workspace, path.join(state.root, 'capture')));
   await redirectRemote(source.git, state.git.directory);
   const receipt = published(await nativePublish(source, state.head, connection));
   assert.notEqual(receipt.sha, state.head);
   for (const entry of entries.filter((entry) => entry.mode === '120000')) {
-    assert.equal(
-      published(await publishGit(state.git, ['show', receipt.sha + ':' + entry.path])),
-      entry.content,
-    );
-    assert.match(
-      published(await publishGit(state.git, ['ls-tree', receipt.sha, '--', entry.path])),
-      /^120000 blob /,
-    );
+    assert.equal(published(await publishGit(state.git, ['show', receipt.sha + ':' + entry.path])), entry.content);
+    assert.match(published(await publishGit(state.git, ['ls-tree', receipt.sha, '--', entry.path])), /^120000 blob /);
   }
 });
 
@@ -116,9 +100,7 @@ test('startup rejects runtime state and submodules before writing', async (conte
     ]);
     context.after(() => rm(state.root, { recursive: true, force: true }));
     if (invalid === 'submodule') {
-      published(
-        await publishGit(state.git, ['update-index', '--cacheinfo', '160000', state.head, invalid]),
-      );
+      published(await publishGit(state.git, ['update-index', '--cacheinfo', '160000', state.head, invalid]));
       const tree = published(await publishGit(state.git, ['write-tree']));
       state.head = published(await publishGit(state.git, ['commit-tree', tree, '-m', 'Submodule']));
     }

@@ -16,9 +16,7 @@ import { projectHasWrangler, resolvePublishExecutable } from './publishExecutabl
 import { publishEnvironment, stopPublishProcess } from './publishCommands';
 
 // What a launched process does: install Wrangler with the site's manager, or sign in.
-export type LaunchStep =
-  | { readonly kind: 'installing'; readonly packageManager: PackageManager }
-  | { readonly kind: 'starting' };
+export type LaunchStep = { readonly kind: 'installing'; readonly packageManager: PackageManager } | { readonly kind: 'starting' };
 
 interface Session {
   readonly id: string;
@@ -33,11 +31,7 @@ interface Session {
 }
 const OUTPUT_CHARS_MAX = 8192;
 const INSTALL_OUTPUT_CHARS_MAX = 1_048_576;
-type Launch = (
-  root: string,
-  provider: 'github' | 'cloudflare',
-  step: LaunchStep,
-) => ChildProcessWithoutNullStreams;
+type Launch = (root: string, provider: 'github' | 'cloudflare', step: LaunchStep) => ChildProcessWithoutNullStreams;
 
 // One login can own the CLI credential store at a time. Raw output never leaves this service.
 export class PublishingAccount {
@@ -67,9 +61,7 @@ export class PublishingAccount {
       return busy;
     }
     const step: LaunchStep =
-      provider === 'cloudflare' && !this.hasWrangler(root)
-        ? { kind: 'installing', packageManager: this.packageManager(root) }
-        : { kind: 'starting' };
+      provider === 'cloudflare' && !this.hasWrangler(root) ? { kind: 'installing', packageManager: this.packageManager(root) } : { kind: 'starting' };
     return this.start(root, request.id, provider, step);
   }
 
@@ -95,12 +87,7 @@ export class PublishingAccount {
     return undefined;
   }
 
-  private start(
-    root: string,
-    id: string,
-    provider: 'github' | 'cloudflare',
-    step: LaunchStep,
-  ): AccountState {
+  private start(root: string, id: string, provider: 'github' | 'cloudflare', step: LaunchStep): AccountState {
     let child: ChildProcessWithoutNullStreams;
     try {
       child = this.launch(root, provider, step);
@@ -125,10 +112,7 @@ export class PublishingAccount {
       timer: undefined,
     };
     this.session = session;
-    session.timer = setTimeout(
-      () => this.expire(session),
-      step.kind === 'installing' ? ACCOUNT_INSTALL_TIMEOUT_MS : ACCOUNT_SIGN_IN_TIMEOUT_MS,
-    );
+    session.timer = setTimeout(() => this.expire(session), step.kind === 'installing' ? ACCOUNT_INSTALL_TIMEOUT_MS : ACCOUNT_SIGN_IN_TIMEOUT_MS);
     session.timer.unref();
     this.watch(session);
     return session.state;
@@ -192,8 +176,7 @@ export class PublishingAccount {
       } else {
         this.finish(session, {
           kind: 'failed',
-          message:
-            'Could not install Wrangler. Check your connection and project access, then retry.',
+          message: 'Could not install Wrangler. Check your connection and project access, then retry.',
         });
       }
       return;
@@ -221,9 +204,7 @@ export class PublishingAccount {
     assert(typeof chunk === 'string', 'Account sign-in streams use UTF-8 text');
     assert(session.output.length <= OUTPUT_CHARS_MAX, 'Account sign-in output stays bounded');
     const installing = session.step.kind === 'installing';
-    const label = installing
-      ? 'Wrangler installation'
-      : `${session.provider === 'github' ? 'GitHub' : 'Cloudflare'} sign-in`;
+    const label = installing ? 'Wrangler installation' : `${session.provider === 'github' ? 'GitHub' : 'Cloudflare'} sign-in`;
     const limit = installing ? INSTALL_OUTPUT_CHARS_MAX : OUTPUT_CHARS_MAX;
     if (chunk.length > limit - session.outputChars) {
       this.finish(session, {
@@ -239,9 +220,7 @@ export class PublishingAccount {
     }
     session.output += chunk;
     if (session.provider === 'cloudflare') {
-      const url = /https:\/\/dash\.cloudflare\.com\/oauth2\/auth\?[^\s]+(?=\s)/.exec(
-        session.output,
-      )?.[0];
+      const url = /https:\/\/dash\.cloudflare\.com\/oauth2\/auth\?[^\s]+(?=\s)/.exec(session.output)?.[0];
       if (url && url.length <= 4096 && !url.includes('#')) {
         session.state = { kind: 'browser', url: parseCloudflareSignInURL(url) };
       }
@@ -311,11 +290,7 @@ export function wranglerInstallArguments(manager: PackageManager): readonly stri
   }
 }
 
-function launchAccountSignIn(
-  root: string,
-  provider: 'github' | 'cloudflare',
-  step: LaunchStep,
-): ChildProcessWithoutNullStreams {
+function launchAccountSignIn(root: string, provider: 'github' | 'cloudflare', step: LaunchStep): ChildProcessWithoutNullStreams {
   if (provider === 'cloudflare') {
     return launchCloudflareSignIn(root, step);
   }
@@ -324,26 +299,13 @@ function launchAccountSignIn(
   // An inherited automation token would prevent gh from adding a locally stored account.
   delete environment['GH_TOKEN'];
   delete environment['GITHUB_TOKEN'];
-  return spawn(
-    'gh',
-    [
-      'auth',
-      'login',
-      '--hostname',
-      'github.com',
-      '--web',
-      '--git-protocol',
-      'https',
-      '--skip-ssh-key',
-    ],
-    {
-      cwd: root,
-      env: environment,
-      stdio: 'pipe',
-      shell: false,
-      windowsHide: true,
-    },
-  );
+  return spawn('gh', ['auth', 'login', '--hostname', 'github.com', '--web', '--git-protocol', 'https', '--skip-ssh-key'], {
+    cwd: root,
+    env: environment,
+    stdio: 'pipe',
+    shell: false,
+    windowsHide: true,
+  });
 }
 
 function launchCloudflareSignIn(root: string, step: LaunchStep): ChildProcessWithoutNullStreams {
@@ -368,10 +330,7 @@ function launchCloudflareSignIn(root: string, step: LaunchStep): ChildProcessWit
   });
 }
 
-function stopAccountSignIn(
-  child: ChildProcessWithoutNullStreams,
-  provider: 'github' | 'cloudflare',
-): void {
+function stopAccountSignIn(child: ChildProcessWithoutNullStreams, provider: 'github' | 'cloudflare'): void {
   if (provider === 'cloudflare') {
     // Wrangler's executable starts a child; closing only the launcher leaves OAuth listening.
     stopPublishProcess(child.pid);

@@ -2,11 +2,7 @@
 export function retryAt(headers: Headers, now = Date.now()): number {
   const retry = headers.get('Retry-After');
   if (retry) {
-    const time = /^\d+$/.test(retry)
-      ? now + Number(retry) * 1000
-      : /^[A-Za-z]{3}, /.test(retry)
-        ? Date.parse(retry)
-        : NaN;
+    const time = /^\d+$/.test(retry) ? now + Number(retry) * 1000 : /^[A-Za-z]{3}, /.test(retry) ? Date.parse(retry) : NaN;
     if (Number.isSafeInteger(time) && time > now) {
       return time;
     }

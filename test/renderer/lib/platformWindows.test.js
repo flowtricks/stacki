@@ -106,18 +106,8 @@ test('Windows discovery covers installers and common version managers', () => {
 });
 
 test('renderer derives project-relative paths from Windows paths', () => {
-  assert.equal(
-    projectRelativePath(
-      'C:\\Users\\Tim\\Site',
-      'c:\\users\\tim\\site\\src\\pages\\index.astro',
-      'win32',
-    ),
-    'src/pages/index.astro',
-  );
-  assert.equal(
-    projectRelativePath('C:\\Users\\Tim\\Site', 'D:\\Other\\index.astro', 'win32'),
-    'D:/Other/index.astro',
-  );
+  assert.equal(projectRelativePath('C:\\Users\\Tim\\Site', 'c:\\users\\tim\\site\\src\\pages\\index.astro', 'win32'), 'src/pages/index.astro');
+  assert.equal(projectRelativePath('C:\\Users\\Tim\\Site', 'D:\\Other\\index.astro', 'win32'), 'D:/Other/index.astro');
 });
 
 test('asset URLs preserve Windows drive and UNC roots', () => {

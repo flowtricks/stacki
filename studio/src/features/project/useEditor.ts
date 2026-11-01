@@ -49,8 +49,7 @@ export function useEditor(
     },
     report,
     active,
-    (id, occurrence) =>
-      enter('', id === '0' && nodes[0]?.id === 'layout' ? 'layout' : 'n' + id, occurrence),
+    (id, occurrence) => enter('', id === '0' && nodes[0]?.id === 'layout' ? 'layout' : 'n' + id, occurrence),
   );
   useLiveText(file, source, nodes, preview);
   useComponentExit(file, previewFile, document, preview, open, report);
@@ -81,8 +80,7 @@ export function useEditor(
     restoreSelection: selection.restore,
     action,
     openComponent: enter,
-    insert: (componentFile: string, location?: DropLocation) =>
-      insertComponent(project, file, parsed, selected, action, componentFile, location),
+    insert: (componentFile: string, location?: DropLocation) => insertComponent(project, file, parsed, selected, action, componentFile, location),
     editable: !!parsed?.editable,
   };
 }
@@ -105,9 +103,7 @@ function insertComponent(
   componentFile: string,
   location?: DropLocation,
 ) {
-  const component = project.components.find(
-    (item) => item.file === componentFile || item.name === componentFile,
-  );
+  const component = project.components.find((item) => item.file === componentFile || item.name === componentFile);
   if (!component || !parsed?.editable) {
     return;
   }
@@ -115,13 +111,7 @@ function insertComponent(
     kind: 'insert',
     ...dropTarget(
       parsed.model.nodes,
-      location ??
-        insertTargetFor(
-          parsePageModel(parsed.model),
-          selected,
-          { type: 'component', name: component.name },
-          project.components,
-        ),
+      location ?? insertTargetFor(parsePageModel(parsed.model), selected, { type: 'component', name: component.name }, project.components),
     ),
     name: component.name,
     importPath: componentImport(file, component),
@@ -130,8 +120,5 @@ function insertComponent(
 }
 
 function useParsed(file: string, source: string) {
-  return useMemo(
-    () => (file.endsWith('.astro') ? parsePage(source, { locs: true }) : undefined),
-    [file, source],
-  );
+  return useMemo(() => (file.endsWith('.astro') ? parsePage(source, { locs: true }) : undefined), [file, source]);
 }

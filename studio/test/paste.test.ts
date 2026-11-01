@@ -19,11 +19,7 @@ const posts = await collection(category), unrelated = 'no';
 const title = format.label(posts[0]);
 const ignored = 'should not move';`;
 
-function pasted(
-  frontmatter = original,
-  fragment = '<Card title={title} items={posts} />',
-  target = 'n0.0',
-) {
+function pasted(frontmatter = original, fragment = '<Card title={title} items={posts} />', target = 'n0.0') {
   const action = parseAction({
     kind: 'paste',
     target,
@@ -46,12 +42,8 @@ test('cross-page paste carries recursive bindings and rebases imports without ch
   assert.match(output, /const posts = await collection\(category\);/);
   assert.ok(output.indexOf('const category') < output.indexOf('const posts'));
   assert.ok(output.indexOf('const posts') < output.indexOf('const title'));
-  assert.ok(
-    !output.includes('unused') && !output.includes('unrelated') && !output.includes('ignored'),
-  );
-  assert.ok(
-    output.includes("// Keep this comment and formatting.\nconst untouched = 'leave me alone';"),
-  );
+  assert.ok(!output.includes('unused') && !output.includes('unrelated') && !output.includes('ignored'));
+  assert.ok(output.includes("// Keep this comment and formatting.\nconst untouched = 'leave me alone';"));
   assert.ok(output.endsWith('<!-- Keep this too. -->'));
   assert.match(output, /<main><Card title=\{title\} items=\{posts\} \/><\/main>/);
   assert.equal(parsePage(output).editable, true);
@@ -64,10 +56,7 @@ test('existing destination bindings are reused without carrying their old depend
 });
 
 test('loops bring their data binding and dynamic imports are rebased', () => {
-  const output = pasted(
-    "const data = await import('../data/posts'); const posts = data.posts;",
-    '{posts.map(post => <p>{post.title}</p>)}',
-  );
+  const output = pasted("const data = await import('../data/posts'); const posts = data.posts;", '{posts.map(post => <p>{post.title}</p>)}');
   assert.match(output, /import\("\.\.\/\.\.\/data\/posts"\)/);
   assert.match(output, /const posts = data.posts/);
   assert.equal(parsePage(output).editable, true);
@@ -93,10 +82,7 @@ test('same-page paste leaves frontmatter unchanged and an unframed page receives
   const same = pasteEdits(destination, clipboard.file, action);
   assert.equal(same.length, 1);
   const bare = '<main></main>';
-  const added = applyEdits(
-    bare,
-    pasteEdits(bare, 'src/pages/another.astro', { ...action, target: 'n0' }),
-  );
+  const added = applyEdits(bare, pasteEdits(bare, 'src/pages/another.astro', { ...action, target: 'n0' }));
   assert.ok(added.startsWith('---\nimport Card'));
   assert.equal(parsePage(added).editable, true);
 });

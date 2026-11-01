@@ -106,9 +106,7 @@ export function scanContainsFile(scan: ScanResult | undefined, path: string): bo
   if (/\/\.stacki\/canvas\/[a-f0-9-]{36}\.astro$/.test(path.replaceAll('\\', '/'))) {
     return true;
   }
-  return (['pages', 'components', 'layouts'] as const).some((kind) =>
-    scan?.[kind]?.some((entry) => entry.path === path),
-  );
+  return (['pages', 'components', 'layouts'] as const).some((kind) => scan?.[kind]?.some((entry) => entry.path === path));
 }
 
 // Each code window destination owns its debounce. Typing in a second file must
@@ -141,9 +139,7 @@ export function createFileSaver({ delay = 300, onError = () => {} }: FileSaverDe
     if (entry.timer !== undefined) {
       clearTimeout(entry.timer);
     }
-    const result: Promise<unknown> = (running.get(key) || Promise.resolve())
-      .catch(() => {})
-      .then(() => entry.write());
+    const result: Promise<unknown> = (running.get(key) || Promise.resolve()).catch(() => {}).then(() => entry.write());
     running.set(key, result);
     result.then(
       () => {

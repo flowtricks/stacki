@@ -6,17 +6,12 @@ import { assert } from '../../shared/core/assert';
 export function componentPreviewStylesModule(projectDirectory: string): string {
   const sources = componentPreviewStyleSources(projectDirectory);
   const entries = componentPreviewStylePaths(sources);
-  assert(
-    entries.length <= Object.keys(sources).length,
-    'Preview styles must belong to the project',
-  );
+  assert(entries.length <= Object.keys(sources).length, 'Preview styles must belong to the project');
   assert(new Set(entries).size === entries.length, 'Preview style entries must be unique');
   return entries.map((file) => `import ${JSON.stringify(file)};`).join('\n');
 }
 
-export function componentPreviewStylePaths(
-  sources: Readonly<Record<string, string>>,
-): readonly string[] {
+export function componentPreviewStylePaths(sources: Readonly<Record<string, string>>): readonly string[] {
   const paths = Object.keys(sources);
   if (paths.length > 1024) {
     throw new Error('Preview stylesheet count exceeds limit');
@@ -45,20 +40,13 @@ export function componentPreviewStylePaths(
       if (specifier === undefined) {
         continue;
       }
-      const target = new URL(
-        specifier.replace(/^[@~]\//, '/src/'),
-        new URL(file, 'https://preview'),
-      );
+      const target = new URL(specifier.replace(/^[@~]\//, '/src/'), new URL(file, 'https://preview'));
       if (target.origin !== 'https://preview') {
         continue;
       }
       const pathname = target.pathname;
       const extension = /\.(css|scss)$/.test(pathname) ? '' : '.scss';
-      const candidates = [
-        pathname,
-        pathname + extension,
-        pathname.replace(/([^/]+)$/, '_$1') + extension,
-      ];
+      const candidates = [pathname, pathname + extension, pathname.replace(/([^/]+)$/, '_$1') + extension];
       for (const candidate of candidates) {
         if (Object.hasOwn(sources, candidate)) {
           imported.add(candidate);

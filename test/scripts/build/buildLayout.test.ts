@@ -16,8 +16,7 @@ const BUNDLED_ENTRIES: ReadonlyMap<string, string> = new Map([
   ['electron/preload/', 'electron/preload/preload.ts'],
   ['electron/previewClient/', 'electron/previewClient/morphClient.ts'],
 ]);
-const bundledAway = (file: string): boolean =>
-  [...BUNDLED_ENTRIES].some(([folder, entry]) => file.startsWith(folder) && file !== entry);
+const bundledAway = (file: string): boolean => [...BUNDLED_ENTRIES].some(([folder, entry]) => file.startsWith(folder) && file !== entry);
 
 test('all compiler output lives under dist', () => {
   for (const directory of ['electron', 'shared']) {

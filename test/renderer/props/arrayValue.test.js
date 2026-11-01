@@ -40,9 +40,7 @@ const check = (what, condition, detail) => {
     platform: 'node',
     logLevel: 'silent',
   });
-  const { arrayItems, arrayText, blankLike, itemLabel, moveItem } = await import(
-    `${pathToFileURL(out).href}?v=${Date.now()}`
-  );
+  const { arrayItems, arrayText, blankLike, itemLabel, moveItem } = await import(`${pathToFileURL(out).href}?v=${Date.now()}`);
 
   const texts = (source) => (arrayItems(source) || []).map((i) => i.text);
 
@@ -51,23 +49,15 @@ const check = (what, condition, detail) => {
   check('written with single quotes', texts("['a', 'b']").join() === 'a,b');
   check('numbers', texts('[1, 2.5, -3]').join() === '1,2.5,-3');
   check('one item', texts('["only"]').join() === 'only');
-  check(
-    'an empty list is a list, not a refusal',
-    Array.isArray(arrayItems('[]')) && arrayItems('[]').length === 0,
-    JSON.stringify(arrayItems('[]')),
-  );
+  check('an empty list is a list, not a refusal', Array.isArray(arrayItems('[]')) && arrayItems('[]').length === 0, JSON.stringify(arrayItems('[]')));
   check('laid out across lines', texts('[\n  "a",\n  "b",\n]').join() === 'a,b');
   check('with a trailing comma', texts('["a", "b",]').join() === 'a,b');
-  check(
-    'a comma inside an item is part of it',
-    texts('["Smith, Jane", "b"]').join() === 'Smith, Jane,b',
-  );
+  check('a comma inside an item is part of it', texts('["Smith, Jane", "b"]').join() === 'Smith, Jane,b');
   check('and an escaped quote', texts('["say \\"hi\\"", "b"]').join() === 'say "hi",b');
   check('a backtick with nothing in it is a word', texts('[`a`, `b`]').join() === 'a,b');
 
   // --- and what it cannot ----------------------------------------------------------
-  const refuses = (source, why) =>
-    check(`refuses ${why}`, arrayItems(source) === undefined, JSON.stringify(arrayItems(source)));
+  const refuses = (source, why) => check(`refuses ${why}`, arrayItems(source) === undefined, JSON.stringify(arrayItems(source)));
   refuses('jobs', 'a name standing for a list');
   refuses('[...defaults, "other"]', 'a spread');
   refuses('[{ value, label }]', 'an object that names things instead of saying them');
@@ -87,40 +77,20 @@ const check = (what, condition, detail) => {
   // `{ value: "us", label: "United States" }` is a row with two fields, which is
   // what the popup is for.
   {
-    const items = arrayItems(
-      '[{ value: "us", label: "United States" }, { value: "ca", label: "Canada" }]',
-    );
+    const items = arrayItems('[{ value: "us", label: "United States" }, { value: "ca", label: "Canada" }]');
     check('an object per item is a list of rows', items?.length === 2, JSON.stringify(items));
     check(
       'with its fields, in the order they were written',
-      items?.[0].fields.map((field) => `${field.key}=${field.text}`).join() ===
-        'value=us,label=United States',
+      items?.[0].fields.map((field) => `${field.key}=${field.text}`).join() === 'value=us,label=United States',
       JSON.stringify(items?.[0]),
     );
-    check(
-      'a row is named by the field a person reads',
-      itemLabel(items[0]) === 'United States',
-      itemLabel(items[0]),
-    );
-    check(
-      'and it goes back as it came',
-      arrayText(items) ===
-        '[{ value: "us", label: "United States" }, { value: "ca", label: "Canada" }]',
-      arrayText(items),
-    );
+    check('a row is named by the field a person reads', itemLabel(items[0]) === 'United States', itemLabel(items[0]));
+    check('and it goes back as it came', arrayText(items) === '[{ value: "us", label: "United States" }, { value: "ca", label: "Canada" }]', arrayText(items));
   }
   {
     const items = arrayItems("[{ 'value': 1, name: 'One' }]");
-    check(
-      'a quoted key keeps its quotes',
-      arrayText(items) === "[{ 'value': 1, name: 'One' }]",
-      arrayText(items),
-    );
-    check(
-      'and a number value stays a number',
-      items[0].fields[0].quote === undefined,
-      JSON.stringify(items[0]),
-    );
+    check('a quoted key keeps its quotes', arrayText(items) === "[{ 'value': 1, name: 'One' }]", arrayText(items));
+    check('and a number value stays a number', items[0].fields[0].quote === undefined, JSON.stringify(items[0]));
   }
   check(
     'an object with nothing to read by falls back to its first field',
@@ -133,40 +103,20 @@ const check = (what, condition, detail) => {
   // offered a bare word would write an array the component cannot read.
   {
     const shaped = blankLike(arrayItems('[{ value: "us", label: "United States" }]'));
-    check(
-      'a new item takes the shape of the list',
-      shaped.fields?.map((field) => field.key).join() === 'value,label',
-      JSON.stringify(shaped),
-    );
+    check('a new item takes the shape of the list', shaped.fields?.map((field) => field.key).join() === 'value,label', JSON.stringify(shaped));
     check(
       'with nothing in it yet',
       shaped.fields.every((field) => field.text === ''),
       JSON.stringify(shaped),
     );
-    check(
-      'and in a list of words it is a word',
-      blankLike(arrayItems('["a"]')).text === '',
-      JSON.stringify(blankLike(arrayItems('["a"]'))),
-    );
-    check(
-      'an empty list starts with a word',
-      blankLike([]).text === '',
-      JSON.stringify(blankLike([])),
-    );
+    check('and in a list of words it is a word', blankLike(arrayItems('["a"]')).text === '', JSON.stringify(blankLike(arrayItems('["a"]'))));
+    check('an empty list starts with a word', blankLike([]).text === '', JSON.stringify(blankLike([])));
   }
 
   // --- putting it back ---------------------------------------------------------------
   check('a list comes back as it went in', arrayText(arrayItems('["a", "b"]')) === '["a", "b"]');
-  check(
-    'in the quote the file used',
-    arrayText(arrayItems("['a', 'b']")) === "['a', 'b']",
-    arrayText(arrayItems("['a', 'b']")),
-  );
-  check(
-    'numbers stay numbers',
-    arrayText(arrayItems('[1, 2]')) === '[1, 2]',
-    arrayText(arrayItems('[1, 2]')),
-  );
+  check('in the quote the file used', arrayText(arrayItems("['a', 'b']")) === "['a', 'b']", arrayText(arrayItems("['a', 'b']")));
+  check('numbers stay numbers', arrayText(arrayItems('[1, 2]')) === '[1, 2]', arrayText(arrayItems('[1, 2]')));
   check('an empty list writes as one', arrayText([]) === '[]', arrayText([]));
   check(
     'a quote inside an item is escaped',
@@ -204,9 +154,7 @@ const check = (what, condition, detail) => {
   check('the list it was given is not touched', abc.map((i) => i.text).join() === 'a,b,c');
 
   if (failures.length) {
-    console.error(
-      `\narray-value: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\narray-value: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

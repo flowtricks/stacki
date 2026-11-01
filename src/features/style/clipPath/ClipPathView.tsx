@@ -26,9 +26,7 @@ export function ClipPathView({ editor }: EditorProps) {
   const { selectedCodeTokenHighlights, onCodeChange, onCodeSelectionChange } = editor;
   return (
     <div className="clip-path_component">
-      {shortcutHelpPortalTarget
-        ? createPortal(<ShortcutHelpControl editor={editor} />, shortcutHelpPortalTarget)
-        : undefined}
+      {shortcutHelpPortalTarget ? createPortal(<ShortcutHelpControl editor={editor} />, shortcutHelpPortalTarget) : undefined}
       {hideClassPicker ? undefined : <ClassTagsControl editor={editor} />}
       <PresetControl editor={editor} />
       <ClipPathCanvas editor={editor} />
@@ -63,9 +61,7 @@ export function ClassTagsControl({ editor }: EditorProps) {
       selected={selectedClassNames}
       onChange={handleClassSelectionChange}
       tagTitle={(token, isActive) =>
-        selectedSelector && isActive
-          ? `Editing clip path on ${selectedSelector}`
-          : `Edit clip path on .${token.name} — Shift/Option-click to combine`
+        selectedSelector && isActive ? `Editing clip path on ${selectedSelector}` : `Edit clip path on .${token.name} — Shift/Option-click to combine`
       }
     />
   );
@@ -119,19 +115,8 @@ export function ClipPathLabel({ editor }: EditorProps) {
         </span>
       )}
       {isClipPathLabelMenuOpen && clipPathStyleOrigin === 'current' ? (
-        <Popup
-          mode="popover"
-          portal={false}
-          onClose={() => editor.setIsClipPathLabelMenuOpen(false)}
-          className="clip-path_label-menu"
-          role="menu"
-        >
-          <button
-            type="button"
-            className="clip-path_label-menu-item"
-            role="menuitem"
-            onClick={() => void resetCurrentBreakpointClipPath()}
-          >
+        <Popup mode="popover" portal={false} onClose={() => editor.setIsClipPathLabelMenuOpen(false)} className="clip-path_label-menu" role="menu">
+          <button type="button" className="clip-path_label-menu-item" role="menuitem" onClick={() => void resetCurrentBreakpointClipPath()}>
             <svg className="clip-path_label-menu-icon" viewBox="0 0 16 16" aria-hidden="true">
               <path d="M5.2 5.2H2.2V2.2" />
               <path d="M2.6 5.2A5.5 5.5 0 1 1 4 12.2" />
@@ -141,9 +126,7 @@ export function ClipPathLabel({ editor }: EditorProps) {
           </button>
         </Popup>
       ) : undefined}
-      {isClipPathLabelMenuOpen && clipPathStyleOrigin === 'inherited' ? (
-        <ClipPathSourceMenu editor={editor} />
-      ) : undefined}
+      {isClipPathLabelMenuOpen && clipPathStyleOrigin === 'inherited' ? <ClipPathSourceMenu editor={editor} /> : undefined}
     </div>
   );
 }
@@ -163,20 +146,12 @@ export function ClipPathSourceMenu({ editor }: EditorProps) {
       <span className="clip-path_source-title">Value comes from:</span>
       <div className="clip-path_source-row">
         {clipPathSourceBreakpoint ? (
-          <span
-            className="clip-path_source-breakpoint"
-            title={BREAKPOINT_LABELS[clipPathSourceBreakpoint]}
-          >
+          <span className="clip-path_source-breakpoint" title={BREAKPOINT_LABELS[clipPathSourceBreakpoint]}>
             <BreakpointIcon breakpoint={clipPathSourceBreakpoint} />
             {BREAKPOINT_LABELS[clipPathSourceBreakpoint]}
           </span>
         ) : undefined}
-        {(clipPathSourceSelector.length
-          ? clipPathSourceSelector
-          : appliedClassName
-            ? [appliedClassName]
-            : []
-        ).map((name) => (
+        {(clipPathSourceSelector.length ? clipPathSourceSelector : appliedClassName ? [appliedClassName] : []).map((name) => (
           <span className="clip-path_source-class" key={name}>
             {name}
           </span>
@@ -256,13 +231,7 @@ export function PresetList({ editor }: EditorProps) {
           <div
             key={name}
             id={presetOptionId(name)}
-            className={[
-              'clip-path_preset-option',
-              index === activePresetIndex ? 'is-active' : '',
-              isSelected ? 'is-selected' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
+            className={['clip-path_preset-option', index === activePresetIndex ? 'is-active' : '', isSelected ? 'is-selected' : ''].filter(Boolean).join(' ')}
             role="option"
             aria-selected={isSelected}
             onMouseEnter={() => setActivePresetIndex(index)}
@@ -382,18 +351,14 @@ export function ShapeScaleVariableControl({ editor }: EditorProps) {
   if (activePreset !== 'Shape' || shapeFitMode !== 'contain') {
     return undefined;
   }
-  const apply = (overrides: ShapeScaleOptionOverrides) =>
-    setShapeScaleOptionsFromControl(currentShapeScaleOptions(overrides));
+  const apply = (overrides: ShapeScaleOptionOverrides) => setShapeScaleOptionsFromControl(currentShapeScaleOptions(overrides));
   return (
     <>
       <div className="clip-path_control-row">
         <ShapeVariableLabel
           id="clip-path_shape-variable-label"
           text="Size"
-          tip={
-            'This optional variable allows us to animate shape size or change size based on ' +
-            'screen size'
-          }
+          tip={'This optional variable allows us to animate shape size or change size based on ' + 'screen size'}
         />
         <ShapeVariableInput
           id="clip-path_shape-variable-input"

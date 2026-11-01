@@ -26,13 +26,7 @@ import {
   NONE_SHAPE,
   DEFAULT_SHAPE_VALUE,
 } from './clipPathConstants';
-import {
-  formatPercent,
-  formatCssNumber,
-  formatCssScaleNumber,
-  formatCqw,
-  sanitizeShapeScaleVariableName,
-} from './clipPathMeasure';
+import { formatPercent, formatCssNumber, formatCssScaleNumber, formatCqw, sanitizeShapeScaleVariableName } from './clipPathMeasure';
 import { oppositeCorner } from './clipPathHandles';
 import {
   parsePercent,
@@ -69,10 +63,7 @@ export function formatShapeValueFromCssSubpaths(subpaths: ShapeCssSubpath[]) {
     }
     if (command.kind === 'curve') {
       const control2 = command.control2 ? ` / ${formatShapeCssPoint(command.control2)}` : '';
-      return [
-        `curve to ${formatShapeCssPoint(command.to)}`,
-        `with ${formatShapeCssPoint(command.control1)}${control2}`,
-      ].join(' ');
+      return [`curve to ${formatShapeCssPoint(command.to)}`, `with ${formatShapeCssPoint(command.control1)}${control2}`].join(' ');
     }
     return 'close';
   };
@@ -82,16 +73,10 @@ export function formatShapeValueFromCssSubpaths(subpaths: ShapeCssSubpath[]) {
     ...subpath.commands.map(commandToShapeValue),
   ];
 
-  return [
-    ...subpathCommands(firstSubpath, 'from'),
-    ...restSubpaths.flatMap((subpath) => subpathCommands(subpath, 'move to')),
-  ].join(', ');
+  return [...subpathCommands(firstSubpath, 'from'), ...restSubpaths.flatMap((subpath) => subpathCommands(subpath, 'move to'))].join(', ');
 }
 
-export function formatShapeContainCoordinate(
-  offset: number,
-  options: ShapeScaleOptions = DEFAULT_SHAPE_SCALE_OPTIONS,
-) {
+export function formatShapeContainCoordinate(offset: number, options: ShapeScaleOptions = DEFAULT_SHAPE_SCALE_OPTIONS) {
   const sign = offset < 0 ? '-' : '+';
   const amount = Math.abs(offset);
   if (options.useVariable) {
@@ -104,9 +89,7 @@ export function formatShapeContainCoordinate(
   return `calc(50% ${sign} ${formatCqw(amount)})`;
 }
 
-export function resolveShapeScaleVarNames(
-  options: ShapeScaleOptions = DEFAULT_SHAPE_SCALE_OPTIONS,
-) {
+export function resolveShapeScaleVarNames(options: ShapeScaleOptions = DEFAULT_SHAPE_SCALE_OPTIONS) {
   // Any empty name stays empty -> the coordinate emits the raw value instead of a var() wrapper.
   return {
     sizeVar: sanitizeShapeScaleVariableName(options.variableName || ''),
@@ -117,23 +100,11 @@ export function resolveShapeScaleVarNames(
 
 // The span is WU (x) or HU (y); size = S (cqw); offset = OL/OT. See
 // SHAPE_OFFSET_COORDINATE_PATTERN.
-export function formatShapeOffsetCoordinate(
-  position: number,
-  span: number,
-  size: number,
-  offset: number,
-  sizeVar: string,
-  offsetVar: string,
-  axis: 'x' | 'y',
-) {
+export function formatShapeOffsetCoordinate(position: number, span: number, size: number, offset: number, sizeVar: string, offsetVar: string, axis: 'x' | 'y') {
   const travelUnit = axis === 'x' ? 'cqw' : 'cqh';
   // No variable -> emit the raw value (100cqw / 0.5) instead of a var(name, value) wrapper.
-  const sizeToken = sizeVar
-    ? `var(${sizeVar}, ${formatCssNumber(size)}cqw)`
-    : `${formatCssNumber(size)}cqw`;
-  const offsetToken = offsetVar
-    ? `var(${offsetVar}, ${formatCssScaleNumber(offset)})`
-    : formatCssScaleNumber(offset);
+  const sizeToken = sizeVar ? `var(${sizeVar}, ${formatCssNumber(size)}cqw)` : `${formatCssNumber(size)}cqw`;
+  const offsetToken = offsetVar ? `var(${offsetVar}, ${formatCssScaleNumber(offset)})` : formatCssScaleNumber(offset);
   const positionTerm = `${formatCssScaleNumber(position)} * ${sizeToken}`;
   const spanTerm = `${formatCssScaleNumber(span)} * ${sizeToken}`;
   return `calc(${positionTerm} + ${offsetToken} * (100${travelUnit} - ${spanTerm}))`;
@@ -167,14 +138,8 @@ export function shapeOffsetBoundsFromCanvasPoints(points: Point[]): ShapeOffsetB
   const travelY = 100 - hu * size;
   // |travel| ~ 0 means the shape fills the axis; OL/OT are then indeterminate, so default to
   // centered.
-  const ol =
-    Math.abs(travelX) > SHAPE_OFFSET_TRAVEL_EPSILON
-      ? (50 + minAx * 100) / travelX
-      : DEFAULT_SHAPE_OFFSET_VALUE;
-  const ot =
-    Math.abs(travelY) > SHAPE_OFFSET_TRAVEL_EPSILON
-      ? (50 + minAy * 100) / travelY
-      : DEFAULT_SHAPE_OFFSET_VALUE;
+  const ol = Math.abs(travelX) > SHAPE_OFFSET_TRAVEL_EPSILON ? (50 + minAx * 100) / travelX : DEFAULT_SHAPE_OFFSET_VALUE;
+  const ot = Math.abs(travelY) > SHAPE_OFFSET_TRAVEL_EPSILON ? (50 + minAy * 100) / travelY : DEFAULT_SHAPE_OFFSET_VALUE;
   return { minAx, minAy, wu, hu, size, ol, ot };
 }
 
@@ -184,24 +149,8 @@ export function formatShapeOffsetPoint(
   names: { sizeVar: string; offsetLeftVar: string; offsetTopVar: string },
 ): ShapeCssPoint {
   return {
-    x: formatShapeOffsetCoordinate(
-      (point.x - 50) / 100 - bounds.minAx,
-      bounds.wu,
-      bounds.size,
-      bounds.ol,
-      names.sizeVar,
-      names.offsetLeftVar,
-      'x',
-    ),
-    y: formatShapeOffsetCoordinate(
-      (point.y - 50) / 100 - bounds.minAy,
-      bounds.hu,
-      bounds.size,
-      bounds.ot,
-      names.sizeVar,
-      names.offsetTopVar,
-      'y',
-    ),
+    x: formatShapeOffsetCoordinate((point.x - 50) / 100 - bounds.minAx, bounds.wu, bounds.size, bounds.ol, names.sizeVar, names.offsetLeftVar, 'x'),
+    y: formatShapeOffsetCoordinate((point.y - 50) / 100 - bounds.minAy, bounds.hu, bounds.size, bounds.ot, names.sizeVar, names.offsetTopVar, 'y'),
   };
 }
 
@@ -217,9 +166,7 @@ export function shapeCoordinateOffset(value: string) {
 export function shapeCssPointToCanvasPoint(point: ShapeCssPoint): Point | undefined {
   const xOffset = shapeCoordinateOffset(point.x);
   const yOffset = shapeCoordinateOffset(point.y);
-  return xOffset === undefined || yOffset === undefined
-    ? undefined
-    : { x: 50 + xOffset, y: 50 + yOffset };
+  return xOffset === undefined || yOffset === undefined ? undefined : { x: 50 + xOffset, y: 50 + yOffset };
 }
 
 export function shapeCssBounds(shape: ShapeFunctionShape): SelectionRect | undefined {
@@ -338,10 +285,7 @@ export function collectShapeCssPoints(subpaths: ShapeCssSubpath[]) {
   ]);
 }
 
-export function mapShapeCssSubpathPoints(
-  subpaths: ShapeCssSubpath[],
-  mapper: (point: ShapeCssPoint) => ShapeCssPoint,
-): ShapeCssSubpath[] {
+export function mapShapeCssSubpathPoints(subpaths: ShapeCssSubpath[], mapper: (point: ShapeCssPoint) => ShapeCssPoint): ShapeCssSubpath[] {
   return subpaths.map((subpath) => ({
     start: mapper(subpath.start),
     commands: subpath.commands.map((command) => {
@@ -363,10 +307,7 @@ export function mapShapeCssSubpathPoints(
 
 // Re-emit a set of CSS subpaths in the offset encoding, decomposing each point's canvas position
 // into the shared size/offset model. Used for stretch->contain conversion and legacy upgrades.
-export function emitContainCssFromSubpaths(
-  subpaths: ShapeCssSubpath[],
-  options: ShapeScaleOptions,
-): ShapeCssSubpath[] | undefined {
+export function emitContainCssFromSubpaths(subpaths: ShapeCssSubpath[], options: ShapeScaleOptions): ShapeCssSubpath[] | undefined {
   const canvasPoints = collectShapeCssPoints(subpaths)
     .map(shapeCssPointToCanvasPoint)
     .filter((point): point is Point => Boolean(point));
@@ -423,10 +364,7 @@ export function containModelFromShape(shape: ShapeFunctionShape): ShapeContainMo
 
 // Re-emit a contain shape keeping every point's own Ux/Uy but applying the model's
 // size/offset/names.
-export function shapeFromContainModel(
-  shape: ShapeFunctionShape,
-  model: ShapeContainModel,
-): ShapeFunctionShape {
+export function shapeFromContainModel(shape: ShapeFunctionShape, model: ShapeContainModel): ShapeFunctionShape {
   const subpaths = parseShapeCssSubpaths(shape.value);
   if (!subpaths) {
     return shape;
@@ -438,24 +376,8 @@ export function shapeFromContainModel(
       return point;
     }
     return {
-      x: formatShapeOffsetCoordinate(
-        px.u,
-        model.wu,
-        model.size,
-        model.ol,
-        model.sizeVar,
-        model.offsetLeftVar,
-        'x',
-      ),
-      y: formatShapeOffsetCoordinate(
-        py.u,
-        model.hu,
-        model.size,
-        model.ot,
-        model.sizeVar,
-        model.offsetTopVar,
-        'y',
-      ),
+      x: formatShapeOffsetCoordinate(px.u, model.wu, model.size, model.ol, model.sizeVar, model.offsetLeftVar, 'x'),
+      y: formatShapeOffsetCoordinate(py.u, model.hu, model.size, model.ot, model.sizeVar, model.offsetTopVar, 'y'),
     };
   });
   return { ...shape, value: formatShapeValueFromCssSubpaths(remapped) };
@@ -464,11 +386,7 @@ export function shapeFromContainModel(
 // Translate a contain shape by a canvas-space delta by folding it into OL/OT (the geometry is
 // fixed).
 // Offsets are left unclamped so the shape can be moved partially off the container, as before.
-export function moveContainModel(
-  model: ShapeContainModel,
-  dx: number,
-  dy: number,
-): ShapeContainModel {
+export function moveContainModel(model: ShapeContainModel, dx: number, dy: number): ShapeContainModel {
   const travelX = 100 - model.wu * model.size;
   const travelY = 100 - model.hu * model.size;
   return {
@@ -482,38 +400,22 @@ export function moveContainModel(
 // Uniformly scale a contain shape by writing --size, recomputing OL/OT so the anchor canvas point
 // (opposite corner, or shape center on alt) stays fixed. The shape may grow larger than the
 // container (travel goes negative — the offset then controls which side overflows).
-export function resizeContainModel(
-  model: ShapeContainModel,
-  anchor: Point,
-  scale: number,
-): ShapeContainModel {
+export function resizeContainModel(model: ShapeContainModel, anchor: Point, scale: number): ShapeContainModel {
   const size = Math.max(0, model.size * scale);
 
   const bboxWidth = model.wu * model.size;
   const bboxHeight = model.hu * model.size;
   // Anchor's fractional position within the bbox (0 = near edge, 0.5 = center, 1 = far edge).
-  const fx =
-    bboxWidth > SHAPE_OFFSET_TRAVEL_EPSILON
-      ? (anchor.x - model.ol * (100 - bboxWidth)) / bboxWidth
-      : DEFAULT_SHAPE_OFFSET_VALUE;
-  const fy =
-    bboxHeight > SHAPE_OFFSET_TRAVEL_EPSILON
-      ? (anchor.y - model.ot * (100 - bboxHeight)) / bboxHeight
-      : DEFAULT_SHAPE_OFFSET_VALUE;
+  const fx = bboxWidth > SHAPE_OFFSET_TRAVEL_EPSILON ? (anchor.x - model.ol * (100 - bboxWidth)) / bboxWidth : DEFAULT_SHAPE_OFFSET_VALUE;
+  const fy = bboxHeight > SHAPE_OFFSET_TRAVEL_EPSILON ? (anchor.y - model.ot * (100 - bboxHeight)) / bboxHeight : DEFAULT_SHAPE_OFFSET_VALUE;
 
   const newTravelX = 100 - model.wu * size;
   const newTravelY = 100 - model.hu * size;
   return {
     ...model,
     size,
-    ol:
-      Math.abs(newTravelX) > SHAPE_OFFSET_TRAVEL_EPSILON
-        ? (anchor.x - fx * model.wu * size) / newTravelX
-        : model.ol,
-    ot:
-      Math.abs(newTravelY) > SHAPE_OFFSET_TRAVEL_EPSILON
-        ? (anchor.y - fy * model.hu * size) / newTravelY
-        : model.ot,
+    ol: Math.abs(newTravelX) > SHAPE_OFFSET_TRAVEL_EPSILON ? (anchor.x - fx * model.wu * size) / newTravelX : model.ol,
+    ot: Math.abs(newTravelY) > SHAPE_OFFSET_TRAVEL_EPSILON ? (anchor.y - fy * model.hu * size) / newTravelY : model.ot,
   };
 }
 
@@ -562,14 +464,8 @@ export function convertShapeFitMode(
     const xOffset = shapeCoordinateOffset(point.x);
     const yOffset = shapeCoordinateOffset(point.y);
     return {
-      x:
-        xOffset === undefined
-          ? point.x
-          : formatPercent(((xOffset - minXOffset) / xOffsetRange) * 100),
-      y:
-        yOffset === undefined
-          ? point.y
-          : formatPercent(((yOffset - minYOffset) / yOffsetRange) * 100),
+      x: xOffset === undefined ? point.x : formatPercent(((xOffset - minXOffset) / xOffsetRange) * 100),
+      y: yOffset === undefined ? point.y : formatPercent(((yOffset - minYOffset) / yOffsetRange) * 100),
     };
   });
 
@@ -585,17 +481,12 @@ export function cacheFromShapeFitVariants(
 ): PastedShapeSvgCache | undefined {
   const isContain = hasContainerQueryUnit(shape.value);
   const stretch = isContain ? convertShapeFitMode(shape, 'stretch', options) : shape;
-  const contain = isContain
-    ? normalizeContainShapeCoordinates(shape, options)
-    : convertShapeFitMode(shape, 'contain', options);
+  const contain = isContain ? normalizeContainShapeCoordinates(shape, options) : convertShapeFitMode(shape, 'contain', options);
 
   return stretch && contain ? { source: 'shape()', stretch, contain } : undefined;
 }
 
-export function normalizeContainShapeCoordinates(
-  shape: ShapeFunctionShape,
-  options: ShapeScaleOptions = DEFAULT_SHAPE_SCALE_OPTIONS,
-): ShapeFunctionShape {
+export function normalizeContainShapeCoordinates(shape: ShapeFunctionShape, options: ShapeScaleOptions = DEFAULT_SHAPE_SCALE_OPTIONS): ShapeFunctionShape {
   // Already in the offset encoding: preserve geometry/size/offset, only apply (possibly renamed)
   // vars.
   const model = containModelFromShape(shape);
@@ -624,26 +515,17 @@ export function normalizeContainShapeCoordinates(
   };
 }
 
-export function normalizeShapeFitCache(
-  cache: PastedShapeSvgCache | undefined,
-  options: ShapeScaleOptions = DEFAULT_SHAPE_SCALE_OPTIONS,
-) {
+export function normalizeShapeFitCache(cache: PastedShapeSvgCache | undefined, options: ShapeScaleOptions = DEFAULT_SHAPE_SCALE_OPTIONS) {
   if (!cache) {
     return undefined;
   }
-  const stretch = hasContainerQueryUnit(cache.stretch.value)
-    ? convertShapeFitMode(cache.stretch, 'stretch', options) || cache.stretch
-    : cache.stretch;
+  const stretch = hasContainerQueryUnit(cache.stretch.value) ? convertShapeFitMode(cache.stretch, 'stretch', options) || cache.stretch : cache.stretch;
   const contain = normalizeContainShapeCoordinates(cache.contain, options);
 
   return { ...cache, stretch, contain };
 }
 
-export function formatShapeCanvasPoint(
-  point: Point,
-  fitMode: ShapeFitMode,
-  options: ShapeScaleOptions,
-): ShapeCssPoint {
+export function formatShapeCanvasPoint(point: Point, fitMode: ShapeFitMode, options: ShapeScaleOptions): ShapeCssPoint {
   if (fitMode === 'contain') {
     return {
       x: formatShapeContainCoordinate(point.x - 50, options),
@@ -712,13 +594,7 @@ export function parseClipPath(value: string): ClipShape | undefined {
   if (polygon) {
     return { kind: 'polygon', points: polygon };
   }
-  return (
-    parseCircle(value) ||
-    parseEllipse(value) ||
-    parseInset(value) ||
-    parseRawBasicClipPath(value) ||
-    parseCustomClipPath(value)
-  );
+  return parseCircle(value) || parseEllipse(value) || parseInset(value) || parseRawBasicClipPath(value) || parseCustomClipPath(value);
 }
 
 export function parseClipPathInput(value: string): ClipShape | undefined {

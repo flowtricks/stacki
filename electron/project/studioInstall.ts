@@ -3,11 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { retainedPath, type StudioRelease } from '../../shared/ipc/studioRelease';
-import {
-  STUDIO_LEGACY_DIRECTORIES,
-  STUDIO_LOCAL_DIRECTORY,
-  STUDIO_UPDATES_DIRECTORY,
-} from '../../shared/properties/studioLocal';
+import { STUDIO_LEGACY_DIRECTORIES, STUDIO_LOCAL_DIRECTORY, STUDIO_UPDATES_DIRECTORY } from '../../shared/properties/studioLocal';
 
 export async function writeRelease(directory: string, release: StudioRelease) {
   for (const file of release.files) {
@@ -48,11 +44,7 @@ export async function validateInstallation(directory: string, project: string): 
 
 // Only the Studio directory is exchanged. Website source never enters the
 // transaction; runtime state is moved, not copied or reset by an update.
-export function installRelease(
-  target: string,
-  release: StudioRelease,
-  validate: (directory: string, project: string) => Promise<void> = validateInstallation,
-) {
+export function installRelease(target: string, release: StudioRelease, validate: (directory: string, project: string) => Promise<void> = validateInstallation) {
   return installReleaseWithMode(target, release, { mode: 'replace' }, validate);
 }
 

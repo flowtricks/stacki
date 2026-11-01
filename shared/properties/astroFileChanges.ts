@@ -28,10 +28,7 @@ export function parseAstroFileChanges(input: unknown): readonly AstroFileChange[
   });
 }
 
-export function diffAstroFiles(
-  previous: ReadonlySet<string>,
-  current: ReadonlySet<string>,
-): readonly AstroFileChange[] {
+export function diffAstroFiles(previous: ReadonlySet<string>, current: ReadonlySet<string>): readonly AstroFileChange[] {
   assert(previous.size <= ASTRO_FILES_MAX, 'Previous Astro inventory exceeds limit');
   assert(current.size <= ASTRO_FILES_MAX, 'Current Astro inventory exceeds limit');
   const changes: AstroFileChange[] = [];
@@ -47,10 +44,7 @@ export function diffAstroFiles(
       changes.push({ kind: 'added', file });
     }
   }
-  assert(
-    previous.size + changes.length - 2 * removedCount === current.size,
-    'Astro changes must account for the inventory size',
-  );
+  assert(previous.size + changes.length - 2 * removedCount === current.size, 'Astro changes must account for the inventory size');
   return changes;
 }
 
@@ -76,9 +70,7 @@ export function astroChangeMessages(changes: readonly AstroFileChange[]): readon
       }
     }
     if (count > 0) {
-      messages.push(
-        `${kind === 'added' ? 'Added' : 'Removed'} ${count} Astro files\n${examples.join('\n')}`,
-      );
+      messages.push(`${kind === 'added' ? 'Added' : 'Removed'} ${count} Astro files\n${examples.join('\n')}`);
     }
   }
   assert(messages.length <= 2, 'Each Astro operation has at most one summary');

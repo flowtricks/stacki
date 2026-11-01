@@ -12,10 +12,7 @@ import type { ImportPaths } from '../../ipc/appBridge';
 import { newId } from './nodeFactory';
 import { chooseImportPath } from './pageGestures';
 
-export {
-  INSTANCE_HEADING,
-  INSTANCE_PARAGRAPH,
-} from '../../../shared/properties/componentStarterDefaults';
+export { INSTANCE_HEADING, INSTANCE_PARAGRAPH } from '../../../shared/properties/componentStarterDefaults';
 import { starterDefaults } from '../../../shared/properties/componentStarterDefaults';
 import {
   DEFAULT_LIMITS,
@@ -36,21 +33,13 @@ export interface InstanceImport {
   readonly paths: ImportPaths;
 }
 
-export async function loadComponentInstance(
-  component: ScanComponent,
-  available: readonly ScanComponent[],
-  projectPath: string,
-): Promise<ComponentInstance> {
+export async function loadComponentInstance(component: ScanComponent, available: readonly ScanComponent[], projectPath: string): Promise<ComponentInstance> {
   const stored = await readMetadata(projectPath, 'components');
   const parsed = stored.source === undefined ? undefined : parseDefaultsSource(stored.source);
   if (parsed && !parsed.ok) {
     throw new Error(parsed.error.message);
   }
-  return componentInstance(
-    component,
-    available,
-    parsed?.ok ? { config: parsed.value, projectPath } : undefined,
-  );
+  return componentInstance(component, available, parsed?.ok ? { config: parsed.value, projectPath } : undefined);
 }
 
 export function componentInstance(
@@ -60,11 +49,7 @@ export function componentInstance(
 ): ComponentInstance {
   const definitions = [component, ...available.filter((entry) => entry.path !== component.path)];
   const fileOf = (entry: ScanComponent) =>
-    settings
-      ? entry.path
-          .replaceAll('\\', '/')
-          .slice(settings.projectPath.replaceAll('\\', '/').replace(/\/$/, '').length + 1)
-      : entry.path;
+    settings ? entry.path.replaceAll('\\', '/').slice(settings.projectPath.replaceAll('\\', '/').replace(/\/$/, '').length + 1) : entry.path;
   const catalog: readonly DefaultComponent[] = definitions.map((entry) => ({
     file: fileOf(entry),
     name: entry.name,
@@ -72,11 +57,7 @@ export function componentInstance(
     slots: entry.slots ?? [],
     slotText: entry.slotText ?? false,
   }));
-  const result = resolveComponentRecipe(
-    fileOf(component),
-    settings?.config ?? starterDefaults(catalog),
-    catalog,
-  );
+  const result = resolveComponentRecipe(fileOf(component), settings?.config ?? starterDefaults(catalog), catalog);
   if (!result.ok) {
     throw new Error(result.error.message);
   }
@@ -98,9 +79,7 @@ export function componentInstance(
     const props: Record<string, Attr> = Object.fromEntries(
       Object.entries(recipe.props).map(([name, value]) => [
         name,
-        typeof value === 'string'
-          ? { type: 'string', value }
-          : { type: 'expr', value: String(value) },
+        typeof value === 'string' ? { type: 'string', value } : { type: 'expr', value: String(value) },
       ]),
     );
     return {
@@ -132,9 +111,7 @@ export function componentInstancePlacement(
   const names = new Map<string, string>();
   for (const { component, paths } of resolved) {
     const importPath = chooseImportPath(model, paths);
-    const existing = imports.find(
-      (item) => item.path === importPath || item.path === paths.relative,
-    );
+    const existing = imports.find((item) => item.path === importPath || item.path === paths.relative);
     if (existing) {
       names.set(component.name, existing.name);
       names.set(component.path, existing.name);
@@ -163,11 +140,7 @@ function componentInstanceName(base: string, taken: ReadonlySet<string>): string
   throw new Error('Unable to allocate an instance import name');
 }
 
-function componentInstanceRename(
-  node: EditorNode,
-  names: ReadonlyMap<string, string>,
-  depth: number,
-): EditorNode {
+function componentInstanceRename(node: EditorNode, names: ReadonlyMap<string, string>, depth: number): EditorNode {
   assert(depth <= LIMITS.treeDepthMax, 'Instance rename exceeds the page tree depth');
   assert(depth <= DEFAULT_LIMITS.depthMax, 'Instance rename exceeds the preset depth');
   if (node.kind !== 'component' && node.kind !== 'element') {

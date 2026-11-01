@@ -133,11 +133,7 @@ function hslToRgb(hue: number, saturation: number, lightness: number): [number, 
     blue = x;
   }
   const offset = lightness - chroma / 2;
-  return [
-    Math.round((red + offset) * 255),
-    Math.round((green + offset) * 255),
-    Math.round((blue + offset) * 255),
-  ];
+  return [Math.round((red + offset) * 255), Math.round((green + offset) * 255), Math.round((blue + offset) * 255)];
 }
 
 const round = (value: number) => Math.round(value * 1000) / 1000;

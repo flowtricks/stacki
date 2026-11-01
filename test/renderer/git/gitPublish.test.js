@@ -13,8 +13,7 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull = JSON.parse('null');
-const { parseGitHubStatus, readGitHubStatus, repoSlug, webUrl } =
-  require('../../helpers/rendererModule')('src/features/git/gitPublish.ts');
+const { parseGitHubStatus, readGitHubStatus, repoSlug, webUrl } = require('../../helpers/rendererModule')('src/features/git/gitPublish.ts');
 
 test('GitHub preflight parses each state and rejects impossible or oversized data', async () => {
   for (const status of [
@@ -88,8 +87,7 @@ test('publish dialog passes its project to preflight and ignores old replies', a
   global.IS_REACT_ACT_ENVIRONMENT = true;
   const reads = [];
   window.avb = {
-    ghStatus: (project) =>
-      new Promise((resolve, reject) => reads.push({ project, resolve, reject })),
+    ghStatus: (project) => new Promise((resolve, reject) => reads.push({ project, resolve, reject })),
   };
   const React = require('react');
   const { act } = React;
@@ -115,9 +113,7 @@ test('publish dialog passes its project to preflight and ignores old replies', a
     assert.match(document.body.textContent, /Checking GitHub CLI/);
     await show('/second');
     assert.equal(reads[1].project, '/second');
-    await act(async () =>
-      reads[1].resolve({ installed: true, authed: true, user: 'current-user' }),
-    );
+    await act(async () => reads[1].resolve({ installed: true, authed: true, user: 'current-user' }));
     await act(async () => reads[0].resolve({ installed: false, authed: false }));
     assert.match(document.body.textContent, /current-user/);
     assert.equal(document.querySelector('.modal-footer .primary').disabled, false);

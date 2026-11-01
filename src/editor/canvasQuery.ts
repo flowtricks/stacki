@@ -100,10 +100,7 @@ export function queryCanvas(
   }
   assert(Number.isSafeInteger(nextId), 'Canvas query ID must remain a safe integer');
   assert(path.length <= LIMITS.attrCharsMax, 'Canvas query path exceeds limit');
-  assert(
-    (context.textParentPath?.length ?? 0) <= LIMITS.attrCharsMax,
-    'Canvas text parent path exceeds limit',
-  );
+  assert((context.textParentPath?.length ?? 0) <= LIMITS.attrCharsMax, 'Canvas text parent path exceeds limit');
   for (const values of [selectors, compute, props]) {
     assert(values.length <= LIMITS.scanEntriesMax, 'Canvas query list exceeds limit');
     for (const value of values) {

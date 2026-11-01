@@ -16,33 +16,12 @@ import type { EditRequest } from '../../shared/engine/editRequest';
 import { describeRejection, type RejectionReason } from '../../shared/engine/intent';
 import type { PageDiskRead, PageEditError, PageEdited } from '../../shared/ipc/pageSave';
 import type { Result } from '../../shared/core/result';
-import {
-  carriedParse,
-  toEditorPageState,
-  type EditablePageState,
-  type EditorPageState,
-} from './pageState';
+import { carriedParse, toEditorPageState, type EditablePageState, type EditorPageState } from './pageState';
 import { sendCode } from './codeEdits';
 import { carryHandles, seedOf } from './nodeHandles';
-import {
-  recordWrite,
-  recordNoChange,
-  sendGesture,
-  type EditDrafts,
-  type EditGesture,
-  type EditsRecord,
-  type PageOrigin,
-  type QueueEntry,
-} from './pageEdits';
+import { recordWrite, recordNoChange, sendGesture, type EditDrafts, type EditGesture, type EditsRecord, type PageOrigin, type QueueEntry } from './pageEdits';
 import type { EntrySent } from './pagePersistence';
-import {
-  saveStateBase,
-  saveStateFailed,
-  saveStateNeedsWrite,
-  saveStateRefused,
-  saveStateStarted,
-  type SaveState,
-} from './saveState';
+import { saveStateBase, saveStateFailed, saveStateNeedsWrite, saveStateRefused, saveStateStarted, type SaveState } from './saveState';
 
 export interface SenderDeps {
   readonly queue: EditDrafts;
@@ -61,9 +40,7 @@ export interface SenderDeps {
   readonly read: (path: string) => Promise<PageDiskRead>;
 }
 
-export function createEntrySender(
-  deps: SenderDeps,
-): (path: string, entry: QueueEntry) => Promise<EntrySent> {
+export function createEntrySender(deps: SenderDeps): (path: string, entry: QueueEntry) => Promise<EntrySent> {
   return async (path, entry) => {
     const state = deps.state();
     assert(state !== undefined, 'An entry is sent for an open page');
@@ -83,20 +60,14 @@ export function createEntrySender(
 
 // --- Gestures ----------------------------------------------------------------------
 
-async function sendGestureEntry(
-  deps: SenderDeps,
-  path: string,
-  entry: Extract<QueueEntry, { tag: 'gesture' }>,
-): Promise<EntrySent> {
+async function sendGestureEntry(deps: SenderDeps, path: string, entry: Extract<QueueEntry, { tag: 'gesture' }>): Promise<EntrySent> {
   const state = deps.state();
   assert(state?.editable === true, 'A gesture is sent for an editable page');
   const origin = state.origin;
   if (origin === undefined) {
     // Typed code made the page parse and its save has not replied: nothing
     // names a node yet. The gesture waits, unsent, for the next save.
-    deps.update(path, (current) =>
-      withSave(current, failed(current.save, 'The page’s text is not saved yet.')),
-    );
+    deps.update(path, (current) => withSave(current, failed(current.save, 'The page’s text is not saved yet.')));
     return { tag: 'failed', error: new Error('The page’s text is not saved yet.') };
   }
   const sent = await sendGesture({
@@ -141,11 +112,7 @@ async function sendGestureEntry(
 // The origin after the gesture's applied replies: each parse keyed by carrying
 // the previous one's handles through that reply's own splices, and the nodes
 // the gesture created by its own prediction.
-function advanced(
-  origin: PageOrigin,
-  replies: readonly PageEdited[],
-  gesture: EditGesture,
-): PageOrigin {
+function advanced(origin: PageOrigin, replies: readonly PageEdited[], gesture: EditGesture): PageOrigin {
   const predicted = gesture.apply(origin.model);
   return replies.reduce<PageOrigin>((before, reply) => {
     assert(reply.editable, 'A visual edit leaves a page that parses');
@@ -158,12 +125,7 @@ function advanced(
 // A write should not be sent again when it may have landed: sending an
 // insertion twice inserts twice. The disk says: untouched, send again later;
 // changed, the page asks the user.
-async function uncertain(
-  deps: SenderDeps,
-  path: string,
-  origin: PageOrigin,
-  message: string,
-): Promise<EntrySent> {
+async function uncertain(deps: SenderDeps, path: string, origin: PageOrigin, message: string): Promise<EntrySent> {
   advance(deps, path, origin);
   let disk: Digest;
   try {
@@ -184,9 +146,7 @@ async function uncertain(
 
 /** All queued gestures planned without writing, or the error preventing a
  * complete review. An incomplete version must never replace the user's draft. */
-export type GesturesPreviewed =
-  | { readonly tag: 'previewed'; readonly origin: PageOrigin }
-  | { readonly tag: 'failed'; readonly message: string };
+export type GesturesPreviewed = { readonly tag: 'previewed'; readonly origin: PageOrigin } | { readonly tag: 'failed'; readonly message: string };
 
 /** The page's unsaved gestures as the bytes they would write (plan §7: the
  * reviewed version of a conflicted page), each planned by main against the
@@ -196,10 +156,7 @@ export async function previewGestures(input: {
   readonly path: string;
   readonly origin: PageOrigin;
   readonly gestures: readonly EditGesture[];
-  readonly preview: (
-    request: EditRequest,
-    source: string,
-  ) => Promise<Result<PageEdited, PageEditError>>;
+  readonly preview: (request: EditRequest, source: string) => Promise<Result<PageEdited, PageEditError>>;
 }): Promise<GesturesPreviewed> {
   assert(input.gestures.length <= LIMITS.intentsPendingMax, 'The queue stays inside its bound');
   let origin = input.origin; // The bytes the next request is stated against.
@@ -235,11 +192,7 @@ export async function previewGestures(input: {
 
 // --- Typed code ----------------------------------------------------------------------
 
-async function sendCodeEntry(
-  deps: SenderDeps,
-  path: string,
-  entry: Extract<QueueEntry, { tag: 'code' }>,
-): Promise<EntrySent> {
+async function sendCodeEntry(deps: SenderDeps, path: string, entry: Extract<QueueEntry, { tag: 'code' }>): Promise<EntrySent> {
   const state = deps.state();
   assert(state !== undefined, 'Typed code belongs to an open page');
   const sent = await sendCode({
@@ -320,31 +273,15 @@ function advance(deps: SenderDeps, path: string, origin: PageOrigin): void {
   deps.update(path, (current) => (current.editable ? { ...current, origin } : current));
 }
 
-function refuse(
-  deps: SenderDeps,
-  path: string,
-  reason: RejectionReason | undefined,
-  base: Digest,
-  disk: Digest,
-): void {
+function refuse(deps: SenderDeps, path: string, reason: RejectionReason | undefined, base: Digest, disk: Digest): void {
   deps.conflict(reason);
-  deps.update(path, (current) =>
-    current.save.tag === 'clean'
-      ? current
-      : withSave(current, saveStateRefused(current.save, base, disk)),
-  );
+  deps.update(path, (current) => (current.save.tag === 'clean' ? current : withSave(current, saveStateRefused(current.save, base, disk))));
 }
 
 // A gesture the engine cannot plan, taken back: the shown model is the origin
 // with the gestures still queued applied again. Earlier successful requests in
 // this gesture keep their undo information; only the failed request is settled.
-function withdraw(
-  deps: SenderDeps,
-  path: string,
-  origin: PageOrigin,
-  record: EditsRecord,
-  reason: RejectionReason,
-): void {
+function withdraw(deps: SenderDeps, path: string, origin: PageOrigin, record: EditsRecord, reason: RejectionReason): void {
   recordNoChange(record);
   deps.notice(`Stacki couldn’t apply this edit. ${describeRejection(reason)}`);
   const queued = deps.queue.entries(path);
@@ -353,14 +290,8 @@ function withdraw(
     if (!current.editable || code) {
       return current.editable ? { ...current, origin } : current;
     }
-    const model = queued.reduce(
-      (shown, entry) => (entry.tag === 'gesture' ? entry.gesture.apply(shown) : shown),
-      origin.model,
-    );
-    const save: SaveState =
-      queued.length === 0
-        ? { tag: 'clean', checksum: origin.checksum }
-        : { tag: 'dirty', baseChecksum: origin.checksum };
+    const model = queued.reduce((shown, entry) => (entry.tag === 'gesture' ? entry.gesture.apply(shown) : shown), origin.model);
+    const save: SaveState = queued.length === 0 ? { tag: 'clean', checksum: origin.checksum } : { tag: 'dirty', baseChecksum: origin.checksum };
     return { ...current, model, parsedFrom: origin.source, source: origin.source, origin, save };
   });
 }

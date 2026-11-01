@@ -69,12 +69,7 @@ export function useHoverTip<T extends HTMLElement>(content: ReactNode) {
     }
     const away = (event: Event) => {
       const element = ref.current;
-      if (
-        !element ||
-        !element.isConnected ||
-        !(event.target instanceof Node) ||
-        !element.contains(event.target)
-      ) {
+      if (!element || !element.isConnected || !(event.target instanceof Node) || !element.contains(event.target)) {
         hide();
       }
     };
@@ -97,10 +92,7 @@ export function useHoverTip<T extends HTMLElement>(content: ReactNode) {
     ref,
     hoverProps,
     hide,
-    tip:
-      open && content && ref.current ? (
-        <HoverTooltip anchor={ref.current}>{content}</HoverTooltip>
-      ) : undefined,
+    tip: open && content && ref.current ? <HoverTooltip anchor={ref.current}>{content}</HoverTooltip> : undefined,
   };
 }
 

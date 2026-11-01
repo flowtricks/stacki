@@ -26,11 +26,7 @@ import { useEffect } from 'react';
  * `active` skips the listeners entirely while the popup is shut, so a closed
  * menu costs nothing.
  */
-export default function useDismiss(
-  ref: RefObject<HTMLElement> | undefined,
-  { active }: { readonly active: boolean },
-  onDismiss: () => void,
-): void {
+export default function useDismiss(ref: RefObject<HTMLElement> | undefined, { active }: { readonly active: boolean }, onDismiss: () => void): void {
   useEffect(() => {
     if (!active) {
       return undefined;

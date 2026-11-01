@@ -31,13 +31,9 @@ export const SHAPE_SCALE_COORDINATE_PATTERN = [
 //                 6=offset(var form), 7=offset(raw form), 8=span.
 export const SHAPE_VAR_NAME = '([a-zA-Z0-9_-]+)';
 // Size token: var(name, S cqw) or a bare S cqw (capturing name + both number forms).
-export const SHAPE_SIZE_TOKEN =
-  `(?:var\\(\\s*${SHAPE_VAR_NAME}\\s*,\\s*(${SHAPE_ABSOLUTE_NUMBER})cqw\\s*\\)` +
-  `|(${SHAPE_ABSOLUTE_NUMBER})cqw)`;
+export const SHAPE_SIZE_TOKEN = `(?:var\\(\\s*${SHAPE_VAR_NAME}\\s*,\\s*(${SHAPE_ABSOLUTE_NUMBER})cqw\\s*\\)` + `|(${SHAPE_ABSOLUTE_NUMBER})cqw)`;
 // Second size occurrence inside the travel term — match either form, capture nothing.
-export const SHAPE_SIZE_TOKEN_LOOSE =
-  `(?:var\\(\\s*[a-zA-Z0-9_-]+\\s*,\\s*${SHAPE_ABSOLUTE_NUMBER}cqw\\s*\\)` +
-  `|${SHAPE_ABSOLUTE_NUMBER}cqw)`;
+export const SHAPE_SIZE_TOKEN_LOOSE = `(?:var\\(\\s*[a-zA-Z0-9_-]+\\s*,\\s*${SHAPE_ABSOLUTE_NUMBER}cqw\\s*\\)` + `|${SHAPE_ABSOLUTE_NUMBER}cqw)`;
 export const buildShapeOffsetCoordinatePattern = (travelUnit: string) =>
   [
     'calc\\(\\s*',
@@ -51,26 +47,11 @@ export const buildShapeOffsetCoordinatePattern = (travelUnit: string) =>
   ].join('');
 export const SHAPE_OFFSET_COORDINATE_PATTERN_X = buildShapeOffsetCoordinatePattern('cqw');
 export const SHAPE_OFFSET_COORDINATE_PATTERN_Y = buildShapeOffsetCoordinatePattern('cqh');
-export const SHAPE_OFFSET_COORDINATE_X_RE = new RegExp(
-  `^${SHAPE_OFFSET_COORDINATE_PATTERN_X}`,
-  'i',
-);
-export const SHAPE_OFFSET_COORDINATE_Y_RE = new RegExp(
-  `^${SHAPE_OFFSET_COORDINATE_PATTERN_Y}`,
-  'i',
-);
-export const SHAPE_OFFSET_COORDINATE_X_EXACT_RE = new RegExp(
-  `^${SHAPE_OFFSET_COORDINATE_PATTERN_X}$`,
-  'i',
-);
-export const SHAPE_OFFSET_COORDINATE_Y_EXACT_RE = new RegExp(
-  `^${SHAPE_OFFSET_COORDINATE_PATTERN_Y}$`,
-  'i',
-);
-export const SHAPE_OFFSET_LEFT_VARIABLE_NAME_RE = new RegExp(
-  SHAPE_OFFSET_COORDINATE_PATTERN_X,
-  'i',
-);
+export const SHAPE_OFFSET_COORDINATE_X_RE = new RegExp(`^${SHAPE_OFFSET_COORDINATE_PATTERN_X}`, 'i');
+export const SHAPE_OFFSET_COORDINATE_Y_RE = new RegExp(`^${SHAPE_OFFSET_COORDINATE_PATTERN_Y}`, 'i');
+export const SHAPE_OFFSET_COORDINATE_X_EXACT_RE = new RegExp(`^${SHAPE_OFFSET_COORDINATE_PATTERN_X}$`, 'i');
+export const SHAPE_OFFSET_COORDINATE_Y_EXACT_RE = new RegExp(`^${SHAPE_OFFSET_COORDINATE_PATTERN_Y}$`, 'i');
+export const SHAPE_OFFSET_LEFT_VARIABLE_NAME_RE = new RegExp(SHAPE_OFFSET_COORDINATE_PATTERN_X, 'i');
 export const SHAPE_OFFSET_TOP_VARIABLE_NAME_RE = new RegExp(SHAPE_OFFSET_COORDINATE_PATTERN_Y, 'i');
 // Offset patterns must come first so the longer, more specific match wins coordinate splitting.
 export const SHAPE_CALCULATED_COORDINATE_RE = new RegExp(
@@ -86,23 +67,13 @@ export const SHAPE_CALCULATED_COORDINATE_RE = new RegExp(
 export const SHAPE_CQW_COORDINATE_EXACT_RE = new RegExp(`^${SHAPE_CQW_COORDINATE_PATTERN}$`, 'i');
 export const SHAPE_MIN_COORDINATE_EXACT_RE = new RegExp(`^${SHAPE_MIN_COORDINATE_PATTERN}$`, 'i');
 export const SHAPE_SCALE_COORDINATE_RE = new RegExp(`^${SHAPE_SCALE_COORDINATE_PATTERN}`, 'i');
-export const SHAPE_SCALE_COORDINATE_EXACT_RE = new RegExp(
-  `^${SHAPE_SCALE_COORDINATE_PATTERN}$`,
-  'i',
-);
+export const SHAPE_SCALE_COORDINATE_EXACT_RE = new RegExp(`^${SHAPE_SCALE_COORDINATE_PATTERN}$`, 'i');
 export const SHAPE_SCALE_VARIABLE_NAME_RE = new RegExp(SHAPE_SCALE_COORDINATE_PATTERN, 'i');
 
-export function parseShapeOffsetCoordinate(
-  value: string,
-  exact = false,
-): ShapeOffsetCoordinate | undefined {
+export function parseShapeOffsetCoordinate(value: string, exact = false): ShapeOffsetCoordinate | undefined {
   const trimmed = value.trim();
-  const xMatch = trimmed.match(
-    exact ? SHAPE_OFFSET_COORDINATE_X_EXACT_RE : SHAPE_OFFSET_COORDINATE_X_RE,
-  );
-  const match =
-    xMatch ||
-    trimmed.match(exact ? SHAPE_OFFSET_COORDINATE_Y_EXACT_RE : SHAPE_OFFSET_COORDINATE_Y_RE);
+  const xMatch = trimmed.match(exact ? SHAPE_OFFSET_COORDINATE_X_EXACT_RE : SHAPE_OFFSET_COORDINATE_X_RE);
+  const match = xMatch || trimmed.match(exact ? SHAPE_OFFSET_COORDINATE_Y_EXACT_RE : SHAPE_OFFSET_COORDINATE_Y_RE);
   if (!match) {
     return undefined;
   }
@@ -149,9 +120,7 @@ export function shapeCalculatedCoordinateOffset(value: string, exact = false) {
     return Number.isFinite(canvas) ? canvas - 50 : undefined;
   }
 
-  const minMatch = trimmed.match(
-    exact ? SHAPE_MIN_COORDINATE_EXACT_RE : new RegExp(`^${SHAPE_MIN_COORDINATE_PATTERN}`, 'i'),
-  );
+  const minMatch = trimmed.match(exact ? SHAPE_MIN_COORDINATE_EXACT_RE : new RegExp(`^${SHAPE_MIN_COORDINATE_PATTERN}`, 'i'));
   if (minMatch) {
     const offset = Number(minMatch[2]);
     if (!Number.isFinite(offset)) {
@@ -160,9 +129,7 @@ export function shapeCalculatedCoordinateOffset(value: string, exact = false) {
     return minMatch[1] === '-' ? -offset : offset;
   }
 
-  const scaleMatch = trimmed.match(
-    exact ? SHAPE_SCALE_COORDINATE_EXACT_RE : SHAPE_SCALE_COORDINATE_RE,
-  );
+  const scaleMatch = trimmed.match(exact ? SHAPE_SCALE_COORDINATE_EXACT_RE : SHAPE_SCALE_COORDINATE_RE);
   if (scaleMatch) {
     const offset = Number(scaleMatch[2]) * 100;
     if (!Number.isFinite(offset)) {
@@ -171,9 +138,7 @@ export function shapeCalculatedCoordinateOffset(value: string, exact = false) {
     return scaleMatch[1] === '-' ? -offset : offset;
   }
 
-  const match = trimmed.match(
-    exact ? SHAPE_CQW_COORDINATE_EXACT_RE : new RegExp(`^${SHAPE_CQW_COORDINATE_PATTERN}`, 'i'),
-  );
+  const match = trimmed.match(exact ? SHAPE_CQW_COORDINATE_EXACT_RE : new RegExp(`^${SHAPE_CQW_COORDINATE_PATTERN}`, 'i'));
   if (!match) {
     return undefined;
   }

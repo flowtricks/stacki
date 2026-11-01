@@ -162,9 +162,7 @@ export interface SourceNodeMetadata {
   readonly attrSpans?: readonly AttrSpan[];
 }
 
-export type PageNode = (
-  PairedNode | RawNode | ValueNode | CommentNode | MapNode | CondNode | BranchNode | ChunkGroupNode
-) &
+export type PageNode = (PairedNode | RawNode | ValueNode | CommentNode | MapNode | CondNode | BranchNode | ChunkGroupNode) &
   MarkdownNodeMetadata &
   SourceNodeMetadata;
 

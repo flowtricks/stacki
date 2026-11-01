@@ -81,16 +81,7 @@ export default function PropTip({ text }: { readonly text?: string | undefined }
     return undefined;
   }
 
-  return (
-    <TipSurface
-      text={text}
-      pos={position}
-      iconRef={iconRef}
-      tipRef={tipRef}
-      show={show}
-      hide={hide}
-    />
-  );
+  return <TipSurface text={text} pos={position} iconRef={iconRef} tipRef={tipRef} show={show} hide={hide} />;
 }
 function TipSurface({ text, pos: position, iconRef, tipRef, show, hide }: TipSurfaceProps) {
   const style: CSSProperties & { readonly '--tip-arrow': string } = {

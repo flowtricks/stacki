@@ -31,21 +31,8 @@ import { err, ok, type Result } from '../../shared/core/result';
 import type { ProjectedNode } from '../../shared/page/sourceProjection';
 import { toByteSpan } from '../../shared/core/span';
 import type { IntentDraft } from './documentActors';
-import {
-  frontmatterSlot,
-  placedHunks,
-  resolveRef,
-  shiftedHunks,
-  type Authored,
-  type Resolved,
-} from './editAnchors';
-import {
-  parseMarkdownPage,
-  printMarkdownFrontmatter,
-  printMarkdownItem,
-  printMarkdownNode,
-  type MarkdownLayout,
-} from '../parse/markdownParser';
+import { frontmatterSlot, placedHunks, resolveRef, shiftedHunks, type Authored, type Resolved } from './editAnchors';
+import { parseMarkdownPage, printMarkdownFrontmatter, printMarkdownItem, printMarkdownNode, type MarkdownLayout } from '../parse/markdownParser';
 
 type Drafted = Result<IntentDraft, RejectionReason> | undefined;
 
@@ -56,17 +43,11 @@ export function markdownEditDraft(edit: Edit, authored: Authored): Drafted {
   switch (edit.tag) {
     case 'set-attribute':
     case 'remove-attribute':
-      return onMarkdown(authored, edit.target, (target) =>
-        rewriteDraft(authored, target, (node) => withAttribute(node, edit)),
-      );
+      return onMarkdown(authored, edit.target, (target) => rewriteDraft(authored, target, (node) => withAttribute(node, edit)));
     case 'rename-tag':
-      return onMarkdown(authored, edit.target, (target) =>
-        rewriteDraft(authored, target, (node) => renamedBlock(node, edit.to)),
-      );
+      return onMarkdown(authored, edit.target, (target) => rewriteDraft(authored, target, (node) => renamedBlock(node, edit.to)));
     case 'replace-node':
-      return onMarkdown(authored, edit.target, (target) =>
-        rewriteDraft(authored, target, () => edit.node),
-      );
+      return onMarkdown(authored, edit.target, (target) => rewriteDraft(authored, target, () => edit.node));
     case 'set-inline-style':
     case 'rename-attribute':
     case 'wrap-nodes':
@@ -105,11 +86,7 @@ export function markdownPageNodes(authored: Authored): readonly PageNode[] | und
 }
 
 // A Markdown node's draft, or undefined for markup.
-function onMarkdown(
-  authored: Authored,
-  ref: NodeRef,
-  next: (target: Resolved) => Result<IntentDraft, RejectionReason>,
-): Drafted {
+function onMarkdown(authored: Authored, ref: NodeRef, next: (target: Resolved) => Result<IntentDraft, RejectionReason>): Drafted {
   const resolved = resolveRef(authored, ref);
   if (!resolved.ok) {
     return resolved;
@@ -126,11 +103,7 @@ interface Located {
   readonly index: number;
 }
 
-function rewriteDraft(
-  authored: Authored,
-  target: Resolved,
-  change: (node: PageNode) => PageNode | undefined,
-): Result<IntentDraft, RejectionReason> {
+function rewriteDraft(authored: Authored, target: Resolved, change: (node: PageNode) => PageNode | undefined): Result<IntentDraft, RejectionReason> {
   const located = locate(authored, target.node.path);
   if (located === undefined) {
     return err('anchor-moved');
@@ -145,9 +118,7 @@ function rewriteDraft(
     return err('unsupported-operation'); // Its line holds more than container syntax.
   }
   const print = (node: PageNode): string =>
-    target.node.list === 'items'
-      ? printMarkdownItem(node, itemAt(located, 0), layout)
-      : printMarkdownNode(node, layout);
+    target.node.list === 'items' ? printMarkdownItem(node, itemAt(located, 0), layout) : printMarkdownNode(node, layout);
   const own = textOf(authored.snapshot.bytes, target.node.span);
   const hunks = placedHunks(print(located.node), print(next), own);
   if (!hunks.ok) {
@@ -195,10 +166,7 @@ function lineBreak(authored: Authored): string {
 }
 
 /** An item's marker: its list's, and its number `offset` after its own. */
-function itemAt(
-  located: Located,
-  offset: number,
-): { readonly marker: string; readonly number: number | undefined; readonly indent: string } {
+function itemAt(located: Located, offset: number): { readonly marker: string; readonly number: number | undefined; readonly indent: string } {
   const list = located.parent;
   assert(list?.kind === 'element', 'An item sits in a list');
   const ordered = list.name === 'ol';
@@ -221,10 +189,7 @@ function attrText(attr: Attr | undefined): string | undefined {
 // which moves every number by as much (a list written 1. 1. 1. stays so).
 // Anything else it cannot write — the printer then changes nothing and the
 // edit is refused.
-function withAttribute(
-  node: PageNode,
-  edit: Extract<Edit, { tag: 'set-attribute' | 'remove-attribute' }>,
-): PageNode | undefined {
+function withAttribute(node: PageNode, edit: Extract<Edit, { tag: 'set-attribute' | 'remove-attribute' }>): PageNode | undefined {
   if (node.kind !== 'element') {
     return undefined;
   }
@@ -233,8 +198,7 @@ function withAttribute(
     return undefined; // An expression or a bare name: Markdown writes text.
   }
   const kept = withoutKey(node.props ?? {}, edit.name);
-  const props: Readonly<Record<string, Attr>> =
-    edit.tag === 'set-attribute' ? { ...kept, [edit.name]: { type: 'string', value } } : kept;
+  const props: Readonly<Record<string, Attr>> = edit.tag === 'set-attribute' ? { ...kept, [edit.name]: { type: 'string', value } } : kept;
   if (node.name === 'pre' && edit.name === 'lang') {
     return { ...node, props, mdInfo: value };
   }
@@ -309,12 +273,7 @@ function listBlock(name: string): boolean {
 // New blocks or items printed at the place they go: beside the anchor, or
 // inside it next to its first or last child. Items only among items, blocks
 // only among blocks; markup inside MDX goes to editRequests.ts.
-function insertionDraft(
-  authored: Authored,
-  ref: NodeRef,
-  placement: Placement,
-  nodes: readonly PageNode[],
-): Drafted {
+function insertionDraft(authored: Authored, ref: NodeRef, placement: Placement, nodes: readonly PageNode[]): Drafted {
   const resolved = resolveRef(authored, ref);
   if (!resolved.ok) {
     return resolved;
@@ -362,9 +321,7 @@ function printedInsertion(
         return undefined;
       }
       const first = beside.side === 'after' ? 1 : 0;
-      const printed = nodes.map((node, index) =>
-        printMarkdownItem(node, itemAt(located, first + index), layout),
-      );
+      const printed = nodes.map((node, index) => printMarkdownItem(node, itemAt(located, first + index), layout));
       return printed.join(`${eol}${prefix}`);
     }
     case 'blocks': {
@@ -390,10 +347,7 @@ function isItem(node: PageNode): boolean {
 
 // The first blocks of an empty page, at its end (the planner refuses them
 // once the page has a node: they must stand beside it then).
-function appendDraft(
-  authored: Authored,
-  nodes: readonly PageNode[],
-): Result<IntentDraft, RejectionReason> {
+function appendDraft(authored: Authored, nodes: readonly PageNode[]): Result<IntentDraft, RejectionReason> {
   if (nodes.some((node) => isItem(node))) {
     return err('unsupported-operation');
   }

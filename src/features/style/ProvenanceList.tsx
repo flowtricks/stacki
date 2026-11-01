@@ -43,16 +43,13 @@ export default function ProvenanceList({
   // Emphasize the row you're editing (the picked selector's value); with nothing
   // being edited (e.g. an orange property's popover) fall back to the winner.
   const editingIndex = contributors.findIndex((contributor) => contributor.editing);
-  const activeIndex =
-    editingIndex >= 0 ? editingIndex : contributors.findIndex((contributor) => contributor.winning);
+  const activeIndex = editingIndex >= 0 ? editingIndex : contributors.findIndex((contributor) => contributor.winning);
   return (
     <ul className="embed-editor_provenance-list">
       {contributors.map((contributor, index) => {
         const activeClass = index === activeIndex ? 'is-active' : '';
         const className = `embed-editor_provenance-item ${activeClass}`;
-        const rawValue = contributor.important
-          ? `${contributor.value} !important`
-          : contributor.value;
+        const rawValue = contributor.important ? `${contributor.value} !important` : contributor.value;
         const body = (
           <>
             <ProvenanceOrigin contributor={contributor} nav={nav} />
@@ -90,13 +87,7 @@ export default function ProvenanceList({
 
 // Where a contributor's value comes from: a plain "Webflow" tag for a native
 // class, or the source embed as a chip that selects it on the canvas.
-function ProvenanceOrigin({
-  contributor,
-  nav,
-}: {
-  contributor: Contributor;
-  nav: EmbedNav | undefined;
-}) {
+function ProvenanceOrigin({ contributor, nav }: { contributor: Contributor; nav: EmbedNav | undefined }) {
   if (contributor.origin === 'native') {
     return <span className="embed-editor_provenance-origin">Webflow</span>;
   }

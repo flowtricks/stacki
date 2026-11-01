@@ -11,14 +11,7 @@
 // world, as the real disk breaks a lock whose owner process is gone.
 import { assert } from '#dist/shared/core/assert.js';
 import type { FilePath } from '#dist/shared/core/brand.js';
-import type {
-  DiskError,
-  DiskLock,
-  DiskRead,
-  DocumentDisk,
-  LockError,
-  ReplaceError,
-} from '#dist/shared/engine/documentActor.js';
+import type { DiskError, DiskLock, DiskRead, DocumentDisk, LockError, ReplaceError } from '#dist/shared/engine/documentActor.js';
 import { err, ok, type Result } from '#dist/shared/core/result.js';
 import { toByteString, type ByteString } from '#dist/shared/core/span.js';
 

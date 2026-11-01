@@ -16,14 +16,9 @@ export interface ObjectEntry {
 }
 
 export const decodeAttr = (attribute: Attr | undefined) =>
-  attribute === undefined || attribute.type === 'bare'
-    ? ''
-    : attribute.type === 'expr'
-      ? `{${attribute.value}}`
-      : String(attribute.value);
+  attribute === undefined || attribute.type === 'bare' ? '' : attribute.type === 'expr' ? `{${attribute.value}}` : String(attribute.value);
 
-export const attributeDisplayName = (name: string, value: Attr | undefined): string =>
-  value?.type === 'spread' ? `{...${value.value}}` : name;
+export const attributeDisplayName = (name: string, value: Attr | undefined): string => (value?.type === 'spread' ? `{...${value.value}}` : name);
 
 export const encodeAttr = (text: string): Attr => {
   if (text === '') {
@@ -36,8 +31,7 @@ export const encodeAttr = (text: string): Attr => {
   return { type: 'string', value: text };
 };
 
-export const ATTR_PASTE_RE =
-  /([\w@:.-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{(?:[^{}]|\{[^{}]*\})*\})|([^\s]+)))?/g;
+export const ATTR_PASTE_RE = /([\w@:.-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{(?:[^{}]|\{[^{}]*\})*\})|([^\s]+)))?/g;
 
 export function parseAttrPaste(text: string): readonly AttributePair[] {
   if (text.length > LIMITS.attrCharsMax) {
@@ -77,8 +71,7 @@ export function parseObjectLiteral(input: unknown): readonly ObjectEntry[] | und
   }
   const entries = [];
   const re = new RegExp(
-    /\s*(?:"([^"]*)"|'([^']*)'|([\w$@:.-]+))\s*:\s*/.source +
-      /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|[^,]+?)\s*(?:,|$)/.source,
+    /\s*(?:"([^"]*)"|'([^']*)'|([\w$@:.-]+))\s*:\s*/.source + /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|[^,]+?)\s*(?:,|$)/.source,
     'y',
   );
   let position = 0;

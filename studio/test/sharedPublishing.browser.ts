@@ -10,8 +10,7 @@ import { sharedPublishingFixture } from './sharedPublishingFixture';
 
 const fixture = await sharedPublishingFixture();
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 try {
@@ -46,12 +45,7 @@ try {
   // Explicit settings remains usable while automatic hosting discovery is still pending.
   await first.getByRole('button', { name: 'More publish options', exact: true }).click();
   await first.getByRole('link', { name: 'Open published site', exact: true }).waitFor();
-  assert.equal(
-    await first
-      .getByRole('link', { name: 'Open published site', exact: true })
-      .getAttribute('href'),
-    'https://example.com',
-  );
+  assert.equal(await first.getByRole('link', { name: 'Open published site', exact: true }).getAttribute('href'), 'https://example.com');
   await first.getByRole('button', { name: 'Publish settings…', exact: true }).click();
   await first.getByRole('dialog', { name: 'Publish settings' }).waitFor();
   const loadingPanel = first.locator('.publish-settings[data-popup-phase="open"]');
@@ -61,20 +55,9 @@ try {
   });
   const loadingFields = loadingPanel.locator('.publish-fields .dd-trigger');
   assert.equal(await loadingFields.count(), 5);
-  assert.equal(
-    await loadingPanel.getByRole('button', { name: 'Hosting provider', exact: true }).isEnabled(),
-    true,
-  );
-  assert.equal(
-    await loadingPanel.getByRole('button', { name: 'Save', exact: true }).isDisabled(),
-    true,
-  );
-  assert.equal(
-    await loadingFields
-      .nth(1)
-      .evaluate((element) => getComputedStyle(element, '::after').animationName),
-    'publish-skeleton',
-  );
+  assert.equal(await loadingPanel.getByRole('button', { name: 'Hosting provider', exact: true }).isEnabled(), true);
+  assert.equal(await loadingPanel.getByRole('button', { name: 'Save', exact: true }).isDisabled(), true);
+  assert.equal(await loadingFields.nth(1).evaluate((element) => getComputedStyle(element, '::after').animationName), 'publish-skeleton');
   const loadingBounds = await loadingPanel.boundingBox();
   const loadingInputBounds = await loadingFields.nth(1).boundingBox();
   if (process.env['PUBLISH_SCREENSHOT']) {
@@ -100,16 +83,8 @@ try {
     await Promise.all(element.getAnimations().map((animation) => animation.finished));
   });
   const beforeLoading = await panel.boundingBox();
-  assert.deepEqual(
-    await first.locator('.publish-settings').boundingBox(),
-    loadingBounds,
-    'Initial metadata and connection loading preserve panel bounds',
-  );
-  assert.deepEqual(
-    await firstAccount.boundingBox(),
-    loadingInputBounds,
-    'Skeleton inputs occupy the final field positions',
-  );
+  assert.deepEqual(await first.locator('.publish-settings').boundingBox(), loadingBounds, 'Initial metadata and connection loading preserve panel bounds');
+  assert.deepEqual(await firstAccount.boundingBox(), loadingInputBounds, 'Skeleton inputs occupy the final field positions');
   await first.unroute('**/studio/api/publish/discover');
   let releaseLoading = () => {};
   const loadingGate = new Promise<void>((resolve) => {
@@ -161,25 +136,13 @@ try {
   await first.locator('.publish-dropdown .dd-option').filter({ hasText: 'Vercel' }).click();
   await first.locator('.publish-dropdown').waitFor({ state: 'hidden' });
   await first.locator('.publish-connections[aria-busy="true"]').waitFor({ state: 'hidden' });
-  assert.equal(
-    await first.getByRole('button', { name: 'Hosting account', exact: true }).count(),
-    0,
-  );
+  assert.equal(await first.getByRole('button', { name: 'Hosting account', exact: true }).count(), 0);
   await first.getByRole('button', { name: 'Hosting project', exact: true }).click();
-  assert.deepEqual(await first.locator('.publish-dropdown .dd-group-label').allTextContents(), [
-    'Personal',
-    'Work',
-  ]);
+  assert.deepEqual(await first.locator('.publish-dropdown .dd-group-label').allTextContents(), ['Personal', 'Work']);
   await first.locator('.publish-dropdown .dd-search').fill('Work');
   assert.equal(await first.locator('.publish-dropdown .dd-option').count(), 1);
-  await first
-    .locator('.publish-dropdown .dd-option')
-    .filter({ hasText: 'Linked Vercel project' })
-    .click();
-  assert.equal(
-    await first.getByLabel('Vercel project ID', { exact: true }).inputValue(),
-    'prj_123',
-  );
+  await first.locator('.publish-dropdown .dd-option').filter({ hasText: 'Linked Vercel project' }).click();
+  assert.equal(await first.getByLabel('Vercel project ID', { exact: true }).inputValue(), 'prj_123');
   await first.locator('.publish-dropdown').waitFor({ state: 'hidden' });
   await first.getByRole('button', { name: 'Save', exact: true }).click();
   await first.getByRole('dialog', { name: 'Publish settings' }).waitFor({ state: 'hidden' });
@@ -188,35 +151,17 @@ try {
   await second.getByRole('button', { name: 'Publish settings…', exact: true }).click();
   const provider = second.getByRole('button', { name: 'Hosting provider', exact: true });
   await provider.locator('.dd-label').filter({ hasText: 'Vercel' }).waitFor();
-  await second
-    .getByRole('button', { name: 'Hosting project', exact: true })
-    .locator('.dd-label')
-    .filter({ hasText: 'Linked Vercel project' })
-    .waitFor();
+  await second.getByRole('button', { name: 'Hosting project', exact: true }).locator('.dd-label').filter({ hasText: 'Linked Vercel project' }).waitFor();
   assert.equal(await provider.innerText(), 'Vercel');
   assert.equal(await provider.locator('svg[data-provider="vercel"]').count(), 1);
-  assert.equal(
-    await second
-      .getByRole('button', { name: 'GitHub account', exact: true })
-      .locator('.dd-label')
-      .innerText(),
-    'tricksinc',
-  );
+  assert.equal(await second.getByRole('button', { name: 'GitHub account', exact: true }).locator('.dd-label').innerText(), 'tricksinc');
   assert.equal(await second.getByLabel('GitHub username', { exact: true }).isVisible(), false);
-  assert.equal(
-    await second.getByRole('button', { name: 'Hosting project', exact: true }).innerText(),
-    'Linked Vercel project',
-  );
-  assert.equal(
-    await second.getByLabel('Vercel project ID', { exact: true }).inputValue(),
-    'prj_123',
-  );
+  assert.equal(await second.getByRole('button', { name: 'Hosting project', exact: true }).innerText(), 'Linked Vercel project');
+  assert.equal(await second.getByLabel('Vercel project ID', { exact: true }).inputValue(), 'prj_123');
   const account = second.getByRole('button', { name: 'GitHub account', exact: true });
   assert.equal(await account.locator('.publish-avatar').count(), 1);
   await account.click();
-  const accountOption = second
-    .locator('.publish-dropdown .dd-option')
-    .filter({ hasText: 'tricksinc' });
+  const accountOption = second.locator('.publish-dropdown .dd-option').filter({ hasText: 'tricksinc' });
   assert.equal(await accountOption.locator('.publish-avatar').count(), 1);
   // Moving through accounts must not change the project's saved selection.
   await account.press('Home');
@@ -225,9 +170,7 @@ try {
   await second.locator('.publish-dropdown').waitFor({ state: 'hidden' });
   await second.locator('.stacki-publish-menu').waitFor({ state: 'hidden' });
   await second.getByRole('dialog', { name: 'Publish settings' }).evaluate(async (element) => {
-    await Promise.all(
-      element.getAnimations({ subtree: true }).map((animation) => animation.finished),
-    );
+    await Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished));
   });
   await second.locator('.publish-settings[data-popup-phase="open"]').waitFor();
   if (process.env['PUBLISH_SCREENSHOT']) {
@@ -244,18 +187,13 @@ try {
   await second.getByRole('button', { name: 'Cancel', exact: true }).click();
   fixture.update({
     sha: 'b'.repeat(40),
-    files: [
-      { file: 'src/pages/index.astro', before: '<h1>Original</h1>', after: '<h1>From GitHub</h1>' },
-    ],
+    files: [{ file: 'src/pages/index.astro', before: '<h1>Original</h1>', after: '<h1>From GitHub</h1>' }],
   });
   await first.getByTestId('source').filter({ hasText: 'From GitHub' }).waitFor();
   for (const page of pages) {
     await page.getByTestId('revision').filter({ hasText: '1' }).waitFor();
   }
-  await writeFile(
-    path.join(fixture.root, 'src/pages/broken.astro'),
-    '---\nconst = ;\n---\n<h1>Broken</h1>',
-  );
+  await writeFile(path.join(fixture.root, 'src/pages/broken.astro'), '---\nconst = ;\n---\n<h1>Broken</h1>');
   await first.evaluate(() => {
     const icon = document.createElement('link');
     icon.rel = 'icon';
@@ -266,20 +204,9 @@ try {
   await first.getByRole('button', { name: 'Publish', exact: true }).click();
   for (const page of pages) {
     await page.getByText('Building website', { exact: true }).waitFor();
-    assert.match(
-      decodeURIComponent((await page.locator('link[rel="icon"]').getAttribute('href')) ?? ''),
-      /circle cx="72" cy="386"/,
-    );
-    assert.equal(
-      await page
-        .locator('.studio-publish-track')
-        .evaluate((element) => getComputedStyle(element, '::after').content),
-      'none',
-    );
-    assert.equal(
-      await page.getByRole('button', { name: 'Publishing…', exact: true }).isDisabled(),
-      true,
-    );
+    assert.match(decodeURIComponent((await page.locator('link[rel="icon"]').getAttribute('href')) ?? ''), /circle cx="72" cy="386"/);
+    assert.equal(await page.locator('.studio-publish-track').evaluate((element) => getComputedStyle(element, '::after').content), 'none');
+    assert.equal(await page.getByRole('button', { name: 'Publishing…', exact: true }).isDisabled(), true);
   }
   assert.equal(await first.locator('.studio-publish-track progress').count(), 1);
   if (process.env['PUBLISH_SCREENSHOT']) {
@@ -290,10 +217,7 @@ try {
   }
   await second.reload();
   await second.getByText('Building website', { exact: true }).waitFor();
-  assert.equal(
-    await second.getByRole('button', { name: 'Publishing…', exact: true }).isDisabled(),
-    true,
-  );
+  assert.equal(await second.getByRole('button', { name: 'Publishing…', exact: true }).isDisabled(), true);
   const checks = fixture.checks();
   await new Promise((resolve) => setTimeout(resolve, 250));
   assert.equal(fixture.checks(), checks, 'Automatic sync pauses during a publish');
@@ -306,15 +230,10 @@ try {
     } else {
       assert.equal(await page.locator('link[rel="icon"]').count(), 0);
     }
-    assert.equal(
-      await page.getByRole('button', { name: 'Publish', exact: true }).isEnabled(),
-      true,
-    );
+    assert.equal(await page.getByRole('button', { name: 'Publish', exact: true }).isEnabled(), true);
   }
   assert.equal(fixture.publisher.state.kind, 'failed');
-  console.log(
-    'Real WebSocket sharing across pages and reconnects, automatic GitHub source refresh, and real Astro build-failure recovery passed.',
-  );
+  console.log('Real WebSocket sharing across pages and reconnects, automatic GitHub source refresh, and real Astro build-failure recovery passed.');
 } catch (error) {
   console.error(fixture.publisher.state);
   for (const context of browser.contexts()) {

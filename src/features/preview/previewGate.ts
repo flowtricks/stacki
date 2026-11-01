@@ -20,12 +20,7 @@
 import { assert } from '../../../shared/core/assert';
 import type { Digest } from '../../../shared/core/brand';
 import { LIMITS } from '../../../shared/core/limits';
-import {
-  judgeEventToken,
-  judgeShownFile,
-  type PreviewRender,
-  type PreviewVerdict,
-} from '../../../shared/page/previewToken';
+import { judgeEventToken, judgeShownFile, type PreviewRender, type PreviewVerdict } from '../../../shared/page/previewToken';
 import type { EditorPageState } from '../../editor/pageState';
 
 /** The file open for editing, as the gate needs it. */
@@ -63,11 +58,7 @@ export async function judgeCanvasEvent(
 }
 
 /** Steps 1 and 2: no disk, no waiting. */
-export function judgeLocally(
-  token: Digest | undefined,
-  render: PreviewRender | undefined,
-  shown: ShownFile | undefined,
-): PreviewVerdict {
+export function judgeLocally(token: Digest | undefined, render: PreviewRender | undefined, shown: ShownFile | undefined): PreviewVerdict {
   const latest = judgeEventToken(token, render);
   if (latest.tag === 'stale') {
     return latest;

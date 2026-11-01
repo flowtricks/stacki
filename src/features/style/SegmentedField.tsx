@@ -16,8 +16,7 @@ import { parseImportant } from './model/styleDisplay';
 
 export type SegOption = { value: string; label: ReactNode; menuLabel: string; ariaLabel?: string };
 
-const joinImportant = ({ value, important }: { value: string; important: boolean }) =>
-  important ? `${value} !important` : value;
+const joinImportant = ({ value, important }: { value: string; important: boolean }) => (important ? `${value} !important` : value);
 
 // Editable text field for a custom value (defaults to `unset` when just entered).
 function CustomField({
@@ -86,16 +85,7 @@ type SegmentedFieldProps = {
   ariaLabel?: string;
 };
 
-export default function SegmentedField({
-  value,
-  important,
-  options,
-  prop,
-  fallback,
-  busy,
-  onCommit,
-  ariaLabel,
-}: SegmentedFieldProps) {
+export default function SegmentedField({ value, important, options, prop, fallback, busy, onCommit, ariaLabel }: SegmentedFieldProps) {
   const current = value.trim().toLowerCase();
   const supported = new Set(options.map((option) => option.value));
   // The bar represents a listed value with no !important; anything else is custom.
@@ -124,21 +114,10 @@ export default function SegmentedField({
   };
 
   return (
-    <div
-      ref={rootRef}
-      className={`embed-editor_display ${customMode ? 'is-custom' : ''}`}
-      role="group"
-      aria-label={ariaLabel}
-    >
+    <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label={ariaLabel}>
       <SegmentPill />
       {customMode ? (
-        <CustomField
-          value={value}
-          important={important}
-          busy={busy}
-          inputRef={inputRef}
-          onCommit={onCommit}
-        />
+        <CustomField value={value} important={important} busy={busy} inputRef={inputRef} onCommit={onCommit} />
       ) : (
         <SegmentButtons options={options} active={active} busy={busy} onPick={pick} />
       )}
@@ -192,21 +171,10 @@ function SegmentMenu({
       </button>
 
       {open ? (
-        <Popup
-          mode="popover"
-          portal={false}
-          onClose={onToggle}
-          className="embed-editor_display-menu"
-          role="menu"
-        >
+        <Popup mode="popover" portal={false} onClose={onToggle} className="embed-editor_display-menu" role="menu">
           {customMode ? (
             options.map((option) => (
-              <MenuItem
-                key={option.value}
-                label={option.menuLabel}
-                selected={current === option.value}
-                onClick={() => onPick(option.value)}
-              />
+              <MenuItem key={option.value} label={option.menuLabel} selected={current === option.value} onClick={() => onPick(option.value)} />
             ))
           ) : (
             <MenuItem label="Custom" selected={false} onClick={onEnterCustom} />
@@ -218,17 +186,7 @@ function SegmentMenu({
 }
 
 // The bar's segments, one per listed value.
-function SegmentButtons({
-  options,
-  active,
-  busy,
-  onPick,
-}: {
-  options: readonly SegOption[];
-  active: string;
-  busy: boolean;
-  onPick: (value: string) => void;
-}) {
+function SegmentButtons({ options, active, busy, onPick }: { options: readonly SegOption[]; active: string; busy: boolean; onPick: (value: string) => void }) {
   return options.map((option) => (
     <button
       key={option.value}

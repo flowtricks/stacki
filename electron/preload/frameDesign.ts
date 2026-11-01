@@ -161,10 +161,7 @@ function forwardShortcut(event: KeyboardEvent): void {
   const target = event.target;
   const typing =
     target instanceof window.HTMLElement &&
-    (target.tagName === 'INPUT' ||
-      target.tagName === 'TEXTAREA' ||
-      target.tagName === 'SELECT' ||
-      target.isContentEditable);
+    (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
   if (typing) {
     return;
   }
@@ -172,12 +169,7 @@ function forwardShortcut(event: KeyboardEvent): void {
   // Clicking the canvas puts keyboard focus inside this frame, so the
   // app's own arrow-key navigation would never see the keys. Forward
   // them (and swallow them here, so the page doesn't scroll instead).
-  if (
-    !mod &&
-    !event.altKey &&
-    !event.shiftKey &&
-    ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)
-  ) {
+  if (!mod && !event.altKey && !event.shiftKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
     event.preventDefault();
     try {
       window.parent.postMessage({ type: 'avb:shortcut', name: 'arrow', key: event.key }, '*');
@@ -206,10 +198,7 @@ function forwardShortcut(event: KeyboardEvent): void {
   if (isDelete || isDuplicate || isClassJump || isProperties || isGuide || isClose) {
     event.preventDefault();
     try {
-      window.parent.postMessage(
-        { type: 'avb:shortcut', name: 'key', key: event.key, meta: mod },
-        '*',
-      );
+      window.parent.postMessage({ type: 'avb:shortcut', name: 'key', key: event.key, meta: mod }, '*');
     } catch {
       /* ignore */
     }

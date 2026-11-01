@@ -101,10 +101,7 @@ test('Pull fails without merging stale refs or a different local branch', async 
     }
     return result;
   };
-  await assert.rejects(
-    pullBranch(switchDuringFetch, { projectPath: reader, branch: 'main' }),
-    /branch changed/,
-  );
+  await assert.rejects(pullBranch(switchDuringFetch, { projectPath: reader, branch: 'main' }), /branch changed/);
   assert.equal(await fs.readFile(path.join(reader, 'page.txt'), 'utf8'), 'base\n');
   await assert.rejects(pullBranch(git, { projectPath: reader, branch: '../invalid' }));
 });
@@ -121,10 +118,7 @@ test('Detection counts commits without touching refs or files', async (context) 
   await git(author, ['push', 'origin', 'main']);
   assert.equal(await readIncomingCommits(git, options), 2);
   assert.equal((await git(reader, ['rev-parse', 'origin/main'])).stdout, trackingBefore);
-  assert.equal(
-    await fs.readFile(path.join(reader, '.git', 'FETCH_HEAD'), 'utf8'),
-    'preserve foreground fetch',
-  );
+  assert.equal(await fs.readFile(path.join(reader, '.git', 'FETCH_HEAD'), 'utf8'), 'preserve foreground fetch');
   assert.equal(await fs.readFile(path.join(reader, 'page.txt'), 'utf8'), 'local edits\n');
   const calls = [];
   const observedGit = (directory, args) => {
@@ -159,11 +153,7 @@ test('Incoming discovery rejects malformed remote refs and commit counts', async
         return { stdout: '' };
     }
   };
-  for (const advertised of [
-    'bad\trefs/heads/main',
-    `${'a'.repeat(40)}\trefs/heads/other`,
-    `${remote}\n${remote}`,
-  ]) {
+  for (const advertised of ['bad\trefs/heads/main', `${'a'.repeat(40)}\trefs/heads/other`, `${remote}\n${remote}`]) {
     await assert.rejects(readIncomingCommits(replies(advertised, '0'), options));
   }
   for (const count of ['-1', '1.5', 'unknown', '9007199254740992']) {

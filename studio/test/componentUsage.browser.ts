@@ -4,8 +4,7 @@ import { mkdir } from 'node:fs/promises';
 import { parseComponentUsage } from '../vendor/stacki/src/features/palette/paletteModel';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const auth = process.env['STUDIO_STORAGE_STATE'];
@@ -23,9 +22,7 @@ try {
   const choice = await usage(page, 'src/components/form/Choice.astro');
   const total = choice.reduce((sum, file) => sum + file.count, 0);
   const row = page.locator('.palette-item').filter({ hasText: /^Choice\d+ instances?$/ });
-  await row
-    .getByRole('button', { name: `${total} instance${total === 1 ? '' : 's'}`, exact: true })
-    .click();
+  await row.getByRole('button', { name: `${total} instance${total === 1 ? '' : 's'}`, exact: true }).click();
   await page.locator('.instances-head').getByText('Choice instances').waitFor();
   for (const file of choice) {
     const entry = page.getByTitle(file.rel, { exact: true });
@@ -43,18 +40,11 @@ try {
   await page.getByPlaceholder('Search components').fill('Choice');
   await row.locator('.palette-instances').click();
   await page.getByText('On this page', { exact: true }).waitFor();
-  await page
-    .locator('.instances-group')
-    .filter({ hasText: 'On this page' })
-    .getByRole('button')
-    .first()
-    .click();
+  await page.locator('.instances-group').filter({ hasText: 'On this page' }).getByRole('button').first().click();
   await page.locator('.structure-node.selected').filter({ hasText: 'Choice' }).waitFor();
   await liveCounts(page);
   assert.deepEqual(errors, []);
-  console.log(
-    'Stacki instance counts, usage files, navigation, and current-page selection passed.',
-  );
+  console.log('Stacki instance counts, usage files, navigation, and current-page selection passed.');
 } catch (error) {
   await page.screenshot({ path: 'test-results/component-instances-failure.png' });
   throw error;
@@ -74,10 +64,7 @@ async function liveCounts(observer: Page) {
       .locator('.structure-node')
       .filter({ has: editor.locator('.label', { hasText: /^Heading$/ }) })
       .click();
-    const initial = (await usage(observer, 'src/components/typography/Heading.astro')).reduce(
-      (sum, file) => sum + file.count,
-      0,
-    );
+    const initial = (await usage(observer, 'src/components/typography/Heading.astro')).reduce((sum, file) => sum + file.count, 0);
     await observer.getByRole('button', { name: 'Components', exact: true }).click();
     await observer.getByPlaceholder('Search components').fill('Heading');
     await observer.getByRole('button', { name: `${initial} instances`, exact: true }).waitFor();
@@ -98,9 +85,7 @@ async function liveCounts(observer: Page) {
 }
 
 async function usage(page: Page, file: string) {
-  const response = await page.request.get(
-    new URL('/studio/api/component-usage?file=' + encodeURIComponent(file), page.url()).href,
-  );
+  const response = await page.request.get(new URL('/studio/api/component-usage?file=' + encodeURIComponent(file), page.url()).href);
   assert.ok(response.ok());
   const result = parseComponentUsage(await response.json());
   assert.equal(result.kind, 'ready');

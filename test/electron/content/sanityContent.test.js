@@ -5,13 +5,7 @@
 // recorded so the write's endpoint and body can be checked exactly.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {
-  sanityCollections,
-  sanityDocument,
-  sanityDocuments,
-  sanityReferenceOptions,
-  sanityWriteDraft,
-} = require('#dist/electron/content/sanityContent.js');
+const { sanityCollections, sanityDocument, sanityDocuments, sanityReferenceOptions, sanityWriteDraft } = require('#dist/electron/content/sanityContent.js');
 
 const TARGET = { projectId: 'abc123', dataset: 'production', token: 'editor-key' };
 
@@ -28,9 +22,7 @@ function playSanity(answer) {
 
 test('collections are the document types, with a count each', async () => {
   const sanity = playSanity((url, body) =>
-    body.query.startsWith('array::unique')
-      ? { result: ['sermon', 'campus', 'sanity.imageAsset'] }
-      : { result: { c0: 12, c1: 296 } },
+    body.query.startsWith('array::unique') ? { result: ['sermon', 'campus', 'sanity.imageAsset'] } : { result: { c0: 12, c1: 296 } },
   );
   try {
     const collections = await sanityCollections(TARGET);
@@ -38,10 +30,7 @@ test('collections are the document types, with a count each', async () => {
       { name: 'campus', count: 12, icon: undefined },
       { name: 'sermon', count: 296, icon: undefined },
     ]);
-    assert.match(
-      sanity.calls[0].url,
-      /^https:\/\/abc123\.api\.sanity\.io\/v[\d-]+\/data\/query\/production\?perspective=raw$/,
-    );
+    assert.match(sanity.calls[0].url, /^https:\/\/abc123\.api\.sanity\.io\/v[\d-]+\/data\/query\/production\?perspective=raw$/);
     assert.equal(sanity.calls[0].auth, 'Bearer editor-key');
   } finally {
     sanity.restore();
@@ -111,19 +100,24 @@ test('a document shows its draft, every field typed, with its assets', async () 
   });
   const schema = {
     fields: [
-      { name: 'name', title: 'Name', description: '', required: true, type: undefined },
-      { name: 'body', title: '', description: '', required: false, type: { kind: 'richText' } },
+      { name: 'name', title: 'Name', description: '', required: true, type: undefined, groups: ['details'] },
+      { name: 'body', title: '', description: '', required: false, type: { kind: 'richText' }, groups: [] },
     ],
     hidden: new Set(['orderRank']),
+    fieldGroups: [{ name: 'details', title: 'Details' }],
   };
   try {
     const document = await sanityDocument(TARGET, 'a', () => schema);
     assert.equal(document.status, 'changed');
     assert.equal(document.editedAt, '2026-10-30T12:00:00Z', 'the draft was edited');
     assert.equal(document.publishedAt, '2026-10-01T09:00:00Z', 'the published one changed then');
-    const fields = Object.fromEntries(
-      document.fields.map((field) => [field.name, [field.type.kind, field.value]]),
+    assert.deepEqual(document.fieldGroups, schema.fieldGroups, 'the schema’s tabs travel with the document');
+    assert.deepEqual(
+      document.fields.slice(0, 2).map((field) => field.groups),
+      [['details'], undefined],
+      'only a grouped field names its tab',
     );
+    const fields = Object.fromEntries(document.fields.map((field) => [field.name, [field.type.kind, field.value]]));
     assert.deepEqual(
       document.fields.slice(0, 2).map((field) => [field.name, field.required]),
       [
@@ -148,9 +142,7 @@ test('a document shows its draft, every field typed, with its assets', async () 
       false,
       'the rank is hidden even with no schema to say so',
     );
-    assert.deepEqual(document.assets, [
-      { id: 'image-1-10x10-png', url: 'https://cdn.sanity.io/i.png', filename: 'p.png' },
-    ]);
+    assert.deepEqual(document.assets, [{ id: 'image-1-10x10-png', url: 'https://cdn.sanity.io/i.png', filename: 'p.png' }]);
   } finally {
     sanity.restore();
   }
@@ -176,34 +168,40 @@ test('a write sets or removes one whole field on the draft', async () => {
     });
     assert.deepEqual(unset.body.actions[0].patch, { unset: ['photo'] });
     assert.equal(JSON.stringify(set.body).includes('publish"'), false);
-    await assert.rejects(
-      () => sanityWriteDraft(TARGET, { id: 'drafts.a', field: 'x', value: 1 }),
-      /published id/,
-    );
+    await assert.rejects(() => sanityWriteDraft(TARGET, { id: 'drafts.a', field: 'x', value: 1 }), /published id/);
   } finally {
     sanity.restore();
   }
 });
 
-test('reference options are published documents of the named types, by title', async () => {
+test('reference options are published documents of the named types, by title, with their pictures', async () => {
   const sanity = playSanity((url, body) => {
     assert.deepEqual(body.params.types, ['campus']);
     assert.match(url, /perspective=published$/);
+    if (body.query.includes('"media"')) {
+      assert.match(body.query, /"media": select\(_type == "campus" => coalesce\(image\.asset->url\)\)/, 'each type by its own preview');
+    }
     return {
       result: [
-        { _id: 'b', _type: 'campus', title: 'Rosepine' },
-        { _id: 'a', _type: 'campus', title: 'Donaldsonville' },
+        { _id: 'b', _type: 'campus', title: 'Rosepine', media: 'https://cdn.sanity.io/images/p/d/b.png' },
+        { _id: 'a', _type: 'campus', title: 'Donaldsonville', media: 'http://cdn.example.com/a.png' },
       ],
     };
   });
   try {
-    const options = await sanityReferenceOptions(TARGET, ['campus']);
+    const options = await sanityReferenceOptions(TARGET, ['campus'], (type) => (type === 'campus' ? 'image' : undefined));
     assert.deepEqual(
-      options.map((option) => option.title),
-      ['Donaldsonville', 'Rosepine'],
+      options.map((option) => [option.title, option.imageURL]),
+      [
+        ['Donaldsonville', undefined],
+        ['Rosepine', 'https://cdn.sanity.io/images/p/d/b.png'],
+      ],
+      'only an https picture is kept',
     );
+    await sanityReferenceOptions(TARGET, ['campus']);
+    assert.equal(sanity.calls[1].body.query.includes('"media"'), false, 'a type with no picture asks for none');
     assert.deepEqual(await sanityReferenceOptions(TARGET, []), [], 'no types, no request');
-    assert.equal(sanity.calls.length, 1);
+    assert.equal(sanity.calls.length, 2);
   } finally {
     sanity.restore();
   }

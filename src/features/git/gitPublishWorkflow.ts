@@ -7,10 +7,7 @@ import { commitGitChanges, createGitHubRepository, readGitInfo } from './gitChip
 
 // The owner flushes editor writes before this workflow reads the working tree.
 // Each operating failure stops the next destructive step; no parser is caught.
-export async function publishGitProject(
-  projectPath: string,
-  request: PublishRequest,
-): Promise<Result<string | undefined, string>> {
+export async function publishGitProject(projectPath: string, request: PublishRequest): Promise<Result<string | undefined, string>> {
   // Validate the complete request before committing anything on disk.
   const payload =
     request.kind === 'existing'

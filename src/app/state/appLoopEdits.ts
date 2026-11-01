@@ -4,12 +4,7 @@
 
 import { useCallback, useRef } from 'react';
 import { assert } from '../../../shared/core/assert';
-import {
-  childrenFingerprint,
-  planLoop,
-  targetKey,
-  type LoopTarget,
-} from '../../editor/loopQueryPlan';
+import { childrenFingerprint, planLoop, targetKey, type LoopTarget } from '../../editor/loopQueryPlan';
 import { frontmatterGesture, nodeGesture, sequence } from '../../editor/editGestures';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import type { EditorModel, EditorNode } from '../../editor/pageView';
@@ -18,15 +13,9 @@ import { frontmatterOf } from '../model/nodeFactory';
 import type { useCoreState } from './appLifecycle';
 import type { useHistory } from './appNodeEdits';
 
-type LoopMemory = Map<
-  string,
-  { readonly produced: string; readonly snapshots: Map<string, readonly EditorNode[]> }
->;
+type LoopMemory = Map<string, { readonly produced: string; readonly snapshots: Map<string, readonly EditorNode[]> }>;
 
-export function useLoopEdits(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useLoopEdits(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
 
@@ -37,11 +26,7 @@ export function useLoopEdits(
   // the snapshot would undo it, so the loop is re-pointed instead.
   const loopMemoryRef = useRef<LoopMemory>(new Map());
   const setLoopSource = useCallback(
-    (
-      nodeId: string,
-      target: LoopTarget,
-      sanityClient: 'available' | 'unavailable',
-    ): LoopApplyResult => {
+    (nodeId: string, target: LoopTarget, sanityClient: 'available' | 'unavailable'): LoopApplyResult => {
       const state = pageStateRef.current.pageState;
       if (!state?.editable) {
         return { ok: false, message: 'This page can’t be edited right now.' };
@@ -67,17 +52,22 @@ export function useLoopEdits(
       });
       assert(plan.loop.id === nodeId, 'A loop plan restates the loop it was made for');
       const options = { coalesceKey: undefined, urgency: true };
-      const loopEdit = nodeGesture(nodeId, plan.loop, options);
-      const after = loopEdit.apply(state.model);
-      const written = (model: EditorModel): EditorModel => ({
-        ...model,
-        extraFrontmatter: plan.extraFrontmatter,
-        imports: plan.imports,
-      });
-      const changed = frontmatterOf(written(after)) !== frontmatterOf(after);
-      commitEdit(
-        changed ? sequence(loopEdit, frontmatterGesture(after, options, written)) : loopEdit,
-      );
+      const written = (model: EditorModel): EditorModel => ({ ...model, extraFrontmatter: plan.extraFrontmatter, imports: plan.imports });
+      // Only what changed is sent: the document engine refuses an edit that
+      // changes nothing (a sort dropped back where it was, a setting set to
+      // what it already says), and that refusal read as an editor error.
+      const loopChanged = plan.loop.head !== loop.head || plan.loop.children !== loop.children;
+      const loopEdit = loopChanged ? nodeGesture(nodeId, plan.loop, options) : undefined;
+      const after = loopEdit === undefined ? state.model : loopEdit.apply(state.model);
+      const frontmatterChanged = frontmatterOf(written(after)) !== frontmatterOf(after);
+      const frontmatterEdit = frontmatterChanged ? frontmatterGesture(after, options, written) : undefined;
+      if (loopEdit !== undefined && frontmatterEdit !== undefined) {
+        commitEdit(sequence(loopEdit, frontmatterEdit));
+      } else if (loopEdit !== undefined || frontmatterEdit !== undefined) {
+        const only = loopEdit ?? frontmatterEdit;
+        assert(only !== undefined, 'One of the two edits is there');
+        commitEdit(only);
+      }
       return { ok: true, unbound: plan.unbound, lost: plan.lost, restored: plan.restored };
     },
     [commitEdit, pageStateRef],

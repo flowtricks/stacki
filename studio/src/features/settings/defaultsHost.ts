@@ -1,9 +1,5 @@
 import { getEditorRole } from '../roles/roleStore';
-import {
-  parseDefaultsSource,
-  type DefaultsSnapshot,
-  type DefaultComponent,
-} from '../../../vendor/stacki/shared/properties/componentDefaults';
+import { parseDefaultsSource, type DefaultsSnapshot, type DefaultComponent } from '../../../vendor/stacki/shared/properties/componentDefaults';
 import { starterDefaults } from '../../../vendor/stacki/shared/properties/componentStarterDefaults';
 import { loadProject } from '../project/projectClient';
 import { readMetadata, writeMetadata } from './metadataClient';

@@ -4,19 +4,9 @@
 import { LIMITS } from '../../shared/core/limits';
 import type { PropUnion, SchemaField } from './astroParserTypes';
 import { required } from './astroAttrs';
-import {
-  splitTypeTop,
-  explodeMembers,
-  statedDefault,
-  numberRules,
-  normalizeType,
-} from './astroPropTypes';
+import { splitTypeTop, explodeMembers, statedDefault, numberRules, normalizeType } from './astroPropTypes';
 
-export function parsePropSchemaExpandAlias(
-  aliases: ReadonlyMap<string, string>,
-  part: string,
-  seen = new Set<string>(),
-): string[] {
+export function parsePropSchemaExpandAlias(aliases: ReadonlyMap<string, string>, part: string, seen = new Set<string>()): string[] {
   const body = aliases.get(part);
   // `seen` gains one alias per expansion, so its size bounds how deep the expansion has gone.
   const depth = seen.size;
@@ -24,9 +14,7 @@ export function parsePropSchemaExpandAlias(
     return [part];
   }
   seen.add(part);
-  return splitTypeTop(body, '|').flatMap((part) =>
-    parsePropSchemaExpandAlias(aliases, part.trim(), seen),
-  );
+  return splitTypeTop(body, '|').flatMap((part) => parsePropSchemaExpandAlias(aliases, part.trim(), seen));
 }
 
 function parsePropSchemaShapeOf(aliases: ReadonlyMap<string, string>, parts: readonly string[]) {
@@ -72,10 +60,7 @@ export function parsePropSchemaMemberEntries(block: string) {
     const text = line.trim().replace(/[;,]\s*$/, '');
     const match = text.match(/^(?:readonly\s+)?([\w$]+)\??\s*:\s*([\s\S]+)$/);
     if (match) {
-      out.set(
-        required(match[1], 'Member name capture'),
-        required(match[2], 'Member type capture').trim(),
-      );
+      out.set(required(match[1], 'Member name capture'), required(match[2], 'Member type capture').trim());
     }
   }
   // …then whole members, for a type that spans lines:
@@ -97,10 +82,7 @@ export function parsePropSchemaMemberEntries(block: string) {
     }
     const match = flat.match(/^(?:readonly\s+)?([\w$]+)\??\s*:\s*(.+?),?$/);
     if (match && !out.has(required(match[1], 'Member name capture'))) {
-      out.set(
-        required(match[1], 'Member name capture'),
-        required(match[2], 'Member type capture').trim(),
-      );
+      out.set(required(match[1], 'Member name capture'), required(match[2], 'Member type capture').trim());
     }
   }
   return out;
@@ -165,10 +147,7 @@ export function parsePropSchemaFields(
   return schema;
 }
 
-export function parsePropSchemaDestructure(
-  frontmatter: string,
-  schema: Map<string, SchemaField>,
-): void {
+export function parsePropSchemaDestructure(frontmatter: string, schema: Map<string, SchemaField>): void {
   const destructure = frontmatter.match(/(?:const|let)\s*\{([\s\S]*?)\}\s*=\s*Astro\.props/);
   if (!destructure) {
     return;
@@ -190,18 +169,14 @@ export function parsePropSchemaDestructure(
       optional: true,
       default: undefined,
     };
-    schema.set(
-      match[1],
-      match[2] === undefined ? existing : withDestructureDefault(existing, match[2].trim()),
-    );
+    schema.set(match[1], match[2] === undefined ? existing : withDestructureDefault(existing, match[2].trim()));
   }
 }
 
 // What a default's text says about the prop: a literal sets its type and
 // value; anything else is kept as an expression for the scanner to resolve.
 function withDestructureDefault(field: SchemaField, defaultText: string): SchemaField {
-  const typed = (type: SchemaField['type']): SchemaField['type'] =>
-    field.type === 'other' ? type : field.type;
+  const typed = (type: SchemaField['type']): SchemaField['type'] => (field.type === 'other' ? type : field.type);
   if (/^["'`]/.test(defaultText)) {
     return { ...field, optional: true, default: defaultText.slice(1, -1), type: typed('string') };
   }
@@ -214,13 +189,7 @@ function withDestructureDefault(field: SchemaField, defaultText: string): Schema
   // Not a literal — an identifier or expression (e.g. SITE_TITLE). Flagged so
   // the scanner can try resolving it to a real value; an object-literal
   // default marks an attributes-object prop.
-  return {
-    ...field,
-    optional: true,
-    default: defaultText,
-    defaultExpr: true,
-    type: /^\{/.test(defaultText) ? typed('attrs') : field.type,
-  };
+  return { ...field, optional: true, default: defaultText, defaultExpr: true, type: /^\{/.test(defaultText) ? typed('attrs') : field.type };
 }
 
 /**
@@ -296,11 +265,7 @@ export function parsePropSchemaSplitFallback(unions: readonly PropUnion[]): Set<
   return splitFallback;
 }
 
-export function parsePropSchemaFallbacks(
-  frontmatter: string,
-  schema: Map<string, SchemaField>,
-  splitFallback: ReadonlySet<string>,
-): void {
+export function parsePropSchemaFallbacks(frontmatter: string, schema: Map<string, SchemaField>, splitFallback: ReadonlySet<string>): void {
   // A prop's fallback isn't always a destructure default. Two more places it
   // is stated plainly, both worth showing as a field's placeholder so the
   // panel can say what happens when you leave it alone:
@@ -325,11 +290,7 @@ export function parsePropSchemaFallbacks(
     );
     if (nullish) {
       const lit = required(nullish[1], 'Nullish default literal capture');
-      field.default = /^["'\`]/.test(lit)
-        ? lit.slice(1, -1)
-        : /^(true|false)$/.test(lit)
-          ? lit === 'true'
-          : Number(lit);
+      field.default = /^["'\`]/.test(lit) ? lit.slice(1, -1) : /^(true|false)$/.test(lit) ? lit === 'true' : Number(lit);
       continue;
     }
 
@@ -370,10 +331,7 @@ export function parsePropSchemaFallbacks(
       // To the end of the sentence, not a fixed number of word characters —
       // "the image service's own default" was coming back as "the image
       // service", which reads like a value rather than the shrug it is.
-      const text = (phrase[1] || phrase[2] || phrase[3] || phrase[4] || '')
-        .replace(/`/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
+      const text = (phrase[1] || phrase[2] || phrase[3] || phrase[4] || '').replace(/`/g, '').replace(/\s+/g, ' ').trim();
       if (text && text.length <= 48) {
         field.hint = text;
       }
@@ -497,9 +455,7 @@ function parsePropSchemaRawBlock(
         i += 1;
       }
       if (rest.length) {
-        match = (line + ' ' + rest.join(' '))
-          .replace(/\s+/g, ' ')
-          .match(/^(?:readonly\s+)?([\w$]+)(\?)?\s*:\s*(.+?)[;,]?\s*$/);
+        match = (line + ' ' + rest.join(' ')).replace(/\s+/g, ' ').match(/^(?:readonly\s+)?([\w$]+)(\?)?\s*:\s*(.+?)[;,]?\s*$/);
       }
     }
     if (!match) {

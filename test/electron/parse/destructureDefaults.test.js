@@ -15,10 +15,8 @@
 const assert = require('node:assert/strict');
 const { parsePropSchema } = require('#dist/electron/parse/astroParser.js');
 
-const names = (frontmatter) =>
-  parsePropSchema(`---\n${frontmatter}\n---\n<div />`).map((field) => field.name);
-const field = (frontmatter, name) =>
-  parsePropSchema(`---\n${frontmatter}\n---\n<div />`).find((entry) => entry.name === name);
+const names = (frontmatter) => parsePropSchema(`---\n${frontmatter}\n---\n<div />`).map((field) => field.name);
+const field = (frontmatter, name) => parsePropSchema(`---\n${frontmatter}\n---\n<div />`).find((entry) => entry.name === name);
 
 const exported = [
   'const {',
@@ -28,11 +26,7 @@ const exported = [
   '  filters: propFilters = {"filterFor": "ALL", "fields": [{"fieldPath": "image", "operatorName": "exists", "value": ""}, {"fieldPath": "name", "operatorName": "exists", "value": ""}]}',
   '} = Astro.props;',
 ].join('\n');
-assert.deepEqual(
-  names(exported),
-  ['paddingTop', 'showButton', 'filters'],
-  'a nested default holds no props',
-);
+assert.deepEqual(names(exported), ['paddingTop', 'showButton', 'filters'], 'a nested default holds no props');
 assert.equal(field(exported, 'paddingTop').default, 'large');
 assert.equal(field(exported, 'showButton').default, true);
 assert.equal(field(exported, 'filters').defaultExpr, true);
@@ -50,11 +44,7 @@ const tricky = [
   '} = Astro.props;',
 ].join('\n');
 assert.deepEqual(names(tricky), ['href', 'label', 'sizes', 'class', 'count']);
-assert.equal(
-  field(tricky, 'href').default,
-  'https://example.com/a,b',
-  'a // inside a string is not a comment',
-);
+assert.equal(field(tricky, 'href').default, 'https://example.com/a,b', 'a // inside a string is not a comment');
 assert.equal(field(tricky, 'label').default, 'say "hi", then {go}');
 assert.equal(field(tricky, 'count').default, 3);
 

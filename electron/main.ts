@@ -15,21 +15,11 @@ import { isAtomicTemporary } from './documents/atomicWrite';
 import { createNodeDocumentActors } from './documents/documentActors';
 import { documentHost, installDocumentHost } from './documents/documentWrites';
 import { isPathDescendant, sameFilesystemPath } from './lib/platform';
-import type {
-  BrowserWindow as Window,
-  MenuItemConstructorOptions,
-  MessageBoxOptions,
-  OpenDialogOptions,
-} from 'electron';
+import type { BrowserWindow as Window, MenuItemConstructorOptions, MessageBoxOptions, OpenDialogOptions } from 'electron';
 import { toRecord } from '../shared/core/record';
 import { parseOptionalString, parseRecents, parseSettings } from './app/mainValidation';
 import type { AppSettings } from './app/mainValidation';
-import {
-  sendUsageCount,
-  shouldCountUsage,
-  usageDay,
-  USAGE_NOTICE_VERSION,
-} from './app/usageCounts';
+import { sendUsageCount, shouldCountUsage, usageDay, USAGE_NOTICE_VERSION } from './app/usageCounts';
 import type { RecentProject } from './lib/mainTypes';
 import {
   app,
@@ -94,9 +84,7 @@ const cmsConnections = new CmsConnectionStore(
   },
   () => app.getPath('userData'),
 );
-const devServers = new DevServers({ send }, (projectRoot) =>
-  cmsPreviewEnvironment(cmsConnections, projectRoot),
-);
+const devServers = new DevServers({ send }, (projectRoot) => cmsPreviewEnvironment(cmsConnections, projectRoot));
 const thumbnails = new Thumbnails({
   devServers,
   userDataPath: () => app.getPath('userData'),
@@ -207,9 +195,7 @@ function refusePrivatePermissions() {
   session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => {
     callback(!isPrivatePermission(permission));
   });
-  session.defaultSession.setPermissionCheckHandler(
-    (_contents, permission) => !isPrivatePermission(permission),
-  );
+  session.defaultSession.setPermissionCheckHandler((_contents, permission) => !isPrivatePermission(permission));
 }
 
 // The preload hands Stacki's API to whatever page this window shows, so the
@@ -305,9 +291,7 @@ function createWindow() {
   listenForPreviewFailures(mainWindow.webContents, () => devServers.current()?.url);
 
   // A renderer that does not load leaves an empty window; the log says why.
-  const loaded = process.env['VITE_DEV_SERVER_URL']
-    ? mainWindow.loadURL(process.env['VITE_DEV_SERVER_URL'])
-    : mainWindow.loadFile(RUNTIME_PATHS.rendererIndex);
+  const loaded = process.env['VITE_DEV_SERVER_URL'] ? mainWindow.loadURL(process.env['VITE_DEV_SERVER_URL']) : mainWindow.loadFile(RUNTIME_PATHS.rendererIndex);
   loaded.catch((error: unknown) => {
     console.error('[window] the renderer did not load:', error);
   });
@@ -318,10 +302,7 @@ function createWindow() {
     }
     return { action: 'deny' };
   });
-  keepOnAppPage(
-    mainWindow,
-    process.env['VITE_DEV_SERVER_URL'] ?? pathToFileURL(RUNTIME_PATHS.rendererIndex).toString(),
-  );
+  keepOnAppPage(mainWindow, process.env['VITE_DEV_SERVER_URL'] ?? pathToFileURL(RUNTIME_PATHS.rendererIndex).toString());
 
   // Somebody closed the window. Whatever was open is over: the next window is a
   // fresh start and belongs on the welcome screen, not back in the project this
@@ -963,11 +944,7 @@ registerProjectHandlers(host);
 registerProjectMetadataHandlers(host);
 registerPublishHandlers(host);
 registerCmsConnectionHandlers(host, cmsConnections, new SanityLogin(cmsConnections));
-registerStudioHandlers(
-  host,
-  app.isPackaged ? { kind: 'packaged' } : { kind: 'development', appPath: app.getAppPath() },
-  () => app.getVersion(),
-);
+registerStudioHandlers(host, app.isPackaged ? { kind: 'packaged' } : { kind: 'development', appPath: app.getAppPath() }, () => app.getVersion());
 registerProjectScanHandlers(host);
 registerStyleSourceHandlers(host);
 registerSelectorHandlers(host);

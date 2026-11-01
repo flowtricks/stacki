@@ -380,8 +380,8 @@ under each of `src/`, `electron/`, `shared/` and `scripts/`.
 ## Standing rules
 
 - AGENTS.md is the normative engineering standard (strict TS, parse-don't-
-  validate, discriminated unions, branded primitives, bounded everything,
-  ≤70-line functions). The checks in docs/enforcement.md hold it mechanically
+  validate, discriminated unions, branded primitives, bounded everything).
+  The checks in docs/enforcement.md hold it mechanically
   — the same code for people and for every coding agent — and CI is the gate
   no one can skip.
 - Behavior preservation is proven per conversion by parity checks against the

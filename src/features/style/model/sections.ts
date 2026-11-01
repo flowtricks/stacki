@@ -7,17 +7,7 @@
 
 import type { ParsedDeclaration } from './styleTypes';
 
-export type SectionId =
-  | 'flex-child'
-  | 'layout'
-  | 'size'
-  | 'spacing'
-  | 'position'
-  | 'typography'
-  | 'backgrounds'
-  | 'borders'
-  | 'effects'
-  | 'other';
+export type SectionId = 'flex-child' | 'layout' | 'size' | 'spacing' | 'position' | 'typography' | 'backgrounds' | 'borders' | 'effects' | 'other';
 
 export type SectionDefinition = {
   id: SectionId;
@@ -93,16 +83,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
     // out, as a property listed in a section is routed to that section's control
     // and the box has none for it: it falls through to the catch-all at the
     // bottom, where it can still be edited and cleared whole, as written.
-    order: [
-      'margin-top',
-      'margin-right',
-      'margin-bottom',
-      'margin-left',
-      'padding-top',
-      'padding-right',
-      'padding-bottom',
-      'padding-left',
-    ],
+    order: ['margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left'],
   },
   {
     id: 'size',
@@ -317,10 +298,7 @@ const UNRANKED = Number.MAX_SAFE_INTEGER;
  * are emitted in SECTIONS order, with `other` last. Empty sections are omitted
  * unless listed in `alwaysShow` (e.g. Size, whose controls always render).
  */
-export function groupDeclarations(
-  decls: ParsedDeclaration[],
-  alwaysShow: readonly SectionId[] = [],
-): SectionGroup[] {
+export function groupDeclarations(decls: ParsedDeclaration[], alwaysShow: readonly SectionId[] = []): SectionGroup[] {
   const buckets = new Map<SectionId, ParsedDeclaration[]>();
   decls.forEach((decl) => {
     const id = sectionOf(decl.prop);
@@ -356,10 +334,7 @@ export function groupDeclarations(
 export type SectionPropGroup = { def: SectionDefinition; props: string[] };
 
 /** Like groupDeclarations but over bare property names (for the resolved model). */
-export function groupProps(
-  propNames: string[],
-  alwaysShow: readonly SectionId[] = [],
-): SectionPropGroup[] {
+export function groupProps(propNames: string[], alwaysShow: readonly SectionId[] = []): SectionPropGroup[] {
   const buckets = new Map<SectionId, string[]>();
   propNames.forEach((prop) => {
     const id = sectionOf(prop);

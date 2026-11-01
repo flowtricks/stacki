@@ -20,13 +20,7 @@ import { checkChanged, checkFiles, repositoryRoot, type CheckOutcome } from '../
 import { POLICY_LIMITS } from '../policy/limits.mts';
 import { parseHookPayload, type HookPayload } from './payload.mts';
 import { commandVerdict, pathVerdict, patchPaths, repositoryPath, type Verdict } from './core.mts';
-import {
-  clearStopState,
-  decideStop,
-  readStopState,
-  reportDigest,
-  writeStopState,
-} from './stopState.mts';
+import { clearStopState, decideStop, readStopState, reportDigest, writeStopState } from './stopState.mts';
 
 export type Harness = 'claude' | 'codex';
 const EVENTS = ['pre-tool', 'post-tool', 'stop'] as const;
@@ -70,10 +64,7 @@ function preTool(root: string, harness: Harness, payload: HookPayload): number {
     return 0;
   }
   const decision = verdict.kind === 'ask' && harness === 'claude' ? 'ask' : 'deny';
-  const reason =
-    verdict.kind === 'ask' && decision === 'deny'
-      ? `${verdict.reason} Ask your human to make or approve this change.`
-      : verdict.reason;
+  const reason = verdict.kind === 'ask' && decision === 'deny' ? `${verdict.reason} Ask your human to make or approve this change.` : verdict.reason;
   const output = {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
@@ -125,16 +116,13 @@ function stop(root: string, payload: HookPayload): number {
   writeStopState(root, payload.sessionId, decision.next);
   switch (decision.kind) {
     case 'refuse': {
-      const heading =
-        'The changes do not pass the repository checks yet ' +
-        `(attempt ${decision.attempt} of ${limit}). Fix these, then finish:`;
+      const heading = 'The changes do not pass the repository checks yet ' + `(attempt ${decision.attempt} of ${limit}). Fix these, then finish:`;
       return report(outcome, heading);
     }
     case 'release': {
       // Out of attempts for these findings: let the session end, and say so.
       const message =
-        `stacki: stopped with failing checks after ${limit} attempts. Run ` +
-        '`npm run check:changed` to see them; CI will fail until they are fixed.';
+        `stacki: stopped with failing checks after ${limit} attempts. Run ` + '`npm run check:changed` to see them; CI will fail until they are fixed.';
       process.stdout.write(`${JSON.stringify({ systemMessage: message })}\n`);
       return 0;
     }
@@ -161,8 +149,6 @@ function report(outcome: CheckOutcome, heading: string): number {
 // Repository-relative paths of the files a tool call writes.
 function editedFiles(root: string, payload: HookPayload): readonly string[] {
   const candidates = [...payload.paths, ...patchPaths(payload.toolInput)];
-  const files = candidates
-    .map((file) => repositoryPath(root, payload.cwd ?? root, file))
-    .filter((file) => file !== undefined);
+  const files = candidates.map((file) => repositoryPath(root, payload.cwd ?? root, file)).filter((file) => file !== undefined);
   return [...new Set(files)];
 }

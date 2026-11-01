@@ -27,12 +27,7 @@ export class EditorHistory {
       this.manager.stopCapturing();
     }
     const previous = this.past.at(-1);
-    if (
-      command.coalesceKey &&
-      previous?.role === command.role &&
-      previous?.coalesceKey === command.coalesceKey &&
-      Date.now() - this.last < 600
-    ) {
+    if (command.coalesceKey && previous?.role === command.role && previous?.coalesceKey === command.coalesceKey && Date.now() - this.last < 600) {
       this.past[this.past.length - 1] = { ...command, undo: previous.undo };
     } else {
       this.past.push(command);

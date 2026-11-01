@@ -39,9 +39,7 @@ export function createCanvasTextOverlay(options: {
       containerElement.id = 'stacki-canvas-text-editor';
       containerElement.hidden = true;
       if (target.label.startsWith('Shared')) {
-        containerElement.dataset['shared'] = target.label.startsWith('Shared CMS')
-          ? 'cms'
-          : 'variable';
+        containerElement.dataset['shared'] = target.label.startsWith('Shared CMS') ? 'cms' : 'variable';
       }
       // A state marker colors the existing outline without adding a second editor.
       document.body.append(containerElement);

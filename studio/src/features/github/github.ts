@@ -48,55 +48,34 @@ export class GitHubRepository {
   async prepareStudioUpdate(release: StudioRelease) {
     const token = await this.installationToken();
     const head = await this.head(token);
-    return prepareStudioBranch(
-      this.config.repository,
-      head,
-      release,
-      (endpoint, method, body) => this.call(endpoint, token, method, body),
-      this.config.branch,
-    );
+    return prepareStudioBranch(this.config.repository, head, release, (endpoint, method, body) => this.call(endpoint, token, method, body), this.config.branch);
   }
   async installationToken(workflow: 'direct' | 'pull-request' = 'direct'): Promise<string> {
     const now = Math.floor(Date.now() / 1000);
     const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
-    const body = Buffer.from(
-      JSON.stringify({ iat: now - 60, exp: now + 540, iss: this.config.appId }),
-    ).toString('base64url');
+    const body = Buffer.from(JSON.stringify({ iat: now - 60, exp: now + 540, iss: this.config.appId })).toString('base64url');
     const payload = `${header}.${body}`;
     const signer = createSign('RSA-SHA256');
     signer.update(payload);
     const jwt = `${payload}.${signer.sign(this.config.privateKey.replaceAll('\\n', '\n'), 'base64url')}`;
     const result = record(
-      await this.call(
-        `/app/installations/${encodeURIComponent(this.config.installationId)}/access_tokens`,
-        jwt,
-        'POST',
-        {
-          repositories: [this.config.repository.split('/')[1]],
-          permissions: {
-            contents: 'write',
-            ...(workflow === 'pull-request' ? { pull_requests: 'write' } : {}),
-          },
+      await this.call(`/app/installations/${encodeURIComponent(this.config.installationId)}/access_tokens`, jwt, 'POST', {
+        repositories: [this.config.repository.split('/')[1]],
+        permissions: {
+          contents: 'write',
+          ...(workflow === 'pull-request' ? { pull_requests: 'write' } : {}),
         },
-      ),
+      }),
     );
     return string(result['token'], 500);
   }
   async head(token: string) {
-    const result = record(
-      await this.call(
-        `/repos/${this.config.repository}/git/ref/heads/${this.config.branch}`,
-        token,
-      ),
-    );
+    const result = record(await this.call(`/repos/${this.config.repository}/git/ref/heads/${this.config.branch}`, token));
     return string(record(result['object'])['sha'], 64);
   }
   async read(file: string, ref: string, token: string) {
     const result = record(
-      await this.call(
-        `/repos/${this.config.repository}/contents/${file.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`,
-        token,
-      ),
+      await this.call(`/repos/${this.config.repository}/contents/${file.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(ref)}`, token),
     );
     if (result['encoding'] !== 'base64') {
       throw new Error('Unsupported GitHub content encoding');
@@ -108,9 +87,7 @@ export class GitHubRepository {
       throw new Error('Invalid published revision');
     }
     const token = await this.installationToken();
-    return publishedAssetTree(
-      await this.call(`/repos/${this.config.repository}/git/trees/${sha}?recursive=1`, token),
-    );
+    return publishedAssetTree(await this.call(`/repos/${this.config.repository}/git/trees/${sha}?recursive=1`, token));
   }
   async acceptBase(_sha: string): Promise<void> {
     /* Local baseline is written by the caller. */
@@ -121,9 +98,7 @@ export class GitHubRepository {
     if (sha === base) {
       return { sha, files: [] };
     }
-    const comparison = record(
-      await this.call(`/repos/${this.config.repository}/compare/${base}...${sha}`, token),
-    );
+    const comparison = record(await this.call(`/repos/${this.config.repository}/compare/${base}...${sha}`, token));
     if (comparison['status'] !== 'ahead') {
       throw new Error('GitHub history diverged. Restore a shared ancestor before syncing.');
     }
@@ -133,11 +108,7 @@ export class GitHubRepository {
     }
     let changes: readonly unknown[] = rawChanges;
     if (changes.length >= 300) {
-      const trees = await Promise.all(
-        [base, sha].map((ref) =>
-          this.call(`/repos/${this.config.repository}/git/trees/${ref}?recursive=1`, token),
-        ),
-      );
+      const trees = await Promise.all([base, sha].map((ref) => this.call(`/repos/${this.config.repository}/git/trees/${ref}?recursive=1`, token)));
       changes = treeChanges(trees[0], trees[1]);
     }
     const files: IncomingFile[] = [];
@@ -147,12 +118,7 @@ export class GitHubRepository {
     }
     return { sha, files };
   }
-  private async incomingFile(
-    change: Record<string, unknown>,
-    base: string,
-    sha: string,
-    token: string,
-  ): Promise<IncomingFile[]> {
+  private async incomingFile(change: Record<string, unknown>, base: string, sha: string, token: string): Promise<IncomingFile[]> {
     const file = string(change['filename'], 500);
     const status = change['status'];
     // Treat each side of a rename separately so moving into/out of Studio or
@@ -172,17 +138,9 @@ export class GitHubRepository {
       // Runtime/config changes need a fresh container with dependencies installed.
       if (
         !/^src\/.+\.(astro|json|md|mdx|css|ts|js)$/.test(file) &&
-        ![
-          '.stacki/components.json',
-          '.stacki/component-sources.json',
-          '.stacki/guide.json',
-          '.stacki/publish.json',
-          '.stacki/pages.json',
-        ].includes(file)
+        !['.stacki/components.json', '.stacki/component-sources.json', '.stacki/guide.json', '.stacki/publish.json', '.stacki/pages.json'].includes(file)
       ) {
-        throw new Error(
-          `GitHub changed ${file}. Restart from a fresh repository revision before syncing runtime or binary changes.`,
-        );
+        throw new Error(`GitHub changed ${file}. Restart from a fresh repository revision before syncing runtime or binary changes.`);
       }
       files.push({
         file,
@@ -206,12 +164,7 @@ export class GitHubRepository {
       token: await this.installationToken('pull-request'),
     });
   }
-  private async call(
-    endpoint: string,
-    token: string,
-    method = 'GET',
-    body?: unknown,
-  ): Promise<unknown> {
+  private async call(endpoint: string, token: string, method = 'GET', body?: unknown): Promise<unknown> {
     const response = await this.transport(`https://api.github.com${endpoint}`, {
       method,
       headers: {

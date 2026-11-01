@@ -21,12 +21,7 @@ function parseCounts(input: unknown): ReadonlyMap<string, number> {
     const item = record(value);
     const file = sourcePath(item['file']);
     const total = item['total'];
-    if (
-      typeof total !== 'number' ||
-      !Number.isSafeInteger(total) ||
-      total < 0 ||
-      counts.has(file)
-    ) {
+    if (typeof total !== 'number' || !Number.isSafeInteger(total) || total < 0 || counts.has(file)) {
       throw new Error('Invalid component count');
     }
     counts.set(file, total);

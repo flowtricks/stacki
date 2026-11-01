@@ -107,10 +107,7 @@ const check = (what, condition, detail) => {
     }
   })();
   if (typeof electronPath !== 'string') {
-    console.log(
-      'panel-field: skipped — no Electron to lay it out in ' +
-        '(see test/electron/preload/gapBands.test.js for the pattern)',
-    );
+    console.log('panel-field: skipped — no Electron to lay it out in ' + '(see test/electron/preload/gapBands.test.js for the pattern)');
     return;
   }
 
@@ -237,31 +234,19 @@ const check = (what, condition, detail) => {
     check('the probe ran in a browser', false, (run.stderr || run.stdout || '').slice(0, 400));
   } else {
     const out = JSON.parse(line);
-    check(
-      'the popup field is as tall as a panel field',
-      out.popup.h === out.panel.h,
-      `${out.popup.h} vs ${out.panel.h}`,
-    );
+    check('the popup field is as tall as a panel field', out.popup.h === out.panel.h, `${out.popup.h} vs ${out.panel.h}`);
     check(
       'and set in the same type',
       out.popup.font === out.panel.font && out.popup.family === out.panel.family,
       `${out.popup.font} ${out.popup.family} vs ${out.panel.font} ${out.panel.family}`,
     );
-    check(
-      'and padded the same',
-      out.popup.padding === out.panel.padding,
-      `${out.popup.padding} vs ${out.panel.padding}`,
-    );
+    check('and padded the same', out.popup.padding === out.panel.padding, `${out.popup.padding} vs ${out.panel.padding}`);
     check('the field carries its unit', out.suffix === '%', String(out.suffix));
     // The visible half of the field is the contenteditable VariableConnect draws
     // (see test/renderer/style/fieldFocus.test.js) — that is what a press focuses, so that is what
     // has to raise the ring.
     check('focus reaches the field', out.focus.focusWithin === true);
-    check(
-      'the ring is drawn round the box',
-      /rgb/.test(out.focus.onBox) && out.focus.onBox !== 'none',
-      out.focus.onBox,
-    );
+    check('the ring is drawn round the box', /rgb/.test(out.focus.onBox) && out.focus.onBox !== 'none', out.focus.onBox);
     check('and not round the input inside it', out.focus.onInput === 'none', out.focus.onInput);
     check('nor round the visible half of it', out.focus.onVisible === 'none', out.focus.onVisible);
     check('so the unit is inside the ring', out.focus.suffixInside === true);
@@ -270,44 +255,16 @@ const check = (what, condition, detail) => {
     // grown their own plain inputs: no way to reach a variable, and a slider
     // squeezed to nothing beside them.
     check('the transition editor opens', out.opening?.open === true, JSON.stringify(out.opening));
-    check(
-      'the transition editor uses the panel field',
-      out.varFields?.sharedField === true,
-      JSON.stringify(out.varFields),
-    );
-    check(
-      'at the same height as the panel',
-      out.varFields?.input?.h === out.panel.h,
-      `${out.varFields?.input?.h} vs ${out.panel.h}`,
-    );
-    check(
-      'and the same type',
-      out.varFields?.input?.font === out.panel.font,
-      `${out.varFields?.input?.font} vs ${out.panel.font}`,
-    );
-    check(
-      'a variable in either field reads as a chip',
-      out.varFields?.chips?.every(Boolean) === true,
-      JSON.stringify(out.varFields?.chips),
-    );
-    check(
-      'and the value is drawn as code',
-      out.varFields?.code?.every(Boolean) === true,
-      JSON.stringify(out.varFields?.code),
-    );
+    check('the transition editor uses the panel field', out.varFields?.sharedField === true, JSON.stringify(out.varFields));
+    check('at the same height as the panel', out.varFields?.input?.h === out.panel.h, `${out.varFields?.input?.h} vs ${out.panel.h}`);
+    check('and the same type', out.varFields?.input?.font === out.panel.font, `${out.varFields?.input?.font} vs ${out.panel.font}`);
+    check('a variable in either field reads as a chip', out.varFields?.chips?.every(Boolean) === true, JSON.stringify(out.varFields?.chips));
+    check('and the value is drawn as code', out.varFields?.code?.every(Boolean) === true, JSON.stringify(out.varFields?.code));
     // A track you cannot aim at is not a control. Beside a variable's name it
     // had about four pixels of it.
-    check(
-      'the duration slider is still wide enough to drag',
-      out.varFields?.slider >= 80,
-      `${out.varFields?.slider}px`,
-    );
+    check('the duration slider is still wide enough to drag', out.varFields?.slider >= 80, `${out.varFields?.slider}px`);
     // And on a plain value, the way in to the picker is the dot.
-    check(
-      'a plain value offers the variable dot instead',
-      out.plainFields?.dots?.every(Boolean) === true,
-      JSON.stringify(out.plainFields),
-    );
+    check('a plain value offers the variable dot instead', out.plainFields?.dots?.every(Boolean) === true, JSON.stringify(out.plainFields));
   }
 
   if (failures.length) {

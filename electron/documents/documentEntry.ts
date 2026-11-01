@@ -109,10 +109,7 @@ export const UNCHANGED: readonly SourceEdit[] = [{ span: toByteSpan(0, 0), text:
 // The hunks from `bytes` to `text`: the code patch between them (its bounds
 // and its coarsening past the diff budget are shared/engine/codePatch.ts's). The
 // bytes' own text is the bytes themselves: UNCHANGED.
-export function rewriteHunks(
-  bytes: ByteString,
-  text: string,
-): Result<readonly SourceEdit[], RejectionReason> {
+export function rewriteHunks(bytes: ByteString, text: string): Result<readonly SourceEdit[], RejectionReason> {
   const decoded = decodeUtf8(bytes);
   if (!decoded.ok) {
     return err('write-failed'); // Not text: a writer's text cannot be diffed with it.
@@ -128,11 +125,7 @@ export function rewriteHunks(
 }
 
 // What lies between an edit's authored bytes and the bytes on disk now.
-export function editHistory(
-  authored: Snapshot,
-  current: Snapshot,
-  chain: readonly CommitRecord[] | undefined,
-): EditBase['history'] {
+export function editHistory(authored: Snapshot, current: Snapshot, chain: readonly CommitRecord[] | undefined): EditBase['history'] {
   if (authored === current) {
     return 'unchanged';
   }

@@ -3,12 +3,7 @@ import { parsePublishTarget } from '../../../vendor/stacki/shared/properties/pub
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Publisher } from './publish';
 
-export function publishRoute(
-  publisher: Publisher,
-  request: IncomingMessage,
-  response: ServerResponse,
-  pathname: string,
-) {
+export function publishRoute(publisher: Publisher, request: IncomingMessage, response: ServerResponse, pathname: string) {
   if (pathname !== '/studio/api/publish') {
     return false;
   }
@@ -17,9 +12,7 @@ export function publishRoute(
     response.end();
     return true;
   }
-  const target = parsePublishTarget(
-    new URL(request.url ?? '/', 'http://studio').searchParams.get('target') ?? 'all',
-  );
+  const target = parsePublishTarget(new URL(request.url ?? '/', 'http://studio').searchParams.get('target') ?? 'all');
   const state = request.method === 'POST' ? publisher.start(target) : publisher.state;
   response.statusCode = state.kind === 'building' ? 202 : 200;
   response.setHeader('Content-Type', 'application/json');

@@ -22,10 +22,7 @@ function hostedModules(): readonly string[] {
   const names = fs.readdirSync(HANDLERS).filter((name) => name.endsWith('.ts'));
   assert.ok(names.length > 0, 'electron/handlers holds the handler modules');
   assert.ok(names.length < MODULES_MAX, 'electron/handlers is a bounded folder');
-  return [
-    ...names.map((name) => path.join('electron/handlers', name)),
-    'electron/app/autoUpdate.ts',
-  ];
+  return [...names.map((name) => path.join('electron/handlers', name)), 'electron/app/autoUpdate.ts'];
 }
 
 test('the pattern finds a value import and passes a type import', () => {

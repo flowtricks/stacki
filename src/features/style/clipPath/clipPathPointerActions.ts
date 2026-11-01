@@ -4,22 +4,9 @@
 // view in sync, and keyboard shortcuts (ClipPath.tsx).
 
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import {
-  type Point,
-  type PolygonShape,
-  type InsetSideMode,
-  type InsetRadiusMode,
-  type HandleTarget,
-  type DragTarget,
-} from './clipPathTypes';
+import { type Point, type PolygonShape, type InsetSideMode, type InsetRadiusMode, type HandleTarget, type DragTarget } from './clipPathTypes';
 import { HANDLE_SIZE_PX, SELECTION_DRAG_THRESHOLD_PX, NONE_PRESET } from './clipPathConstants';
-import {
-  rectFromPoints,
-  boundsClose,
-  pointsNearlyEqual,
-  snapDragPointForTarget,
-  offsetDuplicatePoint,
-} from './clipPathMeasure';
+import { rectFromPoints, boundsClose, pointsNearlyEqual, snapDragPointForTarget, offsetDuplicatePoint } from './clipPathMeasure';
 import { shapesClose } from './clipPathHandles';
 import { formatCodeValue } from './clipPathFormat';
 import { parseSvgClipPathPolygon } from './svgContours';
@@ -29,8 +16,7 @@ import { isSpaceKey, isRadiusUnlockKey, isArrowKey } from './shapeKeyboard';
 import { isEditableTarget } from './clipPathEditorState';
 import { type EditorAfterKeyboardLoopActions, keyboardKeyActions } from './clipPathShapeActions';
 
-export type EditorAfterKeyboardKeyActions = EditorAfterKeyboardLoopActions &
-  ReturnType<typeof keyboardKeyActions>;
+export type EditorAfterKeyboardKeyActions = EditorAfterKeyboardLoopActions & ReturnType<typeof keyboardKeyActions>;
 
 // Following a marquee drag.
 export function marqueeMoveActions(editor: EditorAfterKeyboardKeyActions) {
@@ -68,8 +54,7 @@ export function marqueeMoveActions(editor: EditorAfterKeyboardKeyActions) {
   return { updatePolygonSelectionDrag };
 }
 
-export type EditorAfterMarqueeMoveActions = EditorAfterKeyboardKeyActions &
-  ReturnType<typeof marqueeMoveActions>;
+export type EditorAfterMarqueeMoveActions = EditorAfterKeyboardKeyActions & ReturnType<typeof marqueeMoveActions>;
 
 // Duplicating a polygon point by Option-dragging it.
 export function pointDuplicateDragActions(editor: EditorAfterMarqueeMoveActions) {
@@ -77,29 +62,18 @@ export function pointDuplicateDragActions(editor: EditorAfterMarqueeMoveActions)
   // Option-dragging a polygon point leaves a copy behind: the first move with
   // Option held inserts the duplicate, and the drag carries on with that. Returns
   // the new drag target, or undefined when the point is gone.
-  const duplicateDraggedPolygonPoint = (
-    index: number,
-    beforeShape: PolygonShape,
-    rawPoint: Point,
-  ): DragTarget | undefined => {
+  const duplicateDraggedPolygonPoint = (index: number, beforeShape: PolygonShape, rawPoint: Point): DragTarget | undefined => {
     const originalPoint = beforeShape.points[index];
     if (!originalPoint) {
       return undefined;
     }
     const currentShape = shapeRef.current;
-    const draggedPoint =
-      currentShape.kind === 'polygon' ? currentShape.points[index] || originalPoint : originalPoint;
-    const duplicatePoint = pointsNearlyEqual(draggedPoint, originalPoint)
-      ? offsetDuplicatePoint(originalPoint)
-      : draggedPoint;
+    const draggedPoint = currentShape.kind === 'polygon' ? currentShape.points[index] || originalPoint : originalPoint;
+    const duplicatePoint = pointsNearlyEqual(draggedPoint, originalPoint) ? offsetDuplicatePoint(originalPoint) : draggedPoint;
     const duplicateIndex = index + 1;
     const duplicateShape: PolygonShape = {
       kind: 'polygon',
-      points: [
-        ...beforeShape.points.slice(0, duplicateIndex),
-        duplicatePoint,
-        ...beforeShape.points.slice(duplicateIndex),
-      ],
+      points: [...beforeShape.points.slice(0, duplicateIndex), duplicatePoint, ...beforeShape.points.slice(duplicateIndex)],
     };
     const duplicateHandle: HandleTarget = { kind: 'polygon-point', index: duplicateIndex };
     insertPolygonPointColor(duplicateIndex, beforeShape.points.length);
@@ -119,8 +93,7 @@ export function pointDuplicateDragActions(editor: EditorAfterMarqueeMoveActions)
   return { duplicateDraggedPolygonPoint };
 }
 
-export type EditorAfterPointDuplicateDragActions = EditorAfterMarqueeMoveActions &
-  ReturnType<typeof pointDuplicateDragActions>;
+export type EditorAfterPointDuplicateDragActions = EditorAfterMarqueeMoveActions & ReturnType<typeof pointDuplicateDragActions>;
 
 // Following a handle drag.
 export function handleDragActions(editor: EditorAfterPointDuplicateDragActions) {
@@ -148,17 +121,11 @@ export function handleDragActions(editor: EditorAfterPointDuplicateDragActions) 
     const insetRadiusUnlocked = radiusUnlockKeyPressedRef.current;
     setShape((current) => {
       const dragShape =
-        target.kind === 'polygon-point' &&
-        target.before.kind === 'polygon' &&
-        current.kind === 'polygon' &&
-        target.before.points.length > current.points.length
+        target.kind === 'polygon-point' && target.before.kind === 'polygon' && current.kind === 'polygon' && target.before.points.length > current.points.length
           ? target.before
           : current;
       const activeDragPoint = dragPointForTarget(target, rawPoint);
-      const activeSnapResult =
-        dragShape === shapeRef.current
-          ? snapResult
-          : snapDragPointForTarget(dragShape, target, activeDragPoint.x, activeDragPoint.y);
+      const activeSnapResult = dragShape === shapeRef.current ? snapResult : snapDragPointForTarget(dragShape, target, activeDragPoint.x, activeDragPoint.y);
       showSnapGuides(activeSnapResult.guides);
       const point = activeSnapResult.point;
       const next = updateShapeForDrag(dragShape, target, point.x, point.y, {
@@ -179,8 +146,7 @@ export function handleDragActions(editor: EditorAfterPointDuplicateDragActions) 
   return { dragShapeTo };
 }
 
-export type EditorAfterHandleDragActions = EditorAfterPointDuplicateDragActions &
-  ReturnType<typeof handleDragActions>;
+export type EditorAfterHandleDragActions = EditorAfterPointDuplicateDragActions & ReturnType<typeof handleDragActions>;
 
 // The window's pointer moves during any drag.
 export function pointerMoveActions(editor: EditorAfterHandleDragActions) {
@@ -199,10 +165,7 @@ export function pointerMoveActions(editor: EditorAfterHandleDragActions) {
     if (!target || !canvasRef.current) {
       return;
     }
-    if (
-      activePointerIdRef.current !== undefined &&
-      event.pointerId !== activePointerIdRef.current
-    ) {
+    if (activePointerIdRef.current !== undefined && event.pointerId !== activePointerIdRef.current) {
       return;
     }
     if (event.pointerType === 'mouse' && event.buttons === 0) {
@@ -214,12 +177,7 @@ export function pointerMoveActions(editor: EditorAfterHandleDragActions) {
     const rawY = ((event.clientY - rect.top) / rect.height) * 100;
     const rawPoint = { x: rawX, y: rawY };
 
-    if (
-      target.kind === 'polygon-point' &&
-      event.altKey &&
-      !target.optionDuplicated &&
-      target.before.kind === 'polygon'
-    ) {
+    if (target.kind === 'polygon-point' && event.altKey && !target.optionDuplicated && target.before.kind === 'polygon') {
       target = duplicateDraggedPolygonPoint(target.index, target.before, rawPoint) ?? target;
     }
     dragShapeTo(target, rawPoint, event);
@@ -227,8 +185,7 @@ export function pointerMoveActions(editor: EditorAfterHandleDragActions) {
   return { onWindowPointerMove };
 }
 
-export type EditorAfterPointerMoveActions = EditorAfterHandleDragActions &
-  ReturnType<typeof pointerMoveActions>;
+export type EditorAfterPointerMoveActions = EditorAfterHandleDragActions & ReturnType<typeof pointerMoveActions>;
 
 // The window's pointer releases during any drag.
 export function pointerEndActions(editor: EditorAfterPointerMoveActions) {
@@ -254,10 +211,7 @@ export function pointerEndActions(editor: EditorAfterPointerMoveActions) {
       finishPolygonSelectionDrag(true);
       return;
     }
-    if (
-      activePointerIdRef.current !== undefined &&
-      event.pointerId !== activePointerIdRef.current
-    ) {
+    if (activePointerIdRef.current !== undefined && event.pointerId !== activePointerIdRef.current) {
       return;
     }
     finishDrag(true, event);
@@ -279,10 +233,7 @@ export function pointerEndActions(editor: EditorAfterPointerMoveActions) {
       finishPolygonSelectionDrag(false);
       return;
     }
-    if (
-      activePointerIdRef.current !== undefined &&
-      event.pointerId !== activePointerIdRef.current
-    ) {
+    if (activePointerIdRef.current !== undefined && event.pointerId !== activePointerIdRef.current) {
       return;
     }
     finishDrag(false, event);
@@ -290,8 +241,7 @@ export function pointerEndActions(editor: EditorAfterPointerMoveActions) {
   return { onWindowPointerUp, onWindowPointerCancel };
 }
 
-export type EditorAfterPointerEndActions = EditorAfterPointerMoveActions &
-  ReturnType<typeof pointerEndActions>;
+export type EditorAfterPointerEndActions = EditorAfterPointerMoveActions & ReturnType<typeof pointerEndActions>;
 
 // The window pointer listeners for drags.
 export function useWindowPointerListeners(editor: EditorAfterPointerEndActions) {
@@ -339,8 +289,7 @@ export function useWindowPointerListeners(editor: EditorAfterPointerEndActions) 
   return { onWindowBlurDuringDrag, windowPointerHandlers, windowPointerRef };
 }
 
-export type EditorAfterWindowPointerListeners = EditorAfterPointerEndActions &
-  ReturnType<typeof useWindowPointerListeners>;
+export type EditorAfterWindowPointerListeners = EditorAfterPointerEndActions & ReturnType<typeof useWindowPointerListeners>;
 
 // The shortcut-help target, and closing the menus and popovers on an outside press.
 export function useDismissListeners(editor: EditorAfterWindowPointerListeners) {
@@ -355,11 +304,7 @@ export function useDeselectListener(editor: EditorAfterWindowPointerListeners) {
   const { selectedHandleRef, isShapeTransformSelectedRef, dragTargetRef } = editor;
   const { shapeTransformDragRef, setShapeTransformSelection, selectHandle } = editor;
   const onDocumentPointerDownDeselect = (event: MouseEvent) => {
-    if (
-      (!selectedHandleRef.current && !isShapeTransformSelectedRef.current) ||
-      dragTargetRef.current ||
-      shapeTransformDragRef.current
-    ) {
+    if ((!selectedHandleRef.current && !isShapeTransformSelectedRef.current) || dragTargetRef.current || shapeTransformDragRef.current) {
       return;
     }
     const target = event.target;
@@ -393,8 +338,7 @@ export function useDeselectListener(editor: EditorAfterWindowPointerListeners) {
   return { onDocumentPointerDownDeselect, documentPointerDownRef };
 }
 
-export type EditorAfterDeselectListener = EditorAfterWindowPointerListeners &
-  ReturnType<typeof useDeselectListener>;
+export type EditorAfterDeselectListener = EditorAfterWindowPointerListeners & ReturnType<typeof useDeselectListener>;
 
 // Measuring the canvas and the space its handles may use.
 export function useCanvasMeasure(editor: EditorAfterDeselectListener) {
@@ -413,11 +357,7 @@ export function useCanvasMeasure(editor: EditorAfterDeselectListener) {
       }
       const nextSize = { width: canvasRect.width, height: canvasRect.height };
       setCanvasSize((current) =>
-        current &&
-        Math.abs(current.width - nextSize.width) < 0.1 &&
-        Math.abs(current.height - nextSize.height) < 0.1
-          ? current
-          : nextSize,
+        current && Math.abs(current.width - nextSize.width) < 0.1 && Math.abs(current.height - nextSize.height) < 0.1 ? current : nextSize,
       );
 
       const wrapRect = wrap.getBoundingClientRect();
@@ -479,13 +419,7 @@ export function useCodeSyncEffects(editor: EditorAfterDeselectListener) {
 
   const onShortcutKeyDown = (event: KeyboardEvent) => {
     const target = event.target instanceof HTMLElement ? event.target : undefined;
-    if (
-      target &&
-      (target.tagName === 'INPUT' ||
-        target.tagName === 'SELECT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable)
-    ) {
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
       return;
     }
     const mod = event.metaKey || event.ctrlKey;
@@ -521,8 +455,7 @@ export function useCodeSyncEffects(editor: EditorAfterDeselectListener) {
   return { onShortcutKeyDown };
 }
 
-export type EditorAfterCodeSyncEffects = EditorAfterDeselectListener &
-  ReturnType<typeof useCodeSyncEffects>;
+export type EditorAfterCodeSyncEffects = EditorAfterDeselectListener & ReturnType<typeof useCodeSyncEffects>;
 
 // The keyboard shortcut and paste listeners.
 export function useShortcutListeners(editor: EditorAfterCodeSyncEffects) {
@@ -576,8 +509,7 @@ export function useShortcutListeners(editor: EditorAfterCodeSyncEffects) {
   return { shortcutKeyRef, onWindowPaste, windowPasteRef };
 }
 
-export type EditorAfterShortcutListeners = EditorAfterCodeSyncEffects &
-  ReturnType<typeof useShortcutListeners>;
+export type EditorAfterShortcutListeners = EditorAfterCodeSyncEffects & ReturnType<typeof useShortcutListeners>;
 
 // The window's key presses that move handles.
 export function windowKeyDownActions(editor: EditorAfterShortcutListeners) {
@@ -597,8 +529,7 @@ export function windowKeyDownActions(editor: EditorAfterShortcutListeners) {
     const handle = selectedHandleRef.current;
     const shapeSelected = isShapeTransformSelectedRef.current;
     const shouldIgnore = isEditableTarget(target) && !dragTargetRef.current;
-    const isHandleTarget =
-      target instanceof Element && Boolean(target.closest('.clip-path_handle'));
+    const isHandleTarget = target instanceof Element && Boolean(target.closest('.clip-path_handle'));
 
     if (isRadiusUnlockKey(event.key, event.code)) {
       if (!shouldIgnore) {

@@ -95,20 +95,13 @@ export class Room {
     // restart can seed identical text with new IDs and duplicate it on reconnection.
     await this.persist();
   }
-  attach(
-    socket: WebSocket,
-    identity?: GitHubProfile,
-    authorize?: () => Promise<boolean>,
-    participant?: string,
-  ) {
+  attach(socket: WebSocket, identity?: GitHubProfile, authorize?: () => Promise<boolean>, participant?: string) {
     if (this.clients.size >= 30) {
       socket.close(1013, 'Room is full');
       return;
     }
     const id = randomUUID();
-    const key = identity
-      ? `github:${identity.id}`
-      : `local:${participant && /^[a-f0-9-]{36}$/i.test(participant) ? participant : id}`;
+    const key = identity ? `github:${identity.id}` : `local:${participant && /^[a-f0-9-]{36}$/i.test(participant) ? participant : id}`;
     this.clients.set(socket, {
       id,
       color: this.colors.acquire(key),
@@ -233,11 +226,7 @@ export class Room {
     // durable storage must not sit between a keystroke and another editor.
     this.acknowledgeSave(socket, save, message['type'] === 'update' ? 'classify' : 'immediate');
   }
-  private acknowledgeSave(
-    socket: WebSocket,
-    save: number | undefined,
-    scheduling: SourceSnapshot['scheduling'],
-  ) {
+  private acknowledgeSave(socket: WebSocket, save: number | undefined, scheduling: SourceSnapshot['scheduling']) {
     const revision = this.revision;
     void this.durable.save(this.snapshot(scheduling), scheduling === 'immediate').then(
       () => this.send(socket, { type: 'saved', revision, save }),
@@ -254,12 +243,7 @@ export class Room {
     }
     const action = parseAction(message['action']);
     const client = this.clients.get(socket);
-    const owner = selectionOwner(
-      this.clients.values(),
-      client?.id ?? '',
-      this.file,
-      'node' in action ? action.node : '',
-    );
+    const owner = selectionOwner(this.clients.values(), client?.id ?? '', this.file, 'node' in action ? action.node : '');
     if (owner) {
       throw new Error(selectionLockedMessage(owner));
     }
@@ -268,9 +252,7 @@ export class Room {
       throw new Error('The page changed while loading defaults. Repeat the insertion.');
     }
     const edits =
-      action.kind === 'paste'
-        ? pasteEdits(this.text.toString(), this.file, action)
-        : structuralEdits(this.text.toString(), action, this.file, settings);
+      action.kind === 'paste' ? pasteEdits(this.text.toString(), this.file, action) : structuralEdits(this.text.toString(), action, this.file, settings);
     const source = this.text.toString();
     const select = actionSelection(source, applyEdits(source, edits), edits, action);
     this.document.transact(() => {
@@ -402,22 +384,14 @@ export class Room {
       Y.applyUpdate(probe, Y.encodeStateAsUpdate(this.document));
       Y.applyUpdate(probe, update);
       const client = this.clients.get(socket);
-      const owner = selectionOwner(
-        this.clients.values(),
-        client?.id ?? '',
-        this.file,
-        client?.selection ?? '',
-      );
+      const owner = selectionOwner(this.clients.values(), client?.id ?? '', this.file, client?.selection ?? '');
       if (owner && probe.getText('source').toString() !== this.text.toString()) {
         throw new Error(selectionLockedMessage(owner));
       }
       if (probe.getMap('metadata').get('epoch') !== this.document.getMap('metadata').get('epoch')) {
         throw new Error('Invalid document identity');
       }
-      if (
-        probe.getText('source').length > MAX_SOURCE ||
-        Y.encodeStateAsUpdate(probe).length > 8_000_000
-      ) {
+      if (probe.getText('source').length > MAX_SOURCE || Y.encodeStateAsUpdate(probe).length > 8_000_000) {
         throw new Error('Document exceeds collaboration limits');
       }
     } finally {
@@ -479,8 +453,7 @@ export class Room {
     const absolute = await preparePath(this.root, this.file);
     await writeFile(absolute + '.studio-tmp', source);
     await rename(absolute + '.studio-tmp', absolute);
-    const mode =
-      scheduling === 'classify' ? sourceRenderMode(this.file, this.saved, source) : 'immediate';
+    const mode = scheduling === 'classify' ? sourceRenderMode(this.file, this.saved, source) : 'immediate';
     this.saved = source;
     this.live?.written?.(this.file, mode);
     return true;
@@ -616,10 +589,7 @@ export function createRooms(root: string) {
     },
   };
 }
-function livePresence(
-  rooms: ReadonlySet<Room>,
-  sourceListeners: ReadonlySet<(file: string, mode: SourceRenderMode) => void>,
-): LivePresence {
+function livePresence(rooms: ReadonlySet<Room>, sourceListeners: ReadonlySet<(file: string, mode: SourceRenderMode) => void>): LivePresence {
   return {
     written: (file, mode) => {
       for (const listener of sourceListeners) {
@@ -636,12 +606,7 @@ function livePresence(
   };
 }
 
-async function removeRoom(
-  root: string,
-  rooms: Map<string, Promise<Room>>,
-  readyRooms: Set<Room>,
-  file: string,
-) {
+async function removeRoom(root: string, rooms: Map<string, Promise<Room>>, readyRooms: Set<Room>, file: string) {
   const pending = rooms.get(file);
   if (pending) {
     await (await pending).durable.flush();

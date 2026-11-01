@@ -5,9 +5,7 @@ import { HelpCircleIcon } from '../../ui/Icons';
 export function PropertyDeclarationInfo({ property }: { readonly property: ComponentProperty }) {
   const origin = property.origin;
   const sources = origin?.declarations ?? [];
-  const details = sources.map(
-    (source) => `${source.label} (line ${source.line}): ${source.expression}`,
-  );
+  const details = sources.map((source) => `${source.label} (line ${source.line}): ${source.expression}`);
   if (origin?.defaultValue) {
     details.push(`Default (line ${origin.defaultValue.line}): ${origin.defaultValue.expression}`);
   }
@@ -15,12 +13,7 @@ export function PropertyDeclarationInfo({ property }: { readonly property: Compo
     return undefined;
   }
   return (
-    <button
-      type="button"
-      className="property-declaration-info"
-      aria-label="Declaration details"
-      title={details.join('\n')}
-    >
+    <button type="button" className="property-declaration-info" aria-label="Declaration details" title={details.join('\n')}>
       <HelpCircleIcon size={12} />
     </button>
   );

@@ -3,7 +3,5 @@ export function isStudioAPI(request: Request) {
 }
 export function studioError(request: Request, message: string, status: number) {
   const headers = { 'Cache-Control': 'no-store' };
-  return isStudioAPI(request)
-    ? Response.json({ error: message }, { status, headers })
-    : new Response(message, { status, headers });
+  return isStudioAPI(request) ? Response.json({ error: message }, { status, headers }) : new Response(message, { status, headers });
 }

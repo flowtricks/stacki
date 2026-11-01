@@ -36,11 +36,7 @@ const check = (what, condition, detail) => {
   }
 };
 
-const {
-  parsePage,
-  serializePage,
-  locateSelection,
-} = require('#dist/electron/parse/astroParser.js');
+const { parsePage, serializePage, locateSelection } = require('#dist/electron/parse/astroParser.js');
 const { LIMITS } = require('#dist/shared/core/limits.js');
 const assert = require('node:assert/strict');
 
@@ -83,17 +79,9 @@ function loopIn(body, what) {
   const source = page(body);
   const parsed = parsePage(source);
   const loop = parsed.editable ? find(parsed.model.nodes, 'map') : undefined;
-  check(
-    `${what} — opens as a loop`,
-    !!loop,
-    parsed.editable ? 'read as code, not a loop' : parsed.reason,
-  );
+  check(`${what} — opens as a loop`, !!loop, parsed.editable ? 'read as code, not a loop' : parsed.reason);
   if (parsed.editable) {
-    check(
-      `${what} — and is written back as it was`,
-      serializePage(parsed.model) === source,
-      'the file changed',
-    );
+    check(`${what} — and is written back as it was`, serializePage(parsed.model) === source, 'the file changed');
   }
   return loop;
 }
@@ -103,11 +91,7 @@ function loopIn(body, what) {
   const parsed = parsePage(source);
   check('a CRLF page remains editable', parsed.editable, parsed.reason);
   if (parsed.editable) {
-    check(
-      'and keeps its Windows line endings byte for byte',
-      serializePage(parsed.model) === source,
-      'the line endings changed',
-    );
+    check('and keeps its Windows line endings byte for byte', serializePage(parsed.model) === source, 'the line endings changed');
   }
 }
 
@@ -125,16 +109,8 @@ function loopIn(body, what) {
   })}`,
     'a loop that says why it exists',
   );
-  check(
-    'the markup under it is the tree, not a string',
-    count(loop?.children) === 3,
-    `${count(loop?.children)} nodes`,
-  );
-  check(
-    'and the sentence is still in the block',
-    (loop?.body || []).join('\n').includes('somewhere of its own to lead'),
-    JSON.stringify(loop?.body),
-  );
+  check('the markup under it is the tree, not a string', count(loop?.children) === 3, `${count(loop?.children)} nodes`);
+  check('and the sentence is still in the block', (loop?.body || []).join('\n').includes('somewhere of its own to lead'), JSON.stringify(loop?.body));
   check(
     'the declaration keeps its semicolon',
     (loop?.body || []).some((line) => /const Element = item\.href \? "a" : "div";$/.test(line)),
@@ -181,11 +157,7 @@ loopIn(
     the whole of what this loop is for */ return <li>{label}</li>;
   })}`;
   const at = locateSelection(onDisk(body), '0.0.0');
-  check(
-    'the markup after it points at its own line',
-    at?.startLine === 7,
-    `line ${at?.startLine}, not 7`,
-  );
+  check('the markup after it points at its own line', at?.startLine === 7, `line ${at?.startLine}, not 7`);
 }
 
 loopIn(
@@ -234,11 +206,7 @@ loopIn(
 const stillCode = (body, what) => {
   const parsed = parsePage(page(body));
   const loop = parsed.editable ? find(parsed.model.nodes, 'map') : undefined;
-  check(
-    what,
-    !loop,
-    'opened as a loop — its body would be rewritten from a shape this file cannot hold',
-  );
+  check(what, !loop, 'opened as a loop — its body would be rewritten from a shape this file cannot hold');
 };
 
 loopIn(
@@ -275,16 +243,8 @@ loopIn(
     const parsed = parsePage(source);
     const loop = parsed.editable ? find(parsed.model.nodes, 'map') : undefined;
     check('and it opens as a loop', !!loop, parsed.reason || 'read as code');
-    check(
-      'with all thirty cards worth of markup under it',
-      count(loop?.children) > 15,
-      `${count(loop?.children)} nodes`,
-    );
-    check(
-      'and comes back byte for byte',
-      serializePage(parsed.model) === source,
-      'the file changed',
-    );
+    check('with all thirty cards worth of markup under it', count(loop?.children) > 15, `${count(loop?.children)} nodes`);
+    check('and comes back byte for byte', serializePage(parsed.model) === source, 'the file changed');
 
     // A tree of the file: clicking a card on the canvas has to land on the
     // lines that card is written on. The block form used to parse its markup
@@ -293,22 +253,10 @@ loopIn(
     const lines = source.split('\n');
     const lineOf = (text) => lines.findIndex((line) => line.includes(text)) + 1;
     const at = locateSelection(file, '0.0.0');
-    check(
-      'the card under the loop knows its lines',
-      typeof at?.startLine === 'number',
-      JSON.stringify(at),
-    );
-    check(
-      'and they are the lines it is written on',
-      at?.startLine === lineOf('<li'),
-      `${at?.startLine}, not ${lineOf('<li')}`,
-    );
+    check('the card under the loop knows its lines', typeof at?.startLine === 'number', JSON.stringify(at));
+    check('and they are the lines it is written on', at?.startLine === lineOf('<li'), `${at?.startLine}, not ${lineOf('<li')}`);
     const inner = locateSelection(file, '0.0.0.0.0');
-    check(
-      'so does the one inside it',
-      inner?.startLine === lineOf('<Element'),
-      `${inner?.startLine}, not ${lineOf('<Element')}`,
-    );
+    check('so does the one inside it', inner?.startLine === lineOf('<Element'), `${inner?.startLine}, not ${lineOf('<Element')}`);
   }
 }
 

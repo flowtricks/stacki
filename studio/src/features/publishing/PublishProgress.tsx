@@ -36,13 +36,7 @@ export function PublishProgress({
     );
   }
   if (error) {
-    return (
-      <ErrorToast
-        message={
-          state?.kind === 'failed' ? state.message : 'Publishing did not finish. Please try again.'
-        }
-      />
-    );
+    return <ErrorToast message={state?.kind === 'failed' ? state.message : 'Publishing did not finish. Please try again.'} />;
   }
   return (
     <section className="studio-publish-progress" aria-label="Publish progress" aria-busy={busy}>
@@ -67,9 +61,7 @@ export function PublishProgress({
           max={total}
           value={done}
           aria-label="Publish stages completed"
-          aria-valuetext={
-            done === undefined ? label : `${done} of ${total} stages complete. ${label}`
-          }
+          aria-valuetext={done === undefined ? label : `${done} of ${total} stages complete. ${label}`}
         />
       </div>
       <p>{hint}</p>
@@ -86,19 +78,9 @@ function progressView(state: PublishState | undefined, failed: boolean) {
   const error = failed || state?.kind === 'failed';
   const stage = state?.kind === 'building' && state.stage ? stages[state.stage] : undefined;
   const done = complete ? total : pending ? 4 : stage?.done;
-  const label = error
-    ? 'Publish interrupted'
-    : complete
-      ? 'Saved to GitHub'
-      : (stage?.label ?? 'Starting publish');
+  const label = error ? 'Publish interrupted' : complete ? 'Saved to GitHub' : (stage?.label ?? 'Starting publish');
 
-  const title = error
-    ? 'Publish needs attention'
-    : live
-      ? 'Your site is live'
-      : committed
-        ? 'Saved to GitHub'
-        : 'Publishing';
+  const title = error ? 'Publish needs attention' : live ? 'Your site is live' : committed ? 'Saved to GitHub' : 'Publishing';
   const hint = error
     ? 'Check the error details before trying again.'
     : live

@@ -149,13 +149,9 @@ test('the spacing box reads a padding shorthand and writes drags back compact', 
       await until('the panel to settle', () => SIDES.every((each) => !label(each)?.disabled));
     };
 
-    const chip = await until('the class chip', () =>
-      panel.querySelector('.embed-editor_selector-chip'),
-    );
+    const chip = await until('the class chip', () => panel.querySelector('.embed-editor_selector-chip'));
     chip.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-    await until('the shorthand on the four sides', () =>
-      shown().every((text) => text === '2rem') ? shown() : undefined,
-    );
+    await until('the shorthand on the four sides', () => (shown().every((text) => text === '2rem') ? shown() : undefined));
     assert.equal(disk, '.card { color: red; padding: 2rem; }', 'showing it writes nothing');
 
     // Shift: four sides move together, and the rule still holds one declaration.
@@ -175,10 +171,7 @@ test('the spacing box reads a padding shorthand and writes drags back compact', 
     const [[, block], [, inline]] = padding();
     assert.equal(block, all, 'the block axis kept its value');
     assert.notEqual(inline, all);
-    await until(
-      'the labels to follow each axis',
-      () => JSON.stringify(shown()) === JSON.stringify([block, inline, block, inline]),
-    );
+    await until('the labels to follow each axis', () => JSON.stringify(shown()) === JSON.stringify([block, inline, block, inline]));
 
     // No key: one side leaves its axis, the other axis stays grouped.
     await drag('top', [0, -16]);

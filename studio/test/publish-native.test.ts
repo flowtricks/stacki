@@ -54,13 +54,7 @@ async function fixture() {
 }
 async function capture(state: Awaited<ReturnType<typeof fixture>>, name: string) {
   const source = published(await capturePublishSource(state.site, path.join(state.root, name)));
-  published(
-    await publishGit(source.git, [
-      'config',
-      'url.' + pathToFileURL(state.remote).href + '.insteadOf',
-      'https://github.com/owner/site.git',
-    ]),
-  );
+  published(await publishGit(source.git, ['config', 'url.' + pathToFileURL(state.remote).href + '.insteadOf', 'https://github.com/owner/site.git']));
   return source;
 }
 
@@ -83,20 +77,14 @@ test('immutable source preserves binary data, unrelated configuration and newer 
     assert.equal(stale.error.code, 'github_changed');
   }
   assert.equal(run(state.remote, ['rev-parse', 'main']), result.sha);
-  assert.equal(
-    (await readFile(path.join(source.git.directory, 'config'), 'utf8')).includes(connection.token),
-    false,
-  );
+  assert.equal((await readFile(path.join(source.git.directory, 'config'), 'utf8')).includes(connection.token), false);
 });
 
 test('14,720 files and over 1.3 GB publish without buffered file contents or listings', async (context) => {
   const state = await fixture();
   context.after(() => rm(state.root, { recursive: true, force: true }));
   for (let index = 0; index < 14720; index++) {
-    await writeFile(
-      path.join(state.site, 'public', 'photo-' + index + '-' + 'a'.repeat(70) + '.jpg'),
-      'photo',
-    );
+    await writeFile(path.join(state.site, 'public', 'photo-' + index + '-' + 'a'.repeat(70) + '.jpg'), 'photo');
   }
   for (let index = 0; index < 65; index++) {
     const file = await open(path.join(state.site, 'public', `large-${index}.bin`), 'w');
@@ -110,10 +98,7 @@ test('14,720 files and over 1.3 GB publish without buffered file contents or lis
   published(await createHostingSnapshot(state.site, path.join(state.root, 'large-hosting')));
   const result = published(await nativePublish(source, state.head, connection));
   assert.equal(run(state.remote, ['rev-parse', 'main']), result.sha);
-  assert.equal(
-    run(state.remote, ['cat-file', '-s', result.sha + ':public/large-64.bin']),
-    String(20 * 1024 ** 2),
-  );
+  assert.equal(run(state.remote, ['cat-file', '-s', result.sha + ':public/large-64.bin']), String(20 * 1024 ** 2));
   const unchanged = await capture(state, 'unchanged');
   assert.equal(published(await nativePublish(unchanged, result.sha, connection)).sha, result.sha);
 });
@@ -129,14 +114,8 @@ test('hosting copies isolate edits and resource failures happen before building'
   const file = await open(path.join(state.site, 'public/oversized.bin'), 'w');
   await file.truncate(101 * 1024 ** 2);
   await file.close();
-  assert.equal(
-    (await capturePublishSource(state.site, path.join(state.root, 'too-big'))).ok,
-    false,
-  );
-  assert.equal(
-    (await createHostingSnapshot(state.site, path.join(state.root, 'too-big-host'))).ok,
-    false,
-  );
+  assert.equal((await capturePublishSource(state.site, path.join(state.root, 'too-big'))).ok, false);
+  assert.equal((await createHostingSnapshot(state.site, path.join(state.root, 'too-big-host'))).ok, false);
 });
 
 test('Git child environment excludes inherited credentials, hooks, traces and helpers', () => {
@@ -158,15 +137,8 @@ test('startup restores Git bytes without an archive buffer and rejects invalid r
   const directory = path.join(root, '.stacki/studio/state/bootstrap.git');
   await mkdir(directory, { recursive: true });
   run(root, ['init', '--bare', directory]);
-  run(root, [
-    '--git-dir=' + directory,
-    'config',
-    'url.' + pathToFileURL(state.remote).href + '.insteadOf',
-    'https://github.com/owner/site.git',
-  ]);
-  const result = published(
-    await restorePublishRepository(root, { ...connection, sha: state.head }),
-  );
+  run(root, ['--git-dir=' + directory, 'config', 'url.' + pathToFileURL(state.remote).href + '.insteadOf', 'https://github.com/owner/site.git']);
+  const result = published(await restorePublishRepository(root, { ...connection, sha: state.head }));
   assert.equal(result, state.head);
   assert.equal(await readFile(path.join(root, 'src/index.astro'), 'utf8'), 'original');
   await assert.rejects(readFile(path.join(directory, 'config')), { code: 'ENOENT' });
@@ -176,11 +148,7 @@ test('startup restores Git bytes without an archive buffer and rejects invalid r
 test('server rejection leaves the remote untouched and never exposes credentials', async (context) => {
   const state = await fixture();
   context.after(() => rm(state.root, { recursive: true, force: true }));
-  await writeFile(
-    path.join(state.remote, 'hooks/pre-receive'),
-    '#!' + process.execPath + '\nprocess.exit(1);\n',
-    { mode: 0o700 },
-  );
+  await writeFile(path.join(state.remote, 'hooks/pre-receive'), '#!' + process.execPath + '\nprocess.exit(1);\n', { mode: 0o700 });
   await writeFile(path.join(state.site, 'src/index.astro'), 'changed');
   const source = await capture(state, 'rejected');
   const result = await nativePublish(source, state.head, connection);
@@ -221,14 +189,8 @@ test('aggregate budgets fail before Git hashing and hosting copies', async (cont
     await file.truncate(100 * 1024 ** 2);
     await file.close();
   }
-  assert.equal(
-    (await capturePublishSource(state.site, path.join(state.root, 'over-budget'))).ok,
-    false,
-  );
-  assert.equal(
-    (await createHostingSnapshot(state.site, path.join(state.root, 'over-hosting'))).ok,
-    false,
-  );
+  assert.equal((await capturePublishSource(state.site, path.join(state.root, 'over-budget'))).ok, false);
+  assert.equal((await createHostingSnapshot(state.site, path.join(state.root, 'over-hosting'))).ok, false);
 });
 
 test('disk and link checks reject unsafe captures before any build', async (context) => {
@@ -237,10 +199,7 @@ test('disk and link checks reject unsafe captures before any build', async (cont
   assert.equal((await publishDisk(state.site, Number.MAX_SAFE_INTEGER)).ok, false);
   await symlink(path.join(state.site, 'src/index.astro'), path.join(state.site, 'public/link'));
   assert.equal((await capturePublishSource(state.site, path.join(state.root, 'linked'))).ok, false);
-  assert.equal(
-    (await createHostingSnapshot(state.site, path.join(state.root, 'linked-host'))).ok,
-    false,
-  );
+  assert.equal((await createHostingSnapshot(state.site, path.join(state.root, 'linked-host'))).ok, false);
 });
 
 test('Git timeouts terminate and reap the command instead of hanging a publish', async (context) => {

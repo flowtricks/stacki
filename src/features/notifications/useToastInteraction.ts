@@ -15,11 +15,7 @@ export function useToastInteraction({ paused }: { readonly paused: boolean }, di
   const [focused, setFocused] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const interaction = useToastDrag({ leaving }, () => setLeaving(true));
-  useToastTimer(
-    { leaving, paused: paused || hovered || focused || interaction.dragging },
-    dismiss,
-    () => setLeaving(true),
-  );
+  useToastTimer({ leaving, paused: paused || hovered || focused || interaction.dragging }, dismiss, () => setLeaving(true));
   return {
     ...interaction,
     leaving,
@@ -92,10 +88,7 @@ function useToastDrag({ leaving }: { readonly leaving: boolean }, dismiss: () =>
   };
 }
 
-function toastDragFinish(
-  dragRef: MutableRefObject<Drag | undefined>,
-  event: PointerEvent<HTMLDivElement>,
-) {
+function toastDragFinish(dragRef: MutableRefObject<Drag | undefined>, event: PointerEvent<HTMLDivElement>) {
   // Clear ownership before releasing capture so its loss cannot reset the exit position.
   dragRef.current = undefined;
   if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -103,11 +96,7 @@ function toastDragFinish(
   }
 }
 
-function useToastTimer(
-  { leaving, paused }: { readonly leaving: boolean; readonly paused: boolean },
-  dismiss: () => void,
-  expire: () => void,
-) {
+function useToastTimer({ leaving, paused }: { readonly leaving: boolean; readonly paused: boolean }, dismiss: () => void, expire: () => void) {
   const latestExpire = useRef(expire);
   latestExpire.current = expire;
   const remaining = useRef(TOAST_DURATION_MS);

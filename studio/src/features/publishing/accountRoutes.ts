@@ -28,8 +28,7 @@ export async function accountRoute(
   const result = process.env['GITHUB_REPOSITORY']
     ? {
         kind: 'failed',
-        message:
-          'This Studio uses managed publishing credentials. Add accounts in Desktop or local Studio.',
+        message: 'This Studio uses managed publishing credentials. Add accounts in Desktop or local Studio.',
       }
     : account.request(root, input);
   response.setHeader('Content-Type', 'application/json');

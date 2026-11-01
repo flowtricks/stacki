@@ -2,10 +2,7 @@
 // Method: round-trip valid destinations, then corrupt identifiers, arrays, kinds and path fields.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  parseDiscoveryRequest,
-  parsePublishDiscovery,
-} from '#dist/shared/properties/publishDiscovery.js';
+import { parseDiscoveryRequest, parsePublishDiscovery } from '#dist/shared/properties/publishDiscovery.js';
 import { parseIpcPayload } from '#dist/shared/ipc/ipcPayloads.js';
 
 const ready = {

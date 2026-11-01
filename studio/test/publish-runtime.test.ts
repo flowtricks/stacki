@@ -22,10 +22,7 @@ test('publishing still captures after Vite closes its configuration module runne
     }),
   );
   await writeFile(path.join(root, 'src/pages/index.astro'), '<h1>Publish snapshot</h1>');
-  await writeFile(
-    path.join(root, '.stacki/studio/state/github-base.json'),
-    JSON.stringify({ sha: 'a'.repeat(40) }),
-  );
+  await writeFile(path.join(root, '.stacki/studio/state/github-base.json'), JSON.stringify({ sha: 'a'.repeat(40) }));
   const entry = path.join(root, 'publish-entry.ts');
   await writeFile(
     entry,

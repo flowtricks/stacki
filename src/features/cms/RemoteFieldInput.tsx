@@ -56,10 +56,7 @@ export function RemoteFieldInput(props: {
   );
 }
 
-function useDraftSave(
-  saved: RemoteValue | undefined,
-  onSave: (value: RemoteValue | undefined) => void,
-) {
+function useDraftSave(saved: RemoteValue | undefined, onSave: (value: RemoteValue | undefined) => void) {
   const [draft, setDraft] = useState(saved);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const pending = useRef<{ readonly value: RemoteValue | undefined } | undefined>(undefined);

@@ -102,20 +102,12 @@ function withInsertion(snapshot: Snapshot): {
 } {
   const at = bodyStart(snapshot);
   const text = insertedAbove(snapshot);
-  const bytes = Buffer.concat([
-    snapshot.bytes.subarray(0, at),
-    Buffer.from(text),
-    snapshot.bytes.subarray(at),
-  ]);
+  const bytes = Buffer.concat([snapshot.bytes.subarray(0, at), Buffer.from(text), snapshot.bytes.subarray(at)]);
   return { bytes, at, text };
 }
 
 /** Undo, planned: the inverse of `plan` as a revert against the bytes it wrote. */
-function revert(
-  after: Snapshot,
-  plan: Plan,
-  current: Snapshot = after,
-): ReturnType<typeof planIntent> {
+function revert(after: Snapshot, plan: Plan, current: Snapshot = after): ReturnType<typeof planIntent> {
   const hunks = inverseEdits(plan.splices);
   const anchor = toAnchorRef({
     span: toByteSpan(0, after.bytes.length),
@@ -128,59 +120,38 @@ function revert(
 
 // --- (1) Oracles through the shipping planner ---------------------------------------
 
-test(
-  'every oracle scenario plans its expected ' + 'file with the shipping planner, fresh, stale',
-  () => {
-    let exact = 0;
-    for (const step of ORACLE_SCENARIOS.flatMap((scenario) => scenario.steps)) {
-      const input = snapshotOf(
-        toFilePath(`/project/${step.file}`),
-        encodeUtf8(fs.readFileSync(path.join(FIXTURES, step.file), 'utf8')),
-      );
-      const expected = fs.readFileSync(path.join(FIXTURES, step.expectedFile));
-      const intent = oracleIntent(step, input, toIntentId('oracle'));
-      const planned = planIntent({ authored: input, current: input }, intent);
-      assert.ok(planned.ok, `${step.file}: plans (${planned.ok ? '' : planned.error})`);
-      assert.deepEqual(
-        Buffer.from(applySplices(input.bytes, planned.value.splices)),
-        expected,
-        step.file,
-      );
-      if (step.reference === 'agrees') {
-        assert.deepEqual(planned.value.splices, oracleSplices(step), `${step.file}: exact splices`);
-        exact += 1;
-      }
-      const inverse = revert(
-        snapshotOf(input.path, applySplices(input.bytes, planned.value.splices)),
-        planned.value,
-      );
-      assert.ok(inverse.ok, `${step.file}: the inverse plans`);
-      if (step.file.endsWith('.css')) {
-        continue; // A stylesheet has no body to insert above.
-      }
-      // Stale: an unrelated insertion above the body. The same edit, moved.
-      const stale = withInsertion(input);
-      const current = snapshotOf(input.path, encodeUtf8(Buffer.from(stale.bytes).toString('utf8')));
-      const mapped = planIntent({ authored: input, current }, intent);
-      if (!mapped.ok) {
-        // A moved region whose bytes repeat is refused, never guessed (plan §4).
-        assert.equal(mapped.error, 'anchor-ambiguous', `${step.file}: stale`);
-        continue;
-      }
-      const want = Buffer.concat([
-        expected.subarray(0, stale.at),
-        Buffer.from(stale.text),
-        expected.subarray(stale.at),
-      ]);
-      assert.deepEqual(
-        Buffer.from(applySplices(current.bytes, mapped.value.splices)),
-        want,
-        `${step.file} stale`,
-      );
+test('every oracle scenario plans its expected ' + 'file with the shipping planner, fresh, stale', () => {
+  let exact = 0;
+  for (const step of ORACLE_SCENARIOS.flatMap((scenario) => scenario.steps)) {
+    const input = snapshotOf(toFilePath(`/project/${step.file}`), encodeUtf8(fs.readFileSync(path.join(FIXTURES, step.file), 'utf8')));
+    const expected = fs.readFileSync(path.join(FIXTURES, step.expectedFile));
+    const intent = oracleIntent(step, input, toIntentId('oracle'));
+    const planned = planIntent({ authored: input, current: input }, intent);
+    assert.ok(planned.ok, `${step.file}: plans (${planned.ok ? '' : planned.error})`);
+    assert.deepEqual(Buffer.from(applySplices(input.bytes, planned.value.splices)), expected, step.file);
+    if (step.reference === 'agrees') {
+      assert.deepEqual(planned.value.splices, oracleSplices(step), `${step.file}: exact splices`);
+      exact += 1;
     }
-    assert.ok(exact >= 4, 'the minimal oracle splices are matched exactly');
-  },
-);
+    const inverse = revert(snapshotOf(input.path, applySplices(input.bytes, planned.value.splices)), planned.value);
+    assert.ok(inverse.ok, `${step.file}: the inverse plans`);
+    if (step.file.endsWith('.css')) {
+      continue; // A stylesheet has no body to insert above.
+    }
+    // Stale: an unrelated insertion above the body. The same edit, moved.
+    const stale = withInsertion(input);
+    const current = snapshotOf(input.path, encodeUtf8(Buffer.from(stale.bytes).toString('utf8')));
+    const mapped = planIntent({ authored: input, current }, intent);
+    if (!mapped.ok) {
+      // A moved region whose bytes repeat is refused, never guessed (plan §4).
+      assert.equal(mapped.error, 'anchor-ambiguous', `${step.file}: stale`);
+      continue;
+    }
+    const want = Buffer.concat([expected.subarray(0, stale.at), Buffer.from(stale.text), expected.subarray(stale.at)]);
+    assert.deepEqual(Buffer.from(applySplices(current.bytes, mapped.value.splices)), want, `${step.file} stale`);
+  }
+  assert.ok(exact >= 4, 'the minimal oracle splices are matched exactly');
+});
 
 test('a loop rename finds exactly the oracle sites: the declaration and its two uses', () => {
   const page = snapshotText(fs.readFileSync(path.join(FIXTURES, 'loop-rename.astro'), 'utf8'));
@@ -195,11 +166,7 @@ test('a loop rename finds exactly the oracle sites: the declaration and its two 
     sites?.map((site) => site.start),
     [148, 189, 201],
   );
-  assert.equal(
-    renameSites(page.projection, page.bytes, loop, 'items'),
-    undefined,
-    'not a parameter',
-  );
+  assert.equal(renameSites(page.projection, page.bytes, loop, 'items'), undefined, 'not a parameter');
 });
 
 // --- (2) Hand-written cases --------------------------------------------------------
@@ -208,45 +175,24 @@ const LIST = '<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>\n';
 
 test('remove-node takes the node and its line, never a sibling', () => {
   const page = snapshotText(LIST);
-  assert.equal(
-    run(page, { tag: 'remove-node' }, anchorAt(page, [0, 0])),
-    '<ul>\n  <li>b</li>\n</ul>\n',
-  );
-  assert.equal(
-    run(page, { tag: 'remove-node' }, anchorAt(page, [0, 1])),
-    '<ul>\n  <li>a</li>\n</ul>\n',
-  );
+  assert.equal(run(page, { tag: 'remove-node' }, anchorAt(page, [0, 0])), '<ul>\n  <li>b</li>\n</ul>\n');
+  assert.equal(run(page, { tag: 'remove-node' }, anchorAt(page, [0, 1])), '<ul>\n  <li>a</li>\n</ul>\n');
   assert.equal(run(page, { tag: 'remove-node' }, anchorAt(page, [0])), '');
   const inline = snapshotText('<p>a <b>x</b> c</p>\n');
   assert.equal(run(inline, { tag: 'remove-node' }, anchorAt(inline, [0, 1])), '<p>a  c</p>\n');
   const fenced = snapshotText('---\nconst a = 1;\n---\n<a />\n<b />\n');
-  assert.equal(
-    run(fenced, { tag: 'remove-node' }, anchorAt(fenced, [0])),
-    '---\nconst a = 1;\n---\n<b />\n',
-  );
+  assert.equal(run(fenced, { tag: 'remove-node' }, anchorAt(fenced, [0])), '---\nconst a = 1;\n---\n<b />\n');
 });
 
 test('insert-node beside a node copies its separator; inside, it fills an empty tag', () => {
   const page = snapshotText(LIST);
-  const insert = (placement: Placement, at: readonly number[]) =>
-    run(page, { tag: 'insert-node', placement, source: '<li>n</li>' }, anchorAt(page, at));
+  const insert = (placement: Placement, at: readonly number[]) => run(page, { tag: 'insert-node', placement, source: '<li>n</li>' }, anchorAt(page, at));
   assert.equal(insert('after', [0, 0]), '<ul>\n  <li>a</li>\n  <li>n</li>\n  <li>b</li>\n</ul>\n');
   assert.equal(insert('before', [0, 0]), '<ul>\n  <li>n</li>\n  <li>a</li>\n  <li>b</li>\n</ul>\n');
-  assert.equal(
-    insert('first-child', [0]),
-    '<ul>\n  <li>n</li>\n  <li>a</li>\n  <li>b</li>\n</ul>\n',
-  );
-  assert.equal(
-    insert('last-child', [0]),
-    '<ul>\n  <li>a</li>\n  <li>b</li>\n  <li>n</li>\n</ul>\n',
-  );
+  assert.equal(insert('first-child', [0]), '<ul>\n  <li>n</li>\n  <li>a</li>\n  <li>b</li>\n</ul>\n');
+  assert.equal(insert('last-child', [0]), '<ul>\n  <li>a</li>\n  <li>b</li>\n  <li>n</li>\n</ul>\n');
   const empty = snapshotText('<div>\n</div>\n<aside></aside>\n<hr />\n<Wrapper />\n');
-  const into = (at: readonly number[]) =>
-    run(
-      empty,
-      { tag: 'insert-node', placement: 'first-child', source: '<p>x</p>' },
-      anchorAt(empty, at),
-    );
+  const into = (at: readonly number[]) => run(empty, { tag: 'insert-node', placement: 'first-child', source: '<p>x</p>' }, anchorAt(empty, at));
   assert.equal(into([0]), '<div>\n  <p>x</p>\n</div>\n<aside></aside>\n<hr />\n<Wrapper />\n');
   assert.equal(into([1]), '<div>\n</div>\n<aside><p>x</p></aside>\n<hr />\n<Wrapper />\n');
   assert.equal(into([2]), 'rejected: unsupported-operation', 'a self-closing tag has no inside');
@@ -259,14 +205,7 @@ test('insert-node beside a node copies its separator; inside, it fills an empty 
 
 test('self-closing non-void HTML tags gain children while inline moves preserve separators', () => {
   const empty = snapshotText('<main />');
-  assert.equal(
-    run(
-      empty,
-      { tag: 'insert-node', placement: 'last-child', source: '<p>x</p>' },
-      anchorAt(empty, [0]),
-    ),
-    '<main><p>x</p></main>',
-  );
+  assert.equal(run(empty, { tag: 'insert-node', placement: 'last-child', source: '<p>x</p>' }, anchorAt(empty, [0])), '<main><p>x</p></main>');
   const original = '<main>  <b>a</b>  <i>b</i>  <!-- Keep --> </main>';
   let source = original;
   for (let index = 0; index < 40; index++) {
@@ -287,53 +226,31 @@ test('self-closing non-void HTML tags gain children while inline moves preserve 
 test('insert-node adds children inside loops and conditional branches', () => {
   const loop = snapshotText('{items.map((item) => (\n  <p>{item}</p>\n))}\n');
   assert.equal(
-    run(
-      loop,
-      { tag: 'insert-node', placement: 'last-child', source: '<div>new</div>' },
-      anchorAt(loop, [0]),
-    ),
+    run(loop, { tag: 'insert-node', placement: 'last-child', source: '<div>new</div>' }, anchorAt(loop, [0])),
     '{items.map((item) => (\n  <p>{item}</p>\n  <div>new</div>\n))}\n',
   );
 
   const bareLoop = snapshotText('{items.map((item) => <p>{item}</p>)}\n');
   assert.equal(
-    run(
-      bareLoop,
-      { tag: 'insert-node', placement: 'last-child', source: '<div>new</div>' },
-      anchorAt(bareLoop, [0]),
-    ),
+    run(bareLoop, { tag: 'insert-node', placement: 'last-child', source: '<div>new</div>' }, anchorAt(bareLoop, [0])),
     '{items.map((item) => <p>{item}</p> <div>new</div>)}\n',
   );
 
   const condition = snapshotText('{ready && (\n  <p>one</p>\n)}\n');
   assert.equal(
-    run(
-      condition,
-      { tag: 'insert-node', placement: 'last-child', source: '<div>new</div>' },
-      anchorAt(condition, [0, 0]),
-    ),
+    run(condition, { tag: 'insert-node', placement: 'last-child', source: '<div>new</div>' }, anchorAt(condition, [0, 0])),
     '{ready && (\n  <p>one</p>\n  <div>new</div>\n)}\n',
   );
 
-  const nested = snapshotText(
-    '{outer ? <em>yes</em> : inner ? <strong>maybe</strong> : <span>no</span>}\n',
-  );
+  const nested = snapshotText('{outer ? <em>yes</em> : inner ? <strong>maybe</strong> : <span>no</span>}\n');
   assert.equal(
-    run(
-      nested,
-      { tag: 'insert-node', placement: 'first-child', source: '<p>new</p>' },
-      anchorAt(nested, [0, 1]),
-    ),
+    run(nested, { tag: 'insert-node', placement: 'first-child', source: '<p>new</p>' }, anchorAt(nested, [0, 1])),
     '{outer ? <em>yes</em> : <p>new</p>{inner ? <strong>maybe</strong> : ' + '<span>no</span>}}\n',
   );
 
   const value = snapshotText('{outer ? <em>yes</em> : label}\n');
   assert.equal(
-    run(
-      value,
-      { tag: 'insert-node', placement: 'first-child', source: '<p>new</p>' },
-      anchorAt(value, [0, 1]),
-    ),
+    run(value, { tag: 'insert-node', placement: 'first-child', source: '<p>new</p>' }, anchorAt(value, [0, 1])),
     '{outer ? <em>yes</em> : <p>new</p>{label}}\n',
   );
 });
@@ -341,23 +258,10 @@ test('insert-node adds children inside loops and conditional branches', () => {
 test('move-node relocates the original bytes; into itself is refused', () => {
   const page = snapshotText('<ul>\n  <li class="a">a</li>\n  <li>b</li>\n</ul>\n<ol></ol>\n');
   const move = (from: readonly number[], to: readonly number[], placement: Placement) =>
-    run(
-      page,
-      { tag: 'move-node', destination: anchorAt(page, to), placement },
-      anchorAt(page, from),
-    );
-  assert.equal(
-    move([0, 0], [0, 1], 'after'),
-    '<ul>\n  <li>b</li>\n  <li class="a">a</li>\n</ul>\n<ol></ol>\n',
-  );
-  assert.equal(
-    move([0, 1], [0, 0], 'before'),
-    '<ul>\n  <li>b</li>\n  <li class="a">a</li>\n</ul>\n<ol></ol>\n',
-  );
-  assert.equal(
-    move([0, 0], [1], 'first-child'),
-    '<ul>\n  <li>b</li>\n</ul>\n<ol><li class="a">a</li></ol>\n',
-  );
+    run(page, { tag: 'move-node', destination: anchorAt(page, to), placement }, anchorAt(page, from));
+  assert.equal(move([0, 0], [0, 1], 'after'), '<ul>\n  <li>b</li>\n  <li class="a">a</li>\n</ul>\n<ol></ol>\n');
+  assert.equal(move([0, 1], [0, 0], 'before'), '<ul>\n  <li>b</li>\n  <li class="a">a</li>\n</ul>\n<ol></ol>\n');
+  assert.equal(move([0, 0], [1], 'first-child'), '<ul>\n  <li>b</li>\n</ul>\n<ol><li class="a">a</li></ol>\n');
   assert.equal(move([0], [0, 0], 'after'), 'rejected: unsupported-operation');
 
   const selfClosing = snapshotText('<Button />\n<ButtonWrapper />\n');
@@ -377,35 +281,16 @@ test('move-node relocates the original bytes; into itself is refused', () => {
 });
 
 test('attribute operations keep every byte they do not own', () => {
-  const page = snapshotText(
-    '<a\n  href="/x"\n  class="c"\n>x</a>\n<b style="color: red; margin: 0">y</b>\n',
-  );
+  const page = snapshotText('<a\n  href="/x"\n  class="c"\n>x</a>\n<b style="color: red; margin: 0">y</b>\n');
   const set = (at: readonly number[], name: string, value: string) =>
     run(page, { tag: 'set-attribute', name, value: { type: 'string', value } }, anchorAt(page, at));
-  assert.equal(
-    set([0], 'title', 't'),
-    '<a\n  href="/x"\n  class="c"\n  title="t"\n>x</a>\n<b style="color: red; margin: 0">y</b>\n',
-  );
-  assert.equal(
-    run(page, { tag: 'remove-attribute', name: 'href' }, anchorAt(page, [0])),
-    '<a\n  class="c"\n>x</a>\n<b style="color: red; margin: 0">y</b>\n',
-  );
-  const style = (
-    property: string,
-    declaration: { readonly tag: 'set'; readonly value: string } | { readonly tag: 'remove' },
-  ) => run(page, { tag: 'set-inline-style', property, declaration }, anchorAt(page, [2]));
-  assert.equal(
-    style('margin', { tag: 'set', value: '4px' }),
-    '<a\n  href="/x"\n  class="c"\n>x</a>\n<b style="color: red; margin: 4px">y</b>\n',
-  );
-  assert.equal(
-    style('color', { tag: 'remove' }),
-    '<a\n  href="/x"\n  class="c"\n>x</a>\n<b style="margin: 0">y</b>\n',
-  );
-  assert.equal(
-    style('padding', { tag: 'set', value: '1px' }),
-    '<a\n  href="/x"\n  class="c"\n>x</a>\n<b style="color: red; margin: 0; padding: 1px">y</b>\n',
-  );
+  assert.equal(set([0], 'title', 't'), '<a\n  href="/x"\n  class="c"\n  title="t"\n>x</a>\n<b style="color: red; margin: 0">y</b>\n');
+  assert.equal(run(page, { tag: 'remove-attribute', name: 'href' }, anchorAt(page, [0])), '<a\n  class="c"\n>x</a>\n<b style="color: red; margin: 0">y</b>\n');
+  const style = (property: string, declaration: { readonly tag: 'set'; readonly value: string } | { readonly tag: 'remove' }) =>
+    run(page, { tag: 'set-inline-style', property, declaration }, anchorAt(page, [2]));
+  assert.equal(style('margin', { tag: 'set', value: '4px' }), '<a\n  href="/x"\n  class="c"\n>x</a>\n<b style="color: red; margin: 4px">y</b>\n');
+  assert.equal(style('color', { tag: 'remove' }), '<a\n  href="/x"\n  class="c"\n>x</a>\n<b style="margin: 0">y</b>\n');
+  assert.equal(style('padding', { tag: 'set', value: '1px' }), '<a\n  href="/x"\n  class="c"\n>x</a>\n<b style="color: red; margin: 0; padding: 1px">y</b>\n');
   assert.equal(style('content', { tag: 'set', value: '"x"' }), 'rejected: unsupported-operation');
 });
 
@@ -426,10 +311,7 @@ test('frontmatter slots and code patches: stale ones map whole or reject', () =>
   const elsewhere = snapshotText(`${text}<p>more</p>\n`);
   const mapped = planIntent({ authored: page, current: elsewhere }, intent);
   assert.ok(mapped.ok);
-  assert.equal(
-    textOf(applySplices(elsewhere.bytes, mapped.value.splices)),
-    '---\nconst title = "New";\n---\n<h1>{title}</h1>\n<p>more</p>\n',
-  );
+  assert.equal(textOf(applySplices(elsewhere.bytes, mapped.value.splices)), '---\nconst title = "New";\n---\n<h1>{title}</h1>\n<p>more</p>\n');
   const inside = snapshotText(text.replace('const', 'let'));
   assert.deepEqual(planIntent({ authored: page, current: inside }, intent), {
     ok: false,
@@ -438,33 +320,15 @@ test('frontmatter slots and code patches: stale ones map whole or reject', () =>
 });
 
 test('rename-tag renames the opening and closing tag and nothing between them', () => {
-  const page = snapshotText(
-    '<section class="a">\n  <p>section</p>\n</section>\n<Card />\n<img src="x">\n',
-  );
+  const page = snapshotText('<section class="a">\n  <p>section</p>\n</section>\n<Card />\n<img src="x">\n');
   const rename = (from: string, to: string): Operation => ({ tag: 'rename-tag', from, to });
-  assert.equal(
-    run(page, rename('section', 'article'), anchorAt(page, [0])),
-    '<article class="a">\n  <p>section</p>\n</article>\n<Card />\n<img src="x">\n',
-  );
-  assert.equal(
-    run(page, rename('Card', 'Panel'), anchorAt(page, [1])),
-    '<section class="a">\n  <p>section</p>\n</section>\n<Panel />\n<img src="x">\n',
-  );
-  assert.equal(
-    run(page, rename('img', 'picture'), anchorAt(page, [2])),
-    'rejected: unsupported-operation',
-    'a void tag has no closing tag to rename with it',
-  );
-  assert.equal(
-    run(page, rename('div', 'article'), anchorAt(page, [0])),
-    'rejected: anchor-moved',
-    'the name the client saw is its witness',
-  );
+  assert.equal(run(page, rename('section', 'article'), anchorAt(page, [0])), '<article class="a">\n  <p>section</p>\n</article>\n<Card />\n<img src="x">\n');
+  assert.equal(run(page, rename('Card', 'Panel'), anchorAt(page, [1])), '<section class="a">\n  <p>section</p>\n</section>\n<Panel />\n<img src="x">\n');
+  assert.equal(run(page, rename('img', 'picture'), anchorAt(page, [2])), 'rejected: unsupported-operation', 'a void tag has no closing tag to rename with it');
+  assert.equal(run(page, rename('div', 'article'), anchorAt(page, [0])), 'rejected: anchor-moved', 'the name the client saw is its witness');
   // Stale: someone rewrote the paragraph inside. The rename still lands on the
   // tag's two names, and the outside edit is kept.
-  const current = snapshotText(
-    '<section class="a">\n  <p>edited outside</p>\n</section>\n<Card />\n<img src="x">\n',
-  );
+  const current = snapshotText('<section class="a">\n  <p>edited outside</p>\n</section>\n<Card />\n<img src="x">\n');
   const intent = intentOn(page, anchorAt(page, [0]), rename('section', 'article'));
   const mapped = planIntent({ authored: page, current }, intent);
   assert.ok(mapped.ok, mapped.ok ? '' : mapped.error);
@@ -478,14 +342,8 @@ test('rename-attribute renames in place; a missing name or a clash is refused', 
   const page = snapshotText('<a href="/x" title={t} data-a data-b="1">x</a>\n');
   const rename = (from: string, to: string): Operation => ({ tag: 'rename-attribute', from, to });
   const anchor = anchorAt(page, [0]);
-  assert.equal(
-    run(page, rename('title', 'aria-label'), anchor),
-    '<a href="/x" aria-label={t} data-a data-b="1">x</a>\n',
-  );
-  assert.equal(
-    run(page, rename('data-a', 'hidden'), anchor),
-    '<a href="/x" title={t} hidden data-b="1">x</a>\n',
-  );
+  assert.equal(run(page, rename('title', 'aria-label'), anchor), '<a href="/x" aria-label={t} data-a data-b="1">x</a>\n');
+  assert.equal(run(page, rename('data-a', 'hidden'), anchor), '<a href="/x" title={t} hidden data-b="1">x</a>\n');
   assert.equal(run(page, rename('alt', 'title'), anchor), 'rejected: anchor-moved');
   assert.equal(run(page, rename('href', 'title'), anchor), 'rejected: unsupported-operation');
   const twice = snapshotText('<a x="1" x="2">x</a>\n');
@@ -506,10 +364,7 @@ test('rewrite-node writes its hunks inside the node, and only while the node is 
   const intent = intentOn(page, anchorAt(page, [0]), rewrite);
   const mapped = planIntent({ authored: page, current: above }, intent);
   assert.ok(mapped.ok, mapped.ok ? '' : mapped.error);
-  assert.equal(
-    textOf(applySplices(above.bytes, mapped.value.splices)),
-    'Intro\n<!-- new note -->\n<p>kept</p>\n',
-  );
+  assert.equal(textOf(applySplices(above.bytes, mapped.value.splices)), 'Intro\n<!-- new note -->\n<p>kept</p>\n');
   // Stale, the node changed inside: the rewrite was computed from other text.
   const element = snapshotText('<p class="a">one <b>two</b></p>\n');
   const inside = snapshotText('<p class="a">one <b>three</b></p>\n');
@@ -517,10 +372,7 @@ test('rewrite-node writes its hunks inside the node, and only while the node is 
     tag: 'rewrite-node',
     hunks: [{ span: toByteSpan(13, 16), text: 'uno' }],
   };
-  const refused = planIntent(
-    { authored: element, current: inside },
-    intentOn(element, anchorAt(element, [0]), retitle),
-  );
+  const refused = planIntent({ authored: element, current: inside }, intentOn(element, anchorAt(element, [0]), retitle));
   assert.deepEqual(refused, { ok: false, error: 'region-externally-modified' });
   assert.throws(
     () =>
@@ -542,29 +394,14 @@ test('wrap-nodes puts a run of siblings in a new tag and keeps every byte of the
     open: '<Layout>\n',
     close: '\n</Layout>',
   });
-  assert.equal(
-    run(page, wrap([2]), anchorAt(page, [0])),
-    '<Layout>\n<header>h</header>\n<main>\n  <p>m</p>\n</main>\n<footer>f</footer>\n</Layout>\n',
-  );
-  assert.equal(
-    run(page, wrap([1]), anchorAt(page, [1])),
-    '<header>h</header>\n<Layout>\n<main>\n  <p>m</p>\n</main>\n</Layout>\n<footer>f</footer>\n',
-  );
-  assert.equal(
-    run(page, wrap([1, 0]), anchorAt(page, [0])),
-    'rejected: unsupported-operation',
-    'not one run of siblings',
-  );
-  assert.equal(
-    run(page, wrap([0]), anchorAt(page, [2])),
-    'rejected: unsupported-operation',
-    'the run ends after it starts',
-  );
+  assert.equal(run(page, wrap([2]), anchorAt(page, [0])), '<Layout>\n<header>h</header>\n<main>\n  <p>m</p>\n</main>\n<footer>f</footer>\n</Layout>\n');
+  assert.equal(run(page, wrap([1]), anchorAt(page, [1])), '<header>h</header>\n<Layout>\n<main>\n  <p>m</p>\n</main>\n</Layout>\n<footer>f</footer>\n');
+  assert.equal(run(page, wrap([1, 0]), anchorAt(page, [0])), 'rejected: unsupported-operation', 'not one run of siblings');
+  assert.equal(run(page, wrap([0]), anchorAt(page, [2])), 'rejected: unsupported-operation', 'the run ends after it starts');
 });
 
 test('append-body gives an empty body its first node, and only an empty one', () => {
-  const documentAnchor = (page: Snapshot) =>
-    toAnchorRef({ span: toByteSpan(0, page.bytes.length), path: [], expectedKind: 'document' });
+  const documentAnchor = (page: Snapshot) => toAnchorRef({ span: toByteSpan(0, page.bytes.length), path: [], expectedKind: 'document' });
   const append: Operation = { tag: 'append-body', source: '<main></main>' };
   const empty = snapshotText('---\nconst a = 1;\n---\n');
   const appended = '---\nconst a = 1;\n---\n<main></main>\n';
@@ -599,8 +436,7 @@ const MOVABLE = (node: ProjectedNode) => node.kind !== 'branch' && node.kind !==
 
 const SWEEPS: Readonly<Record<string, Sweep>> = {
   'remove-node': (node) => (MOVABLE(node) ? { tag: 'remove-node' } : undefined),
-  'insert-node': (node) =>
-    MOVABLE(node) ? { tag: 'insert-node', placement: 'after', source: '<hr />' } : undefined,
+  'insert-node': (node) => (MOVABLE(node) ? { tag: 'insert-node', placement: 'after', source: '<hr />' } : undefined),
   duplicate: (node, page) =>
     MOVABLE(node)
       ? {
@@ -609,15 +445,10 @@ const SWEEPS: Readonly<Record<string, Sweep>> = {
           source: Buffer.from(page.bytes.subarray(node.span.start, node.span.end)).toString('utf8'),
         }
       : undefined,
-  'set-attribute': (node) =>
-    TAGS.has(node.kind)
-      ? { tag: 'set-attribute', name: 'data-step', value: { type: 'string', value: '6' } }
-      : undefined,
+  'set-attribute': (node) => (TAGS.has(node.kind) ? { tag: 'set-attribute', name: 'data-step', value: { type: 'string', value: '6' } } : undefined),
   'remove-attribute': (node) => {
     const named = node.attributes.find((attribute) => attribute.type !== 'spread');
-    return TAGS.has(node.kind) && named !== undefined
-      ? { tag: 'remove-attribute', name: named.name }
-      : undefined;
+    return TAGS.has(node.kind) && named !== undefined ? { tag: 'remove-attribute', name: named.name } : undefined;
   },
   'move-node': (node, page) => {
     const projection = page.projection;
@@ -625,19 +456,14 @@ const SWEEPS: Readonly<Record<string, Sweep>> = {
       return undefined;
     }
     // After the last root: out of every loop and condition the node sits in.
-    const roots = projection.nodes.filter(
-      (candidate) => candidate.path.length === 1 && candidate.kind !== 'text',
-    );
+    const roots = projection.nodes.filter((candidate) => candidate.path.length === 1 && candidate.kind !== 'text');
     const last = roots[roots.length - 1];
     if (last === undefined || node.path[0] === last.path[0]) {
       return undefined;
     }
     return { tag: 'move-node', destination: anchorAt(page, last.path), placement: 'after' };
   },
-  'set-inline-style': (node) =>
-    TAGS.has(node.kind)
-      ? { tag: 'set-inline-style', property: 'color', declaration: { tag: 'set', value: 'red' } }
-      : undefined,
+  'set-inline-style': (node) => (TAGS.has(node.kind) ? { tag: 'set-inline-style', property: 'color', declaration: { tag: 'set', value: 'red' } } : undefined),
   // Step 9: the operations that replaced the whole-model save.
   'rename-tag': (node, page) => {
     const name = tagNameOf(node, page);
@@ -648,9 +474,7 @@ const SWEEPS: Readonly<Record<string, Sweep>> = {
   },
   'rename-attribute': (node) => {
     const named = node.attributes.find((attribute) => attribute.type !== 'spread');
-    return TAGS.has(node.kind) && named !== undefined
-      ? { tag: 'rename-attribute', from: named.name, to: `${named.name}-renamed` }
-      : undefined;
+    return TAGS.has(node.kind) && named !== undefined ? { tag: 'rename-attribute', from: named.name, to: `${named.name}-renamed` } : undefined;
   },
   'rewrite-node': (node, page) => {
     if (node.kind === 'text') {
@@ -675,11 +499,7 @@ function tagNameOf(node: ProjectedNode, page: Snapshot): string {
 }
 
 // Every rejection a sweep may meet, per operation; anything else fails.
-const ALLOWED: ReadonlySet<string> = new Set([
-  'unsupported-operation',
-  'anchor-ambiguous',
-  'source-invalid',
-]);
+const ALLOWED: ReadonlySet<string> = new Set(['unsupported-operation', 'anchor-ambiguous', 'source-invalid']);
 
 for (const [label, sweep] of Object.entries(SWEEPS)) {
   const title = `corpus sweep: ${label} plans a parsing candidate whose inverse restores the input`;
@@ -718,11 +538,7 @@ for (const [label, sweep] of Object.entries(SWEEPS)) {
         planned += 1;
         const back = revert(written, fresh.value);
         assert.ok(back.ok, `${where}: the inverse plans`);
-        assert.deepEqual(
-          applySplices(written.bytes, back.value.splices),
-          page.bytes,
-          `${where}: undo`,
-        );
+        assert.deepEqual(applySplices(written.bytes, back.value.splices), page.bytes, `${where}: undo`);
         const mapped = planIntent({ authored: page, current }, intent);
         if (!mapped.ok) {
           assert.equal(mapped.error, 'anchor-ambiguous', `${where}: stale`);
@@ -740,9 +556,7 @@ for (const [label, sweep] of Object.entries(SWEEPS)) {
       }
     }
     const reasons = [...refused].map(([reason, count]) => `${count} ${reason}`).join(', ');
-    testContext.diagnostic(
-      `${planned} planned, ${shifted} mapped stale; refused: ${reasons || 'none'}`,
-    );
+    testContext.diagnostic(`${planned} planned, ${shifted} mapped stale; refused: ${reasons || 'none'}`);
     assert.ok(planned > 60, `the sweep plans many real edits (${planned})`);
     assert.ok(shifted > 30, `and maps many of them stale (${shifted})`);
   });
@@ -764,15 +578,10 @@ test('undo after an outside edit maps through it, or rejects — never reverts i
   assert.ok(applied.ok);
   const after = snapshotOf(page.path, applySplices(page.bytes, applied.value.splices));
   // Elsewhere: the footer's title is edited outside Stacki. Undo maps.
-  const outside = snapshotText(
-    textOf(after.bytes).replace('<Footer title="Old"', '<Footer title="Theirs"'),
-  );
+  const outside = snapshotText(textOf(after.bytes).replace('<Footer title="Old"', '<Footer title="Theirs"'));
   const undone = revert(after, applied.value, outside);
   assert.ok(undone.ok, 'undo maps through an unrelated outside edit');
-  assert.equal(
-    textOf(applySplices(outside.bytes, undone.value.splices)),
-    `<Hero title="Old" />\n${filler}<Footer title="Theirs" />\n`,
-  );
+  assert.equal(textOf(applySplices(outside.bytes, undone.value.splices)), `<Hero title="Old" />\n${filler}<Footer title="Theirs" />\n`);
   // On top of it: the hero's own title changed outside Stacki. Undo rejects.
   const over = snapshotText(textOf(after.bytes).replace('Brand new', 'Theirs'));
   assert.deepEqual(revert(after, applied.value, over), {
@@ -797,15 +606,8 @@ test('editInlineStyle edits one declaration and keeps the rest of the text', () 
   assert.equal(set('color: red', 'margin', '0'), 'color: red; margin: 0');
   assert.equal(set('', 'margin', '0'), 'margin: 0');
   assert.equal(set('COLOR: red', 'color', 'blue'), 'COLOR: blue', 'property names ignore case');
-  assert.equal(
-    set('--Gap: 1px', '--gap', '2px'),
-    '--Gap: 1px; --gap: 2px',
-    'custom properties do not',
-  );
-  assert.equal(
-    set('background: url(a;b); color: red', 'color', 'blue'),
-    'background: url(a;b); color: blue',
-  );
+  assert.equal(set('--Gap: 1px', '--gap', '2px'), '--Gap: 1px; --gap: 2px', 'custom properties do not');
+  assert.equal(set('background: url(a;b); color: red', 'color', 'blue'), 'background: url(a;b); color: blue');
   assert.equal(remove('a: 1; b: 2; c: 3', 'b'), 'a: 1; c: 3');
   assert.equal(remove('a: 1; b: 2', 'b'), 'a: 1;');
   assert.equal(remove('a: 1', 'a'), '');
@@ -815,26 +617,16 @@ test('editInlineStyle edits one declaration and keeps the rest of the text', () 
   assert.equal(set('just words', 'a', '3'), 'unreadable');
 });
 
-test(
-  'code around markup: an emptied branch, and ' + 'a node beside one in a branch, are refused',
-  () => {
-    // `cond && ( )` and `: <p/>other ? …` parse, but no JavaScript engine runs
-    // them; the legacy printer rewrites both, so the app saves those whole.
-    const page = snapshotText('{show && (\n  <p>Only</p>\n)}\n{show ? <em>a</em> : <b>b</b>}\n');
-    assert.equal(
-      run(page, { tag: 'remove-node' }, anchorAt(page, [0, 0, 0])),
-      'rejected: unsupported-operation',
-    );
-    const beside = { tag: 'insert-node' as const, placement: 'after' as const, source: '<i />' };
-    assert.equal(run(page, beside, anchorAt(page, [1, 1, 0])), 'rejected: unsupported-operation');
-    const twice = snapshotText('{show && (\n  <p>One</p>\n  <p>Two</p>\n)}\n');
-    assert.equal(
-      run(twice, { tag: 'remove-node' }, anchorAt(twice, [0, 0, 1])),
-      '{show && (\n  <p>One</p>\n)}\n',
-      'one of several may go',
-    );
-  },
-);
+test('code around markup: an emptied branch, and ' + 'a node beside one in a branch, are refused', () => {
+  // `cond && ( )` and `: <p/>other ? …` parse, but no JavaScript engine runs
+  // them; the legacy printer rewrites both, so the app saves those whole.
+  const page = snapshotText('{show && (\n  <p>Only</p>\n)}\n{show ? <em>a</em> : <b>b</b>}\n');
+  assert.equal(run(page, { tag: 'remove-node' }, anchorAt(page, [0, 0, 0])), 'rejected: unsupported-operation');
+  const beside = { tag: 'insert-node' as const, placement: 'after' as const, source: '<i />' };
+  assert.equal(run(page, beside, anchorAt(page, [1, 1, 0])), 'rejected: unsupported-operation');
+  const twice = snapshotText('{show && (\n  <p>One</p>\n  <p>Two</p>\n)}\n');
+  assert.equal(run(twice, { tag: 'remove-node' }, anchorAt(twice, [0, 0, 1])), '{show && (\n  <p>One</p>\n)}\n', 'one of several may go');
+});
 
 test('singleDeclarationChange finds the one declaration a Style field edit changed', () => {
   assert.deepEqual(singleDeclarationChange('a: 1; b: 2', 'a: 1; b: 3'), {

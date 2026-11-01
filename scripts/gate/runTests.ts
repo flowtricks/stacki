@@ -18,15 +18,7 @@
 import os = require('node:os');
 import path = require('node:path');
 import { gatePlanFor, targetedNotice, type BuildStage } from './gatePlan';
-import {
-  parseJobs,
-  POOL_LIMITS,
-  runTestCommand,
-  runTestPool,
-  stopTestPool,
-  type TestCommand,
-  type TestOutcome,
-} from './testPool';
+import { parseJobs, POOL_LIMITS, runTestCommand, runTestPool, stopTestPool, type TestCommand, type TestOutcome } from './testPool';
 import { repositoryRoot } from '../lib/repoRoot';
 import { discoverTestFiles, selectSuites, suitesFor, type Suite } from './testDiscovery';
 
@@ -37,10 +29,7 @@ if (unknownFlags.length > 0) {
   console.error(`Unknown flag: ${unknownFlags.join(', ')} (supported: --jobs=<n>, --list)`);
   process.exit(1);
 }
-const jobs = parseJobs(
-  flags.find((flag) => flag.startsWith('--jobs='))?.slice('--jobs='.length),
-  os.availableParallelism(),
-);
+const jobs = parseJobs(flags.find((flag) => flag.startsWith('--jobs='))?.slice('--jobs='.length), os.availableParallelism());
 const queries = process.argv.slice(2).filter((argument) => !argument.startsWith('--'));
 const { selected, unmatched } = selectSuites(suitesFor(discoverTestFiles(root)), queries);
 if (selected.length === 0 || unmatched.length > 0) {
@@ -83,12 +72,7 @@ const buildArguments: Readonly<Record<BuildStage, readonly string[]>> = {
 // that deletes the outputs (build:clean, every packaging path) deletes it too,
 // so tsc can never skip an emit whose output is gone. The full gate starts
 // clean and stays cold, as CI is.
-const INCREMENTAL_STAGES: ReadonlySet<BuildStage> = new Set([
-  'build:contracts',
-  'build:electron',
-  'build:morph',
-  'build:preload',
-]);
+const INCREMENTAL_STAGES: ReadonlySet<BuildStage> = new Set(['build:contracts', 'build:electron', 'build:morph', 'build:preload']);
 // The stages whose output esbuild writes, each into one file the runtime loads
 // whole (scripts/build/bundleClients.ts), after tsc has type-checked it.
 const BUNDLED: ReadonlyMap<BuildStage, string> = new Map([
@@ -102,20 +86,12 @@ const buildCommands = (stage: BuildStage): readonly TestCommand[] => {
     return [buildCommand(stage)];
   }
   const bundler = path.join(root, 'dist/scripts/build/bundleClients.js');
-  return [
-    buildCommand(stage),
-    { name: `${stage} (bundle)`, command: node, argumentsList: [bundler, client] },
-  ];
+  return [buildCommand(stage), { name: `${stage} (bundle)`, command: node, argumentsList: [bundler, client] }];
 };
 const buildCommand = (stage: BuildStage): TestCommand => {
   const argumentsList = buildArguments[stage];
   if (plan.kind === 'targeted' && INCREMENTAL_STAGES.has(stage)) {
-    const buildInfo = path.join(
-      root,
-      'dist',
-      '.tsbuildinfo',
-      `${stage.slice('build:'.length)}.tsbuildinfo`,
-    );
+    const buildInfo = path.join(root, 'dist', '.tsbuildinfo', `${stage.slice('build:'.length)}.tsbuildinfo`);
     const incremental = ['--incremental', '--tsBuildInfoFile', buildInfo];
     return { name: stage, command: node, argumentsList: [...argumentsList, ...incremental] };
   }
@@ -141,13 +117,7 @@ const staticChecks: readonly TestCommand[] = [
   {
     name: 'tsc --noEmit',
     command: node,
-    argumentsList: [
-      typeScript,
-      '--noEmit',
-      '--incremental',
-      '--tsBuildInfoFile',
-      path.join(typeCheckCache, 'root.tsbuildinfo'),
-    ],
+    argumentsList: [typeScript, '--noEmit', '--incremental', '--tsBuildInfoFile', path.join(typeCheckCache, 'root.tsbuildinfo')],
   },
   {
     // The scripts emit CommonJS, so their build config cannot hold
@@ -166,12 +136,7 @@ const staticChecks: readonly TestCommand[] = [
   {
     name: 'eslint',
     command: node,
-    argumentsList: [
-      path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js'),
-      '--max-warnings',
-      '0',
-      '.',
-    ],
+    argumentsList: [path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js'), '--max-warnings', '0', '.'],
   },
   {
     // Line width, shell scripts, test headers, the dependency record, one
@@ -293,10 +258,7 @@ async function runBuilds(): Promise<void> {
   }
   const besideJobs = Math.min(Math.max(plan.beside.length, 1), POOL_LIMITS.jobsMax);
   const besideOptions = { cwd: root, environment, jobs: besideJobs };
-  const [chain, beside] = await Promise.all([
-    runChain(plan.chain),
-    runTestPool(plan.beside.flatMap(buildCommands), besideOptions, reportBuild),
-  ]);
+  const [chain, beside] = await Promise.all([runChain(plan.chain), runTestPool(plan.beside.flatMap(buildCommands), besideOptions, reportBuild)]);
   const failures = [...chain, ...beside].filter((outcome) => !outcome.passed);
   if (failures.length > 0) {
     console.error(`\nStatic gate failed: ${failures.map((outcome) => outcome.name).join(', ')}`);
@@ -324,16 +286,12 @@ async function runPhases(): Promise<readonly TestOutcome[]> {
 
 function summarize(outcomes: readonly TestOutcome[]): void {
   const slowest = [...outcomes].sort((left, right) => right.durationMs - left.durationMs);
-  const named = slowest
-    .slice(0, 5)
-    .map((outcome) => `${outcome.name} ${(outcome.durationMs / 1000).toFixed(1)}s`);
+  const named = slowest.slice(0, 5).map((outcome) => `${outcome.name} ${(outcome.durationMs / 1000).toFixed(1)}s`);
   const testSeconds = ((Date.now() - testsStartedMs) / 1000).toFixed(1);
   console.log(`\nTest suites took ${testSeconds}s. Slowest: ${named.join(', ')}`);
 
   const quarantined: readonly string[] = [];
-  const flaky = selected
-    .filter((suite) => suite.options.flaky !== undefined)
-    .map((suite) => suite.name);
+  const flaky = selected.filter((suite) => suite.options.flaky !== undefined).map((suite) => suite.name);
   const durationSeconds = ((Date.now() - startedMs) / 1000).toFixed(1);
   const passed = names.length - failed.length;
   console.log(`\n${passed}/${names.length} test suites passed in ${durationSeconds}s.`);

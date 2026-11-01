@@ -7,17 +7,12 @@ import { InfoLabel } from '../../ui/InfoLabel';
 import Popup from '../../ui/Popup';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { CmsIcon, PayloadIcon, SanityIcon } from '../../ui/Icons';
-import {
-  CMS_CONNECTION_HOST,
-  listCmsConnections,
-  removeCmsConnection,
-} from '../../ipc/cmsConnectionsBridge';
+import { CMS_CONNECTION_HOST, listCmsConnections, removeCmsConnection } from '../../ipc/cmsConnectionsBridge';
 import type { CmsConnection, CmsConnectionList } from '../../../shared/properties/cmsConnections';
 import { SanitySignIn } from './SanitySignIn';
 import { CmsKeyForm, type CmsKeyKind } from './CmsKeyForm';
 
-type Dialog =
-  { readonly kind: 'sanity-login' } | { readonly kind: 'key'; readonly cms: CmsKeyKind };
+type Dialog = { readonly kind: 'sanity-login' } | { readonly kind: 'key'; readonly cms: CmsKeyKind };
 
 export function CmsConnections({ projectPath }: { readonly projectPath: string }) {
   const [list, setList] = useState<CmsConnectionList | undefined>(undefined);
@@ -28,9 +23,7 @@ export function CmsConnections({ projectPath }: { readonly projectPath: string }
   }, [projectPath]);
   useEffect(refresh, [refresh]);
   const remove = (connection: CmsConnection) => {
-    removeCmsConnection(projectPath, connection.id).then(setList, (reason: unknown) =>
-      setError(String(reason)),
-    );
+    removeCmsConnection(projectPath, connection.id).then(setList, (reason: unknown) => setError(String(reason)));
   };
   const closed = () => {
     setDialog(undefined);
@@ -48,25 +41,16 @@ export function CmsConnections({ projectPath }: { readonly projectPath: string }
         />
       </h3>
       {error && <ErrorToast message={error} />}
-      {list?.encryption === 'unavailable' && (
-        <p className="cms-connections-alert">
-          This computer can’t encrypt keys, so Stacki won’t save any.
-        </p>
-      )}
+      {list?.encryption === 'unavailable' && <p className="cms-connections-alert">This computer can’t encrypt keys, so Stacki won’t save any.</p>}
       <ConnectionRows connections={list?.connections ?? []} onRemove={remove} />
       <ConnectionActions onOpen={setDialog} />
       {dialog?.kind === 'sanity-login' && <SanitySignIn projectPath={projectPath} close={closed} />}
-      {dialog?.kind === 'key' && (
-        <CmsKeyForm projectPath={projectPath} cms={dialog.cms} close={closed} />
-      )}
+      {dialog?.kind === 'key' && <CmsKeyForm projectPath={projectPath} cms={dialog.cms} close={closed} />}
     </section>
   );
 }
 
-function ConnectionRows(props: {
-  readonly connections: readonly CmsConnection[];
-  readonly onRemove: (connection: CmsConnection) => void;
-}) {
+function ConnectionRows(props: { readonly connections: readonly CmsConnection[]; readonly onRemove: (connection: CmsConnection) => void }) {
   if (props.connections.length === 0) {
     return <p>No CMS connected.</p>;
   }
@@ -131,13 +115,7 @@ function SanityConnect({ onOpen }: { readonly onOpen: (dialog: Dialog) => void }
           <SanityIcon size={14} />
           Log in with Sanity
         </button>
-        <button
-          type="button"
-          className="cms-connect-arrow"
-          aria-label="More ways to connect Sanity"
-          aria-expanded={open}
-          onClick={() => setOpen(!open)}
-        >
+        <button type="button" className="cms-connect-arrow" aria-label="More ways to connect Sanity" aria-expanded={open} onClick={() => setOpen(!open)}>
           <svg width="6" height="4" viewBox="0 0 10 6" aria-hidden="true">
             <path d="M0 0h10L5 6z" fill="currentColor" />
           </svg>

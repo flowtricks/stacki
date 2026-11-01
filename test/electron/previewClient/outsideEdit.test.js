@@ -64,9 +64,7 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
   });
 
   const { JSDOM } = require('jsdom');
-  const PAGE = (word) =>
-    `<!doctype html><html><head><title>t</title></head><body>` +
-    `<h1 id="probe">probe ${word}</h1></body></html>`;
+  const PAGE = (word) => `<!doctype html><html><head><title>t</title></head><body>` + `<h1 id="probe">probe ${word}</h1></body></html>`;
   const dom = new JSDOM(PAGE('one'), {
     url: 'http://localhost:4321/probe#avb-design',
   });
@@ -88,11 +86,7 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
 
   require(bundle);
   await settle(30); // the client fetches its baseline as it loads
-  check(
-    'the canvas takes a baseline of the server’s rendering',
-    fetches === 1,
-    `${fetches} fetches`,
-  );
+  check('the canvas takes a baseline of the server’s rendering', fetches === 1, `${fetches} fetches`);
 
   const say = async (message) => {
     window.dispatchEvent(new window.MessageEvent('message', { data: message }));
@@ -141,18 +135,12 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
   check('accepted structure reuses the connected push', fetches === beforeImmediate);
   window.document.dispatchEvent(new window.CustomEvent('studio:render-html', { detail: served }));
   await settle(40);
-  check(
-    'the complete pushed structural render reaches the DOM',
-    window.document.getElementById('probe')?.textContent === 'probe three',
-  );
+  check('the complete pushed structural render reaches the DOM', window.document.getElementById('probe')?.textContent === 'probe three');
   served = PAGE('four');
   await say({ type: 'avb:patch-now' });
   await settle(1600);
   check('a missed push falls back to one HTTP rendering', fetches === beforeImmediate + 1);
-  check(
-    'fallback applies the current source',
-    window.document.getElementById('probe')?.textContent === 'probe four',
-  );
+  check('fallback applies the current source', window.document.getElementById('probe')?.textContent === 'probe four');
   window.document.dispatchEvent(new window.CustomEvent('studio:render-push', { detail: false }));
 
   // --- a word to the canvas that needs no answer --------------------------------
@@ -165,22 +153,13 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
     platform: 'node',
     logLevel: 'silent',
   });
-  const { setCanvasFrame, tellCanvas } = await import(
-    `${pathToFileURL(queryBundle).href}?v=${Date.now()}`
-  );
+  const { setCanvasFrame, tellCanvas } = await import(`${pathToFileURL(queryBundle).href}?v=${Date.now()}`);
   const posted = [];
   setCanvasFrame({ postMessage: (message) => posted.push(message) });
   check('what the app says reaches the frame', tellCanvas({ type: 'avb:patch-now' }) === true);
-  check(
-    'as the message the client is listening for',
-    posted[0]?.type === 'avb:patch-now',
-    JSON.stringify(posted),
-  );
+  check('as the message the client is listening for', posted[0]?.type === 'avb:patch-now', JSON.stringify(posted));
   setCanvasFrame(undefined);
-  check(
-    'and with no frame it says so rather than throwing',
-    tellCanvas({ type: 'avb:patch-now' }) === false,
-  );
+  check('and with no frame it says so rather than throwing', tellCanvas({ type: 'avb:patch-now' }) === false);
 
   // --- who says it, and when -----------------------------------------------------
   const main = fs.readFileSync(repoPath('dist/electron/main.js'), 'utf8');
@@ -189,8 +168,7 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
     'a change the app did not make is marked as coming from outside',
     // The document actors hear it too (plan §7): a hint to re-read, not an authority.
     new RegExp(
-      String.raw`if \(isSelfWrite\(changed\)\) \{\s*return;\s*\}\s*` +
-        String.raw`noteExternalChange\(changed\);\s*notePageMayHaveChanged\(true\);`,
+      String.raw`if \(isSelfWrite\(changed\)\) \{\s*return;\s*\}\s*` + String.raw`noteExternalChange\(changed\);\s*notePageMayHaveChanged\(true\);`,
     ).test(watcher),
     'the app cannot tell an outside edit from its own',
   );
@@ -215,9 +193,7 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
   const morph = readSource('electron/previewClient/morphClient.ts');
   check(
     'and the client still listens to the socket as well',
-    /import\.meta\.hot\.on\('avb:page-changed', \(\) => \{[\s\S]{0,200}?requestUpdate\(\);/.test(
-      morph,
-    ),
+    /import\.meta\.hot\.on\('avb:page-changed', \(\) => \{[\s\S]{0,200}?requestUpdate\(\);/.test(morph),
     'the fast path is gone',
   );
 
@@ -253,24 +229,10 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
         authoredChecksum: read.checksum,
         edit: { tag: 'replace-node', target, node },
       });
-      check(
-        'the pending edit is refused',
-        saved.ok === false && saved.error.code === 'rejected',
-        JSON.stringify(saved),
-      );
-      check(
-        'naming the bytes now on disk',
-        saved.error?.diskChecksum === createHash('sha256').update(outside).digest('hex'),
-        saved.error?.diskChecksum,
-      );
-      check(
-        'and the outside edit is still on disk, byte for byte',
-        fs.readFileSync(file, 'utf8') === outside,
-      );
-      check(
-        'with no temporary file left beside it',
-        !fs.readdirSync(path.dirname(file)).some((name) => name.startsWith('.stacki-write-')),
-      );
+      check('the pending edit is refused', saved.ok === false && saved.error.code === 'rejected', JSON.stringify(saved));
+      check('naming the bytes now on disk', saved.error?.diskChecksum === createHash('sha256').update(outside).digest('hex'), saved.error?.diskChecksum);
+      check('and the outside edit is still on disk, byte for byte', fs.readFileSync(file, 'utf8') === outside);
+      check('with no temporary file left beside it', !fs.readdirSync(path.dirname(file)).some((name) => name.startsWith('.stacki-write-')));
       // Keeping the local version is still possible, but only as a deliberate
       // act: the user reviews it as text and saves that text as a patch of the
       // bytes they were shown (the conflict notice's review, step 8).
@@ -281,16 +243,9 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
         authoredChecksum: saved.error.diskChecksum,
         edit: { tag: 'code-patch', hunks: patch.value },
       });
-      check(
-        'keeping the local version patches the bytes on disk',
-        kept.ok === true,
-        JSON.stringify(kept.error),
-      );
+      check('keeping the local version patches the bytes on disk', kept.ok === true, JSON.stringify(kept.error));
       check('and puts the local edit on disk', fs.readFileSync(file, 'utf8') === mine);
-      check(
-        'and never as a whole model: no such channel exists (step 10)',
-        !harness.handlers.has('page:write') && !harness.handlers.has('page:serialize'),
-      );
+      check('and never as a whole model: no such channel exists (step 10)', !harness.handlers.has('page:write') && !harness.handlers.has('page:serialize'));
     } finally {
       harness.dispose();
       fs.rmSync(root, { recursive: true, force: true });
@@ -298,9 +253,7 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   if (failures.length) {
-    console.error(
-      `\noutside-edit: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\noutside-edit: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

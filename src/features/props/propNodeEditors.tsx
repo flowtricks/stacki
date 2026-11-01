@@ -4,11 +4,8 @@ import type { ImportDecl, MapNode } from '../../../shared/page/pageNode';
 import type { LoopTarget } from '../../editor/loopQueryPlan';
 import type { LoopReadInput } from '../../editor/loopQueryRead';
 import type { TreeNode } from '../../editor/dataSuggest';
-import LoopSettings, {
-  type LoopApplyResult,
-  type LoopListOption,
-  type LoopSettingsProps,
-} from './LoopSettings';
+import type { SourcePickerData } from './LoopSourcePicker';
+import LoopSettings, { type LoopApplyResult, type LoopListOption, type LoopSettingsProps } from './LoopSettings';
 import type { RichContext } from './RichContent';
 import type { FieldPosition, SourceContext } from './propBindings';
 import { assert } from '../../../shared/core/assert';
@@ -17,14 +14,7 @@ import { HTML_TAGS } from '../../editor/elementSchemas';
 import { dataTree, listsOnly } from '../../editor/dataSuggest';
 import ExprInput from '../../ui/ExprInput';
 import { SourceEditButton } from './propBindings';
-import {
-  elementIcon,
-  astroAssetIcon,
-  LayoutIcon,
-  ElementComponentIcon,
-  CodeIcon,
-  TagIcon,
-} from '../../ui/Icons';
+import { elementIcon, astroAssetIcon, LayoutIcon, ElementComponentIcon, CodeIcon, TagIcon } from '../../ui/Icons';
 
 export interface Rename {
   readonly from: string;
@@ -40,9 +30,7 @@ interface MapEditorProps {
   /** The file's imports, which say where a loop's list comes from. */
   readonly imports?: readonly ImportDecl[] | undefined;
   readonly projectPath?: string | undefined;
-  readonly onSetLoopSource?:
-    | ((target: LoopTarget, sanityClient: 'available' | 'unavailable') => LoopApplyResult)
-    | undefined;
+  readonly onSetLoopSource?: ((target: LoopTarget, sanityClient: 'available' | 'unavailable') => LoopApplyResult) | undefined;
   readonly onEditLoopProperty?: LoopSettingsProps['onEditProperty'];
 }
 export interface TagOption {
@@ -128,10 +116,7 @@ export function MapEditor(props: MapEditorProps) {
     </MapListSettings>
   ) : (
     <>
-      <div
-        className="props-field"
-        style={{ marginTop: 8, fontSize: 11, color: 'var(--text-faint)' }}
-      >
+      <div className="props-field" style={{ marginTop: 8, fontSize: 11, color: 'var(--text-faint)' }}>
         Custom loop code — edit it below.
       </div>
       {code}
@@ -190,8 +175,7 @@ function useTagModel({ tag, options }: TagFieldProps) {
   // frontmatter already imports).
   assert(tag.length <= LIMITS.tagNameCharsMax, 'TagField: tag limit exceeded');
   assert((options?.length ?? 0) <= LIMITS.scanEntriesMax, 'TagField: option limit exceeded');
-  const pool =
-    options && options.length ? options : HTML_TAGS.map((name) => ({ name, kind: 'element' }));
+  const pool = options && options.length ? options : HTML_TAGS.map((name) => ({ name, kind: 'element' }));
   const query = draft.trim();
   const ql = query.toLowerCase();
   const matches =
@@ -318,20 +302,7 @@ export function TagField(props: TagFieldProps) {
 }
 
 function TagFieldView({ state }: { readonly state: ReturnType<typeof useTagField> }) {
-  const {
-    draft,
-    setFocused,
-    highlight,
-    setHighlight,
-    popupPos: popupPosition,
-    wrapRef,
-    inputRef,
-    draftRef,
-    updateDraft,
-    matches,
-    commit,
-    onKeyDown,
-  } = state;
+  const { draft, setFocused, highlight, setHighlight, popupPos: popupPosition, wrapRef, inputRef, draftRef, updateDraft, matches, commit, onKeyDown } = state;
   return (
     <div className="props-field" ref={wrapRef}>
       <label onClick={noLabelActivation}>
@@ -397,17 +368,22 @@ function MapListSettings({
   readonly anchorRef: React.RefObject<HTMLDivElement>;
   readonly children: React.ReactNode;
 }) {
-  const { node, dataContext, imports, projectPath, onSetLoopSource, bindContext, loopContext } =
-    props;
+  const { node, dataContext, imports, projectPath, onSetLoopSource, bindContext, loopContext } = props;
   const data = parseMapHead(node.head)?.data ?? '';
   const frontmatter = dataContext?.frontmatter ?? '';
-  const input = useMemo<Omit<LoopReadInput, 'fieldKind'>>(
-    () => ({ frontmatter, imports: imports ?? [], data }),
-    [frontmatter, imports, data],
-  );
-  const lists = useMemo(
-    () => pageLists(dataTree(bindContext || loopContext || {})),
-    [bindContext, loopContext],
+  const input = useMemo<Omit<LoopReadInput, 'fieldKind'>>(() => ({ frontmatter, imports: imports ?? [], data }), [frontmatter, imports, data]);
+  const context = bindContext || loopContext;
+  const tree = useMemo(() => dataTree(context || {}), [context]);
+  const lists = useMemo(() => pageLists(tree), [tree]);
+  const pickerData = useMemo<SourcePickerData>(
+    () => ({
+      tree,
+      samples: context?.collectionSamples ?? {},
+      onNeedSample: context?.onNeedSample,
+      onStepItem: context?.onStepItem,
+      frontmatter,
+    }),
+    [tree, context, frontmatter],
   );
   if (onSetLoopSource === undefined) {
     return children;
@@ -418,11 +394,10 @@ function MapListSettings({
       projectPath={projectPath}
       filePath={dataContext?.filePath}
       lists={lists}
+      pickerData={pickerData}
       onApply={onSetLoopSource}
       onEditProperty={props.onEditLoopProperty}
-      sourceButton={(name) => (
-        <SourceEditButton name={name} dataContext={dataContext} anchorRef={anchorRef} />
-      )}
+      sourceButton={(name) => <SourceEditButton name={name} dataContext={dataContext} anchorRef={anchorRef} />}
     >
       {children}
     </LoopSettings>
@@ -438,11 +413,7 @@ export function pageLists(tree: readonly TreeNode[]): readonly LoopListOption[] 
   // Children of a pickable node are pickable nodes too (listsOnly marks the
   // whole tree), but are typed as plain tree nodes; `pickable` is read as a key.
   const pending: TreeNode[] = [...listsOnly(tree)].reverse();
-  for (
-    let count = 0;
-    pending.length > 0 && out.length < PAGE_LISTS_MAX && count < LIMITS.treeNodesMax;
-    count++
-  ) {
+  for (let count = 0; pending.length > 0 && out.length < PAGE_LISTS_MAX && count < LIMITS.treeNodesMax; count++) {
     const node = pending.pop();
     if (node === undefined || node.section === 'collections' || node.query !== undefined) {
       continue;

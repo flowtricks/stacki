@@ -41,14 +41,7 @@ import {
 import { toChildIndex, type AnchorRef } from '../page/ref';
 import { err, ok, type Result } from '../core/result';
 import { markdownPrefix } from './markdownLayout';
-import {
-  itemMarker,
-  markdownBeside,
-  markdownInsertion,
-  markdownRemoval,
-  markdownRemoved,
-  reprefixed,
-} from './planMarkdown';
+import { itemMarker, markdownBeside, markdownInsertion, markdownRemoval, markdownRemoved, reprefixed } from './planMarkdown';
 import type { NodeList, ProjectedNode } from '../page/sourceProjection';
 import { encodeUtf8, toByteSpan, toByteString, type ByteSpan, type ByteString } from '../core/span';
 
@@ -64,10 +57,7 @@ interface Insertion {
   readonly anchorPath: readonly number[];
 }
 
-export function planRemoveNode(
-  context: PlanContext,
-  anchor: AnchorRef,
-): Result<Plan, RejectionReason> {
+export function planRemoveNode(context: PlanContext, anchor: AnchorRef): Result<Plan, RejectionReason> {
   const resolved = resolveTarget(context, anchor);
   if (!resolved.ok) {
     return resolved;
@@ -124,11 +114,7 @@ function removalPlan(
   return { splices: [splice], postKinds: parentKind(projection, node), candidate: 'must-parse' };
 }
 
-export function planInsertNode(
-  context: PlanContext,
-  anchor: AnchorRef,
-  operation: Extract<Operation, { tag: 'insert-node' }>,
-): Result<Plan, RejectionReason> {
+export function planInsertNode(context: PlanContext, anchor: AnchorRef, operation: Extract<Operation, { tag: 'insert-node' }>): Result<Plan, RejectionReason> {
   const resolved = resolveTarget(context, anchor);
   if (!resolved.ok) {
     return resolved;
@@ -138,20 +124,12 @@ export function planInsertNode(
     return err('unsupported-operation');
   }
   const current = currentProjection(context);
-  const insertion = insertionAt(
-    context.current.bytes,
-    current,
-    target.current,
-    operation.placement,
-    operation.source,
-  );
+  const insertion = insertionAt(context.current.bytes, current, target.current, operation.placement, operation.source);
   if (!insertion.ok) {
     return insertion;
   }
   const splice = spliceAt(context.current.bytes, insertion.value.range, insertion.value.text);
-  const postKinds = [
-    { path: insertion.value.anchorPath.map(toChildIndex), kind: target.current.kind },
-  ];
+  const postKinds = [{ path: insertion.value.anchorPath.map(toChildIndex), kind: target.current.kind }];
   return ok({ splices: [splice], postKinds, candidate: 'must-parse' });
 }
 
@@ -160,11 +138,7 @@ export function planInsertNode(
  * last. Both ends are resolved like any anchor; what lies between them is
  * kept whole, whoever wrote it, and nothing is re-indented. Siblings of one
  * list only, in order, and never code a loop or a condition owns. */
-export function planWrapNodes(
-  context: PlanContext,
-  anchor: AnchorRef,
-  operation: Extract<Operation, { tag: 'wrap-nodes' }>,
-): Result<Plan, RejectionReason> {
+export function planWrapNodes(context: PlanContext, anchor: AnchorRef, operation: Extract<Operation, { tag: 'wrap-nodes' }>): Result<Plan, RejectionReason> {
   const first = resolveTarget(context, anchor);
   if (!first.ok) {
     return first;
@@ -203,11 +177,7 @@ export function planWrapNodes(
  * node to stand beside, so the anchor is the document. It goes at the end of
  * the file, on a line of its own. A body that gained a node since was written
  * by someone else; the insertion is refused, to be stated beside a node. */
-export function planAppendBody(
-  context: PlanContext,
-  anchor: AnchorRef,
-  operation: Extract<Operation, { tag: 'append-body' }>,
-): Result<Plan, RejectionReason> {
+export function planAppendBody(context: PlanContext, anchor: AnchorRef, operation: Extract<Operation, { tag: 'append-body' }>): Result<Plan, RejectionReason> {
   assert(anchor.expectedKind === 'document', 'An append anchors the whole document');
   const projections = validProjections(context);
   if (!projections.ok) {
@@ -238,11 +208,7 @@ function bytesHaveCrlf(bytes: ByteString): boolean {
 // within its markup container preserves those bytes and bindings. Leaving a
 // loop rewrites only references the destination cannot satisfy (§3.3). The
 // loop's direct return roots remain code-owned, not a markup sibling list.
-export function planMoveNode(
-  context: PlanContext,
-  anchor: AnchorRef,
-  operation: Extract<Operation, { tag: 'move-node' }>,
-): Result<Plan, RejectionReason> {
+export function planMoveNode(context: PlanContext, anchor: AnchorRef, operation: Extract<Operation, { tag: 'move-node' }>): Result<Plan, RejectionReason> {
   const source = resolveTarget(context, anchor);
   if (!source.ok) {
     return source;
@@ -296,12 +262,7 @@ export function planMoveNode(
 // the destination's prefix, separated there as its neighbours are; its old
 // place removed as a removal would. An item keeps its marker, so it moves only
 // among items written with the same one — another starts a new list.
-function planMarkdownRelocation(
-  context: PlanContext,
-  moved: ProjectedNode,
-  destination: ProjectedNode,
-  placement: Placement,
-): Result<Plan, RejectionReason> {
+function planMarkdownRelocation(context: PlanContext, moved: ProjectedNode, destination: ProjectedNode, placement: Placement): Result<Plan, RejectionReason> {
   const bytes = context.current.bytes;
   const current = currentProjection(context);
   const beside = markdownBeside(current, destination, placement);
@@ -330,12 +291,7 @@ function planMarkdownRelocation(
   return relocationSplices(bytes, insertion, removal, { span: moved.span, text });
 }
 
-function planRelocation(
-  context: PlanContext,
-  source: Target,
-  destination: Target,
-  placement: Placement,
-): Result<Plan, RejectionReason> {
+function planRelocation(context: PlanContext, source: Target, destination: Target, placement: Placement): Result<Plan, RejectionReason> {
   const bytes = context.current.bytes;
   const current = currentProjection(context);
   const text = relocatedText(bytes, current, source.current, destination.current, placement);
@@ -400,10 +356,7 @@ function relocationOf(
   if (insertion.text.indexOf(original, offset + 1) !== -1) {
     return undefined;
   }
-  const shift =
-    removal.range.end <= insertion.range.start
-      ? removal.replacementBytes.length - removal.expectedBytes.length
-      : 0;
+  const shift = removal.range.end <= insertion.range.start ? removal.replacementBytes.length - removal.expectedBytes.length : 0;
   const start = insertion.range.start + shift + encodeUtf8(insertion.text.slice(0, offset)).length;
   const target = toByteSpan(start, start + source.end - source.start);
   return { source, target };
@@ -437,9 +390,7 @@ function relocatedText(
   placement: Placement,
 ): Result<string, RejectionReason> {
   const before = scopeAt(projection, bytes, moved.path);
-  const destinationPath = inside(placement)
-    ? [...destination.path, toChildIndex(0)]
-    : destination.path;
+  const destinationPath = inside(placement) ? [...destination.path, toChildIndex(0)] : destination.path;
   const after = scopeAt(projection, bytes, destinationPath);
   if (before === undefined) {
     return err('unsupported-operation'); // A loop head this cannot read.
@@ -457,11 +408,7 @@ function relocatedText(
 }
 
 // The bytes of `span` with each edit (absolute, ascending, inside it) applied.
-function withReplacements(
-  bytes: ByteString,
-  span: ByteSpan,
-  edits: readonly SourceReplacement[],
-): ByteString {
+function withReplacements(bytes: ByteString, span: ByteSpan, edits: readonly SourceReplacement[]): ByteString {
   const parts: Uint8Array[] = [];
   let cursor = span.start;
   for (const edit of edits) {
@@ -494,20 +441,14 @@ function inCode(projection: ValidProjection, node: ProjectedNode): boolean {
 // out the only node leaves `cond && ( )`, which the parser reads but no
 // JavaScript engine will run. The legacy printer writes `null` there; until a
 // planner rule does, such a removal is refused and the page saved whole.
-function leavesCodeEmpty(
-  bytes: ByteString,
-  projection: ValidProjection,
-  node: ProjectedNode,
-): boolean {
+function leavesCodeEmpty(bytes: ByteString, projection: ValidProjection, node: ProjectedNode): boolean {
   if (node.path.length === 1) {
     return false;
   }
   if (!inCode(projection, node)) {
     return false;
   }
-  const others = siblingsOf(projection, node).filter(
-    (sibling) => sibling !== node && !blankText(bytes, sibling),
-  );
+  const others = siblingsOf(projection, node).filter((sibling) => sibling !== node && !blankText(bytes, sibling));
   return others.length === 0;
 }
 
@@ -515,11 +456,7 @@ function leavesCodeEmpty(
  * otherwise the whitespace after
  * it through the first line break, so no blank line is left; otherwise the
  * node alone (it sat inline). The runs never cross a sibling or the parent. */
-export function removalRange(
-  bytes: ByteString,
-  projection: ValidProjection,
-  node: ProjectedNode,
-): ByteSpan {
+export function removalRange(bytes: ByteString, projection: ValidProjection, node: ProjectedNode): ByteSpan {
   const bounds = siblingBounds(bytes, projection, node);
   const before = whitespaceBefore(bytes, node.span.start, bounds.floor);
   if (before < node.span.start) {
@@ -597,11 +534,7 @@ function markdownInsertionAt(
  * beside it; inside it, the list its children sit in — markup inside markup,
  * and inside a Markdown node whatever its first child says (an empty one says
  * nothing Markdown can place into: `inline`). */
-function listAt(
-  projection: ValidProjection,
-  anchor: ProjectedNode,
-  placement: Placement,
-): NodeList {
+function listAt(projection: ValidProjection, anchor: ProjectedNode, placement: Placement): NodeList {
   if (!inside(placement)) {
     return anchor.list;
   }
@@ -671,16 +604,8 @@ function insertionInside(
   return ok({ range: point(open.end), text: `${lead}${text}`, anchorPath: parent.path });
 }
 
-function insertionIntoSelfClosingTag(
-  bytes: ByteString,
-  parent: ProjectedNode,
-  openEnd: number,
-  text: string,
-): Insertion {
-  assert(
-    parent.kind === 'component' || parent.kind === 'element',
-    'A paired conversion starts from a tag',
-  );
+function insertionIntoSelfClosingTag(bytes: ByteString, parent: ProjectedNode, openEnd: number, text: string): Insertion {
+  assert(parent.kind === 'component' || parent.kind === 'element', 'A paired conversion starts from a tag');
   const slash = openEnd - 2;
   assert(bytes[slash] === 0x2f, 'A self-closing component ends in a slash');
   const nameSpan = toByteSpan(parent.span.start + 1, tagNameEnd(bytes, parent));
@@ -712,11 +637,7 @@ function selfClosingTailStart(bytes: ByteString, slash: number): number {
 // A value or nested condition is code while it is the branch's only child.
 // Once markup stands beside it, braces are what keep that code an Astro
 // expression instead of turning its tokens into text nodes.
-function branchChildAsMarkup(
-  bytes: ByteString,
-  parent: ProjectedNode,
-  child: ProjectedNode,
-): string | undefined {
+function branchChildAsMarkup(bytes: ByteString, parent: ProjectedNode, child: ProjectedNode): string | undefined {
   if (parent.kind !== 'branch') {
     return undefined;
   }
@@ -731,11 +652,7 @@ function branchChildAsMarkup(
 
 // How the node is set apart from what precedes it: the whitespace run between
 // them. A root node with nothing before it on its line gets a line break.
-function separatorBefore(
-  bytes: ByteString,
-  projection: ValidProjection,
-  node: ProjectedNode,
-): string {
+function separatorBefore(bytes: ByteString, projection: ValidProjection, node: ProjectedNode): string {
   const bounds = siblingBounds(bytes, projection, node);
   const start = whitespaceBefore(bytes, node.span.start, bounds.floor);
   const separator = textOf(bytes, toByteSpan(start, node.span.start));
@@ -749,15 +666,9 @@ function separatorBefore(
 
 // A node's whitespace neighbourhood ends at its siblings, else at its parent's
 // content (inside a tag's opening and closing), else at the file's body.
-function siblingBounds(
-  bytes: ByteString,
-  projection: ValidProjection,
-  node: ProjectedNode,
-): { readonly floor: number; readonly ceiling: number } {
+function siblingBounds(bytes: ByteString, projection: ValidProjection, node: ProjectedNode): { readonly floor: number; readonly ceiling: number } {
   // Blank text between siblings is the separator itself, never a neighbour.
-  const siblings = siblingsOf(projection, node).filter(
-    (sibling) => sibling === node || !blankText(bytes, sibling),
-  );
+  const siblings = siblingsOf(projection, node).filter((sibling) => sibling === node || !blankText(bytes, sibling));
   const index = siblings.indexOf(node);
   assert(index >= 0, 'A node is among its siblings');
   const previous = siblings[index - 1];
@@ -772,8 +683,7 @@ function siblingBounds(
 // The bytes a node's parent holds its children in.
 function contentOf(bytes: ByteString, projection: ValidProjection, node: ProjectedNode): ByteSpan {
   if (node.path.length === 1) {
-    const body =
-      projection.frontmatter === undefined ? bomLength(bytes) : projection.frontmatter.end;
+    const body = projection.frontmatter === undefined ? bomLength(bytes) : projection.frontmatter.end;
     return toByteSpan(body, bytes.length);
   }
   const parent = nodeAtPath(projection, parentPath(node.path));
@@ -797,10 +707,7 @@ function bomLength(bytes: ByteString): number {
 }
 
 function childrenOf(projection: ValidProjection, node: ProjectedNode): readonly ProjectedNode[] {
-  return projection.nodes.filter(
-    (candidate) =>
-      candidate.path.length === node.path.length + 1 && startsWith(candidate.path, node.path),
-  );
+  return projection.nodes.filter((candidate) => candidate.path.length === node.path.length + 1 && startsWith(candidate.path, node.path));
 }
 
 function parentKind(projection: ValidProjection, node: ProjectedNode): readonly PostKind[] {
@@ -825,11 +732,7 @@ function shifted(path: readonly number[]): readonly number[] {
 }
 
 // Beside a node, the list it sits in is written; inside it, its own content.
-function placeWritable(
-  projection: ValidProjection,
-  node: ProjectedNode,
-  placement: Placement,
-): boolean {
+function placeWritable(projection: ValidProjection, node: ProjectedNode, placement: Placement): boolean {
   if (inside(placement)) {
     if (node.callback === true) {
       return false; // Separate return sites cannot receive one shared sibling insertion.

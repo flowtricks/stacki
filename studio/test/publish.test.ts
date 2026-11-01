@@ -15,21 +15,12 @@ import { createRooms } from '../src/features/collaboration/rooms';
 
 async function fixture(hosting = false) {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-publish-'));
-  for (const directory of [
-    'src/pages',
-    'public',
-    '.stacki/studio/state',
-    '.stacki',
-    'node_modules',
-  ]) {
+  for (const directory of ['src/pages', 'public', '.stacki/studio/state', '.stacki', 'node_modules']) {
     await mkdir(path.join(root, directory), { recursive: true });
   }
   await writeFile(path.join(root, 'src/pages/index.astro'), '<h1>Captured</h1>');
   await writeFile(path.join(root, 'public/photo.png'), Buffer.from([0, 1, 128, 255]));
-  await writeFile(
-    path.join(root, '.stacki/studio/state/github-base.json'),
-    JSON.stringify({ sha: 'a'.repeat(40) }),
-  );
+  await writeFile(path.join(root, '.stacki/studio/state/github-base.json'), JSON.stringify({ sha: 'a'.repeat(40) }));
   if (hosting) {
     await writeFile(
       path.join(root, '.stacki/publish.json'),
@@ -61,9 +52,7 @@ test('publishing captures accepted edits before their scheduled disk projection'
   const publisher = new Publisher(
     root,
     repository(async (source) => {
-      const content = published(
-        await publishGit(source.git, ['show', `${source.tree}:src/pages/index.astro`]),
-      );
+      const content = published(await publishGit(source.git, ['show', `${source.tree}:src/pages/index.astro`]));
       assert.equal(content.trim(), '<!-- accepted --><h1>Captured</h1>');
       commits++;
       return ok(receipt);
@@ -76,10 +65,7 @@ test('publishing captures accepted edits before their scheduled disk projection'
     rooms.persist,
   );
   try {
-    assert.equal(
-      await readFile(path.join(root, 'src/pages/index.astro'), 'utf8'),
-      '<h1>Captured</h1>',
-    );
+    assert.equal(await readFile(path.join(root, 'src/pages/index.astro'), 'utf8'), '<h1>Captured</h1>');
     assert.equal((await publisher.publish('github')).kind, 'committed');
     assert.equal(commits, 1);
   } finally {
@@ -107,16 +93,7 @@ test('GitHub and None skip builds, dependencies and hooks', async (context) => {
       root,
       repository(async (source) => {
         assert.equal(source.files.length, 3);
-        assert.equal(
-          published(
-            await publishGit(source.git, [
-              'cat-file',
-              'blob',
-              source.tree + ':src/pages/index.astro',
-            ]),
-          ),
-          '<h1>Captured</h1>',
-        );
+        assert.equal(published(await publishGit(source.git, ['cat-file', 'blob', source.tree + ':src/pages/index.astro'])), '<h1>Captured</h1>');
         commits++;
         return ok(receipt);
       }),
@@ -144,24 +121,15 @@ test('failed hosting builds never commit and snapshots preserve captured bytes',
     async (snapshot) => {
       snapshotPath = snapshot;
       await writeFile(path.join(root, 'src/pages/index.astro'), '<h1>Next draft</h1>');
-      assert.equal(
-        await readFile(path.join(snapshot, 'src/pages/index.astro'), 'utf8'),
-        '<h1>Captured</h1>',
-      );
-      assert.deepEqual(
-        await readFile(path.join(snapshot, 'public/photo.png')),
-        Buffer.from([0, 1, 128, 255]),
-      );
+      assert.equal(await readFile(path.join(snapshot, 'src/pages/index.astro'), 'utf8'), '<h1>Captured</h1>');
+      assert.deepEqual(await readFile(path.join(snapshot, 'public/photo.png')), Buffer.from([0, 1, 128, 255]));
       throw new Error('Build failed');
     },
   );
   const result = await publisher.publish();
   assert.equal(result.kind, 'failed');
   assert.match(JSON.stringify(result), /Build failed/);
-  assert.match(
-    await readFile(path.join(root, '.stacki/studio/state/github-base.json'), 'utf8'),
-    /aaaa/,
-  );
+  assert.match(await readFile(path.join(root, '.stacki/studio/state/github-base.json'), 'utf8'), /aaaa/);
   await assert.rejects(access(snapshotPath));
 });
 
@@ -188,10 +156,7 @@ test('a definite pre-push race captures the refreshed draft, but ambiguous failu
       undefined,
       async () => {
         if (++refreshes === 2) {
-          await writeFile(
-            path.join(root, '.stacki/studio/state/github-base.json'),
-            JSON.stringify(receipt),
-          );
+          await writeFile(path.join(root, '.stacki/studio/state/github-base.json'), JSON.stringify(receipt));
         }
       },
     );

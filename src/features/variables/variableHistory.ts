@@ -61,10 +61,7 @@ export function createVariableHistory(options: HistoryOptions) {
   };
 }
 
-async function readTexts(
-  projectPath: string,
-  files: readonly string[],
-): Promise<Result<FileTexts, string>> {
+async function readTexts(projectPath: string, files: readonly string[]): Promise<Result<FileTexts, string>> {
   assert(files.length <= LIMITS.scanEntriesMax, 'Variable undo: read limit exceeded');
   const texts: Record<string, string> = {};
   // Reading sequentially bounds outstanding disk requests even for project-wide edits.

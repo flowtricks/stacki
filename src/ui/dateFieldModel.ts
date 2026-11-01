@@ -4,9 +4,7 @@ const DAY_PATTERN = '\\d{4}-\\d{2}-\\d{2}';
 const TIME_PATTERN = '[T ](?:[01]\\d|2[0-3]):[0-5]\\d';
 const SECONDS_PATTERN = '(?::[0-5]\\d(?:\\.\\d{1,9})?)?';
 const ZONE_PATTERN = '(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)?';
-const CALENDAR_PATTERN = new RegExp(
-  `^(${DAY_PATTERN})(${TIME_PATTERN}${SECONDS_PATTERN}${ZONE_PATTERN})?$`,
-);
+const CALENDAR_PATTERN = new RegExp(`^(${DAY_PATTERN})(${TIME_PATTERN}${SECONDS_PATTERN}${ZONE_PATTERN})?$`);
 
 export interface CalendarValue {
   readonly day: string;

@@ -32,10 +32,7 @@ export interface CollectionPatch {
  * The config with collection `name` added, or why it cannot be. `source` is
  * the config's text, or undefined when the project has none yet.
  */
-export function addCollectionToConfig(
-  source: string | undefined,
-  name: string,
-): Result<CollectionPatch, string> {
+export function addCollectionToConfig(source: string | undefined, name: string): Result<CollectionPatch, string> {
   assert(/^[a-z][A-Za-z0-9]*$/.test(name), 'A collection name is an identifier');
   const folder = `src/content/${kebab(name)}`;
   if (source === undefined) {
@@ -145,9 +142,7 @@ function withEntry(listed: string, entry: string): string {
 // The imports a new declaration uses that the config does not have yet.
 function withImports(source: string): string {
   const missing = [
-    importNamed(source, 'defineCollection')
-      ? ''
-      : "import { defineCollection } from 'astro:content';",
+    importNamed(source, 'defineCollection') ? '' : "import { defineCollection } from 'astro:content';",
     importNamed(source, 'glob') ? '' : "import { glob } from 'astro/loaders';",
     importNamed(source, 'z') ? '' : "import { z } from 'astro/zod';",
   ].filter((line) => line.length > 0);

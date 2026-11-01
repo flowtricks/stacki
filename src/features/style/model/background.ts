@@ -70,8 +70,7 @@ export function colorOverlayOf(image: string): string | undefined {
   if (!parts.length) {
     return undefined;
   }
-  const isDirection = (text: string) =>
-    /^to\s/i.test(text.trim()) || /^-?[\d.]+(deg|grad|rad|turn)$/i.test(text.trim());
+  const isDirection = (text: string) => /^to\s/i.test(text.trim()) || /^-?[\d.]+(deg|grad|rad|turn)$/i.test(text.trim());
   const stops = isDirection(parts[0] ?? '') ? parts.slice(1) : parts;
   if (stops.length < 2) {
     return undefined;
@@ -142,12 +141,8 @@ export function splitTopLevelSpaces(value: string): string[] {
 const REPEAT_KW = new Set(['repeat', 'repeat-x', 'repeat-y', 'no-repeat', 'space', 'round']);
 const ATTACH_KW = new Set(['scroll', 'fixed', 'local']);
 const BOX_KW = new Set(['border-box', 'padding-box', 'content-box']);
-const isImageToken = (token: string) =>
-  /^(url|(repeating-)?(linear|radial|conic)-gradient)\(/i.test(token) ||
-  token.toLowerCase() === 'none';
-const isPositionToken = (token: string) =>
-  /^(left|right|top|bottom|center)$/i.test(token) ||
-  /^-?[\d.]+(px|%|em|rem|vw|vh|vmin|vmax|ch|fr)?$/i.test(token);
+const isImageToken = (token: string) => /^(url|(repeating-)?(linear|radial|conic)-gradient)\(/i.test(token) || token.toLowerCase() === 'none';
+const isPositionToken = (token: string) => /^(left|right|top|bottom|center)$/i.test(token) || /^-?[\d.]+(px|%|em|rem|vw|vh|vmin|vmax|ch|fr)?$/i.test(token);
 
 /** Parse a `background` shorthand into the five longhands + the (single) color.
  *  Order-tolerant per CSS; a `pos / size` group is split on the top-level slash.
@@ -179,8 +174,7 @@ export function splitBackgroundShorthand(bg: string): BackgroundLonghands & { co
     repeats.push(layer.repeat);
     attachments.push(layer.attachment);
   });
-  const join = (list: string[], initial: string) =>
-    list.some((item) => item.trim()) ? list.map((item) => item.trim() || initial).join(', ') : '';
+  const join = (list: string[], initial: string) => (list.some((item) => item.trim()) ? list.map((item) => item.trim() || initial).join(', ') : '');
   return {
     image: images.join(', '),
     size: join(sizes, 'auto'),
@@ -202,10 +196,7 @@ type BackgroundLayerTokens = {
 };
 
 // Sort one layer's tokens into its longhands. Only the LAST layer may carry the colour.
-function parseBackgroundLayer(
-  layerText: string,
-  options: { readonly isLastLayer: boolean },
-): BackgroundLayerTokens {
+function parseBackgroundLayer(layerText: string, options: { readonly isLastLayer: boolean }): BackgroundLayerTokens {
   // Normalize `a / b` (with or without spaces around the slash) into tokens.
   const tokens = splitTopLevelSpaces(layerText.replace(/\s*\/\s*/g, ' / '));
   const layer: BackgroundLayerTokens = {
@@ -253,22 +244,13 @@ export function layerKind(image: string): LayerKind {
   if (colorOverlayOf(image) !== undefined) {
     return 'color';
   }
-  if (
-    normalized.startsWith('linear-gradient') ||
-    normalized.startsWith('repeating-linear-gradient')
-  ) {
+  if (normalized.startsWith('linear-gradient') || normalized.startsWith('repeating-linear-gradient')) {
     return 'linear';
   }
-  if (
-    normalized.startsWith('radial-gradient') ||
-    normalized.startsWith('repeating-radial-gradient')
-  ) {
+  if (normalized.startsWith('radial-gradient') || normalized.startsWith('repeating-radial-gradient')) {
     return 'radial';
   }
-  if (
-    normalized.startsWith('conic-gradient') ||
-    normalized.startsWith('repeating-conic-gradient')
-  ) {
+  if (normalized.startsWith('conic-gradient') || normalized.startsWith('repeating-conic-gradient')) {
     return 'conic';
   }
   return 'other';
@@ -341,9 +323,7 @@ export function serializeLayers(layers: BgLayer[]): BackgroundLonghands {
     return { image: '', size: '', position: '', repeat: '', attachment: '' };
   }
   const list = (key: 'size' | 'position' | 'repeat' | 'attachment'): string =>
-    layers.some((layer) => layer[key].trim())
-      ? layers.map((layer) => layer[key].trim() || INITIAL[key]).join(', ')
-      : '';
+    layers.some((layer) => layer[key].trim()) ? layers.map((layer) => layer[key].trim() || INITIAL[key]).join(', ') : '';
   return {
     image: layers.map((layer) => layer.image.trim()).join(', '),
     size: list('size'),

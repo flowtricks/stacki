@@ -20,9 +20,7 @@ const { repoPath } = require('../../helpers/sources.js');
   });
   const { createQueryCache } = require(outfile);
   const calls = [];
-  const cache = createQueryCache(
-    (element, keys) => new Promise((resolve) => calls.push({ element, keys, resolve })),
-  );
+  const cache = createQueryCache((element, keys) => new Promise((resolve) => calls.push({ element, keys, resolve })));
   const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
   let notifications = 0;
   const off = cache.subscribe(() => notifications++);
@@ -44,11 +42,7 @@ const { repoPath } = require('../../helpers/sources.js');
   calls[1].resolve({ opacity: '0.5' });
   calls[0].resolve({ display: 'grid', color: '' });
   assert.deepEqual(await Promise.all([first, otherProp, otherPath]), ['grid', '', '0.5']);
-  assert.deepEqual(
-    cache.read('a', 'color'),
-    { kind: 'settled', answer: '' },
-    'empty values are settled answers',
-  );
+  assert.deepEqual(cache.read('a', 'color'), { kind: 'settled', answer: '' }, 'empty values are settled answers');
   assert.equal(notifications, 2, 'one notification per completed batch');
 
   const obsolete = cache.request('a', 'width');
@@ -59,40 +53,20 @@ const { repoPath } = require('../../helpers/sources.js');
   await tick();
   calls[2].resolve({ width: '10px' });
   await tick();
-  assert.deepEqual(
-    cache.read('a', 'width'),
-    { kind: 'pending' },
-    'old replies cannot refill the new cache',
-  );
-  assert.equal(
-    cache.request('a', 'width'),
-    fresh,
-    'an old completion cannot erase fresh in-flight work',
-  );
+  assert.deepEqual(cache.read('a', 'width'), { kind: 'pending' }, 'old replies cannot refill the new cache');
+  assert.equal(cache.request('a', 'width'), fresh, 'an old completion cannot erase fresh in-flight work');
   calls[3].resolve({ width: '20px' });
   assert.equal(await fresh, '20px');
 
   cache.setScope(['project', 'page', 'desktop']);
-  assert.deepEqual(
-    cache.read('a', 'width'),
-    { kind: 'pending' },
-    'documents and breakpoints have separate answers',
-  );
+  assert.deepEqual(cache.read('a', 'width'), { kind: 'pending' }, 'documents and breakpoints have separate answers');
   const missing = cache.request('a', 'missing');
   await tick();
   calls[4].resolve(undefined);
   assert.equal(await missing, undefined);
-  assert.deepEqual(
-    cache.read('a', 'missing'),
-    { kind: 'settled', answer: undefined },
-    'a failed query settles, rather than waiting forever',
-  );
+  assert.deepEqual(cache.read('a', 'missing'), { kind: 'settled', answer: undefined }, 'a failed query settles, rather than waiting forever');
   cache.setScope(['project', 'page', 'desktop']);
-  assert.deepEqual(
-    cache.read('a', 'missing'),
-    { kind: 'settled', answer: undefined },
-    'unchanged scope preserves settled answers',
-  );
+  assert.deepEqual(cache.read('a', 'missing'), { kind: 'settled', answer: undefined }, 'unchanged scope preserves settled answers');
   const queued = cache.request('a', 'cancelled');
   cache.clear();
   assert.equal(await queued, undefined);
@@ -100,24 +74,14 @@ const { repoPath } = require('../../helpers/sources.js');
   assert.equal(calls.length, 5, 'clearing cancels a batch that has not started');
 
   const rejects = createQueryCache(() => Promise.reject(new Error('frame closed')));
-  assert.equal(
-    await rejects.request('', 'var(--color)'),
-    undefined,
-    'bridge rejection is a settled miss',
-  );
+  assert.equal(await rejects.request('', 'var(--color)'), undefined, 'bridge rejection is a settled miss');
   const throws = createQueryCache(() => {
     throw new Error('bridge missing');
   });
-  assert.equal(
-    await throws.request('', 'var(--color)'),
-    undefined,
-    'synchronous bridge failure is contained',
-  );
+  assert.equal(await throws.request('', 'var(--color)'), undefined, 'synchronous bridge failure is contained');
   off();
   cache.clear();
-  console.log(
-    'query-cache: passed [batching, deduplication, stale replies, scope, cancellation, failure]',
-  );
+  console.log('query-cache: passed [batching, deduplication, stale replies, scope, cancellation, failure]');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

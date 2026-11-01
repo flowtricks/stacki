@@ -17,12 +17,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { protocolLeftovers } = require('../../helpers/platformSupport.js');
-const {
-  createFileExclusive,
-  digestOf,
-  isAtomicTemporary,
-  replaceFileAtomic,
-} = require('#dist/electron/documents/atomicWrite.js');
+const { createFileExclusive, digestOf, isAtomicTemporary, replaceFileAtomic } = require('#dist/electron/documents/atomicWrite.js');
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 

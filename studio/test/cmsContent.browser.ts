@@ -23,8 +23,7 @@ await mkdir(directory, { recursive: true });
 await writeFile(path.join(directory, 'first.md'), source('First'), { flag: 'wx' });
 await writeFile(path.join(directory, 'second.md'), source('Second'), { flag: 'wx' });
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const first = await (await browser.newContext()).newPage();
@@ -41,19 +40,12 @@ try {
     .filter({ hasText: /^Second$/ })
     .click();
   await second.waitForFunction(() =>
-    [...document.querySelectorAll<HTMLInputElement>('.cms-field input')].some(
-      (input) => input.value === 'Saved before switching',
-    ),
+    [...document.querySelectorAll<HTMLInputElement>('.cms-field input')].some((input) => input.value === 'Saved before switching'),
   );
-  assert.equal(
-    await readFile(path.join(directory, 'first.md'), 'utf8'),
-    source('Saved before switching'),
-  );
+  assert.equal(await readFile(path.join(directory, 'first.md'), 'utf8'), source('Saved before switching'));
   assert.equal(await readFile(path.join(directory, 'second.md'), 'utf8'), source('Second'));
   const saved = second.waitForResponse(
-    (response) =>
-      response.url().endsWith('/studio/api/cms') &&
-      response.request().postData()?.includes('content:writeEntry') === true,
+    (response) => response.url().endsWith('/studio/api/cms') && response.request().postData()?.includes('content:writeEntry') === true,
   );
   await title(second).fill('Saved before closing');
   await second.getByRole('button', { name: 'Collections', exact: true }).click();
@@ -62,10 +54,7 @@ try {
     .locator('.cms-item')
     .filter({ hasText: /^Saved before closing$/ })
     .waitFor();
-  assert.equal(
-    await readFile(path.join(directory, 'first.md'), 'utf8'),
-    source('Saved before closing'),
-  );
+  assert.equal(await readFile(path.join(directory, 'first.md'), 'utf8'), source('Saved before closing'));
   assert.deepEqual(errors, []);
   console.log('Schema-backed content edits survive entry switches and reach independent browsers.');
 } finally {

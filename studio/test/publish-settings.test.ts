@@ -17,10 +17,7 @@ test('GitHub-only publishes shared settings while skipping hooks and hosting', a
   for (const directory of ['src', 'public', '.stacki/studio/state', '.stacki', 'node_modules']) {
     await mkdir(path.join(root, directory), { recursive: true });
   }
-  await writeFile(
-    path.join(root, '.stacki/studio/state/github-base.json'),
-    JSON.stringify({ sha: 'a'.repeat(40) }),
-  );
+  await writeFile(path.join(root, '.stacki/studio/state/github-base.json'), JSON.stringify({ sha: 'a'.repeat(40) }));
   const config = {
     ...DEFAULT_PUBLISH_CONFIG,
     hosting: { provider: 'vercel', projectId: 'prj_1', organizationId: 'team_1' },
@@ -37,8 +34,7 @@ test('GitHub-only publishes shared settings while skipping hooks and hosting', a
   const output = path.join(root, 'hooks.txt');
   await writeFile(
     path.join(root, 'hook.cjs'),
-    `require('node:fs').appendFileSync(${JSON.stringify(output)}, ` +
-      "process.env.npm_lifecycle_event + ':' + process.env.STACKI_PUBLISH_TARGET + '\\n');",
+    `require('node:fs').appendFileSync(${JSON.stringify(output)}, ` + "process.env.npm_lifecycle_event + ':' + process.env.STACKI_PUBLISH_TARGET + '\\n');",
   );
   let files: readonly PublishedFile[] = [];
   let deployments = 0;

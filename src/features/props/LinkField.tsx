@@ -89,10 +89,7 @@ export default function LinkField({ value, context, onChange }: LinkFieldProps) 
   const [type, setType] = useState(() => detectType(text, context.pages));
   const lastRef = useRef(text);
   assert((context.pages?.length ?? 0) <= LIMITS.scanEntriesMax, 'LinkField: page limit exceeded');
-  assert(
-    (context.sectionIds?.length ?? 0) <= LIMITS.treeNodesMax,
-    'LinkField: section limit exceeded',
-  );
+  assert((context.sectionIds?.length ?? 0) <= LIMITS.treeNodesMax, 'LinkField: section limit exceeded');
   useEffect(() => {
     if (text !== lastRef.current) {
       setType(detectType(text, context.pages));
@@ -124,14 +121,7 @@ function LinkControl({
 }) {
   switch (type) {
     case 'url':
-      return (
-        <input
-          value={text}
-          placeholder="#"
-          spellCheck={false}
-          onChange={(event) => commit(event.target.value)}
-        />
-      );
+      return <input value={text} placeholder="#" spellCheck={false} onChange={(event) => commit(event.target.value)} />;
     case 'page':
       return (
         <Dropdown
@@ -174,15 +164,7 @@ function LinkControl({
   }
 }
 
-function LinkSection({
-  text,
-  sections,
-  commit,
-}: {
-  readonly text: string;
-  readonly sections: readonly string[];
-  readonly commit: Commit;
-}) {
+function LinkSection({ text, sections, commit }: { readonly text: string; readonly sections: readonly string[]; readonly commit: Commit }) {
   if (sections.length > 0) {
     return (
       <Dropdown
@@ -195,8 +177,7 @@ function LinkSection({
   }
   return (
     <div className="link-note">
-      No elements on this page have an <code>id</code> yet — set one in an element's attributes to
-      anchor-link to it.
+      No elements on this page have an <code>id</code> yet — set one in an element's attributes to anchor-link to it.
     </div>
   );
 }
@@ -209,36 +190,18 @@ function LinkEmail({ text, commit }: { readonly text: string; readonly commit: C
         value={email}
         placeholder="e.g. bob@gmail.com"
         spellCheck={false}
-        onChange={(event) =>
-          commit(
-            `mailto:${event.target.value.trim()}${
-              subject ? `?subject=${encodeURIComponent(subject)}` : ''
-            }`,
-          )
-        }
+        onChange={(event) => commit(`mailto:${event.target.value.trim()}${subject ? `?subject=${encodeURIComponent(subject)}` : ''}`)}
       />
       <input
         value={subject}
         placeholder="Subject (optional)"
-        onChange={(event) =>
-          commit(
-            `mailto:${email}${
-              event.target.value ? `?subject=${encodeURIComponent(event.target.value)}` : ''
-            }`,
-          )
-        }
+        onChange={(event) => commit(`mailto:${email}${event.target.value ? `?subject=${encodeURIComponent(event.target.value)}` : ''}`)}
       />
     </>
   );
 }
 
-function LinkTypes({
-  type,
-  setType,
-}: {
-  readonly type: LinkType;
-  readonly setType: (type: LinkType) => void;
-}) {
+function LinkTypes({ type, setType }: { readonly type: LinkType; readonly setType: (type: LinkType) => void }) {
   const { rowRef, btnRefs: buttonRefs, indicator } = useLinkIndicator(type);
   return (
     <div className="link-types" ref={rowRef}>
@@ -281,17 +244,10 @@ function useLinkIndicator(type: LinkType) {
   >(undefined);
   const measure = () => {
     const element = buttonRefs.current[typeRef.current];
-    const next =
-      element && element.offsetWidth
-        ? { left: element.offsetLeft, width: element.offsetWidth }
-        : undefined;
+    const next = element && element.offsetWidth ? { left: element.offsetLeft, width: element.offsetWidth } : undefined;
     // Same numbers must yield the same object, or measuring on every render
     // would re-render forever.
-    setIndicator((previous) =>
-      previous && next && previous.left === next.left && previous.width === next.width
-        ? previous
-        : next,
-    );
+    setIndicator((previous) => (previous && next && previous.left === next.left && previous.width === next.width ? previous : next));
   };
   useLayoutEffect(measure);
   useLayoutEffect(() => {

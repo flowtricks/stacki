@@ -58,10 +58,7 @@ function skipCodeToken(text: string, i: number): number {
     }
   }
   const previous = before >= 0 ? text.charAt(before) : undefined;
-  if (
-    text.charAt(i) === '/' &&
-    (before < 0 || (previous !== undefined && '=(:,[!&|?{};'.includes(previous)))
-  ) {
+  if (text.charAt(i) === '/' && (before < 0 || (previous !== undefined && '=(:,[!&|?{};'.includes(previous)))) {
     let inClass = false;
     for (let j = i + 1; j < text.length && text.charAt(j) !== '\n'; j++) {
       if (text.charAt(j) === '\\') {
@@ -166,10 +163,7 @@ function parseImportAt(source: string, at: number): ParsedImport | undefined {
   if (quote === undefined || specifier === undefined || body === undefined) {
     return undefined;
   }
-  const members =
-    plain === null
-      ? namedMembers(body, specifier, quote, at)
-      : [{ name: body, path: specifier, quote, at }];
+  const members = plain === null ? namedMembers(body, specifier, quote, at) : [{ name: body, path: specifier, quote, at }];
   if (members === undefined) {
     return undefined;
   }
@@ -188,12 +182,7 @@ function parseImportAt(source: string, at: number): ParsedImport | undefined {
 
 // The members of `import { … }`, or undefined when there are none or one of
 // them is not a plain `[type] name [as alias]`.
-function namedMembers(
-  body: string,
-  specifier: string,
-  quote: string,
-  at: number,
-): ImportMember[] | undefined {
+function namedMembers(body: string, specifier: string, quote: string, at: number): ImportMember[] | undefined {
   const members: ImportMember[] = [];
   const texts = body
     .split(',')
@@ -218,11 +207,7 @@ function namedMembers(
   return members.length > 0 ? members : undefined;
 }
 
-const sameImport = <Import extends SerializableImport>(
-  candidate: Import,
-  existing: SerializableImport,
-  specFor?: (imp: Import) => string,
-): boolean =>
+const sameImport = <Import extends SerializableImport>(candidate: Import, existing: SerializableImport, specFor?: (imp: Import) => string): boolean =>
   candidate.name === existing.name &&
   (specFor ? specFor(candidate) : candidate.path) === existing.path &&
   candidate.quote === existing.quote &&
@@ -235,11 +220,7 @@ interface ImportGroup<Import extends SerializableImport> {
   specifier: string;
 }
 
-function importLines<Import extends SerializableImport>(
-  imports: readonly Import[],
-  tail: string,
-  specFor?: (imp: Import) => string,
-): string[] {
+function importLines<Import extends SerializableImport>(imports: readonly Import[], tail: string, specFor?: (imp: Import) => string): string[] {
   const groups: ImportGroup<Import>[] = [];
   const named = new Map<string, ImportGroup<Import>>();
   for (const imp of imports) {
@@ -266,10 +247,7 @@ function importLines<Import extends SerializableImport>(
       ? '{ ' +
         members
           .map((imp) => {
-            const name =
-              imp.imported && imp.imported !== imp.name
-                ? `${imp.imported} as ${imp.name}`
-                : imp.name;
+            const name = imp.imported && imp.imported !== imp.name ? `${imp.imported} as ${imp.name}` : imp.name;
             return imp.typeOnly ? `type ${name}` : name;
           })
           .join(', ') +
@@ -305,27 +283,16 @@ function moveOffsets(before: string, after: string, offsets: readonly number[]):
   const beforeLines = split(before);
   const afterLines = split(after);
   let first = 0;
-  while (
-    first < beforeLines.length &&
-    first < afterLines.length &&
-    beforeLines[first] === afterLines[first]
-  ) {
+  while (first < beforeLines.length && first < afterLines.length && beforeLines[first] === afterLines[first]) {
     first++;
   }
   let beforeEnd = beforeLines.length;
   let afterEnd = afterLines.length;
-  while (
-    beforeEnd > first &&
-    afterEnd > first &&
-    beforeLines[beforeEnd - 1] === afterLines[afterEnd - 1]
-  ) {
+  while (beforeEnd > first && afterEnd > first && beforeLines[beforeEnd - 1] === afterLines[afterEnd - 1]) {
     beforeEnd--;
     afterEnd--;
   }
-  const dp = commonLinesTable(
-    beforeLines.slice(first, beforeEnd),
-    afterLines.slice(first, afterEnd),
-  );
+  const dp = commonLinesTable(beforeLines.slice(first, beforeEnd), afterLines.slice(first, afterEnd));
   const moved: number[] = [];
   let oldAt = 0;
   let newAt = 0;
@@ -348,12 +315,7 @@ function moveOffsets(before: string, after: string, offsets: readonly number[]):
   while (i < beforeEnd || j < afterEnd) {
     if (i < beforeEnd && j < afterEnd && beforeLines[i] === afterLines[j]) {
       take(beforeLines[i++] ?? '', afterLines[j++] ?? '', 'kept');
-    } else if (
-      i < beforeEnd &&
-      (j === afterEnd ||
-        !dp.length ||
-        (dp[i - first + 1]?.[j - first] ?? 0) >= (dp[i - first]?.[j - first + 1] ?? 0))
-    ) {
+    } else if (i < beforeEnd && (j === afterEnd || !dp.length || (dp[i - first + 1]?.[j - first] ?? 0) >= (dp[i - first]?.[j - first + 1] ?? 0))) {
       take(beforeLines[i++] ?? '', '', 'changed');
     } else {
       take('', afterLines[j++] ?? '', 'changed');
@@ -385,10 +347,7 @@ function commonLinesTable(before: readonly string[], after: readonly string[]): 
     for (let j = after.length - 1; j >= 0; j--) {
       const row = table[i];
       assert(row !== undefined, 'commonLinesTable: every row was allocated');
-      row[j] =
-        before[i] === after[j]
-          ? (table[i + 1]?.[j + 1] ?? 0) + 1
-          : Math.max(table[i + 1]?.[j] ?? 0, table[i]?.[j + 1] ?? 0);
+      row[j] = before[i] === after[j] ? (table[i + 1]?.[j + 1] ?? 0) + 1 : Math.max(table[i + 1]?.[j] ?? 0, table[i]?.[j + 1] ?? 0);
     }
   }
   return table;
@@ -448,10 +407,7 @@ function safeImportOffsets(text: string, offsets: readonly number[]): number[] {
   return safe;
 }
 
-function writeFrontmatter<Import extends SerializableImport>(
-  model: FrontmatterModel<Import>,
-  specFor?: (imp: Import) => string,
-): string {
+function writeFrontmatter<Import extends SerializableImport>(model: FrontmatterModel<Import>, specFor?: (imp: Import) => string): string {
   const layout = model.frontmatterLayout;
   if (!layout) {
     return writeFrontmatterFresh(model, specFor);
@@ -481,9 +437,7 @@ function writeFrontmatter<Import extends SerializableImport>(
           const original = slot.members[index];
           return original !== undefined && sameImport(imp, original, specFor);
         });
-      output +=
-        (untouched ? slot.source : importLines(members, slot.tail, specFor).join('\n')) +
-        slot.suffix;
+      output += (untouched ? slot.source : importLines(members, slot.tail, specFor).join('\n')) + slot.suffix;
     }
     if (i === layout.slots.length - 1 && additions.length) {
       if (output && !/\n$/.test(output)) {
@@ -507,10 +461,7 @@ function writeFrontmatter<Import extends SerializableImport>(
 }
 
 // No layout to preserve: the imports, then the remaining code below a blank line.
-function writeFrontmatterFresh<Import extends SerializableImport>(
-  model: FrontmatterModel<Import>,
-  specFor?: (imp: Import) => string,
-): string {
+function writeFrontmatterFresh<Import extends SerializableImport>(model: FrontmatterModel<Import>, specFor?: (imp: Import) => string): string {
   const lines: string[] = [];
   if (model.frontmatterLead) {
     lines.push(model.frontmatterLead);
@@ -545,18 +496,10 @@ function groupImports<Import extends SerializableImport>(
   const additions: Import[] = [];
   for (const imp of added) {
     const slot =
-      imp.named &&
-      layout.slots.find((layoutSlot) =>
-        (groups.get(layoutSlot.at) ?? []).some(
-          (grouped) => grouped.named && grouped.path === imp.path,
-        ),
-      );
+      imp.named && layout.slots.find((layoutSlot) => (groups.get(layoutSlot.at) ?? []).some((grouped) => grouped.named && grouped.path === imp.path));
     if (slot) {
       const target = groups.get(slot.at);
-      assert(
-        target !== undefined,
-        'groupImports: slot group exists — groups were built from layout.slots',
-      );
+      assert(target !== undefined, 'groupImports: slot group exists — groups were built from layout.slots');
       target.push(imp);
     } else {
       additions.push(imp);
@@ -581,9 +524,7 @@ export function mapModuleSpecifiers(source: string, map: (path: string) => strin
     if (/[\w$.]/.test(source.charAt(index - 1))) {
       continue;
     }
-    const match = /^(?:import\s*(?:\(\s*)?|from\s+)(['"])([^'"\\\r\n]+)\1/.exec(
-      source.slice(index),
-    );
+    const match = /^(?:import\s*(?:\(\s*)?|from\s+)(['"])([^'"\\\r\n]+)\1/.exec(source.slice(index));
     const path = match?.[2];
     if (match && path) {
       const end = index + match[0].length;
@@ -596,10 +537,7 @@ export function mapModuleSpecifiers(source: string, map: (path: string) => strin
   let nextStart = source.length;
   for (const edit of edits.reverse()) {
     assert(edit.end <= nextStart, 'Module replacements do not overlap');
-    assert(
-      source.charAt(edit.start) === source.charAt(edit.end - 1),
-      'Module replacement consumes a complete quoted specifier',
-    );
+    assert(source.charAt(edit.start) === source.charAt(edit.end - 1), 'Module replacement consumes a complete quoted specifier');
     nextStart = edit.start;
     result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
   }

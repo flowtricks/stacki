@@ -20,9 +20,7 @@ export type Block = (typeof BLOCKS)[number];
 
 /** What a line's typed prefix turns its block into. */
 export type BlockShortcut =
-  | { readonly kind: 'block'; readonly block: Block }
-  | { readonly kind: 'list'; readonly list: 'ul' | 'ol' }
-  | { readonly kind: 'rule' };
+  { readonly kind: 'block'; readonly block: Block } | { readonly kind: 'list'; readonly list: 'ul' | 'ol' } | { readonly kind: 'rule' };
 
 /** An inline run typed in Markdown and the tag it becomes. */
 export interface InlineShortcut {
@@ -104,18 +102,12 @@ export function textCounts(text: string): { readonly words: number; readonly cha
 
 /** Escapes text for insertion as HTML. */
 export function escapeHTML(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // What a paste may keep, and what other tags become. Anything else is unwrapped
 // to its text, so a page's styles, scripts and tracking never come along.
-const PASTE_TAGS = new Set(
-  'p br strong em u s a h1 h2 h3 h4 h5 h6 ul ol li blockquote pre code hr sub sup'.split(' '),
-);
+const PASTE_TAGS = new Set('p br strong em u s a h1 h2 h3 h4 h5 h6 ul ol li blockquote pre code hr sub sup'.split(' '));
 const PASTE_RENAMES: Readonly<Record<string, string>> = {
   b: 'strong',
   i: 'em',
@@ -123,9 +115,7 @@ const PASTE_RENAMES: Readonly<Record<string, string>> = {
   del: 's',
   div: 'p',
 };
-const PASTE_DROPS = new Set(
-  'script style meta link title head template iframe object svg'.split(' '),
-);
+const PASTE_DROPS = new Set('script style meta link title head template iframe object svg'.split(' '));
 
 /**
  * Pasted HTML reduced to the document structure the editor writes: headings,
@@ -200,12 +190,7 @@ export function linkAddress(typed: string): string | undefined {
 }
 
 // Elements that start their own line in the HTML view.
-const LINE_TAGS = new Set(
-  (
-    'p div h1 h2 h3 h4 h5 h6 ul ol li blockquote pre hr table thead tbody tfoot tr td th ' +
-    'caption figure figcaption'
-  ).split(' '),
-);
+const LINE_TAGS = new Set(('p div h1 h2 h3 h4 h5 h6 ul ol li blockquote pre hr table thead tbody tfoot tr td th ' + 'caption figure figcaption').split(' '));
 
 /**
  * Rich text HTML laid out to read, the way Prettier lays out a page: every

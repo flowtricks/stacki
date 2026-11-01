@@ -111,10 +111,7 @@ function bracketed(text: string, start: number): string | undefined {
 // A helper's own definition: from its line to the next line indented as far as
 // it is (the next statement beside it), at most HELPER_CHARS_MAX.
 function helperNames(text: string, helper: string): string[] {
-  const definition = new RegExp(
-    `^([ \\t]*)(?:export\\s+)?(?:const|let|function)\\s+${helper}\\b`,
-    'm',
-  ).exec(text);
+  const definition = new RegExp(`^([ \\t]*)(?:export\\s+)?(?:const|let|function)\\s+${helper}\\b`, 'm').exec(text);
   if (!definition) {
     return [];
   }
@@ -143,9 +140,7 @@ function structureFiles(projectRoot: string): string[] {
 /** The project's own source files whose text passes `test`, breadth first and bounded. */
 export function projectSourceFiles(projectRoot: string, test: (text: string) => boolean): string[] {
   const out: string[] = [];
-  const queue: { readonly directory: string; readonly depth: number }[] = [
-    { directory: projectRoot, depth: 0 },
-  ];
+  const queue: { readonly directory: string; readonly depth: number }[] = [{ directory: projectRoot, depth: 0 }];
   let visited = 0;
   for (let at = 0; at < queue.length && visited < STRUCTURE_LIMITS.filesMax; at++) {
     const next = queue[at];

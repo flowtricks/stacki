@@ -88,11 +88,7 @@ function parsePage(source: string, options: { readonly locs?: boolean } = {}): P
   const { imports } = frontmatterModel;
 
   resetParseBail();
-  const {
-    nodes: topNodes,
-    clean,
-    trailingBlank,
-  } = parseTemplate(body, options.locs ? bodyStart : undefined);
+  const { nodes: topNodes, clean, trailingBlank } = parseTemplate(body, options.locs ? bodyStart : undefined);
   // A newline at the very start of the body is a blank line, because the
   // frontmatter's closing --- already ended its own line. Everywhere else a
   // leading newline is just the break after the tag before it, which is why
@@ -120,17 +116,13 @@ function parsePage(source: string, options: { readonly locs?: boolean } = {}): P
     return {
       editable: false,
       reason: `Page contains markup the visual editor cannot represent.${where}`,
-      bail: parseState.lastBail
-        ? { what: parseState.lastBail.what, near: parseState.lastBail.near }
-        : undefined,
+      bail: parseState.lastBail ? { what: parseState.lastBail.what, near: parseState.lastBail.near } : undefined,
     };
   }
 
   // Type-only specifiers name types, not values, so nothing on the page can be
   // one of them — they must not count as "this component is imported".
-  const importsByName = Object.fromEntries(
-    imports.filter((i) => !i.typeOnly).map((i) => [i.name, i]),
-  );
+  const importsByName = Object.fromEntries(imports.filter((i) => !i.typeOnly).map((i) => [i.name, i]));
 
   // Layout detection: a single top-level component wrapping the whole page,
   // or — when siblings live outside it — exactly one top-level component
@@ -168,11 +160,7 @@ function parsePage(source: string, options: { readonly locs?: boolean } = {}): P
 
 // A shared source-aware writer keeps the preview, file and code editor in
 // agreement. The surrounding page writer supplies the last line break.
-function serializeFrontmatter(
-  model: FrontmatterModel,
-  lines: string[],
-  specFor?: (imp: ImportMember) => string,
-): void {
+function serializeFrontmatter(model: FrontmatterModel, lines: string[], specFor?: (imp: ImportMember) => string): void {
   const text = writeFrontmatter(model, specFor);
   if (text) {
     lines.push(text.replace(/\r?\n$/, ''));
@@ -222,11 +210,7 @@ function serializePage(input: unknown): string {
 // with the page’s. A page marks as "0.1"; src/components/Card.astro marks as
 // "src/components/Card.astro|0.1", and the app asks for that namespace while
 // that component is the file being edited.
-function serializePageMarked(
-  input: unknown,
-  prefix = '',
-  stamp: PreviewStamp | undefined = undefined,
-): string {
+function serializePageMarked(input: unknown, prefix = '', stamp: PreviewStamp | undefined = undefined): string {
   const model = parseSerializePage(input);
   const marks = chunkImportMarks(model);
   const lines = ['---'];
@@ -294,9 +278,7 @@ function locateSelection(absPath: string, indexPath: string): SourceLocation | u
     return bare;
   }
   if (indexPath === 'frontmatter') {
-    return parsed.model.bodyStart
-      ? { file: absPath, startLine: 1, endLine: lineOf(source, parsed.model.bodyStart - 1) }
-      : bare;
+    return parsed.model.bodyStart ? { file: absPath, startLine: 1, endLine: lineOf(source, parsed.model.bodyStart - 1) } : bare;
   }
   resolveChunks(parsed.model, absPath, { locs: true });
 
@@ -359,11 +341,7 @@ function locateSelection(absPath: string, indexPath: string): SourceLocation | u
 }
 
 // The template parse bounded the tree's depth before this runs.
-function parsePageMarkDynamic(
-  list: readonly ParserNode[],
-  importsByName: Readonly<Record<string, ImportMember>>,
-  depth: number,
-): void {
+function parsePageMarkDynamic(list: readonly ParserNode[], importsByName: Readonly<Record<string, ImportMember>>, depth: number): void {
   assert(depth <= LIMITS.treeDepthMax, 'parsePageMarkDynamic: depth limit');
   for (const node of list) {
     if (node.kind === 'component' && node.name !== 'Fragment') {
@@ -384,10 +362,7 @@ function parsePageMarkDynamic(
   }
 }
 
-function parsePageLayout(
-  topNodes: readonly ParserNode[],
-  importsByName: Readonly<Record<string, ImportMember>>,
-): void {
+function parsePageLayout(topNodes: readonly ParserNode[], importsByName: Readonly<Record<string, ImportMember>>): void {
   const significant = topNodes.filter((node) => node.kind !== 'comment');
   let wrapper: ParserNode | undefined;
   const significantFirst = significant[0];
@@ -402,10 +377,7 @@ function parsePageLayout(
     wrapper = significantFirst;
   } else if (significant.length > 1) {
     const layoutish = significant.filter(
-      (node) =>
-        node.kind === 'component' &&
-        node.children !== undefined &&
-        /layout/i.test(importsByName[node.name]?.path || ''),
+      (node) => node.kind === 'component' && node.children !== undefined && /layout/i.test(importsByName[node.name]?.path || ''),
     );
     if (layoutish.length === 1) {
       wrapper = layoutish[0];

@@ -7,54 +7,50 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import { maintainConnection } from '../src/features/collaboration/connectionLease';
 
-test(
-  'access refresh and heartbeats keep an authorized collaboration socket open',
-  { timeout: 5000 },
-  async () => {
-    const { server, client, socket } = await connectedPair();
-    let pings = 0;
-    client.on('message', (data) => {
-      if (data.toString() === JSON.stringify({ type: 'ping' })) {
-        pings++;
-        client.send(JSON.stringify({ type: 'pong' }));
-      }
-    });
-    let checks = 0;
-    maintainConnection(
-      socket,
-      async () => {
-        checks++;
-        return true;
-      },
-      { checkEvery: 50, pingEvery: 500 },
-    );
-    try {
-      // Observe actual traffic instead of assuming heavily parallel tests can
-      // service a 10 ms heartbeat or finish three checks within 150 ms.
-      while (checks < 3 || pings < 2) {
-        assert.equal(client.readyState, WebSocket.OPEN);
-        await delay(25);
-      }
-      assert.ok(checks >= 3);
-      assert.equal(client.readyState, WebSocket.OPEN);
-      const message = new Promise<string>((resolve) => {
-        const received = (data: RawData) => {
-          if (String(data) === 'still connected') {
-            client.off('message', received);
-            resolve(String(data));
-          }
-        };
-        client.on('message', received);
-      });
-      socket.send('still connected');
-      assert.equal(await message, 'still connected');
-    } finally {
-      client.terminate();
-      socket.terminate();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
+test('access refresh and heartbeats keep an authorized collaboration socket open', { timeout: 5000 }, async () => {
+  const { server, client, socket } = await connectedPair();
+  let pings = 0;
+  client.on('message', (data) => {
+    if (data.toString() === JSON.stringify({ type: 'ping' })) {
+      pings++;
+      client.send(JSON.stringify({ type: 'pong' }));
     }
-  },
-);
+  });
+  let checks = 0;
+  maintainConnection(
+    socket,
+    async () => {
+      checks++;
+      return true;
+    },
+    { checkEvery: 50, pingEvery: 500 },
+  );
+  try {
+    // Observe actual traffic instead of assuming heavily parallel tests can
+    // service a 10 ms heartbeat or finish three checks within 150 ms.
+    while (checks < 3 || pings < 2) {
+      assert.equal(client.readyState, WebSocket.OPEN);
+      await delay(25);
+    }
+    assert.ok(checks >= 3);
+    assert.equal(client.readyState, WebSocket.OPEN);
+    const message = new Promise<string>((resolve) => {
+      const received = (data: RawData) => {
+        if (String(data) === 'still connected') {
+          client.off('message', received);
+          resolve(String(data));
+        }
+      };
+      client.on('message', received);
+    });
+    socket.send('still connected');
+    assert.equal(await message, 'still connected');
+  } finally {
+    client.terminate();
+    socket.terminate();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
 
 test('revoked access closes the socket instead of silently extending its authorization', async () => {
   const { server, client, socket } = await connectedPair();

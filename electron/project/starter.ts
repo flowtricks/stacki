@@ -63,19 +63,13 @@ const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog): 
         },
       });
     } catch (error: unknown) {
-      reject(
-        new Error(
-          `Could not run ${cmd}: ${error instanceof Error ? error.message : String(error)}`,
-        ),
-      );
+      reject(new Error(`Could not run ${cmd}: ${error instanceof Error ? error.message : String(error)}`));
       return;
     }
     const child = proc;
     const timer = setTimeout(() => {
       stopProcessTree(child);
-      reject(
-        new Error(`${path.basename(cmd)} ${args[0] ?? ''} took over 5 minutes and was stopped.`),
-      );
+      reject(new Error(`${path.basename(cmd)} ${args[0] ?? ''} took over 5 minutes and was stopped.`));
     }, RUN_TIMEOUT_MS);
     let tail = '';
     const onOut = (chunk: { toString(): string }): void => {
@@ -128,13 +122,7 @@ interface CreateStarterOptions {
  * caller's — this is the part that has to be right before anything is
  * installed into it.
  */
-async function createStarter({
-  starter = 'lumos',
-  parentPath,
-  name,
-  npm,
-  onLog,
-}: CreateStarterOptions = {}): Promise<{ ok: boolean; projectPath: string }> {
+async function createStarter({ starter = 'lumos', parentPath, name, npm, onLog }: CreateStarterOptions = {}): Promise<{ ok: boolean; projectPath: string }> {
   const template = STARTERS[starter];
   if (!template) {
     throw new Error(`${starter} is not a starter this app knows.`);
@@ -189,15 +177,7 @@ async function startSiteHistory(directory: string, label: string, onLog?: OnLog)
     // repository or global configuration behind their back.
     await run(
       'git',
-      [
-        '-c',
-        'user.name=Stacki',
-        '-c',
-        'user.email=stacki@local.invalid',
-        'commit',
-        '-m',
-        `Start ${path.basename(directory)} from ${label}`,
-      ],
+      ['-c', 'user.name=Stacki', '-c', 'user.email=stacki@local.invalid', 'commit', '-m', `Start ${path.basename(directory)} from ${label}`],
       directory,
     );
   } catch (error: unknown) {

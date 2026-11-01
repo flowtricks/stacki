@@ -74,8 +74,6 @@ function startOfDay(milliseconds: number): number {
 function formattedDate(time: number, now: number, month: 'short' | 'long'): string {
   const date = new Date(time);
   const sameYear = date.getFullYear() === new Date(now).getFullYear();
-  const options: Intl.DateTimeFormatOptions = sameYear
-    ? { month, day: 'numeric' }
-    : { month, day: 'numeric', year: 'numeric' };
+  const options: Intl.DateTimeFormatOptions = sameYear ? { month, day: 'numeric' } : { month, day: 'numeric', year: 'numeric' };
   return date.toLocaleDateString(undefined, options);
 }

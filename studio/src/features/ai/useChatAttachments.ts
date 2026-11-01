@@ -15,10 +15,7 @@ export function useChatAttachments(id: string) {
           (size, chat) =>
             size +
             chat.images.reduce((n, image) => n + image.url.length, 0) +
-            chat.messages.reduce(
-              (n, message) => n + message.images.reduce((n, image) => n + image.url.length, 0),
-              0,
-            ),
+            chat.messages.reduce((n, message) => n + message.images.reduce((n, image) => n + image.url.length, 0), 0),
           0,
         );
         if (used + images.reduce((size, image) => size + image.url.length, 0) > 12_000_000) {

@@ -23,36 +23,19 @@ import { canvasDraftInline } from './canvasDraftInline';
 
 export function ElementContent({ state }: { readonly state: ElementState }) {
   const draft = useCanvasTextDraft(state);
-  const {
-    node,
-    loopContext,
-    bindContext,
-    onSetInline,
-    showContentField,
-    isSlot,
-    contentPicker,
-    setContentPicker,
-    contentInsertRef,
-  } = state;
+  const { node, loopContext, bindContext, onSetInline, showContentField, isSlot, contentPicker, setContentPicker, contentInsertRef } = state;
   const contentSet = (node.children?.length ?? 0) > 0;
   return (
     <>
       {showContentField && (
         <div className="props-field" key="content">
           <label onClick={noLabelActivation}>
-            <ContentLabel
-              active={contentSet}
-              name={isSlot ? 'Fallback' : 'Content'}
-              onReset={() => onSetInline([])}
-            />
+            <ContentLabel active={contentSet} name={isSlot ? 'Fallback' : 'Content'} onReset={() => onSetInline([])} />
             {/* Text can hold data too — the same handle, the same picker,
                   dropping the same chip in at the caret. Without it, putting a
                   field into a sentence means knowing to type
                   `{post.data.title}`. */}
-            <BindHandle
-              active={!!contentPicker}
-              onOpen={(host) => elementOpenContentPicker(state, host ?? undefined)}
-            />
+            <BindHandle active={!!contentPicker} onOpen={(host) => elementOpenContentPicker(state, host ?? undefined)} />
           </label>
           <RichContent
             key={node.id}
@@ -90,11 +73,7 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
   );
 }
 
-function ContentLabel(props: {
-  readonly active: boolean;
-  readonly name: string;
-  readonly onReset: () => void;
-}) {
+function ContentLabel(props: { readonly active: boolean; readonly name: string; readonly onReset: () => void }) {
   const [position, setPosition] = useState<FieldPosition>();
   return (
     <>
@@ -151,7 +130,7 @@ export function ElementLooseText({ state }: { readonly state: ElementState }) {
           </label>
           <AutoTextarea
             key={node.id}
-            minRows={2}
+            minRows={1}
             value={looseText ? canvasDraftValue(looseText, draft) : ''}
             placeholder="Text alongside the children below"
             onChange={(event) => onSetContent(event.target.value)}
@@ -191,8 +170,7 @@ export function ElementSchemaFields({ state }: { readonly state: ElementState })
         .filter((field) => field.name !== 'class' && !(styleField && field.name === 'style'))
         .map((field) => {
           const value = canvasDraftProp(node.id, field.name, draft) ?? node.props?.[field.name];
-          const onChange: ValueChange = (next, immediate) =>
-            setPropCascading(field.name, next, immediate);
+          const onChange: ValueChange = (next, immediate) => setPropCascading(field.name, next, immediate);
           const plain = (
             <PropField
               key={field.name}
@@ -209,11 +187,10 @@ export function ElementSchemaFields({ state }: { readonly state: ElementState })
               onChange={onChange}
             />
           );
-          // A prop the component's loop reads its filters or sort from is
-          // edited with the loop's own editor; Show and Skip are numbers.
+          // A prop the component's loop reads its filters, sort or picked items from
+          // is edited with the loop's own editor; Show and Skip are numbers.
           const listProp = listProps?.get(field.name);
-          return listProp !== undefined &&
-            (listProp.setting === 'filter' || listProp.setting === 'sort') ? (
+          return listProp !== undefined && (listProp.setting === 'filter' || listProp.setting === 'sort' || listProp.setting === 'curated') ? (
             <ListPropField
               key={field.name}
               name={field.name}
@@ -232,19 +209,7 @@ export function ElementSchemaFields({ state }: { readonly state: ElementState })
 }
 
 export function ElementExtraFields({ state }: { readonly state: ElementState }) {
-  const {
-    node,
-    slotOptions,
-    projectClasses,
-    loopContext,
-    bindContext,
-    linkContext,
-    onSetProp,
-    dataContext,
-    extraProps,
-    styleField,
-    assetContext,
-  } = state;
+  const { node, slotOptions, projectClasses, loopContext, bindContext, linkContext, onSetProp, dataContext, extraProps, styleField, assetContext } = state;
   return (
     <>
       {extraProps
@@ -274,18 +239,11 @@ export function ElementSettingsHeader({ state }: { readonly state: ElementState 
     <>
       {hasSettings && (
         <div className={`props-group ${settingsOpen ? 'open' : ''}`}>
-          <button
-            type="button"
-            className="props-group-head"
-            aria-expanded={settingsOpen}
-            onClick={() => setSettingsOpen((open) => !open)}
-          >
+          <button type="button" className="props-group-head" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((open) => !open)}>
             <span className="props-group-name">Settings</span>
             {/* Something set in there is worth knowing about without opening
                   it — otherwise a class you gave the element looks lost. */}
-            {!settingsOpen && settingsCount > 0 && (
-              <span className="props-group-count">{settingsCount}</span>
-            )}
+            {!settingsOpen && settingsCount > 0 && <span className="props-group-count">{settingsCount}</span>}
             <ChevronRightIcon size={11} className="props-group-chevron" />
           </button>
         </div>
@@ -295,16 +253,7 @@ export function ElementSettingsHeader({ state }: { readonly state: ElementState 
 }
 
 export function ElementTag({ state }: { readonly state: ElementState }) {
-  const {
-    node,
-    layouts,
-    currentLayoutName,
-    tagOptions,
-    onChangeTag,
-    layoutTag,
-    changeToLayout,
-    showTagField,
-  } = state;
+  const { node, layouts, currentLayoutName, tagOptions, onChangeTag, layoutTag, changeToLayout, showTagField } = state;
   return (
     <>
       {showTagField && (
@@ -314,11 +263,7 @@ export function ElementTag({ state }: { readonly state: ElementState }) {
           // local name the page imported it under — that name is a detail of
           // this page, while the file is what you're choosing between.
           tag={layoutTag ? currentLayoutName || node.name : node.name}
-          options={
-            layoutTag
-              ? layouts.map((option) => ({ name: option.name, kind: 'layout' }))
-              : tagOptions
-          }
+          options={layoutTag ? layouts.map((option) => ({ name: option.name, kind: 'layout' })) : tagOptions}
           onChangeTag={layoutTag ? changeToLayout : (name) => onChangeTag?.(name)}
         />
       )}
@@ -327,18 +272,7 @@ export function ElementTag({ state }: { readonly state: ElementState }) {
 }
 
 export function ElementClass({ state }: { readonly state: ElementState }) {
-  const {
-    node,
-    slotOptions,
-    projectClasses,
-    loopContext,
-    bindContext,
-    linkContext,
-    dataContext,
-    setPropCascading,
-    classField,
-    assetContext,
-  } = state;
+  const { node, slotOptions, projectClasses, loopContext, bindContext, linkContext, dataContext, setPropCascading, classField, assetContext } = state;
   return (
     <>
       {classField && (
@@ -361,17 +295,7 @@ export function ElementClass({ state }: { readonly state: ElementState }) {
 }
 
 export function ElementStyle({ state }: { readonly state: ElementState }) {
-  const {
-    node,
-    slotOptions,
-    projectClasses,
-    loopContext,
-    bindContext,
-    linkContext,
-    dataContext,
-    setPropCascading,
-    styleField,
-  } = state;
+  const { node, slotOptions, projectClasses, loopContext, bindContext, linkContext, dataContext, setPropCascading, styleField } = state;
   return (
     <>
       {styleField && (
@@ -396,17 +320,7 @@ export function ElementStyle({ state }: { readonly state: ElementState }) {
 }
 
 export function ElementAttributes({ state }: { readonly state: ElementState }) {
-  const {
-    node,
-    allowAttrs,
-    loopContext,
-    bindContext,
-    onSetProp,
-    onSetProps,
-    onRenameProp,
-    projectPath,
-    attrNames,
-  } = state;
+  const { node, allowAttrs, loopContext, bindContext, onSetProp, onSetProps, onRenameProp, projectPath, attrNames } = state;
   return (
     <>
       {allowAttrs && (
@@ -455,9 +369,7 @@ export function ElementSettings({ state }: { readonly state: ElementState }) {
           <ElementClass state={state} />
           <ElementStyle state={state} />
           <ElementAttributes state={state} />
-          {onSetComment && (node.kind === 'element' || node.kind === 'component') && (
-            <CommentField key="comment" value={comment} onCommit={onSetComment} />
-          )}
+          {onSetComment && (node.kind === 'element' || node.kind === 'component') && <CommentField key="comment" value={comment} onCommit={onSetComment} />}
           {/* `slot` is not a prop of this component — it tells the PARENT where to
             put it — so it sits apart from the component's own props, last of
             all, below even the comment. */}

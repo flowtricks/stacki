@@ -16,18 +16,11 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import os from 'node:os';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import {
-  cmsFailureMessage,
-  cmsRemoteService,
-  type CmsRemoteService,
-} from '../../../vendor/stacki/electron/content/cmsRemoteService';
+import { cmsFailureMessage, cmsRemoteService, type CmsRemoteService } from '../../../vendor/stacki/electron/content/cmsRemoteService';
 import { fetchLinkPreview } from '../../../vendor/stacki/electron/content/linkPreview';
 import { parseVideoLinkURL } from '../../../vendor/stacki/shared/properties/linkPreview';
 import { SANITY_UPLOAD_BYTES_MAX } from '../../../vendor/stacki/electron/content/sanityUpload';
-import {
-  parseCmsConnectionDraft,
-  parseConnectionId,
-} from '../../../vendor/stacki/shared/properties/cmsConnections';
+import { parseCmsConnectionDraft, parseConnectionId } from '../../../vendor/stacki/shared/properties/cmsConnections';
 import {
   parseRemoteAssetKind,
   parseRemoteCollectionName,
@@ -60,33 +53,23 @@ type Operation = (service: CmsRemoteService, input: Record<string, unknown>) => 
 const OPERATIONS: Readonly<Record<string, Operation>> = {
   collections: (service) => service.collections(),
   documents: (service, input) =>
-    service.documents(
-      parseRemoteCollectionName(input['collection']),
-      input['columns'] === undefined ? [] : parseRemoteColumns(input['columns']),
-    ),
+    service.documents(parseRemoteCollectionName(input['collection']), input['columns'] === undefined ? [] : parseRemoteColumns(input['columns'])),
   create: (service, input) => service.create(parseRemoteCollectionName(input['collection'])),
   delete: (service, input) => service.remove(parseRemoteIds(input['ids'])),
   move: (service, input) => service.move(parseRemoteMove(input['move'])),
   document: (service, input) => service.document(parseRemoteDocumentId(input['id'])),
   template: (service, input) => service.template(parseRemoteCollectionName(input['collection'])),
   write: (service, input) => service.write(parseRemoteWrite(input['write'])),
-  act: (service, input) =>
-    service.act(parseRemoteDocumentId(input['id']), parseRemoteDocumentAction(input['action'])),
+  act: (service, input) => service.act(parseRemoteDocumentId(input['id']), parseRemoteDocumentAction(input['action'])),
   history: (service, input) => service.history(parseRemoteDocumentId(input['id'])),
-  restore: (service, input) =>
-    service.restore(parseRemoteDocumentId(input['id']), parseRemoteRevisionId(input['revision'])),
+  restore: (service, input) => service.restore(parseRemoteDocumentId(input['id']), parseRemoteRevisionId(input['revision'])),
   references: (service, input) => service.references(parseRemoteTypes(input['types'])),
 };
 
 export function cmsRemoteRoutes(root: string) {
   const deployed = Boolean(process.env['STUDIO_CONTAINER_TOKEN']);
   const local = new LocalConnections(root);
-  return async (
-    request: IncomingMessage,
-    response: ServerResponse,
-    pathname: string,
-    readBody: () => Promise<string>,
-  ): Promise<boolean> => {
+  return async (request: IncomingMessage, response: ServerResponse, pathname: string, readBody: () => Promise<string>): Promise<boolean> => {
     if (!deployed && pathname.startsWith('/studio/api/cms-connections')) {
       send(response, await local.route(request, pathname, readBody));
       return true;
@@ -102,10 +85,7 @@ export function cmsRemoteRoutes(root: string) {
     try {
       const target = deployed ? trustedTarget(request) : local.target(request);
       const service = cmsRemoteService(root, target);
-      const value =
-        operation === 'upload'
-          ? await upload(service, request)
-          : await run(service, operation, await readBody());
+      const value = operation === 'upload' ? await upload(service, request) : await run(service, operation, await readBody());
       send(response, { ok: true, value });
     } catch (error) {
       send(response, { ok: false, message: cmsFailureMessage(error).slice(0, 900) });

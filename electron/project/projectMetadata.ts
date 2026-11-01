@@ -5,13 +5,7 @@ import { toDigest } from '../../shared/core/brand';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { err, ok, type Result } from '../../shared/core/result';
-import {
-  METADATA_FILES,
-  metadataSource,
-  validateMetadata,
-  type MetadataFile,
-  type MetadataKind,
-} from '../../shared/properties/projectMetadata';
+import { METADATA_FILES, metadataSource, validateMetadata, type MetadataFile, type MetadataKind } from '../../shared/properties/projectMetadata';
 import { documentHost, describeWriteReport } from '../documents/documentWrites';
 import { readSource } from '../lib/mainLimits';
 

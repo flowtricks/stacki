@@ -33,7 +33,8 @@ export function isDataBound(node: BindableNode | undefined): boolean {
 // A plain name — `overlap`, `post.data.title`. What a chip can show and a
 // picker can choose; anything with an operator or a call in it can't be named
 // that way and stays code.
-export const BIND_PATH_RE = /^[A-Za-z_$][\w$]*(?:\[\d+\])*(?:\.[A-Za-z_$][\w$]*(?:\[\d+\])*)*$/;
+// A step may also be `["campus-name"]`, for a field a dot can't reach.
+export const BIND_PATH_RE = /^[A-Za-z_$][\w$]*(?:\[(?:\d+|"(?:[^"\\]|\\.)*")\])*(?:\.[A-Za-z_$][\w$]*(?:\[(?:\d+|"(?:[^"\\]|\\.)*")\])*)*$/;
 
 export interface TemplateHole {
   readonly from: number;
@@ -98,8 +99,7 @@ const unescapeTpl = (text: string): string =>
     .replace(/\\\$\{/g, '${')
     .replace(/\\\\/g, '\\');
 
-const escapeTpl = (text: string | undefined): string =>
-  String(text).replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+const escapeTpl = (text: string | undefined): string => String(text).replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
 
 // Words that are JavaScript rather than data. `true` is not something to bind
 // to, and neither is the `of` in a for loop.
@@ -208,9 +208,7 @@ export function codeParts(source: unknown): Part[] | undefined {
   }
   // Worth doing only when it is a mix: a bare path is one chip, handled above,
   // and an expression with no data in it has nothing to show.
-  return out.some((part) => part.expr !== undefined) && out.some((part) => part.text !== undefined)
-    ? out
-    : undefined;
+  return out.some((part) => part.expr !== undefined) && out.some((part) => part.text !== undefined) ? out : undefined;
 }
 
 interface ValueLike {
@@ -322,9 +320,7 @@ export function valueFromParts(
   parts: readonly Part[] | undefined,
   { numeric, mode }: { readonly numeric?: boolean; readonly mode?: string } = {},
 ): Extract<Attr, { readonly type: 'string' | 'expr' }> | undefined {
-  const clean = (parts ?? []).filter((part) =>
-    part.expr !== undefined ? String(part.expr).trim() !== '' : part.text !== '',
-  );
+  const clean = (parts ?? []).filter((part) => (part.expr !== undefined ? String(part.expr).trim() !== '' : part.text !== ''));
   if (!clean.length) {
     return undefined;
   }
@@ -369,11 +365,7 @@ interface BindContext {
  * query ended up under — which may be one that was already there, since a page
  * asking for the same collection twice is the same query twice.
  */
-export function resolvePick(
-  path: string,
-  query: PickQuery | undefined,
-  bindContext: BindContext | undefined,
-): string {
+export function resolvePick(path: string, query: PickQuery | undefined, bindContext: BindContext | undefined): string {
   if (!query || !bindContext?.ensureQuery) {
     return path;
   }

@@ -17,12 +17,10 @@ test('page tree builds implicit folders and preserves page basenames', () => {
 });
 
 test('page drag parser accepts its wire shape and rejects malformed boundaries', () => {
-  assert.deepEqual(
-    model.parsePageDragText(
-      JSON.stringify({ path: '/project/src/pages/index.astro', name: 'index.astro' }),
-    ),
-    { path: '/project/src/pages/index.astro', name: 'index.astro' },
-  );
+  assert.deepEqual(model.parsePageDragText(JSON.stringify({ path: '/project/src/pages/index.astro', name: 'index.astro' })), {
+    path: '/project/src/pages/index.astro',
+    name: 'index.astro',
+  });
   for (const value of [
     '',
     '{',

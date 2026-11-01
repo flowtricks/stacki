@@ -60,16 +60,13 @@ export class CmsConnectionStore {
   save(projectRoot: string, draft: CmsConnectionDraft): CmsConnection {
     if (!this.crypt.available()) {
       throw new Error(
-        'This computer cannot encrypt keys for Stacki, so none are saved. ' +
-          'On Linux, install and unlock a keyring (GNOME Keyring or KWallet).',
+        'This computer cannot encrypt keys for Stacki, so none are saved. ' + 'On Linux, install and unlock a keyring (GNOME Keyring or KWallet).',
       );
     }
     const { secret, ...fields } = draft;
     const connection = parseCmsConnection({ ...fields, id: randomUUID() });
     const data = this.read();
-    const others = (data[projectRoot] ?? []).filter(
-      (entry) => !sameTarget(entry.connection, connection),
-    );
+    const others = (data[projectRoot] ?? []).filter((entry) => !sameTarget(entry.connection, connection));
     if (others.length >= CMS_CONNECTION_LIMITS.connectionsPerProjectMax) {
       throw new Error('This project already has the most CMS connections Stacki keeps.');
     }
@@ -164,9 +161,7 @@ function parseStore(input: unknown): StoreData {
     if (!Array.isArray(entries)) {
       throw new Error('CMS store: expected a list');
     }
-    out[root] = entries
-      .slice(0, CMS_CONNECTION_LIMITS.connectionsPerProjectMax)
-      .map(parseStoredConnection);
+    out[root] = entries.slice(0, CMS_CONNECTION_LIMITS.connectionsPerProjectMax).map(parseStoredConnection);
   }
   return out;
 }

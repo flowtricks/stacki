@@ -32,15 +32,7 @@ export function AccountMenu(props: AccountMenuProps) {
       >
         <StackiLogo />
       </button>
-      <Popup
-        mode="popover"
-        portal={false}
-        className="account-popover"
-        open={open}
-        onClose={close}
-        anchor={menu.current ?? undefined}
-        label="Stacki account"
-      >
+      <Popup mode="popover" portal={false} className="account-popover" open={open} onClose={close} anchor={menu.current ?? undefined} label="Stacki account">
         {(actions) => (
           <>
             <RoleMenu saved={props.saved} close={actions.close} />
@@ -74,11 +66,7 @@ export function AccountMenu(props: AccountMenuProps) {
 
 function AccountIdentity({ saved, session }: Pick<AccountMenuProps, 'saved' | 'session'>) {
   if (session?.kind !== 'github') {
-    return (
-      <span className="local-session">
-        {session?.kind === 'local' ? 'Local development · no sign-in required' : 'Loading account…'}
-      </span>
-    );
+    return <span className="local-session">{session?.kind === 'local' ? 'Local development · no sign-in required' : 'Loading account…'}</span>;
   }
   return (
     <div className="account-profile">
@@ -90,12 +78,7 @@ function AccountIdentity({ saved, session }: Pick<AccountMenuProps, 'saved' | 's
         <span>GitHub account</span>
       </div>
       <form method="post" action="/studio/auth/logout">
-        <button
-          className="account-sign-out"
-          type="submit"
-          disabled={!saved}
-          title={saved ? 'Sign out of this studio' : 'Wait for your edits to finish saving'}
-        >
+        <button className="account-sign-out" type="submit" disabled={!saved} title={saved ? 'Sign out of this studio' : 'Wait for your edits to finish saving'}>
           Sign out
         </button>
       </form>

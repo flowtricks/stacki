@@ -25,9 +25,7 @@ async function checkEditors() {
   const browser = await chromium.launch({
     executablePath:
       process.env['CHROME_PATH'] ??
-      (process.platform === 'darwin'
-        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-        : chromium.executablePath()),
+      (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
     headless: true,
   });
   try {
@@ -50,10 +48,7 @@ async function checkEditors() {
       const start = performance.now();
       await input.fill(text);
       for (const page of [first, second]) {
-        await page
-          .frameLocator('iframe[title="Site preview"]')
-          .getByRole('heading', { name: text, exact: true })
-          .waitFor({ timeout: 1000 });
+        await page.frameLocator('iframe[title="Site preview"]').getByRole('heading', { name: text, exact: true }).waitFor({ timeout: 1000 });
       }
       console.log(JSON.stringify({ text, actionToBothObservedMs: performance.now() - start }));
     }
@@ -65,10 +60,7 @@ async function checkEditors() {
     );
     holds.forEach((hold) => hold.release());
     await input.fill('After delayed renders');
-    await second
-      .frameLocator('iframe[title="Site preview"]')
-      .getByRole('heading', { name: 'After delayed renders', exact: true })
-      .waitFor();
+    await second.frameLocator('iframe[title="Site preview"]').getByRole('heading', { name: 'After delayed renders', exact: true }).waitFor();
   } finally {
     await browser.close();
   }
@@ -85,20 +77,14 @@ async function checkKeystrokes(first: Page, second: Page) {
     const started = performance.now();
     await input.pressSequentially(character);
     expected += character;
-    await second
-      .frameLocator('iframe[title="Site preview"]')
-      .getByRole('heading', { name: expected.trim(), exact: true })
-      .waitFor({ timeout: 1000 });
+    await second.frameLocator('iframe[title="Site preview"]').getByRole('heading', { name: expected.trim(), exact: true }).waitFor({ timeout: 1000 });
     timings.push(performance.now() - started);
   }
   assert.equal(await input.innerText(), expected, 'Remote echoes preserve the local caret');
   const burst = ' continuous typing without waiting for peers';
   await input.pressSequentially(burst, { delay: 25 });
   expected += burst;
-  await second
-    .frameLocator('iframe[title="Site preview"]')
-    .getByRole('heading', { name: expected.trim(), exact: true })
-    .waitFor({ timeout: 1000 });
+  await second.frameLocator('iframe[title="Site preview"]').getByRole('heading', { name: expected.trim(), exact: true }).waitFor({ timeout: 1000 });
   assert.equal(await input.innerText(), expected, 'Continuous typing preserves every character');
   console.log(JSON.stringify({ keystrokeToPeerObservedMs: timings }));
 }

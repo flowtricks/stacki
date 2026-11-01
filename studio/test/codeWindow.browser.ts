@@ -4,8 +4,7 @@ import { mkdir } from 'node:fs/promises';
 import { record, string } from '../src/shared/validation';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -19,9 +18,7 @@ try {
   await page.goto(url);
   await saved(page);
   original = await readSource(page);
-  const fixture =
-    original +
-    '\n<script is:inline>\n// Popup script\n</script>\n<style>\n.studio-popup-probe { color: red; }\n</style>\n';
+  const fixture = original + '\n<script is:inline>\n// Popup script\n</script>\n<style>\n.studio-popup-probe { color: red; }\n</style>\n';
   await replaceSource(page, fixture);
   await page.reload();
   await saved(page);
@@ -44,9 +41,7 @@ try {
   await popup.waitFor();
   await closePopup(page);
   for (const name of ['script', 'style']) {
-    const row = page
-      .locator('.structure-node')
-      .filter({ has: page.locator('.label', { hasText: new RegExp('^' + name + '$') }) });
+    const row = page.locator('.structure-node').filter({ has: page.locator('.label', { hasText: new RegExp('^' + name + '$') }) });
     await row.click();
     await page.keyboard.press('Enter');
     await page.getByRole('dialog', { name: '<' + name + '>', exact: true }).waitFor();
@@ -55,21 +50,14 @@ try {
     await page.keyboard.insertText(name === 'script' ? '// Saved script\n' : '/* Saved style */\n');
     await saved(page);
     const marker = name === 'script' ? '// Saved script\n' : '/* Saved style */\n';
-    assert.equal(
-      await readSource(page),
-      before.replace('</' + name + '>', marker + '</' + name + '>'),
-    );
+    assert.equal(await readSource(page), before.replace('</' + name + '>', marker + '</' + name + '>'));
     await closePopup(page);
   }
   await frontmatter.click();
   await page.getByRole('button', { name: 'Code', exact: true }).click();
   await page.locator('.code-panel .cm-content').click();
   await page.keyboard.press('Enter');
-  assert.equal(
-    await popup.count(),
-    0,
-    'Enter inside the code panel must edit code, not open a popup',
-  );
+  assert.equal(await popup.count(), 0, 'Enter inside the code panel must edit code, not open a popup');
   await page.getByRole('button', { name: 'Navigator', exact: true }).click();
   await frontmatter.click();
   await page.keyboard.press('Shift+Enter');
@@ -79,9 +67,7 @@ try {
   await mkdir('test-results', { recursive: true });
   await page.screenshot({ path: 'test-results/code-popup.png' });
   assert.deepEqual(errors, []);
-  console.log(
-    'Frontmatter/script/style Enter, double-click, Edit code, live source edits and typing guards passed.',
-  );
+  console.log('Frontmatter/script/style Enter, double-click, Edit code, live source edits and typing guards passed.');
 } finally {
   if (original !== undefined) {
     await replaceSource(page, original);

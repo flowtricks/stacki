@@ -42,15 +42,7 @@ import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import type { Attr } from '../../shared/page/pageNode';
 import { parseTemplate, serializeNodes } from './astroParser';
-import {
-  type MarkdownNodeList,
-  type PrintNode,
-  type MarkdownLayout,
-  splitFrontmatter,
-  layoutFromFrontmatter,
-  splitLines,
-  lineAt,
-} from './markdownLines';
+import { type MarkdownNodeList, type PrintNode, type MarkdownLayout, splitFrontmatter, layoutFromFrontmatter, splitLines, lineAt } from './markdownLines';
 import { type ParseEnv, parseBlocks, assignPathIds } from './markdownBlocks';
 
 export { type PrintNode, type MarkdownLayout } from './markdownLines';
@@ -259,16 +251,12 @@ export interface MarkdownModel {
 }
 
 export type MarkdownParse =
-  | { readonly editable: true; readonly model: MarkdownModel }
-  | { readonly editable: false; readonly reason: string; readonly bail: undefined };
+  { readonly editable: true; readonly model: MarkdownModel } | { readonly editable: false; readonly reason: string; readonly bail: undefined };
 
 /** Parse a Markdown or MDX page. Every node has its source range; a page whose
  * tree exceeds the wire model's bounds is not editable (the code panel still
  * is), never cut short. */
-function parseMarkdownPage(
-  source: string,
-  { mdx = false }: { readonly mdx?: boolean } = {},
-): MarkdownParse {
+function parseMarkdownPage(source: string, { mdx = false }: { readonly mdx?: boolean } = {}): MarkdownParse {
   if (source.length > LIMITS.ipcFieldCharsMax) {
     return { editable: false, reason: 'The page exceeds the source limit.', bail: undefined };
   }
@@ -313,10 +301,7 @@ function parseMarkdownPage(
  * Markdown page reaches disk only as splices; the lint fence keeps this
  * printer to this module and the tests. */
 function serializeMarkdownPage(
-  model: Pick<
-    MarkdownModel,
-    'extraFrontmatter' | 'mdHasFrontmatter' | 'mdEol' | 'mdEndsWithNewline'
-  > & { readonly nodes: readonly PrintNode[] },
+  model: Pick<MarkdownModel, 'extraFrontmatter' | 'mdHasFrontmatter' | 'mdEol' | 'mdEndsWithNewline'> & { readonly nodes: readonly PrintNode[] },
 ): string {
   const out: string[] = [];
   const fm = model.extraFrontmatter;
@@ -345,11 +330,7 @@ function printMarkdownNode(node: PrintNode, layout: MarkdownLayout): string {
 
 /** A list item written at its place: from its marker (the list's indentation
  * belongs to the list) to its last line. */
-function printMarkdownItem(
-  item: PrintNode,
-  at: Pick<ItemMarker, 'marker' | 'number'> & { readonly indent: string },
-  layout: MarkdownLayout,
-): string {
+function printMarkdownItem(item: PrintNode, at: Pick<ItemMarker, 'marker' | 'number'> & { readonly indent: string }, layout: MarkdownLayout): string {
   const out: string[] = [];
   serializeItem(item, at, out);
   const [first, ...rest] = out;
@@ -366,12 +347,4 @@ function printMarkdownFrontmatter(yaml: string, eol: string): string {
   return ['---', ...lines, '---'].join(eol);
 }
 
-export {
-  layoutFromFrontmatter,
-  parseMarkdownPage,
-  printMarkdownFrontmatter,
-  printMarkdownItem,
-  printMarkdownNode,
-  serializeMarkdownPage,
-  splitFrontmatter,
-};
+export { layoutFromFrontmatter, parseMarkdownPage, printMarkdownFrontmatter, printMarkdownItem, printMarkdownNode, serializeMarkdownPage, splitFrontmatter };

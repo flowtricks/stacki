@@ -31,12 +31,7 @@ export interface EditPreviewed {
 /** The bytes `edit` would leave, planned against `bytes` as the file at
  * `authoredChecksum`. A rejection is the planner's own, as `page:edit` would
  * have answered it over unchanged bytes. */
-export function previewEdit(
-  file: string,
-  bytes: ByteString,
-  authoredChecksum: Digest,
-  edit: Edit,
-): Result<EditPreviewed, RejectionReason> {
+export function previewEdit(file: string, bytes: ByteString, authoredChecksum: Digest, edit: Edit): Result<EditPreviewed, RejectionReason> {
   const path = toFilePath(file);
   const snapshot = NODE_PROJECTOR.snapshot(path, bytes);
   // The renderer states each request against the reply before it, whose bytes

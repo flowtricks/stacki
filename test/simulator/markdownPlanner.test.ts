@@ -26,11 +26,7 @@ const PAGE = toFilePath('/project/page.md');
 const snapshot = (text: string): Snapshot => snapshotOf(PAGE, encodeUtf8(text));
 
 /** Plan `operation` at `path` of `authored` against the same text unchanged. */
-function planned(
-  authored: string,
-  path: readonly number[],
-  operation: (at: (path: readonly number[]) => AnchorRef) => Operation,
-): string {
+function planned(authored: string, path: readonly number[], operation: (at: (path: readonly number[]) => AnchorRef) => Operation): string {
   return plannedAgainst(authored, authored, path, operation);
 }
 

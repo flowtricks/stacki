@@ -3,8 +3,7 @@ import { chromium, type Locator } from 'playwright';
 import { record, string } from '../src/shared/validation';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 600 } });
@@ -44,12 +43,7 @@ try {
   await highlighted.waitFor();
   const menuBox = await popup.boundingBox();
   const optionBox = await highlighted.boundingBox();
-  assert.ok(
-    menuBox &&
-      optionBox &&
-      optionBox.y >= menuBox.y &&
-      optionBox.y + optionBox.height <= menuBox.y + menuBox.height,
-  );
+  assert.ok(menuBox && optionBox && optionBox.y >= menuBox.y && optionBox.y + optionBox.height <= menuBox.y + menuBox.height);
   await page.setViewportSize({ width: 1200, height: 460 });
   await insideViewport(popup);
   await input.press('Enter');
@@ -87,13 +81,7 @@ try {
 async function moveFieldToBottom(input: Locator) {
   await input.evaluate((element) => {
     let scroller = element.parentElement;
-    while (
-      scroller &&
-      !(
-        scroller.scrollHeight > scroller.clientHeight &&
-        /auto|scroll/.test(getComputedStyle(scroller).overflowY)
-      )
-    ) {
+    while (scroller && !(scroller.scrollHeight > scroller.clientHeight && /auto|scroll/.test(getComputedStyle(scroller).overflowY))) {
       scroller = scroller.parentElement;
     }
     if (!scroller) {
@@ -106,16 +94,8 @@ async function insideViewport(popup: Locator) {
   await page.waitForFunction(
     (selector) => {
       const rect = document.querySelector(selector)?.getBoundingClientRect();
-      return (
-        !!rect &&
-        rect.top >= 7 &&
-        rect.left >= 7 &&
-        rect.bottom <= innerHeight - 7 &&
-        rect.right <= innerWidth - 7
-      );
+      return !!rect && rect.top >= 7 && rect.left >= 7 && rect.bottom <= innerHeight - 7 && rect.right <= innerWidth - 7;
     },
-    await popup.evaluate((node) =>
-      node.classList.contains('class-family') ? '.class-family' : '.class-suggest',
-    ),
+    await popup.evaluate((node) => (node.classList.contains('class-family') ? '.class-family' : '.class-suggest')),
   );
 }

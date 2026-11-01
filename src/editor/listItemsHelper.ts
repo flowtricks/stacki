@@ -75,18 +75,12 @@ export const LIST_ITEMS_HELPER: string = HELPER_LINES.join('\n');
  * helper is already there, or the helper to add. A `listItems` of the page's
  * own that is not Stacki's is refused rather than shadowed.
  */
-export function listItemsNeed(
-  frontmatter: ParsedFrontmatter,
-): { readonly kind: 'present' } | { readonly kind: 'add' } | { readonly kind: 'taken' } {
+export function listItemsNeed(frontmatter: ParsedFrontmatter): { readonly kind: 'present' } | { readonly kind: 'add' } | { readonly kind: 'taken' } {
   if (!frontmatter.bound.has(LIST_ITEMS_NAME)) {
     return { kind: 'add' };
   }
   const declaration = frontmatter.declarations.get(LIST_ITEMS_NAME);
-  const ours =
-    declaration !== undefined &&
-    frontmatter.source
-      .slice(declaration.statement.from, declaration.statement.to)
-      .startsWith(SIGNATURE);
+  const ours = declaration !== undefined && frontmatter.source.slice(declaration.statement.from, declaration.statement.to).startsWith(SIGNATURE);
   assert(LIST_ITEMS_HELPER.startsWith(SIGNATURE), 'The helper starts with its signature');
   return ours ? { kind: 'present' } : { kind: 'taken' };
 }

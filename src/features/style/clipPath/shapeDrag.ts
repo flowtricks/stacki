@@ -20,19 +20,9 @@ import {
 } from './clipPathTypes';
 import { CORNERS } from './clipPathConstants';
 import { isCssUnitValue, insetBox } from './clipPathMeasure';
-import {
-  formatRawEditableClipPath,
-  oppositeCorner,
-  oppositeInsetSide,
-  insetSideForHandle,
-} from './clipPathHandles';
+import { formatRawEditableClipPath, oppositeCorner, oppositeInsetSide, insetSideForHandle } from './clipPathHandles';
 import { expandCssUnitValues } from './clipPathPreview';
-import {
-  cssUnitPx,
-  cssUnitValueToCanvasPercent,
-  canvasPercentToCssUnitValue,
-  rawInsetBox,
-} from './clipPathCanvasUnits';
+import { cssUnitPx, cssUnitValueToCanvasPercent, canvasPercentToCssUnitValue, rawInsetBox } from './clipPathCanvasUnits';
 
 // How a drag bends a shape: which sides and corners move together, whether the
 // radii stay round, whether an ellipse keeps its proportions, and the canvas the
@@ -44,18 +34,9 @@ export type ShapeDragOptions = {
   ellipseScaleProportional?: boolean;
   canvas?: HTMLElement | undefined;
 };
-export type RawEditable<Kind extends RawEditableClipPath['kind']> = Extract<
-  RawEditableClipPath,
-  { kind: Kind }
->;
+export type RawEditable<Kind extends RawEditableClipPath['kind']> = Extract<RawEditableClipPath, { kind: Kind }>;
 
-export function updateShapeForDrag(
-  shape: ClipShape,
-  target: DragTarget,
-  x: number,
-  y: number,
-  options: ShapeDragOptions = {},
-): ClipShape {
+export function updateShapeForDrag(shape: ClipShape, target: DragTarget, x: number, y: number, options: ShapeDragOptions = {}): ClipShape {
   if (shape.kind === 'none') {
     return shape;
   }
@@ -109,10 +90,7 @@ export function updateRawShapeForDrag(
 }
 
 // The shape with its raw editable replaced, and its CSS rewritten to match.
-export function withRawEditable(
-  shape: RawClipPathShape,
-  nextEditable: RawEditableClipPath,
-): ClipShape {
+export function withRawEditable(shape: RawClipPathShape, nextEditable: RawEditableClipPath): ClipShape {
   return { ...shape, editable: nextEditable, value: formatRawEditableClipPath(nextEditable) };
 }
 
@@ -124,13 +102,8 @@ export function dragRawPolygonPoint(
   { x, y }: Point,
   canvas: HTMLElement,
 ): ClipShape {
-  const selectedIndexes = new Set(
-    target.polygonPointIndexes?.length ? target.polygonPointIndexes : [target.index],
-  );
-  const beforeEditable =
-    target.before.kind === 'raw' && target.before.editable?.kind === 'polygon'
-      ? target.before.editable
-      : editable;
+  const selectedIndexes = new Set(target.polygonPointIndexes?.length ? target.polygonPointIndexes : [target.index]);
+  const beforeEditable = target.before.kind === 'raw' && target.before.editable?.kind === 'polygon' ? target.before.editable : editable;
   const beforePoint = beforeEditable.points[target.index];
   if (!beforePoint) {
     return shape;
@@ -165,12 +138,8 @@ export function offsetRawPoint(
   canvas: HTMLElement,
 ): CssCoordinatePoint {
   const beforeSelectedCanvas = {
-    x: isCssUnitValue(beforeSelected.x)
-      ? cssUnitValueToCanvasPercent(beforeSelected.x, 'x', canvas)
-      : 0,
-    y: isCssUnitValue(beforeSelected.y)
-      ? cssUnitValueToCanvasPercent(beforeSelected.y, 'y', canvas)
-      : 0,
+    x: isCssUnitValue(beforeSelected.x) ? cssUnitValueToCanvasPercent(beforeSelected.x, 'x', canvas) : 0,
+    y: isCssUnitValue(beforeSelected.y) ? cssUnitValueToCanvasPercent(beforeSelected.y, 'y', canvas) : 0,
   };
   return {
     x:
@@ -207,10 +176,7 @@ export function dragRawCircle(
     y: cssUnitValueToCanvasPercent(editable.cy, 'y', canvas),
   };
   const rect = canvas.getBoundingClientRect();
-  const distancePx = Math.hypot(
-    ((x - center.x) / 100) * rect.width,
-    ((y - center.y) / 100) * rect.height,
-  );
+  const distancePx = Math.hypot(((x - center.x) / 100) * rect.width, ((y - center.y) / 100) * rect.height);
   const unitPx = cssUnitPx(editable.radius.unit, 'x', canvas);
   return withRawEditable(shape, {
     ...editable,
@@ -330,14 +296,8 @@ export function dragRawInsetRadius(
   const horizontal = expandCssUnitValues(radii.horizontal);
   const vertical = expandCssUnitValues(radii.vertical || radii.horizontal);
   const cornerIndex = CORNERS.indexOf(corner);
-  const localXPercent =
-    corner === 'topRight' || corner === 'bottomRight'
-      ? Math.max(0, box.x1 - x)
-      : Math.max(0, x - box.x0);
-  const localYPercent =
-    corner === 'bottomRight' || corner === 'bottomLeft'
-      ? Math.max(0, box.y1 - y)
-      : Math.max(0, y - box.y0);
+  const localXPercent = corner === 'topRight' || corner === 'bottomRight' ? Math.max(0, box.x1 - x) : Math.max(0, x - box.x0);
+  const localYPercent = corner === 'bottomRight' || corner === 'bottomLeft' ? Math.max(0, box.y1 - y) : Math.max(0, y - box.y0);
   const currentHorizontal = horizontal[cornerIndex];
   const currentVertical = vertical[cornerIndex];
   if (!currentHorizontal || !currentVertical) {
@@ -345,13 +305,8 @@ export function dragRawInsetRadius(
   }
   const radiusX = canvasPercentToCssUnitValue(localXPercent, 'x', currentHorizontal.unit, canvas);
   const radiusY = canvasPercentToCssUnitValue(localYPercent, 'y', currentVertical.unit, canvas);
-  const radius = options.insetRadiusUnlocked
-    ? { x: radiusX, y: radiusY }
-    : { x: radiusX, y: { value: radiusX.value, unit: currentVertical.unit } };
-  const next = setRawInsetRadii(
-    { horizontal, vertical },
-    { corner, cornerIndex, radius, mode: options.insetRadiusMode || 'single' },
-  );
+  const radius = options.insetRadiusUnlocked ? { x: radiusX, y: radiusY } : { x: radiusX, y: { value: radiusX.value, unit: currentVertical.unit } };
+  const next = setRawInsetRadii({ horizontal, vertical }, { corner, cornerIndex, radius, mode: options.insetRadiusMode || 'single' });
   return withRawEditable(shape, { ...editable, radii: next });
 }
 
@@ -380,10 +335,8 @@ export function setRawInsetRadii(
     if (!horizontalValue || !verticalValue) {
       return;
     }
-    nextHorizontal[index] =
-      index === cornerIndex ? radius.x : { value: radius.x.value, unit: horizontalValue.unit };
-    nextVertical[index] =
-      index === cornerIndex ? radius.y : { value: radius.y.value, unit: verticalValue.unit };
+    nextHorizontal[index] = index === cornerIndex ? radius.x : { value: radius.x.value, unit: horizontalValue.unit };
+    nextVertical[index] = index === cornerIndex ? radius.y : { value: radius.y.value, unit: verticalValue.unit };
   };
   if (mode === 'all') {
     CORNERS.forEach(setRadius);
@@ -398,12 +351,7 @@ export function setRawInsetRadii(
 
 // Moves the dragged polygon point; with several selected, all of them move by the
 // same offset from where the drag began.
-export function dragPolygonPoint(
-  shape: PolygonShape,
-  target: DragTarget & { kind: 'polygon-point' },
-  x: number,
-  y: number,
-): ClipShape {
+export function dragPolygonPoint(shape: PolygonShape, target: DragTarget & { kind: 'polygon-point' }, x: number, y: number): ClipShape {
   if (target.before.kind === 'polygon' && target.polygonPointIndexes?.length) {
     const beforePoint = target.before.points[target.index];
     if (!beforePoint) {
@@ -417,11 +365,8 @@ export function dragPolygonPoint(
     return {
       kind: 'polygon',
       points: shape.points.map((point, index) => {
-        const beforeSelectedPoint =
-          target.before.kind === 'polygon' ? target.before.points[index] : undefined;
-        return selectedIndexes.has(index) && beforeSelectedPoint
-          ? { x: beforeSelectedPoint.x + dx, y: beforeSelectedPoint.y + dy }
-          : point;
+        const beforeSelectedPoint = target.before.kind === 'polygon' ? target.before.points[index] : undefined;
+        return selectedIndexes.has(index) && beforeSelectedPoint ? { x: beforeSelectedPoint.x + dx, y: beforeSelectedPoint.y + dy } : point;
       }),
     };
   }
@@ -434,13 +379,7 @@ export function dragPolygonPoint(
 
 // Moves a circle or ellipse's centre, or sets a radius from the pointer (an ellipse
 // scaling its other radius with it when proportional).
-export function dragRoundShape(
-  shape: CircleShape | EllipseShape,
-  target: DragTarget,
-  x: number,
-  y: number,
-  options: ShapeDragOptions,
-): ClipShape {
+export function dragRoundShape(shape: CircleShape | EllipseShape, target: DragTarget, x: number, y: number, options: ShapeDragOptions): ClipShape {
   if (shape.kind === 'circle') {
     if (target.kind === 'circle-center') {
       return { ...shape, cx: x, cy: y };
@@ -474,13 +413,7 @@ export function dragRoundShape(
 }
 
 // Moves an inset edge, or sets a corner radius from the pointer.
-export function dragInset(
-  shape: InsetShape,
-  target: DragTarget,
-  x: number,
-  y: number,
-  options: ShapeDragOptions,
-): ClipShape {
+export function dragInset(shape: InsetShape, target: DragTarget, x: number, y: number, options: ShapeDragOptions): ClipShape {
   const insetSideByTarget: Partial<Record<DragTarget['kind'], InsetSide>> = {
     'inset-top': 'top',
     'inset-right': 'right',
@@ -517,28 +450,14 @@ export function dragInset(
 
 // Sets an inset corner radius from the pointer — alone, with the opposite corner,
 // or all four — round unless the radius is unlocked.
-export function dragInsetRadius(
-  shape: InsetShape,
-  corner: CornerName,
-  x: number,
-  y: number,
-  options: ShapeDragOptions,
-): ClipShape {
+export function dragInsetRadius(shape: InsetShape, corner: CornerName, x: number, y: number, options: ShapeDragOptions): ClipShape {
   const { width, height, x1: rightEdge, y1: bottomEdge } = insetBox(shape);
-  const localX =
-    corner === 'topRight' || corner === 'bottomRight'
-      ? Math.max(0, rightEdge - x)
-      : Math.max(0, x - shape.left);
-  const localY =
-    corner === 'bottomRight' || corner === 'bottomLeft'
-      ? Math.max(0, bottomEdge - y)
-      : Math.max(0, y - shape.top);
+  const localX = corner === 'topRight' || corner === 'bottomRight' ? Math.max(0, rightEdge - x) : Math.max(0, x - shape.left);
+  const localY = corner === 'bottomRight' || corner === 'bottomLeft' ? Math.max(0, bottomEdge - y) : Math.max(0, y - shape.top);
   const radiusX = width > 0 ? (localX / width) * 100 : 0;
   const radiusY = height > 0 ? (localY / height) * 100 : 0;
   const radiusValue = Math.max(0, (radiusX + radiusY) / 2);
-  const radius = options.insetRadiusUnlocked
-    ? { x: radiusX, y: radiusY }
-    : { x: radiusValue, y: radiusValue };
+  const radius = options.insetRadiusUnlocked ? { x: radiusX, y: radiusY } : { x: radiusValue, y: radiusValue };
   const nextRadii = { ...shape.radii };
   const setRadius = (target: CornerName) => {
     nextRadii[target] = { ...radius };

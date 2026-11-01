@@ -8,12 +8,7 @@
 // winner (by !important, then specificity, then document order); losing
 // declarations are flagged `overriddenBy` so you still see what actually applies.
 
-import {
-  canonicalCompound,
-  compareSpecificity,
-  matchSelectorList,
-  type MatchTarget,
-} from './selectors';
+import { canonicalCompound, compareSpecificity, matchSelectorList, type MatchTarget } from './selectors';
 import type { ParsedRule, SelectorInfo, Specificity } from './styleTypes';
 import { assert } from '../../../../shared/core/assert';
 
@@ -83,9 +78,7 @@ export function compareCascade(
   return rightOrder - leftOrder; // later wins on a tie
 }
 
-function strongestOf(
-  selectors: SelectorInfo[],
-): { selector: SelectorInfo; specificity: Specificity } | undefined {
+function strongestOf(selectors: SelectorInfo[]): { selector: SelectorInfo; specificity: Specificity } | undefined {
   let best: { selector: SelectorInfo; specificity: Specificity } | undefined;
   for (const selector of selectors) {
     if (!best || compareSpecificity(selector.specificity, best.specificity) > 0) {
@@ -95,10 +88,7 @@ function strongestOf(
   return best;
 }
 
-export async function computeRuleModel(
-  rules: ParsedRule[],
-  target: MatchTarget,
-): Promise<RuleModel> {
+export async function computeRuleModel(rules: ParsedRule[], target: MatchTarget): Promise<RuleModel> {
   const hits: Hit[] = [];
   for (const rule of rules) {
     const results = await matchSelectorList(rule.selectorText, target);
@@ -140,16 +130,12 @@ function classifyHit(rule: ParsedRule, matchedSelectors: SelectorInfo[]): Hit {
     const label = `${rule.atContext.join(' › ')} ${selectorText}`;
     return { ...hit, conditional: true, kind: 'at-rule', label };
   }
-  const baseSelectors = matchedSelectors.filter(
-    (selector) => !subjectHasState(selector.text) && selector.pseudoElement === undefined,
-  );
+  const baseSelectors = matchedSelectors.filter((selector) => !subjectHasState(selector.text) && selector.pseudoElement === undefined);
   if (baseSelectors.length) {
     const strongestBase = strongestOf(baseSelectors);
     return { ...hit, strongestBase, conditional: false, kind: 'base', label: selectorText };
   }
-  const kind = matchedSelectors.some((selector) => selector.pseudoElement !== undefined)
-    ? 'pseudo-element'
-    : 'pseudo-class';
+  const kind = matchedSelectors.some((selector) => selector.pseudoElement !== undefined) ? 'pseudo-element' : 'pseudo-class';
   return { ...hit, conditional: true, kind, label: selectorText };
 }
 
@@ -191,9 +177,7 @@ function cascadeWinners(hits: readonly Hit[]): Map<string, Winner> {
     byProp.set(contribution.prop, list);
   });
   byProp.forEach((list, prop) => {
-    const winner = [...list].sort((left, right) =>
-      compareCascade(left, right, left.seq, right.seq),
-    )[0];
+    const winner = [...list].sort((left, right) => compareCascade(left, right, left.seq, right.seq))[0];
     if (winner === undefined) {
       throw new Error(`Cascade invariant failed: ${prop} has no contributions`);
     }

@@ -1,10 +1,6 @@
 import { parseMergeResolution } from './mergeResolution';
 import { parseAccountRequest } from './publishAccount';
-import {
-  parseCmsConnectionDraft,
-  parseConnectionId,
-  parseSanityLoginRequest,
-} from '../properties/cmsConnections';
+import { parseCmsConnectionDraft, parseConnectionId, parseSanityLoginRequest } from '../properties/cmsConnections';
 import {
   parseRemoteCollectionName,
   parseRemoteColumns,
@@ -38,19 +34,7 @@ import { parseEdit, parseEditRequest } from '../engine/editRequest';
 import { parsePreviewRender } from '../page/previewToken';
 // Complete invoke-channel inventory. Every main-process listener receives the
 // parsed shape below; payload field names retain the existing renderer protocol.
-import {
-  object,
-  text,
-  pathText,
-  boolean,
-  count,
-  optional,
-  nullable,
-  list,
-  dictionary,
-  data,
-  digest,
-} from '../core/boundary';
+import { object, text, pathText, boolean, count, optional, nullable, list, dictionary, data, digest } from '../core/boundary';
 import type { Parsed } from '../core/boundary';
 import { toArray } from '../core/record';
 
@@ -108,8 +92,7 @@ const source = { ...project, fromFile: pathText, spec: text };
 const named = { ...project, name: text };
 const reference = { ...project, ref: text };
 const branch = { ...project, branch: text };
-const location = (input: unknown): string | number =>
-  typeof input === 'number' ? count(input) : text(input);
+const location = (input: unknown): string | number => (typeof input === 'number' ? count(input) : text(input));
 // ContentView sends a storage locator, not the full display entry.
 const entry = object({ file: pathText, locator: optional(list(location)) });
 const edits = list(object({ path: list(location), value: data, rename: optional(text) }));
@@ -225,9 +208,7 @@ export const IPC_PAYLOADS = {
   }),
   'css:addVariables': object({
     ...project,
-    adds: optional(
-      list(object({ ...cssFile, name: text, value: optional(text), after: cssTarget })),
-    ),
+    adds: optional(list(object({ ...cssFile, name: text, value: optional(text), after: cssTarget }))),
   }),
   'css:moveHeading': object({ ...project, ...cssRange, selector: text, before: cssTarget }),
   'css:moveVariables': object({ ...project, moves: optional(list(cssMove)) }),

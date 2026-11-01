@@ -12,13 +12,7 @@
 // (6) diffing leaves its inputs untouched, bytes read from disk included.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  diffBytes,
-  diffHunks,
-  DIFF_BUDGET,
-  type ByteDiff,
-  type DiffBudget,
-} from '#dist/shared/engine/diff.js';
+import { diffBytes, diffHunks, DIFF_BUDGET, type ByteDiff, type DiffBudget } from '#dist/shared/engine/diff.js';
 import { LIMITS } from '#dist/shared/core/limits.js';
 import { encodeUtf8, toByteString, type ByteString } from '#dist/shared/core/span.js';
 import { Prng } from './prng.ts';
@@ -31,11 +25,7 @@ function randomBytes(prng: Prng, lengthMax: number, alphabet: number): ByteStrin
   return toByteString(Uint8Array.from({ length }, () => 0x61 + prng.below(alphabet)));
 }
 
-function computed(
-  source: ByteString,
-  target: ByteString,
-  budget: DiffBudget = DIFF_BUDGET,
-): ByteDiff {
+function computed(source: ByteString, target: ByteString, budget: DiffBudget = DIFF_BUDGET): ByteDiff {
   const outcome = diffBytes(source, target, budget);
   assert.equal(outcome.tag, 'computed');
   if (outcome.tag !== 'computed') {
@@ -79,11 +69,7 @@ test('distances at every point agree with the full tables on seeded inputs', () 
         const before = tables.before(x, y);
         const after = tables.after(x, y);
         const beyond = (value: number) => (value <= tables.distance ? value : undefined);
-        assert.equal(
-          diff.distanceBefore(x, y),
-          beyond(before),
-          `seed ${seed}: before (${x}, ${y})`,
-        );
+        assert.equal(diff.distanceBefore(x, y), beyond(before), `seed ${seed}: before (${x}, ${y})`);
         assert.equal(diff.distanceAfter(x, y), beyond(after), `seed ${seed}: after (${x}, ${y})`);
       }
     }
@@ -103,12 +89,7 @@ test('edge cases: empty, identical, pure insertion, pure deletion', () => {
   const inserted = computed(empty, page);
   assert.equal(inserted.distance, page.length);
   assert.deepEqual(
-    diffHunks(inserted).map((hunk) => [
-      hunk.source.start,
-      hunk.source.end,
-      hunk.target.start,
-      hunk.target.end,
-    ]),
+    diffHunks(inserted).map((hunk) => [hunk.source.start, hunk.source.end, hunk.target.start, hunk.target.end]),
     [[0, 0, 0, page.length]],
   );
   const deleted = computed(page, empty);
@@ -124,10 +105,7 @@ test('edge cases: empty, identical, pure insertion, pure deletion', () => {
 test('the distance budget: at the bound computes, one past it is too-costly', () => {
   const source = encodeUtf8('abcdef');
   const target = encodeUtf8('abXYef'); // Two out, two in: distance 4.
-  assert.equal(
-    computed(source, target, { workMax: DIFF_BUDGET.workMax, distanceMax: 4 }).distance,
-    4,
-  );
+  assert.equal(computed(source, target, { workMax: DIFF_BUDGET.workMax, distanceMax: 4 }).distance, 4);
   assert.deepEqual(diffBytes(source, target, { workMax: DIFF_BUDGET.workMax, distanceMax: 3 }), {
     tag: 'too-costly',
   });
@@ -159,27 +137,14 @@ test('preconditions assert with pinned messages', () => {
     /Assertion failed: The diff budget stays inside the distance/,
   );
   const diff = computed(bytes, encodeUtf8('abd'));
-  assert.throws(
-    () => diff.distanceBefore(4, 0),
-    /Assertion failed: A diff point lies inside the source/,
-  );
-  assert.throws(
-    () => diff.distanceAfter(0, 4),
-    /Assertion failed: A diff point lies inside the target/,
-  );
-  assert.throws(
-    () => diff.distanceBefore(-1, 0),
-    /Assertion failed: A diff point lies right of the grid start/,
-  );
-  assert.throws(
-    () => diff.distanceBefore(0.5, 0),
-    /Assertion failed: A diff point has an integer x/,
-  );
+  assert.throws(() => diff.distanceBefore(4, 0), /Assertion failed: A diff point lies inside the source/);
+  assert.throws(() => diff.distanceAfter(0, 4), /Assertion failed: A diff point lies inside the target/);
+  assert.throws(() => diff.distanceBefore(-1, 0), /Assertion failed: A diff point lies right of the grid start/);
+  assert.throws(() => diff.distanceBefore(0.5, 0), /Assertion failed: A diff point has an integer x/);
 });
 
 test('a 1 MB page with a small edit stays far inside the budget', () => {
-  const block =
-    '<section class="card">\n  <h2 title="Old">Heading</h2>\n  <p>Body text.</p>\n</section>\n';
+  const block = '<section class="card">\n  <h2 title="Old">Heading</h2>\n  <p>Body text.</p>\n</section>\n';
   const page = block.repeat(Math.ceil(1_000_000 / block.length));
   const middle = Math.floor(page.length / 2);
   const edited = `${page.slice(0, middle)}<!-- external -->${page.slice(middle)}`;

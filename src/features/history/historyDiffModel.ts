@@ -57,10 +57,7 @@ export function parseHistoryPatch(patch: string): readonly HistoryDiffLine[] {
   return rows;
 }
 
-function parseHistoryHunkLine(
-  line: string,
-  position: HunkPosition,
-): { readonly row: HistoryDiffLine; readonly position: HunkPosition } {
+function parseHistoryHunkLine(line: string, position: HunkPosition): { readonly row: HistoryDiffLine; readonly position: HunkPosition } {
   const { before, after, beforeRemaining, afterRemaining } = position;
   const text = line.slice(1);
   if (line.startsWith('+')) {

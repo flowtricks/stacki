@@ -10,13 +10,10 @@ function fixture() {
   const calls = [];
   global.window = {
     avb: {
-      discoverPublishing: (input) =>
-        new Promise((resolve, reject) => calls.push({ input, resolve, reject })),
+      discoverPublishing: (input) => new Promise((resolve, reject) => calls.push({ input, resolve, reject })),
     },
   };
-  const { cachedPublishingDiscovery, invalidatePublishingAccounts } = loadRenderer(
-    'src/features/publishing/publishDiscoveryCache.ts',
-  );
+  const { cachedPublishingDiscovery, invalidatePublishingAccounts } = loadRenderer('src/features/publishing/publishDiscoveryCache.ts');
   return { read: cachedPublishingDiscovery, invalidate: invalidatePublishingAccounts, calls };
 }
 
@@ -60,11 +57,7 @@ test('discovery shares requests and reuses results until refresh or expiry', asy
 
 test('discovery does not cache failed, partial, or malformed replies', async () => {
   const { read, calls } = fixture();
-  const responses = [
-    { kind: 'failed', message: 'Sign in again.' },
-    { ...ready, notice: 'Some accounts could not be loaded.' },
-    {},
-  ];
+  const responses = [{ kind: 'failed', message: 'Sign in again.' }, { ...ready, notice: 'Some accounts could not be loaded.' }, {}];
   for (let index = 0; index < responses.length; index++) {
     const pending = read('/project', request, 'reuse');
     assert.equal(calls.length, index + 1);

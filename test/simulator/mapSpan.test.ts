@@ -17,13 +17,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { diffBytes, DIFF_BUDGET } from '#dist/shared/engine/diff.js';
 import { mapSpan, mapSpanThroughDiff, type SpanMapping } from '#dist/shared/engine/mapSpan.js';
-import {
-  encodeUtf8,
-  toByteSpan,
-  toByteString,
-  type ByteSpan,
-  type ByteString,
-} from '#dist/shared/core/span.js';
+import { encodeUtf8, toByteSpan, toByteString, type ByteSpan, type ByteString } from '#dist/shared/core/span.js';
 import { Prng } from './prng.ts';
 import { referenceMapSpan, referenceTables } from './referenceDiff.ts';
 
@@ -183,8 +177,7 @@ test('text inserted and deleted around the span shifts it; inside the span it is
 
 test('a deep restructure: wrapped, re-indented, with a sibling between', () => {
   // `Hero title="Old"` is [1, 17), `Footer title="Old"` is [22, 40).
-  const restructured =
-    '<main>\n  <div>\n    <Hero title="Old" />\n  </div>\n  <Footer title="Old" />\n</main>\n';
+  const restructured = '<main>\n  <div>\n    <Hero title="Old" />\n  </div>\n  <Footer title="Old" />\n</main>\n';
   // Hand-counted: `<main>\n` 7 + `  <div>\n` 8 + 4 spaces → `<Hero` at 19, name at 20.
   assert.deepEqual(mapBoth(HERO_FOOTER, restructured, 1, 17), resolved(20, 36));
   // `  </div>\n` closes at 49; 2 spaces; `<Footer` at 51, name at 52.
@@ -217,10 +210,7 @@ test('exhausted budgets are too-costly; empty and out-of-file spans assert', () 
   assert.deepEqual(mapSpan(source, target, span, budget(workMax, 7)), { tag: 'too-costly' });
   assert.deepEqual(mapSpan(source, target, span, budget(10, 8)), { tag: 'too-costly' });
   assert.deepEqual(mapSpan(source, target, span, budget(workMax, 8)), resolved(9, 25));
-  assert.throws(
-    () => mapSpan(source, target, toByteSpan(3, 3), DIFF_BUDGET),
-    /Assertion failed: Only non-empty spans are mapped/,
-  );
+  assert.throws(() => mapSpan(source, target, toByteSpan(3, 3), DIFF_BUDGET), /Assertion failed: Only non-empty spans are mapped/);
   assert.throws(
     () => mapSpan(source, target, toByteSpan(40, source.length + 1), DIFF_BUDGET),
     /Assertion failed: The mapped span lies inside the authored bytes/,

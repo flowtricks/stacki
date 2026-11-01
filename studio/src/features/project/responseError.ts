@@ -14,17 +14,11 @@ export function responseError(response: Response) {
     return new StudioRequestError('Your Studio session expired. Sign in again.', 401);
   }
   if (response.status === 403) {
-    return new StudioRequestError(
-      'Studio could not authorize this request. Check your access and retry.',
-      403,
-    );
+    return new StudioRequestError('Studio could not authorize this request. Check your access and retry.', 403);
   }
   if (response.status === 429) {
     const retry = response.headers.get('Retry-After');
-    const wait =
-      retry && /^\d{1,6}$/.test(retry)
-        ? ` Wait ${retry} seconds before retrying.`
-        : ' Please wait before retrying.';
+    const wait = retry && /^\d{1,6}$/.test(retry) ? ` Wait ${retry} seconds before retrying.` : ' Please wait before retrying.';
     return new StudioRequestError('Studio is temporarily rate limited.' + wait, 429);
   }
   return new StudioRequestError(

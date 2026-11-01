@@ -12,11 +12,7 @@ export interface ComponentSourceRange extends SourceRange {
   readonly name: string;
 }
 
-export function sourceRangeForSelection(
-  model: EditorModel | undefined,
-  selectedId: string | undefined,
-  sourceLength: number,
-): SourceRange | undefined {
+export function sourceRangeForSelection(model: EditorModel | undefined, selectedId: string | undefined, sourceLength: number): SourceRange | undefined {
   if (!model || !selectedId) {
     return undefined;
   }
@@ -31,15 +27,11 @@ export function sourceRangeForSelection(
   return node ? sourceRangeForNode(node, sourceLength) : undefined;
 }
 
-export function sourceNodeAtOffset(
-  nodes: readonly EditorNode[],
-  offset: number,
-): EditorNode | undefined {
+export function sourceNodeAtOffset(nodes: readonly EditorNode[], offset: number): EditorNode | undefined {
   if (!Number.isSafeInteger(offset) || offset < 0) {
     return undefined;
   }
-  const pending: { readonly node: EditorNode; readonly parent: EditorNode | undefined }[] =
-    nodes.map((node) => ({ node, parent: undefined }));
+  const pending: { readonly node: EditorNode; readonly parent: EditorNode | undefined }[] = nodes.map((node) => ({ node, parent: undefined }));
   let best: EditorNode | undefined = undefined;
   let bestWidth = Number.POSITIVE_INFINITY;
   for (let index = 0; index < pending.length; index += 1) {
@@ -88,10 +80,7 @@ function sourceSelectableNode(node: EditorNode, parent: EditorNode | undefined):
   return node;
 }
 
-export function componentSourceRanges(
-  nodes: readonly EditorNode[],
-  source: string,
-): readonly ComponentSourceRange[] {
+export function componentSourceRanges(nodes: readonly EditorNode[], source: string): readonly ComponentSourceRange[] {
   const ranges: ComponentSourceRange[] = [];
   const pending = [...nodes];
   for (let index = 0; index < pending.length; index += 1) {
@@ -102,13 +91,7 @@ export function componentSourceRanges(
     if (!node) {
       continue;
     }
-    if (
-      node.kind === 'component' &&
-      !node.dynamicTag &&
-      !node.astroAsset &&
-      node.name !== 'Fragment' &&
-      typeof node.start === 'number'
-    ) {
+    if (node.kind === 'component' && !node.dynamicTag && !node.astroAsset && node.name !== 'Fragment' && typeof node.start === 'number') {
       const from = node.start + 1;
       const to = from + node.name.length;
       if (source.slice(from, to) === node.name) {
@@ -122,10 +105,7 @@ export function componentSourceRanges(
   return ranges;
 }
 
-export function sourceLineLabel(
-  source: string,
-  range: SourceRange | undefined,
-): string | undefined {
+export function sourceLineLabel(source: string, range: SourceRange | undefined): string | undefined {
   if (!range) {
     return undefined;
   }

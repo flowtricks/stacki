@@ -39,11 +39,7 @@ export function RemotePendingItem(props: {
   const { pending } = props;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
-  const context = useEditContext(
-    props.projectPath,
-    props.selection.connection.id,
-    pending.document,
-  );
+  const context = useEditContext(props.projectPath, props.selection.connection.id, pending.document);
   const create = async () => {
     setBusy(true);
     setError(undefined);
@@ -76,11 +72,7 @@ export function RemotePendingItem(props: {
       <div className="cms-detail-body">
         <div className="remote-cms-fields">
           {error && <ErrorToast message={error} />}
-          <RemoteFieldList
-            document={pending.document}
-            context={context}
-            onSave={(field, value) => props.onChange(withValue(pending, field, value))}
-          />
+          <RemoteFieldList document={pending.document} context={context} onSave={(field, value) => props.onChange(withValue(pending, field, value))} />
         </div>
       </div>
     </div>
@@ -104,14 +96,8 @@ export function duplicateOf(document: RemoteDocument, title: string): PendingIte
 }
 
 // The pending item with one field's new value; the title follows its name field.
-function withValue(
-  pending: PendingItem,
-  changed: RemoteDocumentField,
-  value: RemoteValue | undefined,
-): PendingItem {
-  const fields = pending.document.fields.map((field) =>
-    field.name === changed.name ? { ...field, value } : field,
-  );
+function withValue(pending: PendingItem, changed: RemoteDocumentField, value: RemoteValue | undefined): PendingItem {
+  const fields = pending.document.fields.map((field) => (field.name === changed.name ? { ...field, value } : field));
   const named = NAME_FIELDS.includes(changed.name) && typeof value === 'string' && value !== '';
   return {
     title: named ? value : pending.title,
@@ -120,11 +106,7 @@ function withValue(
 }
 
 /** Makes the item, then writes each field it holds: one whole value per field, in order. */
-async function createFromDocument(
-  projectPath: string,
-  selection: RemoteCmsSelection,
-  document: RemoteDocument,
-): Promise<RemoteResult<RemoteDocumentSummary>> {
+async function createFromDocument(projectPath: string, selection: RemoteCmsSelection, document: RemoteDocument): Promise<RemoteResult<RemoteDocumentSummary>> {
   const connectionId = selection.connection.id;
   assert(document.fields.length <= CMS_REMOTE_LIMITS.fieldsMax, 'A document has bounded fields');
   const made = await createRemoteDocument(projectPath, connectionId, selection.collection);

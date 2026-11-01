@@ -14,8 +14,7 @@ export function receiveRenderPush(hot: PreviewHot) {
   let path = location.pathname + location.search;
   let ready = false;
   let renderRevision = 0;
-  const announce = () =>
-    document.dispatchEvent(new CustomEvent('studio:render-push', { detail: ready }));
+  const announce = () => document.dispatchEvent(new CustomEvent('studio:render-push', { detail: ready }));
   document.addEventListener('avb:preview-route', () => {
     renderRevision++;
     ready = false;

@@ -1,12 +1,7 @@
 import { pruneGitDrafts } from './gitWorkspacePrune';
 import type { Environment } from './environment';
 import { record } from '../shared/validation';
-import {
-  gitBundleDigest,
-  gitDraftNamespace,
-  gitWorkspaceLimits,
-  parseGitWorkspaceManifest,
-} from '../features/history/gitWorkspaceContract';
+import { gitBundleDigest, gitDraftNamespace, gitWorkspaceLimits, parseGitWorkspaceManifest } from '../features/history/gitWorkspaceContract';
 
 const manifestKey = 'metadata/git-workspace';
 export async function readCloudGitWorkspace(environment: Environment) {
@@ -51,18 +46,14 @@ export async function gitWorkspaceRoute(request: Request, environment: Environme
   const written = await environment.DRAFTS.put(manifestKey, JSON.stringify(manifest), {
     onlyIf: current ? { etagMatches: current.etag } : { etagDoesNotMatch: '*' },
   });
-  return written
-    ? new Response(null, { status: 204 })
-    : new Response('Git changed during the action. Refresh and retry.', { status: 409 });
+  return written ? new Response(null, { status: 204 }) : new Response('Git changed during the action. Refresh and retry.', { status: 409 });
 }
 export async function gitBundleRoute(request: Request, environment: Environment, url: URL) {
   const digest = gitBundleDigest(url.searchParams.get('digest'));
   const key = 'git-bundles/' + digest;
   if (request.method === 'GET') {
     const stored = await environment.DRAFTS.get(key);
-    return stored
-      ? new Response(stored.body)
-      : new Response('Missing Git checkpoint.', { status: 404 });
+    return stored ? new Response(stored.body) : new Response('Missing Git checkpoint.', { status: 404 });
   }
   if (request.method !== 'PUT' || !request.body) {
     return new Response('Method not allowed', { status: 405 });
@@ -93,10 +84,7 @@ async function pruneCloudGitBundles(environment: Environment, digest: string) {
   }
   const keep = new Set([digest, manifest?.bundle]);
   const cutoff = Date.now() - 30 * 60_000;
-  const removed = inventory.objects.filter(
-    (object) =>
-      !keep.has(object.key.slice('git-bundles/'.length)) && object.uploaded.getTime() < cutoff,
-  );
+  const removed = inventory.objects.filter((object) => !keep.has(object.key.slice('git-bundles/'.length)) && object.uploaded.getTime() < cutoff);
   if (removed.length) {
     await environment.DRAFTS.delete(removed.map((object) => object.key));
   }

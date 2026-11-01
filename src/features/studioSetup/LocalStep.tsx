@@ -6,24 +6,14 @@ import { useCopyText } from './useCopyText';
 import { openExternalURL } from '../../ipc/appBridge';
 import { localStudioURL } from './localStudioURL';
 
-export default function LocalStep({
-  installed,
-  previewURL,
-}: {
-  readonly installed: boolean;
-  readonly previewURL: string | undefined;
-}) {
+export default function LocalStep({ installed, previewURL }: { readonly installed: boolean; readonly previewURL: string | undefined }) {
   const url = installed ? localStudioURL(previewURL) : undefined;
   const [error, setError] = useState('');
   return (
     <div className="studio-step-layout">
       <div className="studio-step-intro">
         <h3>Try your editor locally</h3>
-        <p>
-          {installed
-            ? 'Studio runs with your website. No Cloudflare setup needed.'
-            : 'Install Studio first, or use an agent in Go live.'}
-        </p>
+        <p>{installed ? 'Studio runs with your website. No Cloudflare setup needed.' : 'Install Studio first, or use an agent in Go live.'}</p>
       </div>
       <ol className="studio-preview-steps">
         <li>
@@ -71,19 +61,8 @@ function LaunchCommand() {
         <span>From your project folder</span>
       </div>
       <div className="studio-launch-command">
-        <textarea
-          aria-label="Launch command"
-          rows={2}
-          readOnly
-          value={STUDIO_LAUNCH_COMMAND}
-          onFocus={(event) => event.currentTarget.select()}
-        />
-        <button
-          aria-label="Copy launch command"
-          title="Copy launch command"
-          disabled={clipboard.status === 'copying'}
-          onClick={() => void clipboard.copy()}
-        >
+        <textarea aria-label="Launch command" rows={2} readOnly value={STUDIO_LAUNCH_COMMAND} onFocus={(event) => event.currentTarget.select()} />
+        <button aria-label="Copy launch command" title="Copy launch command" disabled={clipboard.status === 'copying'} onClick={() => void clipboard.copy()}>
           {clipboard.status === 'copied' ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
           {clipboard.status === 'copied' ? 'Copied' : 'Copy'}
         </button>
@@ -93,9 +72,7 @@ function LaunchCommand() {
           Launch command copied.
         </span>
       )}
-      {clipboard.status === 'failed' && (
-        <ErrorToast message="Could not copy. Select the command and copy it manually." />
-      )}
+      {clipboard.status === 'failed' && <ErrorToast message="Could not copy. Select the command and copy it manually." />}
     </section>
   );
 }

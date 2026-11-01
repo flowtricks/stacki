@@ -21,8 +21,7 @@ test('history reads real branches and diffs while preserving the shared draft', 
   const draft = path.join(root, 'draft');
   await mkdir(origin);
   await mkdir(draft);
-  const git = async (...args: readonly string[]) =>
-    (await execute('git', args, { cwd: origin, maxBuffer: 1024 * 1024 })).stdout.trim();
+  const git = async (...args: readonly string[]) => (await execute('git', args, { cwd: origin, maxBuffer: 1024 * 1024 })).stdout.trim();
   try {
     const head = await prepareHistory(origin, git);
     await writeFile(path.join(draft, 'untouched.txt'), 'Unsaved draft\n');
@@ -32,11 +31,7 @@ test('history reads real branches and diffs while preserving the shared draft', 
     assert.equal(all.commits.length, 3);
     assert.equal(all.info.head, head);
     assert.deepEqual(all.info.branches, ['alternate', 'main']);
-    assert.equal(
-      metrics.grants(),
-      1,
-      'Local graph commands do not request additional GitHub grants',
-    );
+    assert.equal(metrics.grants(), 1, 'Local graph commands do not request additional GitHub grants');
     assert.ok(all.commits.every((commit) => commit.files === undefined));
     assert.ok(
       metrics.logCommands.every((args) => !args.includes('--name-status')),
@@ -47,11 +42,7 @@ test('history reads real branches and diffs while preserving the shared draft', 
     assert.equal(metrics.commands(), before, 'A cached panel read starts no new Git commands');
     metrics.advance();
     assert.deepEqual(await history.read(0, 'all'), all);
-    assert.equal(
-      metrics.commands(),
-      before + 1,
-      'Unchanged history polls references without fetching again',
-    );
+    assert.equal(metrics.commands(), before + 1, 'Unchanged history polls references without fetching again');
     const current = await history.read(0, 'current');
     assert.equal(current.commits.length, 2);
     const detail = await history.commit(head);
@@ -113,22 +104,13 @@ test('older history deepens the bounded fetch without losing or repeating commit
   const draft = path.join(root, 'draft');
   await mkdir(origin);
   await mkdir(draft);
-  const git = async (...args: readonly string[]) =>
-    (
-      await execute('git', args, { cwd: origin, timeout: 20_000, maxBuffer: 1024 * 1024 })
-    ).stdout.trim();
+  const git = async (...args: readonly string[]) => (await execute('git', args, { cwd: origin, timeout: 20_000, maxBuffer: 1024 * 1024 })).stdout.trim();
   try {
     await initializeRepository(git);
     const tree = await git('write-tree');
     let parent: string | undefined;
     for (let index = 0; index < 35; index++) {
-      parent = await git(
-        'commit-tree',
-        tree,
-        '-m',
-        `Commit ${index}`,
-        ...(parent ? ['-p', parent] : []),
-      );
+      parent = await git('commit-tree', tree, '-m', `Commit ${index}`, ...(parent ? ['-p', parent] : []));
     }
     assert.ok(parent);
     await git('update-ref', 'refs/heads/main', parent);
@@ -141,11 +123,7 @@ test('older history deepens the bounded fetch without losing or repeating commit
       (context, args, input, options) =>
         publishGit(
           context,
-          args.map((argument) =>
-            argument === 'https://github.com/test/history.git'
-              ? pathToFileURL(origin).href
-              : argument,
-          ),
+          args.map((argument) => (argument === 'https://github.com/test/history.git' ? pathToFileURL(origin).href : argument)),
           input,
           options,
         ),
@@ -156,10 +134,7 @@ test('older history deepens the bounded fetch without losing or repeating commit
     assert.equal(first.atEnd, false);
     assert.equal(older.commits.length, 5);
     assert.equal(older.atEnd, true);
-    assert.equal(
-      new Set([...first.commits, ...older.commits].map((commit) => commit.hash)).size,
-      35,
-    );
+    assert.equal(new Set([...first.commits, ...older.commits].map((commit) => commit.hash)).size, 35);
     assert.throws(() => history.read(-1, 'all'), /pagination is bounded/);
     assert.throws(() => history.read(300, 'all'), /pagination is bounded/);
   } finally {
@@ -167,10 +142,7 @@ test('older history deepens the bounded fetch without losing or repeating commit
   }
 });
 
-async function prepareHistory(
-  origin: string,
-  git: (...args: readonly string[]) => Promise<string>,
-) {
+async function prepareHistory(origin: string, git: (...args: readonly string[]) => Promise<string>) {
   await initializeRepository(git);
   await mkdir(path.join(origin, 'src/pages'), { recursive: true });
   await writeFile(path.join(origin, 'src/pages/index.astro'), '<h1>Before</h1>\n');
@@ -207,11 +179,7 @@ function historyFixture(draft: string, origin: string) {
       }
       return publishGit(
         context,
-        args.map((argument) =>
-          argument === 'https://github.com/test/history.git'
-            ? pathToFileURL(origin).href
-            : argument,
-        ),
+        args.map((argument) => (argument === 'https://github.com/test/history.git' ? pathToFileURL(origin).href : argument)),
         input,
         options,
       );

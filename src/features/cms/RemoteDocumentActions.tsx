@@ -6,11 +6,7 @@
 import { useEffect, useState } from 'react';
 import type { RemoteDocument, RemoteRevision } from '../../../shared/properties/cmsRemote';
 import type { RemoteDocumentAction } from '../../../shared/properties/cmsRemote';
-import {
-  actOnRemoteDocument,
-  remoteHistory,
-  restoreRemoteRevision,
-} from '../../ipc/cmsConnectionsBridge';
+import { actOnRemoteDocument, remoteHistory, restoreRemoteRevision } from '../../ipc/cmsConnectionsBridge';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { CloseIcon, HistoryIcon, ResetIcon, TrashIcon } from '../../ui/Icons';
@@ -107,9 +103,7 @@ export function RemoteDocumentActions(props: Props) {
       >
         {busy === 'publish' ? 'Publishing…' : draft ? 'Publish' : 'Published'}
       </button>
-      {history && (
-        <HistoryDialog {...props} onClose={() => setHistory(false)} onRestored={props.onChanged} />
-      )}
+      {history && <HistoryDialog {...props} onClose={() => setHistory(false)} onRestored={props.onChanged} />}
     </div>
   );
 }
@@ -144,12 +138,7 @@ function HistoryDialog(
     }
   };
   return (
-    <Popup
-      className="modal remote-cms-history"
-      label="History"
-      onClose={props.onClose}
-      dismissible={true}
-    >
+    <Popup className="modal remote-cms-history" label="History" onClose={props.onClose} dismissible={true}>
       {({ close }) => (
         <>
           <div className="modal-header cms-modal-header">
@@ -161,16 +150,9 @@ function HistoryDialog(
           <div className="modal-body remote-cms-history-body">
             {error && <ErrorToast message={error} />}
             {revisions === undefined && <p className="remote-cms-note">Loading…</p>}
-            {revisions?.length === 0 && !error && (
-              <p className="remote-cms-note">No history yet.</p>
-            )}
+            {revisions?.length === 0 && !error && <p className="remote-cms-note">No history yet.</p>}
             {revisions?.map((revision, index) => (
-              <RevisionRow
-                key={revision.id}
-                revision={revision}
-                current={index === 0}
-                onRestore={() => void restore(revision, close)}
-              />
+              <RevisionRow key={revision.id} revision={revision} current={index === 0} onRestore={() => void restore(revision, close)} />
             ))}
           </div>
         </>
@@ -179,11 +161,7 @@ function HistoryDialog(
   );
 }
 
-function RevisionRow(props: {
-  readonly revision: RemoteRevision;
-  readonly current: boolean;
-  readonly onRestore: () => void;
-}) {
+function RevisionRow(props: { readonly revision: RemoteRevision; readonly current: boolean; readonly onRestore: () => void }) {
   return (
     <div className="remote-cms-revision">
       <span className="remote-cms-revision-time">{relativeTime(props.revision.timestamp)}</span>

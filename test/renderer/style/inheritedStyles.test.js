@@ -48,17 +48,13 @@ test('computed inheritance fills style controls without authoring CSS', async ()
     },
     IS_REACT_ACT_ENVIRONMENT: true,
   };
-  const previous = new Map(
-    Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(global, key)]),
-  );
+  const previous = new Map(Object.keys(globals).map((key) => [key, Object.getOwnPropertyDescriptor(global, key)]));
   for (const [key, value] of Object.entries(globals)) {
     Object.defineProperty(global, key, { value, configurable: true, writable: true });
   }
   const React = require('react');
   const { createRoot } = require('react-dom/client');
-  const { TypographySection, LivePropField, setHost, setCanvasFrame, receiveCanvasReply } = require(
-    outfile,
-  );
+  const { TypographySection, LivePropField, setHost, setCanvasFrame, receiveCanvasReply } = require(outfile);
   const root = createRoot(document.getElementById('root'));
   const computed = {
     color: 'rgb(12, 34, 56)',
@@ -175,12 +171,7 @@ test('computed inheritance fills style controls without authoring CSS', async ()
       color: 'var(--heading-accent)',
       width: '40rem',
     };
-    inheritedSources = Object.fromEntries(
-      ['font-family', 'font-size', 'line-height', 'color'].map((prop) => [
-        prop,
-        { label: '.heading', path: '0' },
-      ]),
-    );
+    inheritedSources = Object.fromEntries(['font-family', 'font-size', 'line-height', 'color'].map((prop) => [prop, { label: '.heading', path: '0' }]));
     await React.act(async () => setHost({ historyTick: 1 }));
     await render();
     assert.equal(input('Size').placeholder, 'clamp(2rem, 4vw, 4rem)');

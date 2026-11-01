@@ -12,8 +12,7 @@ export function installNativeTextEvents(options: NativeTextOptions): () => void 
   const controller = new AbortController();
   const listener = { capture: true, signal: controller.signal };
   const composing = installCompositionEvents(options, listener);
-  const owns = (event: Event) =>
-    event.target instanceof Node && options.root.contains(event.target);
+  const owns = (event: Event) => event.target instanceof Node && options.root.contains(event.target);
   window.addEventListener(
     'keydown',
     (event) => {
@@ -48,8 +47,7 @@ export function installNativeTextEvents(options: NativeTextOptions): () => void 
 function installCompositionEvents(options: NativeTextOptions, listener: AddEventListenerOptions) {
   let composing = false;
   let nativePending = false;
-  const owns = (event: Event) =>
-    event.target instanceof Node && options.root.contains(event.target);
+  const owns = (event: Event) => event.target instanceof Node && options.root.contains(event.target);
   window.addEventListener(
     'input',
     (event) => {
@@ -133,8 +131,7 @@ function nativeTextInput(options: NativeTextOptions, event: InputEvent): void {
   // Browser editing ranges may trim collapsed source whitespace for insertText.
   // Preserve the user's explicit selection; only deletion/replacement needs the
   // browser's expanded character or word range.
-  const expands =
-    event.inputType.startsWith('delete') || event.inputType === 'insertReplacementText';
+  const expands = event.inputType.startsWith('delete') || event.inputType === 'insertReplacementText';
   const range = textSelection(options.nodes, expands ? ranges[0] : undefined);
   if (!range) {
     return;

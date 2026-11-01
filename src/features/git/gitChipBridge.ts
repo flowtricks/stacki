@@ -2,16 +2,7 @@ import { gitTransport } from '../../ipc/gitTransport';
 import type { IpcResults, WireFileKind, WireGitInfo } from '../../../shared/ipc/ipcResults';
 import type { Result } from '../../../shared/core/result';
 import type { Parser } from '../../../shared/core/boundary';
-import {
-  boolean,
-  count,
-  list,
-  object,
-  optional,
-  pathText,
-  record,
-  text,
-} from '../../../shared/core/boundary';
+import { boolean, count, list, object, optional, pathText, record, text } from '../../../shared/core/boundary';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import { cleanError } from '../../lib/cleanError';
 import { parseMergeResult } from './gitBridge';
@@ -110,10 +101,7 @@ export function parseGitCheckout(input: unknown): IpcResults['git:checkout'] {
   const error = optional(text)(value['error']);
   return error === undefined ? { ok: true, ...common } : { ok: true, ...common, error };
 }
-async function gitRequest<Value>(
-  parse: Parser<Value>,
-  invoke: () => Promise<unknown>,
-): Promise<Result<Value, string>> {
+async function gitRequest<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<Result<Value, string>> {
   let response: unknown;
   try {
     response = await invoke();
@@ -136,11 +124,7 @@ export function commitGitChanges(projectPath: string, message: string, paths?: r
   const payload = parseIpcPayload('git:commit', input);
   return gitRequest(parseGitCommit, () => gitTransport.gitCommit(payload));
 }
-export function createGitHubRepository(
-  projectPath: string,
-  repoName: string,
-  options: { readonly isPrivate: boolean },
-) {
+export function createGitHubRepository(projectPath: string, repoName: string, options: { readonly isPrivate: boolean }) {
   const payload = parseIpcPayload('git:publish', {
     projectPath,
     repoName,
@@ -148,15 +132,10 @@ export function createGitHubRepository(
   });
   return gitRequest(parseGitPublish, () => gitTransport.gitPublish(payload));
 }
-export type CheckoutMode =
-  { readonly kind: 'switch' } | { readonly kind: 'create' } | { readonly kind: 'park' };
+export type CheckoutMode = { readonly kind: 'switch' } | { readonly kind: 'create' } | { readonly kind: 'park' };
 export function checkoutGitBranch(projectPath: string, branch: string, mode: CheckoutMode) {
   const input =
-    mode.kind === 'create'
-      ? { projectPath, branch, create: true }
-      : mode.kind === 'park'
-        ? { projectPath, branch, parkFirst: true }
-        : { projectPath, branch };
+    mode.kind === 'create' ? { projectPath, branch, create: true } : mode.kind === 'park' ? { projectPath, branch, parkFirst: true } : { projectPath, branch };
   const payload = parseIpcPayload('git:checkout', input);
   return gitRequest(parseGitCheckout, () => gitTransport.gitCheckout(payload));
 }

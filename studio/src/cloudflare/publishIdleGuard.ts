@@ -46,9 +46,7 @@ async function readActivity(read: IdleActions['read']): Promise<'publishing' | '
     if (state['kind'] === 'building') {
       return string(state['id'], 64) ? 'publishing' : 'unknown';
     }
-    return ['idle', 'committed', 'failed', 'review-open'].includes(string(state['kind'], 32))
-      ? 'idle'
-      : 'unknown';
+    return ['idle', 'committed', 'failed', 'review-open'].includes(string(state['kind'], 32)) ? 'idle' : 'unknown';
   } catch {
     return 'unknown';
   }

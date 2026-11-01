@@ -50,9 +50,7 @@ type NodeFields =
 type UnionKeys<T> = T extends object ? keyof T : never;
 // Missing fields are readable as undefined but cannot be assigned. This keeps
 // legacy feature probes honest without accepting mixed node payloads.
-type CompleteVariant<T, Keys extends PropertyKey> = T extends object
-  ? T & { [Key in Exclude<Keys, keyof T>]?: never }
-  : never;
+type CompleteVariant<T, Keys extends PropertyKey> = T extends object ? T & { [Key in Exclude<Keys, keyof T>]?: never } : never;
 
 export type ParserNode = NodeMetadata & CompleteVariant<NodeFields, UnionKeys<NodeFields>>;
 export type MapNode = Extract<ParserNode, { kind: 'map' }>;
@@ -76,8 +74,7 @@ export interface ParserPageModel extends FrontmatterModel {
   readonly bodyStart?: number;
 }
 export type ParsedPage =
-  | { readonly editable: true; readonly model: ParserPageModel }
-  | { readonly editable: false; readonly reason: string; readonly bail: ParseBail | undefined };
+  { readonly editable: true; readonly model: ParserPageModel } | { readonly editable: false; readonly reason: string; readonly bail: ParseBail | undefined };
 
 export interface NumberRules {
   min?: number;
@@ -119,6 +116,8 @@ export interface SchemaField extends NumberRules {
   optional: boolean;
   default: string | number | boolean | undefined;
   defaultExpr?: boolean;
+  // The project file an expression default imports ("src/assets/hero.webp").
+  readonly defaultAsset?: string;
   hint?: string;
   readonly options?: readonly string[] | undefined;
   readonly numeric?: boolean | undefined;
@@ -128,11 +127,6 @@ export interface SchemaField extends NumberRules {
   readonly unions?: readonly PropUnion[] | undefined;
 }
 
-export type RenderTag =
-  | { readonly tag: string; readonly prop?: string }
-  | { readonly prop: string }
-  | { readonly options: readonly string[] };
+export type RenderTag = { readonly tag: string; readonly prop?: string } | { readonly prop: string } | { readonly options: readonly string[] };
 
-export type SourceLocation =
-  | { readonly file: string }
-  | { readonly file: string; readonly startLine: number; readonly endLine: number };
+export type SourceLocation = { readonly file: string } | { readonly file: string; readonly startLine: number; readonly endLine: number };

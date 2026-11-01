@@ -1,17 +1,8 @@
 import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  createAstroProject,
-  createStarterProject,
-  subscribeCreateLog,
-  type ProjectTemplate,
-} from './welcomeBridge';
-import {
-  CREATE_PACKAGE_MANAGERS,
-  packageManagerLabel,
-  type CreatePackageManager,
-} from '../../../shared/properties/packageManager';
+import { createAstroProject, createStarterProject, subscribeCreateLog, type ProjectTemplate } from './welcomeBridge';
+import { CREATE_PACKAGE_MANAGERS, packageManagerLabel, type CreatePackageManager } from '../../../shared/properties/packageManager';
 import Dropdown from '../../ui/Dropdown';
 
 const CREATE_LOG_CHARS_MAX = 20_000;
@@ -28,21 +19,14 @@ const TEMPLATES = [
   readonly hint: string;
 }[];
 
-type RunState =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'running' }
-  | { readonly kind: 'error'; readonly message: string };
+type RunState = { readonly kind: 'idle' } | { readonly kind: 'running' } | { readonly kind: 'error'; readonly message: string };
 
 interface WizardProps {
   readonly onClose: () => void;
   readonly onDone: (directory: string) => void;
 }
 
-export function StarterWizard({
-  parentPath,
-  onClose,
-  onDone,
-}: WizardProps & { readonly parentPath: string }) {
+export function StarterWizard({ parentPath, onClose, onDone }: WizardProps & { readonly parentPath: string }) {
   const [name, setName] = useState(SITE_NAME_DEFAULT);
   const [manager, setManager] = useState<CreatePackageManager>('npm');
   const [state, setState] = useState<RunState>({ kind: 'idle' });
@@ -78,13 +62,7 @@ export function StarterWizard({
         </>
       )}
     >
-      <SiteNameField
-        parentPath={parentPath}
-        name={name}
-        running={running}
-        change={setName}
-        submit={() => void run()}
-      />
+      <SiteNameField parentPath={parentPath} name={name} running={running} change={setName} submit={() => void run()} />
       <PackageManagerField value={manager} disabled={running} change={setManager} />
       <div className="starter-note">
         Runs <code>npm create lumos@latest</code>
@@ -93,22 +71,15 @@ export function StarterWizard({
             , installs it with <code>{manager}</code>
           </>
         )}
-        , then starts a git history of its own — so publishing it later publishes your site, not a
-        fork of the starter.
+        , then starts a git history of its own — so publishing it later publishes your site, not a fork of the starter.
       </div>
-      {(running || log.text) && (
-        <CreateLog log={log.text} running={running} elementRef={log.elementRef} />
-      )}
+      {(running || log.text) && <CreateLog log={log.text} running={running} elementRef={log.elementRef} />}
       {state.kind === 'error' && <ErrorToast message={state.message} />}
     </WizardFrame>
   );
 }
 
-export function NewProjectWizard({
-  parentPath,
-  onClose,
-  onDone,
-}: WizardProps & { readonly parentPath: string }) {
+export function NewProjectWizard({ parentPath, onClose, onDone }: WizardProps & { readonly parentPath: string }) {
   const [name, setName] = useState(SITE_NAME_DEFAULT);
   const [template, setTemplate] = useState<ProjectTemplate>('basics');
   const [install, setInstall] = useState(true);
@@ -146,13 +117,7 @@ export function NewProjectWizard({
         </>
       )}
     >
-      <SiteNameField
-        parentPath={parentPath}
-        name={name}
-        running={running}
-        change={setName}
-        submit={() => void run()}
-      />
+      <SiteNameField parentPath={parentPath} name={name} running={running} change={setName} submit={() => void run()} />
       {state.kind === 'idle' && (
         <ProjectChoices
           template={template}
@@ -167,9 +132,7 @@ export function NewProjectWizard({
           setAi={setAi}
         />
       )}
-      {state.kind !== 'idle' && (
-        <CreateLog log={log.text || 'Starting…'} running={running} elementRef={log.elementRef} />
-      )}
+      {state.kind !== 'idle' && <CreateLog log={log.text || 'Starting…'} running={running} elementRef={log.elementRef} />}
       {state.kind === 'error' && <ErrorToast message={state.message} />}
     </WizardFrame>
   );
@@ -249,13 +212,7 @@ function PackageManagerField(props: {
 function useCreateLog() {
   const [text, setText] = useState('');
   const elementRef = useRef<HTMLPreElement>(null);
-  useEffect(
-    () =>
-      subscribeCreateLog((chunk) =>
-        setText((previous) => (previous + chunk).slice(-CREATE_LOG_CHARS_MAX)),
-      ),
-    [],
-  );
+  useEffect(() => subscribeCreateLog((chunk) => setText((previous) => (previous + chunk).slice(-CREATE_LOG_CHARS_MAX))), []);
   useEffect(() => {
     if (elementRef.current) {
       elementRef.current.scrollTop = elementRef.current.scrollHeight;
@@ -321,11 +278,7 @@ function ProjectChoices(props: ProjectChoicesProps) {
           ))}
         </div>
       </div>
-      <PackageManagerField
-        value={props.manager}
-        disabled={!props.install}
-        change={props.setManager}
-      />
+      <PackageManagerField value={props.manager} disabled={!props.install} change={props.setManager} />
       <CheckRow label="Install dependencies" checked={props.install} change={props.setInstall} />
       <CheckRow label="Initialize a new git repository" checked={props.git} change={props.setGit} />
       <CheckRow label="Add AI agent files" checked={props.ai} change={props.setAi} />
@@ -333,22 +286,10 @@ function ProjectChoices(props: ProjectChoicesProps) {
   );
 }
 
-function CheckRow({
-  label,
-  checked,
-  change,
-}: {
-  readonly label: string;
-  readonly checked: boolean;
-  readonly change: (value: boolean) => void;
-}) {
+function CheckRow({ label, checked, change }: { readonly label: string; readonly checked: boolean; readonly change: (value: boolean) => void }) {
   return (
     <label className="check-row">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => change(event.currentTarget.checked)}
-      />
+      <input type="checkbox" checked={checked} onChange={(event) => change(event.currentTarget.checked)} />
       {label}
     </label>
   );
@@ -356,15 +297,7 @@ function CheckRow({
 
 // While it runs, dots animate after the last line, as a terminal shows work in progress:
 // installs and downloads can print nothing for a long time.
-function CreateLog({
-  log,
-  running,
-  elementRef,
-}: {
-  readonly log: string;
-  readonly running: boolean;
-  readonly elementRef: React.RefObject<HTMLPreElement>;
-}) {
+function CreateLog({ log, running, elementRef }: { readonly log: string; readonly running: boolean; readonly elementRef: React.RefObject<HTMLPreElement> }) {
   return (
     <pre className="create-log" ref={elementRef}>
       {running ? log.trimEnd() : log}

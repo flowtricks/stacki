@@ -53,11 +53,7 @@ export function componentPreviewInputs(source: unknown, name: unknown): Componen
   return { props, missing };
 }
 
-export function componentPreviewPath(
-  paths: readonly string[],
-  requestedPath: unknown,
-  requestedName: unknown,
-): string | undefined {
+export function componentPreviewPath(paths: readonly string[], requestedPath: unknown, requestedName: unknown): string | undefined {
   // This pure function is also emitted into the Astro page. Keep its bounds and
   // checks self-contained so edge adapters need neither Node nor CommonJS.
   if (paths.length > 50000) {
@@ -84,10 +80,7 @@ export function componentPreviewPath(
   return undefined;
 }
 
-export function componentPreviewPlugin(
-  projectDirectories: readonly string[],
-  packages: (root: string) => readonly PackagePreviewSource[] = () => [],
-) {
+export function componentPreviewPlugin(projectDirectories: readonly string[], packages: (root: string) => readonly PackagePreviewSource[] = () => []) {
   assert(projectDirectories.length > 0, 'Preview plugin requires a project root');
   assert(projectDirectories.length <= PREVIEW_LIMITS.rootsMax, 'Preview root count exceeds limit');
   const roots = projectDirectories.map((directory) => path.resolve(directory));
@@ -95,12 +88,7 @@ export function componentPreviewPlugin(
     name: 'avb-component-preview',
     enforce: 'pre' as const,
     resolveId(id: string): string | undefined {
-      return [
-        'virtual:stacki-component-preview-styles',
-        'virtual:stacki-package-components',
-      ].includes(id)
-        ? '\0' + id
-        : undefined;
+      return ['virtual:stacki-component-preview-styles', 'virtual:stacki-package-components'].includes(id) ? '\0' + id : undefined;
     },
     load(id: string): string | undefined {
       if (id === '\0virtual:stacki-package-components') {
@@ -157,9 +145,7 @@ function packagePreviewModule(sources: readonly PackagePreviewSource[]): string 
     entries.map((entry) => `${entry.key}: () => import(${entry.specifier})`).join(',') +
     '};\n' +
     'export const packageInputs = {' +
-    entries
-      .map((entry) => `${entry.key}: async () => (${JSON.stringify(entry.inputs)})`)
-      .join(',') +
+    entries.map((entry) => `${entry.key}: async () => (${JSON.stringify(entry.inputs)})`).join(',') +
     '};'
   );
 }

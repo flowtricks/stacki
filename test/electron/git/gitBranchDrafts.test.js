@@ -101,21 +101,12 @@ test('Generated caches survive branches with different ignore rules', async (con
   await fs.writeFile(path.join(directory, '.stacki/guide.json'), '{"columns":12}\n');
   await checkout(directory, 'main');
   assert.equal(await output(directory, ['status', '--porcelain']), '');
-  assert.equal(
-    await fs.readFile(path.join(cache, 'private-source.txt'), 'utf8'),
-    'cached dependency\n',
-  );
+  assert.equal(await fs.readFile(path.join(cache, 'private-source.txt'), 'utf8'), 'cached dependency\n');
   const returned = await checkout(directory, 'feature');
   assert.equal(returned.parked, false, 'Generated files are not unfinished main edits');
   assert.equal(returned.restored, true);
-  assert.equal(
-    await fs.readFile(path.join(cache, 'private-source.txt'), 'utf8'),
-    'cached dependency\n',
-  );
-  assert.equal(
-    await fs.readFile(path.join(directory, '.stacki/guide.json'), 'utf8'),
-    '{"columns":12}\n',
-  );
+  assert.equal(await fs.readFile(path.join(cache, 'private-source.txt'), 'utf8'), 'cached dependency\n');
+  assert.equal(await fs.readFile(path.join(directory, '.stacki/guide.json'), 'utf8'), '{"columns":12}\n');
   assert.equal(await output(directory, ['stash', 'list']), '');
   await git(directory, ['add', '--force', '.cache/fern/private-source.txt']);
   await fs.writeFile(path.join(cache, 'private-source.txt'), 'tracked edit\n');

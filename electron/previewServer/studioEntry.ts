@@ -3,9 +3,7 @@ import { createLocalStudio, hasLocalStudio } from './studioLocal';
 
 interface PreviewServer {
   readonly middlewares: {
-    readonly use: (
-      handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void,
-    ) => void;
+    readonly use: (handler: (request: IncomingMessage, response: ServerResponse, next: () => void) => void) => void;
   };
   readonly httpServer?: { readonly once: (event: 'close', callback: () => void) => void };
   readonly config: { readonly logger: { readonly info: (message: string) => void } };

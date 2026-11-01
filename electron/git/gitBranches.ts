@@ -67,12 +67,7 @@ export type MergeOutcome =
     };
 
 /** One side of a conflicted file, or undefined when that side deleted it. */
-async function stage(
-  git: Git,
-  projectPath: string,
-  stageNumber: number,
-  file: string,
-): Promise<string | undefined> {
+async function stage(git: Git, projectPath: string, stageNumber: number, file: string): Promise<string | undefined> {
   try {
     return (await git(projectPath, ['show', `:${stageNumber}:${file}`])).stdout;
   } catch {
@@ -106,14 +101,9 @@ async function resolveMerge(
 ): Promise<MergeOutcome> {
   const into = await currentBranch(git, projectPath);
   const resolutions = Object.fromEntries(
-    Object.entries(choices ?? {}).map(([file, choice]): readonly [string, MergeResolution] => [
-      file,
-      parseMergeResolution(choice),
-    ]),
+    Object.entries(choices ?? {}).map(([file, choice]): readonly [string, MergeResolution] => [file, parseMergeResolution(choice)]),
   );
-  const edited = Object.values(resolutions).filter(
-    (choice) => typeof choice === 'object' && 'kind' in choice,
-  );
+  const edited = Object.values(resolutions).filter((choice) => typeof choice === 'object' && 'kind' in choice);
   const clean = await resolveMergeStart(git, { projectPath, branch, into, edited });
   if (clean) {
     if (edited.length > 0) {
@@ -127,11 +117,7 @@ async function resolveMerge(
     .map((line) => line.trim())
     .filter(Boolean);
   try {
-    if (
-      edited.length > 0 &&
-      (left.length !== Object.keys(resolutions).length ||
-        left.some((file) => resolutions[file] === undefined))
-    ) {
+    if (edited.length > 0 && (left.length !== Object.keys(resolutions).length || left.some((file) => resolutions[file] === undefined))) {
       throw new Error('The conflicted files changed. Reopen the merge to review them again.');
     }
     for (const file of left) {
@@ -177,14 +163,7 @@ async function resolveMergeStart(
   let clean = false;
   try {
     const prepare = edited.length > 0 ? ['--no-commit', '--no-ff'] : [];
-    await git(projectPath, [
-      '-c',
-      'merge.conflictStyle=diff3',
-      'merge',
-      '--no-edit',
-      ...prepare,
-      branch,
-    ]);
+    await git(projectPath, ['-c', 'merge.conflictStyle=diff3', 'merge', '--no-edit', ...prepare, branch]);
     clean = true;
   } catch {
     /* Expected: the merge conflicts again and must be resolved below. */
@@ -194,12 +173,7 @@ async function resolveMergeStart(
 
 // Keep file reconstruction separate from merge orchestration so every write
 // follows validation, and an error always unwinds the prepared merge above.
-async function resolveMergeFile(
-  git: Git,
-  projectPath: string,
-  file: string,
-  choice: MergeResolution,
-): Promise<void> {
+async function resolveMergeFile(git: Git, projectPath: string, file: string, choice: MergeResolution): Promise<void> {
   // An answer per disagreement — the file is rebuilt from git's own
   // markers with the chosen side of each. This is what makes it possible
   // to take part of a file from each branch.
@@ -232,10 +206,7 @@ async function resolveMergeFile(
  * `changed` is false for a merge that moved nothing: reporting "merged" there
  * would suggest work arrived that was already present.
  */
-async function mergeBranch(
-  git: Git,
-  { projectPath, branch }: { readonly projectPath: string; readonly branch: string },
-): Promise<MergeOutcome> {
+async function mergeBranch(git: Git, { projectPath, branch }: { readonly projectPath: string; readonly branch: string }): Promise<MergeOutcome> {
   const into = await currentBranch(git, projectPath);
   if (branch === into) {
     throw new Error(`"${branch}" is the branch you are on — there is nothing to merge into.`);
@@ -330,12 +301,7 @@ async function mergeBranch(
       const inTheWay = detail
         .split('\n')
         .map((line) => line.trim())
-        .filter(
-          (line) =>
-            line &&
-            !/^(error|Please|Aborting|warning|hint|Updating|Merge with)/i.test(line) &&
-            !line.endsWith(':'),
-        );
+        .filter((line) => line && !/^(error|Please|Aborting|warning|hint|Updating|Merge with)/i.test(line) && !line.endsWith(':'));
       return { ok: false, dirty: true, from: into, branch, files: inTheWay };
     }
     throw new Error(gitErrorDetail(error).trim() || `Could not merge "${branch}" into "${into}".`);
@@ -344,8 +310,7 @@ async function mergeBranch(
   return { ok: true, into, changed: after !== before };
 }
 
-export type DeleteOutcome =
-  { readonly ok: true } | { readonly ok: false; readonly unmerged: true; readonly message: string };
+export type DeleteOutcome = { readonly ok: true } | { readonly ok: false; readonly unmerged: true; readonly message: string };
 
 /**
  * Delete `branch`.
@@ -383,10 +348,7 @@ async function deleteBranch(
   // (Reaching here at all means another branch is checked out, so there is
   // always somewhere for the trunk's work to have gone — no need to check.)
   if (!allowTrunk && (branch === 'main' || branch === 'master')) {
-    throw new Error(
-      `"${branch}" is the branch everything comes back to. ` +
-        'Deleting it would leave the project without its main line of work.',
-    );
+    throw new Error(`"${branch}" is the branch everything comes back to. ` + 'Deleting it would leave the project without its main line of work.');
   }
   try {
     await git(projectPath, ['branch', force ? '-D' : '-d', branch]);
@@ -405,10 +367,7 @@ async function deleteBranch(
     const worktree = detail.match(/used by worktree at '([^']+)'/);
     const where = worktree?.[1];
     if (where !== undefined) {
-      throw new Error(
-        `"${branch}" is checked out in another worktree (${where}). ` +
-          'Close or switch that one first.',
-      );
+      throw new Error(`"${branch}" is checked out in another worktree (${where}). ` + 'Close or switch that one first.');
     }
     throw new Error(detail.trim() || `Could not delete "${branch}".`);
   }
@@ -469,10 +428,7 @@ async function switchBranch(
       const files = detail
         .split('\n')
         .map((line) => line.trim())
-        .filter(
-          (line) =>
-            line && !/^(error|Please|Aborting|warning|hint)/i.test(line) && !line.endsWith(':'),
-        );
+        .filter((line) => line && !/^(error|Please|Aborting|warning|hint)/i.test(line) && !line.endsWith(':'));
       return { ok: false, blocked: true, from, branch, files };
     }
     throw new Error(detail.trim() || `Could not switch to "${branch}".`);

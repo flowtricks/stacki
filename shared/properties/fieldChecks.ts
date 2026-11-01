@@ -84,18 +84,7 @@ export function checksFor(kind: SettingsFieldKind): readonly FieldCheckKey[] {
     case 'phone':
     case 'color':
     case 'file':
-      return [
-        'min',
-        'max',
-        'length',
-        'pattern',
-        'startsWith',
-        'endsWith',
-        'includes',
-        'trim',
-        'letterCase',
-        'nullable',
-      ];
+      return ['min', 'max', 'length', 'pattern', 'startsWith', 'endsWith', 'includes', 'trim', 'letterCase', 'nullable'];
     case 'number':
       return ['min', 'max', 'integer', 'sign', 'gt', 'lt', 'multipleOf', 'nullable'];
     case 'date':
@@ -139,11 +128,7 @@ export function parseFieldChecks(input: unknown): FieldChecks {
   ordered(parsed.min, parsed.max, 'The minimum is larger than the maximum.');
   ordered(parsed.minWidth, parsed.maxWidth, 'The minimum width is larger than the maximum.');
   ordered(parsed.minHeight, parsed.maxHeight, 'The minimum height is larger than the maximum.');
-  if (
-    parsed.minDate !== undefined &&
-    parsed.maxDate !== undefined &&
-    parsed.minDate > parsed.maxDate
-  ) {
+  if (parsed.minDate !== undefined && parsed.maxDate !== undefined && parsed.minDate > parsed.maxDate) {
     throw new Error('The earliest date is after the latest.');
   }
   return parsed;
@@ -159,11 +144,7 @@ export function parseFieldOptions(input: unknown): readonly string[] | undefined
   }
   const items: readonly unknown[] = input;
   const options = items.map((item) => text(item).trim());
-  if (
-    options.some(
-      (option) => option.length === 0 || option.length > FIELD_CHECK_LIMITS.optionCharsMax,
-    )
-  ) {
+  if (options.some((option) => option.length === 0 || option.length > FIELD_CHECK_LIMITS.optionCharsMax)) {
     throw new Error('An option is 1 to 200 characters.');
   }
   if (new Set(options).size !== options.length) {

@@ -1,14 +1,9 @@
 import React from 'react';
+import { assert } from '../../../shared/core/assert';
 import type { Box } from './outlineBoxes';
 import type { PreviewMessage } from './previewMessages';
 import { NO_TEXT_MARKS, type TextMarks } from './previewMessages';
-import {
-  hoverIsSelection,
-  loopChildPaths,
-  onePerPlace,
-  outlineBoxPath,
-  unionBox,
-} from './outlineBoxes';
+import { hoverIsSelection, loopChildPaths, onePerPlace, outlineBoxPath, unionBox } from './outlineBoxes';
 import { spacingBands, withLiveSpacing } from './spacingBands';
 import {
   BranchIcon,
@@ -72,31 +67,19 @@ interface PreviewOverlaysProps {
 export function PreviewOverlays(props: PreviewOverlaysProps) {
   return (
     <>
-      {!props.focusWhole && (
-        <FocusOverlays path={props.focusPath} rects={props.rects} scale={props.scale} />
-      )}
+      {!props.focusWhole && <FocusOverlays path={props.focusPath} rects={props.rects} scale={props.scale} />}
       <SpacingOverlays {...props} />
       <NodeOutlines {...props} />
-      <TextMarkOutlines marks={props.textMarks ?? NO_TEXT_MARKS} scale={props.scale} />
+      <TextMarkOutlines marks={props.textMarks ?? NO_TEXT_MARKS} instances={selectionBoxes(props)} scale={props.scale} />
     </>
   );
 }
 
-function FocusOverlays({
-  path,
-  rects,
-  scale,
-}: {
-  readonly path: string | undefined;
-  readonly rects: RectMap;
-  readonly scale: number;
-}) {
+function FocusOverlays({ path, rects, scale }: { readonly path: string | undefined; readonly rects: RectMap; readonly scale: number }) {
   if (!path) {
     return undefined;
   }
-  return onePerPlace(rects[path] ?? undefined).map((box, index) => (
-    <div key={`focus-${index}`} className="node-focus" style={boxStyle(box, scale)} />
-  ));
+  return onePerPlace(rects[path] ?? undefined).map((box, index) => <div key={`focus-${index}`} className="node-focus" style={boxStyle(box, scale)} />);
 }
 
 function SpacingOverlays(props: PreviewOverlaysProps) {
@@ -110,14 +93,8 @@ function SpacingOverlays(props: PreviewOverlaysProps) {
   const measurement = measurements[props.selOcc ?? 0] ?? measurements[0] ?? undefined;
   const sized = withLiveSpacing(measurement, spacingHover.kind, spacingHover.live);
   return spacingBands(box, sized, spacingHover.kind, spacingHover.sides).map((band, index) => (
-    <div
-      key={`sp-${band.side}-${index}`}
-      className={`spacing-band is-${spacingHover.kind}`}
-      style={boxStyle(band, props.scale)}
-    >
-      <span className="spacing-band-label">
-        {spacingHover.labels?.[band.side] ?? spacingLabel(band)}
-      </span>
+    <div key={`sp-${band.side}-${index}`} className={`spacing-band is-${spacingHover.kind}`} style={boxStyle(band, props.scale)}>
+      <span className="spacing-band-label">{spacingHover.labels?.[band.side] ?? spacingLabel(band)}</span>
     </div>
   ));
 }
@@ -134,32 +111,21 @@ function NodeOutlines(props: PreviewOverlaysProps) {
     // No occurrence means the node, so draw one box per place. A number means
     // the specific repeated copy clicked on the canvas. A loop is every copy.
     const selected = outline.occ === undefined ? undefined : all[outline.occ];
-    const loop =
-      info.nodeKind === 'map' ? loopBox(props.rects, outline.path, info.childCount) : undefined;
-    const copies =
-      outline.occ === undefined ? onePerPlace(all) : selected ? [selected] : all.slice(0, 1);
+    const loop = info.nodeKind === 'map' ? loopBox(props.rects, outline.path, info.childCount) : undefined;
+    const copies = outline.occ === undefined ? onePerPlace(all) : selected ? [selected] : all.slice(0, 1);
     const boxes = loop !== undefined ? [loop] : copies;
     return boxes.map((box, index) => (
       <div
         key={`${outline.type}-${index}`}
         className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${
-          outline.type === 'sel'
-            ? textMarkState(props.textMarks, { pointedAt: props.hoverPath === outline.path })
-            : ''
+          outline.type === 'sel' ? textMarkState(props.textMarks, { pointedAt: props.hoverPath === outline.path }) : ''
         }`}
         style={boxStyle(box, props.scale)}
       >
         <span className={`node-outline-tag ${box.y * props.scale < 20 ? 'inside' : ''}`}>
           {outlineIcon(info)}
           {info.label}
-          {outline.type === 'sel' && (
-            <ComponentEditButton
-              info={info}
-              path={outline.path}
-              occurrence={all.indexOf(box)}
-              onOpen={props.onOpenComponent}
-            />
-          )}
+          {outline.type === 'sel' && <ComponentEditButton info={info} path={outline.path} occurrence={all.indexOf(box)} onOpen={props.onOpenComponent} />}
         </span>
       </div>
     ));
@@ -215,13 +181,7 @@ interface OutlineTarget {
 
 function outlineTargets(props: PreviewOverlaysProps): readonly OutlineTarget[] {
   const targets: OutlineTarget[] = [];
-  if (
-    props.hoverPath &&
-    !hoverIsSelection(
-      { path: props.hoverPath, occ: props.hoverOcc },
-      { path: props.selPath, occ: props.selOcc },
-    )
-  ) {
+  if (props.hoverPath && !hoverIsSelection({ path: props.hoverPath, occ: props.hoverOcc }, { path: props.selPath, occ: props.selOcc })) {
     targets.push({ path: props.hoverPath, type: 'hover', occ: props.hoverOcc });
   }
   if (props.selPath) {
@@ -240,11 +200,7 @@ function outlineIcon(info: OverlayInfo): React.ReactNode {
     if (info.kind === 'element') {
       return <CustomElementIcon size={size} />;
     }
-    return info.astroAsset ? (
-      astroAssetIcon(info.label, size)
-    ) : (
-      <ElementComponentIcon size={size} />
-    );
+    return info.astroAsset ? astroAssetIcon(info.label, size) : <ElementComponentIcon size={size} />;
   }
   switch (info.nodeKind) {
     case 'map':
@@ -268,35 +224,65 @@ function outlineIcon(info: OverlayInfo): React.ReactNode {
 // Text the selected instance shows, hovered or clicked: drawn like an element's
 // hover and selection outlines, named for the component (or tag) rendering it.
 // While one is picked the instance's own outline steps back to a parent's.
-function TextMarkOutlines({ marks, scale }: { readonly marks: TextMarks; readonly scale: number }) {
+// Text that fills its instance (an Eyebrow that is only its words) would put
+// its tag on the instance's own: the instance's tag stays, as it names what is
+// edited and carries the edit button, and the text's is left out.
+function TextMarkOutlines({ marks, instances, scale }: { readonly marks: TextMarks; readonly instances: readonly Box[]; readonly scale: number }) {
   const drawn = [
-    ...(marks.hover && !sameBox(marks.hover, marks.picked)
-      ? [['hover', marks.hover] as const]
-      : []),
+    ...(marks.hover && !sameBox(marks.hover, marks.picked) ? [['hover', marks.hover] as const] : []),
     ...(marks.picked ? [['sel', marks.picked] as const] : []),
   ];
   return drawn.map(([type, box]) => (
-    <div
-      key={type}
-      className={`node-outline ${type} component text-mark`}
-      style={boxStyle(box, scale)}
-    >
-      <span className={`node-outline-tag ${box.y * scale < 20 ? 'inside' : ''}`}>
-        {box.kind === 'component' ? <ElementComponentIcon size={11} /> : <TextIcon size={11} />}
-        {box.label}
-      </span>
+    <div key={type} className={`node-outline ${type} component text-mark`} style={boxStyle(box, scale)}>
+      {!instances.some((instance) => tagsCollide(instance, box, scale)) && (
+        <span className={`node-outline-tag ${box.y * scale < 20 ? 'inside' : ''}`}>
+          {box.kind === 'component' ? <ElementComponentIcon size={11} /> : <TextIcon size={11} />}
+          {box.label}
+        </span>
+      )}
     </div>
   ));
+}
+
+// The boxes the selection's outlines are drawn on, so text marks can keep
+// their tags off the selection's tag.
+function selectionBoxes(props: PreviewOverlaysProps): readonly Box[] {
+  if (!props.selPath) {
+    return [];
+  }
+  const info = props.overlayInfo?.(props.selPath);
+  const all = props.rects[outlineBoxPath(props.selPath, info?.nodeKind)] ?? props.rects[props.selPath];
+  if (!all) {
+    return [];
+  }
+  const loop = info?.nodeKind === 'map' ? loopBox(props.rects, props.selPath, info.childCount) : undefined;
+  if (loop !== undefined) {
+    return [loop];
+  }
+  if (props.selOcc === undefined) {
+    return onePerPlace(all);
+  }
+  const selected = all[props.selOcc];
+  return selected ? [selected] : all.slice(0, 1);
+}
+
+// Tags sit on their box's top-left corner, so two boxes whose corners lie
+// within a tag's height of each other on screen draw their tags over one another.
+function tagsCollide(instance: Box, mark: Box, scale: number): boolean {
+  assert(scale > 0, 'Overlay scale must be positive');
+  const horizontalPx = Math.abs(instance.x - mark.x) * scale;
+  const verticalPx = Math.abs(instance.y - mark.y) * scale;
+  if (horizontalPx < TAG_HEIGHT_PX) {
+    return verticalPx < TAG_HEIGHT_PX;
+  }
+  return false;
 }
 
 // How the selected instance shows the state of its text. While one is
 // picked it reads as that text's parent, tinted when the pointer is on the
 // instance beside the text rather than on it. Pointing at any other text of
 // it tints it too, as pointing at a component does.
-function textMarkState(
-  marks: TextMarks | undefined,
-  pointer: { readonly pointedAt: boolean },
-): string {
+function textMarkState(marks: TextMarks | undefined, pointer: { readonly pointedAt: boolean }): string {
   const picked = marks?.picked;
   const hover = marks?.hover;
   const onOtherText = hover !== undefined && !sameBox(hover, picked);
@@ -310,6 +296,9 @@ function sameBox(left: Box, right: Box | undefined): boolean {
   }
   return left.x === right.x && left.y === right.y && left.w === right.w && left.h === right.h;
 }
+
+// A tag is 10.5px type with 7px of padding, so 18px rounds it up.
+const TAG_HEIGHT_PX = 18;
 
 function boxStyle(box: Box, scale: number): React.CSSProperties {
   return {

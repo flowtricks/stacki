@@ -2,10 +2,7 @@ import { assert } from '../../../shared/core/assert';
 import type { HistoryCommit } from './historyBridge';
 import { gitRefColor } from '../../lib/gitBranchColors';
 
-export function historyGraphColors(
-  commits: readonly HistoryCommit[],
-  branches: ReadonlyMap<string, number>,
-): ReadonlyMap<string, number> {
+export function historyGraphColors(commits: readonly HistoryCommit[], branches: ReadonlyMap<string, number>): ReadonlyMap<string, number> {
   const byHash = new Map(commits.map((commit) => [commit.hash, commit]));
   const colors = new Map<string, number>();
   assert(byHash.size === commits.length, 'History graph: duplicate commit');

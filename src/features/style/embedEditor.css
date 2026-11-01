@@ -971,10 +971,8 @@
   border: var(--border-width-thin) solid var(--color-border-default);
   background-color: #fff;
   background-image:
-    linear-gradient(45deg, #bdbdbd 25%, transparent 25%),
-    linear-gradient(-45deg, #bdbdbd 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #bdbdbd 75%),
-    linear-gradient(-45deg, transparent 75%, #bdbdbd 75%);
+    linear-gradient(45deg, #bdbdbd 25%, transparent 25%), linear-gradient(-45deg, #bdbdbd 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #bdbdbd 75%), linear-gradient(-45deg, transparent 75%, #bdbdbd 75%);
   background-size: 10px 10px;
   background-position:
     0 0,
@@ -1282,10 +1280,8 @@
      under the gradient — the gradient itself paints on ::before above this. */
   background-color: #fff;
   background-image:
-    linear-gradient(45deg, #bdbdbd 25%, transparent 25%),
-    linear-gradient(-45deg, #bdbdbd 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #bdbdbd 75%),
-    linear-gradient(-45deg, transparent 75%, #bdbdbd 75%);
+    linear-gradient(45deg, #bdbdbd 25%, transparent 25%), linear-gradient(-45deg, #bdbdbd 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #bdbdbd 75%), linear-gradient(-45deg, transparent 75%, #bdbdbd 75%);
   background-size: 10px 10px;
   background-position:
     0 0,
@@ -3767,9 +3763,7 @@ textarea.embed-editor_value-input.is-expanded {
   /* One chip row, whatever is in it: the spinner shown while the scan runs stands
      exactly as tall as the chips it is standing in for, so the well doesn't change
      height — and everything under it doesn't jump — when they arrive. */
-  --embed-editor_chip-h: calc(
-    (var(--font-size-xs) * var(--line-height-tight)) + 4px + (2 * var(--border-width-thin))
-  );
+  --embed-editor_chip-h: calc((var(--font-size-xs) * var(--line-height-tight)) + 4px + (2 * var(--border-width-thin)));
   min-height: calc(var(--embed-editor_chip-h) + (2 * var(--space-3)));
   padding: var(--space-3);
   cursor: text;
@@ -5384,8 +5378,7 @@ textarea.embed-editor_value-input.is-expanded {
   pointer-events: auto;
 }
 /* A live draft hides inheritance even before its value reaches React state. */
-.embed-editor_varconnect-editor:not(:empty):not(:has(> br:only-child))
-  ~ .embed-editor_varconnect-hint {
+.embed-editor_varconnect-editor:not(:empty):not(:has(> br:only-child)) ~ .embed-editor_varconnect-hint {
   display: none;
 }
 /* The atomic chip (contenteditable=false): click to re-open the picker and switch. */

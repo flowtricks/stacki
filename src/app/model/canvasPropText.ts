@@ -42,10 +42,7 @@ export interface PropTextContext extends PropSiteContext {
 const INSTANCES_MAX = 64;
 const LABEL = 'Component text · this instance';
 
-export async function canvasPropEdits(
-  document: CanvasTextDocument,
-  context: PropTextContext,
-): Promise<CanvasTextEdit[]> {
+export async function canvasPropEdits(document: CanvasTextDocument, context: PropTextContext): Promise<CanvasTextEdit[]> {
   const sites = propSiteReader(context);
   const edits: CanvasTextEdit[] = [];
   for (const instance of pageInstances(context.nodes).slice(0, INSTANCES_MAX)) {
@@ -112,10 +109,7 @@ function textEdit(shown: ShownProp, site: PropTextSite & { readonly kind: 'text'
 
 // `set:html={prop}`: each text run of the prop's inline HTML is its own text,
 // found by position, formatted with the canvas bar and saved back as HTML.
-function htmlEdits(
-  shown: ShownProp,
-  site: PropTextSite & { readonly kind: 'html' },
-): CanvasTextEdit[] {
+function htmlEdits(shown: ShownProp, site: PropTextSite & { readonly kind: 'html' }): CanvasTextEdit[] {
   const children = inlineContent(shown.value);
   if (!children) {
     return [];
@@ -224,11 +218,7 @@ function pageInstances(nodes: readonly PropNode[]): InstanceNode[] {
 
 // The text an instance shows for a prop: its own string attribute, or, when it
 // sets none, the component's string default. An expression is the page's code.
-function shownValue(
-  instance: InstanceNode,
-  component: ScanComponent,
-  prop: string,
-): string | undefined {
+function shownValue(instance: InstanceNode, component: ScanComponent, prop: string): string | undefined {
   const attr = 'props' in instance ? instance.props?.[prop] : undefined;
   if (attr !== undefined) {
     return attr.type === 'string' && usable(attr.value) ? attr.value : undefined;

@@ -38,10 +38,7 @@ export async function readPage(path: string): Promise<PageDiskRead> {
   return parsePageDiskRead(result);
 }
 
-export async function parsePageSource(
-  path: string,
-  source: string,
-): Promise<ParsePageResult & { readonly source: string }> {
+export async function parsePageSource(path: string, source: string): Promise<ParsePageResult & { readonly source: string }> {
   const result = await window.avb.parsePageSource({ pagePath: toFilePath(path), source });
   return parsePageReadResult(result);
 }
@@ -60,12 +57,7 @@ export async function writeText(projectPath: string, rel: string, text: string):
   parseOkResult(result);
 }
 
-export async function readSymbol(
-  projectPath: string,
-  fromFile: string,
-  spec: string,
-  name: string,
-): Promise<SymbolReadResult> {
+export async function readSymbol(projectPath: string, fromFile: string, spec: string, name: string): Promise<SymbolReadResult> {
   const result = await window.avb.readSymbolSource({
     projectPath: toProjectPath(projectPath),
     fromFile: toFilePath(fromFile),
@@ -75,11 +67,7 @@ export async function readSymbol(
   return parseSymbolReadResult(result);
 }
 
-export async function resolvePath(
-  projectPath: string,
-  fromFile: string,
-  spec: string,
-): Promise<ResolvePathResult> {
+export async function resolvePath(projectPath: string, fromFile: string, spec: string): Promise<ResolvePathResult> {
   const result = await window.avb.resolveSourcePath({
     projectPath: toProjectPath(projectPath),
     fromFile: toFilePath(fromFile),

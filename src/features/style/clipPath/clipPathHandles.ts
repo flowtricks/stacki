@@ -33,11 +33,7 @@ export function radiusValuesClose(left: number, right: number) {
 }
 
 export function radiiClose(left: CornerRadii, right: CornerRadii) {
-  return CORNERS.every(
-    (corner) =>
-      radiusValuesClose(left[corner].x, right[corner].x) &&
-      radiusValuesClose(left[corner].y, right[corner].y),
-  );
+  return CORNERS.every((corner) => radiusValuesClose(left[corner].x, right[corner].x) && radiusValuesClose(left[corner].y, right[corner].y));
 }
 
 export function hasRoundedCorners(radii: CornerRadii) {
@@ -46,11 +42,7 @@ export function hasRoundedCorners(radii: CornerRadii) {
 
 export function formatRadiusList(values: number[]) {
   const formatted = values.map(formatPercent);
-  if (
-    formatted[0] === formatted[1] &&
-    formatted[0] === formatted[2] &&
-    formatted[0] === formatted[3]
-  ) {
+  if (formatted[0] === formatted[1] && formatted[0] === formatted[2] && formatted[0] === formatted[3]) {
     return formatted[0];
   }
   if (formatted[0] === formatted[2] && formatted[1] === formatted[3]) {
@@ -101,9 +93,7 @@ export function formatRawEditableClipPath(editable: RawEditableClipPath) {
     return `inset(${sides})`;
   }
   const horizontal = formatCssUnitList(editable.radii.horizontal);
-  const vertical = editable.radii.vertical
-    ? ` / ${formatCssUnitList(editable.radii.vertical)}`
-    : '';
+  const vertical = editable.radii.vertical ? ` / ${formatCssUnitList(editable.radii.vertical)}` : '';
   return `inset(${sides} round ${horizontal}${vertical})`;
 }
 
@@ -157,11 +147,7 @@ export function isInsetHandle(handle: HandleTarget | undefined) {
   return Boolean(handle && (handle.kind === 'inset-radius' || insetSideForHandle(handle)));
 }
 
-export function isInsetHandleAffected(
-  activeHandle: HandleTarget | undefined,
-  candidate: HandleTarget,
-  mode: InsetModifierMode,
-) {
+export function isInsetHandleAffected(activeHandle: HandleTarget | undefined, candidate: HandleTarget, mode: InsetModifierMode) {
   if (mode === 'single' || !activeHandle || handlesMatch(activeHandle, candidate)) {
     return false;
   }
@@ -198,9 +184,7 @@ export function pointsClose(left: Point[], right: Point[]) {
   }
   return left.every((point, index) => {
     const other = right[index];
-    return (
-      other !== undefined && Math.abs(point.x - other.x) < 1 && Math.abs(point.y - other.y) < 1
-    );
+    return other !== undefined && Math.abs(point.x - other.x) < 1 && Math.abs(point.y - other.y) < 1;
   });
 }
 
@@ -218,19 +202,10 @@ export function shapesClose(left: ClipShape, right: ClipShape) {
     return pointsClose(left.points, right.points);
   }
   if (left.kind === 'circle' && right.kind === 'circle') {
-    return (
-      Math.abs(left.radius - right.radius) < 1 &&
-      Math.abs(left.cx - right.cx) < 1 &&
-      Math.abs(left.cy - right.cy) < 1
-    );
+    return Math.abs(left.radius - right.radius) < 1 && Math.abs(left.cx - right.cx) < 1 && Math.abs(left.cy - right.cy) < 1;
   }
   if (left.kind === 'ellipse' && right.kind === 'ellipse') {
-    return (
-      Math.abs(left.rx - right.rx) < 1 &&
-      Math.abs(left.ry - right.ry) < 1 &&
-      Math.abs(left.cx - right.cx) < 1 &&
-      Math.abs(left.cy - right.cy) < 1
-    );
+    return Math.abs(left.rx - right.rx) < 1 && Math.abs(left.ry - right.ry) < 1 && Math.abs(left.cx - right.cx) < 1 && Math.abs(left.cy - right.cy) < 1;
   }
   if (left.kind === 'inset' && right.kind === 'inset') {
     return (
@@ -242,9 +217,7 @@ export function shapesClose(left: ClipShape, right: ClipShape) {
     );
   }
   if (left.kind === 'shape' && right.kind === 'shape') {
-    return (
-      left.value === right.value && (left.fillRule || 'nonzero') === (right.fillRule || 'nonzero')
-    );
+    return left.value === right.value && (left.fillRule || 'nonzero') === (right.fillRule || 'nonzero');
   }
   return false;
 }
@@ -260,9 +233,7 @@ export function pointsEqual(left: Point[], right: Point[]) {
 }
 
 export function radiiEqual(left: CornerRadii, right: CornerRadii) {
-  return CORNERS.every(
-    (corner) => left[corner].x === right[corner].x && left[corner].y === right[corner].y,
-  );
+  return CORNERS.every((corner) => left[corner].x === right[corner].x && left[corner].y === right[corner].y);
 }
 
 export function shapesEqual(left: ClipShape, right: ClipShape) {
@@ -282,25 +253,15 @@ export function shapesEqual(left: ClipShape, right: ClipShape) {
     return left.radius === right.radius && left.cx === right.cx && left.cy === right.cy;
   }
   if (left.kind === 'ellipse' && right.kind === 'ellipse') {
-    return (
-      left.rx === right.rx && left.ry === right.ry && left.cx === right.cx && left.cy === right.cy
-    );
+    return left.rx === right.rx && left.ry === right.ry && left.cx === right.cx && left.cy === right.cy;
   }
   if (left.kind === 'inset' && right.kind === 'inset') {
     return (
-      left.top === right.top &&
-      left.right === right.right &&
-      left.bottom === right.bottom &&
-      left.left === right.left &&
-      radiiEqual(left.radii, right.radii)
+      left.top === right.top && left.right === right.right && left.bottom === right.bottom && left.left === right.left && radiiEqual(left.radii, right.radii)
     );
   }
   if (left.kind === 'shape' && right.kind === 'shape') {
-    return (
-      left.value === right.value &&
-      (left.fillRule || 'nonzero') === (right.fillRule || 'nonzero') &&
-      (left.pathData || '') === (right.pathData || '')
-    );
+    return left.value === right.value && (left.fillRule || 'nonzero') === (right.fillRule || 'nonzero') && (left.pathData || '') === (right.pathData || '');
   }
   return false;
 }
@@ -318,9 +279,7 @@ export function handlesMatch(left: HandleTarget | undefined, right: HandleTarget
   return left.kind !== 'polygon-point' && left.kind !== 'inset-radius';
 }
 
-export function isPolygonPointHandle(
-  handle: HandleTarget | undefined,
-): handle is Extract<HandleTarget, { kind: 'polygon-point' }> {
+export function isPolygonPointHandle(handle: HandleTarget | undefined): handle is Extract<HandleTarget, { kind: 'polygon-point' }> {
   return handle?.kind === 'polygon-point';
 }
 
@@ -337,11 +296,7 @@ export function uniqueHandles(handles: HandleTarget[]) {
   }, []);
 }
 
-export function previousSurvivingPolygonIndex(
-  pointCount: number,
-  deletedIndexes: Set<number>,
-  referenceIndex: number,
-) {
+export function previousSurvivingPolygonIndex(pointCount: number, deletedIndexes: Set<number>, referenceIndex: number) {
   for (let offset = 1; offset <= pointCount; offset += 1) {
     const index = (referenceIndex - offset + pointCount) % pointCount;
     if (!deletedIndexes.has(index)) {
@@ -381,16 +336,7 @@ export function handleFromDragTarget(target: DragTarget): HandleTarget {
   return { kind: target.kind };
 }
 
-export const HANDLE_COLOR_CLASSES: readonly [
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-] = [
+export const HANDLE_COLOR_CLASSES: readonly [string, string, string, string, string, string, string, string] = [
   'clip-path_color-a',
   'clip-path_color-b',
   'clip-path_color-c',
@@ -408,11 +354,7 @@ export function handleColorClass(handle: HandleTarget) {
   if (handle.kind === 'circle-center' || handle.kind === 'ellipse-center') {
     return 'clip-path_color-center';
   }
-  if (
-    handle.kind === 'circle-radius' ||
-    handle.kind === 'ellipse-rx' ||
-    handle.kind === 'inset-top'
-  ) {
+  if (handle.kind === 'circle-radius' || handle.kind === 'ellipse-rx' || handle.kind === 'inset-top') {
     return 'clip-path_color-a';
   }
   if (handle.kind === 'ellipse-ry' || handle.kind === 'inset-right') {
@@ -425,20 +367,13 @@ export function handleColorClass(handle: HandleTarget) {
     return 'clip-path_color-d';
   }
   if (handle.kind === 'inset-radius') {
-    return (
-      HANDLE_COLOR_CLASSES[(CORNERS.indexOf(handle.corner) + 4) % HANDLE_COLOR_CLASSES.length] ??
-      'clip-path_color-a'
-    );
+    return HANDLE_COLOR_CLASSES[(CORNERS.indexOf(handle.corner) + 4) % HANDLE_COLOR_CLASSES.length] ?? 'clip-path_color-a';
   }
   return 'clip-path_color-a';
 }
 
 export function polygonPointColorClass(index: number, colorClasses: string[] = []) {
-  return (
-    colorClasses[index] ||
-    HANDLE_COLOR_CLASSES[index % HANDLE_COLOR_CLASSES.length] ||
-    'clip-path_color-a'
-  );
+  return colorClasses[index] || HANDLE_COLOR_CLASSES[index % HANDLE_COLOR_CLASSES.length] || 'clip-path_color-a';
 }
 
 export function normalizePolygonPointColors(count: number, colors: string[] = []) {
@@ -447,15 +382,11 @@ export function normalizePolygonPointColors(count: number, colors: string[] = []
 
 export function nextPolygonPointColor(colors: string[], insertIndex: number) {
   const blocked = new Set([colors[insertIndex - 1], colors[insertIndex]].filter(Boolean));
-  const unusedColor = HANDLE_COLOR_CLASSES.find(
-    (colorClass) => !colors.includes(colorClass) && !blocked.has(colorClass),
-  );
+  const unusedColor = HANDLE_COLOR_CLASSES.find((colorClass) => !colors.includes(colorClass) && !blocked.has(colorClass));
   if (unusedColor) {
     return unusedColor;
   }
-  return (
-    HANDLE_COLOR_CLASSES.find((colorClass) => !blocked.has(colorClass)) || HANDLE_COLOR_CLASSES[0]
-  );
+  return HANDLE_COLOR_CLASSES.find((colorClass) => !blocked.has(colorClass)) || HANDLE_COLOR_CLASSES[0];
 }
 
 export function shorthandGroups<T>(items: T[], count = items.length) {

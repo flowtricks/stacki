@@ -67,8 +67,7 @@ const check = (what, condition, detail) => {
     const lib = fs.readFileSync(repoPath('src/features/style/model/computedColor.ts'), 'utf8');
     check(
       'and the app asks even with nothing selected',
-      /function pathOfSelection\(\): string \{/.test(lib) &&
-        !/if \(!path\) \{[\s\S]{0,80}setResolved\(null\)/.test(lib),
+      /function pathOfSelection\(\): string \{/.test(lib) && !/if \(!path\) \{[\s\S]{0,80}setResolved\(null\)/.test(lib),
       'the ask is abandoned when nothing is selected',
     );
   }
@@ -87,9 +86,7 @@ const check = (what, condition, detail) => {
   })();
   if (typeof electronPath !== 'string') {
     console.log(
-      `computed-color: ${checked} passed  ` +
-        '[needsPage; the probe needs a browser — see ' +
-        'test/electron/project/thumbs.test.js for the pattern]',
+      `computed-color: ${checked} passed  ` + '[needsPage; the probe needs a browser — see ' + 'test/electron/project/thumbs.test.js for the pattern]',
     );
     return;
   }
@@ -153,41 +150,19 @@ const check = (what, condition, detail) => {
     check('the probe ran in a browser', false, (run.stderr || run.stdout || '').slice(0, 300));
   } else {
     const out = JSON.parse(line);
-    check(
-      'a variable resolves to what the element sees',
-      out.light === 'rgb(255, 255, 255)',
-      out.light,
-    );
+    check('a variable resolves to what the element sees', out.light === 'rgb(255, 255, 255)', out.light);
     check('and to something else under a theme', out.dark === 'rgb(31, 29, 30)', out.dark);
     // A mix comes back in whatever space it was mixed in — `color(srgb …)`
     // rather than `rgb(…)`. Either paints; what matters is that it resolved.
-    check(
-      'a colour-mix of a variable resolves too',
-      /^(?:rgb|rgba|color)\(/.test(out.mixed || ''),
-      out.mixed,
-    );
-    check(
-      'currentcolor resolves to the inherited colour',
-      out.inherited === 'rgb(10, 20, 30)',
-      out.inherited,
-    );
-    check(
-      'a mix resolves against the page root, with nothing selected',
-      /^(?:rgb|rgba|color)\(/.test(out.atRoot || ''),
-      out.atRoot,
-    );
-    check(
-      'a value that is not a colour reports nothing',
-      out.nonsense === null,
-      JSON.stringify(out.nonsense),
-    );
+    check('a colour-mix of a variable resolves too', /^(?:rgb|rgba|color)\(/.test(out.mixed || ''), out.mixed);
+    check('currentcolor resolves to the inherited colour', out.inherited === 'rgb(10, 20, 30)', out.inherited);
+    check('a mix resolves against the page root, with nothing selected', /^(?:rgb|rgba|color)\(/.test(out.atRoot || ''), out.atRoot);
+    check('a value that is not a colour reports nothing', out.nonsense === null, JSON.stringify(out.nonsense));
     check('the probe leaves no trace in the page', out.leftClean === 2, `${out.leftClean} spans`);
   }
 
   if (failures.length) {
-    console.error(
-      `computed-color: ${failures.length} of ${checked} failed\n${failures.join('\n')}`,
-    );
+    console.error(`computed-color: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
   console.log(`computed-color: ${checked} passed  [needsPage, probe in a real browser]`);

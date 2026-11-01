@@ -8,8 +8,7 @@ import { parseInsertContent } from '../src/features/source/insertContent';
 import { insertTargetFor } from '../vendor/stacki/src/editor/insertTarget';
 import { parsePageModel } from '../vendor/stacki/shared/page/pageNode';
 
-const source =
-  '---\n// Keep this comment.\nconst title = "Unchanged";\n---\n<section><h1>{title}</h1></section>\n';
+const source = '---\n// Keep this comment.\nconst title = "Unchanged";\n---\n<section><h1>{title}</h1></section>\n';
 test('component insertion reuses an existing alias import for the same resolved file', () => {
   const page = `---\nimport Section from '@/components/wrapper/Section.astro';\n---\n<Section></Section>`;
   const action = parseAction({
@@ -62,10 +61,7 @@ test('asset insertion reuses aliases and avoids project component collisions', (
   const result = applyEdits(collision, structuralEdits(collision, action));
   assert.ok(result.includes("import { Image as AstroImage } from 'astro:assets';"));
   assert.ok(result.includes('<AstroImage '));
-  const alias = source.replace(
-    '// Keep this comment.',
-    "import { Image as Photo } from 'astro:assets';",
-  );
+  const alias = source.replace('// Keep this comment.', "import { Image as Photo } from 'astro:assets';");
   const reused = applyEdits(alias, structuralEdits(alias, action));
   assert.equal(reused.match(/astro:assets/g)?.length, 1);
   assert.ok(reused.includes('<Photo '));
@@ -81,12 +77,7 @@ test('empty pages accept new markup and asset imports', () => {
   }
 });
 test('invalid palette payloads cannot become arbitrary markup or imports', () => {
-  for (const content of [
-    null,
-    { type: 'element', tag: 'div onclick="bad"' },
-    { type: 'astroAsset', name: 'Unknown' },
-    { type: 'invalid' },
-  ]) {
+  for (const content of [null, { type: 'element', tag: 'div onclick="bad"' }, { type: 'astroAsset', name: 'Unknown' }, { type: 'invalid' }]) {
     assert.throws(() => parseInsertContent(content));
   }
   assert.throws(() =>
@@ -114,16 +105,6 @@ test('Stacki placement inserts inside containers and alongside incompatible head
   });
   const componentPage = parsePage('<Heading tag="h1">Title</Heading>', { locs: true });
   assert.ok(componentPage.editable);
-  const components = [
-    { name: 'Heading', slots: ['default'], renderTag: { prop: 'tag', tag: 'h2' } },
-  ];
-  assert.deepEqual(
-    insertTargetFor(
-      parsePageModel(componentPage.model),
-      'n0',
-      { type: 'element', tag: 'p' },
-      components,
-    ),
-    { parentId: undefined, index: 1 },
-  );
+  const components = [{ name: 'Heading', slots: ['default'], renderTag: { prop: 'tag', tag: 'h2' } }];
+  assert.deepEqual(insertTargetFor(parsePageModel(componentPage.model), 'n0', { type: 'element', tag: 'p' }, components), { parentId: undefined, index: 1 });
 });

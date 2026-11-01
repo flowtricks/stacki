@@ -2,14 +2,11 @@ import { switchPage } from './pageNavigation';
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const context = await browser.newContext({
-  ...(process.env['STUDIO_STORAGE_STATE']
-    ? { storageState: process.env['STUDIO_STORAGE_STATE'] }
-    : {}),
+  ...(process.env['STUDIO_STORAGE_STATE'] ? { storageState: process.env['STUDIO_STORAGE_STATE'] } : {}),
 });
 const page = await context.newPage();
 const errors: string[] = [];
@@ -58,9 +55,7 @@ try {
     await switchPage(page, 'src/pages/index.astro');
     await preview.locator('h1').waitFor();
   }
-  console.log(
-    'Repeated 404 navigation, selected outlines, and six in-place updates passed without reloads.',
-  );
+  console.log('Repeated 404 navigation, selected outlines, and six in-place updates passed without reloads.');
 } finally {
   await browser.close();
 }

@@ -1,14 +1,7 @@
 import { gitWorkspaceBusy } from '../history/gitWorkspaceLease';
 import { managedHostingFromEnvironment, managedPublishConfig } from './managedHosting';
-import {
-  parsePublishSource,
-  type PublishConfig,
-  type PublishTarget,
-} from '../../../vendor/stacki/shared/properties/publishConfig';
-import {
-  deployHosting,
-  runPublishScripts,
-} from '../../../vendor/stacki/electron/project/publishCommands';
+import { parsePublishSource, type PublishConfig, type PublishTarget } from '../../../vendor/stacki/shared/properties/publishConfig';
+import { deployHosting, runPublishScripts } from '../../../vendor/stacki/electron/project/publishCommands';
 import { readMetadataSource } from '../settings/projectMetadata';
 import { deploymentFromEnvironment } from './deployment';
 import { readFile, writeFile, rm } from 'node:fs/promises';
@@ -70,12 +63,8 @@ export class Publisher {
     readonly github: RepositoryAccess | undefined,
     readonly coordinator = new SerialQueue(),
     readonly build: (root: string) => Promise<void> = runBuild,
-    readonly cleanup?: (
-      files: readonly PublishedFile[],
-      sha: string,
-    ) => Promise<{ readonly warning?: string }>,
-    readonly deploy:
-      ((sha: string) => Promise<'live' | 'pending'>) | undefined = deploymentFromEnvironment(),
+    readonly cleanup?: (files: readonly PublishedFile[], sha: string) => Promise<{ readonly warning?: string }>,
+    readonly deploy: ((sha: string) => Promise<'live' | 'pending'>) | undefined = deploymentFromEnvironment(),
     readonly refresh?: () => Promise<unknown>,
     readonly persistDraft?: () => Promise<void>,
     readonly managedHosting = managedHostingFromEnvironment(),
@@ -122,16 +111,10 @@ export class Publisher {
           .then((stored) => parsePublishSource(stored.source))
           .then(ok, publishFailure),
       );
-      const config = managedPublishConfig(
-        storedConfig,
-        target,
-        this.deploy ? this.managedHosting : undefined,
-      );
+      const config = managedPublishConfig(storedConfig, target, this.deploy ? this.managedHosting : undefined);
       if (config.githubWorkflow?.kind === 'pull-request') {
         if (target === 'hosting') {
-          throw new PublishFailure(
-            'Submit changes for review and deploy the merged branch through your repository workflow.',
-          );
+          throw new PublishFailure('Submit changes for review and deploy the merged branch through your repository workflow.');
         }
         return await this.submitReview(temporary, progress);
       }
@@ -148,17 +131,12 @@ export class Publisher {
       this.state = {
         kind: 'failed',
         id,
-        message:
-          (savedToGitHub ? 'Saved to GitHub. Remaining publish steps failed: ' : '') +
-          (error instanceof Error ? error.message : 'Publish failed'),
+        message: (savedToGitHub ? 'Saved to GitHub. Remaining publish steps failed: ' : '') + (error instanceof Error ? error.message : 'Publish failed'),
       };
       return this.state;
     } finally {
       this.running = false;
-      const cleanup = await rm(temporary, { recursive: true, force: true }).then(
-        ok,
-        publishFailure,
-      );
+      const cleanup = await rm(temporary, { recursive: true, force: true }).then(ok, publishFailure);
       if (!cleanup.ok) {
         console.error('Publish temporary directory cleanup failed.');
       }
@@ -176,12 +154,7 @@ export class Publisher {
     if (this.github) {
       published(await this.github.acceptBase(result.sha).then(ok, publishFailure));
     }
-    published(
-      await writeFile(
-        path.join(this.root, '.stacki/studio/state/github-base.json'),
-        JSON.stringify({ sha: result.sha }),
-      ).then(ok, publishFailure),
-    );
+    published(await writeFile(path.join(this.root, '.stacki/studio/state/github-base.json'), JSON.stringify({ sha: result.sha })).then(ok, publishFailure));
     const cleanupWarning = await this.cleanPublishedAssets(files, result.sha);
     const deployment =
       target === 'github'
@@ -203,10 +176,7 @@ export class Publisher {
     };
     return this.state;
   }
-  private async submitReview(
-    temporary: string,
-    progress: Extract<PublishState, { kind: 'building' }>,
-  ): Promise<PublishState> {
+  private async submitReview(temporary: string, progress: Extract<PublishState, { kind: 'building' }>): Promise<PublishState> {
     if (!this.github?.review) {
       throw new PublishFailure('This repository connection does not support pull request review.');
     }
@@ -234,12 +204,7 @@ export class Publisher {
     this.state = { kind: 'review-open', id: progress.id, ...receipt };
     return this.state;
   }
-  private async buildAndCommit(
-    snapshot: string,
-    progress: Extract<PublishState, { kind: 'building' }>,
-    config: PublishConfig,
-    target: PublishTarget,
-  ) {
+  private async buildAndCommit(snapshot: string, progress: Extract<PublishState, { kind: 'building' }>, config: PublishConfig, target: PublishTarget) {
     const github = this.github;
     if (!github) {
       throw new Error('GitHub is not configured');
@@ -266,11 +231,8 @@ export class Publisher {
         if (target !== 'github' && config.hosting.provider !== 'none') {
           published(await createHostingSnapshot(this.root, snapshot));
         }
-        const sourceRoot =
-          target !== 'github' && config.hosting.provider !== 'none' ? snapshot : this.root;
-        const source = published(
-          await capturePublishSource(sourceRoot, path.dirname(snapshot), { assetRoot: this.root }),
-        );
+        const sourceRoot = target !== 'github' && config.hosting.provider !== 'none' ? snapshot : this.root;
+        const source = published(await capturePublishSource(sourceRoot, path.dirname(snapshot), { assetRoot: this.root }));
         return { source, expectedHead };
       });
       if (target !== 'github' && config.hosting.provider !== 'none') {
@@ -283,9 +245,7 @@ export class Publisher {
         if (config.buildScript === 'build') {
           published(await this.build(snapshot).then(ok, publishFailure));
         } else {
-          published(
-            await runPublishScripts(snapshot, [config.buildScript]).then(ok, publishFailure),
-          );
+          published(await runPublishScripts(snapshot, [config.buildScript]).then(ok, publishFailure));
         }
       }
       this.state = { ...progress, stage: 'committing' };
@@ -296,26 +256,16 @@ export class Publisher {
       if (result.error.code !== 'github_changed' || !this.refresh || attempt === 2) {
         published(result);
       }
-      published(
-        await rm(path.dirname(snapshot), { recursive: true, force: true }).then(ok, publishFailure),
-      );
+      published(await rm(path.dirname(snapshot), { recursive: true, force: true }).then(ok, publishFailure));
     }
     throw new PublishFailure('GitHub is changing too quickly. Try publishing again.');
   }
-  private async deployConfigured(
-    snapshot: string,
-    progress: Extract<PublishState, { kind: 'building' }>,
-    config: PublishConfig,
-  ): Promise<'live'> {
+  private async deployConfigured(snapshot: string, progress: Extract<PublishState, { kind: 'building' }>, config: PublishConfig): Promise<'live'> {
     this.state = { ...progress, stage: 'deploying', deployment: 'pending' };
     published(await deployHosting(snapshot, config).then(ok, publishFailure));
     return 'live';
   }
-  private async publishHosting(
-    snapshot: string,
-    progress: Extract<PublishState, { kind: 'building' }>,
-    config: PublishConfig,
-  ): Promise<PublishState> {
+  private async publishHosting(snapshot: string, progress: Extract<PublishState, { kind: 'building' }>, config: PublishConfig): Promise<PublishState> {
     if (config.hosting.provider === 'none') {
       throw new PublishFailure('Choose a hosting provider in Publish settings.');
     }
@@ -346,10 +296,7 @@ export class Publisher {
     };
     return this.state;
   }
-  private async confirmDeployment(
-    sha: string,
-    progress: Extract<PublishState, { kind: 'building' }>,
-  ) {
+  private async confirmDeployment(sha: string, progress: Extract<PublishState, { kind: 'building' }>) {
     this.state = { ...progress, stage: 'deploying' };
     try {
       return (await this.deploy?.(sha)) ?? 'pending';
@@ -397,19 +344,12 @@ export function githubFromEnvironment(root?: string) {
   );
 }
 
-async function afterPublish(
-  snapshot: string,
-  config: PublishConfig,
-  target: PublishTarget,
-  options: { readonly hostingComplete: boolean },
-) {
+async function afterPublish(snapshot: string, config: PublishConfig, target: PublishTarget, options: { readonly hostingComplete: boolean }) {
   try {
     await runPublishScripts(snapshot, config.afterPublish, { STACKI_PUBLISH_TARGET: target });
   } catch (error: unknown) {
     const failure = publishFailure(error);
     const message = failure.ok ? '' : failure.error.message;
-    throw new PublishFailure(
-      (options.hostingComplete ? 'Hosting deployment completed. ' : '') + message,
-    );
+    throw new PublishFailure((options.hostingComplete ? 'Hosting deployment completed. ' : '') + message);
   }
 }

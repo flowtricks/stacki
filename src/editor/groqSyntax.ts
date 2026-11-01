@@ -6,16 +6,7 @@
 // as far as it can be and never loses a clause it was not understood in.
 
 import { assert } from '../../shared/core/assert';
-import {
-  isDateValue,
-  isDocumentId,
-  isFieldPath,
-  isItemId,
-  LOOP_QUERY_LIMITS,
-  type LoopCondition,
-  type LoopLiteral,
-  type LoopSort,
-} from './loopQuery';
+import { isDateValue, isDocumentId, isFieldPath, isItemId, LOOP_QUERY_LIMITS, type LoopCondition, type LoopLiteral, type LoopSort } from './loopQuery';
 
 export interface GroqReading {
   readonly type: string;
@@ -128,12 +119,7 @@ function readTail(text: string): TailReading | undefined {
   if (slice) {
     const start = Number(slice[1]);
     const end = Number(slice[3]) + (slice[2] === '..' ? 1 : 0);
-    if (
-      !Number.isSafeInteger(start) ||
-      !Number.isSafeInteger(end) ||
-      end <= start ||
-      start > LOOP_QUERY_LIMITS.offsetMax
-    ) {
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || end <= start || start > LOOP_QUERY_LIMITS.offsetMax) {
       return undefined;
     }
     offset = start;
@@ -143,11 +129,7 @@ function readTail(text: string): TailReading | undefined {
   if (rest === '') {
     return { sorts, offset, limit, projection: undefined };
   }
-  if (
-    !rest.startsWith('{') ||
-    matching(rest, 0) !== rest.length - 1 ||
-    rest.length > LOOP_QUERY_LIMITS.projectionCharsMax
-  ) {
+  if (!rest.startsWith('{') || matching(rest, 0) !== rest.length - 1 || rest.length > LOOP_QUERY_LIMITS.projectionCharsMax) {
     return undefined; // A projection before the order, a pipe after it, or a single document.
   }
   return { sorts, offset, limit, projection: rest };
@@ -200,29 +182,17 @@ export function readCondition(clause: string): LoopCondition {
   }
   const now = new RegExp(`^${FIELD}\\s*(<=|<|>|>=)\\s*now\\(\\)$`).exec(text);
   if (now?.[1] !== undefined && isFieldPath(now[1])) {
-    return {
-      kind: 'test',
-      field: now[1],
-      operator: now[2]?.startsWith('<') ? 'inPast' : 'inFuture',
-    };
+    return { kind: 'test', field: now[1], operator: now[2]?.startsWith('<') ? 'inPast' : 'inFuture' };
   }
-  const compared = new RegExp(
-    `^${FIELD}\\s*${COMPARE}\\s*(?:${STRING}|${NUMBER}|(true|false))$`,
-  ).exec(text);
+  const compared = new RegExp(`^${FIELD}\\s*${COMPARE}\\s*(?:${STRING}|${NUMBER}|(true|false))$`).exec(text);
   if (compared?.[1] !== undefined && compared[2] !== undefined) {
-    return (
-      comparedCondition(compared[1], compared[2], compared[3], compared[4], compared[5]) ?? custom
-    );
+    return comparedCondition(compared[1], compared[2], compared[3], compared[4], compared[5]) ?? custom;
   }
   return custom;
 }
 
 // `"id" in tags[]._ref` (a list of references) or `"news" in tags` (of text).
-function containsCondition(
-  field: string,
-  quoted: string | undefined,
-  number: string | undefined,
-): LoopCondition | undefined {
+function containsCondition(field: string, quoted: string | undefined, number: string | undefined): LoopCondition | undefined {
   const reference = field.endsWith('[]._ref') ? field.slice(0, -'[]._ref'.length) : undefined;
   const text = quoted === undefined ? undefined : groqStringValue(quoted);
   if (reference !== undefined) {
@@ -236,9 +206,7 @@ function containsCondition(
   if (text !== undefined) {
     return { kind: 'test', field, operator: 'has', value: { kind: 'text', text } };
   }
-  return number === undefined
-    ? undefined
-    : { kind: 'test', field, operator: 'has', value: { kind: 'number', number: Number(number) } };
+  return number === undefined ? undefined : { kind: 'test', field, operator: 'has', value: { kind: 'number', number: Number(number) } };
 }
 
 function comparedCondition(
@@ -258,16 +226,12 @@ function comparedCondition(
     if (boolean === 'true' && operator === '==') {
       return { kind: 'test', field, operator: 'isTrue' };
     }
-    return boolean === 'true' && operator === '!='
-      ? { kind: 'test', field, operator: 'isFalse' }
-      : undefined;
+    return boolean === 'true' && operator === '!=' ? { kind: 'test', field, operator: 'isFalse' } : undefined;
   }
   const text = quoted === undefined ? undefined : groqStringValue(quoted);
   if (operator === '==' || operator === '!=') {
     const literal = literalOf(reference ? 'reference' : 'value', text, number);
-    return literal === undefined
-      ? undefined
-      : { kind: 'test', field, operator: operator === '==' ? 'is' : 'isNot', value: literal };
+    return literal === undefined ? undefined : { kind: 'test', field, operator: operator === '==' ? 'is' : 'isNot', value: literal };
   }
   if (reference) {
     return undefined;
@@ -287,18 +251,11 @@ function comparedCondition(
     return undefined;
   }
   const operators = { '>': 'greater', '<': 'less', '>=': 'atLeast', '<=': 'atMost' } as const;
-  const named =
-    operator === '>' || operator === '<' || operator === '>=' || operator === '<='
-      ? operators[operator]
-      : undefined;
+  const named = operator === '>' || operator === '<' || operator === '>=' || operator === '<=' ? operators[operator] : undefined;
   return named === undefined ? undefined : { kind: 'test', field, operator: named, value };
 }
 
-function literalOf(
-  form: 'reference' | 'value',
-  text: string | undefined,
-  number: string | undefined,
-): LoopLiteral | undefined {
+function literalOf(form: 'reference' | 'value', text: string | undefined, number: string | undefined): LoopLiteral | undefined {
   if (form === 'reference') {
     return text !== undefined && isDocumentId(text) ? { kind: 'reference', id: text } : undefined;
   }
@@ -411,9 +368,7 @@ function splitTop(text: string, separator: string): string[] {
 
 // `(a || b)` → `a || b`, only when the parentheses enclose the whole clause.
 function unwrapped(clause: string): string | undefined {
-  return clause.startsWith('(') && matching(clause, 0) === clause.length - 1
-    ? clause.slice(1, -1).trim()
-    : undefined;
+  return clause.startsWith('(') && matching(clause, 0) === clause.length - 1 ? clause.slice(1, -1).trim() : undefined;
 }
 
 function stripComments(text: string): string {

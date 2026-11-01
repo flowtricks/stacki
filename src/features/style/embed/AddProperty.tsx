@@ -2,15 +2,7 @@
 // combobox, suggestions, custom properties and the new value's input
 // (EmbedEditor.tsx).
 
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Popup from '../../../ui/Popup';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import useScrub from '../components/useScrub';
@@ -118,10 +110,7 @@ export const ValueField = forwardRef<
 });
 
 // One ref callback that sets both a local ref and whatever ref the caller forwarded.
-export function mergedRef<T>(
-  localRef: React.RefObject<T>,
-  forwardedRef: React.ForwardedRef<T>,
-): React.RefCallback<T> {
+export function mergedRef<T>(localRef: React.RefObject<T>, forwardedRef: React.ForwardedRef<T>): React.RefCallback<T> {
   return (node) => {
     Reflect.set(localRef, 'current', node);
     if (typeof forwardedRef === 'function') {
@@ -155,15 +144,7 @@ export function useLiveTimer(liveNow: (text: string) => void) {
 
 // The value field's expansion: it expands the instant the collapsed single line can no
 // longer hold the content, and grows to fit it (no inner scroll); collapsing resets it.
-export function useAutoExpand({
-  ref,
-  focused,
-  draft,
-}: {
-  ref: React.RefObject<HTMLTextAreaElement>;
-  focused: React.MutableRefObject<boolean>;
-  draft: string;
-}) {
+export function useAutoExpand({ ref, focused, draft }: { ref: React.RefObject<HTMLTextAreaElement>; focused: React.MutableRefObject<boolean>; draft: string }) {
   const [expanded, setExpanded] = useState(false);
   const maybeExpand = () => {
     const field = ref.current;
@@ -191,9 +172,7 @@ export function useAutoExpand({
 
 // Enter blurs (the commit); ↑/↓ step the number under the caret in place. Returns the
 // stepped text, or undefined when the key did not step.
-export function stepValueField(
-  event: React.KeyboardEvent<HTMLTextAreaElement>,
-): string | undefined {
+export function stepValueField(event: React.KeyboardEvent<HTMLTextAreaElement>): string | undefined {
   const field = event.currentTarget;
   if (event.key === 'Enter') {
     event.preventDefault();
@@ -315,15 +294,7 @@ export function PropertySuggestions({
   choose: (prop: string) => void;
 }) {
   return (
-    <Popup
-      mode="popover"
-      onClose={onClose}
-      ref={listRef}
-      className="embed-editor_propsuggest"
-      style={position}
-      role="listbox"
-      label="CSS properties"
-    >
+    <Popup mode="popover" onClose={onClose} ref={listRef} className="embed-editor_propsuggest" style={position} role="listbox" label="CSS properties">
       {matches.map((prop, i) => (
         <button
           key={prop}
@@ -387,11 +358,7 @@ export function useSuggestPosition({
       width: span.width,
       visibility: 'visible',
     } as const;
-    setPosition(
-      up
-        ? { ...box, bottom: window.innerHeight - rect.top + gap, maxHeight: heightMax }
-        : { ...box, top: rect.bottom + gap, maxHeight: heightMax },
-    );
+    setPosition(up ? { ...box, bottom: window.innerHeight - rect.top + gap, maxHeight: heightMax } : { ...box, top: rect.bottom + gap, maxHeight: heightMax });
   }, [open, matchCount, value, inputRef]);
   return position;
 }
@@ -457,13 +424,7 @@ export function comboKeyDown(
   }
 }
 
-export function AddPropertyRow({
-  busy,
-  onAdd,
-}: {
-  busy: boolean;
-  onAdd: (prop: string, value: string, important: boolean) => void;
-}) {
+export function AddPropertyRow({ busy, onAdd }: { busy: boolean; onAdd: (prop: string, value: string, important: boolean) => void }) {
   const row = useAddProperty(onAdd);
   const { expanded, prop, setProp, value, setValue, valueRef, ready, cancel, submit } = row;
   // The project's own custom properties are properties here too — this row is
@@ -491,21 +452,8 @@ export function AddPropertyRow({
         onEnter={row.enterName}
         onEscape={cancel}
       />
-      <NewValueInput
-        valueRef={valueRef}
-        value={value}
-        setValue={setValue}
-        submit={submit}
-        cancel={cancel}
-      />
-      <button
-        className="embed-editor_icon-btn"
-        type="button"
-        onClick={submit}
-        disabled={busy || !ready}
-        title="Add property"
-        aria-label="Add property"
-      >
+      <NewValueInput valueRef={valueRef} value={value} setValue={setValue} submit={submit} cancel={cancel} />
+      <button className="embed-editor_icon-btn" type="button" onClick={submit} disabled={busy || !ready} title="Add property" aria-label="Add property">
         +
       </button>
     </div>
@@ -563,13 +511,7 @@ export function useAddProperty(onAdd: (prop: string, value: string, important: b
 
 export function CancelAddButton({ onCancel }: { onCancel: () => void }) {
   return (
-    <button
-      className="embed-editor_icon-btn"
-      type="button"
-      onClick={onCancel}
-      title="Cancel"
-      aria-label="Cancel adding property"
-    >
+    <button className="embed-editor_icon-btn" type="button" onClick={onCancel} title="Cancel" aria-label="Cancel adding property">
       ✕
     </button>
   );
@@ -635,10 +577,7 @@ export type SectionToggleRequest = {
   readonly scope: 'one' | 'all';
 };
 
-export function useSectionVisibility(): readonly [
-  ReadonlySet<string>,
-  (request: SectionToggleRequest) => void,
-] {
+export function useSectionVisibility(): readonly [ReadonlySet<string>, (request: SectionToggleRequest) => void] {
   const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set(['flex-child']));
   const toggle = useCallback((request: SectionToggleRequest) => {
     setClosed((previous) => {

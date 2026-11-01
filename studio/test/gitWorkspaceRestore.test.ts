@@ -14,10 +14,7 @@ test('startup preserves the restored baseline without another Git checkout', asy
     const state = await setup.workspace.load();
     await rm(state.git.directory, { recursive: true, force: true });
     await restoreGitWorkspaceCheckout(state.git, state.manifest, setup.head);
-    assert.equal(
-      await readFile(path.join(setup.root, 'src/pages/index.astro'), 'utf8'),
-      '<h1>Changed</h1>',
-    );
+    assert.equal(await readFile(path.join(setup.root, 'src/pages/index.astro'), 'utf8'), '<h1>Changed</h1>');
     assert.deepEqual(await readGitWorkspace(setup.root), state.manifest);
   } finally {
     await rm(setup.parent, { recursive: true, force: true });

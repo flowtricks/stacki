@@ -70,9 +70,7 @@ export default function SegmentPill() {
       ref={ref}
       className={`embed-editor_display-indicator${animated ? ' is-animated' : ''}`}
       aria-hidden="true"
-      style={
-        box ? { transform: `translateX(${box.x}px)`, width: `${box.width}px` } : { opacity: 0 }
-      }
+      style={box ? { transform: `translateX(${box.x}px)`, width: `${box.width}px` } : { opacity: 0 }}
     />
   );
 }

@@ -52,8 +52,7 @@ function valuesByPath(context: DataContext, depthMax = 4): ReadonlyMap<string, u
 
 // A preview string as a value: sampled previews are quoted (`"BloomCraft"`),
 // which is how they read in the picker but not what the prop holds.
-const unquote = (value: unknown): unknown =>
-  typeof value === 'string' && /^".*"$/.test(value) ? value.slice(1, -1) : value;
+const unquote = (value: unknown): unknown => (typeof value === 'string' && /^".*"$/.test(value) ? value.slice(1, -1) : value);
 
 /**
  * The props an instance passes, resolved as far as the page can be read.
@@ -63,10 +62,7 @@ const unquote = (value: unknown): unknown =>
  * frontmatter, imports, the loops around it, and whatever samples the app has
  * for the collections it reads.
  */
-export function resolveInstanceProps(
-  node: TreeView | undefined,
-  context: DataContext = {},
-): Readonly<Record<string, unknown>> | undefined {
+export function resolveInstanceProps(node: TreeView | undefined, context: DataContext = {}): Readonly<Record<string, unknown>> | undefined {
   const props = node?.props;
   if (!props || typeof props !== 'object') {
     return undefined;

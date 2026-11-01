@@ -11,20 +11,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {
-  astroSchemaFields,
-  labelize,
-  referencedCollections,
-} = require('#dist/electron/content/astroRemoteSchema.js');
-const {
-  addCollectionToConfig,
-  createAstroCollection,
-} = require('#dist/electron/content/astroCollectionConfig.js');
+const { astroSchemaFields, labelize, referencedCollections } = require('#dist/electron/content/astroRemoteSchema.js');
+const { addCollectionToConfig, createAstroCollection } = require('#dist/electron/content/astroCollectionConfig.js');
 const { astroRemoteService, documentId } = require('#dist/electron/content/astroRemoteService.js');
-const {
-  parseRemoteDocument,
-  parseRemoteDocumentList,
-} = require('#dist/shared/properties/cmsRemote.js');
+const { parseRemoteDocument, parseRemoteDocumentList } = require('#dist/shared/properties/cmsRemote.js');
 
 const SCHEMA = {
   type: 'object',
@@ -52,19 +42,7 @@ test('a zod schema maps onto the remote field types the panel draws', () => {
   const byName = new Map(fields.map((field) => [field.name, field]));
   assert.deepEqual(
     fields.map((field) => field.name),
-    [
-      'title',
-      'status',
-      'email',
-      'link',
-      'views',
-      'featured',
-      'date',
-      'cover',
-      'author',
-      'tags',
-      'seo',
-    ],
+    ['title', 'status', 'email', 'link', 'views', 'featured', 'date', 'cover', 'author', 'tags', 'seo'],
     'a union and a record are left out',
   );
   assert.equal(byName.get('title').required, true);
@@ -115,11 +93,7 @@ test('a recursive schema stops at the depth bound instead of looping', () => {
   };
   const [node] = astroSchemaFields(recursive, new Map());
   let depth = 0;
-  for (
-    let at = node?.type;
-    at?.kind === 'object';
-    at = at.fields.find((field) => field.name === 'child')?.type
-  ) {
+  for (let at = node?.type; at?.kind === 'object'; at = at.fields.find((field) => field.name === 'child')?.type) {
     depth += 1;
   }
   assert.ok(depth > 0 && depth <= 8, `nested ${depth} levels`);
@@ -155,10 +129,7 @@ test('an existing config gains the collection beside the others, and its missing
   assert.match(text, /^import \{ glob \} from 'astro\/loaders';\n/, 'only glob is missing');
   assert.doesNotMatch(text, /astro\/zod/, 'z is already imported');
   assert.match(text, /const news = defineCollection\(\{/);
-  assert.match(
-    text,
-    /\n  'faq': defineCollection\(\{ loader: file\('src\/data\/faq\.json'\) \}\),\n  news,\n\};/,
-  );
+  assert.match(text, /\n  'faq': defineCollection\(\{ loader: file\('src\/data\/faq\.json'\) \}\),\n  news,\n\};/);
   assert.ok(text.indexOf('const news') < text.indexOf('export const collections'));
   const oneLine = addCollectionToConfig('export const collections = { team };\n', 'news');
   assert.match(oneLine.value.text, /export const collections = \{ team, news \};/);
@@ -177,10 +148,7 @@ test('a config that cannot take the collection is refused with the reason', () =
   const open = addCollectionToConfig('export const collections = { a: "}", b: {', 'news');
   assert.equal(open.ok, false);
   assert.match(open.error, /not closed/);
-  const shadowed = addCollectionToConfig(
-    "import news from './news';\nexport const collections = { team };\n",
-    'news',
-  );
+  const shadowed = addCollectionToConfig("import news from './news';\nexport const collections = { team };\n", 'news');
   assert.equal(shadowed.ok, true);
   assert.match(shadowed.value.text, /const newsCollection = defineCollection/);
   assert.match(shadowed.value.text, /\{ team, news: newsCollection \}/);
@@ -317,12 +285,7 @@ test('an entry image path resolves to the project file Astro reads, or to none',
   assert.equal(projectImage(entry, '../../assets/a b.png?v=2'), 'src/assets/a b.png');
   assert.equal(projectImage(entry, '/images/hero.webp'), 'public/images/hero.webp');
   assert.equal(projectImage('src/data/team.json', 'photo.png'), 'src/data/photo.png');
-  for (const outside of [
-    '',
-    'https://cdn.example.com/a.png',
-    '@/assets/a.png',
-    '../../../../x.png',
-  ]) {
+  for (const outside of ['', 'https://cdn.example.com/a.png', '@/assets/a.png', '../../../../x.png']) {
     assert.equal(projectImage(entry, outside), undefined, outside);
   }
 });
@@ -343,10 +306,7 @@ test('a plain string of another collection’s record ids becomes a choice of it
   };
   const team = {
     name: 'team',
-    entries: [
-      record('ada', 'Ada', { campus: 'w1', campuses: ['w1', 'w2'], role: 'Lead' }),
-      record('alan', 'Alan', { campus: 'w2', campuses: [], role: 'w1' }),
-    ],
+    entries: [record('ada', 'Ada', { campus: 'w1', campuses: ['w1', 'w2'], role: 'Lead' }), record('alan', 'Alan', { campus: 'w2', campuses: [], role: 'w1' })],
   };
   const text = { kind: 'string', options: [] };
   const field = (name, type) => ({
@@ -363,10 +323,7 @@ test('a plain string of another collection’s record ids becomes a choice of it
     field('role', text),
     field('photo', { kind: 'string', options: [], asset: 'image' }),
   ];
-  const [campusField, campusesField, roleField, photoField] = withInferredReferences(fields, team, [
-    campus,
-    team,
-  ]);
+  const [campusField, campusesField, roleField, photoField] = withInferredReferences(fields, team, [campus, team]);
   const options = [
     { title: 'Main', value: 'w1' },
     { title: 'North', value: 'w2' },
@@ -391,13 +348,7 @@ test('a plain string of another collection’s record ids becomes a choice of it
 
 test('a data file gains records beside its others and loses them in place', async () => {
   const root = project({
-    'src/data/people.json': [
-      '[',
-      '  { "id": "ada", "name": "Ada", "staff": true },',
-      '  { "id": "alan", "name": "Alan", "staff": false }',
-      ']',
-      '',
-    ].join('\n'),
+    'src/data/people.json': ['[', '  { "id": "ada", "name": "Ada", "staff": true },', '  { "id": "alan", "name": "Alan", "staff": false }', ']', ''].join('\n'),
     'src/data/teams.yaml': 'red:\n  title: Red # kept\nblue:\n  title: Blue\n',
   });
   const people = {
@@ -420,10 +371,7 @@ test('a data file gains records beside its others and loses them in place', asyn
   assert.deepEqual(json(), [{ id: 'alan', name: 'Alan', staff: false }]);
   await content.create('teams');
   const yaml = fs.readFileSync(path.join(root, 'src/data/teams.yaml'), 'utf8');
-  assert.match(
-    yaml,
-    /^red:\n  title: Red # kept\nblue:\n  title: Blue\nuntitled:\n  title: Untitled\n$/,
-  );
+  assert.match(yaml, /^red:\n  title: Red # kept\nblue:\n  title: Blue\nuntitled:\n  title: Untitled\n$/);
 });
 
 test('an empty data file takes its first record, and other formats are refused', async () => {
@@ -464,8 +412,7 @@ test('exported keys that start with a digit or hold dashes are fields like any o
 
 test('a list read with columns carries each entry’s values, references by name', async () => {
   const root = project({
-    'src/data/campus.json':
-      '[{"id":"main","name":"Main","_id":"w1"},{"id":"north","name":"North","_id":"w2"}]',
+    'src/data/campus.json': '[{"id":"main","name":"Main","_id":"w1"},{"id":"north","name":"North","_id":"w2"}]',
     'src/data/team.json': '[{"id":"ada","name":"Ada","campus":"w2","staff":true,"order":2}]',
   });
   const campus = { name: 'campus', loader: { kind: 'file', file: 'src/data/campus.json' } };

@@ -30,8 +30,7 @@ if (process.env['CANVAS_TEXT_HOST'] !== 'studio') {
 }
 const studio = await startStyleFixture({ page: source, prepare: prepareContent });
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 try {
@@ -60,10 +59,7 @@ async function checkTextEditing(page: Page, root: string) {
   await checkContentField(page, 'Welcome world again');
   await frame.locator('[data-avb-text-editor]').press('Enter');
   await frame.locator('h1').filter({ hasText: 'Welcome world again' }).waitFor();
-  assert.match(
-    await savedText(sourceFile, 'Welcome'),
-    /Welcome <span class="accent">world<\/span>/,
-  );
+  assert.match(await savedText(sourceFile, 'Welcome'), /Welcome <span class="accent">world<\/span>/);
   await frame.locator('h1 span').click();
   assert.equal(await frame.locator('[data-avb-text-editor]').count(), 0);
   await openText(frame, 'h1 span');
@@ -76,10 +72,7 @@ async function checkTextEditing(page: Page, root: string) {
   const shared = frame.locator('[data-avb-text-editor]');
   await replaceText(page, frame, 'Updated shared heading');
   await checkContentField(page, 'Updated shared heading');
-  assert.equal(
-    await page.locator('.rich-content .expr-chip').getAttribute('data-expr'),
-    '{heading}',
-  );
+  assert.equal(await page.locator('.rich-content .expr-chip').getAttribute('data-expr'), '{heading}');
   await shared.press('Enter');
   await frame.locator('h2').filter({ hasText: 'Updated shared heading' }).waitFor();
   const saved = await savedText(sourceFile, 'Updated shared heading');
@@ -109,10 +102,7 @@ async function checkRuntimeMarkup(page: Page, frame: FrameLocator, sourceFile: s
   await replaceText(page, frame, 'Animation edited');
   await frame.locator('[data-avb-text-editor]').press('Enter');
   await frame.locator('#split').filter({ hasText: 'Animation edited' }).waitFor();
-  assert.match(
-    await savedText(sourceFile, 'Animation edited'),
-    /<p id="split">Animation edited<\/p>/,
-  );
+  assert.match(await savedText(sourceFile, 'Animation edited'), /<p id="split">Animation edited<\/p>/);
   const before = await readFile(sourceFile, 'utf8');
   await frame.locator('#changed').evaluate((element) => {
     element.textContent = 'Runtime changed';
@@ -206,12 +196,7 @@ async function checkFocusAndDismiss(page: Page, frame: FrameLocator, sourceFile:
   });
   assert.equal(during, before);
   assert.equal(await page.locator('.canvas-text-caret').count(), 0);
-  assert.equal(
-    await frame
-      .locator('[data-avb-text-editor]')
-      .evaluate((element) => getComputedStyle(element).outlineStyle),
-    'none',
-  );
+  assert.equal(await frame.locator('[data-avb-text-editor]').evaluate((element) => getComputedStyle(element).outlineStyle), 'none');
   await frame.locator('#outside').click();
   await frame.locator('[data-avb-text-editor]').waitFor({ state: 'detached' });
   assert.equal(await frame.locator('html').evaluate(() => window.getSelection()?.toString()), '');
@@ -311,10 +296,7 @@ async function checkCaretPlacement(page: Page, frame: FrameLocator) {
 async function checkContentField(page: Page, value: string) {
   // The canvas still owns focus here: no Enter, blur, save or source refresh
   // is allowed to make an otherwise stale Content field pass this assertion.
-  await page.waitForFunction(
-    (expected) => document.querySelector('.rich-content')?.textContent === expected,
-    value,
-  );
+  await page.waitForFunction((expected) => document.querySelector('.rich-content')?.textContent === expected, value);
 }
 
 async function prepareSlotComponents(root: string) {
@@ -328,9 +310,7 @@ const Tag = 'p';
 ---\n`;
   await writeFile(
     path.join(directory, 'Eyebrow.astro'),
-    frontmatter +
-      '<div class="eyebrow_wrap"><span aria-hidden="true" />' +
-      '<Tag id="eyebrow"><Fragment set:html={content} /></Tag></div>',
+    frontmatter + '<div class="eyebrow_wrap"><span aria-hidden="true" />' + '<Tag id="eyebrow"><Fragment set:html={content} /></Tag></div>',
   );
   await writeFile(
     path.join(directory, 'Button.astro'),
@@ -358,10 +338,7 @@ async function checkWrappedSlots(page: Page, frame: FrameLocator, sourceFile: st
     await frame.locator(selector).filter({ hasText: text }).waitFor();
     await savedText(sourceFile, text);
   }
-  assert.match(
-    await readFile(sourceFile, 'utf8'),
-    /<Button href="\/destination">Button edited<\/Button>/,
-  );
+  assert.match(await readFile(sourceFile, 'utf8'), /<Button href="\/destination">Button edited<\/Button>/);
 }
 
 async function prepareContent(root: string) {
@@ -405,10 +382,7 @@ async function checkSlotText(page: Page, frame: FrameLocator, sourceFile: string
   await checkContentField(page, 'Edited slot protected');
   await input.press('Enter');
   await frame.locator('#slot').filter({ hasText: 'Edited slot protected' }).waitFor();
-  assert.match(
-    await savedText(sourceFile, 'Edited slot'),
-    /<Heading>Edited slot <span>protected<\/span><\/Heading>/,
-  );
+  assert.match(await savedText(sourceFile, 'Edited slot'), /<Heading>Edited slot <span>protected<\/span><\/Heading>/);
   await frame.locator('#slot span').click();
   assert.equal(await frame.locator('[data-avb-text-editor]').count(), 0);
 }
@@ -417,10 +391,7 @@ async function checkContentText(page: Page, frame: FrameLocator, root: string) {
   const input = frame.locator('[data-avb-text-editor]');
   await replaceText(page, frame, 'Updated CMS title');
   await checkContentField(page, 'Updated CMS title');
-  assert.equal(
-    await page.locator('.rich-content .expr-chip').getAttribute('data-expr'),
-    '{post.data.title}',
-  );
+  assert.equal(await page.locator('.rich-content .expr-chip').getAttribute('data-expr'), '{post.data.title}');
   await input.press('Enter');
   await savedText(path.join(root, 'src/content/blog/hello.json'), 'Updated CMS title');
   await frame.locator('#cms').filter({ hasText: 'Updated CMS title' }).waitFor();

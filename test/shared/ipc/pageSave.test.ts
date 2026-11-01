@@ -82,10 +82,7 @@ test('edit payloads require a well-formed authored checksum', () => {
   assert.equal(parsed.authoredChecksum, base);
   assert.throws(() => parseIpcPayload('page:edit', payload), /Expected digest string/);
   assert.throws(() => parseIpcPayload('page:edit', { ...payload, authoredChecksum: 42 }), /digest/);
-  assert.throws(
-    () => parseIpcPayload('page:edit', { ...payload, authoredChecksum: 'B'.repeat(64) }),
-    /Digest: expected 64 lowercase hex characters/,
-  );
+  assert.throws(() => parseIpcPayload('page:edit', { ...payload, authoredChecksum: 'B'.repeat(64) }), /Digest: expected 64 lowercase hex characters/);
 });
 
 test('the whole-file channels are retired: every save is an edit through page:edit', () => {
@@ -112,21 +109,12 @@ test('page read and edit replies parse only with a valid checksum', () => {
   const checksum = 'c'.repeat(64);
   assert.equal(parsePageDiskRead({ ...page, checksum }).checksum, checksum);
   assert.throws(() => parsePageDiskRead(page), /PageDiskRead\.checksum: expected string/);
-  assert.throws(
-    () => parsePageDiskRead({ ...page, checksum: 'c'.repeat(63) }),
-    /PageDiskRead\.checksum: Digest/,
-  );
+  assert.throws(() => parsePageDiskRead({ ...page, checksum: 'c'.repeat(63) }), /PageDiskRead\.checksum: Digest/);
   // An edit's reply carries the inverse Undo submits (step 9).
   const written = parsePageEditResult({ ok: true, ...page, checksum, inverse: [] });
   assert.equal(written.ok && written.value.checksum, checksum);
-  assert.throws(
-    () => parsePageEditResult({ ok: true, ...page, inverse: [] }),
-    /PageDiskRead\.checksum/,
-  );
-  assert.throws(
-    () => parsePageEditResult({ ok: true, ...page, checksum }),
-    /PageEdited\.inverse: expected array/,
-  );
+  assert.throws(() => parsePageEditResult({ ok: true, ...page, inverse: [] }), /PageDiskRead\.checksum/);
+  assert.throws(() => parsePageEditResult({ ok: true, ...page, checksum }), /PageEdited\.inverse: expected array/);
   assert.throws(() => parsePageEditResult(jsonNull), /PageEditResult: expected object/);
   assert.throws(() => parsePageEditResult({ ok: 'yes' }), /PageEditResult\.ok/);
 });
@@ -219,10 +207,7 @@ test('an outside edit between read and write is refused and left on disk', async
   const payload = { pagePath: notes, authoredChecksum: before.checksum, edit: level };
   const result = parsePageEditResult(await harness.invoke('page:edit', payload));
   assert.equal(!result.ok && result.error.code, 'rejected');
-  assert.equal(
-    !result.ok && result.error.code === 'rejected' && result.error.diskChecksum,
-    sha256('# Outside\n'),
-  );
+  assert.equal(!result.ok && result.error.code === 'rejected' && result.error.diskChecksum, sha256('# Outside\n'));
   assert.equal(fs.readFileSync(notes, 'utf8'), '# Outside\n', 'the gesture left disk alone');
   const file = path.join(harness.root, 'src/pages/index.astro');
   fs.writeFileSync(file, '<h1>Before</h1>\n');
@@ -231,10 +216,7 @@ test('an outside edit between read and write is refused and left on disk', async
   // The code editor's save of the same word overlaps the outside edit.
   const code = await saveCode(harness, file, read, '<h1>Mine</h1>\n');
   assert.equal(!code.ok && code.error.code === 'rejected' && code.error.reason, 'merge-conflict');
-  assert.equal(
-    !code.ok && code.error.code === 'rejected' && code.error.diskChecksum,
-    sha256('<h1>Outside</h1>\n'),
-  );
+  assert.equal(!code.ok && code.error.code === 'rejected' && code.error.diskChecksum, sha256('<h1>Outside</h1>\n'));
   assert.equal(fs.readFileSync(file, 'utf8'), '<h1>Outside</h1>\n', 'the patch left disk alone');
   assert.deepEqual(temporaries(path.dirname(file)), []);
 });

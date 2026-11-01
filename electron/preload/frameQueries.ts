@@ -28,14 +28,7 @@ import {
   setTracking,
 } from './frameRegions';
 import { ownClasses, resetThinCache } from './frameMeasure';
-import {
-  forgetReportedKeys,
-  paintOpened,
-  scrollPathIntoView,
-  sendClasses,
-  sendRects,
-  sendRendered,
-} from './frameReports';
+import { forgetReportedKeys, paintOpened, scrollPathIntoView, sendClasses, sendRects, sendRendered } from './frameReports';
 import { enterDesignMode, startOutlines } from './frameTargets';
 
 // Nodes that put nothing on the page: a component that returns null for the
@@ -92,9 +85,7 @@ const elementsForPath = (nodePath: string): Element[] => {
   // `display: contents`) still has descendants that do — the first of those
   // stands in for it, the same fallback the rect measuring uses.
   if (!out.length) {
-    const first = Array.from(document.querySelectorAll(`[${PATH_ATTR}]`)).find((element) =>
-      pathsOf(element).some((x) => x.startsWith(nodePath + '.')),
-    );
+    const first = Array.from(document.querySelectorAll(`[${PATH_ATTR}]`)).find((element) => pathsOf(element).some((x) => x.startsWith(nodePath + '.')));
     if (first) {
       out.push(first);
     }
@@ -115,8 +106,7 @@ const identityOf = (element: Element) => ({
 
 // The app posts these messages with structured payloads; anything else from
 // its window — or from another frame entirely — is not ours to act on.
-const recordPayload = (x: unknown): x is Record<string, unknown> =>
-  typeof x === 'object' && x !== null;
+const recordPayload = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null;
 
 // The app's questions and instructions, from its own window only.
 export function listenForQueries(): void {
@@ -214,10 +204,7 @@ function applyClassPatch(data: Record<string, unknown>): void {
 
 const answerQuery = (data: Record<string, unknown>, id: number) => {
   if (data['pageText'] === true) {
-    window.parent.postMessage(
-      { type: 'avb:query-result', id, found: true, pageText: renderedPageText(document) },
-      '*',
-    );
+    window.parent.postMessage({ type: 'avb:query-result', id, found: true, pageText: renderedPageText(document) }, '*');
     return;
   }
   if (data['pageMetadata'] === true) {
@@ -236,9 +223,7 @@ const answerQuery = (data: Record<string, unknown>, id: number) => {
   const path = typeof data['path'] === 'string' ? data['path'] : '';
   const els = path ? elementsForPath(path) : [];
   const styleHost = els[0] ?? answerQueryTextHost(path, data['textParentPath']);
-  const wanted = (Array.isArray(data['compute']) ? data['compute'] : []).filter(
-    (value): value is string => typeof value === 'string',
-  );
+  const wanted = (Array.isArray(data['compute']) ? data['compute'] : []).filter((value): value is string => typeof value === 'string');
   // No element named, or none found: the question is about the page rather
   // than about a node. That is what the variables panel asks — a value is
   // the same colour wherever it is written, and the custom properties it
@@ -249,9 +234,7 @@ const answerQuery = (data: Record<string, unknown>, id: number) => {
   const computed = wanted.length && host ? computeValues(host, wanted) : {};
   const props = Array.isArray(data['props']) ? data['props'] : [];
   const computedProps = props.length && styleHost ? computeProperties(styleHost, props) : {};
-  const selectors = (Array.isArray(data['selectors']) ? data['selectors'] : []).filter(
-    (value): value is string => typeof value === 'string',
-  );
+  const selectors = (Array.isArray(data['selectors']) ? data['selectors'] : []).filter((value): value is string => typeof value === 'string');
   const matched: Record<string, boolean | undefined> = {};
   for (const selector of selectors) {
     try {
@@ -353,8 +336,7 @@ const computeValues = (host: Element, wanted: string[]): Record<string, string |
       // colour the value never had.
       probe.style.color = 'rgb(1, 2, 3)';
       probe.style.color = value;
-      computed[value] =
-        probe.style.color === 'rgb(1, 2, 3)' ? undefined : getComputedStyle(probe).color;
+      computed[value] = probe.style.color === 'rgb(1, 2, 3)' ? undefined : getComputedStyle(probe).color;
     } catch {
       computed[value] = undefined;
     }
@@ -367,10 +349,7 @@ const computeValues = (host: Element, wanted: string[]): Record<string, string |
 // sets — inherited from a parent, painted by a `*` rule the panel can't see
 // past a component edge, or a user-agent default. The panel highlights that
 // value in its dropdowns so an unset control still shows what's on the page.
-const computeProperties = (
-  element: Element,
-  props: unknown[],
-): Record<string, string | undefined> => {
+const computeProperties = (element: Element, props: unknown[]): Record<string, string | undefined> => {
   const computedProps: Record<string, string | undefined> = {};
   // Design mode paints `cursor: default !important` over everything (see the
   // top of this file), so the page's own cursor is hidden behind it. Lift that
@@ -438,10 +417,7 @@ const start = () => {
   // Tell the app which route this frame is on (used by interactive
   // preview mode to follow link navigation).
   try {
-    window.parent.postMessage(
-      { type: 'avb:navigated', path: location.pathname + location.search },
-      '*',
-    );
+    window.parent.postMessage({ type: 'avb:navigated', path: location.pathname + location.search }, '*');
   } catch {
     /* ignore */
   }

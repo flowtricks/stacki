@@ -10,11 +10,7 @@ let copied: NodeClipboard | undefined;
 export function hasCopiedNode() {
   return copied !== undefined;
 }
-export function copyNode(
-  document: SharedDocument | undefined,
-  id: string,
-  report: (error: unknown) => void,
-) {
+export function copyNode(document: SharedDocument | undefined, id: string, report: (error: unknown) => void) {
   if (!document) {
     return;
   }
@@ -33,12 +29,7 @@ export function copyNode(
     report(error);
   }
 }
-export function pasteNode(
-  document: SharedDocument | undefined,
-  target: string,
-  report: (error: unknown) => void,
-  components: readonly Component[],
-) {
+export function pasteNode(document: SharedDocument | undefined, target: string, report: (error: unknown) => void, components: readonly Component[]) {
   if (!document || !copied) {
     return;
   }

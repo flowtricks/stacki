@@ -6,10 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test, type TestContext } from 'node:test';
-import {
-  atomicDirectoryOf,
-  prepareAtomicDirectory,
-} from '#dist/electron/documents/atomicDirectory.js';
+import { atomicDirectoryOf, prepareAtomicDirectory } from '#dist/electron/documents/atomicDirectory.js';
 import { NodeDocumentDisk } from '#dist/electron/documents/documentDisk.js';
 import { toFilePath } from '#dist/shared/core/brand.js';
 import { replaceFileAtomic } from '#dist/electron/documents/atomicWrite.js';
@@ -49,11 +46,7 @@ test('a staging link cannot redirect temporary files elsewhere', (context) => {
   const target = path.join(path.dirname(file), 'foreign');
   fs.mkdirSync(target);
   fs.mkdirSync(path.dirname(atomicDirectoryOf(file)));
-  fs.symlinkSync(
-    target,
-    atomicDirectoryOf(file),
-    process.platform === 'win32' ? 'junction' : 'dir',
-  );
+  fs.symlinkSync(target, atomicDirectoryOf(file), process.platform === 'win32' ? 'junction' : 'dir');
   assert.equal(replaceFileAtomic(file, Buffer.from('after')).ok, false);
   assert.equal(fs.readFileSync(file, 'utf8'), 'before');
   assert.deepEqual(fs.readdirSync(target), []);
@@ -91,11 +84,7 @@ test('nested pages, components and metadata share project staging', (context) =>
   const file = fixture(context);
   const root = path.dirname(file);
   fs.writeFileSync(path.join(root, 'package.json'), '{}');
-  for (const relative of [
-    'src/pages/blog/index.astro',
-    'src/components/Card.astro',
-    '.stacki/components.json',
-  ]) {
+  for (const relative of ['src/pages/blog/index.astro', 'src/components/Card.astro', '.stacki/components.json']) {
     const target = path.join(root, relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, 'before');
@@ -112,11 +101,7 @@ test('a linked metadata directory cannot redirect staging', (context) => {
   const file = fixture(context);
   const target = path.join(path.dirname(file), 'foreign');
   fs.mkdirSync(target);
-  fs.symlinkSync(
-    target,
-    path.join(path.dirname(file), '.stacki'),
-    process.platform === 'win32' ? 'junction' : 'dir',
-  );
+  fs.symlinkSync(target, path.join(path.dirname(file), '.stacki'), process.platform === 'win32' ? 'junction' : 'dir');
   assert.equal(replaceFileAtomic(file, Buffer.from('after')).ok, false);
   assert.equal(fs.readFileSync(file, 'utf8'), 'before');
   assert.deepEqual(fs.readdirSync(target), []);

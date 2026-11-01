@@ -38,9 +38,7 @@ export function MergeConflictDetail({ model, conflict, working }: DetailProps) {
         onEdit={model.edit}
         onSelect={model.select}
       />
-      {draft.regions.length > 0 && (
-        <MergeChangeInspector model={model} conflict={conflict} working={working} />
-      )}
+      {draft.regions.length > 0 && <MergeChangeInspector model={model} conflict={conflict} working={working} />}
     </section>
   );
 }
@@ -66,21 +64,13 @@ function MergeChangeInspector({ model, conflict, working }: DetailProps) {
     <div className="merge-change-inspector">
       <div className="merge-change-toolbar">
         <div className="merge-change-navigation">
-          <button
-            aria-label="Previous change"
-            disabled={working}
-            onClick={() => model.select((model.active + total - 1) % total)}
-          >
+          <button aria-label="Previous change" disabled={working} onClick={() => model.select((model.active + total - 1) % total)}>
             ↑
           </button>
           <span>
             Change {model.active + 1} of {total}
           </span>
-          <button
-            aria-label="Next change"
-            disabled={working}
-            onClick={() => model.select((model.active + 1) % total)}
-          >
+          <button aria-label="Next change" disabled={working} onClick={() => model.select((model.active + 1) % total)}>
             ↓
           </button>
         </div>
@@ -89,18 +79,10 @@ function MergeChangeInspector({ model, conflict, working }: DetailProps) {
       <div className="merge-change-options">
         <SourceChoice model={model} conflict={conflict} working={working} choice="ours" />
         <SourceChoice model={model} conflict={conflict} working={working} choice="theirs" />
-        {clash.merged !== undefined && (
-          <ChoiceButton model={model} working={working} choice="merged" label="Combine edits" />
-        )}
-        {clash.changedBy === 'both' && clash.merged === undefined && (
-          <ChoiceButton model={model} working={working} choice="both" label="Keep both blocks" />
-        )}
+        {clash.merged !== undefined && <ChoiceButton model={model} working={working} choice="merged" label="Combine edits" />}
+        {clash.changedBy === 'both' && clash.merged === undefined && <ChoiceButton model={model} working={working} choice="both" label="Keep both blocks" />}
       </div>
-      {!region.selectable && (
-        <p className="hint-text">
-          Your edit spans multiple changes. Undo in the code editor to restore individual choices.
-        </p>
-      )}
+      {!region.selectable && <p className="hint-text">Your edit spans multiple changes. Undo in the code editor to restore individual choices.</p>}
     </div>
   );
 }
@@ -120,11 +102,7 @@ function SourceChoice({
     <div className={`merge-source-option merge-source-${choice}`}>
       <ChoiceButton model={model} working={working} choice={choice} label={`Keep ${label}`} />
       <div className="merge-source-preview">
-        {text === '' ? (
-          <span className="hint-text">Remove this text</span>
-        ) : (
-          <Code text={text} filename={model.file.path} maxHeight={84} />
-        )}
+        {text === '' ? <span className="hint-text">Remove this text</span> : <Code text={text} filename={model.file.path} maxHeight={84} />}
       </div>
     </div>
   );
@@ -160,12 +138,7 @@ function MergeWhole({ model, conflict, working }: DetailProps) {
       <p>This file cannot be compared as text. Choose the version to keep.</p>
       <div className="conflict-choice">
         {(['ours', 'theirs'] as const).map((choice) => (
-          <button
-            key={choice}
-            className={model.whole[model.file.path] === choice ? 'on' : ''}
-            disabled={working}
-            onClick={() => model.setWhole(choice)}
-          >
+          <button key={choice} className={model.whole[model.file.path] === choice ? 'on' : ''} disabled={working} onClick={() => model.setWhole(choice)}>
             {choice === 'ours' ? model.ours : conflict.branch}
           </button>
         ))}

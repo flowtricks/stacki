@@ -8,11 +8,7 @@ import { snapshotTokens } from './model/elementTokens';
  * `h2.hero_title.u-text-style-h2[data-x="1"]`). Just a reference; the actual
  * editable selectors live in the SelectorPicker below.
  */
-export default function ElementTokenPicker({
-  snapshot,
-}: {
-  snapshot: ElementSnapshot | undefined;
-}) {
+export default function ElementTokenPicker({ snapshot }: { snapshot: ElementSnapshot | undefined }) {
   const tokens = useMemo(() => snapshotTokens(snapshot), [snapshot]);
   if (!tokens.length) {
     return undefined;

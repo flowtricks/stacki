@@ -33,17 +33,13 @@ const draftField = StateField.define<ConflictDraft>({
   },
   update: (value, transaction) => {
     const restored = transaction.effects.find((effect) => effect.is(draftEffect));
-    return (
-      restored?.value ??
-      (transaction.docChanged ? editConflictDraft(value, transaction.changes) : value)
-    );
+    return restored?.value ?? (transaction.docChanged ? editConflictDraft(value, transaction.changes) : value);
   },
 });
 const marks = StateEffect.define<ReturnType<typeof Decoration.set>>();
 const markField = StateField.define({
   create: () => Decoration.none,
-  update: (value, transaction) =>
-    transaction.effects.find((effect) => effect.is(marks))?.value ?? value.map(transaction.changes),
+  update: (value, transaction) => transaction.effects.find((effect) => effect.is(marks))?.value ?? value.map(transaction.changes),
   provide: (field) => EditorView.decorations.from(field),
 });
 
@@ -87,9 +83,7 @@ export default function MergeResultEditor(props: MergeEditorProps) {
 }
 
 function createMergeEditor(parent: HTMLDivElement, latest: MutableRefObject<MergeEditorProps>) {
-  const language = latest.current.path.endsWith('.astro')
-    ? 'astro'
-    : languageFor(latest.current.path);
+  const language = latest.current.path.endsWith('.astro') ? 'astro' : languageFor(latest.current.path);
   return new EditorView({
     parent,
     state: EditorState.create({
@@ -103,9 +97,7 @@ function createMergeEditor(parent: HTMLDivElement, latest: MutableRefObject<Merg
         EditorState.lineSeparator.of('\n'),
         markField,
         draftField.init(() => latest.current.draft),
-        invertedEffects.of((transaction) =>
-          transaction.docChanged ? [draftEffect.of(transaction.startState.field(draftField))] : [],
-        ),
+        invertedEffects.of((transaction) => (transaction.docChanged ? [draftEffect.of(transaction.startState.field(draftField))] : [])),
         EditorView.contentAttributes.of({ 'aria-label': 'Final merged code' }),
         EditorState.transactionFilter.of((transaction) => {
           if (transaction.annotation(external)) {
@@ -134,10 +126,7 @@ function mergeEditorMarks(props: MergeEditorProps) {
       Decoration.mark({
         class: `merge-code-${range.source}`,
         attributes: {
-          title:
-            range.source === 'custom'
-              ? 'Your edit'
-              : `From ${range.source === 'ours' ? props.ours : props.theirs}`,
+          title: range.source === 'custom' ? 'Your edit' : `From ${range.source === 'ours' ? props.ours : props.theirs}`,
         },
       }).range(range.from, range.to),
     );
@@ -153,9 +142,7 @@ function mergeEditorInteractions(latest: MutableRefObject<MergeEditorProps>) {
     click: (event, view) => {
       const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
       if (position !== null) {
-        const index = latest.current.draft.regions.findIndex(
-          (region) => region.from <= position && position <= region.to,
-        );
+        const index = latest.current.draft.regions.findIndex((region) => region.from <= position && position <= region.to);
         if (index >= 0) {
           latest.current.onSelect(index);
         }

@@ -6,8 +6,7 @@ import { chromium } from 'playwright';
 import { record, string } from '../src/shared/validation';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -52,15 +51,9 @@ try {
   await palette.getByRole('button', { name: 'Elements', exact: true }).click();
   await search.fill('h');
   await search.press('ArrowDown');
-  assert.equal(
-    await palette.locator('.insert-item.highlight .insert-item-label').innerText(),
-    '<h2>',
-  );
+  assert.equal(await palette.locator('.insert-item.highlight .insert-item-label').innerText(), '<h2>');
   await search.press('ArrowUp');
-  assert.equal(
-    await palette.locator('.insert-item.highlight .insert-item-label').innerText(),
-    '<h1>',
-  );
+  assert.equal(await palette.locator('.insert-item.highlight .insert-item-label').innerText(), '<h1>');
   await search.fill('mark');
   await search.press('Enter');
   await palette.waitFor({ state: 'detached' });
@@ -96,9 +89,7 @@ try {
   await page.locator('.insert-overlay').click({ position: { x: 5, y: 5 } });
   await palette.waitFor({ state: 'detached' });
   assert.deepEqual(errors, []);
-  console.log(
-    'Quick-insert shortcuts, search, tabs, arrow keys, dismissal, HTML/component insertion, placement, undo, and CodeMirror find passed.',
-  );
+  console.log('Quick-insert shortcuts, search, tabs, arrow keys, dismissal, HTML/component insertion, placement, undo, and CodeMirror find passed.');
 } finally {
   if (original !== undefined) {
     const base = await readSource();
@@ -131,9 +122,7 @@ async function waitSource(expected: string) {
     async ({ endpoint, expected }) => {
       const response = await fetch(endpoint);
       const data: unknown = await response.json();
-      return (
-        typeof data === 'object' && data !== null && 'source' in data && data.source === expected
-      );
+      return typeof data === 'object' && data !== null && 'source' in data && data.source === expected;
     },
     { endpoint, expected },
   );
@@ -143,13 +132,7 @@ async function waitSourceIncludes(fragment: string) {
     async ({ endpoint, fragment }) => {
       const response = await fetch(endpoint);
       const data: unknown = await response.json();
-      return (
-        typeof data === 'object' &&
-        data !== null &&
-        'source' in data &&
-        typeof data.source === 'string' &&
-        data.source.includes(fragment)
-      );
+      return typeof data === 'object' && data !== null && 'source' in data && typeof data.source === 'string' && data.source.includes(fragment);
     },
     { endpoint, fragment },
   );

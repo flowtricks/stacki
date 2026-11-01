@@ -19,9 +19,7 @@ test('a chain of plain checks becomes rules, in order', () => {
 });
 
 test('links keep their schemes and whether relative ones are allowed', () => {
-  const [rule] = rulesOf(
-    '(r) => r.required().uri({ allowRelative: true, scheme: ["http", "https", "mailto"] })',
-  ).slice(1);
+  const [rule] = rulesOf('(r) => r.required().uri({ allowRelative: true, scheme: ["http", "https", "mailto"] })').slice(1);
   assert.deepEqual(rule, {
     level: 'error',
     kind: 'uri',
@@ -32,9 +30,7 @@ test('links keep their schemes and whether relative ones are allowed', () => {
 });
 
 test('a warning chain warns; computed limits and custom checks are not invented', () => {
-  assert.deepEqual(rulesOf('(r) => r.max(60).warning("Long titles get cut")'), [
-    { level: 'warning', kind: 'max', limit: 60 },
-  ]);
+  assert.deepEqual(rulesOf('(r) => r.max(60).warning("Long titles get cut")'), [{ level: 'warning', kind: 'max', limit: 60 }]);
   assert.deepEqual(rulesOf('(r) => r.max(LIMIT).custom((v) => true)'), []);
   assert.deepEqual(rulesOf(undefined), []);
 });

@@ -24,22 +24,14 @@ import { readFrontmatter } from '../../../shared/page/frontmatterSource';
 import { hasClass, withClass } from '../../editor/classAttr';
 import { previewAddedClass, previewClassProps } from '../../editor/previewClassPatch';
 import { cleanError } from '../../lib/cleanError';
-import type { PickedAsset } from '../../ui/AssetField';
+import type { AssetReference, PickedAsset } from '../../ui/AssetField';
 import type { InlineNode } from '../../features/props/RichContent';
 import type { Rename } from '../../features/props/propNodeEditors';
 import type { PropValues } from '../../features/props/propRules';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { findImportPath } from '../../ipc/appBridge';
-import {
-  newId,
-  inlineWithIds,
-  type BranchNode,
-  tagChangeGesture,
-  restatedText,
-  statedText,
-  frontmatterOf,
-} from '../model/nodeFactory';
+import { newId, inlineWithIds, type BranchNode, tagChangeGesture, restatedText, statedText, frontmatterOf } from '../model/nodeFactory';
 import { withPrunedImports, chooseImportPath } from '../model/pageGestures';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
@@ -47,10 +39,7 @@ import { useHistory } from './appNodeEdits';
 import { useNodeEdits } from './appShortcuts';
 
 // The note above a node.
-export function useComment(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useComment(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
 
@@ -103,11 +92,7 @@ export function useComment(
 }
 
 // Classes and props.
-export function useClassEdits(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useClassEdits(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
   const addClassToNode = useAddClassToNode(coreState, lifecycle, history);
@@ -115,13 +100,7 @@ export function useClassEdits(
   // Step 6, attribute: set or remove one prop, as an edit request when it has
   // an intent form (editGestures.ts), else as a whole-model save.
   const setProp = useCallback(
-    (
-      nodeId: string,
-      propName: string,
-      value: Attr | undefined,
-      immediate = false,
-      previewPath?: string,
-    ) => {
+    (nodeId: string, propName: string, value: Attr | undefined, immediate = false, previewPath?: string) => {
       const coalesceKey = `prop:${nodeId}:${propName}`;
       const options = { coalesceKey, urgency: immediate };
       const state = pageStateRef.current.pageState;
@@ -156,11 +135,7 @@ export function useClassEdits(
   return { addClassToNode, setProp, setProps };
 }
 
-function useAddClassToNode(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-  history: ReturnType<typeof useHistory>,
-) {
+function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { flushSave, showToast } = lifecycle;
   const { commitEdit } = history;
@@ -214,11 +189,7 @@ function useAddClassToNode(
 }
 
 // Writing an asset pick into a prop.
-export function useAssetProp(
-  coreState: ReturnType<typeof useCoreState>,
-  classEdits: ReturnType<typeof useClassEdits>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useAssetProp(coreState: ReturnType<typeof useCoreState>, classEdits: ReturnType<typeof useClassEdits>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef, projectRef } = coreState;
   const { setProp } = classEdits;
   const { commitEdit } = history;
@@ -230,10 +201,11 @@ export function useAssetProp(
   //
   // The src/ form is the one Astro wants for <Image>: it carries the file's
   // real dimensions, so nothing has to be typed in and MissingImageDimension
-  // can't happen. An element gets `hero.src` instead — a plain <img> needs the
-  // URL out of the imported object, not the object.
+  // can't happen. A plain <img>, or a component prop typed as a string, gets
+  // `hero.src` instead: it needs the URL out of the imported object, not the
+  // object (assetReferenceFor in elementState.ts decides).
   const setAssetProp = useCallback(
-    async (nodeId: string, propName: string, picked: PickedAsset & { readonly abs?: string }) => {
+    async (nodeId: string, propName: string, picked: PickedAsset & { readonly abs?: string }, reference: AssetReference) => {
       const { pageState: state, currentPage: page } = pageStateRef.current;
       if (!state?.editable || !page?.path || !picked?.rel) {
         return;
@@ -281,8 +253,7 @@ export function useAssetProp(
       const binding = local;
       // Step 6, prop and frontmatter: the prop as a request, then the import
       // it needs and the one a replaced image leaves behind — one undo step.
-      const reference = node.kind === 'element' ? `${binding}.src` : binding;
-      const value = { type: 'expr' as const, value: reference };
+      const value = { type: 'expr' as const, value: reference === 'url' ? `${binding}.src` : binding };
       const options = { coalesceKey: undefined, urgency: true };
       const prop = propsGesture(nodeId, { [propName]: value }, options);
       const imported = (current: EditorModel): EditorModel => {
@@ -302,10 +273,7 @@ export function useAssetProp(
 }
 
 // Renaming an attribute.
-export function useRenameProp(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useRenameProp(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
 
@@ -329,11 +297,7 @@ export function useRenameProp(
 }
 
 // Turning a tag into a component.
-export function useNodeKind(
-  coreState: ReturnType<typeof useCoreState>,
-  nodeEdits: ReturnType<typeof useNodeEdits>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useNodeKind(coreState: ReturnType<typeof useCoreState>, nodeEdits: ReturnType<typeof useNodeEdits>, history: ReturnType<typeof useHistory>) {
   const { insertables, pageStateRef } = coreState;
   const { resolveImportPath } = nodeEdits;
   const { commitEdit } = history;
@@ -376,13 +340,8 @@ export function useNodeKind(
       // Attributes that belonged to the old element's tag mean nothing to a
       // component; class, data- and aria- carry over the way they do for a
       // tag change.
-      const oldNames =
-        node.kind === 'element'
-          ? new Set(getElementSchema(node.name).map((field) => field.name))
-          : undefined;
-      const dropped = Object.keys(node.props || {}).filter(
-        (attr) => oldNames?.has(attr) && !GLOBAL_ATTRS.has(attr) && !/^(data-|aria-)/.test(attr),
-      );
+      const oldNames = node.kind === 'element' ? new Set(getElementSchema(node.name).map((field) => field.name)) : undefined;
+      const dropped = Object.keys(node.props || {}).filter((attr) => oldNames?.has(attr) && !GLOBAL_ATTRS.has(attr) && !/^(data-|aria-)/.test(attr));
       const imported = (pageModel: EditorModel): EditorModel => {
         if (pageModel.imports.some((i) => i.name === name)) {
           return withPrunedImports(pageModel);
@@ -392,9 +351,7 @@ export function useNodeKind(
           : asset
             ? { name, imported: name, path: ASTRO_ASSETS_MODULE, quote: "'", named: true }
             : undefined;
-        return withPrunedImports(
-          entry ? { ...pageModel, imports: [...pageModel.imports, entry] } : pageModel,
-        );
+        return withPrunedImports(entry ? { ...pageModel, imports: [...pageModel.imports, entry] } : pageModel);
       };
       const change = { kind: 'component' as const, name, asset, dropped };
       commitEdit(tagChangeGesture(model, node, change, imported));
@@ -406,10 +363,7 @@ export function useNodeKind(
 }
 
 // Changing an element’s tag.
-export function useElementTag(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useElementTag(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
 
@@ -431,16 +385,10 @@ export function useElementTag(
       // its props were the component's API, and they'd be junk attributes on
       // a <div>.
       const wasComponent = node.kind !== 'element';
-      const oldNames = wasComponent
-        ? new Set(Object.keys(node.props || {}))
-        : new Set(getElementSchema(node.name).map((field) => field.name));
+      const oldNames = wasComponent ? new Set(Object.keys(node.props || {})) : new Set(getElementSchema(node.name).map((field) => field.name));
       const newNames = new Set(getElementSchema(tag).map((field) => field.name));
       const dropped = Object.keys(node.props || {}).filter(
-        (attr) =>
-          oldNames.has(attr) &&
-          !newNames.has(attr) &&
-          !GLOBAL_ATTRS.has(attr) &&
-          !/^(data-|aria-)/.test(attr),
+        (attr) => oldNames.has(attr) && !newNames.has(attr) && !GLOBAL_ATTRS.has(attr) && !/^(data-|aria-)/.test(attr),
       );
       const change = { kind: 'element' as const, name: tag, asset: false, dropped };
       commitEdit(tagChangeGesture(model, node, change, withPrunedImports));
@@ -451,10 +399,7 @@ export function useElementTag(
 }
 
 // A node’s text, and the frontmatter.
-export function useNodeText(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useNodeText(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { commitEdit, scheduleSave } = history;
 
@@ -466,22 +411,13 @@ export function useNodeText(
   // (the style panel writing a <style> block): waiting 300 ms there just delays the
   // canvas, since the next keystroke it was batching with never comes.
   const setNodeText = useCallback(
-    (
-      nodeId: string,
-      value: string,
-      renames: readonly Rename[] | undefined = undefined,
-      immediate: boolean | 'live' = false,
-    ) => {
-      const renaming = (renames || []).some(
-        (rename) => rename.from && rename.to && rename.from !== rename.to,
-      );
+    (nodeId: string, value: string, renames: readonly Rename[] | undefined = undefined, immediate: boolean | 'live' = false) => {
+      const renaming = (renames || []).some((rename) => rename.from && rename.to && rename.from !== rename.to);
       const state = pageStateRef.current.pageState;
       if (renaming && state?.editable) {
         // Step 6, loop rename (multi-span): the parameters and every reference
         // below, as rename-binding requests, when the head changed nothing else.
-        const pairs = (renames || []).flatMap((rename) =>
-          rename.from && rename.to ? [{ from: rename.from, to: rename.to }] : [],
-        );
+        const pairs = (renames || []).flatMap((rename) => (rename.from && rename.to ? [{ from: rename.from, to: rename.to }] : []));
         const change = { head: value, renames: pairs };
         const gesture = loopRenameGesture(state.model, nodeId, change, { urgency: true });
         if (gesture) {
@@ -522,8 +458,7 @@ export function useNodeText(
         return;
       }
       // Object.assign, as the legacy setFrontmatter did: the block's fields replace the model's.
-      const written = (model: EditorModel): EditorModel =>
-        Object.assign({}, model, readFrontmatter(code));
+      const written = (model: EditorModel): EditorModel => Object.assign({}, model, readFrontmatter(code));
       const options = { coalesceKey: 'frontmatter', urgency: false };
       commitEdit(frontmatterGesture(state.model, options, written));
     },
@@ -533,10 +468,7 @@ export function useNodeText(
 }
 
 // A condition’s else branch, and the frontmatter’s declarations.
-export function useBranchEdits(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useBranchEdits(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
 
@@ -593,14 +525,12 @@ export function useBranchEdits(
     },
     [commitEdit, pageStateRef],
   );
+
   return { setExtraFrontmatter, toggleElseBranch };
 }
 
 // A node’s text content and inline children.
-export function useContentEdits(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useContentEdits(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
 
@@ -645,10 +575,7 @@ export function useContentEdits(
         return;
       }
       const back = textSlotRef.current[nodeId];
-      const index =
-        back !== undefined && Number.isInteger(back) && back <= children.length
-          ? back
-          : children.length;
+      const index = back !== undefined && Number.isInteger(back) && back <= children.length ? back : children.length;
       commitEdit(insertGesture(model, text, { parentId: nodeId, index }, { urgency: false }));
     },
     [commitEdit, pageStateRef],

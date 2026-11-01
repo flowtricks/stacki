@@ -4,10 +4,7 @@ import { canvasTypedText, type CanvasTextDraft } from '../../ui/canvasTextDraft'
 import { textValueCanonical } from '../../../shared/page/htmlText';
 import type { InlineNode } from './richContentModel';
 
-export function canvasDraftInline(
-  nodes: readonly InlineNode[],
-  draft: CanvasTextDraft | undefined,
-): readonly InlineNode[] {
+export function canvasDraftInline(nodes: readonly InlineNode[], draft: CanvasTextDraft | undefined): readonly InlineNode[] {
   if (draft?.kind !== 'text') {
     return nodes;
   }
@@ -24,9 +21,7 @@ export function canvasDraftInline(
         // Expression chips keep their original binding when the panel serializes
         // them. Only their visible label previews the edited shared value.
         const typed = canvasTypedText(draft.sourceValue, draft.value);
-        return node.kind === 'expr'
-          ? { ...node, preview: typed }
-          : { ...node, value: textValueCanonical(typed) };
+        return node.kind === 'expr' ? { ...node, preview: typed } : { ...node, value: textValueCanonical(typed) };
       }
       return node;
     });

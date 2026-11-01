@@ -2,10 +2,7 @@
 // already contains optimistic edits. One bounded walk serves every pending edit.
 export function renderedText(document: Document): ReadonlyMap<string, string | undefined> {
   const values = new Map<string, string | undefined>();
-  const walker = document.createTreeWalker(
-    document,
-    NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_COMMENT,
-  );
+  const walker = document.createTreeWalker(document, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_COMMENT);
   for (let count = 0; count < 50_000; count++) {
     const node = walker.nextNode();
     if (!node) {

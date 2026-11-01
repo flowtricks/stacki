@@ -33,10 +33,7 @@ export class RepositorySync {
     }
     return state;
   }
-  private begin(
-    resolution?: { readonly sha: string; readonly side: 'draft' | 'github' },
-    preferDraft = false,
-  ) {
+  private begin(resolution?: { readonly sha: string; readonly side: 'draft' | 'github' }, preferDraft = false) {
     const pending = this.run(resolution, preferDraft);
     this.pending = pending;
     void pending.finally(() => {
@@ -44,10 +41,7 @@ export class RepositorySync {
     });
     return pending;
   }
-  private async run(
-    resolution?: { readonly sha: string; readonly side: 'draft' | 'github' },
-    preferDraft = false,
-  ): Promise<SyncState> {
+  private async run(resolution?: { readonly sha: string; readonly side: 'draft' | 'github' }, preferDraft = false): Promise<SyncState> {
     if (!this.repository) {
       return this.state;
     }
@@ -72,14 +66,8 @@ export class RepositorySync {
         if ((await this.baseline()) !== base) {
           throw new Error('Published revision changed during sync. Try again.');
         }
-        const planned = await Promise.all(
-          incoming.files.map((change) =>
-            this.plan(change, resolution?.side ?? (preferDraft ? 'draft' : undefined)),
-          ),
-        );
-        const conflicts = planned
-          .filter((item) => item.kind === 'conflict')
-          .map((item) => item.file);
+        const planned = await Promise.all(incoming.files.map((change) => this.plan(change, resolution?.side ?? (preferDraft ? 'draft' : undefined))));
+        const conflicts = planned.filter((item) => item.kind === 'conflict').map((item) => item.file);
         if (conflicts.length) {
           this.state = { kind: 'conflict', sha: incoming.sha, files: conflicts };
           return;
@@ -128,10 +116,7 @@ export class RepositorySync {
         return { kind: 'write' as const, file: change.file, source: local };
       }
       return {
-        kind:
-          local === null || local === change.before || side === 'github'
-            ? ('delete' as const)
-            : ('conflict' as const),
+        kind: local === null || local === change.before || side === 'github' ? ('delete' as const) : ('conflict' as const),
         file: change.file,
       };
     }
@@ -144,12 +129,7 @@ export class RepositorySync {
       }
       return { kind: 'conflict' as const, file: change.file };
     }
-    const merged = await mergeSource(
-      change.before ?? '',
-      local ?? '',
-      change.after,
-      side === 'draft',
-    );
+    const merged = await mergeSource(change.before ?? '', local ?? '', change.after, side === 'draft');
     if (merged.kind === 'merged') {
       return { kind: 'write' as const, file: change.file, source: merged.source };
     }
@@ -163,20 +143,10 @@ export class RepositorySync {
     return { kind: 'conflict' as const, file: change.file };
   }
   private async baseline() {
-    return string(
-      record(
-        JSON.parse(
-          await readFile(path.join(this.root, '.stacki/studio/state/github-base.json'), 'utf8'),
-        ),
-      )['sha'],
-      64,
-    );
+    return string(record(JSON.parse(await readFile(path.join(this.root, '.stacki/studio/state/github-base.json'), 'utf8')))['sha'], 64);
   }
   private async writeBaseline(sha: string) {
     await mkdir(path.join(this.root, '.stacki/studio/state'), { recursive: true });
-    await writeFile(
-      path.join(this.root, '.stacki/studio/state/github-base.json'),
-      JSON.stringify({ sha }),
-    );
+    await writeFile(path.join(this.root, '.stacki/studio/state/github-base.json'), JSON.stringify({ sha }));
   }
 }

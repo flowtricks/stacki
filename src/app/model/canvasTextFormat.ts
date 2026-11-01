@@ -10,20 +10,8 @@
 
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
-import {
-  INLINE_TAGS,
-  isChippable,
-  isInlineOnly,
-  nodesToHtml,
-  type InlineNode,
-} from '../../features/props/richContentModel';
-import {
-  richApplyLink,
-  richContentNodes,
-  richExec,
-  richWrapTag,
-  type FormatState,
-} from '../../features/props/richFormat';
+import { INLINE_TAGS, isChippable, isInlineOnly, nodesToHtml, type InlineNode } from '../../features/props/richContentModel';
+import { richApplyLink, richContentNodes, richExec, richWrapTag, type FormatState } from '../../features/props/richFormat';
 import type { CanvasFormatAction } from '../../features/preview/canvasTextSelection';
 
 /** A model node whose children are its own kind, as the page model's are. */
@@ -47,10 +35,7 @@ export interface InlineRoot<Node extends CanvasFormatTree<Node>> {
  * element around that markup — so a press can take a format off as well as
  * put one on. Undefined when the content is not plain inline content.
  */
-export function inlineRootOf<Node extends CanvasFormatTree<Node>>(
-  nodes: readonly Node[],
-  textId: string,
-): InlineRoot<Node> | undefined {
+export function inlineRootOf<Node extends CanvasFormatTree<Node>>(nodes: readonly Node[], textId: string): InlineRoot<Node> | undefined {
   const chain = ancestorsOf(nodes, textId);
   if (!chain) {
     return undefined;
@@ -91,9 +76,7 @@ function ancestorsOf<Node extends CanvasFormatTree<Node>>(
     }
     if (entry.node.id === id) {
       assert(entry.indices.length === entry.ancestors.length + 1, 'One index per level');
-      return entry.ancestors.length
-        ? { ancestors: entry.ancestors, indices: entry.indices }
-        : undefined;
+      return entry.ancestors.length ? { ancestors: entry.ancestors, indices: entry.indices } : undefined;
     }
     const children: readonly Node[] = entry.node.children ?? [];
     children.forEach((child, index) =>
@@ -108,10 +91,7 @@ function ancestorsOf<Node extends CanvasFormatTree<Node>>(
 }
 
 /** Which buttons are lit: the inline markup the selected text already sits in. */
-export function inlineStatesAt(
-  children: readonly InlineNode[],
-  trail: readonly number[],
-): FormatState {
+export function inlineStatesAt(children: readonly InlineNode[], trail: readonly number[]): FormatState {
   assert(trail.length > 0, 'A trail reaches a text node');
   const names = new Set<string>();
   let level: readonly InlineNode[] = children;
@@ -136,12 +116,7 @@ export function inlineStatesAt(
 }
 
 /** The content with the text at `trail` holding `value` — what is typed but not saved yet. */
-export function inlineWithValue(
-  children: readonly InlineNode[],
-  trail: readonly number[],
-  value: string,
-  depth = 0,
-): readonly InlineNode[] {
+export function inlineWithValue(children: readonly InlineNode[], trail: readonly number[], value: string, depth = 0): readonly InlineNode[] {
   assert(depth <= LIMITS.treeDepthMax, 'Inline content depth limit exceeded');
   const [index, ...rest] = trail;
   assert(index !== undefined, 'A trail reaches a text node');

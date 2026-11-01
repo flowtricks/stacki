@@ -44,9 +44,8 @@ function SwitchBranchBody({
           <div className="modal-header">These changes can’t come with you</div>
           <div className="modal-body">
             <div className="hint-text">
-              {from} and {to} have different versions of{' '}
-              {files.length === 1 ? 'this file' : 'these files'}, so your unsaved work can’t follow
-              you across. It can wait here until you come back — no commit needed.
+              {from} and {to} have different versions of {files.length === 1 ? 'this file' : 'these files'}, so your unsaved work can’t follow you across. It
+              can wait here until you come back — no commit needed.
             </div>
 
             <SwitchBranchFiles files={files} />
@@ -75,14 +74,7 @@ function SwitchBranchBody({
               </div>
             )}
           </div>
-          <SwitchBranchFooter
-            from={from}
-            busy={busy}
-            onCancel={close}
-            onLeaveHere={onLeaveHere}
-            onCommitFirst={onCommitFirst}
-            message={message}
-          />
+          <SwitchBranchFooter from={from} busy={busy} onCancel={close} onLeaveHere={onLeaveHere} onCommitFirst={onCommitFirst} message={message} />
         </>
       )}
     </Popup>
@@ -105,19 +97,10 @@ function SwitchBranchFooter({
       <button onClick={onCancel} disabled={working}>
         Cancel
       </button>
-      <button
-        onClick={() => onCommitFirst(message.trim() || `Update ${from}`)}
-        disabled={working}
-        title={`Commit to ${from}, then switch`}
-      >
+      <button onClick={() => onCommitFirst(message.trim() || `Update ${from}`)} disabled={working} title={`Commit to ${from}, then switch`}>
         Commit first
       </button>
-      <button
-        className="primary"
-        disabled={working}
-        onClick={onLeaveHere}
-        title={`Set them aside on ${from} and pick them up when you return`}
-      >
+      <button className="primary" disabled={working} onClick={onLeaveHere} title={`Set them aside on ${from} and pick them up when you return`}>
         Leave them on {from}
       </button>
     </div>

@@ -7,10 +7,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { Publisher, type PublishState } from '../src/features/publishing/publish';
-import {
-  managedHostingFromEnvironment,
-  managedPublishConfig,
-} from '../src/features/publishing/managedHosting';
+import { managedHostingFromEnvironment, managedPublishConfig } from '../src/features/publishing/managedHosting';
 import { DEFAULT_PUBLISH_CONFIG } from '../vendor/stacki/shared/properties/publishConfig';
 import { ok } from '../vendor/stacki/shared/core/result';
 import { record } from '../src/shared/validation';
@@ -37,12 +34,7 @@ for (const deployment of ['live', 'pending'] as const) {
         async acceptBase() {},
         async commit(captured) {
           commits++;
-          assert.equal(
-            published(
-              await publishGit(captured.git, ['show', `${captured.tree}:src/pages/index.astro`]),
-            ).trim(),
-            '<h1>Latest draft</h1>',
-          );
+          assert.equal(published(await publishGit(captured.git, ['show', `${captured.tree}:src/pages/index.astro`])).trim(), '<h1>Latest draft</h1>');
           return ok({ sha: revision, url: 'https://github.com/owner/site/commit/' + revision });
         },
       },
@@ -78,14 +70,7 @@ for (const deployment of ['live', 'pending'] as const) {
       false,
     );
     assert.equal(await readFile(path.join(root, '.stacki/publish.json'), 'utf8'), source);
-    assert.equal(
-      record(
-        JSON.parse(
-          await readFile(path.join(root, '.stacki/studio/state/github-base.json'), 'utf8'),
-        ),
-      )['sha'],
-      revision,
-    );
+    assert.equal(record(JSON.parse(await readFile(path.join(root, '.stacki/studio/state/github-base.json'), 'utf8')))['sha'], revision);
   });
 }
 
@@ -129,9 +114,6 @@ async function managedFixture() {
   await writeFile(path.join(root, 'src/pages/index.astro'), '<h1>Latest draft</h1>');
   const source = JSON.stringify(config);
   await writeFile(path.join(root, '.stacki/publish.json'), source);
-  await writeFile(
-    path.join(root, '.stacki/studio/state/github-base.json'),
-    JSON.stringify({ sha: 'a'.repeat(40) }),
-  );
+  await writeFile(path.join(root, '.stacki/studio/state/github-base.json'), JSON.stringify({ sha: 'a'.repeat(40) }));
   return { root, source };
 }

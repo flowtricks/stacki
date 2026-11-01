@@ -35,11 +35,7 @@ test('each kind of connection parses, and drafts carry their key', () => {
   };
   const parsed = parseCmsConnection(payload);
   assert.equal(parsed.kind, 'payload');
-  assert.equal(
-    parsed.kind === 'payload' ? parsed.baseUrl : undefined,
-    'https://cms.example.com',
-    'a trailing slash is dropped',
-  );
+  assert.equal(parsed.kind === 'payload' ? parsed.baseUrl : undefined, 'https://cms.example.com', 'a trailing slash is dropped');
   const custom = {
     kind: 'custom',
     id: ID,
@@ -82,14 +78,8 @@ test('replies hold public fields only, within their bounds', () => {
   assert.equal(list.connections.length, 1);
   assert.equal('secret' in (list.connections[0] ?? {}), false, 'a key is never read back');
   assert.throws(() => parseCmsConnectionList({ encryption: 'maybe', connections: [] }));
-  const many = Array.from(
-    { length: CMS_CONNECTION_LIMITS.connectionsPerProjectMax + 1 },
-    () => SANITY,
-  );
-  assert.throws(
-    () => parseCmsConnectionList({ encryption: 'available', connections: many }),
-    /Too many/,
-  );
+  const many = Array.from({ length: CMS_CONNECTION_LIMITS.connectionsPerProjectMax + 1 }, () => SANITY);
+  assert.throws(() => parseCmsConnectionList({ encryption: 'available', connections: many }), /Too many/);
   assert.deepEqual(parseCmsSaveResult({ ok: false, message: 'No' }), { ok: false, message: 'No' });
   assert.throws(() => parseCmsSaveResult({ ok: false, message: '' }));
 });

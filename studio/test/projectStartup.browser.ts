@@ -9,10 +9,7 @@ import { startStyleFixture } from './stylePanelFixture';
 const fixture = await startStyleFixture();
 const browser = await chromium.launch({
   executablePath:
-    process.env['CHROME_PATH'] ??
-    (process.platform === 'darwin'
-      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-      : chromium.executablePath()),
+    process.env['CHROME_PATH'] ?? (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
   headless: true,
 });
 let release = () => {};
@@ -49,9 +46,7 @@ try {
     }
   });
   assert.equal(requests, 1, 'Changes queue one fresh scan instead of cancelling running work');
-  const followup = page.waitForResponse(
-    (response) => requests === 2 && new URL(response.url()).pathname === '/studio/api/project',
-  );
+  const followup = page.waitForResponse((response) => requests === 2 && new URL(response.url()).pathname === '/studio/api/project');
   release();
   await followup;
   await page.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();

@@ -28,11 +28,7 @@ interface ObjectFieldProps {
 export default function ObjectField({ value, onChange }: ObjectFieldProps) {
   assert((value?.length ?? 0) <= LIMITS.attrCharsMax, 'ObjectField: value limit exceeded');
   const fields = objectFields(value) || [];
-  const change = (
-    index: number,
-    next: ObjectRow,
-    options: { readonly immediate: boolean },
-  ): void => {
+  const change = (index: number, next: ObjectRow, options: { readonly immediate: boolean }): void => {
     assert(index >= 0, 'ObjectField: field index is nonnegative');
     assert(index < fields.length, 'ObjectField: field index exists');
     const text = objectText(fields.map((field, current) => (current === index ? next : field)));
@@ -42,11 +38,7 @@ export default function ObjectField({ value, onChange }: ObjectFieldProps) {
   return (
     <div className="object-field">
       {fields.map((field, index) => (
-        <ObjectRowField
-          key={field.key}
-          field={field}
-          onChange={(next, options) => change(index, next, options)}
-        />
+        <ObjectRowField key={field.key} field={field} onChange={(next, options) => change(index, next, options)} />
       ))}
     </div>
   );
@@ -89,9 +81,7 @@ function ObjectRowControl({ field, onChange }: RowProps) {
           { value: false, label: 'False' },
         ]}
         current={text === 'true'}
-        onPick={(next) =>
-          onChange({ ...field, text: next ? 'true' : 'false' }, { immediate: true })
-        }
+        onPick={(next) => onChange({ ...field, text: next ? 'true' : 'false' }, { immediate: true })}
       />
     );
   }
@@ -105,10 +95,7 @@ function ObjectRowControl({ field, onChange }: RowProps) {
       onChange={(event) => onChange({ ...field, text: event.target.value }, { immediate: false })}
       onBlur={() => {
         // Invalid numeric text must be quoted before it is written back into source.
-        const next: ObjectRow =
-          field.kind === 'number' && !/^[-+]?(\d+\.?\d*|\.\d+)$/.test(text.trim())
-            ? { ...field, kind: 'text', quote: '"' }
-            : field;
+        const next: ObjectRow = field.kind === 'number' && !/^[-+]?(\d+\.?\d*|\.\d+)$/.test(text.trim()) ? { ...field, kind: 'text', quote: '"' } : field;
         onChange(next, { immediate: true });
       }}
       onKeyDown={(event) => {

@@ -6,10 +6,7 @@ import { useState } from 'react';
 import Popup from '../../ui/Popup';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { saveCmsConnection } from '../../ipc/cmsConnectionsBridge';
-import {
-  parseCmsConnectionDraft,
-  type CmsConnectionDraft,
-} from '../../../shared/properties/cmsConnections';
+import { parseCmsConnectionDraft, type CmsConnectionDraft } from '../../../shared/properties/cmsConnections';
 
 export type CmsKeyKind = CmsConnectionDraft['kind'];
 
@@ -45,18 +42,13 @@ const EMPTY: Fields = {
   secret: '',
 };
 
-export function CmsKeyForm(props: {
-  readonly projectPath: string;
-  readonly cms: CmsKeyKind;
-  readonly close: () => void;
-}) {
+export function CmsKeyForm(props: { readonly projectPath: string; readonly cms: CmsKeyKind; readonly close: () => void }) {
   const [fields, setFields] = useState<Fields>(EMPTY);
   const [error, setError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const field = (name: keyof Fields) => ({
     value: fields[name],
-    onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
-      setFields({ ...fields, [name]: event.target.value }),
+    onChange: (event: React.ChangeEvent<HTMLInputElement>) => setFields({ ...fields, [name]: event.target.value }),
   });
   const save = async () => {
     let draft: CmsConnectionDraft;
@@ -76,12 +68,7 @@ export function CmsKeyForm(props: {
     }
   };
   return (
-    <Popup
-      className="modal publish-settings"
-      label={TITLES[props.cms]}
-      onClose={props.close}
-      dismissible
-    >
+    <Popup className="modal publish-settings" label={TITLES[props.cms]} onClose={props.close} dismissible>
       {() => (
         <>
           <div className="modal-header">{TITLES[props.cms]}</div>
@@ -114,15 +101,9 @@ export function CmsKeyForm(props: {
 }
 
 const KEY_HINTS: Readonly<Record<CmsKeyKind, string>> = {
-  sanity:
-    'Create one in sanity.io/manage → your project → API → Tokens, with the Editor role. ' +
-    'It reads drafts and writes them.',
-  payload:
-    'A Payload API key for a user who may edit this content (enable “useAPIKey” on the ' +
-    'auth collection). Edits are saved with ?draft=true.',
-  custom:
-    'Stacki sends each canvas edit as JSON {document, field, value, draft: true} to this ' +
-    'address with the header above.',
+  sanity: 'Create one in sanity.io/manage → your project → API → Tokens, with the Editor role. ' + 'It reads drafts and writes them.',
+  payload: 'A Payload API key for a user who may edit this content (enable “useAPIKey” on the ' + 'auth collection). Edits are saved with ?draft=true.',
+  custom: 'Stacki sends each canvas edit as JSON {document, field, value, draft: true} to this ' + 'address with the header above.',
 };
 
 function KindFields(props: {

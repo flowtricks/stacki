@@ -5,14 +5,7 @@
 import { useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
-import {
-  ChevronDownIcon,
-  ChevronRightIcon,
-  DragIcon,
-  PencilIcon,
-  PlusIcon,
-  TrashIcon,
-} from '../../ui/Icons';
+import { ChevronDownIcon, ChevronRightIcon, DragIcon, PencilIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import useListReorder from '../../ui/useListReorder';
 
 interface Props {
@@ -44,29 +37,16 @@ export function CmsListField({ value, layout = 'collapsible', onChange }: Props)
       {open && (
         <>
           {value.map((entry, index) => (
-            <div
-              key={index}
-              className={`cms-option-row ${reorder.rowClass(index)}`}
-              {...reorder.rowProps(index)}
-            >
+            <div key={index} className={`cms-option-row ${reorder.rowClass(index)}`} {...reorder.rowProps(index)}>
               <span className="cms-option-grip" title="Drag to reorder">
                 <DragIcon size={12} />
               </span>
               {renaming === index ? (
-                <RenameInput
-                  initial={optionText(entry)}
-                  onDone={(text) => list.rename(index, text)}
-                  onCancel={() => setRenaming(undefined)}
-                />
+                <RenameInput initial={optionText(entry)} onDone={(text) => list.rename(index, text)} onCancel={() => setRenaming(undefined)} />
               ) : (
                 <OptionLabel text={optionText(entry)} onRename={() => setRenaming(index)} />
               )}
-              <button
-                type="button"
-                className="ghost cms-option-trash"
-                title="Delete"
-                onClick={() => list.remove(index)}
-              >
+              <button type="button" className="ghost cms-option-trash" title="Delete" onClick={() => list.remove(index)}>
                 <TrashIcon size={13} />
               </button>
             </div>
@@ -86,12 +66,7 @@ function OptionLabel(props: { readonly text: string; readonly onRename: () => vo
       <span className="cms-option-text" onDoubleClick={props.onRename}>
         {props.text || <em>Empty</em>}
       </span>
-      <button
-        type="button"
-        className="ghost cms-option-rename"
-        title="Rename"
-        onClick={props.onRename}
-      >
+      <button type="button" className="ghost cms-option-rename" title="Rename" onClick={props.onRename}>
         <PencilIcon size={12} />
       </button>
     </>
@@ -99,11 +74,7 @@ function OptionLabel(props: { readonly text: string; readonly onRename: () => vo
 }
 
 // Enter or leaving the field keeps the new text; Escape keeps the old.
-function RenameInput(props: {
-  readonly initial: string;
-  readonly onDone: (text: string) => void;
-  readonly onCancel: () => void;
-}) {
+function RenameInput(props: { readonly initial: string; readonly onDone: (text: string) => void; readonly onCancel: () => void }) {
   const [text, setText] = useState(props.initial);
   return (
     <input
@@ -127,11 +98,7 @@ function RenameInput(props: {
 
 // The list's edits, each a new array: rename (keeping a number a number),
 // remove, add (opening the new item for its text) and move.
-function useListEdits(
-  value: readonly unknown[],
-  onChange: (value: unknown[]) => void,
-  setRenaming: (index: number | undefined) => void,
-) {
+function useListEdits(value: readonly unknown[], onChange: (value: unknown[]) => void, setRenaming: (index: number | undefined) => void) {
   const rename = (index: number, text: string) => {
     assert(index >= 0, 'CMS list: rename index is nonnegative');
     assert(index < value.length, 'CMS list: rename index in range');

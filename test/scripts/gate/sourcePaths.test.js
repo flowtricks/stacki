@@ -52,10 +52,7 @@ const RULES = [
     message: 'a regular expression over a source folder: stub by file (stubSources)',
   },
 ];
-const STALE_NAME = new RegExp(
-  `(?<![\\w./#$-])(?:#|\\./)?((?:${ROOTS})/[\\w./-]+)\\.(js|jsx)\\b`,
-  'g',
-);
+const STALE_NAME = new RegExp(`(?<![\\w./#$-])(?:#|\\./)?((?:${ROOTS})/[\\w./-]+)\\.(js|jsx)\\b`, 'g');
 // Files that hold these spellings as data (the move tool's test, the lint
 // rules' cases, and this test), and the helper that is the one place the root
 // is found from __dirname.
@@ -69,11 +66,12 @@ const EXEMPT = new Set([
 function testFiles() {
   // Local checks run before staging, so new tests must follow the same rules
   // as committed tests. Deleted files have no source left to inspect.
-  const listing = execFileSync(
-    'git',
-    ['ls-files', '-z', '--cached', '--others', '--exclude-standard', 'test'],
-    { cwd: ROOT, encoding: 'utf8', maxBuffer: 4_000_000, timeout: 30_000 },
-  );
+  const listing = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', 'test'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    maxBuffer: 4_000_000,
+    timeout: 30_000,
+  });
   const files = [...new Set(listing.split('\0'))];
   assert.ok(files.length <= 20_000, 'test source path scan exceeds its file limit');
   return files
@@ -120,10 +118,7 @@ test('the rules catch each spelling they name', () => {
     const caught = RULES.some((rule) => rule.pattern.test(sample) && !rule.unless?.test(sample));
     assert.ok(caught, `no rule catches ${sample}`);
   }
-  const allowed = [
-    "repoPath('src/Sample.tsx')",
-    "import { a } from '../../scripts/policy/scan.mts';",
-  ];
+  const allowed = ["repoPath('src/Sample.tsx')", "import { a } from '../../scripts/policy/scan.mts';"];
   for (const sample of allowed) {
     const caught = RULES.some((rule) => rule.pattern.test(sample) && !rule.unless?.test(sample));
     assert.ok(!caught, `a rule rejects ${sample}`);

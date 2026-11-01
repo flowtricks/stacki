@@ -22,9 +22,7 @@ import { createPortal } from 'react-dom';
 // by it — which is exactly what a message wider than the column would be.
 
 const COPY = {
-  error:
-    'Does not reach 2x of its original size at a 500% zoom. ' +
-    'Reduce difference between max and min variable size.',
+  error: 'Does not reach 2x of its original size at a 500% zoom. ' + 'Reduce difference between max and min variable size.',
   warning: 'Shrinks when increasing zoom. Increase difference between max and min viewport size.',
 };
 
@@ -76,9 +74,7 @@ interface TipProps {
 }
 function Tip({ anchor, error, message, link }: TipProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<
-    { readonly left: number; readonly top: number } | undefined
-  >(undefined);
+  const [position, setPosition] = useState<{ readonly left: number; readonly top: number } | undefined>(undefined);
 
   useLayoutEffect(() => {
     const height = ref.current?.offsetHeight || 90;
@@ -86,10 +82,7 @@ function Tip({ anchor, error, message, link }: TipProps) {
       anchor.left - TIP_WIDTH - TIP_MARGIN >= TIP_MARGIN
         ? anchor.left - TIP_WIDTH - TIP_MARGIN
         : Math.min(anchor.right + TIP_MARGIN, window.innerWidth - TIP_WIDTH - TIP_MARGIN);
-    const top = Math.min(
-      Math.max(TIP_MARGIN, anchor.top + anchor.height / 2 - height / 2),
-      window.innerHeight - height - TIP_MARGIN,
-    );
+    const top = Math.min(Math.max(TIP_MARGIN, anchor.top + anchor.height / 2 - height / 2), window.innerHeight - height - TIP_MARGIN);
     setPosition({ left, top });
   }, [anchor]);
 
@@ -118,8 +111,7 @@ export default function FluidBadge({ fluid }: FluidBadgeProps) {
     return undefined;
   }
   const error = fluid.status === 'error';
-  const message =
-    fluid.status === 'error' ? COPY.error : fluid.status === 'warning' ? COPY.warning : undefined;
+  const message = fluid.status === 'error' ? COPY.error : fluid.status === 'warning' ? COPY.warning : undefined;
   const label = `${error ? 'Accessibility error' : 'Accessibility warning'}: ${message}`;
 
   // No `title`: the browser's own tooltip would say the same thing again, a

@@ -13,25 +13,20 @@ export interface LinkRenameContext {
 export function renamePageLinks(source: string, context: LinkRenameContext): string {
   assert(source.length <= 5_000_000, 'Link rename: source size is bounded');
   assert(context.origins.length <= 32, 'Link rename: origin count is bounded');
-  const quoted = source.replace(
-    /(["'`])((?:\\[\s\S]|(?!\1)[^\\])*)\1/g,
-    (_match: string, quote: string, value: string) => {
-      const escaped = value.includes('\\/');
-      const literal = escaped ? value.replace(/\\\//g, '/') : value;
-      const next = renamePageLink(literal, context);
-      return quote + (escaped ? next.replace(/\//g, '\\/') : next) + quote;
-    },
-  );
+  const quoted = source.replace(/(["'`])((?:\\[\s\S]|(?!\1)[^\\])*)\1/g, (_match: string, quote: string, value: string) => {
+    const escaped = value.includes('\\/');
+    const literal = escaped ? value.replace(/\\\//g, '/') : value;
+    const next = renamePageLink(literal, context);
+    return quote + (escaped ? next.replace(/\//g, '\\/') : next) + quote;
+  });
   // Markdown destinations, unquoted HTML links and XML sitemap locations are not JS strings.
   const attributes = quoted.replace(
     /(\b(?:href|action)\s*=\s*)(["'])([^"']*)\2/g,
-    (_match: string, prefix: string, quote: string, value: string) =>
-      prefix + quote + renamePageLink(value, { ...context, relative: 'url' }) + quote,
+    (_match: string, prefix: string, quote: string, value: string) => prefix + quote + renamePageLink(value, { ...context, relative: 'url' }) + quote,
   );
   return attributes.replace(
     /(\]\(\s*|\b(?:href|src|action)=|<loc>)([^\s<>"'`)]+)/g,
-    (_match: string, prefix: string, value: string) =>
-      prefix + renamePageLink(value, { ...context, relative: 'url' }),
+    (_match: string, prefix: string, value: string) => prefix + renamePageLink(value, { ...context, relative: 'url' }),
   );
 }
 
@@ -87,12 +82,7 @@ function renameURLPath(value: string, change: PageRename): string {
   return next === undefined ? value : next + (trailing && next !== '/' ? '/' : '') + suffix;
 }
 
-function renameRoutePattern(
-  route: string,
-  from: string,
-  to: string,
-  options: { readonly descendants: boolean },
-): string | undefined {
+function renameRoutePattern(route: string, from: string, to: string, options: { readonly descendants: boolean }): string | undefined {
   if (!from.includes('[')) {
     return route === from ? to : undefined;
   }
@@ -125,13 +115,11 @@ export function renamePageImports(
   const rewrite = (specifier: string) => renameModulePath(specifier, file, relocated, aliases);
   const modules = source.replace(
     /((?:\bfrom\s*|\bimport\s*(?:\(\s*)?|\brequire\(\s*)['"])([^'"]+)(['"])/g,
-    (_match: string, prefix: string, specifier: string, quote: string) =>
-      prefix + rewrite(specifier) + quote,
+    (_match: string, prefix: string, specifier: string, quote: string) => prefix + rewrite(specifier) + quote,
   );
   return modules.replace(
     /^(\s*layout:\s*['"]?)([^'"\s]+)(['"]?\s*)$/gm,
-    (_match: string, prefix: string, specifier: string, suffix: string) =>
-      prefix + rewrite(specifier) + suffix,
+    (_match: string, prefix: string, specifier: string, suffix: string) => prefix + rewrite(specifier) + suffix,
   );
 }
 
@@ -142,9 +130,7 @@ function renameModulePath(
   aliases: readonly (readonly [string, readonly string[]])[],
 ): string {
   const relative = specifier.startsWith('./') || specifier.startsWith('../');
-  const alias = aliases.find(
-    ([prefix]) => specifier === prefix || specifier.startsWith(prefix + '/'),
-  );
+  const alias = aliases.find(([prefix]) => specifier === prefix || specifier.startsWith(prefix + '/'));
   const aliasTarget = alias?.[1][0];
   if (!relative && aliasTarget === undefined) {
     return specifier;
@@ -152,17 +138,7 @@ function renameModulePath(
   const target = relative
     ? path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier))
     : path.posix.normalize((aliasTarget ?? '') + specifier.slice(alias?.[0].length ?? 0));
-  const suffix = [
-    '',
-    '.astro',
-    '.md',
-    '.mdx',
-    '.ts',
-    '.js',
-    '/index.astro',
-    '/index.ts',
-    '/index.js',
-  ].find((extension) => relocated.has(target + extension));
+  const suffix = ['', '.astro', '.md', '.mdx', '.ts', '.js', '/index.astro', '/index.ts', '/index.js'].find((extension) => relocated.has(target + extension));
   const nextFile = relocated.get(file) ?? file;
   const nextTarget = suffix === undefined ? target : relocated.get(target + suffix);
   assert(nextTarget !== undefined, 'A matched relocation has a destination');

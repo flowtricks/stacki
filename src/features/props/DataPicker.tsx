@@ -3,6 +3,7 @@ import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { ChevronRightIcon, ChevronLeftIcon, CheckIcon, CodeIcon, SearchIcon, PencilIcon } from '../../ui/Icons';
+import { pathSteps } from '../../editor/dataSample';
 
 // The data behind the page, as something you can look through rather than
 // something you have to already know. Every row is a value that is in scope
@@ -16,26 +17,12 @@ import { ChevronRightIcon, ChevronLeftIcon, CheckIcon, CodeIcon, SearchIcon, Pen
 // Every ancestor of a path, so opening the picker on an existing binding shows
 // it rather than making you find it: `post.data.title` opens post and post.data.
 function ancestorsOf(path: string | undefined): string[] {
-  const out: string[] = [];
   const pathText = path || '';
   assert(pathText.length <= LIMITS.attrCharsMax, 'DataPicker: binding path limit exceeded');
-  let acc = '';
-  for (const part of pathText.split('.')) {
-    // Array steps ride along with the name they belong to: `posts[0]` is one
-    // step down from `posts`, not two.
-    const match = part.match(/^([^[]*)((\[\d+\])*)$/);
-    acc = acc ? `${acc}.${match ? (match[1] ?? '') : part}` : match ? (match[1] ?? '') : part;
-    if (acc !== pathText) {
-      out.push(acc);
-    }
-    for (const index of (match?.[2] || '').match(/\[\d+\]/g) || []) {
-      acc += index;
-      if (acc !== pathText) {
-        out.push(acc);
-      }
-    }
-  }
-  return out;
+  // Every step's prefix but the whole path: `posts[0]` is one step down from
+  // `posts`, and `post.data["campus-name"]` one down from `post.data`.
+  const steps = pathSteps(pathText) ?? [];
+  return steps.slice(0, -1).map((step) => pathText.slice(0, step.end));
 }
 
 // How far a nested field steps in: the width of a chevron and the gap after
@@ -66,6 +53,9 @@ function flatten(nodes: readonly PickerNode[]): PickerNode[] {
 
 const SECTION_LABEL: Readonly<Record<string, string>> = {
   collections: 'Collections in this project',
+  // The loop's Source picker (LoopSourcePicker.tsx) groups its rows these ways too.
+  'loop-sanity': 'Sanity',
+  'loop-page': 'On this page',
 };
 
 // A field can be bound to something this entry doesn't have — an optional

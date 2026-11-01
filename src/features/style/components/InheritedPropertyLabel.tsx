@@ -68,11 +68,7 @@ function InheritedPropertyPopover({
   const ref = useRef<HTMLDivElement>(null);
   const position = useAnchoredPosition(ref, anchor);
   const target = inheritedTarget(source);
-  const content = (
-    <code className="embed-editor_provenance-sel embed-editor_provenance-source">
-      {target.label}
-    </code>
-  );
+  const content = <code className="embed-editor_provenance-sel embed-editor_provenance-source">{target.label}</code>;
   return (
     <Popup
       mode="popover"
@@ -85,12 +81,7 @@ function InheritedPropertyPopover({
     >
       <div className="embed-editor_provenance-head">
         <span>Value comes from:</span>
-        <button
-          type="button"
-          className="embed-editor_icon-btn"
-          aria-label="Close"
-          onClick={onClose}
-        >
+        <button type="button" className="embed-editor_icon-btn" aria-label="Close" onClick={onClose}>
           ✕
         </button>
       </div>

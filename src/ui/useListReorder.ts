@@ -137,21 +137,14 @@ function reorderRowRef(rowsRef: ReorderState['rows'], index: number): RefCallbac
   };
 }
 
-function reorderRowProps(
-  index: number,
-  state: ReorderState,
-  options: { readonly disabled: boolean },
-): RowProps {
+function reorderRowProps(index: number, state: ReorderState, options: { readonly disabled: boolean }): RowProps {
   return {
     ref: reorderRowRef(state.rows, index),
     onPointerDown: (event) => {
       if (options.disabled || event.button !== 0) {
         return;
       }
-      const control =
-        event.target instanceof Element
-          ? event.target.closest('button, input, textarea, select, a')
-          : undefined;
+      const control = event.target instanceof Element ? event.target.closest('button, input, textarea, select, a') : undefined;
       if (control && !control.hasAttribute('data-drag-through')) {
         return;
       }

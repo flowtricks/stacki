@@ -51,10 +51,7 @@ export function buildHistoryGraph(
   for (const commit of commits) {
     assert(!seen.has(commit.hash), 'History graph: duplicate commit');
     assert(commit.parents.length <= GRAPH_LANES_MAX, 'History graph: parent limit exceeded');
-    assert(
-      new Set(commit.parents).size === commit.parents.length,
-      'History graph: duplicate parent',
-    );
+    assert(new Set(commit.parents).size === commit.parents.length, 'History graph: duplicate parent');
     for (const parent of commit.parents) {
       assert(parent !== commit.hash, 'History graph: self parent');
       assert(!seen.has(parent), 'History graph: parents must follow their children');
@@ -104,13 +101,8 @@ function buildHistoryGraphRow(
     const edgeColor = index === 0 ? color : (lanes[target]?.color ?? target);
     edges.push({ source: lane, target, color: edgeColor, kind: 'outgoing' });
   });
-  const continuing = lanes.flatMap((entry, lane) =>
-    entry === undefined ? [] : [{ lane, color: entry.color }],
-  );
-  assert(
-    new Set(continuing.map((entry) => entry.lane)).size === continuing.length,
-    'History graph: unique continuing lanes',
-  );
+  const continuing = lanes.flatMap((entry, lane) => (entry === undefined ? [] : [{ lane, color: entry.color }]));
+  assert(new Set(continuing.map((entry) => entry.lane)).size === continuing.length, 'History graph: unique continuing lanes');
   return { row: { commit, lane, color, edges, continuing }, lanes };
 }
 

@@ -214,13 +214,7 @@ test('four distinct menu connections also measure the project column fallback', 
     widthMax: variable('--max'),
     columns: variable('--cols'),
   };
-  assert.deepEqual(guideVariableNames(settings), [
-    '--pad',
-    '--gap',
-    '--max',
-    '--cols',
-    '--site-columns',
-  ]);
+  assert.deepEqual(guideVariableNames(settings), ['--pad', '--gap', '--max', '--cols', '--site-columns']);
   assert.equal(guideVariableNames(settings).length, GUIDE_LIMITS.variablesMax);
   const duplicate = { ...settings, columns: variable('--site-columns') };
   assert.deepEqual(guideVariableNames(duplicate), ['--pad', '--gap', '--max', '--site-columns']);
@@ -278,12 +272,7 @@ test('past the maximum width the content box stays centred', () => {
 
 test('gutters that leave no room draw no columns', () => {
   const crowded = { ...LUMOS_WIDE, viewportWidthPx: 400, gutterPx: 40 };
-  assert.deepEqual(
-    guideColumns(
-      resolveGuide(crowded, { ...GUIDE_DEFAULTS, columns: { kind: 'count', count: 24 } }),
-    ),
-    [],
-  );
+  assert.deepEqual(guideColumns(resolveGuide(crowded, { ...GUIDE_DEFAULTS, columns: { kind: 'count', count: 24 } })), []);
   const marginsOnly = { ...LUMOS_WIDE, viewportWidthPx: 80 };
   assert.deepEqual(guideColumns(resolveGuide(marginsOnly, GUIDE_DEFAULTS)), []);
 });
@@ -322,21 +311,7 @@ test('a typed count accepts whole numbers from 2 through 32', () => {
   for (const count of [2, 3, 4, 10, 24, 25, 32]) {
     assert.equal(parseGuideColumnCount(String(count)), count);
   }
-  for (const text of [
-    '0',
-    '-1',
-    '1',
-    '33',
-    '99',
-    '100',
-    '04x',
-    '',
-    ' 8',
-    'ten',
-    '-8',
-    '8.5',
-    '8,5',
-  ]) {
+  for (const text of ['0', '-1', '1', '33', '99', '100', '04x', '', ' 8', 'ten', '-8', '8.5', '8,5']) {
     assert.equal(parseGuideColumnCount(text), undefined, text);
   }
 });

@@ -5,13 +5,7 @@ import { applyProposal, discardProposal } from './chatActions';
 import { type ChatThread, type ChatMessage } from './chatState';
 import { ChatIcon } from './ChatIcon';
 
-export function ChatMessages({
-  chat,
-  refresh,
-}: {
-  readonly chat: ChatThread;
-  readonly refresh: () => void;
-}) {
+export function ChatMessages({ chat, refresh }: { readonly chat: ChatThread; readonly refresh: () => void }) {
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const [unread, setUnread] = useState(false);
@@ -43,9 +37,7 @@ export function ChatMessages({
       {chat.status !== 'idle' && (
         <div className="chat-working" role="status">
           <span />
-          {chat.status === 'working'
-            ? 'Thinking through your request…'
-            : 'Applying changes to the draft…'}
+          {chat.status === 'working' ? 'Thinking through your request…' : 'Applying changes to the draft…'}
         </div>
       )}
       {chat.error && <ErrorToast message={chat.error} />}
@@ -64,15 +56,7 @@ export function ChatMessages({
     </div>
   );
 }
-function ProposalCard({
-  chat,
-  message,
-  refresh,
-}: {
-  readonly chat: ChatThread;
-  readonly message: ChatMessage;
-  readonly refresh: () => void;
-}) {
+function ProposalCard({ chat, message, refresh }: { readonly chat: ChatThread; readonly message: ChatMessage; readonly refresh: () => void }) {
   const proposal = message.proposal;
   if (!proposal) {
     return null;
@@ -91,16 +75,10 @@ function ProposalCard({
         </details>
       ))}
       <div className="chat-proposal-actions">
-        <button
-          disabled={chat.status !== 'idle'}
-          onClick={() => void applyProposal(chat.id, message.id, refresh)}
-        >
+        <button disabled={chat.status !== 'idle'} onClick={() => void applyProposal(chat.id, message.id, refresh)}>
           Apply to draft
         </button>
-        <button
-          disabled={chat.status !== 'idle'}
-          onClick={() => discardProposal(chat.id, message.id)}
-        >
+        <button disabled={chat.status !== 'idle'} onClick={() => discardProposal(chat.id, message.id)}>
           Discard
         </button>
       </div>
@@ -108,38 +86,20 @@ function ProposalCard({
   );
 }
 
-function MessageItem({
-  chat,
-  message,
-  refresh,
-}: {
-  readonly chat: ChatThread;
-  readonly message: ChatMessage;
-  readonly refresh: () => void;
-}) {
+function MessageItem({ chat, message, refresh }: { readonly chat: ChatThread; readonly message: ChatMessage; readonly refresh: () => void }) {
   return (
     <article className={`chat-message chat-message-${message.role}`} key={message.id}>
       <span className="chat-message-label">{message.role === 'user' ? 'You' : 'Assistant'}</span>
       {message.images.length > 0 && (
         <div className="chat-message-images">
           {message.images.map((image) => (
-            <a
-              key={image.id}
-              href={image.url}
-              download={image.name}
-              title={`Download ${image.name}`}
-            >
+            <a key={image.id} href={image.url} download={image.name} title={`Download ${image.name}`}>
               <img src={image.url} alt={image.name} />
             </a>
           ))}
         </div>
       )}
-      {message.content &&
-        (message.role === 'assistant' ? (
-          <ChatText text={message.content} />
-        ) : (
-          <div className="chat-message-text">{message.content}</div>
-        ))}
+      {message.content && (message.role === 'assistant' ? <ChatText text={message.content} /> : <div className="chat-message-text">{message.content}</div>)}
       {message.proposal && <ProposalCard chat={chat} message={message} refresh={refresh} />}
       {message.outcome && <p className="chat-outcome">{message.outcome}</p>}
     </article>

@@ -28,13 +28,7 @@ import { type Props, type WriteOptions, writeValue, useLayerRows, EffLabel } fro
 export const ClockIcon = () => (
   <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
     <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
-    <path
-      d="M8 5v3l2 1.5"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
+    <path d="M8 5v3l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 export function EaseCurveIcon({ timing }: { timing: string }) {
@@ -43,12 +37,7 @@ export function EaseCurveIcon({ timing }: { timing: string }) {
   const pt = (x: number, y: number) => `${(x * size).toFixed(1)} ${(size - y * size).toFixed(1)}`;
   return (
     <svg viewBox={`-2 -5 ${size + 4} ${size + 10}`} width="16" height="16" aria-hidden="true">
-      <path
-        d={`M ${pt(0, 0)} C ${pt(bezier[0], bezier[1])} ${pt(bezier[2], bezier[3])} ${pt(1, 1)}`}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.4"
-      />
+      <path d={`M ${pt(0, 0)} C ${pt(bezier[0], bezier[1])} ${pt(bezier[2], bezier[3])} ${pt(1, 1)}`} fill="none" stroke="currentColor" strokeWidth="1.4" />
     </svg>
   );
 }
@@ -76,17 +65,7 @@ export function fmtDuration(ms: number, unit: 'ms' | 's'): string {
 
 // Duration: a slider (numeric ms) alongside a free-text input holding the raw value,
 // so the unit lives inside the field and you can type 0.2s, var(), inherit, unset, etc.
-export function DurationField({
-  value,
-  busy,
-  onCommit,
-  onLive,
-}: {
-  value: string;
-  busy: boolean;
-  onCommit: (v: string) => void;
-  onLive: (v: string) => void;
-}) {
+export function DurationField({ value, busy, onCommit, onLive }: { value: string; busy: boolean; onCommit: (v: string) => void; onLive: (v: string) => void }) {
   const ms = durationToMs(value);
   const unit = durationUnit(value);
   // While the slider is being dragged the field shows where it is; the rest of
@@ -136,14 +115,7 @@ export function EasingField({
 }) {
   return (
     <div className="embed-editor_trans-easing">
-      <button
-        type="button"
-        className="embed-editor_trans-easing-btn"
-        onClick={onEditEasing}
-        disabled={busy}
-        title="Edit easing"
-        aria-label="Edit easing"
-      >
+      <button type="button" className="embed-editor_trans-easing-btn" onClick={onEditEasing} disabled={busy} title="Edit easing" aria-label="Edit easing">
         <EaseCurveIcon timing={value} />
       </button>
       <LiveInput
@@ -198,12 +170,7 @@ export function TransitionEditor({
       </div>
       <div className="embed-editor_size-row">
         <span className="embed-editor_size-label embed-editor_bg-caption">Easing</span>
-        <EasingField
-          value={transition.timing}
-          busy={busy}
-          onCommit={(next) => onChange({ timing: next }, false)}
-          onEditEasing={onEditEasing}
-        />
+        <EasingField value={transition.timing} busy={busy} onCommit={(next) => onChange({ timing: next }, false)} onEditEasing={onEditEasing} />
       </div>
     </div>
   );
@@ -231,14 +198,7 @@ export function TransitionsRow({ props }: { props: Props }) {
     <div className="embed-editor_type-shadows embed-editor_transitions">
       <div className="embed-editor_bg-layers-head">
         <EffLabel label="Transitions" prop="transition" props={props} />
-        <button
-          type="button"
-          className="embed-editor_icon-btn"
-          disabled={busy}
-          title="Add transition"
-          aria-label="Add transition"
-          onClick={stack.add}
-        >
+        <button type="button" className="embed-editor_icon-btn" disabled={busy} title="Add transition" aria-label="Add transition" onClick={stack.add}>
           <PlusIcon />
         </button>
       </div>
@@ -262,20 +222,11 @@ export function TransitionsRow({ props }: { props: Props }) {
       />
       {openIndex !== undefined && stack.anchorElement && current ? (
         <LayerPopover anchorEl={stack.anchorElement} ariaLabel="Transition" onClose={stack.close}>
-          <TransitionEditor
-            transition={current}
-            busy={busy}
-            onChange={(changes, live) => patch(changes, { live })}
-            onEditEasing={() => setEasingOpen(true)}
-          />
+          <TransitionEditor transition={current} busy={busy} onChange={(changes, live) => patch(changes, { live })} onEditEasing={() => setEasingOpen(true)} />
         </LayerPopover>
       ) : undefined}
       {easingOpen && current ? (
-        <EasingEditor
-          value={current.timing || 'ease'}
-          onClose={() => setEasingOpen(false)}
-          onChange={(timing) => patch({ timing }, { live: false })}
-        />
+        <EasingEditor value={current.timing || 'ease'} onClose={() => setEasingOpen(false)} onChange={(timing) => patch({ timing }, { live: false })} />
       ) : undefined}
     </div>
   );

@@ -28,15 +28,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import { toFilePath, type FilePath } from '../../shared/core/brand';
-import type {
-  DiskError,
-  DiskLock,
-  DiskRead,
-  DocumentDisk,
-  LockError,
-  Projector,
-  ReplaceError,
-} from '../../shared/engine/documentActor';
+import type { DiskError, DiskLock, DiskRead, DocumentDisk, LockError, Projector, ReplaceError } from '../../shared/engine/documentActor';
 import { parsePageResult } from '../../shared/page/pageNode';
 import { parseMarkdownPage } from '../parse/markdownParser';
 import type { Plan } from '../../shared/engine/planner';
@@ -44,11 +36,7 @@ import { projectValueSplice } from '../../shared/engine/projectionPatch';
 import { toRecord } from '../../shared/core/record';
 import { err, ok, type Result } from '../../shared/core/result';
 import { createLazySnapshot, createSnapshot, type Snapshot } from '../../shared/page/snapshot';
-import {
-  projectOpaqueDocument,
-  projectPage,
-  type Projection,
-} from '../../shared/page/sourceProjection';
+import { projectOpaqueDocument, projectPage, type Projection } from '../../shared/page/sourceProjection';
 import { decodeUtf8, toByteString, type ByteString } from '../../shared/core/span';
 import { parsePage } from '../parse/astroParser';
 import {
@@ -239,10 +227,7 @@ export class NodeDocumentDisk implements DocumentDisk {
     if (!this.#stale(lockFile, owner)) {
       return false;
     }
-    const aside = path.join(
-      path.dirname(lockFile),
-      `${LOCK_PREFIX}broken-${randomUUID()}${LOCK_SUFFIX}`,
-    );
+    const aside = path.join(path.dirname(lockFile), `${LOCK_PREFIX}broken-${randomUUID()}${LOCK_SUFFIX}`);
     try {
       fs.renameSync(lockFile, aside);
     } catch (error: unknown) {
@@ -338,8 +323,7 @@ const hashBytes = (bytes: ByteString) => digestOf(bytes);
  * reparse on every candidate (plan §10). */
 export const NODE_PROJECTOR: Projector = {
   hash: hashBytes,
-  snapshot: (file, bytes) =>
-    createLazySnapshot({ path: file, bytes }, (own) => projectDocument(file, own), hashBytes),
+  snapshot: (file, bytes) => createLazySnapshot({ path: file, bytes }, (own) => projectDocument(file, own), hashBytes),
   candidate: (file: FilePath, base: Snapshot, plan: Plan, bytes: ByteString) => {
     const [splice, ...others] = plan.splices;
     if (splice !== undefined && others.length === 0) {
@@ -350,11 +334,7 @@ export const NODE_PROJECTOR: Projector = {
         }
       }
     }
-    return createLazySnapshot(
-      { path: file, bytes },
-      (own) => projectDocument(file, own),
-      hashBytes,
-    );
+    return createLazySnapshot({ path: file, bytes }, (own) => projectDocument(file, own), hashBytes);
   },
 };
 
@@ -368,9 +348,7 @@ export interface LockOwner {
 
 /** Directory identity and a folded filename distinguish equal basenames while
  * making aliases of the same target contend for one lock in shared staging. */
-function lockFileOf(
-  target: string,
-): Result<string, { readonly code: 'failed'; readonly message: string }> {
+function lockFileOf(target: string): Result<string, { readonly code: 'failed'; readonly message: string }> {
   try {
     const directory = fs.statSync(path.dirname(target));
     const identity = `${directory.dev}:${directory.ino}/${foldCase(path.basename(target))}`;
@@ -477,15 +455,12 @@ function swapCase(name: string): string {
 }
 
 /** Refuse a write that would land inside node_modules (see header). */
-function refuseInstalled(
-  file: string,
-): Result<void, { readonly code: 'failed'; readonly message: string }> {
+function refuseInstalled(file: string): Result<void, { readonly code: 'failed'; readonly message: string }> {
   const landing = landingOf(file);
   assert(path.isAbsolute(landing), 'A landing path is absolute');
   if (isInstalledFile(file) || isInstalledFile(landing)) {
     const owner = packageOf(landing);
-    const what =
-      owner === undefined ? 'is inside node_modules' : `belongs to the installed package ${owner}`;
+    const what = owner === undefined ? 'is inside node_modules' : `belongs to the installed package ${owner}`;
     return err({
       code: 'failed',
       message:

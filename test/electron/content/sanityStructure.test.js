@@ -6,10 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {
-  sanityStructureOrder,
-  inStructureOrder,
-} = require('#dist/electron/content/sanityStructure.js');
+const { sanityStructureOrder, inStructureOrder } = require('#dist/electron/content/sanityStructure.js');
 
 const STRUCTURE = `import type { StructureBuilder } from "sanity/structure";
 const QUERY = '*[_type == "sermon"]';
@@ -38,14 +35,7 @@ test('the full sidebar’s order, through a helper, ahead of unnamed types', () 
     const types = ['booklet', 'campus', 'logo', 'series', 'sermon', 'settings'];
     const order = sanityStructureOrder(root, types);
     // The sidebar's order; types it does not name (logo, sermon) after, as given.
-    assert.deepEqual(inStructureOrder(types, order), [
-      'settings',
-      'campus',
-      'series',
-      'booklet',
-      'logo',
-      'sermon',
-    ]);
+    assert.deepEqual(inStructureOrder(types, order), ['settings', 'campus', 'series', 'booklet', 'logo', 'sermon']);
   } finally {
     fs.rmSync(root, { recursive: true });
   }

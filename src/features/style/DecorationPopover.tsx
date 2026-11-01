@@ -6,12 +6,7 @@ import Select, { type SelectOption } from './components/Select';
 import ColorSwatch from './components/ColorSwatch';
 import { splitTopLevelSpaces } from './model/background';
 import { displayOf } from './model/styleDisplay';
-import {
-  DecorNoneIcon,
-  DecorStrikeIcon,
-  DecorUnderlineIcon,
-  DecorOverlineIcon,
-} from './TypographyIcons';
+import { DecorNoneIcon, DecorStrikeIcon, DecorUnderlineIcon, DecorOverlineIcon } from './TypographyIcons';
 import { type Props, LiveInput } from './TypographyKit';
 import { PopLabel, LengthRow } from './TypographyColumns';
 
@@ -24,11 +19,7 @@ import { PopLabel, LengthRow } from './TypographyColumns';
 export const DECOR_LINE_KW = ['underline', 'overline', 'line-through', 'blink'];
 export const DECOR_STYLE_KW = ['solid', 'double', 'dotted', 'dashed', 'wavy'];
 export const LINE_ORDER = ['underline', 'overline', 'line-through'];
-export const DECOR_PROPS = [
-  'text-decoration',
-  'text-decoration-thickness',
-  'text-decoration-skip-ink',
-] as const;
+export const DECOR_PROPS = ['text-decoration', 'text-decoration-thickness', 'text-decoration-skip-ink'] as const;
 
 export type DecorParts = { lines: string[]; style: string; color: string };
 
@@ -64,11 +55,7 @@ export function lineKey(lines: string[]): string {
 }
 
 // Small horizontal glyphs for the Style select (a decoration line drawn each way).
-export function StyleGlyph({
-  variant,
-}: {
-  variant: 'solid' | 'double' | 'dotted' | 'dashed' | 'wavy';
-}) {
+export function StyleGlyph({ variant }: { variant: 'solid' | 'double' | 'dotted' | 'dashed' | 'wavy' }) {
   if (variant === 'double') {
     return (
       <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -86,14 +73,7 @@ export function StyleGlyph({
   const dash = variant === 'dotted' ? '1 2' : variant === 'dashed' ? '3 2' : undefined;
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M2 8h12"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeDasharray={dash}
-      />
+      <path d="M2 8h12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeDasharray={dash} />
     </svg>
   );
 }
@@ -128,11 +108,7 @@ export function DecorationPopover(props: Props) {
   const raw = display.present ? display.value : displayOf(read('text-decoration-line')).value;
   const parts = parseDecoration(raw);
   const write: DecorationWrite = (next, mode = 'commit') =>
-    (mode === 'live' ? liveSetProp : setProp)(
-      'text-decoration',
-      composeDecoration(next),
-      display.important,
-    );
+    (mode === 'live' ? liveSetProp : setProp)('text-decoration', composeDecoration(next), display.important);
   // A preview that ends (the menu closed without a pick) puts the live write back.
   const preview = (value: string | undefined, next: (value: string) => DecorParts) => {
     if (value === undefined) {
@@ -177,9 +153,7 @@ export function DecorationPopover(props: Props) {
           disabled={busy}
         />
       </div>
-      <p className="embed-editor_more-note">
-        The browser will try to interrupt overlines and underlines to prevent drawing over glyphs.
-      </p>
+      <p className="embed-editor_more-note">The browser will try to interrupt overlines and underlines to prevent drawing over glyphs.</p>
     </div>
   );
 }
@@ -226,11 +200,7 @@ export function DecorationSelectRow({
         prop="text-decoration"
         {...props}
         active={lines ? shorthandSet : shorthandSet && parts.style !== ''}
-        onClear={() =>
-          lines
-            ? props.clearProp(['text-decoration', 'text-decoration-line'])
-            : write({ ...parts, style: '' })
-        }
+        onClear={() => (lines ? props.clearProp(['text-decoration', 'text-decoration-line']) : write({ ...parts, style: '' }))}
       />
       <Select
         value={value}
@@ -248,13 +218,7 @@ export function DecorationSelectRow({
 export function DecorationColorRow({ props, parts, shorthandSet, write }: DecorationRowProps) {
   return (
     <div className="embed-editor_size-row">
-      <PopLabel
-        label="Color"
-        prop="text-decoration"
-        {...props}
-        active={shorthandSet && parts.color !== ''}
-        onClear={() => write({ ...parts, color: '' })}
-      />
+      <PopLabel label="Color" prop="text-decoration" {...props} active={shorthandSet && parts.color !== ''} onClear={() => write({ ...parts, color: '' })} />
       <div className="embed-editor_type-field">
         <ColorSwatch
           value={parts.color}

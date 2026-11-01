@@ -44,18 +44,9 @@ export function ElementContextMenu(
   );
 }
 
-function runContextAction(
-  action: ContextAction,
-  props: ElementActionProps,
-  menu: ContextPosition,
-): void {
+function runContextAction(action: ContextAction, props: ElementActionProps, menu: ContextPosition): void {
   const capabilities = contextCapabilities(props, menu);
-  if (
-    capabilities.protectedNode &&
-    action !== 'paste' &&
-    action !== 'open' &&
-    action !== 'defaults'
-  ) {
+  if (capabilities.protectedNode && action !== 'paste' && action !== 'open' && action !== 'defaults') {
     return;
   }
   switch (action) {

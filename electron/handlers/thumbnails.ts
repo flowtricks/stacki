@@ -100,9 +100,7 @@ export class Thumbnails {
     if (!hasDependencies(projectPath)) {
       return { ok: false as const, error: 'This project has no dependencies installed yet.' };
     }
-    return withTemporaryServer(projectPath, signal, (url) =>
-      thumbs.capture(userData, projectPath, url + '/'),
-    );
+    return withTemporaryServer(projectPath, signal, (url) => thumbs.capture(userData, projectPath, url + '/'));
   }
 }
 
@@ -128,11 +126,7 @@ export function registerThumbnailHandlers({
 
 // A dev server of the project's own, for one capture: the canvas's server is
 // left alone, and the temporary one is stopped however the capture ends.
-async function withTemporaryServer(
-  projectPath: string,
-  signal: AbortSignal,
-  capture: (url: string) => ReturnType<typeof thumbs.capture>,
-) {
+async function withTemporaryServer(projectPath: string, signal: AbortSignal, capture: (url: string) => ReturnType<typeof thumbs.capture>) {
   const binName = isWin ? 'astro.cmd' : 'astro';
   const localBin = path.join(projectPath, 'node_modules', '.bin', binName);
   const port = await findFreePort(4400 + Math.floor(Math.random() * 200));

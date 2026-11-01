@@ -13,9 +13,7 @@
 /** `!important` and whatever whitespace led up to it, kept aside and put back. */
 function splitImportant(value: string): { body: string; suffix: string } {
   const match = value.match(/(\s*!\s*important\s*)$/i);
-  return match
-    ? { body: value.slice(0, match.index), suffix: match[1] ?? '' }
-    : { body: value, suffix: '' };
+  return match ? { body: value.slice(0, match.index), suffix: match[1] ?? '' } : { body: value, suffix: '' };
 }
 
 const LONE_VAR = /^var\(\s*--[A-Za-z0-9_-]+\s*(?:,[^)]*)?\)$/i;

@@ -85,9 +85,7 @@ export function parseOrigin(value: string): Origin {
   // nonsense x of `top`), so the y-only words decide the order.
   const firstLower = lower[0] ?? '';
   const secondLower = lower[1] ?? '';
-  const swapped =
-    (firstLower in Y_WORD && !(firstLower in X_WORD)) ||
-    (secondLower in X_WORD && !(secondLower in Y_WORD));
+  const swapped = (firstLower in Y_WORD && !(firstLower in X_WORD)) || (secondLower in X_WORD && !(secondLower in Y_WORD));
   const rawX = (swapped ? parts[1] : parts[0]) ?? '50%';
   const rawY = (swapped ? parts[0] : parts[1]) ?? '50%';
   return {
@@ -134,9 +132,7 @@ const samePosition = (left: string, right: string): boolean => {
 
 /** Which pad dot an origin sits on, or -1 when it is somewhere in between. */
 export const originPreset = (origin: Origin): number =>
-  ORIGIN_PRESETS.findIndex(
-    (preset) => samePosition(preset.x, origin.x) && samePosition(preset.y, origin.y),
-  );
+  ORIGIN_PRESETS.findIndex((preset) => samePosition(preset.x, origin.x) && samePosition(preset.y, origin.y));
 
 /**
  * Lift a `perspective()` out of a transform value.

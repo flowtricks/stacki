@@ -25,11 +25,7 @@ export function applyPageRename(plan: PageRenamePlan, writer: RenameWriter): Res
   const texts = plan.texts.map((entry) => ({ ...entry, file: path.join(plan.root, entry.file) }));
   return writer.lease(texts, () => renameLeased(plan, texts, writer));
 }
-function renameLeased(
-  plan: PageRenamePlan,
-  texts: readonly RenameText[],
-  writer: RenameWriter,
-): Result<void> {
+function renameLeased(plan: PageRenamePlan, texts: readonly RenameText[], writer: RenameWriter): Result<void> {
   const source = path.join(plan.root, 'src/pages', plan.change.from);
   const target = path.join(plan.root, 'src/pages', plan.change.to);
   if (fs.existsSync(target)) {
@@ -68,11 +64,7 @@ function moveRenamePath(source: string, target: string): Result<void> {
     });
   }
 }
-function restoreRenameTexts(
-  written: readonly RenameText[],
-  message: string,
-  writer: RenameWriter,
-): Result<never> {
+function restoreRenameTexts(written: readonly RenameText[], message: string, writer: RenameWriter): Result<never> {
   const failed: string[] = [];
   for (const entry of [...written].reverse()) {
     const current = writer.current(entry.file);

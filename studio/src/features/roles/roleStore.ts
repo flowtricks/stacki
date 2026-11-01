@@ -7,10 +7,7 @@ export function getEditorRole(): EditorRole {
     return current;
   }
   try {
-    current =
-      typeof sessionStorage !== 'undefined' && sessionStorage.getItem('studio-role') === 'client'
-        ? 'client'
-        : 'designer';
+    current = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('studio-role') === 'client' ? 'client' : 'designer';
   } catch {
     current = 'designer';
   }

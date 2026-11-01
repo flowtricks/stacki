@@ -10,30 +10,14 @@ import { assert } from '../../../shared/core/assert';
 import { VOID_TAGS } from '../../editor/elementSchemas';
 import { previewGestures } from '../../editor/pageSender';
 import { carryHandles, seedOf } from '../../editor/nodeHandles';
-import {
-  type PageOrigin,
-  type EditGesture,
-  type EditsRecord,
-  type QueueEntry,
-} from '../../editor/pageEdits';
-import {
-  frontmatterGesture,
-  propsGesture,
-  sequence,
-  tagRenameGesture,
-} from '../../editor/editGestures';
+import { type PageOrigin, type EditGesture, type EditsRecord, type QueueEntry } from '../../editor/pageEdits';
+import { frontmatterGesture, propsGesture, sequence, tagRenameGesture } from '../../editor/editGestures';
 import type { PageEdited } from '../../../shared/ipc/pageSave';
 import { ancestorChain, nodeAtPath } from '../../editor/editorTree';
 import { renamedLoopVar, parseLoopHead, disconnectedLoops } from '../../editor/loopBindings';
 import type { InlineNode } from '../../features/props/RichContent';
 import type { Rename } from '../../features/props/propNodeEditors';
-import {
-  findEditorNodeById as findNodeById,
-  type EditablePageState,
-  type EditorPageState,
-  type OpenFile,
-  type TrailingSlash,
-} from '../../editor/pageState';
+import { findEditorNodeById as findNodeById, type EditablePageState, type EditorPageState, type OpenFile, type TrailingSlash } from '../../editor/pageState';
 import { nodeId, type EditorModel, type EditorNode } from '../../editor/pageView';
 import { previewProjectPageEdit } from '../../ipc/appBridge';
 
@@ -68,11 +52,7 @@ export function inlineWithIds(list: readonly InlineNode[], depth: number): Edito
     if (node.kind === 'text' || node.kind === 'expr') {
       return { ...node, id: newId() };
     }
-    const props = Object.fromEntries(
-      Object.entries(node.props ?? {}).filter(
-        (entry): entry is [string, Attr] => entry[1] !== undefined,
-      ),
-    );
+    const props = Object.fromEntries(Object.entries(node.props ?? {}).filter((entry): entry is [string, Attr] => entry[1] !== undefined));
     return {
       id: newId(),
       kind: 'element',
@@ -166,9 +146,7 @@ export function definitionOf(
   insertables: readonly ScanComponent[],
 ): ScanComponent | undefined {
   const specifier = model.imports.find((item) => item.name === node.name)?.path;
-  const installed = insertables.find(
-    (item) => item.origin?.kind === 'package' && item.origin.importPath === specifier,
-  );
+  const installed = insertables.find((item) => item.origin?.kind === 'package' && item.origin.importPath === specifier);
   if (installed) {
     return installed;
   }
@@ -187,11 +165,7 @@ export function definitionOf(
 // First element with this tag, depth-first. Used to land the selection on a
 // layout's <body> when it is opened: the html/head wrapper above it is not
 // what anyone came to edit, and <body> is the page's real root.
-export function findElementByTag(
-  nodes: readonly PageNode[] | undefined,
-  tag: string,
-  depth = 0,
-): PairedNode | undefined {
+export function findElementByTag(nodes: readonly PageNode[] | undefined, tag: string, depth = 0): PairedNode | undefined {
   // A parsed tree is bounded by the page-tree depth cap.
   assert(depth <= LIMITS.treeDepthMax, 'findElementByTag: depth exceeds the tree cap');
   for (const node of nodes || []) {
@@ -213,10 +187,7 @@ export function findElementByTag(
 // their <body> selection; files without rendered markup still get a fallback.
 export function openingSelection(nodes: readonly PageNode[] | undefined): PageNode | undefined {
   const list = Array.isArray(nodes) ? nodes : [];
-  const firstRendered = (
-    children: readonly PageNode[] | undefined,
-    depth: number,
-  ): PageNode | undefined => {
+  const firstRendered = (children: readonly PageNode[] | undefined, depth: number): PageNode | undefined => {
     assert(depth <= LIMITS.treeDepthMax, 'openingSelection: depth exceeds the tree cap');
     for (const node of children || []) {
       const markup = node.kind === 'element' || node.kind === 'component';
@@ -225,12 +196,7 @@ export function openingSelection(nodes: readonly PageNode[] | undefined): PageNo
         if (child) {
           return child;
         }
-      } else if (
-        markup &&
-        !['head', 'script', 'style', 'link', 'meta', 'title', 'base', 'template'].includes(
-          node.name,
-        )
-      ) {
+      } else if (markup && !['head', 'script', 'style', 'link', 'meta', 'title', 'base', 'template'].includes(node.name)) {
         return node;
       }
     }
@@ -245,11 +211,7 @@ export function openingSelection(nodes: readonly PageNode[] | undefined): PageNo
 // node beats selecting nothing.
 export function outermostNode(nodes: readonly PageNode[] | undefined): PageNode | undefined {
   const list: readonly PageNode[] = nodes ?? [];
-  return (
-    list.find((node) => node.kind === 'element' || node.kind === 'component') ||
-    list[0] ||
-    undefined
-  );
+  return list.find((node) => node.kind === 'element' || node.kind === 'component') || list[0] || undefined;
 }
 
 export interface OpenFileOptions {
@@ -260,11 +222,7 @@ export interface OpenFileOptions {
 // Returning from a component should land on the instance that opened it. The
 // path is stored with the child stack entry because node ids can change when
 // the parent file is parsed again during the return trip.
-export function openFileSelection(
-  entry: OpenFile,
-  result: EditorPageState,
-  selectionPath: string | undefined,
-): PageNode | undefined {
+export function openFileSelection(entry: OpenFile, result: EditorPageState, selectionPath: string | undefined): PageNode | undefined {
   if (!result.editable) {
     return undefined;
   }
@@ -276,9 +234,7 @@ export function openFileSelection(
       return selected;
     }
   }
-  return entry.kind === 'component'
-    ? openingSelection(result.model.nodes)
-    : outermostNode(result.model.nodes);
+  return entry.kind === 'component' ? openingSelection(result.model.nodes) : outermostNode(result.model.nodes);
 }
 
 export function collectUsedNames(model: PageModel): Set<string> {
@@ -362,12 +318,7 @@ export interface TagChange {
 // its kind, which the next request's anchor would no longer match — then the
 // name, then the imports the new name needs and the old one leaves unused, all
 // one undo step. Void tags keep no children: `<img>` holds none.
-export function tagChangeGesture(
-  model: EditorModel,
-  node: EditorNode,
-  change: TagChange,
-  imports: (model: EditorModel) => EditorModel,
-): EditGesture {
+export function tagChangeGesture(model: EditorModel, node: EditorNode, change: TagChange, imports: (model: EditorModel) => EditorModel): EditGesture {
   const options = { coalesceKey: undefined, urgency: true };
   const patch = Object.fromEntries(change.dropped.map((attr) => [attr, undefined]));
   const removal = propsGesture(node.id, patch, options);
@@ -399,15 +350,9 @@ export function tagChangeGesture(
 // page's queued gestures are planned as the splices they would write, against
 // the bytes they were stated on (page:previewEdit) — never printed whole, on
 // any page since step 10.
-export type Reviewed =
-  | { readonly tag: 'shown'; readonly source: string }
-  | { readonly tag: 'failed'; readonly message: string };
+export type Reviewed = { readonly tag: 'shown'; readonly source: string } | { readonly tag: 'failed'; readonly message: string };
 
-export async function reviewedSource(
-  path: string,
-  state: EditablePageState,
-  queued: readonly QueueEntry[],
-): Promise<Reviewed> {
+export async function reviewedSource(path: string, state: EditablePageState, queued: readonly QueueEntry[]): Promise<Reviewed> {
   // Only typed code leaves a page without an origin, and typed code is
   // reviewed as it was typed (the caller's branch).
   assert(state.origin !== undefined, 'A page with only gestures queued has an origin');
@@ -436,16 +381,11 @@ export async function reviewedSource(
 // — a condition's test, a style or script body, or the value of a text, an
 // expression or a note. A new node; the shown one is left as it was, and the
 // loop helpers edit a private copy of the loop only.
-export function restatedText(
-  node: EditorNode,
-  value: string,
-  renames: readonly Rename[] | undefined,
-): EditorNode | undefined {
+export function restatedText(node: EditorNode, value: string, renames: readonly Rename[] | undefined): EditorNode | undefined {
   switch (node.kind) {
     case 'map': {
       const renamed = (renames || []).reduce(
-        (children, { from, to }) =>
-          from && to && from !== to ? renamedLoopVar(children, from, to) : children,
+        (children, { from, to }) => (from && to && from !== to ? renamedLoopVar(children, from, to) : children),
         node.children,
       );
       // Renames above already re-pointed the children, so compare the data
@@ -524,10 +464,7 @@ export function voided(outcome: EditsRecord['outcome']): boolean {
 
 // The origin after an Undo's revert: its reply, carried from the origin
 // through the revert's own splices (an .astro page; undefined otherwise).
-export function revertedOrigin(
-  origin: PageOrigin | undefined,
-  reply: PageEdited,
-): PageOrigin | undefined {
+export function revertedOrigin(origin: PageOrigin | undefined, reply: PageEdited): PageOrigin | undefined {
   if (origin === undefined || !reply.editable) {
     return undefined;
   }

@@ -40,43 +40,21 @@ const check = (what, condition, detail) => {
     platform: 'node',
     logLevel: 'silent',
   });
-  const { comparePageNames, leadsFolders, pageRank } = await import(
-    `${pathToFileURL(orderOut).href}?v=${Date.now()}`
-  );
+  const { comparePageNames, leadsFolders, pageRank } = await import(`${pathToFileURL(orderOut).href}?v=${Date.now()}`);
 
   check('the folder’s own page leads', leadsFolders('index.astro') === true);
-  check(
-    'however it is spelled',
-    leadsFolders('index') === true && leadsFolders('Index.astro') === true,
-  );
+  check('however it is spelled', leadsFolders('index') === true && leadsFolders('Index.astro') === true);
   check('an .mdx one too', leadsFolders('index.mdx') === true);
   check('a page merely starting with the word does not', leadsFolders('index-old.astro') === false);
-  check(
-    'nor does anything else',
-    leadsFolders('about.astro') === false && leadsFolders('404.astro') === false,
-  );
-  check(
-    'and among pages it still sorts first',
-    ['story.astro', 'index.astro', '404.astro'].sort(comparePageNames)[0] === 'index.astro',
-  );
-  check(
-    'with the numbered ones last',
-    ['story.astro', '404.astro'].sort(comparePageNames)[1] === '404.astro',
-  );
-  check(
-    'naturally, not asciibetically',
-    ['page-10.astro', 'page-2.astro'].sort(comparePageNames)[0] === 'page-2.astro',
-  );
+  check('nor does anything else', leadsFolders('about.astro') === false && leadsFolders('404.astro') === false);
+  check('and among pages it still sorts first', ['story.astro', 'index.astro', '404.astro'].sort(comparePageNames)[0] === 'index.astro');
+  check('with the numbered ones last', ['story.astro', '404.astro'].sort(comparePageNames)[1] === '404.astro');
+  check('naturally, not asciibetically', ['page-10.astro', 'page-2.astro'].sort(comparePageNames)[0] === 'page-2.astro');
   check('the rank is what says so', pageRank('index.astro') === 0 && pageRank('about.astro') === 1);
 
   // --- the panel that draws it --------------------------------------------------
   const entry = path.join(buildDirectory, 'page-order.entry.jsx');
-  fs.writeFileSync(
-    entry,
-    `export { default as PagesPanel } from ${JSON.stringify(
-      repoPath('src/features/pages/PagesPanel.tsx'),
-    )};\n`,
-  );
+  fs.writeFileSync(entry, `export { default as PagesPanel } from ${JSON.stringify(repoPath('src/features/pages/PagesPanel.tsx'))};\n`);
   const bundle = path.join(buildDirectory, 'page-order.bundle.js');
   await esbuild.build({
     entryPoints: [entry],
@@ -169,30 +147,12 @@ const check = (what, condition, detail) => {
 
   const order = listed();
   const aboutFolder = container.querySelector('[data-order-key="about/"]');
-  check(
-    'folder label is human readable',
-    aboutFolder.querySelector('.label').textContent === 'About',
-  );
-  check(
-    'folder slug stays beneath its label',
-    aboutFolder.querySelector('.sub').textContent === '/about',
-  );
-  check(
-    'the site’s own page is the first thing in the list',
-    order[0] === 'Home',
-    order.join(' · '),
-  );
+  check('folder label is human readable', aboutFolder.querySelector('.label').textContent === 'About');
+  check('folder slug stays beneath its label', aboutFolder.querySelector('.sub').textContent === '/about');
+  check('the site’s own page is the first thing in the list', order[0] === 'Home', order.join(' · '));
   check('above every folder', order.indexOf('Home') < order.indexOf('About/'), order.join(' · '));
-  check(
-    'the folders are still together, in order',
-    order.indexOf('About/') < order.indexOf('Care/'),
-    order.join(' · '),
-  );
-  check(
-    'and the other root pages are still below them',
-    order.indexOf('branding') > order.indexOf('Care/'),
-    order.join(' · '),
-  );
+  check('the folders are still together, in order', order.indexOf('About/') < order.indexOf('Care/'), order.join(' · '));
+  check('and the other root pages are still below them', order.indexOf('branding') > order.indexOf('Care/'), order.join(' · '));
   check('a numbered page is still last', order[order.length - 1] === '404', order.join(' · '));
   check('nothing was lost on the way', order.length === 9, order.join(' · '));
 
@@ -200,31 +160,17 @@ const check = (what, condition, detail) => {
   // it leads what is inside the folder rather than sorting among it.
   const inFolder = order.slice(order.indexOf('About/') + 1, order.indexOf('Care/'));
   check('a folder’s own page leads what is inside it', inFolder[0] === 'index', order.join(' · '));
-  check(
-    'with the rest of the folder after it',
-    inFolder.join() === 'index,beliefs,story',
-    inFolder.join(),
-  );
+  check('with the rest of the folder after it', inFolder.join() === 'index,beliefs,story', inFolder.join());
 
   // The row that leads is the folder's, not something that happens to be
   // called index: collapsing the folder takes it with it.
   await act(async () => {
-    container
-      .querySelector('[data-order-key="about/"]')
-      ?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    container.querySelector('[data-order-key="about/"]')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
   const closed = listed();
-  check(
-    'closing the folder puts its own page away too',
-    closed.filter((page) => page === 'index').length === 0,
-    closed.join(' · '),
-  );
-  check(
-    'and the site’s page is still at the top',
-    closed[0] === 'Home' && closed[1] === 'About/',
-    closed.join(' · '),
-  );
+  check('closing the folder puts its own page away too', closed.filter((page) => page === 'index').length === 0, closed.join(' · '));
+  check('and the site’s page is still at the top', closed[0] === 'Home' && closed[1] === 'About/', closed.join(' · '));
 
   if (failures.length) {
     console.error(`\npage-order: ${failures.length} failed, ${checked - failures.length} passed\n`);

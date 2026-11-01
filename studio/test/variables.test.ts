@@ -32,13 +32,7 @@ test('Stacki models survive JSON, sparse modes, comments and exact value edits',
       value: '#abcdef',
     });
     assert.ok(result.ok);
-    assert.equal(
-      files.get(file),
-      (source + '.dark { --brand: black; --space: 2rem; --extra: 0; }').replace(
-        '#123456',
-        '#abcdef',
-      ),
-    );
+    assert.equal(files.get(file), (source + '.dark { --brand: black; --space: 2rem; --extra: 0; }').replace('#123456', '#abcdef'));
     assert.equal(parsed.value.values['--extra'], '0');
   });
 });
@@ -62,9 +56,7 @@ test('variable operations add, reorder, rename references and edit headings in s
         moves: [{ file, selector: ':root', name: '--accent', target: '--brand' }],
       }).ok,
     );
-    assert.ok(
-      (files.get(file)?.indexOf('--accent') ?? 1) < (files.get(file)?.indexOf('--brand') ?? 0),
-    );
+    assert.ok((files.get(file)?.indexOf('--accent') ?? 1) < (files.get(file)?.indexOf('--brand') ?? 0));
     assert.ok(
       applyVariableOperation('renameCssVariables', {
         projectPath: 'studio',
@@ -201,8 +193,7 @@ async function variableFixture() {
     root,
     rooms,
     get: async () => record(await (await fetch(url)).json()),
-    post: async (body: unknown): Promise<unknown> =>
-      (await fetch(url, { method: 'POST', body: JSON.stringify(body) })).json(),
+    post: async (body: unknown): Promise<unknown> => (await fetch(url, { method: 'POST', body: JSON.stringify(body) })).json(),
     close: async () => {
       server.close();
       server.closeAllConnections();
@@ -222,9 +213,7 @@ test('variable undo checks exact source and preserves later collaborator edits',
   try {
     const changed = source.replace('#123456', 'red');
     const remote = changed.replace('1rem', '2rem');
-    await fixture.rooms.coordinator.run(async () =>
-      (await fixture.rooms.get(file)).setSource(remote),
-    );
+    await fixture.rooms.coordinator.run(async () => (await fixture.rooms.get(file)).setSource(remote));
     const latest = await fixture.get();
     const refused = record(
       await fixture.post({

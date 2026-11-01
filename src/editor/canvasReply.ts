@@ -1,14 +1,6 @@
 // Replies come from a project's iframe, so validate before resolving a pending
 // query. Invalid messages remain unanswered and use the normal timeout fallback.
-import {
-  boolean,
-  count,
-  dictionary,
-  list,
-  object,
-  optional,
-  text,
-} from '../../shared/core/boundary';
+import { boolean, count, dictionary, list, object, optional, text } from '../../shared/core/boundary';
 import { parseStyleSource } from '../../shared/properties/styleSource';
 import { parsePageImage, parsePageType } from '../../shared/properties/pageMetadata';
 import { parsePageText, type PageText } from '../../shared/properties/pageText';

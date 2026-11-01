@@ -55,8 +55,7 @@ function tokenAt(code: string, position: number): string {
  * Empty is ok: clearing the field is a thing to be allowed to do, and the
  * caller decides what an empty statement means.
  */
-export type StatementCheck =
-  { readonly ok: true } | { readonly ok: false; readonly message: string };
+export type StatementCheck = { readonly ok: true } | { readonly ok: false; readonly message: string };
 
 export function checkStatement(code: unknown): StatementCheck {
   const source = String(code ?? '');

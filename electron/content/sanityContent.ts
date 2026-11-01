@@ -18,7 +18,7 @@ import { assert } from '../../shared/core/assert';
 import { isRank } from './sanityRank';
 import { assetRefs, documentFields } from './sanityFields';
 import type { SanityDocumentSchema, SanityPreview } from './sanitySchema';
-import { previewOf, previewProjection } from './sanityPreview';
+import { mediaProjection, previewOf, previewProjection } from './sanityPreview';
 import {
   CMS_REMOTE_LIMITS,
   REMOTE_TEMPLATE_ID,
@@ -53,8 +53,7 @@ function userType(name: string): boolean {
 }
 
 // Documents Sanity keeps for itself: system types, and ids in the `_.` namespace.
-const USER_DOCUMENTS =
-  '!(_id in path("_.**")) && !(_type match "sanity.*") && !(_type match "system.*")';
+const USER_DOCUMENTS = '!(_id in path("_.**")) && !(_type match "sanity.*") && !(_type match "system.*")';
 
 export async function sanityCollections(target: SanityDataset): Promise<RemoteCollection[]> {
   const types = await sanityQuery(target, `array::unique(*[${USER_DOCUMENTS}]._type)`, {}, 'raw');
@@ -70,9 +69,7 @@ export async function sanityCollections(target: SanityDataset): Promise<RemoteCo
   }
   // One request for every count: {"c0": count(*[_type == $t0 …]), …}.
   const params = Object.fromEntries(names.map((name, index) => [`t${index}`, name]));
-  const counts = names
-    .map((_name, index) => `"c${index}": count(*[_type == $t${index} && ${USER_DOCUMENTS}])`)
-    .join(', ');
+  const counts = names.map((_name, index) => `"c${index}": count(*[_type == $t${index} && ${USER_DOCUMENTS}])`).join(', ');
   const result = await sanityQuery(target, `{${counts}}`, params, 'published');
   return names.map((name, index) => ({
     name,
@@ -101,17 +98,11 @@ export async function sanityDocuments(
   // Ordered where every document carries a rank (the orderable plugin's list);
   // otherwise newest first, as the query returned them.
   const orderable = summaries.length > 0 && summaries.every((entry) => entry.rank !== undefined);
-  const ordered = orderable
-    ? [...summaries].sort((left, right) => ((left.rank ?? '') < (right.rank ?? '') ? -1 : 1))
-    : summaries;
+  const ordered = orderable ? [...summaries].sort((left, right) => ((left.rank ?? '') < (right.rank ?? '') ? -1 : 1)) : summaries;
   return { orderable, documents: ordered.map(({ rank: _rank, ...summary }) => summary) };
 }
 
-export async function sanityDocument(
-  target: SanityDataset,
-  id: string,
-  schemaOf: (type: string) => SanityDocumentSchema | undefined,
-): Promise<RemoteDocument> {
+export async function sanityDocument(target: SanityDataset, id: string, schemaOf: (type: string) => SanityDocumentSchema | undefined): Promise<RemoteDocument> {
   const result = await sanityQuery(target, '*[_id in [$id, "drafts." + $id]]', { id }, 'raw');
   if (!Array.isArray(result)) {
     throw new Error('Sanity returned an unexpected document.');
@@ -127,7 +118,8 @@ export async function sanityDocument(
   if (typeof type !== 'string') {
     throw new Error('This document has no type.');
   }
-  const fields = documentFields(shown, schemaOf(type));
+  const schema = schemaOf(type);
+  const fields = documentFields(shown, schema);
   const refs = fields.flatMap((field) => assetRefs(field.value));
   return {
     id,
@@ -138,15 +130,14 @@ export async function sanityDocument(
     editedAt: draft === undefined ? undefined : stringAt(draft, '_updatedAt'),
     publishedAt: published === undefined ? undefined : stringAt(published, '_updatedAt'),
     editURL: undefined,
+    ...fieldGroupsOf(schema),
   };
 }
 
 /** A type's fields with no values: what a new document is edited as before it is created. */
-export function sanityTemplate(
-  type: string,
-  schemaOf: (type: string) => SanityDocumentSchema | undefined,
-): RemoteDocument {
-  const fields = documentFields({ _type: type }, schemaOf(type));
+export function sanityTemplate(type: string, schemaOf: (type: string) => SanityDocumentSchema | undefined): RemoteDocument {
+  const schema = schemaOf(type);
+  const fields = documentFields({ _type: type }, schema);
   assert(
     fields.every((field) => field.value === undefined),
     'A template holds no values',
@@ -160,18 +151,19 @@ export function sanityTemplate(
     editedAt: undefined,
     publishedAt: undefined,
     editURL: undefined,
+    ...fieldGroupsOf(schema),
   };
+}
+
+// The tabs a document's schema splits its fields into, when it names any.
+function fieldGroupsOf(schema: SanityDocumentSchema | undefined): Pick<RemoteDocument, 'fieldGroups'> {
+  return schema?.fieldGroups === undefined ? {} : { fieldGroups: schema.fieldGroups };
 }
 
 // The stored files behind asset references: their addresses and file names.
 async function sanityAssets(target: SanityDataset, ids: readonly string[]): Promise<RemoteAsset[]> {
   const bounded = ids.slice(0, CMS_REMOTE_LIMITS.assetsMax);
-  const rows = await sanityQuery(
-    target,
-    '*[_id in $ids]{_id, url, originalFilename}',
-    { ids: bounded },
-    'raw',
-  );
+  const rows = await sanityQuery(target, '*[_id in $ids]{_id, url, originalFilename}', { ids: bounded }, 'raw');
   const out: RemoteAsset[] = [];
   for (const row of Array.isArray(rows) ? rows : []) {
     const id = idOf(row);
@@ -188,8 +180,7 @@ async function sanityAssets(target: SanityDataset, ids: readonly string[]): Prom
 export async function sanityWriteDraft(target: SanityDataset, write: RemoteWrite): Promise<void> {
   assert(!write.id.startsWith('drafts.'), 'A write names the published id');
   assert(!write.field.startsWith('_'), 'A write never touches system keys');
-  const patch =
-    write.value === undefined ? { unset: [write.field] } : { set: { [write.field]: write.value } };
+  const patch = write.value === undefined ? { unset: [write.field] } : { set: { [write.field]: write.value } };
   const action = {
     actionType: 'sanity.action.document.edit',
     publishedId: write.id,
@@ -203,6 +194,7 @@ export async function sanityWriteDraft(target: SanityDataset, write: RemoteWrite
 export async function sanityReferenceOptions(
   target: SanityDataset,
   types: readonly string[],
+  mediaOf: (type: string) => string | undefined = () => undefined,
 ): Promise<RemoteReferenceOption[]> {
   if (types.length === 0) {
     return [];
@@ -210,7 +202,7 @@ export async function sanityReferenceOptions(
   const rows = await sanityQuery(
     target,
     `*[_type in $types && ${USER_DOCUMENTS}] | order(_updatedAt desc) [0...$limit]` +
-      `{_id, _type, "title": coalesce(title, name, heading, label, slug.current, _id)}`,
+      `{_id, _type, "title": coalesce(title, name, heading, label, slug.current, _id)${mediaProjection(types, mediaOf)}}`,
     { types, limit: CMS_REMOTE_LIMITS.documentsMax },
     'published',
   );
@@ -220,7 +212,9 @@ export async function sanityReferenceOptions(
     if (id === undefined || type === undefined || !/^[\w][\w.-]{0,127}$/.test(id)) {
       return [];
     }
-    return [{ id, type, title: (stringAt(row, 'title') ?? id).slice(0, 200) }];
+    const media = stringAt(row, 'media');
+    const imageURL = media !== undefined && media.startsWith('https://') ? media : undefined;
+    return [{ id, type, title: (stringAt(row, 'title') ?? id).slice(0, 200), imageURL }];
   });
   return options.sort((left, right) => left.title.localeCompare(right.title));
 }
@@ -247,9 +241,7 @@ function cellsOf(row: unknown, columns: readonly string[]): Record<string, Remot
   const stored: unknown = typeof row === 'object' && row !== null ? Reflect.get(row, 'cells') : {};
   const out: Record<string, RemoteCell> = {};
   for (const name of columns) {
-    const cell = remoteCell(
-      typeof stored === 'object' && stored !== null ? Reflect.get(stored, name) : undefined,
-    );
+    const cell = remoteCell(typeof stored === 'object' && stored !== null ? Reflect.get(stored, name) : undefined);
     if (cell !== undefined) {
       out[name] = cell;
     }
@@ -266,10 +258,7 @@ function summarise(rows: readonly unknown[], columns: readonly string[]): Ranked
     }
     const id = raw.startsWith('drafts.') ? raw.slice('drafts.'.length) : raw;
     const entry = byId.get(id) ?? {};
-    byId.set(
-      id,
-      raw.startsWith('drafts.') ? { ...entry, draft: row } : { ...entry, published: row },
-    );
+    byId.set(id, raw.startsWith('drafts.') ? { ...entry, draft: row } : { ...entry, published: row });
   }
   const out: RankedSummary[] = [];
   for (const [id, entry] of byId) {
@@ -342,11 +331,7 @@ export async function sanityQuery(
   return isPlainObject(body) ? Reflect.get(body, 'result') : undefined;
 }
 
-export async function sanityRequest(
-  target: SanityDataset,
-  path: string,
-  body: object,
-): Promise<unknown> {
+export async function sanityRequest(target: SanityDataset, path: string, body: object): Promise<unknown> {
   assert(/^[a-z0-9]{1,64}$/.test(target.projectId), 'A Sanity project id is lower-case');
   const url = `https://${target.projectId}.api.sanity.io/${SANITY_API_VERSION}/data/${path}`;
   const response = await fetch(url, {
@@ -360,11 +345,7 @@ export async function sanityRequest(
   const parsed: unknown = text ? JSON.parse(text) : undefined;
   if (!response.ok) {
     const message: unknown = isPlainObject(parsed) ? Reflect.get(parsed, 'message') : undefined;
-    throw new Error(
-      typeof message === 'string' && message
-        ? message.slice(0, 300)
-        : `Sanity answered ${response.status}.`,
-    );
+    throw new Error(typeof message === 'string' && message ? message.slice(0, 300) : `Sanity answered ${response.status}.`);
   }
   return parsed;
 }

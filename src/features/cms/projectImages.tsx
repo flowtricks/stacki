@@ -13,17 +13,11 @@ type AssetFile = Extract<WireAssetEntry, { readonly isDir: false }>;
 const ProjectImages = createContext<ReadonlyMap<string, AssetFile>>(new Map());
 
 /** Makes the project's images available below, for content collections only. */
-export function ProjectImagesScope(props: {
-  readonly projectPath: string;
-  readonly source: CmsSource;
-  readonly children: ReactNode;
-}) {
+export function ProjectImagesScope(props: { readonly projectPath: string; readonly source: CmsSource; readonly children: ReactNode }) {
   if (!isAstroContent(props.source)) {
     return props.children;
   }
-  return (
-    <ProjectImagesProvider projectPath={props.projectPath}>{props.children}</ProjectImagesProvider>
-  );
+  return <ProjectImagesProvider projectPath={props.projectPath}>{props.children}</ProjectImagesProvider>;
 }
 
 /** The asset a project-relative path names, when it is one of the project's files. */
@@ -47,10 +41,7 @@ export function hasOptionImage(options: readonly { readonly imageFile?: string }
  * A choice's picture in a dropdown: the record's image, or, among choices that
  * have pictures, a grey placeholder that keeps the names lined up.
  */
-export function OptionImage(props: {
-  readonly file: string | undefined;
-  readonly placeholder: boolean;
-}) {
+export function OptionImage(props: { readonly file: string | undefined; readonly placeholder: boolean }) {
   const asset = useProjectImage(props.file);
   if (asset !== undefined) {
     return <AssetThumb file={asset} className="option-image" />;
@@ -65,15 +56,9 @@ export function OptionImage(props: {
   return undefined;
 }
 
-function ProjectImagesProvider(props: {
-  readonly projectPath: string;
-  readonly children: ReactNode;
-}) {
+function ProjectImagesProvider(props: { readonly projectPath: string; readonly children: ReactNode }) {
   const entries = useAssetEntries(props.projectPath);
-  const images = useMemo(
-    () => new Map(entries.filter(isAssetFile).map((entry) => [entry.rel, entry])),
-    [entries],
-  );
+  const images = useMemo(() => new Map(entries.filter(isAssetFile).map((entry) => [entry.rel, entry])), [entries]);
   return <ProjectImages.Provider value={images}>{props.children}</ProjectImages.Provider>;
 }
 

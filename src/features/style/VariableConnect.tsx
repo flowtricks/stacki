@@ -62,10 +62,7 @@ type VariableConnectProps = {
  * second opinion on a question already answered — and when the first answer
  * was "replace", it turned a picked variable into a wiped value.
  */
-export function connectCustomField(
-  field: ReactElement,
-  onDraft: (value: string) => void,
-): ReactNode {
+export function connectCustomField(field: ReactElement, onDraft: (value: string) => void): ReactNode {
   return (
     <VariableConnect className="is-multiline" code onDraft={onDraft} onPick={onDraft}>
       {field}
@@ -232,13 +229,7 @@ function ConnectTokenField({
         {...(stepMin === undefined ? {} : { stepMin })}
       />
       {hintValue ? (
-        <VariableHint
-          value={hintValue}
-          chips={chips}
-          className={field.childClass}
-          disabled={disabled ?? false}
-          onPick={() => setOpen(true)}
-        />
+        <VariableHint value={hintValue} chips={chips} className={field.childClass} disabled={disabled ?? false} onPick={() => setOpen(true)} />
       ) : undefined}
     </>
   );
@@ -280,9 +271,7 @@ function ConnectPopups({
           vars={applied.vars}
           loading={applied.loading}
           {...(prop === undefined ? {} : { prop })}
-          {...(!applied.isVar || applied.binding === undefined
-            ? {}
-            : { selectedBinding: applied.binding })}
+          {...(!applied.isVar || applied.binding === undefined ? {} : { selectedBinding: applied.binding })}
           onPick={onPick}
           onClose={onClosePicker}
         />
@@ -315,26 +304,13 @@ function ConnectPopups({
 // like calc(var(…) + 10px) — or when a bare value equals a project variable's NAME (a
 // native binding reads back as its "group/leaf" name). Load the shared list only when
 // the value could carry a variable (so numbers, lengths, colors don't trigger it).
-function useAppliedVariable({
-  value,
-  open,
-  prop,
-}: {
-  value: string;
-  open: boolean;
-  prop: string | undefined;
-}) {
+function useAppliedVariable({ value, open, prop }: { value: string; open: boolean; prop: string | undefined }) {
   const raw = value.replace(/!\s*important\s*$/i, '').trim();
   const embedVar = raw.match(/var\(\s*--[A-Za-z0-9_-]+[^)]*\)/i)?.[0];
   // Native size variables may read back as `group/name (resolved value)`. Match using
   // the name portion while keeping the complete raw text as the replaceable token.
   const nativeNames = nativeVariableNames(raw);
-  const nameLike =
-    !embedVar &&
-    nativeNames.some(
-      (name) =>
-        name !== '' && /[A-Za-z]/.test(name) && !name.includes('(') && !/^[#.\d]/.test(name),
-    );
+  const nameLike = !embedVar && nativeNames.some((name) => name !== '' && /[A-Za-z]/.test(name) && !name.includes('(') && !/^[#.\d]/.test(name));
   const { vars, loading } = useSharedVars({ active: open || !!embedVar || nameLike });
   const current = resolveVariable({ vars, embedVar, nameLike, nativeNames, prop });
   const isVar = !!embedVar || !!current;
@@ -366,16 +342,12 @@ function resolveVariable({
   if (!nameLike) {
     return undefined;
   }
-  const fullPath = (variable: ProjectVariable) =>
-    variable.group ? `${variable.group}/${variable.name}` : variable.name;
+  const fullPath = (variable: ProjectVariable) => (variable.group ? `${variable.group}/${variable.name}` : variable.name);
   return vars.find((variable) => {
     if (!varTypeAllowed(prop, variable.type)) {
       return false;
     }
-    const catalogNames = [
-      ...nativeVariableNames(variable.name),
-      ...nativeVariableNames(fullPath(variable)),
-    ];
+    const catalogNames = [...nativeVariableNames(variable.name), ...nativeVariableNames(fullPath(variable))];
     return nativeNames.some((name) => catalogNames.includes(name));
   });
 }
@@ -466,12 +438,7 @@ type WrappedField = ReturnType<typeof useWrappedField>;
 // (Pressing the dot used to blur the field, which committed the draft and
 // hid this by accident. Keeping focus so the caret survives took that
 // accident away, which is what made the wipe show up every time.)
-function fieldLiveValue(
-  editorRef: RefObject<HTMLDivElement>,
-  inputRef: MutableRefObject<FieldRefValue>,
-  chipText: string,
-  value: string,
-): string {
+function fieldLiveValue(editorRef: RefObject<HTMLDivElement>, inputRef: MutableRefObject<FieldRefValue>, chipText: string, value: string): string {
   const editor = editorRef.current;
   if (editor) {
     return serializeTokens(editor, chipText, chipText);
@@ -544,22 +511,10 @@ function tokenFieldHandlers({
 // stayed dark unless it also had focus. Hand enter and leave over the same way
 // focus and blur are handed over, and only while the editor is the thing on top;
 // otherwise the input hears them itself.
-function connectWrapperHandlers({
-  showToken,
-  field,
-  readCaret,
-}: {
-  showToken: boolean;
-  field: WrappedField;
-  readCaret: () => void;
-}) {
+function connectWrapperHandlers({ showToken, field, readCaret }: { showToken: boolean; field: WrappedField; readCaret: () => void }) {
   return {
-    onMouseEnter: showToken
-      ? (event: React.MouseEvent) => field.childHandlersRef.current?.onMouseEnter?.(event)
-      : undefined,
-    onMouseLeave: showToken
-      ? (event: React.MouseEvent) => field.childHandlersRef.current?.onMouseLeave?.(event)
-      : undefined,
+    onMouseEnter: showToken ? (event: React.MouseEvent) => field.childHandlersRef.current?.onMouseEnter?.(event) : undefined,
+    onMouseLeave: showToken ? (event: React.MouseEvent) => field.childHandlersRef.current?.onMouseLeave?.(event) : undefined,
     onKeyUp: readCaret,
     onMouseUp: readCaret,
     onInput: readCaret,
@@ -624,10 +579,7 @@ function bigEditorTriggers({
       const target = event.target;
       if (
         target instanceof Element &&
-        target.closest(
-          '.embed-editor_varconnect-dot, .embed-editor_varconnect-hint, ' +
-            '.u-color-swatch, .embed-editor_varpicker, .var-custom',
-        )
+        target.closest('.embed-editor_varconnect-dot, .embed-editor_varconnect-hint, ' + '.u-color-swatch, .embed-editor_varpicker, .var-custom')
       ) {
         return;
       }
@@ -701,17 +653,13 @@ function ConnectDot({
 // value it serializes to spells that chip out as `var(--x)`. An offset from
 // one measured against the other lands in the wrong place, so the marks
 // before the caret are expanded to the length they serialize to.
-function useCaretTracker(
-  editorRef: RefObject<HTMLDivElement>,
-  inputRef: MutableRefObject<FieldRefValue>,
-) {
+function useCaretTracker(editorRef: RefObject<HTMLDivElement>, inputRef: MutableRefObject<FieldRefValue>) {
   const caretRef = useRef<number | undefined>(undefined);
   const readCaret = () => {
     const editor = editorRef.current;
     if (!editor) {
       const input = inputRef.current;
-      caretRef.current =
-        typeof input?.selectionStart === 'number' ? input.selectionStart : undefined;
+      caretRef.current = typeof input?.selectionStart === 'number' ? input.selectionStart : undefined;
       return;
     }
     const at = caretOffset(editor);
@@ -734,9 +682,7 @@ function useCaretTracker(
 // several, and they need not be the same variable — so the lengths are read off
 // the chips themselves rather than assumed equal.
 function serializedOffset(editor: HTMLElement, at: number): number {
-  const bindings = Array.from(editor.querySelectorAll<HTMLElement>('[data-chip]')).map(
-    (node) => node.dataset['binding'] ?? '',
-  );
+  const bindings = Array.from(editor.querySelectorAll<HTMLElement>('[data-chip]')).map((node) => node.dataset['binding'] ?? '');
   let length = 0;
   let chip = 0;
   for (const ch of fieldText(editor).slice(0, at)) {

@@ -309,7 +309,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 2px 0 8px 16px;
+  /* Lined up with the label above it and the panel's other content. */
+  padding: 2px 0 8px;
 }
 .loop-lineage-title {
   color: var(--text-faint);
@@ -454,6 +455,7 @@
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   min-height: 0;
 }
 .loop-settings-picker-row {
@@ -556,7 +558,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 240px;
+  /* As wide as the pop-up, which is sized to the field it opens from. */
+  width: 100%;
 }
 .loop-bind-title {
   color: var(--text);
@@ -619,11 +622,13 @@
   background: var(--bg-hover);
 }
 .loop-bind-button.primary {
-  background: #9274ff;
+  /* The app's action colour, as every Create and Save is; purple is for links to data. */
+  background: var(--accent);
   color: #fff;
 }
 .loop-bind-button.primary:hover:not(:disabled) {
-  background: #a48aff;
+  background: var(--accent);
+  filter: brightness(1.1);
 }
 .loop-bind-button:disabled {
   opacity: 0.45;
@@ -737,9 +742,6 @@
 }
 
 /* Property settings: name and tooltip, then the default, editable. */
-.loop-property-settings {
-  width: 270px;
-}
 .loop-property-head {
   display: flex;
   align-items: center;
@@ -749,7 +751,6 @@
   align-items: start;
 }
 .loop-bind-name textarea {
-  min-height: 56px;
   padding: 6px 8px;
   border: none;
   border-radius: 6px;
@@ -757,7 +758,6 @@
   color: var(--text);
   font: inherit;
   font-size: 12px;
-  resize: vertical;
 }
 .loop-property-default {
   display: flex;
@@ -771,4 +771,75 @@
 .loop-property-default .loop-settings-section,
 .loop-property-default .loop-settings-editor-row {
   padding: 0;
+}
+
+/* The Source picker: None and Custom list above the data tree, then the
+   tree, as tall as the pop-up allows. */
+.loop-source-trigger {
+  width: 100%;
+  min-width: 0;
+}
+.loop-source-picker {
+  display: flex;
+  flex-direction: column;
+  margin: -10px;
+  max-height: inherit;
+}
+.loop-source-picker .data-picker {
+  min-height: 0;
+  max-height: 380px;
+}
+.loop-source-extras {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 4px 0;
+}
+.loop-source-extras .dp-row {
+  width: 100%;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  justify-content: flex-start;
+}
+.loop-source-extras .dp-row:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.loop-source-extras .dp-preview {
+  margin-left: auto;
+  color: var(--text-faint);
+}
+
+/* A sort row being dragged, and where it will land. */
+.loop-settings-sortable {
+  cursor: grab;
+}
+.loop-settings-sortable.drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.loop-settings-sortable.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.loop-settings-sortable.is-dragging {
+  opacity: 0.4;
+}
+
+/* A sortable row's grip: on its left edge while the row is pointed at, in
+   the space before its label, so the row's text never moves. */
+.loop-settings-item-grip {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  display: flex;
+  width: 10px;
+  justify-content: center;
+  color: var(--text-faint);
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+}
+.loop-settings-item:hover > .loop-settings-item-grip {
+  opacity: 1;
 }

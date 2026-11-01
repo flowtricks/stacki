@@ -1,13 +1,7 @@
 // What is in scope in a page's frontmatter: marked queries, the names a
 // binding can use, and the chips a code field draws (dataSuggest.ts).
 
-import {
-  parseDeclarations,
-  type ImportLike,
-  parseDestructures,
-  looksCallable,
-  collectionCallIn,
-} from './dataSource';
+import { parseDeclarations, type ImportLike, parseDestructures, looksCallable, collectionCallIn } from './dataSource';
 
 // Numbered names tried for a collection's entries before settling on `…X`: a
 // page reads a handful of collections, never dozens under one name.
@@ -27,10 +21,7 @@ export interface MarkedQuery {
 /** Those queries, as {name, start, end} spans in the frontmatter text. */
 export function markedQueries(frontmatter: string | undefined): MarkedQuery[] {
   const out: MarkedQuery[] = [];
-  const re = new RegExp(
-    `^[ \\t]*(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=[^\\n]*?//\\s*${QUERY_MARK}[ \\t]*$`,
-    'gm',
-  );
+  const re = new RegExp(`^[ \\t]*(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=[^\\n]*?//\\s*${QUERY_MARK}[ \\t]*$`, 'gm');
   let match;
   while ((match = re.exec(frontmatter ?? '')) !== null) {
     const name = match[1];
@@ -84,10 +75,7 @@ export function queriesInScope(frontmatter: string | undefined): Map<string, str
 }
 
 /** Every name the frontmatter already binds — what an auto-named query must avoid. */
-export function namesInScope(
-  frontmatter: string | undefined,
-  imports: readonly ImportLike[] | undefined,
-): Set<string> {
+export function namesInScope(frontmatter: string | undefined, imports: readonly ImportLike[] | undefined): Set<string> {
   const taken = new Set<string>();
   for (const [name] of parseDeclarations(frontmatter ?? '')) {
     taken.add(name);
@@ -155,10 +143,10 @@ export function isTypeSyntaxIdentifier(source: string, from: number, root: strin
  *
  * Strings are skipped: `"content"` is a word, not the prop of that name.
  */
-export function scopeChips(
-  text: unknown,
-  names: Iterable<string> | Set<string> | undefined,
-): ScopeChip[] {
+// One more step of a value: `.name`, `[0]`, or `["name"]`.
+const CHIP_STEP = /^(?:\.[A-Za-z_$][\w$]*|\[\d+\]|\["(?:[^"\\]|\\.)*"\])/;
+
+export function scopeChips(text: unknown, names: Iterable<string> | Set<string> | undefined): ScopeChip[] {
   const source = String(text ?? '');
   const inScope = names instanceof Set ? names : new Set(names ?? []);
   if (!inScope.size) {
@@ -187,11 +175,9 @@ export function scopeChips(
     while (j < source.length && /[\w$]/.test(source.charAt(j))) {
       j += 1;
     }
-    while (source.charAt(j) === '.' && /[A-Za-z_$]/.test(source.charAt(j + 1))) {
-      j += 1;
-      while (j < source.length && /[\w$]/.test(source.charAt(j))) {
-        j += 1;
-      }
+    // `["campus-name"]` and `[0]` are steps of the same value too.
+    for (let step = CHIP_STEP.exec(source.slice(j)); step !== null; step = CHIP_STEP.exec(source.slice(j))) {
+      j += step[0].length;
     }
     let path = source.slice(i, j);
     let end = j;
@@ -209,7 +195,7 @@ export function scopeChips(
     // Not a property of something else — the `data` in `post.data` is part of
     // that chip, not one of its own.
     const before = source.slice(0, i).trimEnd();
-    const root = path.split('.')[0] ?? '';
+    const root = path.split(/[.[]/)[0] ?? '';
     if (!before.endsWith('.') && inScope.has(root) && !isTypeSyntaxIdentifier(source, i, root)) {
       out.push({ from: i, to: end, path });
     }
@@ -226,9 +212,7 @@ export function scopeChips(
  */
 export function autoQueryName(collection: string, taken: ReadonlySet<string> = new Set()): string {
   const camel = String(collection)
-    .replace(/[^A-Za-z0-9]+(.)?/g, (_whole: string, letter?: string) =>
-      letter ? letter.toUpperCase() : '',
-    )
+    .replace(/[^A-Za-z0-9]+(.)?/g, (_whole: string, letter?: string) => (letter ? letter.toUpperCase() : ''))
     .replace(/^[0-9]+/, '');
   const base = `${camel || 'collection'}Entries`;
   if (!taken.has(base)) {
@@ -261,16 +245,11 @@ const IMPORTED_CALL = /^await\s+([A-Za-z_$][\w$]*)\s*\(\s*\)\s*;?$/;
  * The values this file computes by calling an import — what the app asks the
  * dev server to sample, since only it can run the project's code.
  */
-export function importedCallsInScope(
-  frontmatter: string | undefined,
-  imports: readonly ImportLike[],
-): ImportedCall[] {
+export function importedCallsInScope(frontmatter: string | undefined, imports: readonly ImportLike[]): ImportedCall[] {
   const calls: ImportedCall[] = [];
   for (const [name, value] of parseDeclarations(frontmatter ?? '')) {
     const exportName = IMPORTED_CALL.exec(value.trim())?.[1];
-    const spec = imports.find(
-      (entry) => entry.name !== undefined && entry.name === exportName,
-    )?.path;
+    const spec = imports.find((entry) => entry.name !== undefined && entry.name === exportName)?.path;
     if (exportName !== undefined && spec !== undefined) {
       calls.push({ name, exportName, spec });
     }

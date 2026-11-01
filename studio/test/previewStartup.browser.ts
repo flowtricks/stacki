@@ -9,8 +9,7 @@ import { startStyleFixture } from './stylePanelFixture';
 
 const fixture = await startStyleFixture({ page: '<main><h1>Preview recovered</h1></main>' });
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 try {
@@ -36,9 +35,7 @@ try {
   });
   await page.goto(fixture.url, { waitUntil: 'domcontentloaded' });
   const preview = page.frameLocator('iframe[title="Site preview"]');
-  await preview
-    .getByText('Preview sign-in expired', { exact: true })
-    .waitFor({ state: 'attached' });
+  await preview.getByText('Preview sign-in expired', { exact: true }).waitFor({ state: 'attached' });
   assert.equal(
     await page.locator('.preview-frame-wrap').getAttribute('data-preview-loading'),
     'true',
@@ -52,9 +49,7 @@ try {
   await page.getByRole('button', { name: 'Canvas — all breakpoints — 4', exact: true }).click();
   await page.locator('.preview-frame-wrap[data-preview-loading="false"]').waitFor();
   assert.equal(await page.locator('.canvas-view iframe').count(), 3);
-  console.log(
-    'Preview errors stay recoverable; retry renews entry; all-breakpoint readiness works.',
-  );
+  console.log('Preview errors stay recoverable; retry renews entry; all-breakpoint readiness works.');
 } finally {
   await browser.close();
   await fixture.stop();

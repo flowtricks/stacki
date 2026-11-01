@@ -62,13 +62,13 @@ it.
 `eslint.config.mjs` is the source of truth; a copy here would drift from it.
 It holds, at minimum: `no-explicit-any`, the `no-unsafe-*` family, a ban on
 type-assertion syntax outside validated constructors, `prefer-readonly`,
-`switch-exhaustiveness-check`, `curly: all`, and `max-lines-per-function: 70`.
+`switch-exhaustiveness-check`, and `curly: all`.
 The rules below that stock ESLint cannot express live in the local plugin,
 `scripts/eslintPlugin/`.
 
-Formatting: Prettier with `printWidth: 100`. **100 columns is a hard limit,
-without exception** — nothing may hide behind a horizontal scrollbar. Use the
-full width; never go beyond.
+Formatting: Prettier with `printWidth: 160`. Prettier wraps what it can; a line it
+cannot wrap (a long string, URL or comment) may run past 160 columns. No check
+holds line width, function length or file length.
 
 ## Enforcement
 
@@ -350,11 +350,10 @@ fast, near their cause.
 
 ### 11. Function shape and control flow
 
-There is a sharp discontinuity between a function that fits on a screen and one
-you must scroll through. Art is born of constraints.
+A function that fits on a screen is easier to read than one you must scroll
+through, but length is a judgement, not a rule: no check counts lines.
 
-- **Hard limit: 70 lines per function** (enforced by lint). When splitting,
-  don't chop arbitrarily — divide by responsibility:
+- **When a function grows long, split it by responsibility**, not arbitrarily:
   - **Centralize control flow.** Push `if`s up and `for`s down: the parent
     function keeps the `switch`/`if` branching and owns the state; helpers
     contain non-branchy logic and stay pure. All control flow is handled by one
@@ -573,7 +572,7 @@ ESLint, production builds, contract tests, and the complete regression suite.
 - [ ] Invariants are asserted: preconditions, postconditions, pairs on both
       sides of storage; ~2 assertions per function in core logic
 - [ ] Every loop, queue, retry, and collection has a stated upper bound
-- [ ] No function exceeds 70 lines; control flow is centralized, helpers pure
+- [ ] Control flow is centralized, helpers pure
 - [ ] Conditions are simple and positive; every `if` has its `else` handled or
       asserted
 - [ ] Names are unabbreviated; units and qualifiers last; one name, one meaning

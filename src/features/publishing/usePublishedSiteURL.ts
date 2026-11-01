@@ -30,15 +30,8 @@ export function usePublishedSiteURL(projectPath: string, config: PublishConfig |
       if (url === undefined) {
         return;
       }
-      const current = await rememberPublishedSite(
-        projectPath,
-        destination,
-        url,
-        () => active,
-      ).catch(() => {
-        reportErrorToast(
-          'Could not save the published site link. Reopen Publish options to retry.',
-        );
+      const current = await rememberPublishedSite(projectPath, destination, url, () => active).catch(() => {
+        reportErrorToast('Could not save the published site link. Reopen Publish options to retry.');
         return false;
       });
       if (active) {
@@ -62,12 +55,7 @@ export function usePublishedSiteURL(projectPath: string, config: PublishConfig |
   return savedURL;
 }
 
-async function rememberPublishedSite(
-  projectPath: string,
-  destination: string,
-  url: string,
-  active: () => boolean,
-): Promise<boolean> {
+async function rememberPublishedSite(projectPath: string, destination: string, url: string, active: () => boolean): Promise<boolean> {
   const file = await readMetadata(projectPath, 'publish');
   if (!active()) {
     return false;
@@ -93,12 +81,7 @@ async function rememberPublishedSite(
   await writeMetadata(projectPath, {
     kind: 'publish',
     base: file.source,
-    source:
-      JSON.stringify(
-        { ...config, publishedSite: { hosting: config.hosting, source: 'discovered', url } },
-        undefined,
-        2,
-      ) + '\n',
+    source: JSON.stringify({ ...config, publishedSite: { hosting: config.hosting, source: 'discovered', url } }, undefined, 2) + '\n',
   });
   return true;
 }

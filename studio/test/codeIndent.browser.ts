@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import { record, string } from '../src/shared/validation';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage();
@@ -48,9 +47,7 @@ try {
   await editor.press('Tab');
   assert.equal(await editor.evaluate((element) => element === document.activeElement), false);
   assert.equal(await readSource(), original, 'Leaving the editor must not alter the source');
-  console.log(
-    'Code Tab/Shift+Tab, multiline indent, undo/redo, saved source and focus escape passed.',
-  );
+  console.log('Code Tab/Shift+Tab, multiline indent, undo/redo, saved source and focus escape passed.');
 } finally {
   if (original !== undefined) {
     const base = await readSource();
@@ -75,9 +72,7 @@ async function waitSource(target: Page, expected: string) {
     async ({ endpoint, expected }) => {
       const response = await fetch(endpoint);
       const data: unknown = await response.json();
-      return (
-        typeof data === 'object' && data !== null && 'source' in data && data.source === expected
-      );
+      return typeof data === 'object' && data !== null && 'source' in data && data.source === expected;
     },
     { endpoint, expected },
   );

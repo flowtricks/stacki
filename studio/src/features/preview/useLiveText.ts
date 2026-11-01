@@ -6,12 +6,7 @@ import type { usePreview } from './usePreview';
 import { hasOnlyLiteralTextChanges, type TextSnapshot } from './liveTextChanges';
 // The server still owns rendering. Literal text can reach the existing text
 // region immediately while Astro compiles the authoritative page in parallel.
-export function useLiveText(
-  file: string,
-  source: string,
-  nodes: readonly ParserNode[],
-  preview: ReturnType<typeof usePreview>,
-) {
+export function useLiveText(file: string, source: string, nodes: readonly ParserNode[], preview: ReturnType<typeof usePreview>) {
   const previous = useRef<TextSnapshot>({ source: '', nodes: [] });
   const previousFile = useRef(file);
   const send = useRef(preview.send);
@@ -51,8 +46,6 @@ export function useLiveText(
 }
 
 function soleTextParent(nodes: readonly ParserNode[], id: string, file: string) {
-  const parent = nodes.find(
-    (parent) => parent.children?.length === 1 && parent.children[0]?.id === id,
-  );
+  const parent = nodes.find((parent) => parent.children?.length === 1 && parent.children[0]?.id === id);
   return parent?.id ? (isCanvasPage(file) ? '' : file + '|') + pathFor(parent.id) : '';
 }

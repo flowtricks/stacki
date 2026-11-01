@@ -98,13 +98,9 @@ test('a paste keeps structure and safe links, and nothing that styles or acts', 
   ].join('');
   assert.equal(
     rich.cleanPastedHTML(pasted, document),
-    '<h1>Title</h1><p><strong>Bold</strong> and <em>it</em></p><ul><li>One</li></ul>' +
-      '<a href="https://example.com">site</a>bad<h6>Small</h6>',
+    '<h1>Title</h1><p><strong>Bold</strong> and <em>it</em></p><ul><li>One</li></ul>' + '<a href="https://example.com">site</a>bad<h6>Small</h6>',
   );
-  assert.throws(
-    () => rich.cleanPastedHTML('x'.repeat(10_000_001), document),
-    /paste limit exceeded/,
-  );
+  assert.throws(() => rich.cleanPastedHTML('x'.repeat(10_000_001), document), /paste limit exceeded/);
 });
 
 test('a typed link is a safe address, an email, or a bare domain', () => {
@@ -119,8 +115,7 @@ test('a typed link is a safe address, an email, or a bare domain', () => {
 
 test('the HTML view puts blocks on their own lines and indents nested ones', () => {
   const html =
-    '<p>One <strong>two</strong></p><ul><li>A<ul><li>B</li></ul></li><li>C</li></ul>' +
-    '<pre>keep\n  this</pre>\n\n<blockquote><p>Q</p></blockquote>';
+    '<p>One <strong>two</strong></p><ul><li>A<ul><li>B</li></ul></li><li>C</li></ul>' + '<pre>keep\n  this</pre>\n\n<blockquote><p>Q</p></blockquote>';
   assert.equal(
     rich.formatHTML(html, document),
     [

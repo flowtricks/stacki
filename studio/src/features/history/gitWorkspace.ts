@@ -9,12 +9,7 @@ import { SerialQueue } from '../../shared/serialQueue';
 import { checkpointGitWorkspace } from './gitWorkspaceCheckpoint';
 import { gitSelectedTree, gitWorkspaceChanges } from './gitWorkspaceChanges';
 import { readGitWorkspace, writeLocalGitWorkspace } from './gitWorkspaceStorage';
-import {
-  gitBranchName,
-  gitRevision,
-  gitWorkspaceBranch,
-  type GitWorkspaceManifest,
-} from './gitWorkspaceContract';
+import { gitBranchName, gitRevision, gitWorkspaceBranch, type GitWorkspaceManifest } from './gitWorkspaceContract';
 import {
   fetchGitWorkspaceHeads,
   gitWorkspaceContext,
@@ -67,14 +62,7 @@ export class GitWorkspace {
     const tree = await snapshotGitWorkspace(git, branch.head);
     const changed = await gitWorkspaceChanges(run, branch.head, tree);
     const remote = manifest.remote.find((reference) => reference.name === manifest.branch);
-    const ahead = Number(
-      await run([
-        'rev-list',
-        '--count',
-        branch.head,
-        ...(remote ? ['^' + remote.head] : manifest.remote.map((entry) => '^' + entry.head)),
-      ]),
-    );
+    const ahead = Number(await run(['rev-list', '--count', branch.head, ...(remote ? ['^' + remote.head] : manifest.remote.map((entry) => '^' + entry.head))]));
     if (!Number.isSafeInteger(ahead) || ahead < 0) {
       throw new Error('Invalid outgoing commit count.');
     }
@@ -94,11 +82,7 @@ export class GitWorkspace {
   }
   async status(state: GitWorkspaceState) {
     const head = gitWorkspaceBranch(state.manifest).head;
-    return gitWorkspaceChanges(
-      gitWorkspaceRun(state.git),
-      head,
-      await snapshotGitWorkspace(state.git, head),
-    );
+    return gitWorkspaceChanges(gitWorkspaceRun(state.git), head, await snapshotGitWorkspace(state.git, head));
   }
   async commit(state: GitWorkspaceState, message: string, selection?: readonly string[]) {
     const { git, manifest } = state;
@@ -110,19 +94,12 @@ export class GitWorkspace {
     if (!changes.length) {
       throw new Error('There are no changes to commit.');
     }
-    const head = await gitWorkspaceCommit(
-      run,
-      tree,
-      [branch.head],
-      message || 'Update from Stacki',
-    );
+    const head = await gitWorkspaceCommit(run, tree, [branch.head], message || 'Update from Stacki');
     const snapshot = await gitWorkspaceCommit(run, draft, [head], 'Studio working draft');
     await checkpointGitWorkspace(git, manifest, {
       ...manifest,
       draft: snapshot,
-      branches: manifest.branches.map((entry) =>
-        entry.name === branch.name ? { ...entry, head } : entry,
-      ),
+      branches: manifest.branches.map((entry) => (entry.name === branch.name ? { ...entry, head } : entry)),
     });
     return { ok: true as const, files: changes.length };
   }
@@ -133,14 +110,7 @@ export class GitWorkspace {
     if (!reference) {
       return 0;
     }
-    const count = Number(
-      await run([
-        'rev-list',
-        '--count',
-        reference.head,
-        '^' + gitWorkspaceBranch(state.manifest).head,
-      ]),
-    );
+    const count = Number(await run(['rev-list', '--count', reference.head, '^' + gitWorkspaceBranch(state.manifest).head]));
     if (!Number.isSafeInteger(count) || count < 0) {
       throw new Error('Invalid incoming commit count.');
     }
@@ -160,15 +130,7 @@ export class GitWorkspace {
       }
       throw error;
     });
-    await run([
-      'fetch',
-      '--quiet',
-      '--depth=301',
-      '--filter=blob:none',
-      '--no-tags',
-      'origin',
-      head,
-    ]);
+    await run(['fetch', '--quiet', '--depth=301', '--filter=blob:none', '--no-tags', 'origin', head]);
     const manifest: GitWorkspaceManifest = {
       version: 1,
       revision: randomUUID(),

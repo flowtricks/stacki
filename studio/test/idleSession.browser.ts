@@ -5,10 +5,7 @@ import { chromium, type Page, type WebSocket } from 'playwright';
 
 const browser = await chromium.launch({
   executablePath:
-    process.env['CHROME_PATH'] ??
-    (process.platform === 'darwin'
-      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-      : chromium.executablePath()),
+    process.env['CHROME_PATH'] ?? (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -59,9 +56,7 @@ try {
   await page.clock.fastForward('05:20');
   await page.getByRole('button', { name: 'Resume editing' }).waitFor();
   await released(page, sockets);
-  console.log(
-    'Tab switching stays connected; idle saved sessions pause; pending work is protected.',
-  );
+  console.log('Tab switching stays connected; idle saved sessions pause; pending work is protected.');
 } finally {
   release();
   await browser.close();

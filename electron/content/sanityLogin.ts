@@ -20,21 +20,9 @@ import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import { assert } from '../../shared/core/assert';
-import {
-  SANITY_LOGIN_TIMEOUT_MS,
-  type SanityLoginRequest,
-  type SanityLoginState,
-  type SanityProjectChoice,
-} from '../../shared/properties/cmsConnections';
+import { SANITY_LOGIN_TIMEOUT_MS, type SanityLoginRequest, type SanityLoginState, type SanityProjectChoice } from '../../shared/properties/cmsConnections';
 import type { CmsConnectionStore } from './cmsConnectionStore';
-import {
-  SanityRequestError,
-  createSanityEditorKey,
-  sanityLoginURL,
-  sanityLogout,
-  sanityProjects,
-  sanityTokenForSession,
-} from './sanityApi';
+import { SanityRequestError, createSanityEditorKey, sanityLoginURL, sanityLogout, sanityProjects, sanityTokenForSession } from './sanityApi';
 
 const SUCCESS_PAGE = 'https://www.sanity.io/login/success';
 // The .env lines read for a suggestion, and the longest file read for them.
@@ -121,12 +109,8 @@ export class SanityLogin {
   private start(projectRoot: string, id: string): SanityLoginState {
     const session = new Session(id, projectRoot);
     this.session = session;
-    const server = http.createServer((request, response) =>
-      this.callback(session, request, response),
-    );
-    session.listen(server, () =>
-      session.end({ kind: 'failed', message: 'Sanity sign-in timed out.' }),
-    );
+    const server = http.createServer((request, response) => this.callback(session, request, response));
+    session.listen(server, () => session.end({ kind: 'failed', message: 'Sanity sign-in timed out.' }));
     server.on('error', (error) => this.fail(session, error));
     // Bound to localhost, not 127.0.0.1: Sanity accepts any http://localhost:<port> origin.
     server.listen(0, 'localhost', () => {
@@ -240,10 +224,7 @@ else document.getElementById('m').textContent =
   'Sanity did not return a sign-in. Close this tab and try again in Stacki.';
 </script>`;
 
-type Callback =
-  | { readonly kind: 'sid'; readonly sid: string }
-  | { readonly kind: 'without-sid' }
-  | { readonly kind: 'other' };
+type Callback = { readonly kind: 'sid'; readonly sid: string } | { readonly kind: 'without-sid' } | { readonly kind: 'other' };
 
 function callbackOf(requestURL: string | undefined): Callback {
   if (!requestURL || requestURL.length > 8192) {
@@ -292,16 +273,11 @@ function siteSuggestion(projectRoot: string, projects: readonly SanityProjectCho
       values.set(key, value);
     }
   }
-  const pick = (suffix: string) =>
-    [...values].find(
-      ([key]) => /^(PUBLIC_|SANITY_STUDIO_|NEXT_PUBLIC_)?SANITY_/.test(key) && key.endsWith(suffix),
-    )?.[1];
+  const pick = (suffix: string) => [...values].find(([key]) => /^(PUBLIC_|SANITY_STUDIO_|NEXT_PUBLIC_)?SANITY_/.test(key) && key.endsWith(suffix))?.[1];
   const projectId = pick('PROJECT_ID');
   const dataset = pick('DATASET') ?? 'production';
   const project = projects.find((entry) => entry.id === projectId);
-  return project && project.datasets.includes(dataset)
-    ? { projectId: project.id, dataset }
-    : undefined;
+  return project && project.datasets.includes(dataset) ? { projectId: project.id, dataset } : undefined;
 }
 
 function envEntries(file: string): [string, string][] {

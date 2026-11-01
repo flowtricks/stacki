@@ -5,16 +5,13 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { record } from '../src/shared/validation';
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const url = process.env['STUDIO_URL'] ?? 'http://localhost:4365/studio';
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
 const first = await context.newPage();
-const second = await (
-  await browser.newContext({ viewport: { width: 1440, height: 1000 } })
-).newPage();
+const second = await (await browser.newContext({ viewport: { width: 1440, height: 1000 } })).newPage();
 const rel = `data/cms-browser-${Date.now()}.json`;
 const payload = { projectPath: 'studio', rel };
 const errors: string[] = [];
@@ -46,11 +43,7 @@ try {
   const input = field(first, 'Title').locator('input');
   await input.fill('Shared item');
   await field(second, 'Title').locator('input').filter({ visible: true }).waitFor();
-  await second.waitForFunction(() =>
-    [...document.querySelectorAll<HTMLInputElement>('.cms-field input')].some(
-      (input) => input.value === 'Shared item',
-    ),
-  );
+  await second.waitForFunction(() => [...document.querySelectorAll<HTMLInputElement>('.cms-field input')].some((input) => input.value === 'Shared item'));
   const saved = record((await api(first, 'cms:read', payload))['value'])['data'];
   assert.ok(Array.isArray(saved));
   assert.equal(record(saved[0])['title'], 'Shared item');
@@ -69,11 +62,7 @@ try {
   await first.getByPlaceholder('e.g. Subtitle').fill('Summary');
   await first.getByRole('button', { name: 'Add field', exact: true }).last().click();
   await first.locator('.cms-schema-name').filter({ visible: true }).first().waitFor();
-  await first.waitForFunction(() =>
-    [...document.querySelectorAll<HTMLInputElement>('.cms-schema-name')].some(
-      (input) => input.value === 'Summary',
-    ),
-  );
+  await first.waitForFunction(() => [...document.querySelectorAll<HTMLInputElement>('.cms-schema-name')].some((input) => input.value === 'Summary'));
   await mkdir('test-results', { recursive: true });
   await first.screenshot({ path: 'test-results/cms-desktop.png' });
   const phone = await (
@@ -85,17 +74,12 @@ try {
   ).newPage();
   await phone.goto(url);
   await openCollection(phone);
-  assert.equal(
-    await phone.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    true,
-  );
+  assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   const phoneField = await field(phone, 'Title').locator('input').boundingBox();
   assert.ok(phoneField && phoneField.width > 200, 'Phone fields must have usable width');
   await phone.screenshot({ path: 'test-results/cms-mobile.png' });
   assert.deepEqual(errors, []);
-  console.log(
-    'CMS navigation, shared edits, items, schema dialog, search and mobile layout passed.',
-  );
+  console.log('CMS navigation, shared edits, items, schema dialog, search and mobile layout passed.');
 } finally {
   try {
     const usage = await api(first, 'cms:usage', payload);

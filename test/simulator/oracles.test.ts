@@ -24,11 +24,7 @@ import { planByIdentity } from './referencePlanner.ts';
 import { applySplices } from '#dist/shared/engine/splice.js';
 
 const FIXTURES = path.resolve('test/fixtures/editor-core');
-const snapshotFile = (name: string) =>
-  snapshotOf(
-    toFilePath(`/project/${name}`),
-    encodeUtf8(fs.readFileSync(path.join(FIXTURES, name), 'utf8')),
-  );
+const snapshotFile = (name: string) => snapshotOf(toFilePath(`/project/${name}`), encodeUtf8(fs.readFileSync(path.join(FIXTURES, name), 'utf8')));
 
 test('the corpus carries every hard intent class (tracker step 1 corpus gate)', () => {
   const classes = new Set(ORACLE_SCENARIOS.map((scenario) => scenario.intentClass));
@@ -48,10 +44,7 @@ test('the corpus carries every hard intent class (tracker step 1 corpus gate)', 
   assert.deepEqual([...classes].sort(), [...required].sort());
   const multiFile = ORACLE_SCENARIOS.find((scenario) => scenario.intentClass === 'multi-file');
   assert.ok(multiFile !== undefined);
-  assert.ok(
-    new Set(multiFile.steps.map((step) => step.file)).size > 1,
-    'a multi-file gesture spans files',
-  );
+  assert.ok(new Set(multiFile.steps.map((step) => step.file)).size > 1, 'a multi-file gesture spans files');
 });
 
 for (const scenario of ORACLE_SCENARIOS) {
@@ -62,20 +55,14 @@ for (const scenario of ORACLE_SCENARIOS) {
       const splices = oracleSplices(step);
       for (const splice of splices) {
         const found = input.bytes.subarray(splice.range.start, splice.range.end);
-        assert.deepEqual(
-          found,
-          splice.expectedBytes,
-          `${step.file}: witness at ${splice.range.start}`,
-        );
+        assert.deepEqual(found, splice.expectedBytes, `${step.file}: witness at ${splice.range.start}`);
       }
       assert.deepEqual(applySplices(input.bytes, splices), expected.bytes, `${step.file}: result`);
       const projection = expected.projection;
       assert.equal(projection.tag, 'valid', `${step.expectedFile} parses`);
       if (projection.tag === 'valid') {
         for (const post of step.postKinds) {
-          const node: ProjectedNode | undefined = projection.nodes.find(
-            (candidate) => candidate.path.join() === post.path.join(),
-          );
+          const node: ProjectedNode | undefined = projection.nodes.find((candidate) => candidate.path.join() === post.path.join());
           assert.equal(node?.kind, post.kind, `${step.expectedFile} at ${post.path.join('/')}`);
         }
       }
@@ -92,54 +79,45 @@ for (const scenario of ORACLE_SCENARIOS) {
 }
 
 test('a stale oracle intent is refused, never re-targeted (identity mapping only)', () => {
-  const [step] =
-    ORACLE_SCENARIOS.find((scenario) => scenario.intentClass === 'wrong-site')?.steps ?? [];
+  const [step] = ORACLE_SCENARIOS.find((scenario) => scenario.intentClass === 'wrong-site')?.steps ?? [];
   assert.ok(step !== undefined);
   const input = snapshotFile(step.file);
   const intent = oracleIntent(step, input, toIntentId('stale'));
   // A card inserted above moves every byte; step 2 maps or rejects, step 1 rejects.
-  const shifted = snapshotOf(
-    input.path,
-    encodeUtf8(`<Card title="Old" />\n${fs.readFileSync(path.join(FIXTURES, step.file), 'utf8')}`),
-  );
+  const shifted = snapshotOf(input.path, encodeUtf8(`<Card title="Old" />\n${fs.readFileSync(path.join(FIXTURES, step.file), 'utf8')}`));
   assert.deepEqual(planByIdentity(shifted, intent), { ok: false, error: 'anchor-moved' });
 });
 
-test(
-  'duplicate attribute names are ambiguous, and ' + 'a file that does not parse is source-invalid',
-  () => {
-    const page = snapshotFile('conditional-template.astro');
-    assert.equal(page.projection.tag, 'valid');
-    if (page.projection.tag !== 'valid') {
-      return;
-    }
-    const duplicated = page.projection.nodes.find(
-      (node) =>
-        node.capability === 'editable' &&
-        node.attributes.filter((attribute) => attribute.name === 'class').length > 1,
-    );
-    assert.ok(duplicated !== undefined, 'the fixture has an editable node with a duplicated class');
-    const step = {
-      file: 'conditional-template.astro',
-      expectedFile: 'conditional-template.astro',
-      anchor: { path: duplicated.path, kind: duplicated.kind },
-      operation: () => ({
-        tag: 'set-attribute' as const,
-        name: 'class',
-        value: { type: 'string' as const, value: 'c' },
-      }),
-      splices: [],
-      postKinds: [],
-      reference: 'anchor-ambiguous' as const,
-    };
-    const intent = oracleIntent(step, page, toIntentId('dup'));
-    assert.deepEqual(planByIdentity(page, intent), { ok: false, error: 'anchor-ambiguous' });
-    const broken = snapshotFile('malformed.astro');
-    assert.equal(broken.projection.tag, 'parse-error');
-    assert.deepEqual(planByIdentity(broken, { ...intent, file: broken.path }), {
-      ok: false,
-      error: 'source-invalid',
-    });
-    assert.ok(LIMITS.splicesPerIntentMax >= 3, 'the loop rename fits the splice bound');
-  },
-);
+test('duplicate attribute names are ambiguous, and ' + 'a file that does not parse is source-invalid', () => {
+  const page = snapshotFile('conditional-template.astro');
+  assert.equal(page.projection.tag, 'valid');
+  if (page.projection.tag !== 'valid') {
+    return;
+  }
+  const duplicated = page.projection.nodes.find(
+    (node) => node.capability === 'editable' && node.attributes.filter((attribute) => attribute.name === 'class').length > 1,
+  );
+  assert.ok(duplicated !== undefined, 'the fixture has an editable node with a duplicated class');
+  const step = {
+    file: 'conditional-template.astro',
+    expectedFile: 'conditional-template.astro',
+    anchor: { path: duplicated.path, kind: duplicated.kind },
+    operation: () => ({
+      tag: 'set-attribute' as const,
+      name: 'class',
+      value: { type: 'string' as const, value: 'c' },
+    }),
+    splices: [],
+    postKinds: [],
+    reference: 'anchor-ambiguous' as const,
+  };
+  const intent = oracleIntent(step, page, toIntentId('dup'));
+  assert.deepEqual(planByIdentity(page, intent), { ok: false, error: 'anchor-ambiguous' });
+  const broken = snapshotFile('malformed.astro');
+  assert.equal(broken.projection.tag, 'parse-error');
+  assert.deepEqual(planByIdentity(broken, { ...intent, file: broken.path }), {
+    ok: false,
+    error: 'source-invalid',
+  });
+  assert.ok(LIMITS.splicesPerIntentMax >= 3, 'the loop rename fits the splice bound');
+});

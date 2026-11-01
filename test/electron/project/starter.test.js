@@ -98,11 +98,7 @@ console.log('Ready.');
 
   // --- the starter this app ships with ---------------------------------------
   check('Lumos is a starter', !!STARTERS.lumos);
-  check(
-    "started with the framework's own scaffolder",
-    STARTERS.lumos.create === 'lumos@latest',
-    STARTERS.lumos.create,
-  );
+  check("started with the framework's own scaffolder", STARTERS.lumos.create === 'lumos@latest', STARTERS.lumos.create);
 
   // --- a site ----------------------------------------------------------------
   const log = [];
@@ -113,15 +109,8 @@ console.log('Ready.');
     onLog: (text) => log.push(text),
   });
   const directory = path.join(parent, 'my-site');
-  check(
-    'the site lands in the folder it was named for',
-    result.projectPath === directory,
-    result.projectPath,
-  );
-  check(
-    'with the starter in it',
-    fs.existsSync(path.join(directory, 'src', 'pages', 'index.astro')),
-  );
+  check('the site lands in the folder it was named for', result.projectPath === directory, result.projectPath);
+  check('with the starter in it', fs.existsSync(path.join(directory, 'src', 'pages', 'index.astro')));
   check('and its config', fs.existsSync(path.join(directory, 'astro.config.mjs')));
 
   // The command, as the framework documents it.
@@ -130,11 +119,7 @@ console.log('Ready.');
     calls()[0] === 'create lumos@latest my-site --yes -- --no-install',
     calls()[0],
   );
-  check(
-    'the log says what it ran',
-    log.join('').includes('> npm create lumos@latest my-site'),
-    log.join(''),
-  );
+  check('the log says what it ran', log.join('').includes('> npm create lumos@latest my-site'), log.join(''));
   check('and shows what it said', log.join('').includes('Ready.'), log.join(''));
 
   // The package is the site now.
@@ -171,25 +156,15 @@ console.log('Ready.');
     }
   };
   check('a folder that exists is refused', !!(await refuses({ name: 'my-site' })));
-  check(
-    'and says so plainly',
-    /already exists/.test(await refuses({ name: 'my-site' })),
-    await refuses({ name: 'my-site' }),
-  );
+  check('and says so plainly', /already exists/.test(await refuses({ name: 'my-site' })), await refuses({ name: 'my-site' }));
   check('an empty name is refused', /Give the site a name/.test(await refuses({ name: '  ' })));
   check(
     'a name that is not a folder name is refused',
     /letters, numbers/.test(await refuses({ name: 'my site/../etc' })),
     await refuses({ name: 'my site/../etc' }),
   );
-  check(
-    'a starter nobody has heard of is refused',
-    /not a starter/.test(await refuses({ starter: 'nope', name: 'x' })),
-  );
-  check(
-    'and so is a folder that is not there',
-    /Choose where/.test(await refuses({ parentPath: path.join(root, 'nowhere'), name: 'x' })),
-  );
+  check('a starter nobody has heard of is refused', /not a starter/.test(await refuses({ starter: 'nope', name: 'x' })));
+  check('and so is a folder that is not there', /Choose where/.test(await refuses({ parentPath: path.join(root, 'nowhere'), name: 'x' })));
   check('a refused name never reaches the command line', calls().length === 1, calls().join(' | '));
 
   // A scaffolder that fails is a site that was not made, said out loud.
@@ -217,11 +192,7 @@ console.log('Ready.');
     } catch (error) {
       message = error.message;
     }
-    check(
-      'a missing npm is said in terms of what to install',
-      /npm could not be found\. Install Node\.js/.test(message),
-      message,
-    );
+    check('a missing npm is said in terms of what to install', /npm could not be found\. Install Node\.js/.test(message), message);
   }
 
   // A scaffolder that starts a history of its own keeps it: its first commit is
@@ -246,20 +217,13 @@ g('-c', 'user.email=t@t', '-c', 'user.name=T',
       /Initial commit from the scaffolder/.test(git(own.projectPath, ['log', '-1', '--pretty=%s'])),
       git(own.projectPath, ['log', '-1', '--pretty=%s']).trim(),
     );
-    check(
-      'and is still the only one',
-      git(own.projectPath, ['rev-list', '--count', 'HEAD']).trim() === '1',
-    );
+    check('and is still the only one', git(own.projectPath, ['rev-list', '--count', 'HEAD']).trim() === '1');
   }
 
   // A second site from the same starter is a second site, not a conflict.
   const second = await createStarter({ npm, parentPath: parent, name: 'another-site' });
   check('a second site is made alongside the first', fs.existsSync(second.projectPath));
-  check(
-    'with its own name',
-    JSON.parse(fs.readFileSync(path.join(second.projectPath, 'package.json'), 'utf8')).name ===
-      'another-site',
-  );
+  check('with its own name', JSON.parse(fs.readFileSync(path.join(second.projectPath, 'package.json'), 'utf8')).name === 'another-site');
 
   fs.rmSync(root, { recursive: true, force: true });
 

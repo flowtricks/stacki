@@ -56,9 +56,7 @@ test('a quick press commits a page choice', async () => {
   try {
     await act(() => root.render(React.createElement(Harness)));
     await act(() => document.querySelector('.page-switch-btn').click());
-    const row = [...document.querySelectorAll('.page-menu-item')].find((item) =>
-      item.textContent.includes('about'),
-    );
+    const row = [...document.querySelectorAll('.page-menu-item')].find((item) => item.textContent.includes('about'));
     assert.ok(row);
     await act(() => {
       const down = new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0 });

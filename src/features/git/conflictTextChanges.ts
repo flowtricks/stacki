@@ -10,10 +10,7 @@ const DIFF_TEXT_CHARS_MAX = 40_000;
 
 // A presentation diff only. Returning undefined on budget exhaustion keeps the
 // original combined decision instead of guessing at independent editable ranges.
-export function conflictTextChanges(
-  source: string,
-  target: string,
-): readonly ConflictTextChange[] | undefined {
+export function conflictTextChanges(source: string, target: string): readonly ConflictTextChange[] | undefined {
   if (source === target) {
     return [];
   }
@@ -22,11 +19,7 @@ export function conflictTextChanges(
   }
   const left = source.match(/\s+|[\p{L}\p{N}_]+|[^\s]/gu) ?? [];
   const right = target.match(/\s+|[\p{L}\p{N}_]+|[^\s]/gu) ?? [];
-  if (
-    left.length > TOKENS_MAX ||
-    right.length > TOKENS_MAX ||
-    left.length * right.length > DIFF_CELLS_MAX
-  ) {
+  if (left.length > TOKENS_MAX || right.length > TOKENS_MAX || left.length * right.length > DIFF_CELLS_MAX) {
     return undefined;
   }
   const rows = Array.from({ length: left.length + 1 }, () => new Uint32Array(right.length + 1));
@@ -37,18 +30,13 @@ export function conflictTextChanges(
       continue;
     }
     for (let j = right.length - 1; j >= 0; j--) {
-      row[j] =
-        left[i] === right[j] ? (next[j + 1] ?? 0) + 1 : Math.max(next[j] ?? 0, row[j + 1] ?? 0);
+      row[j] = left[i] === right[j] ? (next[j + 1] ?? 0) + 1 : Math.max(next[j] ?? 0, row[j + 1] ?? 0);
     }
   }
   return conflictTextChangesWalk(left, right, rows);
 }
 
-function conflictTextChangesWalk(
-  left: readonly string[],
-  right: readonly string[],
-  rows: readonly Uint32Array[],
-) {
+function conflictTextChangesWalk(left: readonly string[], right: readonly string[], rows: readonly Uint32Array[]) {
   const changes: ConflictTextChange[] = [];
   let i = 0;
   let j = 0;
@@ -68,10 +56,7 @@ function conflictTextChangesWalk(
       j++;
     } else {
       start ??= { from: sourceOffset, targetFrom: targetOffset };
-      if (
-        i < left.length &&
-        (j === right.length || (rows[i + 1]?.[j] ?? 0) >= (rows[i]?.[j + 1] ?? 0))
-      ) {
+      if (i < left.length && (j === right.length || (rows[i + 1]?.[j] ?? 0) >= (rows[i]?.[j + 1] ?? 0))) {
         sourceOffset += left[i]?.length ?? 0;
         i++;
       } else {

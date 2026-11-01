@@ -9,23 +9,11 @@ import SegmentedControl from '../components/SegmentedControl';
 import { type MatchedRule, type RuleModel } from '../model/cascade';
 import { cssTokens } from '../model/cssCode';
 import { buildCssRuleView, type CssRuleRange, type CssRuleView } from '../model/cssRuleView';
-import {
-  selectorsMatch,
-  type ContextInfo,
-  type ContextKey,
-  type MatchedSelector,
-  type ResolvedStyle,
-  type StyleContext,
-} from '../model/resolved';
+import { selectorsMatch, type ContextInfo, type ContextKey, type MatchedSelector, type ResolvedStyle, type StyleContext } from '../model/resolved';
 import type { ElementSnapshot, ParsedRule } from '../model/styleTypes';
 import { type LiveSetProp } from './EditorBasics';
 import { type SourceOption, type SelectorSuggestion } from './LayoutRows';
-import {
-  useHighlightInView,
-  QUERY_MODES,
-  type QuerySuggestion,
-  type QueryComboProps,
-} from './SelectorPicker';
+import { useHighlightInView, QUERY_MODES, type QuerySuggestion, type QueryComboProps } from './SelectorPicker';
 
 export function QueryCombo(props: QueryComboProps) {
   const { draft, setDraft, onSubmit, onCancel, suggestions, ariaLabel } = props;
@@ -36,10 +24,7 @@ export function QueryCombo(props: QueryComboProps) {
   const listRef = useRef<HTMLDivElement>(null);
   useFocusOnMount({ inputRef, selectOnFocus });
 
-  const filtered = useMemo(
-    () => filteredQueries(suggestions, draft, initial),
-    [suggestions, draft, initial],
-  );
+  const filtered = useMemo(() => filteredQueries(suggestions, draft, initial), [suggestions, draft, initial]);
   const showList = open && filtered.length > 0;
   useHighlightInView({ listRef, highlight, showList });
 
@@ -88,13 +73,7 @@ export function QueryCombo(props: QueryComboProps) {
 
 // Focus the field on mount: select the whole value (editing), or park the caret at
 // its end (adding).
-export function useFocusOnMount({
-  inputRef,
-  selectOnFocus,
-}: {
-  inputRef: React.RefObject<HTMLInputElement>;
-  selectOnFocus: boolean;
-}) {
+export function useFocusOnMount({ inputRef, selectOnFocus }: { inputRef: React.RefObject<HTMLInputElement>; selectOnFocus: boolean }) {
   useEffect(() => {
     const input = inputRef.current;
     if (!input) {
@@ -125,15 +104,7 @@ export function QuerySuggestionList({
   submit: (text: string) => void;
 }) {
   return (
-    <Popup
-      mode="popover"
-      portal={false}
-      onClose={onClose}
-      className="embed-editor_selector-suggest"
-      ref={listRef}
-      role="listbox"
-      label="Query suggestions"
-    >
+    <Popup mode="popover" portal={false} onClose={onClose} className="embed-editor_selector-suggest" ref={listRef} role="listbox" label="Query suggestions">
       {filtered.map((suggestion, i) => (
         <button
           key={`${suggestion.kind}:${suggestion.query}`}
@@ -157,15 +128,9 @@ export function QuerySuggestionList({
 // one being renamed, or a suggestion just picked — has nothing left to narrow:
 // matching it against itself leaves a list of one, hiding the very queries you opened
 // the field to switch to. So a complete query shows them all.
-export function filteredQueries(
-  suggestions: QuerySuggestion[],
-  draft: string,
-  initial: string,
-): QuerySuggestion[] {
+export function filteredQueries(suggestions: QuerySuggestion[], draft: string, initial: string): QuerySuggestion[] {
   const query = draft.trim().toLowerCase();
-  const whole =
-    query === initial.trim().toLowerCase() ||
-    suggestions.some((suggestion) => suggestion.query.toLowerCase() === query);
+  const whole = query === initial.trim().toLowerCase() || suggestions.some((suggestion) => suggestion.query.toLowerCase() === query);
   if (!query || query === '@' || whole) {
     return suggestions;
   }
@@ -254,27 +219,13 @@ export function AddQueryForm({
           <button type="button" className="u-button is-ghost is-small" onClick={onCancel}>
             Cancel
           </button>
-          <button
-            type="button"
-            className="u-button is-primary is-small"
-            onClick={() => submit(draft)}
-            disabled={draft.trim() === '' || draft.trim() === '@'}
-          >
+          <button type="button" className="u-button is-primary is-small" onClick={() => submit(draft)} disabled={draft.trim() === '' || draft.trim() === '@'}>
             Add
           </button>
         </div>
       </div>
-      {!canNest ? (
-        <p className="embed-editor_add-query-note">Pick a selector to nest inside it.</p>
-      ) : undefined}
-      <QueryCombo
-        draft={draft}
-        setDraft={setDraft}
-        onSubmit={submit}
-        onCancel={onCancel}
-        suggestions={suggestions}
-        ariaLabel="Query to add"
-      />
+      {!canNest ? <p className="embed-editor_add-query-note">Pick a selector to nest inside it.</p> : undefined}
+      <QueryCombo draft={draft} setDraft={setDraft} onSubmit={submit} onCancel={onCancel} suggestions={suggestions} ariaLabel="Query to add" />
     </div>
   );
 }
@@ -310,22 +261,14 @@ export function EditQueryForm({
   return (
     <div className="embed-editor_add-query is-rename">
       <div className="embed-editor_add-query-controls">
-        <span
-          className="embed-editor_add-query-count"
-          title={`${uses === 1 ? '1 block' : `${uses} blocks`} in ${sourceLabel}`}
-        >
+        <span className="embed-editor_add-query-count" title={`${uses === 1 ? '1 block' : `${uses} blocks`} in ${sourceLabel}`}>
           {uses === 1 ? '1 block' : `${uses} blocks`} in {sourceLabel}
         </span>
         <div className="embed-editor_add-query-actions">
           <button type="button" className="u-button is-ghost is-small" onClick={onCancel}>
             Cancel
           </button>
-          <button
-            type="button"
-            className="u-button is-primary is-small"
-            onClick={() => submit(draft)}
-            disabled={!changed}
-          >
+          <button type="button" className="u-button is-primary is-small" onClick={() => submit(draft)} disabled={!changed}>
             Rename
           </button>
         </div>
@@ -351,18 +294,11 @@ export function cssRuleMatchesSelector(matched: MatchedRule, selector: string): 
   return matched.matchedSelectors.some((entry) => selectorsMatch(entry.text, selector));
 }
 
-export function cssRuleMatchesVisibleSelector(
-  matched: MatchedRule,
-  visibleSelectors: readonly string[],
-): boolean {
+export function cssRuleMatchesVisibleSelector(matched: MatchedRule, visibleSelectors: readonly string[]): boolean {
   return visibleSelectors.some((selector) => cssRuleMatchesSelector(matched, selector));
 }
 
-export function cssSelectorLine(
-  line: string,
-  lineFrom: number,
-  matchedRanges: readonly CssRuleRange[],
-): ReactNode {
+export function cssSelectorLine(line: string, lineFrom: number, matchedRanges: readonly CssRuleRange[]): ReactNode {
   const segments: ReactNode[] = [];
   let cursor = 0;
   for (const range of matchedRanges) {
@@ -417,9 +353,7 @@ export function cssCodeLine(line: string): ReactNode {
   }
   const brace = line.lastIndexOf('{');
   if (brace >= 0) {
-    const selectorClass = line.trimStart().startsWith('@')
-      ? 'embed-editor_css-code-context'
-      : 'embed-editor_css-code-selector';
+    const selectorClass = line.trimStart().startsWith('@') ? 'embed-editor_css-code-context' : 'embed-editor_css-code-selector';
     return (
       <>
         <span className={selectorClass}>{line.slice(0, brace)}</span>
@@ -442,10 +376,7 @@ export function CssCodePreview({ view, ariaLabel }: { view: CssRuleView; ariaLab
         const selectorList = view.selectorLists.some((range) => range.from < to && range.to > from);
         const matchedRanges = view.selectors.filter((range) => range.from < to && range.to > from);
         return (
-          <span
-            key={`${index}:${line}`}
-            className={`embed-editor_css-code-line ${overridden ? 'is-overridden' : ''}`}
-          >
+          <span key={`${index}:${line}`} className={`embed-editor_css-code-line ${overridden ? 'is-overridden' : ''}`}>
             {selectorList ? cssSelectorLine(line, from, matchedRanges) : cssCodeLine(line)}
           </span>
         );
@@ -518,15 +449,7 @@ export type CssCodeSectionProps = {
   readonly onSave: (rule: ParsedRule, css: string) => void;
 };
 
-export function CssCodeHeader({
-  open,
-  sourceLabel,
-  onToggle,
-}: {
-  readonly open: boolean;
-  readonly sourceLabel: string;
-  readonly onToggle: () => void;
-}) {
+export function CssCodeHeader({ open, sourceLabel, onToggle }: { readonly open: boolean; readonly sourceLabel: string; readonly onToggle: () => void }) {
   return (
     <button
       type="button"
@@ -543,34 +466,16 @@ export function CssCodeHeader({
       ) : undefined}
       <span className="embed-editor_css-code-chevron" aria-hidden="true">
         <svg className="embed-editor_section-chevron" viewBox="0 0 16 16" aria-hidden="true">
-          <path
-            d="M4.2 6.2 8 10l3.8-3.8"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <path d="M4.2 6.2 8 10l3.8-3.8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </span>
     </button>
   );
 }
 
-export function CssCodeSection({
-  model,
-  activeSelector,
-  visibleSelectors,
-  editableRule,
-  busy,
-  open,
-  onToggle,
-  onSave,
-}: CssCodeSectionProps) {
+export function CssCodeSection({ model, activeSelector, visibleSelectors, editableRule, busy, open, onToggle, onSave }: CssCodeSectionProps) {
   const rules = useMemo(() => {
-    const visible = [...model.base, ...model.conditional].filter((rule) =>
-      cssRuleMatchesVisibleSelector(rule, visibleSelectors),
-    );
+    const visible = [...model.base, ...model.conditional].filter((rule) => cssRuleMatchesVisibleSelector(rule, visibleSelectors));
     if (!activeSelector) {
       return visible;
     }
@@ -586,12 +491,7 @@ export function CssCodeSection({
       {open ? (
         <div className="embed-editor_css-code-body">
           {activeSelector && editableRule ? (
-            <EditableCssRule
-              key={editableRule.ruleId}
-              rule={editableRule}
-              busy={busy}
-              onSave={onSave}
-            />
+            <EditableCssRule key={editableRule.ruleId} rule={editableRule} busy={busy} onSave={onSave} />
           ) : view.code ? (
             <CssCodePreview view={view} ariaLabel="CSS matching this element" />
           ) : (

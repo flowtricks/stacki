@@ -15,13 +15,7 @@ export function skipStringOrComment(code: string, start: number): number {
   return skipLiteral(code, start, 0);
 }
 
-function findMatchingDelimiter(
-  code: string,
-  start: number,
-  open: string,
-  close: string,
-  nesting = 0,
-): number {
+function findMatchingDelimiter(code: string, start: number, open: string, close: string, nesting = 0): number {
   if (nesting > LIMITS.treeDepthMax) {
     return -1;
   }

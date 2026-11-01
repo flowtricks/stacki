@@ -62,8 +62,7 @@ const { repoPath } = require('../../helpers/sources.js');
   check('the page parses', parsed.editable, parsed.reason);
   const marked = serializePageMarked(parsed.model);
 
-  const tagged = (tag, nodePath) =>
-    new RegExp(`<${tag}\\b[^>]*\\bdata-avb-p="${nodePath.replace(/\./g, '\\.')}"`).test(marked);
+  const tagged = (tag, nodePath) => new RegExp(`<${tag}\\b[^>]*\\bdata-avb-p="${nodePath.replace(/\./g, '\\.')}"`).test(marked);
 
   // A component instance carries it as a prop. It only reaches the DOM where
   // that component spreads its rest props — most do, and where one doesn't
@@ -80,11 +79,7 @@ const { repoPath } = require('../../helpers/sources.js');
   // The markers are still there. They are what works when nothing interferes,
   // and they carry what an attribute can't — text, a loop, a branch.
   for (const nodePath of ['0.0', '0.0.0', '0.0.1', '0.0.1.0']) {
-    check(
-      `the marker pair for ${nodePath} is still written`,
-      marked.includes(`avb-s:${nodePath}--`) && marked.includes(`avb-e:${nodePath}--`),
-      marked,
-    );
+    check(`the marker pair for ${nodePath} is still written`, marked.includes(`avb-s:${nodePath}--`) && marked.includes(`avb-e:${nodePath}--`), marked);
   }
 
   // Not just slot content. What gets scrubbed is everything the slot rendered,
@@ -92,14 +87,8 @@ const { repoPath } = require('../../helpers/sources.js');
   // written with its markup at the top of its own file, a page away from any
   // slot, still loses every marker for being placed inside one. So the tag is
   // on the markup wherever it is.
-  const plain = serializePageMarked(
-    parsePage('---\n---\n<section>\n  <p>hi</p>\n</section>\n').model,
-  );
-  check(
-    'the top level of a file carries it too',
-    /<section data-avb-p=\{\["0", /.test(plain),
-    plain,
-  );
+  const plain = serializePageMarked(parsePage('---\n---\n<section>\n  <p>hi</p>\n</section>\n').model);
+  check('the top level of a file carries it too', /<section data-avb-p=\{\["0", /.test(plain), plain);
   check('and so does what is inside it', /<p data-avb-p="0\.0">/.test(plain), plain);
 
   // ── A file's own roots carry whatever they were called by ──────────────────
@@ -119,25 +108,19 @@ const { repoPath } = require('../../helpers/sources.js');
       checksum: 'a'.repeat(64),
     };
     const noSpread = serializePageMarked(
-      parsePage(
-        '---\nconst { slides } = Astro.props;\n---\n<div class="slider">{slides.length}</div>\n',
-      ).model,
+      parsePage('---\nconst { slides } = Astro.props;\n---\n<div class="slider">{slides.length}</div>\n').model,
       'src/components/Slider.astro|',
       stamp,
     );
     check(
       'a root that never asked for rest props still carries the caller’s name',
-      /data-avb-p=\{\["src\/components\/Slider\.astro\|0", Astro\.props\["data-avb-p"\]\]/.test(
-        noSpread,
-      ),
+      /data-avb-p=\{\["src\/components\/Slider\.astro\|0", Astro\.props\["data-avb-p"\]\]/.test(noSpread),
       noSpread,
     );
     check(
       'the root also carries its file stamp through comment-stripping slots',
-      new RegExp(
-        /data-avb-d=\{\["avb-d:a{64}:src\/components\/Slider\.astro", /.source +
-          /Astro\.props\["data-avb-d"\]\]/.source,
-      ).test(noSpread) && noSpread.includes('.filter(Boolean).join("\\n")'),
+      new RegExp(/data-avb-d=\{\["avb-d:a{64}:src\/components\/Slider\.astro", /.source + /Astro\.props\["data-avb-d"\]\]/.source).test(noSpread) &&
+        noSpread.includes('.filter(Boolean).join("\\n")'),
       noSpread,
     );
 
@@ -145,18 +128,16 @@ const { repoPath } = require('../../helpers/sources.js');
     // a condition, and what the branch renders is what the caller placed.
     const conditional = serializePageMarked(
       parsePage(
-        '---\nconst { render = true, slides } = Astro.props;\n---\n' +
-          '{\n  render && slides.length > 0 && (\n    <div class="slider">x</div>\n  )\n}\n',
+        '---\nconst { render = true, slides } = Astro.props;\n---\n' + '{\n  render && slides.length > 0 && (\n    <div class="slider">x</div>\n  )\n}\n',
       ).model,
       'src/components/Slider.astro|',
       stamp,
     );
     check(
       'a root written as a condition carries it too',
-      new RegExp(
-        /<div class="slider" data-avb-p=\{\["src\/components\//.source +
-          /Slider\.astro\|0\.0\.0", Astro\.props\["data-avb-p"\]\]/.source,
-      ).test(conditional),
+      new RegExp(/<div class="slider" data-avb-p=\{\["src\/components\//.source + /Slider\.astro\|0\.0\.0", Astro\.props\["data-avb-p"\]\]/.source).test(
+        conditional,
+      ),
       conditional,
     );
 
@@ -168,9 +149,7 @@ const { repoPath } = require('../../helpers/sources.js');
 
   // The two that render no element of their own: there is nothing for an
   // attribute to ride on, and their markers are what address them.
-  const passthrough = serializePageMarked(
-    parsePage('---\n---\n<div>\n  <Fragment>\n    <slot />\n  </Fragment>\n</div>\n').model,
-  );
+  const passthrough = serializePageMarked(parsePage('---\n---\n<div>\n  <Fragment>\n    <slot />\n  </Fragment>\n</div>\n').model);
   check('a <Fragment> is left alone', !/<Fragment data-avb-p/.test(passthrough), passthrough);
   check('and so is a <slot />', !/<slot data-avb-p/.test(passthrough), passthrough);
 
@@ -187,44 +166,28 @@ const { repoPath } = require('../../helpers/sources.js');
     parsePage('---\nconst { ...rest } = Astro.props;\n---\n<span {...rest}>x</span>\n').model,
     'src/components/Icon.astro|',
   );
-  const comp = serializePageMarked(
-    parsePage('---\nconst { ...rest } = Astro.props;\n---\n<Svg {...rest} />\n').model,
-    'src/components/Icon.astro|',
-  );
+  const comp = serializePageMarked(parsePage('---\nconst { ...rest } = Astro.props;\n---\n<Svg {...rest} />\n').model, 'src/components/Icon.astro|');
   for (const [what, out] of [
     ['an element', elementMarked],
     ['a component', comp],
   ]) {
     check(
       `${what} that forwards rest props keeps the path that arrived`,
-      new RegExp(
-        /data-avb-p=\{\["src\/components\/Icon\.astro\|0", Astro\./.source +
-          /props\["data-avb-p"\]\]\.filter\(Boolean\)\.join\(" "\)\}/.source,
-      ).test(out),
+      new RegExp(/data-avb-p=\{\["src\/components\/Icon\.astro\|0", Astro\./.source + /props\["data-avb-p"\]\]\.filter\(Boolean\)\.join\(" "\)\}/.source).test(
+        out,
+      ),
       out,
     );
   }
   // An element's attributes are text, and an html parser keeps the FIRST of
   // two with the same name.
-  check(
-    'an element writes it before the spread',
-    elementMarked.indexOf('data-avb-p') < elementMarked.indexOf('{...rest}'),
-    elementMarked,
-  );
+  check('an element writes it before the spread', elementMarked.indexOf('data-avb-p') < elementMarked.indexOf('{...rest}'), elementMarked);
   // A component's are an object, where the later key overwrites.
-  check(
-    'a component writes it after',
-    comp.indexOf('{...rest}') < comp.indexOf('data-avb-p'),
-    comp,
-  );
+  check('a component writes it after', comp.indexOf('{...rest}') < comp.indexOf('data-avb-p'), comp);
   // Everything else stays the plain attribute — no expression, nothing to
   // evaluate, nothing to go wrong in a file that never mentions Astro.props.
   const nested = serializePageMarked(parsePage('---\n---\n<div><span>x</span></div>\n').model);
-  check(
-    'a node that is neither a root nor a spread gets the plain attribute',
-    /<span data-avb-p="0\.0">/.test(nested),
-    nested,
-  );
+  check('a node that is neither a root nor a spread gets the plain attribute', /<span data-avb-p="0\.0">/.test(nested), nested);
 }
 
 // ── What the page reports when only the tags survive ────────────────────────
@@ -289,34 +252,18 @@ const { repoPath } = require('../../helpers/sources.js');
 
   const rendered = sent.filter((message) => message.type === 'avb:rendered-nodes').pop();
   const paths = rendered?.paths || [];
-  check(
-    'the page reports what rendered',
-    !!rendered,
-    JSON.stringify(sent.map((message) => message.type)),
-  );
+  check('the page reports what rendered', !!rendered, JSON.stringify(sent.map((message) => message.type)));
   check('the wrapped node is on the page', paths.includes('0'), JSON.stringify(paths));
   for (const nodePath of ['0.0', '0.1', '0.1.0']) {
-    check(
-      `the tag alone puts ${nodePath} on the page`,
-      paths.includes(nodePath),
-      JSON.stringify(paths),
-    );
+    check(`the tag alone puts ${nodePath} on the page`, paths.includes(nodePath), JSON.stringify(paths));
   }
   // An element can answer to more than one file: the component that rendered
   // it has a name for it, and so does the page that placed that component.
-  check(
-    'an element in two namespaces answers to the page',
-    paths.includes('0.3'),
-    JSON.stringify(paths),
-  );
+  check('an element in two namespaces answers to the page', paths.includes('0.3'), JSON.stringify(paths));
   // The other half of the report: nothing here is display:none, and a node the
   // page can't find says nothing about itself either way.
   const states = sent.filter((message) => message.type === 'avb:node-states').pop();
-  check(
-    'and none of them is called hidden',
-    !(states?.hidden || []).length,
-    JSON.stringify(states),
-  );
+  check('and none of them is called hidden', !(states?.hidden || []).length, JSON.stringify(states));
 
   // A component that spreads its rest props puts the path on whatever element
   // it spreads onto, which can sit inside the one the collector tagged. That
@@ -324,11 +271,7 @@ const { repoPath } = require('../../helpers/sources.js');
   // the occurrence a click reports, or a node with a single instance answers
   // "copy 2" for a click in the wrong half of itself.
   const rects = sent.filter((message) => message.type === 'avb:rects').pop();
-  check(
-    'a path on an element and again inside it is one copy',
-    (rects?.rects?.['0.2'] || []).length === 1,
-    JSON.stringify(rects?.rects?.['0.2']),
-  );
+  check('a path on an element and again inside it is one copy', (rects?.rects?.['0.2'] || []).length === 1, JSON.stringify(rects?.rects?.['0.2']));
   check(
     'and its classes are read once, from the outer one',
     JSON.stringify(rects?.classes?.['0.2']) === JSON.stringify([['c']]),
@@ -336,9 +279,7 @@ const { repoPath } = require('../../helpers/sources.js');
   );
 
   if (failures.length) {
-    console.error(
-      `\nslot-markers: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\nslot-markers: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

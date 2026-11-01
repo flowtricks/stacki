@@ -14,13 +14,7 @@
 
 import { assert } from '../../../shared/core/assert';
 import { remoteCollections, remoteDocument, remoteDocuments } from '../../ipc/remoteSource';
-import type {
-  RemoteCollection,
-  RemoteDocument,
-  RemoteDocumentList,
-  RemoteReferenceOption,
-  RemoteResult,
-} from '../../../shared/properties/cmsRemote';
+import type { RemoteCollection, RemoteDocument, RemoteDocumentList, RemoteReferenceOption, RemoteResult } from '../../../shared/properties/cmsRemote';
 
 export interface RemoteCache<T> {
   readonly get: (key: string) => RemoteResult<T> | undefined;
@@ -95,8 +89,7 @@ export const DOCUMENT_LISTS = createRemoteCache<RemoteDocumentList>(256);
 export const DOCUMENTS = createRemoteCache<RemoteDocument>(512);
 export const REFERENCE_OPTIONS = createRemoteCache<readonly RemoteReferenceOption[]>(64);
 
-export const listKey = (connectionId: string, collection: string) =>
-  `${connectionId}:${collection}`;
+export const listKey = (connectionId: string, collection: string) => `${connectionId}:${collection}`;
 export const documentKey = (connectionId: string, id: string) => `${connectionId}:${id}`;
 
 // Reads started before they are asked for, so opening shows what is already kept.
@@ -109,13 +102,11 @@ export function prefetchConnection(projectPath: string, connectionId: string): v
   if (!online()) {
     return;
   }
-  void COLLECTIONS.load(connectionId, () => remoteCollections(projectPath, connectionId)).then(
-    (collections) => {
-      for (const collection of collections.ok ? collections.value : []) {
-        prefetchList(projectPath, connectionId, collection.name);
-      }
-    },
-  );
+  void COLLECTIONS.load(connectionId, () => remoteCollections(projectPath, connectionId)).then((collections) => {
+    for (const collection of collections.ok ? collections.value : []) {
+      prefetchList(projectPath, connectionId, collection.name);
+    }
+  });
 }
 
 /** One collection's documents; a collection of one also has that document read. */
@@ -132,7 +123,5 @@ export function prefetchList(projectPath: string, connectionId: string, collecti
 
 /** One document, as a row is pointed at: it is usually opened next. */
 export function prefetchDocument(projectPath: string, connectionId: string, id: string): void {
-  DOCUMENTS.prefetch(documentKey(connectionId, id), () =>
-    remoteDocument(projectPath, connectionId, id),
-  );
+  DOCUMENTS.prefetch(documentKey(connectionId, id), () => remoteDocument(projectPath, connectionId, id));
 }

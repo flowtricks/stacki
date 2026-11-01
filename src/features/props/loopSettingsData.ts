@@ -8,24 +8,15 @@ import { assert } from '../../../shared/core/assert';
 import { toRecord } from '../../../shared/core/record';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import { cmsTransport } from '../../ipc/editorEnvironment';
-import { remoteDocuments } from '../../ipc/remoteSource';
-import {
-  loadCatalog,
-  loadFields,
-  loadReferenceChoices,
-  LOOP_CATALOG_LIMITS,
-  type CatalogField,
-  type LoopCatalog,
-} from './loopCatalog';
+import { remoteDocument, remoteDocuments } from '../../ipc/remoteSource';
+import { loadCatalog, loadFields, loadReferenceChoices, LOOP_CATALOG_LIMITS, type CatalogField, type LoopCatalog } from './loopCatalog';
 import { parseSourceKey, sourceKey } from './loopSettingsModel';
 import { type TracedCollection } from './LoopLineage';
 import { rewrittenGroqLiteral, type GroqLiteral } from '../../editor/loopTrace';
 import { readText, writeText } from '../../ipc/bridge';
 import type { ChoiceContext } from './LoopFilters';
 /** A traced GROQ query as list settings, when the trace found its literal and could read it. */
-export function editableTrace(
-  traced: TracedCollection,
-): { readonly query: LoopQuery; readonly literal: GroqLiteral; readonly file: string } | undefined {
+export function editableTrace(traced: TracedCollection): { readonly query: LoopQuery; readonly literal: GroqLiteral; readonly file: string } | undefined {
   const groq = traced.groq;
   const literal = traced.literal;
   if (groq === undefined || literal === undefined || traced.source.kind !== 'sanity') {
@@ -55,18 +46,12 @@ export async function writeTracedQuery(
     const text = await readText(projectPath, change.file);
     const next = rewrittenGroqLiteral(text, literal, groqQueryText(change.query, []));
     if (next === undefined) {
-      return {
-        ok: false,
-        message: `${change.file} changed since it was read, so nothing was saved. Its settings are shown again as they are now.`,
-      };
+      return { ok: false, message: `${change.file} changed since it was read, so nothing was saved. Its settings are shown again as they are now.` };
     }
     await writeText(projectPath, change.file, next);
     return { ok: true };
   } catch (error: unknown) {
-    return {
-      ok: false,
-      message: `Couldn’t save ${change.file}: ${error instanceof Error ? error.message : String(error)}`,
-    };
+    return { ok: false, message: `Couldn’t save ${change.file}: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -79,9 +64,7 @@ export async function writeTracedQuery(
 const catalogs = new Map<string, LoopCatalog>();
 
 export function useLoopCatalog(projectPath: string | undefined): LoopCatalog | undefined {
-  const [catalog, setCatalog] = useState<LoopCatalog | undefined>(
-    projectPath ? catalogs.get(projectPath) : undefined,
-  );
+  const [catalog, setCatalog] = useState<LoopCatalog | undefined>(projectPath ? catalogs.get(projectPath) : undefined);
   useEffect(() => {
     if (!projectPath) {
       return undefined;
@@ -109,9 +92,7 @@ export function useCatalogFields(
   source: LoopSource | undefined,
 ): readonly CatalogField[] | undefined {
   const key = source === undefined ? '' : sourceKey(source);
-  const [loaded, setLoaded] = useState<
-    { readonly key: string; readonly fields: readonly CatalogField[] } | undefined
-  >(undefined);
+  const [loaded, setLoaded] = useState<{ readonly key: string; readonly fields: readonly CatalogField[] } | undefined>(undefined);
   useEffect(() => {
     // Read back from the key, so the effect depends on what names the source
     // rather than on an object rebuilt every render.
@@ -132,19 +113,12 @@ export function useCatalogFields(
   return loaded?.key === key ? loaded.fields : undefined;
 }
 
-export function useReferenceChoices(
-  context: ChoiceContext,
-  field: CatalogField | undefined,
-): readonly { readonly title: string; readonly value: string }[] {
+export function useReferenceChoices(context: ChoiceContext, field: CatalogField | undefined): readonly { readonly title: string; readonly value: string }[] {
   const types = field?.references ?? [];
   const typesKey = types.join(',');
-  const [loaded, setLoaded] = useState<
-    | {
-        readonly key: string;
-        readonly choices: readonly { readonly title: string; readonly value: string }[];
-      }
-    | undefined
-  >(undefined);
+  const [loaded, setLoaded] = useState<{ readonly key: string; readonly choices: readonly { readonly title: string; readonly value: string }[] } | undefined>(
+    undefined,
+  );
   const { projectPath, catalog } = context;
   const sourceName = sourceKey(context.query.source);
   const key = `${sourceName}|${typesKey}`;
@@ -154,13 +128,11 @@ export function useReferenceChoices(
       return undefined;
     }
     let live = true;
-    void loadReferenceChoices(projectPath, catalog, parsed.source, typesKey.split(',')).then(
-      (choices) => {
-        if (live) {
-          setLoaded({ key, choices });
-        }
-      },
-    );
+    void loadReferenceChoices(projectPath, catalog, parsed.source, typesKey.split(',')).then((choices) => {
+      if (live) {
+        setLoaded({ key, choices });
+      }
+    });
     return () => {
       live = false;
     };
@@ -186,19 +158,9 @@ export async function loadItems(
 ): Promise<readonly PickableItem[]> {
   const { source } = target;
   if (source.kind === 'sanity') {
-    const connectionId =
-      catalog.sanity.kind === 'connected' ? catalog.sanity.connectionId : undefined;
-    const listed =
-      connectionId === undefined
-        ? undefined
-        : await remoteDocuments(projectPath, connectionId, source.collection).catch(
-            () => undefined,
-          );
-    return listed?.ok
-      ? listed.value.documents
-          .slice(0, PICKABLE_ITEMS_MAX)
-          .map((document) => ({ id: document.id, title: document.title }))
-      : [];
+    const connectionId = catalog.sanity.kind === 'connected' ? catalog.sanity.connectionId : undefined;
+    const listed = connectionId === undefined ? undefined : await remoteDocuments(projectPath, connectionId, source.collection).catch(() => undefined);
+    return listed?.ok ? listed.value.documents.slice(0, PICKABLE_ITEMS_MAX).map((document) => ({ id: document.id, title: document.title })) : [];
   }
   const payload = parseIpcPayload('content:entries', { projectPath, name: source.collection });
   const answer: unknown = await cmsTransport.contentEntries(payload).catch(() => undefined);
@@ -212,6 +174,26 @@ export async function loadItems(
   }
   assert(items.length <= PICKABLE_ITEMS_MAX, 'Pickable items are bounded');
   return items;
+}
+
+/**
+ * One document of a Sanity type, as field name to value, so the Source picker
+ * can show what its documents hold and which of their fields are lists.
+ * Undefined when there is no connection, no document, or it can't be read.
+ */
+export async function loadSanitySample(projectPath: string, catalog: LoopCatalog, type: string): Promise<Readonly<Record<string, unknown>> | undefined> {
+  const connectionId = catalog.sanity.kind === 'connected' ? catalog.sanity.connectionId : undefined;
+  if (connectionId === undefined) {
+    return undefined;
+  }
+  const listed = await remoteDocuments(projectPath, connectionId, type).catch(() => undefined);
+  const first = listed?.ok ? listed.value.documents[0] : undefined;
+  const read = first === undefined ? undefined : await remoteDocument(projectPath, connectionId, first.id).catch(() => undefined);
+  if (read === undefined || !read.ok) {
+    return undefined;
+  }
+  // A document's fields come from the CMS: shown up to the catalog's bound.
+  return Object.fromEntries(read.value.fields.slice(0, LOOP_CATALOG_LIMITS.fieldsMax).map((field) => [field.name, field.value]));
 }
 
 // One `content:entries` entry: its id (or its data's `_id`) and its title.

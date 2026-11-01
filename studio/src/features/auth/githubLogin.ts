@@ -35,11 +35,7 @@ export async function githubLogin(
       headers: { Allow: 'GET', 'Cache-Control': 'no-store' },
     });
   }
-  if (
-    (request.headers.get('Sec-Purpose') ?? request.headers.get('Purpose') ?? '').includes(
-      'prefetch',
-    )
-  ) {
+  if ((request.headers.get('Sec-Purpose') ?? request.headers.get('Purpose') ?? '').includes('prefetch')) {
     return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
   }
   const existing = await reuseLoginSession(request, config, authorize);
@@ -70,26 +66,12 @@ export async function githubLogin(
     if (problem === 'rate-limit') {
       return completeAttempt(await rateLimitedPage(failure.retryAt, config.SESSION_SECRET));
     }
-    return completeAttempt(
-      loginPage(
-        problem,
-        ['expired', 'cancelled', 'email'].includes(problem) ? 400 : 503,
-        `${stage}-${status}-${code}`,
-      ),
-    );
+    return completeAttempt(loginPage(problem, ['expired', 'cancelled', 'email'].includes(problem) ? 400 : 503, `${stage}-${status}-${code}`));
   }
 }
 
-async function reuseLoginSession(
-  request: Request,
-  config: AuthConfig,
-  authorize: (profile: GitHubProfile) => Promise<boolean>,
-): Promise<Response | undefined> {
-  const current = await verifySession(
-    cookie(request, '__Host-studio'),
-    config.SESSION_SECRET,
-    'studio',
-  );
+async function reuseLoginSession(request: Request, config: AuthConfig, authorize: (profile: GitHubProfile) => Promise<boolean>): Promise<Response | undefined> {
+  const current = await verifySession(cookie(request, '__Host-studio'), config.SESSION_SECRET, 'studio');
   if (current) {
     if (await authorize(current)) {
       // Back, refresh, and a second callback should reuse an authorized session instead of OAuth.
@@ -102,18 +84,9 @@ async function reuseLoginSession(
   return undefined;
 }
 
-async function finishLogin(
-  request: Request,
-  config: AuthConfig,
-  attempts: LoginAttempts,
-  authorize: (profile: GitHubProfile) => Promise<boolean>,
-) {
+async function finishLogin(request: Request, config: AuthConfig, attempts: LoginAttempts, authorize: (profile: GitHubProfile) => Promise<boolean>) {
   const url = new URL(request.url);
-  const state = await verifySession(
-    cookie(request, '__Host-studio-state'),
-    config.SESSION_SECRET,
-    'login',
-  );
+  const state = await verifySession(cookie(request, '__Host-studio-state'), config.SESSION_SECRET, 'login');
   if (!state || state.login !== url.searchParams.get('state')) {
     return loginPage('expired', 403);
   }
@@ -127,9 +100,7 @@ async function finishLogin(
   if (code.length > 1000) {
     return loginPage('expired', 400);
   }
-  const result = await attempts.run(state.login, state.expires, () =>
-    completeLogin(code, config, authorize),
-  );
+  const result = await attempts.run(state.login, state.expires, () => completeLogin(code, config, authorize));
   if (result.ok) {
     return result.value;
   }
@@ -141,22 +112,13 @@ async function finishLogin(
   }
 }
 
-async function completeLogin(
-  code: string,
-  config: AuthConfig,
-  authorize: (profile: GitHubProfile) => Promise<boolean>,
-) {
+async function completeLogin(code: string, config: AuthConfig, authorize: (profile: GitHubProfile) => Promise<boolean>) {
   const token = await signInStep('token', () => exchangeCode(code, config));
   const profile = await signInStep('profile', () => fetchProfile(token));
   if (!(await signInStep('repository', () => authorize(profile)))) {
     return loginPage('access', 403);
   }
-  const session = await signInStep('session', () =>
-    signSession(
-      { ...profile, expires: Date.now() + 28_800_000, audience: 'studio' },
-      config.SESSION_SECRET,
-    ),
-  );
+  const session = await signInStep('session', () => signSession({ ...profile, expires: Date.now() + 28_800_000, audience: 'studio' }, config.SESSION_SECRET));
   const headers = new Headers({
     Location: `${config.STUDIO_ORIGIN}/studio`,
     'Cache-Control': 'no-store',
@@ -175,29 +137,16 @@ async function fetchProfile(token: string) {
   });
   if (!profileResponse.ok) {
     if (profileResponse.status === 429) {
-      throw new SignInFailure(
-        'rate-limit',
-        'profile',
-        429,
-        'http',
-        retryAt(profileResponse.headers),
-      );
+      throw new SignInFailure('rate-limit', 'profile', 429, 'http', retryAt(profileResponse.headers));
     }
     throw new SignInFailure('unavailable', 'profile', profileResponse.status, 'http');
   }
   return parseProfile(await profileResponse.json());
 }
-export function loginPage(
-  problem?: SignInProblem,
-  status = 200,
-  reference = '',
-  seconds = 0,
-): Response {
+export function loginPage(problem?: SignInProblem, status = 200, reference = '', seconds = 0): Response {
   const message = problem ? signInMessages[problem] : 'Sign in to edit and publish your website.';
   const countdown = loginCountdown(seconds);
-  const detail = reference
-    ? `<p>Reference: ${reference.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80)}</p>`
-    : '';
+  const detail = reference ? `<p>Reference: ${reference.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80)}</p>` : '';
   return new Response(
     `<!doctype html>
 <html lang="en">
@@ -235,9 +184,7 @@ p{color:#999;line-height:1.6}
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store',
-        'Content-Security-Policy':
-          "default-src 'none'; img-src data:; style-src 'unsafe-inline'; frame-ancestors 'none'" +
-          countdown.policy,
+        'Content-Security-Policy': "default-src 'none'; img-src data:; style-src 'unsafe-inline'; frame-ancestors 'none'" + countdown.policy,
       },
     },
   );
@@ -271,33 +218,20 @@ async function exchangeCode(code: string, config: AuthConfig) {
     throw new SignInFailure('expired', 'token', tokenResponse.status, 'bad_verification_code');
   }
   if (['incorrect_client_credentials', 'redirect_uri_mismatch'].includes(String(data['error']))) {
-    throw new SignInFailure(
-      'configuration',
-      'token',
-      tokenResponse.status,
-      'credentials_or_callback',
-    );
+    throw new SignInFailure('configuration', 'token', tokenResponse.status, 'credentials_or_callback');
   }
   if (data['error'] === 'unverified_user_email') {
     throw new SignInFailure('email', 'token', tokenResponse.status, 'unverified_user_email');
   }
   if (data['error'] || typeof data['access_token'] !== 'string' || !data['access_token']) {
-    throw new SignInFailure(
-      'unavailable',
-      'token',
-      tokenResponse.status,
-      data['error'] ? 'provider_error' : 'missing_token',
-    );
+    throw new SignInFailure('unavailable', 'token', tokenResponse.status, data['error'] ? 'provider_error' : 'missing_token');
   }
   return string(data['access_token'], 1000);
 }
 
 async function beginLogin(config: AuthConfig) {
   const state = crypto.randomUUID();
-  const signed = await signSession(
-    { id: 1, login: state, expires: Date.now() + loginLifetimeMs, audience: 'login' },
-    config.SESSION_SECRET,
-  );
+  const signed = await signSession({ id: 1, login: state, expires: Date.now() + loginLifetimeMs, audience: 'login' }, config.SESSION_SECRET);
   const destination = new URL('https://github.com/login/oauth/authorize');
   destination.searchParams.set('client_id', config.GITHUB_CLIENT_ID);
   destination.searchParams.set('redirect_uri', `${config.STUDIO_ORIGIN}/studio/auth/callback`);
@@ -355,11 +289,6 @@ function reportTokenLimit(response: Response): void {
   ];
   console.error(
     'GitHub token limit',
-    Object.fromEntries(
-      names.map((name) => [
-        name,
-        (response.headers.get(name) ?? '').replace(/[^a-zA-Z0-9:;=., /_-]/g, '').slice(0, 120),
-      ]),
-    ),
+    Object.fromEntries(names.map((name) => [name, (response.headers.get(name) ?? '').replace(/[^a-zA-Z0-9:;=., /_-]/g, '').slice(0, 120)])),
   );
 }

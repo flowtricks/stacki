@@ -4,14 +4,7 @@
 // (ClipPath.tsx).
 
 import type { BreakpointId, ElementStyleSource, WebflowApi } from './webflowDesigner';
-import {
-  type CornerName,
-  type ShapeFunctionShape,
-  type RawClipPathShape,
-  type NoneShape,
-  type ArrowKey,
-  type ShapeScaleOptions,
-} from './clipPathTypes';
+import { type CornerName, type ShapeFunctionShape, type RawClipPathShape, type NoneShape, type ArrowKey, type ShapeScaleOptions } from './clipPathTypes';
 
 export function isDefined<T>(value: T | undefined): value is T {
   return value !== undefined && value !== undefined;
@@ -103,13 +96,7 @@ export const CUSTOM_SHAPE: RawClipPathShape = {
   value: 'inherit',
   preset: CUSTOM_PRESET,
 };
-export const CSS_GLOBAL_CLIP_PATH_VALUES = new Set([
-  'inherit',
-  'initial',
-  'unset',
-  'revert',
-  'revert-layer',
-]);
+export const CSS_GLOBAL_CLIP_PATH_VALUES = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer']);
 export const CSS_GEOMETRY_BOX_CLIP_PATH_VALUES = new Set([
   'border-box',
   'content-box',
@@ -120,9 +107,7 @@ export const CSS_GEOMETRY_BOX_CLIP_PATH_VALUES = new Set([
   'stroke-box',
   'view-box',
 ]);
-export const DEFAULT_SHAPE_PATH_DATA =
-  'M56.8 43.2H100V56.8C76.2 56.8 56.8 76.2 56.8 100H43.2' +
-  'V56.8H0V43.2C23.8 43.2 43.2 23.8 43.2 0H56.8V43.2Z';
+export const DEFAULT_SHAPE_PATH_DATA = 'M56.8 43.2H100V56.8C76.2 56.8 56.8 76.2 56.8 100H43.2' + 'V56.8H0V43.2C23.8 43.2 43.2 23.8 43.2 0H56.8V43.2Z';
 export const DEFAULT_SHAPE_VALUE = [
   'from 56.8% 43.2%',
   'line to 100% 43.2%',

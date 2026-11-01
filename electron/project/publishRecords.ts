@@ -18,10 +18,7 @@ export class PublishRecords {
   private count = 0;
 
   accept(input: unknown): Result<readonly string[]> {
-    assert(
-      this.pending.length <= PUBLISH_RECORD_LIMITS.recordBytesMax,
-      'Pending record is bounded',
-    );
+    assert(this.pending.length <= PUBLISH_RECORD_LIMITS.recordBytesMax, 'Pending record is bounded');
     assert(this.count <= PUBLISH_RECORD_LIMITS.recordsMax, 'Accepted record count is bounded');
     if (!Buffer.isBuffer(input) || input.length > PUBLISH_RECORD_LIMITS.chunkBytesMax) {
       return err({ code: 'git-output', message: 'Git returned an oversized or invalid chunk.' });
@@ -58,9 +55,7 @@ export class PublishRecords {
   }
 
   finish(): Result<void> {
-    return this.pending.length === 0
-      ? ok(undefined)
-      : err({ code: 'git-output', message: 'Git returned an incomplete file listing.' });
+    return this.pending.length === 0 ? ok(undefined) : err({ code: 'git-output', message: 'Git returned an incomplete file listing.' });
   }
 }
 
@@ -111,9 +106,7 @@ export async function readPublishRecords(
   }
 }
 
-function monitorPublishRecords(
-  child: Pick<ChildProcess, 'once' | 'kill'> & { readonly stderr: Readable },
-) {
+function monitorPublishRecords(child: Pick<ChildProcess, 'once' | 'kill'> & { readonly stderr: Readable }) {
   let failure: Result<void> = ok(undefined);
   let diagnosticsBytes = 0;
   const stop = (message: string) => {
@@ -124,11 +117,7 @@ function monitorPublishRecords(
   };
   const completion = new Promise<Result<void>>((resolve) => {
     child.once('error', () => resolve(err({ code: 'git-start', message: 'Could not start Git.' })));
-    child.once('close', (code) =>
-      resolve(
-        code === 0 ? ok(undefined) : err({ code: 'git-exit', message: 'Git listing failed.' }),
-      ),
-    );
+    child.once('close', (code) => resolve(code === 0 ? ok(undefined) : err({ code: 'git-exit', message: 'Git listing failed.' })));
   });
   child.stderr.on('data', (chunk: Buffer) => {
     diagnosticsBytes += chunk.length;
@@ -136,10 +125,7 @@ function monitorPublishRecords(
       stop('Git diagnostics exceeded the 1 MiB limit.');
     }
   });
-  const timer = setTimeout(
-    () => stop('Git inspection exceeded the ten-minute limit.'),
-    PUBLISH_RECORD_LIMITS.timeoutMs,
-  );
+  const timer = setTimeout(() => stop('Git inspection exceeded the ten-minute limit.'), PUBLISH_RECORD_LIMITS.timeoutMs);
   return {
     completion,
     failure: () => failure,
@@ -155,9 +141,7 @@ async function* readPublishChunks(stream: Readable): AsyncGenerator<Result<unkno
   const iterator = stream[Symbol.asyncIterator]();
   for (let count = 0; count < PUBLISH_RECORD_LIMITS.chunksMax; count++) {
     // Catch only pipe I/O. Assertions and visitor errors never pass through this adapter.
-    const next = await iterator
-      .next()
-      .then(ok, () => err({ code: 'git-output', message: 'Could not read the Git file listing.' }));
+    const next = await iterator.next().then(ok, () => err({ code: 'git-output', message: 'Could not read the Git file listing.' }));
     if (!next.ok) {
       yield next;
       return;

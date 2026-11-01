@@ -16,21 +16,14 @@ import { replaceGitWorkspaceReferences } from './gitWorkspaceCheckpoint';
 
 const execute = promisify(execFile);
 /** Run Desktop's merge engine in an isolated checkout so conflicts never reach the preview. */
-export async function mergeGitWorkspace(
-  state: GitWorkspaceState,
-  branch: string,
-  target: string,
-  choices?: Record<string, unknown>,
-) {
+export async function mergeGitWorkspace(state: GitWorkspaceState, branch: string, target: string, choices?: Record<string, unknown>) {
   const { git, manifest } = state;
   const current = gitWorkspaceBranch(manifest);
   const run = gitWorkspaceRun(git);
   const draft = await snapshotGitWorkspace(git, current.head);
   const changed = await gitWorkspaceChanges(run, current.head, draft);
   // Keep the exact Desktop conflict UI; dirty overlapping files must be parked first.
-  const incoming = new Set(
-    (await run(['diff', '--name-only', current.head, target])).split('\n').filter(Boolean),
-  );
+  const incoming = new Set((await run(['diff', '--name-only', current.head, target])).split('\n').filter(Boolean));
   const overlapping = changed.filter((file) => incoming.has(file.path));
   if (overlapping.length) {
     return {
@@ -62,9 +55,7 @@ export async function mergeGitWorkspace(
       manifest: {
         ...manifest,
         draft: snapshot,
-        branches: manifest.branches.map((entry) =>
-          entry.name === manifest.branch ? { ...entry, head } : entry,
-        ),
+        branches: manifest.branches.map((entry) => (entry.name === manifest.branch ? { ...entry, head } : entry)),
       },
       target: snapshot,
     };

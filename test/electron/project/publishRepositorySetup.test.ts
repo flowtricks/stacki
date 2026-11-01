@@ -6,11 +6,7 @@ import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import tools, { git, setToolPathHome } from '#dist/electron/lib/nodeTools.js';
-import {
-  connectPublishingRepository,
-  publishingRepositories,
-  repositoryState,
-} from '#dist/electron/project/publishRepositories.js';
+import { connectPublishingRepository, publishingRepositories, repositoryState } from '#dist/electron/project/publishRepositories.js';
 import { discoverPublishing } from '#dist/electron/project/publishDiscovery.js';
 import discovery from '#dist/electron/project/publishDiscoveryCommand.js';
 setToolPathHome(homedir());
@@ -47,26 +43,17 @@ test('remote changes preserve project files', async (context) => {
 test('creation pins the account without committing or reconnecting', async (context) => {
   const root = await fixture(context);
   const recorded: string[][] = [];
-  context.mock.method(
-    tools,
-    'run',
-    async (
-      executable: string,
-      args: readonly string[],
-      _root: string,
-      options: { readonly env?: NodeJS.ProcessEnv },
-    ) => {
-      assert.equal(executable, 'gh');
-      recorded.push([...args]);
-      if (args[0] === 'auth') {
-        assert.equal(args.at(-1), 'work');
-        return { stdout: 'gho_private_test_token', stderr: '' };
-      }
-      assert.equal(options.env?.['GH_TOKEN'], 'gho_private_test_token');
-      assert.deepEqual(args, ['repo', 'create', 'work/new-site', '--private']);
-      return { stdout: 'https://github.com/work/new-site', stderr: '' };
-    },
-  );
+  context.mock.method(tools, 'run', async (executable: string, args: readonly string[], _root: string, options: { readonly env?: NodeJS.ProcessEnv }) => {
+    assert.equal(executable, 'gh');
+    recorded.push([...args]);
+    if (args[0] === 'auth') {
+      assert.equal(args.at(-1), 'work');
+      return { stdout: 'gho_private_test_token', stderr: '' };
+    }
+    assert.equal(options.env?.['GH_TOKEN'], 'gho_private_test_token');
+    assert.deepEqual(args, ['repo', 'create', 'work/new-site', '--private']);
+    return { stdout: 'https://github.com/work/new-site', stderr: '' };
+  });
   const created = await publishingRepositories(root, {
     action: 'create',
     account: 'work',

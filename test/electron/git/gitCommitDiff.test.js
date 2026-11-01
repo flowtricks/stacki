@@ -82,10 +82,7 @@ test('oversized patches and missing commits return explicit errors', async () =>
     path: 'file',
     from: undefined,
   };
-  for (const stdout of [
-    'x'.repeat(COMMIT_DIFF_LIMITS.charactersMax + 1),
-    '\n'.repeat(COMMIT_DIFF_LIMITS.linesMax),
-  ]) {
+  for (const stdout of ['x'.repeat(COMMIT_DIFF_LIMITS.charactersMax + 1), '\n'.repeat(COMMIT_DIFF_LIMITS.linesMax)]) {
     const result = await readCommitDiff(async () => ({ stdout }), request);
     assert.equal(result.ok, false);
     assert.match(result.error, /too (large|many)/);

@@ -8,10 +8,7 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { git, setToolPathHome } from '#dist/electron/lib/nodeTools.js';
 import { DesktopPublisher } from '#dist/electron/project/publisher.js';
-import {
-  createPublishSource,
-  createPublishSnapshot,
-} from '#dist/electron/project/publishSnapshot.js';
+import { createPublishSource, createPublishSnapshot } from '#dist/electron/project/publishSnapshot.js';
 import { commitPublishSource } from '#dist/electron/project/publishCommit.js';
 import { readPublishAvailability } from '#dist/electron/project/publishAvailability.js';
 import commands from '#dist/electron/project/publishCommands.js';
@@ -76,10 +73,7 @@ for (const target of ['github', 'all'] as const) {
       hosting: false,
     });
     assert.equal(scripts.mock.callCount(), 0);
-    assert.equal(
-      (await git(root, ['rev-parse', 'HEAD'])).stdout,
-      (await git(remote, ['rev-parse', 'refs/heads/main'])).stdout,
-    );
+    assert.equal((await git(root, ['rev-parse', 'HEAD'])).stdout, (await git(remote, ['rev-parse', 'refs/heads/main'])).stdout);
     assert.equal((await readPublishAvailability(root)).github, 'current');
   });
 }
@@ -90,12 +84,7 @@ test('large listings and assets can push and report current', async (context) =>
   // Batches cap concurrent writes. These names alone exceed the old 1 MiB stdout buffer.
   for (let batch = 0; batch < 230; batch++) {
     await Promise.all(
-      Array.from({ length: 64 }, (_, offset) =>
-        writeFile(
-          path.join(root, 'public', `${batch * 64 + offset}-${'photo'.repeat(20)}.txt`),
-          'photo',
-        ),
-      ),
+      Array.from({ length: 64 }, (_, offset) => writeFile(path.join(root, 'public', `${batch * 64 + offset}-${'photo'.repeat(20)}.txt`), 'photo')),
     );
   }
   // Sparse assets cross 256 MiB without allocating a giant test buffer or a >100 MiB GitHub file.
@@ -113,10 +102,7 @@ test('large listings and assets can push and report current', async (context) =>
     github: true,
     hosting: false,
   });
-  assert.equal(
-    (await git(root, ['rev-parse', 'HEAD'])).stdout,
-    (await git(remote, ['rev-parse', 'refs/heads/main'])).stdout,
-  );
+  assert.equal((await git(root, ['rev-parse', 'HEAD'])).stdout, (await git(remote, ['rev-parse', 'refs/heads/main'])).stdout);
   assert.equal((await readPublishAvailability(root)).github, 'current');
   await removeLargeFixtureFiles(root);
   const smaller = await createPublishSnapshot(root);
@@ -131,9 +117,7 @@ async function removeLargeFixtureFiles(root: string): Promise<void> {
     ...Array.from({ length: 6 }, (_, index) => `asset-${index}.bin`),
   ];
   for (let index = 0; index < names.length; index += 64) {
-    await Promise.all(
-      names.slice(index, index + 64).map((name) => rm(path.join(root, 'public', name))),
-    );
+    await Promise.all(names.slice(index, index + 64).map((name) => rm(path.join(root, 'public', name))));
   }
   await mkdir(path.join(root, 'node_modules'));
 }
@@ -226,21 +210,14 @@ test('bookkeeping failure preserves confirmation of the push', async (context) =
     assert.equal(state.github, true);
     assert.match(state.message, /Saved to GitHub/);
   }
-  assert.equal(
-    (await git(root, ['rev-parse', 'HEAD'])).stdout,
-    (await git(remote, ['rev-parse', 'refs/heads/main'])).stdout,
-  );
+  assert.equal((await git(root, ['rev-parse', 'HEAD'])).stdout, (await git(remote, ['rev-parse', 'refs/heads/main'])).stdout);
 });
 
 test('a rejected push retains the local commit and never confirms GitHub', async (context) => {
   const { root, remote } = await fixture(context);
   await git(root, ['push', 'origin', 'HEAD:refs/heads/main']);
   const previous = (await git(remote, ['rev-parse', 'refs/heads/main'])).stdout;
-  await writeFile(
-    path.join(remote, 'hooks/pre-receive'),
-    '#!/usr/bin/env node\nprocess.exit(1);\n',
-    { mode: 0o755 },
-  );
+  await writeFile(path.join(remote, 'hooks/pre-receive'), '#!/usr/bin/env node\nprocess.exit(1);\n', { mode: 0o755 });
   await writeFile(path.join(root, 'page.txt'), 'Rejected by remote');
   const publisher = new DesktopPublisher();
   publisher.start(root, 'github', 'Keep this local commit');
@@ -291,10 +268,7 @@ test('an unborn branch can publish its first commit without a build', async (con
     github: true,
     hosting: false,
   });
-  assert.equal(
-    (await git(remote, ['rev-list', '--count', 'refs/heads/first-publish'])).stdout.trim(),
-    '1',
-  );
+  assert.equal((await git(remote, ['rev-list', '--count', 'refs/heads/first-publish'])).stdout.trim(), '1');
 });
 
 test('capture invariant failures escape the operating error channel', async (context) => {

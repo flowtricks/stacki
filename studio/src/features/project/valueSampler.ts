@@ -94,12 +94,8 @@ function sample(value: unknown, depth = 0): unknown {
     return { __stacki: 'deep' };
   }
   if (Array.isArray(value)) {
-    const items: unknown[] = value
-      .slice(0, ITEMS_MAX)
-      .map((item) => sample(item, depth + 1) ?? null);
-    return value.length > ITEMS_MAX
-      ? [...items, { __stacki: 'more', count: value.length - ITEMS_MAX }]
-      : items;
+    const items: unknown[] = value.slice(0, ITEMS_MAX).map((item) => sample(item, depth + 1) ?? null);
+    return value.length > ITEMS_MAX ? [...items, { __stacki: 'more', count: value.length - ITEMS_MAX }] : items;
   }
   const fields: [string, unknown][] = [];
   for (const [key, field] of Object.entries(value).slice(0, KEYS_MAX)) {

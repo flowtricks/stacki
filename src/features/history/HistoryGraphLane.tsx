@@ -10,26 +10,13 @@ export function historyGraphWidth(lanes: number): number {
   return lanes * LANE_WIDTH + 12;
 }
 
-export default function HistoryGraphLane({
-  row,
-  width,
-  current,
-}: {
-  readonly row: HistoryGraphRow;
-  readonly width: number;
-  readonly current: boolean;
-}) {
+export default function HistoryGraphLane({ row, width, current }: { readonly row: HistoryGraphRow; readonly width: number; readonly current: boolean }) {
   const pixels = historyGraphWidth(width);
   return (
     <div className="history-graph-lane" aria-hidden="true">
       <svg width={pixels} height={HISTORY_ROW_HEIGHT} className="history-graph-drawing">
         {row.edges.map((edge, index) => (
-          <path
-            key={index}
-            d={historyGraphPath(edge)}
-            style={{ color: gitBranchColor(edge.color) }}
-            className={`history-graph-color-${edge.color}`}
-          />
+          <path key={index} d={historyGraphPath(edge)} style={{ color: gitBranchColor(edge.color) }} className={`history-graph-color-${edge.color}`} />
         ))}
         <circle
           cx={laneX(row.lane)}

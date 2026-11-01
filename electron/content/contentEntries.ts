@@ -35,11 +35,7 @@ interface FormatEdit {
 
 interface FormatModule {
   readonly parseData: (text: string) => unknown;
-  readonly applyEdits: (
-    text: string,
-    edits: readonly FormatEdit[],
-    opts?: { readonly body?: string },
-  ) => string;
+  readonly applyEdits: (text: string, edits: readonly FormatEdit[], opts?: { readonly body?: string }) => string;
   readonly DELETE: symbol;
 }
 
@@ -64,8 +60,7 @@ const formatName = (file: string): string => {
 };
 
 const toPosix = (filePath: string): string => filePath.split(path.sep).join('/');
-const isPlainObject = (value: unknown): boolean =>
-  !!value && typeof value === 'object' && !Array.isArray(value);
+const isPlainObject = (value: unknown): boolean => !!value && typeof value === 'object' && !Array.isArray(value);
 
 // A glob pattern as a regular expression: `**` crosses folders, `*` does not,
 // and `{a,b}` is a choice. Enough for the patterns a content config writes.
@@ -363,8 +358,7 @@ function locateRecords(data: unknown): { shape: string; records: RawRecord[] } {
   return { shape: records.length ? 'nested' : 'single', records };
 }
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
+const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 function fileEntries(projectPath: string, collection: ContentCollection): ListResult {
   const loader = collection.loader ?? {};
@@ -485,10 +479,7 @@ function writeEntry(
         },
   );
 
-  const next =
-    format === frontmatter
-      ? frontmatter.applyEdits(text, prefixed, { body })
-      : format.applyEdits(text, prefixed);
+  const next = format === frontmatter ? frontmatter.applyEdits(text, prefixed, { body }) : format.applyEdits(text, prefixed);
   if (next === text) {
     return { ok: true, changed: false };
   }
@@ -569,13 +560,4 @@ function isDataDirectory(directory: string): boolean {
   return directory.startsWith('src/data/');
 }
 
-export {
-  listEntries,
-  writeEntry,
-  countEntries,
-  coveredPaths,
-  locateRecords,
-  globToRegExp,
-  formatFor,
-  formatName,
-};
+export { listEntries, writeEntry, countEntries, coveredPaths, locateRecords, globToRegExp, formatFor, formatName };

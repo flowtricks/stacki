@@ -55,10 +55,7 @@ for (const domains of [[], undefined]) {
       '/workers/scripts/site/subdomain': { enabled: true },
       '/workers/subdomain': { subdomain: 'account-name' },
     });
-    assert.equal(
-      await publishedSiteURL('/project', worker),
-      'https://site.account-name.workers.dev',
-    );
+    assert.equal(await publishedSiteURL('/project', worker), 'https://site.account-name.workers.dev');
   });
 }
 
@@ -90,26 +87,22 @@ test('Pages prefers custom domains over its project subdomain', async (context) 
 });
 
 test('Vercel follows bounded pages and selects verified production domains', async (context) => {
-  context.mock.method(
-    command,
-    'discoveryCommand',
-    async (_root: string, executable: string, args: readonly string[]) => {
-      assert.equal(executable, 'vercel');
-      assert.deepEqual(args.slice(2), ['--method', 'GET', '--raw', '--scope', 'team']);
-      if (args[1]?.includes('until=')) {
-        return { domains: [{ name: 'example.com', verified: true }], pagination: {} };
-      }
-      return {
-        domains: [
-          { name: 'site.vercel.app', verified: true },
-          { name: 'unverified.com', verified: false },
-          { name: 'preview.example.com', verified: true, gitBranch: 'preview' },
-          { name: 'alias.example.com', verified: true, redirect: 'example.com' },
-        ],
-        pagination: { next: 123 },
-      };
-    },
-  );
+  context.mock.method(command, 'discoveryCommand', async (_root: string, executable: string, args: readonly string[]) => {
+    assert.equal(executable, 'vercel');
+    assert.deepEqual(args.slice(2), ['--method', 'GET', '--raw', '--scope', 'team']);
+    if (args[1]?.includes('until=')) {
+      return { domains: [{ name: 'example.com', verified: true }], pagination: {} };
+    }
+    return {
+      domains: [
+        { name: 'site.vercel.app', verified: true },
+        { name: 'unverified.com', verified: false },
+        { name: 'preview.example.com', verified: true, gitBranch: 'preview' },
+        { name: 'alias.example.com', verified: true, redirect: 'example.com' },
+      ],
+      pagination: { next: 123 },
+    };
+  });
   assert.equal(
     await publishedSiteURL('/project', {
       provider: 'vercel',
@@ -157,16 +150,11 @@ test('URL discovery uses the same unsaved provider link as the menu', async (con
     projects: [{ name: 'site', hosting: worker }],
   }));
   cloudflare(context, {
-    '/workers/domains?service=site&environment=production': [
-      { service: 'site', environment: 'production', hostname: 'example.com' },
-    ],
+    '/workers/domains?service=site&environment=production': [{ service: 'site', environment: 'production', hostname: 'example.com' }],
   });
   assert.equal(await publishedProjectSiteURL('/project', undefined), 'https://example.com');
   // An explicit None setting must never be replaced by an automatically detected link.
-  assert.equal(
-    await publishedProjectSiteURL('/project', JSON.stringify(DEFAULT_PUBLISH_CONFIG)),
-    undefined,
-  );
+  assert.equal(await publishedProjectSiteURL('/project', JSON.stringify(DEFAULT_PUBLISH_CONFIG)), undefined);
 });
 
 test('ambiguous and failed linked discovery never guess a public URL', async (context) => {
@@ -215,11 +203,7 @@ test('unsaved Wrangler custom domain opens without provider credentials', async 
 
 test('configured domain requires the matching account and Worker', async (context) => {
   const root = await workerConfigFixture(context);
-  await writeFile(
-    path.join(root, 'wrangler.toml'),
-    'name = "site"\naccount_id = "account"\n' +
-      'route = { pattern = "example.com", custom_domain = true }\n',
-  );
+  await writeFile(path.join(root, 'wrangler.toml'), 'name = "site"\naccount_id = "account"\n' + 'route = { pattern = "example.com", custom_domain = true }\n');
   assert.equal(await configuredWorkerSiteURL(root, worker), 'https://example.com');
   assert.equal(await configuredWorkerSiteURL(root, { ...worker, accountId: 'other' }), undefined);
   assert.equal(await configuredWorkerSiteURL(root, { ...worker, project: 'other' }), undefined);
@@ -237,15 +221,9 @@ test('configured domains reject routes, invalid origins and oversized lists', as
     [{ pattern: 'example.com?query', custom_domain: true }],
     [{ pattern: 42, custom_domain: true }],
   ]) {
-    await writeFile(
-      path.join(root, 'wrangler.json'),
-      JSON.stringify({ name: 'site', account_id: 'account', routes }),
-    );
+    await writeFile(path.join(root, 'wrangler.json'), JSON.stringify({ name: 'site', account_id: 'account', routes }));
     assert.equal(await configuredWorkerSiteURL(root, worker), undefined);
   }
-  await writeFile(
-    path.join(root, 'wrangler.json'),
-    JSON.stringify({ name: 'site', account_id: 'account', routes: Array(501).fill('a') }),
-  );
+  await writeFile(path.join(root, 'wrangler.json'), JSON.stringify({ name: 'site', account_id: 'account', routes: Array(501).fill('a') }));
   await assert.rejects(configuredWorkerSiteURL(root, worker), /Discovery exceeds 500 entries/);
 });

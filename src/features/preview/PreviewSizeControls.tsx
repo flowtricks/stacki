@@ -38,9 +38,7 @@ export function PreviewSizeControls({ width, scale, onWidth, onFit }: PreviewSiz
               setDraft(String(Math.round(width)));
             }
           }}
-          aria-description={
-            `Enter ${PREVIEW_WIDTH_LIMITS.minimum}–` + `${PREVIEW_WIDTH_LIMITS.maximum}px`
-          }
+          aria-description={`Enter ${PREVIEW_WIDTH_LIMITS.minimum}–` + `${PREVIEW_WIDTH_LIMITS.maximum}px`}
         />
         <span>px</span>
       </label>

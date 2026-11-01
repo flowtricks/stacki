@@ -36,6 +36,9 @@ export interface PropField {
   readonly numeric?: boolean;
   readonly default?: PropDefault | undefined;
   readonly defaultExpr?: boolean;
+  // The project file an expression default imports, for its thumbnail only:
+  // the default itself is still the expression.
+  readonly defaultAsset?: string;
   readonly hint?: string;
   readonly doc?: string;
   readonly min?: number;
@@ -61,23 +64,16 @@ export function parseField(input: unknown, where: string): PropField {
     optional: schemaBoolean(value['optional'], `${where}.optional`),
     ...schemaOptionalMetadata(value, where),
     ...definedFields({
-      options: schemaOptional(value, 'options', where, (input, at) =>
-        schemaStrings(input, at, LIMITS.propOptionsMax),
-      ),
+      options: schemaOptional(value, 'options', where, (input, at) => schemaStrings(input, at, LIMITS.propOptionsMax)),
       shape: schemaOptional(value, 'shape', where, schemaShape),
-      unions: schemaOptional(value, 'unions', where, (input, at) =>
-        schemaArray(input, at, LIMITS.propOptionsMax).map((union) => schemaUnion(union, at)),
-      ),
+      unions: schemaOptional(value, 'unions', where, (input, at) => schemaArray(input, at, LIMITS.propOptionsMax).map((union) => schemaUnion(union, at))),
     }),
   };
   // An explicit undefined default is part of the existing in-process protocol.
   return 'default' in value
     ? {
         ...field,
-        default:
-          value['default'] === undefined
-            ? undefined
-            : schemaDefault(value['default'], `${where}.default`),
+        default: value['default'] === undefined ? undefined : schemaDefault(value['default'], `${where}.default`),
       }
     : field;
 }
@@ -175,12 +171,7 @@ function schemaStrings(input: unknown, where: string, maximum: number): readonly
 }
 
 // Undefined metadata is omitted because absence has meaning to the field renderer.
-function schemaOptional<T>(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-  where: string,
-  parse: (input: unknown, where: string) => T,
-): T | undefined {
+function schemaOptional<T>(record: Readonly<Record<string, unknown>>, key: string, where: string, parse: (input: unknown, where: string) => T): T | undefined {
   return record[key] === undefined ? undefined : parse(record[key], `${where}.${key}`);
 }
 function schemaOptionalMetadata(value: Readonly<Record<string, unknown>>, where: string) {
@@ -194,6 +185,7 @@ function schemaOptionalMetadata(value: Readonly<Record<string, unknown>>, where:
     max: schemaOptional(value, 'max', where, schemaNumber),
     step: schemaOptional(value, 'step', where, schemaNumber),
     doc: schemaOptional(value, 'doc', where, schemaText),
+    defaultAsset: schemaOptional(value, 'defaultAsset', where, schemaText),
     hint: schemaOptional(value, 'hint', where, schemaText),
   });
 }
@@ -206,35 +198,22 @@ function schemaShape(input: unknown, where: string): readonly PropShapeField[] {
     };
   });
 }
-function schemaDictionary<T>(
-  input: unknown,
-  where: string,
-  parse: (value: unknown, where: string) => T,
-): Readonly<Record<string, T>> {
+function schemaDictionary<T>(input: unknown, where: string, parse: (value: unknown, where: string) => T): Readonly<Record<string, T>> {
   const record = schemaRecord(input === undefined ? {} : input, where);
-  return Object.fromEntries(
-    Object.entries(record).map(([key, value]) => [
-      schemaText(key, where),
-      parse(value, `${where}.${key}`),
-    ]),
-  );
+  return Object.fromEntries(Object.entries(record).map(([key, value]) => [schemaText(key, where), parse(value, `${where}.${key}`)]));
 }
 function schemaUnion(input: unknown, where: string): PropUnion {
   const value = schemaRecord(input, where);
   return {
     names: schemaStrings(value['names'], `${where}.names`, LIMITS.propSchemaFieldsMax),
-    branches: schemaArray(value['branches'], `${where}.branches`, LIMITS.propOptionsMax).map(
-      (branch) => schemaBranch(branch, where),
-    ),
+    branches: schemaArray(value['branches'], `${where}.branches`, LIMITS.propOptionsMax).map((branch) => schemaBranch(branch, where)),
   };
 }
 function schemaBranch(input: unknown, where: string): UnionBranch {
   const value = schemaRecord(input, where);
   return {
     forbids: schemaStrings(value['forbids'], `${where}.forbids`, LIMITS.propSchemaFieldsMax),
-    pins: schemaDictionary(value['pins'], `${where}.pins`, (input, at) =>
-      schemaStrings(input, at, LIMITS.propOptionsMax),
-    ),
+    pins: schemaDictionary(value['pins'], `${where}.pins`, (input, at) => schemaStrings(input, at, LIMITS.propOptionsMax)),
     defaults: schemaDictionary(value['defaults'], `${where}.defaults`, (input, at) =>
       typeof input === 'string' ? schemaText(input, at) : schemaNumber(input, at),
     ),

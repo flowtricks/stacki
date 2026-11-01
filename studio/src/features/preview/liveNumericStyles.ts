@@ -24,10 +24,7 @@ export function receiveLiveNumericStyles(input: unknown) {
         variable: string(value['variable'], 110),
         value: string(value['value'], 100),
       };
-      if (
-        !/^--[\w-]+$/.test(change.variable) ||
-        (change.value && !/^-?[\d.]+(ch|px|rem|em|%|vw|vh)$/.test(change.value))
-      ) {
+      if (!/^--[\w-]+$/.test(change.variable) || (change.value && !/^-?[\d.]+(ch|px|rem|em|%|vw|vh)$/.test(change.value))) {
         continue;
       }
       const key = change.path + ':' + change.variable;
@@ -43,15 +40,8 @@ export function receiveLiveNumericStyles(input: unknown) {
 export function applyLiveNumericStyles(rendered?: Document) {
   for (const [key, change] of pending) {
     if (rendered) {
-      const matches = [...rendered.querySelectorAll<HTMLElement>('[data-avb-p]')].filter(
-        (element) => matchesPath(element, change),
-      );
-      if (
-        matches.length &&
-        matches.every(
-          (element) => element.style.getPropertyValue(change.variable).trim() === change.value,
-        )
-      ) {
+      const matches = [...rendered.querySelectorAll<HTMLElement>('[data-avb-p]')].filter((element) => matchesPath(element, change));
+      if (matches.length && matches.every((element) => element.style.getPropertyValue(change.variable).trim() === change.value)) {
         pending.delete(key);
         continue;
       }

@@ -10,10 +10,7 @@ interface TitleNode {
   readonly props?: Readonly<Record<string, Attr>> | undefined;
 }
 
-export function layoutPageTitle(
-  nodes: readonly TitleNode[],
-  inheritedTitle?: string,
-): string | undefined {
+export function layoutPageTitle(nodes: readonly TitleNode[], inheritedTitle?: string): string | undefined {
   assert(nodes.length <= LIMITS.treeNodesMax, 'Page title: node count is bounded');
   const layout = nodes.find((node) => node.id === 'layout');
   if (layout?.kind !== 'component') {

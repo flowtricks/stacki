@@ -78,14 +78,8 @@ test('a stamp is written and read back; anything else in a comment is not one', 
   ]) {
     assert.equal(parseStampData(data), undefined, JSON.stringify(data));
   }
-  assert.throws(
-    () => stampComment({ file: '../x.astro', checksum: firstDigest }),
-    /project-relative/,
-  );
-  assert.throws(
-    () => stampComment({ file: 'a-->b.astro', checksum: firstDigest }),
-    /project-relative/,
-  );
+  assert.throws(() => stampComment({ file: '../x.astro', checksum: firstDigest }), /project-relative/);
+  assert.throws(() => stampComment({ file: 'a-->b.astro', checksum: firstDigest }), /project-relative/);
 });
 
 test('a manifest is sorted, one entry per file, and refuses a rendering of two versions', () => {
@@ -106,10 +100,7 @@ test('a manifest is sorted, one entry per file, and refuses a rendering of two v
   assert.equal(manifestOf(many.slice(1)).ok, true, 'the bound itself is allowed');
   const copies = Array.from({ length: LIMITS.previewMarkersMax + 1 }, () => card);
   assert.deepEqual(manifestOf(copies), { ok: false, error: 'too-many-files' });
-  assert.equal(
-    canonicalManifest([card, page]),
-    `${firstDigest} src/components/Card.astro\n${secondDigest} src/pages/index.astro\n`,
-  );
+  assert.equal(canonicalManifest([card, page]), `${firstDigest} src/components/Card.astro\n${secondDigest} src/pages/index.astro\n`);
   assert.throws(() => canonicalManifest([page, card]), /sorted/);
 });
 
@@ -161,46 +152,31 @@ test('the judge: token first, then every stamped file, each state named', () => 
       ['src/components/Card.astro', card],
       ['src/pages/index.astro', page],
     ]);
-  assert.deepEqual(
-    judgePreviewRender(render, now(present(firstDigest), present(secondDigest)), tokenOf),
-    {
-      tag: 'current',
-    },
-  );
-  assert.deepEqual(
-    judgePreviewRender(render, now(present(secondDigest), present(secondDigest)), tokenOf),
-    {
-      tag: 'stale',
-      reason: 'file-changed',
-      file: 'src/components/Card.astro',
-    },
-  );
-  assert.deepEqual(
-    judgePreviewRender(render, now({ tag: 'missing' }, present(secondDigest)), tokenOf),
-    {
-      tag: 'stale',
-      reason: 'file-missing',
-      file: 'src/components/Card.astro',
-    },
-  );
-  assert.deepEqual(
-    judgePreviewRender(render, now(present(firstDigest), { tag: 'over-limit' }), tokenOf),
-    {
-      tag: 'stale',
-      reason: 'file-changed',
-      file: 'src/pages/index.astro',
-    },
-  );
+  assert.deepEqual(judgePreviewRender(render, now(present(firstDigest), present(secondDigest)), tokenOf), {
+    tag: 'current',
+  });
+  assert.deepEqual(judgePreviewRender(render, now(present(secondDigest), present(secondDigest)), tokenOf), {
+    tag: 'stale',
+    reason: 'file-changed',
+    file: 'src/components/Card.astro',
+  });
+  assert.deepEqual(judgePreviewRender(render, now({ tag: 'missing' }, present(secondDigest)), tokenOf), {
+    tag: 'stale',
+    reason: 'file-missing',
+    file: 'src/components/Card.astro',
+  });
+  assert.deepEqual(judgePreviewRender(render, now(present(firstDigest), { tag: 'over-limit' }), tokenOf), {
+    tag: 'stale',
+    reason: 'file-changed',
+    file: 'src/pages/index.astro',
+  });
   // A token that is not the manifest's digest vouches for nothing.
   const forged = { ...render, token: firstDigest };
-  assert.deepEqual(
-    judgePreviewRender(forged, now(present(firstDigest), present(secondDigest)), tokenOf),
-    {
-      tag: 'stale',
-      reason: 'token-mismatch',
-      file: undefined,
-    },
-  );
+  assert.deepEqual(judgePreviewRender(forged, now(present(firstDigest), present(secondDigest)), tokenOf), {
+    tag: 'stale',
+    reason: 'token-mismatch',
+    file: undefined,
+  });
   // Main must have read every stamped file: a missing entry is a bug.
   assert.throws(() => judgePreviewRender(render, new Map(), tokenOf), /read every stamped file/);
 });
@@ -249,14 +225,8 @@ test('verdicts cross the wire intact, and every reason has its own notice', () =
   assert.deepEqual(parsePreviewVerdict({ tag: 'current' }), { tag: 'current' });
   assert.throws(() => parsePreviewVerdict({ tag: 'fresh' }), /tag/);
   assert.throws(() => parsePreviewVerdict({ tag: 'stale', reason: 'old' }), /reason/);
-  assert.throws(
-    () => parsePreviewVerdict({ tag: 'stale', reason: 'superseded', file: '../x' }),
-    /file/,
-  );
-  assert.equal(
-    new Set(PREVIEW_STALE_REASONS.map(describePreviewStale)).size,
-    PREVIEW_STALE_REASONS.length,
-  );
+  assert.throws(() => parsePreviewVerdict({ tag: 'stale', reason: 'superseded', file: '../x' }), /file/);
+  assert.equal(new Set(PREVIEW_STALE_REASONS.map(describePreviewStale)).size, PREVIEW_STALE_REASONS.length);
 });
 
 // --- End to end ---------------------------------------------------------------
@@ -334,8 +304,7 @@ test('markers live in memory only; the token follows the rendering chain', async
     assert.equal(typeof configPath, 'string', 'the generated config parses');
     assert.ok(typeof configPath === 'string');
     assert.ok(
-      path.relative(path.join(root, 'node_modules', '.avb'), configPath).split(path.sep)[0] !==
-        '..',
+      path.relative(path.join(root, 'node_modules', '.avb'), configPath).split(path.sep)[0] !== '..',
       'the generated config lives in node_modules/.avb, outside the project source',
     );
     const module: unknown = await import(pathToFileURL(configPath).href);
@@ -366,9 +335,7 @@ test('markers live in memory only; the token follows the rendering chain', async
     assert.match(page, /<!--avb-s:0-->/, 'the page is marked');
     assert.match(card, /src\/components\/Card\.astro\|0/, 'a component marks in its own namespace');
     assert.deepEqual(stampsIn(page), [{ file: 'src/pages/index.astro', checksum: sha256(PAGE) }]);
-    assert.deepEqual(stampsIn(card), [
-      { file: 'src/components/Card.astro', checksum: sha256(CARD) },
-    ]);
+    assert.deepEqual(stampsIn(card), [{ file: 'src/components/Card.astro', checksum: sha256(CARD) }]);
     assert.match(
       card,
       /data-avb-d=\{\["avb-d:[0-9a-f]{64}:src\/components\/Card\.astro",/,
@@ -392,13 +359,8 @@ test('markers live in memory only; the token follows the rendering chain', async
 });
 
 /** The real `preview:check` handler, as files change under one rendering. */
-async function judgeAsFilesChange(
-  harness: ReturnType<typeof mainHarness>,
-  root: string,
-  render: PreviewRender,
-): Promise<void> {
-  const check = async () =>
-    parsePreviewVerdict(await harness.invoke('preview:check', { projectPath: root, render }));
+async function judgeAsFilesChange(harness: ReturnType<typeof mainHarness>, root: string, render: PreviewRender): Promise<void> {
+  const check = async () => parsePreviewVerdict(await harness.invoke('preview:check', { projectPath: root, render }));
   assert.deepEqual(await check(), { tag: 'current' });
 
   // Direction one: a component edit makes the page's rendering stale, though
@@ -446,12 +408,11 @@ async function judgeAsFilesChange(
   assert.equal(fs.existsSync(outside), false);
   // A token that does not match its manifest vouches for nothing.
   const forged = { ...render, token: firstDigest };
-  assert.deepEqual(
-    parsePreviewVerdict(
-      await harness.invoke('preview:check', { projectPath: root, render: forged }),
-    ),
-    { tag: 'stale', reason: 'token-mismatch', file: undefined },
-  );
+  assert.deepEqual(parsePreviewVerdict(await harness.invoke('preview:check', { projectPath: root, render: forged })), {
+    tag: 'stale',
+    reason: 'token-mismatch',
+    file: undefined,
+  });
 }
 
 interface MarkerPlugin {
@@ -464,10 +425,7 @@ function markerPlugin(config: unknown, name: string): MarkerPlugin {
   assert.ok(typeof vite === 'object' && vite !== null && 'plugins' in vite);
   const plugins: unknown = vite.plugins;
   assert.ok(Array.isArray(plugins));
-  const found: unknown = plugins.find(
-    (plugin: unknown) =>
-      typeof plugin === 'object' && plugin !== null && 'name' in plugin && plugin.name === name,
-  );
+  const found: unknown = plugins.find((plugin: unknown) => typeof plugin === 'object' && plugin !== null && 'name' in plugin && plugin.name === name);
   assert.ok(typeof found === 'object' && found !== null && 'load' in found);
   const load: unknown = found.load;
   assert.ok(typeof load === 'function');
@@ -497,19 +455,12 @@ test('only the marking module makes markers, and nothing imports it', () => {
   assert.deepEqual(importers, [], 'the dev plugin requires it by path; no app module imports it');
   const callers = all.filter((file) => {
     const text = fs.readFileSync(file, 'utf8');
-    return /\b(serializePageMarked|markChunkHtml)\s*\(/.test(
-      text.replace(/^\s*(\/\/|\*).*$/gm, ''),
-    );
+    return /\b(serializePageMarked|markChunkHtml)\s*\(/.test(text.replace(/^\s*(\/\/|\*).*$/gm, ''));
   });
   assert.deepEqual(
     callers.map((file) => file.split(path.sep).join('/')).sort(),
-    [
-      'electron/parse/astroChunks.ts',
-      'electron/parse/astroParser.ts',
-      'electron/previewServer/previewMarkers.ts',
-    ],
-    'the marked serializers are defined in the parser (markChunkHtml in its chunks module) ' +
-      'and called only by the marking module',
+    ['electron/parse/astroChunks.ts', 'electron/parse/astroParser.ts', 'electron/previewServer/previewMarkers.ts'],
+    'the marked serializers are defined in the parser (markChunkHtml in its chunks module) ' + 'and called only by the marking module',
   );
   const marking = fs.readFileSync('electron/previewServer/previewMarkers.ts', 'utf8');
   assert.doesNotMatch(

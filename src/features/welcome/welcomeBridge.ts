@@ -1,14 +1,6 @@
 import type { IpcResults } from '../../../shared/ipc/ipcResults';
 import type { Parser } from '../../../shared/core/boundary';
-import {
-  boolean,
-  count,
-  list,
-  optional,
-  pathText,
-  record,
-  text,
-} from '../../../shared/core/boundary';
+import { boolean, count, list, optional, pathText, record, text } from '../../../shared/core/boundary';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import type { Result } from '../../../shared/core/result';
 import type { CreatePackageManager } from '../../../shared/properties/packageManager';
@@ -16,8 +8,7 @@ import { cleanError } from '../../lib/cleanError';
 
 export type RecentProject = IpcResults['recents:list'][number];
 export type ProjectDialog = IpcResults['project:openDialog'];
-export type ParentDialog =
-  { readonly canceled: true } | { readonly canceled: false; readonly parentPath: string };
+export type ParentDialog = { readonly canceled: true } | { readonly canceled: false; readonly parentPath: string };
 export type ProjectTemplate = 'basics' | 'blog' | 'starlight' | 'minimal';
 
 export interface AstroProjectOptions {
@@ -95,11 +86,7 @@ export function chooseStarterParent() {
   return welcomeRequest(parseParentDialog, () => window.avb.parentDialog(payload));
 }
 
-export function createStarterProject(
-  parentPath: string,
-  name: string,
-  packageManager: CreatePackageManager,
-) {
+export function createStarterProject(parentPath: string, name: string, packageManager: CreatePackageManager) {
   const payload = parseIpcPayload('project:createStarter', {
     starter: 'lumos',
     parentPath,
@@ -162,10 +149,7 @@ function parseAstroResult(input: unknown): IpcResults['project:createAstro'] {
   };
 }
 
-async function welcomeRequest<Value>(
-  parse: Parser<Value>,
-  invoke: () => Promise<unknown>,
-): Promise<Result<Value, string>> {
+async function welcomeRequest<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<Result<Value, string>> {
   let response: unknown;
   try {
     response = await invoke();

@@ -25,9 +25,7 @@ interface PreviewWatch {
 }
 // What one probe found: a page being served, or the server still failing to serve one.
 type ProbeAnswer = 'serving' | 'failing';
-type WatchState =
-  | { readonly kind: 'active'; readonly serving: boolean }
-  | { readonly kind: 'stopped'; readonly serving: boolean };
+type WatchState = { readonly kind: 'active'; readonly serving: boolean } | { readonly kind: 'stopped'; readonly serving: boolean };
 
 export function createPreviewWatch(options: PreviewOptions): PreviewWatch {
   const watch = new PreviewWatcher(options);

@@ -22,11 +22,7 @@ import * as path from 'node:path';
 import { test } from 'node:test';
 import { toFilePath, toIntentId } from '#dist/shared/core/brand.js';
 import { toIntent, type Intent, type Operation } from '#dist/shared/engine/intent.js';
-import {
-  planIntent,
-  planIntentThroughDiff,
-  type PlanningBase,
-} from '#dist/shared/engine/planner.js';
+import { planIntent, planIntentThroughDiff, type PlanningBase } from '#dist/shared/engine/planner.js';
 import type { AnchorRef } from '#dist/shared/page/ref.js';
 import type { Snapshot } from '#dist/shared/page/snapshot.js';
 import type { ProjectedNode } from '#dist/shared/page/sourceProjection.js';
@@ -82,10 +78,7 @@ function spliceStarts(base: PlanningBase, intent: Intent): readonly number[] {
 test('oracle set-attribute scenarios: exact splices, fast path and diff path alike', () => {
   let checked = 0;
   for (const step of ORACLE_SCENARIOS.flatMap((scenario) => scenario.steps)) {
-    const input = snapshotOf(
-      toFilePath(`/project/${step.file}`),
-      encodeUtf8(readFixture(step.file)),
-    );
+    const input = snapshotOf(toFilePath(`/project/${step.file}`), encodeUtf8(readFixture(step.file)));
     const intent = oracleIntent(step, input, toIntentId(`oracle-${checked}`));
     if (intent.operation.tag !== 'set-attribute') {
       continue;
@@ -114,11 +107,7 @@ const SIBLINGS = `${HERO}${FOOTER}${CARD}${CARD}`;
 
 function secondCardIntent(): { readonly authored: Snapshot; readonly intent: Intent } {
   const authored = snapshotText(SIBLINGS);
-  assert.equal(
-    readFixture('duplicate-siblings.astro'),
-    SIBLINGS,
-    'the fixture is the one described',
-  );
+  assert.equal(readFixture('duplicate-siblings.astro'), SIBLINGS, 'the fixture is the one described');
   return {
     authored,
     intent: intentOn(authored, anchorAt(authored, [3]), setAttribute('title', 'New')),
@@ -161,17 +150,11 @@ test('stale intent, edit elsewhere: a unique region is retitled at its new offse
   assert.deepEqual(footerSplice(noHero), [15]);
   // A sibling inserted below the target: nothing above moved, the splice stays at 36.
   const below = `${HERO}${FOOTER}<hr />\n${CARD}${CARD}`;
-  assert.equal(
-    footerAgainst(below).result,
-    `${HERO}<Footer title="New" />\n<hr />\n${CARD}${CARD}`,
-  );
+  assert.equal(footerAgainst(below).result, `${HERO}<Footer title="New" />\n<hr />\n${CARD}${CARD}`);
   assert.deepEqual(footerSplice(below), [36]);
   // Wrapped and re-indented: `<main>\n` 7 bytes, two spaces, the hero, two spaces: 47.
   const wrapped = `<main>\n  ${HERO}  ${FOOTER}  ${CARD}  ${CARD}</main>\n`;
-  assert.equal(
-    footerAgainst(wrapped).result,
-    `<main>\n  ${HERO}  <Footer title="New" />\n  ${CARD}  ${CARD}</main>\n`,
-  );
+  assert.equal(footerAgainst(wrapped).result, `<main>\n  ${HERO}  <Footer title="New" />\n  ${CARD}  ${CARD}</main>\n`);
   assert.deepEqual(footerSplice(wrapped), [47]);
 });
 
@@ -179,14 +162,8 @@ test('stale intent, edit elsewhere: one of two identical cards is refused, not g
   // The same four edits, aimed at the second card: its bytes repeat in every one.
   assert.equal(againstCurrent(`<Nav />\n${SIBLINGS}`).result, 'rejected: anchor-ambiguous');
   assert.equal(againstCurrent(`${FOOTER}${CARD}${CARD}`).result, 'rejected: anchor-ambiguous');
-  assert.equal(
-    againstCurrent(`${HERO}${FOOTER}${CARD}<hr />\n${CARD}`).result,
-    'rejected: anchor-ambiguous',
-  );
-  assert.equal(
-    againstCurrent(`<main>\n  ${HERO}  ${FOOTER}  ${CARD}  ${CARD}</main>\n`).result,
-    'rejected: anchor-ambiguous',
-  );
+  assert.equal(againstCurrent(`${HERO}${FOOTER}${CARD}<hr />\n${CARD}`).result, 'rejected: anchor-ambiguous');
+  assert.equal(againstCurrent(`<main>\n  ${HERO}  ${FOOTER}  ${CARD}  ${CARD}</main>\n`).result, 'rejected: anchor-ambiguous');
   // The first card retitled outside Stacki: the second card's bytes are now
   // unique in the current file, but they were not in the authored one — the
   // same bytes arise from the second card retitled and the two swapped, and
@@ -204,33 +181,18 @@ test('stale intent, the target itself in question: typed rejections, never anoth
   // A third identical card: which two are the originals is a guess.
   assert.equal(againstCurrent(`${SIBLINGS}${CARD}`).result, 'rejected: anchor-ambiguous');
   // Its title changed outside Stacki: the tag the edit lives in is gone.
-  assert.equal(
-    againstCurrent(`${HERO}${FOOTER}${CARD}<Card title="Ext" />\n`).result,
-    'rejected: anchor-moved',
-  );
+  assert.equal(againstCurrent(`${HERO}${FOOTER}${CARD}<Card title="Ext" />\n`).result, 'rejected: anchor-moved');
   // An attribute added inside its name-to-last-attribute region.
-  assert.equal(
-    againstCurrent(`${HERO}${FOOTER}${CARD}<Card data-x="1" title="Old" />\n`).result,
-    'rejected: anchor-moved',
-  );
+  assert.equal(againstCurrent(`${HERO}${FOOTER}${CARD}<Card data-x="1" title="Old" />\n`).result, 'rejected: anchor-moved');
   // An attribute appended after the title: the closing quote could be either.
-  assert.equal(
-    againstCurrent(`${HERO}${FOOTER}${CARD}<Card title="Old" data-x="1" />\n`).result,
-    'rejected: anchor-ambiguous',
-  );
+  assert.equal(againstCurrent(`${HERO}${FOOTER}${CARD}<Card title="Old" data-x="1" />\n`).result, 'rejected: anchor-ambiguous');
   // Commented out: the bytes survive, the element does not. The commented
   // copy repeats the first card's bytes, so the remap is refused before the
   // parse would find no element there.
-  assert.equal(
-    againstCurrent(`${HERO}${FOOTER}${CARD}<!-- <Card title="Old" /> -->\n`).result,
-    'rejected: anchor-ambiguous',
-  );
+  assert.equal(againstCurrent(`${HERO}${FOOTER}${CARD}<!-- <Card title="Old" /> -->\n`).result, 'rejected: anchor-ambiguous');
   // Moved into a loop: one source node, many rendered cards. The loop body
   // repeats the first card's bytes, so the remap is refused as repeated first.
-  assert.equal(
-    againstCurrent(`${HERO}${FOOTER}${CARD}{[1, 2].map(() => <Card title="Old" />)}\n`).result,
-    'rejected: anchor-ambiguous',
-  );
+  assert.equal(againstCurrent(`${HERO}${FOOTER}${CARD}{[1, 2].map(() => <Card title="Old" />)}\n`).result, 'rejected: anchor-ambiguous');
   // The footer moved into a loop, its bytes unique: it is now one source node
   // rendered many times, which the user never saw, so the edit is refused —
   // never applied to every copy (step 7).
@@ -274,9 +236,7 @@ test('a pasted copy after an edit above: mapped onto the copy, refused by the pl
   assert.equal(planned({ authored, current: far }, footer), 'rejected: anchor-ambiguous');
   // An attribute appended to the original keeps the old region as a prefix of
   // its own: two occurrences again, though only one is a whole region.
-  const appended = snapshotText(
-    `<Hero title="New" />\n<Footer title="Old" data-x="1" />\n${FOOTER}${CARD}${CARD}`,
-  );
+  const appended = snapshotText(`<Hero title="New" />\n<Footer title="Old" data-x="1" />\n${FOOTER}${CARD}${CARD}`);
   assert.equal(planned({ authored, current: appended }, footer), 'rejected: anchor-ambiguous');
 });
 
@@ -318,9 +278,7 @@ test('a twin removed: a region unique now but repeated when authored is refused'
 test('BYTES CANNOT TELL: a unique region planned where only history could object', () => {
   const { authored } = secondCardIntent();
   const footer = intentOn(authored, anchorAt(authored, [1]), setAttribute('title', 'New'));
-  const current = snapshotText(
-    `<Hero title="New" />\n<Footer title="Zed" />\n${FOOTER}${CARD}${CARD}`,
-  );
+  const current = snapshotText(`<Hero title="New" />\n<Footer title="Zed" />\n${FOOTER}${CARD}${CARD}`);
   assert.deepEqual(spliceStarts({ authored, current }, footer), [59]);
 });
 
@@ -349,37 +307,23 @@ test('stale intent past the diff bound, or into a file that no longer parses', (
 test('rejections that need no diff: the anchor, the attribute, the value, the operation', () => {
   const { authored, intent } = secondCardIntent();
   const base = { authored, current: authored };
-  const plan = (operation: Operation, anchor: AnchorRef = intent.anchor) =>
-    planIntent(base, intentOn(authored, anchor, operation));
+  const plan = (operation: Operation, anchor: AnchorRef = intent.anchor) => planIntent(base, intentOn(authored, anchor, operation));
   // The anchor must name, in the authored bytes, a node at that path with that span and kind.
   const hero = anchorAt(authored, [0]);
   assert.deepEqual(plan(setAttribute('title', 'x'), { ...intent.anchor, span: hero.span }), {
     ok: false,
     error: 'anchor-moved',
   });
-  assert.deepEqual(
-    plan(setAttribute('title', 'x'), { ...intent.anchor, expectedKind: 'element' }),
-    {
-      ok: false,
-      error: 'anchor-moved',
-    },
-  );
+  assert.deepEqual(plan(setAttribute('title', 'x'), { ...intent.anchor, expectedKind: 'element' }), {
+    ok: false,
+    error: 'anchor-moved',
+  });
   // Step 6: what step 2 refused now plans; each result is written out by hand.
-  const text = (operation: Operation): string =>
-    planned(base, intentOn(authored, intent.anchor, operation));
+  const text = (operation: Operation): string => planned(base, intentOn(authored, intent.anchor, operation));
   const card = (tag: string) => `${HERO}${FOOTER}${CARD}${tag}\n`;
-  assert.equal(
-    text(setAttribute('data-missing', 'x')),
-    card('<Card title="Old" data-missing="x" />'),
-  );
-  assert.equal(
-    text({ tag: 'set-attribute', name: 'title', value: { type: 'expr', value: 'x' } }),
-    card('<Card title={x} />'),
-  );
-  assert.equal(
-    text({ tag: 'set-attribute', name: 'title', value: { type: 'bare' } }),
-    card('<Card title />'),
-  );
+  assert.equal(text(setAttribute('data-missing', 'x')), card('<Card title="Old" data-missing="x" />'));
+  assert.equal(text({ tag: 'set-attribute', name: 'title', value: { type: 'expr', value: 'x' } }), card('<Card title={x} />'));
+  assert.equal(text({ tag: 'set-attribute', name: 'title', value: { type: 'bare' } }), card('<Card title />'));
   // A double quote closes a double-quoted value: the value is re-quoted.
   assert.equal(text(setAttribute('title', 'say "hi"')), card(`<Card title='say "hi"' />`));
   assert.equal(text(setAttribute('title', "it's")), card(`<Card title="it's" />`));
@@ -388,93 +332,74 @@ test('rejections that need no diff: the anchor, the attribute, the value, the op
     text({ tag: 'set-inline-style', property: 'color', declaration: { tag: 'set', value: 'red' } }),
     card('<Card title="Old" style="color: red" />'),
   );
-  assert.equal(
-    text({ tag: 'insert-node', placement: 'after', source: '<p />' }),
-    `${HERO}${FOOTER}${CARD}<Card title="Old" />\n<p />\n`,
-  );
+  assert.equal(text({ tag: 'insert-node', placement: 'after', source: '<p />' }), `${HERO}${FOOTER}${CARD}<Card title="Old" />\n<p />\n`);
   assert.deepEqual(plan({ tag: 'move-node', destination: hero, placement: 'after' }).ok, true);
 });
 
-test(
-  'duplicate attributes are refused, loop bodies edit their one source node, and an expression ' +
-    'attribute is replaced whole',
-  () => {
-    const page = snapshotText(readFixture('conditional-template.astro'));
-    const projection = page.projection;
-    assert.equal(projection.tag, 'valid');
-    if (projection.tag !== 'valid') {
-      return;
+test('duplicate attributes are refused, loop bodies edit their one source node, and an expression ' + 'attribute is replaced whole', () => {
+  const page = snapshotText(readFixture('conditional-template.astro'));
+  const projection = page.projection;
+  assert.equal(projection.tag, 'valid');
+  if (projection.tag !== 'valid') {
+    return;
+  }
+  const base = { authored: page, current: page };
+  const nodeWith = (predicate: (node: ProjectedNode) => boolean) => {
+    const node = projection.nodes.find(predicate);
+    assert.ok(node !== undefined);
+    return anchorAt(page, node.path);
+  };
+  const classCount = (node: ProjectedNode) => node.attributes.filter((attribute) => attribute.name === 'class').length;
+  const duplicated = nodeWith((node) => {
+    if (node.capability === 'editable') {
+      return classCount(node) > 1;
     }
-    const base = { authored: page, current: page };
-    const nodeWith = (predicate: (node: ProjectedNode) => boolean) => {
-      const node = projection.nodes.find(predicate);
-      assert.ok(node !== undefined);
-      return anchorAt(page, node.path);
-    };
-    const classCount = (node: ProjectedNode) =>
-      node.attributes.filter((attribute) => attribute.name === 'class').length;
-    const duplicated = nodeWith((node) => {
-      if (node.capability === 'editable') {
-        return classCount(node) > 1;
-      }
-      return false;
-    });
-    assert.deepEqual(planIntent(base, intentOn(page, duplicated, setAttribute('class', 'c'))), {
-      ok: false,
-      error: 'anchor-ambiguous',
-    });
-    // An expression attribute is set as a whole: `data-x={ 1 + 2 }` → `data-x="3"`.
-    const expression = nodeWith((node) =>
-      node.attributes.some((attribute) => attribute.name === 'data-x'),
-    );
-    const set = planIntent(base, intentOn(page, expression, setAttribute('data-x', '3')));
-    assert.ok(set.ok, 'a type change plans');
-    const written = decodeUtf8(applySplices(page.bytes, set.value.splices));
-    assert.ok(written.ok);
-    assert.match(written.value, /\n  data-x="3"\n/);
-    const repeated = nodeWith((node) => {
-      if (node.capability === 'repeated-source-node') {
-        return node.kind === 'element';
-      }
-      return false;
-    });
-    // Step 7: a node a loop repeats is one source node, and an edit of it edits
-    // that source — every copy the loop renders — never one runtime instance.
-    const edited = planIntent(base, intentOn(page, repeated, setAttribute('data-step', '7')));
-    assert.ok(edited.ok, 'an attribute of a repeated node plans against its source node');
-    const [splice, ...others] = edited.value.splices;
-    assert.equal(others.length, 0, 'one splice: the source node is written once');
-    assert.ok(splice !== undefined);
-    assert.ok(repeated.span.start <= splice.range.start, 'the splice lands in the source node');
-    assert.ok(splice.range.end <= repeated.span.end, 'and stays inside it');
-    // Nothing is placed beside it or taken from it: the list it sits in is the
-    // loop body's code.
-    assert.deepEqual(
-      planIntent(
-        base,
-        intentOn(page, repeated, { tag: 'insert-node', placement: 'after', source: '<p />' }),
-      ),
-      { ok: false, error: 'unsupported-operation' },
-    );
-    assert.deepEqual(planIntent(base, intentOn(page, repeated, { tag: 'remove-node' })), {
-      ok: false,
-      error: 'unsupported-operation',
-    });
-  },
-);
+    return false;
+  });
+  assert.deepEqual(planIntent(base, intentOn(page, duplicated, setAttribute('class', 'c'))), {
+    ok: false,
+    error: 'anchor-ambiguous',
+  });
+  // An expression attribute is set as a whole: `data-x={ 1 + 2 }` → `data-x="3"`.
+  const expression = nodeWith((node) => node.attributes.some((attribute) => attribute.name === 'data-x'));
+  const set = planIntent(base, intentOn(page, expression, setAttribute('data-x', '3')));
+  assert.ok(set.ok, 'a type change plans');
+  const written = decodeUtf8(applySplices(page.bytes, set.value.splices));
+  assert.ok(written.ok);
+  assert.match(written.value, /\n  data-x="3"\n/);
+  const repeated = nodeWith((node) => {
+    if (node.capability === 'repeated-source-node') {
+      return node.kind === 'element';
+    }
+    return false;
+  });
+  // Step 7: a node a loop repeats is one source node, and an edit of it edits
+  // that source — every copy the loop renders — never one runtime instance.
+  const edited = planIntent(base, intentOn(page, repeated, setAttribute('data-step', '7')));
+  assert.ok(edited.ok, 'an attribute of a repeated node plans against its source node');
+  const [splice, ...others] = edited.value.splices;
+  assert.equal(others.length, 0, 'one splice: the source node is written once');
+  assert.ok(splice !== undefined);
+  assert.ok(repeated.span.start <= splice.range.start, 'the splice lands in the source node');
+  assert.ok(splice.range.end <= repeated.span.end, 'and stays inside it');
+  // Nothing is placed beside it or taken from it: the list it sits in is the
+  // loop body's code.
+  assert.deepEqual(planIntent(base, intentOn(page, repeated, { tag: 'insert-node', placement: 'after', source: '<p />' })), {
+    ok: false,
+    error: 'unsupported-operation',
+  });
+  assert.deepEqual(planIntent(base, intentOn(page, repeated, { tag: 'remove-node' })), {
+    ok: false,
+    error: 'unsupported-operation',
+  });
+});
 
 test("preconditions assert: the authored snapshot and the file are the intent's own", () => {
   const { authored, intent } = secondCardIntent();
   const other = snapshotText(`${SIBLINGS}\n`);
-  assert.throws(
-    () => planIntent({ authored: other, current: other }, intent),
-    /Assertion failed: The authored snapshot is the one the intent names/,
-  );
+  assert.throws(() => planIntent({ authored: other, current: other }, intent), /Assertion failed: The authored snapshot is the one the intent names/);
   const elsewhere = snapshotText(SIBLINGS, toFilePath('/project/other.astro'));
-  assert.throws(
-    () => planIntent({ authored, current: elsewhere }, intent),
-    /Assertion failed: The current snapshot is of the intent file/,
-  );
+  assert.throws(() => planIntent({ authored, current: elsewhere }, intent), /Assertion failed: The current snapshot is of the intent file/);
 });
 
 // --- The corpus sweep --------------------------------------------------------
@@ -496,13 +421,9 @@ function corpusFiles(): readonly { readonly name: string; readonly text: string 
 
 /** The file with INSERTED at the start of the body: after the frontmatter, or
  * after a leading byte-order mark. Returns the byte offset it went in at. */
-function withInsertion(
-  snapshot: Snapshot,
-  text: string,
-): { readonly text: string; readonly at: number } {
+function withInsertion(snapshot: Snapshot, text: string): { readonly text: string; readonly at: number } {
   assert.equal(snapshot.projection.tag, 'valid');
-  const frontmatter =
-    snapshot.projection.tag === 'valid' ? snapshot.projection.frontmatter : undefined;
+  const frontmatter = snapshot.projection.tag === 'valid' ? snapshot.projection.frontmatter : undefined;
   const at = frontmatter === undefined ? (text.startsWith('﻿') ? 3 : 0) : frontmatter.end;
   const bytes: ByteString = snapshot.bytes;
   const joined = Buffer.concat([bytes.subarray(0, at), Buffer.from(INSERTED), bytes.subarray(at)]);
@@ -521,8 +442,7 @@ function regionRepeats(authored: Snapshot, current: Snapshot, node: ProjectedNod
   return text.value.indexOf(region, first + 1) >= 0;
 }
 
-const SWEEP_TITLE =
-  'corpus sweep: fast = reference = diff path; an insertion above shifts every plan';
+const SWEEP_TITLE = 'corpus sweep: fast = reference = diff path; an insertion above shifts every plan';
 test(SWEEP_TITLE, (testContext) => {
   let plannedCount = 0;
   let shiftedCount = 0;
@@ -541,18 +461,10 @@ test(SWEEP_TITLE, (testContext) => {
         if (!['element', 'component', 'raw'].includes(node.kind)) {
           continue;
         }
-        const intent = intentOn(
-          authored,
-          anchorAt(authored, node.path),
-          setAttribute(attribute.name, 'x'),
-        );
+        const intent = intentOn(authored, anchorAt(authored, node.path), setAttribute(attribute.name, 'x'));
         const same = { authored, current: authored };
         const fast = planIntent(same, intent);
-        assert.deepEqual(
-          planByIdentity(authored, intent),
-          fast,
-          `${file.name} ${node.path.join('/')}: reference`,
-        );
+        assert.deepEqual(planByIdentity(authored, intent), fast, `${file.name} ${node.path.join('/')}: reference`);
         assert.deepEqual(planIntentThroughDiff(same, intent), fast, `${file.name}: diff path`);
         const stale = planIntent({ authored, current }, intent);
         if (fast.ok) {
@@ -563,20 +475,13 @@ test(SWEEP_TITLE, (testContext) => {
             repeatedCount += 1;
             continue;
           }
-          assert.ok(
-            stale.ok,
-            `${file.name} ${node.path.join('/')} ${attribute.name}: plans after the insertion`,
-          );
+          assert.ok(stale.ok, `${file.name} ${node.path.join('/')} ${attribute.name}: plans after the insertion`);
           const [before] = fast.value.splices;
           const [after] = stale.value.splices;
           assert.ok(before !== undefined, 'the identity plan has a splice');
           assert.ok(after !== undefined, 'the stale plan has a splice');
           const shift = before.range.start >= insertion.at ? INSERTED.length : 0;
-          assert.equal(
-            after.range.start,
-            before.range.start + shift,
-            `${file.name}: exact shifted range`,
-          );
+          assert.equal(after.range.start, before.range.start + shift, `${file.name}: exact shifted range`);
           assert.equal(after.range.end, before.range.end + shift);
           assert.deepEqual(after.expectedBytes, before.expectedBytes);
           shiftedCount += shift > 0 ? 1 : 0;
@@ -586,10 +491,7 @@ test(SWEEP_TITLE, (testContext) => {
       }
     }
   }
-  testContext.diagnostic(
-    `${fileCount} files, ${plannedCount} attributes planned, ${shiftedCount} shifted, ` +
-      `${repeatedCount} refused as repeated`,
-  );
+  testContext.diagnostic(`${fileCount} files, ${plannedCount} attributes planned, ${shiftedCount} shifted, ` + `${repeatedCount} refused as repeated`);
   assert.ok(repeatedCount > 0, 'the sweep meets repeated regions, so the refusal is exercised');
   assert.ok(plannedCount > 60, `the sweep plans many real attributes (${plannedCount})`);
   assert.ok(shiftedCount > 60, `most of them sit below the insertion (${shiftedCount})`);

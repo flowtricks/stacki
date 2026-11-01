@@ -57,31 +57,15 @@ export default function InsertSearch(props: InsertSearchProps) {
   const state = useInsertSearch(props);
   const { query, setQuery, tab, setTab, highlight, setHighlight, listRef, results } = state;
   return (
-    <div
-      className="insert-overlay"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <div
-        className="insert-palette"
-        onKeyDown={(event) => insertKey(event, state, onInsert, onClose)}
-      >
+    <div className="insert-overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="insert-palette" onKeyDown={(event) => insertKey(event, state, onInsert, onClose)}>
         <div className="insert-search-row">
           <SearchIcon size={14} />
-          <input
-            autoFocus
-            value={query}
-            placeholder="Search components, elements…"
-            spellCheck={false}
-            onChange={(event) => setQuery(event.target.value)}
-          />
+          <input autoFocus value={query} placeholder="Search components, elements…" spellCheck={false} onChange={(event) => setQuery(event.target.value)} />
         </div>
         <div className="insert-tabs">
           {TABS.map((tabEntry) => (
-            <button
-              key={tabEntry.key}
-              className={`insert-tab ${tab === tabEntry.key ? 'on' : ''}`}
-              onClick={() => setTab(tabEntry.key)}
-            >
+            <button key={tabEntry.key} className={`insert-tab ${tab === tabEntry.key ? 'on' : ''}`} onClick={() => setTab(tabEntry.key)}>
               {tabEntry.label}
             </button>
           ))}
@@ -120,10 +104,7 @@ function useInsertSearch({ components, allowSlot }: InsertSearchProps) {
   const [highlight, setHighlight] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const allItems = useMemo(
-    () => insertItems(components ?? [], { allowSlot }),
-    [components, allowSlot],
-  );
+  const allItems = useMemo(() => insertItems(components ?? [], { allowSlot }), [components, allowSlot]);
   // The words, and where they land: see src/features/palette/insertRank.ts. The trailing space
   // is meaningful, so the query is not trimmed on the way in.
   const results = useMemo(() => {
@@ -145,12 +126,7 @@ function useInsertSearch({ components, allowSlot }: InsertSearchProps) {
 }
 
 type InsertState = ReturnType<typeof useInsertSearch>;
-function insertKey(
-  event: React.KeyboardEvent,
-  state: InsertState,
-  onInsert: (item: InsertItem) => void,
-  onClose: () => void,
-): void {
+function insertKey(event: React.KeyboardEvent, state: InsertState, onInsert: (item: InsertItem) => void, onClose: () => void): void {
   const { results, highlight, setHighlight, tab, setTab } = state;
   if (event.key === 'Escape') {
     event.preventDefault();
@@ -182,16 +158,8 @@ function insertItems(
   },
 ): InsertItem[] {
   assert(components.length <= LIMITS.scanEntriesMax, 'InsertSearch: component limit exceeded');
-  const items = [
-    ...insertComponents(components),
-    ...insertAssets(),
-    ...insertTags(options),
-    ...OTHER_ITEMS,
-  ];
-  assert(
-    items.length <= LIMITS.scanEntriesMax + HTML_TAGS.length + 11,
-    'InsertSearch: combined item limit exceeded',
-  );
+  const items = [...insertComponents(components), ...insertAssets(), ...insertTags(options), ...OTHER_ITEMS];
+  assert(items.length <= LIMITS.scanEntriesMax + HTML_TAGS.length + 11, 'InsertSearch: combined item limit exceeded');
   // Project components stay first so a local Image is not shadowed by Astro's.
   return items;
 }
@@ -203,11 +171,7 @@ function insertComponents(components: readonly InsertComponent[]): InsertItem[] 
     label: component.name,
     sub: component.folder || 'component',
     cat: 'components',
-    icon: component.isLayout ? (
-      <LayoutIcon size={15} style={{ color: '#79e09c' }} />
-    ) : (
-      <ElementComponentIcon size={15} style={{ color: '#79e09c' }} />
-    ),
+    icon: component.isLayout ? <LayoutIcon size={15} style={{ color: '#79e09c' }} /> : <ElementComponentIcon size={15} style={{ color: '#79e09c' }} />,
   }));
 }
 function insertAssets(): InsertItem[] {

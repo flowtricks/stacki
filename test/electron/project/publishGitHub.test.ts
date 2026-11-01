@@ -11,21 +11,12 @@ import { DEFAULT_PUBLISH_CONFIG } from '#dist/shared/properties/publishConfig.js
 test('account lookup never changes global credentials', async (context) => {
   const previous = process.env['GH_TOKEN'];
   const calls: unknown[] = [];
-  context.mock.method(
-    nodeTools,
-    'run',
-    async (
-      command: string,
-      argumentsList: readonly string[],
-      root: string,
-      options?: ExecFileOptions,
-    ) => {
-      calls.push({ command, argumentsList, root });
-      assert.equal(options?.env?.['GH_TOKEN'], undefined);
-      assert.equal(options?.env?.['GITHUB_TOKEN'], undefined);
-      return { stdout: 'gho_testcredential123\n', stderr: '' };
-    },
-  );
+  context.mock.method(nodeTools, 'run', async (command: string, argumentsList: readonly string[], root: string, options?: ExecFileOptions) => {
+    calls.push({ command, argumentsList, root });
+    assert.equal(options?.env?.['GH_TOKEN'], undefined);
+    assert.equal(options?.env?.['GITHUB_TOKEN'], undefined);
+    return { stdout: 'gho_testcredential123\n', stderr: '' };
+  });
   const environment = await publishingGitEnvironment('/project', {
     ...DEFAULT_PUBLISH_CONFIG,
     githubAccount: 'project-owner',

@@ -22,9 +22,7 @@ const EDGES = ['top', 'right', 'bottom', 'left'] as const;
 
 // Props the label clears — for 'all', all four edges plus any leftover shorthand.
 const facetClear = (facet: Facet, side: Side): string[] =>
-  side === 'all'
-    ? [`border-${facet}`, ...EDGES.map((edge) => `border-${edge}-${facet}`)]
-    : [`border-${side}-${facet}`];
+  side === 'all' ? [`border-${facet}`, ...EDGES.map((edge) => `border-${edge}-${facet}`)] : [`border-${side}-${facet}`];
 // Representative property to read / label. A single side owns its edge longhand;
 // "all" owns only the border facet shorthand. It must not borrow a side value — doing
 // so makes the center selector show (and edit) Bottom when only Bottom is configured.
@@ -32,8 +30,7 @@ function facetRead(facet: Facet, side: Side, read: Read): { d: Display; prop: st
   const prop = side === 'all' ? `border-${facet}` : `border-${side}-${facet}`;
   return { d: displayOf(read(prop)), prop };
 }
-const facetExternal = (display: Display) =>
-  display.present ? (display.important ? `${display.value} !important` : display.value) : '';
+const facetExternal = (display: Display) => (display.present ? (display.important ? `${display.value} !important` : display.value) : '');
 // How a facet write lands: live while typing or dragging, or committed.
 interface WriteOptions {
   readonly live: boolean;
@@ -60,9 +57,7 @@ function facetWrite(facet: Facet, side: Side, props: Props): FacetWrite {
       // On commit, drop any stray per-side longhands so the shorthand stays the source
       // — but only when some exist, so a plain "all" edit stays a single write.
       if (!live) {
-        const strays = EDGES.map((edge) => `border-${edge}-${facet}`).filter(
-          (prop) => displayOf(props.read(prop)).present,
-        );
+        const strays = EDGES.map((edge) => `border-${edge}-${facet}`).filter((prop) => displayOf(props.read(prop)).present);
         if (strays.length) {
           props.clearProp(strays);
         }
@@ -83,36 +78,18 @@ function appliedBorderSides(read: Read): Set<Side> {
     applied.add('all');
   }
   for (const side of EDGES) {
-    if (
-      [
-        `border-${side}`,
-        `border-${side}-style`,
-        `border-${side}-width`,
-        `border-${side}-color`,
-      ].some(owns)
-    ) {
+    if ([`border-${side}`, `border-${side}-style`, `border-${side}-width`, `border-${side}-color`].some(owns)) {
       applied.add(side);
     }
   }
   return applied;
 }
 
-function SideSelector({
-  side,
-  applied,
-  onPick,
-}: {
-  side: Side;
-  applied: ReadonlySet<Side>;
-  onPick: (s: Side) => void;
-}) {
+function SideSelector({ side, applied, onPick }: { side: Side; applied: ReadonlySet<Side>; onPick: (s: Side) => void }) {
   const sideButton = (option: Side, label: string) => (
     <button
       type="button"
-      className={
-        `embed-editor_border-side is-${option} ${side === option ? 'is-active' : ''} ` +
-        (applied.has(option) ? 'is-applied' : '')
-      }
+      className={`embed-editor_border-side is-${option} ${side === option ? 'is-active' : ''} ` + (applied.has(option) ? 'is-applied' : '')}
       aria-pressed={side === option}
       aria-label={option === 'all' ? 'All borders' : `${label} border`}
       onClick={() => onPick(option)}
@@ -201,21 +178,10 @@ function StyleControl({
   };
 
   return (
-    <div
-      ref={rootRef}
-      className={`embed-editor_display embed-editor_border-style ${customMode ? 'is-custom' : ''}`}
-      role="group"
-      aria-label="Border style"
-    >
+    <div ref={rootRef} className={`embed-editor_display embed-editor_border-style ${customMode ? 'is-custom' : ''}`} role="group" aria-label="Border style">
       <SegmentPill />
       {customMode ? (
-        <StyleCustomField
-          value={value}
-          busy={busy}
-          inputRef={inputRef}
-          write={write}
-          clear={clear}
-        />
+        <StyleCustomField value={value} busy={busy} inputRef={inputRef} write={write} clear={clear} />
       ) : (
         <StyleSegments shown={shown} busy={busy} pick={pick} />
       )}
@@ -233,15 +199,7 @@ function StyleControl({
 }
 
 // None / Solid / Dashed / Dotted.
-function StyleSegments({
-  shown,
-  busy,
-  pick,
-}: {
-  shown: string;
-  busy: boolean;
-  pick: (next: string) => void;
-}) {
+function StyleSegments({ shown, busy, pick }: { shown: string; busy: boolean; pick: (next: string) => void }) {
   return STYLE_OPTIONS.map((seg) => (
     <button
       key={seg.value}
@@ -261,15 +219,7 @@ function StyleSegments({
 
 // Focus the custom field once its `unset` write settles (the input is disabled
 // mid-save). Returns the request to make when entering custom mode.
-function useFocusOnceReady({
-  customMode,
-  busy,
-  inputRef,
-}: {
-  customMode: boolean;
-  busy: boolean;
-  inputRef: React.RefObject<HTMLInputElement>;
-}) {
+function useFocusOnceReady({ customMode, busy, inputRef }: { customMode: boolean; busy: boolean; inputRef: React.RefObject<HTMLInputElement> }) {
   const wantFocus = useRef(false);
   useEffect(() => {
     if (customMode && wantFocus.current && !busy) {
@@ -316,12 +266,7 @@ function StyleCustomField({
     write(important ? `${styleValue} !important` : styleValue, { live: false });
   };
   return (
-    <VariableConnect
-      ariaLabel="Connect border style to a variable"
-      disabled={busy}
-      prop="border-style"
-      onPick={(binding) => write(binding, { live: false })}
-    >
+    <VariableConnect ariaLabel="Connect border style to a variable" disabled={busy} prop="border-style" onPick={(binding) => write(binding, { live: false })}>
       <input
         ref={inputRef}
         className="embed-editor_value-input embed-editor_display-input"
@@ -386,21 +331,10 @@ function StyleMenu({
         <ChevronIcon />
       </button>
       {open ? (
-        <Popup
-          mode="popover"
-          portal={false}
-          onClose={onToggle}
-          className="embed-editor_display-menu"
-          role="menu"
-        >
+        <Popup mode="popover" portal={false} onClose={onToggle} className="embed-editor_display-menu" role="menu">
           {customMode ? (
             STYLE_OPTIONS.map((seg) => (
-              <MenuItem
-                key={seg.value}
-                label={seg.ariaLabel ?? seg.value}
-                selected={shown === seg.value}
-                onClick={() => pick(seg.value)}
-              />
+              <MenuItem key={seg.value} label={seg.ariaLabel ?? seg.value} selected={shown === seg.value} onClick={() => pick(seg.value)} />
             ))
           ) : (
             <MenuItem label="Custom" selected={false} onClick={enterCustom} />
@@ -492,12 +426,7 @@ function BorderControl(props: Props) {
       <SideSelector side={side} applied={applied} onPick={setSide} />
       <div className="embed-editor_border-fields">
         <div className="embed-editor_size-row">
-          <PropLabel
-            label="Style"
-            prop={styleFacet.prop}
-            clearProps={facetClear('style', side)}
-            {...props}
-          />
+          <PropLabel label="Style" prop={styleFacet.prop} clearProps={facetClear('style', side)} {...props} />
           <StyleControl
             value={styleFacet.d.present ? styleFacet.d.value.trim() : ''}
             prop={styleFacet.prop}
@@ -507,12 +436,7 @@ function BorderControl(props: Props) {
           />
         </div>
         <div className="embed-editor_size-row">
-          <PropLabel
-            label="Width"
-            prop={widthFacet.prop}
-            clearProps={facetClear('width', side)}
-            {...props}
-          />
+          <PropLabel label="Width" prop={widthFacet.prop} clearProps={facetClear('width', side)} {...props} />
           <LiveInput
             value={facetExternal(widthFacet.d)}
             busy={busy}
@@ -523,12 +447,7 @@ function BorderControl(props: Props) {
           />
         </div>
         <div className="embed-editor_size-row">
-          <PropLabel
-            label="Color"
-            prop={colorFacet.prop}
-            clearProps={facetClear('color', side)}
-            {...props}
-          />
+          <PropLabel label="Color" prop={colorFacet.prop} clearProps={facetClear('color', side)} {...props} />
           <ColorField side={side} props={props} />
         </div>
       </div>

@@ -10,13 +10,7 @@ import { setTimeout } from 'node:timers/promises';
 import { writeStudioConfig } from '../scripts/workspace';
 
 const execute = promisify(execFile);
-const FIXTURE_FOLDERS = [
-  'src/pages',
-  'src/components',
-  'src/styles',
-  'public',
-  '.stacki/studio/state',
-];
+const FIXTURE_FOLDERS = ['src/pages', 'src/components', 'src/styles', 'public', '.stacki/studio/state'];
 
 export async function startStyleFixture(
   sources: {
@@ -35,14 +29,8 @@ export async function startStyleFixture(
   await symlink(path.resolve('node_modules'), path.join(root, 'node_modules'), 'dir');
   await writeFile(path.join(root, 'package.json'), '{"type":"module","name":"style-parity"}');
   await writeFile(path.join(root, 'src/pages/index.astro'), sources.page ?? pageSource);
-  await writeFile(
-    path.join(root, 'src/components/Card.astro'),
-    sources.component ?? componentSource,
-  );
-  await writeFile(
-    path.join(root, 'src/styles/global.css'),
-    '.sheet { padding: 12px; }\np { line-height: 1.5; }\n:root { --accent: rgb(30, 140, 80); }\n',
-  );
+  await writeFile(path.join(root, 'src/components/Card.astro'), sources.component ?? componentSource);
+  await writeFile(path.join(root, 'src/styles/global.css'), '.sheet { padding: 12px; }\np { line-height: 1.5; }\n:root { --accent: rgb(30, 140, 80); }\n');
   await writeFile(
     path.join(root, 'public/pattern.svg'),
     '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="green"/></svg>',
@@ -50,21 +38,10 @@ export async function startStyleFixture(
   await sources.prepare?.(root);
   await writeStudioConfig(root, path.resolve('.'), port);
   try {
-    await execute(
-      process.execPath,
-      [
-        astro,
-        'dev',
-        '--background',
-        '--config',
-        './astro.studio.config.ts',
-        '--port',
-        String(port),
-        '--host',
-        '127.0.0.1',
-      ],
-      { cwd: root, timeout: 60000 },
-    );
+    await execute(process.execPath, [astro, 'dev', '--background', '--config', './astro.studio.config.ts', '--port', String(port), '--host', '127.0.0.1'], {
+      cwd: root,
+      timeout: 60000,
+    });
     try {
       await waitForWatcher(root, port);
     } catch (error) {
@@ -121,9 +98,7 @@ async function availablePort(): Promise<number> {
   if (!address || typeof address === 'string') {
     throw new Error('No fixture port');
   }
-  await new Promise<void>((resolve, reject) =>
-    server.close((error) => (error ? reject(error) : resolve())),
-  );
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   return address.port;
 }
 const pageSource = `---

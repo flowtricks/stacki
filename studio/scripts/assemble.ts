@@ -7,9 +7,7 @@ import { record, string } from '../src/shared/primitiveValidation';
 // is rebuilt from the canonical editor before every check, build and release.
 const studio = fileURLToPath(new URL('../', import.meta.url));
 const root = path.dirname(studio);
-const inventory = record(
-  JSON.parse(await readFile(path.join(studio, 'scripts/shared-source.json'), 'utf8')),
-);
+const inventory = record(JSON.parse(await readFile(path.join(studio, 'scripts/shared-source.json'), 'utf8')));
 
 function paths(value: unknown): readonly string[] {
   if (!Array.isArray(value) || value.length > 2000) {
@@ -35,10 +33,7 @@ async function assembleFile(file: string, adapters: ReadonlySet<string>) {
   const modules = record(inventory['modules']);
   if (modules[file]) {
     const target = path.join(studio, string(modules[file], 500));
-    await writeFile(
-      destination,
-      `export * from ${JSON.stringify(relativeModule(destination, target))};\n`,
-    );
+    await writeFile(destination, `export * from ${JSON.stringify(relativeModule(destination, target))};\n`);
     return;
   }
   const source = adapters.has(file) ? path.join(studio, 'adapters', file) : path.join(root, file);
@@ -75,10 +70,7 @@ if (record(parent)['name'] === 'stacki' && development) {
     await assembleFile(file, adapters);
   }
   const version = string(record(parent)['version'], 50);
-  await writeFile(
-    path.join(studio, 'src/shared/release.json'),
-    JSON.stringify({ version }, null, 2) + '\n',
-  );
+  await writeFile(path.join(studio, 'src/shared/release.json'), JSON.stringify({ version }, null, 2) + '\n');
   await writeFile(
     path.join(studio, 'vendor/stacki/PROVENANCE.md'),
     `# Stacki shared source\n\nGenerated from the Stacki ${version} source tree (MIT).\n` +

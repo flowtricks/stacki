@@ -17,11 +17,7 @@ import { assert } from '../../shared/core/assert';
 import type { Digest } from '../../shared/core/brand';
 import { diffCodePatch, mergeTyping } from '../../shared/engine/codePatch';
 import type { EditRequest } from '../../shared/engine/editRequest';
-import {
-  describeRejection,
-  type RejectionReason,
-  type SourceEdit,
-} from '../../shared/engine/intent';
+import { describeRejection, type RejectionReason, type SourceEdit } from '../../shared/engine/intent';
 import type { PageDiskRead, PageEditError, PageEdited } from '../../shared/ipc/pageSave';
 import type { Result } from '../../shared/core/result';
 import type { CodeBaseline, EditDrafts } from './pageEdits';
@@ -103,9 +99,7 @@ export async function sendCode(input: CodeSaveInput): Promise<CodeSaveOutcome> {
 
 // Where the patch starts and what it aims at: the known baseline, with the
 // typing since merged into what the disk holds; or the disk itself, read now.
-async function planCode(
-  input: CodeSaveInput,
-): Promise<{ readonly tag: 'plan'; readonly plan: Plan } | CodeSaveOutcome> {
+async function planCode(input: CodeSaveInput): Promise<{ readonly tag: 'plan'; readonly plan: Plan } | CodeSaveOutcome> {
   const baseline = input.baseline;
   switch (baseline.tag) {
     case 'known': {

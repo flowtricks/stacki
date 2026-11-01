@@ -35,8 +35,7 @@ export interface LoopSource {
 }
 
 /** What a field holds, as far as filtering and sorting it cares. */
-export type LoopFieldKind =
-  'text' | 'number' | 'boolean' | 'date' | 'list' | 'reference' | 'image' | 'other';
+export type LoopFieldKind = 'text' | 'number' | 'boolean' | 'date' | 'list' | 'reference' | 'image' | 'other';
 
 export interface LoopFieldOption {
   readonly title: string;
@@ -73,9 +72,7 @@ export type LoopOperator =
 
 /** A value a field is compared with: text, a number, or a document a reference points at, by id. */
 export type LoopLiteral =
-  | { readonly kind: 'text'; readonly text: string }
-  | { readonly kind: 'number'; readonly number: number }
-  | { readonly kind: 'reference'; readonly id: string };
+  { readonly kind: 'text'; readonly text: string } | { readonly kind: 'number'; readonly number: number } | { readonly kind: 'reference'; readonly id: string };
 
 /**
  * One condition an item must meet. The value exists only for operators that
@@ -84,41 +81,12 @@ export type LoopLiteral =
  * is kept verbatim so editing the conditions around it does not lose it.
  */
 export type LoopCondition =
-  | {
-      readonly kind: 'test';
-      readonly field: string;
-      readonly operator: 'isSet' | 'isEmpty' | 'isTrue' | 'isFalse' | 'inPast' | 'inFuture';
-    }
-  | {
-      readonly kind: 'test';
-      readonly field: string;
-      readonly operator: 'is' | 'isNot';
-      readonly value: LoopLiteral;
-    }
-  | {
-      readonly kind: 'test';
-      readonly field: string;
-      readonly operator: 'contains';
-      readonly value: string;
-    }
-  | {
-      readonly kind: 'test';
-      readonly field: string;
-      readonly operator: 'has';
-      readonly value: LoopLiteral;
-    }
-  | {
-      readonly kind: 'test';
-      readonly field: string;
-      readonly operator: 'greater' | 'less' | 'atLeast' | 'atMost';
-      readonly value: number;
-    }
-  | {
-      readonly kind: 'test';
-      readonly field: string;
-      readonly operator: 'before' | 'after';
-      readonly value: string;
-    }
+  | { readonly kind: 'test'; readonly field: string; readonly operator: 'isSet' | 'isEmpty' | 'isTrue' | 'isFalse' | 'inPast' | 'inFuture' }
+  | { readonly kind: 'test'; readonly field: string; readonly operator: 'is' | 'isNot'; readonly value: LoopLiteral }
+  | { readonly kind: 'test'; readonly field: string; readonly operator: 'contains'; readonly value: string }
+  | { readonly kind: 'test'; readonly field: string; readonly operator: 'has'; readonly value: LoopLiteral }
+  | { readonly kind: 'test'; readonly field: string; readonly operator: 'greater' | 'less' | 'atLeast' | 'atMost'; readonly value: number }
+  | { readonly kind: 'test'; readonly field: string; readonly operator: 'before' | 'after'; readonly value: string }
   | { readonly kind: 'custom'; readonly code: string };
 
 export type LoopTestCondition = Extract<LoopCondition, { readonly kind: 'test' }>;
@@ -137,8 +105,7 @@ export interface LoopSort {
  * `(entry) => entry.data.x`. Kept from the code it was read from, so a custom
  * condition written against one form still reads the same name.
  */
-export type AstroItemParameter =
-  { readonly kind: 'data' } | { readonly kind: 'entry'; readonly name: string };
+export type AstroItemParameter = { readonly kind: 'data' } | { readonly kind: 'entry'; readonly name: string };
 
 export interface LoopQuery {
   readonly source: LoopSource;
@@ -167,14 +134,7 @@ const COLLECTION_NAME = /^[A-Za-z0-9_][\w.-]*$/;
 const PARAMETER_NAME = /^[A-Za-z_$][\w$]*$/;
 
 /** Operators that need no value. */
-export const VALUELESS_OPERATORS = [
-  'isSet',
-  'isEmpty',
-  'isTrue',
-  'isFalse',
-  'inPast',
-  'inFuture',
-] as const;
+export const VALUELESS_OPERATORS = ['isSet', 'isEmpty', 'isTrue', 'isFalse', 'inPast', 'inFuture'] as const;
 
 /** The operators a field of each kind offers, in menu order. */
 export function operatorsFor(kind: LoopFieldKind): readonly LoopOperator[] {
@@ -250,18 +210,9 @@ export function emptyQuery(source: LoopSource): LoopQuery {
 export function assertLoopQuery(query: LoopQuery): void {
   assertSelection(query);
   assert(COLLECTION_NAME.test(query.source.collection), 'A loop source names a collection');
-  assert(
-    query.source.collection.length <= LOOP_QUERY_LIMITS.collectionCharsMax,
-    'A collection name is short',
-  );
-  assert(
-    query.conditions.length <= LOOP_QUERY_LIMITS.conditionsMax,
-    'A loop has a bounded number of conditions',
-  );
-  assert(
-    query.sorts.length <= LOOP_QUERY_LIMITS.sortsMax,
-    'A loop has a bounded number of sort keys',
-  );
+  assert(query.source.collection.length <= LOOP_QUERY_LIMITS.collectionCharsMax, 'A collection name is short');
+  assert(query.conditions.length <= LOOP_QUERY_LIMITS.conditionsMax, 'A loop has a bounded number of conditions');
+  assert(query.sorts.length <= LOOP_QUERY_LIMITS.sortsMax, 'A loop has a bounded number of sort keys');
   assert(Number.isSafeInteger(query.offset), 'An offset is a whole number');
   assert(query.offset >= 0, 'An offset is never negative');
   assert(query.offset <= LOOP_QUERY_LIMITS.offsetMax, 'An offset is bounded');
@@ -272,10 +223,7 @@ export function assertLoopQuery(query: LoopQuery): void {
   }
   if (query.projection !== undefined) {
     assert(query.source.kind === 'sanity', 'Only a Sanity query has a projection');
-    assert(
-      query.projection.length <= LOOP_QUERY_LIMITS.projectionCharsMax,
-      'A projection is bounded',
-    );
+    assert(query.projection.length <= LOOP_QUERY_LIMITS.projectionCharsMax, 'A projection is bounded');
   }
   if (query.parameter.kind === 'entry') {
     assert(PARAMETER_NAME.test(query.parameter.name), 'An entry parameter is a name');
@@ -319,10 +267,7 @@ function idsCode(ids: readonly string[]): string {
 function assertCondition(condition: LoopCondition): void {
   if (condition.kind === 'custom') {
     assert(condition.code.trim().length > 0, 'A custom condition holds code');
-    assert(
-      condition.code.length <= LOOP_QUERY_LIMITS.valueCharsMax * 4,
-      'A custom condition is bounded',
-    );
+    assert(condition.code.length <= LOOP_QUERY_LIMITS.valueCharsMax * 4, 'A custom condition is bounded');
     return;
   }
   assertFieldPath(condition.field);
@@ -334,10 +279,7 @@ function assertCondition(condition: LoopCondition): void {
       return;
     case 'contains':
       assert(condition.value.length > 0, 'A searched text is not empty');
-      assert(
-        condition.value.length <= LOOP_QUERY_LIMITS.valueCharsMax,
-        'A searched text is bounded',
-      );
+      assert(condition.value.length <= LOOP_QUERY_LIMITS.valueCharsMax, 'A searched text is bounded');
       return;
     case 'greater':
     case 'less':
@@ -431,17 +373,10 @@ export function astroQueryCode(query: LoopQuery, reader = 'getCollection'): stri
   }
   const filter = astroFilterCode(query);
   const read = `await ${reader}(${jsString(query.source.collection)}${filter === undefined ? '' : `, ${filter}`})`;
-  const sort = query.random
-    ? `.sort(() => Math.random() - 0.5)`
-    : query.sorts.length > 0
-      ? `.sort(${astroComparatorCode(query.sorts)})`
-      : '';
+  const sort = query.random ? `.sort(() => Math.random() - 0.5)` : query.sorts.length > 0 ? `.sort(${astroComparatorCode(query.sorts)})` : '';
   const slice = sliceCode(query.offset, query.limit);
   const code = sort === '' && slice === '' ? read : `(${read})${sort}${slice}`;
-  assert(
-    code.startsWith('await') || code.startsWith('(await'),
-    'An Astro query awaits its collection',
-  );
+  assert(code.startsWith('await') || code.startsWith('(await'), 'An Astro query awaits its collection');
   return code;
 }
 
@@ -450,11 +385,7 @@ export function astroQueryCode(query: LoopQuery, reader = 'getCollection'): stri
  * fields under `itemPath`), copied so a sort cannot reorder the original,
  * then filtered, sorted and sliced the way the query says.
  */
-export function chainQueryCode(
-  query: LoopQuery,
-  list: string,
-  itemPath: readonly string[],
-): string {
+export function chainQueryCode(query: LoopQuery, list: string, itemPath: readonly string[]): string {
   assertLoopQuery(query);
   assert(list.trim().length > 0, 'A kept list is an expression');
   assert(
@@ -470,14 +401,8 @@ export function chainQueryCode(
   const base = [name, ...itemPath].join('.');
   const joiner = query.match === 'all' ? ' && ' : ' || ';
   const filter =
-    query.conditions.length === 0
-      ? ''
-      : `.filter((${name}) => ${query.conditions.map((condition) => astroConditionCode(condition, base)).join(joiner)})`;
-  const sort = query.random
-    ? '.sort(() => Math.random() - 0.5)'
-    : query.sorts.length > 0
-      ? `.sort(${astroComparatorCode(query.sorts, itemPath)})`
-      : '';
+    query.conditions.length === 0 ? '' : `.filter((${name}) => ${query.conditions.map((condition) => astroConditionCode(condition, base)).join(joiner)})`;
+  const sort = query.random ? '.sort(() => Math.random() - 0.5)' : query.sorts.length > 0 ? `.sort(${astroComparatorCode(query.sorts, itemPath)})` : '';
   const code = `[...${list.trim()}]${filter}${sort}${sliceCode(query.offset, query.limit)}`;
   assert(code.startsWith('[...'), 'A kept list is copied');
   return code;
@@ -561,10 +486,7 @@ function groupedCode(code: string): string {
   return /\|\||&&|\?/.test(trimmed) ? `(${trimmed})` : trimmed;
 }
 
-function astroComparatorCode(
-  sorts: readonly LoopSort[],
-  itemPath: readonly string[] = ['data'],
-): string {
+function astroComparatorCode(sorts: readonly LoopSort[], itemPath: readonly string[] = ['data']): string {
   assert(sorts.length > 0, 'A comparator compares by at least one key');
   const keys = sorts.map((sort) => {
     const [first, second] = sort.direction === 'ascending' ? ['a', 'b'] : ['b', 'a'];
@@ -686,18 +608,11 @@ export function groqQueryText(query: LoopQuery, fields: readonly LoopField[]): s
   }
   const clauses = query.conditions.map(groqConditionCode);
   const joiner = query.match === 'all' ? ' && ' : ' || ';
-  const narrowed =
-    clauses.length === 0
-      ? ''
-      : clauses.length === 1 || query.match === 'all'
-        ? ` && ${clauses.join(joiner)}`
-        : ` && (${clauses.join(joiner)})`;
+  const narrowed = clauses.length === 0 ? '' : clauses.length === 1 || query.match === 'all' ? ` && ${clauses.join(joiner)}` : ` && (${clauses.join(joiner)})`;
   // A shuffle happens after the fetch (GROQ has no random order), so the
   // query returns every match and the slice is taken from the shuffled list.
   const sorted = !query.random && query.sorts.length > 0;
-  const order = sorted
-    ? ` | order(${query.sorts.map((sort) => `${sort.field} ${sort.direction === 'ascending' ? 'asc' : 'desc'}`).join(', ')})`
-    : '';
+  const order = sorted ? ` | order(${query.sorts.map((sort) => `${sort.field} ${sort.direction === 'ascending' ? 'asc' : 'desc'}`).join(', ')})` : '';
   const slice = query.random ? '' : groqSlice(query.offset, query.limit);
   const projection = query.projection ?? defaultProjection(fields);
   const text = `*[${type}${narrowed}]${order}${slice}${projection === '' ? '' : ` ${projection}`}`;
@@ -709,11 +624,7 @@ export function groqQueryText(query: LoopQuery, fields: readonly LoopField[]): s
  * The expression that reads a Sanity query through `client` (an imported
  * `sanityClient`): the fetch, and in JS only what GROQ cannot do — a shuffle.
  */
-export function sanityQueryCode(
-  query: LoopQuery,
-  fields: readonly LoopField[],
-  client: string,
-): string {
+export function sanityQueryCode(query: LoopQuery, fields: readonly LoopField[], client: string): string {
   assert(/^[A-Za-z_$][\w$]*$/.test(client), 'A client is named by an identifier');
   const fetch = `await ${client}.fetch(${jsString(groqQueryText(query, fields))})`;
   if (query.selection !== undefined) {
@@ -721,9 +632,7 @@ export function sanityQueryCode(
     const ids = idsCode(query.selection);
     return `(${fetch}).sort((a, b) => ${ids}.indexOf(a._id) - ${ids}.indexOf(b._id))`;
   }
-  const code = query.random
-    ? `(${fetch}).sort(() => Math.random() - 0.5)${sliceCode(query.offset, query.limit)}`
-    : fetch;
+  const code = query.random ? `(${fetch}).sort(() => Math.random() - 0.5)${sliceCode(query.offset, query.limit)}` : fetch;
   assert(code.includes(`${client}.fetch(`), 'A Sanity query fetches through its client');
   return code;
 }
@@ -736,19 +645,13 @@ export function groqConditionCode(condition: LoopCondition): string {
   const field = condition.field;
   switch (condition.operator) {
     case 'is':
-      return condition.value.kind === 'reference'
-        ? `${field}._ref == ${groqString(condition.value.id)}`
-        : `${field} == ${groqLiteral(condition.value)}`;
+      return condition.value.kind === 'reference' ? `${field}._ref == ${groqString(condition.value.id)}` : `${field} == ${groqLiteral(condition.value)}`;
     case 'isNot':
-      return condition.value.kind === 'reference'
-        ? `${field}._ref != ${groqString(condition.value.id)}`
-        : `${field} != ${groqLiteral(condition.value)}`;
+      return condition.value.kind === 'reference' ? `${field}._ref != ${groqString(condition.value.id)}` : `${field} != ${groqLiteral(condition.value)}`;
     case 'contains':
       return `${field} match ${groqString(`*${condition.value}*`)}`;
     case 'has':
-      return condition.value.kind === 'reference'
-        ? `${groqString(condition.value.id)} in ${field}[]._ref`
-        : `${groqLiteral(condition.value)} in ${field}`;
+      return condition.value.kind === 'reference' ? `${groqString(condition.value.id)} in ${field}[]._ref` : `${groqLiteral(condition.value)} in ${field}`;
     case 'isSet':
       return `defined(${field})`;
     case 'isEmpty':
@@ -785,9 +688,7 @@ function groqSlice(offset: number, limit: number | undefined): string {
     return ` [${offset}...${offset + limit}]`;
   }
   // GROQ has no open-ended slice; a start alone runs to the bound on offsets.
-  return offset > 0
-    ? ` [${offset}...${LOOP_QUERY_LIMITS.offsetMax + LOOP_QUERY_LIMITS.limitMax}]`
-    : '';
+  return offset > 0 ? ` [${offset}...${LOOP_QUERY_LIMITS.offsetMax + LOOP_QUERY_LIMITS.limitMax}]` : '';
 }
 
 function groqLiteral(value: LoopLiteral): string {

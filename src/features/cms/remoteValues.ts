@@ -1,13 +1,7 @@
 // Plain facts about connected-CMS fields and values that every editor shares:
 // a field's display name, whether a value holds anything, and new item keys.
 import { assert } from '../../../shared/core/assert';
-import {
-  REMOTE_SCHEMA_LIMITS,
-  remoteList,
-  remoteObject,
-  type RemoteSchemaField,
-  type RemoteValue,
-} from '../../../shared/properties/cmsRemoteSchema';
+import { REMOTE_SCHEMA_LIMITS, remoteList, remoteObject, type RemoteSchemaField, type RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
 import { labelize } from './cmsSchema';
 
 export function fieldTitle(field: Pick<RemoteSchemaField, 'name' | 'title'>): string {

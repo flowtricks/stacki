@@ -18,24 +18,14 @@ interface SaveConflictNoticeProps {
   readonly onKeep: () => void;
 }
 
-export default function SaveConflictNotice({
-  fileName,
-  reason,
-  reviewing,
-  onReload,
-  onReview,
-  onKeep,
-}: SaveConflictNoticeProps) {
-  const detail =
-    reason === undefined ? 'changed on disk while you were editing.' : describeRejection(reason);
+export default function SaveConflictNotice({ fileName, reason, reviewing, onReload, onReview, onKeep }: SaveConflictNoticeProps) {
+  const detail = reason === undefined ? 'changed on disk while you were editing.' : describeRejection(reason);
   return (
     <ErrorToast
       message={`${fileName}: ${detail} Your edits are kept here and are not being saved.`}
       recovery={[
         { label: 'Reload from disk', run: onReload },
-        reviewing
-          ? { label: 'Save this version', run: onKeep }
-          : { label: 'Review in code', run: onReview },
+        reviewing ? { label: 'Save this version', run: onKeep } : { label: 'Review in code', run: onReview },
       ]}
     />
   );

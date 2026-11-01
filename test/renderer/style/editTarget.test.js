@@ -60,14 +60,10 @@ async function resolve(css, activeSelector, matching) {
 }
 
 // Which rule of the stylesheet, by its position in the file (0-based).
-const position = (resolved, rule) =>
-  rule === undefined ? undefined : [...resolved.selectedRules.values()].indexOf(rule);
+const position = (resolved, rule) => (rule === undefined ? undefined : [...resolved.selectedRules.values()].indexOf(rule));
 
 test('a grouped rule above the selector’s own rule: the own rule takes the edit', async () => {
-  const css = [
-    '.wrap, .arrow { display: block; color: red; }',
-    '.wrap { display: inline-block; }',
-  ].join('\n');
+  const css = ['.wrap, .arrow { display: block; color: red; }', '.wrap { display: inline-block; }'].join('\n');
   const resolved = await resolve(css, '.wrap', ['.wrap']);
   const shown = resolved.props.get('display');
   assert.equal(shown.selectedValue.value, 'inline-block', 'the panel shows the winner');

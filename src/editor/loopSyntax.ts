@@ -29,19 +29,12 @@ interface Span {
 }
 
 export type JsParameter =
-  | { readonly kind: 'name'; readonly name: string }
-  | { readonly kind: 'object'; readonly names: readonly string[] }
-  | { readonly kind: 'other' };
+  { readonly kind: 'name'; readonly name: string } | { readonly kind: 'object'; readonly names: readonly string[] } | { readonly kind: 'other' };
 
 export type Js = Span &
   (
     | { readonly kind: 'name'; readonly name: string }
-    | {
-        readonly kind: 'member';
-        readonly object: Js;
-        readonly property: string;
-        readonly optional: boolean;
-      }
+    | { readonly kind: 'member'; readonly object: Js; readonly property: string; readonly optional: boolean }
     | { readonly kind: 'index'; readonly object: Js; readonly index: Js }
     | { readonly kind: 'call'; readonly callee: Js; readonly args: readonly Js[] }
     | { readonly kind: 'new'; readonly callee: Js; readonly args: readonly Js[] }
@@ -52,12 +45,7 @@ export type Js = Span &
     | { readonly kind: 'null' }
     | { readonly kind: 'unary'; readonly operator: string; readonly value: Js }
     | { readonly kind: 'binary'; readonly operator: string; readonly left: Js; readonly right: Js }
-    | {
-        readonly kind: 'conditional';
-        readonly test: Js;
-        readonly consequent: Js;
-        readonly alternate: Js;
-      }
+    | { readonly kind: 'conditional'; readonly test: Js; readonly consequent: Js; readonly alternate: Js }
     | {
         readonly kind: 'function';
         readonly parameters: readonly JsParameter[];
@@ -136,10 +124,7 @@ export function parseFrontmatter(text: string): ParsedFrontmatter {
   const bound = new Set<string>();
   let statement = tree.topNode.firstChild;
   for (let count = 0; statement && count < LOOP_SYNTAX_LIMITS.declarationsMax; count++) {
-    const declaration =
-      statement.name === 'ExportDeclaration'
-        ? statement.getChild('VariableDeclaration')
-        : statement;
+    const declaration = statement.name === 'ExportDeclaration' ? statement.getChild('VariableDeclaration') : statement;
     if (declaration?.name === 'VariableDeclaration') {
       readDeclaration(declaration, statement, source, declarations, bound);
     }
@@ -159,13 +144,7 @@ export function parseFrontmatter(text: string): ParsedFrontmatter {
   return { source, declarations, uses, bound };
 }
 
-function readDeclaration(
-  node: SyntaxNode,
-  statement: SyntaxNode,
-  source: string,
-  out: Map<string, Declaration>,
-  bound: Set<string>,
-): void {
+function readDeclaration(node: SyntaxNode, statement: SyntaxNode, source: string, out: Map<string, Declaration>, bound: Set<string>): void {
   const span = statementSpan(statement, source);
   const children = significant(node);
   const names = children.filter((child) => child.name === 'VariableDefinition');
@@ -189,12 +168,7 @@ function readDeclaration(
       at++;
     }
     const value = children[at]?.name === 'Equals' ? children[at + 1] : undefined;
-    out.set(name, {
-      name,
-      init: value ? toJs(value, source, 0) : undefined,
-      statement: span,
-      alone: names.length === 1,
-    });
+    out.set(name, { name, init: value ? toJs(value, source, 0) : undefined, statement: span, alone: names.length === 1 });
   }
 }
 
@@ -218,20 +192,7 @@ function hasError(node: SyntaxNode): boolean {
   return found;
 }
 
-const PUNCTUATION = new Set([
-  '(',
-  ')',
-  '[',
-  ']',
-  '{',
-  '}',
-  ',',
-  ';',
-  '.',
-  '?.',
-  'LineComment',
-  'BlockComment',
-]);
+const PUNCTUATION = new Set(['(', ')', '[', ']', '{', '}', ',', ';', '.', '?.', 'LineComment', 'BlockComment']);
 
 function significant(node: SyntaxNode): SyntaxNode[] {
   const out: SyntaxNode[] = [];
@@ -258,8 +219,7 @@ function toJs(node: SyntaxNode, source: string, depth: number): Js {
   const span = { from: node.from, to: node.to };
   const text = source.slice(node.from, node.to);
   const parts = significant(node);
-  const below = (child: SyntaxNode | undefined): Js =>
-    child ? toJs(child, source, depth + 1) : other(node);
+  const below = (child: SyntaxNode | undefined): Js => (child ? toJs(child, source, depth + 1) : other(node));
   switch (node.name) {
     case 'ParenthesizedExpression':
       return parts.length === 1 ? below(parts[0]) : other(node);
@@ -268,9 +228,7 @@ function toJs(node: SyntaxNode, source: string, depth: number): Js {
     case 'String':
       return stringValue(text, span) ?? other(node);
     case 'TemplateString':
-      return node.getChild('Interpolation')
-        ? other(node)
-        : (stringValue(text, span) ?? other(node));
+      return node.getChild('Interpolation') ? other(node) : (stringValue(text, span) ?? other(node));
     case 'Number': {
       const value = Number(text.replace(/_/g, ''));
       return Number.isFinite(value) ? { ...span, kind: 'number', value } : other(node);
@@ -290,20 +248,12 @@ function toJs(node: SyntaxNode, source: string, depth: number): Js {
       return unaryJs(node, parts, source, depth, span);
     case 'PostfixExpression':
       // `value!` asserts to the compiler only; at runtime it is the value.
-      return parts.length === 2 && parts[1] && source.slice(parts[1].from, parts[1].to) === '!'
-        ? below(parts[0])
-        : other(node);
+      return parts.length === 2 && parts[1] && source.slice(parts[1].from, parts[1].to) === '!' ? below(parts[0]) : other(node);
     case 'BinaryExpression':
       return binaryJs(node, parts, source, depth, span);
     case 'ConditionalExpression':
       return parts.length === 5
-        ? {
-            ...span,
-            kind: 'conditional',
-            test: below(parts[0]),
-            consequent: below(parts[2]),
-            alternate: below(parts[4]),
-          }
+        ? { ...span, kind: 'conditional', test: below(parts[0]), consequent: below(parts[2]), alternate: below(parts[4]) }
         : other(node);
     case 'ArrowFunction':
     case 'FunctionExpression':
@@ -325,27 +275,15 @@ function entryOf(node: SyntaxNode, source: string, depth: number): JsEntry {
     return { key: undefined, value: other(node) };
   }
   const name =
-    key.name === 'PropertyDefinition'
-      ? source.slice(key.from, key.to)
-      : key.name === 'String'
-        ? decodeString(source.slice(key.from, key.to))
-        : undefined;
+    key.name === 'PropertyDefinition' ? source.slice(key.from, key.to) : key.name === 'String' ? decodeString(source.slice(key.from, key.to)) : undefined;
   if (value === undefined) {
     // Shorthand `{ a }`: the value is the variable of that name.
-    return name === undefined
-      ? { key: undefined, value: other(node) }
-      : { key: name, value: { from: key.from, to: key.to, kind: 'name', name } };
+    return name === undefined ? { key: undefined, value: other(node) } : { key: name, value: { from: key.from, to: key.to, kind: 'name', name } };
   }
   return { key: name, value: toJs(value, source, depth + 1) };
 }
 
-function unaryJs(
-  node: SyntaxNode,
-  parts: readonly SyntaxNode[],
-  source: string,
-  depth: number,
-  span: Span,
-): Js {
+function unaryJs(node: SyntaxNode, parts: readonly SyntaxNode[], source: string, depth: number, span: Span): Js {
   const symbol = parts[0];
   const operand = parts[1];
   if (parts.length !== 2 || !symbol || !operand) {
@@ -354,20 +292,12 @@ function unaryJs(
   const operator = source.slice(symbol.from, symbol.to);
   const value = toJs(operand, source, depth + 1);
   // `-2.5` is a number, as the writer writes one; not an operation on one.
-  return operator === '-' && value.kind === 'number'
-    ? { ...span, kind: 'number', value: -value.value }
-    : { ...span, kind: 'unary', operator, value };
+  return operator === '-' && value.kind === 'number' ? { ...span, kind: 'number', value: -value.value } : { ...span, kind: 'unary', operator, value };
 }
 
 // An object or array literal, bounded; `[...list]` copies a list, so it reads
 // as the list itself.
-function literalJs(
-  node: SyntaxNode,
-  parts: readonly SyntaxNode[],
-  source: string,
-  depth: number,
-  span: Span,
-): Js {
+function literalJs(node: SyntaxNode, parts: readonly SyntaxNode[], source: string, depth: number, span: Span): Js {
   const kept = parts.slice(0, LOOP_SYNTAX_LIMITS.entriesMax);
   if (node.name === 'ObjectExpression') {
     return { ...span, kind: 'object', entries: kept.map((part) => entryOf(part, source, depth)) };
@@ -376,18 +306,10 @@ function literalJs(
   if (parts.length === 2 && parts[0]?.name === 'Spread' && copied) {
     return toJs(copied, source, depth + 1);
   }
-  return parts.some((part) => part.name === 'Spread')
-    ? other(node)
-    : { ...span, kind: 'array', items: kept.map((part) => toJs(part, source, depth + 1)) };
+  return parts.some((part) => part.name === 'Spread') ? other(node) : { ...span, kind: 'array', items: kept.map((part) => toJs(part, source, depth + 1)) };
 }
 
-function memberJs(
-  node: SyntaxNode,
-  parts: readonly SyntaxNode[],
-  source: string,
-  depth: number,
-  span: Span,
-): Js {
+function memberJs(node: SyntaxNode, parts: readonly SyntaxNode[], source: string, depth: number, span: Span): Js {
   const object = parts[0];
   const property = parts[1];
   if (!object || !property || parts.length !== 2) {
@@ -396,13 +318,7 @@ function memberJs(
   const optional = node.getChild('?.') !== null;
   const base = toJs(object, source, depth + 1);
   if (property.name === 'PropertyName') {
-    return {
-      ...span,
-      kind: 'member',
-      object: base,
-      property: source.slice(property.from, property.to),
-      optional,
-    };
+    return { ...span, kind: 'member', object: base, property: source.slice(property.from, property.to), optional };
   }
   const index = toJs(property, source, depth + 1);
   // `data["campus-name"]` is the field `campus-name`, the way `.` names one.
@@ -412,13 +328,7 @@ function memberJs(
   return { ...span, kind: 'index', object: base, index };
 }
 
-function callJs(
-  node: SyntaxNode,
-  parts: readonly SyntaxNode[],
-  source: string,
-  depth: number,
-  span: Span,
-): Js {
+function callJs(node: SyntaxNode, parts: readonly SyntaxNode[], source: string, depth: number, span: Span): Js {
   const isNew = node.name === 'NewExpression';
   const callee = isNew ? parts[1] : parts[0];
   const argumentList = node.getChild('ArgList');
@@ -426,26 +336,15 @@ function callJs(
     return other(node);
   }
   const args = argumentList ? significant(argumentList) : [];
-  if (
-    args.length > LOOP_SYNTAX_LIMITS.argumentsMax ||
-    args.some((argument) => argument.name === 'Spread')
-  ) {
+  if (args.length > LOOP_SYNTAX_LIMITS.argumentsMax || args.some((argument) => argument.name === 'Spread')) {
     return other(node);
   }
   const converted = args.map((argument) => toJs(argument, source, depth + 1));
   const calleeJs = toJs(callee, source, depth + 1);
-  return isNew
-    ? { ...span, kind: 'new', callee: calleeJs, args: converted }
-    : { ...span, kind: 'call', callee: calleeJs, args: converted };
+  return isNew ? { ...span, kind: 'new', callee: calleeJs, args: converted } : { ...span, kind: 'call', callee: calleeJs, args: converted };
 }
 
-function binaryJs(
-  node: SyntaxNode,
-  parts: readonly SyntaxNode[],
-  source: string,
-  depth: number,
-  span: Span,
-): Js {
+function binaryJs(node: SyntaxNode, parts: readonly SyntaxNode[], source: string, depth: number, span: Span): Js {
   const [left, operator, right] = parts;
   if (parts.length !== 3 || !left || !operator || !right) {
     return other(node);
@@ -454,13 +353,7 @@ function binaryJs(
   if (symbol === 'as' || symbol === 'satisfies') {
     return toJs(left, source, depth + 1);
   }
-  return {
-    ...span,
-    kind: 'binary',
-    operator: symbol,
-    left: toJs(left, source, depth + 1),
-    right: toJs(right, source, depth + 1),
-  };
+  return { ...span, kind: 'binary', operator: symbol, left: toJs(left, source, depth + 1), right: toJs(right, source, depth + 1) };
 }
 
 function functionJs(node: SyntaxNode, source: string, depth: number, span: Span): Js {
@@ -481,13 +374,7 @@ function functionJs(node: SyntaxNode, source: string, depth: number, span: Span)
     return other(node);
   }
   const body = functionBody(node, source, depth);
-  return {
-    ...span,
-    kind: 'function',
-    parameters,
-    body: body?.value,
-    substituted: body?.substituted ?? false,
-  };
+  return { ...span, kind: 'function', parameters, body: body?.value, substituted: body?.substituted ?? false };
 }
 
 function parameterOf(node: SyntaxNode, source: string): JsParameter {
@@ -499,11 +386,7 @@ function parameterOf(node: SyntaxNode, source: string): JsParameter {
     for (const property of significant(node)) {
       // `{ data }` only: a renamed or defaulted property is not a plain field read.
       const inner = significant(property);
-      if (
-        property.name !== 'PatternProperty' ||
-        inner.length !== 1 ||
-        inner[0]?.name !== 'PropertyName'
-      ) {
+      if (property.name !== 'PatternProperty' || inner.length !== 1 || inner[0]?.name !== 'PropertyName') {
         return { kind: 'other' };
       }
       names.push(source.slice(inner[0].from, inner[0].to));
@@ -518,22 +401,12 @@ function parameterOf(node: SyntaxNode, source: string): JsParameter {
 // `const value0 = entry.fields?.["category"]; let expected0 = "Care";
 // if (…) expected0 = …; return (value0 === expected0);` — the `if`s only
 // coerce a value's type, so the return, substituted, says what is compared.
-function functionBody(
-  node: SyntaxNode,
-  source: string,
-  depth: number,
-): { readonly value: Js; readonly substituted: boolean } | undefined {
+function functionBody(node: SyntaxNode, source: string, depth: number): { readonly value: Js; readonly substituted: boolean } | undefined {
   const block = node.getChild('Block');
   if (!block) {
     const parts = significant(node);
     const last = parts[parts.length - 1];
-    const value =
-      last &&
-      last.name !== 'ParamList' &&
-      last.name !== 'Arrow' &&
-      last.name !== 'VariableDefinition'
-        ? toJs(last, source, depth + 1)
-        : undefined;
+    const value = last && last.name !== 'ParamList' && last.name !== 'Arrow' && last.name !== 'VariableDefinition' ? toJs(last, source, depth + 1) : undefined;
     return value === undefined ? undefined : { value, substituted: false };
   }
   const statements = significant(block);
@@ -560,9 +433,7 @@ function functionBody(
     return undefined;
   }
   const returned = toJs(value, source, depth + 1);
-  return locals.size === 0
-    ? { value: returned, substituted: false }
-    : { value: substitutedJs(returned, locals, 0), substituted: true };
+  return locals.size === 0 ? { value: returned, substituted: false } : { value: substitutedJs(returned, locals, 0), substituted: true };
 }
 
 // The tree with each local name replaced by what it was declared as.
@@ -587,19 +458,11 @@ function substitutedJs(node: Js, locals: ReadonlyMap<string, Js>, depth: number)
     case 'binary':
       return { ...node, left: next(node.left), right: next(node.right) };
     case 'conditional':
-      return {
-        ...node,
-        test: next(node.test),
-        consequent: next(node.consequent),
-        alternate: next(node.alternate),
-      };
+      return { ...node, test: next(node.test), consequent: next(node.consequent), alternate: next(node.alternate) };
     case 'array':
       return { ...node, items: node.items.map(next) };
     case 'object':
-      return {
-        ...node,
-        entries: node.entries.map((entry) => ({ ...entry, value: next(entry.value) })),
-      };
+      return { ...node, entries: node.entries.map((entry) => ({ ...entry, value: next(entry.value) })) };
     case 'function':
     case 'string':
     case 'number':
@@ -647,20 +510,9 @@ export function decodeString(literal: string): string | undefined {
   return out;
 }
 
-const SIMPLE_ESCAPES: Readonly<Record<string, string>> = {
-  n: '\n',
-  r: '\r',
-  t: '\t',
-  b: '\b',
-  f: '\f',
-  v: '\v',
-  '0': '\0',
-};
+const SIMPLE_ESCAPES: Readonly<Record<string, string>> = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', v: '\v', '0': '\0' };
 
-function decodeEscape(
-  body: string,
-  at: number,
-): { readonly text: string; readonly end: number } | undefined {
+function decodeEscape(body: string, at: number): { readonly text: string; readonly end: number } | undefined {
   const character = body.charAt(at);
   const simple = SIMPLE_ESCAPES[character];
   if (simple !== undefined) {
@@ -668,22 +520,16 @@ function decodeEscape(
   }
   if (character === 'x') {
     const hex = body.slice(at + 1, at + 3);
-    return /^[0-9a-fA-F]{2}$/.test(hex)
-      ? { text: String.fromCharCode(parseInt(hex, 16)), end: at + 3 }
-      : undefined;
+    return /^[0-9a-fA-F]{2}$/.test(hex) ? { text: String.fromCharCode(parseInt(hex, 16)), end: at + 3 } : undefined;
   }
   if (character === 'u') {
     const braced = /^\{([0-9a-fA-F]{1,6})\}/.exec(body.slice(at + 1));
     if (braced?.[1]) {
       const point = parseInt(braced[1], 16);
-      return point <= 0x10ffff
-        ? { text: String.fromCodePoint(point), end: at + 1 + braced[0].length }
-        : undefined;
+      return point <= 0x10ffff ? { text: String.fromCodePoint(point), end: at + 1 + braced[0].length } : undefined;
     }
     const hex = body.slice(at + 1, at + 5);
-    return /^[0-9a-fA-F]{4}$/.test(hex)
-      ? { text: String.fromCharCode(parseInt(hex, 16)), end: at + 5 }
-      : undefined;
+    return /^[0-9a-fA-F]{4}$/.test(hex) ? { text: String.fromCharCode(parseInt(hex, 16)), end: at + 5 } : undefined;
   }
   if (character === '\n') {
     return { text: '', end: at + 1 }; // A line continuation.
@@ -756,31 +602,20 @@ export function parseModule(text: string): ParsedModule {
   const bound = new Set<string>();
   let statement = tree.topNode.firstChild;
   for (let count = 0; statement && count < LOOP_SYNTAX_LIMITS.declarationsMax; count++) {
-    const inner =
-      statement.name === 'ExportDeclaration'
-        ? (statement.getChild('FunctionDeclaration') ?? statement.getChild('VariableDeclaration'))
-        : statement;
+    const inner = statement.name === 'ExportDeclaration' ? (statement.getChild('FunctionDeclaration') ?? statement.getChild('VariableDeclaration')) : statement;
     if (inner?.name === 'ImportDeclaration') {
       imports.push(...importsOf(inner, source));
     } else if (inner?.name === 'FunctionDeclaration') {
       const name = inner.getChild('VariableDefinition');
       if (name) {
-        functions.set(source.slice(name.from, name.to), {
-          name: source.slice(name.from, name.to),
-          calls: callsIn(inner, source),
-          from: inner.from,
-        });
+        functions.set(source.slice(name.from, name.to), { name: source.slice(name.from, name.to), calls: callsIn(inner, source), from: inner.from });
       }
     } else if (inner?.name === 'VariableDeclaration') {
       readDeclaration(inner, statement, source, declarations, bound);
       const name = inner.getChild('VariableDefinition');
       const value = inner.getChild('ArrowFunction') ?? inner.getChild('FunctionExpression');
       if (name && value) {
-        functions.set(source.slice(name.from, name.to), {
-          name: source.slice(name.from, name.to),
-          calls: callsIn(value, source),
-          from: inner.from,
-        });
+        functions.set(source.slice(name.from, name.to), { name: source.slice(name.from, name.to), calls: callsIn(value, source), from: inner.from });
       }
     }
     statement = statement.nextSibling;

@@ -72,8 +72,7 @@ function fixture(context) {
     requests,
     timers,
     read: () => latest,
-    show: (info = repository, projectPath = '/project') =>
-      act(async () => root.render(React.createElement(Harness, { projectPath, info }))),
+    show: (info = repository, projectPath = '/project') => act(async () => root.render(React.createElement(Harness, { projectPath, info }))),
     tick: () =>
       act(async () => {
         for (const callback of timers.values()) {

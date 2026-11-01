@@ -6,10 +6,7 @@ export function literalOptions(type: string): readonly string[] | undefined {
   if (!tokens || tokens.length < 1 || tokens.length > PROPERTY_LIMITS.fieldsMax) {
     return undefined;
   }
-  const remaining = type.replace(
-    /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|-?\d+(?:\.\d+)?|true|false/g,
-    '',
-  );
+  const remaining = type.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|-?\d+(?:\.\d+)?|true|false/g, '');
   if (!/^\s*(?:\|\s*)*$/.test(remaining)) {
     return undefined;
   }

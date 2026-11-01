@@ -23,12 +23,7 @@ const check = (what, condition, detail) => {
     failures.push(`  ${what}${detail ? `\n    ${detail}` : ''}`);
   }
 };
-const same = (what, got, want) =>
-  check(
-    what,
-    JSON.stringify(got) === JSON.stringify(want),
-    `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`,
-  );
+const same = (what, got, want) => check(what, JSON.stringify(got) === JSON.stringify(want), `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
 
 (async () => {
   const esbuild = require('esbuild');
@@ -50,15 +45,7 @@ const same = (what, got, want) =>
     platform: 'node',
     logLevel: 'silent',
   });
-  const {
-    buildCssRuleView,
-    cssTokens,
-    highlightCss,
-    stepNumberAt,
-    stepSize,
-    caretOffset,
-    setCaretOffset,
-  } = require(bundlePath);
+  const { buildCssRuleView, cssTokens, highlightCss, stepNumberAt, stepSize, caretOffset, setCaretOffset } = require(bundlePath);
 
   // --- colouring ------------------------------------------------------------
   //
@@ -112,15 +99,7 @@ const same = (what, got, want) =>
   check('markup escapes', !highlightCss('a < b & c').includes('<b'), highlightCss('a < b & c'));
 
   // --- matched-rule view ----------------------------------------------------
-  const matchedRule = ({
-    selector,
-    specificity,
-    order,
-    value,
-    winning,
-    atContext = [],
-    matchedSelector = selector,
-  }) => ({
+  const matchedRule = ({ selector, specificity, order, value, winning, atContext = [], matchedSelector = selector }) => ({
     rule: {
       ruleId: selector,
       selectorText: selector,
@@ -190,10 +169,7 @@ const same = (what, got, want) =>
       atContext: ['@media (width > 40rem)'],
     }),
   ]);
-  check(
-    'query context is preserved around its rule',
-    queryView.code === '@media (width > 40rem) {\n  .card {\n    color: green;\n  }\n}',
-  );
+  check('query context is preserved around its rule', queryView.code === '@media (width > 40rem) {\n  .card {\n    color: green;\n  }\n}');
 
   // --- stepping -------------------------------------------------------------
   same('alt is a tenth', stepSize({ altKey: true }), 0.1);

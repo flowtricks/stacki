@@ -1,17 +1,8 @@
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import type { CanvasEditFormat, CanvasTextEdit } from './canvasTextSource';
 import { useEffect, useRef, type RefObject } from 'react';
-import {
-  canvasTextUnfolded,
-  parseCanvasTextEvent,
-  type CanvasTextCatalog,
-} from '../../../shared/properties/canvasText';
-import {
-  applyCanvasText,
-  canvasTextNodes,
-  canvasTextPlans,
-  type CanvasSourceNode,
-} from './canvasTextSource';
+import { canvasTextUnfolded, parseCanvasTextEvent, type CanvasTextCatalog } from '../../../shared/properties/canvasText';
+import { applyCanvasText, canvasTextNodes, canvasTextPlans, type CanvasSourceNode } from './canvasTextSource';
 import { createCanvasTextOverlay } from './canvasTextOverlay';
 import {
   CANVAS_FOCUS_PATHS_MAX,
@@ -21,18 +12,8 @@ import {
   type CanvasTextSelection,
   type CanvasTextSelectionRange,
 } from '../../../shared/properties/canvasTextOverlay';
-import {
-  canvasTextSelection,
-  clearCanvasTextSelection,
-  type CanvasFormatAction,
-  type CanvasFormatState,
-} from './canvasTextSelection';
-import {
-  canvasTextDraft,
-  clearCanvasTextDraft,
-  canvasTypedText,
-  type CanvasTextDraft,
-} from '../../ui/canvasTextDraft';
+import { canvasTextSelection, clearCanvasTextSelection, type CanvasFormatAction, type CanvasFormatState } from './canvasTextSelection';
+import { canvasTextDraft, clearCanvasTextDraft, canvasTypedText, type CanvasTextDraft } from '../../ui/canvasTextDraft';
 
 export interface CanvasTextDocument {
   readonly projectPath: string;
@@ -58,11 +39,7 @@ export interface CanvasTextFormatter {
   /** The lit buttons for a text node, or undefined when it cannot be formatted. */
   readonly states: (textId: string) => CanvasFormatState | undefined;
   /** One press over [start, end) of the text, which reads `value`. False: nothing changed. */
-  readonly apply: (
-    textId: string,
-    selection: { readonly start: number; readonly end: number; readonly value: string },
-    action: CanvasFormatAction,
-  ) => boolean;
+  readonly apply: (textId: string, selection: { readonly start: number; readonly end: number; readonly value: string }, action: CanvasFormatAction) => boolean;
 }
 interface Options {
   readonly document: CanvasTextDocument | undefined;
@@ -160,12 +137,7 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
   // closes: its own edit carries the typed text, so the save the editor posts
   // on its way out would be a second, conflicting write of the same words.
   const takeover: Takeover = { key: undefined, linking: false };
-  const nodes = new Map(
-    canvasTextNodes(options.initial.nodes).map(({ node }) => [
-      node.id ? options.initial.pathFor(node.id) : undefined,
-      node,
-    ]),
-  );
+  const nodes = new Map(canvasTextNodes(options.initial.nodes).map(({ node }) => [node.id ? options.initial.pathFor(node.id) : undefined, node]));
   return (event: MessageEvent<unknown>) => {
     const message = canvasTextSessionMessage(event, options);
     if (!message) {
@@ -213,12 +185,7 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
 
 // The words being typed, mirrored into the field that shows them: a text
 // node's Content field, or the props panel field of the prop that sets them.
-function publishCanvasDraft(
-  plan: CanvasTextEdit,
-  node: CanvasSourceNode | undefined,
-  value: string,
-  options: CanvasTextReceiverOptions,
-) {
+function publishCanvasDraft(plan: CanvasTextEdit, node: CanvasSourceNode | undefined, value: string, options: CanvasTextReceiverOptions) {
   const scope = {
     session: options.session,
     projectPath: options.initial.projectPath,
@@ -242,10 +209,7 @@ function publishCanvasDraft(
   }
 }
 
-function canvasTextSessionMessage(
-  event: MessageEvent<unknown>,
-  options: CanvasTextReceiverOptions,
-) {
+function canvasTextSessionMessage(event: MessageEvent<unknown>, options: CanvasTextReceiverOptions) {
   const host = options.current.current;
   const message = canvasTextMessage(event, host ?? undefined);
   if (!message || !host) {
@@ -258,29 +222,18 @@ function canvasTextSessionMessage(
   if (message.session !== options.session) {
     return undefined;
   }
-  if (
-    host.document?.source !== options.initial.source ||
-    host.document.file !== options.initial.file
-  ) {
+  if (host.document?.source !== options.initial.source || host.document.file !== options.initial.file) {
     return undefined;
   }
   return message;
 }
 
 function canvasTextMessage(event: MessageEvent<unknown>, host: Options | undefined) {
-  if (
-    !host?.url ||
-    event.source !== host.frame.current?.contentWindow ||
-    event.origin !== new URL(host.url).origin
-  ) {
+  if (!host?.url || event.source !== host.frame.current?.contentWindow || event.origin !== new URL(host.url).origin) {
     return undefined;
   }
   try {
-    return (
-      parseCanvasTextEvent(event.data) ??
-      parseCanvasTextOverlay(event.data) ??
-      parseCanvasTextSelection(event.data)
-    );
+    return parseCanvasTextEvent(event.data) ?? parseCanvasTextOverlay(event.data) ?? parseCanvasTextSelection(event.data);
   } catch {
     return undefined;
   }
@@ -290,15 +243,10 @@ async function publishCanvasTextSession(
   document: CanvasTextDocument,
   session: string,
   revision: number,
-  publish: (ready: {
-    readonly plans: readonly CanvasTextEdit[];
-    readonly catalog: CanvasTextCatalog;
-  }) => void,
+  publish: (ready: { readonly plans: readonly CanvasTextEdit[]; readonly catalog: CanvasTextCatalog }) => void,
 ) {
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(document.source));
-  const checksum = Array.from(new Uint8Array(hash), (byte) =>
-    byte.toString(16).padStart(2, '0'),
-  ).join('');
+  const checksum = Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('');
   const literal = canvasTextPlans(document.source, document.nodes, document.pathFor);
   const plans: readonly CanvasTextEdit[] = [
     ...literal.map((plan) => ({
@@ -359,9 +307,7 @@ function receiveCanvasSelection(message: CanvasTextSelection, options: CanvasSel
   }
   const typed = () => {
     const draft = canvasTextDraft.get();
-    return draft?.session === session && draftOf(plan, draft, options.nodes)
-      ? draftTyped(draft)
-      : plan.target.value;
+    return draft?.session === session && draftOf(plan, draft, options.nodes) ? draftTyped(draft) : plan.target.value;
   };
   const takeOver = () => {
     const value = typed();
@@ -441,10 +387,7 @@ function editFormat(
 // A selection over the editor's text, moved onto the words as they will be
 // saved: without the template's whitespace around them (canvasTypedText).
 // Prop text keeps its own value; its runs carry no template whitespace.
-function typedSelection(
-  plan: CanvasTextEdit,
-  selection: { readonly start: number; readonly end: number; readonly value: string },
-) {
+function typedSelection(plan: CanvasTextEdit, selection: { readonly start: number; readonly end: number; readonly value: string }) {
   if (plan.prop) {
     return selection;
   }
@@ -457,11 +400,7 @@ function typedSelection(
 }
 
 // Whether a draft is the one this text's editor is writing.
-function draftOf(
-  plan: CanvasTextEdit,
-  draft: CanvasTextDraft,
-  nodes: ReadonlyMap<string | undefined, CanvasSourceNode>,
-): boolean {
+function draftOf(plan: CanvasTextEdit, draft: CanvasTextDraft, nodes: ReadonlyMap<string | undefined, CanvasSourceNode>): boolean {
   if (draft.kind === 'prop') {
     return draft.nodeID === plan.prop?.nodeID && draft.prop === plan.prop.name;
   }

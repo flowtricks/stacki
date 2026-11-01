@@ -47,14 +47,9 @@ const check = (what, condition, detail) => {
     platform: 'node',
     logLevel: 'silent',
   });
-  const {
-    identifiersIn,
-    namesUsedIn,
-    neededFrontmatter,
-    unusedDeclarations,
-    withStatements,
-    withoutDeclarations,
-  } = await import(`${pathToFileURL(out).href}?v=${Date.now()}`);
+  const { identifiersIn, namesUsedIn, neededFrontmatter, unusedDeclarations, withStatements, withoutDeclarations } = await import(
+    `${pathToFileURL(out).href}?v=${Date.now()}`
+  );
 
   // --- what a piece of markup reads ------------------------------------------------
   {
@@ -80,22 +75,10 @@ const check = (what, condition, detail) => {
     check('the component it renders', names.includes('Card'), names.join());
     check('a name in a prop expression', names.includes('jobs'), names.join());
     check('the list a loop walks', names.includes('posts'), names.join());
-    check(
-      'and what a condition asks about',
-      names.includes('showFooter') && names.includes('year'),
-      names.join(),
-    );
+    check('and what a condition asks about', names.includes('showFooter') && names.includes('year'), names.join());
     check('a loop variable is read where it is used', names.includes('post'), names.join());
-    check(
-      'but a prop that is TEXT is not a name',
-      !JSON.stringify(nodes).includes('__') && names.filter((name) => name === 'jobs').length === 1,
-      names.join(),
-    );
-    check(
-      'nor is a property of something else',
-      !names.includes('data') && !names.includes('title'),
-      names.join(),
-    );
+    check('but a prop that is TEXT is not a name', !JSON.stringify(nodes).includes('__') && names.filter((name) => name === 'jobs').length === 1, names.join());
+    check('nor is a property of something else', !names.includes('data') && !names.includes('title'), names.join());
   }
 
   // A name inside a string is text. A name inside a template's hole is code.
@@ -122,9 +105,7 @@ const check = (what, condition, detail) => {
     // The page after a delete: only the Card, reading `jobs`.
     const model = {
       extraFrontmatter: FRONTMATTER,
-      nodes: [
-        { kind: 'component', name: 'Card', props: { options: { type: 'expr', value: 'jobs' } } },
-      ],
+      nodes: [{ kind: 'component', name: 'Card', props: { options: { type: 'expr', value: 'jobs' } } }],
     };
     const dead = unusedDeclarations(model)
       .map((declaration) => declaration.name)
@@ -177,9 +158,7 @@ const check = (what, condition, detail) => {
         {
           kind: 'element',
           name: 'div',
-          children: [
-            { kind: 'element', name: 'p', props: { 'data-x': { type: 'expr', value: 'other' } } },
-          ],
+          children: [{ kind: 'element', name: 'p', props: { 'data-x': { type: 'expr', value: 'other' } } }],
         },
       ],
     };
@@ -219,26 +198,13 @@ const check = (what, condition, detail) => {
     });
     const imported = carried.imports.map((i) => `${i.name}=${i.path}`).sort();
     const statements = carried.statements.map((statement) => statement.name);
-    check(
-      'an import the markup reads comes across',
-      imported.includes('hero=../assets/hero.png'),
-      imported.join(),
-    );
-    check(
-      'and so does the component’s own',
-      imported.includes('Card=@/components/Card.astro'),
-      imported.join(),
-    );
+    check('an import the markup reads comes across', imported.includes('hero=../assets/hero.png'), imported.join());
+    check('and so does the component’s own', imported.includes('Card=@/components/Card.astro'), imported.join());
     check('a const it reads comes across', statements.includes('jobs'), statements.join());
-    check(
-      'and one that const reads in turn',
-      statements.includes('label') && statements.includes('year'),
-      statements.join(),
-    );
+    check('and one that const reads in turn', statements.includes('label') && statements.includes('year'), statements.join());
     check(
       'in the order the file had them',
-      statements.indexOf('jobs') < statements.indexOf('year') &&
-        statements.indexOf('year') < statements.indexOf('label'),
+      statements.indexOf('jobs') < statements.indexOf('year') && statements.indexOf('year') < statements.indexOf('label'),
       statements.join(),
     );
     check('nothing it does not read', !statements.includes('posts'), statements.join());
@@ -268,51 +234,22 @@ const check = (what, condition, detail) => {
   {
     const before = 'const a = 1;';
     const after = withStatements(before, [{ name: 'b', statement: 'const b = 2;' }]);
-    check(
-      'what arrives goes after what was there',
-      after === 'const a = 1;\nconst b = 2;',
-      JSON.stringify(after),
-    );
-    check(
-      'into an empty frontmatter too',
-      withStatements('', [{ statement: 'const b = 2;' }]) === 'const b = 2;',
-    );
+    check('what arrives goes after what was there', after === 'const a = 1;\nconst b = 2;', JSON.stringify(after));
+    check('into an empty frontmatter too', withStatements('', [{ statement: 'const b = 2;' }]) === 'const b = 2;');
     check('and nothing arriving changes nothing', withStatements(before, []) === before);
   }
 
   // --- the app asks for both ----------------------------------------------------------
   // The app shell and the modules it was split into (src/app).
   const app = readAppSource();
-  check(
-    'deleting prunes what it made dead',
-    /const dead = unusedDeclarations\(next\)/.test(app),
-    'nothing prunes declarations',
-  );
-  check(
-    'and says which lines went',
-    /from the frontmatter/.test(app),
-    'the deletion is silent about it',
-  );
-  check(
-    'copying takes the page’s code with it',
-    /frontmatter: state\.model\.extraFrontmatter/.test(app),
-    'the clipboard holds markup only',
-  );
-  check(
-    'pasting brings what the markup reads',
-    /neededFrontmatter\(\{/.test(app),
-    'the paste carries nothing',
-  );
-  check(
-    'and rewrites a relative import for where it landed',
-    /rebaseProjectImport\(/.test(app),
-    'a relative path would point at nothing from another folder',
-  );
+  check('deleting prunes what it made dead', /const dead = unusedDeclarations\(next\)/.test(app), 'nothing prunes declarations');
+  check('and says which lines went', /from the frontmatter/.test(app), 'the deletion is silent about it');
+  check('copying takes the page’s code with it', /frontmatter: state\.model\.extraFrontmatter/.test(app), 'the clipboard holds markup only');
+  check('pasting brings what the markup reads', /neededFrontmatter\(\{/.test(app), 'the paste carries nothing');
+  check('and rewrites a relative import for where it landed', /rebaseProjectImport\(/.test(app), 'a relative path would point at nothing from another folder');
 
   if (failures.length) {
-    console.error(
-      `\nfrontmatter-move: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\nfrontmatter-move: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

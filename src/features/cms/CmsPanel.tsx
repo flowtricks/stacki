@@ -7,22 +7,10 @@ import type { Collection } from './cmsSchema';
 import type { CmsPanelContent, CmsPanelFile } from './cmsPanelBridge';
 import { collectionHasContent, collectionOf } from './cmsSchema';
 import { createCmsCollection, readCmsFiles, readContentCollections } from './cmsPanelBridge';
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  CmsIcon,
-  FileIcon,
-  FolderDefaultIcon,
-  GearIcon,
-  PlusIcon,
-} from '../../ui/Icons';
+import { ChevronLeftIcon, ChevronRightIcon, CmsIcon, FileIcon, FolderDefaultIcon, GearIcon, PlusIcon } from '../../ui/Icons';
 import { listCmsConnections } from '../../ipc/cmsConnectionsBridge';
 import type { CmsConnection } from '../../../shared/properties/cmsConnections';
-import {
-  ASTRO_CONTENT_ID,
-  ASTRO_CONTENT_SOURCE,
-  type CmsSource,
-} from '../../../shared/properties/astroContent';
+import { ASTRO_CONTENT_ID, ASTRO_CONTENT_SOURCE, type CmsSource } from '../../../shared/properties/astroContent';
 import { RemoteCmsBrowser } from './RemoteCmsBrowser';
 import { prefetchConnection } from './remoteCmsCache';
 import { ConnectionLogo, type RemoteCmsSelection } from './remoteCmsShared';
@@ -106,46 +94,22 @@ function LocalCmsPanel(
   const [creating, setCreating] = useState(false);
   const [openKey, setOpenKey] = useState<string | undefined>(undefined);
   const collections = useMemo(() => visibleCollections(files, content), [files, content]);
-  const groups = useMemo(
-    () => collectionGroups(collections, props.currentFile),
-    [collections, props.currentFile],
-  );
+  const groups = useMemo(() => collectionGroups(collections, props.currentFile), [collections, props.currentFile]);
   useSelectedGroup(props.selectedRel, openKey, collections, setOpenKey);
   const open = openKey === undefined ? undefined : groups.find((group) => group.key === openKey);
   const create = useCreateCollection(props, setCreating, setOpenKey, refresh);
   return (
     <div className="panel-section grow">
-      <PanelHeader
-        open={open}
-        openKey={openKey}
-        onBack={() => closeGroup(props, setOpenKey)}
-        onCreate={() => setCreating(true)}
-        onConnect={props.onConnect}
-      />
+      <PanelHeader open={open} openKey={openKey} onBack={() => closeGroup(props, setOpenKey)} onCreate={() => setCreating(true)} onConnect={props.onConnect} />
       <div className="panel-body">
         {creating && <CreateRow onCreate={create} />}
         {!open && (
           <>
-            <ConnectionRows
-              connections={props.connections}
-              content={content}
-              onOpen={props.onOpenRemote}
-            />
-            <GroupList
-              groups={groups}
-              selectedRel={props.selectedRel}
-              onOpen={(key) => openGroup(groups, key, { select: props.onSelect, open: setOpenKey })}
-            />
+            <ConnectionRows connections={props.connections} content={content} onOpen={props.onOpenRemote} />
+            <GroupList groups={groups} selectedRel={props.selectedRel} onOpen={(key) => openGroup(groups, key, { select: props.onSelect, open: setOpenKey })} />
           </>
         )}
-        {open && (
-          <JsonCollectionList
-            collections={open.items}
-            selected={props.selectedRel}
-            onSelect={props.onSelect}
-            onOpenSettings={props.onOpenSettings}
-          />
-        )}
+        {open && <JsonCollectionList collections={open.items} selected={props.selectedRel} onSelect={props.onSelect} onOpenSettings={props.onOpenSettings} />}
         {/* The content collections' row is always there, so the panel is never empty. */}
         <PanelReadStatus state={state} label="collections" retry={refresh} />
       </div>
@@ -178,10 +142,7 @@ function useCmsPanelData(projectPath: string, refreshKey: string | number): CmsP
   };
 }
 async function readCmsCatalog(projectPath: string): Promise<Result<CmsCatalog, string>> {
-  const [files, content] = await Promise.all([
-    readCmsFiles(projectPath),
-    readContentCollections(projectPath),
-  ]);
+  const [files, content] = await Promise.all([readCmsFiles(projectPath), readContentCollections(projectPath)]);
   if (!files.ok) {
     return files;
   }
@@ -232,19 +193,14 @@ function useSelectedGroup(
     }
     const key = groupIdentity(selected.rel, selected.dir).key;
     // A group with this one collection is not opened: its row already opened it.
-    const siblings = collections.filter(
-      (collection) => groupIdentity(collection.rel, collection.dir).key === key,
-    );
+    const siblings = collections.filter((collection) => groupIdentity(collection.rel, collection.dir).key === key);
     if (siblings.length > 1) {
       setOpenKey(key);
     }
   }, [collections, openKey, selectedRel, setOpenKey]);
 }
 
-function visibleCollections(
-  files: readonly CmsPanelFile[],
-  content: CmsPanelContent,
-): readonly Collection[] {
+function visibleCollections(files: readonly CmsPanelFile[], content: CmsPanelContent): readonly Collection[] {
   return files
     .filter((file) => !ownedByContent(file.rel.split('#')[0] ?? '', content.covered))
     .map(collectionOf)
@@ -258,14 +214,8 @@ function ownedByContent(rel: string, covered: CmsPanelContent['covered']): boole
   return covered.dirs.some((directory) => `src/${rel}`.startsWith(`${directory}/`));
 }
 
-function collectionGroups(
-  collections: readonly Collection[],
-  currentFile: string | undefined,
-): readonly CollectionGroup[] {
-  const mutableGroups = new Map<
-    string,
-    { readonly identity: GroupIdentity; items: Collection[] }
-  >();
+function collectionGroups(collections: readonly Collection[], currentFile: string | undefined): readonly CollectionGroup[] {
+  const mutableGroups = new Map<string, { readonly identity: GroupIdentity; items: Collection[] }>();
   for (const collection of collections) {
     const identity = groupIdentity(collection.rel, collection.dir);
     if (identity.key.toLowerCase().endsWith('.astro') && identity.key !== currentFile) {
@@ -280,11 +230,7 @@ function collectionGroups(
   }
   return Array.from(mutableGroups.values(), ({ identity, items }) => {
     const current = currentFile !== undefined && identity.key === currentFile;
-    const badge: CollectionGroup['badge'] = current
-      ? identity.key.startsWith('pages/')
-        ? 'this page'
-        : 'open'
-      : undefined;
+    const badge: CollectionGroup['badge'] = current ? (identity.key.startsWith('pages/') ? 'this page' : 'open') : undefined;
     return {
       ...identity,
       items,
@@ -342,10 +288,7 @@ function openGroup(
   }
 }
 
-function closeGroup(
-  props: Pick<CmsPanelProps, 'onSelect' | 'onSelectContent'>,
-  setOpenKey: React.Dispatch<React.SetStateAction<string | undefined>>,
-): void {
+function closeGroup(props: Pick<CmsPanelProps, 'onSelect' | 'onSelectContent'>, setOpenKey: React.Dispatch<React.SetStateAction<string | undefined>>): void {
   setOpenKey(undefined);
   props.onSelect(undefined);
   props.onSelectContent(undefined);
@@ -414,9 +357,7 @@ function ConnectionRows(props: {
       ))}
       <GroupRow
         label={ASTRO_CONTENT_SOURCE.label}
-        title={
-          props.content.configPath ? `Declared in ${props.content.configPath}` : 'Astro content'
-        }
+        title={props.content.configPath ? `Declared in ${props.content.configPath}` : 'Astro content'}
         onClick={() => props.onOpen(ASTRO_CONTENT_SOURCE)}
         icon={<ConnectionLogo kind="astro" />}
       />
@@ -602,7 +543,5 @@ function jsonItemCount(collection: Collection): string {
   if (collection.error !== undefined) {
     return 'unreadable';
   }
-  return collection.single || collection.items.length === 1
-    ? '1 item'
-    : `${collection.items.length} items`;
+  return collection.single || collection.items.length === 1 ? '1 item' : `${collection.items.length} items`;
 }

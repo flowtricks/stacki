@@ -52,9 +52,7 @@ export function frontmatterOf(source: string) {
 // the same form: `pages/index.astro#rotatingWords`.
 export function splitCmsRel(rel: string) {
   const at = String(rel || '').lastIndexOf('#');
-  return at === -1
-    ? { fileRel: String(rel || ''), exportName: undefined }
-    : { fileRel: String(rel).slice(0, at), exportName: String(rel).slice(at + 1) };
+  return at === -1 ? { fileRel: String(rel || ''), exportName: undefined } : { fileRel: String(rel).slice(0, at), exportName: String(rel).slice(at + 1) };
 }
 
 // Refuses paths that escape src/.
@@ -114,11 +112,7 @@ export const collectionOf = async (projectPath: string, name: string) => {
 // A file's single values go by the file's own name: they are what the file is.
 const fileName = (rel: string): string => rel.slice(rel.lastIndexOf('/') + 1);
 
-export function readCmsSource(
-  full: string,
-  entryRel: string,
-  options: { readonly page: boolean; readonly includeGeneralOnly?: boolean },
-): CmsFile[] {
+export function readCmsSource(full: string, entryRel: string, options: { readonly page: boolean; readonly includeGeneralOnly?: boolean }): CmsFile[] {
   let source: string;
   try {
     if (fs.statSync(full).size > MAIN_LIMITS.cmsFileBytesMax) {
@@ -154,9 +148,7 @@ export function readCmsSource(
     ...(options.page ? { fromPage: true } : {}),
   };
   const general = readGeneral(source, scan);
-  const files: CmsFile[] = general
-    ? [{ ...metadata, rel: `${entryRel}#${GENERAL}`, name: fileName(entryRel), data: general }]
-    : [];
+  const files: CmsFile[] = general ? [{ ...metadata, rel: `${entryRel}#${GENERAL}`, name: fileName(entryRel), data: general }] : [];
   for (const collection of collections) {
     if (collection.data) {
       files.push({

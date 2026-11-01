@@ -92,27 +92,13 @@ const fragment = {
   await act(async () => root.render(React.createElement(PropsPanel, { ...props, node: nodes[1] })));
   const toggle = document.querySelector('.props-group [aria-expanded]');
   assert.ok(toggle);
-  await act(async () =>
-    toggle.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })),
-  );
-  assert.equal(
-    document.querySelector('.props-group [aria-expanded]').getAttribute('aria-expanded'),
-    'true',
-  );
+  await act(async () => toggle.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  assert.equal(document.querySelector('.props-group [aria-expanded]').getAttribute('aria-expanded'), 'true');
   await act(async () => root.render(React.createElement(PropsPanel, { ...props, node: nodes[2] })));
   await act(async () => root.render(React.createElement(PropsPanel, { ...props, node: nodes[1] })));
-  assert.equal(
-    document.querySelector('.props-group [aria-expanded]').getAttribute('aria-expanded'),
-    'true',
-  );
-  await act(async () =>
-    root.render(React.createElement(PropsPanel, { ...props, allowAttrs: false, node: fragment })),
-  );
-  assert.equal(
-    document.querySelector('.attr-name')?.textContent,
-    'set:html',
-    'Fragment directives appear in Attributes without a component rest prop',
-  );
+  assert.equal(document.querySelector('.props-group [aria-expanded]').getAttribute('aria-expanded'), 'true');
+  await act(async () => root.render(React.createElement(PropsPanel, { ...props, allowAttrs: false, node: fragment })));
+  assert.equal(document.querySelector('.attr-name')?.textContent, 'set:html', 'Fragment directives appear in Attributes without a component rest prop');
   await act(async () => root.unmount());
   assert.throws(
     () =>
@@ -131,27 +117,17 @@ const fragment = {
       {
         node: {
           ...nodes[1],
-          props: Object.fromEntries(
-            Array.from({ length: 257 }, (_, index) => [`attr${index}`, { type: 'bare' }]),
-          ),
+          props: Object.fromEntries(Array.from({ length: 257 }, (_, index) => [`attr${index}`, { type: 'bare' }])),
         },
       },
       /attribute limit exceeded/,
     ],
     [{ node: { ...nodes[1], children: Array(20001).fill(nodes[2]) } }, /child limit exceeded/],
   ]) {
-    assert.throws(
-      () =>
-        renderToStaticMarkup(
-          React.createElement(PropsPanel, { ...props, node: nodes[1], ...patch }),
-        ),
-      message,
-    );
+    assert.throws(() => renderToStaticMarkup(React.createElement(PropsPanel, { ...props, node: nodes[1], ...patch })), message);
   }
   dom.window.close();
-  console.log(
-    'props-selection: 24 node-kind transitions, settings retention and binding bounds passed',
-  );
+  console.log('props-selection: 24 node-kind transitions, settings retention and binding bounds passed');
   process.exit(0);
 })().catch((error) => {
   console.error(error);

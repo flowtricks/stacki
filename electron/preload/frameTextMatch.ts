@@ -13,9 +13,7 @@ export function matchCanvasText(target: CanvasTextTarget, clicked: Element): Tex
   // wrapper (a Section's container) tags each level. The innermost one is the
   // closest the instance comes to the words.
   const parents = elementsWithPath(target.parent).filter((parent) => parent.contains(clicked));
-  const parent = parents.find((outer) =>
-    parents.every((inner) => inner === outer || !outer.contains(inner)),
-  );
+  const parent = parents.find((outer) => parents.every((inner) => inner === outer || !outer.contains(inner)));
   if (!parent || (target.kind === 'element' && parent.localName !== target.tag)) {
     return undefined;
   }
@@ -29,9 +27,7 @@ export function matchCanvasText(target: CanvasTextTarget, clicked: Element): Tex
   if (target.segment !== undefined) {
     return segmentMatch(parent, target, target.segment);
   }
-  const mapped = (runsOf(target.path) ?? []).filter(
-    (run) => run.length > 0 && run.every((node) => node.isConnected && parent.contains(node)),
-  );
+  const mapped = (runsOf(target.path) ?? []).filter((run) => run.length > 0 && run.every((node) => node.isConnected && parent.contains(node)));
   const exact = mapped.filter((run) => run.every((node) => node instanceof Text));
   if (exact.length === 1) {
     const nodes = exact[0]?.filter((node): node is Text => node instanceof Text) ?? [];
@@ -39,11 +35,7 @@ export function matchCanvasText(target: CanvasTextTarget, clicked: Element): Tex
       return { nodes, element: parent };
     }
   }
-  if (
-    target.siblings.some(
-      (path) => elementsWithPath(path).filter((element) => parent.contains(element)).length !== 1,
-    )
-  ) {
+  if (target.siblings.some((path) => elementsWithPath(path).filter((element) => parent.contains(element)).length !== 1)) {
     return undefined;
   }
   // The words are looked for from the clicked element outwards: a component
@@ -66,11 +58,7 @@ export function matchCanvasText(target: CanvasTextTarget, clicked: Element): Tex
 
 // The text node at a position inside HTML a prop rendered (`set:html`), which
 // carries no canvas paths. It must still read what the prop says it reads.
-function segmentMatch(
-  parent: Element,
-  target: CanvasTextTarget,
-  segment: number,
-): TextMatch | undefined {
+function segmentMatch(parent: Element, target: CanvasTextTarget, segment: number): TextMatch | undefined {
   const walker = document.createTreeWalker(parent, NodeFilter.SHOW_TEXT);
   let node = walker.nextNode();
   for (let index = 0; node && index < segment && index < 1_000; index++) {

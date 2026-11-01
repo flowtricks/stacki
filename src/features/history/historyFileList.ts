@@ -13,14 +13,11 @@ export function selectHistoryFiles(
   options: { readonly filter: HistoryFileFilter; readonly sort: HistoryFileSort },
 ): readonly HistoryCommitFile[] {
   assert(files.length <= BOUNDARY_LIMITS.itemsMax, 'History files: file limit exceeded');
-  const visible = files.filter(
-    (file) => options.filter === 'all' || historyFileCategory(file) === options.filter,
-  );
+  const visible = files.filter((file) => options.filter === 'all' || historyFileCategory(file) === options.filter);
   // Sort a fresh list so filtering never changes the commit's original file order.
   visible.sort((left, right) => {
     if (options.sort === 'status') {
-      const categoryOrder =
-        STATUS_ORDER[historyFileCategory(left)] - STATUS_ORDER[historyFileCategory(right)];
+      const categoryOrder = STATUS_ORDER[historyFileCategory(left)] - STATUS_ORDER[historyFileCategory(right)];
       if (categoryOrder !== 0) {
         return categoryOrder;
       }

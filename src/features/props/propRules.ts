@@ -34,11 +34,7 @@ export function createPropRules(schema: readonly FieldDefinition[], props: PropV
   const fitting = branchesFitting(context, undefined);
   return {
     appliesNow: (field: FieldDefinition) =>
-      fitting.every(
-        ({ union, branches }) =>
-          !union.names.includes(field.name) ||
-          !branches.every((branch) => branch.forbids.includes(field.name)),
-      ),
+      fitting.every(({ union, branches }) => !union.names.includes(field.name) || !branches.every((branch) => branch.forbids.includes(field.name))),
     branchDefault: (name: string) => branchDefault(context, fitting, name),
     narrowOptions: (field: FieldDefinition) => narrowOptions(context, field),
     cascade: (input: CascadeInput) => cascade(context, input),
@@ -69,10 +65,7 @@ function pinsMatch(context: RuleContext, branch: UnionBranch, ignore: string | u
   return true;
 }
 
-function branchesFitting(
-  context: RuleContext,
-  ignore: string | undefined,
-): readonly FittingUnion[] {
+function branchesFitting(context: RuleContext, ignore: string | undefined): readonly FittingUnion[] {
   return context.unions.map((union) => {
     assert(union.branches.length <= LIMITS.propOptionsMax, 'Prop rules: branch limit exceeded');
     assert(union.names.length <= LIMITS.propSchemaFieldsMax, 'Prop rules: name limit exceeded');
@@ -100,11 +93,7 @@ function branchDefault(context: RuleContext, fitting: readonly FittingUnion[], n
     }
     for (const branch of branches) {
       const rule = branch.rules[name];
-      const value = rule
-        ? effective(context, rule.prop) === rule.is
-          ? rule.then
-          : rule.otherwise
-        : branch.defaults[name];
+      const value = rule ? (effective(context, rule.prop) === rule.is ? rule.then : rule.otherwise) : branch.defaults[name];
       if (value === undefined) {
         continue;
       }
@@ -166,8 +155,7 @@ function narrowOptions(context: RuleContext, field: FieldDefinition): FieldDefin
     return field;
   }
   const value = context.props[field.name];
-  const keep =
-    value && value.type !== 'expr' ? (value.type === 'bare' ? '' : value.value) : undefined;
+  const keep = value && value.type !== 'expr' ? (value.type === 'bare' ? '' : value.value) : undefined;
   const options = field.options.filter((option) => allowed.has(option) || option === keep);
   if (options.length > 0) {
     if (options.length < field.options.length) {
@@ -187,9 +175,7 @@ function cascadeSets(context: RuleContext, fieldName: string) {
     for (const name of union.names) {
       involved.add(name);
     }
-    const pinsField = union.branches.some((branch) =>
-      Object.prototype.hasOwnProperty.call(branch.pins, fieldName),
-    );
+    const pinsField = union.branches.some((branch) => Object.prototype.hasOwnProperty.call(branch.pins, fieldName));
     const fits = union.branches.filter((branch) => {
       if (!pinsField) {
         for (const name of branch.forbids) {
@@ -213,14 +199,8 @@ function cascadeSets(context: RuleContext, fieldName: string) {
   return { forbidden, involved };
 }
 
-function cascade(
-  context: RuleContext,
-  { fieldName, value, stash: held }: CascadeInput,
-): { readonly patch: PropValues; readonly stash: PropValues } {
-  assert(
-    Object.keys(held).length <= LIMITS.propSchemaFieldsMax,
-    'Prop rules: stash limit exceeded',
-  );
+function cascade(context: RuleContext, { fieldName, value, stash: held }: CascadeInput): { readonly patch: PropValues; readonly stash: PropValues } {
+  assert(Object.keys(held).length <= LIMITS.propSchemaFieldsMax, 'Prop rules: stash limit exceeded');
   assert(fieldName.length <= LIMITS.attrCharsMax, 'Prop rules: field name limit exceeded');
   const props = { ...context.props, [fieldName]: value };
   const { forbidden, involved } = cascadeSets({ ...context, props }, fieldName);
@@ -249,13 +229,7 @@ function cascade(
     patch[name] = previous;
     delete stash[name];
   }
-  assert(
-    Object.keys(stash).length <= LIMITS.propSchemaFieldsMax,
-    'Prop rules: stash limit exceeded',
-  );
-  assert(
-    Object.keys(patch).length <= LIMITS.propSchemaFieldsMax,
-    'Prop rules: patch limit exceeded',
-  );
+  assert(Object.keys(stash).length <= LIMITS.propSchemaFieldsMax, 'Prop rules: stash limit exceeded');
+  assert(Object.keys(patch).length <= LIMITS.propSchemaFieldsMax, 'Prop rules: patch limit exceeded');
   return { patch, stash };
 }

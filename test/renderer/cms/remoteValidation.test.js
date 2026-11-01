@@ -34,10 +34,7 @@ test('emails, links, unique lists and numbers', () => {
     { _key: 'b', _type: 'reference', _ref: 'x' },
   ];
   assert.deepEqual(messages([error('unique')], items), ['Items must be unique']);
-  assert.deepEqual(messages([error('integer'), error('positive')], -1.5), [
-    'Must be a whole number',
-    'Must be positive',
-  ]);
+  assert.deepEqual(messages([error('integer'), error('positive')], -1.5), ['Must be a whole number', 'Must be positive']);
 });
 
 test('only errors block publishing, each named by its field', () => {

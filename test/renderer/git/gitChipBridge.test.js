@@ -44,13 +44,7 @@ test('GitChip parsers cover status and checkout variants', () => {
     error: 'restore failed',
   });
   assert.deepEqual(bridge.parseGitCheckout(blocked), blocked);
-  for (const value of [
-    jsonNull,
-    {},
-    [{ ...status, kind: 'mystery' }],
-    [{ ...status, staged: 'no' }],
-    Array(100001).fill(status),
-  ]) {
+  for (const value of [jsonNull, {}, [{ ...status, kind: 'mystery' }], [{ ...status, staged: 'no' }], Array(100001).fill(status)]) {
     assert.throws(() => bridge.parseGitStatus(value));
   }
   for (const value of [
@@ -136,25 +130,13 @@ test('GitChip transport failures are values and malformed replies throw', async 
   });
   global.window = { avb: { gitPush: async () => ({ ok: false }) } };
   await assert.rejects(bridge.pushGitBranch('/project', 'main'), /expected success/i);
-  assert.throws(
-    () => bridge.checkoutGitBranch('/project\0bad', 'topic', { kind: 'switch' }),
-    /NUL/,
-  );
+  assert.throws(() => bridge.checkoutGitBranch('/project\0bad', 'topic', { kind: 'switch' }), /NUL/);
 });
 
 test('GitChip routes every direct Git operation through the parsed bridge', () => {
   const source = fs.readFileSync(repoPath('src/features/git/GitChip.tsx'), 'utf8');
-  assert.doesNotMatch(
-    source,
-    /window\.avb\.git(?:Info|Status|Checkout|Commit|Init|Push|ResolveMerge)/,
-  );
-  for (const operation of [
-    'readGitStatus',
-    'checkoutGitBranch',
-    'commitGitChanges',
-    'initializeGit',
-    'resolveGitMerge',
-  ]) {
+  assert.doesNotMatch(source, /window\.avb\.git(?:Info|Status|Checkout|Commit|Init|Push|ResolveMerge)/);
+  for (const operation of ['readGitStatus', 'checkoutGitBranch', 'commitGitChanges', 'initializeGit', 'resolveGitMerge']) {
     assert.match(source, new RegExp(`\\b${operation}\\(`));
   }
 });
@@ -163,9 +145,7 @@ test('Pull validates requests, response variants and failures', async () => {
   global.window = { avb: { gitPull: async () => ({ ok: true, changed: 'yes' }) } };
   await assert.rejects(bridge.pullGitBranch('/project', 'main'), /boolean/i);
   assert.throws(() => bridge.pullGitBranch('/project', 1));
-  assert.throws(() =>
-    bridge.pullGitBranch('/project', 'a'.repeat(BOUNDARY_LIMITS.textLengthMax + 1)),
-  );
+  assert.throws(() => bridge.pullGitBranch('/project', 'a'.repeat(BOUNDARY_LIMITS.textLengthMax + 1)));
   assert.throws(() => bridge.pullGitBranch('/project\0bad', 'main'), /NUL/);
   const dirty = { ok: false, dirty: true, from: 'main', branch: 'origin/main', files: ['a'] };
   global.window.avb.gitPull = async () => dirty;

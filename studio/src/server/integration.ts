@@ -20,10 +20,7 @@ import { STUDIO_STATE_DIRECTORY } from '../../vendor/stacki/shared/properties/st
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { markSourceFile } from '../../vendor/stacki/electron/previewServer/previewMarkers';
-import {
-  componentPreviewPlugin,
-  renderComponentPreviewPage,
-} from '../../vendor/stacki/electron/previewServer/componentPreview';
+import { componentPreviewPlugin, renderComponentPreviewPage } from '../../vendor/stacki/electron/previewServer/componentPreview';
 import { createRooms } from '../features/collaboration/rooms';
 import { safePath, preparePath, readSource } from '../features/project/projectServer';
 import { filePath, sourcePath, string, record, MAX_SOURCE } from '../shared/validation';
@@ -52,21 +49,12 @@ export default function studio(options: Options): AstroIntegration {
         prioritizeRequests = () => prioritizeStudioRequests(server);
       },
       'astro:server:start': () => prioritizeRequests(),
-      'astro:config:setup': async ({
-        updateConfig,
-        addMiddleware,
-        injectRoute,
-        command,
-        config,
-      }) => {
+      'astro:config:setup': async ({ updateConfig, addMiddleware, injectRoute, command, config }) => {
         if (command === 'dev') {
           // `.stacki/studio/` ignores its own contents; an older `.studio-state` moves in.
           prepareStudioLocal(options.root);
           await mkdir(path.join(options.root, STUDIO_STATE_DIRECTORY), { recursive: true });
-          const entrypoint = path.join(
-            options.root,
-            '.stacki/studio/state/component-preview.astro',
-          );
+          const entrypoint = path.join(options.root, '.stacki/studio/state/component-preview.astro');
           await writeFile(entrypoint, renderComponentPreviewPage());
           injectRoute({ pattern: '/__avb/preview', entrypoint });
         }
@@ -90,9 +78,7 @@ export default function studio(options: Options): AstroIntegration {
 function prioritizeStudioRequests(server: ViteDevServer): void {
   // Astro prepends route policy after Vite configureServer and server:setup.
   // At server:start, move only our authenticated namespace ahead of site routing.
-  const index = server.middlewares.stack.findIndex(
-    (entry) => typeof entry.handle === 'function' && entry.handle.name === 'studioRequests',
-  );
+  const index = server.middlewares.stack.findIndex((entry) => typeof entry.handle === 'function' && entry.handle.name === 'studioRequests');
   if (index >= 0) {
     const [entry] = server.middlewares.stack.splice(index, 1);
     if (entry) {
@@ -101,11 +87,7 @@ function prioritizeStudioRequests(server: ViteDevServer): void {
   }
 }
 
-function previewPlugin(
-  options: PreviewOptions,
-  features: ReturnType<typeof featureRoutes>,
-  rooms: ReturnType<typeof createRooms>,
-): Plugin {
+function previewPlugin(options: PreviewOptions, features: ReturnType<typeof featureRoutes>, rooms: ReturnType<typeof createRooms>): Plugin {
   return {
     name: 'studio-preview-markers',
     apply: 'serve',
@@ -116,11 +98,7 @@ function previewPlugin(
       }
       const marked = markSourceFile(id, [options.root]);
       return marked
-        ? instrumentVariant(
-            marked.code,
-            path.relative(options.root, id).split(path.sep).join('/'),
-            path.join(options.assets, 'variantRuntime.mjs'),
-          ) +
+        ? instrumentVariant(marked.code, path.relative(options.root, id).split(path.sep).join('/'), path.join(options.assets, 'variantRuntime.mjs')) +
             (marked.page
               ? `\n<meta name="studio-parent-origin" content="${process.env['STUDIO_PARENT_ORIGIN'] ?? ''}">` +
                 '\n<script is:inline type="module" src="/studio/morph.js"></script>\n<script is:inline type="module" async src="/studio/preview.js"></script>'
@@ -140,11 +118,7 @@ function authorized(request: IncomingMessage, options: Options) {
     return request.headers['x-studio-token'] === token;
   }
   const host = request.headers.host;
-  const allowed = [
-    `localhost:${options.port}`,
-    `127.0.0.1:${options.port}`,
-    `[::1]:${options.port}`,
-  ];
+  const allowed = [`localhost:${options.port}`, `127.0.0.1:${options.port}`, `[::1]:${options.port}`];
   if (!host || !allowed.includes(host)) {
     return false;
   }
@@ -163,21 +137,12 @@ async function handleRequest(
     json(response, 403, { error: 'Unauthorized studio request' });
     return;
   }
-  const work = () =>
-    handleRequestInWorkspace(request, response, options, features, rooms, catalogs);
-  if (
-    request.method === 'GET' ||
-    request.method === 'HEAD' ||
-    isGitWorkspaceRead(new URL(request.url ?? '/', 'http://studio').pathname)
-  ) {
+  const work = () => handleRequestInWorkspace(request, response, options, features, rooms, catalogs);
+  if (request.method === 'GET' || request.method === 'HEAD' || isGitWorkspaceRead(new URL(request.url ?? '/', 'http://studio').pathname)) {
     return work();
   }
   const expected = request.headers['x-studio-workspace'];
-  return withGitWorkspaceLease(
-    options.root,
-    typeof expected === 'string' ? expected : undefined,
-    work,
-  );
+  return withGitWorkspaceLease(options.root, typeof expected === 'string' ? expected : undefined, work);
 }
 async function handleRequestInWorkspace(
   request: IncomingMessage,
@@ -233,10 +198,7 @@ async function handleRequestInWorkspace(
     await uploadAsset(request, response, options, rooms, url);
     return;
   }
-  const name =
-    url.pathname === '/studio' || url.pathname === '/studio/'
-      ? 'index.html'
-      : url.pathname.slice('/studio/'.length);
+  const name = url.pathname === '/studio' || url.pathname === '/studio/' ? 'index.html' : url.pathname.slice('/studio/'.length);
   if (!['index.html', 'studio.js', 'studio.css', 'preview.js', 'morph.js'].includes(name)) {
     json(response, 404, { error: 'Not found' });
     return;
@@ -265,10 +227,7 @@ function mime(file: string): string {
     )[extension] ?? 'application/octet-stream'
   );
 }
-async function sendCatalog(
-  response: ServerResponse,
-  read: () => Promise<{ readonly value: unknown; readonly timing: string }>,
-) {
+async function sendCatalog(response: ServerResponse, read: () => Promise<{ readonly value: unknown; readonly timing: string }>) {
   const catalog = await read();
   response.setHeader('Server-Timing', catalog.timing);
   json(response, 200, catalog.value);
@@ -323,9 +282,7 @@ function configureStudioServer(
       socket.destroy();
       return;
     }
-    void withGitWorkspaceLease(options.root, url.searchParams.get('workspace') ?? undefined, () =>
-      rooms.get(url.searchParams.get('file') ?? ''),
-    )
+    void withGitWorkspaceLease(options.root, url.searchParams.get('workspace') ?? undefined, () => rooms.get(url.searchParams.get('file') ?? ''))
       .then((room) => {
         rooms.sockets.handleUpgrade(request, socket, head, (client) =>
           room.attach(
@@ -346,16 +303,9 @@ function configureStudioServer(
   configureProjectWatching(server, options.root, rooms);
 }
 
-function configureProjectWatching(
-  server: ViteDevServer,
-  root: string,
-  rooms: ReturnType<typeof createRooms>,
-) {
+function configureProjectWatching(server: ViteDevServer, root: string, rooms: ReturnType<typeof createRooms>) {
   server.watcher.on('all', (event, file) => {
-    if (
-      ['change', 'add', 'unlink'].includes(event) &&
-      /\.(astro|json|md|mdx|mdoc|markdown|[cm]?[jt]sx?|yaml|yml|toml|csv|ndjson)$/.test(file)
-    ) {
+    if (['change', 'add', 'unlink'].includes(event) && /\.(astro|json|md|mdx|mdoc|markdown|[cm]?[jt]sx?|yaml|yml|toml|csv|ndjson)$/.test(file)) {
       server.ws.send({ type: 'custom', event: 'studio:cms-changed' });
     }
   });
@@ -373,12 +323,7 @@ function configureProjectWatching(
 
 // Reads of a project file: its source, or what its call to one of its imports
 // returns, sampled for the binding picker (valueSampler.ts). False: not a read.
-async function sendSourceRead(
-  response: ServerResponse,
-  url: URL,
-  options: Options,
-  catalogs: ReturnType<typeof projectCatalogs>,
-): Promise<boolean> {
+async function sendSourceRead(response: ServerResponse, url: URL, options: Options, catalogs: ReturnType<typeof projectCatalogs>): Promise<boolean> {
   if (url.pathname === '/studio/api/file') {
     const file = sourcePath(url.searchParams.get('file'));
     json(response, 200, { file, source: await readSource(options.root, file) });
@@ -394,13 +339,7 @@ async function sendSourceRead(
   return false;
 }
 
-async function createFile(
-  request: IncomingMessage,
-  response: ServerResponse,
-  options: Options,
-  rooms: ReturnType<typeof createRooms>,
-  _url: URL,
-) {
+async function createFile(request: IncomingMessage, response: ServerResponse, options: Options, rooms: ReturnType<typeof createRooms>, _url: URL) {
   const input = record(JSON.parse(await body(request)));
   const file = sourcePath(input['file']);
   if (!/^src\/(pages|content|data)\//.test(file)) {
@@ -414,13 +353,7 @@ async function createFile(
   json(response, 201, { file });
   return;
 }
-async function uploadAsset(
-  request: IncomingMessage,
-  response: ServerResponse,
-  options: Options,
-  rooms: ReturnType<typeof createRooms>,
-  url: URL,
-) {
+async function uploadAsset(request: IncomingMessage, response: ServerResponse, options: Options, rooms: ReturnType<typeof createRooms>, url: URL) {
   const file = filePath(url.searchParams.get('file'));
   managedAsset(file);
   const bytes = await bodyBytes(request, 20_000_000);
@@ -466,10 +399,7 @@ async function sendAsset(response: ServerResponse, root: string, url: URL) {
   }
   const bytes = await readFile(await safePath(root, file));
   response.setHeader('Content-Type', mime(file));
-  response.setHeader(
-    'Content-Security-Policy',
-    "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'",
-  );
+  response.setHeader('Content-Security-Policy', "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'");
   response.end(bytes);
 }
 
@@ -498,11 +428,7 @@ function configureStudioRequests(
       next();
       return;
     }
-    if (
-      request.url === '/studio/api/astro-events' &&
-      request.method === 'GET' &&
-      authorized(request, options)
-    ) {
+    if (request.url === '/studio/api/astro-events' && request.method === 'GET' && authorized(request, options)) {
       subscribe(response, reauthorizeConnection(request));
       return;
     }

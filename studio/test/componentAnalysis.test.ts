@@ -29,11 +29,7 @@ test('unchanged inputs reuse parsing; changed declarations and source do not', a
   const changed = await analysis.read('src/components/Button.astro', source, read);
   assert.notEqual(changed, first);
   assert.notDeepEqual(changed.fields, first.fields);
-  const renamed = await analysis.read(
-    'src/components/Button.astro',
-    source.replace('<slot />', '<slot name="label" />'),
-    read,
-  );
+  const renamed = await analysis.read('src/components/Button.astro', source.replace('<slot />', '<slot name="label" />'), read);
   assert.deepEqual(renamed.slots, ['label']);
 });
 
@@ -54,10 +50,7 @@ test('a newly created preferred declaration invalidates a previously missing can
   const second = await analysis.read('src/components/Button.astro', source, read);
   assert.notDeepEqual(first.fields, second.fields);
   preferred = undefined;
-  assert.deepEqual(
-    (await analysis.read('src/components/Button.astro', source, read)).fields,
-    first.fields,
-  );
+  assert.deepEqual((await analysis.read('src/components/Button.astro', source, read)).fields, first.fields);
 });
 
 test('unreadable dependencies fail instead of serving old analysis', async () => {

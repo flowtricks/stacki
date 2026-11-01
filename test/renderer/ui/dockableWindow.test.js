@@ -77,13 +77,10 @@ test('floating tools preserve content while docking and using the canvas', async
         ),
     );
   }
-  const render = (hidden = false, generation = 0) =>
-    act(async () => root.render(React.createElement(App, { hidden, key: generation })));
+  const render = (hidden = false, generation = 0) => act(async () => root.render(React.createElement(App, { hidden, key: generation })));
   const press = (element, type, extra = {}) =>
     act(async () => {
-      element.dispatchEvent(
-        new window.MouseEvent(type, { bubbles: true, cancelable: true, ...extra }),
-      );
+      element.dispatchEvent(new window.MouseEvent(type, { bubbles: true, cancelable: true, ...extra }));
     });
   const key = (element, value) =>
     act(async () => {
@@ -137,9 +134,7 @@ test('floating tools preserve content while docking and using the canvas', async
       Object.defineProperty(window, 'innerWidth', { value: 400, configurable: true });
       window.dispatchEvent(new window.Event('resize'));
     });
-    assert.ok(
-      Number.parseInt(frame.style.left, 10) + Number.parseInt(frame.style.width, 10) <= 400,
-    );
+    assert.ok(Number.parseInt(frame.style.left, 10) + Number.parseInt(frame.style.width, 10) <= 400);
     assert.equal(frame.querySelector('input'), input);
 
     await act(async () => openChild());

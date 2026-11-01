@@ -77,10 +77,7 @@ export const varKind = (name: string, value: string): string => {
   // FontFamily, had nothing to show. Ask CSS.supports only about resolved values and
   // leave the rest to the literal-syntax regexes, which need real syntax to match.
   const unresolved = /var\(/i.test(trimmed);
-  if (
-    (!unresolved && supports('color', trimmed)) ||
-    /^#|^rgba?\(|^hsla?\(|^color(-mix)?\(/i.test(trimmed)
-  ) {
+  if ((!unresolved && supports('color', trimmed)) || /^#|^rgba?\(|^hsla?\(|^color(-mix)?\(/i.test(trimmed)) {
     return 'Color';
   }
   // Fluid sizing — `clamp(var(--space-5-min) / 16 * 1rem, …)` — keeps var() references
@@ -89,10 +86,7 @@ export const varKind = (name: string, value: string): string => {
   if (/^(calc|clamp|min|max)\(/i.test(trimmed)) {
     return 'Size';
   }
-  if (
-    (!unresolved && supports('width', trimmed)) ||
-    /^-?[\d.]+(px|rem|em|%|vw|vh|vmin|vmax|ch|ex|pt|cm|mm|in)$/i.test(trimmed)
-  ) {
+  if ((!unresolved && supports('width', trimmed)) || /^-?[\d.]+(px|rem|em|%|vw|vh|vmin|vmax|ch|ex|pt|cm|mm|in)$/i.test(trimmed)) {
     return 'Size';
   }
   if (/^-?[\d.]+$/.test(trimmed)) {
@@ -228,10 +222,7 @@ export function whenProjectReady(timeoutMs = 4000): Promise<void> {
   });
 }
 
-export async function streamProjectVariables(
-  onAdd: (v: ProjectVariable) => void,
-  isCancelled: () => boolean = () => false,
-): Promise<ProjectVariable[]> {
+export async function streamProjectVariables(onAdd: (v: ProjectVariable) => void, isCancelled: () => boolean = () => false): Promise<ProjectVariable[]> {
   await whenProjectReady();
   const all: ProjectVariable[] = [];
   const seen = new Set<string>();

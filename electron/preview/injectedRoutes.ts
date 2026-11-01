@@ -39,9 +39,7 @@ export interface InjectedRoute {
 function readInjectedRoutes(projectPath: string): InjectedRoute[] {
   let raw: unknown;
   try {
-    raw = JSON.parse(
-      fs.readFileSync(path.join(projectPath, 'node_modules', '.avb', 'routes.json'), 'utf8'),
-    );
+    raw = JSON.parse(fs.readFileSync(path.join(projectPath, 'node_modules', '.avb', 'routes.json'), 'utf8'));
   } catch {
     return [];
   }

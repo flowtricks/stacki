@@ -3,37 +3,59 @@
 // (dataSuggest.ts).
 
 import { toRecord, toArray } from '../../shared/core/record';
-import {
-  parseDeclarations,
-  firstObjectIn,
-  objectEntries,
-  kindOf,
-  parseDestructures,
-  referenceCallIn,
-} from './dataSource';
+import { parseDeclarations, firstObjectIn, objectEntries, kindOf, parseDestructures, referenceCallIn } from './dataSource';
 
-/** The value at a dotted path inside sampled data: `post.data.author` → {id, collection}. */
-export function sampleAt(sample: unknown, path: unknown): unknown {
-  let current: unknown = sample;
-  for (const step of String(path || '').split('.')) {
-    const match = step.match(/^([^[]*)((?:\[\d+\])*)$/);
-    if (!match) {
+/** One step of a data path, and where in the path's text it ends. */
+export interface PathStep {
+  readonly key: string | number;
+  readonly end: number;
+}
+
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+// `.name`, `[0]`, or `["name"]` (a field a dot can't reach: `campus-description`).
+const STEP = /^(?:\.?([A-Za-z_$][\w$]*)|\[(\d+)\]|\[("(?:[^"\\]|\\.)*")\])/;
+
+/** A data path's steps: `post.data["campus-name"][0]` → post, data, campus-name, 0. */
+export function pathSteps(path: string): readonly PathStep[] | undefined {
+  const steps: PathStep[] = [];
+  let at = 0;
+  // Each step consumes at least one character, so the text's length bounds the loop.
+  while (at < path.length) {
+    const match = STEP.exec(path.slice(at));
+    if (match === null || (steps.length === 0 && path.charAt(at) === '.')) {
       return undefined;
     }
-    const name = match[1];
-    if (name) {
-      const record = toRecord(current);
-      if (!record) {
-        return undefined;
-      }
-      current = record[name];
+    at += match[0].length;
+    const quoted: unknown = match[3] === undefined ? undefined : JSON.parse(match[3]);
+    const key = match[1] ?? (match[2] === undefined ? (typeof quoted === 'string' ? quoted : undefined) : Number(match[2]));
+    if (key === undefined) {
+      return undefined;
     }
-    for (const indexText of match[2]?.match(/\d+/g) ?? []) {
-      const list = toArray(current);
-      if (!list) {
-        return undefined;
-      }
-      current = list[Number(indexText)];
+    steps.push({ key, end: at });
+  }
+  return steps;
+}
+
+/** A field's path under its parent's: `.title`, or `["campus-name"]` when a dot can't reach it. */
+export function childPath(base: string, key: string): string {
+  return IDENTIFIER.test(key) ? `${base}.${key}` : `${base}[${JSON.stringify(key)}]`;
+}
+
+/** The value at a path inside sampled data: `post.data.author` → {id, collection}. */
+export function sampleAt(sample: unknown, path: unknown): unknown {
+  const steps = pathSteps(String(path || ''));
+  if (steps === undefined) {
+    return undefined;
+  }
+  let current: unknown = sample;
+  for (const step of steps) {
+    if (typeof step.key === 'number') {
+      current = toArray(current)?.[step.key];
+    } else {
+      current = toRecord(current)?.[step.key];
+    }
+    if (current === undefined) {
+      return undefined;
     }
   }
   return current;
@@ -43,17 +65,11 @@ export function sampleAt(sample: unknown, path: unknown): unknown {
 // named by collection and id, with nothing loaded yet.
 export const isRef = (candidate: unknown): candidate is { id: string; collection: string } => {
   const record = toRecord(candidate);
-  return (
-    record !== undefined &&
-    typeof record['id'] === 'string' &&
-    typeof record['collection'] === 'string' &&
-    record['data'] === undefined
-  );
+  return record !== undefined && typeof record['id'] === 'string' && typeof record['collection'] === 'string' && record['data'] === undefined;
 };
 
 /** How a fetched entry is keyed. One per collection+id, so refs to the same entry share. */
-export const sampleKey = (collection: string, id?: string): string =>
-  id ? `${collection}#${id}` : collection;
+export const sampleKey = (collection: string, id?: string): string => (id ? `${collection}#${id}` : collection);
 
 export interface ReferenceNeed {
   readonly key: string;
@@ -66,10 +82,7 @@ export interface ReferenceNeed {
  * getEntry(post.data.author)` — as {key, collection, id} to fetch. Needs the
  * props sample, since the reference's target is in the data, not the source.
  */
-export function referencesInScope(
-  frontmatter: string | undefined,
-  propsSample: unknown,
-): ReferenceNeed[] {
+export function referencesInScope(frontmatter: string | undefined, propsSample: unknown): ReferenceNeed[] {
   if (!propsSample) {
     return [];
   }
@@ -139,25 +152,14 @@ export function sampleKind(sample: unknown): string {
 // Bookkeeping Astro puts on a content entry: where the file is, what its hash
 // is, the rendered HTML. Real keys, and never what anyone means to bind — they
 // would sit at the top of every entry, above the fields that matter.
-export const ENTRY_INTERNALS = new Set([
-  'filePath',
-  'digest',
-  'rendered',
-  'deferredRender',
-  'legacyId',
-  'assetImports',
-]);
-export const isEntry = (entry: Record<string, unknown>): boolean =>
-  'collection' in entry && 'data' in entry;
+export const ENTRY_INTERNALS = new Set(['filePath', 'digest', 'rendered', 'deferredRender', 'legacyId', 'assetImports']);
+export const isEntry = (entry: Record<string, unknown>): boolean => 'collection' in entry && 'data' in entry;
 export const shownKeys = (sample: unknown): string[] => {
   const record = toRecord(sample) ?? {};
-  return isEntry(record)
-    ? Object.keys(record).filter((key) => !ENTRY_INTERNALS.has(key))
-    : Object.keys(record);
+  return isEntry(record) ? Object.keys(record).filter((key) => !ENTRY_INTERNALS.has(key)) : Object.keys(record);
 };
 
-export const clip = (text: unknown, max: number): string =>
-  String(text).length > max ? `${String(text).slice(0, max)}…` : String(text);
+export const clip = (text: unknown, max: number): string => (String(text).length > max ? `${String(text).slice(0, max)}…` : String(text));
 
 // One line saying what a value IS — the thing a designer reads down the right
 // of the picker to find the field they mean. A container says how much is in
@@ -212,8 +214,7 @@ export interface TreeNode {
 }
 
 // A web address that names an image by its extension, or Sanity's image CDN.
-const IMAGE_URL =
-  /^https:\/\/(?:cdn\.sanity\.io\/images\/\S+|\S+\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#]\S*)?)$/i;
+const IMAGE_URL = /^https:\/\/(?:cdn\.sanity\.io\/images\/\S+|\S+\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#]\S*)?)$/i;
 
 // A value the app has actually seen — every key is real, so the tree is the
 // data rather than a guess at it.
@@ -224,15 +225,11 @@ export function fromSample(value: unknown, base: string, depth: number): TreeNod
   const kind = sampleKind(value);
   if (kind === 'object') {
     const record = toRecord(value) ?? {};
-    return shownKeys(value).map((key) => sampleNode(`${base}.${key}`, key, record[key], depth + 1));
+    return shownKeys(value).map((key) => sampleNode(childPath(base, key), key, record[key], depth + 1));
   }
   if (kind === 'list') {
     return (toArray(value) ?? [])
-      .map((entry, i) =>
-        marker(entry) === 'more'
-          ? undefined
-          : sampleNode(`${base}[${i}]`, String(i), entry, depth + 1),
-      )
+      .map((entry, i) => (marker(entry) === 'more' ? undefined : sampleNode(`${base}[${i}]`, String(i), entry, depth + 1)))
       .filter((node): node is TreeNode => node !== undefined);
   }
   return undefined;
@@ -263,11 +260,7 @@ export function fromLiteral(text: unknown, base: string, depth: number): TreeNod
   const trimmed = String(text || '').trim();
   if (trimmed.startsWith('{')) {
     const entries = objectEntries(trimmed);
-    return entries.length
-      ? entries.map((entry) =>
-          literalNode(`${base}.${entry.key}`, entry.key, entry.value, depth + 1),
-        )
-      : undefined;
+    return entries.length ? entries.map((entry) => literalNode(childPath(base, entry.key), entry.key, entry.value, depth + 1)) : undefined;
   }
   if (trimmed.startsWith('[')) {
     const first = firstObjectIn(trimmed);
@@ -280,12 +273,7 @@ export function fromLiteral(text: unknown, base: string, depth: number): TreeNod
   return undefined;
 }
 
-export function literalNode(
-  path: string,
-  key: string,
-  valueText: unknown,
-  depth: number,
-): TreeNode {
+export function literalNode(path: string, key: string, valueText: unknown, depth: number): TreeNode {
   const trimmed = String(valueText || '').trim();
   const kind = kindOf(trimmed) || 'value';
   const children = fromLiteral(trimmed, path, depth);

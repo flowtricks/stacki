@@ -128,22 +128,14 @@ function measureGuide(body: HTMLElement) {
     margin: lengthOf(body, rootStyle, GUIDE_VARIABLES.margin),
     gutter: lengthOf(body, rootStyle, GUIDE_VARIABLES.gutter),
     widthMax: lengthOf(body, rootStyle, GUIDE_VARIABLES.widthMax),
-    variables: Object.fromEntries(
-      menuVariables.map((name) => [name, lengthOf(body, rootStyle, name)]),
-    ),
+    variables: Object.fromEntries(menuVariables.map((name) => [name, lengthOf(body, rootStyle, name)])),
     // The same names read as a column count: a whole number on :root.
-    counts: Object.fromEntries(
-      menuVariables.map((name) => [name, countOf(rootStyle.getPropertyValue(name))]),
-    ),
+    counts: Object.fromEntries(menuVariables.map((name) => [name, countOf(rootStyle.getPropertyValue(name))])),
   };
 }
 
 // A declared length, in pixels, or undefined for one the page does not declare.
-function lengthOf(
-  body: HTMLElement,
-  rootStyle: CSSStyleDeclaration,
-  variable: string,
-): number | undefined {
+function lengthOf(body: HTMLElement, rootStyle: CSSStyleDeclaration, variable: string): number | undefined {
   const declared = rootStyle.getPropertyValue(variable).trim();
   if (declared === '' || declared === 'none') {
     return undefined;
@@ -164,9 +156,7 @@ function appendProbe(body: HTMLElement, style: string): HTMLElement {
   probe.setAttribute(PROBE_ATTR, '');
   probe.setAttribute(
     'style',
-    'position:absolute;left:0;top:0;height:0;margin:0;padding:0;border:0;' +
-      'box-sizing:content-box;visibility:hidden;pointer-events:none;' +
-      style,
+    'position:absolute;left:0;top:0;height:0;margin:0;padding:0;border:0;' + 'box-sizing:content-box;visibility:hidden;pointer-events:none;' + style,
   );
   body.appendChild(probe);
   return probe;

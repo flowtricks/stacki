@@ -2,14 +2,7 @@ import type { PropValuePolicy } from './propValuePolicy';
 // The shapes the settings panel is built from: the selected node, the panel's
 // props, and the props each kind of node's panel takes (PropsPanel.tsx).
 
-import type {
-  PageNode,
-  PairedNode,
-  ChunkGroupNode,
-  Attr,
-  ValueNode,
-  ImportDecl,
-} from '../../../shared/page/pageNode';
+import type { PageNode, PairedNode, ChunkGroupNode, Attr, ValueNode, ImportDecl } from '../../../shared/page/pageNode';
 import type { LoopTarget } from '../../editor/loopQueryPlan';
 import type { ListProp } from '../../editor/listProps';
 import type { LoopApplyResult } from './LoopSettings';
@@ -19,7 +12,7 @@ import type { SetText, TagOption, TagFieldProps } from './propNodeEditors';
 import type { SourceContext } from './propBindings';
 import type { RichContext, InlineNode } from './RichContent';
 import type { AssetDimensions } from '../../ui/AssetThumb';
-import type { PickedAsset } from '../../ui/AssetField';
+import type { AssetReference, PickedAsset } from '../../ui/AssetField';
 import React from 'react';
 import LinkField from './LinkField';
 
@@ -49,7 +42,7 @@ export interface PropsPanelProps {
   readonly linkContext?: React.ComponentProps<typeof LinkField>['context'] | undefined;
   readonly onSetProp: SetProp;
   readonly onSetProps?: SetProps;
-  readonly onSetAssetProp?: (nodeId: string, name: string, picked: PickedAsset) => void;
+  readonly onSetAssetProp?: (nodeId: string, name: string, picked: PickedAsset, reference: AssetReference) => void;
   readonly onRenameProp: (previous: string, next: string) => void;
   readonly onChangeTag?: TagFieldProps['onChangeTag'];
   readonly onSetText: SetText;
@@ -60,24 +53,16 @@ export interface PropsPanelProps {
   readonly frontmatterSource?: string;
   /** The open file's imports: what a loop's source is read against. */
   readonly frontmatterImports?: readonly ImportDecl[] | undefined;
-  readonly onSetLoopSource?: (
-    target: LoopTarget,
-    sanityClient: 'available' | 'unavailable',
-  ) => LoopApplyResult;
+  readonly onSetLoopSource?: (target: LoopTarget, sanityClient: 'available' | 'unavailable') => LoopApplyResult;
   /** Renames a list setting's property, or changes its tooltip; resolves with why it could not. */
-  readonly onEditLoopProperty?: (
-    key: string,
-    edit: { readonly name: string; readonly description: string },
-  ) => Promise<string | undefined>;
+  readonly onEditLoopProperty?: (key: string, edit: { readonly name: string; readonly description: string }) => Promise<string | undefined>;
   readonly onOpenSymbol?: (name: string) => void;
   readonly onToggleElse?: (value: boolean) => void;
   readonly projectPath?: string | undefined;
   readonly filePath?: string | undefined;
 }
 export type NodePanelProps<Kind extends SelectedNode['kind']> = Omit<PropsPanelProps, 'node'> & {
-  readonly node:
-    | Extract<SelectedNode, { readonly kind: Kind }>
-    | (Kind extends ValueNode['kind'] ? ValueNode : never);
+  readonly node: Extract<SelectedNode, { readonly kind: Kind }> | (Kind extends ValueNode['kind'] ? ValueNode : never);
 };
 export interface ElementPropsPanelProps extends Omit<PropsPanelProps, 'node'> {
   readonly node: ElementNode;

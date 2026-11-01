@@ -58,9 +58,7 @@ export interface CmsConnectionList {
   readonly connections: readonly CmsConnection[];
 }
 
-export type CmsSaveResult =
-  | { readonly ok: true; readonly list: CmsConnectionList }
-  | { readonly ok: false; readonly message: string };
+export type CmsSaveResult = { readonly ok: true; readonly list: CmsConnectionList } | { readonly ok: false; readonly message: string };
 
 export interface SanityProjectChoice {
   readonly id: string;
@@ -187,9 +185,7 @@ export function parseCmsConnectionDraft(input: unknown): CmsConnectionDraft {
   return { ...parseConnectionFields(value), secret: parseCmsSecret(value['secret']) };
 }
 
-function parseConnectionFields(
-  value: Record<string, unknown>,
-): DistributiveOmit<CmsConnection, 'id'> {
+function parseConnectionFields(value: Record<string, unknown>): DistributiveOmit<CmsConnection, 'id'> {
   const label = parseLabel(value['label']);
   switch (value['kind']) {
     case 'sanity':
@@ -323,9 +319,7 @@ function parseProjectChoices(input: unknown): SanityProjectChoice[] {
 
 function parseLabelText(input: unknown): string {
   const name = text(input);
-  return name.length > CMS_CONNECTION_LIMITS.labelCharsMax
-    ? name.slice(0, CMS_CONNECTION_LIMITS.labelCharsMax)
-    : name;
+  return name.length > CMS_CONNECTION_LIMITS.labelCharsMax ? name.slice(0, CMS_CONNECTION_LIMITS.labelCharsMax) : name;
 }
 
 function parseSuggestion(input: unknown) {

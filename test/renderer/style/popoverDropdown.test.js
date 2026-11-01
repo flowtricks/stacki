@@ -104,10 +104,7 @@ const check = (what, condition, detail) => {
     }
   })();
   if (typeof electronPath !== 'string') {
-    console.log(
-      'popover-dropdown: skipped — no Electron to lay it out in ' +
-        '(see test/electron/preload/gapBands.test.js for the pattern)',
-    );
+    console.log('popover-dropdown: skipped — no Electron to lay it out in ' + '(see test/electron/preload/gapBands.test.js for the pattern)');
     return;
   }
 
@@ -194,29 +191,15 @@ const check = (what, condition, detail) => {
     check('and is not marked as scrolling', out.box.scrollingClass === false);
     check('the menu opens', out.opened === true);
     check('upward, having no room below', out.dropUp === true);
-    check(
-      'so it hangs outside the popover box',
-      out.menu?.above === true,
-      JSON.stringify(out.menu),
-    );
+    check('so it hangs outside the popover box', out.menu?.above === true, JSON.stringify(out.menu));
     check('and the option is what is at the option', out.hit.isTheOption === true, out.hit.hit);
     check('pressing it leaves the popover open', out.afterPick.popover === true);
-    check(
-      'and asks nobody to close it',
-      out.afterPick.closes === 0,
-      `${out.afterPick.closes} close calls — ${JSON.stringify(out.why)}`,
-    );
-    check(
-      'a box taller than the screen still scrolls',
-      out.tall.scrollingClass === true && out.tall.overflow === 'auto',
-      JSON.stringify(out.tall),
-    );
+    check('and asks nobody to close it', out.afterPick.closes === 0, `${out.afterPick.closes} close calls — ${JSON.stringify(out.why)}`);
+    check('a box taller than the screen still scrolls', out.tall.scrollingClass === true && out.tall.overflow === 'auto', JSON.stringify(out.tall));
   }
 
   if (failures.length) {
-    console.error(
-      `popover-dropdown: ${failures.length} of ${checked} failed\n${failures.join('\n')}`,
-    );
+    console.error(`popover-dropdown: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
   console.log(`popover-dropdown: ${checked} passed  [real layout, real press]`);

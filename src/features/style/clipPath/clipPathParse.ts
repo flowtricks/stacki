@@ -14,13 +14,7 @@ import {
   type CssCoordinatePoint,
   type RawClipPathShape,
 } from './clipPathTypes';
-import {
-  isDefined,
-  parseFillRule,
-  CUSTOM_PRESET,
-  CSS_GLOBAL_CLIP_PATH_VALUES,
-  CSS_GEOMETRY_BOX_CLIP_PATH_VALUES,
-} from './clipPathConstants';
+import { isDefined, parseFillRule, CUSTOM_PRESET, CSS_GLOBAL_CLIP_PATH_VALUES, CSS_GEOMETRY_BOX_CLIP_PATH_VALUES } from './clipPathConstants';
 import { makeInsetRadii } from './clipPathHandles';
 
 export function parsePercent(value: string): number | undefined {
@@ -341,12 +335,7 @@ export function validRawInsetRadii(value: string | undefined) {
     return true;
   }
   const parts = splitTopLevelChar(value, '/');
-  return (
-    parts.length >= 1 &&
-    parts.length <= 2 &&
-    validLengthPercentageList(parts[0] ?? '', 1, 4) &&
-    (!parts[1] || validLengthPercentageList(parts[1], 1, 4))
-  );
+  return parts.length >= 1 && parts.length <= 2 && validLengthPercentageList(parts[0] ?? '', 1, 4) && (!parts[1] || validLengthPercentageList(parts[1], 1, 4));
 }
 
 export function parseRawPolygon(value: string): RawClipPathShape | undefined {
@@ -379,9 +368,7 @@ export function parseRawPolygon(value: string): RawClipPathShape | undefined {
     return undefined;
   }
   const editable =
-    parsedPoints.length === pointParts.length
-      ? { kind: 'polygon' as const, points: parsedPoints, ...(fillRule ? { fillRule } : {}) }
-      : undefined;
+    parsedPoints.length === pointParts.length ? { kind: 'polygon' as const, points: parsedPoints, ...(fillRule ? { fillRule } : {}) } : undefined;
   return {
     kind: 'raw',
     value: value.trim(),
@@ -485,12 +472,7 @@ export function parseRawInset(value: string): RawClipPathShape | undefined {
 }
 
 export function parseRawBasicClipPath(value: string): RawClipPathShape | undefined {
-  return (
-    parseRawPolygon(value) ||
-    parseRawCircle(value) ||
-    parseRawEllipse(value) ||
-    parseRawInset(value)
-  );
+  return parseRawPolygon(value) || parseRawCircle(value) || parseRawEllipse(value) || parseRawInset(value);
 }
 
 export function parseCustomClipPath(value: string): RawClipPathShape | undefined {
@@ -526,9 +508,7 @@ export function parseShape(value: string): ShapeFunctionShape | undefined {
     content = fillRuleMatch[2]?.trim() ?? '';
   }
 
-  return /^from\b/i.test(content)
-    ? { kind: 'shape', value: content, ...(fillRule ? { fillRule } : {}) }
-    : undefined;
+  return /^from\b/i.test(content) ? { kind: 'shape', value: content, ...(fillRule ? { fillRule } : {}) } : undefined;
 }
 
 export function splitShapeCommandList(value: string) {

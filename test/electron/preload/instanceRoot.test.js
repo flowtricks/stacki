@@ -150,20 +150,11 @@ const BUTTON = 'src/components/Button.astro|';
   await new Promise((resolve) => setTimeout(resolve, 60));
 
   const query = (selector) => window.document.querySelector(selector);
-  const carries = (element, nodePath) =>
-    (element.getAttribute('data-avb-p') || '').split(' ').includes(nodePath);
+  const carries = (element, nodePath) => (element.getAttribute('data-avb-p') || '').split(' ').includes(nodePath);
 
   // --- the report ---------------------------------------------------------------
-  check(
-    'the field answers to the instance',
-    carries(query('label.field'), '0.1.0.0'),
-    query('label.field').getAttribute('data-avb-p'),
-  );
-  check(
-    'and so does the control it came in on',
-    carries(query('select.field_control'), '0.1.0.0'),
-    query('select.field_control').getAttribute('data-avb-p'),
-  );
+  check('the field answers to the instance', carries(query('label.field'), '0.1.0.0'), query('label.field').getAttribute('data-avb-p'));
+  check('and so does the control it came in on', carries(query('select.field_control'), '0.1.0.0'), query('select.field_control').getAttribute('data-avb-p'));
 
   const boxFor = (nodePath) => {
     const event = new window.MessageEvent('message', {
@@ -176,11 +167,7 @@ const BUTTON = 'src/components/Button.astro|';
   };
   {
     const box = boxFor('0.1.0.0');
-    check(
-      'the outline is the whole field',
-      box && box.h === 80 && box.y === 100,
-      JSON.stringify(box),
-    );
+    check('the outline is the whole field', box && box.h === 80 && box.y === 100, JSON.stringify(box));
     check('not just the control inside it', !(box && box.h === 30), JSON.stringify(box));
   }
 
@@ -188,15 +175,9 @@ const BUTTON = 'src/components/Button.astro|';
   // whatever the component happens to sit in.
   {
     sent.length = 0;
-    query('span.field_label').dispatchEvent(
-      new window.MouseEvent('click', { bubbles: true, cancelable: true }),
-    );
+    query('span.field_label').dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
     const message = sent.filter((message) => message.type === 'avb:click-node').pop();
-    check(
-      'a click on the label reaches the component',
-      message?.path === '0.1.0.0',
-      JSON.stringify(message),
-    );
+    check('a click on the label reaches the component', message?.path === '0.1.0.0', JSON.stringify(message));
   }
 
   // --- what must NOT be renamed ----------------------------------------------------
@@ -204,24 +185,12 @@ const BUTTON = 'src/components/Button.astro|';
   // The section is the root of Section.astro and is slotted into the layout, so
   // it carries a path in the layout's namespace as well. That is not a name
   // handed in on a spread, and climbing it would walk to <body>.
-  check(
-    'the layout body is not given the page path',
-    !carries(query('body'), '0.1'),
-    query('body').getAttribute('data-avb-p'),
-  );
+  check('the layout body is not given the page path', !carries(query('body'), '0.1'), query('body').getAttribute('data-avb-p'));
   check('nor is <main>', !carries(query('main'), '0.1'), query('main').getAttribute('data-avb-p'));
-  check(
-    'the section still has it',
-    carries(query('section'), '0.1'),
-    query('section').getAttribute('data-avb-p'),
-  );
+  check('the section still has it', carries(query('section'), '0.1'), query('section').getAttribute('data-avb-p'));
   {
     const box = boxFor('0.1');
-    check(
-      'and it measures as the section, not the page',
-      box && box.h === 500,
-      JSON.stringify(box),
-    );
+    check('and it measures as the section, not the page', box && box.h === 500, JSON.stringify(box));
   }
 
   // A component whose own root takes the spread was already named there, and
@@ -240,60 +209,30 @@ const BUTTON = 'src/components/Button.astro|';
   // nothing to stop it and ran to the top of the layout. On a Webflow export
   // that is nine sections all naming themselves on <html>, and selecting any
   // one of them outlined the whole page.
-  check(
-    'the layout is not given the page’s name for a section',
-    !carries(query('body'), '0.2'),
-    query('body').getAttribute('data-avb-p'),
-  );
-  check(
-    'and neither is anything else on the way up',
-    !carries(query('main'), '0.2'),
-    query('main').getAttribute('data-avb-p'),
-  );
+  check('the layout is not given the page’s name for a section', !carries(query('body'), '0.2'), query('body').getAttribute('data-avb-p'));
+  check('and neither is anything else on the way up', !carries(query('main'), '0.2'), query('main').getAttribute('data-avb-p'));
   check(
     'the section did pick up the layout’s namespace, which is what tempted it',
     (query('section.plain').getAttribute('data-avb-p') || '').includes(LAYOUT),
     query('section.plain').getAttribute('data-avb-p'),
   );
-  check(
-    'the section it belongs to still has it',
-    carries(query('section.plain'), '0.2'),
-    query('section.plain').getAttribute('data-avb-p'),
-  );
+  check('the section it belongs to still has it', carries(query('section.plain'), '0.2'), query('section.plain').getAttribute('data-avb-p'));
   {
     const box = boxFor('0.2');
-    check(
-      'so the outline hugs the section',
-      box && box.y === 600 && box.h === 300,
-      JSON.stringify(box),
-    );
+    check('so the outline hugs the section', box && box.y === 600 && box.h === 300, JSON.stringify(box));
     check('rather than the page around it', !(box && box.h >= 4000), JSON.stringify(box));
   }
   {
     sent.length = 0;
-    query('p.plain_text').dispatchEvent(
-      new window.MouseEvent('click', { bubbles: true, cancelable: true }),
-    );
+    query('p.plain_text').dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
     const message = sent.filter((message) => message.type === 'avb:click-node').pop();
-    check(
-      'and a click inside it reaches what is inside it',
-      message?.path === '0.2.0',
-      JSON.stringify(message),
-    );
+    check('and a click inside it reaches what is inside it', message?.path === '0.2.0', JSON.stringify(message));
   }
 
   // --- said once ---------------------------------------------------------------------
   const source = readFolderSource('electron/preload');
-  check(
-    'the rule lives in one place',
-    /const promoteInstanceTags = \(\) => \{/.test(source),
-    'the promotion is inlined somewhere and will drift',
-  );
-  check(
-    'and it refuses to climb out of a root',
-    /a root: leave it alone/.test(source),
-    'nothing stops the climb at a component that names itself',
-  );
+  check('the rule lives in one place', /const promoteInstanceTags = \(\) => \{/.test(source), 'the promotion is inlined somewhere and will drift');
+  check('and it refuses to climb out of a root', /a root: leave it alone/.test(source), 'nothing stops the climb at a component that names itself');
   check(
     'and only moves a name that arrived on a spread',
     /rodeIn\(element, nodePath\)/.test(source),
@@ -301,9 +240,7 @@ const BUTTON = 'src/components/Button.astro|';
   );
 
   if (failures.length) {
-    console.error(
-      `\ninstance-root: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\ninstance-root: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

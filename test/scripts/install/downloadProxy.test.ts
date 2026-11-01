@@ -23,42 +23,38 @@ const proxyClient = `
   request.on('error', error => { console.error(error.message); process.exitCode = 1; });
 `;
 
-test(
-  'Electron builder downloader initializes the overridden proxy agent',
-  { timeout: 10000 },
-  async () => {
-    let requestedURL: string | undefined;
-    const proxy = createServer((request, response) => {
-      requestedURL = request.url;
-      response.end('stacki-proxy-ok');
-    });
-    proxy.maxConnections = 1;
-    proxy.listen(0, '127.0.0.1');
-    await once(proxy, 'listening');
-    try {
-      const address = proxy.address();
-      assert.ok(address);
-      assert.equal(typeof address, 'object');
-      if (typeof address === 'string') {
-        throw new Error('Expected a TCP proxy address');
-      }
-      const proxyURL = `http://127.0.0.1:${address.port}`;
-      const result = await execute(process.execPath, ['-e', proxyClient], {
-        env: {
-          ...process.env,
-          GLOBAL_AGENT_HTTP_PROXY: proxyURL,
-          GLOBAL_AGENT_HTTPS_PROXY: proxyURL,
-          GLOBAL_AGENT_NO_PROXY: '',
-        },
-        timeout: 5000,
-        maxBuffer: 4096,
-      });
-      assert.equal(result.stdout, 'stacki-proxy-ok');
-      assert.equal(requestedURL, 'http://stacki-proxy.invalid/artifact');
-    } finally {
-      proxy.close();
-      proxy.closeAllConnections();
-      await once(proxy, 'close');
+test('Electron builder downloader initializes the overridden proxy agent', { timeout: 10000 }, async () => {
+  let requestedURL: string | undefined;
+  const proxy = createServer((request, response) => {
+    requestedURL = request.url;
+    response.end('stacki-proxy-ok');
+  });
+  proxy.maxConnections = 1;
+  proxy.listen(0, '127.0.0.1');
+  await once(proxy, 'listening');
+  try {
+    const address = proxy.address();
+    assert.ok(address);
+    assert.equal(typeof address, 'object');
+    if (typeof address === 'string') {
+      throw new Error('Expected a TCP proxy address');
     }
-  },
-);
+    const proxyURL = `http://127.0.0.1:${address.port}`;
+    const result = await execute(process.execPath, ['-e', proxyClient], {
+      env: {
+        ...process.env,
+        GLOBAL_AGENT_HTTP_PROXY: proxyURL,
+        GLOBAL_AGENT_HTTPS_PROXY: proxyURL,
+        GLOBAL_AGENT_NO_PROXY: '',
+      },
+      timeout: 5000,
+      maxBuffer: 4096,
+    });
+    assert.equal(result.stdout, 'stacki-proxy-ok');
+    assert.equal(requestedURL, 'http://stacki-proxy.invalid/artifact');
+  } finally {
+    proxy.close();
+    proxy.closeAllConnections();
+    await once(proxy, 'close');
+  }
+});

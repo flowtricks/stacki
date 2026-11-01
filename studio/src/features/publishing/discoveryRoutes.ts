@@ -26,9 +26,7 @@ export async function discoveryRoute(
   const managed = process.env['GITHUB_REPOSITORY'];
   const owner = managed ? parseGitHubRepository(managed).split('/')[0] : undefined;
   const result =
-    input.provider === 'github' && owner
-      ? { kind: 'ready', accounts: [{ id: owner, name: owner }], projects: [] }
-      : await discoverPublishing(root, input);
+    input.provider === 'github' && owner ? { kind: 'ready', accounts: [{ id: owner, name: owner }], projects: [] } : await discoverPublishing(root, input);
   response.setHeader('Content-Type', 'application/json');
   response.setHeader('Cache-Control', 'no-store');
   response.end(JSON.stringify(result));

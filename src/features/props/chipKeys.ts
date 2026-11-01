@@ -11,9 +11,7 @@ import { assert } from '../../../shared/core/assert';
 const isChip = (node: Node | undefined): node is Element => {
   // Use the node's realm so iframe nodes and DOM test documents narrow correctly.
   const ElementType = node?.ownerDocument?.defaultView?.Element;
-  return (
-    ElementType !== undefined && node instanceof ElementType && node.classList.contains('expr-chip')
-  );
+  return ElementType !== undefined && node instanceof ElementType && node.classList.contains('expr-chip');
 };
 
 // The chip the caret is sitting against, on the side it is about to delete
@@ -48,10 +46,7 @@ function chipBesideCaret(host: HTMLElement, directory: -1 | 1): Element | undefi
  * took one — the caller should then prevent the event and emit, since the DOM
  * has changed without the browser's own editing having run.
  */
-export function deleteChipAtCaret(
-  host: HTMLElement | undefined,
-  event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey'>,
-): boolean {
+export function deleteChipAtCaret(host: HTMLElement | undefined, event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey'>): boolean {
   if (!host) {
     return false;
   }

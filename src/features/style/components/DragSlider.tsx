@@ -1,11 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type {
-  CSSProperties,
-  KeyboardEvent as ReactKeyboardEvent,
-  MutableRefObject,
-  PointerEvent as ReactPointerEvent,
-  RefObject,
-} from 'react';
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MutableRefObject, PointerEvent as ReactPointerEvent, RefObject } from 'react';
 import { assert } from '../../../../shared/core/assert';
 
 function sliderStyle(percent: number): CSSProperties & { readonly '--pct': string } {
@@ -71,9 +65,7 @@ export default function DragSlider({
   return (
     <div
       ref={trackRef}
-      className={['u-drag-slider', disabled ? 'is-disabled' : '', className]
-        .filter(Boolean)
-        .join(' ')}
+      className={['u-drag-slider', disabled ? 'is-disabled' : '', className].filter(Boolean).join(' ')}
       role="slider"
       tabIndex={disabled ? -1 : 0}
       aria-label={ariaLabel}
@@ -113,13 +105,7 @@ function sliderKeyHandler(drag: SliderDrag) {
 
 // The value a key asks for: arrows use the caller's step (Shift = ×10), while
 // Home/End jump to the ends. Undefined for any other key.
-function keyedValue(
-  event: ReactKeyboardEvent<HTMLDivElement>,
-  local: number,
-  min: number,
-  max: number,
-  step: number,
-): number | undefined {
+function keyedValue(event: ReactKeyboardEvent<HTMLDivElement>, local: number, min: number, max: number, step: number): number | undefined {
   assert(step > 0, 'DragSlider: keyboard step is positive');
   const delta = event.shiftKey ? step * 10 : step;
   if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {

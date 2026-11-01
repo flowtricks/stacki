@@ -42,9 +42,7 @@ const codeEditorHighlightStyle = HighlightStyle.define([
 
 // CodeMirror paints its selection as its own layer; this selector covers both the unfocused
 // and the focused selection backgrounds.
-const SELECTION_BACKGROUND_SELECTOR =
-  '.cm-selectionBackground, ' +
-  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground';
+const SELECTION_BACKGROUND_SELECTOR = '.cm-selectionBackground, ' + '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground';
 
 const codeEditorTheme = EditorView.theme(
   {
@@ -92,13 +90,7 @@ const codeEditorTheme = EditorView.theme(
 const codeEditorExtensions = {
   // ⌘F opens at the top: this editor is short, and a panel at the bottom covers
   // the end of the file — which is where a search that has run leaves you.
-  css: [
-    css(),
-    search({ top: true }),
-    EditorView.lineWrapping,
-    syntaxHighlighting(codeEditorHighlightStyle),
-    codeEditorTheme,
-  ],
+  css: [css(), search({ top: true }), EditorView.lineWrapping, syntaxHighlighting(codeEditorHighlightStyle), codeEditorTheme],
 };
 
 const codeEditorBasicSetup = {
@@ -146,9 +138,7 @@ function highlightDecorations(highlights: ReadonlyArray<CodeEditorTokenHighlight
     const documentLength = view.state.doc.length;
     const ranges = highlights
       .filter((highlight) => highlight.to <= documentLength)
-      .map((highlight) =>
-        Decoration.mark({ class: highlight.className }).range(highlight.from, highlight.to),
-      );
+      .map((highlight) => Decoration.mark({ class: highlight.className }).range(highlight.from, highlight.to));
     return Decoration.set(ranges, true);
   });
 }
@@ -167,28 +157,19 @@ export function CodeEditor({
 }: CodeEditorProps) {
   const extensions = useMemo(() => {
     const highlights = tokenHighlights
-      .filter(
-        (highlight) =>
-          highlight.from >= 0 && highlight.to > highlight.from && highlight.to <= value.length,
-      )
+      .filter((highlight) => highlight.from >= 0 && highlight.to > highlight.from && highlight.to <= value.length)
       .sort((left, right) => left.from - right.from || left.to - right.to);
     const selectionExtensions = onSelectionChange ? selectionListeners(onSelectionChange) : [];
     if (!highlights.length) {
       return [...codeEditorExtensions[language], ...selectionExtensions];
     }
-    return [
-      ...codeEditorExtensions[language],
-      highlightDecorations(highlights),
-      ...selectionExtensions,
-    ];
+    return [...codeEditorExtensions[language], highlightDecorations(highlights), ...selectionExtensions];
   }, [language, onSelectionChange, tokenHighlights, value.length]);
 
   return (
     <ReactCodeMirror
       {...(id === undefined ? {} : { id })}
-      className={['code-editor', readOnly ? 'is-readonly' : '', className || '']
-        .filter(Boolean)
-        .join(' ')}
+      className={['code-editor', readOnly ? 'is-readonly' : '', className || ''].filter(Boolean).join(' ')}
       value={value}
       extensions={extensions}
       basicSetup={codeEditorBasicSetup}

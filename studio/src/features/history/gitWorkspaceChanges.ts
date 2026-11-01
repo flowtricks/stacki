@@ -24,12 +24,7 @@ export async function gitWorkspaceChanges(run: GitWorkspaceRun, head: string, tr
     untracked: file.status === 'A',
   }));
 }
-export async function gitSelectedTree(
-  git: PublishGit,
-  head: string,
-  draft: string,
-  selection: readonly string[],
-): Promise<string> {
+export async function gitSelectedTree(git: PublishGit, head: string, draft: string, selection: readonly string[]): Promise<string> {
   if (selection.length === 0 || selection.length > 100_000) {
     throw new Error('Select at least one changed file.');
   }

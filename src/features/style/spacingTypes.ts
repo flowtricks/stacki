@@ -5,11 +5,7 @@ import { selectorsMatch, type ResolvedProp } from './model/resolved';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
-export type LiveSetProp = (
-  prop: string | readonly string[],
-  value: string | undefined,
-  important: boolean,
-) => void;
+export type LiveSetProp = (prop: string | readonly string[], value: string | undefined, important: boolean) => void;
 export type Read = (prop: string) => ResolvedProp | undefined;
 export type SelectSelector = (selector: string, prop?: string) => void;
 
@@ -41,19 +37,14 @@ export function displayOf(resolved: ResolvedProp | undefined): Display {
   // rule, while its native class can still read back as the inner Variable object.
   // Prefer that authored fallback so spacing shows/edits `calc(...)`, not the lossy
   // variable name. This remains scoped to the same selected selector.
-  const editingSelector = resolved.contributors.find(
-    (contributor) => contributor.editing,
-  )?.selectorText;
+  const editingSelector = resolved.contributors.find((contributor) => contributor.editing)?.selectorText;
   const wrappedFallback = resolved.contributors.find(
     (contributor) =>
       contributor.origin === 'embed' &&
       isWrappedValue(contributor.value) &&
-      (contributor.isSelected ||
-        (!!editingSelector && selectorsMatch(contributor.selectorText, editingSelector))),
+      (contributor.isSelected || (!!editingSelector && selectorsMatch(contributor.selectorText, editingSelector))),
   );
-  const source =
-    wrappedFallback ??
-    (isSelected && resolved.selectedValue ? resolved.selectedValue : resolved.winner);
+  const source = wrappedFallback ?? (isSelected && resolved.selectedValue ? resolved.selectedValue : resolved.winner);
   return {
     present: true,
     isSelected,

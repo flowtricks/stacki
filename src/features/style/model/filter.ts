@@ -5,16 +5,7 @@
 
 import { splitTopLevelSpaces } from './background';
 
-export type FilterType =
-  | 'blur'
-  | 'brightness'
-  | 'contrast'
-  | 'grayscale'
-  | 'hue-rotate'
-  | 'invert'
-  | 'saturate'
-  | 'sepia'
-  | 'drop-shadow';
+export type FilterType = 'blur' | 'brightness' | 'contrast' | 'grayscale' | 'hue-rotate' | 'invert' | 'saturate' | 'sepia' | 'drop-shadow';
 
 /** One filter layer: an amount (for the value filters) OR the drop-shadow fields. */
 export type Filter = {
@@ -27,18 +18,10 @@ export type Filter = {
 };
 // One control's edit. Each member names the fields that control owns — an
 // explicit update surface rather than `Partial<T>` (AGENTS.md §4).
-export type FilterPatch =
-  | Pick<Filter, 'amount'>
-  | Pick<Filter, 'x'>
-  | Pick<Filter, 'y'>
-  | Pick<Filter, 'blur'>
-  | Pick<Filter, 'color'>;
+export type FilterPatch = Pick<Filter, 'amount'> | Pick<Filter, 'x'> | Pick<Filter, 'y'> | Pick<Filter, 'blur'> | Pick<Filter, 'color'>;
 
 export type FilterControl = 'amount' | 'angle' | 'shadow';
-export const FILTER_META: Record<
-  FilterType,
-  { label: string; unit: string; min: number; max: number; control: FilterControl; def: string }
-> = {
+export const FILTER_META: Record<FilterType, { label: string; unit: string; min: number; max: number; control: FilterControl; def: string }> = {
   blur: { label: 'Blur', unit: 'px', min: 0, max: 100, control: 'amount', def: '4px' },
   brightness: { label: 'Brightness', unit: '%', min: 0, max: 200, control: 'amount', def: '100%' },
   contrast: { label: 'Contrast', unit: '%', min: 0, max: 200, control: 'amount', def: '100%' },
@@ -71,17 +54,13 @@ function isFilterType(value: string): value is FilterType {
 const DROP_DEFAULT = { x: '0px', y: '2px', blur: '5px', color: 'rgba(0, 0, 0, 0.7)' };
 const round = (value: number) => Math.round(value * 100) / 100;
 
-const functionName = (call: string): string =>
-  call.slice(0, call.indexOf('(')).trim().toLowerCase();
+const functionName = (call: string): string => call.slice(0, call.indexOf('(')).trim().toLowerCase();
 const innerOf = (call: string): string => {
   const openIndex = call.indexOf('(');
   const closeIndex = call.lastIndexOf(')');
-  return openIndex < 0 || closeIndex <= openIndex
-    ? ''
-    : call.slice(openIndex + 1, closeIndex).trim();
+  return openIndex < 0 || closeIndex <= openIndex ? '' : call.slice(openIndex + 1, closeIndex).trim();
 };
-const isLength = (token: string): boolean =>
-  /^-?[\d.]+(px|em|rem|%|vw|vh|vmin|vmax)?$/i.test(token.trim());
+const isLength = (token: string): boolean => /^-?[\d.]+(px|em|rem|%|vw|vh|vmin|vmax)?$/i.test(token.trim());
 
 // Normalize a value filter's argument to the meta unit: %-filters store a percentage
 // (a unitless `1.5` → `150%`), deg-filters store degrees, blur stores px. A value we

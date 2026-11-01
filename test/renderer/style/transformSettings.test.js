@@ -37,10 +37,7 @@ const check = (what, condition, detail) => {
     ['{ parseTransforms, serializeTransforms }', 'src/features/style/model/transform.ts'],
     ['{ parseHideable, serializeHideable }', 'src/features/style/model/hideable.ts'],
   ];
-  fs.writeFileSync(
-    entry,
-    reexports.map(([names, file]) => `export ${names} from ${sourceSpecifier(file)};\n`).join(''),
-  );
+  fs.writeFileSync(entry, reexports.map(([names, file]) => `export ${names} from ${sourceSpecifier(file)};\n`).join(''));
   const bundlePath = path.join(buildDirectory, 'transform-settings.bundle.js');
   await esbuild.build({
     entryPoints: [entry],
@@ -72,16 +69,8 @@ const check = (what, condition, detail) => {
       JSON.stringify(parseOrigin('left top')) === JSON.stringify({ x: '0%', y: '0%', z: '' }),
       JSON.stringify(parseOrigin('left top')),
     );
-    check(
-      'and so is 0% 0%',
-      originPreset(parseOrigin('0% 0%')) === 0,
-      String(originPreset(parseOrigin('0% 0%'))),
-    );
-    check(
-      'and so is 0 0',
-      originPreset(parseOrigin('0 0')) === 0,
-      String(originPreset(parseOrigin('0 0'))),
-    );
+    check('and so is 0% 0%', originPreset(parseOrigin('0% 0%')) === 0, String(originPreset(parseOrigin('0% 0%'))));
+    check('and so is 0 0', originPreset(parseOrigin('0 0')) === 0, String(originPreset(parseOrigin('0 0'))));
     // Two keywords may be written either way round — `top left` is a corner, not
     // a nonsense x of `top`.
     check(
@@ -89,16 +78,8 @@ const check = (what, condition, detail) => {
       JSON.stringify(parseOrigin('top left')) === JSON.stringify({ x: '0%', y: '0%', z: '' }),
       JSON.stringify(parseOrigin('top left')),
     );
-    check(
-      'right bottom is the far corner',
-      originPreset(parseOrigin('right bottom')) === 8,
-      String(originPreset(parseOrigin('right bottom'))),
-    );
-    check(
-      'bottom right too',
-      originPreset(parseOrigin('bottom right')) === 8,
-      String(originPreset(parseOrigin('bottom right'))),
-    );
+    check('right bottom is the far corner', originPreset(parseOrigin('right bottom')) === 8, String(originPreset(parseOrigin('right bottom'))));
+    check('bottom right too', originPreset(parseOrigin('bottom right')) === 8, String(originPreset(parseOrigin('bottom right'))));
 
     // One value: the other axis is the centre.
     check(
@@ -111,127 +92,55 @@ const check = (what, condition, detail) => {
       JSON.stringify(parseOrigin('top')) === JSON.stringify({ x: '50%', y: '0%', z: '' }),
       JSON.stringify(parseOrigin('top')),
     );
-    check(
-      'a lone length is x',
-      JSON.stringify(parseOrigin('10px')) === JSON.stringify({ x: '10px', y: '50%', z: '' }),
-      JSON.stringify(parseOrigin('10px')),
-    );
+    check('a lone length is x', JSON.stringify(parseOrigin('10px')) === JSON.stringify({ x: '10px', y: '50%', z: '' }), JSON.stringify(parseOrigin('10px')));
 
     // Nothing declared is the centre, which is what both properties do anyway.
-    check(
-      'an empty value is the centre',
-      originPreset(parseOrigin('')) === 4,
-      String(originPreset(parseOrigin(''))),
-    );
-    check(
-      'and so is `center`',
-      originPreset(parseOrigin('center')) === 4,
-      String(originPreset(parseOrigin('center'))),
-    );
+    check('an empty value is the centre', originPreset(parseOrigin('')) === 4, String(originPreset(parseOrigin(''))));
+    check('and so is `center`', originPreset(parseOrigin('center')) === 4, String(originPreset(parseOrigin('center'))));
 
     // A value between the dots lights up none of them rather than the nearest.
-    check(
-      'an in-between origin matches no dot',
-      originPreset(parseOrigin('30% 70%')) === -1,
-      String(originPreset(parseOrigin('30% 70%'))),
-    );
+    check('an in-between origin matches no dot', originPreset(parseOrigin('30% 70%')) === -1, String(originPreset(parseOrigin('30% 70%'))));
 
     // A calc() has spaces in it and must not be split into two axes.
-    check(
-      'a calc keeps its spaces',
-      parseOrigin('calc(50% + 10px) 0%').x === 'calc(50% + 10px)',
-      parseOrigin('calc(50% + 10px) 0%').x,
-    );
-    check(
-      'and the axis after it still reads',
-      parseOrigin('calc(50% + 10px) 0%').y === '0%',
-      parseOrigin('calc(50% + 10px) 0%').y,
-    );
+    check('a calc keeps its spaces', parseOrigin('calc(50% + 10px) 0%').x === 'calc(50% + 10px)', parseOrigin('calc(50% + 10px) 0%').x);
+    check('and the axis after it still reads', parseOrigin('calc(50% + 10px) 0%').y === '0%', parseOrigin('calc(50% + 10px) 0%').y);
 
     // transform-origin takes a third, z value. Nothing in the UI shows it, so it
     // has to be carried through rather than dropped.
-    check(
-      'a z origin is kept',
-      parseOrigin('50% 50% 20px').z === '20px',
-      JSON.stringify(parseOrigin('50% 50% 20px')),
-    );
-    check(
-      'and written back out',
-      serializeOrigin(parseOrigin('50% 50% 20px')) === '50% 50% 20px',
-      serializeOrigin(parseOrigin('50% 50% 20px')),
-    );
+    check('a z origin is kept', parseOrigin('50% 50% 20px').z === '20px', JSON.stringify(parseOrigin('50% 50% 20px')));
+    check('and written back out', serializeOrigin(parseOrigin('50% 50% 20px')) === '50% 50% 20px', serializeOrigin(parseOrigin('50% 50% 20px')));
   }
 
   // --- Writing one back -------------------------------------------------------
   {
-    check(
-      'a corner serializes',
-      serializeOrigin({ x: '0%', y: '100%', z: '' }) === '0% 100%',
-      serializeOrigin({ x: '0%', y: '100%', z: '' }),
-    );
+    check('a corner serializes', serializeOrigin({ x: '0%', y: '100%', z: '' }) === '0% 100%', serializeOrigin({ x: '0%', y: '100%', z: '' }));
     // The centre IS the default, so writing it would leave a declaration saying
     // nothing — the caller clears the property instead.
-    check(
-      'the centre serializes to nothing',
-      serializeOrigin({ x: '50%', y: '50%', z: '' }) === '',
-      serializeOrigin({ x: '50%', y: '50%', z: '' }),
-    );
-    check(
-      'unless it carries a z',
-      serializeOrigin({ x: '50%', y: '50%', z: '20px' }) === '50% 50% 20px',
-    );
+    check('the centre serializes to nothing', serializeOrigin({ x: '50%', y: '50%', z: '' }) === '', serializeOrigin({ x: '50%', y: '50%', z: '' }));
+    check('unless it carries a z', serializeOrigin({ x: '50%', y: '50%', z: '20px' }) === '50% 50% 20px');
     check(
       'every dot round-trips',
-      ORIGIN_PRESETS.every(
-        (preset, i) =>
-          originPreset(
-            parseOrigin(serializeOrigin({ x: preset.x, y: preset.y, z: '' }) || 'center'),
-          ) === i,
-      ),
+      ORIGIN_PRESETS.every((preset, i) => originPreset(parseOrigin(serializeOrigin({ x: preset.x, y: preset.y, z: '' }) || 'center')) === i),
     );
   }
 
   // --- Lifting the self perspective out --------------------------------------
   {
-    const taken = takeSelfPerspective(
-      'perspective(500px) rotateX(0deg) rotateY(0deg) rotateZ(45deg)',
-    );
+    const taken = takeSelfPerspective('perspective(500px) rotateX(0deg) rotateY(0deg) rotateZ(45deg)');
     check('the distance comes out', taken.distance === '500px', taken.distance);
-    check(
-      'and the layers are left behind',
-      taken.rest === 'rotateX(0deg) rotateY(0deg) rotateZ(45deg)',
-      taken.rest,
-    );
+    check('and the layers are left behind', taken.rest === 'rotateX(0deg) rotateY(0deg) rotateZ(45deg)', taken.rest);
     // The rest has to be something parseTransforms can still read.
-    check(
-      'which still parse as layers',
-      parseTransforms(taken.rest).length === 1,
-      JSON.stringify(parseTransforms(taken.rest)),
-    );
+    check('which still parse as layers', parseTransforms(taken.rest).length === 1, JSON.stringify(parseTransforms(taken.rest)));
 
     // Written by hand somewhere other than the front — still found, because
     // leaving it in would mean parseTransforms silently dropping it.
     const mid = takeSelfPerspective('translateX(10px) perspective(800px) rotateZ(45deg)');
     check('one written mid-list is found too', mid.distance === '800px', mid.distance);
-    check(
-      'and the layers around it survive',
-      mid.rest === 'translateX(10px) rotateZ(45deg)',
-      mid.rest,
-    );
+    check('and the layers around it survive', mid.rest === 'translateX(10px) rotateZ(45deg)', mid.rest);
 
-    check(
-      'a value with none reports none',
-      takeSelfPerspective('scale3d(2, 2, 1)').distance === '',
-      takeSelfPerspective('scale3d(2, 2, 1)').distance,
-    );
-    check(
-      'and hands the value back whole',
-      takeSelfPerspective('scale3d(2, 2, 1)').rest === 'scale3d(2, 2, 1)',
-    );
-    check(
-      'an empty value is fine',
-      takeSelfPerspective('').distance === '' && takeSelfPerspective('').rest === '',
-    );
+    check('a value with none reports none', takeSelfPerspective('scale3d(2, 2, 1)').distance === '', takeSelfPerspective('scale3d(2, 2, 1)').distance);
+    check('and hands the value back whole', takeSelfPerspective('scale3d(2, 2, 1)').rest === 'scale3d(2, 2, 1)');
+    check('an empty value is fine', takeSelfPerspective('').distance === '' && takeSelfPerspective('').rest === '');
 
     // A name that merely ends in the word is a different function.
     check(
@@ -244,11 +153,7 @@ const check = (what, condition, detail) => {
     // perspective() mentioned in there is not this element's perspective.
     const hid = takeSelfPerspective('scale3d(2, 2, 1) /* perspective(900px) */');
     check('one inside a hidden layer is not taken', hid.distance === '', hid.distance);
-    check(
-      'and the comment is left where it was',
-      hid.rest === 'scale3d(2, 2, 1) /* perspective(900px) */',
-      hid.rest,
-    );
+    check('and the comment is left where it was', hid.rest === 'scale3d(2, 2, 1) /* perspective(900px) */', hid.rest);
   }
 
   // --- Putting it back --------------------------------------------------------
@@ -258,21 +163,10 @@ const check = (what, condition, detail) => {
       withSelfPerspective('rotateZ(45deg)', '500px') === 'perspective(500px) rotateZ(45deg)',
       withSelfPerspective('rotateZ(45deg)', '500px'),
     );
-    check(
-      'on its own when there are no layers',
-      withSelfPerspective('', '500px') === 'perspective(500px)',
-      withSelfPerspective('', '500px'),
-    );
-    check(
-      'no distance writes nothing extra',
-      withSelfPerspective('rotateZ(45deg)', '') === 'rotateZ(45deg)',
-    );
+    check('on its own when there are no layers', withSelfPerspective('', '500px') === 'perspective(500px)', withSelfPerspective('', '500px'));
+    check('no distance writes nothing extra', withSelfPerspective('rotateZ(45deg)', '') === 'rotateZ(45deg)');
     // A zero perspective is not a subtle one, it is an invalid one.
-    check(
-      'zero counts as none',
-      withSelfPerspective('rotateZ(45deg)', '0') === 'rotateZ(45deg)',
-      withSelfPerspective('rotateZ(45deg)', '0'),
-    );
+    check('zero counts as none', withSelfPerspective('rotateZ(45deg)', '0') === 'rotateZ(45deg)', withSelfPerspective('rotateZ(45deg)', '0'));
     check('and so does 0px', withSelfPerspective('rotateZ(45deg)', '0px') === 'rotateZ(45deg)');
 
     // `none` is the placeholder written when every layer is hidden, to stop the
@@ -286,11 +180,7 @@ const check = (what, condition, detail) => {
       withSelfPerspective(allHidden, '500px') === 'perspective(500px) /* rotateZ(45deg) */',
       withSelfPerspective(allHidden, '500px'),
     );
-    check(
-      'and comes back when the perspective goes',
-      withSelfPerspective(allHidden, '') === allHidden,
-      withSelfPerspective(allHidden, ''),
-    );
+    check('and comes back when the perspective goes', withSelfPerspective(allHidden, '') === allHidden, withSelfPerspective(allHidden, ''));
   }
 
   // --- It survives editing the layers ----------------------------------------
@@ -298,8 +188,7 @@ const check = (what, condition, detail) => {
   // The failure this guards: every layer edit rewrites the whole `transform`
   // value, and the self perspective is inside it.
   {
-    const start =
-      'perspective(600px) translate3d(10px, 20px, 0px) rotateX(0deg) rotateY(0deg) rotateZ(45deg)';
+    const start = 'perspective(600px) translate3d(10px, 20px, 0px) rotateX(0deg) rotateY(0deg) rotateZ(45deg)';
     const round = (value, edit) => {
       const { distance, rest } = takeSelfPerspective(value);
       const rows = parseHideable(rest, ' ', parseTransforms);
@@ -312,9 +201,7 @@ const check = (what, condition, detail) => {
     );
     check(
       'it survives hiding a layer',
-      round(start, (layers) =>
-        layers.map((x, i) => (i === 0 ? { ...x, hidden: true } : x)),
-      ).startsWith('perspective(600px) '),
+      round(start, (layers) => layers.map((x, i) => (i === 0 ? { ...x, hidden: true } : x))).startsWith('perspective(600px) '),
       round(start, (layers) => layers.map((x, i) => (i === 0 ? { ...x, hidden: true } : x))),
     );
     check(
@@ -329,9 +216,7 @@ const check = (what, condition, detail) => {
     );
     check(
       'it survives hiding them all',
-      round(start, (layers) => layers.map((x) => ({ ...x, hidden: true }))).startsWith(
-        'perspective(600px) /*',
-      ),
+      round(start, (layers) => layers.map((x) => ({ ...x, hidden: true }))).startsWith('perspective(600px) /*'),
       round(start, (layers) => layers.map((x) => ({ ...x, hidden: true }))),
     );
     // And the layers are still all there afterwards.
@@ -424,10 +309,7 @@ const check = (what, condition, detail) => {
       // delivered from `focusout`, not `blur`, which does not bubble.
       const type = async (input, text) => {
         await act(async () => {
-          const setter = Object.getOwnPropertyDescriptor(
-            dom.window.HTMLInputElement.prototype,
-            'value',
-          ).set;
+          const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
           setter.call(input, text);
           input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
         });
@@ -442,10 +324,7 @@ const check = (what, condition, detail) => {
         click,
         type,
         // The popover portals to <body>, so it is looked for there.
-        popup: () =>
-          document.querySelector(
-            '[aria-label="Transform settings"][role], .embed-editor_tsettings',
-          ),
+        popup: () => document.querySelector('[aria-label="Transform settings"][role], .embed-editor_tsettings'),
         trigger: () => host.querySelector('button[aria-label="Transform settings"]'),
         done: async () => {
           await act(async () => root.unmount());
@@ -455,11 +334,7 @@ const check = (what, condition, detail) => {
     };
 
     const mounted = await mount({ transform: 'rotateX(0deg) rotateY(0deg) rotateZ(45deg)' });
-    check(
-      'the transform list has a settings button',
-      !!mounted.trigger(),
-      mounted.host.innerHTML.slice(0, 200),
-    );
+    check('the transform list has a settings button', !!mounted.trigger(), mounted.host.innerHTML.slice(0, 200));
     check('and it is closed to begin with', !document.querySelector('.embed-editor_tsettings'));
 
     await mounted.click(mounted.trigger());
@@ -482,9 +357,7 @@ const check = (what, condition, detail) => {
       check(
         'with one of its segments lit even though nothing is set',
         lit.length === 1,
-        JSON.stringify(
-          segs.map((button) => [button.textContent, button.getAttribute('aria-checked')]),
-        ),
+        JSON.stringify(segs.map((button) => [button.textContent, button.getAttribute('aria-checked')])),
       );
       check(
         'and it is Visible, which is what the element actually does',
@@ -492,10 +365,7 @@ const check = (what, condition, detail) => {
         lit.map((button) => button.textContent).join(','),
       );
       check('a transform-origin pad', !!popup.querySelector('[aria-label="Transform origin"]'));
-      check(
-        'and a perspective-origin pad',
-        !!popup.querySelector('[aria-label="Perspective origin"]'),
-      );
+      check('and a perspective-origin pad', !!popup.querySelector('[aria-label="Perspective origin"]'));
       check(
         'plus both distances',
         popup.querySelectorAll('input[aria-label$="perspective distance"]').length === 2,
@@ -507,30 +377,20 @@ const check = (what, condition, detail) => {
       await mounted.click(pad.querySelectorAll('button')[0]);
       check(
         'a pad dot writes transform-origin',
-        mounted.set.some(
-          ([property, value]) => property === 'transform-origin' && value === '0% 0%',
-        ),
+        mounted.set.some(([property, value]) => property === 'transform-origin' && value === '0% 0%'),
         JSON.stringify(mounted.set),
       );
 
       // The centre is the default, so choosing it clears rather than writes.
       await mounted.click(pad.querySelectorAll('button')[4]);
-      check(
-        'and the centre clears it instead',
-        mounted.cleared.includes('transform-origin'),
-        JSON.stringify(mounted.cleared),
-      );
+      check('and the centre clears it instead', mounted.cleared.includes('transform-origin'), JSON.stringify(mounted.cleared));
 
       // Backface writes its own property, not the transform.
-      const hidden = [...popup.querySelectorAll('[aria-label="Backface visibility"] button')].find(
-        (button) => (button.textContent || '').trim() === 'Hidden',
-      );
+      const hidden = [...popup.querySelectorAll('[aria-label="Backface visibility"] button')].find((button) => (button.textContent || '').trim() === 'Hidden');
       await mounted.click(hidden);
       check(
         'Hidden writes backface-visibility',
-        mounted.set.some(
-          ([property, value]) => property === 'backface-visibility' && value === 'hidden',
-        ),
+        mounted.set.some(([property, value]) => property === 'backface-visibility' && value === 'hidden'),
         JSON.stringify(mounted.set),
       );
 
@@ -546,9 +406,8 @@ const check = (what, condition, detail) => {
       );
       check(
         'and never touches the transform',
-        !mounted.set.some(
-          ([property, value]) => property === 'transform' && value.includes('perspective'),
-        ) || mounted.set.filter(([property]) => property === 'transform').length === 0,
+        !mounted.set.some(([property, value]) => property === 'transform' && value.includes('perspective')) ||
+          mounted.set.filter(([property]) => property === 'transform').length === 0,
         JSON.stringify(mounted.set.filter(([property]) => property === 'transform')),
       );
 
@@ -557,17 +416,9 @@ const check = (what, condition, detail) => {
       const wrote = mounted.set.filter(([property]) => property === 'transform').pop();
       check('self perspective writes into the transform', !!wrote, JSON.stringify(mounted.set));
       // In front, which is the half that decides what it means.
-      check(
-        'at the front of the list',
-        !!wrote && wrote[1].startsWith('perspective(500px) '),
-        JSON.stringify(wrote),
-      );
+      check('at the front of the list', !!wrote && wrote[1].startsWith('perspective(500px) '), JSON.stringify(wrote));
       // And without losing the layer that was already there.
-      check(
-        'keeping the layer already there',
-        !!wrote && wrote[1].includes('rotateZ(45deg)'),
-        JSON.stringify(wrote),
-      );
+      check('keeping the layer already there', !!wrote && wrote[1].includes('rotateZ(45deg)'), JSON.stringify(wrote));
     }
     await mounted.done();
 
@@ -578,9 +429,9 @@ const check = (what, condition, detail) => {
         'backface-visibility': 'hidden',
       });
       await declared.click(declared.trigger());
-      const lit = [
-        ...document.querySelectorAll('[aria-label="Backface visibility"] button'),
-      ].filter((button) => button.getAttribute('aria-checked') === 'true');
+      const lit = [...document.querySelectorAll('[aria-label="Backface visibility"] button')].filter(
+        (button) => button.getAttribute('aria-checked') === 'true',
+      );
       check(
         'a declared backface lights its own segment',
         lit.length === 1 && (lit[0].textContent || '').trim() === 'Hidden',
@@ -607,31 +458,15 @@ const check = (what, condition, detail) => {
 
       await lifted.click(lifted.host.querySelector('button[aria-label="Add a transform"]'));
       const added = lifted.set.filter(([property]) => property === 'transform').pop();
-      check(
-        'adding a layer keeps the self perspective',
-        !!added && added[1].startsWith('perspective(600px) '),
-        JSON.stringify(added),
-      );
-      check(
-        'and still in front',
-        !!added && added[1].indexOf('perspective(') === 0,
-        JSON.stringify(added),
-      );
-      check(
-        'with the layer that was there',
-        !!added && added[1].includes('rotateZ(45deg)'),
-        JSON.stringify(added),
-      );
+      check('adding a layer keeps the self perspective', !!added && added[1].startsWith('perspective(600px) '), JSON.stringify(added));
+      check('and still in front', !!added && added[1].indexOf('perspective(') === 0, JSON.stringify(added));
+      check('with the layer that was there', !!added && added[1].includes('rotateZ(45deg)'), JSON.stringify(added));
 
       // And the settings popup reads the existing distance back out rather than
       // showing an empty field over a perspective that is really set.
       await lifted.click(lifted.trigger());
       const field = document.querySelector('input[aria-label="Self perspective distance"]');
-      check(
-        'the popup shows the perspective already set',
-        field && field.value === '600px',
-        field && field.value,
-      );
+      check('the popup shows the perspective already set', field && field.value === '600px', field && field.value);
       await lifted.done();
     }
   }
@@ -650,9 +485,7 @@ const check = (what, condition, detail) => {
   })();
   if (typeof electronPath !== 'string') {
     if (failures.length) {
-      console.error(
-        `transform-settings: ${failures.length} of ${checked} failed\n${failures.join('\n')}`,
-      );
+      console.error(`transform-settings: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
       process.exit(1);
     }
     console.log(`transform-settings: ${checked} passed  [the browser check needs a Chromium]`);
@@ -748,66 +581,29 @@ const check = (what, condition, detail) => {
       `both computed ${by['panel output'].computed}`,
     );
     // And the panel's is the leading one.
-    check(
-      'the panel writes the leading form',
-      by['panel output'].value.startsWith('perspective('),
-      by['panel output'].value,
-    );
-    check(
-      'which the browser resolves to a 3D matrix',
-      /^matrix3d\(/.test(by['panel output'].computed),
-      by['panel output'].computed,
-    );
+    check('the panel writes the leading form', by['panel output'].value.startsWith('perspective('), by['panel output'].value);
+    check('which the browser resolves to a 3D matrix', /^matrix3d\(/.test(by['panel output'].computed), by['panel output'].computed);
     // Every layer hidden but a perspective set: still a live declaration.
-    check(
-      'a perspective with every layer hidden still applies',
-      /^matrix3d\(/.test(by['all hidden'].computed),
-      by['all hidden'].computed,
-    );
-    check(
-      'and the hidden layer is still in the text',
-      by['all hidden'].value.includes('rotateZ(45deg)'),
-      by['all hidden'].value,
-    );
+    check('a perspective with every layer hidden still applies', /^matrix3d\(/.test(by['all hidden'].computed), by['all hidden'].computed);
+    check('and the hidden layer is still in the text', by['all hidden'].value.includes('rotateZ(45deg)'), by['all hidden'].value);
     // And with no perspective, the placeholder keeps the comment alive.
     check(
       'with no perspective the placeholder holds the declaration open',
       by['all hidden, no perspective'].kept !== '',
       by['all hidden, no perspective'].value,
     );
-    check(
-      'and applies nothing',
-      by['all hidden, no perspective'].computed === 'none',
-      by['all hidden, no perspective'].computed,
-    );
+    check('and applies nothing', by['all hidden, no perspective'].computed === 'none', by['all hidden, no perspective'].computed);
     // The origins land where they say.
-    check(
-      'the origin lands where the pad says',
-      by.origin.computed === '0px 100px',
-      by.origin.computed,
-    );
-    check(
-      'a z origin survives to the browser',
-      by['origin with z'].computed === '0px 100px 20px',
-      by['origin with z'].computed,
-    );
-    check(
-      'and the perspective origin too',
-      by['perspective origin'].computed === '0px 100px',
-      by['perspective origin'].computed,
-    );
+    check('the origin lands where the pad says', by.origin.computed === '0px 100px', by.origin.computed);
+    check('a z origin survives to the browser', by['origin with z'].computed === '0px 100px 20px', by['origin with z'].computed);
+    check('and the perspective origin too', by['perspective origin'].computed === '0px 100px', by['perspective origin'].computed);
   }
 
   if (failures.length) {
-    console.error(
-      `transform-settings: ${failures.length} of ${checked} failed\n${failures.join('\n')}`,
-    );
+    console.error(`transform-settings: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
-  console.log(
-    `transform-settings: ${checked} passed  ` +
-      `[origin, self vs children perspective, in a real browser]`,
-  );
+  console.log(`transform-settings: ${checked} passed  ` + `[origin, self vs children perspective, in a real browser]`);
 })().catch((error) => {
   console.error(error);
   process.exit(1);

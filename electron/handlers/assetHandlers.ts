@@ -8,21 +8,9 @@ import type { AssetEntry } from '../lib/mainTypes';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { MainHost } from './mainHost';
-import {
-  publicDirectoryOf,
-  rootOfRel,
-  assetAbs,
-  uniqueTarget,
-  imageSizeOf,
-  listAssetTree,
-} from '../project/assetFiles';
+import { publicDirectoryOf, rootOfRel, assetAbs, uniqueTarget, imageSizeOf, listAssetTree } from '../project/assetFiles';
 
-export function registerAssetHandlers(
-  host: Pick<
-    MainHost,
-    'assertInProject' | 'ipcMain' | 'noteAppWrite' | 'send' | 'shell' | 'showOpenDialog'
-  >,
-): void {
+export function registerAssetHandlers(host: Pick<MainHost, 'assertInProject' | 'ipcMain' | 'noteAppWrite' | 'send' | 'shell' | 'showOpenDialog'>): void {
   registerAssetsListHandlers(host);
   registerAssetsMoveHandlers(host);
   registerAssetsReadTextHandlers(host);
@@ -72,52 +60,41 @@ function registerAssetsListHandlers({
   });
 
   // Copies OS-dragged files into public/<destRel>.
-  ipcMain.handle(
-    'assets:upload',
-    async (_event, { projectPath, destRel: targetRel, filePaths }) => {
-      return copyAssetsIn({ noteAppWrite, send }, projectPath, targetRel, filePaths || []);
-    },
-  );
+  ipcMain.handle('assets:upload', async (_event, { projectPath, destRel: targetRel, filePaths }) => {
+    return copyAssetsIn({ noteAppWrite, send }, projectPath, targetRel, filePaths || []);
+  });
 }
 
-function registerAssetsMoveHandlers({
-  ipcMain,
-  noteAppWrite,
-  send,
-  shell,
-}: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send' | 'shell'>): void {
-  ipcMain.handle(
-    'assets:move',
-    async (_event, { projectPath, fromRel, toDirRel: toDirectoryRel }) => {
-      const from = assetAbs(projectPath, fromRel);
-      const toDirectory = assetAbs(projectPath, toDirectoryRel);
-      // Between roots the file's IDENTITY changes, not just its path: a public/
-      // asset is referenced by URL and a src/ one by import, so every reference to
-      // it would have to be rewritten in place. Until that rewrite exists, refuse
-      // — moving the file alone would leave the site pointing at nothing, quietly.
-      if (rootOfRel(fromRel) !== rootOfRel(toDirectoryRel)) {
-        throw new Error(
-          'Moving between public/ and src/ changes how the file is referenced ' +
-            '(URL vs import), so it needs the references updated too. Not supported yet — ' +
-            'move it outside the app and fix the references by hand.',
-        );
-      }
-      if (!fs.existsSync(from)) {
-        return { ok: false as const };
-      }
-      // Refuse moving a folder into itself/its own subtree.
-      if (fs.statSync(from).isDirectory() && isPathWithin(from, toDirectory)) {
-        throw new Error('Cannot move a folder into itself.');
-      }
-      const target = uniqueTarget(toDirectory, path.basename(from));
-      noteAppWrite();
-      noteAppWrite();
-      fs.mkdirSync(toDirectory, { recursive: true });
-      fs.renameSync(from, target);
-      send('assets:changed', {});
-      return { ok: true as const };
-    },
-  );
+function registerAssetsMoveHandlers({ ipcMain, noteAppWrite, send, shell }: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send' | 'shell'>): void {
+  ipcMain.handle('assets:move', async (_event, { projectPath, fromRel, toDirRel: toDirectoryRel }) => {
+    const from = assetAbs(projectPath, fromRel);
+    const toDirectory = assetAbs(projectPath, toDirectoryRel);
+    // Between roots the file's IDENTITY changes, not just its path: a public/
+    // asset is referenced by URL and a src/ one by import, so every reference to
+    // it would have to be rewritten in place. Until that rewrite exists, refuse
+    // — moving the file alone would leave the site pointing at nothing, quietly.
+    if (rootOfRel(fromRel) !== rootOfRel(toDirectoryRel)) {
+      throw new Error(
+        'Moving between public/ and src/ changes how the file is referenced ' +
+          '(URL vs import), so it needs the references updated too. Not supported yet — ' +
+          'move it outside the app and fix the references by hand.',
+      );
+    }
+    if (!fs.existsSync(from)) {
+      return { ok: false as const };
+    }
+    // Refuse moving a folder into itself/its own subtree.
+    if (fs.statSync(from).isDirectory() && isPathWithin(from, toDirectory)) {
+      throw new Error('Cannot move a folder into itself.');
+    }
+    const target = uniqueTarget(toDirectory, path.basename(from));
+    noteAppWrite();
+    noteAppWrite();
+    fs.mkdirSync(toDirectory, { recursive: true });
+    fs.renameSync(from, target);
+    send('assets:changed', {});
+    return { ok: true as const };
+  });
 
   ipcMain.handle('assets:rename', async (_event, { projectPath, rel, newName }) => {
     const clean = String(newName).trim().replace(/[/\\]/g, '');
@@ -195,12 +172,7 @@ function registerAssetsReadTextHandlers({
   });
 }
 
-function copyAssetsIn(
-  { noteAppWrite, send }: Pick<MainHost, 'noteAppWrite' | 'send'>,
-  projectPath: string,
-  targetRel: string,
-  filePaths: readonly string[],
-) {
+function copyAssetsIn({ noteAppWrite, send }: Pick<MainHost, 'noteAppWrite' | 'send'>, projectPath: string, targetRel: string, filePaths: readonly string[]) {
   const targetDirectory = assetAbs(projectPath, targetRel);
   fs.mkdirSync(targetDirectory, { recursive: true });
   let added = 0;

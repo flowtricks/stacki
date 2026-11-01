@@ -126,9 +126,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     await act(async () => {
       element.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
       await settle(0);
-      element.dispatchEvent(
-        new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }),
-      );
+      element.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
       await settle(0);
     });
   };
@@ -140,22 +138,14 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   pressed.length = 0;
   await pressAndClick(events);
   check('pressing a control outside closes the editor', closes === 1, `${closes} closes`);
-  check(
-    'and does not also press that control',
-    pressed.length === 0,
-    `pressed: ${pressed.join(', ')}`,
-  );
+  check('and does not also press that control', pressed.length === 0, `pressed: ${pressed.join(', ')}`);
 
   // --- the next press is a normal one ------------------------------------------
   // Dismissing swallows ONE click. The press after it belongs to whatever it
   // lands on, or nothing would work after closing a popover.
   pressed.length = 0;
   await pressAndClick(events);
-  check(
-    'the press after that presses the control',
-    pressed.join(',') === 'events',
-    pressed.join(','),
-  );
+  check('the press after that presses the control', pressed.join(',') === 'events', pressed.join(','));
 
   // --- the row the editor belongs to -------------------------------------------
   // Its own click handler is what toggles the editor shut, so that press has to
@@ -164,11 +154,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   await open();
   pressed.length = 0;
   await pressAndClick(row);
-  check(
-    'pressing the row it belongs to reaches the row',
-    pressed.join(',') === 'row',
-    pressed.join(','),
-  );
+  check('pressing the row it belongs to reaches the row', pressed.join(',') === 'row', pressed.join(','));
 
   // --- a press inside changes nothing ------------------------------------------
   closes = 0;
@@ -217,16 +203,10 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     events.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
     await settle(0);
   });
-  check(
-    'a press with no click does not swallow a later one',
-    pressed.join(',') === 'events',
-    `pressed: ${pressed.join(', ')}`,
-  );
+  check('a press with no click does not swallow a later one', pressed.join(',') === 'events', `pressed: ${pressed.join(', ')}`);
 
   if (failures.length) {
-    console.error(
-      `\npopover-dismiss: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\npopover-dismiss: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

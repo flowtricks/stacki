@@ -27,9 +27,7 @@ export function dedentHead(text: string): string {
   if (lines.length < 2) {
     return normalizeHead(text);
   }
-  const indents = lines
-    .filter((line) => line.trim())
-    .map((line) => (line.match(/^[ \t]*/)?.[0] ?? '').length);
+  const indents = lines.filter((line) => line.trim()).map((line) => (line.match(/^[ \t]*/)?.[0] ?? '').length);
   const common = Math.min(...indents);
   return lines
     .map((line) => (line.trim() ? line.slice(common) : ''))
@@ -138,9 +136,7 @@ function endsInComment(text: string): boolean {
 // Returns { body: string[], markup: string, at: number } or undefined, where `at`
 // is where the markup starts in `block` — the returned tree is a tree of the
 // file, and every node in it has to be able to say which lines are its own.
-export function splitBlockLoopBody(
-  block: string,
-): { body: string[]; markup: string; at: number } | undefined {
+export function splitBlockLoopBody(block: string): { body: string[]; markup: string; at: number } | undefined {
   const statements = topLevelStatements(block);
   if (!statements.length) {
     return undefined;

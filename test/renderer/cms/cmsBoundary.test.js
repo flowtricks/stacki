@@ -10,20 +10,15 @@ const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
 const jsonNull = JSON.parse('null');
 const bridge = load('src/features/cms/cmsBridge.ts');
 const types = load('src/features/cms/cmsTypes.ts');
-const entries = [
-  { title: 'Entry', image: { __expr: 'hero', __asset: 'src/assets/hero.png' }, tags: ['one'] },
-];
+const entries = [{ title: 'Entry', image: { __expr: 'hero', __asset: 'src/assets/hero.png' }, tags: ['one'] }];
 
 test('CMS data and declared field types retain their wire meaning', () => {
   assert.deepEqual(bridge.parseCmsRead({ data: { rows: entries, version: 2 } }), {
     data: { rows: entries, version: 2 },
   });
-  assert.deepEqual(
-    bridge.parseCmsMeta({ meta: { 'data/site.json': { title: 'text', image: 'image' } } }),
-    {
-      meta: { 'data/site.json': { title: 'text', image: 'image' } },
-    },
-  );
+  assert.deepEqual(bridge.parseCmsMeta({ meta: { 'data/site.json': { title: 'text', image: 'image' } } }), {
+    meta: { 'data/site.json': { title: 'text', image: 'image' } },
+  });
   assert.deepEqual(bridge.parseCmsUsage({ files: ['pages/index.astro'] }), {
     files: ['pages/index.astro'],
   });
@@ -39,13 +34,7 @@ test('CMS parsers reject malformed shapes, field types, and boundary overflow', 
   for (const value of [jsonNull, {}, [], { data: NaN }, { data: () => {} }]) {
     assert.throws(() => bridge.parseCmsRead(value));
   }
-  for (const value of [
-    jsonNull,
-    {},
-    { meta: [] },
-    { meta: { file: { field: 'mystery' } } },
-    { meta: { file: { field: 12 } } },
-  ]) {
+  for (const value of [jsonNull, {}, { meta: [] }, { meta: { file: { field: 'mystery' } } }, { meta: { file: { field: 12 } } }]) {
     assert.throws(() => bridge.parseCmsMeta(value));
   }
   for (const value of [jsonNull, {}, { files: ['ok', 1] }, { files: ['x'.repeat(32769)] }]) {
@@ -73,12 +62,7 @@ test('CMS requests parse replies outside the operating failure catch', async () 
     ['writeCmsMeta', 'setCmsMeta', ['/project', 'data.json', { title: 'text' }], { ok: true }],
     ['readCmsUsage', 'cmsUsage', ['/project', 'data.json'], { files: [] }],
     ['deleteCms', 'deleteCms', ['/project', 'data.json'], { ok: true, rewritten: [] }],
-    [
-      'importCmsAsset',
-      'cmsAssetRef',
-      ['/project', 'data.js#items', 'src/hero.png'],
-      { name: 'hero', asset: 'src/hero.png' },
-    ],
+    ['importCmsAsset', 'cmsAssetRef', ['/project', 'data.js#items', 'src/hero.png'], { name: 'hero', asset: 'src/hero.png' }],
   ];
   for (const [method, channel, args, reply] of cases) {
     let calls = 0;

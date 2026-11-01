@@ -84,12 +84,7 @@ function BranchCreateForm(props: BranchCreateProps & { readonly onClose: () => v
     >
       <div className="git-branch-editor-heading">
         <span>New branch</span>
-        <button
-          type="button"
-          className="ghost"
-          aria-label="Close new branch"
-          onClick={props.onClose}
-        >
+        <button type="button" className="ghost" aria-label="Close new branch" onClick={props.onClose}>
           <CloseIcon size={12} />
         </button>
       </div>

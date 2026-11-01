@@ -146,10 +146,7 @@ const CATEGORY: Readonly<Record<string, number>> = { components: 0, elements: 1,
  * input in it" — it is the thing called Input in the folder called Form, and a
  * list that answered with forty rows would be answering a different question.
  */
-export function rankInsertItems<T extends SearchItem>(
-  items: readonly T[] | undefined,
-  query: unknown,
-): readonly T[] {
+export function rankInsertItems<T extends SearchItem>(items: readonly T[] | undefined, query: unknown): readonly T[] {
   assert((items?.length ?? 0) <= LIMITS.scanEntriesMax, 'Palette item count exceeds limit');
   const text = String(query || '').toLowerCase();
   const tokens = text.split(/\s+/).filter(Boolean);
@@ -176,10 +173,7 @@ export function rankInsertItems<T extends SearchItem>(
     }
   }
   scored.sort(
-    (left, right) =>
-      (CATEGORY[left.item.cat ?? ''] ?? 3) - (CATEGORY[right.item.cat ?? ''] ?? 3) ||
-      left.total - right.total ||
-      left.index - right.index,
+    (left, right) => (CATEGORY[left.item.cat ?? ''] ?? 3) - (CATEGORY[right.item.cat ?? ''] ?? 3) || left.total - right.total || left.index - right.index,
   );
   return scored.map((entry) => entry.item);
 }

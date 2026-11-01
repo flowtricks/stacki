@@ -23,10 +23,7 @@ export async function removeDefaultsCanvas(projectPath: string, file: string): P
   await window.avb.removeDefaultsCanvas(input);
 }
 
-export async function writeMetadata(
-  projectPath: string,
-  write: { readonly kind: MetadataKind; readonly source: string; readonly base?: string },
-) {
+export async function writeMetadata(projectPath: string, write: { readonly kind: MetadataKind; readonly source: string; readonly base?: string }) {
   const input = parseIpcPayload('project:writeMetadata', { projectPath, write });
   const result = parseMetadataResult(await window.avb.writeProjectMetadata(input));
   if (!result.ok) {

@@ -52,9 +52,7 @@ function configPathOf(projectPath: string): { abs: string; rel: string } | undef
 // own) keeps us on the version the project already runs. The build surface
 // used here is the one every esbuild version this app supports exposes.
 interface ProjectEsbuild {
-  build(
-    options: Record<string, unknown>,
-  ): Promise<{ metafile?: { inputs?: Record<string, unknown> } }>;
+  build(options: Record<string, unknown>): Promise<{ metafile?: { inputs?: Record<string, unknown> } }>;
 }
 
 function isProjectEsbuild(input: unknown): input is ProjectEsbuild {
@@ -85,8 +83,7 @@ function esbuildOf(projectPath: string): ProjectEsbuild | undefined {
 // The generated bundle lives in the project so that `astro/zod` — left
 // external, so the config and our stubs share one zod instance — resolves
 // against the project's node_modules.
-const workDirectoryOf = (projectPath: string): string =>
-  path.join(projectPath, '.studio-cms-runner');
+const workDirectoryOf = (projectPath: string): string => path.join(projectPath, '.studio-cms-runner');
 
 // The stubs are copied into the project rather than bundled from where they
 // sit, because in a packaged build they sit inside app.asar, which esbuild (a
@@ -94,17 +91,8 @@ const workDirectoryOf = (projectPath: string): string =>
 function stageRunner(projectPath: string, configAbs: string): { directory: string; entry: string } {
   const directory = workDirectoryOf(projectPath);
   fs.mkdirSync(directory, { recursive: true });
-  for (const name of [
-    'stubAstroContent.mjs',
-    'stubAstroLoaders.mjs',
-    'schemaTools.mjs',
-    'introspect.mjs',
-  ]) {
-    fs.writeFileSync(
-      path.join(directory, name),
-      fs.readFileSync(contentWorkerPath(name), 'utf8'),
-      'utf8',
-    );
+  for (const name of ['stubAstroContent.mjs', 'stubAstroLoaders.mjs', 'schemaTools.mjs', 'introspect.mjs']) {
+    fs.writeFileSync(path.join(directory, name), fs.readFileSync(contentWorkerPath(name), 'utf8'), 'utf8');
   }
   const entry = path.join(directory, 'read-config.entry.mjs');
   fs.writeFileSync(
@@ -130,12 +118,10 @@ function stageRunner(projectPath: string, configAbs: string): { directory: strin
       '    let request;',
       '    try { request = JSON.parse(line); } catch { continue; }',
       '    try {',
-      '      const value = request.op === "validate" ? validate(config, request) : ' +
-        '{ error: "unknown request" };',
+      '      const value = request.op === "validate" ? validate(config, request) : ' + '{ error: "unknown request" };',
       '      send({ type: "reply", id: request.id, value });',
       '    } catch (err) {',
-      '      send({ type: "reply", id: request.id, value: ' +
-        '{ error: String(err && err.message || err) } });',
+      '      send({ type: "reply", id: request.id, value: ' + '{ error: String(err && err.message || err) } });',
       '    }',
       '  }',
       '});',
@@ -147,16 +133,9 @@ function stageRunner(projectPath: string, configAbs: string): { directory: strin
   return { directory, entry };
 }
 
-async function bundle(
-  esbuild: ProjectEsbuild,
-  projectPath: string,
-  directory: string,
-  entry: string,
-): Promise<{ outfile: string; inputs: string[] }> {
+async function bundle(esbuild: ProjectEsbuild, projectPath: string, directory: string, entry: string): Promise<{ outfile: string; inputs: string[] }> {
   const outfile = path.join(directory, 'read-config.mjs');
-  const tsconfig = ['tsconfig.json', 'jsconfig.json']
-    .map((fileName) => path.join(projectPath, fileName))
-    .find((candidate) => fs.existsSync(candidate));
+  const tsconfig = ['tsconfig.json', 'jsconfig.json'].map((fileName) => path.join(projectPath, fileName)).find((candidate) => fs.existsSync(candidate));
   const result = await esbuild.build({
     entryPoints: [entry],
     outfile,
@@ -180,10 +159,7 @@ async function bundle(
     // an ESM bundle has no such thing as. Give it one, resolving from where the
     // bundle sits — inside the project.
     banner: {
-      js: [
-        "import { createRequire as __stackiRequire } from 'node:module';",
-        'const require = __stackiRequire(import.meta.url);',
-      ].join('\n'),
+      js: ["import { createRequire as __stackiRequire } from 'node:module';", 'const require = __stackiRequire(import.meta.url);'].join('\n'),
     },
     logLevel: 'silent',
     // Which files went in, so the answer can be cached until one of them
@@ -334,16 +310,12 @@ class ConfigService {
         this.pending.delete(id);
         callback(value);
       };
-      const timer = setTimeout(
-        () => finish(new Error('Checking the entry timed out.'), reject),
-        RUN_TIMEOUT,
-      );
+      const timer = setTimeout(() => finish(new Error('Checking the entry timed out.'), reject), RUN_TIMEOUT);
       timer.unref?.();
       this.pending.set(id, {
         // The child's reply is an object or nothing; the boundary narrows it.
         resolve: (value) => finish(toRecord(value) ?? {}, resolve),
-        reject: (error) =>
-          finish(error instanceof Error ? error : new Error(String(error)), reject),
+        reject: (error) => finish(error instanceof Error ? error : new Error(String(error)), reject),
       });
       try {
         this.child?.stdin?.write(message, (error) => {
@@ -399,13 +371,8 @@ class ConfigService {
     });
     child.on('error', fail);
     child.stdin.on('error', fail);
-    child.on('exit', () =>
-      fail(new Error(cleanError(this.stderr) || 'The content config could not be read.')),
-    );
-    this.timer = setTimeout(
-      () => fail(new Error('Reading the content config timed out.')),
-      RUN_TIMEOUT,
-    );
+    child.on('exit', () => fail(new Error(cleanError(this.stderr) || 'The content config could not be read.')));
+    this.timer = setTimeout(() => fail(new Error('Reading the content config timed out.')), RUN_TIMEOUT);
     this.timer.unref?.();
     return manifest;
   }
@@ -459,22 +426,14 @@ function stopService(projectPath: string): void {
 
 // Publish the pending service before doing any asynchronous work. Readers and
 // validation requests then share its bundle, process, and completed manifest.
-function serviceFor(
-  projectPath: string,
-  { force = false }: { readonly force?: boolean } = {},
-): Promise<ConfigService | undefined> {
+function serviceFor(projectPath: string, { force = false }: { readonly force?: boolean } = {}): Promise<ConfigService | undefined> {
   const found = configPathOf(projectPath);
   const existing = services.get(projectPath);
   if (!found) {
     stopService(projectPath);
     return Promise.resolve(undefined);
   }
-  if (
-    existing &&
-    !force &&
-    existing.configAbs === found.abs &&
-    (!existing.manifest || existing.stamp === stampOf(projectPath, existing.inputs))
-  ) {
+  if (existing && !force && existing.configAbs === found.abs && (!existing.manifest || existing.stamp === stampOf(projectPath, existing.inputs))) {
     const ready = existing.ready ?? Promise.reject(new Error(RELOADED));
     return ready.then((service) => {
       if (service.stopped) {
@@ -489,9 +448,7 @@ function serviceFor(
   services.set(projectPath, service);
   // A service in the map always has ready assigned just after construction;
   // the branch is for the compiler.
-  service.ready = existing?.ready
-    ? existing.ready.catch(() => undefined).then(() => service.start())
-    : service.start();
+  service.ready = existing?.ready ? existing.ready.catch(() => undefined).then(() => service.start()) : service.start();
   return service.ready;
 }
 
@@ -504,10 +461,7 @@ export type ContentConfigResult =
  * { collections: [...] } for a project, { missing: true } when it has no
  * content config, or { error } when the config could not be read.
  */
-async function readContentConfig(
-  projectPath: string,
-  { force = false }: { readonly force?: boolean } = {},
-): Promise<ContentConfigResult> {
+async function readContentConfig(projectPath: string, { force = false }: { readonly force?: boolean } = {}): Promise<ContentConfigResult> {
   const found = configPathOf(projectPath);
   if (!found) {
     stopService(projectPath);

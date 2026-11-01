@@ -23,10 +23,7 @@ function doesNotFit(container: Element, value: string) {
   // The token editor first, and only then the plain input: with a code field
   // the input is always in the DOM, hidden behind the editor, and a selector
   // that took either would have measured the invisible one.
-  const field =
-    container.querySelector('.embed-editor_varconnect-editor') ||
-    container.querySelector('.var-input') ||
-    container.querySelector('input');
+  const field = container.querySelector('.embed-editor_varconnect-editor') || container.querySelector('.var-input') || container.querySelector('input');
   // clientWidth is 0 before layout (and in jsdom); fall back to the count.
   if (!field || !field.clientWidth) {
     return isLong(value);
@@ -155,11 +152,7 @@ function useCustomPosition(boxRef: RefObject<HTMLDivElement>, anchor: DOMRect | 
   return position;
 }
 
-function useCustomClose(
-  boxRef: RefObject<HTMLDivElement>,
-  commit: () => string,
-  onSave: (value: string) => void,
-): void {
+function useCustomClose(boxRef: RefObject<HTMLDivElement>, commit: () => string, onSave: (value: string) => void): void {
   const saveRef = useRef(onSave);
   saveRef.current = onSave;
   useEffect(() => {
@@ -198,14 +191,9 @@ function useCustomScrollLock(boxRef: RefObject<HTMLDivElement>): void {
   }, [boxRef]);
 }
 
-function useCustomFocus(
-  boxRef: RefObject<HTMLDivElement>,
-  fieldRef: RefObject<HTMLTextAreaElement>,
-) {
+function useCustomFocus(boxRef: RefObject<HTMLDivElement>, fieldRef: RefObject<HTMLTextAreaElement>) {
   useEffect(() => {
-    const settled = (): boolean =>
-      !!boxRef.current?.contains(document.activeElement) ||
-      !!document.activeElement?.closest('.embed-editor_varpicker');
+    const settled = (): boolean => !!boxRef.current?.contains(document.activeElement) || !!document.activeElement?.closest('.embed-editor_varpicker');
     if (settled()) {
       return;
     }

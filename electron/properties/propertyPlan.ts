@@ -22,10 +22,7 @@ export interface FileChange {
   readonly after: string;
 }
 
-export function planPropertyChanges(
-  request: PropertyEditRequest,
-  source: string,
-): Result<readonly FileChange[]> {
+export function planPropertyChanges(request: PropertyEditRequest, source: string): Result<readonly FileChange[]> {
   const change = request.change;
   const first = { file: request.file, before: request.source, after: source };
   if (change.kind === 'remove') {
@@ -56,14 +53,7 @@ export function planPropertyChanges(
     const own = sameFilesystemPath(file, request.file);
     const original = own ? source : consumer.source;
     const owner = own ? 'definition' : 'consumer';
-    const changed = planConsumerChange(
-      original,
-      names,
-      change,
-      propertyRename,
-      optionRenames,
-      owner,
-    );
+    const changed = planConsumerChange(original, names, change, propertyRename, optionRenames, owner);
     if (!changed.ok) {
       return err({
         code: changed.error.code,
@@ -85,15 +75,11 @@ export function planPropertyChanges(
   return ok(changes);
 }
 
-function propertyRenameForChange(
-  change: PropertyChange,
-): { readonly from: string; readonly to: string } | undefined {
+function propertyRenameForChange(change: PropertyChange): { readonly from: string; readonly to: string } | undefined {
   if (change.kind !== 'save' || !change.originalName) {
     return undefined;
   }
-  return change.originalName === change.property.name
-    ? undefined
-    : { from: change.originalName, to: change.property.name };
+  return change.originalName === change.property.name ? undefined : { from: change.originalName, to: change.property.name };
 }
 
 function planConsumerChange(
@@ -104,9 +90,7 @@ function planConsumerChange(
   optionRenames: readonly PropertyOptionRename[],
   owner: 'definition' | 'consumer',
 ): Result<string> {
-  const renamed = propertyRename
-    ? renameComponentReferences(source, names, propertyRename, owner)
-    : ok(source);
+  const renamed = propertyRename ? renameComponentReferences(source, names, propertyRename, owner) : ok(source);
   if (!renamed.ok || optionRenames.length === 0) {
     return renamed;
   }
@@ -122,12 +106,8 @@ function validateOptionRenames(
   if (renames.length === 0) {
     return ok(undefined);
   }
-  const before = readComponentProperties(beforeSource).properties.find(
-    (property) => property.name === change.originalName,
-  );
-  const after = readComponentProperties(afterSource).properties.find(
-    (property) => property.name === change.property.name,
-  );
+  const before = readComponentProperties(beforeSource).properties.find((property) => property.name === change.originalName);
+  const after = readComponentProperties(afterSource).properties.find((property) => property.name === change.property.name);
   const beforeOptions = before ? literalOptions(before.type) : undefined;
   const afterOptions = after ? literalOptions(after.type) : undefined;
   if (!beforeOptions || !afterOptions) {
@@ -147,31 +127,20 @@ function validateOptionRenames(
   return ok(undefined);
 }
 
-function planPropertyRemoval(
-  request: PropertyEditRequest,
-  change: FileChange,
-  name: string,
-): Result<readonly FileChange[]> {
+function planPropertyRemoval(request: PropertyEditRequest, change: FileChange, name: string): Result<readonly FileChange[]> {
   const consumers = readPropertyConsumers(request);
   if (!consumers.ok) {
     return consumers;
   }
   for (const consumer of consumers.value) {
-    const result = renameComponentReferences(
-      consumer.source,
-      consumer.names,
-      { from: name, to: '_stackiDeletedProperty' },
-      'consumer',
-    );
+    const result = renameComponentReferences(consumer.source, consumer.names, { from: name, to: '_stackiDeletedProperty' }, 'consumer');
     if (!result.ok) {
       return result;
     }
     if (result.value !== consumer.source) {
       return err({
         code: 'in-use',
-        message:
-          `${consumer.file} still passes ${name}. ` +
-          'Remove that instance value before deleting the prop.',
+        message: `${consumer.file} still passes ${name}. ` + 'Remove that instance value before deleting the prop.',
       });
     }
   }

@@ -62,31 +62,17 @@ test('hover preview opens immediately, targets exact files and closes on exit', 
       ),
     );
     await checkCancelledHover(context);
-    const interactiveFrame = await checkPreviewTarget(
-      context,
-      'Interactive',
-      'src/components/Interactive/AccordionItem.astro',
-    );
+    const interactiveFrame = await checkPreviewTarget(context, 'Interactive', 'src/components/Interactive/AccordionItem.astro');
     await sendPreviewStatus(context, interactiveFrame, 'empty');
-    assert.equal(
-      document.querySelector('.comp-preview').style.visibility,
-      'hidden',
-      'An empty active component hides its preview',
-    );
+    assert.equal(document.querySelector('.comp-preview').style.visibility, 'hidden', 'An empty active component hides its preview');
     await checkPreviewTarget(context, 'Marketing', 'src/components/Marketing/AccordionItem.astro');
     await checkPreviewTarget(context, 'layouts', 'src/layouts/Base.astro');
     await checkPreviewHandoff(context);
     await checkPreviewCacheBound(context);
     await React.act(async () => {
-      itemInFolder('layouts').dispatchEvent(
-        new dom.window.MouseEvent('dblclick', { bubbles: true }),
-      );
+      itemInFolder('layouts').dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true }));
     });
-    assert.deepEqual(
-      inserted,
-      ['/project/src/layouts/Base.astro'],
-      'Insertion retains the exact component path',
-    );
+    assert.deepEqual(inserted, ['/project/src/layouts/Base.astro'], 'Insertion retains the exact component path');
     await checkResolvedPreviewHandoff(context, root, React, Palette);
   } finally {
     await React.act(async () => root.unmount());
@@ -119,11 +105,7 @@ async function checkResolvedPreviewHandoff(context, root, React, Palette) {
       }),
     ),
   );
-  const shown = await checkPreviewTarget(
-    context,
-    'Interactive',
-    'src/components/Interactive/AccordionItem.astro',
-  );
+  const shown = await checkPreviewTarget(context, 'Interactive', 'src/components/Interactive/AccordionItem.astro');
   const next = itemInFolder('Marketing');
   await pointerEvent(context, context.hoveredItem, 'mouseout', next);
   assert.equal(requests.length, 2, 'Keeping the visible frame does not resolve its URL again');
@@ -211,11 +193,7 @@ async function checkPreviewTarget(context, folder, componentPath) {
   assert.equal(url.origin, 'http://localhost:4321');
   assert.equal(url.pathname, '/__avb/preview/');
   assert.equal(url.searchParams.get('c'), name);
-  assert.equal(
-    url.searchParams.get('p'),
-    componentPath,
-    'Duplicate basenames retain file identity',
-  );
+  assert.equal(url.searchParams.get('p'), componentPath, 'Duplicate basenames retain file identity');
   assert.equal(iframe.title, `${name} preview`);
   const preview = document.querySelector('.comp-preview');
   assert.equal(preview.style.visibility, 'visible', 'The box appears immediately while loading');
@@ -263,9 +241,7 @@ async function pointerEvent({ dom, act }, item, type, relatedTarget = document.b
 }
 
 function itemInFolder(folder) {
-  const heading = [...document.querySelectorAll('.palette-folder')].find(
-    (element) => element.textContent === folder,
-  );
+  const heading = [...document.querySelectorAll('.palette-folder')].find((element) => element.textContent === folder);
   assert.ok(heading, `Folder ${folder} is listed`);
   const item = heading.nextElementSibling;
   assert.ok(item?.classList.contains('palette-item'), `${folder} has a component`);

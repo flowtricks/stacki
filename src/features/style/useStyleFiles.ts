@@ -7,11 +7,7 @@ type ReadFiles = (project: string) => Promise<Result<StyleFiles, string>>;
 
 // A failed inventory is not an empty project. Keep the last usable list and
 // retry interrupted startup reads; a later focus/online event can recover too.
-export function useStyleFiles(
-  project: string | undefined,
-  refreshKey: string | undefined,
-  read: ReadFiles,
-) {
+export function useStyleFiles(project: string | undefined, refreshKey: string | undefined, read: ReadFiles) {
   const [state, setState] = useState<{ readonly files: StyleFiles; readonly error: string }>({
     files: [],
     error: '',

@@ -9,8 +9,7 @@ import { startStyleFixture } from './stylePanelFixture';
 
 const fixture = await startStyleFixture({ page: '<main><h1>Cross-origin preview</h1></main>' });
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 try {
@@ -39,10 +38,7 @@ try {
   });
   await page.goto(fixture.url, { waitUntil: 'domcontentloaded' });
   await page.locator('.preview-frame-wrap[data-preview-loading="false"]').waitFor();
-  await page
-    .frameLocator('iframe[title="Site preview"]')
-    .getByRole('heading', { name: 'Cross-origin preview', exact: true })
-    .waitFor();
+  await page.frameLocator('iframe[title="Site preview"]').getByRole('heading', { name: 'Cross-origin preview', exact: true }).waitFor();
   console.log('Hidden cross-origin preview initializes without waiting for animation frames.');
 } finally {
   await browser.close();

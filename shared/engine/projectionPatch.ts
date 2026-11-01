@@ -56,24 +56,14 @@ import { assert } from '../core/assert';
 import { LIMITS } from '../core/limits';
 import type { Splice } from './planner';
 import type { ProjectedAttribute, ProjectedNode, Projection } from '../page/sourceProjection';
-import {
-  byteStringsEqual,
-  toByteSpan,
-  toByteString,
-  type ByteSpan,
-  type ByteString,
-} from '../core/span';
+import { byteStringsEqual, toByteSpan, toByteString, type ByteSpan, type ByteString } from '../core/span';
 
 type ValidProjection = Extract<Projection, { tag: 'valid' }>;
 
 /** The projection of `bytes` with `splice` applied, or undefined when the
  * splice is not a value edit this module can prove structure-neutral — the
  * caller then reparses. `projection` must describe `bytes`. */
-export function projectValueSplice(
-  projection: Projection,
-  bytes: ByteString,
-  splice: Splice,
-): Projection | undefined {
+export function projectValueSplice(projection: Projection, bytes: ByteString, splice: Splice): Projection | undefined {
   assert(projection.byteLength === bytes.length, 'The projection describes these bytes');
   assert(splice.range.end <= bytes.length, 'The splice lies inside the bytes');
   const held = toByteString(bytes.subarray(splice.range.start, splice.range.end));
@@ -122,10 +112,7 @@ export type HostContext = 'markup' | 'expression' | 'refused';
  * printable ASCII except quotes, backtick, backslash, angle brackets and
  * braces, and any byte of a multi-byte UTF-8 sequence; inside an expression,
  * also none of `( ) [ ] ? : & ; / *`. */
-export function valueBytesNeutral(
-  bytes: ByteString,
-  context: Exclude<HostContext, 'refused'>,
-): boolean {
+export function valueBytesNeutral(bytes: ByteString, context: Exclude<HostContext, 'refused'>): boolean {
   assert(bytes.length <= LIMITS.sourceBytesMax, 'Checked bytes are inside the file bound');
   const table = context === 'markup' ? MARKUP_VALUE_BYTES : EXPRESSION_VALUE_BYTES;
   for (let index = 0; index < bytes.length; index++) {
@@ -169,8 +156,7 @@ export function hostContext(projection: Projection, range: ByteSpan): HostContex
   if (containing.every((node) => MARKUP_KINDS.has(node.kind))) {
     return 'markup';
   }
-  const known = (node: ProjectedNode): boolean =>
-    MARKUP_KINDS.has(node.kind) || EXPRESSION_KINDS.has(node.kind);
+  const known = (node: ProjectedNode): boolean => MARKUP_KINDS.has(node.kind) || EXPRESSION_KINDS.has(node.kind);
   return containing.every(known) ? 'expression' : 'refused';
 }
 
@@ -238,11 +224,7 @@ function isValueAt(attribute: ProjectedAttribute, range: ByteSpan): boolean {
   return value.start === range.start && value.end === range.end;
 }
 
-function shiftProjection(
-  projection: ValidProjection,
-  range: ByteSpan,
-  lengths: { readonly bytes: number; readonly units: number },
-): ValidProjection {
+function shiftProjection(projection: ValidProjection, range: ByteSpan, lengths: { readonly bytes: number; readonly units: number }): ValidProjection {
   const delta = lengths.bytes;
   const frontmatter = projection.frontmatter;
   if (frontmatter !== undefined) {
@@ -274,11 +256,7 @@ function shiftNode(node: ProjectedNode, range: ByteSpan, delta: number): Project
   return { ...node, span, attributes };
 }
 
-function shiftOptional(
-  span: ByteSpan | undefined,
-  range: ByteSpan,
-  delta: number,
-): ByteSpan | undefined {
+function shiftOptional(span: ByteSpan | undefined, range: ByteSpan, delta: number): ByteSpan | undefined {
   return span === undefined ? undefined : shiftSpan(span, range, delta);
 }
 

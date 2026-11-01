@@ -25,22 +25,13 @@ import { FileIcon } from '../ui/Icons';
 //
 // Live preview is off. Each option is a full page navigation, so skimming the
 // list would reload the canvas once per hover.
-export default function DynamicPicker({
-  entries,
-  index,
-  onPick,
-  error,
-  pattern,
-}: DynamicPickerProps) {
+export default function DynamicPicker({ entries, index, onPick, error, pattern }: DynamicPickerProps) {
   if (error) {
     return <ErrorToast message={`Could not load dynamic page paths: ${error}`} />;
   }
   if (!entries.length) {
     return (
-      <span
-        className="route-chip"
-        title={`${pattern} has no paths to preview — getStaticPaths returned nothing.`}
-      >
+      <span className="route-chip" title={`${pattern} has no paths to preview — getStaticPaths returned nothing.`}>
         No paths
       </span>
     );

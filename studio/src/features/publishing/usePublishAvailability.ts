@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  parsePublishAvailability,
-  UNKNOWN_PUBLISH_AVAILABILITY,
-} from '../../../vendor/stacki/shared/properties/publishState';
+import { parsePublishAvailability, UNKNOWN_PUBLISH_AVAILABILITY } from '../../../vendor/stacki/shared/properties/publishState';
 import { request } from '../project/projectClient';
 import type { PublishState } from './publish';
 

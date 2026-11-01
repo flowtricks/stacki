@@ -1,13 +1,7 @@
 import * as path from 'node:path';
 // Setup is scoped to the open project. Local bundles are selected in main,
 // never accepted as arbitrary paths from renderer input.
-import {
-  installStudio,
-  automaticStudio,
-  readStudioRelease,
-  studioStatus,
-  type StudioReleaseEnvironment,
-} from '../project/studioSetup';
+import { installStudio, automaticStudio, readStudioRelease, studioStatus, type StudioReleaseEnvironment } from '../project/studioSetup';
 import { errorMessage } from '../lib/mainHelpers';
 import type { MainHost } from './mainHost';
 import type { StudioInstallResult } from '../../shared/ipc/studioSetup';
@@ -18,18 +12,10 @@ export function registerStudioHandlers(
   environment: StudioReleaseEnvironment,
   desktopVersion: () => string,
 ): void {
-  host.ipcMain.handle('studio:status', (_event, project) =>
-    studioStatus(
-      path.dirname(host.assertInProject(path.join(project, 'studio'))),
-      desktopVersion(),
-    ),
-  );
+  host.ipcMain.handle('studio:status', (_event, project) => studioStatus(path.dirname(host.assertInProject(path.join(project, 'studio'))), desktopVersion()));
   host.ipcMain.handle('studio:install', async (_event, options): Promise<StudioInstallResult> => {
     const project = path.dirname(host.assertInProject(path.join(options.projectPath, 'studio')));
-    const progress = createStudioProgress(
-      { projectPath: options.projectPath, requestId: options.requestId },
-      (value) => host.send('studio:progress', value),
-    );
+    const progress = createStudioProgress({ projectPath: options.projectPath, requestId: options.requestId }, (value) => host.send('studio:progress', value));
     try {
       const status = await studioStatus(project, desktopVersion());
       if (status.kind !== 'missing') {
@@ -55,12 +41,7 @@ export function registerStudioHandlers(
   });
 }
 
-async function selectRelease(
-  host: Pick<MainHost, 'showOpenDialog'>,
-  source: 'published' | 'file',
-  version: string,
-  environment: StudioReleaseEnvironment,
-) {
+async function selectRelease(host: Pick<MainHost, 'showOpenDialog'>, source: 'published' | 'file', version: string, environment: StudioReleaseEnvironment) {
   if (source === 'published') {
     return automaticStudio(version, environment);
   }

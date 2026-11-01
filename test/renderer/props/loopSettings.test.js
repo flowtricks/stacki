@@ -14,13 +14,7 @@ const model = load('src/features/props/loopSettingsModel.ts');
 const catalog = load('src/features/props/loopCatalog.ts');
 
 const fields = [
-  {
-    path: 'category',
-    title: 'Category',
-    kind: 'reference',
-    options: [{ title: 'Get Involved', value: 'get-involved' }],
-    references: [],
-  },
+  { path: 'category', title: 'Category', kind: 'reference', options: [{ title: 'Get Involved', value: 'get-involved' }], references: [] },
   { path: 'order', title: 'Sort Order', kind: 'number', options: [], references: [] },
   { path: 'date', title: 'Published On', kind: 'date', options: [], references: [] },
   { path: 'featured', title: 'Featured', kind: 'boolean', options: [], references: [] },
@@ -28,119 +22,49 @@ const fields = [
 
 // Summaries.
 assert.equal(
-  model.conditionSummary(
-    {
-      kind: 'test',
-      field: 'category',
-      operator: 'is',
-      value: { kind: 'reference', id: 'get-involved' },
-    },
-    fields,
-    [],
-  ),
+  model.conditionSummary({ kind: 'test', field: 'category', operator: 'is', value: { kind: 'reference', id: 'get-involved' } }, fields, []),
   'Category = Get Involved',
 );
-assert.equal(
-  model.conditionSummary({ kind: 'test', field: 'featured', operator: 'isTrue' }, fields, []),
-  'Featured is on',
-);
-assert.equal(
-  model.conditionSummary(
-    { kind: 'test', field: 'order', operator: 'atMost', value: 3 },
-    fields,
-    [],
-  ),
-  'Sort Order ≤ 3',
-);
-assert.match(
-  model.conditionSummary(
-    { kind: 'test', field: 'date', operator: 'before', value: '2024-01-05' },
-    fields,
-    [],
-  ),
-  /^Published On is before .*2024/,
-);
-assert.equal(
-  model.conditionSummary({ kind: 'custom', code: 'a  &&\n b' }, fields, []),
-  'Custom: a && b',
-);
+assert.equal(model.conditionSummary({ kind: 'test', field: 'featured', operator: 'isTrue' }, fields, []), 'Featured is on');
+assert.equal(model.conditionSummary({ kind: 'test', field: 'order', operator: 'atMost', value: 3 }, fields, []), 'Sort Order ≤ 3');
+assert.match(model.conditionSummary({ kind: 'test', field: 'date', operator: 'before', value: '2024-01-05' }, fields, []), /^Published On is before .*2024/);
+assert.equal(model.conditionSummary({ kind: 'custom', code: 'a  &&\n b' }, fields, []), 'Custom: a && b');
 assert.equal(
   model.conditionSummary({ kind: 'test', field: 'campus-name', operator: 'isSet' }, undefined, []),
   'Campus Name is set',
   'unloaded fields read by name',
 );
-assert.equal(
-  model.sortSummary({ field: 'order', direction: 'ascending', order: 'number' }, fields),
-  'Sort Order · Smallest to largest',
-);
-assert.equal(
-  model.sortSummary({ field: 'date', direction: 'descending', order: 'date' }, fields),
-  'Published On · Newest to oldest',
-);
-assert.equal(
-  model.sortSummary({ field: 'featured', direction: 'ascending', order: 'boolean' }, fields),
-  'Featured · Is Off First',
-);
-assert.equal(
-  model.sortSummary({ field: 'featured', direction: 'descending', order: 'boolean' }, fields),
-  'Featured · Is On First',
-);
+assert.equal(model.sortSummary({ field: 'order', direction: 'ascending', order: 'number' }, fields), 'Sort Order · Smallest to largest');
+assert.equal(model.sortSummary({ field: 'date', direction: 'descending', order: 'date' }, fields), 'Published On · Newest to oldest');
+assert.equal(model.sortSummary({ field: 'featured', direction: 'ascending', order: 'boolean' }, fields), 'Featured · Is Off First');
+assert.equal(model.sortSummary({ field: 'featured', direction: 'descending', order: 'boolean' }, fields), 'Featured · Is On First');
 
 // Drafts become conditions only when complete and valid.
-const draft = (operator, value, field = 'order') =>
-  model.conditionOf(
-    { field, operator, value },
-    fields.find((entry) => entry.path === field)?.kind ?? 'text',
-  );
+const draft = (operator, value, field = 'order') => model.conditionOf({ field, operator, value }, fields.find((entry) => entry.path === field)?.kind ?? 'text');
 assert.equal(draft('greater', ''), undefined);
 assert.equal(draft('greater', '1e'), undefined);
 assert.equal(draft('greater', 'Infinity'), undefined);
-assert.deepEqual(draft('greater', '-2.5'), {
-  kind: 'test',
-  field: 'order',
-  operator: 'greater',
-  value: -2.5,
-});
+assert.deepEqual(draft('greater', '-2.5'), { kind: 'test', field: 'order', operator: 'greater', value: -2.5 });
 assert.equal(draft('before', '2024-13-40', 'date'), undefined);
 assert.equal(draft('before', 'tomorrow', 'date'), undefined);
 assert.deepEqual(draft('inPast', '', 'date'), { kind: 'test', field: 'date', operator: 'inPast' });
 assert.equal(draft('contains', '   ', 'title'), undefined);
 assert.equal(draft('is', 'x'.repeat(501), 'title'), undefined);
-assert.deepEqual(draft('is', 'get-involved', 'category').value, {
-  kind: 'reference',
-  id: 'get-involved',
-});
-assert.deepEqual(
-  draft('is', 'Get Involved', 'category').value,
-  { kind: 'text', text: 'Get Involved' },
-  'a choice that cannot be an id is text',
-);
+assert.deepEqual(draft('is', 'get-involved', 'category').value, { kind: 'reference', id: 'get-involved' });
+assert.deepEqual(draft('is', 'Get Involved', 'category').value, { kind: 'text', text: 'Get Involved' }, 'a choice that cannot be an id is text');
 assert.equal(model.wholeNumberOf('12', { min: 1, max: 10 }), 10);
 assert.equal(model.wholeNumberOf('0', { min: 1, max: 10 }), 1);
 assert.equal(model.wholeNumberOf('2.5', { min: 1, max: 10 }), undefined);
 assert.throws(() => model.wholeNumberOf('2', { min: 3, max: 1 }), /Bounds are ordered/);
 
 // Source keys round-trip.
-assert.deepEqual(model.parseSourceKey('astro:case-studies'), {
-  kind: 'collection',
-  source: { kind: 'astro', collection: 'case-studies' },
-});
-assert.deepEqual(model.parseSourceKey('value:Astro.props.items'), {
-  kind: 'value',
-  data: 'Astro.props.items',
-});
+assert.deepEqual(model.parseSourceKey('astro:case-studies'), { kind: 'collection', source: { kind: 'astro', collection: 'case-studies' } });
+assert.deepEqual(model.parseSourceKey('value:Astro.props.items'), { kind: 'value', data: 'Astro.props.items' });
 assert.equal(model.parseSourceKey('other:x'), undefined);
 assert.equal(model.readingKey({ kind: 'code' }, 'x'), 'custom');
 
 // Schema fields as filter and sort fields.
-const text = (name, extra = {}) => ({
-  name,
-  title: '',
-  description: '',
-  required: false,
-  rules: [],
-  type: { kind: 'string', options: [], ...extra },
-});
+const text = (name, extra = {}) => ({ name, title: '', description: '', required: false, rules: [], type: { kind: 'string', options: [], ...extra } });
 const mapped = catalog.catalogFields(
   [
     text('title'),
@@ -166,23 +90,14 @@ assert.deepEqual(byPath, {
   _updatedAt: 'date',
 });
 assert.equal(
-  catalog.catalogFields(
-    [text('category', { options: [{ title: 'News', value: 'news' }] })],
-    'astro',
-  )[0].kind,
+  catalog.catalogFields([text('category', { options: [{ title: 'News', value: 'news' }] })], 'astro')[0].kind,
   'reference',
   'an Astro choice may be a reference',
 );
 assert.equal(catalog.titled('case-studies'), 'Case Studies');
 assert.equal(catalog.titled('sermonSpeaker'), 'Sermon Speaker');
-assert.equal(
-  catalog.hasDependency('{"dependencies":{"@sanity/astro":"^3"}}', '@sanity/astro'),
-  true,
-);
-assert.equal(
-  catalog.hasDependency('{"devDependencies":{"@sanity/astro":"^3"}}', '@sanity/astro'),
-  true,
-);
+assert.equal(catalog.hasDependency('{"dependencies":{"@sanity/astro":"^3"}}', '@sanity/astro'), true);
+assert.equal(catalog.hasDependency('{"devDependencies":{"@sanity/astro":"^3"}}', '@sanity/astro'), true);
 assert.equal(catalog.hasDependency('{"dependencies":{}}', '@sanity/astro'), false);
 assert.equal(catalog.hasDependency('not json', '@sanity/astro'), false);
 
@@ -192,6 +107,14 @@ assert.deepEqual(moved(['a', 'b', 'c'], 0, 3), ['b', 'c', 'a'], 'to the end');
 assert.deepEqual(moved(['a', 'b', 'c'], 2, 0), ['c', 'a', 'b'], 'to the start');
 assert.deepEqual(moved(['a', 'b', 'c'], 1, 1), ['a', 'b', 'c'], 'onto itself');
 assert.throws(() => moved(['a'], 1, 0), /A moved item exists/);
+// A drop back in its own place (its own slot, or the one just after it)
+// changes nothing; writing it anyway was refused as an editor error.
+const { staysPut } = load('src/features/props/LoopItems.tsx');
+assert.equal(staysPut(1, 1), true);
+assert.equal(staysPut(1, 2), true);
+assert.equal(staysPut(1, 0), false);
+assert.equal(staysPut(1, 3), false);
+assert.deepEqual(moved([{ field: 'name' }, { field: 'email' }], 1, 0), [{ field: 'email' }, { field: 'name' }], 'sorts move like ids');
 
 // A list typed in place: only plain strings read as rows, and rows write back
 // as code that reads the same. Anything else stays code, so editing rows never
@@ -202,18 +125,42 @@ assert.deepEqual(literal.literalItems("['a', 'b']"), ['a', 'b'], 'single quotes 
 for (const code of ['[1, 2]', '[{ a: 1 }]', '[...posts]', 'posts', '["a", b]', '']) {
   assert.equal(literal.literalItems(code), undefined, `${code} stays code`);
 }
-assert.equal(
-  literal.literalItems(`[${Array.from({ length: 201 }, () => '"x"').join(',')}]`),
-  undefined,
-  'a typed list is bounded',
-);
+assert.equal(literal.literalItems(`[${Array.from({ length: 201 }, () => '"x"').join(',')}]`), undefined, 'a typed list is bounded');
 assert.equal(literal.literalCode(['He said "hi"', 'x']), '["He said \\"hi\\"", "x"]');
-assert.deepEqual(
-  literal.literalItems(literal.literalCode(['He said "hi"', '\\'])),
-  ['He said "hi"', '\\'],
-  'escapes round-trip',
-);
+assert.deepEqual(literal.literalItems(literal.literalCode(['He said "hi"', '\\'])), ['He said "hi"', '\\'], 'escapes round-trip');
 assert.throws(() => literal.literalCode(['x'.repeat(501)]), /A typed item is bounded/);
-assert.deepEqual(model.parseSourceKey('list'), { kind: 'list' });
+
+// What a row of the Source picker means: a collection, a list inside its
+// items, or a list on the page. A list inside one particular item is not
+// offered as a loop over every item's.
+const picker = load('src/features/props/LoopSourcePicker.tsx');
+assert.deepEqual(picker.pickOf('astro:campus'), { kind: 'collection', source: { kind: 'astro', collection: 'campus' } });
+assert.deepEqual(picker.pickOf('sanity:pastor'), { kind: 'collection', source: { kind: 'sanity', collection: 'pastor' } });
+assert.deepEqual(picker.pickOf('astro:campus.pastors'), {
+  kind: 'field',
+  list: { source: { kind: 'astro', collection: 'campus' }, path: ['pastors'], follow: 'values' },
+});
+assert.deepEqual(picker.pickOf('astro:campus.team.members').list.path, ['team', 'members']);
+assert.deepEqual(picker.pickOf('sanity:campus.pastors').list.source, { kind: 'sanity', collection: 'campus' });
+assert.equal(picker.pickOf('sanity:campus.a-b c'), undefined, 'a Sanity field GROQ cannot name is not offered');
+assert.equal(picker.pickOf('astro:campus.pastors[0].tags'), undefined);
+assert.deepEqual(picker.pickOf('items1'), { kind: 'value', data: 'items1' });
+assert.equal(picker.fieldListPath({ source: { kind: 'sanity', collection: 'campus' }, path: ['pastors'], follow: 'values' }), 'sanity:campus.pastors');
+
+// A prop a component's loop reads its filters from is a Filter, whatever its
+// declared type says: opening it in the Properties panel offers that type,
+// ready to save. A prop with a real type of its own keeps it.
+const { withListSettingType } = load('src/features/componentProperties/PropertyEditor.tsx');
+const { SETTING_PROP_TYPES } = load('src/editor/optionsBinding.ts');
+const { listPropsOf } = load('src/editor/listProps.ts');
+const exportFrontmatter = [
+  "import { getCollection } from 'astro:content';",
+  'const { filters: propFilters = {"filterFor": "ALL", "fields": []} } = Astro.props;',
+  'const items1 = queryItems((await getCollection("campus")) || [], ({"filter": propFilters}), {});',
+].join('\n');
+const property = (name, type) => ({ name, type, required: false, readonly: false, defaultValue: '', description: '' });
+assert.equal(withListSettingType(property('filters', 'unknown'), listPropsOf(exportFrontmatter)).type, SETTING_PROP_TYPES.filter);
+assert.equal(withListSettingType(property('filters', 'string'), listPropsOf(exportFrontmatter)).type, 'string', 'a real type is kept');
+assert.equal(withListSettingType(property('title', 'unknown'), listPropsOf(exportFrontmatter)).type, 'unknown', 'a prop no loop reads is left alone');
 
 console.log('loopSettings: ok');

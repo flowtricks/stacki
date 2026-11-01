@@ -29,10 +29,7 @@ export function listPropsOf(componentFrontmatter: string): ReadonlyMap<string, L
     module.imports.find((entry) => entry.name === local && entry.path === spec)?.imported;
   const found = new Map<string, ListProp>();
   for (const declaration of frontmatter.declarations.values()) {
-    const read =
-      declaration.init === undefined
-        ? undefined
-        : readOptionsQuery(declaration.init, { frontmatter, importedFrom });
+    const read = declaration.init === undefined ? undefined : readOptionsQuery(declaration.init, { frontmatter, importedFrom });
     if (read === undefined) {
       continue;
     }
@@ -47,9 +44,6 @@ export function listPropsOf(componentFrontmatter: string): ReadonlyMap<string, L
       }
     }
   }
-  assert(
-    found.size <= LOOP_SETTINGS.length * frontmatter.declarations.size,
-    'List props are bounded by the lists',
-  );
+  assert(found.size <= LOOP_SETTINGS.length * frontmatter.declarations.size, 'List props are bounded by the lists');
   return found;
 }

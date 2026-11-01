@@ -44,20 +44,12 @@ const check = (what, condition, detail) => {
     platform: 'node',
     logLevel: 'silent',
   });
-  const { rendersOwnElement, liveClassesById } = await import(
-    `${pathToFileURL(out).href}?v=${Date.now()}`
-  );
+  const { rendersOwnElement, liveClassesById } = await import(`${pathToFileURL(out).href}?v=${Date.now()}`);
 
   // --- what renders something of its own ------------------------------------
   check('a div does', rendersOwnElement({ kind: 'element', name: 'div' }) === true);
-  check(
-    'and a component does',
-    rendersOwnElement({ kind: 'component', name: 'FeatureImage' }) === true,
-  );
-  check(
-    'a Fragment does not',
-    rendersOwnElement({ kind: 'component', name: 'Fragment' }) === false,
-  );
+  check('and a component does', rendersOwnElement({ kind: 'component', name: 'FeatureImage' }) === true);
+  check('a Fragment does not', rendersOwnElement({ kind: 'component', name: 'Fragment' }) === false);
   check('nor does a slot', rendersOwnElement({ kind: 'element', name: 'slot' }) === false);
   check('and nothing at all is nothing', rendersOwnElement(undefined) === false);
 
@@ -71,10 +63,7 @@ const check = (what, condition, detail) => {
   );
   check(
     'and the same question decides what "renders nothing" is a fact about',
-    new RegExp(
-      /const answers = \(node: EditorNode\): boolean =>\s*/.source +
-        /MARKABLE\.has\(node\.kind\) && rendersOwnElement\(node\)/.source,
-    ).test(app),
+    new RegExp(/const answers = \(node: EditorNode\): boolean =>\s*/.source + /MARKABLE\.has\(node\.kind\) && rendersOwnElement\(node\)/.source).test(app),
     'the two places disagree about what a Fragment renders',
   );
 
@@ -183,25 +172,13 @@ const check = (what, condition, detail) => {
     await new Promise((resolve) => setTimeout(resolve, 30));
   });
 
-  const labelOf = (id) =>
-    container.querySelector(`.structure-node[data-node-id="${id}"] .label`)?.textContent?.trim() ||
-    '';
+  const labelOf = (id) => container.querySelector(`.structure-node[data-node-id="${id}"] .label`)?.textContent?.trim() || '';
   check('the Fragment says what it is', labelOf('frag') === 'Fragment', labelOf('frag'));
-  check(
-    'the component it holds says what IT is',
-    labelOf('img') === 'FeatureImage',
-    labelOf('img'),
-  );
-  check(
-    'and an element still wears the class the page says it rendered with',
-    labelOf('listed') === 'card_wrap',
-    labelOf('listed'),
-  );
+  check('the component it holds says what IT is', labelOf('img') === 'FeatureImage', labelOf('img'));
+  check('and an element still wears the class the page says it rendered with', labelOf('listed') === 'card_wrap', labelOf('listed'));
 
   if (failures.length) {
-    console.error(
-      `\nfragment-identity: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\nfragment-identity: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

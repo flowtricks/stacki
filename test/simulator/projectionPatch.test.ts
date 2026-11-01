@@ -21,20 +21,9 @@ import { parsePage } from '#dist/electron/parse/astroParser.js';
 import { toFilePath } from '#dist/shared/core/brand.js';
 import { LIMITS } from '#dist/shared/core/limits.js';
 import type { Splice } from '#dist/shared/engine/planner.js';
-import {
-  hostContext,
-  projectValueSplice,
-  valueBytesNeutral,
-} from '#dist/shared/engine/projectionPatch.js';
+import { hostContext, projectValueSplice, valueBytesNeutral } from '#dist/shared/engine/projectionPatch.js';
 import type { ProjectedNode, Projection } from '#dist/shared/page/sourceProjection.js';
-import {
-  decodeUtf8,
-  encodeUtf8,
-  toByteSpan,
-  toByteString,
-  type ByteSpan,
-  type ByteString,
-} from '#dist/shared/core/span.js';
+import { decodeUtf8, encodeUtf8, toByteSpan, toByteString, type ByteSpan, type ByteString } from '#dist/shared/core/span.js';
 import { patchCounts } from './candidate.ts';
 import { Prng } from './prng.ts';
 import { loadSimulationFixtures } from './fixtures.entry.ts';
@@ -93,11 +82,7 @@ function stringValues(projection: Projection): readonly ValueSite[] {
     return [];
   }
   return projection.nodes.flatMap((node) =>
-    node.attributes.flatMap((attribute) =>
-      attribute.type === 'string' && attribute.valueSpan !== undefined
-        ? [{ node, range: attribute.valueSpan }]
-        : [],
-    ),
+    node.attributes.flatMap((attribute) => (attribute.type === 'string' && attribute.valueSpan !== undefined ? [{ node, range: attribute.valueSpan }] : [])),
   );
 }
 
@@ -141,10 +126,7 @@ test('the patched projection is the reparsed one on every fixture value', () => 
       }
     }
   }
-  console.log(
-    `compared ${compared}; refused: host context ${refusedByHost}, ` +
-      `a value outside its context's bytes ${refusedByBytes}`,
-  );
+  console.log(`compared ${compared}; refused: host context ${refusedByHost}, ` + `a value outside its context's bytes ${refusedByBytes}`);
   assert.ok(compared > 500, `the sweep compared a real sample (${compared})`);
 });
 
@@ -330,12 +312,7 @@ const AROUND: readonly (readonly [string, string])[] = [
   ['a // b\n', ''],
 ];
 const ORIGINALS = ['x', 'Old title', 'a-b_c', 'é', "it's", 'a/b', 'q?r', ''] as const;
-const ALPHABET = [
-  ...Array.from({ length: 0x7f - 0x20 }, (_, index) => String.fromCharCode(0x20 + index)),
-  'é',
-  '漢',
-  '😀',
-];
+const ALPHABET = [...Array.from({ length: 0x7f - 0x20 }, (_, index) => String.fromCharCode(0x20 + index)), 'é', '漢', '😀'];
 
 function propertyBody(prng: Prng, depth: number): string {
   const text = (): string => prng.pick(TEXTS);

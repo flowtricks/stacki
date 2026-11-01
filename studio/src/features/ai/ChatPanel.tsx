@@ -9,14 +9,7 @@ import { ChatSwitcher } from './ChatSwitcher';
 import { ChatIcon } from './ChatIcon';
 import './chat.css';
 
-export function ChatPanel({
-  file,
-  refresh,
-}: {
-  readonly file: string;
-  readonly refresh: () => void;
-  readonly error: (error: unknown) => void;
-}) {
+export function ChatPanel({ file, refresh }: { readonly file: string; readonly refresh: () => void; readonly error: (error: unknown) => void }) {
   const state = useChats();
   const { config, error, reload } = useModels();
   const chat = state.threads.find((chat) => chat.id === state.active) ?? state.threads[0];
@@ -64,11 +57,7 @@ export function ChatPanel({
           <button onClick={reload}>Retry connection</button>
         </div>
       )}
-      {chat.messages.length || chat.error ? (
-        <ChatMessages key={chat.id} chat={chat} refresh={refresh} />
-      ) : (
-        <ChatWelcome chat={chat} />
-      )}
+      {chat.messages.length || chat.error ? <ChatMessages key={chat.id} chat={chat} refresh={refresh} /> : <ChatWelcome chat={chat} />}
       <ChatComposer key={chat.id} chat={chat} file={file} config={config} />
     </section>
   );
@@ -106,11 +95,7 @@ function ChatWelcome({ chat }: { readonly chat: ChatThread }) {
         or bring a reference image.
       </p>
       <div className="chat-starters">
-        {[
-          'Help me improve this page',
-          'Make this page work better on mobile',
-          'Explain how this page is built',
-        ].map((prompt) => (
+        {['Help me improve this page', 'Make this page work better on mobile', 'Explain how this page is built'].map((prompt) => (
           <button
             key={prompt}
             onClick={() => {

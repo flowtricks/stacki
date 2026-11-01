@@ -5,13 +5,7 @@
 
 import { StateEffect, StateField, type Extension } from '@codemirror/state';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import {
-  Decoration,
-  EditorView,
-  ViewPlugin,
-  type DecorationSet,
-  type ViewUpdate,
-} from '@codemirror/view';
+import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view';
 import { LIMITS } from '../../shared/core/limits';
 
 const highlightDelayMs = 60;
@@ -106,11 +100,7 @@ export const astroHighlight: Extension = [
   ),
 ];
 
-async function highlightAstro(
-  view: EditorView,
-  revision: number,
-  currentRevision: () => number,
-): Promise<void> {
+async function highlightAstro(view: EditorView, revision: number, currentRevision: () => number): Promise<void> {
   const source = view.state.doc.toString();
   if (source.length > LIMITS.syntaxHighlightCharsMax) {
     replaceHighlight(view, Decoration.none, revision, source, currentRevision);
@@ -143,13 +133,7 @@ async function highlightAstro(
   replaceHighlight(view, Decoration.set(ranges, true), revision, source, currentRevision);
 }
 
-function replaceHighlight(
-  view: EditorView,
-  decorations: DecorationSet,
-  revision: number,
-  source: string,
-  currentRevision: () => number,
-): void {
+function replaceHighlight(view: EditorView, decorations: DecorationSet, revision: number, source: string, currentRevision: () => number): void {
   if (revision !== currentRevision()) {
     return;
   }
@@ -159,10 +143,7 @@ function replaceHighlight(
   view.dispatch({ effects: replaceAstroHighlight.of(decorations) });
 }
 
-function astroTokenStyle(token: {
-  readonly color?: string | undefined;
-  readonly fontStyle?: number | undefined;
-}): string {
+function astroTokenStyle(token: { readonly color?: string | undefined; readonly fontStyle?: number | undefined }): string {
   const styles: string[] = [];
   if (token.color && colorPattern.test(token.color)) {
     styles.push(`--astro-token-color:${token.color};color:${token.color}`);

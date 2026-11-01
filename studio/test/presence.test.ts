@@ -38,9 +38,7 @@ test('presence retains the authenticated GitHub identity despite spoofed client 
       });
     });
     await once(client, 'open');
-    client.send(
-      JSON.stringify({ type: 'presence', name: 'imposter', githubId: 999, selection: '0.0' }),
-    );
+    client.send(JSON.stringify({ type: 'presence', name: 'imposter', githubId: 999, selection: '0.0' }));
     const peer = record(await received);
     assert.equal(peer['name'], 'editor');
     assert.equal(peer['githubId'], 123);

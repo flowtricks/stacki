@@ -52,16 +52,8 @@ const check = (what, condition, detail) => {
     // The case from the screenshot.
     check('and a plain value with !important is', replacesWholeValue('2rem !important') === true);
 
-    check(
-      'replacing gives just the variable',
-      insertBinding('2rem', BRAND, 3) === BRAND,
-      insertBinding('2rem', BRAND, 3),
-    );
-    check(
-      'a swap gives just the new one',
-      insertBinding('var(--old)', BRAND, 5) === BRAND,
-      insertBinding('var(--old)', BRAND, 5),
-    );
+    check('replacing gives just the variable', insertBinding('2rem', BRAND, 3) === BRAND, insertBinding('2rem', BRAND, 3));
+    check('a swap gives just the new one', insertBinding('var(--old)', BRAND, 5) === BRAND, insertBinding('var(--old)', BRAND, 5));
     // Losing !important would change what the declaration does, and nobody
     // picking a variable asked for that.
     check(
@@ -78,10 +70,7 @@ const check = (what, condition, detail) => {
     check('nor a color-mix', replacesWholeValue('color-mix(in srgb, red, blue)') === false);
     // Three parts, and a variable is being picked for one of them.
     check('nor a multi-part value', replacesWholeValue('1px solid red') === false);
-    check(
-      'nor a calc with !important',
-      replacesWholeValue('calc(100% - 2rem) !important') === false,
-    );
+    check('nor a calc with !important', replacesWholeValue('calc(100% - 2rem) !important') === false);
 
     // The point of the whole thing: the expression survives.
     const at = 'calc(100% - '.length;
@@ -151,9 +140,7 @@ const check = (what, condition, detail) => {
   }
 
   if (failures.length) {
-    console.error(
-      `insert-binding: ${failures.length} of ${checked} failed\n${failures.join('\n')}`,
-    );
+    console.error(`insert-binding: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
   console.log(`insert-binding: ${checked} passed`);

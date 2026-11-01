@@ -25,11 +25,7 @@ export function usePageTitles({ currentPage, pageState, setScan }: PageTitleStat
   }, [titlePath, nodes, pageState?.editable, setScan]);
 }
 
-export function updatePageTitle(
-  scan: ScanResult,
-  path: string,
-  title: string | undefined,
-): ScanResult {
+export function updatePageTitle(scan: ScanResult, path: string, title: string | undefined): ScanResult {
   const page = scan.pages.find((entry) => entry.path === path);
   if (page === undefined || page.title === title) {
     return scan;

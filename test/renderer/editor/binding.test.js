@@ -47,85 +47,40 @@ const check = (what, condition, detail) => {
     return import(pathToFileURL(out).href);
   };
 
-  const { partsFromValue, valueFromParts } = await bundle(
-    'src/editor/bindings.ts',
-    'bindings.bundle.mjs',
-  );
+  const { partsFromValue, valueFromParts } = await bundle('src/editor/bindings.ts', 'bindings.bundle.mjs');
 
   // ── values ↔ parts ────────────────────────────────────────────────────────
   const J = JSON.stringify;
   const round = (parts, options) => partsFromValue(valueFromParts(parts, options));
 
-  check(
-    'a bare path reads as one chip',
-    J(partsFromValue({ type: 'expr', value: 'post.data.pubDate' })) ===
-      J([{ expr: 'post.data.pubDate' }]),
-  );
-  check(
-    'a string reads as text',
-    J(partsFromValue({ type: 'string', value: 'Hello' })) === J([{ text: 'Hello' }]),
-  );
+  check('a bare path reads as one chip', J(partsFromValue({ type: 'expr', value: 'post.data.pubDate' })) === J([{ expr: 'post.data.pubDate' }]));
+  check('a string reads as text', J(partsFromValue({ type: 'string', value: 'Hello' })) === J([{ text: 'Hello' }]));
   check('an unset prop has no parts', J(partsFromValue(undefined)) === J([]));
   check(
     'a template reads as text around its holes',
     J(partsFromValue({ type: 'expr', value: '`Posted ${post.data.pubDate} today`' })) ===
       J([{ text: 'Posted ' }, { expr: 'post.data.pubDate' }, { text: ' today' }]),
   );
-  check(
-    'an indexed path is still a path',
-    J(partsFromValue({ type: 'expr', value: 'posts[0].data.title' })) ===
-      J([{ expr: 'posts[0].data.title' }]),
-  );
+  check('an indexed path is still a path', J(partsFromValue({ type: 'expr', value: 'posts[0].data.title' })) === J([{ expr: 'posts[0].data.title' }]));
 
   // Values written as expressions because that is how the prop is written —
   // there is nothing bound in them, and they edit as the text they look like.
-  check(
-    'a number is text, not a binding',
-    J(partsFromValue({ type: 'expr', value: '12' })) === J([{ text: '12' }]),
-  );
-  check(
-    'true is text, not a binding',
-    J(partsFromValue({ type: 'expr', value: 'true' })) === J([{ text: 'true' }]),
-  );
-  check(
-    'a name that starts with true still binds',
-    J(partsFromValue({ type: 'expr', value: 'trueValue' })) === J([{ expr: 'trueValue' }]),
-  );
+  check('a number is text, not a binding', J(partsFromValue({ type: 'expr', value: '12' })) === J([{ text: '12' }]));
+  check('true is text, not a binding', J(partsFromValue({ type: 'expr', value: 'true' })) === J([{ text: 'true' }]));
+  check('a name that starts with true still binds', J(partsFromValue({ type: 'expr', value: 'trueValue' })) === J([{ expr: 'trueValue' }]));
 
   // Code no field of chips and text can hold keeps the code editor. (An
   // expression that is only paths and operators does have parts — see the
   // section below.)
-  check(
-    'a call has no parts',
-    partsFromValue({ type: 'expr', value: 'items.filter(Boolean)' }) === undefined,
-  );
-  check(
-    'a computed hole makes the whole thing code',
-    partsFromValue({ type: 'expr', value: '`a ${x + 1}`' }) === undefined,
-  );
-  check(
-    'an unclosed hole is code',
-    partsFromValue({ type: 'expr', value: '`a ${x`' }) === undefined,
-  );
+  check('a call has no parts', partsFromValue({ type: 'expr', value: 'items.filter(Boolean)' }) === undefined);
+  check('a computed hole makes the whole thing code', partsFromValue({ type: 'expr', value: '`a ${x + 1}`' }) === undefined);
+  check('an unclosed hole is code', partsFromValue({ type: 'expr', value: '`a ${x`' }) === undefined);
 
-  check(
-    'one binding stays one expression',
-    J(valueFromParts([{ expr: 'a.b' }])) === J({ type: 'expr', value: 'a.b' }),
-  );
-  check(
-    'text alone is a string',
-    J(valueFromParts([{ text: 'hi' }])) === J({ type: 'string', value: 'hi' }),
-  );
-  check(
-    'text on a numeric prop stays an expression',
-    J(valueFromParts([{ text: '12' }], { numeric: true })) === J({ type: 'expr', value: '12' }),
-  );
+  check('one binding stays one expression', J(valueFromParts([{ expr: 'a.b' }])) === J({ type: 'expr', value: 'a.b' }));
+  check('text alone is a string', J(valueFromParts([{ text: 'hi' }])) === J({ type: 'string', value: 'hi' }));
+  check('text on a numeric prop stays an expression', J(valueFromParts([{ text: '12' }], { numeric: true })) === J({ type: 'expr', value: '12' }));
   check('an empty field unsets the prop', valueFromParts([{ text: '' }]) === undefined);
-  check(
-    'text and data together make a template',
-    J(valueFromParts([{ text: 'Posted ' }, { expr: 'a.b' }])) ===
-      J({ type: 'expr', value: '`Posted ${a.b}`' }),
-  );
+  check('text and data together make a template', J(valueFromParts([{ text: 'Posted ' }, { expr: 'a.b' }])) === J({ type: 'expr', value: '`Posted ${a.b}`' }));
 
   // Text that looks like template syntax has to survive being written into a
   // template — otherwise typing ${x} turns into a binding on the next read.
@@ -141,68 +96,39 @@ const check = (what, condition, detail) => {
   // ── data inside an expression ─────────────────────────────────────────────
   // `a ?? b` is not one thing to bind, it is two with a fallback between them.
   // The data in it chips; the code around it stays text you can edit.
-  const { valueModeOf, codeParts, templateHoles } = await bundle(
-    'src/editor/bindings.ts',
-    'bindings2.bundle.mjs',
-  );
+  const { valueModeOf, codeParts, templateHoles } = await bundle('src/editor/bindings.ts', 'bindings2.bundle.mjs');
   const expr = (value) => ({ type: 'expr', value: value });
 
   check(
     'a fallback splits into its two paths',
-    J(partsFromValue(expr('post.data.seo.title ?? post.data.title'))) ===
-      J([{ expr: 'post.data.seo.title' }, { text: ' ?? ' }, { expr: 'post.data.title' }]),
+    J(partsFromValue(expr('post.data.seo.title ?? post.data.title'))) === J([{ expr: 'post.data.seo.title' }, { text: ' ?? ' }, { expr: 'post.data.title' }]),
   );
   check(
     'a ternary keeps its operators as text',
-    J(partsFromValue(expr('cond ? a.b : c.d'))) ===
-      J([{ expr: 'cond' }, { text: ' ? ' }, { expr: 'a.b' }, { text: ' : ' }, { expr: 'c.d' }]),
+    J(partsFromValue(expr('cond ? a.b : c.d'))) === J([{ expr: 'cond' }, { text: ' ? ' }, { expr: 'a.b' }, { text: ' : ' }, { expr: 'c.d' }]),
   );
-  check(
-    'arithmetic chips the value in it',
-    J(partsFromValue(expr('count + 1'))) === J([{ expr: 'count' }, { text: ' + 1' }]),
-  );
-  check(
-    'a name inside a string stays a string',
-    J(partsFromValue(expr('x.y ?? "none"'))) === J([{ expr: 'x.y' }, { text: ' ?? "none"' }]),
-  );
+  check('arithmetic chips the value in it', J(partsFromValue(expr('count + 1'))) === J([{ expr: 'count' }, { text: ' + 1' }]));
+  check('a name inside a string stays a string', J(partsFromValue(expr('x.y ?? "none"'))) === J([{ expr: 'x.y' }, { text: ' ?? "none"' }]));
   check('a call is still code', partsFromValue(expr('items.filter(Boolean)')) === undefined);
   check('an arrow is still code', partsFromValue(expr('items.map(i => i.on)')) === undefined);
   check('an object literal is still code', codeParts('{ a: b }') === undefined);
   check('an expression with no data in it is not worth chipping', codeParts('1 + 2') === undefined);
-  check(
-    'keywords are not data',
-    J(partsFromValue(expr('a.b ?? null'))) === J([{ expr: 'a.b' }, { text: ' ?? null' }]),
-  );
+  check('keywords are not data', J(partsFromValue(expr('a.b ?? null'))) === J([{ expr: 'a.b' }, { text: ' ?? null' }]));
   for (const source of ['src as string', 'src satisfies ImageSource']) {
     const operator = source.includes(' satisfies ') ? 'satisfies' : 'as';
-    check(
-      `${operator} keeps its type clause as code`,
-      J(partsFromValue(expr(source))) ===
-        J([{ expr: 'src' }, { text: source.slice('src'.length) }]),
-    );
-    check(
-      `${operator} round trips without changing the expression`,
-      J(valueFromParts(partsFromValue(expr(source)), { mode: 'code' })) === J(expr(source)),
-    );
+    check(`${operator} keeps its type clause as code`, J(partsFromValue(expr(source))) === J([{ expr: 'src' }, { text: source.slice('src'.length) }]));
+    check(`${operator} round trips without changing the expression`, J(valueFromParts(partsFromValue(expr(source)), { mode: 'code' })) === J(expr(source)));
   }
   check(
     'a property named as remains part of its binding',
-    J(partsFromValue(expr('source.as ?? fallback'))) ===
-      J([{ expr: 'source.as' }, { text: ' ?? ' }, { expr: 'fallback' }]),
+    J(partsFromValue(expr('source.as ?? fallback'))) === J([{ expr: 'source.as' }, { text: ' ?? ' }, { expr: 'fallback' }]),
   );
 
   // Code that stays code still has data in it, and the data is still drawn as
   // chips — inside the editor, over the text, so the program reads as written.
   const style = 'maxWidth ? `--_mw: ${maxWidth}ch;` : undefined';
-  check(
-    'an expression like this one keeps the code editor',
-    partsFromValue(expr(style)) === undefined,
-  );
-  check(
-    'and its hole is found where it sits',
-    J(templateHoles(style)) === J([{ from: 19, to: 30, path: 'maxWidth' }]),
-    J(templateHoles(style)),
-  );
+  check('an expression like this one keeps the code editor', partsFromValue(expr(style)) === undefined);
+  check('and its hole is found where it sits', J(templateHoles(style)) === J([{ from: 19, to: 30, path: 'maxWidth' }]), J(templateHoles(style)));
   check(
     'every hole in a template, not just the first',
     J(templateHoles('`${a} and ${b.c}`')) ===
@@ -212,49 +138,32 @@ const check = (what, condition, detail) => {
       ]),
     J(templateHoles('`${a} and ${b.c}`')),
   );
-  check(
-    'a hole holding an expression is not a chip — no picker could choose it',
-    J(templateHoles('`${a + 1}`')) === J([]),
-  );
+  check('a hole holding an expression is not a chip — no picker could choose it', J(templateHoles('`${a + 1}`')) === J([]));
   check('an escaped hole is text', J(templateHoles('`\\${notAHole}`')) === J([]));
   check('an unclosed hole is nothing yet', J(templateHoles('`${half')) === J([]));
   check('code with no template has no holes', J(templateHoles('a ?? b')) === J([]));
   // The range covers the whole `${…}`, so repointing swaps the interpolation
   // rather than leaving its braces behind.
-  check(
-    'the range is the whole interpolation',
-    style.slice(19, 30) === '${maxWidth}',
-    style.slice(19, 30),
-  );
+  check('the range is the whole interpolation', style.slice(19, 30) === '${maxWidth}', style.slice(19, 30));
 
   check('an expression is written back as one', J(valueModeOf(expr('a.b ?? c.d'))) === J('code'));
   check('a plain path is not', J(valueModeOf(expr('a.b'))) === J('text'));
   check('a string is not', J(valueModeOf({ type: 'string', value: 'hi' })) === J('text'));
-  check(
-    'an expression round trips as written',
-    J(valueFromParts(partsFromValue(expr('a.b ?? c.d')), { mode: 'code' })) ===
-      J(expr('a.b ?? c.d')),
-  );
+  check('an expression round trips as written', J(valueFromParts(partsFromValue(expr('a.b ?? c.d')), { mode: 'code' })) === J(expr('a.b ?? c.d')));
   check(
     'and the same parts as content would be a template',
-    J(valueFromParts([{ expr: 'a.b' }, { text: ' ?? ' }], { mode: 'text' })) ===
-      J(expr('`${a.b} ?? `')),
+    J(valueFromParts([{ expr: 'a.b' }, { text: ' ?? ' }], { mode: 'text' })) === J(expr('`${a.b} ?? `')),
   );
 
   // ── a keypress against a chip ─────────────────────────────────────────────
-  const { deleteChipAtCaret } = await bundle(
-    'src/features/props/chipKeys.ts',
-    'chipkeys.bundle.mjs',
-  );
+  const { deleteChipAtCaret } = await bundle('src/features/props/chipKeys.ts', 'chipkeys.bundle.mjs');
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM('<!doctype html><body><div id="host" contenteditable></div></body>');
   global.window = dom.window;
   global.document = dom.window.document;
   const host = document.getElementById('host');
 
-  const chip = (expression) =>
-    `<span class="expr-chip" contenteditable="false" data-expr="${expression}">` +
-    `${expression}</span>`;
+  const chip = (expression) => `<span class="expr-chip" contenteditable="false" data-expr="${expression}">` + `${expression}</span>`;
   const caret = (node, offset) => {
     const range = document.createRange();
     range.setStart(node, offset);
@@ -270,116 +179,62 @@ const check = (what, condition, detail) => {
     altKey: false,
     ...mods,
   });
-  const shown = () =>
-    [...host.childNodes]
-      .map((node) =>
-        node.nodeType === 3 ? J(node.nodeValue) : `[${node.getAttribute('data-expr')}]`,
-      )
-      .join(' ');
+  const shown = () => [...host.childNodes].map((node) => (node.nodeType === 3 ? J(node.nodeValue) : `[${node.getAttribute('data-expr')}]`)).join(' ');
 
   // The case that made this necessary: chips with no text around them, caret
   // at the end. Left to the browser this took the whole field.
   host.innerHTML = chip('a.b') + chip('c.d') + chip('e.f');
   caret(host, 3);
-  check(
-    'backspace takes one chip, not the field',
-    deleteChipAtCaret(host, key('Backspace')) && shown() === '[a.b] [c.d]',
-    shown(),
-  );
+  check('backspace takes one chip, not the field', deleteChipAtCaret(host, key('Backspace')) && shown() === '[a.b] [c.d]', shown());
 
   host.innerHTML = chip('a.b') + 'hello';
   caret(host.childNodes[1], 0);
-  check(
-    'backspace from the start of text takes the chip before it',
-    deleteChipAtCaret(host, key('Backspace')) && shown() === '"hello"',
-    shown(),
-  );
+  check('backspace from the start of text takes the chip before it', deleteChipAtCaret(host, key('Backspace')) && shown() === '"hello"', shown());
 
   host.innerHTML = chip('a.b') + 'hello';
   caret(host.childNodes[1], 3);
-  check(
-    'backspace inside text is left to the browser',
-    deleteChipAtCaret(host, key('Backspace')) === false,
-  );
+  check('backspace inside text is left to the browser', deleteChipAtCaret(host, key('Backspace')) === false);
 
   host.innerHTML = `hi ${chip('a.b')} there`;
   caret(host.childNodes[0], 3);
-  check(
-    'delete takes the chip ahead of the caret',
-    deleteChipAtCaret(host, key('Delete')) && shown() === '"hi " " there"',
-    shown(),
-  );
+  check('delete takes the chip ahead of the caret', deleteChipAtCaret(host, key('Delete')) && shown() === '"hi " " there"', shown());
 
   host.innerHTML = 'hi';
   caret(host.childNodes[0], 2);
-  check(
-    'delete at the end of text is left to the browser',
-    deleteChipAtCaret(host, key('Delete')) === false,
-  );
+  check('delete at the end of text is left to the browser', deleteChipAtCaret(host, key('Delete')) === false);
 
   host.innerHTML = `a${chip('x.y')}b`;
   caret(host.childNodes[2], 0);
   deleteChipAtCaret(host, key('Backspace'));
   const range = window.getSelection().getRangeAt(0);
-  check(
-    'the caret stays where the chip was',
-    range.startContainer === host && range.startOffset === 1,
-  );
+  check('the caret stays where the chip was', range.startContainer === host && range.startOffset === 1);
 
   host.innerHTML = chip('a.b');
   caret(host, 1);
-  check(
-    'a modified backspace is left to the browser',
-    deleteChipAtCaret(host, key('Backspace', { altKey: true })) === false,
-  );
+  check('a modified backspace is left to the browser', deleteChipAtCaret(host, key('Backspace', { altKey: true })) === false);
   check('other keys are ignored', deleteChipAtCaret(host, key('x')) === false);
 
   // ── queries the picker writes, and takes back ─────────────────────────────
-  const {
-    autoQueryName,
-    dataTree,
-    markedQueries,
-    namesInScope,
-    queriesInScope,
-    removeMarkedQuery,
-    QUERY_MARK,
-  } = await bundle('src/editor/dataSuggest.ts', 'datasuggest.bundle.mjs');
+  const { autoQueryName, dataTree, markedQueries, namesInScope, queriesInScope, removeMarkedQuery, QUERY_MARK } = await bundle(
+    'src/editor/dataSuggest.ts',
+    'datasuggest.bundle.mjs',
+  );
 
   check('a collection query is named for what it holds', autoQueryName('blog') === 'blogEntries');
-  check(
-    'a hyphenated collection camel-cases',
-    autoQueryName('case-studies') === 'caseStudiesEntries',
-  );
-  check(
-    'a taken name is stepped past',
-    autoQueryName('blog', new Set(['blogEntries'])) === 'blogEntries2',
-  );
-  check(
-    'an existing query is found so it can be reused',
-    queriesInScope('const posts = await getCollection("blog");').get('blog') === 'posts',
-  );
-  check(
-    'getEntry is not a collection query',
-    queriesInScope('const one = await getEntry("blog", id);').size === 0,
-  );
+  check('a hyphenated collection camel-cases', autoQueryName('case-studies') === 'caseStudiesEntries');
+  check('a taken name is stepped past', autoQueryName('blog', new Set(['blogEntries'])) === 'blogEntries2');
+  check('an existing query is found so it can be reused', queriesInScope('const posts = await getCollection("blog");').get('blog') === 'posts');
+  check('getEntry is not a collection query', queriesInScope('const one = await getEntry("blog", id);').size === 0);
   check(
     'names already bound are known',
-    ['posts', 'x', 'Layout'].every((name) =>
-      namesInScope('const posts = 1;\nconst { x } = y;', [{ name: 'Layout' }]).has(name),
-    ),
+    ['posts', 'x', 'Layout'].every((name) => namesInScope('const posts = 1;\nconst { x } = y;', [{ name: 'Layout' }]).has(name)),
   );
 
   // A collection the page doesn't read yet is offered with the name its query
   // WOULD get, so the path is known before anything is written.
   const offered = dataTree({ frontmatter: '', collections: [{ name: 'blog', count: 7 }] });
-  check(
-    'an unread collection is offered',
-    offered.length === 1 && offered[0].path === 'blogEntries',
-  );
-  check(
-    'it says what it is',
-    offered[0].preview === '7 entries' && offered[0].section === 'collections',
-  );
+  check('an unread collection is offered', offered.length === 1 && offered[0].path === 'blogEntries');
+  check('it says what it is', offered[0].preview === '7 entries' && offered[0].section === 'collections');
   check('it carries what must be written first', offered[0].query?.collection === 'blog');
   check('and nothing is fetched for it yet', offered[0].lazy === true);
   check(
@@ -407,9 +262,7 @@ const check = (what, condition, detail) => {
         collectionSamples: { portfolio: entry },
       }).find((node) => node.path === 'featured');
 
-    const found = picked(
-      'const featured = portfolio.find((p) => p.data.featured) ?? portfolio[0];',
-    );
+    const found = picked('const featured = portfolio.find((p) => p.data.featured) ?? portfolio[0];');
     check('an entry picked out of a list opens', !!found?.children, J(found));
     check(
       'onto the fields of one entry',
@@ -423,33 +276,21 @@ const check = (what, condition, detail) => {
     );
     check(
       'and its fields go as deep as the entry does',
-      J(
-        (found?.children?.find((child) => child.key === 'data')?.children || []).map(
-          (child) => child.path,
-        ),
-      ) === J(['featured.data.title', 'featured.data.order']),
+      J((found?.children?.find((child) => child.key === 'data')?.children || []).map((child) => child.path)) ===
+        J(['featured.data.title', 'featured.data.order']),
       J(found?.children?.find((child) => child.key === 'data')?.children),
     );
-    check(
-      'it reads as one of them, not all of them',
-      found?.preview === 'portfolio entry',
-      found?.preview,
-    );
+    check('it reads as one of them, not all of them', found?.preview === 'portfolio entry', found?.preview);
     check('an index picks one too', !!picked('const featured = portfolio[0];')?.children);
     check('and so does .at()', !!picked('const featured = portfolio.at(-1);')?.children);
     check(
       'while a narrowed list is still a list',
       dataTree({
-        frontmatter:
-          'const portfolio = await getCollection("portfolio");\n' +
-          'const some = portfolio.filter(Boolean);',
+        frontmatter: 'const portfolio = await getCollection("portfolio");\n' + 'const some = portfolio.filter(Boolean);',
         collectionSamples: { portfolio: entry },
       }).find((node) => node.path === 'some')?.kind === 'list',
     );
-    check(
-      'a value that picks from nothing known stays a plain value',
-      !picked('const featured = mystery.find((p) => p);')?.children,
-    );
+    check('a value that picks from nothing known stays a plain value', !picked('const featured = mystery.find((p) => p);')?.children);
   }
 
   // Inside a loop, the item leads: it is what the markup in there is for.
@@ -457,11 +298,7 @@ const check = (what, condition, detail) => {
     frontmatter: 'const { post } = Astro.props;\nconst rows = [{ name: "a" }];',
     ancestorHeads: ['rows.map((row) => ('],
   });
-  check(
-    "the loop item comes before this file's props",
-    inLoop.map((node) => node.key)[0] === 'row',
-    inLoop.map((node) => node.key).join(', '),
-  );
+  check("the loop item comes before this file's props", inLoop.map((node) => node.key)[0] === 'row', inLoop.map((node) => node.key).join(', '));
 
   const nested = dataTree({
     frontmatter: 'const rows = [{ cells: [{ v: 1 }] }];',
@@ -477,27 +314,16 @@ const check = (what, condition, detail) => {
   );
 
   // Cleanup only ever considers what Stacki wrote.
-  const written =
-    `const a = 1;\nconst blogEntries = await getCollection('blog'); // ${QUERY_MARK}\n` +
-    `const b = 2;`;
+  const written = `const a = 1;\nconst blogEntries = await getCollection('blog'); // ${QUERY_MARK}\n` + `const b = 2;`;
   check(
     'a written query is recognised',
     markedQueries(written)
       .map((query) => query.name)
       .join() === 'blogEntries',
   );
-  check(
-    'a hand-written one is not',
-    markedQueries('const posts = await getCollection("blog");').length === 0,
-  );
-  check(
-    'removing one takes its line and nothing else',
-    removeMarkedQuery(written, 'blogEntries') === 'const a = 1;\nconst b = 2;',
-  );
-  check(
-    'removing the only line leaves nothing behind',
-    removeMarkedQuery(`const x = await getCollection('a'); // ${QUERY_MARK}`, 'x') === '',
-  );
+  check('a hand-written one is not', markedQueries('const posts = await getCollection("blog");').length === 0);
+  check('removing one takes its line and nothing else', removeMarkedQuery(written, 'blogEntries') === 'const a = 1;\nconst b = 2;');
+  check('removing the only line leaves nothing behind', removeMarkedQuery(`const x = await getCollection('a'); // ${QUERY_MARK}`, 'x') === '');
   check('removing an unknown name changes nothing', removeMarkedQuery(written, 'nope') === written);
 
   // ── the write, through the real parser ───────────────────────────────────
@@ -530,32 +356,17 @@ const check = (what, condition, detail) => {
   model.extraFrontmatter += `\nconst blogEntries = await getCollection('blog'); // ${QUERY_MARK}`;
   const file = astro.serializePage(model);
 
-  check(
-    'the import is written as a named import',
-    file.includes("import { getCollection } from 'astro:content';"),
-  );
+  check('the import is written as a named import', file.includes("import { getCollection } from 'astro:content';"));
   check('the query is written', file.includes("const blogEntries = await getCollection('blog');"));
 
   const reparsed = astro.parsePage(file).model;
-  check(
-    'the marker survives a round trip',
-    markedQueries(reparsed.extraFrontmatter).length === 1,
-    reparsed.extraFrontmatter,
-  );
-  check(
-    'the import survives as one entry',
-    reparsed.imports.filter((i) => i.name === 'getCollection' && i.path === 'astro:content')
-      .length === 1,
-  );
+  check('the marker survives a round trip', markedQueries(reparsed.extraFrontmatter).length === 1, reparsed.extraFrontmatter);
+  check('the import survives as one entry', reparsed.imports.filter((i) => i.name === 'getCollection' && i.path === 'astro:content').length === 1);
 
   // …and taking it back leaves what was there before.
   reparsed.extraFrontmatter = removeMarkedQuery(reparsed.extraFrontmatter, 'blogEntries');
   reparsed.imports = reparsed.imports.filter((i) => i.name !== 'getCollection');
-  check(
-    'removing it restores the file',
-    astro.serializePage(reparsed) === baseline,
-    astro.serializePage(reparsed),
-  );
+  check('removing it restores the file', astro.serializePage(reparsed) === baseline, astro.serializePage(reparsed));
 
   // The field really draws them, and pressing one repoints that hole alone.
   const panel = require('fs').readFileSync(repoPath('src/features/props/propBindings.tsx'), 'utf8');
@@ -564,10 +375,7 @@ const check = (what, condition, detail) => {
   check('the code field marks its holes', /const holes = templateHoles\(text\)/.test(panel));
   check('and the values the code names', /scopeChips\(text, scopeNames\)/.test(panel));
   check('a press on one opens the picker', /onChipClick=\{\(hit\) => open\(hit\)\}/.test(panel));
-  check(
-    'and the pick rewrites that hole, not the expression',
-    /replaceRange\(chip\.from, chip\.to/.test(panel),
-  );
+  check('and the pick rewrites that hole, not the expression', /replaceRange\(chip\.from, chip\.to/.test(panel));
   check('with the press surviving its own mousedown', /<Popup/.test(panel));
 
   // ── A chip that writes a tail ─────────────────────────────────────────────
@@ -631,39 +439,17 @@ const check = (what, condition, detail) => {
     const written = () => page.window.document.querySelector('[contenteditable]').textContent;
 
     await draw('featured?.data.title');
-    check(
-      'the tail chip writes the tail',
-      J(chipsNow().map((chip) => chip.expr)) === J(['featured', '.data.title']),
-      J(chipsNow()),
-    );
-    check(
-      'and stands for the whole path',
-      chipsNow()[1].full === 'featured.data.title',
-      J(chipsNow()[1]),
-    );
-    check(
-      'a chip that is a whole path in itself needs no second reading',
-      chipsNow()[0].full === undefined,
-    );
+    check('the tail chip writes the tail', J(chipsNow().map((chip) => chip.expr)) === J(['featured', '.data.title']), J(chipsNow()));
+    check('and stands for the whole path', chipsNow()[1].full === 'featured.data.title', J(chipsNow()[1]));
+    check('a chip that is a whole path in itself needs no second reading', chipsNow()[0].full === undefined);
 
     // Repointed somewhere under the same value: the `?` is how the author chose
     // to reach it, and is not ours to take away.
     await act(async () => {
-      api.current.replace(
-        page.window.document.querySelectorAll('.expr-chip')[1],
-        'featured.data.description',
-      );
+      api.current.replace(page.window.document.querySelectorAll('.expr-chip')[1], 'featured.data.description');
     });
-    check(
-      'repointing under the same value keeps the chain',
-      written() === 'featured?.data.description',
-      written(),
-    );
-    check(
-      'and the chip still knows what it means',
-      chipsNow()[1]?.full === 'featured.data.description',
-      J(chipsNow()),
-    );
+    check('repointing under the same value keeps the chain', written() === 'featured?.data.description', written());
+    check('and the chip still knows what it means', chipsNow()[1]?.full === 'featured.data.description', J(chipsNow()));
 
     // Repointed somewhere else: the chain goes with it, or the field would read
     // `featured?posts[0].title`.
@@ -671,16 +457,8 @@ const check = (what, condition, detail) => {
     await act(async () => {
       api.current.replace(page.window.document.querySelectorAll('.expr-chip')[1], 'posts[0].title');
     });
-    check(
-      'repointing elsewhere takes the chain with it',
-      written() === 'posts[0].title',
-      written(),
-    );
-    check(
-      'leaving one chip, standing for itself',
-      J(chipsNow()) === J([{ text: 'posts[0].title', expr: 'posts[0].title', full: undefined }]),
-      J(chipsNow()),
-    );
+    check('repointing elsewhere takes the chain with it', written() === 'posts[0].title', written());
+    check('leaving one chip, standing for itself', J(chipsNow()) === J([{ text: 'posts[0].title', expr: 'posts[0].title', full: undefined }]), J(chipsNow()));
 
     await act(async () => {
       root.unmount();
@@ -696,11 +474,7 @@ const check = (what, condition, detail) => {
     /current=\{menu\.chip \? chipPath\(menu\.chip\)/.test(panel),
     "the picker is reading the chip's written text again",
   );
-  check(
-    'a chip in another field closes this one',
-    /onClose=\{\(\) => setMenu\(undefined\)\}/.test(panel),
-    'any chip anywhere keeps this picker open',
-  );
+  check('a chip in another field closes this one', /onClose=\{\(\) => setMenu\(undefined\)\}/.test(panel), 'any chip anywhere keeps this picker open');
 
   // ── The chip as it is actually drawn ────────────────────────────────────────
   //
@@ -711,10 +485,7 @@ const check = (what, condition, detail) => {
   // byte the way it went in.
   const chipDom = await (async () => {
     const entry = path.join(buildDirectory, 'chip.entry.jsx');
-    fs.writeFileSync(
-      entry,
-      `export { default as ExprInput } from ${JSON.stringify(repoPath('src/ui/ExprInput.tsx'))};\n`,
-    );
+    fs.writeFileSync(entry, `export { default as ExprInput } from ${JSON.stringify(repoPath('src/ui/ExprInput.tsx'))};\n`);
     const out = path.join(buildDirectory, 'chip.bundle.js');
     await esbuild.build({
       entryPoints: [entry],
@@ -787,9 +558,7 @@ const check = (what, condition, detail) => {
     const chips = [...view.window.document.querySelectorAll('.expr-chip')];
     // Blur is what commits, and what it commits is the document itself.
     await act(async () => {
-      view.window.document
-        .querySelector('.cm-content')
-        ?.dispatchEvent(new view.window.FocusEvent('blur'));
+      view.window.document.querySelector('.cm-content')?.dispatchEvent(new view.window.FocusEvent('blur'));
     });
     // Unmounted before the globals go back: CodeMirror keeps a measure loop on
     // requestAnimationFrame, and a frame that lands after the DOM it measures
@@ -803,16 +572,8 @@ const check = (what, condition, detail) => {
   })();
 
   check('the hole is drawn as one chip', chipDom.chips.length === 1, J(chipDom.chips));
-  check(
-    'showing the name, not the syntax around it',
-    chipDom.chips[0] === 'maxWidth',
-    J(chipDom.chips[0]),
-  );
-  check(
-    'and the value underneath is untouched',
-    chipDom.committed === chipDom.source,
-    J(chipDom.committed),
-  );
+  check('showing the name, not the syntax around it', chipDom.chips[0] === 'maxWidth', J(chipDom.chips[0]));
+  check('and the value underneath is untouched', chipDom.committed === chipDom.source, J(chipDom.committed));
 
   // ── The label activates nothing ─────────────────────────────────────────────
   //
@@ -824,15 +585,10 @@ const check = (what, condition, detail) => {
   {
     const { JSDOM: JSDOM3 } = require('jsdom');
     const page = new JSDOM(
-      '<!doctype html><div class="props-field"><label id="lab">' +
-        '<span class="prop-label">style</span><button id="btn"></button>' +
-        '</label><input></div>',
+      '<!doctype html><div class="props-field"><label id="lab">' + '<span class="prop-label">style</span><button id="btn"></button>' + '</label><input></div>',
     );
     const document = page.window.document;
-    const clickLabel = () =>
-      document
-        .getElementById('lab')
-        .dispatchEvent(new page.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    const clickLabel = () => document.getElementById('lab').dispatchEvent(new page.window.MouseEvent('click', { bubbles: true, cancelable: true }));
     let pressed = 0;
     document.getElementById('btn').addEventListener('click', () => {
       pressed += 1;
@@ -844,9 +600,7 @@ const check = (what, condition, detail) => {
     clickLabel();
     check("cancelling the label's default stops that", pressed === 0, String(pressed));
     pressed = 0;
-    document
-      .getElementById('btn')
-      .dispatchEvent(new page.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    document.getElementById('btn').dispatchEvent(new page.window.MouseEvent('click', { bubbles: true, cancelable: true }));
     check('while a press on the button itself still counts', pressed === 1, String(pressed));
   }
   // ── A value reached the careful way ───────────────────────────────────────
@@ -860,40 +614,24 @@ const check = (what, condition, detail) => {
   // dot and all, so the line still reads as it was written.
   check(
     'a question mark breaks the path into two chips',
-    J(partsFromValue(expr('featured?.data.title'))) ===
-      J([{ expr: 'featured' }, { text: '?' }, { expr: '.data.title' }]),
+    J(partsFromValue(expr('featured?.data.title'))) === J([{ expr: 'featured' }, { text: '?' }, { expr: '.data.title' }]),
     J(partsFromValue(expr('featured?.data.title'))),
   );
-  check(
-    'a path reached the ordinary way stays one',
-    J(partsFromValue(expr('featured.data.title'))) === J([{ expr: 'featured.data.title' }]),
-  );
+  check('a path reached the ordinary way stays one', J(partsFromValue(expr('featured.data.title'))) === J([{ expr: 'featured.data.title' }]));
   check(
     'every question mark in it breaks it again',
-    J(partsFromValue(expr('post?.data.seo?.title'))) ===
-      J([
-        { expr: 'post' },
-        { text: '?' },
-        { expr: '.data.seo' },
-        { text: '?' },
-        { expr: '.title' },
-      ]),
+    J(partsFromValue(expr('post?.data.seo?.title'))) === J([{ expr: 'post' }, { text: '?' }, { expr: '.data.seo' }, { text: '?' }, { expr: '.title' }]),
     J(partsFromValue(expr('post?.data.seo?.title'))),
   );
   check(
     'with the code around it kept as written',
-    J(partsFromValue(expr('a?.b + 1'))) ===
-      J([{ expr: 'a' }, { text: '?' }, { expr: '.b' }, { text: ' + 1' }]),
+    J(partsFromValue(expr('a?.b + 1'))) === J([{ expr: 'a' }, { text: '?' }, { expr: '.b' }, { text: ' + 1' }]),
     J(partsFromValue(expr('a?.b + 1'))),
   );
   // The parts are what gets written back, so they have to add up to the value
   // they came from — a chip that swallowed or dropped a character would edit
   // the file just by being looked at.
-  for (const source of [
-    'featured?.data.title',
-    'post?.data.seo?.title ?? post.data.title',
-    'a?.b + 1',
-  ]) {
+  for (const source of ['featured?.data.title', 'post?.data.seo?.title ?? post.data.title', 'a?.b + 1']) {
     check(
       `${source} survives being split into chips`,
       valueFromParts(partsFromValue(expr(source)), { mode: 'code' })?.value === source,

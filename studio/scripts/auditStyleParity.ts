@@ -55,9 +55,6 @@ const adapters = new Set([
   'src/features/style/BackgroundLayerFields.tsx',
   'src/features/style/StylePanel.tsx',
 ]);
-if (
-  upstreamFiles.some((file) => !localFiles.has(file)) ||
-  compared.some((entry) => !entry.same && !adapters.has(entry.file))
-) {
+if (upstreamFiles.some((file) => !localFiles.has(file)) || compared.some((entry) => !entry.same && !adapters.has(entry.file))) {
   throw new Error('Style parity changed outside the documented browser adapters');
 }

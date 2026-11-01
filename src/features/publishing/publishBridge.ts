@@ -1,10 +1,7 @@
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import type { PublishTarget } from '../../../shared/properties/publishConfig';
 import { parseDesktopPublishState } from '../../../shared/properties/publishState';
-import {
-  parsePublishAvailability,
-  type PublishAvailability,
-} from '../../../shared/properties/publishState';
+import { parsePublishAvailability, type PublishAvailability } from '../../../shared/properties/publishState';
 import type { Result } from '../../../shared/core/result';
 import { parsePublishedSiteURL } from '../../../shared/properties/publishSite';
 import { publishedSiteURL } from '../../ipc/publishSiteHost';
@@ -20,9 +17,7 @@ export async function readPublishedSiteURL(projectPath: string): Promise<string 
   return response === undefined ? undefined : parsePublishedSiteURL(response);
 }
 
-export async function readPublishAvailability(
-  projectPath: string,
-): Promise<Result<PublishAvailability, string>> {
+export async function readPublishAvailability(projectPath: string): Promise<Result<PublishAvailability, string>> {
   const input = parseIpcPayload('publish:availability', projectPath);
   let response: unknown;
   try {
@@ -34,11 +29,7 @@ export async function readPublishAvailability(
   return { ok: true, value: parsePublishAvailability(response) };
 }
 
-export async function startPublish(
-  projectPath: string,
-  target: PublishTarget,
-  commitMessage?: string,
-) {
+export async function startPublish(projectPath: string, target: PublishTarget, commitMessage?: string) {
   const input = parseIpcPayload('publish:start', { projectPath, target, commitMessage });
   return parseDesktopPublishState(await window.avb.publishStart(input));
 }

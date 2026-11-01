@@ -42,10 +42,7 @@ interface SetValuePayload {
  * the value that was read, or the file has changed underneath the panel and the
  * offsets no longer mean anything.
  */
-function setVariable(
-  projectPath: string,
-  { file, valueStart, valueEnd, expect, value }: SetValuePayload,
-): { ok: boolean; stale?: boolean; error?: string } {
+function setVariable(projectPath: string, { file, valueStart, valueEnd, expect, value }: SetValuePayload): { ok: boolean; stale?: boolean; error?: string } {
   const abs = path.resolve(projectPath, file);
   const text = fs.readFileSync(abs, 'utf8');
   const current = text.slice(valueStart, valueEnd);
@@ -73,10 +70,7 @@ interface SectionRangePayload {
  * writing them. Like a value, it is written back only if the file still says
  * what the panel read.
  */
-function setSectionTitle(
-  projectPath: string,
-  { file, start, end, expect, title }: SectionRangePayload,
-): { ok: boolean; stale?: boolean; error?: string } {
+function setSectionTitle(projectPath: string, { file, start, end, expect, title }: SectionRangePayload): { ok: boolean; stale?: boolean; error?: string } {
   const next = String(title ?? '').trim();
   if (!next) {
     return { ok: false, error: 'A heading needs a name.' };
@@ -110,10 +104,7 @@ function setSectionTitle(
  * one to itself — a heading removed by cutting the words alone would leave an
  * empty comment behind.
  */
-function removeSection(
-  projectPath: string,
-  { file, start, end, expect }: SectionRangePayload,
-): { ok: boolean; stale?: boolean; error?: string } {
+function removeSection(projectPath: string, { file, start, end, expect }: SectionRangePayload): { ok: boolean; stale?: boolean; error?: string } {
   const abs = path.resolve(projectPath, file);
   const text = fs.readFileSync(abs, 'utf8');
   if (expect !== undefined && text.slice(start, end) !== expect) {
@@ -181,10 +172,7 @@ function moveHeading(
   let to = close + 2;
   const lineStart = text.lastIndexOf('\n', from - 1) + 1;
   const lineEnd = text.indexOf('\n', to);
-  if (
-    !text.slice(lineStart, from).trim() &&
-    !text.slice(to, lineEnd === -1 ? text.length : lineEnd).trim()
-  ) {
+  if (!text.slice(lineStart, from).trim() && !text.slice(to, lineEnd === -1 ? text.length : lineEnd).trim()) {
     from = lineStart;
     to = lineEnd === -1 ? text.length : lineEnd + 1;
   }
@@ -274,10 +262,7 @@ function addSection(
       return { ok: false, error: `${selector} is no longer in ${file}.` };
     }
     const decls = (rule.nodes || []).filter((node) => node.type === 'decl');
-    const anchorDecl =
-      (before && decls.find((declaration) => declaration.prop === before)) ||
-      decls[decls.length - 1] ||
-      undefined;
+    const anchorDecl = (before && decls.find((declaration) => declaration.prop === before)) || decls[decls.length - 1] || undefined;
     if (!anchorDecl) {
       return { ok: false, error: `${selector} has nothing to head.` };
     }
@@ -351,10 +336,7 @@ function moveVariable(
     return { ok: false, error: `${selector} is no longer in ${file}.` };
   }
 
-  const declOf = (prop: string): Declaration | undefined =>
-    (rule.nodes || []).find(
-      (node): node is Declaration => node.type === 'decl' && node.prop === prop,
-    );
+  const declOf = (prop: string): Declaration | undefined => (rule.nodes || []).find((node): node is Declaration => node.type === 'decl' && node.prop === prop);
   const moved = declOf(name);
   if (!moved) {
     return { ok: false, error: `${name} is no longer declared there.` };
@@ -405,10 +387,7 @@ interface MoveSectionPayload {
  * that are not always next to each other (a family's names interleave), so they
  * are cut out and re-inserted together, in the order they were in.
  */
-function moveSection(
-  projectPath: string,
-  { file, selector, names, target }: MoveSectionPayload,
-): { ok: boolean; error?: string; changed?: boolean } {
+function moveSection(projectPath: string, { file, selector, names, target }: MoveSectionPayload): { ok: boolean; error?: string; changed?: boolean } {
   const abs = path.resolve(projectPath, file);
   const text = fs.readFileSync(abs, 'utf8');
   const root = postcss.parse(text);
@@ -425,12 +404,9 @@ function moveSection(
   }
 
   const nodes = rule.nodes || [];
-  const declOf = (prop: string): Declaration | undefined =>
-    nodes.find((node): node is Declaration => node.type === 'decl' && node.prop === prop);
+  const declOf = (prop: string): Declaration | undefined => nodes.find((node): node is Declaration => node.type === 'decl' && node.prop === prop);
 
-  const decls = names
-    .map(declOf)
-    .filter((declaration): declaration is Declaration => declaration !== undefined);
+  const decls = names.map(declOf).filter((declaration): declaration is Declaration => declaration !== undefined);
   const firstDecl = decls[0];
   if (!firstDecl) {
     return { ok: false, error: 'Those variables are no longer declared there.' };
@@ -443,8 +419,7 @@ function moveSection(
   }
   // The comment above the first one is the group's name — it goes too.
   const firstAt = nodes.indexOf(firstDecl);
-  const heading =
-    firstAt > 0 && nodes[firstAt - 1]?.type === 'comment' ? nodes[firstAt - 1] : undefined;
+  const heading = firstAt > 0 && nodes[firstAt - 1]?.type === 'comment' ? nodes[firstAt - 1] : undefined;
   if (heading?.type === 'comment') {
     spans.unshift(lineSpan(text, heading));
   }
@@ -467,9 +442,7 @@ function moveSection(
   const landingAt = landing ? nodes.indexOf(landing) : -1;
   const landingHeading = landingAt > 0 ? nodes[landingAt - 1] : undefined;
   const lastDecl = decls[decls.length - 1] ?? firstDecl;
-  const at = landing
-    ? lineSpan(text, landingHeading?.type === 'comment' ? landingHeading : landing).from
-    : lineSpan(text, lastDecl).to;
+  const at = landing ? lineSpan(text, landingHeading?.type === 'comment' ? landingHeading : landing).from : lineSpan(text, lastDecl).to;
   // At the end of the rule there is nothing to separate from below, so the
   // group keeps its gap above instead of leaving one before the closing brace.
   if (!landing) {
@@ -488,22 +461,14 @@ function moveSection(
 
 // The text with every span cut out and `block` inserted at `at`, an offset into the text as it
 // was before the cut.
-function cutAndInsert(
-  text: string,
-  spans: readonly { readonly from: number; readonly to: number }[],
-  block: string,
-  at: number,
-): string {
+function cutAndInsert(text: string, spans: readonly { readonly from: number; readonly to: number }[], block: string, at: number): string {
   // Cut from the bottom up so the offsets above stay valid, then insert at the
   // target corrected for everything removed before it.
   let out = text;
   for (const span of [...spans].reverse()) {
     out = out.slice(0, span.from) + out.slice(span.to);
   }
-  const removedBefore = spans.reduce(
-    (sum, span) => (span.to <= at ? sum + (span.to - span.from) : sum),
-    0,
-  );
+  const removedBefore = spans.reduce((sum, span) => (span.to <= at ? sum + (span.to - span.from) : sum), 0);
   const insertAt = at - removedBefore;
   // The spans cut before `at` all end at or before it, so they never sum past it.
   assert(insertAt >= 0, 'cutAndInsert: the insertion point is not before the text');
@@ -548,10 +513,7 @@ function addVariable(
     return { ok: false, error: `${name} is already declared in ${selector}.` };
   }
 
-  const previous =
-    (after && decls.find((declaration) => declaration.prop === after)) ||
-    decls[decls.length - 1] ||
-    undefined;
+  const previous = (after && decls.find((declaration) => declaration.prop === after)) || decls[decls.length - 1] || undefined;
   const indentOf = (node: Declaration): string => {
     const start = node.source?.start?.offset ?? 0;
     return text.slice(text.lastIndexOf('\n', start - 1) + 1, start);
@@ -573,16 +535,7 @@ function addVariable(
   return { ok: true, name };
 }
 
-export {
-  setSectionTitle,
-  removeSection,
-  addSection,
-  moveHeading,
-  setVariable,
-  moveVariable,
-  moveSection,
-  addVariable,
-};
+export { setSectionTitle, removeSection, addSection, moveHeading, setVariable, moveVariable, moveSection, addVariable };
 // The reading, grouping, model and renaming halves live beside this file; their
 // public names are still answered here, where every caller imports them from.
 export { readDeclarations, findStylesheets } from './cssVarRead';

@@ -2,12 +2,7 @@ import { pruneLocalGitBundles } from './gitWorkspacePrune';
 import { mkdir, open, readFile, rename, writeFile, stat, copyFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import {
-  gitWorkspaceBranch,
-  gitWorkspaceLimits,
-  parseGitWorkspaceManifest,
-  type GitWorkspaceManifest,
-} from './gitWorkspaceContract';
+import { gitWorkspaceBranch, gitWorkspaceLimits, parseGitWorkspaceManifest, type GitWorkspaceManifest } from './gitWorkspaceContract';
 
 // Local commits have no GitHub copy. A successful action must acknowledge its
 // immutable bundle and atomic manifest in durable storage before reporting success.
@@ -98,10 +93,7 @@ export async function downloadGitBundle(digest: string, destination: string): Pr
   });
   await requireStored(response);
   const bytes = await boundedGitBytes(response);
-  if (
-    bytes.length > gitWorkspaceLimits.bundleBytes ||
-    createHash('sha256').update(bytes).digest('hex') !== digest
-  ) {
+  if (bytes.length > gitWorkspaceLimits.bundleBytes || createHash('sha256').update(bytes).digest('hex') !== digest) {
     throw new Error('Git checkpoint is oversized or corrupt.');
   }
   await writeFile(destination, bytes, { mode: 0o600 });

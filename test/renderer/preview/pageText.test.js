@@ -36,15 +36,7 @@ const oversized = atLimit + 'a';
 document.querySelector('title').textContent = oversized;
 document.querySelector('[property="og:description"]').setAttribute('content', oversized);
 assert.deepEqual(renderedPageText(document), {});
-for (const invalid of [
-  42,
-  [],
-  JSON.parse('null'),
-  { title: 42 },
-  { description: {} },
-  { title: oversized },
-  { description: oversized },
-]) {
+for (const invalid of [42, [], JSON.parse('null'), { title: 42 }, { description: {} }, { title: oversized }, { description: oversized }]) {
   assert.throws(() => parsePageText(invalid));
   assert.equal(parseCanvasReply({ id: 1, found: true, pageText: invalid }).ok, false);
 }

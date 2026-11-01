@@ -39,10 +39,7 @@ test('workspace namespaces retain the deployed format without reading legacy or 
   assert.equal(current, `astro-studio:${origin}:church-copy-2026-10-23:${file}`);
   assert.notEqual(current, legacy);
   assert.notEqual(current, documentStorageName(origin, file, 'another-site'));
-  assert.notEqual(
-    current,
-    documentStorageName(origin, 'src/pages/about.astro', 'church-copy-2026-10-23'),
-  );
+  assert.notEqual(current, documentStorageName(origin, 'src/pages/about.astro', 'church-copy-2026-10-23'));
 });
 
 test('project scans carry the manifest workspace identity across the server and browser boundary', async () => {
@@ -52,10 +49,7 @@ test('project scans carry the manifest workspace identity across the server and 
     await mkdir(path.join(root, 'public'));
     assert.equal(await readWorkspaceId(root), undefined);
     const manifest = path.join(root, 'package.json');
-    await writeFile(
-      manifest,
-      JSON.stringify({ studio: { workspaceId: 'church-copy-2026-10-23' } }),
-    );
+    await writeFile(manifest, JSON.stringify({ studio: { workspaceId: 'church-copy-2026-10-23' } }));
     assert.equal(parseProject(await scanProject(root)).workspaceId, 'church-copy-2026-10-23');
     for (const input of ['{}', '{"studio":{}}']) {
       await writeFile(manifest, input);

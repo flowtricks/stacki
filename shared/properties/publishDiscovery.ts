@@ -2,8 +2,7 @@ import { assert } from '../core/assert';
 import { record, text, list } from '../core/boundary';
 import { DEFAULT_PUBLISH_CONFIG, parsePublishConfig, type Hosting } from './publishConfig';
 
-export type DiscoveryProvider =
-  'cloudflare' | 'cloudflare-workers' | 'vercel' | 'github' | 'linked';
+export type DiscoveryProvider = 'cloudflare' | 'cloudflare-workers' | 'vercel' | 'github' | 'linked';
 export interface DiscoveryRequest {
   readonly provider: DiscoveryProvider;
   readonly account: string;
@@ -29,13 +28,7 @@ export const DISCOVERY_LIMITS = { itemsMax: 500, pagesMax: 5, timeoutMs: 30_000 
 export function parseDiscoveryRequest(input: unknown): DiscoveryRequest {
   const value = record(input);
   const provider = value['provider'];
-  if (
-    provider !== 'cloudflare' &&
-    provider !== 'cloudflare-workers' &&
-    provider !== 'vercel' &&
-    provider !== 'github' &&
-    provider !== 'linked'
-  ) {
+  if (provider !== 'cloudflare' && provider !== 'cloudflare-workers' && provider !== 'vercel' && provider !== 'github' && provider !== 'linked') {
     throw new Error('Unknown publishing provider.');
   }
   const account = text(value['account']);

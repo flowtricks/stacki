@@ -20,9 +20,7 @@ const IMPORTS = [
 ];
 
 test('only an import called with no arguments is asked for', () => {
-  assert.deepEqual(importedCallsInScope(FRONTMATTER, IMPORTS), [
-    { name: 'campusPastors', exportName: 'getCampusPastors', spec: '@/sanity/queries.ts' },
-  ]);
+  assert.deepEqual(importedCallsInScope(FRONTMATTER, IMPORTS), [{ name: 'campusPastors', exportName: 'getCampusPastors', spec: '@/sanity/queries.ts' }]);
   assert.deepEqual(importedCallsInScope('', IMPORTS), []);
   assert.deepEqual(importedCallsInScope(FRONTMATTER, []), [], 'a local function is not run');
 });
@@ -43,11 +41,7 @@ test('the loop item over a sampled call shows each field with its value', () => 
   assert.ok(pastor, 'the loop item is offered');
   assert.deepEqual(pastor.nav, { index: 0, count: 2 }, 'its entries can be stepped through');
   const fields = Object.fromEntries((pastor.children ?? []).map((node) => [node.key, node]));
-  assert.deepEqual(
-    Object.keys(fields).sort(),
-    ['campus', 'email', 'name'],
-    'a field one entry lacks is still a field of the item',
-  );
+  assert.deepEqual(Object.keys(fields).sort(), ['campus', 'email', 'name'], 'a field one entry lacks is still a field of the item');
   assert.equal(fields.name.preview, '"Joey & Sarai Kahl"', 'the value beside its field');
   const unsampled = dataTree({ frontmatter: FRONTMATTER, imports: IMPORTS });
   const value = unsampled.find((node) => node.path === 'campusPastors');

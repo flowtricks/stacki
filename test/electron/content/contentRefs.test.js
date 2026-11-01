@@ -17,18 +17,12 @@ const path = require('path');
 const os = require('os');
 const { readContentConfig, stopAllServices } = require('#dist/electron/content/contentConfig.js');
 const { listEntries } = require('#dist/electron/content/contentEntries.js');
-const {
-  planRename,
-  applyRename,
-  rewriteRelative,
-} = require('#dist/electron/content/contentRefs.js');
+const { planRename, applyRename, rewriteRelative } = require('#dist/electron/content/contentRefs.js');
 const frontmatter = require('#dist/electron/content/formats/markdownEntry.js');
 const jsonFormat = require('#dist/electron/content/formats/json.js');
 
 const DEFAULT_FIXTURE = path.join(os.homedir(), 'Downloads', 'awesome-client-main');
-const source = path.resolve(
-  process.argv[2] || process.env.STACKI_CONTENT_FIXTURE || DEFAULT_FIXTURE,
-);
+const source = path.resolve(process.argv[2] || process.env.STACKI_CONTENT_FIXTURE || DEFAULT_FIXTURE);
 
 const failures = [];
 let checked = 0;
@@ -73,9 +67,7 @@ const check = (what, condition, detail) => {
     );
     check(
       'authors: an array reference is found by position',
-      plan.pointers.some(
-        (pointer) => pointer.path.length === 2 && pointer.path[0] === 'contributors',
-      ),
+      plan.pointers.some((pointer) => pointer.path.length === 2 && pointer.path[0] === 'contributors'),
     );
 
     const before = plan.pointers.map((pointer) => ({ ...pointer }));
@@ -85,24 +77,16 @@ const check = (what, condition, detail) => {
       'authors: the entry itself is renamed',
       entriesOf('authors').some((entry) => entry.id === 'avery-chen-jones'),
     );
-    check(
-      'authors: and the old id is gone',
-      !entriesOf('authors').some((entry) => entry.id === 'avery-chen'),
-    );
+    check('authors: and the old id is gone', !entriesOf('authors').some((entry) => entry.id === 'avery-chen'));
     let rewritten = 0;
     for (const pointer of before) {
-      const data =
-        frontmatter.parseData(read(pointer.file)) || jsonFormat.parseData(read(pointer.file));
+      const data = frontmatter.parseData(read(pointer.file)) || jsonFormat.parseData(read(pointer.file));
       const value = pointer.path.reduce((node, key) => node?.[key], data);
       if (value === 'avery-chen-jones') {
         rewritten++;
       }
     }
-    check(
-      'authors: every pointer rewritten',
-      rewritten === before.length,
-      `${rewritten}/${before.length}`,
-    );
+    check('authors: every pointer rewritten', rewritten === before.length, `${rewritten}/${before.length}`);
     check(
       'authors: nothing still points at the old id',
       !planRename(root, collections, {
@@ -125,19 +109,9 @@ const check = (what, condition, detail) => {
     applyRename(root, plan);
     const after = read('src/data/clients.json');
     const data = jsonFormat.parseData(after);
-    check(
-      'clients: renamed in place',
-      Object.keys(data)[1] === 'helios-energy',
-      Object.keys(data).join(', '),
-    );
-    check(
-      'clients: its record is untouched',
-      JSON.stringify(data['helios-energy']) === JSON.stringify(jsonFormat.parseData(before).helios),
-    );
-    check(
-      'clients: one line changed',
-      before.split('\n').filter((line, i) => line !== after.split('\n')[i]).length === 1,
-    );
+    check('clients: renamed in place', Object.keys(data)[1] === 'helios-energy', Object.keys(data).join(', '));
+    check('clients: its record is untouched', JSON.stringify(data['helios-energy']) === JSON.stringify(jsonFormat.parseData(before).helios));
+    check('clients: one line changed', before.split('\n').filter((line, i) => line !== after.split('\n')[i]).length === 1);
   }
 
   // --- a file per entry: the path is the id ----------------------------------
@@ -148,19 +122,11 @@ const check = (what, condition, detail) => {
       to: 'designing-schemas-for-editors',
     });
     check('blog: the file is the id', plan.move.kind === 'file');
-    check(
-      'blog: it moves to a matching filename',
-      plan.move.to.endsWith('designing-schemas-for-editors.md'),
-    );
+    check('blog: it moves to a matching filename', plan.move.to.endsWith('designing-schemas-for-editors.md'));
     applyRename(root, plan);
     check('blog: the file moved', fs.existsSync(path.join(root, plan.move.to)));
     check('blog: nothing left behind', !fs.existsSync(path.join(root, plan.move.from)));
-    check(
-      'blog: relatedPosts elsewhere follow it',
-      !entriesOf('blog').some((entry) =>
-        (entry.data.relatedPosts || []).includes('schema-design-for-editors'),
-      ),
-    );
+    check('blog: relatedPosts elsewhere follow it', !entriesOf('blog').some((entry) => (entry.data.relatedPosts || []).includes('schema-design-for-editors')));
   }
 
   // --- moving between folders rewrites what images point at -------------------
@@ -171,11 +137,7 @@ const check = (what, condition, detail) => {
       to: 'the-cost-of-a-thousand-images',
     });
     check('blog: a move is a rename with a different folder', plan.move.kind === 'file');
-    check(
-      'blog: images are rewritten for the new depth',
-      plan.imageEdits.length > 0,
-      'nothing to rewrite',
-    );
+    check('blog: images are rewritten for the new depth', plan.imageEdits.length > 0, 'nothing to rewrite');
     check(
       'blog: one folder up means one ../ fewer',
       plan.imageEdits.every((edit) => edit.value.length < edit.from.length),
@@ -215,26 +177,16 @@ const check = (what, condition, detail) => {
   }
 
   // --- the relative-path arithmetic itself ------------------------------------
-  check(
-    'up one folder',
-    rewriteRelative('../../../assets/images/x.png', 'src/content/blog/2025', 'src/content/blog') ===
-      '../../assets/images/x.png',
-  );
+  check('up one folder', rewriteRelative('../../../assets/images/x.png', 'src/content/blog/2025', 'src/content/blog') === '../../assets/images/x.png');
   check(
     'down two folders',
-    rewriteRelative(
-      '../../assets/images/x.png',
-      'src/content/blog',
-      'src/content/blog/2026/spring',
-    ) === '../../../../assets/images/x.png',
+    rewriteRelative('../../assets/images/x.png', 'src/content/blog', 'src/content/blog/2026/spring') === '../../../../assets/images/x.png',
   );
 
   fs.rmSync(root, { recursive: true, force: true });
 
   if (failures.length) {
-    console.error(
-      `\ncontent-refs: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\ncontent-refs: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     stopAllServices();
     process.exit(1);

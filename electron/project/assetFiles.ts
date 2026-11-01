@@ -31,8 +31,7 @@ export const ASSET_ROOTS = ['public', 'src'];
 // Media only under src/: everything else there is code. public/ lists whatever
 // is in it — that folder exists to be served.
 export const MEDIA_EXT = new RegExp(
-  '\\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|tiff?|' +
-    'mp4|webm|mov|m4v|ogv|mp3|wav|ogg|m4a|flac|aac|woff2?|ttf|otf|eot)$',
+  '\\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|tiff?|' + 'mp4|webm|mov|m4v|ogv|mp3|wav|ogg|m4a|flac|aac|woff2?|ttf|otf|eot)$',
   'i',
 );
 
@@ -146,11 +145,7 @@ export function imageSizeOf(abs: string) {
   return undefined;
 }
 
-export function listAssetTree(
-  root: string,
-  rel: string,
-  options: { readonly mediaOnly: boolean },
-): AssetEntry[] {
+export function listAssetTree(root: string, rel: string, options: { readonly mediaOnly: boolean }): AssetEntry[] {
   const entries: AssetEntry[] = [];
   // Folders are only worth showing when something is in them, which for src/
   // means "holds media somewhere below" — otherwise every component folder in
@@ -220,11 +215,7 @@ export function listAssetTree(
 
 export function webpImageSize(buf: Buffer) {
   // WebP: VP8 (lossy), VP8L (lossless) and VP8X (extended) each differ.
-  if (
-    buf.length > 30 &&
-    buf.toString('binary', 0, 4) === 'RIFF' &&
-    buf.toString('binary', 8, 12) === 'WEBP'
-  ) {
+  if (buf.length > 30 && buf.toString('binary', 0, 4) === 'RIFF' && buf.toString('binary', 8, 12) === 'WEBP') {
     const kind = buf.toString('binary', 12, 16);
     if (kind === 'VP8 ') {
       return { w: buf.readUInt16LE(26) & 0x3fff, h: buf.readUInt16LE(28) & 0x3fff };

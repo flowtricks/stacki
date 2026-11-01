@@ -15,6 +15,36 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.100 collection lists, linked list settings, selectors panel
+
+- A loop's Settings work like a builder's collection list. Source opens a tree of the
+  project's collections (Astro and Sanity, each opening to a sample item), the page's lists,
+  None and a Custom list typed as rows; a list inside a collection's items can be chosen too
+  (every campus's pastors). Then Items (Dynamic or Selected, picked and dragged into order),
+  Filters (all or any), Sort (Is Off First / Is On First for switches) and Limit items. It is
+  read from the code however it is written — by hand, by an AI assistant or by a Webflow
+  export — and every change is one undo step that cleans up what the old source left behind.
+- Filters, Sort, Show, Skip and Selected items link to component properties with a purple dot:
+  "New property" asks for a name, tooltip and default; a linked setting shows as a purple bar
+  with Edit settings, Disconnect, New property and Connect. A page using the component edits
+  the property with the same editors, its label blue once set. A list written as code is
+  rewritten as data, read through a small `listItems` helper, when a setting is first linked.
+  The Properties panel recognises these props as Filter, Sort or Selected items.
+- Sorts and filters drag to reorder; a newly inserted loop opens with these settings instead of
+  breaking the page; a selected loop's outline wraps every item.
+- The binding picker shows a builder export's loop items with their values, a renamed prop once
+  by the name the code uses, and a field named with dashes as one chip
+  (`item0.fields["campus-name"]`); samples come from a published entry, not a draft.
+- Styles: a Selectors panel that finds selectors nothing uses and removes them, with a delete
+  prompt, and a check-project report.
+- CMS: Sanity reference pictures, readable dates and switches in tables, and content
+  collection fields written by hand editable in collection settings.
+- Image defaults written as expressions show their thumbnails; text inside a component no
+  longer draws a second tag over the component's; variable tables keep their columns aligned.
+- Code style: Prettier at 160 columns, with no line, function or file length check
+  (AGENTS.md, docs/enforcement.md).
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 0.1.100.
+
 ## 0.1.99 Windows release correction
 
 The 0.1.98 release stopped at the Windows build: the collection-delete test recorded the

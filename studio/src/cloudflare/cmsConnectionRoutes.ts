@@ -8,16 +8,8 @@
 import { canEdit } from '../features/auth/repositoryAccess';
 import type { Identity } from '../features/auth/session';
 import { publicList, withConnection, withoutConnection } from '../features/cms/cmsConnectionBook';
-import {
-  keepConnections,
-  sealCmsSecret,
-  storedConnections,
-  type Vault,
-} from '../features/cms/cmsConnectionVault';
-import {
-  parseCmsConnectionDraft,
-  parseConnectionId,
-} from '../../vendor/stacki/shared/properties/cmsConnections';
+import { keepConnections, sealCmsSecret, storedConnections, type Vault } from '../features/cms/cmsConnectionVault';
+import { parseCmsConnectionDraft, parseConnectionId } from '../../vendor/stacki/shared/properties/cmsConnections';
 import { studioError } from './apiResponse';
 import type { Environment } from './environment';
 
@@ -29,12 +21,7 @@ export function cmsVault(environment: Environment): Vault {
 }
 
 /** The connection routes; undefined for any other request. */
-export async function cmsConnectionRoute(
-  request: Request,
-  url: URL,
-  environment: Environment,
-  identity: Identity,
-): Promise<Response | undefined> {
+export async function cmsConnectionRoute(request: Request, url: URL, environment: Environment, identity: Identity): Promise<Response | undefined> {
   const path = url.pathname;
   if (!path.startsWith('/studio/api/cms-connections')) {
     return undefined;

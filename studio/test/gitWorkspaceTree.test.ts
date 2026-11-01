@@ -24,13 +24,7 @@ test('workspace tree reads metadata and excludes links and submodules', async ()
 
 test('workspace tree rejects malformed, unsafe, duplicate and oversized metadata', async () => {
   const entry = `100644 blob ${revision}\tfile\0`;
-  for (const output of [
-    'invalid\0',
-    `100644 blob ${revision}\t../outside\0`,
-    `100600 blob ${revision}\tfile\0`,
-    entry + entry,
-    entry.repeat(20_001),
-  ]) {
+  for (const output of ['invalid\0', `100644 blob ${revision}\t../outside\0`, `100600 blob ${revision}\tfile\0`, entry + entry, entry.repeat(20_001)]) {
     await assert.rejects(gitWorkspaceTree(async () => output, revision));
   }
 });

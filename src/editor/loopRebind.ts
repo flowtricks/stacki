@@ -30,22 +30,10 @@ export interface Rebound {
 }
 
 // An Astro entry's own properties, beside its `data`.
-const ASTRO_ENTRY_KEYS = new Set([
-  'id',
-  'collection',
-  'body',
-  'slug',
-  'rendered',
-  'filePath',
-  'data',
-]);
+const ASTRO_ENTRY_KEYS = new Set(['id', 'collection', 'body', 'slug', 'rendered', 'filePath', 'data']);
 const UNBOUND_TEXT = 'content';
 
-export function reboundItem(
-  nodes: readonly EditorNode[],
-  item: string,
-  target: ItemShape,
-): Rebound {
+export function reboundItem(nodes: readonly EditorNode[], item: string, target: ItemShape): Rebound {
   assert(/^[A-Za-z_$][\w$]*$/.test(item), 'A loop item is named by an identifier');
   assert(target.fields.size <= LIMITS.treeNodesMax, 'A collection has a bounded number of fields');
   // The count is the one piece of state, owned here; the walk reports to it.
@@ -60,20 +48,12 @@ export function reboundItem(
     });
   const out = nodes.map((node) => reboundNode(node, { item, depth: 0 }, rewrite, lose));
   assert(unbound >= 0, 'An unbound count is never negative');
-  assert(
-    lost.size <= unbound || unbound > 0 || lost.size === 0,
-    'Lost fields come from unbound bindings',
-  );
+  assert(lost.size <= unbound || unbound > 0 || lost.size === 0, 'Lost fields come from unbound bindings');
   return { nodes: out, unbound, lost: [...lost] };
 }
 
 /** The code with each `item.…` path re-pointed, or undefined when one has no field to point at. */
-export function reboundCode(
-  code: string,
-  item: string,
-  target: ItemShape,
-  onLost?: (field: string) => void,
-): string | undefined {
+export function reboundCode(code: string, item: string, target: ItemShape, onLost?: (field: string) => void): string | undefined {
   const pattern = new RegExp(`(?<![.\\w$])${item}((?:\\??\\.[A-Za-z_$][\\w$]*)*)`, 'g');
   let lost = false;
   const next = code.replace(pattern, (whole: string, tail: string) => {
@@ -81,11 +61,7 @@ export function reboundCode(
     const pointed = pointedPath(segments, target);
     if (pointed === undefined) {
       lost = true;
-      onLost?.(
-        segments[0] === 'data' || segments[0] === 'fields'
-          ? (segments[1] ?? segments[0])
-          : (segments[0] ?? item),
-      );
+      onLost?.(segments[0] === 'data' || segments[0] === 'fields' ? (segments[1] ?? segments[0]) : (segments[0] ?? item));
       return whole;
     }
     return [item, ...pointed].join('.');
@@ -94,10 +70,7 @@ export function reboundCode(
 }
 
 // The path into an item of the new shape, for a path written against either.
-function pointedPath(
-  segments: readonly string[],
-  target: ItemShape,
-): readonly string[] | undefined {
+function pointedPath(segments: readonly string[], target: ItemShape): readonly string[] | undefined {
   const first = segments[0];
   if (first === undefined) {
     return segments; // The item itself.
@@ -127,12 +100,7 @@ function pointedPath(
 
 type Rewrite = (code: string) => string | undefined;
 
-function reboundNode(
-  node: EditorNode,
-  at: { readonly item: string; readonly depth: number },
-  rewrite: Rewrite,
-  lose: () => void,
-): EditorNode {
+function reboundNode(node: EditorNode, at: { readonly item: string; readonly depth: number }, rewrite: Rewrite, lose: () => void): EditorNode {
   const depth = at.depth;
   assert(depth <= LIMITS.treeDepthMax, `reboundItem: depth ${depth} exceeds the tree cap`);
   const withProps = reboundProps(node, rewrite, lose);
@@ -144,9 +112,7 @@ function reboundNode(
   if (children === undefined) {
     return own.node;
   }
-  const next = children.map((child) =>
-    reboundNode(child, { item: at.item, depth: depth + 1 }, rewrite, lose),
-  );
+  const next = children.map((child) => reboundNode(child, { item: at.item, depth: depth + 1 }, rewrite, lose));
   assert(next.length === children.length, 'Rebinding keeps every child');
   return Object.assign({}, own.node, { children: next });
 }
@@ -182,19 +148,10 @@ function reboundProps(node: EditorNode, rewrite: Rewrite, lose: () => void): Edi
   const { attrSpans: staleSpans, ...rest } = node;
   void staleSpans;
   const order = rest.attrOrder?.filter((name) => names.has(name));
-  return {
-    ...rest,
-    props: Object.fromEntries(kept),
-    ...(order === undefined ? {} : { attrOrder: order }),
-  };
+  return { ...rest, props: Object.fromEntries(kept), ...(order === undefined ? {} : { attrOrder: order }) };
 }
 
-function reboundOwn(
-  node: EditorNode,
-  item: string,
-  rewrite: Rewrite,
-  lose: () => void,
-): { readonly node: EditorNode; readonly shadowed: boolean } {
+function reboundOwn(node: EditorNode, item: string, rewrite: Rewrite, lose: () => void): { readonly node: EditorNode; readonly shadowed: boolean } {
   switch (node.kind) {
     case 'expr': {
       const code = rewrite(node.value);

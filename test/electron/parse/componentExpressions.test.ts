@@ -4,12 +4,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import {
-  parsePage,
-  parseTemplate,
-  serializePage,
-  serializePageMarked,
-} from '#dist/electron/parse/astroParser.js';
+import { parsePage, parseTemplate, serializePage, serializePageMarked } from '#dist/electron/parse/astroParser.js';
 import { parsePageResult } from '#dist/shared/page/pageNode.js';
 import { LIMITS } from '#dist/shared/core/limits.js';
 import type { ParserNode } from '#dist/electron/parse/astroParserTypes.js';

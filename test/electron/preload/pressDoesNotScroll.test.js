@@ -118,11 +118,7 @@ const press = (window, target, init = {}) => {
     const { window } = await frame('#avb-design');
     const link = window.document.querySelector('[data-box="link"]');
     const event = press(window, link);
-    check(
-      'a press on the canvas is refused',
-      event.defaultPrevented,
-      'the browser focuses the link and scrolls to it',
-    );
+    check('a press on the canvas is refused', event.defaultPrevented, 'the browser focuses the link and scrolls to it');
     const onNothing = press(window, window.document.querySelector('[data-box="hero"]'));
     check('and so is one on anything else', onNothing.defaultPrevented, 'only links were covered');
     // Editing fields now live in the host; a page cannot opt out by copying their ID.
@@ -138,19 +134,11 @@ const press = (window, target, init = {}) => {
     editor.remove();
     // A right-click is the context menu's, not ours.
     const right = press(window, link, { button: 2 });
-    check(
-      'a right-click is left alone',
-      !right.defaultPrevented,
-      'the context menu would never open',
-    );
+    check('a right-click is left alone', !right.defaultPrevented, 'the context menu would never open');
     // The click after it is still refused — that is what stops navigation.
     const click = new window.MouseEvent('click', { bubbles: true, cancelable: true });
     link.dispatchEvent(click);
-    check(
-      'and the click still is, so a link goes nowhere',
-      click.defaultPrevented,
-      'the canvas would navigate',
-    );
+    check('and the click still is, so a link goes nowhere', click.defaultPrevented, 'the canvas would navigate');
   }
 
   {
@@ -203,21 +191,9 @@ const press = (window, target, init = {}) => {
     window.dispatchEvent(go);
     await settle(30);
     const last = scrolls[scrolls.length - 1];
-    check(
-      'asking for a node off to the side scrolls sideways to it',
-      last && typeof last.left === 'number',
-      JSON.stringify(scrolls),
-    );
-    check(
-      'far enough to put it on screen',
-      last && last.left < 1200 && last.left >= 0,
-      JSON.stringify(last),
-    );
-    check(
-      'and it says where vertically too, in the same move',
-      last && typeof last.top === 'number',
-      JSON.stringify(last),
-    );
+    check('asking for a node off to the side scrolls sideways to it', last && typeof last.left === 'number', JSON.stringify(scrolls));
+    check('far enough to put it on screen', last && last.left < 1200 && last.left >= 0, JSON.stringify(last));
+    check('and it says where vertically too, in the same move', last && typeof last.top === 'number', JSON.stringify(last));
   }
 
   const source = readFolderSource('electron/preload');
@@ -228,9 +204,7 @@ const press = (window, target, init = {}) => {
   );
 
   if (failures.length) {
-    console.error(
-      `\npress-does-not-scroll: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\npress-does-not-scroll: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

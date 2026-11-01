@@ -30,12 +30,7 @@ export interface CatalogCollection {
 
 export type SanityAvailability =
   | { readonly kind: 'none' }
-  | {
-      readonly kind: 'connected';
-      readonly label: string;
-      readonly connectionId: string;
-      readonly client: 'available' | 'unavailable';
-    };
+  | { readonly kind: 'connected'; readonly label: string; readonly connectionId: string; readonly client: 'available' | 'unavailable' };
 
 export interface LoopCatalog {
   readonly collections: readonly CatalogCollection[];
@@ -49,14 +44,8 @@ export interface CatalogField extends LoopField {
 }
 
 export async function loadCatalog(projectPath: string): Promise<LoopCatalog> {
-  const [astro, sanity] = await Promise.all([
-    astroCollections(projectPath),
-    sanityCatalog(projectPath),
-  ]);
-  const collections = [...astro, ...sanity.collections].slice(
-    0,
-    LOOP_CATALOG_LIMITS.collectionsMax,
-  );
+  const [astro, sanity] = await Promise.all([astroCollections(projectPath), sanityCatalog(projectPath)]);
+  const collections = [...astro, ...sanity.collections].slice(0, LOOP_CATALOG_LIMITS.collectionsMax);
   assert(collections.length <= LOOP_CATALOG_LIMITS.collectionsMax, 'The catalog is bounded');
   return { collections, sanity: sanity.availability };
 }
@@ -73,35 +62,17 @@ async function astroCollections(projectPath: string): Promise<readonly CatalogCo
   }));
 }
 
-async function sanityCatalog(projectPath: string): Promise<{
-  readonly collections: readonly CatalogCollection[];
-  readonly availability: SanityAvailability;
-}> {
+async function sanityCatalog(projectPath: string): Promise<{ readonly collections: readonly CatalogCollection[]; readonly availability: SanityAvailability }> {
   const list = await listCmsConnections(projectPath).catch(() => undefined);
   const connection = list?.connections.find((candidate) => candidate.kind === 'sanity');
   if (connection === undefined) {
     return { collections: [], availability: { kind: 'none' } };
   }
-  const [result, client] = await Promise.all([
-    remoteCollections(projectPath, connection.id).catch(() => undefined),
-    sanityClientIn(projectPath),
-  ]);
+  const [result, client] = await Promise.all([remoteCollections(projectPath, connection.id).catch(() => undefined), sanityClientIn(projectPath)]);
   const collections: CatalogCollection[] = result?.ok
-    ? result.value.map((collection) => ({
-        source: { kind: 'sanity', collection: collection.name },
-        title: titled(collection.name),
-        count: collection.count,
-      }))
+    ? result.value.map((collection) => ({ source: { kind: 'sanity', collection: collection.name }, title: titled(collection.name), count: collection.count }))
     : [];
-  return {
-    collections,
-    availability: {
-      kind: 'connected',
-      label: connection.label,
-      connectionId: connection.id,
-      client,
-    },
-  };
+  return { collections, availability: { kind: 'connected', label: connection.label, connectionId: connection.id, client } };
 }
 
 // `sanity:client` exists only with the @sanity/astro integration installed; a
@@ -129,18 +100,12 @@ export function hasDependency(text: string, name: string): boolean {
 }
 
 /** A collection's fields, as the filter and sort menus offer them. */
-export async function loadFields(
-  projectPath: string,
-  catalog: LoopCatalog,
-  source: LoopSource,
-): Promise<readonly CatalogField[] | undefined> {
+export async function loadFields(projectPath: string, catalog: LoopCatalog, source: LoopSource): Promise<readonly CatalogField[] | undefined> {
   const connectionId = connectionOf(catalog, source.kind);
   if (connectionId === undefined) {
     return undefined;
   }
-  const template = await remoteTemplate(projectPath, connectionId, source.collection).catch(
-    () => undefined,
-  );
+  const template = await remoteTemplate(projectPath, connectionId, source.collection).catch(() => undefined);
   if (!template?.ok) {
     return undefined;
   }
@@ -158,15 +123,11 @@ export async function loadReferenceChoices(
   if (connectionId === undefined || source.kind !== 'sanity' || types.length === 0) {
     return [];
   }
-  const result = await remoteReferenceOptions(projectPath, connectionId, types).catch(
-    () => undefined,
-  );
+  const result = await remoteReferenceOptions(projectPath, connectionId, types).catch(() => undefined);
   if (!result?.ok) {
     return [];
   }
-  return result.value
-    .slice(0, LOOP_CATALOG_LIMITS.optionsMax)
-    .map((option) => ({ title: option.title, value: option.id }));
+  return result.value.slice(0, LOOP_CATALOG_LIMITS.optionsMax).map((option) => ({ title: option.title, value: option.id }));
 }
 
 function connectionOf(catalog: LoopCatalog, kind: LoopSourceKind): string | undefined {
@@ -184,10 +145,7 @@ const SANITY_SYSTEM_FIELDS: readonly CatalogField[] = [
 ];
 
 /** A schema's top-level fields as filter and sort fields. */
-export function catalogFields(
-  fields: readonly RemoteSchemaField[],
-  kind: LoopSourceKind,
-): readonly CatalogField[] {
+export function catalogFields(fields: readonly RemoteSchemaField[], kind: LoopSourceKind): readonly CatalogField[] {
   const out: CatalogField[] = [];
   for (const field of fields.slice(0, LOOP_CATALOG_LIMITS.fieldsMax)) {
     const mapped = catalogField(field, kind);
@@ -196,10 +154,7 @@ export function catalogFields(
     }
   }
   const all = kind === 'sanity' ? [...out, ...SANITY_SYSTEM_FIELDS] : out;
-  assert(
-    all.length <= LOOP_CATALOG_LIMITS.fieldsMax + SANITY_SYSTEM_FIELDS.length,
-    'Catalog fields are bounded',
-  );
+  assert(all.length <= LOOP_CATALOG_LIMITS.fieldsMax + SANITY_SYSTEM_FIELDS.length, 'Catalog fields are bounded');
   return all;
 }
 
@@ -214,20 +169,14 @@ function catalogField(field: RemoteSchemaField, source: LoopSourceKind): Catalog
       if (type.asset === 'image') {
         return { ...base, path: field.name, kind: 'image' };
       }
-      const options = type.options
-        .slice(0, LOOP_CATALOG_LIMITS.optionsMax)
-        .map((option) => ({ title: option.title, value: option.value }));
+      const options = type.options.slice(0, LOOP_CATALOG_LIMITS.optionsMax).map((option) => ({ title: option.title, value: option.value }));
       // An Astro choice may be a reference (stored as `{ collection, id }`); the
       // writer compares either by id, so both are offered as a reference.
       const kind: LoopFieldKind = options.length > 0 && source === 'astro' ? 'reference' : 'text';
       return { ...base, path: field.name, kind, options };
     }
     case 'slug':
-      return {
-        ...base,
-        path: source === 'sanity' ? `${field.name}.current` : field.name,
-        kind: 'text',
-      };
+      return { ...base, path: source === 'sanity' ? `${field.name}.current` : field.name, kind: 'text' };
     case 'number':
       return { ...base, path: field.name, kind: 'number' };
     case 'boolean':
@@ -255,27 +204,14 @@ function catalogField(field: RemoteSchemaField, source: LoopSourceKind): Catalog
 
 // A list of text or of references can be asked whether it has a value; any
 // other list only whether it has items.
-function listField(
-  field: RemoteSchemaField,
-  members: readonly RemoteType[],
-  base: Pick<CatalogField, 'title' | 'options' | 'references'>,
-): CatalogField {
+function listField(field: RemoteSchemaField, members: readonly RemoteType[], base: Pick<CatalogField, 'title' | 'options' | 'references'>): CatalogField {
   if (members.length > 0 && members.every((member) => member.kind === 'reference')) {
     const references = members.flatMap((member) => (member.kind === 'reference' ? member.to : []));
     return { ...base, path: field.name, kind: 'list', references };
   }
-  const textual =
-    members.length > 0 &&
-    members.every((member) => member.kind === 'string' || member.kind === 'text');
-  const options = members
-    .flatMap((member) => (member.kind === 'string' ? member.options : []))
-    .map((option) => ({ title: option.title, value: option.value }));
-  return {
-    ...base,
-    path: field.name,
-    kind: textual ? 'list' : 'other',
-    options: options.slice(0, LOOP_CATALOG_LIMITS.optionsMax),
-  };
+  const textual = members.length > 0 && members.every((member) => member.kind === 'string' || member.kind === 'text');
+  const options = members.flatMap((member) => (member.kind === 'string' ? member.options : [])).map((option) => ({ title: option.title, value: option.value }));
+  return { ...base, path: field.name, kind: textual ? 'list' : 'other', options: options.slice(0, LOOP_CATALOG_LIMITS.optionsMax) };
 }
 
 /** `case-studies` → "Case Studies", `sermonSpeaker` → "Sermon Speaker". */

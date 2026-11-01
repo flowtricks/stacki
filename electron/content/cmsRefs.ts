@@ -22,9 +22,7 @@ function readJsonc(file: string): unknown {
   try {
     const raw = fs
       .readFileSync(file, 'utf8')
-      .replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$|\/\*[\s\S]*?\*\/)/gm, (match, comment) =>
-        comment ? '' : match,
-      )
+      .replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$|\/\*[\s\S]*?\*\/)/gm, (match, comment) => (comment ? '' : match))
       .replace(/,(\s*[}\]])/g, '$1');
     return JSON.parse(raw);
   } catch {
@@ -46,9 +44,7 @@ function aliasMap(projectPath: string): Alias[] {
     wildcard: true,
     targets: [path.resolve(projectPath, componentSourceRoot(source))],
   }));
-  const config =
-    readJsonc(path.join(projectPath, 'tsconfig.json')) ??
-    readJsonc(path.join(projectPath, 'jsconfig.json'));
+  const config = readJsonc(path.join(projectPath, 'tsconfig.json')) ?? readJsonc(path.join(projectPath, 'jsconfig.json'));
   const compilerOptions = toRecord(toRecord(config)?.['compilerOptions']);
   const paths = toRecord(compilerOptions?.['paths']);
   if (!compilerOptions || !paths) {
@@ -60,9 +56,7 @@ function aliasMap(projectPath: string): Alias[] {
     ...Object.entries(paths).map(([pattern, targets]) => ({
       prefix: pattern.replace(/\*$/, ''),
       wildcard: pattern.endsWith('*'),
-      targets: (toArray(targets) ?? []).map((target) =>
-        path.resolve(base, String(target).replace(/\*$/, '')),
-      ),
+      targets: (toArray(targets) ?? []).map((target) => path.resolve(base, String(target).replace(/\*$/, ''))),
     })),
   ];
 }

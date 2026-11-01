@@ -1,14 +1,7 @@
 import { useEffect } from 'react';
-import {
-  astroChangeMessages,
-  parseAstroFileChanges,
-} from '../../../vendor/stacki/shared/properties/astroFileChanges';
+import { astroChangeMessages, parseAstroFileChanges } from '../../../vendor/stacki/shared/properties/astroFileChanges';
 
-export function useAstroFileNotifications(
-  report: (message: unknown) => void,
-  refresh: () => void,
-  reconcile: () => void,
-) {
+export function useAstroFileNotifications(report: (message: unknown) => void, refresh: () => void, reconcile: () => void) {
   useEffect(() => {
     const events = new EventSource('/studio/api/astro-events');
     // Opening or reconnecting the stream catches changes made while disconnected.

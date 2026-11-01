@@ -338,11 +338,7 @@ export function listMatchedSelectors(model: RuleModel, context: ContextKey): Mat
     }
   }
   assert(order === byKey.size, 'listMatchedSelectors: one order rank per chip');
-  return [...byKey.values()].sort(
-    (left, right) =>
-      compareSpecificity(left.specificity, right.specificity) ||
-      left.text.localeCompare(right.text),
-  );
+  return [...byKey.values()].sort((left, right) => compareSpecificity(left.specificity, right.specificity) || left.text.localeCompare(right.text));
 }
 
 // The chips one matched rule contributes. A splittable selector (`.card::before`) gets
@@ -350,10 +346,7 @@ export function listMatchedSelectors(model: RuleModel, context: ContextKey): Mat
 // selectors (`:not(.x) > :is(...)`, which can't be cleanly split) are folded into ONE
 // chip showing the rule's FULL grouped selector, so it's clear that editing touches
 // every selector/element it targets.
-function chipsForRule(
-  matched: MatchedRule,
-  options: { readonly inContext: boolean },
-): MatchedSelectorCandidate[] {
+function chipsForRule(matched: MatchedRule, options: { readonly inContext: boolean }): MatchedSelectorCandidate[] {
   const { inContext } = options;
   const chips: MatchedSelectorCandidate[] = [];
   let complexSpec: Specificity | undefined;
@@ -402,21 +395,10 @@ function isBareSelector(canon: ReturnType<typeof canonicalCompound>): boolean {
   // A lone universal (`*`) matches everything — too generic to be a useful chip on
   // its own. Skip it UNLESS it's part of a more specific selector (a combinator,
   // a state, or a pseudo-element makes it non-bare, so it isn't caught here).
-  return (
-    canon.universal &&
-    canon.oneCompound &&
-    canon.tokens.length === 0 &&
-    !canon.pseudoElement &&
-    canon.pseudoClasses.length === 0
-  );
+  return canon.universal && canon.oneCompound && canon.tokens.length === 0 && !canon.pseudoElement && canon.pseudoClasses.length === 0;
 }
 
-export function resolveStyle(
-  model: RuleModel,
-  context: ContextKey,
-  activeSelector: string,
-  native?: NativeResolveInput,
-): ResolvedStyle {
+export function resolveStyle(model: RuleModel, context: ContextKey, activeSelector: string, native?: NativeResolveInput): ResolvedStyle {
   const all = [...model.base, ...model.conditional];
 
   // The panel views ONE interaction state and ONE pseudo-element target at a time,
@@ -472,10 +454,7 @@ export function resolveStyle(
     props.set(prop, resolveProp(prop, list, native));
   });
   assert(props.size === byProp.size, 'resolveStyle: one resolved entry per property');
-  assert(
-    selectedRule === undefined || selectedRules.has(selectedRule.ruleId),
-    'resolveStyle: the selected rule is one of the picked selector’s rules',
-  );
+  assert(selectedRule === undefined || selectedRules.has(selectedRule.ruleId), 'resolveStyle: the selected rule is one of the picked selector’s rules');
   return { props, selectedRule, selectedRules, contexts: contextsOf(all), states: STATES };
 }
 
@@ -501,9 +480,7 @@ export function selectedRulesSetting(resolved: ResolvedStyle, prop: string): Par
  *  where the cascade ignores it, and the panel keeps showing the old one. */
 export function editableRuleFor(resolved: ResolvedStyle, prop: string): ParsedRule | undefined {
   const shown = resolved.props.get(prop);
-  const setHere = shown?.contributors.find(
-    (contributor) => contributor.origin === 'embed' && contributor.editing === true,
-  );
+  const setHere = shown?.contributors.find((contributor) => contributor.origin === 'embed' && contributor.editing === true);
   if (setHere === undefined) {
     return resolved.selectedRule;
   }
@@ -583,8 +560,7 @@ function foldEmbedRule(matched: MatchedRule, view: ResolveView): FoldedRule | un
   // it builds on (as inherited/orange), not only its own overrides. Mirrors how a
   // Webflow breakpoint shows wider-breakpoint values. Sibling queries don't apply.
   const atContext = ruleContext === view.context;
-  const inherited =
-    !atContext && (ruleContext === '' || view.context.startsWith(`${ruleContext} › `));
+  const inherited = !atContext && (ruleContext === '' || view.context.startsWith(`${ruleContext} › `));
   if (!atContext && !inherited) {
     return undefined;
   }
@@ -673,9 +649,7 @@ function nativeContributor(contribution: NativeContribution): Contributor {
     // A narrower breakpoint's value (higher bpTier) wins the same-specificity
     // tie over the inherited base value; both stay below any embed rule.
     order: NATIVE_ORDER_BASE + contribution.bpTier * 1_000 + contribution.styleIndex,
-    ruleId:
-      `native:${contribution.styleIndex}:${contribution.bpTier}:` +
-      `${contribution.atState ? 's' : 'b'}:${contribution.prop}`,
+    ruleId: `native:${contribution.styleIndex}:${contribution.bpTier}:` + `${contribution.atState ? 's' : 'b'}:${contribution.prop}`,
     origin: 'native',
     styleIndex: contribution.styleIndex,
     bpTier: contribution.bpTier,
@@ -687,11 +661,7 @@ function nativeContributor(contribution: NativeContribution): Contributor {
 }
 
 // Rank one property's contributors and mark its winner and its editable one.
-function resolveProp(
-  prop: string,
-  list: Contributor[],
-  native: NativeResolveInput | undefined,
-): ResolvedProp {
+function resolveProp(prop: string, list: Contributor[], native: NativeResolveInput | undefined): ResolvedProp {
   const source = native?.source ?? 'embed';
   list.sort((left, right) => compareCascade(left, right, left.order, right.order));
   const winner = list[0];
@@ -717,9 +687,7 @@ function resolveProp(
       (native?.currentTier === undefined || contribution.bpTier === native.currentTier) &&
       contribution.atState !== false,
   );
-  const embedSelected = list.find(
-    (contribution) => contribution.origin === 'embed' && contribution.isSelected,
-  );
+  const embedSelected = list.find((contribution) => contribution.origin === 'embed' && contribution.isSelected);
   const selected = source === 'native' ? (nativeSelected ?? embedSelected) : embedSelected;
   // Mark the contributor whose value is the one being edited (the picked selector's)
   // so the provenance list can highlight it rather than the cascade winner.
@@ -730,9 +698,7 @@ function resolveProp(
     prop,
     source: selected ? 'selected' : 'other',
     ...(selected === undefined ? {} : { selectedOrigin: selected.origin }),
-    ...(selected === undefined
-      ? {}
-      : { selectedValue: { value: selected.value, important: selected.important } }),
+    ...(selected === undefined ? {} : { selectedValue: { value: selected.value, important: selected.important } }),
     winner,
     // The picked selector sets it, but a more specific selector wins the cascade.
     overridden: selected !== undefined && winner !== selected,

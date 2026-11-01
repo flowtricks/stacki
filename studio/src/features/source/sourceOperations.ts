@@ -7,12 +7,7 @@ import { componentInsertionEdits } from './componentInsertion';
 import { contentInsertionEdits } from './insertContent';
 import { nodeAt, bounds, type TreeAction, type Edit } from './source';
 
-export function structuralEdits(
-  source: string,
-  action: TreeAction,
-  file = '',
-  settings?: InsertionDefaults,
-): Edit[] {
+export function structuralEdits(source: string, action: TreeAction, file = '', settings?: InsertionDefaults): Edit[] {
   if (action.kind === 'paste') {
     throw new Error('Paste requires the destination file context');
   }

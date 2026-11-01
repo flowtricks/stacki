@@ -4,39 +4,17 @@ import { assert } from '../../shared/core/assert';
 import { err, ok, type Result } from '../../shared/core/result';
 import { readPublishConfig } from './publishConfig';
 import { ensureToolPath } from '../lib/nodeTools';
-import {
-  parsePublishCommitMessage,
-  type PublishConfig,
-  type PublishTarget,
-} from '../../shared/properties/publishConfig';
-import {
-  parseDesktopPublishProgress,
-  type DesktopPublishState,
-} from '../../shared/properties/publishState';
+import { parsePublishCommitMessage, type PublishConfig, type PublishTarget } from '../../shared/properties/publishConfig';
+import { parseDesktopPublishProgress, type DesktopPublishState } from '../../shared/properties/publishState';
 import { deployHosting, runPublishScripts } from './publishCommands';
-import {
-  createPublishSnapshot,
-  createPublishSource,
-  type PublishSource,
-  type PublishSnapshot,
-} from './publishSnapshot';
-import {
-  publishingGitEnvironment,
-  publishingGitRemote,
-  recordPublishedGitHub,
-} from './publishGitHub';
+import { createPublishSnapshot, createPublishSource, type PublishSource, type PublishSnapshot } from './publishSnapshot';
+import { publishingGitEnvironment, publishingGitRemote, recordPublishedGitHub } from './publishGitHub';
 import { deploymentConfiguration, recordDeployment } from './publishReceipt';
 import { publishFilesystemFailure, runPublishGit } from './publishGitCommand';
-import {
-  checkPublishIncoming,
-  commitPublishSource,
-  requirePublishMessage,
-  type PublishRepository,
-} from './publishCommit';
+import { checkPublishIncoming, commitPublishSource, requirePublishMessage, type PublishRepository } from './publishCommit';
 
 type PublishPlan =
-  | { readonly kind: 'github'; readonly repository: PublishRepository }
-  | { readonly kind: 'hosting'; readonly repository: PublishRepository | undefined };
+  { readonly kind: 'github'; readonly repository: PublishRepository } | { readonly kind: 'hosting'; readonly repository: PublishRepository | undefined };
 
 interface PublishJob {
   readonly root: string;
@@ -66,19 +44,14 @@ export class DesktopPublisher {
       }
       throw new Error('Another project is publishing. Wait for it to finish.');
     }
-    const message =
-      commitMessage === undefined ? undefined : parsePublishCommitMessage(commitMessage);
+    const message = commitMessage === undefined ? undefined : parsePublishCommitMessage(commitMessage);
     this.project = root;
     this.current = { kind: 'running', step: 'Preparing publish…' };
     void this.publish(root, target, message);
     return this.current;
   }
 
-  private async publish(
-    root: string,
-    target: PublishTarget,
-    message: string | undefined,
-  ): Promise<void> {
+  private async publish(root: string, target: PublishTarget, message: string | undefined): Promise<void> {
     ensureToolPath();
     const prepared = await preparePublishJob(root, target, message);
     if (!prepared.ok) {
@@ -86,10 +59,7 @@ export class DesktopPublisher {
       return;
     }
     const job = prepared.value;
-    const captured =
-      job.plan.kind === 'github'
-        ? await createPublishSource(job.root, 'github')
-        : await createPublishSnapshot(job.root);
+    const captured = job.plan.kind === 'github' ? await createPublishSource(job.root, 'github') : await createPublishSnapshot(job.root);
     if (!captured.ok) {
       this.fail(captured.error.message, { github: false, hosting: false });
       return;
@@ -120,32 +90,17 @@ export class DesktopPublisher {
         await this.deploy(job, { ...captured.value, root: captured.value.root });
       }
     } finally {
-      const cleanup = await rm(captured.value.temporary, { recursive: true, force: true }).then(
-        ok,
-        publishFilesystemFailure,
-      );
+      const cleanup = await rm(captured.value.temporary, { recursive: true, force: true }).then(ok, publishFilesystemFailure);
       if (!cleanup.ok) {
         const completed = this.current;
-        assert(
-          completed.kind === 'done' ||
-            completed.kind === 'failed' ||
-            completed.kind === 'review-open',
-          'Cleanup follows publishing',
-        );
+        assert(completed.kind === 'done' || completed.kind === 'failed' || completed.kind === 'review-open', 'Cleanup follows publishing');
         const message = completed.kind === 'failed' ? `${completed.message} ` : '';
-        this.fail(
-          `${message}Temporary publish files could not be removed.`,
-          completed.kind === 'review-open' ? { github: false, hosting: false } : completed,
-        );
+        this.fail(`${message}Temporary publish files could not be removed.`, completed.kind === 'review-open' ? { github: false, hosting: false } : completed);
       }
     }
   }
 
-  private async push(
-    job: PublishJob,
-    source: PublishSource,
-    repository: PublishRepository,
-  ): Promise<Result<PublishPush>> {
+  private async push(job: PublishJob, source: PublishSource, repository: PublishRepository): Promise<Result<PublishPush>> {
     const message = await requirePublishMessage(job.root, source, job.message);
     if (!message.ok) {
       return message;
@@ -161,23 +116,17 @@ export class DesktopPublisher {
     if (!committed.ok) {
       return committed;
     }
-    const pushed = await runPublishGit(
-      job.root,
-      ['push', repository.remote, `${committed.value}:refs/heads/${repository.branch}`],
-      { env: repository.environment, timeout: 120_000 },
-    );
+    const pushed = await runPublishGit(job.root, ['push', repository.remote, `${committed.value}:refs/heads/${repository.branch}`], {
+      env: repository.environment,
+      timeout: 120_000,
+    });
     if (!pushed.ok) {
       return pushed;
     }
     // A bookkeeping failure must not pretend the external push failed or retry that push.
-    const recorded = await recordPublishedGitHub(job.root, repository.branch, committed.value).then(
-      ok,
-      publishFilesystemFailure,
-    );
+    const recorded = await recordPublishedGitHub(job.root, repository.branch, committed.value).then(ok, publishFilesystemFailure);
     return ok({
-      warning: recorded.ok
-        ? undefined
-        : 'Saved to GitHub, but local push status could not be updated. Refresh Git.',
+      warning: recorded.ok ? undefined : 'Saved to GitHub, but local push status could not be updated. Refresh Git.',
     });
   }
 
@@ -210,10 +159,7 @@ export class DesktopPublisher {
       }
     }
     this.current = runningState(`Deploying to ${job.config.hosting.provider}…`, 3, 5);
-    const deployed = await deployHosting(snapshot.root, job.config).then(
-      ok,
-      publishFilesystemFailure,
-    );
+    const deployed = await deployHosting(snapshot.root, job.config).then(ok, publishFilesystemFailure);
     if (!deployed.ok) {
       this.fail(deployed.error.message, completed);
       return;
@@ -239,10 +185,7 @@ export class DesktopPublisher {
     this.current = { kind: 'done', ...completed };
   }
 
-  private fail(
-    message: string,
-    completed: { readonly github: boolean; readonly hosting: boolean },
-  ): void {
+  private fail(message: string, completed: { readonly github: boolean; readonly hosting: boolean }): void {
     this.current = {
       kind: 'failed',
       message,
@@ -256,11 +199,7 @@ function runningState(step: string, completed: number, total: number): DesktopPu
   return { kind: 'running', step, progress: parseDesktopPublishProgress({ completed, total }) };
 }
 
-async function preparePublishJob(
-  root: string,
-  target: PublishTarget,
-  message: string | undefined,
-): Promise<Result<PublishJob>> {
+async function preparePublishJob(root: string, target: PublishTarget, message: string | undefined): Promise<Result<PublishJob>> {
   const canonical = await realpath(root).then(ok, publishFilesystemFailure);
   if (!canonical.ok) {
     return canonical;
@@ -276,9 +215,7 @@ async function preparePublishJob(
     if (config.githubWorkflow?.kind === 'pull-request') {
       return err({
         code: 'review-required',
-        message:
-          'Submit changes for review and deploy the merged branch ' +
-          'through your repository workflow.',
+        message: 'Submit changes for review and deploy the merged branch ' + 'through your repository workflow.',
       });
     }
     if (config.hosting.provider === 'none') {
@@ -299,12 +236,7 @@ async function preparePublishJob(
   if (!repository.ok) {
     return repository;
   }
-  const kind =
-    target === 'github' ||
-    config.hosting.provider === 'none' ||
-    config.githubWorkflow?.kind === 'pull-request'
-      ? 'github'
-      : 'hosting';
+  const kind = target === 'github' || config.hosting.provider === 'none' || config.githubWorkflow?.kind === 'pull-request' ? 'github' : 'hosting';
   return ok({
     root: canonical.value,
     target,
@@ -314,18 +246,12 @@ async function preparePublishJob(
   });
 }
 
-async function preparePublishRepository(
-  root: string,
-  config: PublishConfig,
-): Promise<Result<PublishRepository>> {
+async function preparePublishRepository(root: string, config: PublishConfig): Promise<Result<PublishRepository>> {
   const remote = await publishingGitRemote(root, config).then(ok, publishFilesystemFailure);
   if (!remote.ok) {
     return remote;
   }
-  const environment = await publishingGitEnvironment(root, config).then(
-    ok,
-    publishFilesystemFailure,
-  );
+  const environment = await publishingGitEnvironment(root, config).then(ok, publishFilesystemFailure);
   if (!environment.ok) {
     return environment;
   }
@@ -336,18 +262,12 @@ async function preparePublishRepository(
   return ok({ branch: branch.value.trim(), remote: remote.value, environment: environment.value });
 }
 
-async function buildPublishSnapshot(
-  job: PublishJob,
-  snapshot: PublishSnapshot,
-): Promise<Result<void>> {
+async function buildPublishSnapshot(job: PublishJob, snapshot: PublishSnapshot): Promise<Result<void>> {
   const before = await runPublishScripts(snapshot.root, job.config.beforePublish, {
     STACKI_PUBLISH_TARGET: job.target,
   }).then(ok, publishFilesystemFailure);
   if (!before.ok) {
     return before;
   }
-  return runPublishScripts(snapshot.root, [job.config.buildScript]).then(
-    ok,
-    publishFilesystemFailure,
-  );
+  return runPublishScripts(snapshot.root, [job.config.buildScript]).then(ok, publishFilesystemFailure);
 }

@@ -18,8 +18,7 @@ function page(html) {
   regions.resetFocusCache();
   return dom;
 }
-const words = (path) =>
-  inline.inlineTextRuns(path).map((run) => run.map((text) => text.data.trim()));
+const words = (path) => inline.inlineTextRuns(path).map((run) => run.map((text) => text.data.trim()));
 
 const HEADING =
   '<h2 data-avb-p="src/components/Heading.astro|0.0.0 0.1">' +
@@ -50,9 +49,7 @@ test('an index that is not certain claims nothing', () => {
 });
 
 test('a gap of more than one child is not claimed', () => {
-  const dom = page(
-    '<p data-avb-p="0">one <b data-avb-p="0.1">two</b> three <i data-avb-p="0.4">four</i></p>',
-  );
+  const dom = page('<p data-avb-p="0">one <b data-avb-p="0.1">two</b> three <i data-avb-p="0.4">four</i></p>');
   try {
     assert.deepEqual(words('0.2'), [], 'the next tagged sibling is 0.4, not 0.3');
     assert.deepEqual(words('0.0'), [['one']]);
@@ -62,9 +59,7 @@ test('a gap of more than one child is not claimed', () => {
 });
 
 test('siblings out of order claim nothing rather than crash', () => {
-  const dom = page(
-    '<p data-avb-p="0"><b data-avb-p="0.3">a</b> mid <i data-avb-p="0.1">b</i> end</p>',
-  );
+  const dom = page('<p data-avb-p="0"><b data-avb-p="0.3">a</b> mid <i data-avb-p="0.1">b</i> end</p>');
   try {
     assert.deepEqual(words('0.2'), []);
   } finally {
@@ -73,10 +68,7 @@ test('siblings out of order claim nothing rather than crash', () => {
 });
 
 test('a component that wraps its slot is searched where the siblings are', () => {
-  const dom = page(
-    '<div data-avb-p="0.2"><span class="inner">' +
-      'Hello <em data-avb-p="0.2.1">there</em> friend</span></div>',
-  );
+  const dom = page('<div data-avb-p="0.2"><span class="inner">' + 'Hello <em data-avb-p="0.2.1">there</em> friend</span></div>');
   try {
     assert.deepEqual(words('0.2.0'), [['Hello']]);
     assert.deepEqual(words('0.2.2'), [['friend']]);
@@ -119,8 +111,7 @@ test('inlinePlace splits a path and rejects roots and bad indexes', () => {
 // layout, so the caret lookup and the text's boxes are stubbed to put the pointer on the words.
 function pointAt(dom, text, onWords) {
   dom.window.document.caretRangeFromPoint = () => ({ startContainer: text });
-  dom.window.Range.prototype.getClientRects = () =>
-    onWords ? [{ left: 0, right: 100, top: 0, bottom: 20 }] : [];
+  dom.window.Range.prototype.getClientRects = () => (onWords ? [{ left: 0, right: 100, top: 0, bottom: 20 }] : []);
 }
 
 test('the pointer on words beside a tagged sibling names that text run', () => {

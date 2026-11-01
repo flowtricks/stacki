@@ -7,14 +7,8 @@ const loadRenderer = require('../../helpers/rendererModule');
 // so the negative space below includes it. It is read from JSON, because our own
 // code never writes a null.
 const PLATFORM_NULL = JSON.parse('null');
-const {
-  parseAssetEntry,
-  parseAssetEntries,
-  listAssetEntries,
-  resolveAssetImport,
-  parseAssetDimensions,
-  readAssetDimensions,
-} = loadRenderer('src/ipc/assetBridge.ts');
+const { parseAssetEntry, parseAssetEntries, listAssetEntries, resolveAssetImport, parseAssetDimensions, readAssetDimensions } =
+  loadRenderer('src/ipc/assetBridge.ts');
 const file = {
   rel: 'public/a.png',
   name: 'a.png',
@@ -52,10 +46,7 @@ for (const invalid of [
 ]) {
   assert.throws(() => parseAssetEntry(invalid));
 }
-assert.throws(
-  () => parseAssetEntries({ entries: Array(100001).fill(file) }),
-  /Array exceeds limit/,
-);
+assert.throws(() => parseAssetEntries({ entries: Array(100001).fill(file) }), /Array exceeds limit/);
 assert.throws(() => parseAssetEntries({ entries: PLATFORM_NULL }), /Expected array/);
 assert.deepEqual(parseAssetDimensions({ dims: { w: 640, h: 480 } }), { w: 640, h: 480 });
 // Absence is `undefined` (AGENTS.md §6): an image whose size is unknown sends
@@ -66,10 +57,7 @@ for (const invalid of [
   { dims: PLATFORM_NULL },
   { dims: [] },
   { dims: { w: 1 } },
-  ...[0, -1, 1.5, NaN, Infinity, '20', 0x1_0000_0000].flatMap((value) => [
-    { dims: { w: value, h: 1 } },
-    { dims: { w: 1, h: value } },
-  ]),
+  ...[0, -1, 1.5, NaN, Infinity, '20', 0x1_0000_0000].flatMap((value) => [{ dims: { w: value, h: 1 } }, { dims: { w: 1, h: value } }]),
 ]) {
   assert.throws(() => parseAssetDimensions(invalid));
 }
@@ -98,13 +86,7 @@ assert.deepEqual(parseAssetDimensions({ dims: { w: 0xffff_ffff, h: 1 } }), {
     throw new Error('unavailable');
   };
   assert.deepEqual(await resolveAssetImport(...request), { ok: false });
-  for (const response of [
-    PLATFORM_NULL,
-    {},
-    { ok: true, rel: 0 },
-    { ok: true, rel: 'x'.repeat(32769) },
-    { ok: true, rel: 'bad\0path' },
-  ]) {
+  for (const response of [PLATFORM_NULL, {}, { ok: true, rel: 0 }, { ok: true, rel: 'x'.repeat(32769) }, { ok: true, rel: 'bad\0path' }]) {
     window.avb.resolveSourcePath = async () => response;
     await assert.rejects(() => resolveAssetImport(...request));
   }

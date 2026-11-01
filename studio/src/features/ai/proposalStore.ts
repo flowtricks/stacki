@@ -27,9 +27,7 @@ export class ProposalStore {
   private async generate(value: unknown, signal?: AbortSignal) {
     const config = aiConfiguration();
     if (!config) {
-      throw new Error(
-        'Set AI_BASE_URL and AI_MODEL on the server to connect an AI provider. AI_API_KEY is optional for local providers.',
-      );
+      throw new Error('Set AI_BASE_URL and AI_MODEL on the server to connect an AI provider. AI_API_KEY is optional for local providers.');
     }
     const input = record(value);
     const models = await availableModels();
@@ -45,14 +43,7 @@ export class ProposalStore {
     if (this.proposals.size + this.active > 30) {
       throw new Error('Too many pending AI proposals');
     }
-    const proposal = await propose(
-      this.root,
-      sourcePath(input['file']),
-      string(input['prompt'], 12_000),
-      { ...config, model },
-      parseChatInput(input),
-      signal,
-    );
+    const proposal = await propose(this.root, sourcePath(input['file']), string(input['prompt'], 12_000), { ...config, model }, parseChatInput(input), signal);
     signal?.throwIfAborted();
     const id = randomUUID();
     if (proposal.changes.length) {

@@ -26,9 +26,7 @@ export function RemoteImageGrid(props: {
       const previous = items[index];
       const key = (previous === undefined ? undefined : itemKey(previous)) ?? remoteKey();
       const next = remoteObject(pointingAt(remoteObject(previous), 'image', asset)) ?? {};
-      props.onChange(
-        items.map((item, position) => (position === index ? { ...next, _key: key } : item)),
-      );
+      props.onChange(items.map((item, position) => (position === index ? { ...next, _key: key } : item)));
     });
   };
   const add = () => {
@@ -113,11 +111,7 @@ function itemKey(item: RemoteValue): string | undefined {
 }
 
 // The list with the item at `from` moved to sit where `to` was.
-export function movedTo(
-  items: readonly RemoteValue[],
-  from: number,
-  to: number,
-): readonly RemoteValue[] {
+export function movedTo(items: readonly RemoteValue[], from: number, to: number): readonly RemoteValue[] {
   assert(from >= 0, 'A move starts inside the list');
   assert(from < items.length, 'A move starts inside the list');
   const next = [...items];

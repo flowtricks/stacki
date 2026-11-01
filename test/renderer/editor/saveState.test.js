@@ -50,10 +50,7 @@ test('new and failed edits can start a save', () => {
   assert.deepEqual(save.saveStateStarted(states.dirty), states.saving);
   assert.deepEqual(save.saveStateStarted(states.failed), states.saving);
   for (const tag of ['clean', 'saving', 'conflicted']) {
-    assert.throws(
-      () => save.saveStateStarted(states[tag]),
-      new RegExp(`Assertion failed: Only an unsaved page starts a save, not ${tag}`),
-    );
+    assert.throws(() => save.saveStateStarted(states[tag]), new RegExp(`Assertion failed: Only an unsaved page starts a save, not ${tag}`));
   }
 });
 
@@ -71,14 +68,8 @@ test('a refusal records the base compared and the bytes found on disk', () => {
   for (const tag of ['dirty', 'saving', 'failed', 'conflicted']) {
     assert.deepEqual(save.saveStateRefused(states[tag], written, disk), conflicted);
   }
-  assert.throws(
-    () => save.saveStateRefused(states.clean, base, disk),
-    /A clean page has nothing to refuse/,
-  );
-  assert.throws(
-    () => save.saveStateRefused(states.dirty, disk, disk),
-    /A refusal names bytes other than the base/,
-  );
+  assert.throws(() => save.saveStateRefused(states.clean, base, disk), /A clean page has nothing to refuse/);
+  assert.throws(() => save.saveStateRefused(states.dirty, disk, disk), /A refusal names bytes other than the base/);
 });
 
 test('keeping the local version after review rebases it on the disk bytes', () => {
@@ -87,10 +78,7 @@ test('keeping the local version after review rebases it on the disk bytes', () =
     baseChecksum: disk,
   });
   for (const tag of ['clean', 'dirty', 'saving', 'failed']) {
-    assert.throws(
-      () => save.saveStateAccepted(states[tag]),
-      new RegExp(`Only a conflicted page can be accepted, not ${tag}`),
-    );
+    assert.throws(() => save.saveStateAccepted(states[tag]), new RegExp(`Only a conflicted page can be accepted, not ${tag}`));
   }
 });
 

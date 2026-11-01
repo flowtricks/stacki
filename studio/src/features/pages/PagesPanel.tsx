@@ -21,16 +21,7 @@ interface Props {
   readonly error: (error: unknown) => void;
   readonly collection?: boolean;
 }
-export function PagesPanel({
-  project,
-  flushSave,
-  peers,
-  file,
-  open,
-  refresh,
-  error,
-  collection = false,
-}: Props) {
+export function PagesPanel({ project, flushSave, peers, file, open, refresh, error, collection = false }: Props) {
   const renaming = usePageRename({ file, open, refresh, flushSave });
   const ordering = useProjectPageOrder(collection ? undefined : project.name);
   const reorder = usePageOrderDrag({
@@ -40,9 +31,7 @@ export function PagesPanel({
   });
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
-  const { busy, create, failure } = useCreateFile({ file, collection, refresh, open, error }, () =>
-    setCreating(false),
-  );
+  const { busy, create, failure } = useCreateFile({ file, collection, refresh, open, error }, () => setCreating(false));
   const items = collection ? project.collections : project.pages;
   return (
     <div className="panel-section grow">
@@ -56,15 +45,7 @@ export function PagesPanel({
           onChange={(event) => setQuery(event.target.value)}
         />
       </div>
-      {creating && (
-        <CreateFileDialog
-          create={create}
-          collection={collection}
-          busy={busy}
-          failure={failure}
-          close={() => setCreating(false)}
-        />
-      )}
+      {creating && <CreateFileDialog create={create} collection={collection} busy={busy} failure={failure} close={() => setCreating(false)} />}
       <ProjectRenameDialog renaming={renaming} project={project} />
       <PageOrderNotice state={ordering.state} reload={ordering.reload} />
       <PageFileList
@@ -80,48 +61,23 @@ export function PagesPanel({
         open={open}
         collection={collection}
       />
-      {!items.length && (
-        <div className="panel-note">
-          {collection
-            ? 'JSON and Markdown files in src/content and src/data appear here.'
-            : 'No pages found.'}
-        </div>
-      )}
+      {!items.length && <div className="panel-note">{collection ? 'JSON and Markdown files in src/content and src/data appear here.' : 'No pages found.'}</div>}
     </div>
   );
 }
 
-async function newFileSource({
-  name,
-  file,
-  duplicate,
-  collection,
-}: {
-  name: string;
-  file: string;
-  duplicate: boolean;
-  collection: boolean;
-}) {
+async function newFileSource({ name, file, duplicate, collection }: { name: string; file: string; duplicate: boolean; collection: boolean }) {
   let source = '---\n---\n\n<main>\n  <h1>New page</h1>\n</main>\n';
   if (duplicate) {
-    source = string(
-      record(await request(`/studio/api/file?file=${encodeURIComponent(file)}`))['source'],
-    );
+    source = string(record(await request(`/studio/api/file?file=${encodeURIComponent(file)}`))['source']);
   } else if (collection) {
-    source = name.endsWith('.json')
-      ? '{\n  "title": "New item"\n}\n'
-      : '---\ntitle: New item\n---\n\nWrite your content here.\n';
+    source = name.endsWith('.json') ? '{\n  "title": "New item"\n}\n' : '---\ntitle: New item\n---\n\nWrite your content here.\n';
   }
   return source;
 }
 
 async function createProjectFile(
-  {
-    name,
-    file,
-    duplicate,
-    collection,
-  }: { name: string; file: string; duplicate: boolean; collection: boolean },
+  { name, file, duplicate, collection }: { name: string; file: string; duplicate: boolean; collection: boolean },
   destination: string,
 ) {
   const source = await newFileSource({ name, file, duplicate, collection });
@@ -133,13 +89,7 @@ async function createProjectFile(
 }
 
 function useCreateFile(
-  {
-    file,
-    collection = false,
-    refresh,
-    open,
-    error,
-  }: Pick<Props, 'file' | 'collection' | 'refresh' | 'open' | 'error'>,
+  { file, collection = false, refresh, open, error }: Pick<Props, 'file' | 'collection' | 'refresh' | 'open' | 'error'>,
   close: () => void,
 ) {
   const [busy, setBusy] = useState(false);
@@ -151,9 +101,7 @@ function useCreateFile(
     setBusy(true);
     setFailure('');
     try {
-      const destination = collection
-        ? `src/content/${name}`
-        : `src/pages/${name.replace(/\.astro$/, '')}.astro`;
+      const destination = collection ? `src/content/${name}` : `src/pages/${name.replace(/\.astro$/, '')}.astro`;
       await createProjectFile({ name, file, duplicate, collection }, destination);
       refresh();
       open(destination);
@@ -167,22 +115,12 @@ function useCreateFile(
   }
   return { busy, create, failure };
 }
-function PagesHeader({
-  collection,
-  create,
-}: {
-  readonly collection: boolean;
-  readonly create: () => void;
-}) {
+function PagesHeader({ collection, create }: { readonly collection: boolean; readonly create: () => void }) {
   return (
     <div className="panel-header">
       <h2>{collection ? 'Collections' : 'Pages'}</h2>
       <div className="studio-panel-actions">
-        <button
-          className="ghost"
-          aria-label={collection ? 'Create item' : 'Create page'}
-          onClick={create}
-        >
+        <button className="ghost" aria-label={collection ? 'Create item' : 'Create page'} onClick={create}>
           <PlusIcon size={16} />
         </button>
       </div>
@@ -190,13 +128,7 @@ function PagesHeader({
   );
 }
 
-function ProjectRenameDialog({
-  renaming,
-  project,
-}: {
-  readonly renaming: ReturnType<typeof usePageRename>;
-  readonly project: Project;
-}) {
+function ProjectRenameDialog({ renaming, project }: { readonly renaming: ReturnType<typeof usePageRename>; readonly project: Project }) {
   if (!renaming.item) {
     return undefined;
   }

@@ -29,10 +29,7 @@ const check = (what, condition, detail) => {
 };
 
 const schemaFor = (document) =>
-  parsePropSchema(
-    `---\ninterface Props {\n  /** ${document} */\n  thing?: string;\n}\n` +
-      `const { thing } = Astro.props;\n---\n<div>{thing}</div>\n`,
-  );
+  parsePropSchema(`---\ninterface Props {\n  /** ${document} */\n  thing?: string;\n}\n` + `const { thing } = Astro.props;\n---\n<div>{thing}</div>\n`);
 
 const field = (document) => {
   const schema = schemaFor(document);
@@ -46,18 +43,13 @@ check('a single value becomes the default', plain.default === 'webp', JSON.strin
 check('a single value claims no hint', !plain.hint, JSON.stringify(plain));
 
 // Usage advice names an explicit alternative; it does not change the fallback.
-const adviceDocument =
-  'Open Graph type. Defaults to `website`; use `article` for posts and news pages.';
+const adviceDocument = 'Open Graph type. Defaults to `website`; use `article` for posts and news pages.';
 const advice = field(adviceDocument);
 check('usage advice retains the default', advice.default === 'website', JSON.stringify(advice));
 check('usage advice is not a fallback hint', advice.hint === undefined, JSON.stringify(advice));
 check('the tooltip keeps usage advice', advice.doc === adviceDocument, JSON.stringify(advice));
 const literalAdvice = field('Text. Defaults to `text; use as is`.');
-check(
-  'advice punctuation within a literal stays intact',
-  literalAdvice.default === 'text; use as is',
-  JSON.stringify(literalAdvice),
-);
+check('advice punctuation within a literal stays intact', literalAdvice.default === 'text; use as is', JSON.stringify(literalAdvice));
 
 // Two values: no default may be claimed, whatever joins them.
 for (const [label, document] of [
@@ -69,29 +61,17 @@ for (const [label, document] of [
   ['semicolon', 'Output format. Defaults to `webp`; or `svg` for SVG sources.'],
 ]) {
   const thingField = field(document);
-  check(
-    `two values claim no default — ${label}`,
-    thingField.default === undefined,
-    JSON.stringify(thingField),
-  );
+  check(`two values claim no default — ${label}`, thingField.default === undefined, JSON.stringify(thingField));
   check(`two values leave a hint — ${label}`, !!thingField.hint, JSON.stringify(thingField));
 }
 
 // Prose naming one value still needs a joining word to read as conditional.
 const prose = field('Output format. Defaults to webp or svg for SVG sources.');
-check(
-  'unbackticked prose still reads as conditional',
-  prose.default === undefined,
-  JSON.stringify(prose),
-);
+check('unbackticked prose still reads as conditional', prose.default === undefined, JSON.stringify(prose));
 
 // A decimal inside backticks is one value, not a sentence that ended early.
 const decimal = field('How far. Defaults to `1.5`.');
-check(
-  'a decimal is one value',
-  decimal.default === 1.5 || decimal.default === '1.5',
-  JSON.stringify(decimal),
-);
+check('a decimal is one value', decimal.default === 1.5 || decimal.default === '1.5', JSON.stringify(decimal));
 
 // A prop written in several branches of a union has one answer per branch,
 // and the branch is decided by props the panel already knows. The field
@@ -119,11 +99,7 @@ const unionList = Array.isArray(union) ? union : [...(union?.values?.() ?? [])];
 const labelField = unionList.find((field) => field.name === 'label') || {};
 const table = (labelField.unions || []).find((union) => union.names.includes('label'));
 
-check(
-  'the field claims no default of its own',
-  labelField.default === undefined,
-  JSON.stringify(labelField.default),
-);
+check('the field claims no default of its own', labelField.default === undefined, JSON.stringify(labelField.default));
 check('the union is reported', !!table, JSON.stringify(labelField.unions));
 if (table) {
   const byVariant = {};
@@ -156,12 +132,8 @@ const ruleFor = (document) => {
     '<button>{label}{variant}{direction}</button>',
   ].join('\n');
   const list = [...parsePropSchema(source).values()];
-  const table = (list.find((field) => field.name === 'label')?.unions || []).find((union) =>
-    union.names.includes('label'),
-  );
-  const arrow = (table?.branches || []).find((branch) =>
-    (branch.pins.variant || []).includes('arrow'),
-  );
+  const table = (list.find((field) => field.name === 'label')?.unions || []).find((union) => union.names.includes('label'));
+  const arrow = (table?.branches || []).find((branch) => (branch.pins.variant || []).includes('arrow'));
   return arrow?.rules?.label;
 };
 
@@ -170,19 +142,11 @@ check('a named condition becomes a rule', !!named, JSON.stringify(named));
 if (named) {
   check('the rule reads its prop', named.prop === 'direction', JSON.stringify(named));
   check('the rule reads the value it turns on', named.is === 'back', JSON.stringify(named));
-  check(
-    'the rule reads both answers',
-    named.then === 'Previous' && named.otherwise === 'Next',
-    JSON.stringify(named),
-  );
+  check('the rule reads both answers', named.then === 'Previous' && named.otherwise === 'Next', JSON.stringify(named));
 }
 
 const bare = ruleFor('What it says. Defaults to `Play`, or `Pause` when pressed.');
-check(
-  'a bare boolean condition reads as true',
-  bare && bare.prop === 'pressed' && bare.is === 'true',
-  JSON.stringify(bare),
-);
+check('a bare boolean condition reads as true', bare && bare.prop === 'pressed' && bare.is === 'true', JSON.stringify(bare));
 
 // A clause with two answers but no prop named stays a hint, since there is
 // nothing to weigh it against.
@@ -213,11 +177,7 @@ const shared = parsePropSchema(
   ].join('\n'),
 );
 const sharedLabel = [...shared.values()].find((field) => field.name === 'label') || {};
-check(
-  'the tip keeps what every branch says',
-  sharedLabel.doc === 'What it says.',
-  JSON.stringify(sharedLabel.doc),
-);
+check('the tip keeps what every branch says', sharedLabel.doc === 'What it says.', JSON.stringify(sharedLabel.doc));
 
 // One branch, one doc: nothing is trimmed.
 const single = parsePropSchema(
@@ -233,11 +193,7 @@ const single = parsePropSchema(
   ].join('\n'),
 );
 const only = [...single.values()].find((field) => field.name === 'format') || {};
-check(
-  'a prop declared once keeps its whole doc',
-  only.doc === 'Output format. Defaults to `webp`.',
-  JSON.stringify(only.doc),
-);
+check('a prop declared once keeps its whole doc', only.doc === 'Output format. Defaults to `webp`.', JSON.stringify(only.doc));
 
 // A branch can allow fewer values than the prop as a whole. The alias naming
 // them is as much a fixed set as the literals written out, so the panel can
@@ -256,26 +212,12 @@ const narrowed = parsePropSchema(
 );
 const emphasis = [...narrowed.values()].find((field) => field.name === 'emphasis') || {};
 const emTable = (emphasis.unions || []).find((union) => union.names.includes('emphasis'));
-const pinFor = (value) =>
-  (emTable?.branches || []).find((branch) => (branch.pins.variant || []).includes(value))?.pins
-    ?.emphasis;
+const pinFor = (value) => (emTable?.branches || []).find((branch) => (branch.pins.variant || []).includes(value))?.pins?.emphasis;
 
-check(
-  'every value is still offered by the prop',
-  (emphasis.options || []).length === 3,
-  JSON.stringify(emphasis.options),
-);
+check('every value is still offered by the prop', (emphasis.options || []).length === 3, JSON.stringify(emphasis.options));
 check('an alias behind a branch still pins it', !!pinFor('close'), JSON.stringify(pinFor('close')));
-check(
-  'the narrow branch drops link',
-  pinFor('close') && !pinFor('close').includes('link'),
-  JSON.stringify(pinFor('close')),
-);
-check(
-  'the wide branch keeps link',
-  (pinFor('main') || []).includes('link'),
-  JSON.stringify(pinFor('main')),
-);
+check('the narrow branch drops link', pinFor('close') && !pinFor('close').includes('link'), JSON.stringify(pinFor('close')));
+check('the wide branch keeps link', (pinFor('main') || []).includes('link'), JSON.stringify(pinFor('main')));
 
 if (failures.length) {
   console.error(`\ndoc-defaults: ${failures.length} failed, ${checked - failures.length} passed\n`);

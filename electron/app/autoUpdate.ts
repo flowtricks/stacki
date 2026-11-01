@@ -19,10 +19,7 @@ export interface AutoUpdateHost {
   readonly beforeInstall: () => void;
   /** The window a dialog belongs to, while one is open. */
   readonly parentWindow: () => BrowserWindow | undefined;
-  readonly showMessageBox: (
-    parent: BrowserWindow | undefined,
-    options: MessageBoxOptions,
-  ) => Promise<MessageBoxReturnValue>;
+  readonly showMessageBox: (parent: BrowserWindow | undefined, options: MessageBoxOptions) => Promise<MessageBoxReturnValue>;
 }
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -68,9 +65,7 @@ export class AutoUpdates {
         type: 'info',
         title: 'Check for Updates',
         message: 'Updates are only checked in the installed this.host.app.',
-        detail:
-          `This is a development build (${this.host.app.getVersion()}), ` +
-          'which updates when you rebuild it.',
+        detail: `This is a development build (${this.host.app.getVersion()}), ` + 'which updates when you rebuild it.',
       });
       return;
     }
@@ -145,12 +140,8 @@ export class AutoUpdates {
     this.host.autoUpdater.autoInstallOnAppQuit = true;
 
     this.host.autoUpdater.on('checking-for-update', () => this.log('Checking for updates'));
-    this.host.autoUpdater.on('update-available', (info) =>
-      this.log('Update available', { version: info.version }),
-    );
-    this.host.autoUpdater.on('update-not-available', (info) =>
-      this.log('No update available', { version: info.version }),
-    );
+    this.host.autoUpdater.on('update-available', (info) => this.log('Update available', { version: info.version }));
+    this.host.autoUpdater.on('update-not-available', (info) => this.log('No update available', { version: info.version }));
 
     this.host.autoUpdater.on('update-downloaded', (info) => {
       this.log('Update downloaded', { version: info.version });
@@ -178,9 +169,7 @@ export class AutoUpdates {
         message: 'Stacki could not check for updates.',
         // The raw error carries response headers and a stack trace; the full
         // text is in the log, so show the user only the first line.
-        detail:
-          formatAutoUpdateError(error).split('\n')[0]?.slice(0, 200) +
-          '\n\nStacki will try again later.',
+        detail: formatAutoUpdateError(error).split('\n')[0]?.slice(0, 200) + '\n\nStacki will try again later.',
       });
     });
   }
@@ -204,10 +193,7 @@ export class AutoUpdates {
   }
 
   private log(message: string, details?: unknown): void {
-    const detailText =
-      details === undefined
-        ? ''
-        : ` ${typeof details === 'string' ? details : JSON.stringify(details)}`;
+    const detailText = details === undefined ? '' : ` ${typeof details === 'string' ? details : JSON.stringify(details)}`;
     const line = `[${new Date().toISOString()}] ${message}${detailText}`;
 
     console.log(line);
@@ -236,10 +222,7 @@ function isExpectedAutoUpdateNetworkError(error: unknown) {
 
   // A release whose other platform published first: the channel file is
   // briefly absent, which surfaces as a 404 on latest-mac.yml / latest.yml.
-  if (
-    message.includes('cannot find latest') ||
-    (message.includes('404') && message.includes('.yml'))
-  ) {
+  if (message.includes('cannot find latest') || (message.includes('404') && message.includes('.yml'))) {
     return true;
   }
 

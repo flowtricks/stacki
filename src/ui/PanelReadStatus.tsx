@@ -14,11 +14,7 @@ export function PanelReadStatus({
 }) {
   if (state.kind === 'loading') {
     return (
-      <div
-        className={`panel-loading panel-loading-layout-${layout}`}
-        role="status"
-        aria-label={`Loading ${label}…`}
-      >
+      <div className={`panel-loading panel-loading-layout-${layout}`} role="status" aria-label={`Loading ${label}…`}>
         <div className="panel-loading-rows" aria-hidden="true">
           <span />
           <span />

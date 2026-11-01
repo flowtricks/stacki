@@ -68,10 +68,7 @@ function select(client: WebSocket, selection: string, occurrence = 0) {
 test('simultaneous selections are shared while editing ownership stays exclusive', async () => {
   const state = await fixture();
   try {
-    const results = await Promise.all([
-      select(state.first, 'n0', 0),
-      select(state.second, 'n0', 1),
-    ]);
+    const results = await Promise.all([select(state.first, 'n0', 0), select(state.second, 'n0', 1)]);
     assert.equal(results.filter((result) => result['selection'] === 'n0').length, 2);
     assert.equal(results.filter((result) => result['owner']).length, 1);
     assert.equal([...state.room.clients.values()].filter((peer) => peer.editing).length, 1);
@@ -82,10 +79,7 @@ test('simultaneous selections are shared while editing ownership stays exclusive
     assert.equal(inspected['selection'], 'n0', 'Inspection selects the requested element');
     assert.ok(inspected['owner']);
     await select(owner, '');
-    assert.equal(
-      [...state.room.clients.values()].find((peer) => peer.selection === 'n0')?.editing,
-      true,
-    );
+    assert.equal([...state.room.clients.values()].find((peer) => peer.selection === 'n0')?.editing, true);
     assert.equal((await select(other, 'n0'))['selection'], 'n0');
   } finally {
     await state.close();
@@ -143,10 +137,7 @@ test('takeover transfers editing ownership and preserves both selections', async
     const stale = response(state.second, 'error');
     state.second.send(JSON.stringify(request));
     assert.match(String((await stale)['message']), /selection has changed/);
-    assert.equal(
-      [...state.room.clients.values()].filter((peer) => peer.selection === 'n1').length,
-      2,
-    );
+    assert.equal([...state.room.clients.values()].filter((peer) => peer.selection === 'n1').length, 2);
     assert.equal(state.room.text.toString(), '<h1>Heading</h1><p>Paragraph</p>');
   } finally {
     await state.close();

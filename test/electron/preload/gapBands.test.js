@@ -86,16 +86,8 @@ function loadGapBandsFor(window) {
       bands.every((band) => band.axis === 'column'),
       JSON.stringify(bands),
     );
-    check(
-      'the first sits between the first two',
-      bands[0].x === 100 && bands[0].w === 20,
-      JSON.stringify(bands[0]),
-    );
-    check(
-      'the second between the next two',
-      bands[1].x === 220 && bands[1].w === 20,
-      JSON.stringify(bands[1]),
-    );
+    check('the first sits between the first two', bands[0].x === 100 && bands[0].w === 20, JSON.stringify(bands[0]));
+    check('the second between the next two', bands[1].x === 220 && bands[1].w === 20, JSON.stringify(bands[1]));
     // A band spans the row it is in, so it reads as the space holding those
     // two items apart rather than a floating rectangle.
     check(
@@ -126,11 +118,7 @@ function loadGapBandsFor(window) {
     );
     check('and there is one gap between the rows', rows.length === 1, JSON.stringify(rows));
     check('sitting between them', rows[0].y === 50 && rows[0].h === 30, JSON.stringify(rows[0]));
-    check(
-      'spanning the children’s width',
-      rows[0].x === 0 && rows[0].w === 220,
-      JSON.stringify(rows[0]),
-    );
+    check('spanning the children’s width', rows[0].x === 0 && rows[0].w === 220, JSON.stringify(rows[0]));
   }
 
   // --- space-between: the band is the gap, not the free space ---------------
@@ -163,9 +151,7 @@ function loadGapBandsFor(window) {
     ]);
     check('a zero gap draws nothing', gapBandsFor(zero.el, zero.cs).length === 0);
 
-    const one = parentWith({ display: 'flex', columnGap: '20px', rowGap: '20px' }, [
-      { x: 0, y: 0, w: 100, h: 50 },
-    ]);
+    const one = parentWith({ display: 'flex', columnGap: '20px', rowGap: '20px' }, [{ x: 0, y: 0, w: 100, h: 50 }]);
     check('one child has nothing to be between', gapBandsFor(one.el, one.cs).length === 0);
 
     const empty = parentWith({ display: 'grid', columnGap: '20px', rowGap: '20px' }, []);
@@ -183,11 +169,7 @@ function loadGapBandsFor(window) {
     ]);
     const bands = gapBandsFor(element, cs);
     check('a hidden child is not a gap boundary', bands.length === 1, JSON.stringify(bands));
-    check(
-      'and the gap spans the two real children',
-      bands[0].x === 100 && bands[0].w === 20,
-      JSON.stringify(bands[0]),
-    );
+    check('and the gap spans the two real children', bands[0].x === 100 && bands[0].w === 20, JSON.stringify(bands[0]));
   }
 
   // --- Overlapping children -------------------------------------------------
@@ -197,11 +179,7 @@ function loadGapBandsFor(window) {
       { x: 0, y: 0, w: 100, h: 50 },
       { x: 90, y: 0, w: 100, h: 50 },
     ]);
-    check(
-      'overlapping children have no gap to show',
-      gapBandsFor(element, cs).length === 0,
-      JSON.stringify(gapBandsFor(element, cs)),
-    );
+    check('overlapping children have no gap to show', gapBandsFor(element, cs).length === 0, JSON.stringify(gapBandsFor(element, cs)));
   }
 
   if (failures.length) {

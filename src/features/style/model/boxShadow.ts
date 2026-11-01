@@ -17,12 +17,7 @@ export type BoxShadow = {
 // One control's edit. Each member names the fields that control owns — an
 // explicit update surface rather than `Partial<T>` (AGENTS.md §4).
 export type BoxShadowPatch =
-  | Pick<BoxShadow, 'inset'>
-  | Pick<BoxShadow, 'x'>
-  | Pick<BoxShadow, 'y'>
-  | Pick<BoxShadow, 'blur'>
-  | Pick<BoxShadow, 'spread'>
-  | Pick<BoxShadow, 'color'>;
+  Pick<BoxShadow, 'inset'> | Pick<BoxShadow, 'x'> | Pick<BoxShadow, 'y'> | Pick<BoxShadow, 'blur'> | Pick<BoxShadow, 'spread'> | Pick<BoxShadow, 'color'>;
 
 /** A token that reads as a length (a number with an optional CSS unit). */
 function isLength(token: string): boolean {
@@ -74,13 +69,7 @@ export function serializeBoxShadows(shadows: BoxShadow[]): string {
   if (!shadows.length) {
     return '';
   }
-  return shadows
-    .map(
-      (shadow) =>
-        `${shadow.inset ? 'inset ' : ''}${boxShadowLengths(shadow)}` +
-        (shadow.color ? ` ${shadow.color}` : ''),
-    )
-    .join(', ');
+  return shadows.map((shadow) => `${shadow.inset ? 'inset ' : ''}${boxShadowLengths(shadow)}` + (shadow.color ? ` ${shadow.color}` : '')).join(', ');
 }
 
 /** A new shadow with Webflow-like defaults (outer, `0px 2px 5px 0px rgba(0,0,0,0.2)`). */

@@ -19,13 +19,7 @@ import { toAnchorRef, toChildIndex, type AnchorRef } from '../../shared/page/ref
 import { err, ok, type Result } from '../../shared/core/result';
 import type { Snapshot } from '../../shared/page/snapshot';
 import type { ProjectedNode } from '../../shared/page/sourceProjection';
-import {
-  encodeUtf8,
-  spansAscending,
-  toByteSpan,
-  utf16ToByteOffsets,
-  type ByteSpan,
-} from '../../shared/core/span';
+import { encodeUtf8, spansAscending, toByteSpan, utf16ToByteOffsets, type ByteSpan } from '../../shared/core/span';
 
 /** How a page is written: its file's extension decides the parser. */
 export type PageFormat = 'astro' | 'md' | 'mdx';
@@ -103,11 +97,7 @@ export function splitsPair(text: string, offset: number): boolean {
  * the change applies as it is; otherwise each hunk is placed on `own` through
  * the diff from `before`, and a hunk the formatting itself changed has no
  * place: refused, never reprinted. */
-export function placedHunks(
-  before: string,
-  after: string,
-  own: string,
-): Result<readonly SourceEdit[], RejectionReason> {
+export function placedHunks(before: string, after: string, own: string): Result<readonly SourceEdit[], RejectionReason> {
   const change = diffCodePatch(before, after);
   if (!change.ok) {
     return change;
@@ -169,22 +159,14 @@ export function shiftedHunks(hunks: readonly SourceEdit[], start: number): reado
 
 /** A frontmatter block's new text as the slot where it differs from the block
  * on disk: the common start and end are kept, whole code points only. */
-export function frontmatterSlot(
-  block: ByteSpan,
-  before: string,
-  printed: string,
-): { readonly slot: ByteSpan; readonly text: string } {
+export function frontmatterSlot(block: ByteSpan, before: string, printed: string): { readonly slot: ByteSpan; readonly text: string } {
   let prefix = 0;
   const shorter = Math.min(before.length, printed.length);
   while (prefix < shorter && before.charCodeAt(prefix) === printed.charCodeAt(prefix)) {
     prefix++;
   }
   let suffix = 0;
-  while (
-    suffix < shorter - prefix &&
-    before.charCodeAt(before.length - 1 - suffix) ===
-      printed.charCodeAt(printed.length - 1 - suffix)
-  ) {
+  while (suffix < shorter - prefix && before.charCodeAt(before.length - 1 - suffix) === printed.charCodeAt(printed.length - 1 - suffix)) {
     suffix++;
   }
   // Whole code points only: a boundary inside a pair moves out of it.

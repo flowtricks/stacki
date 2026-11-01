@@ -16,12 +16,7 @@ export function historyRoutes(root: string, repository: NativeRepository | undef
           },
         }),
   );
-  return async (
-    request: IncomingMessage,
-    response: ServerResponse,
-    pathname: string,
-    readBody: () => Promise<string>,
-  ): Promise<boolean> => {
+  return async (request: IncomingMessage, response: ServerResponse, pathname: string, readBody: () => Promise<string>): Promise<boolean> => {
     if (!pathname.startsWith('/studio/api/history/')) {
       return false;
     }

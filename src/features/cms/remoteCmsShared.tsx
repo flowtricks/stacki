@@ -19,11 +19,7 @@ export interface RemoteCmsSelection {
 // One read per subject, through its cache (remoteCmsCache.ts): what is kept for
 // `key` shows at once and is refreshed behind it. `replace` shows a value the
 // panel already knows — an edit's result, a list after a drag — without a read.
-export function useRemote<T>(
-  cache: RemoteCache<T>,
-  key: string,
-  load: () => Promise<RemoteResult<T>>,
-) {
+export function useRemote<T>(cache: RemoteCache<T>, key: string, load: () => Promise<RemoteResult<T>>) {
   const [shown, setShown] = useState(() => ({ key, result: cache.get(key) }));
   const current = useRef(key);
   current.current = key;
@@ -76,10 +72,7 @@ export function Loading<T>(props: {
   return props.children(props.result.value);
 }
 
-export function ConnectionLogo(props: {
-  readonly kind: CmsSource['kind'];
-  readonly size?: number;
-}) {
+export function ConnectionLogo(props: { readonly kind: CmsSource['kind']; readonly size?: number }) {
   const size = props.size ?? 14;
   switch (props.kind) {
     case 'sanity':

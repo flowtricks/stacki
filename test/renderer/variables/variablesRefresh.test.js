@@ -60,10 +60,7 @@ test('variables refresh coalesces watcher bursts and ignores obsolete projects',
   });
   try {
     await show('/first');
-    assert.equal(
-      document.querySelector('[role="status"]').getAttribute('aria-label'),
-      'Loading CSS variables…',
-    );
+    assert.equal(document.querySelector('[role="status"]').getAttribute('aria-label'), 'Loading CSS variables…');
     assert.doesNotMatch(document.body.textContent, /Loading CSS variables/);
     assert.doesNotMatch(document.body.textContent, /No CSS custom properties/);
     assert.equal(reads.length, 1);
@@ -118,15 +115,8 @@ test('variables refresh coalesces watcher bursts and ignores obsolete projects',
     });
     assert.equal(document.getElementById('root').textContent, '');
     await show('/second');
-    assert.match(
-      document.body.textContent,
-      /second.css/,
-      'Reopening shows cached content immediately',
-    );
-    assert.doesNotMatch(
-      document.body.textContent,
-      /Loading CSS variables|No CSS custom properties/,
-    );
+    assert.match(document.body.textContent, /second.css/, 'Reopening shows cached content immediately');
+    assert.doesNotMatch(document.body.textContent, /Loading CSS variables|No CSS custom properties/);
     await act(async () => reads[5].resolve(snapshot('fresh.css')));
     assert.match(document.body.textContent, /fresh.css/, 'Background read updates cached content');
     await act(async () => root.unmount());

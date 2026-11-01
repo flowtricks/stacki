@@ -17,15 +17,8 @@ async function fixture() {
     await mkdir(path.join(root, directory), { recursive: true });
   }
   await writeFile(path.join(root, 'src/pages/index.astro'), '<h1>Draft</h1>');
-  await writeFile(
-    path.join(root, '.stacki/studio/state/github-base.json'),
-    JSON.stringify({ sha: 'a'.repeat(40) }),
-  );
-  const draft = path.join(
-    root,
-    '.stacki/studio/state',
-    Buffer.from('src/pages/index.astro').toString('base64url') + '.bin',
-  );
+  await writeFile(path.join(root, '.stacki/studio/state/github-base.json'), JSON.stringify({ sha: 'a'.repeat(40) }));
+  const draft = path.join(root, '.stacki/studio/state', Buffer.from('src/pages/index.astro').toString('base64url') + '.bin');
   await writeFile(draft, 'CRDT identity must remain');
   const queue = new SerialQueue();
   return { root, draft, queue, cleanup: new StorageCleanup(root, queue) };
@@ -121,15 +114,9 @@ test('a published path with different draft bytes is never treated as an unused 
   const { root, cleanup } = await fixture();
   try {
     await saveAsset(root, 'public/photo.png', Buffer.from('draft'));
-    await cleanup.store.rememberPublished(
-      'a'.repeat(40),
-      new Map([['public/photo.png', gitBlob(Buffer.from('older'))]]),
-    );
+    await cleanup.store.rememberPublished('a'.repeat(40), new Map([['public/photo.png', gitBlob(Buffer.from('older'))]]));
     assert.deepEqual((await cleanup.inspect()).candidates, []);
-    const result = await cleanup.afterPublish(
-      [{ path: 'public/photo.png', sha: gitBlob(Buffer.from('older')), mode: '100644', size: 5 }],
-      'a'.repeat(40),
-    );
+    const result = await cleanup.afterPublish([{ path: 'public/photo.png', sha: gitBlob(Buffer.from('older')), mode: '100644', size: 5 }], 'a'.repeat(40));
     assert.equal(result.removed, 0);
     assert.equal(await readFile(localUploadPath(root, 'public/photo.png'), 'utf8'), 'draft');
   } finally {
@@ -204,9 +191,7 @@ test('published copies are removed for every supported format in nested public a
     'eot',
     'pdf',
   ];
-  const files = ['public/nested', 'src/assets/nested'].flatMap((directory) =>
-    extensions.map((extension) => `${directory}/upload.${extension}`),
-  );
+  const files = ['public/nested', 'src/assets/nested'].flatMap((directory) => extensions.map((extension) => `${directory}/upload.${extension}`));
   try {
     const bytes = Buffer.from('committed');
     for (const file of files) {

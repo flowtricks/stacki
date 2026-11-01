@@ -24,9 +24,7 @@ export interface ComponentSources {
   readonly sources: readonly PackageComponentSource[];
 }
 
-export type ComponentOrigin =
-  | { readonly kind: 'local' }
-  | { readonly kind: 'package'; readonly package: string; readonly importPath: string };
+export type ComponentOrigin = { readonly kind: 'local' } | { readonly kind: 'package'; readonly package: string; readonly importPath: string };
 
 export function parseComponentSources(input: unknown): ComponentSources {
   const value = record(input);
@@ -40,10 +38,7 @@ export function parseComponentSources(input: unknown): ComponentSources {
   const parsed = sources.map(parsePackageComponentSource);
   for (const [index, source] of parsed.entries()) {
     for (const previous of parsed.slice(0, index)) {
-      if (
-        source.importPrefix.startsWith(previous.importPrefix) ||
-        previous.importPrefix.startsWith(source.importPrefix)
-      ) {
+      if (source.importPrefix.startsWith(previous.importPrefix) || previous.importPrefix.startsWith(source.importPrefix)) {
         throw new Error('Component import prefixes must not overlap.');
       }
       const currentRoot = componentSourceRoot(source) + '/';

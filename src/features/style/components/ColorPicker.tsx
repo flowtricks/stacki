@@ -1,17 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Popup from '../../../ui/Popup';
-import {
-  colorMode,
-  formatColor,
-  formatHex,
-  hsvaToRgba,
-  parseColor,
-  rgbaToHsl,
-  rgbaToHsva,
-  type ColorMode,
-  type HSVA,
-  type RGBA,
-} from '../model/colorSpace';
+import { colorMode, formatColor, formatHex, hsvaToRgba, parseColor, rgbaToHsl, rgbaToHsva, type ColorMode, type HSVA, type RGBA } from '../model/colorSpace';
 import { dragNote, endDragNotes } from '../../../ui/sound';
 import type { CSSProperties, RefObject } from 'react';
 
@@ -44,8 +33,7 @@ type Props = {
 };
 
 const CHECKER = 'repeating-conic-gradient(#808080 0% 25%, #a0a0a0 0% 50%) 50% / 10px 10px';
-const HUE_BAR =
-  'linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)';
+const HUE_BAR = 'linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)';
 const clamp = (value: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, value));
 
 function checkerStyle(): CSSProperties & { readonly '--picker-checker': string } {
@@ -60,13 +48,7 @@ type DragPhase = 'live' | 'final';
 // `tall` says the vertical is worth hearing: the saturation square is a surface
 // you drag around in, the hue and alpha bars are a few pixels high, where a
 // fraction of the height is noise rather than intent.
-function useDrag({
-  tall = false,
-  onMove,
-}: {
-  readonly tall?: boolean;
-  readonly onMove: (fx: number, fy: number, phase: DragPhase) => void;
-}) {
+function useDrag({ tall = false, onMove }: { readonly tall?: boolean; readonly onMove: (fx: number, fy: number, phase: DragPhase) => void }) {
   return (element: HTMLElement, event: React.PointerEvent) => {
     const rect = element.getBoundingClientRect();
     const report = (event: PointerEvent | React.PointerEvent, phase: DragPhase) => {
@@ -96,17 +78,7 @@ function useDrag({
   };
 }
 
-function Field({
-  label,
-  value,
-  onChange,
-  wide,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  wide?: boolean;
-}) {
+function Field({ label, value, onChange, wide }: { label: string; value: string; onChange: (v: string) => void; wide?: boolean }) {
   const [text, setText] = useState(value);
   const focused = useRef(false);
   useEffect(() => {
@@ -147,9 +119,7 @@ function Field({
             return;
           }
           event.preventDefault();
-          const next = String(
-            parsed + (event.shiftKey ? 10 : 1) * (event.key === 'ArrowUp' ? 1 : -1),
-          );
+          const next = String(parsed + (event.shiftKey ? 10 : 1) * (event.key === 'ArrowUp' ? 1 : -1));
           setText(next);
           onChange(next);
         }}
@@ -159,9 +129,7 @@ function Field({
   );
 }
 
-const EYEDROPPER_ICON_PATH =
-  'M10.5 2.5a1.7 1.7 0 0 1 2.4 2.4l-1 1 1 1-1.2 1.2-1-1' +
-  'L6 12.8 3 13.5l.7-3 4.1-4.1-1-1L8 4.2l1 1 1-1a1.7 1.7 0 0 1 .5-.4Z';
+const EYEDROPPER_ICON_PATH = 'M10.5 2.5a1.7 1.7 0 0 1 2.4 2.4l-1 1 1 1-1.2 1.2-1-1' + 'L6 12.8 3 13.5l.7-3 4.1-4.1-1-1L8 4.2l1 1 1-1a1.7 1.7 0 0 1 .5-.4Z';
 
 const EyedropperIcon = () => (
   <svg viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
@@ -226,12 +194,7 @@ export default function ColorPicker({ value, anchor, trigger, onChange, onClose 
       label="Color picker"
     >
       <PickerSurfaces hsva={hsva} alpha={alpha} emit={emit} onPicked={setFromColor} />
-      <PickerInputs
-        hsva={hsva}
-        channel={notation.channel}
-        onColor={setFromColor}
-        onNumber={setNumber}
-      />
+      <PickerInputs hsva={hsva} channel={notation.channel} onColor={setFromColor} onNumber={setNumber} />
       <NotationRow notation={notation} />
     </Popup>
   );
@@ -260,9 +223,7 @@ type AlphaChoice = ReturnType<typeof useAlphaChoice>;
 // it is R/G/B spelled differently, and it has a label of its own sitting right
 // beside them.
 function useNotation(value: string, hsva: HSVA, onChange: Props['onChange']) {
-  const [channel, setChannel] = useState<'rgb' | 'hsl'>(() =>
-    colorMode(value) === 'hsl' ? 'hsl' : 'rgb',
-  );
+  const [channel, setChannel] = useState<'rgb' | 'hsl'>(() => (colorMode(value) === 'hsl' ? 'hsl' : 'rgb'));
   // Nothing set yet is no notation to preserve, and a colour written for the
   // first time should come out the way this panel has always written one.
   const [asHex, setAsHex] = useState(() => !!value.trim() && colorMode(value) === 'hex');
@@ -308,10 +269,7 @@ function usePickerPosition(rootRef: RefObject<HTMLDivElement>, anchor: DOMRect) 
     const height = element.offsetHeight || 300;
     const left = clamp(anchor.left, 8, window.innerWidth - width - 8);
     const below = anchor.bottom + 6;
-    const top =
-      below + height > window.innerHeight - 8 && anchor.top - height - 6 > 8
-        ? anchor.top - height - 6
-        : below;
+    const top = below + height > window.innerHeight - 8 && anchor.top - height - 6 > 8 ? anchor.top - height - 6 : below;
     setPosition({ top, left });
   }, [rootRef, anchor]);
   return position;
@@ -358,8 +316,7 @@ function PickerSurfaces({
   const hueColor = formatHex({ ...hsvaToRgba({ h: hsva.h, s: 100, v: 100, a: 1 }), a: 1 });
   const dragSB = useDrag({
     tall: true,
-    onMove: (fx, fy, phase) =>
-      emit(alpha.carry({ ...hsva, s: Math.round(fx * 100), v: Math.round((1 - fy) * 100) }), phase),
+    onMove: (fx, fy, phase) => emit(alpha.carry({ ...hsva, s: Math.round(fx * 100), v: Math.round((1 - fy) * 100) }), phase),
   });
   const dragHue = useDrag({
     onMove: (fx, _fy, phase) => emit(alpha.carry({ ...hsva, h: Math.round(fx * 360) }), phase),
@@ -375,19 +332,14 @@ function PickerSurfaces({
       <div
         className="u-color-sb"
         style={{
-          background:
-            'linear-gradient(to top, #000, transparent), ' +
-            `linear-gradient(to right, #fff, ${hueColor})`,
+          background: 'linear-gradient(to top, #000, transparent), ' + `linear-gradient(to right, #fff, ${hueColor})`,
         }}
         onPointerDown={(event) => {
           event.preventDefault();
           dragSB(event.currentTarget, event);
         }}
       >
-        <span
-          className="u-color-sb-thumb"
-          style={{ left: `${hsva.s}%`, top: `${100 - hsva.v}%`, background: formatHex(rgba) }}
-        />
+        <span className="u-color-sb-thumb" style={{ left: `${hsva.s}%`, top: `${100 - hsva.v}%`, background: formatHex(rgba) }} />
       </div>
       <PickerSliders hsva={hsva} dragHue={dragHue} dragAlpha={dragAlpha} onPicked={onPicked} />
     </>
@@ -396,17 +348,7 @@ function PickerSurfaces({
 
 type DragStart = (element: HTMLElement, event: React.PointerEvent) => void;
 
-function PickerSliders({
-  hsva,
-  dragHue,
-  dragAlpha,
-  onPicked,
-}: {
-  hsva: HSVA;
-  dragHue: DragStart;
-  dragAlpha: DragStart;
-  onPicked: (color: string) => void;
-}) {
+function PickerSliders({ hsva, dragHue, dragAlpha, onPicked }: { hsva: HSVA; dragHue: DragStart; dragAlpha: DragStart; onPicked: (color: string) => void }) {
   const eyedrop = () => {
     const EyeDropper = readEyeDropper();
     if (!EyeDropper) {
@@ -484,20 +426,12 @@ function PickerInputs({
   const rgba = hsvaToRgba(hsva);
   const hsl = rgbaToHsl(rgba);
   const asHsl = channel === 'hsl';
-  const channelValues = asHsl
-    ? [String(hsl.h), String(hsl.s), String(hsl.l)]
-    : [String(rgba.r), String(rgba.g), String(rgba.b)];
+  const channelValues = asHsl ? [String(hsl.h), String(hsl.s), String(hsl.l)] : [String(rgba.r), String(rgba.g), String(rgba.b)];
   const setChannel = (i: number, value: string) => {
     if (asHsl) {
-      onColor(
-        `hsla(${i === 0 ? value : hsl.h}, ${i === 1 ? value : hsl.s}%, ` +
-          `${i === 2 ? value : hsl.l}%, ${rgba.a})`,
-      );
+      onColor(`hsla(${i === 0 ? value : hsl.h}, ${i === 1 ? value : hsl.s}%, ` + `${i === 2 ? value : hsl.l}%, ${rgba.a})`);
     } else {
-      onColor(
-        `rgba(${i === 0 ? value : rgba.r}, ${i === 1 ? value : rgba.g}, ` +
-          `${i === 2 ? value : rgba.b}, ${rgba.a})`,
-      );
+      onColor(`rgba(${i === 0 ? value : rgba.r}, ${i === 1 ? value : rgba.g}, ` + `${i === 2 ? value : rgba.b}, ${rgba.a})`);
     }
   };
   // HEX is always present; the middle three fields follow the channel notation.
@@ -506,19 +440,10 @@ function PickerInputs({
       <Field label="HEX" wide value={formatHex(rgba)} onChange={onColor} />
       <div className="u-color-channels">
         {channelLabels(channel).map((lab, i) => (
-          <Field
-            key={i}
-            label={lab}
-            value={channelValues[i] ?? ''}
-            onChange={(value) => setChannel(i, value)}
-          />
+          <Field key={i} label={lab} value={channelValues[i] ?? ''} onChange={(value) => setChannel(i, value)} />
         ))}
       </div>
-      <Field
-        label="A"
-        value={String(Math.round(hsva.a * 100))}
-        onChange={(value) => onNumber('a', value, 100)}
-      />
+      <Field label="A" value={String(Math.round(hsva.a * 100))} onChange={(value) => onNumber('a', value, 100)} />
     </div>
   );
 }

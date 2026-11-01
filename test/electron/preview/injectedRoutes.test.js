@@ -76,25 +76,14 @@ const { packageOf } = require('#dist/electron/lib/installedPackages.js');
       routes.map((route) => route.route).join(',') === '/,/contacto,/blog/[...id]',
       routes.map((route) => route.route).join(','),
     );
-    check(
-      "Astro's own internals are left out",
-      !routes.some((route) => route.route === '/404'),
-      JSON.stringify(routes.map((route) => route.route)),
-    );
-    check(
-      "and so are Stacki's own endpoints",
-      !routes.some((route) => route.route.startsWith('/__avb')),
-    );
+    check("Astro's own internals are left out", !routes.some((route) => route.route === '/404'), JSON.stringify(routes.map((route) => route.route)));
+    check("and so are Stacki's own endpoints", !routes.some((route) => route.route.startsWith('/__avb')));
     check(
       'each says which package it came from',
       routes.every((route) => route.from === '@fivedogs/presencia-core'),
       JSON.stringify(routes.map((route) => route.from)),
     );
-    check(
-      'a dynamic one keeps its params',
-      routes[2].params.join(',') === 'id',
-      JSON.stringify(routes[2].params),
-    );
+    check('a dynamic one keeps its params', routes[2].params.join(',') === 'id', JSON.stringify(routes[2].params));
   }
 
   {
@@ -113,16 +102,8 @@ const { packageOf } = require('#dist/electron/lib/installedPackages.js');
       ]),
     );
     const routes = read(directory);
-    check(
-      'a page of your own is not listed as injected',
-      routes.length === 1 && routes[0].route === '/from-a-package',
-      JSON.stringify(routes),
-    );
-    check(
-      'and the package name survives a scoped-less path',
-      routes[0].from === 'thing',
-      routes[0].from,
-    );
+    check('a page of your own is not listed as injected', routes.length === 1 && routes[0].route === '/from-a-package', JSON.stringify(routes));
+    check('and the package name survives a scoped-less path', routes[0].from === 'thing', routes[0].from);
   }
 
   {
@@ -136,19 +117,13 @@ const { packageOf } = require('#dist/electron/lib/installedPackages.js');
 
   {
     // The package name is what the panel groups these under.
-    check(
-      'a scoped package is named in full',
-      packageOf('node_modules/@fivedogs/presencia-core/src/paginas/x.astro') ===
-        '@fivedogs/presencia-core',
-    );
+    check('a scoped package is named in full', packageOf('node_modules/@fivedogs/presencia-core/src/paginas/x.astro') === '@fivedogs/presencia-core');
     check('an unscoped one too', packageOf('node_modules/presencia/src/x.astro') === 'presencia');
     check('and a path outside a package names none', packageOf('/tmp/.avb/paths.js') === undefined);
   }
 
   if (failures.length) {
-    console.error(
-      `injected-routes: ${failures.length} of ${checked} failed\n${failures.join('\n')}`,
-    );
+    console.error(`injected-routes: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
   console.log(`injected-routes: ${checked} passed  [issue #7 shape]`);

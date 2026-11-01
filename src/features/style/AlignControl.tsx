@@ -46,26 +46,19 @@ function Icon({ children, rotate = 0 }: { children: ReactNode; rotate?: number }
 }
 
 const JUSTIFY_FLEX_START_PATH =
-  'M2 14V1H3V5H11.5C11.7761 5 12 5.22386 12 5.5V6.5C12 6.77614 11.7761 7 11.5 7H3V8H7.5' +
-  'C7.77614 8 8 8.22386 8 8.5V9.5C8 9.77614 7.77614 10 7.5 10H3V14H2Z';
+  'M2 14V1H3V5H11.5C11.7761 5 12 5.22386 12 5.5V6.5C12 6.77614 11.7761 7 11.5 7H3V8H7.5' + 'C7.77614 8 8 8.22386 8 8.5V9.5C8 9.77614 7.77614 10 7.5 10H3V14H2Z';
 const JUSTIFY_CENTER_FIRST_PATH =
-  'M7 14V10H4.5C4.22386 10 4 9.77614 4 9.5V8.5C4 8.22386 4.22386 8 4.5 8H7V7H2.5' +
-  'C2.22386 7 2 6.77614 2 6.5V5.5C2 5.22386 2.22386 5 2.5 5H7V1H8V14H7Z';
+  'M7 14V10H4.5C4.22386 10 4 9.77614 4 9.5V8.5C4 8.22386 4.22386 8 4.5 8H7V7H2.5' + 'C2.22386 7 2 6.77614 2 6.5V5.5C2 5.22386 2.22386 5 2.5 5H7V1H8V14H7Z';
 const JUSTIFY_FLEX_END_PATH =
-  'M13 14V10H8.5C8.22386 10 8 9.77614 8 9.5V8.5C8 8.22386 8.22386 8 8.5 8H13V7H4.5' +
-  'C4.22386 7 4 6.77614 4 6.5V5.5C4 5.22386 4.22386 5 4.5 5H13V1H14V14H13Z';
+  'M13 14V10H8.5C8.22386 10 8 9.77614 8 9.5V8.5C8 8.22386 8.22386 8 8.5 8H13V7H4.5' + 'C4.22386 7 4 6.77614 4 6.5V5.5C4 5.22386 4.22386 5 4.5 5H13V1H14V14H13Z';
 const JUSTIFY_SPACE_BETWEEN_FIRST_PATH =
-  'M14 4L14 1L15 1L15 14L14 14L14 11L12.5 11C12.2239 11 12 10.7761 12 10.5L12 4.5' +
-  'C12 4.22386 12.2239 4 12.5 4L14 4Z';
+  'M14 4L14 1L15 1L15 14L14 14L14 11L12.5 11C12.2239 11 12 10.7761 12 10.5L12 4.5' + 'C12 4.22386 12.2239 4 12.5 4L14 4Z';
 const JUSTIFY_SPACE_BETWEEN_SECOND_PATH =
-  'M2 14L2 0.999999L3 0.999999L3 4L4.5 4C4.77614 4 5 4.22386 5 4.5L5 10.5' +
-  'C5 10.7761 4.77614 11 4.5 11L3 11L3 14L2 14Z';
+  'M2 14L2 0.999999L3 0.999999L3 4L4.5 4C4.77614 4 5 4.22386 5 4.5L5 10.5' + 'C5 10.7761 4.77614 11 4.5 11L3 11L3 14L2 14Z';
 const JUSTIFY_SPACE_AROUND_SECOND_PATH =
-  'M4.5 4C4.22386 4 4 4.22386 4 4.5L4 10.5C4 10.7761 4.22386 11 4.5 11H5.5' +
-  'C5.77614 11 6 10.7761 6 10.5L6 4.5C6 4.22386 5.77614 4 5.5 4L4.5 4Z';
+  'M4.5 4C4.22386 4 4 4.22386 4 4.5L4 10.5C4 10.7761 4.22386 11 4.5 11H5.5' + 'C5.77614 11 6 10.7761 6 10.5L6 4.5C6 4.22386 5.77614 4 5.5 4L4.5 4Z';
 const JUSTIFY_SPACE_AROUND_THIRD_PATH =
-  'M11.5 11C11.2239 11 11 10.7761 11 10.5V4.5C11 4.22386 11.2239 4 11.5 4L12.5 4' +
-  'C12.7761 4 13 4.22386 13 4.5V10.5C13 10.7761 12.7761 11 12.5 11H11.5Z';
+  'M11.5 11C11.2239 11 11 10.7761 11 10.5V4.5C11 4.22386 11.2239 4 11.5 4L12.5 4' + 'C12.7761 4 13 4.22386 13 4.5V10.5C13 10.7761 12.7761 11 12.5 11H11.5Z';
 
 // justify-content — authored HORIZONTAL (bars packed left→right).
 const JUSTIFY_PATHS: Record<string, ReactNode> = {
@@ -73,14 +66,8 @@ const JUSTIFY_PATHS: Record<string, ReactNode> = {
   center: (
     <>
       <path d={JUSTIFY_CENTER_FIRST_PATH} fill="currentColor" />
-      <path
-        d="M14 5.5C14 5.22386 13.7761 5 13.5 5H9V7H13.5C13.7761 7 14 6.77614 14 6.5V5.5Z"
-        fill="currentColor"
-      />
-      <path
-        d="M12 8.5C12 8.22386 11.7761 8 11.5 8H9V10H11.5C11.7761 10 12 9.77614 12 9.5V8.5Z"
-        fill="currentColor"
-      />
+      <path d="M14 5.5C14 5.22386 13.7761 5 13.5 5H9V7H13.5C13.7761 7 14 6.77614 14 6.5V5.5Z" fill="currentColor" />
+      <path d="M12 8.5C12 8.22386 11.7761 8 11.5 8H9V10H11.5C11.7761 10 12 9.77614 12 9.5V8.5Z" fill="currentColor" />
     </>
   ),
   'flex-end': <path d={JUSTIFY_FLEX_END_PATH} fill="currentColor" />,
@@ -122,28 +109,13 @@ const ALIGN_PATHS: Record<string, ReactNode> = {
   center: (
     <>
       <path d={ALIGN_CENTER_FIRST_PATH} fill="currentColor" />
-      <path
-        d="M8 9V13.5C8 13.7761 7.77614 14 7.5 14H6.5C6.22386 14 6 13.7761 6 13.5V9H8Z"
-        fill="currentColor"
-      />
-      <path
-        d="M10.5 12C10.7761 12 11 11.7761 11 11.5V9H9V11.5C9 11.7761 9.22386 12 9.5 12H10.5Z"
-        fill="currentColor"
-      />
+      <path d="M8 9V13.5C8 13.7761 7.77614 14 7.5 14H6.5C6.22386 14 6 13.7761 6 13.5V9H8Z" fill="currentColor" />
+      <path d="M10.5 12C10.7761 12 11 11.7761 11 11.5V9H9V11.5C9 11.7761 9.22386 12 9.5 12H10.5Z" fill="currentColor" />
     </>
   ),
   'flex-end': <path d={ALIGN_FLEX_END_PATH} fill="currentColor" />,
-  stretch: (
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M6 3L2 3V2H15V3L11 3V13L15 13V14L2 14V13H6L6 3ZM8 3L9 3L9 13H8L8 3Z"
-      fill="currentColor"
-    />
-  ),
-  baseline: (
-    <path fillRule="evenodd" clipRule="evenodd" d={ALIGN_BASELINE_PATH} fill="currentColor" />
-  ),
+  stretch: <path fillRule="evenodd" clipRule="evenodd" d="M6 3L2 3V2H15V3L11 3V13L15 13V14L2 14V13H6L6 3ZM8 3L9 3L9 13H8L8 3Z" fill="currentColor" />,
+  baseline: <path fillRule="evenodd" clipRule="evenodd" d={ALIGN_BASELINE_PATH} fill="currentColor" />,
 };
 
 // The icon for a value on a given SCREEN axis. Glyphs are authored for their natural
@@ -167,42 +139,14 @@ function iconFor(value: string, prop: string, axis: 'x' | 'y'): ReactNode {
 // so Space-between pushes them to the edges, Center sits them together, etc.
 const BASELINE_LETTER = (
   <svg viewBox="0 0 14 16" width="14" height="16" fill="none" aria-hidden="true">
-    <path
-      d="M2.6 10 L7 3 L11.4 10 M4.1 7.6 H9.9"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <line
-      x1="1.4"
-      y1="13"
-      x2="12.6"
-      y2="13"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
+    <path d="M2.6 10 L7 3 L11.4 10 M4.1 7.6 H9.9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    <line x1="1.4" y1="13" x2="12.6" y2="13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
   </svg>
 );
 const BASELINE_ARROW = (
   <svg viewBox="0 0 14 16" width="14" height="16" fill="none" aria-hidden="true">
-    <path
-      d="M7 3 V9.2 M4.4 6.9 L7 9.6 L9.6 6.9"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <line
-      x1="1.4"
-      y1="13"
-      x2="12.6"
-      y2="13"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
+    <path d="M7 3 V9.2 M4.4 6.9 L7 9.6 L9.6 6.9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    <line x1="1.4" y1="13" x2="12.6" y2="13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
   </svg>
 );
 
@@ -337,11 +281,7 @@ function useLiveTimer(onLive: (value: string) => void) {
 
 // The options of one axis dropdown: its values with their screen-axis labels and
 // icons, then "Custom".
-function axisOptions(
-  values: readonly string[],
-  prop: string,
-  axis: 'x' | 'y',
-): SelectOption<string>[] {
+function axisOptions(values: readonly string[], prop: string, axis: 'x' | 'y'): SelectOption<string>[] {
   const options: SelectOption<string>[] = values.map((option) => ({
     value: option,
     label: axisLabel(option, axis),
@@ -355,10 +295,7 @@ function axisOptions(
 // align-items, per direction); `fallback` is the CSS default shown when unset. The
 // last option is always "Custom", which seeds `unset` and reveals a free-text field
 // for any other value.
-type AxisSelectProps = Pick<
-  Props,
-  'busy' | 'read' | 'onSet' | 'onLive' | 'onClear' | 'onProvenance' | 'onSelectSelector'
-> & {
+type AxisSelectProps = Pick<Props, 'busy' | 'read' | 'onSet' | 'onLive' | 'onClear' | 'onProvenance' | 'onSelectSelector'> & {
   axis: 'x' | 'y';
   label: string;
   prop: string;
@@ -392,8 +329,7 @@ function AxisSelect(props: AxisSelectProps) {
   // Hover scrub: preview the option under the pointer on the canvas, and put the
   // original back when the list closes without a pick. "Custom" has no value of its own
   // to show, so landing on it reverts rather than previewing `unset`.
-  const preview = (option: string | undefined) =>
-    onLive(prop, option === CUSTOM ? undefined : option);
+  const preview = (option: string | undefined) => onLive(prop, option === CUSTOM ? undefined : option);
 
   return (
     <div className="embed-editor_align-axis">
@@ -469,13 +405,7 @@ function AlignDots({ column, busy, onSet }: Pick<Props, 'column' | 'busy' | 'onS
 
 // The preview square: a 3×3 grid of click targets (start / center / end on each
 // axis) under a real-flex bar preview that lays out with the current values.
-function AlignBox({
-  justify,
-  align,
-  column,
-  busy,
-  onSet,
-}: Pick<Props, 'justify' | 'align' | 'column' | 'busy' | 'onSet'>) {
+function AlignBox({ justify, align, column, busy, onSet }: Pick<Props, 'justify' | 'align' | 'column' | 'busy' | 'onSet'>) {
   const justifyValue = norm(justify) || 'flex-start';
   const alignValue = norm(align) || 'stretch';
   const isBaseline = alignValue === 'baseline';
@@ -483,9 +413,7 @@ function AlignBox({
   // other value → a short fixed-length bar that align-items then positions (Webflow
   // shows the children as small ticks unless they're stretched).
   const cross = alignValue === 'stretch' ? undefined : '28%';
-  const barStyle: CSSProperties = column
-    ? { height: 2, width: cross }
-    : { width: 2, height: cross };
+  const barStyle: CSSProperties = column ? { height: 2, width: cross } : { width: 2, height: cross };
   // Baseline aligns items to the first text baseline — i.e. the cross-axis start (the
   // top of a row) — so pin the A↓ glyph there (like Webflow), while the other axis
   // (justify-content) still positions it left/center/right.
@@ -511,17 +439,8 @@ function AlignBox({
               key={i}
               className="embed-editor_align-bar"
               style={barStyle}
-              title={
-                justifyValue === 'space-between'
-                  ? 'Double-click to align here'
-                  : 'Double-click for Space between'
-              }
-              onDoubleClick={() =>
-                onSet(
-                  'justify-content',
-                  justifyValue === 'space-between' ? position : 'space-between',
-                )
-              }
+              title={justifyValue === 'space-between' ? 'Double-click to align here' : 'Double-click for Space between'}
+              onDoubleClick={() => onSet('justify-content', justifyValue === 'space-between' ? position : 'space-between')}
             />
           ))
         )}
@@ -530,18 +449,7 @@ function AlignBox({
   );
 }
 
-export default function AlignControl({
-  justify,
-  align,
-  column,
-  busy,
-  read,
-  onSet,
-  onLive,
-  onClear,
-  onProvenance,
-  onSelectSelector,
-}: Props) {
+export default function AlignControl({ justify, align, column, busy, read, onSet, onLive, onClear, onProvenance, onSelectSelector }: Props) {
   // X = horizontal screen axis, Y = vertical. In a column layout the main axis is
   // vertical, so justify/align swap which screen axis they drive.
   const xProp = column ? 'align-items' : 'justify-content';

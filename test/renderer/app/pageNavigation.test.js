@@ -84,15 +84,7 @@ test('out-of-order page reads and external reads cannot replace the current edit
   const url = 'http://localhost/';
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { url, pretendToBeVisual: true });
   const { window } = dom;
-  const shared = [
-    'window',
-    'document',
-    'navigator',
-    'HTMLElement',
-    'Element',
-    'Node',
-    'MutationObserver',
-  ];
+  const shared = ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'MutationObserver'];
   for (const key of shared) {
     global[key] = key === 'window' ? window : window[key];
   }
@@ -259,11 +251,7 @@ test('out-of-order page reads and external reads cannot replace the current edit
     await tick();
   });
   assert.equal(shown(), 'third');
-  assert.equal(
-    __panels.PreviewPane.navHoverPath,
-    undefined,
-    'Installing a page clears navigator hover so canvas hover can take over',
-  );
+  assert.equal(__panels.PreviewPane.navHoverPath, undefined, 'Installing a page clears navigator hover so canvas hover can take over');
   await act(async () => {
     reads[1].resolve(pageState('stale-second'));
     await tick();
@@ -322,11 +310,7 @@ test('out-of-order page reads and external reads cannot replace the current edit
   await wait(350);
   assert.equal(edits.at(-1).pagePath, pages[2].path);
   assert.equal(edits.at(-1).edit.tag, 'set-attribute', 'saved as a request, never a whole model');
-  assert.equal(
-    edits.at(-1).authoredChecksum,
-    sha256(textOf('latest-disk')),
-    'the save names the bytes it edited',
-  );
+  assert.equal(edits.at(-1).authoredChecksum, sha256(textOf('latest-disk')), 'the save names the bytes it edited');
   assert.equal(disk.get(pages[2].path), '<div data-label="latest-disk" title="keep this"></div>\n');
   let openComponent;
   await act(async () => {
@@ -465,10 +449,7 @@ test('out-of-order page reads and external reads cannot replace the current edit
   const readsBefore = reads.length;
   await navigate('/third');
   assert.equal(reads.length, readsBefore, 'a conflicted page blocks navigation before any read');
-  assert.match(
-    document.querySelector('.toast.error').textContent,
-    /conflict with a change on disk/,
-  );
+  assert.match(document.querySelector('.toast.error').textContent, /conflict with a change on disk/);
   // Review shows the local version as text; keeping it saves that text as a
   // patch of the bytes on disk — read when the save is sent — deliberately,
   // never as a whole model.

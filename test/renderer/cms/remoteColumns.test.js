@@ -54,11 +54,7 @@ test('a column sorts smallest first, then largest first, and back', () => {
 
 test('names sort as a person reads them, dates by time, and empty values go last', () => {
   assert.deepEqual(ids(sortItems(rows, { key: 'title', direction: 'ascending' })), ['c', 'b', 'a']);
-  assert.deepEqual(ids(sortItems(rows, { key: 'updated', direction: 'descending' })), [
-    'a',
-    'c',
-    'b',
-  ]);
+  assert.deepEqual(ids(sortItems(rows, { key: 'updated', direction: 'descending' })), ['a', 'c', 'b']);
   for (const direction of ['ascending', 'descending']) {
     const sorted = ids(sortItems(rows, { key: 'cell:author', direction }));
     assert.equal(sorted.at(-1), 'b', `the row without an author is last ${direction}`);
@@ -72,6 +68,15 @@ test('cells read as short lines, and only fields with one can be columns', () =>
   assert.equal(cellText(4), '4');
   assert.equal(cellText(undefined), '—');
   assert.equal(cellText(''), '—');
+  // Dates read as people read them, in local time; text that only looks like one stays.
+  const day = { month: 'short', day: 'numeric', year: 'numeric' };
+  assert.equal(cellText('2026-08-17'), new Date(2026, 7, 17).toLocaleDateString(undefined, day));
+  assert.equal(cellText('2026-08-17T15:30:00'), new Date(2026, 7, 17, 15, 30).toLocaleString(undefined, { ...day, hour: 'numeric', minute: '2-digit' }));
+  const utcMidnight = new Date('2026-08-17T00:00:00+00:00');
+  assert.notEqual(cellText('2026-08-17T00:00:00+00:00'), '2026-08-17T00:00:00+00:00');
+  assert.ok(cellText('2026-08-17T00:00:00+00:00').includes(String(utcMidnight.getFullYear())));
+  assert.equal(cellText('2026-08-17 notes'), '2026-08-17 notes');
+  assert.equal(cellText('2026-13-45'), '2026-13-45');
   const field = (name, type) => ({
     name,
     title: name,

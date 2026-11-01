@@ -429,19 +429,11 @@ export const PhoneIcon = (props: IconProps) => (
 export const AssetManagerIcon = (props: IconProps) => (
   <I24 {...props}>
     <path d={paths.assetManagerIconPath1} fill="currentColor" />
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d={paths.assetManagerIconPath2}
-      fill="currentColor"
-    />
+    <path fillRule="evenodd" clipRule="evenodd" d={paths.assetManagerIconPath2} fill="currentColor" />
     <g opacity="0.4">
       <path d={paths.assetManagerIconPath3} fill="currentColor" />
       <path d={paths.assetManagerIconPath4} fill="currentColor" />
-      <path
-        d="M12.5 18.9999H8L11.6464 15.3535C11.9614 15.0385 12.5 15.2616 12.5 15.707V18.9999Z"
-        fill="currentColor"
-      />
+      <path d="M12.5 18.9999H8L11.6464 15.3535C11.9614 15.0385 12.5 15.2616 12.5 15.707V18.9999Z" fill="currentColor" />
     </g>
   </I24>
 );
@@ -478,12 +470,7 @@ export const NavigatorIcon = (props: IconProps) => (
 
 export const ComponentFillIcon = (props: IconProps) => (
   <I24 {...props}>
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d={paths.componentFillIconPath1}
-      fill="currentColor"
-    />
+    <path fillRule="evenodd" clipRule="evenodd" d={paths.componentFillIconPath1} fill="currentColor" />
     <g opacity="0.4">
       <path d={paths.componentFillIconPath2} fill="currentColor" />
       <path d={paths.componentFillIconPath3} fill="currentColor" />
@@ -508,13 +495,7 @@ export const CanvasIcon = (props: IconProps) => (
 
 // Three dots: the row's own menu, shown on hover.
 export const MoreIcon = (props: IconProps) => (
-  <svg
-    viewBox="0 0 16 16"
-    width={props?.size || 14}
-    height={props?.size || 14}
-    fill="currentColor"
-    aria-hidden="true"
-  >
+  <svg viewBox="0 0 16 16" width={props?.size || 14} height={props?.size || 14} fill="currentColor" aria-hidden="true">
     <circle cx="3.5" cy="8" r="1.3" />
     <circle cx="8" cy="8" r="1.3" />
     <circle cx="12.5" cy="8" r="1.3" />
@@ -605,13 +586,7 @@ export const HelpCircleIcon = ({ size = 16, className, style }: IconProps) => (
   >
     <path d={paths.helpCircleIconPath1} fill="currentColor" />
     <path d={paths.helpCircleIconPath2} fill="currentColor" />
-    <path
-      opacity="0.4"
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d={paths.helpCircleIconPath3}
-      fill="currentColor"
-    />
+    <path opacity="0.4" fillRule="evenodd" clipRule="evenodd" d={paths.helpCircleIconPath3} fill="currentColor" />
   </svg>
 );
 
@@ -707,30 +682,11 @@ export function astroAssetIcon(name: unknown, size = 14, className?: string) {
     >
       {/* A second frame behind the first says "more than one source". */}
       {stack && (
-        <path
-          d="M4.5 3.5H2.75A.75.75 0 0 0 2 4.25v8a.75.75 0 0 0 .75.75H10"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-          opacity="0.55"
-        />
+        <path d="M4.5 3.5H2.75A.75.75 0 0 0 2 4.25v8a.75.75 0 0 0 .75.75H10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity="0.55" />
       )}
-      <rect
-        x={stack ? 5 : 2.6}
-        y={stack ? 2 : 3}
-        width={stack ? 9 : 10.8}
-        height={stack ? 9 : 10}
-        rx="1.1"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
+      <rect x={stack ? 5 : 2.6} y={stack ? 2 : 3} width={stack ? 9 : 10.8} height={stack ? 9 : 10} rx="1.1" stroke="currentColor" strokeWidth="1.2" />
       <circle cx={stack ? 7.6 : 5.6} cy={stack ? 4.7 : 5.9} r="1" fill="currentColor" />
-      <path
-        d={stack ? 'M5.4 10.2 8.2 7.6l5.2 4.6' : 'M3 12.2l3.4-3.2 6.6 5.5'}
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
+      <path d={stack ? 'M5.4 10.2 8.2 7.6l5.2 4.6' : 'M3 12.2l3.4-3.2 6.6 5.5'} stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -761,12 +717,9 @@ export const VariableIcon = ({ size = 24, className, style }: IconProps) => (
 );
 
 // Original vector paths, split only for source readability.
-const fileIconPath1 =
-  'M4.5 1.75h4.4l3.1 3.1v9.15a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5V2.25a.5.5 0 ' + '0 1 .5-.5Z';
+const fileIconPath1 = 'M4.5 1.75h4.4l3.1 3.1v9.15a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5V2.25a.5.5 0 ' + '0 1 .5-.5Z';
 
-const commentIconPath1 =
-  'M13.5 7.6c0 2.8-2.5 5-5.5 5-.7 0-1.4-.1-2-.35L2.8 13l.6-2.5A4.7 4.7 0 0 1 2' +
-  '.5 7.6c0-2.8 2.5-5 5.5-5s5.5 2.2 5.5 5Z';
+const commentIconPath1 = 'M13.5 7.6c0 2.8-2.5 5-5.5 5-.7 0-1.4-.1-2-.35L2.8 13l.6-2.5A4.7 4.7 0 0 1 2' + '.5 7.6c0-2.8 2.5-5 5.5-5s5.5 2.2 5.5 5Z';
 
 const componentPropertiesIconPath1 =
   'M8.47885 1.69162C8.18037 1.52882 7.81963 1.52882 7.52115 1.69162L2.52115 4.' +

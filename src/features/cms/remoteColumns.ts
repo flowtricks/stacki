@@ -5,11 +5,7 @@
 // are a way of looking, not part of the site.
 import { useState } from 'react';
 import { assert } from '../../../shared/core/assert';
-import {
-  CMS_REMOTE_LIMITS,
-  type RemoteCell,
-  type RemoteDocumentSummary,
-} from '../../../shared/properties/cmsRemote';
+import { CMS_REMOTE_LIMITS, type RemoteCell, type RemoteDocumentSummary } from '../../../shared/properties/cmsRemote';
 import type { RemoteSchemaField } from '../../../shared/properties/cmsRemoteSchema';
 
 /** A field shown as a column: its name in the CMS, and its label. */
@@ -34,10 +30,7 @@ export function nextSort(current: RemoteSort | undefined, key: RemoteSortKey): R
 }
 
 /** The rows in the sort's order; without one, in the CMS's own. Empty values go last. */
-export function sortItems(
-  items: readonly RemoteDocumentSummary[],
-  sort: RemoteSort | undefined,
-): readonly RemoteDocumentSummary[] {
+export function sortItems(items: readonly RemoteDocumentSummary[], sort: RemoteSort | undefined): readonly RemoteDocumentSummary[] {
   if (sort === undefined) {
     return items;
   }
@@ -83,7 +76,7 @@ function compare(left: RemoteCell, right: RemoteCell): number {
   });
 }
 
-/** A cell as text: a switch as Yes or No, a number as written. */
+/** A cell as text: a switch as Yes or No, a date as people read it, a number as written. */
 export function cellText(cell: RemoteCell | undefined): string {
   if (cell === undefined || cell === '') {
     return '—';
@@ -91,7 +84,33 @@ export function cellText(cell: RemoteCell | undefined): string {
   if (typeof cell === 'boolean') {
     return cell ? 'Yes' : 'No';
   }
+  if (typeof cell === 'string') {
+    return dateText(cell) ?? cell;
+  }
   return String(cell);
+}
+
+// Only whole ISO values count as dates, so text that merely starts with one stays as written.
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:?\d{2})?$/;
+
+// A date as "Aug 17, 2026"; a moment in local time, with its time unless it falls at midnight.
+// A calendar date is read at local midnight: read as UTC it would show the day before west of Greenwich.
+function dateText(value: string): string | undefined {
+  const day = { month: 'short', day: 'numeric', year: 'numeric' } as const;
+  if (ISO_DATE.test(value)) {
+    const date = new Date(`${value}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? undefined : date.toLocaleDateString(undefined, day);
+  }
+  if (ISO_DATETIME.test(value)) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return undefined;
+    }
+    const midnight = date.getHours() === 0 && date.getMinutes() === 0;
+    return midnight ? date.toLocaleDateString(undefined, day) : date.toLocaleString(undefined, { ...day, hour: 'numeric', minute: '2-digit' });
+  }
+  return undefined;
 }
 
 /** Fields a column can show: the ones with a line of text, a number or a switch to read. */
@@ -121,11 +140,10 @@ const LEAD_PX = 28;
  * The grid of a table with these columns, and the width below which it scrolls
  * sideways instead of squeezing: every column keeps a readable width.
  */
-export function tableGrid(shape: {
-  readonly lead: boolean;
-  readonly status: boolean;
-  readonly columns: number;
-}): { readonly columns: string; readonly widthPx: number } {
+export function tableGrid(shape: { readonly lead: boolean; readonly status: boolean; readonly columns: number }): {
+  readonly columns: string;
+  readonly widthPx: number;
+} {
   assert(shape.columns <= CMS_REMOTE_LIMITS.columnsMax, 'A table shows few columns');
   const parts = [
     ...(shape.lead ? [`${LEAD_PX}px`] : []),
@@ -135,21 +153,13 @@ export function tableGrid(shape: {
     `${UPDATED_PX}px`,
     `${PIN_PX}px`,
   ];
-  const widthPx =
-    (shape.lead ? LEAD_PX : 0) +
-    NAME_MIN_PX +
-    (shape.status ? STATUS_PX : 0) +
-    shape.columns * COLUMN_MIN_PX +
-    UPDATED_PX +
-    PIN_PX;
+  const widthPx = (shape.lead ? LEAD_PX : 0) + NAME_MIN_PX + (shape.status ? STATUS_PX : 0) + shape.columns * COLUMN_MIN_PX + UPDATED_PX + PIN_PX;
   assert(widthPx > NAME_MIN_PX, 'A table is wider than its name column');
   return { columns: parts.join(' '), widthPx };
 }
 
 /** The columns chosen for one collection, remembered in this browser. */
-export function useColumnChoice(
-  key: string,
-): readonly [readonly RemoteColumn[], (columns: readonly RemoteColumn[]) => void] {
+export function useColumnChoice(key: string): readonly [readonly RemoteColumn[], (columns: readonly RemoteColumn[]) => void] {
   const storageKey = `stacki:cms-columns:${key}`;
   const [columns, setColumns] = useState<readonly RemoteColumn[]>(() => readColumns(storageKey));
   const choose = (next: readonly RemoteColumn[]) => {
@@ -179,12 +189,8 @@ function readColumns(storageKey: string): readonly RemoteColumn[] {
   const items: readonly unknown[] = stored;
   return items.slice(0, CMS_REMOTE_LIMITS.columnsMax).flatMap((item): RemoteColumn[] => {
     const name: unknown = typeof item === 'object' && item !== null ? Reflect.get(item, 'name') : 0;
-    const title: unknown =
-      typeof item === 'object' && item !== null ? Reflect.get(item, 'title') : 0;
-    const valid =
-      typeof name === 'string' &&
-      /^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$/.test(name) &&
-      !name.startsWith('_');
+    const title: unknown = typeof item === 'object' && item !== null ? Reflect.get(item, 'title') : 0;
+    const valid = typeof name === 'string' && /^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$/.test(name) && !name.startsWith('_');
     return valid && typeof title === 'string' ? [{ name, title: title.slice(0, 200) }] : [];
   });
 }

@@ -10,9 +10,7 @@ import type { RemoteCmsSelection } from './remoteCmsShared';
 import { columnFields, type RemoteColumn } from './remoteColumns';
 
 type Fields =
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'ready'; readonly fields: readonly RemoteColumn[] }
-  | { readonly kind: 'failed'; readonly message: string };
+  { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly fields: readonly RemoteColumn[] } | { readonly kind: 'failed'; readonly message: string };
 
 export function RemoteColumnPicker(props: {
   readonly projectPath: string;
@@ -29,22 +27,14 @@ export function RemoteColumnPicker(props: {
       setFields({ kind: 'loading' });
       const { connection, collection } = props.selection;
       void remoteTemplate(props.projectPath, connection.id, collection).then((template) =>
-        setFields(
-          template.ok
-            ? { kind: 'ready', fields: columnFields(template.value.fields) }
-            : { kind: 'failed', message: template.message },
-        ),
+        setFields(template.ok ? { kind: 'ready', fields: columnFields(template.value.fields) } : { kind: 'failed', message: template.message }),
       );
     }
   };
   const chosen = new Set(props.columns.map((column) => column.name));
   // Toggled in the order the fields come, so the columns keep the schema's order.
   const toggle = (field: RemoteColumn, all: readonly RemoteColumn[]) =>
-    props.onColumns(
-      all.filter((each) =>
-        each.name === field.name ? !chosen.has(each.name) : chosen.has(each.name),
-      ),
-    );
+    props.onColumns(all.filter((each) => (each.name === field.name ? !chosen.has(each.name) : chosen.has(each.name))));
   const rect = button.current?.getBoundingClientRect();
   return (
     <>

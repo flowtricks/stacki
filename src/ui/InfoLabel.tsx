@@ -1,21 +1,11 @@
 import { useId, useState } from 'react';
 import './infoLabel.css';
 
-export function InfoLabel({
-  label,
-  description,
-}: {
-  readonly label: string;
-  readonly description: string;
-}) {
+export function InfoLabel({ label, description }: { readonly label: string; readonly description: string }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   return (
-    <span
-      className="info-label"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
+    <span className="info-label" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
       <span>{label}</span>
       <button
         type="button"

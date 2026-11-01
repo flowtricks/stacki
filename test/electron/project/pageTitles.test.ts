@@ -8,8 +8,7 @@ import { parsePage } from '#dist/electron/parse/astroParser.js';
 import { layoutPageTitle } from '#dist/shared/page/pageTitle.js';
 
 const page = { path: '/site/src/pages/example.astro', name: 'example.astro', route: '/example' };
-const wrap = (props: string) =>
-  `---\nimport Shell from '../layouts/Base.astro';\n---\n<Shell ${props}><h1>Hello</h1></Shell>`;
+const wrap = (props: string) => `---\nimport Shell from '../layouts/Base.astro';\n---\n<Shell ${props}><h1>Hello</h1></Shell>`;
 
 for (const [source, title] of [
   [wrap('title="Example Components"'), 'Example Components'],
@@ -35,9 +34,7 @@ for (const [source, title] of [
 test('missing source and non-Astro pages retain their file identity', () => {
   assert.deepEqual(scanPageTitles([page], []), [page]);
   const markdown = { ...page, path: '/site/src/pages/post.md', name: 'post.md' };
-  assert.deepEqual(scanPageTitles([markdown], [{ file: markdown.path, text: wrap('') }]), [
-    markdown,
-  ]);
+  assert.deepEqual(scanPageTitles([markdown], [{ file: markdown.path, text: wrap('') }]), [markdown]);
 });
 
 test('imported wrappers supply inherited titles without overriding explicit page props', () => {
@@ -52,15 +49,8 @@ test('imported wrappers supply inherited titles without overriding explicit page
     ['title=""', undefined],
     ['title={runtimeTitle}', undefined],
   ] as const) {
-    const source = wrap(props).replace(
-      '../layouts/Base.astro',
-      '@/components/ResourcesLayout.astro',
-    );
-    const scanned = scanPageTitles(
-      [page],
-      [{ file: page.path, text: source }, wrapper],
-      aliases,
-    )[0];
+    const source = wrap(props).replace('../layouts/Base.astro', '@/components/ResourcesLayout.astro');
+    const scanned = scanPageTitles([page], [{ file: page.path, text: source }, wrapper], aliases)[0];
     assert.equal(scanned?.title, expected);
     assert.equal(scanned?.inheritedTitle, 'The Church Resources');
     const parsed = parsePage(source);
@@ -78,10 +68,7 @@ test('missing, cyclic, dynamic and excessively deep wrappers fall back safely', 
   assert.equal(scanPageTitles([page], [pageSource])[0]?.title, undefined);
   const sources = Array.from({ length: 34 }, (_, index) => ({
     file: `/site/src/layouts/Layer${index}.astro`,
-    text: wrap(index === 33 ? 'title="Too deep"' : '').replace(
-      '../layouts/Base.astro',
-      `./Layer${index + 1}.astro`,
-    ),
+    text: wrap(index === 33 ? 'title="Too deep"' : '').replace('../layouts/Base.astro', `./Layer${index + 1}.astro`),
   }));
   const first = { ...pageSource, text: wrap('').replace('Base.astro', 'Layer0.astro') };
   assert.equal(scanPageTitles([page], [first, ...sources])[0]?.title, undefined);

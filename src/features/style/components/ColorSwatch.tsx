@@ -38,16 +38,9 @@ export default function ColorSwatch({
         className="u-color-swatch"
         disabled={busy}
         aria-label={ariaLabel}
-        onClick={() =>
-          setAnchor((previous) =>
-            previous ? undefined : (ref.current?.getBoundingClientRect() ?? undefined),
-          )
-        }
+        onClick={() => setAnchor((previous) => (previous ? undefined : (ref.current?.getBoundingClientRect() ?? undefined)))}
       >
-        <span
-          className="u-color-swatch-fill"
-          style={{ background: fill.trim() || 'transparent' }}
-        />
+        <span className="u-color-swatch-fill" style={{ background: fill.trim() || 'transparent' }} />
       </button>
       {anchor ? (
         <ColorPicker

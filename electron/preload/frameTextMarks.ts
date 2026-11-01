@@ -39,8 +39,7 @@ interface TextMatchAt {
 export function installTextMarks(source: MarkSource): () => void {
   const layer = document.createElement('div');
   layer.setAttribute('data-avb-text-marks', '');
-  layer.style.cssText =
-    'position:fixed;inset:0;pointer-events:none;z-index:2147483646;contain:strict;';
+  layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483646;contain:strict;';
   let frame = 0;
   let pointer: { readonly x: number; readonly y: number } | undefined;
   // The text clicked while its instance stays selected, by catalog key.
@@ -53,22 +52,14 @@ export function installTextMarks(source: MarkSource): () => void {
     // open: the app draws it and its parent in their editing look.
     const editing = source.editing();
     const typing = shown.some(({ target }) => target.key === editing);
-    picked = typing
-      ? editing
-      : shown.some(({ target }) => target.key === picked)
-        ? picked
-        : undefined;
+    picked = typing ? editing : shown.some(({ target }) => target.key === picked) ? picked : undefined;
     const at = pointer;
     const hover = at ? shown.find(({ element }) => holds(element, at)) : undefined;
     const chosen = shown.find(({ target }) => target.key === picked);
     if (!layer.isConnected) {
       document.documentElement.appendChild(layer);
     }
-    layer.replaceChildren(
-      ...shown
-        .filter((match) => match !== hover && match !== chosen)
-        .map(({ element }) => dashedMark(element.getBoundingClientRect())),
-    );
+    layer.replaceChildren(...shown.filter((match) => match !== hover && match !== chosen).map(({ element }) => dashedMark(element.getBoundingClientRect())));
     const message = { type: 'avb:text-marks', hover: report(hover), picked: report(chosen) };
     const text = JSON.stringify(message);
     if (text !== reported) {
@@ -120,16 +111,11 @@ function markedNow(source: MarkSource): TextMatchAt[] {
   const element = source.editingElement();
   const typed = source.catalog()?.targets.find((target) => target.key === editing);
   const typing = typed && element && marked(typed, focus) ? [{ target: typed, element }] : [];
-  const others = matchesWhere(
-    source.catalog(),
-    (target) => marked(target, focus) && target.key !== editing,
-  );
+  const others = matchesWhere(source.catalog(), (target) => marked(target, focus) && target.key !== editing);
   // Text whose element is the instance's own root — a Heading's words in its
   // <h2> — is the selection itself, not something inside it: no second
   // outline or tag is drawn over the selection's.
-  return [...typing, ...others].filter(
-    (match) => !pathsOf(match.element).includes(match.target.scope ?? ''),
-  );
+  return [...typing, ...others].filter((match) => !pathsOf(match.element).includes(match.target.scope ?? ''));
 }
 
 function dashedMark(box: DOMRect): HTMLElement {
@@ -169,10 +155,7 @@ function labelOf(element: Element): { readonly label: string; readonly kind: str
 
 // Where each accepted target's text renders: the element holding it, found
 // the way a double click on the words finds it, once per element.
-function matchesWhere(
-  catalog: CanvasTextCatalog | undefined,
-  accept: (target: CanvasTextTarget) => boolean,
-): TextMatchAt[] {
+function matchesWhere(catalog: CanvasTextCatalog | undefined, accept: (target: CanvasTextTarget) => boolean): TextMatchAt[] {
   const found: TextMatchAt[] = [];
   const seen = new Set<Element>();
   for (const target of catalog?.targets ?? []) {

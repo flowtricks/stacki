@@ -1,11 +1,6 @@
 import { useMemo } from 'react';
 import type { EditorModel } from '../../editor/pageView';
-import {
-  componentSourceRanges,
-  sourceLineLabel,
-  sourceNodeAtOffset,
-  sourceRangeForSelection,
-} from './codePanelModel';
+import { componentSourceRanges, sourceLineLabel, sourceNodeAtOffset, sourceRangeForSelection } from './codePanelModel';
 import CodeEditor from '../../ui/CodeEditor';
 import { CodeIcon } from '../../ui/Icons';
 
@@ -21,14 +16,8 @@ interface CodePanelProps {
 
 export default function CodePanel(props: CodePanelProps) {
   const { source, relativePath, model, selectedId, onChange, onSelect, onOpenComponent } = props;
-  const activeRange = useMemo(
-    () => sourceRangeForSelection(model, selectedId, source.length),
-    [model, selectedId, source.length],
-  );
-  const components = useMemo(
-    () => componentSourceRanges(model?.nodes ?? [], source),
-    [model, source],
-  );
+  const activeRange = useMemo(() => sourceRangeForSelection(model, selectedId, source.length), [model, selectedId, source.length]);
+  const components = useMemo(() => componentSourceRanges(model?.nodes ?? [], source), [model, source]);
   const lineLabel = sourceLineLabel(source, activeRange);
   return (
     <section className="code-panel">

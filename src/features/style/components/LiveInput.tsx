@@ -120,17 +120,12 @@ export default function LiveInput({
 // either way there is none.
 function suffixSpan(suffix: ReactNode): ReactNode {
   const shown = suffix ?? undefined;
-  return shown !== undefined ? (
-    <span className="embed-editor_field-suffix">{shown}</span>
-  ) : undefined;
+  return shown !== undefined ? <span className="embed-editor_field-suffix">{shown}</span> : undefined;
 }
 
 // Enter commits in place; an arrow key steps the number under the caret and returns
 // the stepped text (already written into the field), or undefined when nothing stepped.
-function keyDownStep(
-  event: KeyboardEvent<HTMLInputElement>,
-  min: number | undefined,
-): string | undefined {
+function keyDownStep(event: KeyboardEvent<HTMLInputElement>, min: number | undefined): string | undefined {
   if (event.key === 'Enter') {
     commitInPlace(event.currentTarget);
     return undefined;

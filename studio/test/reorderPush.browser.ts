@@ -29,9 +29,7 @@ async function checkReorder() {
   const browser = await chromium.launch({
     executablePath:
       process.env['CHROME_PATH'] ??
-      (process.platform === 'darwin'
-        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-        : chromium.executablePath()),
+      (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
     headless: true,
   });
   try {
@@ -79,10 +77,7 @@ async function holdRefresh(page: Page) {
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const observed = page.waitForRequest(
-    (request) => request.resourceType() === 'fetch' && new URL(request.url()).pathname === '/',
-    { timeout: 10_000 },
-  );
+  const observed = page.waitForRequest((request) => request.resourceType() === 'fetch' && new URL(request.url()).pathname === '/', { timeout: 10_000 });
   let heldCount = 0;
   await page.route('**/*', async (route) => {
     const request = route.request();

@@ -4,11 +4,7 @@
 // their fixed id (astroContent.ts), go to the content handlers through the CMS
 // transport both hosts provide. The views stay the same for both.
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
-import {
-  ASTRO_CONTENT_ID,
-  type AstroRemoteEdit,
-  type AstroRemoteRead,
-} from '../../shared/properties/astroContent';
+import { ASTRO_CONTENT_ID, type AstroRemoteEdit, type AstroRemoteRead } from '../../shared/properties/astroContent';
 import {
   parseRemoteCollections,
   parseRemoteDocument,
@@ -23,17 +19,10 @@ import {
   type RemoteWrite,
 } from '../../shared/properties/cmsRemote';
 import * as connections from './cmsConnectionsBridge';
-import {
-  parseCollectionSettings,
-  type CollectionSettings,
-  type SettingsChange,
-} from '../../shared/properties/collectionSettings';
+import { parseCollectionSettings, type CollectionSettings, type SettingsChange } from '../../shared/properties/collectionSettings';
 import { cmsTransport } from './editorEnvironment';
 
-export function remoteCollections(
-  projectPath: string,
-  connectionId: string,
-): Promise<RemoteResult<readonly RemoteCollection[]>> {
+export function remoteCollections(projectPath: string, connectionId: string): Promise<RemoteResult<readonly RemoteCollection[]>> {
   return connectionId === ASTRO_CONTENT_ID
     ? read(projectPath, { operation: 'collections' }, parseRemoteCollections)
     : connections.remoteCollections(projectPath, connectionId);
@@ -50,79 +39,49 @@ export function remoteDocuments(
     : connections.remoteDocuments(projectPath, connectionId, collection, columns);
 }
 
-export function remoteDocument(
-  projectPath: string,
-  connectionId: string,
-  id: string,
-): Promise<RemoteResult<RemoteDocument>> {
+export function remoteDocument(projectPath: string, connectionId: string, id: string): Promise<RemoteResult<RemoteDocument>> {
   return connectionId === ASTRO_CONTENT_ID
     ? read(projectPath, { operation: 'document', id }, parseRemoteDocument)
     : connections.remoteDocument(projectPath, connectionId, id);
 }
 
 /** A collection's fields with no values: what a new item is edited as before it is created. */
-export function remoteTemplate(
-  projectPath: string,
-  connectionId: string,
-  collection: string,
-): Promise<RemoteResult<RemoteDocument>> {
+export function remoteTemplate(projectPath: string, connectionId: string, collection: string): Promise<RemoteResult<RemoteDocument>> {
   return connectionId === ASTRO_CONTENT_ID
     ? read(projectPath, { operation: 'template', collection }, parseRemoteDocument)
     : connections.remoteTemplate(projectPath, connectionId, collection);
 }
 
-export function writeRemoteDocument(
-  projectPath: string,
-  connectionId: string,
-  write: RemoteWrite,
-): Promise<RemoteResult<RemoteDocument>> {
+export function writeRemoteDocument(projectPath: string, connectionId: string, write: RemoteWrite): Promise<RemoteResult<RemoteDocument>> {
   return connectionId === ASTRO_CONTENT_ID
     ? edit(projectPath, { operation: 'write', write }, parseRemoteDocument)
     : connections.writeRemoteDocument(projectPath, connectionId, write);
 }
 
-export function createRemoteDocument(
-  projectPath: string,
-  connectionId: string,
-  collection: string,
-): Promise<RemoteResult<RemoteDocumentSummary>> {
+export function createRemoteDocument(projectPath: string, connectionId: string, collection: string): Promise<RemoteResult<RemoteDocumentSummary>> {
   return connectionId === ASTRO_CONTENT_ID
     ? edit(projectPath, { operation: 'create', collection }, parseSummary)
     : connections.createRemoteDocument(projectPath, connectionId, collection);
 }
 
-export function deleteRemoteDocuments(
-  projectPath: string,
-  connectionId: string,
-  ids: readonly string[],
-): Promise<RemoteResult<number>> {
+export function deleteRemoteDocuments(projectPath: string, connectionId: string, ids: readonly string[]): Promise<RemoteResult<number>> {
   return connectionId === ASTRO_CONTENT_ID
     ? edit(projectPath, { operation: 'delete', ids }, parseRemoved)
     : connections.deleteRemoteDocuments(projectPath, connectionId, ids);
 }
 
 /** A content collection's settings: its name and fields as its config states them. */
-export function collectionSettings(
-  projectPath: string,
-  collection: string,
-): Promise<RemoteResult<CollectionSettings>> {
+export function collectionSettings(projectPath: string, collection: string): Promise<RemoteResult<CollectionSettings>> {
   return read(projectPath, { operation: 'settings', collection }, parseCollectionSettings);
 }
 
 /** Changes a content collection's settings, its entries and the code that names it. */
-export function changeCollectionSettings(
-  projectPath: string,
-  collection: string,
-  change: SettingsChange,
-): Promise<RemoteResult<CollectionSettings>> {
+export function changeCollectionSettings(projectPath: string, collection: string, change: SettingsChange): Promise<RemoteResult<CollectionSettings>> {
   return edit(projectPath, { operation: 'settings', collection, change }, parseCollectionSettings);
 }
 
 /** Adds a content collection named from `label` (a typed name) to the content config. */
-export function createContentCollection(
-  projectPath: string,
-  label: string,
-): Promise<RemoteResult<RemoteCollection>> {
+export function createContentCollection(projectPath: string, label: string): Promise<RemoteResult<RemoteCollection>> {
   return edit(projectPath, { operation: 'createCollection', name: label }, (value) => {
     const [collection] = parseRemoteCollections([value]);
     if (collection === undefined) {
@@ -132,22 +91,14 @@ export function createContentCollection(
   });
 }
 
-async function read<T>(
-  projectPath: string,
-  request: AstroRemoteRead,
-  parse: (value: unknown) => T,
-): Promise<RemoteResult<T>> {
+async function read<T>(projectPath: string, request: AstroRemoteRead, parse: (value: unknown) => T): Promise<RemoteResult<T>> {
   return attempt(async () => {
     const payload = parseIpcPayload('content:remoteRead', { projectPath, request });
     return parseRemoteResult(await cmsTransport.contentRemoteRead(payload), parse);
   });
 }
 
-async function edit<T>(
-  projectPath: string,
-  request: AstroRemoteEdit,
-  parse: (value: unknown) => T,
-): Promise<RemoteResult<T>> {
+async function edit<T>(projectPath: string, request: AstroRemoteEdit, parse: (value: unknown) => T): Promise<RemoteResult<T>> {
   return attempt(async () => {
     // The payload parser checks the request, a typed collection name included.
     const payload = parseIpcPayload('content:remoteEdit', { projectPath, request });

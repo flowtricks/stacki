@@ -60,10 +60,7 @@ const check = (what, condition, detail) => {
     ['{ setHost }', 'src/features/style/model/host.ts'],
     ['{ forgetComputedStyles }', 'src/features/style/model/computedStyle.ts'],
   ];
-  fs.writeFileSync(
-    entry,
-    reexports.map(([names, file]) => `export ${names} from ${sourceSpecifier(file)};\n`).join(''),
-  );
+  fs.writeFileSync(entry, reexports.map(([names, file]) => `export ${names} from ${sourceSpecifier(file)};\n`).join(''));
   const bundlePath = path.join(buildDirectory, 'computed-hold.bundle.js');
   await esbuild.build({
     entryPoints: [entry],
@@ -189,9 +186,7 @@ const check = (what, condition, detail) => {
     };
     const selected = () => {
       const bar = host.querySelector('[aria-label="Pointer events"]');
-      const on = [...bar.querySelectorAll('.embed-editor_display-seg')].filter((segment) =>
-        segment.classList.contains('is-selected'),
-      );
+      const on = [...bar.querySelectorAll('.embed-editor_display-seg')].filter((segment) => segment.classList.contains('is-selected'));
       return on.map((segment) => segment.getAttribute('aria-label')).join(',') || '(none)';
     };
     await render();
@@ -228,11 +223,7 @@ const check = (what, condition, detail) => {
       `${mounted.selected()} — this is the guess, and the page has not been asked yet`,
     );
     await mounted.answer();
-    check(
-      'and the answer confirms it, so nothing moved at all',
-      mounted.selected() === 'None',
-      mounted.selected(),
-    );
+    check('and the answer confirms it, so nothing moved at all', mounted.selected() === 'None', mounted.selected());
     await mounted.done();
   }
 
@@ -250,11 +241,7 @@ const check = (what, condition, detail) => {
     check('still holds while the page is asked', mounted.selected() === 'None', mounted.selected());
     await mounted.answer();
     // One move, and to the place the page actually named.
-    check(
-      'then moves once, to what the page says',
-      mounted.selected() === 'Auto',
-      mounted.selected(),
-    );
+    check('then moves once, to what the page says', mounted.selected() === 'Auto', mounted.selected());
     await mounted.done();
   }
 
@@ -269,11 +256,7 @@ const check = (what, condition, detail) => {
     check('the authored value still wins', mounted.selected() === 'None', mounted.selected());
     await mounted.clear('pointer-events');
     await mounted.settle();
-    check(
-      'clearing falls back at once with no page to ask',
-      mounted.selected() === 'Auto',
-      mounted.selected(),
-    );
+    check('clearing falls back at once with no page to ask', mounted.selected() === 'Auto', mounted.selected());
     await mounted.done();
     globalThis.__noCanvas = false;
   }
@@ -336,9 +319,7 @@ const check = (what, condition, detail) => {
     console.error(`computed-hold: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
-  console.log(
-    `computed-hold: ${checked} passed  [holds while asking, falls back with nothing to ask]`,
-  );
+  console.log(`computed-hold: ${checked} passed  [holds while asking, falls back with nothing to ask]`);
 })().catch((error) => {
   console.error(error);
   process.exit(1);

@@ -20,36 +20,21 @@ function fixture() {
     fs.writeFileSync(path.join(root, file), source);
   };
   const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
-  write(
-    'src/pages/about/index.astro',
-    `---\nimport Card from '../../components/Card.astro';\n---\n<Card />`,
-  );
+  write('src/pages/about/index.astro', `---\nimport Card from '../../components/Card.astro';\n---\n<Card />`);
   write('src/pages/about/team.astro', '<a href="/about/">About</a>');
   write('src/components/Card.astro', '<a href="/about/team?q=1#bio">Team</a>');
   write('src/pages/index.astro', '<a href="/about">About</a><a href="/about-us">Keep</a>');
   write('src/data/menu.json', '{"url":"/about/team"}');
   write('public/sitemap.xml', '<loc>https://example.com/about/</loc>');
   write('astro.config.mjs', `export default { site: 'https://example.com' };`);
-  write(
-    '.stacki/pages.json',
-    '{"version":1,"entries":["about/","about/team.astro","about/index.astro","index.astro"]}',
-  );
+  write('.stacki/pages.json', '{"version":1,"entries":["about/","about/team.astro","about/index.astro","index.astro"]}');
   return { root, read, write, close: () => fs.rmSync(root, { recursive: true, force: true }) };
 }
 
 test('rename boundaries reject traversal, bad names and invalid page extensions', () => {
   const good = { kind: 'page', from: 'about.astro', to: 'company.astro' };
   assert.deepEqual(parsePageRename(good), good);
-  for (const to of [
-    '',
-    '../secret.astro',
-    '/home.astro',
-    'a\\b.astro',
-    'a?b.astro',
-    'a//b.astro',
-    'file.exe',
-    'x'.repeat(501),
-  ]) {
+  for (const to of ['', '../secret.astro', '/home.astro', 'a\\b.astro', 'a?b.astro', 'a//b.astro', 'file.exe', 'x'.repeat(501)]) {
     assert.throws(() => parsePageRename({ ...good, to }));
   }
   assert.throws(() => parsePageRename({ ...good, kind: 'other' }));
@@ -65,14 +50,8 @@ test('URL collisions include index aliases, folders, case and dynamic parameter 
   for (const to of ['about.astro', 'ABOUT.astro', 'empty.astro', 'blog/[slug].astro']) {
     assert.equal(pageRenameConflicts({ kind: 'page', from: 'old.astro', to }, inventory).ok, false);
   }
-  assert.equal(
-    pageRenameConflicts({ kind: 'folder', from: 'about', to: 'about/child' }, inventory).ok,
-    false,
-  );
-  assert.equal(
-    pageRenameConflicts({ kind: 'folder', from: 'about', to: 'company' }, inventory).ok,
-    true,
-  );
+  assert.equal(pageRenameConflicts({ kind: 'folder', from: 'about', to: 'about/child' }, inventory).ok, false);
+  assert.equal(pageRenameConflicts({ kind: 'folder', from: 'about', to: 'company' }, inventory).ok, true);
 });
 
 test('literal link rewriting preserves external URLs, prefix lookalikes, query and hash', () => {
@@ -93,10 +72,7 @@ test('literal link rewriting preserves external URLs, prefix lookalikes, query a
   ]) {
     assert.equal(renamePageLink(before ?? '', context), after);
   }
-  assert.equal(
-    renamePageLinks('[Team](/about/team) <a href=/about>About</a>', context),
-    '[Team](/company/team) <a href=/company>About</a>',
-  );
+  assert.equal(renamePageLinks('[Team](/about/team) <a href=/about>About</a>', context), '[Team](/company/team) <a href=/company>About</a>');
   assert.equal(renamePageLinks('{"url":"\\/about"}', context), '{"url":"\\/company"}');
 });
 
@@ -167,9 +143,7 @@ test('stale plans refuse writes and a failed write restores earlier links', () =
       ...writer,
       write: (entry) => {
         writes++;
-        return writes === 2
-          ? { ok: false, error: { code: 'disk', message: 'Disk full' } }
-          : writer.write(entry);
+        return writes === 2 ? { ok: false, error: { code: 'disk', message: 'Disk full' } } : writer.write(entry);
       },
     });
     assert.equal(result.ok, false);
@@ -183,15 +157,10 @@ test('stale plans refuse writes and a failed write restores earlier links', () =
 test('aliased and extensionless imports follow renamed files', () => {
   const site = fixture();
   try {
-    site.write(
-      'src/components/Alias.astro',
-      `---\nimport Page from '@/pages/about/team.astro';\n---`,
-    );
+    site.write('src/components/Alias.astro', `---\nimport Page from '@/pages/about/team.astro';\n---`);
     site.write('src/pages/about/helper.ts', 'export const title = "Team";');
     site.write('src/pages/consumer.astro', `---\nimport { title } from './about/helper';\n---`);
-    const planned = planPageRename(site.root, { kind: 'folder', from: 'about', to: 'company' }, [
-      ['@/', ['src/']],
-    ]);
+    const planned = planPageRename(site.root, { kind: 'folder', from: 'about', to: 'company' }, [['@/', ['src/']]]);
     assert.ok(planned.ok);
     assert.ok(applyPageRename(planned.value, desktopRenameWriter()).ok);
     assert.match(site.read('src/components/Alias.astro'), /\.\.\/pages\/company\/team.astro/);
@@ -207,18 +176,9 @@ test('relative links remain valid when their owner moves to another depth', () =
     file: 'src/pages/about/team.astro',
     origins: [],
   };
-  assert.equal(
-    renamePageLinks('<a href="../contact">Contact</a>', context),
-    '<a href="/contact">Contact</a>',
-  );
-  assert.equal(
-    renamePageLinks('<a href="other">Other</a>', context),
-    '<a href="/about/other">Other</a>',
-  );
-  assert.equal(
-    renamePageLinks('<a href="#section">Section</a>', context),
-    '<a href="#section">Section</a>',
-  );
+  assert.equal(renamePageLinks('<a href="../contact">Contact</a>', context), '<a href="/contact">Contact</a>');
+  assert.equal(renamePageLinks('<a href="other">Other</a>', context), '<a href="/about/other">Other</a>');
+  assert.equal(renamePageLinks('<a href="#section">Section</a>', context), '<a href="#section">Section</a>');
 });
 
 test('symbolic links refuse the whole rename and generated outputs remain untouched', () => {
@@ -232,15 +192,8 @@ test('symbolic links refuse the whole rename and generated outputs remain untouc
     assert.ok(applyPageRename(planned.value, desktopRenameWriter()).ok);
     assert.match(site.read('dist/index.html'), /\/about/);
     assert.match(site.read('.stacki/preview/index.html'), /\/about/);
-    fs.symlinkSync(
-      path.join(site.root, 'src/pages/company'),
-      path.join(site.root, 'linked'),
-      'junction',
-    );
-    assert.throws(
-      () => planPageRename(site.root, { ...change, from: 'company', to: 'about' }),
-      /symbolic link/,
-    );
+    fs.symlinkSync(path.join(site.root, 'src/pages/company'), path.join(site.root, 'linked'), 'junction');
+    assert.throws(() => planPageRename(site.root, { ...change, from: 'company', to: 'about' }), /symbolic link/);
   } finally {
     site.close();
   }

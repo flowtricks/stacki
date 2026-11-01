@@ -53,9 +53,7 @@ test('the complete channel inventory matches real main and terminal registration
   const harness = fixture();
   context.after(harness.dispose);
   const terminal = fs.readFileSync(path.resolve('dist/electron/terminal/terminal.js'), 'utf8');
-  const terminalChannels = [...terminal.matchAll(/ipcMain\.handle\(['"]([^'"]+)['"]/g)].map(
-    (match) => match[1],
-  );
+  const terminalChannels = [...terminal.matchAll(/ipcMain\.handle\(['"]([^'"]+)['"]/g)].map((match) => match[1]);
   // Step 8 retired page:writeRaw; step 9 added page:previewEdit; step 10
   // retired page:write and page:serialize, the Markdown whole-model save.
   // Publishing and its availability check, project settings, canvases, and history are scoped.
@@ -70,15 +68,10 @@ test('the complete channel inventory matches real main and terminal registration
   // item's template (its collection's fields, edited before it is created) adds one.
   assert.equal(harness.handlers.size, 152);
   assert.equal(terminalChannels.length, 4);
-  assert.deepEqual(
-    [...Object.keys(IPC_PAYLOADS)].sort(),
-    [...harness.handlers.keys(), ...terminalChannels].sort(),
-  );
+  assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name
   // its own parser before touching the payload.
-  const sendChannels = [...terminal.matchAll(/ipcMain\.on\(['"]([^'"]+)['"]/g)].map(
-    (match) => match[1],
-  );
+  const sendChannels = [...terminal.matchAll(/ipcMain\.on\(['"]([^'"]+)['"]/g)].map((match) => match[1]);
   assert.deepEqual(sendChannels, ['terminal:input', 'terminal:ack']);
   for (const channel of sendChannels) {
     assert.match(terminal, new RegExp(`parseSendPayload\\('${channel}'`), `${channel} is parsed`);
@@ -103,10 +96,7 @@ test('malformed writes fail before altering disk; valid writes still work', asyn
     tag: 'code-patch',
     hunks: [{ span: { start: 4, end: 10 }, expected: 'Before', text: 'After' }],
   };
-  await assert.rejects(
-    harness.invoke('page:edit', { pagePath: file, authoredChecksum: 'nope', edit: patch }),
-    /Digest: expected 64 lowercase hex characters/,
-  );
+  await assert.rejects(harness.invoke('page:edit', { pagePath: file, authoredChecksum: 'nope', edit: patch }), /Digest: expected 64 lowercase hex characters/);
   assert.equal(fs.readFileSync(file, 'utf8'), '<h1>Before</h1>\n');
   const baseChecksum = sha256('<h1>Before</h1>\n');
   const written = toRecord(
@@ -121,16 +111,10 @@ test('malformed writes fail before altering disk; valid writes still work', asyn
   const result = toRecord(await harness.invoke('page:read', file));
   assert.equal(result?.['editable'], true);
   assert.equal(result?.['source'], '<h1>After</h1>\n');
-  const parsed = toRecord(
-    await harness.invoke('page:parse', { pagePath: file, source: '<main>Draft</main>\n' }),
-  );
+  const parsed = toRecord(await harness.invoke('page:parse', { pagePath: file, source: '<main>Draft</main>\n' }));
   assert.equal(parsed?.['editable'], true);
   assert.equal(parsed?.['source'], '<main>Draft</main>\n');
-  assert.equal(
-    fs.readFileSync(file, 'utf8'),
-    '<h1>After</h1>\n',
-    'parsing a code draft has no disk side effect',
-  );
+  assert.equal(fs.readFileSync(file, 'utf8'), '<h1>After</h1>\n', 'parsing a code draft has no disk side effect');
 });
 
 test('the Markdown wire model keeps source metadata and rejects corrupted fields', () => {
@@ -170,16 +154,11 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
     },
   );
   assert.throws(() => parseSettings({ sound: false, usageCountsEnabled: 'no' }), /boolean/);
-  assert.throws(
-    () => parseSettings({ sound: false, usageLastAttemptDay: 'yesterday' }),
-    /usage day/,
-  );
+  assert.throws(() => parseSettings({ sound: false, usageLastAttemptDay: 'yesterday' }), /usage day/);
   const recent = { path: '/site', name: 'Site', openedAt: 1000 };
   assert.deepEqual(parseRecents([recent]), [recent]);
   assert.throws(() => parseRecents([{ ...recent, openedAt: -1 }]), /nonnegative/);
-  assert.deepEqual(parseAliases({ compilerOptions: { paths: { '@/*': ['src/*'] } } }), [
-    ['@/', ['src/']],
-  ]);
+  assert.deepEqual(parseAliases({ compilerOptions: { paths: { '@/*': ['src/*'] } } }), [['@/', ['src/']]]);
   assert.throws(() => parseAliases({ compilerOptions: { paths: { '@/*': [12] } } }), /string/);
   assert.deepEqual(parseAstroLock({ url: 'http://localhost:4321' }), {
     url: 'http://localhost:4321',
@@ -218,20 +197,10 @@ test('CMS discovers data modules outside a content glob', async (context) => {
   fs.mkdirSync(path.join(harness.root, 'src/lib'), { recursive: true });
   fs.writeFileSync(
     path.join(harness.root, 'src/data/site.ts'),
-    [
-      'export const site = { title: "Stacki", launched: 2026 };',
-      'export const tagline = "Design in the browser";',
-      '',
-    ].join('\n'),
+    ['export const site = { title: "Stacki", launched: 2026 };', 'export const tagline = "Design in the browser";', ''].join('\n'),
   );
-  fs.writeFileSync(
-    path.join(harness.root, 'src/data/team.ts'),
-    'export const team = [{ name: "Ada", role: "Engineer" }];\n',
-  );
-  fs.writeFileSync(
-    path.join(harness.root, 'src/lib/constants.ts'),
-    'export const internalLabel = "Not CMS content";\n',
-  );
+  fs.writeFileSync(path.join(harness.root, 'src/data/team.ts'), 'export const team = [{ name: "Ada", role: "Engineer" }];\n');
+  fs.writeFileSync(path.join(harness.root, 'src/lib/constants.ts'), 'export const internalLabel = "Not CMS content";\n');
   fs.writeFileSync(path.join(harness.root, 'src/data/posts/first.md'), '# First\n');
 
   const listed = toArray(toRecord(await harness.invoke('cms:list', harness.root))?.['files']);
@@ -283,10 +252,7 @@ test('CMS discovers root site constants and preserves unrelated source', async (
   fs.writeFileSync(path.join(harness.root, 'src/assets/animation.json'), '{"v":"5.5.8"}');
   const listed = toArray(toRecord(await harness.invoke('cms:list', harness.root))?.['files']);
   assert.ok(listed);
-  assert.deepEqual(listed.map((entry) => toRecord(entry)?.['rel']).sort(), [
-    'constants.mjs#*general',
-    'consts.ts#*general',
-  ]);
+  assert.deepEqual(listed.map((entry) => toRecord(entry)?.['rel']).sort(), ['constants.mjs#*general', 'consts.ts#*general']);
   const payload = { projectPath: harness.root, rel: 'consts.ts#*general' };
   const read = toRecord(await harness.invoke('cms:read', payload));
   const data = toRecord(read?.['data']);
@@ -299,21 +265,14 @@ test('CMS discovers root site constants and preserves unrelated source', async (
     SITE_LOCALE: 'en-US',
     NOINDEX_ROUTES: ['/404'],
   });
-  const saved = toRecord(
-    await harness.invoke('cms:write', { ...payload, data: { ...data, SITE_NAME: 'Updated' } }),
-  );
+  const saved = toRecord(await harness.invoke('cms:write', { ...payload, data: { ...data, SITE_NAME: 'Updated' } }));
   assert.equal(saved?.['ok'], true);
   assert.equal(fs.readFileSync(file, 'utf8'), source.replace('Original', 'Updated'));
 });
 
 test('dev-server parsers support current and legacy responses', () => {
-  assert.deepEqual(parseDynamicPaths({ entries: [{ slug: 'a' }] }).entries, [
-    { params: { slug: 'a' }, props: undefined },
-  ]);
-  assert.deepEqual(
-    parseDynamicPaths({ entries: [{ params: { slug: 'a' }, props: { n: 1 } }] }).entries,
-    [{ params: { slug: 'a' }, props: { n: 1 } }],
-  );
+  assert.deepEqual(parseDynamicPaths({ entries: [{ slug: 'a' }] }).entries, [{ params: { slug: 'a' }, props: undefined }]);
+  assert.deepEqual(parseDynamicPaths({ entries: [{ params: { slug: 'a' }, props: { n: 1 } }] }).entries, [{ params: { slug: 'a' }, props: { n: 1 } }]);
   assert.throws(() => parseDynamicPaths({ entries: [42] }), /object/);
   assert.throws(() => parseDynamicPaths({ entries: [], error: 42 }), /string/);
   assert.deepEqual(parseSampleEntry({ entry: jsonNull, error: 'offline' }), {
@@ -325,10 +284,7 @@ test('dev-server parsers support current and legacy responses', () => {
   assert.deepEqual(parseContentConfig({ collections: [{ name: 'broken', error: 'bad' }] }), {
     collections: [{ name: 'broken', error: 'bad' }],
   });
-  assert.throws(
-    () => parseContentConfig({ collections: [{ name: 'posts', crossFieldChecks: 'yes' }] }),
-    /boolean/,
-  );
+  assert.throws(() => parseContentConfig({ collections: [{ name: 'posts', crossFieldChecks: 'yes' }] }), /boolean/);
   const manifest = {
     collections: [
       {
@@ -362,10 +318,7 @@ test('port search skips busy sockets and rejects invalid starts', async (context
   const port = await harness.call('findFreePort', address.port);
   assert.equal(typeof port, 'number');
   assert.notEqual(port, address.port);
-  await assert.rejects(
-    async () => harness.call('findFreePort', -1),
-    /Starting port must be positive/,
-  );
+  await assert.rejects(async () => harness.call('findFreePort', -1), /Starting port must be positive/);
 });
 
 test('Markdown array metadata and source-file size have explicit bounds', async (context) => {
@@ -387,10 +340,7 @@ test('an empty tsconfig alias map takes precedence over jsconfig', async (contex
   context.after(harness.dispose);
   const config = path.join(harness.root, 'tsconfig.json');
   fs.writeFileSync(config, '{"compilerOptions":{"paths":{}}}');
-  fs.writeFileSync(
-    path.join(harness.root, 'jsconfig.json'),
-    '{"compilerOptions":{"paths":{"@/*":["src/*"]}}}',
-  );
+  fs.writeFileSync(path.join(harness.root, 'jsconfig.json'), '{"compilerOptions":{"paths":{"@/*":["src/*"]}}}');
   fs.writeFileSync(path.join(harness.root, 'src/data/site.ts'), 'export const title = "Site";');
   await harness.invoke('project:scan', harness.root);
   const payload = {

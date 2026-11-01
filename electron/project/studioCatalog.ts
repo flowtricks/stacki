@@ -32,13 +32,10 @@ export async function boundedText(response: Response, maximum: number): Promise<
   }
 }
 export async function latestRelease() {
-  const response = await fetch(
-    `https://api.github.com/repos/${RELEASE_REPOSITORY}/releases/latest`,
-    {
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Stacki-Studio' },
-      signal: AbortSignal.timeout(15_000),
-    },
-  );
+  const response = await fetch(`https://api.github.com/repos/${RELEASE_REPOSITORY}/releases/latest`, {
+    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Stacki-Studio' },
+    signal: AbortSignal.timeout(15_000),
+  });
   if (response.status === 404) {
     return undefined;
   }

@@ -58,25 +58,15 @@ function fixture(context) {
       closes++;
     },
   };
-  const show = (overrides = {}) =>
-    act(async () =>
-      root.render(React.createElement(components.RenamePageDialog, { ...props, ...overrides })),
-    );
+  const show = (overrides = {}) => act(async () => root.render(React.createElement(components.RenamePageDialog, { ...props, ...overrides })));
   const type = (value) =>
     act(async () => {
       const input = document.querySelector('.modal input');
-      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(
-        input,
-        value,
-      );
+      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(input, value);
       input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     });
   const submit = () =>
-    act(async () =>
-      document
-        .querySelector('.modal form')
-        .dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })),
-    );
+    act(async () => document.querySelector('.modal form').dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
   return { dom, root, components, writes, show, type, submit, closes: () => closes };
 }
 const apply = () => document.querySelector('.modal button[type="submit"]');
@@ -171,9 +161,7 @@ test('Desktop rename action opens the popup instead of an inline rename input', 
       }),
     ),
   );
-  await act(async () =>
-    document.querySelector('[data-order-key="old.astro"] [aria-label="Rename page"]').click(),
-  );
+  await act(async () => document.querySelector('[data-order-key="old.astro"] [aria-label="Rename page"]').click());
   assert.equal(document.querySelector('.modal input').value, 'old');
   assert.equal(document.querySelector('.rename-input') === null, true);
   assert.equal(apply().textContent, 'Apply');

@@ -27,15 +27,7 @@ export function HtmlLinkEditor(props: {
   const { bubble } = props;
   const style = { top: bubble.place.top, left: bubble.place.left };
   if (bubble.kind === 'edit') {
-    return (
-      <LinkForm
-        href={bubble.href}
-        style={style}
-        onApply={props.onApply}
-        onRemove={props.onRemove}
-        onClose={props.onClose}
-      />
-    );
+    return <LinkForm href={bubble.href} style={style} onApply={props.onApply} onRemove={props.onRemove} onClose={props.onClose} />;
   }
   return (
     <div className="html-link-bubble" style={style} onMouseDown={(event) => event.preventDefault()}>

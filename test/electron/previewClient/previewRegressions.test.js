@@ -34,10 +34,7 @@ test('large unchanged sibling lists and appends stay within a linear allocation 
   let allocated = 0;
   const diff = new Function(
     'Int32Array',
-    `${source.slice(
-      source.indexOf('function diffChildren('),
-      source.indexOf('// Raised when the live document'),
-    )}\nreturn diffChildren;`,
+    `${source.slice(source.indexOf('function diffChildren('), source.indexOf('// Raised when the live document'))}\nreturn diffChildren;`,
   )(function BudgetedArray(size) {
     allocated += size;
     assert.ok(allocated < 100_000, 'unchanged siblings allocated a quadratic matrix');
@@ -78,10 +75,7 @@ test('a missing explicit id cannot redirect an edit onto an unrelated live eleme
 });
 
 test('a comment cannot stand in for missing text', () => {
-  assert.equal(
-    morph.findLive(tree('<!--before-->').firstChild, tree('before').firstChild),
-    undefined,
-  );
+  assert.equal(morph.findLive(tree('<!--before-->').firstChild, tree('before').firstChild), undefined);
 });
 
 test('script identity cannot collide with separators inside source text', () => {
@@ -113,17 +107,8 @@ test('scripts retain ordering, multiplicity, and loading attributes', () => {
   assert.equal(morph.addedScripts(tree(first + second), tree(second + first)), undefined);
   assert.equal(morph.addedScripts(tree(first + first), tree(first)), undefined);
   assert.equal(morph.addedScripts(tree(first), tree(first + first)), undefined);
-  assert.equal(
-    morph.addedScripts(
-      tree(first),
-      tree(first.replace('type="module"', 'type="module" integrity="new"')),
-    ),
-    undefined,
-  );
-  assert.deepEqual(
-    morph.addedScripts(tree(first), tree('<script src="/first.js" type="module"></script>')),
-    [],
-  );
+  assert.equal(morph.addedScripts(tree(first), tree(first.replace('type="module"', 'type="module" integrity="new"'))), undefined);
+  assert.deepEqual(morph.addedScripts(tree(first), tree('<script src="/first.js" type="module"></script>')), []);
 
   const script =
     '<script type="module" src="/with | separator.js" integrity="sha256-value" ' +

@@ -43,10 +43,7 @@ test('all variable edit contracts accept valid replies and reject malformed repl
         },
       },
     };
-    assert.deepEqual(
-      await variableEdit(name, payload),
-      name === 'readStyleFile' ? { ok: true, css: '' } : response,
-    );
+    assert.deepEqual(await variableEdit(name, payload), name === 'readStyleFile' ? { ok: true, css: '' } : response);
     assert.deepEqual(received, payload);
     for (const invalid of [PLATFORM_NULL, {}, { ok: 1 }, { css: 42 }]) {
       window.avb[name] = async () => invalid;
@@ -100,10 +97,7 @@ test('edit payloads are parsed before IPC and bounded replies stay bounded', asy
   });
   window.avb.readStyleFile = async () => ({ css: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) });
   await assert.rejects(variableEdit('readStyleFile', calls.readStyleFile), /String exceeds limit/);
-  assert.equal(
-    friendlyError(new Error("Error invoking remote method 'css:edit': Error: disk full")),
-    'disk full',
-  );
+  assert.equal(friendlyError(new Error("Error invoking remote method 'css:edit': Error: disk full")), 'disk full');
   assert.equal(friendlyError({ message: 'No handler registered for css:edit' }), restart);
 });
 
@@ -150,12 +144,7 @@ test('history deduplicates every touched file and restores both directions', asy
     true,
   );
   assert.equal(state.records.length, 1);
-  assert.deepEqual(state.reads, [
-    '/project/a.css',
-    '/project/b.css',
-    '/project/a.css',
-    '/project/b.css',
-  ]);
+  assert.deepEqual(state.reads, ['/project/a.css', '/project/b.css', '/project/a.css', '/project/b.css']);
   const command = state.records[0];
   assert.equal(command.label, 'the move');
   assert.equal(command.coalesceKey, 'move');
@@ -215,38 +204,35 @@ test('unchanged and rejected edits do not add undo commands', async () => {
   assert.equal(state.reads.length, 3, 'rejected edit does not take an after snapshot');
 });
 
-test(
-  'refresh bursts share one request and one ' + 'follow-up; disposal suppresses late results',
-  async () => {
-    const reads = [];
-    const published = [];
-    global.window = { avb: { cssVariables: () => new Promise((resolve) => reads.push(resolve)) } };
-    const reader = createVariableRefresh('/project', (value) => published.push(value));
-    const first = reader.refresh();
-    await tick();
-    // A burst during a read shares the one read after it: two reads in all.
-    const pending = reader.refresh();
-    for (let index = 0; index < 50; index++) {
-      assert.equal(reader.refresh(), pending);
-    }
-    assert.equal(reads.length, 1);
-    reads[0](snapshot);
-    await first;
-    await tick();
-    assert.equal(reads.length, 2);
-    reads[1](snapshot);
-    await pending;
-    assert.equal(published.length, 2);
-    const last = reader.refresh();
-    await tick();
-    reader.dispose();
-    reads[2](snapshot);
-    await last;
-    await reader.refresh();
-    assert.equal(reads.length, 3);
-    assert.equal(published.length, 2);
-  },
-);
+test('refresh bursts share one request and one ' + 'follow-up; disposal suppresses late results', async () => {
+  const reads = [];
+  const published = [];
+  global.window = { avb: { cssVariables: () => new Promise((resolve) => reads.push(resolve)) } };
+  const reader = createVariableRefresh('/project', (value) => published.push(value));
+  const first = reader.refresh();
+  await tick();
+  // A burst during a read shares the one read after it: two reads in all.
+  const pending = reader.refresh();
+  for (let index = 0; index < 50; index++) {
+    assert.equal(reader.refresh(), pending);
+  }
+  assert.equal(reads.length, 1);
+  reads[0](snapshot);
+  await first;
+  await tick();
+  assert.equal(reads.length, 2);
+  reads[1](snapshot);
+  await pending;
+  assert.equal(published.length, 2);
+  const last = reader.refresh();
+  await tick();
+  reader.dispose();
+  reads[2](snapshot);
+  await last;
+  await reader.refresh();
+  assert.equal(reads.length, 3);
+  assert.equal(published.length, 2);
+});
 
 test('publication cannot resurrect a disposed refresh coordinator', async () => {
   let reads = 0;

@@ -8,7 +8,7 @@ import type { SetProp } from './propAttributes';
 import type { FieldPosition } from './propBindings';
 import type { RichInsertAPI } from './RichContent';
 import type { AssetDimensions } from '../../ui/AssetThumb';
-import type { PickedAsset } from '../../ui/AssetField';
+import type { AssetReference, PickedAsset } from '../../ui/AssetField';
 import { createPropRules } from './propRules';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
@@ -30,10 +30,7 @@ export function useElementProps(props: ElementPropsPanelProps) {
   const schema = props.schema ?? [];
   const layouts = props.layouts ?? [];
   assert(schema.length <= LIMITS.propSchemaFieldsMax, 'PropsPanel: schema limit exceeded');
-  assert(
-    Object.keys(props.node.props ?? {}).length <= LIMITS.attrsPerNodeMax,
-    'PropsPanel: attribute limit exceeded',
-  );
+  assert(Object.keys(props.node.props ?? {}).length <= LIMITS.attrsPerNodeMax, 'PropsPanel: attribute limit exceeded');
   assert(layouts.length <= LIMITS.scanEntriesMax, 'PropsPanel: layout limit exceeded');
   const layout = elementFieldLayout(props);
   const assets = useElementAssets(props);
@@ -56,7 +53,7 @@ export function useElementProps(props: ElementPropsPanelProps) {
     siblingProps: props.node.props,
     srcKind: assets.sourceKind,
     onPickAsset: props.onSetAssetProp
-      ? (name: string, picked: PickedAsset) => props.onSetAssetProp?.(props.node.id, name, picked)
+      ? (name: string, picked: PickedAsset) => props.onSetAssetProp?.(props.node.id, name, picked, assetReferenceFor(props.node.kind, schema, name))
       : undefined,
   };
   return {
@@ -74,6 +71,21 @@ export function useElementProps(props: ElementPropsPanelProps) {
 }
 export type ElementState = ReturnType<typeof useElementProps>;
 
+// A plain <img> needs the URL out of an imported asset, and so does a
+// component prop declared as a string: handed the ImageMetadata object, its
+// <img src> renders "[object Object]" and the image never loads. Any other
+// component prop may want the object itself, as astro:assets <Image> does.
+export function assetReferenceFor(kind: ElementPropsPanelProps['node']['kind'], schema: readonly FieldDefinition[], name: string): AssetReference {
+  if (kind === 'element') {
+    return 'url';
+  }
+  const field = schema.find((candidate) => candidate.name === name);
+  if (field === undefined) {
+    return 'module';
+  }
+  return field.type === 'string' ? 'url' : 'module';
+}
+
 export function elementFieldLayout(props: ElementPropsPanelProps) {
   const { node, schema = [], slotOptions, takesSlotText, allowAttrs } = props;
   assert((node.children?.length ?? 0) <= LIMITS.treeNodesMax, 'PropsPanel: child limit exceeded');
@@ -85,13 +97,8 @@ export function elementFieldLayout(props: ElementPropsPanelProps) {
   // The slot field renders in one stable spot whether or not the attribute
   // is currently set — hover-previewing a value must not remount the field
   // (that would close the dropdown mid-hover).
-  const showSlotField =
-    Array.isArray(slotOptions) &&
-    slotOptions.some((slot) => slot !== 'default') &&
-    !schemaNames.has('slot');
-  let extraProps = Object.keys(node.props || {}).filter(
-    (key) => !schemaNames.has(key) && !(showSlotField && key === 'slot'),
-  );
+  const showSlotField = Array.isArray(slotOptions) && slotOptions.some((slot) => slot !== 'default') && !schemaNames.has('slot');
+  let extraProps = Object.keys(node.props || {}).filter((key) => !schemaNames.has(key) && !(showSlotField && key === 'slot'));
   // With a free-form Attributes section, unknown attrs live there instead of
   // as individual fields — except class and style, which keep dedicated ones.
   let attrNames: string[] = [];
@@ -99,9 +106,7 @@ export function elementFieldLayout(props: ElementPropsPanelProps) {
     attrNames = extraProps.filter((key) => key !== 'class' && key !== 'style' && key !== 'slot');
     // `slot` is sorted last so a hand-written one lands where the picker's
     // does — directly above the comment — instead of in among the props.
-    extraProps = extraProps
-      .filter((key) => key === 'class' || key === 'slot')
-      .sort((left, right) => (left === 'slot' ? 1 : right === 'slot' ? -1 : 0));
+    extraProps = extraProps.filter((key) => key === 'class' || key === 'slot').sort((left, right) => (left === 'slot' ? 1 : right === 'slot' ? -1 : 0));
   }
 
   // Content field: shown when the children are inline-only (text plus simple
@@ -114,16 +119,14 @@ export function elementFieldLayout(props: ElementPropsPanelProps) {
   // adds, since a fresh instance is self-closing — has no Content field, and
   // so no way to be given its first words.
   const isEmpty = node.children === undefined || node.children.length === 0;
-  const canHoldText =
-    (node.kind === 'element' && !VOID_TAGS.has(String(node.name).toLowerCase())) || !!takesSlotText;
+  const canHoldText = (node.kind === 'element' && !VOID_TAGS.has(String(node.name).toLowerCase())) || !!takesSlotText;
   const showContentField = isInlineOnly(node.children) || (isEmpty && canHoldText);
   // HTML lets a node hold text *and* elements — `<div>Intro<Button/></div>` is
   // ordinary markup — but the rich editor above only covers all-inline
   // children. Rather than leave the text unreachable from the node that owns
   // it, mixed children get a plain field over the loose text alone; the
   // element children it sits among are left exactly where they are.
-  const looseText =
-    !isEmpty && (node.children || []).find((child): child is ValueNode => child.kind === 'text');
+  const looseText = !isEmpty && (node.children || []).find((child): child is ValueNode => child.kind === 'text');
   const showLooseTextField = !showContentField && canHoldText && !isEmpty;
   // <slot> does take children, but they're the fallback Astro renders only
   // when the caller passes nothing — labelling it "Content" reads as if it
@@ -184,10 +187,7 @@ export function elementRules(props: ElementPropsPanelProps) {
   // Values a discriminant switch took away, per node, kept only while the
   // panel is up: flicking variant → full-width → constrained should hand
   // `sizes` back, but reopening the project shouldn't resurrect it.
-  const { appliesNow, branchDefault, narrowOptions, cascade } = createPropRules(
-    schema,
-    node.props || {},
-  );
+  const { appliesNow, branchDefault, narrowOptions, cascade } = createPropRules(schema, node.props || {});
   const setPropCascading: SetProp = (fieldName, value, immediate) => {
     const held = stashRef.current.get(node.id);
     if (!held) {
@@ -285,17 +285,7 @@ export function elementSettings(
   layout: ReturnType<typeof elementFieldLayout>,
   appliesNow: ReturnType<typeof createPropRules>['appliesNow'],
 ) {
-  const {
-    node,
-    isLayout,
-    layouts = [],
-    onChangeLayout,
-    schema = [],
-    allowAttrs,
-    comment,
-    onSetComment,
-    onChangeTag,
-  } = props;
+  const { node, isLayout, layouts = [], onChangeLayout, schema = [], allowAttrs, comment, onSetComment, onChangeTag } = props;
   const { isSlot, showSlotField, attrNames } = layout;
   const classField: FieldDefinition | undefined =
     schema.find((field) => field.name === 'class' && appliesNow(field)) ||
@@ -306,9 +296,7 @@ export function elementSettings(
   // offers a prop the component would ignore. Always the CSS editor, even
   // when a component types it `style?: string`.
   const styleField: FieldDefinition | undefined =
-    allowAttrs || node.props?.['style'] !== undefined
-      ? { ...(schema.find((field) => field.name === 'style') || {}), name: 'style', type: 'style' }
-      : undefined;
+    allowAttrs || node.props?.['style'] !== undefined ? { ...(schema.find((field) => field.name === 'style') || {}), name: 'style', type: 'style' } : undefined;
   // The page's wrapper switches through the same Tag field as everything else
   // — it just answers with a layout rather than a tag, so its list is the
   // project's layouts and the change goes through the import rewrite.
@@ -324,17 +312,9 @@ export function elementSettings(
   };
   // Anything with a real tag or component name — not a loop, a condition, a
   // comment or a slot (switching a slot away would be a one-way door).
-  const showTagField =
-    !isSlot &&
-    (layoutTag ||
-      (!!onChangeTag && !isLayout && (node.kind === 'element' || node.kind === 'component')));
+  const showTagField = !isSlot && (layoutTag || (!!onChangeTag && !isLayout && (node.kind === 'element' || node.kind === 'component')));
   const hasSettings =
-    showTagField ||
-    !!classField ||
-    !!styleField ||
-    allowAttrs ||
-    showSlotField ||
-    !!(onSetComment && (node.kind === 'element' || node.kind === 'component'));
+    showTagField || !!classField || !!styleField || allowAttrs || showSlotField || !!(onSetComment && (node.kind === 'element' || node.kind === 'component'));
   // How many of them actually carry something, shown on the closed header.
   const settingsCount =
     (node.props?.['class'] !== undefined ? 1 : 0) +

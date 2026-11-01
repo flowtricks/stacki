@@ -46,10 +46,7 @@ const check = (what, condition, detail) => {
   const definition = { name: 'ContentWrapper', slots: ['default', 'column2'] };
 
   // --- where it still means something -------------------------------------------
-  check(
-    'inside the component whose slot it names, it stays',
-    keepsSlot({ slotName: 'column2', host: wrapper, definition }) === true,
-  );
+  check('inside the component whose slot it names, it stays', keepsSlot({ slotName: 'column2', host: wrapper, definition }) === true);
   check(
     'and inside another component that has the same slot',
     keepsSlot({
@@ -60,10 +57,7 @@ const check = (what, condition, detail) => {
   );
 
   // --- and where it does not -------------------------------------------------------
-  check(
-    'dragged out into the open, it goes',
-    keepsSlot({ slotName: 'column2', host: undefined, definition: undefined }) === false,
-  );
+  check('dragged out into the open, it goes', keepsSlot({ slotName: 'column2', host: undefined, definition: undefined }) === false);
   check(
     'and into a component with no such slot',
     keepsSlot({
@@ -94,41 +88,26 @@ const check = (what, condition, detail) => {
       definition: undefined,
     }) === true,
   );
-  check(
-    'and a node asking for nothing has nothing to lose',
-    keepsSlot({ slotName: undefined, host: undefined, definition: undefined }) === true,
-  );
-  check(
-    'nor does one asking in code, whose value this cannot read',
-    keepsSlot({ slotName: '', host: undefined, definition: undefined }) === true,
-  );
+  check('and a node asking for nothing has nothing to lose', keepsSlot({ slotName: undefined, host: undefined, definition: undefined }) === true);
+  check('nor does one asking in code, whose value this cannot read', keepsSlot({ slotName: '', host: undefined, definition: undefined }) === true);
 
   // --- the move asks -----------------------------------------------------------------
   // The app shell and the modules it was split into (src/app).
   const app = readAppSource();
-  const move = app.slice(
-    app.indexOf('const moveNode = useCallback'),
-    app.indexOf('const removeNode = useCallback'),
-  );
-  check(
-    'a move asks about the slot it carries',
-    /keepsSlotAttribute\(\{ slotName, host, definition \}\)/.test(move),
-    'the slot is not reconsidered on a move',
-  );
+  const move = app.slice(app.indexOf('const moveNode = useCallback'), app.indexOf('const removeNode = useCallback'));
+  check('a move asks about the slot it carries', /keepsSlotAttribute\(\{ slotName, host, definition \}\)/.test(move), 'the slot is not reconsidered on a move');
   // Step 6: the move is a gesture (src/editor/editGestures.ts, moveGesture), which
   // asks the app's rule of the model after the move and removes the slot
   // first — as a request, and from the shown model.
   const gestureSource = fs.readFileSync(repoPath('src/editor/editGestures.ts'), 'utf8');
   check(
     'and drops it when the answer is no',
-    /tag: 'remove-attribute', target, name: 'slot'/.test(gestureSource) &&
-      /patchedProps\(node\.props, \{ slot: undefined \}\)/.test(gestureSource),
+    /tag: 'remove-attribute', target, name: 'slot'/.test(gestureSource) && /patchedProps\(node\.props, \{ slot: undefined \}\)/.test(gestureSource),
     'nothing removes it',
   );
   check(
     'the host is the component it landed in, not the node above it',
-    /slotHostOf\(model, id\)/.test(move) &&
-      /rules\.keepsSlot\(landing\.model, nodeId\)/.test(gestureSource),
+    /slotHostOf\(model, id\)/.test(move) && /rules\.keepsSlot\(landing\.model, nodeId\)/.test(gestureSource),
     'a wrapper element would be read as the host',
   );
 

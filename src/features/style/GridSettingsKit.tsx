@@ -22,11 +22,7 @@ export const resolvedValue = (read: Read, prop: string): string => {
   if (!resolved) {
     return '';
   }
-  return (
-    resolved.source === 'selected' && resolved.selectedValue
-      ? resolved.selectedValue.value
-      : resolved.winner.value
-  ).trim();
+  return (resolved.source === 'selected' && resolved.selectedValue ? resolved.selectedValue.value : resolved.winner.value).trim();
 };
 
 // Icons.
@@ -75,12 +71,7 @@ export const GripIcon = () => (
 );
 export const WarnIcon = () => (
   <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="16" height="16">
-    <path
-      d="M8 2 1.5 13.5h13L8 2Z"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinejoin="round"
-    />
+    <path d="M8 2 1.5 13.5h13L8 2Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
     <path d="M8 6.5v3.2M8 11.4v.1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
   </svg>
 );

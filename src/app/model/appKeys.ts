@@ -8,46 +8,16 @@ import type { ScanComponent, ScanResult } from '../../../shared/properties/proje
 import { readPage } from '../../ipc/bridge';
 import { type AppliedEdit, type PageOrigin, type EditGesture } from '../../editor/pageEdits';
 import { describeRejection } from '../../../shared/engine/intent';
-import {
-  type InsertPlace,
-  frontmatterGesture,
-  insertGesture,
-  sequence,
-  tagRenameGesture,
-  wrapGesture,
-} from '../../editor/editGestures';
+import { type InsertPlace, frontmatterGesture, insertGesture, sequence, tagRenameGesture, wrapGesture } from '../../editor/editGestures';
 import type { PageEdited } from '../../../shared/ipc/pageSave';
 import { loopVarsAt, strippedBindings } from '../../editor/loopBindings';
 import { cleanError } from '../../lib/cleanError';
-import {
-  type AppHistory,
-  type LeftTab,
-  type NodeClipboard,
-  type ProjectIdentity,
-  type RightTab,
-  type ToastKind,
-} from '../appTypes';
-import {
-  toEditorPageState,
-  carriedParse,
-  type EditorPageState,
-  type OpenFile,
-  type PageStateSnapshot,
-} from '../../editor/pageState';
+import { type AppHistory, type LeftTab, type NodeClipboard, type ProjectIdentity, type RightTab, type ToastKind } from '../appTypes';
+import { toEditorPageState, carriedParse, type EditorPageState, type OpenFile, type PageStateSnapshot } from '../../editor/pageState';
 import { nodeId, type EditorModel, type EditorNode } from '../../editor/pageView';
-import {
-  copyEditorSelection,
-  runNativeEdit,
-  editProjectPage,
-  type ImportPaths,
-} from '../../ipc/appBridge';
+import { copyEditorSelection, runNativeEdit, editProjectPage, type ImportPaths } from '../../ipc/appBridge';
 import { revertedOrigin, frontmatterOf } from './nodeFactory';
-import {
-  withPrunedImports,
-  chooseImportPath,
-  withLayoutField,
-  type PasteNeeds,
-} from './pageGestures';
+import { withPrunedImports, chooseImportPath, withLayoutField, type PasteNeeds } from './pageGestures';
 
 // The app's own keys, read through refs at keypress time: see the keydown effect in App.
 export interface AppKeys {
@@ -171,11 +141,7 @@ export function handleCommandKey(event: KeyboardEvent, keys: AppKeys): boolean {
 export function handleSelectionKey(event: KeyboardEvent, keys: AppKeys): void {
   const mod = event.metaKey || event.ctrlKey;
   const target = event.target;
-  if (
-    target instanceof HTMLElement &&
-    (target.closest('input, textarea, select, [contenteditable="true"]') ||
-      target.isContentEditable)
-  ) {
+  if (target instanceof HTMLElement && (target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)) {
     return;
   }
   const state = keys.pageStateRef.current.pageState;
@@ -366,16 +332,10 @@ export function markdownLayoutGesture(model: EditorModel, rel: string | undefine
 
 // The imports a wrapper change needs, and those it leaves unused, as the same
 // undo step (step 9: a frontmatter slot).
-export function withImportsGesture(
-  model: EditorModel,
-  gesture: EditGesture,
-  imports: (pageModel: EditorModel) => EditorModel,
-): EditGesture {
+export function withImportsGesture(model: EditorModel, gesture: EditGesture, imports: (pageModel: EditorModel) => EditorModel): EditGesture {
   const after = gesture.apply(model);
   const options = { coalesceKey: undefined, urgency: true };
-  return frontmatterOf(imports(after)) === frontmatterOf(after)
-    ? gesture
-    : sequence(gesture, frontmatterGesture(after, options, imports));
+  return frontmatterOf(imports(after)) === frontmatterOf(after) ? gesture : sequence(gesture, frontmatterGesture(after, options, imports));
 }
 
 // The page's layout wrapper renamed to `layout`, or the page wrapped in it when it has
@@ -392,10 +352,7 @@ export function layoutWrapperGesture(
         ? pageModel
         : {
             ...pageModel,
-            imports: [
-              ...pageModel.imports,
-              { name, path: chooseImportPath(pageModel, paths), quote: "'" },
-            ],
+            imports: [...pageModel.imports, { name, path: chooseImportPath(pageModel, paths), quote: "'" }],
           },
     );
   if (wrapper) {
@@ -441,31 +398,20 @@ export async function savedForNavigation(
 // Whether a text field, a box or anything a caret is in has focus.
 export function inEditable(): boolean {
   const active = document.activeElement;
-  return (
-    active instanceof HTMLElement &&
-    (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)
-  );
+  return active instanceof HTMLElement && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
 }
 
 // The component file a caller already named: the instances popup names a component by
 // where it lives, and two folders can hold the same basename.
-export function componentAtPath(
-  scan: ScanResult,
-  name: string,
-  filePath: string,
-): { readonly name: string; readonly path: string } {
+export function componentAtPath(scan: ScanResult, name: string, filePath: string): { readonly name: string; readonly path: string } {
   return (
-    scan.components.find((component) => component.path === filePath) ||
-    scan.layouts.find((layout) => layout.path === filePath) || { name, path: filePath }
+    scan.components.find((component) => component.path === filePath) || scan.layouts.find((layout) => layout.path === filePath) || { name, path: filePath }
   );
 }
 
 // The scanned component or layout with this name.
 export function componentNamed(scan: ScanResult, name: string): ScanComponent | undefined {
-  return (
-    scan.components.find((component) => component.name === name) ||
-    scan.layouts.find((layout) => layout.name === name)
-  );
+  return scan.components.find((component) => component.name === name) || scan.layouts.find((layout) => layout.name === name);
 }
 
 // The drill-down stack with `entry` on top, unless the file is already open in it.
@@ -490,17 +436,11 @@ export function pastedInScope(
 
 // What a paste brought across from the page it was copied from, if anything.
 export function broughtMessage(needs: PasteNeeds): string | undefined {
-  const brought = [
-    ...needs.carriedImports.map((i) => i.name),
-    ...needs.carried.statements.map((statement) => statement.name),
-  ];
+  const brought = [...needs.carriedImports.map((i) => i.name), ...needs.carried.statements.map((statement) => statement.name)];
   if (!brought.length) {
     return undefined;
   }
-  return (
-    `Brought ${brought.map((name) => `\`${name}\``).join(', ')} ` +
-    'across from the page it was copied from.'
-  );
+  return `Brought ${brought.map((name) => `\`${name}\``).join(', ')} ` + 'across from the page it was copied from.';
 }
 
 // What the menu's Copy and Paste act on when no field has focus: see the menu effect in App.
@@ -532,11 +472,7 @@ export function menuPaste(menu: MenuEdits): void {
     runNativeEdit('paste');
     return;
   }
-  if (
-    menu.nodeClipboardRef.current &&
-    menu.pageStateRef.current.pageState?.editable &&
-    !menu.cmsOpenRef.current
-  ) {
+  if (menu.nodeClipboardRef.current && menu.pageStateRef.current.pageState?.editable && !menu.cmsOpenRef.current) {
     void menu.pasteNode().catch(menu.reportFailure);
   }
 }

@@ -4,9 +4,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const load = require('../../helpers/rendererModule');
-const { WINDOW_EDGES, initialWindowRectangle, fitWindowRectangle, resizeWindowRectangle } = load(
-  'src/ui/windowGeometry.ts',
-);
+const { WINDOW_EDGES, initialWindowRectangle, fitWindowRectangle, resizeWindowRectangle } = load('src/ui/windowGeometry.ts');
 
 const viewport = { width: 1440, height: 900 };
 const minimum = { width: 340, height: 220 };
@@ -48,12 +46,6 @@ test('initial placement and viewport shrink keep the complete window reachable',
     inside(fitWindowRectangle({ ...start, x: 3000, y: -1000 }, size, minimum), size);
   }
   assert.throws(() => fitWindowRectangle(start, { width: 0, height: 900 }, minimum), /positive/);
-  assert.throws(
-    () => fitWindowRectangle(start, { width: Infinity, height: 900 }, minimum),
-    /finite/,
-  );
-  assert.throws(
-    () => resizeWindowRectangle(start, 'se', { x: NaN, y: 0 }, viewport, minimum),
-    /finite/,
-  );
+  assert.throws(() => fitWindowRectangle(start, { width: Infinity, height: 900 }, minimum), /finite/);
+  assert.throws(() => resizeWindowRectangle(start, 'se', { x: NaN, y: 0 }, viewport, minimum), /finite/);
 });

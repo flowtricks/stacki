@@ -40,10 +40,7 @@ test('markdown imports and missing markup do not invent instances', () => {
 });
 
 test('source and tag indexes reject excessive growth', () => {
-  assert.throws(
-    () => instanceCounts('x'.repeat(LIMITS.sourceBytesMax + 1), file, []),
-    /Usage source stays within the reader limit/,
-  );
+  assert.throws(() => instanceCounts('x'.repeat(LIMITS.sourceBytesMax + 1), file, []), /Usage source stays within the reader limit/);
   const source = Array.from({ length: 10_001 }, (_, index) => `<Tag${index}/>`).join('');
   assert.throws(() => instanceCounts(source, file, []), /10,000 tag names/);
 });

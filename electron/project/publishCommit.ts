@@ -10,11 +10,7 @@ export interface PublishRepository {
   readonly environment: NodeJS.ProcessEnv;
 }
 
-export async function requirePublishMessage(
-  root: string,
-  source: PublishSource,
-  message: string | undefined,
-): Promise<Result<void>> {
+export async function requirePublishMessage(root: string, source: PublishSource, message: string | undefined): Promise<Result<void>> {
   if (source.head !== undefined) {
     const headTree = await runPublishGit(root, ['rev-parse', `${source.head}^{tree}`]);
     if (!headTree.ok) {
@@ -33,18 +29,10 @@ export async function requirePublishMessage(
 }
 
 /** Fetch objects without moving refs or working files; the existing Pull flow owns merges. */
-export async function checkPublishIncoming(
-  root: string,
-  repository: PublishRepository,
-  head: string | undefined,
-): Promise<Result<void>> {
+export async function checkPublishIncoming(root: string, repository: PublishRepository, head: string | undefined): Promise<Result<void>> {
   const reference = `refs/heads/${repository.branch}`;
   const options = { env: repository.environment, timeout: 120_000 };
-  const advertised = await runPublishGit(
-    root,
-    ['ls-remote', '--refs', repository.remote, reference],
-    options,
-  );
+  const advertised = await runPublishGit(root, ['ls-remote', '--refs', repository.remote, reference], options);
   if (!advertised.ok) {
     return advertised;
   }
@@ -62,11 +50,7 @@ export async function checkPublishIncoming(
   if (head === undefined) {
     return incomingChanges();
   }
-  const fetched = await runPublishGit(
-    root,
-    ['fetch', '--no-tags', '--no-write-fetch-head', repository.remote, commit],
-    options,
-  );
+  const fetched = await runPublishGit(root, ['fetch', '--no-tags', '--no-write-fetch-head', repository.remote, commit], options);
   if (!fetched.ok) {
     return fetched;
   }
@@ -77,12 +61,7 @@ export async function checkPublishIncoming(
   return ancestor.error.exitCode === 1 ? incomingChanges() : ancestor;
 }
 
-export async function commitPublishSource(
-  root: string,
-  source: PublishSource,
-  branch: string,
-  message: string | undefined,
-): Promise<Result<string>> {
+export async function commitPublishSource(root: string, source: PublishSource, branch: string, message: string | undefined): Promise<Result<string>> {
   assert(parsePublishObject(source.tree).ok, 'Publish source carries a valid tree');
   assert(branch.length > 0, 'Publish commits belong to a named branch');
   const stable = await checkPublishIdentity(root, source, branch);
@@ -122,11 +101,7 @@ export async function commitPublishSource(
   return verifyPublishCommit(root, source.tree, branch);
 }
 
-async function commitPublishChanges(
-  root: string,
-  source: PublishSource,
-  message: string | undefined,
-): Promise<Result<void>> {
+async function commitPublishChanges(root: string, source: PublishSource, message: string | undefined): Promise<Result<void>> {
   if (source.head !== undefined) {
     const headTree = await runPublishGit(root, ['rev-parse', `${source.head}^{tree}`]);
     if (!headTree.ok) {
@@ -143,11 +118,7 @@ async function commitPublishChanges(
   return result.ok ? ok(undefined) : result;
 }
 
-async function checkPublishIdentity(
-  root: string,
-  source: PublishSource,
-  branch: string,
-): Promise<Result<void>> {
+async function checkPublishIdentity(root: string, source: PublishSource, branch: string): Promise<Result<void>> {
   const currentBranch = await runPublishGit(root, ['symbolic-ref', '--short', 'HEAD']);
   if (!currentBranch.ok) {
     return currentBranch;
@@ -162,11 +133,7 @@ async function checkPublishIdentity(
   return head.value === source.head ? ok(undefined) : changedProject();
 }
 
-async function verifyPublishCommit(
-  root: string,
-  tree: string,
-  branch: string,
-): Promise<Result<string>> {
+async function verifyPublishCommit(root: string, tree: string, branch: string): Promise<Result<string>> {
   const head = await readPublishHead(root);
   if (!head.ok) {
     return head;
@@ -196,15 +163,13 @@ async function verifyPublishCommit(
 function changedProject(): Result<never> {
   return err({
     code: 'source-changed',
-    message:
-      'Project or branch changed while publishing. Publish again to include the latest edits.',
+    message: 'Project or branch changed while publishing. Publish again to include the latest edits.',
   });
 }
 
 function incomingChanges(): Result<never> {
   return err({
     code: 'incoming',
-    message:
-      'GitHub has incoming changes. Use Pull from GitHub in the branch menu, then publish again.',
+    message: 'GitHub has incoming changes. Use Pull from GitHub in the branch menu, then publish again.',
   });
 }

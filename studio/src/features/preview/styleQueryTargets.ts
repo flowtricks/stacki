@@ -1,9 +1,4 @@
-import {
-  elementsWithPath,
-  inFocus,
-  pathsOf,
-  runsOf,
-} from '../../../vendor/stacki/electron/preload/frameRegions';
+import { elementsWithPath, inFocus, pathsOf, runsOf } from '../../../vendor/stacki/electron/preload/frameRegions';
 
 // Stacki queries marker runs as well as tagged elements: fragments, slots and
 // text nodes need the same rendered target that its measurement code sees.
@@ -22,9 +17,7 @@ export function styleElements(path: string): Element[] {
   if (elements.size === 0) {
     const descendant = [...document.querySelectorAll('[data-avb-p]')]
       .slice(0, 10_000)
-      .find(
-        (element) => inFocus(element) && pathsOf(element).some((p) => p.startsWith(path + '.')),
-      );
+      .find((element) => inFocus(element) && pathsOf(element).some((p) => p.startsWith(path + '.')));
     if (descendant) {
       elements.add(descendant);
     }
@@ -45,12 +38,7 @@ export function textStyleHost(path: string, parent: string | undefined): Element
       }
     }
   }
-  if (
-    runs.length === 0 &&
-    parent &&
-    path.startsWith(parent + '.') &&
-    /^\d+$/.test(path.slice(parent.length + 1))
-  ) {
+  if (runs.length === 0 && parent && path.startsWith(parent + '.') && /^\d+$/.test(path.slice(parent.length + 1))) {
     return elementsWithPath(parent)[0];
   }
   return undefined;

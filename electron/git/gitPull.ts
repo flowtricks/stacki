@@ -4,17 +4,12 @@ import type { MergeOutcome } from './gitBranches';
 import { count } from '../../shared/core/boundary';
 
 /** Discover incoming commits without changing the index or working files. */
-export async function readIncomingCommits(
-  git: Git,
-  options: { readonly projectPath: string; readonly branch: string },
-): Promise<number> {
+export async function readIncomingCommits(git: Git, options: { readonly projectPath: string; readonly branch: string }): Promise<number> {
   const { projectPath, branch } = options;
   await git(projectPath, ['check-ref-format', `refs/heads/${branch}`]);
   await requireCurrentBranch(git, options);
   const remoteReference = `refs/heads/${branch}`;
-  const advertised = (
-    await git(projectPath, ['ls-remote', '--refs', 'origin', remoteReference])
-  ).stdout.trim();
+  const advertised = (await git(projectPath, ['ls-remote', '--refs', 'origin', remoteReference])).stdout.trim();
   if (advertised === '') {
     return 0;
   }
@@ -44,10 +39,7 @@ export async function readIncomingCommits(
 }
 
 /** Fetch explicitly so pull conflicts use the editor's existing merge review. */
-export async function pullBranch(
-  git: Git,
-  options: { readonly projectPath: string; readonly branch: string },
-): Promise<MergeOutcome> {
+export async function pullBranch(git: Git, options: { readonly projectPath: string; readonly branch: string }): Promise<MergeOutcome> {
   const { projectPath, branch } = options;
   await git(projectPath, ['check-ref-format', `refs/heads/${branch}`]);
   await requireCurrentBranch(git, options);
@@ -60,13 +52,8 @@ export async function pullBranch(
   return mergeBranch(git, { projectPath, branch: reference });
 }
 
-async function requireCurrentBranch(
-  git: Git,
-  { projectPath, branch }: { readonly projectPath: string; readonly branch: string },
-): Promise<void> {
-  const current = (
-    await git(projectPath, ['symbolic-ref', '--quiet', '--short', 'HEAD'])
-  ).stdout.trim();
+async function requireCurrentBranch(git: Git, { projectPath, branch }: { readonly projectPath: string; readonly branch: string }): Promise<void> {
+  const current = (await git(projectPath, ['symbolic-ref', '--quiet', '--short', 'HEAD'])).stdout.trim();
   if (current !== branch) {
     throw new Error('The current branch changed. Refresh Git and try pulling again.');
   }

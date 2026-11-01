@@ -68,10 +68,7 @@ export function withConnection(
   return [...others, { connection, secret: sealed.secret }];
 }
 
-export function withoutConnection(
-  stored: readonly StoredConnection[],
-  id: string,
-): StoredConnection[] {
+export function withoutConnection(stored: readonly StoredConnection[], id: string): StoredConnection[] {
   return stored.filter((entry) => entry.connection.id !== id);
 }
 
@@ -105,9 +102,7 @@ export function parseSanityTarget(input: unknown): SanityTarget {
 
 function sameTarget(left: CmsConnection, right: CmsConnection): boolean {
   if (left.kind === 'sanity') {
-    return right.kind === 'sanity' && left.projectId === right.projectId
-      ? left.dataset === right.dataset
-      : false;
+    return right.kind === 'sanity' && left.projectId === right.projectId ? left.dataset === right.dataset : false;
   }
   return right.kind === left.kind && 'baseUrl' in right ? right.baseUrl === left.baseUrl : false;
 }

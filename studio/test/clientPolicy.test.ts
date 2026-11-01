@@ -63,9 +63,7 @@ test('Client direct edits cannot remove/replace the layout or alter outer markup
   ]) {
     assert.throws(() => assertClientSourceChange(page, source, next));
   }
-  assert.throws(() =>
-    assertClientSourceChange(page, withScript, withScript.replace('kept', 'changed')),
-  );
+  assert.throws(() => assertClientSourceChange(page, withScript, withScript.replace('kept', 'changed')));
   assert.throws(() => assertClientSourceChange('src/components/Test.astro', source, source));
   assertClientSourceChange('src/content/posts/example.md', 'Old', 'New');
 });

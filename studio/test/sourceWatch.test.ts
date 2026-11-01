@@ -99,10 +99,7 @@ function assertRouteEvents(events: readonly string[]): void {
   );
 }
 
-async function waitForWatched(
-  watcher: { readonly getWatched: () => Readonly<Record<string, readonly string[]>> },
-  directory: string,
-): Promise<void> {
+async function waitForWatched(watcher: { readonly getWatched: () => Readonly<Record<string, readonly string[]>> }, directory: string): Promise<void> {
   for (let attempt = 0; attempt < 200; attempt++) {
     const files = watcher.getWatched()[directory];
     if (files?.includes('index.astro')) {

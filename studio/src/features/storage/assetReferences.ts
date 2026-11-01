@@ -6,8 +6,7 @@ export async function referencedAssets(root: string, files: readonly string[]) {
   const referenced = new Set<string>();
   const queue = ['src', 'public'];
   const textFiles: string[] = [];
-  const text =
-    /\.(astro|[cm]?[jt]sx?|vue|svelte|json|mdx?|css|scss|sass|less|html?|svg|xml|txt|ya?ml|webmanifest)$/i;
+  const text = /\.(astro|[cm]?[jt]sx?|vue|svelte|json|mdx?|css|scss|sass|less|html?|svg|xml|txt|ya?ml|webmanifest)$/i;
   for (const entry of await readdir(root, { withFileTypes: true })) {
     if (entry.isFile() && text.test(entry.name)) {
       textFiles.push(entry.name);
@@ -47,10 +46,8 @@ export async function referencedAssets(root: string, files: readonly string[]) {
     }
     let source = (await readFile(filename, 'utf8')).toLowerCase();
     // Match percent-encoded spaces and JSON/JS character escapes as well.
-    source = source.replace(
-      /\\u([\da-f]{4})|\\x([\da-f]{2})/g,
-      (_match, unicode: string | undefined, hex: string | undefined) =>
-        String.fromCharCode(parseInt(unicode ?? hex ?? '', 16)),
+    source = source.replace(/\\u([\da-f]{4})|\\x([\da-f]{2})/g, (_match, unicode: string | undefined, hex: string | undefined) =>
+      String.fromCharCode(parseInt(unicode ?? hex ?? '', 16)),
     );
     for (const { file: asset, name } of names) {
       if (source.includes(name) || source.includes(encodeURIComponent(name).toLowerCase())) {

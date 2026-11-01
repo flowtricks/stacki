@@ -44,9 +44,7 @@ const check = (what, condition, detail) => {
     platform: 'node',
     logLevel: 'silent',
   });
-  const { canvasClickAction, canvasEventSelectsSource } = await import(
-    `${pathToFileURL(out).href}?v=${Date.now()}`
-  );
+  const { canvasClickAction, canvasEventSelectsSource } = await import(`${pathToFileURL(out).href}?v=${Date.now()}`);
 
   // Editing Button.astro, opened from the second instance on the page.
   const COMPONENT = 'src/components/Button.astro|';
@@ -58,11 +56,7 @@ const check = (what, condition, detail) => {
   const away = (path) => canvasClickAction({ path, outside: true, ...inside }).kind;
 
   // --- inside a component -------------------------------------------------------
-  check(
-    "a click on the component's own markup selects that node",
-    act(`${COMPONENT}1.0.2`) === 'inner',
-    act(`${COMPONENT}1.0.2`),
-  );
+  check("a click on the component's own markup selects that node", act(`${COMPONENT}1.0.2`) === 'inner', act(`${COMPONENT}1.0.2`));
   check('however deep it is', act(`${COMPONENT}1.0.2.0.1.0`) === 'inner');
   check('the component root included', act(`${COMPONENT}0`) === 'inner');
 
@@ -72,11 +66,7 @@ const check = (what, condition, detail) => {
 
   // A path in the PAGE's namespace, under the instance being edited: the
   // instance's own markup as the page sees it, or content passed into its slot.
-  check(
-    'a page-side path inside the instance stays put',
-    act('0.3.1.2') === 'nothing',
-    act('0.3.1.2'),
-  );
+  check('a page-side path inside the instance stays put', act('0.3.1.2') === 'nothing', act('0.3.1.2'));
   check('as does the instance itself', act('0.3.1') === 'nothing');
 
   // --- leaving ------------------------------------------------------------------
@@ -99,30 +89,19 @@ const check = (what, condition, detail) => {
   // Closing changes which file is open but does not use the event's source path
   // as a selection. The preview gate must not demand a source stamp for that
   // no-selection action; doing so rejected gray-area clicks before they closed.
-  check(
-    'leaving does not claim to select component source',
-    canvasEventSelectsSource({ kind: 'click', path: undefined, outside: true }, inside) === false,
-  );
+  check('leaving does not claim to select component source', canvasEventSelectsSource({ kind: 'click', path: undefined, outside: true }, inside) === false);
   check(
     'an inner click still claims the component source',
-    canvasEventSelectsSource({ kind: 'click', path: `${COMPONENT}0`, outside: false }, inside) ===
-      true,
+    canvasEventSelectsSource({ kind: 'click', path: `${COMPONENT}0`, outside: false }, inside) === true,
   );
-  check(
-    'opening still claims the source being opened',
-    canvasEventSelectsSource({ kind: 'open' }, inside) === true,
-  );
+  check('opening still claims the source being opened', canvasEventSelectsSource({ kind: 'open' }, inside) === true);
 
   // --- not in a component -------------------------------------------------------
   const page = { focusPath: undefined, scope: '' };
   check('on a page, a mapped path selects', act('0.1', page) === 'select', act('0.1', page));
   // Chrome the layout renders itself — header, footer, anything outside the
   // page's <slot> — carries no page-model marker, so it arrives with no path.
-  check(
-    'and an unmapped click selects the layout that owns it',
-    act(undefined, page) === 'layout',
-    act(undefined, page),
-  );
+  check('and an unmapped click selects the layout that owns it', act(undefined, page) === 'layout', act(undefined, page));
 
   // --- the panel asks -----------------------------------------------------------
   // The app shell and the modules it was split into (src/app).
@@ -144,14 +123,11 @@ const check = (what, condition, detail) => {
   check('the click carries whether it landed outside', /outside: !best && !!anyTag/.test(preload));
   check(
     'and closing is the only thing that closes',
-    (app.match(/if \(kind === 'close'\)/g) || []).length === 1 &&
-      containsCode(app, "if (kind === 'nothing') { return; }"),
+    (app.match(/if \(kind === 'close'\)/g) || []).length === 1 && containsCode(app, "if (kind === 'nothing') { return; }"),
   );
 
   if (failures.length) {
-    console.error(
-      `\ncanvas-click: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\ncanvas-click: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

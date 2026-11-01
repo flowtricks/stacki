@@ -75,10 +75,7 @@ test('span wire parsers reject every malformed shape and the bounds', () => {
   for (const [input, message] of bad) {
     assert.throws(() => parseByteSpan(input, 'span'), message);
   }
-  assert.throws(
-    () => parseUtf16Span({ start: 0, end: LIMITS.ipcFieldCharsMax + 1 }, 'span'),
-    /exceeds/,
-  );
+  assert.throws(() => parseUtf16Span({ start: 0, end: LIMITS.ipcFieldCharsMax + 1 }, 'span'), /exceeds/);
 });
 
 test('UTF-16 → byte conversion agrees with a brute-force reference at every offset', () => {
@@ -106,10 +103,7 @@ test('conversion refuses offsets out of order, past the end, or inside a surroga
   assert.throws(() => utf16ToByteOffsets('abc', [toUtf16Offset(2), toUtf16Offset(1)]), /ascending/);
   assert.throws(() => utf16ToByteOffsets('abc', [toUtf16Offset(4)]), /inside the text/);
   assert.throws(() => utf16ToByteOffsets('a🎉', [toUtf16Offset(2)]), /surrogate pair/);
-  assert.deepEqual(
-    utf16ToByteOffsets('a🎉', [toUtf16Offset(1), toUtf16Offset(1), toUtf16Offset(3)]),
-    [1, 1, 5],
-  );
+  assert.deepEqual(utf16ToByteOffsets('a🎉', [toUtf16Offset(1), toUtf16Offset(1), toUtf16Offset(3)]), [1, 1, 5]);
 });
 
 test('decoding is strict and keeps a byte-order mark; byte strings are private copies', () => {

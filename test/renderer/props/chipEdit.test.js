@@ -31,11 +31,7 @@ const check = (what, condition, detail) => {
   const buildDirectory = repoPath('node_modules/.stacki-test');
   fs.mkdirSync(buildDirectory, { recursive: true });
   const entry = path.join(buildDirectory, 'chip-edit.entry.jsx');
-  fs.writeFileSync(
-    entry,
-    `export { BindField } ` +
-      `from ${JSON.stringify(repoPath('src/features/props/PropsPanel.tsx'))};\n`,
-  );
+  fs.writeFileSync(entry, `export { BindField } ` + `from ${JSON.stringify(repoPath('src/features/props/PropsPanel.tsx'))};\n`);
   const bundle = path.join(buildDirectory, 'chip-edit.bundle.js');
   await esbuild.build({
     entryPoints: [entry],
@@ -127,14 +123,11 @@ const check = (what, condition, detail) => {
       });
     };
     // Every action row in the open menu, by its text.
-    const menuRows = () =>
-      [...document.querySelectorAll('.bind-menu .dp-foot')].map((row) => row.textContent.trim());
+    const menuRows = () => [...document.querySelectorAll('.bind-menu .dp-foot')].map((row) => row.textContent.trim());
     // A missing row is a FAILURE, not a crash: this is exactly what regresses,
     // and a stack trace buries which case it was.
     const clickRow = async (match) => {
-      const row = [...document.querySelectorAll('.bind-menu .dp-foot')].find((row) =>
-        row.textContent.includes(match),
-      );
+      const row = [...document.querySelectorAll('.bind-menu .dp-foot')].find((row) => row.textContent.includes(match));
       check(`the menu offers "${match}"`, !!row, `rows were ${JSON.stringify(menuRows())}`);
       if (!row) {
         return false;
@@ -163,17 +156,9 @@ const check = (what, condition, detail) => {
   // --- Two chips in one field -----------------------------------------------
   {
     const mounted = await mount({ type: 'expr', value: '`${media} ${theme}`' });
-    check(
-      'both bindings draw as chips',
-      mounted.chips().length === 2,
-      `${mounted.chips().length} chips: ${mounted.host.textContent}`,
-    );
+    check('both bindings draw as chips', mounted.chips().length === 2, `${mounted.chips().length} chips: ${mounted.host.textContent}`);
     // The pencil that could only speak for one of them is gone.
-    check(
-      'the field has no pencil beside it',
-      !mounted.host.querySelector('.attr-asset-toggle'),
-      mounted.host.innerHTML.slice(0, 200),
-    );
+    check('the field has no pencil beside it', !mounted.host.querySelector('.attr-asset-toggle'), mounted.host.innerHTML.slice(0, 200));
 
     // First chip: a const in this file, so the row offers to edit it here.
     await mounted.press(mounted.chips()[0]);
@@ -191,34 +176,18 @@ const check = (what, condition, detail) => {
       mounted.menuRows().some((label) => label === 'Open where theme is defined'),
       JSON.stringify(mounted.menuRows()),
     );
-    check(
-      'and not the first chip’s',
-      !mounted.menuRows().some((label) => label.includes('media')),
-      JSON.stringify(mounted.menuRows()),
-    );
+    check('and not the first chip’s', !mounted.menuRows().some((label) => label.includes('media')), JSON.stringify(mounted.menuRows()));
 
     // …and taking it does the thing for the chip that was pressed.
     await mounted.clickRow('Open where theme');
-    check(
-      'choosing it opens that symbol',
-      mounted.opened.join(',') === 'theme',
-      JSON.stringify(mounted.opened),
-    );
+    check('choosing it opens that symbol', mounted.opened.join(',') === 'theme', JSON.stringify(mounted.opened));
     check('and closes the menu', !mounted.menuOpen(), 'menu still open');
 
     // The local one edits in place, under the field, rather than opening a file.
     await mounted.press(mounted.chips()[0]);
     await mounted.clickRow('Edit media');
-    check(
-      'editing a local const opens it in place',
-      !!document.querySelector('.var-src'),
-      'no inline editor',
-    );
-    check(
-      'and does not open a file',
-      mounted.opened.join(',') === 'theme',
-      JSON.stringify(mounted.opened),
-    );
+    check('editing a local const opens it in place', !!document.querySelector('.var-src'), 'no inline editor');
+    check('and does not open a file', mounted.opened.join(',') === 'theme', JSON.stringify(mounted.opened));
     await mounted.done();
   }
 
@@ -227,15 +196,10 @@ const check = (what, condition, detail) => {
     // A binding to something no frontmatter declares and no import names: the
     // row would have nowhere to go, so it isn't offered.
     const mounted = await mount({ type: 'expr', value: '`${nowhere}`' });
-    check(
-      'an unfindable binding still opens the menu',
-      (await mounted.press(mounted.chips()[0]), mounted.menuOpen()),
-    );
+    check('an unfindable binding still opens the menu', (await mounted.press(mounted.chips()[0]), mounted.menuOpen()));
     check(
       'but offers no edit row',
-      !mounted
-        .menuRows()
-        .some((label) => label.startsWith('Edit') || label.startsWith('Open where')),
+      !mounted.menuRows().some((label) => label.startsWith('Edit') || label.startsWith('Open where')),
       JSON.stringify(mounted.menuRows()),
     );
     check(

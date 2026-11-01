@@ -44,13 +44,7 @@ export function CodePanel({ document, selected, select, openComponent }: Props) 
           </div>
           <div className="code-panel-editor">
             <CodeEditor
-              language={
-                document.file.endsWith('.css')
-                  ? 'css'
-                  : /\.mdx?$/.test(document.file)
-                    ? 'markdown'
-                    : 'javascript'
-              }
+              language={document.file.endsWith('.css') ? 'css' : /\.mdx?$/.test(document.file) ? 'markdown' : 'javascript'}
               value={source}
               onChange={(source) => document.replaceSource(source)}
             />

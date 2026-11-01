@@ -75,10 +75,7 @@ test('terminal requests validate replies and preserve transport failures', async
     ok: false,
     error: 'pty unavailable',
   });
-  assert.equal(
-    (await terminal.saveTerminalClipboardImage(new Uint8Array(2), 'image/png')).ok,
-    true,
-  );
+  assert.equal((await terminal.saveTerminalClipboardImage(new Uint8Array(2), 'image/png')).ok, true);
   terminal.sendTerminalInput('one', 'a');
   terminal.acknowledgeTerminalData('one', 1);
   assert.deepEqual(calls, [

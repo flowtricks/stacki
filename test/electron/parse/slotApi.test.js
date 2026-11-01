@@ -44,11 +44,7 @@ const slots = (fm, body) => JSON.stringify(parseSlots(page(fm, body)));
 
 // ── The old way, unchanged ──────────────────────────────────────────────────
 check('a plain <slot /> is the default slot', slots('', '<div><slot /></div>') === '["default"]');
-check(
-  'a named slot is named',
-  slots('', '<div><slot name="footer" /></div>') === '["footer"]',
-  slots('', '<div><slot name="footer" /></div>'),
-);
+check('a named slot is named', slots('', '<div><slot name="footer" /></div>') === '["footer"]', slots('', '<div><slot name="footer" /></div>'));
 check(
   'and both together put the default first',
   slots('', '<div><slot name="footer" /><slot /></div>') === '["default","footer"]',
@@ -79,24 +75,13 @@ check(
   slots('const c = await slotContent(Astro.slots);', '<div set:html={c} />'),
 );
 {
-  const fm =
-    'const column1 = await slotContent(Astro.slots);\n' +
-    'const column2 = await slotContent(Astro.slots, "column2");';
-  check(
-    'and both columns of a two-slot layout are found',
-    slots(fm, '<div />') === '["default","column2"]',
-    slots(fm, '<div />'),
-  );
+  const fm = 'const column1 = await slotContent(Astro.slots);\n' + 'const column2 = await slotContent(Astro.slots, "column2");';
+  check('and both columns of a two-slot layout are found', slots(fm, '<div />') === '["default","column2"]', slots(fm, '<div />'));
 }
 // The name comes from the call it is in, not from the next one down the file.
 {
-  const fm =
-    'const a = await slotContent(Astro.slots);\nconst b = await slotContent(Astro.slots, "aside");';
-  check(
-    'a call cannot borrow the name of a later one',
-    slots(fm, '<div />') === '["default","aside"]',
-    slots(fm, '<div />'),
-  );
+  const fm = 'const a = await slotContent(Astro.slots);\nconst b = await slotContent(Astro.slots, "aside");';
+  check('a call cannot borrow the name of a later one', slots(fm, '<div />') === '["default","aside"]', slots(fm, '<div />'));
 }
 check(
   'a variable slot name reads as the default rather than as itself',
@@ -110,11 +95,7 @@ check(
     '/**\n * A <script> never reaches the page when the parent consumes it through\n' +
     ' * `Astro.slots.render()`, which is how `Section` handles its slots.\n */\n' +
     'const id = "x";';
-  check(
-    'a comment about Astro.slots declares no slot',
-    slots(fm, '<div />') === '[]',
-    slots(fm, '<div />'),
-  );
+  check('a comment about Astro.slots declares no slot', slots(fm, '<div />') === '[]', slots(fm, '<div />'));
 }
 check(
   'nor does a line comment',
@@ -129,14 +110,8 @@ check(
 // A URL in the template is not a comment, whatever `//` looks like.
 check(
   'a url keeps the rest of its line',
-  slots(
-    'const c = await Astro.slots.render();',
-    '<a href="https://x.dev">link</a>\n<p set:html={c} />',
-  ) === '["default"]',
-  slots(
-    'const c = await Astro.slots.render();',
-    '<a href="https://x.dev">link</a>\n<p set:html={c} />',
-  ),
+  slots('const c = await Astro.slots.render();', '<a href="https://x.dev">link</a>\n<p set:html={c} />') === '["default"]',
+  slots('const c = await Astro.slots.render();', '<a href="https://x.dev">link</a>\n<p set:html={c} />'),
 );
 
 // ── Where the content lands decides what arrives in it ──────────────────────
@@ -150,16 +125,10 @@ check(
   inline('const c = await slotContent(Astro.slots);', '<p><Fragment set:html={c} /></p>') === true,
   String(inline('const c = await slotContent(Astro.slots);', '<p><Fragment set:html={c} /></p>')),
 );
-check(
-  'set:html inside a <div> wants blocks',
-  inline('const c = await slotContent(Astro.slots);', '<div><Fragment set:html={c} /></div>') ===
-    false,
-);
+check('set:html inside a <div> wants blocks', inline('const c = await slotContent(Astro.slots);', '<div><Fragment set:html={c} /></div>') === false);
 // `<Tag>` is a variable — resolve it to what it defaults to.
 {
-  const fm =
-    'const { tag = "p" } = Astro.props;\nconst Tag = tag;\n' +
-    'const c = await slotContent(Astro.slots);';
+  const fm = 'const { tag = "p" } = Astro.props;\nconst Tag = tag;\n' + 'const c = await slotContent(Astro.slots);';
   check(
     'and a dynamic tag is resolved before it is judged',
     inline(fm, '<Tag><Fragment set:html={c} /></Tag>') === true,
@@ -174,16 +143,8 @@ check(
 );
 check(
   'a named slot never decides this',
-  inline(
-    'const c = await slotContent(Astro.slots, "aside");',
-    '<p><Fragment set:html={c} /></p>',
-  ) === false,
-  String(
-    inline(
-      'const c = await slotContent(Astro.slots, "aside");',
-      '<p><Fragment set:html={c} /></p>',
-    ),
-  ),
+  inline('const c = await slotContent(Astro.slots, "aside");', '<p><Fragment set:html={c} /></p>') === false,
+  String(inline('const c = await slotContent(Astro.slots, "aside");', '<p><Fragment set:html={c} /></p>')),
 );
 
 // ── The files this came from ────────────────────────────────────────────────
@@ -220,11 +181,7 @@ if (fs.existsSync(LUMOS)) {
     run(source, what);
   };
   onceReal('the real <Paragraph> takes content', 'Paragraph', (source) => {
-    check(
-      'the real <Paragraph> takes content',
-      JSON.stringify(parseSlots(source)) === '["default"]',
-      JSON.stringify(parseSlots(source)),
-    );
+    check('the real <Paragraph> takes content', JSON.stringify(parseSlots(source)) === '["default"]', JSON.stringify(parseSlots(source)));
   });
   onceReal('the real <ContentWrapper>', 'ContentWrapper', (source) => {
     check(
@@ -235,11 +192,7 @@ if (fs.existsSync(LUMOS)) {
     check('while it takes blocks, not words', defaultSlotInline(source) === false);
   });
   onceReal('a component with no slots', 'Img', (source) => {
-    check(
-      'a component with no slots still reports none',
-      JSON.stringify(parseSlots(source)) === '[]',
-      JSON.stringify(parseSlots(source)),
-    );
+    check('a component with no slots still reports none', JSON.stringify(parseSlots(source)) === '[]', JSON.stringify(parseSlots(source)));
   });
 }
 
@@ -320,11 +273,7 @@ if (fs.existsSync(LUMOS)) {
   };
 
   const withSlot = await mount(true);
-  check(
-    'a component that takes content is offered a Content field',
-    withSlot.includes('Content'),
-    JSON.stringify(withSlot),
-  );
+  check('a component that takes content is offered a Content field', withSlot.includes('Content'), JSON.stringify(withSlot));
   const without = await mount(false);
   check('one that takes none is not', !without.includes('Content'), JSON.stringify(without));
 

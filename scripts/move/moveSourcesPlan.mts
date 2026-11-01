@@ -48,10 +48,7 @@ export interface StepPlan {
 export type ExtensionPolicy = 'keep' | 'strip';
 
 export type SpecifierForm =
-  | { readonly kind: 'exact' }
-  | { readonly kind: 'alias'; readonly extension: string }
-  | { readonly kind: 'bare' }
-  | { readonly kind: 'directory' };
+  { readonly kind: 'exact' } | { readonly kind: 'alias'; readonly extension: string } | { readonly kind: 'bare' } | { readonly kind: 'directory' };
 
 export interface Resolution {
   readonly target: string;
@@ -209,11 +206,7 @@ function callSpecifier(node: ts.CallExpression): ts.StringLiteralLike | undefine
   return undefined;
 }
 
-export function resolveSpecifier(
-  files: ReadonlySet<string>,
-  importer: string,
-  specifier: string,
-): Resolution | undefined {
+export function resolveSpecifier(files: ReadonlySet<string>, importer: string, specifier: string): Resolution | undefined {
   assert(specifier.startsWith('.'), 'resolveSpecifier: only relative specifiers resolve');
   const base = path.posix.join(path.posix.dirname(importer), specifier);
   return resolvePath(files, base);
@@ -246,11 +239,7 @@ export function resolvePath(files: ReadonlySet<string>, base: string): Resolutio
   return undefined;
 }
 
-export function formatSpecifier(
-  importer: string,
-  resolution: Resolution,
-  policy: ExtensionPolicy,
-): string {
+export function formatSpecifier(importer: string, resolution: Resolution, policy: ExtensionPolicy): string {
   const relative = path.posix.relative(path.posix.dirname(importer), resolution.target);
   const written = writtenPath(relative, resolution.form, policy);
   return written.startsWith('.') ? written : `./${written}`;
@@ -287,12 +276,7 @@ interface RewriteResult {
   readonly reports: readonly string[];
 }
 
-export function rewriteImports(
-  file: string,
-  text: string,
-  files: ReadonlySet<string>,
-  moves: ReadonlyMap<string, string>,
-): RewriteResult {
+export function rewriteImports(file: string, text: string, files: ReadonlySet<string>, moves: ReadonlyMap<string, string>): RewriteResult {
   const importer = moves.get(file) ?? file;
   const policy = extensionPolicy(importer);
   const edits: Edit[] = [];
@@ -385,10 +369,7 @@ export function rewritePathText(input: PathTextInput): RewriteResult {
   return { text: applyEdits(input.text, edits), reports };
 }
 
-type TokenMapping =
-  | { readonly kind: 'same' }
-  | { readonly kind: 'mapped'; readonly text: string }
-  | { readonly kind: 'report'; readonly message: string };
+type TokenMapping = { readonly kind: 'same' } | { readonly kind: 'mapped'; readonly text: string } | { readonly kind: 'report'; readonly message: string };
 
 function mapPathToken(token: string, input: PathTextInput): TokenMapping {
   if (token.startsWith('dist/')) {
@@ -437,11 +418,7 @@ const SAME: TokenMapping = { kind: 'same' };
 
 // A folder maps to a folder only when every file in it moves and they land
 // together, each at the same depth below one new folder (names may change).
-function movedDirectory(
-  directory: string,
-  files: readonly string[],
-  moves: ReadonlyMap<string, string>,
-): TokenMapping {
+function movedDirectory(directory: string, files: readonly string[], moves: ReadonlyMap<string, string>): TokenMapping {
   const moved = files.filter((file) => moves.has(file));
   if (moved.length === 0) {
     return SAME;
@@ -517,11 +494,7 @@ function regexReports(input: PathTextInput): readonly string[] {
 
 // A renamed file named without its folder (`see tool-prefs.ts`) is a reader's
 // pointer this tool cannot place; report it for a hand edit.
-function renamedNameReports(
-  file: string,
-  text: string,
-  moves: ReadonlyMap<string, string>,
-): readonly string[] {
+function renamedNameReports(file: string, text: string, moves: ReadonlyMap<string, string>): readonly string[] {
   const reports: string[] = [];
   for (const [from, to] of moves) {
     const name = path.posix.basename(from);

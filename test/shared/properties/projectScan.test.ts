@@ -51,23 +51,14 @@ test('a component without an extended or root tag carries undefined, never null'
   const parsed = parseScanResult({ ...goodScan, components: [bare] });
   assert.equal(parsed.components[0]?.extendsTag, undefined);
   assert.equal(parsed.components[0]?.renderTag, undefined);
-  assert.throws(
-    () => parseScanResult({ ...goodScan, components: [{ ...bare, extendsTag: jsonNull }] }),
-    /extendsTag: expected string/,
-  );
-  assert.throws(
-    () => parseScanResult({ ...goodScan, components: [{ ...bare, renderTag: jsonNull }] }),
-    /renderTag: expected object/,
-  );
+  assert.throws(() => parseScanResult({ ...goodScan, components: [{ ...bare, extendsTag: jsonNull }] }), /extendsTag: expected string/);
+  assert.throws(() => parseScanResult({ ...goodScan, components: [{ ...bare, renderTag: jsonNull }] }), /renderTag: expected object/);
 });
 
 test('negative space: wrong entry shapes fail with pinned messages', () => {
   assert.throws(() => parseScanResult(jsonNull), /expected object/);
   assert.throws(() => parseScanResult({ ...goodScan, pages: {} }), /pages: expected array/);
-  assert.throws(
-    () => parseScanResult({ ...goodScan, pages: [{ path: '/x', name: 'x.astro' }] }),
-    /route: expected string/,
-  );
+  assert.throws(() => parseScanResult({ ...goodScan, pages: [{ path: '/x', name: 'x.astro' }] }), /route: expected string/);
   assert.throws(
     () =>
       parseScanResult({
@@ -163,8 +154,7 @@ test('inherited page titles use the same boundary validation as direct titles', 
     name: 'resources.astro',
     route: '/resources',
   };
-  const scan = (inheritedTitle: unknown) =>
-    parseScanResult({ ...goodScan, pages: [{ ...page, inheritedTitle }] });
+  const scan = (inheritedTitle: unknown) => parseScanResult({ ...goodScan, pages: [{ ...page, inheritedTitle }] });
   assert.equal(scan('Resources').pages[0]?.inheritedTitle, 'Resources');
   assert.equal(scan(undefined).pages[0]?.inheritedTitle, undefined);
   for (const value of [jsonNull, 42, {}, [], 'x'.repeat(LIMITS.ipcFieldCharsMax + 1)]) {

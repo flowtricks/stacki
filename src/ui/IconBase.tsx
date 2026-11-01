@@ -17,14 +17,7 @@ export interface IconProps {
 // glance as Astro's rather than the project's or plain HTML's.
 export const ASTRO_ASSET_ACCENT = '#ff5d01';
 
-export const I = ({
-  children,
-  size = 16,
-  className,
-  style,
-  filled = false,
-  strokeWidth = 1.3,
-}: IconProps) => (
+export const I = ({ children, size = 16, className, style, filled = false, strokeWidth = 1.3 }: IconProps) => (
   <svg
     width={size}
     height={size}

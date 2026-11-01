@@ -10,18 +10,10 @@ import { digest, pathText } from '../core/boundary';
 import { LIMITS } from '../core/limits';
 import { toArray, toRecord } from '../core/record';
 import { isNodeKind, parseAnchorRef, type AnchorKind, type AnchorRef } from '../page/ref';
-import {
-  parseByteSpan,
-  spanContains,
-  spansAscending,
-  utf8ByteLength,
-  type ByteSpan,
-} from '../core/span';
+import { parseByteSpan, spanContains, spansAscending, utf8ByteLength, type ByteSpan } from '../core/span';
 
 export type AttributeValue =
-  | { readonly type: 'string'; readonly value: string }
-  | { readonly type: 'expr'; readonly value: string }
-  | { readonly type: 'bare' };
+  { readonly type: 'string'; readonly value: string } | { readonly type: 'expr'; readonly value: string } | { readonly type: 'bare' };
 
 export const PLACEMENTS = ['before', 'after', 'first-child', 'last-child'] as const;
 export type Placement = (typeof PLACEMENTS)[number];
@@ -32,8 +24,7 @@ export interface SourceEdit {
   readonly text: string;
 }
 
-export type StyleDeclaration =
-  { readonly tag: 'set'; readonly value: string } | { readonly tag: 'remove' };
+export type StyleDeclaration = { readonly tag: 'set'; readonly value: string } | { readonly tag: 'remove' };
 
 /** The closed operation set (plan §3.3). New operations extend this union; they
  * never extend a writer.
@@ -109,8 +100,7 @@ export interface Intent {
   readonly operation: Operation;
 }
 
-export type SubmissionResult =
-  { readonly tag: 'accepted'; readonly intentId: IntentId } | { readonly tag: 'backpressured' };
+export type SubmissionResult = { readonly tag: 'accepted'; readonly intentId: IntentId } | { readonly tag: 'backpressured' };
 
 export const REJECTION_REASONS = [
   'anchor-moved',
@@ -196,9 +186,7 @@ export function intentPayloadBytes(operation: Operation): number {
 function operationTexts(operation: Operation): readonly string[] {
   switch (operation.tag) {
     case 'set-attribute':
-      return operation.value.type === 'bare'
-        ? [operation.name]
-        : [operation.name, operation.value.value];
+      return operation.value.type === 'bare' ? [operation.name] : [operation.name, operation.value.value];
     case 'remove-attribute':
       return [operation.name];
     case 'insert-node':
@@ -213,9 +201,7 @@ function operationTexts(operation: Operation): readonly string[] {
     case 'rename-attribute':
       return [operation.from, operation.to];
     case 'set-inline-style':
-      return operation.declaration.tag === 'set'
-        ? [operation.property, operation.declaration.value]
-        : [operation.property];
+      return operation.declaration.tag === 'set' ? [operation.property, operation.declaration.value] : [operation.property];
     case 'apply-code-patch':
     case 'revert-splices':
     case 'rewrite-node':
@@ -483,11 +469,7 @@ function parseSetInlineStyle(record: Record<string, unknown>): Operation {
     return { tag: 'set-inline-style', property, declaration: { tag } };
   }
   if (tag === 'set') {
-    const value = boundedText(
-      declaration['value'],
-      'Operation.declaration.value',
-      LIMITS.attrCharsMax,
-    );
+    const value = boundedText(declaration['value'], 'Operation.declaration.value', LIMITS.attrCharsMax);
     return { tag: 'set-inline-style', property, declaration: { tag, value } };
   }
   throw new Error(`Operation.declaration.tag: unknown value ${JSON.stringify(tag)}`);
@@ -546,14 +528,8 @@ export function parseOutcome(input: unknown): Outcome {
   const tag = record['tag'];
   switch (tag) {
     case 'applied': {
-      const ranges = boundedArray(
-        record['changedRanges'],
-        'Outcome.changedRanges',
-        LIMITS.splicesPerIntentMax,
-      );
-      const changedRanges = ranges.map((range, index) =>
-        parseByteSpan(range, `Outcome.changedRanges[${index}]`),
-      );
+      const ranges = boundedArray(record['changedRanges'], 'Outcome.changedRanges', LIMITS.splicesPerIntentMax);
+      const changedRanges = ranges.map((range, index) => parseByteSpan(range, `Outcome.changedRanges[${index}]`));
       if (!spansAscending(changedRanges)) {
         throw new Error('Outcome.changedRanges: expected ascending disjoint ranges');
       }

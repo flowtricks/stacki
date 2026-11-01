@@ -5,12 +5,7 @@ import test from 'node:test';
 import { BOUNDARY_LIMITS } from '#dist/shared/core/boundary.js';
 import { parseIpcPayload } from '#dist/shared/ipc/ipcPayloads.js';
 import { parseStudioStatus, parseStudioInstallResult } from '#dist/shared/ipc/studioSetup.js';
-import {
-  parseStudioInstallProgress,
-  STUDIO_INSTALL_STAGES,
-  STUDIO_LOG_CHARS_MAX,
-  studioCompletedStages,
-} from '#dist/shared/ipc/studioProgress.js';
+import { parseStudioInstallProgress, STUDIO_INSTALL_STAGES, STUDIO_LOG_CHARS_MAX, studioCompletedStages } from '#dist/shared/ipc/studioProgress.js';
 
 test('Studio progress validates every stage, identity and output bound', () => {
   const base = { projectPath: '/site', requestId: 'install-1', output: '', stage: 'release' };
@@ -99,11 +94,7 @@ test('Studio status and installation results are validated', () => {
   ]) {
     assert.deepEqual(parseStudioStatus(value), value);
   }
-  for (const value of [
-    { kind: 'installed', version: '1.2.3' },
-    { kind: 'canceled' },
-    { kind: 'error', message: 'Unavailable' },
-  ]) {
+  for (const value of [{ kind: 'installed', version: '1.2.3' }, { kind: 'canceled' }, { kind: 'error', message: 'Unavailable' }]) {
     assert.deepEqual(parseStudioInstallResult(value), value);
   }
   for (const value of [undefined, 1, {}, { kind: 'installed' }, { kind: 'error', message: 7 }]) {

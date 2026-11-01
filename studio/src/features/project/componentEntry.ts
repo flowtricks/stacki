@@ -1,7 +1,4 @@
-import {
-  isCanvasPage,
-  isDefaultsCanvas,
-} from '../../../vendor/stacki/shared/properties/defaultsCanvas';
+import { isCanvasPage, isDefaultsCanvas } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import type { SharedDocument } from '../collaboration/useDocument';
 import { getEditorRole } from '../roles/roleStore';
 import { flatten, type parsePage } from '../source/source';
@@ -11,21 +8,13 @@ import type { ComponentFocus, OpenFile } from './editorNavigation';
 import { pathFor } from './previewSelection';
 
 type Parsed = ReturnType<typeof parsePage> | undefined;
-export function componentAt(
-  project: Project,
-  file: string,
-  parsed: Parsed,
-  id: string,
-  name?: string,
-) {
+export function componentAt(project: Project, file: string, parsed: Parsed, id: string, name?: string) {
   if (!parsed?.editable) {
     return undefined;
   }
   const node = flatten(parsed.model.nodes).find((node) => node.id === id);
   const spec = parsed.model.imports.find((item) => item.name === (node?.name ?? name))?.path;
-  return project.components.find(
-    (item) => item.file === resolveImport(file, spec, project.components),
-  );
+  return project.components.find((item) => item.file === resolveImport(file, spec, project.components));
 }
 interface Context {
   readonly project: Project;
@@ -49,9 +38,7 @@ export function componentEntry(context: Context) {
       return;
     }
     if (component.origin?.kind === 'package') {
-      context.report(
-        new Error('Package components are read-only. Edit instance properties on the page.'),
-      );
+      context.report(new Error('Package components are read-only. Edit instance properties on the page.'));
       return;
     }
     const focus =

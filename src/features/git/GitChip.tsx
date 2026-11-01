@@ -5,14 +5,7 @@ import type { Result } from '../../../shared/core/result';
 import { assert } from '../../../shared/core/assert';
 import { cleanError } from '../../lib/cleanError';
 import { deleteBranchAction, mergeBranchAction, tidyUp } from './gitActions';
-import {
-  checkoutGitBranch,
-  commitGitChanges,
-  initializeGit,
-  pullGitBranch,
-  readGitStatus,
-  resolveGitMerge,
-} from './gitChipBridge';
+import { checkoutGitBranch, commitGitChanges, initializeGit, pullGitBranch, readGitStatus, resolveGitMerge } from './gitChipBridge';
 import { BranchIcon } from '../../ui/Icons';
 import type { Conflict, ConflictChoices } from './gitConflictModel';
 import GitChipView from './GitChipView';
@@ -22,11 +15,7 @@ import SwitchBranchModal from './SwitchBranchModal';
 type ToastKind = 'error' | 'success' | 'info';
 type ShowToast = (message: string, kind: ToastKind) => void;
 type ActionWork = () => Promise<void>;
-type RunAction = (
-  work: ActionWork,
-  successMessage: string | undefined,
-  label?: string,
-) => Promise<boolean>;
+type RunAction = (work: ActionWork, successMessage: string | undefined, label?: string) => Promise<boolean>;
 
 interface GitProject {
   readonly path: string;
@@ -133,13 +122,7 @@ export default function GitChip(props: GitChipProps) {
     );
   }
   if (!info.isRepo) {
-    return (
-      <InitializeGitChip
-        projectPath={props.project.path}
-        busy={action.busy ?? props.busy}
-        runAction={action.runAction}
-      />
-    );
+    return <InitializeGitChip projectPath={props.project.path} busy={action.busy ?? props.busy} runAction={action.runAction} />;
   }
   return (
     <RepositoryGitChip
@@ -230,15 +213,9 @@ function pullFromGitHub(props: RepositoryProps, state: ActionState): void {
       if ('conflicted' in result) {
         state.setConflict({ ...result, deleteAfter: false });
       } else if ('dirty' in result) {
-        props.showToast(
-          'Commit your local changes before pulling: incoming changes affect the same files.',
-          'error',
-        );
+        props.showToast('Commit your local changes before pulling: incoming changes affect the same files.', 'error');
       } else {
-        props.showToast(
-          result.changed ? 'Pulled changes from GitHub' : 'Already up to date with GitHub',
-          'success',
-        );
+        props.showToast(result.changed ? 'Pulled changes from GitHub' : 'Already up to date with GitHub', 'success');
       }
     },
     undefined,
@@ -358,11 +335,7 @@ function useRepositoryActions(props: RepositoryProps, state: ActionState) {
   } as const;
 }
 
-async function switchBranch(
-  props: RepositoryProps,
-  state: ActionState,
-  branch: string,
-): Promise<void> {
+async function switchBranch(props: RepositoryProps, state: ActionState, branch: string): Promise<void> {
   const result = await checkoutBranch(props, branch, { kind: 'switch' });
   if (!result.ok) {
     state.setSwitchTo({ branch, files: result.files });
@@ -379,11 +352,7 @@ async function switchBranch(
   }
 }
 
-function checkoutBranch(
-  props: RepositoryProps,
-  branch: string,
-  mode: Parameters<typeof checkoutGitBranch>[2],
-) {
+function checkoutBranch(props: RepositoryProps, branch: string, mode: Parameters<typeof checkoutGitBranch>[2]) {
   const work = () => gitValue(checkoutGitBranch(props.project.path, branch, mode));
   return props.withBranchChange ? props.withBranchChange(work) : work();
 }
@@ -417,11 +386,7 @@ async function parkAndSwitch(props: RepositoryProps, branch: string): Promise<bo
   );
 }
 
-function commitAndSwitch(
-  props: RepositoryProps,
-  branch: string,
-  message: string,
-): Promise<boolean> {
+function commitAndSwitch(props: RepositoryProps, branch: string, message: string): Promise<boolean> {
   const from = props.info.branch;
   return props.runAction(
     async () => {
@@ -491,11 +456,7 @@ function GitModals(props: ModalProps) {
 
 function ConflictModal(props: ModalProps & { readonly conflict: PendingConflict }) {
   const resolve = async (choices: ConflictChoices): Promise<void> => {
-    const done = await props.runAction(
-      () => resolveConflict(props, choices),
-      undefined,
-      'Merging…',
-    );
+    const done = await props.runAction(() => resolveConflict(props, choices), undefined, 'Merging…');
     if (done) {
       props.setConflict(undefined);
     }
@@ -515,13 +476,8 @@ function ConflictModal(props: ModalProps & { readonly conflict: PendingConflict 
   );
 }
 
-async function resolveConflict(
-  props: ModalProps & { readonly conflict: PendingConflict },
-  choices: ConflictChoices,
-): Promise<void> {
-  const result = await gitValue(
-    resolveGitMerge(props.project.path, props.conflict.branch, choices),
-  );
+async function resolveConflict(props: ModalProps & { readonly conflict: PendingConflict }, choices: ConflictChoices): Promise<void> {
+  const result = await gitValue(resolveGitMerge(props.project.path, props.conflict.branch, choices));
   assert(result.ok, 'Merge resolution must complete');
   assert(result.into !== undefined, 'Merge resolution requires a target branch');
   if (props.conflict.deleteAfter) {

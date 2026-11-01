@@ -5,8 +5,7 @@ import { thenBranch } from './branches';
 interface Insertable {
   readonly name: string;
   readonly slots?: readonly string[];
-  readonly renderTag?:
-    { readonly tag?: string | undefined; readonly prop?: string | undefined } | undefined;
+  readonly renderTag?: { readonly tag?: string | undefined; readonly prop?: string | undefined } | undefined;
 }
 interface InsertItem {
   readonly type: string;
@@ -37,10 +36,7 @@ import { canContainTag, VOID_TAGS } from './elementSchemas';
  * which case an instance's own value wins over the component's default.
  * Undefined when it can't be told — several possible tags, or no root element.
  */
-export function tagOfComponent(
-  component: Insertable | undefined,
-  node?: TreeView | undefined,
-): string | undefined {
+export function tagOfComponent(component: Insertable | undefined, node?: TreeView | undefined): string | undefined {
   const renderTag = component?.renderTag;
   if (!renderTag) {
     return undefined;
@@ -55,19 +51,14 @@ export function tagOfComponent(
   return renderTag.tag || undefined;
 }
 
-const findNode = (nodes: readonly TreeView[], id: string): TreeView | undefined =>
-  findWithParent(nodes, id)?.node;
+const findNode = (nodes: readonly TreeView[], id: string): TreeView | undefined => findWithParent(nodes, id)?.node;
 const findParentOf = (nodes: readonly TreeView[], id: string): InsertTarget | undefined => {
   const found = findWithParent(nodes, id);
   return found ? { parentId: found.parent?.id, index: found.index } : undefined;
 };
 
 /** Whether `node` can hold `childTag` (undefined when the tag can't be told). */
-export function acceptsChildren(
-  node: TreeView,
-  childTag: string | undefined,
-  insertables: readonly Insertable[] | undefined,
-): boolean {
+export function acceptsChildren(node: TreeView, childTag: string | undefined, insertables: readonly Insertable[] | undefined): boolean {
   if (node.id === 'layout') {
     return true;
   }

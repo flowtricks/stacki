@@ -19,11 +19,7 @@ const SEARCHABLE_WIDTH_MIN = 300;
 // The tallest a list grows before it scrolls: about a dozen options, so a long
 // list (time zones, locales) is a list to scroll, not a wall down the window.
 const MENU_HEIGHT_MAX = 320;
-export function popupBox(
-  rectangle: Pick<DOMRect, 'top' | 'bottom'>,
-  wanted: number,
-  windowHeight: number,
-) {
+export function popupBox(rectangle: Pick<DOMRect, 'top' | 'bottom'>, wanted: number, windowHeight: number) {
   const below = windowHeight - rectangle.bottom - POPUP_GAP - POPUP_EDGE;
   const above = rectangle.top - POPUP_GAP - POPUP_EDGE;
   const up = wanted > below && above > below;
@@ -100,10 +96,7 @@ export default function Dropdown<T>(props: DropdownProps<T>) {
   const state = useDropdownSelection(props);
   const actions = useDropdownActions(props, state);
   const control = { ...state, ...actions };
-  const position = useDropdownPosition(state, {
-    searchable: props.searchable ?? false,
-    widthPxMin: props.menuWidthMin ?? 0,
-  });
+  const position = useDropdownPosition(state, { searchable: props.searchable ?? false, widthPxMin: props.menuWidthMin ?? 0 });
   useDropdownSound(state);
   useDropdownFocus(state, { searchable: props.searchable ?? false });
   useEffect(() => {
@@ -134,9 +127,7 @@ export default function Dropdown<T>(props: DropdownProps<T>) {
           <ChevronDownIcon size={11} />
         </span>
       </button>
-      {position && (
-        <DropdownPopup control={control} props={props} position={position} onKey={onKey} />
-      )}
+      {position && <DropdownPopup control={control} props={props} position={position} onKey={onKey} />}
     </>
   );
 }
@@ -155,11 +146,7 @@ function useDropdownSelection<T>(props: DropdownProps<T>): Selection<T> {
   const queryText = query.trim().toLowerCase();
   const visible =
     props.searchable && queryText
-      ? props.options.filter((option) =>
-          `${option.label} ${option.hint || ''} ${option.group || ''}`
-            .toLowerCase()
-            .includes(queryText),
-        )
+      ? props.options.filter((option) => `${option.label} ${option.hint || ''} ${option.group || ''}`.toLowerCase().includes(queryText))
       : props.options;
   return {
     open,
@@ -183,15 +170,7 @@ function useDropdownSelection<T>(props: DropdownProps<T>): Selection<T> {
 // Waiting longer makes the canvas feel stale as the pointer crosses options.
 function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Actions<T> {
   const { setOpen, setHighlight, committed, previewed, visible } = state;
-  const {
-    value,
-    options,
-    onChange,
-    onPreview,
-    onPrepare,
-    onCancelPreview,
-    livePreview = true,
-  } = props;
+  const { value, options, onChange, onPreview, onPrepare, onCancelPreview, livePreview = true } = props;
   const hoverFrame = useRef<number | undefined>(undefined);
   const cancelHover = useCallback((): void => {
     if (hoverFrame.current !== undefined) {
@@ -259,11 +238,7 @@ function initializeDropdown<T>(state: Selection<T>, value: T): void {
   setQuery('');
 }
 
-function commitDropdownOption<T>(
-  props: DropdownProps<T>,
-  state: Selection<T>,
-  option: DropdownOption<T>,
-): void {
+function commitDropdownOption<T>(props: DropdownProps<T>, state: Selection<T>, option: DropdownOption<T>): void {
   const { onPreview, onCancelPreview, onCommitPreview, onChange } = props;
   const { committed, previewed, setOpen, triggerRef } = state;
   const applied = onPreview ? committed.current : (previewed.current?.value ?? committed.current);
@@ -284,10 +259,7 @@ function commitDropdownOption<T>(
   triggerRef.current?.focus();
 }
 
-function useDropdownPosition<T>(
-  state: Selection<T>,
-  options: { readonly searchable: boolean; readonly widthPxMin: number },
-) {
+function useDropdownPosition<T>(state: Selection<T>, options: { readonly searchable: boolean; readonly widthPxMin: number }) {
   const [position, setPosition] = useState<PopupPosition | undefined>(undefined);
   const { open, triggerRef, visible } = state;
   const { searchable, widthPxMin } = options;
@@ -300,10 +272,7 @@ function useDropdownPosition<T>(
     // makes a long list alternate between capped and uncapped heights until
     // React aborts the render loop, so derive its intrinsic height from the
     // dimensions this component owns instead.
-    const wanted =
-      (visible.length + dropdownGroupCount(visible)) * OPTION_HEIGHT +
-      POPUP_PADDING_HEIGHT +
-      (searchable ? SEARCH_HEIGHT : 0);
+    const wanted = (visible.length + dropdownGroupCount(visible)) * OPTION_HEIGHT + POPUP_PADDING_HEIGHT + (searchable ? SEARCH_HEIGHT : 0);
     const shown = Math.min(wanted, MENU_HEIGHT_MAX);
     const box = popupBox(rectangle, shown, window.innerHeight);
     // A menu wider than its trigger (a compact "Match all") grows to its
@@ -362,11 +331,9 @@ function useDropdownFocus<T>(state: Selection<T>, options: { readonly searchable
       return;
     }
     const timer = window.setTimeout(() => {
-      (listRef.current || popupRef.current)
-        ?.querySelectorAll('.dd-option')
-        [highlight]?.scrollIntoView({
-          block: 'nearest',
-        });
+      (listRef.current || popupRef.current)?.querySelectorAll('.dd-option')[highlight]?.scrollIntoView({
+        block: 'nearest',
+      });
     }, 0);
     return () => window.clearTimeout(timer);
   }, [open, highlight, listRef, popupRef]);
@@ -379,11 +346,7 @@ function useDropdownFocus<T>(state: Selection<T>, options: { readonly searchable
   }, [open, searchable, searchRef]);
 }
 
-function dropdownKey<T>(
-  event: KeyboardEvent<HTMLElement>,
-  control: Controller<T>,
-  props: DropdownProps<T>,
-): void {
+function dropdownKey<T>(event: KeyboardEvent<HTMLElement>, control: Controller<T>, props: DropdownProps<T>): void {
   if (!control.open) {
     if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
       event.preventDefault();
@@ -477,15 +440,7 @@ function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
     </Popup>
   );
 }
-function DropdownRow<T>({
-  option,
-  index,
-  control,
-}: {
-  readonly option: DropdownOption<T>;
-  readonly index: number;
-  readonly control: Controller<T>;
-}) {
+function DropdownRow<T>({ option, index, control }: { readonly option: DropdownOption<T>; readonly index: number; readonly control: Controller<T> }) {
   const highlight = index === control.highlight ? 'highlight' : '';
   const selected = option.value === control.committed.current && control.open ? 'selected' : '';
   return (
@@ -506,15 +461,11 @@ function DropdownRow<T>({
       <span className="dd-option-label">{option.label}</span>
       {option.description && <span className="dd-description">{option.description}</span>}
       {option.hint && <span className="dd-hint">{option.hint}</span>}
-      <span className="dd-check">
-        {option.value === control.committed.current ? <CheckIcon size={11} /> : undefined}
-      </span>
+      <span className="dd-check">{option.value === control.committed.current ? <CheckIcon size={11} /> : undefined}</span>
     </div>
   );
 }
 
 function dropdownGroupCount<T>(options: readonly DropdownOption<T>[]): number {
-  return options.filter(
-    (option, index) => option.group && option.group !== options[index - 1]?.group,
-  ).length;
+  return options.filter((option, index) => option.group && option.group !== options[index - 1]?.group).length;
 }

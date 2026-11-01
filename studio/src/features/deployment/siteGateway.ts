@@ -11,12 +11,7 @@ export function serveSite(request: Request, environment: SiteEnvironment): Promi
   const pathname = new URL(request.url).pathname;
   if (pathname === '/__studio-deployment') {
     const tag = environment.SITE_VERSION?.tag;
-    return Promise.resolve(
-      Response.json(
-        { sha: tag && /^[a-f0-9]{40}$/.test(tag) ? tag : null },
-        { headers: { 'Cache-Control': 'no-store' } },
-      ),
-    );
+    return Promise.resolve(Response.json({ sha: tag && /^[a-f0-9]{40}$/.test(tag) ? tag : null }, { headers: { 'Cache-Control': 'no-store' } }));
   }
   if (pathname !== '/studio' && !pathname.startsWith('/studio/')) {
     return environment.ASSETS.fetch(request);

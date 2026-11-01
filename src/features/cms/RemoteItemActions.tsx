@@ -57,8 +57,7 @@ async function deleteItem(props: {
     title: `Delete “${title}”?`,
     body: isAstroContent(selection.connection)
       ? `It will be deleted from the project. ${entryDeletionMessage}`
-      : `It will be deleted from ${selection.connection.label}, published and draft. ` +
-        'Sanity keeps its history.',
+      : `It will be deleted from ${selection.connection.label}, published and draft. ` + 'Sanity keeps its history.',
     confirmLabel: 'Delete',
     danger: true,
   });

@@ -5,11 +5,7 @@ import { useMemo, useState } from 'react';
 import { ChevronLeftIcon } from '../../ui/Icons';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { remoteDocument, writeRemoteDocument } from '../../ipc/remoteSource';
-import type {
-  RemoteAsset,
-  RemoteDocument,
-  RemoteDocumentField,
-} from '../../../shared/properties/cmsRemote';
+import type { RemoteAsset, RemoteDocument, RemoteDocumentField } from '../../../shared/properties/cmsRemote';
 import { RemoteItemActions } from './RemoteItemActions';
 import type { RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
 import { RemoteFieldList } from './RemoteFieldList';
@@ -37,9 +33,7 @@ export function RemoteItemFields(props: {
   const id = selection.item?.id ?? '';
   // Kept across opens: an item opened before, or pointed at in the list, shows at
   // once and is refreshed behind the view; a save shows the CMS's answer.
-  const { result, retry, replace } = useRemote(DOCUMENTS, documentKey(connection.id, id), () =>
-    remoteDocument(projectPath, connection.id, id),
-  );
+  const { result, retry, replace } = useRemote(DOCUMENTS, documentKey(connection.id, id), () => remoteDocument(projectPath, connection.id, id));
   const [error, setError] = useState<string | undefined>(undefined);
   const save = async (field: RemoteDocumentField, value: RemoteValue | undefined) => {
     setError(undefined);
@@ -74,11 +68,7 @@ export function RemoteItemFields(props: {
           {(loaded) => (
             <div className="remote-cms-fields">
               {error && <ErrorToast message={error} />}
-              <RemoteFieldList
-                document={loaded}
-                context={context}
-                onSave={(field, value) => void save(field, value)}
-              />
+              <RemoteFieldList document={loaded} context={context} onSave={(field, value) => void save(field, value)} />
               <RemoteItemActions
                 projectPath={projectPath}
                 selection={selection}
@@ -98,11 +88,7 @@ export function RemoteItemFields(props: {
 // What every field's editor reaches: the connection, the stored assets the
 // document points at, with any uploaded since it loaded, and the folder of the
 // project file it lives in, which its image paths are relative to.
-export function useEditContext(
-  projectPath: string,
-  connectionId: string,
-  document: RemoteDocument | undefined,
-): RemoteEditContext {
+export function useEditContext(projectPath: string, connectionId: string, document: RemoteDocument | undefined): RemoteEditContext {
   const [uploaded, setUploaded] = useState<readonly RemoteAsset[]>([]);
   const loaded = document?.assets;
   const folder = document?.file?.split('/').slice(0, -1).join('/');

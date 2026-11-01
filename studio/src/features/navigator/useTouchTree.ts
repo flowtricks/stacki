@@ -74,9 +74,7 @@ function touchHandlers(element: HTMLDivElement) {
   };
   const up = () => {
     if (data) {
-      over?.dispatchEvent(
-        new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data }),
-      );
+      over?.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data }));
     }
     element.classList.remove('touch-dragging');
     reset();

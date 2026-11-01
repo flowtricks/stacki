@@ -71,11 +71,7 @@ async function commit(
  */
 async function restoreFile(
   git: Git,
-  {
-    projectPath,
-    ref,
-    path: filePath,
-  }: { readonly projectPath: string; readonly ref: string; readonly path: string },
+  { projectPath, ref, path: filePath }: { readonly projectPath: string; readonly ref: string; readonly path: string },
 ): Promise<{ ok: boolean; missing?: boolean; message?: string }> {
   try {
     await git(projectPath, ['cat-file', '-e', `${ref}:${filePath}`]);
@@ -105,19 +101,13 @@ async function restoreFile(
  */
 async function restoreProject(
   git: Git,
-  {
-    projectPath,
-    ref,
-    park,
-  }: { readonly projectPath: string; readonly ref: string; readonly park?: () => Promise<boolean> },
+  { projectPath, ref, park }: { readonly projectPath: string; readonly ref: string; readonly park?: () => Promise<boolean> },
 ): Promise<{ ok: boolean; parked: boolean }> {
   const dirty = (await git(projectPath, ['status', '--porcelain'])).stdout.trim().length > 0;
   let parked = false;
   if (dirty) {
     if (!park) {
-      throw new Error(
-        'There are unsaved changes here. Save them first — going back would write over them.',
-      );
+      throw new Error('There are unsaved changes here. Save them first — going back would write over them.');
     }
     parked = await park();
   }

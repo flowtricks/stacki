@@ -25,8 +25,7 @@ const load = (file) => {
 };
 
 try {
-  const { requestAsset, onAssetRequest, clearAssetRequest, getPendingAsset } =
-    load('src/ui/assetPick.ts');
+  const { requestAsset, onAssetRequest, clearAssetRequest, getPendingAsset } = load('src/ui/assetPick.ts');
   const first = [];
   const second = [];
   const unsubscribe = onAssetRequest((request) => first.push(request));
@@ -87,10 +86,7 @@ try {
   const { decideTerminalPaste } = load('src/features/terminal/terminalPaste.ts');
   const item = { type: 'text/plain', kind: 'string', getAsFile: () => PLATFORM_NULL };
   assert.deepEqual(decideTerminalPaste([item], 'hello', undefined, 'posix'), { kind: 'text' });
-  assert.throws(
-    () => decideTerminalPaste(Array(10_001).fill(item), '', undefined, 'posix'),
-    /item count/,
-  );
+  assert.throws(() => decideTerminalPaste(Array(10_001).fill(item), '', undefined, 'posix'), /item count/);
   const { findWithParent, isInlineRun } = load('src/editor/treeSelection.ts');
   const cycle = { id: 'cycle', kind: 'element', name: 'span', children: [] };
   cycle.children.push(cycle);

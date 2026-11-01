@@ -18,28 +18,12 @@ import {
   renameAsset,
   uploadAssets,
 } from './assetPanelBridge';
-import {
-  ChevronRightIcon,
-  FolderIcon,
-  FolderPlusIcon,
-  TrashIcon,
-  UploadCloudIcon,
-} from '../../ui/Icons';
+import { ChevronRightIcon, FolderIcon, FolderPlusIcon, TrashIcon, UploadCloudIcon } from '../../ui/Icons';
 import AssetThumb, { TEXT_EXT, preloadFontPreviews } from '../../ui/AssetThumb';
 import MoreMenu from '../../ui/MoreMenu';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import { allowDragEffect } from '../../editor/dragState';
-import {
-  PICK_HOME,
-  type AssetFile,
-  kindMatches,
-  pickPrompt,
-  buildCrumbs,
-  parentOf,
-  basename,
-  isInPickHome,
-  assetTitle,
-} from './assetPaths';
+import { PICK_HOME, type AssetFile, kindMatches, pickPrompt, buildCrumbs, parentOf, basename, isInPickHome, assetTitle } from './assetPaths';
 
 const FILE_DROP_COUNT_MAX = assetDropLimit;
 type Toast = (message: string, kind: 'error') => void;
@@ -149,11 +133,7 @@ function initialAssetDirectory(projectPath: string): string {
   const cached = assetCache.get(projectPath);
   return cached?.kind === 'ready' ? defaultAssetDirectory(cached.value.entries) : ASSET_IMAGES;
 }
-function useAssetListing(
-  projectPath: string,
-  cwdRef: React.MutableRefObject<string>,
-  setCwd: React.Dispatch<React.SetStateAction<string>>,
-) {
+function useAssetListing(projectPath: string, cwdRef: React.MutableRefObject<string>, setCwd: React.Dispatch<React.SetStateAction<string>>) {
   const read = useCallback(() => readAssetListing(projectPath), [projectPath]);
   const listing = usePanelData(assetCache, projectPath, read, onAssetListingChanged);
   useEffect(() => {
@@ -192,9 +172,7 @@ function usePickPlacement(
     if (entries.length === 0) {
       return;
     }
-    const hasMatch = entries.some(
-      (entry) => !entry.isDir && isInPickHome(entry.rel) && kindMatches(pick.mediaKind, entry.name),
-    );
+    const hasMatch = entries.some((entry) => !entry.isDir && isInPickHome(entry.rel) && kindMatches(pick.mediaKind, entry.name));
     setCwd(hasMatch ? PICK_HOME : '');
     placedRef.current = pickKey;
   }, [entries, pick, pickKey, setCwd]);
@@ -314,10 +292,7 @@ function useAssetRemove(props: AssetsPanelProps) {
 async function removeAsset(file: AssetFile, projectPath: string, showToast: Toast): Promise<void> {
   const confirmed = await confirmDialog({
     title: `Delete ${file.name}?`,
-    body:
-      assetDeletionMessage +
-      ' Anything on the site still pointing at ' +
-      `/${file.rel} will stop finding it.`,
+    body: assetDeletionMessage + ' Anything on the site still pointing at ' + `/${file.rel} will stop finding it.`,
     confirmLabel: 'Delete',
     danger: true,
   });
@@ -355,10 +330,7 @@ function useDropInto(
           return;
         }
         if (payload.value.kind === 'asset') {
-          if (
-            payload.value.rel === destinationRel ||
-            parentOf(payload.value.rel) === destinationRel
-          ) {
+          if (payload.value.rel === destinationRel || parentOf(payload.value.rel) === destinationRel) {
             return;
           }
           void move(payload.value.rel, destinationRel);
@@ -384,18 +356,11 @@ function useDragOverInto(setDragTarget: AssetPanelState['setDragTarget']) {
   );
 }
 
-async function uploadDropped(
-  projectPath: string,
-  showToast: Toast,
-  destinationRel: string,
-  paths: readonly File[],
-): Promise<void> {
+async function uploadDropped(projectPath: string, showToast: Toast, destinationRel: string, paths: readonly File[]): Promise<void> {
   reportResult(await uploadAssets(projectPath, destinationRel, paths), showToast);
 }
 
-type DropPayload =
-  | { readonly kind: 'asset'; readonly rel: string }
-  | { readonly kind: 'os'; readonly paths: readonly File[] };
+type DropPayload = { readonly kind: 'asset'; readonly rel: string } | { readonly kind: 'os'; readonly paths: readonly File[] };
 
 // A drop carrying nothing usable is ok with no payload, not an error.
 function dropPayload(transfer: DataTransfer): Result<DropPayload | undefined, string> {
@@ -411,9 +376,7 @@ function dropPayload(transfer: DataTransfer): Result<DropPayload | undefined, st
     return { ok: false, error: `Drop at most ${FILE_DROP_COUNT_MAX} files at once.` };
   }
   const paths = [...transfer.files];
-  return paths.length === 0
-    ? { ok: true, value: undefined }
-    : { ok: true, value: { kind: 'os', paths } };
+  return paths.length === 0 ? { ok: true, value: undefined } : { ok: true, value: { kind: 'os', paths } };
 }
 
 function parseAssetRel(input: string): string {
@@ -436,45 +399,18 @@ function reportResult<Value>(result: Result<Value, string>, showToast: Toast): b
   return true;
 }
 
-function AssetPanelBody({
-  props,
-  state,
-  actions,
-}: {
-  readonly props: AssetsPanelProps;
-  readonly state: AssetPanelState;
-  readonly actions: AssetActions;
-}) {
+function AssetPanelBody({ props, state, actions }: { readonly props: AssetsPanelProps; readonly state: AssetPanelState; readonly actions: AssetActions }) {
   const folders = state.entries.filter((entry) => entry.isDir && entry.parent === state.cwd);
   const files = state.entries.filter(
-    (entry): entry is AssetFile =>
-      !entry.isDir &&
-      entry.parent === state.cwd &&
-      (!props.pick || kindMatches(props.pick.mediaKind, entry.name)),
+    (entry): entry is AssetFile => !entry.isDir && entry.parent === state.cwd && (!props.pick || kindMatches(props.pick.mediaKind, entry.name)),
   );
   return (
     <div className="panel-section grow">
-      {(props.pick || !state.batch.selecting) && (
-        <AssetHeader
-          cwd={state.cwd}
-          actions={actions}
-          state={state}
-          picking={Boolean(props.pick)}
-        />
-      )}
-      <PickBanner
-        {...(props.pick === undefined ? {} : { pick: props.pick })}
-        {...(props.onPickCancel === undefined ? {} : { onCancel: props.onPickCancel })}
-      />
+      {(props.pick || !state.batch.selecting) && <AssetHeader cwd={state.cwd} actions={actions} state={state} picking={Boolean(props.pick)} />}
+      <PickBanner {...(props.pick === undefined ? {} : { pick: props.pick })} {...(props.onPickCancel === undefined ? {} : { onCancel: props.onPickCancel })} />
       {!props.pick && <AssetBatchTools batch={state.batch} files={files} />}
       <AssetBreadcrumbs state={state} actions={actions} />
-      <AssetContents
-        props={props}
-        state={state}
-        actions={actions}
-        folders={folders}
-        files={files}
-      />
+      <AssetContents props={props} state={state} actions={actions} folders={folders} files={files} />
     </div>
   );
 }
@@ -528,13 +464,7 @@ function AssetHeader({
   );
 }
 
-function PickBanner({
-  pick,
-  onCancel,
-}: {
-  readonly pick?: AssetRequest | undefined;
-  readonly onCancel?: () => void;
-}) {
+function PickBanner({ pick, onCancel }: { readonly pick?: AssetRequest | undefined; readonly onCancel?: () => void }) {
   if (!pick) {
     return undefined;
   }
@@ -548,13 +478,7 @@ function PickBanner({
   );
 }
 
-function AssetBreadcrumbs({
-  state,
-  actions,
-}: {
-  readonly state: AssetPanelState;
-  readonly actions: AssetActions;
-}) {
+function AssetBreadcrumbs({ state, actions }: { readonly state: AssetPanelState; readonly actions: AssetActions }) {
   const crumbs = useMemo(() => buildCrumbs(state.cwd), [state.cwd]);
   return (
     <div className="asset-crumbs">
@@ -566,9 +490,7 @@ function AssetBreadcrumbs({
             </span>
           )}
           <span
-            className={`crumb ${index === crumbs.length - 1 ? 'last' : ''} ${
-              state.dragTarget === crumb.rel && state.cwd !== crumb.rel ? 'drop' : ''
-            }`}
+            className={`crumb ${index === crumbs.length - 1 ? 'last' : ''} ${state.dragTarget === crumb.rel && state.cwd !== crumb.rel ? 'drop' : ''}`}
             onClick={() => state.setCwd(crumb.rel)}
             onDragOver={actions.dragOverInto(crumb.rel)}
             onDragLeave={() => state.setDragTarget(undefined)}
@@ -616,23 +538,14 @@ function AssetContents({
         ))}
       </div>
       <PanelReadStatus state={state.listing} label="assets" layout="assets" retry={state.refresh} />
-      {state.listing.kind === 'ready' &&
-        folders.length === 0 &&
-        files.length === 0 &&
-        !state.newFolder && (
-          <div className="props-empty">Empty folder. Drop files here or use the upload button.</div>
-        )}
+      {state.listing.kind === 'ready' && folders.length === 0 && files.length === 0 && !state.newFolder && (
+        <div className="props-empty">Empty folder. Drop files here or use the upload button.</div>
+      )}
     </div>
   );
 }
 
-function NewFolderRow({
-  state,
-  actions,
-}: {
-  readonly state: AssetPanelState;
-  readonly actions: AssetActions;
-}) {
+function NewFolderRow({ state, actions }: { readonly state: AssetPanelState; readonly actions: AssetActions }) {
   return (
     <div className="asset-folder">
       <FolderIcon size={14} />
@@ -652,15 +565,7 @@ function NewFolderRow({
   );
 }
 
-function AssetFolder({
-  folder,
-  state,
-  actions,
-}: {
-  readonly folder: AssetPanelEntry;
-  readonly state: AssetPanelState;
-  readonly actions: AssetActions;
-}) {
+function AssetFolder({ folder, state, actions }: { readonly folder: AssetPanelEntry; readonly state: AssetPanelState; readonly actions: AssetActions }) {
   return (
     <div
       className={`asset-folder ${state.dragTarget === folder.rel ? 'drop' : ''}`}
@@ -709,9 +614,7 @@ function AssetTile({
   const editable = TEXT_EXT.test(file.name);
   return (
     <div
-      className={`asset-tile ${props.pick ? 'pickable' : ''} ${
-        props.pick?.current === file.rel ? 'selected' : ''
-      }`}
+      className={`asset-tile ${props.pick ? 'pickable' : ''} ${props.pick?.current === file.rel ? 'selected' : ''}`}
       draggable={state.renaming !== file.rel}
       onDragStart={(event) => startAssetDrag(event, file.rel)}
       title={assetTitle(file, { editable, picking: Boolean(props.pick) })}
@@ -770,13 +673,7 @@ function MissingAssets({ onUpload }: { readonly onUpload: () => void }) {
   );
 }
 
-function RenameInput({
-  entry,
-  onCommit,
-}: {
-  readonly entry: AssetPanelEntry;
-  readonly onCommit: (entry: AssetPanelEntry, value: string) => void;
-}) {
+function RenameInput({ entry, onCommit }: { readonly entry: AssetPanelEntry; readonly onCommit: (entry: AssetPanelEntry, value: string) => void }) {
   const [value, setValue] = useState(entry.name);
   return (
     <input

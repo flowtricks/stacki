@@ -3,11 +3,7 @@ import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { DragIcon } from '../../ui/Icons';
 
 // Drop targets are gaps before removal, matching the shared list gesture hook.
-export function movePropertyItem<Value>(
-  items: readonly Value[],
-  source: number,
-  gap: number,
-): readonly Value[] {
+export function movePropertyItem<Value>(items: readonly Value[], source: number, gap: number): readonly Value[] {
   assert(items.length <= PROPERTY_LIMITS.fieldsMax, 'Property list exceeds bounds');
   assert(Number.isSafeInteger(source), 'Property source index must be an integer');
   assert(Number.isSafeInteger(gap), 'Property drop gap must be an integer');

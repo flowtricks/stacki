@@ -34,44 +34,21 @@ import {
   type RemoteDocumentSummary,
   type RemoteWrite,
 } from '../../shared/properties/cmsRemote';
-import {
-  REMOTE_SCHEMA_LIMITS,
-  parseRemoteValue,
-  type RemoteOption,
-  type RemoteSchemaField,
-  type RemoteValue,
-} from '../../shared/properties/cmsRemoteSchema';
+import { REMOTE_SCHEMA_LIMITS, parseRemoteValue, type RemoteOption, type RemoteSchemaField, type RemoteValue } from '../../shared/properties/cmsRemoteSchema';
 import { astroSchemaFields, labelize, referencedCollections } from './astroRemoteSchema';
 import { createAstroCollection } from './astroCollectionConfig';
 import { changeCollectionSettings, readCollectionSettings } from './astroCollectionSettings';
-import type {
-  CollectionSettings,
-  SettingsChange,
-} from '../../shared/properties/collectionSettings';
+import type { CollectionSettings, SettingsChange } from '../../shared/properties/collectionSettings';
 import { addDataRecord, removeDataRecords } from './astroDataRecords';
-import {
-  entryImage,
-  projectImage,
-  withInferredReferences,
-  type RecordCollection,
-} from './astroRecordReferences';
+import { entryImage, projectImage, withInferredReferences, type RecordCollection } from './astroRecordReferences';
 
 export { projectImage };
-import {
-  globToRegExp,
-  listEntries,
-  writeEntry,
-  type ContentCollection,
-  type Entry,
-} from './contentEntries';
+import { globToRegExp, listEntries, writeEntry, type ContentCollection, type Entry } from './contentEntries';
 
 export interface AstroRemoteService {
   readonly collections: () => Promise<RemoteCollection[]>;
   /** One collection's entries, each with the `columns` fields' values to show beside it. */
-  readonly documents: (
-    collection: string,
-    columns?: readonly string[],
-  ) => Promise<RemoteDocumentList>;
+  readonly documents: (collection: string, columns?: readonly string[]) => Promise<RemoteDocumentList>;
   readonly document: (id: string) => Promise<RemoteDocument>;
   /** A collection's fields with no values, edited before a new entry is created. */
   readonly template: (collection: string) => Promise<RemoteDocument>;
@@ -126,9 +103,7 @@ export function astroRemoteService(projectPath: string, host: AstroRemoteHost): 
   };
   const located = async (id: string) => {
     const collection = await collectionNamed(collectionOfId(id));
-    const entry = listEntries(projectPath, collection).entries.find(
-      (candidate) => documentId(collection.name, candidate.id) === id,
-    );
+    const entry = listEntries(projectPath, collection).entries.find((candidate) => documentId(collection.name, candidate.id) === id);
     if (entry === undefined) {
       throw new Error('This entry is no longer in the project.');
     }
@@ -143,11 +118,9 @@ export function astroRemoteService(projectPath: string, host: AstroRemoteHost): 
   };
   return {
     collections: async () => (await editable()).flatMap(collectionSummary(projectPath)),
-    documents: async (name, columns = []) =>
-      listWithColumns(projectPath, { collection: await collectionNamed(name), columns }, editable),
+    documents: async (name, columns = []) => listWithColumns(projectPath, { collection: await collectionNamed(name), columns }, editable),
     document,
-    template: async (name) =>
-      templateOf(projectPath, await collectionNamed(name), await editable()),
+    template: async (name) => templateOf(projectPath, await collectionNamed(name), await editable()),
     write: async (write) => {
       const { collection, entry } = await located(write.id);
       writeField(projectPath, { collection, entry, write });
@@ -204,11 +177,7 @@ function collectionSummary(projectPath: string) {
   ];
 }
 
-function documentList(
-  projectPath: string,
-  collection: Collection,
-  cellsOf: (entry: Entry) => RemoteDocumentSummary['cells'] | undefined,
-): RemoteDocumentList {
+function documentList(projectPath: string, collection: Collection, cellsOf: (entry: Entry) => RemoteDocumentSummary['cells'] | undefined): RemoteDocumentList {
   // A collection whose file could not be read says why, rather than listing nothing.
   const listed = listEntries(projectPath, collection);
   if (listed.entries.length === 0 && listed.reason !== undefined) {
@@ -250,11 +219,7 @@ async function columnCells(
   const records = recordsOf(projectPath, collections);
   const own = records.find((each) => each.name === collection.name);
   assert(own !== undefined, 'A list’s own collection is among those read');
-  const fields = withInferredReferences(
-    astroSchemaFields(collection.schema, targets),
-    own,
-    records,
-  );
+  const fields = withInferredReferences(astroSchemaFields(collection.schema, targets), own, records);
   const titles = new Map(columns.map((name) => [name, optionTitles(fields, name)] as const));
   return (entry) => {
     const data = toRecord(entry.data) ?? {};
@@ -277,22 +242,14 @@ async function columnCells(
 }
 
 // A choice field's values by the titles its options give them; none for any other field.
-function optionTitles(
-  fields: readonly RemoteSchemaField[],
-  name: string,
-): ReadonlyMap<string, string> {
+function optionTitles(fields: readonly RemoteSchemaField[], name: string): ReadonlyMap<string, string> {
   const type = fields.find((field) => field.name === name)?.type;
   const member = type?.kind === 'array' ? type.of[0] : type;
   const options = member?.kind === 'string' ? member.options : [];
   return new Map(options.map((option) => [option.value, option.title]));
 }
 
-function summaryOf(
-  projectPath: string,
-  collection: string,
-  entry: Entry,
-  imageField?: string,
-): RemoteDocumentSummary {
+function summaryOf(projectPath: string, collection: string, entry: Entry, imageField?: string): RemoteDocumentSummary {
   const title = preview(entry.title);
   const imageFile = entryImage(entry, imageField);
   return {
@@ -320,11 +277,7 @@ function documentOf(
   const schema = collection.schema === undefined ? undefined : toRecord(collection.schema);
   const own = records.find((each) => each.name === collection.name);
   assert(own !== undefined, 'A document’s own collection is among those read');
-  const declared = withInferredReferences(
-    schema === undefined ? inferredFields(data) : astroSchemaFields(schema, targets),
-    own,
-    records,
-  );
+  const declared = withInferredReferences(schema === undefined ? inferredFields(data) : astroSchemaFields(schema, targets), own, records);
   const fields: RemoteDocumentField[] = declared.flatMap((field) => {
     const value = representable(data[field.name]);
     return value.ok ? [{ ...field, value: value.value }] : [];
@@ -368,10 +321,7 @@ function scalarKind(value: unknown): 'string' | 'number' | 'boolean' | undefined
   return typeof value === 'boolean' ? 'boolean' : undefined;
 }
 
-function bodyField(
-  entry: Pick<Entry, 'hasBody' | 'body'>,
-  declared: readonly RemoteSchemaField[],
-): RemoteDocumentField | undefined {
+function bodyField(entry: Pick<Entry, 'hasBody' | 'body'>, declared: readonly RemoteSchemaField[]): RemoteDocumentField | undefined {
   if (entry.hasBody !== true || declared.some((field) => field.name === BODY_FIELD)) {
     return undefined;
   }
@@ -407,21 +357,13 @@ async function removeEntries(
 
 // A collection's fields with no values: a new entry before it is written. A
 // Markdown collection's entries have a body, so its template has one too.
-async function templateOf(
-  projectPath: string,
-  collection: Collection,
-  collections: readonly Collection[],
-): Promise<RemoteDocument> {
+async function templateOf(projectPath: string, collection: Collection, collections: readonly Collection[]): Promise<RemoteDocument> {
   const targets = await referenceTargets(projectPath, collection, collections);
   const records = recordsOf(projectPath, collections);
   const own = records.find((each) => each.name === collection.name);
   assert(own !== undefined, 'A template’s own collection is among those read');
   const schema = collection.schema === undefined ? undefined : toRecord(collection.schema);
-  const declared = withInferredReferences(
-    schema === undefined ? [] : astroSchemaFields(schema, targets),
-    own,
-    records,
-  );
+  const declared = withInferredReferences(schema === undefined ? [] : astroSchemaFields(schema, targets), own, records);
   const fields = declared.map((field) => ({ ...field, value: undefined }));
   const markdown = own.entries.some((entry) => entry.hasBody === true) || markdownGlob(collection);
   const body = markdown ? bodyField({ hasBody: true }, declared) : undefined;
@@ -445,17 +387,13 @@ function markdownGlob(collection: Collection): boolean {
     return false;
   }
   const patterns = typeof loader.pattern === 'string' ? [loader.pattern] : (loader.pattern ?? []);
-  const extension = EXTENSIONS.find((candidate) =>
-    patterns.some((pattern) => pattern.includes(candidate)),
-  );
+  const extension = EXTENSIONS.find((candidate) => patterns.some((pattern) => pattern.includes(candidate)));
   return extension === undefined || ['md', 'mdx', 'markdown', 'mdoc'].includes(extension);
 }
 
 // A stored value as JSON the panel can hold: dates as ISO text, the rest checked
 // against the remote value bounds. A value past them is left out, not cut.
-function representable(
-  input: unknown,
-): { readonly ok: true; readonly value: RemoteValue | undefined } | { readonly ok: false } {
+function representable(input: unknown): { readonly ok: true; readonly value: RemoteValue | undefined } | { readonly ok: false } {
   try {
     return { ok: true, value: parseRemoteValue(plain(input, 0)) };
   } catch {
@@ -479,9 +417,7 @@ function plain(input: unknown, depth: number): unknown {
   if (value === undefined) {
     return input;
   }
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [key, plain(item, depth + 1)]),
-  );
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, plain(item, depth + 1)]));
 }
 
 async function referenceTargets(
@@ -513,14 +449,9 @@ async function referenceTargets(
   return targets;
 }
 
-function writeField(
-  projectPath: string,
-  context: { readonly collection: Collection; readonly entry: Entry; readonly write: RemoteWrite },
-): void {
+function writeField(projectPath: string, context: { readonly collection: Collection; readonly entry: Entry; readonly write: RemoteWrite }): void {
   const { collection, entry, write } = context;
-  const schemaBody = astroSchemaFields(collection.schema, new Map()).some(
-    (field) => field.name === BODY_FIELD,
-  );
+  const schemaBody = astroSchemaFields(collection.schema, new Map()).some((field) => field.name === BODY_FIELD);
   if (write.field === BODY_FIELD && entry.hasBody === true && !schemaBody) {
     if (write.value !== undefined && typeof write.value !== 'string') {
       throw new Error('An entry’s body is text.');
@@ -531,10 +462,7 @@ function writeField(
   writeEntry(projectPath, entry, [{ path: [write.field], value: write.value }]);
 }
 
-async function createEntry(
-  projectPath: string,
-  collection: Collection,
-): Promise<RemoteDocumentSummary> {
+async function createEntry(projectPath: string, collection: Collection): Promise<RemoteDocumentSummary> {
   const loader = collection.loader;
   if (loader?.kind === 'file') {
     return createRecord(projectPath, collection, String(loader.file ?? ''));
@@ -543,16 +471,13 @@ async function createEntry(
     throw new Error(`${collection.name} is built by code; its entries cannot be added here.`);
   }
   const patterns = typeof loader.pattern === 'string' ? [loader.pattern] : (loader.pattern ?? []);
-  const extension =
-    EXTENSIONS.find((candidate) => patterns.some((pattern) => pattern.includes(candidate))) ?? 'md';
+  const extension = EXTENSIONS.find((candidate) => patterns.some((pattern) => pattern.includes(candidate))) ?? 'md';
   const base = cmsDirectoryPath(projectPath, String(loader.base ?? ''));
   const name = freeName(base, extension);
   if (!patterns.some((pattern) => globToRegExp(pattern).test(name))) {
     throw new Error(`Stacki can’t tell where new ${collection.name} entries go.`);
   }
-  const titled = astroSchemaFields(collection.schema, new Map()).some(
-    (field) => field.name === 'title',
-  );
+  const titled = astroSchemaFields(collection.schema, new Map()).some((field) => field.name === 'title');
   // A new collection's folder may not exist yet: Studio carries files, not empty folders.
   fs.mkdirSync(base, { recursive: true });
   createProjectText(path.join(base, name), starter(extension, { titled }));
@@ -563,10 +488,7 @@ async function createEntry(
 }
 
 // Every collection's records, for the references the config leaves undeclared.
-function recordsOf(
-  projectPath: string,
-  collections: readonly Collection[],
-): readonly RecordCollection[] {
+function recordsOf(projectPath: string, collections: readonly Collection[]): readonly RecordCollection[] {
   return collections.map((each) => ({
     name: each.name,
     entries: listEntries(projectPath, each).entries,
@@ -576,17 +498,11 @@ function recordsOf(
 
 /** The collection's first image field: its entries' picture in lists and choices. */
 function firstImageField(collection: Collection): string | undefined {
-  return astroSchemaFields(collection.schema, new Map()).find(
-    (field) => field.type.kind === 'string' && field.type.asset === 'image',
-  )?.name;
+  return astroSchemaFields(collection.schema, new Map()).find((field) => field.type.kind === 'string' && field.type.asset === 'image')?.name;
 }
 
 // A record in the collection's data file, listed afterwards as any other.
-function createRecord(
-  projectPath: string,
-  collection: Collection,
-  file: string,
-): RemoteDocumentSummary {
+function createRecord(projectPath: string, collection: Collection, file: string): RemoteDocumentSummary {
   const entries = listEntries(projectPath, collection).entries;
   const fields = astroSchemaFields(collection.schema, new Map());
   const added = addDataRecord(projectPath, {

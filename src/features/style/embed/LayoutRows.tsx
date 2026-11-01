@@ -14,13 +14,7 @@ import { type MatchedSelector, type ResolvedProp } from '../model/resolved';
 import { selectorDependsOnAncestor } from '../model/selectors';
 import { getHost, onHostChange } from '../model/host';
 import { type LiveSetProp } from './EditorBasics';
-import {
-  VALIGN_DISPLAYS,
-  VerticalAlignRow,
-  effectiveValue,
-  rawEffective,
-  currentFlexFlow,
-} from './ResolvedRows';
+import { VALIGN_DISPLAYS, VerticalAlignRow, effectiveValue, rawEffective, currentFlexFlow } from './ResolvedRows';
 
 // The flex Direction control — only rendered when `display` is flex. Writes the
 // `flex-direction` + `flex-wrap` longhands; the label clears them (and any legacy
@@ -137,13 +131,7 @@ export function AlignRow({
 
 export const ChevronRightIcon = () => (
   <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
-    <path
-      d="M6 4l4 4-4 4"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
+    <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
@@ -166,25 +154,10 @@ export function layoutMode(display: string): 'grid' | 'flex' | 'inline' | undefi
 
 // A collapsible disclosure (Webflow's "More alignment options" button): a full-width
 // header whose chevron rotates open to reveal its rows.
-export function LayoutDisclosure({
-  label,
-  open,
-  onToggle,
-  children,
-}: {
-  label: string;
-  open: boolean;
-  onToggle: () => void;
-  children: ReactNode;
-}) {
+export function LayoutDisclosure({ label, open, onToggle, children }: { label: string; open: boolean; onToggle: () => void; children: ReactNode }) {
   return (
     <div className={`embed-editor_disclosure ${open ? 'is-open' : ''}`}>
-      <button
-        type="button"
-        className="embed-editor_disclosure-btn"
-        aria-expanded={open}
-        onClick={onToggle}
-      >
+      <button type="button" className="embed-editor_disclosure-btn" aria-expanded={open} onClick={onToggle}>
         <span className={`embed-editor_disclosure-arrow ${open ? 'is-open' : ''}`}>
           <ChevronRightIcon />
         </span>
@@ -222,9 +195,7 @@ export function LayoutModeSections({
   const mode = layoutMode(display);
   const [open, toggle] = useLayoutModeOpen(mode, { resolving });
   // A gap set in ANY spelling keeps the Gap row visible (it reads all of them).
-  const hasGridGap = ['row-gap', 'column-gap', 'grid-row-gap', 'grid-column-gap', 'gap'].some(
-    (prop) => read(prop) !== undefined,
-  );
+  const hasGridGap = ['row-gap', 'column-gap', 'grid-row-gap', 'grid-column-gap', 'gap'].some((prop) => read(prop) !== undefined);
   return (
     <>
       <LayoutDisclosure label="Flex settings" open={open.flex} onToggle={() => toggle('flex')}>
@@ -236,17 +207,8 @@ export function LayoutModeSections({
       </LayoutDisclosure>
       {/* Gap is shared by flex + grid — always mounted (keeps its link-toggle state),
           shown whenever the element is a flex/grid container. */}
-      <GapControl
-        key={activeSelector}
-        show={mode === 'flex' || mode === 'grid' || hasGridGap}
-        {...rowProps}
-        liveSetProp={liveSetProp}
-      />
-      <LayoutDisclosure
-        label="Inline settings"
-        open={open.inline}
-        onToggle={() => toggle('inline')}
-      >
+      <GapControl key={activeSelector} show={mode === 'flex' || mode === 'grid' || hasGridGap} {...rowProps} liveSetProp={liveSetProp} />
+      <LayoutDisclosure label="Inline settings" open={open.inline} onToggle={() => toggle('inline')}>
         {/* Align Y = vertical-align: the inline-level alignment property. Dimmed unless
             Display is inline-level or table-cell, where it actually applies. */}
         <VerticalAlignRow
@@ -265,10 +227,7 @@ export function LayoutModeSections({
 
 // Which disclosures are open. Changing Display's mode opens the matching one and
 // closes the others; hand-toggles persist between changes.
-export function useLayoutModeOpen(
-  mode: ReturnType<typeof layoutMode>,
-  options: { readonly resolving: boolean },
-) {
+export function useLayoutModeOpen(mode: ReturnType<typeof layoutMode>, options: { readonly resolving: boolean }) {
   const { resolving } = options;
   const [open, setOpen] = useState({
     flex: mode === 'flex',
@@ -284,8 +243,7 @@ export function useLayoutModeOpen(
     }
     setOpen({ flex: mode === 'flex', grid: mode === 'grid', inline: mode === 'inline' });
   }, [mode, resolving]);
-  const toggle = (key: 'flex' | 'grid' | 'inline') =>
-    setOpen((previous) => ({ ...previous, [key]: !previous[key] }));
+  const toggle = (key: 'flex' | 'grid' | 'inline') => setOpen((previous) => ({ ...previous, [key]: !previous[key] }));
   return [open, toggle] as const;
 }
 
@@ -324,9 +282,7 @@ export function useProjectClasses(): string[] {
     const sync = () =>
       setList((previous) => {
         const next = getHost().projectClasses ?? [];
-        return next.length === previous.length && next.every((name, i) => name === previous[i])
-          ? previous
-          : next;
+        return next.length === previous.length && next.every((name, i) => name === previous[i]) ? previous : next;
       });
     sync();
     return onHostChange(sync);

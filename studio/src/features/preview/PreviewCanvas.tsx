@@ -10,17 +10,10 @@ import { spacingHover } from './spacingHover';
 import { useLiveValue } from '../../../vendor/stacki/src/ui/liveValue';
 import { PreviewOverlays } from '../../../vendor/stacki/src/features/preview/PreviewOverlays';
 import { GuideOverlay } from '../../../vendor/stacki/src/features/preview/GuideOverlay';
-import {
-  useColumnGuide,
-  type ShownGuide,
-} from '../../../vendor/stacki/src/features/preview/guideSettings';
+import { useColumnGuide, type ShownGuide } from '../../../vendor/stacki/src/features/preview/guideSettings';
 import { outlineInfo, outlineNode } from './outlineInfo';
 import type { CSSProperties } from 'react';
-import {
-  PreviewToolbar,
-  type PreviewDevice,
-  type PreviewInspectorActions,
-} from '../../../vendor/stacki/src/features/preview/PreviewToolbar';
+import { PreviewToolbar, type PreviewDevice, type PreviewInspectorActions } from '../../../vendor/stacki/src/features/preview/PreviewToolbar';
 import CanvasView from '../../../vendor/stacki/src/features/preview/CanvasView';
 import { usePreviewSizing } from '../../../vendor/stacki/src/features/preview/usePreviewSizing';
 import type { usePreviewDimensions } from '../../../vendor/stacki/src/features/preview/usePreviewSizing';
@@ -81,10 +74,7 @@ export function PreviewCanvas(props: Props) {
     <main className="studio-center" data-canvas-interactive={interaction.active}>
       <div className="studio-preview-toolbar">
         <PreviewToolbar
-          crumbs={[
-            ...(props.pageLabel ? [{ id: undefined, label: props.pageLabel }] : []),
-            ...crumbsFor(props.nodes, props.selected),
-          ]}
+          crumbs={[...(props.pageLabel ? [{ id: undefined, label: props.pageLabel }] : []), ...crumbsFor(props.nodes, props.selected)]}
           onCrumb={(id) => props.select(id ?? 'layout')}
           activeDevice={sizing.activeDevice}
           onDevice={props.onDevice}
@@ -106,12 +96,7 @@ export function PreviewCanvas(props: Props) {
       {props.collection && props.document ? (
         <CollectionEditor document={props.document} />
       ) : (
-        <PreviewSurface
-          interactive={interaction.active}
-          props={props}
-          sizing={sizing}
-          shownGuide={columnGuide.shown}
-        />
+        <PreviewSurface interactive={interaction.active} props={props} sizing={sizing} shownGuide={columnGuide.shown} />
       )}
     </main>
   );
@@ -142,34 +127,14 @@ function PreviewSurface({
   readonly shownGuide: ShownGuide | undefined;
   readonly interactive?: boolean;
 }) {
-  const loading = usePreviewLoading(
-    props.preview.url,
-    sizing.wrapRef,
-    props.device === 'canvas',
-    props.preview.retry,
-  );
+  const loading = usePreviewLoading(props.preview.url, sizing.wrapRef, props.device === 'canvas', props.preview.retry);
   return (
-    <div
-      className="preview-frame-wrap"
-      ref={sizing.wrapRef}
-      data-preview-loading={!loading.ready}
-      aria-busy={!loading.ready}
-    >
+    <div className="preview-frame-wrap" ref={sizing.wrapRef} data-preview-loading={!loading.ready} aria-busy={!loading.ready}>
       {props.preview.url &&
         (props.device === 'canvas' ? (
-          <CanvasView
-            key={loading.attempt}
-            url={props.preview.renderURL ?? props.preview.url}
-            refreshKey={loading.attempt}
-          />
+          <CanvasView key={loading.attempt} url={props.preview.renderURL ?? props.preview.url} refreshKey={loading.attempt} />
         ) : (
-          <DesignFrame
-            key={loading.attempt}
-            interactive={interactive ?? false}
-            props={props}
-            sizing={sizing}
-            shownGuide={shownGuide}
-          />
+          <DesignFrame key={loading.attempt} interactive={interactive ?? false} props={props} sizing={sizing} shownGuide={shownGuide} />
         ))}
       {!loading.ready && <PreviewLoading slow={loading.slow} retry={loading.retry} />}
     </div>
@@ -214,11 +179,7 @@ function DesignFrame({
           />
         </div>
         {(['w', 'e', 's'] as const).map((edge) => (
-          <div
-            key={edge}
-            className={`rz-handle rz-${edge}`}
-            onPointerDown={sizing.startResize(edge)}
-          />
+          <div key={edge} className={`rz-handle rz-${edge}`} onPointerDown={sizing.startResize(edge)} />
         ))}
         {sizing.resizing && (
           <div className="rz-readout">
@@ -283,10 +244,7 @@ function CanvasOverlays({
     </div>
   );
 }
-function crumbsFor(
-  nodes: readonly ParserNode[],
-  selected: string,
-): { id: string; label: string }[] {
+function crumbsFor(nodes: readonly ParserNode[], selected: string): { id: string; label: string }[] {
   for (const node of nodes) {
     if (!node.id) {
       continue;

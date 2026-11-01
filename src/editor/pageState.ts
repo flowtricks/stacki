@@ -66,10 +66,7 @@ export interface PageStateSnapshot {
 
 export type TrailingSlash = 'always' | 'never' | 'ignore';
 
-export function findEditorNodeById(
-  nodes: readonly EditorNode[] | undefined,
-  id: string,
-): EditorNode | undefined {
+export function findEditorNodeById(nodes: readonly EditorNode[] | undefined, id: string): EditorNode | undefined {
   const pending = [...(nodes ?? [])];
   let visited = 0;
   while (pending.length > 0) {
@@ -92,10 +89,7 @@ export function findEditorNodeById(
   return undefined;
 }
 
-export function findEditorParentList(
-  model: EditorModel,
-  id: string,
-): { readonly list: readonly EditorNode[]; readonly index: number } | undefined {
+export function findEditorParentList(model: EditorModel, id: string): { readonly list: readonly EditorNode[]; readonly index: number } | undefined {
   const pending: (readonly EditorNode[])[] = [model.nodes];
   let visited = 0;
   while (pending.length > 0) {
@@ -122,9 +116,7 @@ export function findEditorParentList(
 }
 
 /** A page as a read or a reply left it: clean, and its own origin. */
-export function toEditorPageState(
-  input: ParsePageResult & { readonly source: string; readonly checksum: Digest },
-): EditorPageState {
+export function toEditorPageState(input: ParsePageResult & { readonly source: string; readonly checksum: Digest }): EditorPageState {
   const save = saveStateClean(input.checksum);
   const source = input.source;
   if (!input.editable) {

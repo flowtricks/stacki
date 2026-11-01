@@ -5,10 +5,7 @@ import { presenceColor } from './presenceColors';
 
 type CursorView = ReturnType<typeof createRemoteCursor>;
 export class RemoteCursors {
-  private readonly views = new Map<
-    string,
-    { readonly view: CursorView; packet: CursorPacket; seen: number }
-  >();
+  private readonly views = new Map<string, { readonly view: CursorView; packet: CursorPacket; seen: number }>();
   inverse = 1;
   constructor(private readonly root: ShadowRoot) {}
   update(packet: CursorPacket) {

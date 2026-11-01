@@ -8,16 +8,7 @@ import VariableConnect from './VariableConnect';
 import { commitInPlace } from './model/commitInPlace';
 import { useDebouncedLive } from './model/fieldHooks';
 import { displayOf, parseImportant } from './model/styleDisplay';
-import {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type Props,
-  SizeLabel,
-  withImportant,
-  useFollowingDraft,
-  stepSizeKey,
-} from './SizeKit';
+import { type SetProp, type ClearProp, type LiveSetProp, type Props, SizeLabel, withImportant, useFollowingDraft, stepSizeKey } from './SizeKit';
 
 // ─────────────────────────── Aspect ratio ───────────────────────────
 
@@ -58,9 +49,7 @@ export function ratioKeyOf(value: string): string {
   if (!parsed) {
     return 'other';
   }
-  const match = RATIO_PRESETS.find(
-    (preset) => preset.value === `${parsed.width} / ${parsed.height}`,
-  );
+  const match = RATIO_PRESETS.find((preset) => preset.value === `${parsed.width} / ${parsed.height}`);
   return match ? match.value : 'custom';
 }
 
@@ -189,13 +178,7 @@ export function RatioOtherInput({
   // the field you land in precisely because the value is not a plain one — was
   // the one place it was shown as raw text.
   return (
-    <VariableConnect
-      code
-      ariaLabel={`Connect ${ariaLabel} to a variable`}
-      disabled={busy}
-      prop={prop}
-      onPick={(binding) => onCommit(binding, false)}
-    >
+    <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => onCommit(binding, false)}>
       <input
         ref={inputRef}
         className="u-select-custom-input"
@@ -233,15 +216,7 @@ export const RATIO_OPTIONS: SelectOption<string>[] = [
   { value: 'other', label: 'Other' },
 ];
 
-export function AspectRatioField({
-  read,
-  busy,
-  setProp,
-  clearProp,
-  liveSetProp,
-  onProvenance,
-  onSelectSelector,
-}: Props) {
+export function AspectRatioField({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Props) {
   const display = displayOf(read('aspect-ratio'));
   const current = display.present ? display.value : '';
   const derivedKey = display.present ? ratioKeyOf(current) : 'auto';
@@ -272,13 +247,7 @@ export function AspectRatioField({
           ariaLabel="Aspect ratio"
           disabled={busy}
           onChange={onSelect}
-          onPreview={(choice) =>
-            liveSetProp(
-              'aspect-ratio',
-              choice === 'custom' || choice === 'other' ? undefined : (choice ?? undefined),
-              false,
-            )
-          }
+          onPreview={(choice) => liveSetProp('aspect-ratio', choice === 'custom' || choice === 'other' ? undefined : (choice ?? undefined), false)}
           customInput={
             key === 'other' ? (
               <RatioOtherInput
@@ -294,9 +263,7 @@ export function AspectRatioField({
           }
         />
       </div>
-      {key === 'custom' ? (
-        <RatioPair current={current} busy={busy} setProp={setProp} liveSetProp={liveSetProp} />
-      ) : undefined}
+      {key === 'custom' ? <RatioPair current={current} busy={busy} setProp={setProp} liveSetProp={liveSetProp} /> : undefined}
     </>
   );
 }
@@ -305,17 +272,7 @@ export function AspectRatioField({
 // stick once chosen — even when the value happens to match a preset (1 / 1 vs
 // Square) — until a preset/Auto is picked. Everything else derives straight from
 // the value.
-export function useRatioMode({
-  current,
-  derivedKey,
-  setProp,
-  clearProp,
-}: {
-  current: string;
-  derivedKey: string;
-  setProp: SetProp;
-  clearProp: ClearProp;
-}) {
+export function useRatioMode({ current, derivedKey, setProp, clearProp }: { current: string; derivedKey: string; setProp: SetProp; clearProp: ClearProp }) {
   const [forced, setForced] = useState<'custom' | 'other' | undefined>(undefined);
   // Whether "Other" was just chosen here, as opposed to the value simply being
   // one the bar can't show. Only the first of those wants the caret.
@@ -355,17 +312,7 @@ export function useRatioMode({
 }
 
 // The Custom W:H pair: two number fields that write `W / H` (a blank side as 0).
-export function RatioPair({
-  current,
-  busy,
-  setProp,
-  liveSetProp,
-}: {
-  current: string;
-  busy: boolean;
-  setProp: SetProp;
-  liveSetProp: LiveSetProp;
-}) {
+export function RatioPair({ current, busy, setProp, liveSetProp }: { current: string; busy: boolean; setProp: SetProp; liveSetProp: LiveSetProp }) {
   const parsed = parseRatio(current) ?? { width: '1', height: '1' };
   const write = (width: string, height: string, mode: 'live' | 'commit') => {
     const value = `${width || '0'} / ${height || '0'}`;

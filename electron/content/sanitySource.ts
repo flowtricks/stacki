@@ -173,9 +173,7 @@ function commentEnd(text: string, index: number): number | undefined {
 // A string escape at `index` (its backslash) as the text it stands for, and its
 // length in the source: `\u2192` is an arrow, not "u2192".
 function escapeAt(text: string, index: number): { readonly text: string; readonly length: number } {
-  const unicode = /^\\u(?:\{([0-9a-fA-F]{1,6})\}|([0-9a-fA-F]{4}))/.exec(
-    text.slice(index, index + 10),
-  );
+  const unicode = /^\\u(?:\{([0-9a-fA-F]{1,6})\}|([0-9a-fA-F]{4}))/.exec(text.slice(index, index + 10));
   const hex = /^\\x([0-9a-fA-F]{2})/.exec(text.slice(index, index + 4));
   if (unicode) {
     const code = parseInt(unicode[1] ?? unicode[2] ?? '', 16);

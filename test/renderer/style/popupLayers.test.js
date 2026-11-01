@@ -32,9 +32,7 @@ const check = (what, condition, detail) => {
   const bundlePath = path.join(buildDirectory, 'popup-layers.bundle.js');
   await esbuild.build({
     stdin: {
-      contents:
-        `export { registerPopupLayer, inOwnedPopup, hasOwnedPopup } ` +
-        `from './src/features/style/model/popupLayer'`,
+      contents: `export { registerPopupLayer, inOwnedPopup, hasOwnedPopup } ` + `from './src/features/style/model/popupLayer'`,
       resolveDir: ROOT,
       loader: 'ts',
     },
@@ -59,14 +57,8 @@ const check = (what, condition, detail) => {
   const offPicker = registerPopupLayer($('picker'), $('dot'));
   const offColour = registerPopupLayer($('colour'), $('swatch'));
 
-  check(
-    'a press in the variable picker is a press in the popover it opened from',
-    inOwnedPopup($('option'), $('popover')),
-  );
-  check(
-    'so is a press on HEX, in the layer holding the swatch',
-    inOwnedPopup($('hex'), $('popover')),
-  );
+  check('a press in the variable picker is a press in the popover it opened from', inOwnedPopup($('option'), $('popover')));
+  check('so is a press on HEX, in the layer holding the swatch', inOwnedPopup($('hex'), $('popover')));
   check('a press anywhere else is still outside', !inOwnedPopup($('other'), $('popover')));
   check('the popover can tell it has a popup of its own open', hasOwnedPopup($('popover')));
   check('an unrelated element owns nothing', !hasOwnedPopup($('elsewhere')));
@@ -74,10 +66,7 @@ const check = (what, condition, detail) => {
   // Chains: a popup opened from inside another popup still belongs to the popover
   // at the bottom of the stack — the picker inside the big value editor, say.
   const offNested = registerPopupLayer($('elsewhere'), $('hex'));
-  check(
-    'a popup opened from inside another still belongs to the popover',
-    inOwnedPopup($('other'), $('popover')),
-  );
+  check('a popup opened from inside another still belongs to the popover', inOwnedPopup($('other'), $('popover')));
   offNested();
 
   offPicker();
@@ -223,15 +212,10 @@ const check = (what, condition, detail) => {
       press(popover().querySelector('.embed-editor_varconnect-dot'));
     });
     await settle();
-    check(
-      'the dot opens the variable picker',
-      !!win.document.querySelector('.embed-editor_varpicker'),
-    );
+    check('the dot opens the variable picker', !!win.document.querySelector('.embed-editor_varpicker'));
     check('and the editor it opened from stays open', closes === 0, `${closes} closes`);
 
-    const row = [...win.document.querySelectorAll('button')].find((button) =>
-      /site-margin/.test(button.textContent || ''),
-    );
+    const row = [...win.document.querySelectorAll('button')].find((button) => /site-margin/.test(button.textContent || ''));
     check('the picker lists a variable', !!row);
     if (row) {
       await act(async () => {
@@ -245,9 +229,7 @@ const check = (what, condition, detail) => {
     if (rich) {
       await act(async () => {
         rich.focus();
-        rich.dispatchEvent(
-          new win.KeyboardEvent('keydown', { key: '=', bubbles: true, cancelable: true }),
-        );
+        rich.dispatchEvent(new win.KeyboardEvent('keydown', { key: '=', bubbles: true, cancelable: true }));
       });
       await settle();
       check('= opens the big value editor', !!win.document.querySelector('.var-custom'));

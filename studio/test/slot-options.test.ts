@@ -25,8 +25,7 @@ import Wrapper from '@/components/Section.astro';
 ---
 <Layout><Wrapper><h2>Title</h2><div><p>Nested</p></div></Wrapper></Layout>`;
 test('slot assignment reads the direct component or layout parent, including import aliases', () => {
-  const options = (selected: string) =>
-    slotOptions(project, 'src/pages/index.astro', source, selected);
+  const options = (selected: string) => slotOptions(project, 'src/pages/index.astro', source, selected);
   assert.deepEqual(options('n0.0'), ['default', 'head']);
   assert.deepEqual(options('n0.0.0'), ['default', 'background']);
   assert.equal(options('n0.0.1.0'), undefined);

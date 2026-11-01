@@ -13,16 +13,7 @@ import type { ResolvedProp } from './model/resolved';
 import { commitInPlace } from './model/commitInPlace';
 import { parseImportant } from './model/styleDisplay';
 import { CloseIcon, RelativeIcon, AbsoluteIcon, FixedIcon, StickyIcon } from './PositionIcons';
-import {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type Read,
-  type Props,
-  SegmentedIconControl,
-  FLOAT_SEGS,
-  CLEAR_SEGS,
-} from './PositionSegments';
+import { type SetProp, type ClearProp, type LiveSetProp, type Read, type Props, SegmentedIconControl, FLOAT_SEGS, CLEAR_SEGS } from './PositionSegments';
 
 // The Position section: a position-type dropdown (with a Custom escape hatch), an
 // inset box (top/right/bottom/left, like the spacing box), a z-index field, and
@@ -31,22 +22,17 @@ import {
 
 // ─────────────────────────── Helpers ───────────────────────────
 
-const joinImportant = ({ value, important }: { value: string; important: boolean }) =>
-  important ? `${value} !important` : value;
+const joinImportant = ({ value, important }: { value: string; important: boolean }) => (important ? `${value} !important` : value);
 
 type Display = { present: boolean; value: string; important: boolean };
 function displayOf(resolved: ResolvedProp | undefined): Display {
   if (!resolved) {
     return { present: false, value: '', important: false };
   }
-  const source =
-    resolved.source === 'selected' && resolved.selectedValue
-      ? resolved.selectedValue
-      : resolved.winner;
+  const source = resolved.source === 'selected' && resolved.selectedValue ? resolved.selectedValue : resolved.winner;
   return { present: true, value: source.value, important: source.important };
 }
-const effectiveValue = (read: Read, prop: string) =>
-  displayOf(read(prop)).value.trim().toLowerCase();
+const effectiveValue = (read: Read, prop: string) => displayOf(read(prop)).value.trim().toLowerCase();
 
 // ─────────────────────────── Live text field ───────────────────────────
 
@@ -70,13 +56,7 @@ function LiveField({
   const external = display.present ? joinImportant(display) : '';
   const field = useLiveFieldEditing({ prop, external, busy, setProp, clearProp, liveSetProp });
   return (
-    <VariableConnect
-      code
-      ariaLabel={`Connect ${ariaLabel} to a variable`}
-      disabled={busy}
-      prop={prop}
-      onPick={(binding) => setProp(prop, binding, false)}
-    >
+    <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
       <input
         {...field.scrub.input}
         className="u-input embed-editor_position-input"
@@ -223,15 +203,7 @@ const POSITION_PRESET_VALUES = new Set(POSITION_PRESETS.map((preset) => preset.v
 const CUSTOM = '__custom__';
 
 // The editable field shown inside the position dropdown's trigger in custom mode.
-function PositionCustomField({
-  read,
-  busy,
-  setProp,
-}: {
-  read: Read;
-  busy: boolean;
-  setProp: SetProp;
-}) {
+function PositionCustomField({ read, busy, setProp }: { read: Read; busy: boolean; setProp: SetProp }) {
   const display = displayOf(read('position'));
   const external = display.present ? joinImportant(display) : '';
   const [draft, setDraft] = useState(external);
@@ -249,12 +221,7 @@ function PositionCustomField({
     }
   };
   return (
-    <VariableConnect
-      ariaLabel="Connect Position to a variable"
-      disabled={busy}
-      prop="position"
-      onPick={(binding) => setProp('position', binding, false)}
-    >
+    <VariableConnect ariaLabel="Connect Position to a variable" disabled={busy} prop="position" onPick={(binding) => setProp('position', binding, false)}>
       <input
         className="embed-editor_value-input embed-editor_display-input"
         value={draft}
@@ -280,17 +247,7 @@ function PositionCustomField({
   );
 }
 
-function PositionControl({
-  read,
-  busy,
-  setProp,
-  liveSetProp,
-}: {
-  read: Read;
-  busy: boolean;
-  setProp: SetProp;
-  liveSetProp: LiveSetProp;
-}) {
+function PositionControl({ read, busy, setProp, liveSetProp }: { read: Read; busy: boolean; setProp: SetProp; liveSetProp: LiveSetProp }) {
   const current = effectiveValue(read, 'position');
   const isPreset = POSITION_PRESET_VALUES.has(current);
   // Unset → what the page computes (a `*` rule the panel can't see, a UA default),
@@ -325,9 +282,7 @@ function PositionControl({
         })),
         { value: CUSTOM, label: 'Custom' },
       ]}
-      customInput={
-        custom ? <PositionCustomField read={read} busy={busy} setProp={setProp} /> : undefined
-      }
+      customInput={custom ? <PositionCustomField read={read} busy={busy} setProp={setProp} /> : undefined}
       disabled={busy}
       onChange={(next) => {
         if (next === CUSTOM) {
@@ -338,9 +293,7 @@ function PositionControl({
           setProp('position', next, false);
         }
       }}
-      onPreview={(next) =>
-        liveSetProp('position', next === CUSTOM ? undefined : (next ?? undefined), false)
-      }
+      onPreview={(next) => liveSetProp('position', next === CUSTOM ? undefined : (next ?? undefined), false)}
       ariaLabel="Position"
     />
   );
@@ -364,17 +317,7 @@ const INSET_SIDES = ['top', 'right', 'bottom', 'left'] as const;
 type InsetSide = (typeof INSET_SIDES)[number];
 
 // A hint of the element's box, and the part of it being pinned.
-function InsetIcon({
-  x,
-  y,
-  width,
-  height,
-}: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}) {
+function InsetIcon({ x, y, width, height }: { x: number; y: number; width: number; height: number }) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <rect x="3" y="3" width="10" height="10" rx="1.5" stroke="currentColor" opacity="0.4" />
@@ -453,12 +396,7 @@ function InsetPresets({ read, busy, setProp, clearProp }: Props) {
     const value = (effectiveValue(read, side) || '').trim().toLowerCase();
     return value !== '' && value !== 'auto';
   });
-  const current =
-    INSET_PRESETS.find(
-      (preset) =>
-        preset.sides.length === pinned.length &&
-        preset.sides.every((side) => pinned.includes(side)),
-    )?.value ?? '';
+  const current = INSET_PRESETS.find((preset) => preset.sides.length === pinned.length && preset.sides.every((side) => pinned.includes(side)))?.value ?? '';
 
   const apply = (preset: (typeof INSET_PRESETS)[number]) => {
     // Clear the others FIRST: an element that has `left` set and then gains
@@ -607,12 +545,7 @@ export default function PositionSection(props: Props) {
   return (
     <div className="embed-editor_position">
       <Row label={rowLabel('Position', 'position')}>
-        <PositionControl
-          read={read}
-          busy={props.busy}
-          setProp={props.setProp}
-          liveSetProp={props.liveSetProp}
-        />
+        <PositionControl read={read} busy={props.busy} setProp={props.setProp} liveSetProp={props.liveSetProp} />
       </Row>
 
       {/* Always there, whatever `position` says — the same reasoning as the
@@ -634,22 +567,10 @@ export default function PositionSection(props: Props) {
       </Row>
 
       <Row label={rowLabel('Float', 'float')}>
-        <SegmentedIconControl
-          prop="float"
-          ariaLabel="Float"
-          segments={FLOAT_SEGS}
-          current={effectiveValue(read, 'float') || 'none'}
-          {...props}
-        />
+        <SegmentedIconControl prop="float" ariaLabel="Float" segments={FLOAT_SEGS} current={effectiveValue(read, 'float') || 'none'} {...props} />
       </Row>
       <Row label={rowLabel('Clear', 'clear')}>
-        <SegmentedIconControl
-          prop="clear"
-          ariaLabel="Clear"
-          segments={CLEAR_SEGS}
-          current={effectiveValue(read, 'clear') || 'none'}
-          {...props}
-        />
+        <SegmentedIconControl prop="clear" ariaLabel="Clear" segments={CLEAR_SEGS} current={effectiveValue(read, 'clear') || 'none'} {...props} />
       </Row>
     </div>
   );

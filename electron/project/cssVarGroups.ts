@@ -48,8 +48,7 @@ export function commonStem(labels: readonly string[]): string {
 
 // --- grouping --------------------------------------------------------------
 
-export const namesOf = (rule: Rule): string[] =>
-  rule.entries.filter((entry) => entry.kind === 'var').map((entry) => entry.name);
+export const namesOf = (rule: Rule): string[] => rule.entries.filter((entry) => entry.kind === 'var').map((entry) => entry.name);
 
 export const overlap = (left: readonly string[], right: readonly string[]): number => {
   const rightSet = new Set(right);
@@ -87,10 +86,7 @@ export function groupRules(rules: readonly Rule[]): Rule[][] {
       // One shared name is only a mode when it is the whole of both rules —
       // a page of utilities each setting `--_gap-size` is a scale, not a
       // coincidence.
-      const enough =
-        names.length > 1
-          ? same >= MERGE_THRESHOLD
-          : same === 1 && otherNames.length === names.length;
+      const enough = names.length > 1 ? same >= MERGE_THRESHOLD : same === 1 && otherNames.length === names.length;
       if (enough) {
         members.push(candidate);
         taken.add(other);
@@ -121,40 +117,23 @@ export interface Family {
   self: boolean;
 }
 
-// The suffixes most of these prefixes declare. "Most" rather than "all",
-// because one variant carrying an extra property is normal and should not cost
-// everyone else the table.
-export function rowsFor(
-  prefixes: readonly string[],
-  bySuffix: Map<string, Set<string>>,
-  used: Set<string>,
-): string[] {
-  const rows: string[] = [];
-  for (const [suffix, owners] of bySuffix) {
-    const shared = prefixes.filter(
-      (prefix) => owners.has(prefix) && !used.has(`--${prefix}-${suffix}`),
-    );
-    if (shared.length >= Math.max(2, Math.ceil(prefixes.length * 0.5))) {
-      rows.push(suffix);
-    }
-  }
-  return rows;
-}
-
 /**
  * The tables hiding in a list of names.
  *
- * A family is a set of prefixes that share a set of suffixes: {h1, h2, …} all
- * having {line-height, margin-top, …}. The suffix that the most prefixes agree
- * on picks the family; every other suffix that most of those prefixes also have
- * becomes a row. A name that is only the prefix (`--h1`) is the family's own
- * value, and is the first row.
+ * A family is a set of prefixes that declare exactly the same variables:
+ * {h1, h2, …} each having {line-height, margin-top, …} and nothing else. Exact,
+ * not "most": a table is only worth reading when every column fills every row.
+ * Prefixes that merely overlap — a few names in common and the rest their own —
+ * made tables that were mostly dashes, so they stay lists. A name that is only
+ * the prefix (`--h1`) is the family's own value, and is the first row; either
+ * every prefix has one or none does.
  */
 // Families one stylesheet is read into: a stylesheet, not a database.
 export const FAMILIES_MAX = 25;
 
 export function findFamilies(names: readonly string[]): { families: Family[]; used: Set<string> } {
   const bySuffix = new Map<string, Set<string>>(); // suffix -> Set(prefix)
+  const byPrefix = new Map<string, string[]>(); // prefix -> suffixes, in source order
   for (const name of names) {
     for (const { prefix, suffix } of splits(name)) {
       const owners = bySuffix.get(suffix);
@@ -162,6 +141,12 @@ export function findFamilies(names: readonly string[]): { families: Family[]; us
         owners.add(prefix);
       } else {
         bySuffix.set(suffix, new Set([prefix]));
+      }
+      const suffixes = byPrefix.get(prefix);
+      if (suffixes) {
+        suffixes.push(suffix);
+      } else {
+        byPrefix.set(prefix, [suffix]);
       }
     }
   }
@@ -171,7 +156,7 @@ export function findFamilies(names: readonly string[]): { families: Family[]; us
   const used = new Set<string>();
 
   while (families.length < FAMILIES_MAX) {
-    const best = bestFamilySeed(bySuffix, nameSet, used);
+    const best = bestFamilySeed(bySuffix, byPrefix, nameSet, used);
     if (best === undefined) {
       break;
     }
@@ -204,15 +189,18 @@ export interface FamilySeed {
 }
 
 // Every suffix is a candidate seed: the prefixes that share it might be a
-// family. Which one is picked matters — `--h1-margin-top` and
-// `--h1-trim-top` both end in `top`, so "top" seeds a wide, shallow family
-// of fourteen `*-margin`/`*-trim` prefixes that would eat two rows out of
-// the real one. The family that accounts for the most declarations wins,
-// which is the deep one: seven headings by thirteen properties.
+// family. Among them, only prefixes with the same signature — the same
+// unclaimed suffixes, and the same answer to "is the prefix a variable too" —
+// can be columns of one table. Which seed is picked matters — `--h1-margin-top`
+// and `--h1-trim-top` both end in `top`, so "top" seeds candidates of
+// `*-margin`/`*-trim` prefixes that would eat two rows out of the real table.
+// The family that accounts for the most declarations wins, which is the deep
+// one: seven headings by thirteen properties.
 export function bestFamilySeed(
-  bySuffix: Map<string, Set<string>>,
+  bySuffix: ReadonlyMap<string, ReadonlySet<string>>,
+  byPrefix: ReadonlyMap<string, readonly string[]>,
   nameSet: ReadonlySet<string>,
-  used: Set<string>,
+  used: ReadonlySet<string>,
 ): FamilySeed | undefined {
   let best: FamilySeed | undefined = undefined;
   for (const [suffix, prefixes] of bySuffix) {
@@ -220,31 +208,60 @@ export function bestFamilySeed(
     if (seed.length < 2) {
       continue;
     }
-    const rows = rowsFor(seed, bySuffix, used);
-    // A prefix that is also a variable of its own — `--gap-1` beside
-    // `--gap-1-min` — is a row too: the family's own value. Without counting
-    // it, a scale with one part each looks like a single-row table and stays
-    // a list.
-    const self = seed.some((prefix) => nameSet.has(`--${prefix}`) && !used.has(`--${prefix}`));
-    const height = rows.length + (self ? 1 : 0);
-    if (height < 2) {
-      continue;
-    }
-    const score = seed.length * height;
-    if (!best || score > best.score) {
-      best = { score, prefixes: seed, rows };
+    for (const candidate of signatureGroups(seed, byPrefix, nameSet, used)) {
+      if (candidate.prefixes.length < 2) {
+        continue;
+      }
+      // A one-row table is a list turned sideways.
+      const height = candidate.rows.length + (candidate.self ? 1 : 0);
+      if (height < 2) {
+        continue;
+      }
+      const score = candidate.prefixes.length * height;
+      if (!best || score > best.score) {
+        best = { score, prefixes: candidate.prefixes, rows: candidate.rows };
+      }
     }
   }
   return best;
 }
 
+interface SignatureGroup {
+  readonly prefixes: string[];
+  readonly rows: string[];
+  readonly self: boolean;
+}
+
+// The seed's prefixes, split by exactly what each declares that is not
+// claimed yet. Prefixes in one group have identical rows, so a table of them
+// has no empty cells.
+function signatureGroups(
+  seed: readonly string[],
+  byPrefix: ReadonlyMap<string, readonly string[]>,
+  nameSet: ReadonlySet<string>,
+  used: ReadonlySet<string>,
+): SignatureGroup[] {
+  assert(seed.length >= 2, 'signatureGroups: a seed has at least two prefixes');
+  const groups = new Map<string, SignatureGroup>();
+  for (const prefix of seed) {
+    const rows = [...new Set(byPrefix.get(prefix) ?? [])].filter((suffix) => !used.has(`--${prefix}-${suffix}`));
+    assert(rows.length > 0, 'signatureGroups: a seed prefix declares its seed suffix');
+    const self = nameSet.has(`--${prefix}`) && !used.has(`--${prefix}`);
+    // Suffixes are names without the prefix, so a newline cannot occur in one.
+    const key = `${self ? 'self' : 'none'}\n${[...rows].sort().join('\n')}`;
+    const group = groups.get(key);
+    if (group) {
+      group.prefixes.push(prefix);
+    } else {
+      groups.set(key, { prefixes: [prefix], rows, self });
+    }
+  }
+  return [...groups.values()];
+}
+
 // The family a seed describes, with its rows and columns in source order: the order the author
 // chose, rather than anything alphabetical.
-export function familyFrom(
-  best: FamilySeed,
-  names: readonly string[],
-  nameSet: ReadonlySet<string>,
-): Family {
+export function familyFrom(best: FamilySeed, names: readonly string[], nameSet: ReadonlySet<string>): Family {
   const { prefixes } = best;
   const order = new Map<string, number>();
   names.forEach((name, index) => {
@@ -254,9 +271,7 @@ export function familyFrom(
       }
     }
   });
-  const rows = [...best.rows].sort(
-    (left, right) => (order.get(left) ?? 0) - (order.get(right) ?? 0),
-  );
+  const rows = [...best.rows].sort((left, right) => (order.get(left) ?? 0) - (order.get(right) ?? 0));
 
   const columnOrder = new Map<string, number>();
   names.forEach((name, index) => {
@@ -267,9 +282,7 @@ export function familyFrom(
       }
     }
   });
-  const columns = [...prefixes].sort(
-    (left, right) => (columnOrder.get(left) ?? 0) - (columnOrder.get(right) ?? 0),
-  );
+  const columns = [...prefixes].sort((left, right) => (columnOrder.get(left) ?? 0) - (columnOrder.get(right) ?? 0));
   const self = columns.some((prefix) => nameSet.has(`--${prefix}`));
   return { prefixes: columns, rows, self };
 }

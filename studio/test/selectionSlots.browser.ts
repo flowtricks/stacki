@@ -4,8 +4,7 @@ import assert from 'node:assert/strict';
 import { record, string } from '../src/shared/validation';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -46,9 +45,7 @@ try {
   }
   await sourceEquals(original);
   assert.deepEqual(errors, []);
-  console.log(
-    'Component-panel append, duplicate/delete selection, slot dropdown assignment and undo passed.',
-  );
+  console.log('Component-panel append, duplicate/delete selection, slot dropdown assignment and undo passed.');
 } finally {
   await browser.close();
 }
@@ -58,9 +55,7 @@ async function checkSlots(original: string) {
     .locator('.props-group-head')
     .filter({ hasText: /^Settings/ })
     .click();
-  const slot = page
-    .locator('.props-field')
-    .filter({ has: page.locator('.prop-label', { hasText: /^slot$/ }) });
+  const slot = page.locator('.props-field').filter({ has: page.locator('.prop-label', { hasText: /^slot$/ }) });
   await slot.locator('.dd-trigger').click();
   await page
     .locator('.dd-option')
@@ -74,9 +69,7 @@ async function checkSlots(original: string) {
   await sourceEquals(original);
 }
 function row(page: Page, name: string) {
-  return page
-    .locator('.structure-node')
-    .filter({ has: page.locator('.label', { hasText: new RegExp(`^${name}$`) }) });
+  return page.locator('.structure-node').filter({ has: page.locator('.label', { hasText: new RegExp(`^${name}$`) }) });
 }
 async function readSource() {
   return string(record(await (await page.request.get(endpoint)).json())['source']);
@@ -94,13 +87,7 @@ async function sourceIncludes(expected: string) {
   await page.waitForFunction(
     async ({ endpoint, expected }) => {
       const data: unknown = await (await fetch(endpoint)).json();
-      return (
-        !!data &&
-        typeof data === 'object' &&
-        'source' in data &&
-        typeof data.source === 'string' &&
-        data.source.includes(expected)
-      );
+      return !!data && typeof data === 'object' && 'source' in data && typeof data.source === 'string' && data.source.includes(expected);
     },
     { endpoint, expected },
   );

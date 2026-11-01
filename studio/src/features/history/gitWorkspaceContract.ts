@@ -65,11 +65,7 @@ export function gitBranchName(input: unknown): string {
   if (value === 'HEAD' || !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(value) || value.includes('..')) {
     throw new Error('Invalid Git branch name.');
   }
-  if (
-    value
-      .split('/')
-      .some((part) => !part || part.startsWith('.') || part.endsWith('.') || part.endsWith('.lock'))
-  ) {
+  if (value.split('/').some((part) => !part || part.startsWith('.') || part.endsWith('.') || part.endsWith('.lock'))) {
     throw new Error('Invalid Git branch name.');
   }
   return value;
@@ -102,10 +98,7 @@ export function gitWorkspaceBranch(manifest: GitWorkspaceManifest): GitWorkspace
   }
   return branch;
 }
-function parseGitWorkspaceList<T extends { readonly name: string }>(
-  input: unknown,
-  parse: (entry: Record<string, unknown>) => T,
-): readonly T[] {
+function parseGitWorkspaceList<T extends { readonly name: string }>(input: unknown, parse: (entry: Record<string, unknown>) => T): readonly T[] {
   if (!Array.isArray(input) || input.length > gitWorkspaceLimits.branches) {
     throw new Error('Git workspaces support at most 64 branches.');
   }

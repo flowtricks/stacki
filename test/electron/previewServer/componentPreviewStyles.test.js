@@ -5,13 +5,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {
-  componentPreviewStylePaths,
-} = require('#dist/electron/previewServer/componentPreviewStyles.js');
-const {
-  componentPreviewPlugin,
-  renderComponentPreviewPage,
-} = require('#dist/electron/previewServer/componentPreview.js');
+const { componentPreviewStylePaths } = require('#dist/electron/previewServer/componentPreviewStyles.js');
+const { componentPreviewPlugin, renderComponentPreviewPage } = require('#dist/electron/previewServer/componentPreview.js');
 
 const sources = {
   '/src/styles/base.css': 'button { background: transparent; padding: 0; border: 0; }',
@@ -25,10 +20,7 @@ const sources = {
 };
 
 test('layered styles are loaded through their entry point without unlayered duplicates', () => {
-  assert.deepEqual(componentPreviewStylePaths(sources), [
-    '/src/styles/global.css',
-    '/src/styles/standalone.css',
-  ]);
+  assert.deepEqual(componentPreviewStylePaths(sources), ['/src/styles/global.css', '/src/styles/standalone.css']);
   assert.deepEqual(componentPreviewStylePaths({}), []);
 });
 
@@ -57,17 +49,9 @@ test('nested imports, URLs, aliases and Sass partials retain their entry points'
 
 test('malformed, oversized and cyclic stylesheet graphs fail explicitly', () => {
   assert.throws(() => componentPreviewStylePaths({ '/src/styles/base.css': {} }), /source text/);
+  assert.throws(() => componentPreviewStylePaths({ '/src/styles/base.css': 'x'.repeat(10 * 1024 * 1024 + 1) }), /source limit/);
   assert.throws(
-    () => componentPreviewStylePaths({ '/src/styles/base.css': 'x'.repeat(10 * 1024 * 1024 + 1) }),
-    /source limit/,
-  );
-  assert.throws(
-    () =>
-      componentPreviewStylePaths(
-        Object.fromEntries(
-          Array.from({ length: 1025 }, (_, index) => [`/src/styles/${index}.css`, '']),
-        ),
-      ),
+    () => componentPreviewStylePaths(Object.fromEntries(Array.from({ length: 1025 }, (_, index) => [`/src/styles/${index}.css`, '']))),
     /count exceeds limit/,
   );
   assert.throws(
@@ -92,17 +76,10 @@ test('the Vite graph contains only entry styles and reflects edited imports', (c
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, source);
   }
-  assert.equal(
-    plugin.load(id),
-    ['import "/src/styles/global.css";', 'import "/src/styles/standalone.css";'].join('\n'),
-  );
+  assert.equal(plugin.load(id), ['import "/src/styles/global.css";', 'import "/src/styles/standalone.css";'].join('\n'));
   fs.appendFileSync(path.join(project, 'src/styles/global.css'), '\n@import "./standalone.css";');
   assert.equal(plugin.load(id), 'import "/src/styles/global.css";');
   const template = renderComponentPreviewPage();
   assert.match(template, /import 'virtual:stacki-component-preview-styles'/);
-  assert.equal(
-    template.includes("glob('/src/styles"),
-    false,
-    'even a lazy glob makes Astro collect unlayered leaf styles',
-  );
+  assert.equal(template.includes("glob('/src/styles"), false, 'even a lazy glob makes Astro collect unlayered leaf styles');
 });

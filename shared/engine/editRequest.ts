@@ -34,9 +34,7 @@ export interface NodeRef {
 
 /** What goes in: new nodes main prints, or a copy of a node's own bytes (a
  * duplicate is its source, never a reprint). */
-export type InsertContent =
-  | { readonly tag: 'nodes'; readonly nodes: readonly PageNode[] }
-  | { readonly tag: 'copy'; readonly source: NodeRef };
+export type InsertContent = { readonly tag: 'nodes'; readonly nodes: readonly PageNode[] } | { readonly tag: 'copy'; readonly source: NodeRef };
 
 export type Edit =
   | {
@@ -182,10 +180,7 @@ export function parseEdit(input: unknown): Edit {
 }
 
 // The edits that change one attribute or declaration of the target tag.
-function parseAttributeEdit(
-  record: Record<string, unknown>,
-  tag: 'set-attribute' | 'remove-attribute' | 'set-inline-style',
-): Edit {
+function parseAttributeEdit(record: Record<string, unknown>, tag: 'set-attribute' | 'remove-attribute' | 'set-inline-style'): Edit {
   // Paired with parseEdit's dispatch: the record is the edit it was routed as.
   assert(record['tag'] === tag, 'parseAttributeEdit: record tag matches its dispatch');
   const target = parseNodeRef(record['target'], 'Edit.target');
@@ -311,9 +306,7 @@ function parseContent(input: unknown): InsertContent {
     const context = { nodes: 0 };
     return {
       tag,
-      nodes: nodes.map((node, index) =>
-        parsePageNode(node, `Edit.content.nodes[${index}]`, 0, context),
-      ),
+      nodes: nodes.map((node, index) => parsePageNode(node, `Edit.content.nodes[${index}]`, 0, context)),
     };
   }
   throw new Error(`Edit.content.tag: unknown value ${JSON.stringify(tag)}`);

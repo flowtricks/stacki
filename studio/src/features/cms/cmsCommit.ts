@@ -12,9 +12,7 @@ export async function commitCms(
   after: ReadonlyMap<string, string>,
   versions: Readonly<Record<string, unknown>>,
 ) {
-  const changed = [...new Set([...before.keys(), ...after.keys()])].filter(
-    (file) => before.get(file) !== after.get(file),
-  );
+  const changed = [...new Set([...before.keys(), ...after.keys()])].filter((file) => before.get(file) !== after.get(file));
   if (changed.length > 50) {
     throw new Error('Change at most 50 CMS files at once');
   }

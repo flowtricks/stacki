@@ -2,16 +2,7 @@ import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import { toRecord } from '../../../shared/core/record';
 import { parseContentSchema } from './contentSchemaBoundary';
-import type {
-  ContentSchema,
-  Control,
-  Constraints,
-  ConstraintBuilder,
-  FieldBuilder,
-  FieldDescriptor,
-  FieldMember,
-  FieldOptions,
-} from './contentSchemaTypes';
+import type { ContentSchema, Control, Constraints, ConstraintBuilder, FieldBuilder, FieldDescriptor, FieldMember, FieldOptions } from './contentSchemaTypes';
 export type { FieldDescriptor, FieldMember, Control } from './contentSchemaTypes';
 
 // Deep structures are described one level at a time: a recursive schema has no
@@ -24,11 +15,7 @@ interface SchemaOptions {
   readonly required?: boolean;
   readonly depth?: number;
 }
-export function describeField(
-  input: unknown,
-  key: string | undefined,
-  options: SchemaOptions = {},
-): FieldDescriptor {
+export function describeField(input: unknown, key: string | undefined, options: SchemaOptions = {}): FieldDescriptor {
   assert(Number.isSafeInteger(options.depth ?? 0), 'Schema depth must be an integer');
   assert((options.depth ?? 0) >= 0, 'Schema depth must be nonnegative');
   const root = options.root ? parseContentSchema(options.root) : undefined;
@@ -123,10 +110,7 @@ function unwrapNullable(node: ContentSchema): {
 
 const definitionsOf = (root: ContentSchema | undefined) => root?.$defs || {};
 
-function deref(
-  node: ContentSchema | undefined,
-  root: ContentSchema | undefined,
-): ContentSchema | undefined {
+function deref(node: ContentSchema | undefined, root: ContentSchema | undefined): ContentSchema | undefined {
   if (!node?.$ref) {
     return node;
   }
@@ -156,11 +140,7 @@ function discriminatorOf(branches: readonly ContentSchema[] | undefined): string
   return undefined;
 }
 
-function controlFor(
-  node: ContentSchema | undefined,
-  key: string,
-  { nullable }: { readonly nullable: boolean },
-): Control {
+function controlFor(node: ContentSchema | undefined, key: string, { nullable }: { readonly nullable: boolean }): Control {
   if (!node || node.recursiveOnly) {
     return 'unknown';
   }
@@ -180,8 +160,7 @@ function controlFor(
     return 'const';
   }
 
-  const type =
-    typeof node.type === 'string' ? node.type : node.type?.find((name) => name !== 'null');
+  const type = typeof node.type === 'string' ? node.type : node.type?.find((name) => name !== 'null');
   if (type === 'boolean') {
     return 'boolean';
   }
@@ -199,11 +178,7 @@ function controlFor(
     return 'list';
   }
   if (type === 'object') {
-    if (
-      !node.properties &&
-      node.additionalProperties &&
-      typeof node.additionalProperties === 'object'
-    ) {
+    if (!node.properties && node.additionalProperties && typeof node.additionalProperties === 'object') {
       return 'record';
     }
     return 'object';
@@ -317,11 +292,11 @@ function describeFieldParsed(
   if (control === 'object') {
     field.fields = fieldsOfParsed(node, { root, depth: depth + 1, visit });
   } else if (control === 'record') {
-    field.value = describeFieldParsed(
-      typeof node.additionalProperties === 'object' ? node.additionalProperties : {},
-      undefined,
-      { root, depth: depth + 1, visit },
-    );
+    field.value = describeFieldParsed(typeof node.additionalProperties === 'object' ? node.additionalProperties : {}, undefined, {
+      root,
+      depth: depth + 1,
+      visit,
+    });
   } else if (control === 'list') {
     field.item = describeFieldParsed(node.items || {}, undefined, {
       root,
@@ -337,9 +312,7 @@ function describeFieldParsed(
       return {
         value,
         label: labelize(String(value ?? `Option ${index + 1}`)),
-        fields: fieldsOfParsed(branch, { root, depth: depth + 1, visit }).filter(
-          (member) => member.key !== discriminator,
-        ),
+        fields: fieldsOfParsed(branch, { root, depth: depth + 1, visit }).filter((member) => member.key !== discriminator),
       };
     });
   }
@@ -380,9 +353,7 @@ function fieldsOfParsed(
   const node = deref(schema, root) || {};
   const properties = node.properties || {};
   const required = new Set(node.required || []);
-  return Object.entries(properties).map(([key, child]) =>
-    describeFieldParsed(child, key, { required: required.has(key), root, depth, visit }),
-  );
+  return Object.entries(properties).map(([key, child]) => describeFieldParsed(child, key, { required: required.has(key), root, depth, visit }));
 }
 
 /**
@@ -404,10 +375,7 @@ export function collectionFields(input: unknown) {
 }
 
 /** Which union member a value is, by its discriminator. */
-export function memberFor(
-  union: FieldDescriptor | undefined,
-  value: unknown,
-): FieldMember | undefined {
+export function memberFor(union: FieldDescriptor | undefined, value: unknown): FieldMember | undefined {
   if (!union?.members?.length) {
     return undefined;
   }
@@ -520,11 +488,7 @@ export function hintFor(field: FieldDescriptor): string | undefined {
  * schema's defaults into every file it touches — a value the user did not set
  * is a value that was never in the file, and it stays that way.
  */
-export function editsBetween(
-  before: unknown,
-  after: unknown,
-  path: readonly string[] = [],
-): readonly ContentEdit[] {
+export function editsBetween(before: unknown, after: unknown, path: readonly string[] = []): readonly ContentEdit[] {
   let remaining = BOUNDARY_LIMITS.itemsMax;
   const visit = (depth: number): void => {
     assert(depth <= BOUNDARY_LIMITS.depthMax, 'Content edit exceeds depth limit');
@@ -536,18 +500,12 @@ interface ContentEdit {
   readonly path: readonly string[];
   readonly value: unknown;
 }
-function editsBetweenVisit(
-  before: unknown,
-  after: unknown,
-  path: readonly string[],
-  visit: (depth: number) => void,
-): readonly ContentEdit[] {
+function editsBetweenVisit(before: unknown, after: unknown, path: readonly string[], visit: (depth: number) => void): readonly ContentEdit[] {
   const depth = path.length;
   assert(depth <= BOUNDARY_LIMITS.depthMax, 'Content edit exceeds depth limit');
   visit(depth);
   const edits: ContentEdit[] = [];
-  const isObject = (value: unknown): value is Record<string, unknown> =>
-    toRecord(value) !== undefined;
+  const isObject = (value: unknown): value is Record<string, unknown> => toRecord(value) !== undefined;
 
   if (Array.isArray(before) || Array.isArray(after)) {
     if (JSON.stringify(before) !== JSON.stringify(after)) {

@@ -7,9 +7,7 @@ import { parseHistoryPatch } from './historyDiffModel';
 import type { HistoryDiffLine } from './historyDiffModel';
 
 type DiffState =
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'ready'; readonly rows: readonly HistoryDiffLine[] };
+  { readonly kind: 'loading' } | { readonly kind: 'error'; readonly message: string } | { readonly kind: 'ready'; readonly rows: readonly HistoryDiffLine[] };
 
 export default function HistoryFileDiff({
   projectPath,
@@ -40,23 +38,13 @@ export default function HistoryFileDiff({
         {commit.isMerge ? ' · compared with first parent' : ''}
       </div>
       {state.kind === 'loading' && <p className="history-note">Loading diff…</p>}
-      {state.kind === 'error' && (
-        <ErrorToast
-          message={state.message}
-          recovery={[{ label: 'Retry', run: () => setRevision((value) => value + 1) }]}
-        />
-      )}
+      {state.kind === 'error' && <ErrorToast message={state.message} recovery={[{ label: 'Retry', run: () => setRevision((value) => value + 1) }]} />}
       {state.kind === 'ready' && <HistoryDiffLines rows={state.rows} />}
     </div>
   );
 }
 
-function useHistoryDiff(
-  projectPath: string,
-  commit: string,
-  file: HistoryCommitFile,
-  revision: number,
-): DiffState {
+function useHistoryDiff(projectPath: string, commit: string, file: HistoryCommitFile, revision: number): DiffState {
   const [state, setState] = useState<DiffState>({ kind: 'loading' });
   const { path, from } = file;
   useEffect(() => {
@@ -64,11 +52,7 @@ function useHistoryDiff(
     setState({ kind: 'loading' });
     void readHistoryDiff({ projectPath, commit, path, from }).then((result) => {
       if (active) {
-        setState(
-          result.ok
-            ? { kind: 'ready', rows: parseHistoryPatch(result.value) }
-            : { kind: 'error', message: result.error },
-        );
+        setState(result.ok ? { kind: 'ready', rows: parseHistoryPatch(result.value) } : { kind: 'error', message: result.error });
       }
     });
     return () => {
@@ -93,9 +77,7 @@ function HistoryDiffLines({ rows }: { readonly rows: readonly HistoryDiffLine[] 
               <>
                 <span className="history-diff-number">{'before' in row ? row.before : ''}</span>
                 <span className="history-diff-number">{'after' in row ? row.after : ''}</span>
-                <span className="history-diff-sign">
-                  {row.kind === 'added' ? '+' : row.kind === 'deleted' ? '−' : ' '}
-                </span>
+                <span className="history-diff-sign">{row.kind === 'added' ? '+' : row.kind === 'deleted' ? '−' : ' '}</span>
                 <span className="history-diff-code">{row.text || ' '}</span>
               </>
             )}

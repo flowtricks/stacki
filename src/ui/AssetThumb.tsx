@@ -23,13 +23,7 @@ export function looksLikeAssetPath(value: unknown) {
   if (!path.startsWith('/') || path.startsWith('//')) {
     return false;
   }
-  return (
-    IMAGE_EXT.test(path) ||
-    VIDEO_EXT.test(path) ||
-    AUDIO_EXT.test(path) ||
-    TEXT_EXT.test(path) ||
-    FONT_DOCUMENT_EXT.test(path)
-  );
+  return IMAGE_EXT.test(path) || VIDEO_EXT.test(path) || AUDIO_EXT.test(path) || TEXT_EXT.test(path) || FONT_DOCUMENT_EXT.test(path);
 }
 
 // Which picker filter suits a value ("image" | "video" | "audio" | "asset").
@@ -53,13 +47,10 @@ const encodePath = (abs: string): string =>
     .replace(/\\/g, '/')
     .replace(/^\/(?!\/)/, '')
     .split('/')
-    .map((segment, index) =>
-      index === 0 && /^[A-Za-z]:$/.test(segment) ? segment : encodeURIComponent(segment),
-    )
+    .map((segment, index) => (index === 0 && /^[A-Za-z]:$/.test(segment) ? segment : encodeURIComponent(segment)))
     .join('/');
 
-const fileURL = (encodedPath: string): string =>
-  encodedPath.startsWith('//') ? `file:${encodedPath}` : `file:///${encodedPath}`;
+const fileURL = (encodedPath: string): string => (encodedPath.startsWith('//') ? `file:${encodedPath}` : `file:///${encodedPath}`);
 
 // Served by the main process (see ASSET_SCHEME in electron/main.js). A plain
 // file:// URL only loads when the window itself came from file:// — true of a
@@ -90,10 +81,7 @@ const familyFor = (abs: string): string => {
 // isn't a usable font, so the caller falls back to the badge.
 const FONT_LOADS_MAX = 256;
 const fontLoads = new Map<string, Promise<string | undefined>>(); // Keyed by absolute path.
-function loadFontPreview(
-  abs: string,
-  sources: readonly [string, string],
-): Promise<string | undefined> {
+function loadFontPreview(abs: string, sources: readonly [string, string]): Promise<string | undefined> {
   const existing = fontLoads.get(abs);
   if (existing) {
     return existing;
@@ -162,14 +150,8 @@ interface AssetThumbProps {
   readonly onImageLoad?: ((dimensions: AssetDimensions) => void) | undefined;
   readonly onClick?: React.MouseEventHandler<HTMLDivElement>;
 }
-export default function AssetThumb({
-  file,
-  className = '',
-  onImageLoad,
-  onClick,
-}: AssetThumbProps) {
-  const { videoRef, source, failed, nextSource, isText, isVideo, isImage, isFont, fontFamily } =
-    useAssetPreview(file);
+export default function AssetThumb({ file, className = '', onImageLoad, onClick }: AssetThumbProps) {
+  const { videoRef, source, failed, nextSource, isText, isVideo, isImage, isFont, fontFamily } = useAssetPreview(file);
   return (
     <div
       className={`asset-thumb ${className}`}
@@ -202,9 +184,7 @@ export default function AssetThumb({
           playsInline
           preload="metadata"
           draggable={false}
-          onLoadedMetadata={(event) =>
-            onImageLoad?.({ w: event.currentTarget.videoWidth, h: event.currentTarget.videoHeight })
-          }
+          onLoadedMetadata={(event) => onImageLoad?.({ w: event.currentTarget.videoWidth, h: event.currentTarget.videoHeight })}
           onError={nextSource}
         />
       ) : isFont && fontFamily ? (

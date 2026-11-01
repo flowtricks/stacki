@@ -16,13 +16,7 @@ test('pause waits for an owned process to exit', async (context) => {
   const servers = new DevServers({ send() {} });
   const child = spawn(
     process.execPath,
-    [
-      '-e',
-      [
-        'process.on("SIGTERM", () => setTimeout(() => process.exit(0), 75));',
-        'setInterval(() => {}, 1000); process.stdout.write("ready");',
-      ].join('\n'),
-    ],
+    ['-e', ['process.on("SIGTERM", () => setTimeout(() => process.exit(0), 75));', 'setInterval(() => {}, 1000); process.stdout.write("ready");'].join('\n')],
     { detached: process.platform !== 'win32' },
   );
   context.after(() => child.kill());
@@ -46,10 +40,7 @@ test('pause awaits daemon stop and leaves external servers alone', async (contex
   const bin = path.join(directory, 'astro.mjs');
   await fs.writeFile(
     bin,
-    [
-      'import {writeFileSync} from "node:fs";',
-      'setTimeout(() => writeFileSync("stopped.txt", process.argv.slice(2).join(" ")), 75);',
-    ].join('\n'),
+    ['import {writeFileSync} from "node:fs";', 'setTimeout(() => writeFileSync("stopped.txt", process.argv.slice(2).join(" ")), 75);'].join('\n'),
   );
   const servers = new DevServers({ send() {} });
   servers.server = {

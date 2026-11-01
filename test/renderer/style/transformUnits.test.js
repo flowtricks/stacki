@@ -35,27 +35,16 @@ const check = (what, condition, detail) => {
     loader: { '.ts': 'ts' },
     logLevel: 'silent',
   });
-  const {
-    IDENTITY,
-    blankTransform,
-    retypeTransform,
-    parseTransforms,
-    serializeTransforms,
-  } = require(bundlePath);
+  const { IDENTITY, blankTransform, retypeTransform, parseTransforms, serializeTransforms } = require(bundlePath);
 
   // --- where a move starts -----------------------------------------------------
   check('a move starts in rem', IDENTITY.move === '0rem', IDENTITY.move);
   check(
     'a new layer is three rem axes',
-    JSON.stringify(blankTransform('move')) ===
-      JSON.stringify({ type: 'move', x: '0rem', y: '0rem', z: '0rem' }),
+    JSON.stringify(blankTransform('move')) === JSON.stringify({ type: 'move', x: '0rem', y: '0rem', z: '0rem' }),
     JSON.stringify(blankTransform('move')),
   );
-  check(
-    'and switching a layer to Move resets it to rem',
-    retypeTransform('move').x === '0rem',
-    retypeTransform('move').x,
-  );
+  check('and switching a layer to Move resets it to rem', retypeTransform('move').x === '0rem', retypeTransform('move').x);
   // The others are not lengths and are untouched by this.
   check('scale is still a bare number', IDENTITY.scale === '1');
   check('rotate is still degrees', IDENTITY.rotate === '0deg');
@@ -88,16 +77,8 @@ const check = (what, condition, detail) => {
     // away, and a missing one silently read to the end of the file.
     effects.indexOf('function parseAxis'),
   );
-  check(
-    "the move axis's default unit is rem",
-    /move: \{ unit: 'rem'/.test(axisConfigSource),
-    axisConfigSource.match(/move: \{[^}]*\}/)?.[0],
-  );
-  check(
-    'degrees still belong to rotate and skew',
-    /rotate: \{ unit: 'deg'/.test(axisConfigSource) &&
-      /skew: \{ unit: 'deg'/.test(axisConfigSource),
-  );
+  check("the move axis's default unit is rem", /move: \{ unit: 'rem'/.test(axisConfigSource), axisConfigSource.match(/move: \{[^}]*\}/)?.[0]);
+  check('degrees still belong to rotate and skew', /rotate: \{ unit: 'deg'/.test(axisConfigSource) && /skew: \{ unit: 'deg'/.test(axisConfigSource));
   check('and scale has no unit at all', /scale: \{ unit: ''/.test(axisConfigSource));
   check(
     'the unit comes off the value first, the default second',
@@ -111,9 +92,7 @@ const check = (what, condition, detail) => {
   check('the move slider steps finer than one rem', steps >= 10, move);
 
   if (failures.length) {
-    console.error(
-      `\ntransform-units: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\ntransform-units: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

@@ -68,8 +68,7 @@ export function isHrefName(name: string) {
   return words[words.length - 1] === 'href';
 }
 
-export const MEDIA_IMPORT_RE =
-  /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|mp4|webm|mov|m4v|ogg|mp3|wav)(\?.*)?$/i;
+export const MEDIA_IMPORT_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|mp4|webm|mov|m4v|ogg|mp3|wav)(\?.*)?$/i;
 
 export function assetImportOf(expr: unknown, frontmatter: unknown) {
   const match = String(expr ?? '')
@@ -85,21 +84,7 @@ export function assetImportOf(expr: unknown, frontmatter: unknown) {
   return { ident: match[1] ?? '', spec: imported.spec };
 }
 
-export const MEDIA_WORDS = new Set([
-  'src',
-  'image',
-  'poster',
-  'icon',
-  'logo',
-  'avatar',
-  'thumb',
-  'thumbnail',
-  'photo',
-  'banner',
-  'cover',
-  'video',
-  'audio',
-]);
+export const MEDIA_WORDS = new Set(['src', 'image', 'poster', 'icon', 'logo', 'avatar', 'thumb', 'thumbnail', 'photo', 'banner', 'cover', 'video', 'audio']);
 
 export function mediaWord(name: string) {
   const words = String(name || '')
@@ -164,9 +149,7 @@ export function valueFromExpr(field: FieldDefinition, raw: string): Attr | undef
       return undefined;
     }
     const text = (quoted[2] ?? '').replace(/\\n/g, '\n').replace(/\\(['"\\])/g, '$1');
-    return field.type === 'enum' && !(field.options || []).includes(text)
-      ? undefined
-      : { type: 'string', value: text };
+    return field.type === 'enum' && !(field.options || []).includes(text) ? undefined : { type: 'string', value: text };
   }
   if (field.type === 'boolean') {
     return /^(true|false)$/.test(source) ? { type: 'expr', value: source } : undefined;
@@ -175,9 +158,7 @@ export function valueFromExpr(field: FieldDefinition, raw: string): Attr | undef
     return /^[-+]?(\d+\.?\d*|\.\d+)$/.test(source) ? { type: 'expr', value: source } : undefined;
   }
   if (field.type === 'enum') {
-    return (field.options || []).includes(source)
-      ? { type: field.numeric ? 'expr' : 'string', value: source }
-      : undefined;
+    return (field.options || []).includes(source) ? { type: field.numeric ? 'expr' : 'string', value: source } : undefined;
   }
   // An array of plain items survives the trip: the list can show it, so going
   // back to the control keeps the value rather than dropping the prop.
@@ -216,10 +197,7 @@ export function usePropFieldModel(props: PropFieldProps) {
   const policy = useContext(PropValuePolicyContext);
   // Choice controls show the effective fallback while isSet tracks authored values.
   const showsFallback = ['boolean', 'enum'].includes(props.field.type);
-  const field =
-    policy === 'defaults' && !showsFallback
-      ? { ...props.field, default: undefined, hint: '' }
-      : props.field;
+  const field = policy === 'defaults' && !showsFallback ? { ...props.field, default: undefined, hint: '' } : props.field;
   const {
     branchDefault,
     value,
@@ -230,9 +208,7 @@ export function usePropFieldModel(props: PropFieldProps) {
     dataContext,
   } = props;
   const placeholderFor = (target: FieldDefinition) =>
-    policy === 'defaults' && !showsFallback
-      ? ''
-      : propFieldPlaceholder(target, assetContext, branchDefault);
+    policy === 'defaults' && !showsFallback ? '' : propFieldPlaceholder(target, assetContext, branchDefault);
   const { name, type } = field;
   const isSet = value !== undefined;
   const [menuPosition, setMenuPosition] = useState<FieldPosition | undefined>(undefined);
@@ -245,12 +221,10 @@ export function usePropFieldModel(props: PropFieldProps) {
   const bindable = type !== 'attrs' && name !== 'slot';
   const valueText = attrText(value) ?? '';
   const assetBinding = assetImportOf(valueText, dataContext?.imports);
-  const shownAsAsset =
-    value?.type === 'expr' && assetBinding && assetContext?.projectPath && assetContext?.filePath;
+  const shownAsAsset = value?.type === 'expr' && assetBinding && assetContext?.projectPath && assetContext?.filePath;
   const showExpr = bindable && (custom || (isBoundValue(field, value) && !shownAsAsset));
   const reason =
-    !/^(quality|format|formats|fallbackFormat|densities|widths|sizes)$/i.test(name) ||
-    !assetContext?.srcKind
+    !/^(quality|format|formats|fallbackFormat|densities|widths|sizes)$/i.test(name) || !assetContext?.srcKind
       ? undefined
       : assetContext.srcKind === 'svg'
         ? 'SVG sources are passed through unoptimized, so this has no effect.'
@@ -319,11 +293,7 @@ export type PropControlState = PropState & {
   readonly pill: React.ReactNode;
   readonly menu: React.ReactNode;
 };
-export function propFieldPlaceholder(
-  field: FieldDefinition,
-  assetContext: AssetContext | undefined,
-  branchDefault: string | number | undefined,
-): string {
+export function propFieldPlaceholder(field: FieldDefinition, assetContext: AssetContext | undefined, branchDefault: string | number | undefined): string {
   // Rendered layout metadata resolves delegated and CMS defaults that source hints cannot.
   if (field.name === 'title' || field.name === 'description') {
     const rendered = assetContext?.layoutText?.[field.name];

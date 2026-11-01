@@ -5,14 +5,7 @@
 // runtime test only keeps the file in the suite and asserts the helpers exist.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  toByteOffset,
-  toIntentId,
-  toUtf16Offset,
-  type ByteOffset,
-  type Digest,
-  type IntentId,
-} from '#dist/shared/core/brand.js';
+import { toByteOffset, toIntentId, toUtf16Offset, type ByteOffset, type Digest, type IntentId } from '#dist/shared/core/brand.js';
 import type { Capability } from '#dist/shared/page/capability.js';
 import type { ByteDiff, DiffOutcome } from '#dist/shared/engine/diff.js';
 import type { Outcome, RejectionReason, SubmissionResult } from '#dist/shared/engine/intent.js';
@@ -61,13 +54,7 @@ function mappingReason(mapping: SpanMapping): RejectionReason | undefined {
   }
 }
 
-export function mappingTypeChecks(
-  mapping: SpanMapping,
-  outcome: DiffOutcome,
-  diff: ByteDiff,
-  base: PlanningBase,
-  plan: Plan,
-): void {
+export function mappingTypeChecks(mapping: SpanMapping, outcome: DiffOutcome, diff: ByteDiff, base: PlanningBase, plan: Plan): void {
   // @ts-expect-error Only a resolved mapping carries a span: no "best guess" on the others.
   void mapping.span;
   // @ts-expect-error A too-costly diff carries no partial diff to map through.
@@ -83,11 +70,7 @@ export function mappingTypeChecks(
   void currentOnly;
 }
 
-export function typeChecks(
-  snapshot: Snapshot,
-  projection: Projection,
-  reason: RejectionReason,
-): void {
+export function typeChecks(snapshot: Snapshot, projection: Projection, reason: RejectionReason): void {
   const utf16 = toUtf16Offset(3);
   // @ts-expect-error A UTF-16 offset is not a byte offset (plan §3.2).
   byteOnly(utf16);
@@ -124,10 +107,7 @@ export function typeChecks(
 
 test('type-level contracts compile only as intended', () => {
   assert.equal(typeof typeChecks, 'function');
-  assert.equal(
-    describe({ tag: 'rejected', intentId: toIntentId('i1'), reason: 'write-race' }),
-    'write-race',
-  );
+  assert.equal(describe({ tag: 'rejected', intentId: toIntentId('i1'), reason: 'write-race' }), 'write-race');
   assert.equal(typeof mappingTypeChecks, 'function');
   assert.equal(mappingReason({ tag: 'ambiguous' }), 'anchor-ambiguous');
 });

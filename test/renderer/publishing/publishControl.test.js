@@ -490,10 +490,7 @@ test('discovered URLs persist and survive closing the menu while offline', async
     throw new Error('Offline');
   };
   await act(async () => arrow().click());
-  assert.equal(
-    document.querySelector('[aria-label="Open published site"]').href,
-    'https://example.com/',
-  );
+  assert.equal(document.querySelector('[aria-label="Open published site"]').href, 'https://example.com/');
   assert.equal(view.writes.length, 1);
 });
 
@@ -510,10 +507,7 @@ test('manual URLs override discovery', async (context) => {
   };
   await view.show({ github: 'current', hosting: 'pending' });
   await act(async () => arrow().click());
-  assert.equal(
-    document.querySelector('[aria-label="Open published site"]').href,
-    'https://custom.example.com/',
-  );
+  assert.equal(document.querySelector('[aria-label="Open published site"]').href, 'https://custom.example.com/');
   assert.equal(requests, 0);
   assert.deepEqual(view.writes, []);
 });

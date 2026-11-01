@@ -1,13 +1,6 @@
 import { useState } from 'react';
 import Select from './components/Select';
-import {
-  blankLayer,
-  layerLabel,
-  parseLayers,
-  serializeLayers,
-  splitBackgroundShorthand,
-  type BgLayer,
-} from './model/background';
+import { blankLayer, layerLabel, parseLayers, serializeLayers, splitBackgroundShorthand, type BgLayer } from './model/background';
 import LayerList from './LayerList';
 import { PlusIcon } from './components/MenuParts';
 import { openAfterRemoval } from './model/fieldHooks';
@@ -84,13 +77,7 @@ export default function BackgroundSection(props: Props) {
 
       {/* Colour — painted behind every layer. */}
       <div className="embed-editor_size-row">
-        <BgField
-          {...props}
-          prop="background-color"
-          label="Color"
-          placeholder="transparent"
-          swatchLabel="Background color"
-        />
+        <BgField {...props} prop="background-color" label="Color" placeholder="transparent" swatchLabel="Background color" />
       </div>
 
       <ClippingRow {...props} />
@@ -238,10 +225,7 @@ function useLayerStack({ read, setProp, clearProp }: Props) {
 // changed on the picked selector. Each setProp/clearProp is a separate native op that
 // toggles busy + re-reads from Webflow, so rewriting all five longhands on every change
 // flashes the panel and echoes unchanged values back to Webflow.
-function writeLonghands(
-  serialized: ReturnType<typeof serializeLayers>,
-  { read, setProp, clearProp }: Pick<Props, 'read' | 'setProp' | 'clearProp'>,
-) {
+function writeLonghands(serialized: ReturnType<typeof serializeLayers>, { read, setProp, clearProp }: Pick<Props, 'read' | 'setProp' | 'clearProp'>) {
   // The value the PICKED selector itself sets for `prop` (undefined when it doesn't set
   // it — a value inherited from another selector doesn't count).
   const ownValue = (prop: string): string | undefined => {

@@ -114,17 +114,7 @@ test('content operations validate payloads and keep transport failures as values
   assert.equal((await bridge.readContentEntries('/project', 'posts')).ok, true);
   assert.equal((await bridge.readContentTargets('/project', 'posts')).ok, true);
   assert.equal((await bridge.validateContentEntry('/project', 'posts', entry.data)).ok, true);
-  assert.equal(
-    (
-      await bridge.writeContentEntry(
-        '/project',
-        { file: entry.file, locator: [] },
-        [{ path: ['title'], value: 'Welcome' }],
-        undefined,
-      )
-    ).ok,
-    true,
-  );
+  assert.equal((await bridge.writeContentEntry('/project', { file: entry.file, locator: [] }, [{ path: ['title'], value: 'Welcome' }], undefined)).ok, true);
   assert.equal((await bridge.planContentRename('/project', 'posts', 'hello', 'welcome')).ok, true);
   assert.equal((await bridge.renameContentEntry('/project', 'posts', 'hello', 'welcome')).ok, true);
   assert.equal(calls.length, 6);

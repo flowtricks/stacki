@@ -11,11 +11,7 @@ import type { PreviewCrumb, PreviewDevice } from './PreviewToolbar';
 import { DevOffline } from './DevOffline';
 import { PreviewOverlays } from './PreviewOverlays';
 import { PreviewToolbar } from './PreviewToolbar';
-import {
-  usePreviewRuntime,
-  type JudgeCanvasEvent,
-  type PreviewRuntimeProps,
-} from './previewRuntime';
+import { usePreviewRuntime, type JudgeCanvasEvent, type PreviewRuntimeProps } from './previewRuntime';
 import type { PreviewVerdict } from '../../../shared/page/previewToken';
 import type { PreviewReloadReason } from './previewMessages';
 import './previewViewport.css';
@@ -54,10 +50,7 @@ interface PreviewPaneProps {
   readonly onPreviewReload?: (reason: PreviewReloadReason) => void;
   readonly onSelectedClasses?: (classes: readonly string[]) => void;
   readonly onRenderedPaths?: (paths: readonly string[]) => void;
-  readonly onNodeStates?: (states: {
-    readonly hidden: readonly string[];
-    readonly inert: readonly string[];
-  }) => void;
+  readonly onNodeStates?: (states: { readonly hidden: readonly string[]; readonly inert: readonly string[] }) => void;
   readonly onNodeClasses?: (classes: Readonly<Record<string, readonly string[]>>) => void;
   readonly focusPath?: string | undefined;
   readonly focusOcc?: number | undefined;
@@ -110,11 +103,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
         guide={columnGuide.menu}
         interaction={interaction}
       />
-      <div
-        className="preview-frame-wrap"
-        data-canvas-interactive={interaction.active}
-        ref={sizing.wrapRef}
-      >
+      <div className="preview-frame-wrap" data-canvas-interactive={interaction.active} ref={sizing.wrapRef}>
         <PreviewContent
           props={props}
           url={props.device === 'canvas' ? url : source.url}
@@ -156,23 +145,11 @@ function PreviewContent({
   }
   if (url && props.device === 'canvas') {
     return (
-      <CanvasView
-        url={url}
-        refreshKey={props.refreshKey ?? 0}
-        {...(props.onPreviewLoaded === undefined ? {} : { onPreviewLoaded: props.onPreviewLoaded })}
-      />
+      <CanvasView url={url} refreshKey={props.refreshKey ?? 0} {...(props.onPreviewLoaded === undefined ? {} : { onPreviewLoaded: props.onPreviewLoaded })} />
     );
   }
   if (url) {
-    return (
-      <DesignPreview
-        props={props}
-        url={url}
-        runtime={runtime}
-        sizing={sizing}
-        shownGuide={shownGuide}
-      />
-    );
+    return <DesignPreview props={props} url={url} runtime={runtime} sizing={sizing} shownGuide={shownGuide} />;
   }
   return <PreviewPlaceholder props={props} />;
 }
@@ -264,8 +241,7 @@ function ResizeHandles({ sizing }: { readonly sizing: Sizing }) {
       <div className="rz-handle rz-s" onPointerDown={sizing.startResize('s')} />
       {sizing.resizing && (
         <div className="rz-readout">
-          {Math.round(sizing.width ?? sizing.wrapWidth ?? 0)} ×{' '}
-          {sizing.customHeight ?? sizing.frameRef.current?.offsetHeight ?? ''}
+          {Math.round(sizing.width ?? sizing.wrapWidth ?? 0)} × {sizing.customHeight ?? sizing.frameRef.current?.offsetHeight ?? ''}
         </div>
       )}
     </>

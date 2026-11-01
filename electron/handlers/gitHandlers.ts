@@ -12,14 +12,7 @@ import { readCommitDiff } from '../git/gitCommitDiff';
 import * as gitSnapshot from '../git/gitSnapshot';
 import { capture } from '../lib/mainHelpers';
 import { run, git } from '../lib/nodeTools';
-import {
-  parkBranch,
-  unparkBranch,
-  currentBranch,
-  readGitLog,
-  readGitIdentity,
-  readGitParked,
-} from '../git/gitParking';
+import { parkBranch, unparkBranch, currentBranch, readGitLog, readGitIdentity, readGitParked } from '../git/gitParking';
 import type { MainHost } from './mainHost';
 
 export function registerGitHandlers(host: Pick<MainHost, 'ipcMain'>): void {
@@ -71,8 +64,7 @@ function registerGitInfoHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
       /* empty repo */
     }
     try {
-      info.remote =
-        (await git(projectPath, ['remote', 'get-url', 'origin'])).stdout.trim() || undefined;
+      info.remote = (await git(projectPath, ['remote', 'get-url', 'origin'])).stdout.trim() || undefined;
     } catch {
       info.remote = undefined;
     }
@@ -102,9 +94,7 @@ function registerGitInfoHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
     }
     if (info.hasUpstream) {
       try {
-        const counts = (
-          await git(projectPath, ['rev-list', '--count', '--left-only', 'HEAD...@{upstream}'])
-        ).stdout.trim();
+        const counts = (await git(projectPath, ['rev-list', '--count', '--left-only', 'HEAD...@{upstream}'])).stdout.trim();
         info.ahead = parseInt(counts, 10) || 0;
       } catch {
         info.ahead = 0;
@@ -171,17 +161,11 @@ function registerGitGhStatusHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): vo
 
   // Every file in the project, with what has happened to each — the file
   // browser's list, and the same status the commit picker reads.
-  ipcMain.handle('git:allFiles', async (_event, { projectPath }) =>
-    gitHistory.describeFiles(await gitHistory.allFiles(git, { projectPath })),
-  );
+  ipcMain.handle('git:allFiles', async (_event, { projectPath }) => gitHistory.describeFiles(await gitHistory.allFiles(git, { projectPath })));
 
-  ipcMain.handle('git:status', async (_event, { projectPath }) =>
-    gitHistory.describeFiles(await gitHistory.status(git, { projectPath })),
-  );
+  ipcMain.handle('git:status', async (_event, { projectPath }) => gitHistory.describeFiles(await gitHistory.status(git, { projectPath })));
 
-  ipcMain.handle('git:worktrees', async (_event, { projectPath }) =>
-    gitHistory.worktrees(git, { projectPath }),
-  );
+  ipcMain.handle('git:worktrees', async (_event, { projectPath }) => gitHistory.worktrees(git, { projectPath }));
 
   // Setting work aside and picking it back up, on their own. The switch has done
   // this internally for a while; a merge that finds unsaved work in its way needs
@@ -199,27 +183,17 @@ function registerGitUnparkHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): void
     return unparkBranch(projectPath, branch);
   });
 
-  ipcMain.handle('git:merge', async (_event, { projectPath, branch }) =>
-    mergeBranch(git, { projectPath, branch }),
-  );
+  ipcMain.handle('git:merge', async (_event, { projectPath, branch }) => mergeBranch(git, { projectPath, branch }));
 
   // Finishing a merge the user has chosen their way through. The conflicting
   // files come back from git:merge with both versions; this applies the answers.
-  ipcMain.handle('git:resolveMerge', async (_event, { projectPath, branch, choices }) =>
-    resolveMerge(git, definedFields({ projectPath, branch, choices })),
-  );
+  ipcMain.handle('git:resolveMerge', async (_event, { projectPath, branch, choices }) => resolveMerge(git, definedFields({ projectPath, branch, choices })));
 
-  ipcMain.handle('git:deleteBranch', async (_event, { projectPath, branch, force }) =>
-    deleteBranch(git, definedFields({ projectPath, branch, force })),
-  );
+  ipcMain.handle('git:deleteBranch', async (_event, { projectPath, branch, force }) => deleteBranch(git, definedFields({ projectPath, branch, force })));
 
-  ipcMain.handle('git:commit', async (_event, { projectPath, message, paths }) =>
-    gitSnapshot.commit(git, definedFields({ projectPath, message, paths })),
-  );
+  ipcMain.handle('git:commit', async (_event, { projectPath, message, paths }) => gitSnapshot.commit(git, definedFields({ projectPath, message, paths })));
 
-  ipcMain.handle('git:restoreFile', async (_event, { projectPath, ref, path: filePath }) =>
-    gitSnapshot.restoreFile(git, { projectPath, ref, path: filePath }),
-  );
+  ipcMain.handle('git:restoreFile', async (_event, { projectPath, ref, path: filePath }) => gitSnapshot.restoreFile(git, { projectPath, ref, path: filePath }));
 
   // `park` is handed in rather than imported: it lives here, over the stash, and
   // is the reason going back to an old version cannot lose what is on disk now.
@@ -244,24 +218,12 @@ function registerGitUnparkHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): void
 
 function registerGitPullHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
   ipcMain.handle('git:incoming', async (_event, payload) => {
-    const environment = await publishingGitEnvironment(
-      payload.projectPath,
-      readPublishConfig(payload.projectPath),
-    );
-    return readIncomingCommits(
-      (projectPath, args) => git(projectPath, args, { timeout: 30000, env: environment }),
-      payload,
-    );
+    const environment = await publishingGitEnvironment(payload.projectPath, readPublishConfig(payload.projectPath));
+    return readIncomingCommits((projectPath, args) => git(projectPath, args, { timeout: 30000, env: environment }), payload);
   });
   ipcMain.handle('git:pull', async (_event, payload) => {
-    const environment = await publishingGitEnvironment(
-      payload.projectPath,
-      readPublishConfig(payload.projectPath),
-    );
-    return pullBranch(
-      (projectPath, args) => git(projectPath, args, { timeout: 120000, env: environment }),
-      payload,
-    );
+    const environment = await publishingGitEnvironment(payload.projectPath, readPublishConfig(payload.projectPath));
+    return pullBranch((projectPath, args) => git(projectPath, args, { timeout: 120000, env: environment }), payload);
   });
 }
 
@@ -270,22 +232,9 @@ function registerGitPublishHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void
     try {
       await run('gh', ['--version'], projectPath);
     } catch {
-      throw new Error(
-        'GitHub CLI (gh) is not installed. Install it from https://cli.github.com ' +
-          'and run `gh auth login`.',
-      );
+      throw new Error('GitHub CLI (gh) is not installed. Install it from https://cli.github.com ' + 'and run `gh auth login`.');
     }
-    const args = [
-      'repo',
-      'create',
-      repoName,
-      isPrivate ? '--private' : '--public',
-      '--source',
-      '.',
-      '--remote',
-      'origin',
-      '--push',
-    ];
+    const args = ['repo', 'create', repoName, isPrivate ? '--private' : '--public', '--source', '.', '--remote', 'origin', '--push'];
     const environment = await publishingGitEnvironment(projectPath, readPublishConfig(projectPath));
     const result = await run('gh', args, projectPath, { timeout: 180000, env: environment });
     const output = result.stdout + result.stderr;

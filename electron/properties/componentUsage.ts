@@ -38,10 +38,7 @@ function astroFiles(directory: string): string[] {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
         walk(full, depth + 1);
-      } else if (
-        entry.name.endsWith('.astro') ||
-        (current.includes(`${path.sep}pages`) && /\.mdx?$/i.test(entry.name))
-      ) {
+      } else if (entry.name.endsWith('.astro') || (current.includes(`${path.sep}pages`) && /\.mdx?$/i.test(entry.name))) {
         out.push(full);
       }
     }
@@ -132,11 +129,7 @@ type InstanceCounts = (target: Pick<InstanceArgs, 'targetPath' | 'name'>) => num
 const USAGE_NAMES_MAX = 10_000;
 
 /** Scan markup and imports once; all component queries then use bounded maps. */
-export function instanceCounts(
-  source: unknown,
-  file: string,
-  aliases: readonly Alias[],
-): InstanceCounts {
+export function instanceCounts(source: unknown, file: string, aliases: readonly Alias[]): InstanceCounts {
   const text = String(source ?? '');
   assert(text.length <= LIMITS.sourceBytesMax, 'Usage source stays within the reader limit');
   const names = instanceTagCounts(templateOf(text));
@@ -196,10 +189,7 @@ function instanceTagCounts(template: string): ReadonlyMap<string, number> {
  * component's own name: markdown pages and auto-import integrations render
  * components they never name in an import.
  */
-function instancesIn(
-  source: unknown,
-  { file, targetPath, name, aliases = [], counts }: InstanceArgs,
-): number {
+function instancesIn(source: unknown, { file, targetPath, name, aliases = [], counts }: InstanceArgs): number {
   return (counts ?? instanceCounts(source, file, aliases))({ targetPath, name });
 }
 
@@ -219,15 +209,10 @@ export interface UsageFile {
  * The component's own file is left out: a file is not one of its own users, and
  * a recursive component would otherwise list itself above everything else.
  */
-function componentUsage({
-  projectPath,
-  name,
-  exclude,
-}: {
-  readonly projectPath: string;
-  readonly name: string;
-  readonly exclude?: string;
-}): { files: UsageFile[]; total: number } {
+function componentUsage({ projectPath, name, exclude }: { readonly projectPath: string; readonly name: string; readonly exclude?: string }): {
+  files: UsageFile[];
+  total: number;
+} {
   const sourceFolder = path.join(projectPath, 'src');
   const skip = exclude ? path.resolve(exclude) : undefined;
   // `exclude` is the component's own file, which is also the file every other

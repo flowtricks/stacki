@@ -15,10 +15,7 @@ import { DEFAULT_PUBLISH_CONFIG } from '../../shared/properties/publishConfig';
 import { publishingGitEnvironment } from './publishGitHub';
 
 /** Repository setup never commits, pulls, or pushes project files. */
-export async function publishingRepositories(
-  root: string,
-  input: RepositoryRequest,
-): Promise<RepositoryResult> {
+export async function publishingRepositories(root: string, input: RepositoryRequest): Promise<RepositoryResult> {
   const request = parseRepositoryRequest(input);
   try {
     const state = await repositoryState(root);
@@ -31,16 +28,10 @@ export async function publishingRepositories(
     });
     if (request.action === 'create') {
       const repository = parseGitHubRepository(`${request.account}/${request.name}`);
-      await repositoryCommand(
-        root,
-        ['repo', 'create', repository, request.private ? '--private' : '--public'],
-        environment,
-      );
+      await repositoryCommand(root, ['repo', 'create', repository, request.private ? '--private' : '--public'], environment);
       return { ok: true, value: { ...state, repositories: [repository] } };
     }
-    const access = record(
-      await repositoryJSON(root, ['api', `repos/${request.repository}`], environment),
-    );
+    const access = record(await repositoryJSON(root, ['api', `repos/${request.repository}`], environment));
     if (record(access['permissions'])['push'] !== true) {
       return { ok: false, error: 'This account does not have write access to that repository.' };
     }
@@ -68,9 +59,7 @@ export async function repositoryState(root: string): Promise<PublishingRepositor
       remote = (await git(root, ['remote', 'get-url', 'origin'])).stdout.trim();
     }
   }
-  const match = /^(?:https:\/\/github\.com\/|git@github\.com:)([\w.-]+\/[\w.-]+?)(?:\.git)?$/.exec(
-    remote,
-  );
+  const match = /^(?:https:\/\/github\.com\/|git@github\.com:)([\w.-]+\/[\w.-]+?)(?:\.git)?$/.exec(remote);
   const connected = match?.[1] ? parseGitHubRepository(match[1]) : '';
   return {
     connected,
@@ -93,12 +82,7 @@ export async function connectPublishingRepository(
     await git(root, ['init', '--initial-branch=main']);
   }
   const remotes = (await git(root, ['remote'])).stdout.trim().split('\n');
-  await git(root, [
-    'remote',
-    remotes.includes('origin') ? 'set-url' : 'add',
-    'origin',
-    `https://github.com/${request.repository}.git`,
-  ]);
+  await git(root, ['remote', remotes.includes('origin') ? 'set-url' : 'add', 'origin', `https://github.com/${request.repository}.git`]);
   const saved = await repositoryState(root);
   if (saved.connected !== request.repository) {
     return {
@@ -122,11 +106,7 @@ async function listRepositories(root: string, account: string, environment: Node
     const values = list(record)(
       await repositoryJSON(
         root,
-        [
-          'api',
-          `user/repos?per_page=100&page=${page}&sort=pushed&` +
-            'affiliation=owner,collaborator,organization_member',
-        ],
+        ['api', `user/repos?per_page=100&page=${page}&sort=pushed&` + 'affiliation=owner,collaborator,organization_member'],
         environment,
       ),
     );
@@ -143,37 +123,22 @@ async function listRepositories(root: string, account: string, environment: Node
     }
     if (values.length < 100) {
       // Owned repositories come first; accessible organization repositories remain selectable.
-      return repositories.sort(
-        (left, right) =>
-          Number(right.startsWith(`${account}/`)) - Number(left.startsWith(`${account}/`)),
-      );
+      return repositories.sort((left, right) => Number(right.startsWith(`${account}/`)) - Number(left.startsWith(`${account}/`)));
     }
   }
   throw new Error('More than 500 repositories are available. Narrow repository access first.');
 }
-async function repositoryJSON(
-  root: string,
-  args: readonly string[],
-  environment: NodeJS.ProcessEnv,
-) {
+async function repositoryJSON(root: string, args: readonly string[], environment: NodeJS.ProcessEnv) {
   const output = await repositoryCommand(root, args, environment);
   const value: unknown = JSON.parse(output);
   return value;
 }
-async function repositoryCommand(
-  root: string,
-  args: readonly string[],
-  environment: NodeJS.ProcessEnv,
-) {
+async function repositoryCommand(root: string, args: readonly string[], environment: NodeJS.ProcessEnv) {
   const result = await run('gh', args, root, { env: environment, timeout: 30_000 });
   return result.stdout;
 }
 
-async function repositoryList(
-  root: string,
-  account: string,
-  state: PublishingRepositories,
-): Promise<PublishingRepositories> {
+async function repositoryList(root: string, account: string, state: PublishingRepositories): Promise<PublishingRepositories> {
   try {
     const environment = await publishingGitEnvironment(root, {
       ...DEFAULT_PUBLISH_CONFIG,

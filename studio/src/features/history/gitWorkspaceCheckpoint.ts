@@ -4,11 +4,7 @@ import { open, rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { PublishGit } from '../publishing/publishGit';
 import { gitWorkspaceRun } from './gitWorkspaceObjects';
-import {
-  gitWorkspaceLimits,
-  parseGitWorkspaceManifest,
-  type GitWorkspaceManifest,
-} from './gitWorkspaceContract';
+import { gitWorkspaceLimits, parseGitWorkspaceManifest, type GitWorkspaceManifest } from './gitWorkspaceContract';
 import { saveGitWorkspace } from './gitWorkspaceStorage';
 
 /** Immutable objects upload first; one conditional manifest write publishes the checkpoint. */
@@ -19,31 +15,14 @@ export async function checkpointGitWorkspace(
 ): Promise<GitWorkspaceManifest> {
   const run = gitWorkspaceRun(git);
   await replaceGitWorkspaceReferences(git, next);
-  const count = Number(
-    await run([
-      'rev-list',
-      '--count',
-      '--branches',
-      '--glob=refs/studio/*',
-      '--not',
-      '--remotes=origin',
-    ]),
-  );
+  const count = Number(await run(['rev-list', '--count', '--branches', '--glob=refs/studio/*', '--not', '--remotes=origin']));
   if (!Number.isSafeInteger(count) || count < 0 || count > 20_000) {
     throw new Error('Too many unpublished Git commits. Push your changes first.');
   }
   const bundle = path.join(git.directory, 'checkpoint.bundle');
   let digest: string | undefined;
   if (count > 0) {
-    await run([
-      'bundle',
-      'create',
-      bundle,
-      '--branches',
-      '--glob=refs/studio/*',
-      '--not',
-      '--remotes=origin',
-    ]);
+    await run(['bundle', 'create', bundle, '--branches', '--glob=refs/studio/*', '--not', '--remotes=origin']);
     digest = await gitCheckpointDigest(bundle);
   }
   const manifest = parseGitWorkspaceManifest({ ...next, revision: randomUUID(), bundle: digest });
@@ -64,11 +43,7 @@ export async function checkpointGitWorkspace(
 }
 export async function replaceGitWorkspaceReferences(git: PublishGit, next: GitWorkspaceManifest) {
   const run = gitWorkspaceRun(git);
-  const existing = (
-    await run(['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/studio', 'refs/remotes'])
-  )
-    .split('\n')
-    .filter(Boolean);
+  const existing = (await run(['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/studio', 'refs/remotes'])).split('\n').filter(Boolean);
   if (existing.length > 194) {
     throw new Error('Git reference inventory exceeds its limit.');
   }

@@ -9,19 +9,12 @@ export interface PublishGitError {
 }
 
 /** Convert only child-process failures; invariant checks execute outside this boundary. */
-export async function runPublishGit(
-  root: string,
-  argumentsList: readonly string[],
-  options: ExecFileOptions = {},
-): Promise<Result<string, PublishGitError>> {
+export async function runPublishGit(root: string, argumentsList: readonly string[], options: ExecFileOptions = {}): Promise<Result<string, PublishGitError>> {
   ensureToolPath();
   return git(root, argumentsList, options).then(
     (output) => ok(output.stdout),
     (error: unknown) => {
-      const exitCode =
-        error instanceof Error && 'code' in error && typeof error.code === 'number'
-          ? error.code
-          : undefined;
+      const exitCode = error instanceof Error && 'code' in error && typeof error.code === 'number' ? error.code : undefined;
       // Git errors may embed credential-helper output; only the operation name reaches the UI.
       return err({
         code: 'git',
@@ -41,9 +34,7 @@ export async function readPublishHead(root: string): Promise<Result<string | und
 }
 
 export function parsePublishObject(value: string): Result<string> {
-  return /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value)
-    ? ok(value)
-    : err({ code: 'git-output', message: 'Git returned an invalid object identifier.' });
+  return /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value) ? ok(value) : err({ code: 'git-output', message: 'Git returned an invalid object identifier.' });
 }
 
 export function publishFilesystemFailure(error: unknown): Result<never> {

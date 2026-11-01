@@ -60,9 +60,7 @@ if (command === 'check-project') {
   const value = record(JSON.parse(await readFile(manifest, 'utf8')));
   value['scripts'] = projectScripts;
   await writeFile(manifest, JSON.stringify(value, null, 2) + '\n');
-  console.log(
-    `Cloudflare deployment template created in ${destination}. Configure cloudflare/wrangler.jsonc and secrets using the deployment guide.`,
-  );
+  console.log(`Cloudflare deployment template created in ${destination}. Configure cloudflare/wrangler.jsonc and secrets using the deployment guide.`);
 } else {
   console.log(
     'Astro Studio\n\n  astro-studio dev [project-directory]\n  astro-studio init-cloudflare [new-directory]\n\nastro-studio check-project [project-directory]\n  astro-studio check-update\n  astro-studio update <project> <exact-version-or-release.json> --replace-customizations\n\nPORT overrides 4350. STUDIO_WORKSPACE selects the draft workspace.',

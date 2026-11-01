@@ -2,18 +2,11 @@ import { inOwnedPopup, isTopPopupLayer } from './popupOwnership';
 import { useEffect, type RefObject } from 'react';
 import type { PopupProps, PopupActions } from './Popup';
 import { toRecord } from '../../shared/core/record';
-interface DismissOptions extends Pick<
-  PopupProps,
-  'dismissible' | 'anchor' | 'within' | 'onEscape'
-> {
+interface DismissOptions extends Pick<PopupProps, 'dismissible' | 'anchor' | 'within' | 'onEscape'> {
   readonly active: boolean;
   readonly mode: 'modal' | 'popover';
 }
-export function usePopupDismiss(
-  surface: RefObject<HTMLDivElement>,
-  options: DismissOptions,
-  { close, finish }: PopupActions,
-): void {
+export function usePopupDismiss(surface: RefObject<HTMLDivElement>, options: DismissOptions, { close, finish }: PopupActions): void {
   const { active, anchor, within, dismissible = true, mode, onEscape } = options;
   usePopupEnvironment(surface, options, close);
   useEffect(() => {
@@ -38,12 +31,7 @@ export function usePopupDismiss(
       }
     };
     const click = (event: MouseEvent): void => {
-      if (
-        mode === 'modal' &&
-        outsidePress &&
-        outside(event.target) &&
-        popupIsTop(surface.current)
-      ) {
+      if (mode === 'modal' && outsidePress && outside(event.target) && popupIsTop(surface.current)) {
         // A dismissal gesture must not also activate a control behind the popup.
         event.preventDefault();
         event.stopPropagation();
@@ -87,11 +75,7 @@ export function popupIsTop(surface: RefObject<HTMLDivElement>['current']): boole
 }
 
 // Canvas focus and viewport movement can happen outside this document's click stream.
-function usePopupEnvironment(
-  surface: RefObject<HTMLDivElement>,
-  options: DismissOptions,
-  close: () => void,
-): void {
+function usePopupEnvironment(surface: RefObject<HTMLDivElement>, options: DismissOptions, close: () => void): void {
   const { active, dismissible = true, mode } = options;
   useEffect(() => {
     if (!active || !dismissible || mode === 'modal') {
@@ -149,11 +133,5 @@ function consumePopupClick(target: Event['target']): void {
 }
 
 function isCanvasPress(kind: unknown): boolean {
-  return (
-    kind === 'avb:click-node' ||
-    kind === 'avb:open-node' ||
-    kind === 'avb:context-node' ||
-    kind === 'studio:select' ||
-    kind === 'studio:open'
-  );
+  return kind === 'avb:click-node' || kind === 'avb:open-node' || kind === 'avb:context-node' || kind === 'studio:select' || kind === 'studio:open';
 }

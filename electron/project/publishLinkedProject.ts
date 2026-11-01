@@ -5,23 +5,11 @@ import { parseConfigFileTextToJson } from 'typescript';
 import { record } from '../../shared/core/boundary';
 import type { Hosting } from '../../shared/properties/publishConfig';
 import { parsePublishedSiteURL } from '../../shared/properties/publishSite';
-import {
-  discoveryIdentifier,
-  discoveryList,
-  type DiscoveryProvider,
-  type PublishProject,
-} from '../../shared/properties/publishDiscovery';
-import {
-  cloudflareProjects,
-  cloudflareAccounts,
-  cloudflareWorkers,
-} from './publishDiscoveryCloudflare';
+import { discoveryIdentifier, discoveryList, type DiscoveryProvider, type PublishProject } from '../../shared/properties/publishDiscovery';
+import { cloudflareProjects, cloudflareAccounts, cloudflareWorkers } from './publishDiscoveryCloudflare';
 
 // Read existing links only: discovery never creates or relinks a remote project.
-export async function linkedPublishProject(
-  root: string,
-  provider: DiscoveryProvider,
-): Promise<readonly PublishProject[]> {
+export async function linkedPublishProject(root: string, provider: DiscoveryProvider): Promise<readonly PublishProject[]> {
   if (provider === 'vercel') {
     const source = await linkedSource(root, '.vercel/project.json');
     if (source === undefined) {
@@ -44,9 +32,7 @@ export async function linkedPublishProject(
     const value = await linkedWranglerConfig(root);
     if (value !== undefined) {
       const projects = await linkedCloudflare(root, value);
-      return provider === 'linked' || provider === 'cloudflare'
-        ? projects
-        : projects.filter((project) => project.hosting.provider === provider);
+      return provider === 'linked' || provider === 'cloudflare' ? projects : projects.filter((project) => project.hosting.provider === provider);
     }
   }
   return [];
@@ -95,9 +81,7 @@ async function linkedWranglerConfig(root: string): Promise<Record<string, unknow
     const source = await linkedSource(root, filename);
     if (source !== undefined) {
       // Parse data only: discovering a link must never execute project code.
-      const parsed = filename.endsWith('.toml')
-        ? { config: parseTOML(source), error: undefined }
-        : parseConfigFileTextToJson(filename, source);
+      const parsed = filename.endsWith('.toml') ? { config: parseTOML(source), error: undefined } : parseConfigFileTextToJson(filename, source);
       if (parsed.error) {
         throw new Error('Cannot read existing Wrangler configuration.');
       }
@@ -107,23 +91,16 @@ async function linkedWranglerConfig(root: string): Promise<Record<string, unknow
   return undefined;
 }
 
-async function linkedCloudflare(
-  root: string,
-  value: Readonly<Record<string, unknown>>,
-): Promise<readonly PublishProject[]> {
+async function linkedCloudflare(root: string, value: Readonly<Record<string, unknown>>): Promise<readonly PublishProject[]> {
   if (!value['name']) {
     return [];
   }
   const name = discoveryIdentifier(value['name']);
   if (!value['pages_build_output_dir']) {
-    const accountId = value['account_id']
-      ? discoveryIdentifier(value['account_id'])
-      : await linkedWorkerAccount(root, name);
+    const accountId = value['account_id'] ? discoveryIdentifier(value['account_id']) : await linkedWorkerAccount(root, name);
     return [{ name, hosting: { provider: 'cloudflare-workers', accountId, project: name } }];
   }
-  const account = value['account_id']
-    ? discoveryIdentifier(value['account_id'])
-    : await singleCloudflareAccount(root);
+  const account = value['account_id'] ? discoveryIdentifier(value['account_id']) : await singleCloudflareAccount(root);
   if (!account) {
     return [];
   }
@@ -191,9 +168,7 @@ async function linkedWorkerAccount(root: string, name: string): Promise<string> 
         return workers.some((worker) => worker.name === name) ? account.id : undefined;
       }),
     );
-    const found = matches.flatMap((match) =>
-      match.status === 'fulfilled' && match.value ? [match.value] : [],
-    );
+    const found = matches.flatMap((match) => (match.status === 'fulfilled' && match.value ? [match.value] : []));
     return found.length === 1 ? (found[0] ?? '') : '';
   } catch {
     return '';

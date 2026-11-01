@@ -32,8 +32,7 @@ export function trackCanvasGesture(): void {
   window.addEventListener(
     'pointerdown',
     (event) => {
-      gesture =
-        event.button === 0 ? { x: event.clientX, y: event.clientY, dragged: false } : undefined;
+      gesture = event.button === 0 ? { x: event.clientX, y: event.clientY, dragged: false } : undefined;
     },
     true,
   );

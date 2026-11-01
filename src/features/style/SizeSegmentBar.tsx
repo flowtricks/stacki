@@ -128,12 +128,7 @@ export function SegmentBar(props: SegmentBarProps) {
   };
 
   return (
-    <div
-      ref={rootRef}
-      className={`embed-editor_display ${customMode ? 'is-custom' : ''}`}
-      role="group"
-      aria-label={config.groupLabel}
-    >
+    <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label={config.groupLabel}>
       <SegmentPill />
       {customMode ? (
         <SegmentCustomInput
@@ -146,14 +141,7 @@ export function SegmentBar(props: SegmentBarProps) {
           ariaLabel={config.customLabel}
         />
       ) : (
-        <SegmentButtons
-          segments={config.segments}
-          current={current}
-          busy={busy}
-          onPick={pick}
-          onHoverStart={tip.startHover}
-          onHoverEnd={tip.endHover}
-        />
+        <SegmentButtons segments={config.segments} current={current} busy={busy} onPick={pick} onHoverStart={tip.startHover} onHoverEnd={tip.endHover} />
       )}
       <SegmentMenu
         open={open}
@@ -166,22 +154,13 @@ export function SegmentBar(props: SegmentBarProps) {
         onPick={pick}
         onEnterCustom={enterCustom}
       />
-      <SegmentTooltip
-        content={tip.hoveredValue === undefined ? undefined : config.tooltips[tip.hoveredValue]}
-        arrowRight={tip.arrowRight}
-      />
+      <SegmentTooltip content={tip.hoveredValue === undefined ? undefined : config.tooltips[tip.hoveredValue]} arrowRight={tip.arrowRight} />
     </div>
   );
 }
 
 // The hovered segment's tooltip, its arrow pointing down at that segment.
-export function SegmentTooltip({
-  content,
-  arrowRight,
-}: {
-  content: ReactNode;
-  arrowRight: number;
-}) {
+export function SegmentTooltip({ content, arrowRight }: { content: ReactNode; arrowRight: number }) {
   if (!content) {
     return undefined;
   }
@@ -267,21 +246,10 @@ export function SegmentMenu({
         <ChevronIcon />
       </button>
       {open ? (
-        <Popup
-          mode="popover"
-          portal={false}
-          onClose={onToggle}
-          className="embed-editor_display-menu"
-          role="menu"
-        >
+        <Popup mode="popover" portal={false} onClose={onToggle} className="embed-editor_display-menu" role="menu">
           {customMode ? (
             segments.map((segment) => (
-              <MenuItem
-                key={segment.value}
-                label={segment.menuLabel}
-                selected={current === segment.value}
-                onClick={() => onPick(segment.value)}
-              />
+              <MenuItem key={segment.value} label={segment.menuLabel} selected={current === segment.value} onClick={() => onPick(segment.value)} />
             ))
           ) : (
             <MenuItem label="Custom" selected={false} onClick={onEnterCustom} />
@@ -293,13 +261,7 @@ export function SegmentMenu({
 }
 
 // Delayed hover tooltip, right-anchored with a down-arrow to the hovered segment.
-export function useSegmentTooltip({
-  rootRef,
-  tooltips,
-}: {
-  rootRef: React.RefObject<HTMLDivElement>;
-  tooltips: Record<string, ReactNode>;
-}) {
+export function useSegmentTooltip({ rootRef, tooltips }: { rootRef: React.RefObject<HTMLDivElement>; tooltips: Record<string, ReactNode> }) {
   const [hoveredValue, setHoveredValue] = useState<string | undefined>(undefined);
   const [arrowRight, setArrowRight] = useState(0);
   const hoverTimer = useRef<number | undefined>(undefined);

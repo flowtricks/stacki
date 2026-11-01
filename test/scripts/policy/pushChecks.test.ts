@@ -8,10 +8,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { runPushChecks } from '../../../scripts/policy/pushChecks.mts';
 
-function pushFixture(options: {
-  readonly compilerStatus: number;
-  readonly gateStatus: number;
-}): string {
+function pushFixture(options: { readonly compilerStatus: number; readonly gateStatus: number }): string {
   const root = mkdtempSync(path.join(tmpdir(), 'stacki-push-checks-'));
   const compiler = path.join(root, 'node_modules/typescript/bin');
   const gate = path.join(root, 'dist/scripts/gate');
@@ -39,13 +36,7 @@ process.exit(${options.gateStatus});`,
 
 test('push isolates the full gate from Electron mode and worktree hook variables', () => {
   const root = pushFixture({ compilerStatus: 0, gateStatus: 0 });
-  const keys = [
-    'ELECTRON_RUN_AS_NODE',
-    'GIT_COMMON_DIR',
-    'GIT_DIR',
-    'GIT_WORK_TREE',
-    'GIT_INDEX_FILE',
-  ];
+  const keys = ['ELECTRON_RUN_AS_NODE', 'GIT_COMMON_DIR', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE'];
   const inherited = keys.map((key) => [key, process.env[key]] as const);
   for (const key of keys) {
     process.env[key] = 'inherited-hook-value';

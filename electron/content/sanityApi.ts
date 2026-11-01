@@ -7,10 +7,7 @@
 // Access HTTP references, and POST /auth/logout. The sign-in endpoints are the
 // ones the CLI uses; they are not a documented public API (docs/contracts.md).
 
-import {
-  CMS_CONNECTION_LIMITS,
-  type SanityProjectChoice,
-} from '../../shared/properties/cmsConnections';
+import { CMS_CONNECTION_LIMITS, type SanityProjectChoice } from '../../shared/properties/cmsConnections';
 import { assert } from '../../shared/core/assert';
 
 const API = 'https://api.sanity.io';
@@ -47,8 +44,7 @@ export function sanityLoginURL(origin: string): string {
 export async function sanityTokenForSession(sid: string): Promise<string> {
   assert(/^[\w-]{1,512}$/.test(sid), 'A Sanity session id is a short token');
   const body = await sanityJSON(`${API}/${AUTH_VERSION}/auth/fetch?sid=${sid}`, undefined);
-  const token: unknown =
-    typeof body === 'object' && body !== null ? Reflect.get(body, 'token') : undefined;
+  const token: unknown = typeof body === 'object' && body !== null ? Reflect.get(body, 'token') : undefined;
   if (typeof token !== 'string' || !/^[\w.-]{8,4096}$/.test(token)) {
     throw new Error('Sanity did not return a login token.');
   }
@@ -78,12 +74,8 @@ async function sanityDatasets(token: string, projectId: string): Promise<string[
   }
   return body
     .slice(0, CMS_CONNECTION_LIMITS.datasetsPerProjectMax)
-    .map((entry: unknown): unknown =>
-      typeof entry === 'object' && entry !== null ? Reflect.get(entry, 'name') : undefined,
-    )
-    .filter(
-      (name): name is string => typeof name === 'string' && /^[a-z0-9][\w-]{0,63}$/.test(name),
-    );
+    .map((entry: unknown): unknown => (typeof entry === 'object' && entry !== null ? Reflect.get(entry, 'name') : undefined))
+    .filter((name): name is string => typeof name === 'string' && /^[a-z0-9][\w-]{0,63}$/.test(name));
 }
 
 function projectSummary(entry: unknown): { id: string; name: string }[] {
@@ -103,18 +95,13 @@ function projectSummary(entry: unknown): { id: string; name: string }[] {
  * A project key with the Editor role: what Stacki keeps instead of the login.
  * Editor reads drafts and writes them, and nothing about members or billing.
  */
-export async function createSanityEditorKey(
-  token: string,
-  projectId: string,
-  label: string,
-): Promise<string> {
+export async function createSanityEditorKey(token: string, projectId: string, label: string): Promise<string> {
   assert(/^[a-z0-9]{1,64}$/.test(projectId), 'A Sanity project id is lower-case letters');
   const body = await sanityJSON(`${API}/${MANAGE_VERSION}/projects/${projectId}/tokens`, token, {
     label,
     roleName: 'editor',
   });
-  const key: unknown =
-    typeof body === 'object' && body !== null ? Reflect.get(body, 'key') : undefined;
+  const key: unknown = typeof body === 'object' && body !== null ? Reflect.get(body, 'key') : undefined;
   if (typeof key !== 'string' || !/^[\w.-]{8,4096}$/.test(key)) {
     throw new Error('Sanity did not return the new API key.');
   }
@@ -151,8 +138,7 @@ async function sanityJSON(url: string, token: string | undefined, body?: object)
 function sanityErrorMessage(text: string, status: number): string {
   try {
     const parsed: unknown = JSON.parse(text);
-    const message: unknown =
-      typeof parsed === 'object' && parsed !== null ? Reflect.get(parsed, 'message') : undefined;
+    const message: unknown = typeof parsed === 'object' && parsed !== null ? Reflect.get(parsed, 'message') : undefined;
     if (typeof message === 'string' && message.length > 0) {
       return message.slice(0, 300);
     }

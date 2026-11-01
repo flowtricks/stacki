@@ -36,11 +36,7 @@ import {
   type RemoteRevision,
   type RemoteWrite,
 } from '../../../vendor/stacki/shared/properties/cmsRemote';
-import {
-  parseLinkPreview,
-  parseVideoLinkURL,
-  type LinkPreview,
-} from '../../../vendor/stacki/shared/properties/linkPreview';
+import { parseLinkPreview, parseVideoLinkURL, type LinkPreview } from '../../../vendor/stacki/shared/properties/linkPreview';
 import { CMS_CONNECTION_HEADER } from './cmsConnectionBook';
 import { request } from '../project/projectClient';
 
@@ -54,24 +50,15 @@ export async function listCmsConnections(_projectPath: string): Promise<CmsConne
   return parseCmsConnectionList(await request('/studio/api/cms-connections'));
 }
 
-export async function saveCmsConnection(
-  _projectPath: string,
-  draft: CmsConnectionDraft,
-): Promise<CmsSaveResult> {
+export async function saveCmsConnection(_projectPath: string, draft: CmsConnectionDraft): Promise<CmsSaveResult> {
   return parseCmsSaveResult(await post('/studio/api/cms-connections/save', { draft }));
 }
 
-export async function removeCmsConnection(
-  _projectPath: string,
-  id: string,
-): Promise<CmsConnectionList> {
+export async function removeCmsConnection(_projectPath: string, id: string): Promise<CmsConnectionList> {
   return parseCmsConnectionList(await post('/studio/api/cms-connections/remove', { id }));
 }
 
-export async function sanityLogin(
-  _projectPath: string,
-  _request: SanityLoginRequest,
-): Promise<SanityLoginState> {
+export async function sanityLogin(_projectPath: string, _request: SanityLoginRequest): Promise<SanityLoginState> {
   return { kind: 'failed', message: 'Paste a Sanity key to connect from Studio.' };
 }
 
@@ -79,10 +66,7 @@ export async function openSanitySignIn(_url: string): Promise<void> {
   // Not offered in Studio (CMS_CONNECTION_HOST.sanityLogin is 'none').
 }
 
-export async function remoteCollections(
-  _projectPath: string,
-  connectionId: string,
-): Promise<RemoteResult<readonly RemoteCollection[]>> {
+export async function remoteCollections(_projectPath: string, connectionId: string): Promise<RemoteResult<readonly RemoteCollection[]>> {
   return remote(connectionId, 'collections', {}, parseRemoteCollections);
 }
 
@@ -95,11 +79,7 @@ export async function remoteDocuments(
   return remote(connectionId, 'documents', { collection, columns }, parseRemoteDocumentList);
 }
 
-export async function createRemoteDocument(
-  _projectPath: string,
-  connectionId: string,
-  collection: string,
-): Promise<RemoteResult<RemoteDocumentSummary>> {
+export async function createRemoteDocument(_projectPath: string, connectionId: string, collection: string): Promise<RemoteResult<RemoteDocumentSummary>> {
   return remote(connectionId, 'create', { collection }, (value) => {
     const [summary] = parseRemoteDocuments([value]);
     if (!summary) {
@@ -109,11 +89,7 @@ export async function createRemoteDocument(
   });
 }
 
-export async function deleteRemoteDocuments(
-  _projectPath: string,
-  connectionId: string,
-  ids: readonly string[],
-): Promise<RemoteResult<number>> {
+export async function deleteRemoteDocuments(_projectPath: string, connectionId: string, ids: readonly string[]): Promise<RemoteResult<number>> {
   return remote(connectionId, 'delete', { ids }, (value) => {
     if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
       throw new Error('Expected how many documents were deleted.');
@@ -122,36 +98,20 @@ export async function deleteRemoteDocuments(
   });
 }
 
-export async function moveRemoteDocument(
-  _projectPath: string,
-  connectionId: string,
-  move: RemoteMove,
-): Promise<RemoteResult<RemoteDocumentList>> {
+export async function moveRemoteDocument(_projectPath: string, connectionId: string, move: RemoteMove): Promise<RemoteResult<RemoteDocumentList>> {
   return remote(connectionId, 'move', { move }, parseRemoteDocumentList);
 }
 
-export async function remoteDocument(
-  _projectPath: string,
-  connectionId: string,
-  id: string,
-): Promise<RemoteResult<RemoteDocument>> {
+export async function remoteDocument(_projectPath: string, connectionId: string, id: string): Promise<RemoteResult<RemoteDocument>> {
   return remote(connectionId, 'document', { id }, parseRemoteDocument);
 }
 
 /** A collection's fields with no values: what a new item is edited as before it is created. */
-export async function remoteTemplate(
-  _projectPath: string,
-  connectionId: string,
-  collection: string,
-): Promise<RemoteResult<RemoteDocument>> {
+export async function remoteTemplate(_projectPath: string, connectionId: string, collection: string): Promise<RemoteResult<RemoteDocument>> {
   return remote(connectionId, 'template', { collection }, parseRemoteDocument);
 }
 
-export async function writeRemoteDocument(
-  _projectPath: string,
-  connectionId: string,
-  write: RemoteWrite,
-): Promise<RemoteResult<RemoteDocument>> {
+export async function writeRemoteDocument(_projectPath: string, connectionId: string, write: RemoteWrite): Promise<RemoteResult<RemoteDocument>> {
   return remote(connectionId, 'write', { write }, parseRemoteDocument);
 }
 
@@ -171,11 +131,7 @@ export async function actOnRemoteDocument(
   return remote(connectionId, 'act', input, parseRemoteActedDocument);
 }
 
-export async function remoteHistory(
-  _projectPath: string,
-  connectionId: string,
-  id: string,
-): Promise<RemoteResult<readonly RemoteRevision[]>> {
+export async function remoteHistory(_projectPath: string, connectionId: string, id: string): Promise<RemoteResult<readonly RemoteRevision[]>> {
   return remote(connectionId, 'history', { id }, parseRemoteRevisions);
 }
 
@@ -188,11 +144,7 @@ export async function restoreRemoteRevision(
 }
 
 /** Asks for a file in the browser and stores it in the CMS; undefined when cancelled. */
-export async function uploadRemoteAsset(
-  _projectPath: string,
-  connectionId: string,
-  kind: RemoteAssetKind,
-): Promise<RemoteResult<RemoteAsset | undefined>> {
+export async function uploadRemoteAsset(_projectPath: string, connectionId: string, kind: RemoteAssetKind): Promise<RemoteResult<RemoteAsset | undefined>> {
   const file = await chooseFile(kind === 'image' ? 'image/*' : '');
   if (file === undefined) {
     return { ok: true, value: undefined };
@@ -210,12 +162,7 @@ export async function uploadRemoteAsset(
   );
 }
 
-async function remote<T>(
-  connectionId: string,
-  operation: string,
-  input: object,
-  parse: (value: unknown) => T,
-): Promise<RemoteResult<T>> {
+async function remote<T>(connectionId: string, operation: string, input: object, parse: (value: unknown) => T): Promise<RemoteResult<T>> {
   return attempt(async () =>
     parseRemoteResult(
       await request(`/studio/api/cms-remote/${operation}`, {
@@ -262,9 +209,7 @@ function chooseFile(accept: string): Promise<File | undefined> {
 export async function linkPreview(url: string): Promise<RemoteResult<LinkPreview | undefined>> {
   const link = parseVideoLinkURL(url);
   return attempt(async () =>
-    parseRemoteResult(await post('/studio/api/link-preview', { url: link }), (value) =>
-      value === undefined ? undefined : parseLinkPreview(value),
-    ),
+    parseRemoteResult(await post('/studio/api/link-preview', { url: link }), (value) => (value === undefined ? undefined : parseLinkPreview(value))),
   );
 }
 

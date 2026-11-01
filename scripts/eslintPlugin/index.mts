@@ -10,16 +10,7 @@ import { naming } from './naming.mts';
 import { noBooleanParameter } from './noBooleanParameter.mts';
 import { noNull } from './noNull.mts';
 import { sourceLayers } from './sourceLayers.mts';
-import {
-  callbackLast,
-  catchUnknown,
-  divisionIntent,
-  noCompoundAssert,
-  noEnum,
-  noOverloads,
-  noPartialParameter,
-  noUnboundedLoop,
-} from './statements.mts';
+import { callbackLast, catchUnknown, divisionIntent, noCompoundAssert, noEnum, noOverloads, noPartialParameter, noUnboundedLoop } from './statements.mts';
 
 export const rules = {
   'bounded-recursion': boundedRecursion,

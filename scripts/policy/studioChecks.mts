@@ -25,11 +25,7 @@ function verifyStudio(root: string): number {
     [compiler, '--noEmit'],
     [compiler, '-p', 'tsconfig.worker.json'],
     [dependency('eslint/bin/eslint.js'), '--max-warnings', '0', '.'],
-    [
-      dependency('prettier/bin/prettier.cjs'),
-      process.argv.includes('--write') ? '--write' : '--check',
-      '.',
-    ],
+    [dependency('prettier/bin/prettier.cjs'), process.argv.includes('--write') ? '--write' : '--check', '.'],
   ];
   const suites = fs
     .readdirSync(path.join(cwd, 'test'))

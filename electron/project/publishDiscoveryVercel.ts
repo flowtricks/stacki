@@ -17,10 +17,7 @@ export async function vercelAccounts(root: string): Promise<readonly PublishAcco
   });
 }
 
-export async function vercelProjects(
-  root: string,
-  account: string,
-): Promise<readonly PublishProject[]> {
+export async function vercelProjects(root: string, account: string): Promise<readonly PublishProject[]> {
   const values = await vercelPages(root, '/v9/projects', 'projects', account);
   return values.map((entry) => {
     const value = record(entry);

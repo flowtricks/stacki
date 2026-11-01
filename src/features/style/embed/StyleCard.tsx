@@ -29,12 +29,7 @@ import {
   EFFECTS_CONTROL_PROPS,
   TYPOGRAPHY_CONTROL_PROPS,
 } from './ResolvedRows';
-import {
-  ALIGN_PROPS,
-  GRID_CONTROL_PROPS,
-  LayoutModeSections,
-  type SourceOption,
-} from './LayoutRows';
+import { ALIGN_PROPS, GRID_CONTROL_PROPS, LayoutModeSections, type SourceOption } from './LayoutRows';
 import { SelectorPicker, ADD_QUERY, PlusIcon } from './SelectorPicker';
 import { AddQueryForm, EditQueryForm, CssCodeSection, type StyleCardProps } from './QueryForms';
 
@@ -109,9 +104,7 @@ export function useVisibleSelectors() {
   const [visibleSelectors, setVisibleSelectors] = useState<readonly string[]>([]);
   const rememberVisibleSelectors = useCallback((next: readonly string[]) => {
     setVisibleSelectors((previous) => {
-      const same =
-        next.length === previous.length &&
-        next.every((selector, index) => selector === previous[index]);
+      const same = next.length === previous.length && next.every((selector, index) => selector === previous[index]);
       return same ? previous : [...next];
     });
   }, []);
@@ -120,13 +113,7 @@ export function useVisibleSelectors() {
 
 // The card's sticky head: the query/context selector (with its add / rename forms),
 // the element's identity, the selector well, and where edits go.
-export function StyleCardHead({
-  card,
-  onVisibleSelectorsChange,
-}: {
-  card: StyleCardProps;
-  onVisibleSelectorsChange: (selectors: readonly string[]) => void;
-}) {
+export function StyleCardHead({ card, onVisibleSelectorsChange }: { card: StyleCardProps; onVisibleSelectorsChange: (selectors: readonly string[]) => void }) {
   const { snapshot, activeSelector, busy } = card;
   // Whether the "Add query" form is open (below the context dropdown).
   const [addingQuery, setAddingQuery] = useState(false);
@@ -153,20 +140,10 @@ export function StyleCardHead({
           />
         ) : undefined}
       </div>
-      <QueryForms
-        card={card}
-        addingQuery={addingQuery}
-        editingQuery={editingQuery}
-        setAddingQuery={setAddingQuery}
-        setEditingQuery={setEditingQuery}
-      />
+      <QueryForms card={card} addingQuery={addingQuery} editingQuery={editingQuery} setAddingQuery={setAddingQuery} setEditingQuery={setEditingQuery} />
       <div className="embed-editor_selector">
         <div className="embed-editor_selector-box">
-          {snapshot ? (
-            <ElementTokenPicker snapshot={snapshot} />
-          ) : (
-            <div className="embed-editor_element-id is-empty">No element selected</div>
-          )}
+          {snapshot ? <ElementTokenPicker snapshot={snapshot} /> : <div className="embed-editor_element-id is-empty">No element selected</div>}
           {/* Right-aligned slot the save indicator portals into — sits on the
             `div.test` row (see SaveIndicator). */}
           <span id="embed-editor_save-slot" className="embed-editor_selector-save" />
@@ -195,15 +172,7 @@ export function StyleCardHead({
 
 // The style-context dropdown. Each context row can carry a pencil to rename its query;
 // the last option adds a query.
-export function ContextSwitcher({
-  card,
-  onAddQuery,
-  onEditQuery,
-}: {
-  card: StyleCardProps;
-  onAddQuery: () => void;
-  onEditQuery: (query: string) => void;
-}) {
+export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: StyleCardProps; onAddQuery: () => void; onEditQuery: (query: string) => void }) {
   const { contexts, contextInfos, queryUses } = card;
   const options = contexts.map((styleContext) => {
     // Editable when this stylesheet is where the query is written. A row can be here
@@ -319,10 +288,7 @@ export function SourcePickerRow({ card }: { card: StyleCardProps }) {
         ) : undefined}
       </div>
       {card.pending ? (
-        <span
-          className="embed-editor_unsaved"
-          title="Not yet saved — applies when you exit the component"
-        >
+        <span className="embed-editor_unsaved" title="Not yet saved — applies when you exit the component">
           Unsaved
         </span>
       ) : undefined}
@@ -347,28 +313,13 @@ export function sourceSelectOption(option: SourceOption) {
 }
 
 // What every section's controls are handed.
-export type SectionCard = Pick<
-  StyleCardProps,
-  | 'busy'
-  | 'resolving'
-  | 'setProp'
-  | 'clearProp'
-  | 'liveSetProp'
-  | 'onSelectSelector'
-  | 'activeSelector'
-> & {
+export type SectionCard = Pick<StyleCardProps, 'busy' | 'resolving' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onSelectSelector' | 'activeSelector'> & {
   read: (prop: string) => ResolvedProp | undefined;
   onProvenance: (prop: string, anchor: DOMRect) => void;
 };
 
 // The property sections, each collapsible (Shift-click applies to all).
-export function StyleSections({
-  card,
-  openProvenance,
-}: {
-  card: StyleCardProps;
-  openProvenance: (prop: string, anchor: DOMRect) => void;
-}) {
+export function StyleSections({ card, openProvenance }: { card: StyleCardProps; openProvenance: (prop: string, anchor: DOMRect) => void }) {
   const { resolved } = card;
   // Always show Layout + Size so the panel is consistent across elements, not
   // only those that already set a property in that section.
@@ -407,22 +358,9 @@ export function StyleSections({
           // blue once the picked selector is one of the things setting it —
           // `source === 'selected'` is the same test every property label in
           // here makes.
-          mark={
-            group.props.some((prop) => read(prop)?.source === 'selected')
-              ? 'own'
-              : group.props.length
-                ? 'other'
-                : undefined
-          }
+          mark={group.props.some((prop) => read(prop)?.source === 'selected') ? 'own' : group.props.length ? 'other' : undefined}
           headerAction={
-            group.def.id === 'spacing' ? (
-              <SpacingCenterButton
-                read={read}
-                busy={card.busy}
-                setProp={card.setProp}
-                clearProp={card.clearProp}
-              />
-            ) : undefined
+            group.def.id === 'spacing' ? <SpacingCenterButton read={read} busy={card.busy} setProp={card.setProp} clearProp={card.clearProp} /> : undefined
           }
         >
           {SECTION_CONTROLS[group.def.id]?.(section)}
@@ -438,18 +376,7 @@ export function StyleSections({
   );
 }
 
-export const SECTION_ORDER = [
-  'flex-child',
-  'layout',
-  'position',
-  'spacing',
-  'size',
-  'typography',
-  'backgrounds',
-  'borders',
-  'effects',
-  'other',
-] as const;
+export const SECTION_ORDER = ['flex-child', 'layout', 'position', 'spacing', 'size', 'typography', 'backgrounds', 'borders', 'effects', 'other'] as const;
 
 export const EMPTY_CUSTOM_NOTE = 'No custom properties — add one below.';
 
@@ -465,9 +392,7 @@ export const SECTION_CONTROLS: Readonly<Record<string, (section: SectionCard) =>
       busy={section.busy}
       setProp={section.setProp}
       clearProp={section.clearProp}
-      liveSetProp={(prop, value, important) =>
-        section.liveSetProp(prop, value ?? undefined, important)
-      }
+      liveSetProp={(prop, value, important) => section.liveSetProp(prop, value ?? undefined, important)}
       onProvenance={section.onProvenance}
       onSelectSelector={section.onSelectSelector}
     />
@@ -535,9 +460,7 @@ export const SECTION_CONTROLS: Readonly<Record<string, (section: SectionCard) =>
       busy={section.busy}
       setProp={section.setProp}
       clearProp={section.clearProp}
-      liveSetProp={(prop, value, important) =>
-        section.liveSetProp(prop, value ?? undefined, important)
-      }
+      liveSetProp={(prop, value, important) => section.liveSetProp(prop, value ?? undefined, important)}
       onProvenance={section.onProvenance}
       onSelectSelector={section.onSelectSelector}
     />
@@ -596,12 +519,7 @@ export function fallThroughProps(id: string, props: readonly string[]): readonly
     case 'typography':
       return props.filter((prop) => !TYPOGRAPHY_CONTROL_PROPS.has(prop));
     case 'layout':
-      return props.filter(
-        (prop) =>
-          !LAYOUT_CONTROL_PROPS.has(prop) &&
-          !ALIGN_PROPS.has(prop) &&
-          !GRID_CONTROL_PROPS.has(prop),
-      );
+      return props.filter((prop) => !LAYOUT_CONTROL_PROPS.has(prop) && !ALIGN_PROPS.has(prop) && !GRID_CONTROL_PROPS.has(prop));
     case 'effects':
       return props.filter((prop) => !EFFECTS_CONTROL_PROPS.has(prop));
     default:
@@ -624,9 +542,7 @@ export function FallThroughRows({
   section: SectionCard;
 }) {
   if (!props.length) {
-    return emptyNote === undefined ? undefined : (
-      <p className="embed-editor_decls-empty">{emptyNote}</p>
-    );
+    return emptyNote === undefined ? undefined : <p className="embed-editor_decls-empty">{emptyNote}</p>;
   }
   return props.map((prop) => {
     const found = resolved.props.get(prop);

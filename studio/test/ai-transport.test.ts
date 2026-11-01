@@ -86,10 +86,7 @@ test('stopping one request aborts its provider fetch while another request can c
   });
   const options = { endpoint: server.endpoint, apiKey: '', model: 'local' };
   try {
-    await assert.rejects(
-      propose(root, 'src/pages/index.astro', 'First chat', options, undefined, controller.signal),
-      { name: 'AbortError' },
-    );
+    await assert.rejects(propose(root, 'src/pages/index.astro', 'First chat', options, undefined, controller.signal), { name: 'AbortError' });
     await assert.rejects(propose(root, 'src/pages/index.astro', 'Second chat', options), /503/);
     assert.equal(calls, 2);
   } finally {

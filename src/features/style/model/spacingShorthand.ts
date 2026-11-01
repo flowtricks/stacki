@@ -51,12 +51,7 @@ export function spacingSides(prop: string, value: string): ReadonlyMap<string, s
   }
   // CSS fills a missing part from the opposite side, two parts back in the
   // clockwise order, and from the first part when that one is missing too.
-  const sides = new Map(
-    shorthand.sides.map((side, index) => [
-      `${shorthand.box}-${side}`,
-      parts[index] ?? parts[index - 2] ?? first,
-    ]),
-  );
+  const sides = new Map(shorthand.sides.map((side, index) => [`${shorthand.box}-${side}`, parts[index] ?? parts[index - 2] ?? first]));
   assert(sides.size === shorthand.sides.length, 'spacingSides: one value per side');
   return sides;
 }
@@ -126,9 +121,7 @@ type SideValue = Declared & { readonly opaque: boolean };
 
 // The padding declarations written directly on `node`, never a nested rule's.
 function paddingDeclarations(node: Rule | AtRule): Declaration[] {
-  return (node.nodes ?? []).filter(
-    (child): child is Declaration => child.type === 'decl' && isPaddingProperty(child.prop),
-  );
+  return (node.nodes ?? []).filter((child): child is Declaration => child.type === 'decl' && isPaddingProperty(child.prop));
 }
 
 // A multi-side value with a var() or env() part: the function may substitute
@@ -148,9 +141,7 @@ const isSubstitution = (part: string): boolean => /^(var|env)\(/i.test(part);
 // What each side resolves to within one node: a later declaration wins, unless
 // an earlier one is `!important` and it is not. Undefined when a declaration
 // cannot be read side by side, which leaves the node as written.
-function paddingSideValues(
-  declarations: readonly Declaration[],
-): ReadonlyMap<string, SideValue> | undefined {
+function paddingSideValues(declarations: readonly Declaration[]): ReadonlyMap<string, SideValue> | undefined {
   const values = new Map<string, SideValue>();
   for (const declaration of declarations) {
     const sides = spacingSides(declaration.prop.toLowerCase(), declaration.value);
@@ -196,12 +187,8 @@ function compactForm(values: ReadonlyMap<string, SideValue>): readonly Compact[]
   if (SIDES.every((side) => equal('top', side))) {
     return written('padding', 'top');
   }
-  const block = equal('top', 'bottom')
-    ? written('padding-block', 'top')
-    : [...written('padding-top', 'top'), ...written('padding-bottom', 'bottom')];
-  const inline = equal('left', 'right')
-    ? written('padding-inline', 'left')
-    : [...written('padding-right', 'right'), ...written('padding-left', 'left')];
+  const block = equal('top', 'bottom') ? written('padding-block', 'top') : [...written('padding-top', 'top'), ...written('padding-bottom', 'bottom')];
+  const inline = equal('left', 'right') ? written('padding-inline', 'left') : [...written('padding-right', 'right'), ...written('padding-left', 'left')];
   return [...block, ...inline];
 }
 

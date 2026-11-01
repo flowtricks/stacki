@@ -17,11 +17,7 @@ export function validateGuidePreferences(input: unknown): void {
     case 'automatic':
       break;
     case 'count': {
-      const count = boundedNumber(
-        columns['count'],
-        GUIDE_LIMITS.columnPickMin,
-        GUIDE_LIMITS.columnPickMax,
-      );
+      const count = boundedNumber(columns['count'], GUIDE_LIMITS.columnPickMin, GUIDE_LIMITS.columnPickMax);
       if (!Number.isSafeInteger(count)) {
         throw new Error('Guide columns must be a whole number');
       }
@@ -54,11 +50,7 @@ function validateGuideSize(input: unknown): void {
   if (unit !== 'px' && unit !== 'rem') {
     throw new Error('Invalid guide unit');
   }
-  boundedNumber(
-    length['amount'],
-    0,
-    unit === 'px' ? GUIDE_LIMITS.lengthPxMax : GUIDE_LIMITS.lengthRemMax,
-  );
+  boundedNumber(length['amount'], 0, unit === 'px' ? GUIDE_LIMITS.lengthPxMax : GUIDE_LIMITS.lengthRemMax);
 }
 
 function variableName(input: unknown): void {

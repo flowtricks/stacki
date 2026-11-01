@@ -66,10 +66,7 @@ async function prepareProject(project: string, source: string, component: string
       dependencies: { astro: '7.3.8' },
     }),
   );
-  await writeFile(
-    path.join(project, 'astro.config.mjs'),
-    'export default { devToolbar: { enabled: false } };',
-  );
+  await writeFile(path.join(project, 'astro.config.mjs'), 'export default { devToolbar: { enabled: false } };');
   await writeFile(path.join(project, 'src/pages/index.astro'), source);
   if (component !== undefined) {
     await mkdir(path.join(project, 'src/components'), { recursive: true });

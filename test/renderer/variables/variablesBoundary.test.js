@@ -10,16 +10,14 @@ const { readVariables } = require('#dist/electron/project/cssVars.js');
 // so the negative space below includes it. It is read from JSON, because our own
 // code never writes a null.
 const PLATFORM_NULL = JSON.parse('null');
-const { parseCSSVariables, readCSSVariables, VARIABLES_LIMITS } =
-  require('../../helpers/rendererModule')('src/features/variables/variablesBridge.ts');
+const { parseCSSVariables, readCSSVariables, VARIABLES_LIMITS } = require('../../helpers/rendererModule')('src/features/variables/variablesBridge.ts');
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-variable-boundary-'));
 let wire;
 try {
   fs.mkdirSync(path.join(directory, 'src/styles'), { recursive: true });
   fs.writeFileSync(
     path.join(directory, 'src/styles/tokens.css'),
-    ':root { /* Palette */ --brand: #0af; --accent: var(--brand); --gap: 1rem; }\n' +
-      '.dark { --brand: #111; --accent: var(--brand); --gap: 2rem; }\n',
+    ':root { /* Palette */ --brand: #0af; --accent: var(--brand); --gap: 1rem; }\n' + '.dark { --brand: #111; --accent: var(--brand); --gap: 2rem; }\n',
   );
   fs.writeFileSync(path.join(directory, 'src/styles/broken.css'), ':root { --broken:');
   wire = readVariables(directory);
@@ -157,9 +155,7 @@ for (const invalid of [PLATFORM_NULL, [], {}, { files: [] }, { files: [], error:
   assert.deepEqual(await readCSSVariables('/project'), { ok: false, error: 'disk unavailable' });
   window.avb.cssVariables = async () => PLATFORM_NULL;
   await assert.rejects(() => readCSSVariables('/project'));
-  console.log(
-    'variables-boundary: real parser round trip, nested bounds and failure channels passed',
-  );
+  console.log('variables-boundary: real parser round trip, nested bounds and failure channels passed');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

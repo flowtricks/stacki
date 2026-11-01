@@ -20,14 +20,10 @@ export function applyVariableOperation(operation: string, input: unknown) {
     case 'renameCssVariables':
       return css.renameVariables(VARIABLE_ROOT, parseIpcPayload('css:renameVariables', input));
     case 'addCssVariables':
-      return batch(parseIpcPayload('css:addVariables', input).adds ?? [], (add) =>
-        css.addVariable(VARIABLE_ROOT, add),
-      );
+      return batch(parseIpcPayload('css:addVariables', input).adds ?? [], (add) => css.addVariable(VARIABLE_ROOT, add));
     case 'moveCssVariables':
       return batch(parseIpcPayload('css:moveVariables', input).moves ?? [], (move) =>
-        'names' in move
-          ? css.moveSection(VARIABLE_ROOT, move)
-          : css.moveVariable(VARIABLE_ROOT, move),
+        'names' in move ? css.moveSection(VARIABLE_ROOT, move) : css.moveVariable(VARIABLE_ROOT, move),
       );
     default:
       throw new Error('Unknown variable operation');

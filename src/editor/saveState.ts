@@ -61,11 +61,7 @@ export function saveStateFailed(state: SaveState, message: string): SaveState {
 /** The disk no longer holds the base the write named: refuse to write over
  * it (plan §7). `baseChecksum` is the base actually compared — the saver may
  * have advanced it past the state's own base through its own earlier writes. */
-export function saveStateRefused(
-  state: SaveState,
-  baseChecksum: Digest,
-  diskChecksum: Digest,
-): SaveState {
+export function saveStateRefused(state: SaveState, baseChecksum: Digest, diskChecksum: Digest): SaveState {
   assert(state.tag !== 'clean', 'A clean page has nothing to refuse');
   assert(diskChecksum !== baseChecksum, 'A refusal names bytes other than the base');
   return { tag: 'conflicted', baseChecksum, diskChecksum };

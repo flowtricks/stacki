@@ -42,16 +42,7 @@ test('the packageManager field names a manager with or without a version', () =>
 });
 
 test('the packageManager field names nothing when unknown, malformed or oversized', () => {
-  for (const input of [
-    undefined,
-    7,
-    '',
-    '@9.0.0',
-    'deno@2.0.0',
-    'PNPM@9.0.0',
-    ` pnpm@9.0.0`,
-    `pnpm@${'9'.repeat(256)}`,
-  ]) {
+  for (const input of [undefined, 7, '', '@9.0.0', 'deno@2.0.0', 'PNPM@9.0.0', ` pnpm@9.0.0`, `pnpm@${'9'.repeat(256)}`]) {
     assert.equal(parsePackageManagerField(input), undefined, String(input));
   }
 });
@@ -64,10 +55,7 @@ test('a new site can be created with npm or pnpm, and nothing else yet', () => {
     assert.throws(() => parseCreatePackageManager(input), /expected npm or pnpm/, String(input));
   }
   assert.equal(parseIpcPayload('project:createStarter', starter('pnpm')).packageManager, 'pnpm');
-  assert.equal(
-    parseIpcPayload('project:createStarter', starter(undefined)).packageManager,
-    undefined,
-  );
+  assert.equal(parseIpcPayload('project:createStarter', starter(undefined)).packageManager, undefined);
   assert.throws(() => parseIpcPayload('project:createStarter', starter('yarn')), /npm or pnpm/);
 });
 

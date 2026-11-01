@@ -2,8 +2,7 @@
 // inside it. Token serialization therefore cannot turn inheritance into a write.
 import { tokenGlyph, type Chip } from './TokenField';
 
-type HintPart =
-  { readonly kind: 'text'; readonly text: string } | { readonly kind: 'chip'; readonly chip: Chip };
+type HintPart = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'chip'; readonly chip: Chip };
 
 export default function VariableHint({
   value,

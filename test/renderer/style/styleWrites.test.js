@@ -48,18 +48,9 @@ const PAGE = [
   '',
 ].join('\n');
 
-const CARD = [
-  '<div class="card"><h2 class="title">T</h2><slot /></div>',
-  '<style>',
-  '  .card {',
-  '    padding: 1px;',
-  '  }',
-  '</style>',
-  '',
-].join('\n');
+const CARD = ['<div class="card"><h2 class="title">T</h2><slot /></div>', '<style>', '  .card {', '    padding: 1px;', '  }', '</style>', ''].join('\n');
 
-const refusals = () =>
-  [...document.querySelectorAll('.toast.error')].map((toast) => toast.textContent);
+const refusals = () => [...document.querySelectorAll('.toast.error')].map((toast) => toast.textContent);
 
 // A project with the page and the Card component, the app open on the page.
 async function openProject(context) {
@@ -98,9 +89,7 @@ function find(matches) {
     if (matches(node)) {
       return { node, at };
     }
-    (node.children ?? []).forEach((child, index) =>
-      pending.push({ node: child, at: [...at, index] }),
-    );
+    (node.children ?? []).forEach((child, index) => pending.push({ node: child, at: [...at, index] }));
   }
   assert.fail('a node matches');
 }
@@ -222,10 +211,7 @@ test('a computed class stays intact when the style panel adds another class', as
   const coded = find((node) => String(node.props?.class?.value).includes('join'));
   const outcome = await addClass(app, coded.at, 'added');
   assert.equal(outcome.tag, 'applied');
-  assert.equal(
-    fs.readFileSync(page, 'utf8'),
-    PAGE.replace('class={items.join(" ")}', 'class:list={[(items.join(" ")), "added"]}'),
-  );
+  assert.equal(fs.readFileSync(page, 'utf8'), PAGE.replace('class={items.join(" ")}', 'class:list={[(items.join(" ")), "added"]}'));
   assert.deepEqual(refusals(), []);
 });
 
@@ -235,9 +221,7 @@ test('an invalid class name reports an error without changing the page', async (
   const outcome = await addClass(app, heading.at, 'two classes');
   assert.equal(outcome.tag, 'refused');
   assert.equal(fs.readFileSync(page, 'utf8'), PAGE);
-  assert.deepEqual(refusals(), [
-    'Stacki couldn’t add the class “two classes”. Check the class name and retry.',
-  ]);
+  assert.deepEqual(refusals(), ['Stacki couldn’t add the class “two classes”. Check the class name and retry.']);
 });
 
 test('a typed class lands on an element inside an opened component', async (context) => {
@@ -262,12 +246,6 @@ test('an inline style is edited in place, and added where there is none', async 
     __panels.PropsPanel.onSetProp('style', style('color: blue'), true);
     await tick();
   });
-  assert.equal(
-    fs.readFileSync(page, 'utf8'),
-    PAGE.replace('style="color: red"', 'style="color: blue"').replace(
-      '<p>',
-      '<p style="color: blue">',
-    ),
-  );
+  assert.equal(fs.readFileSync(page, 'utf8'), PAGE.replace('style="color: red"', 'style="color: blue"').replace('<p>', '<p style="color: blue">'));
   assert.deepEqual(refusals(), []);
 });

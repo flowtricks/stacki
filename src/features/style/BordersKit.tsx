@@ -35,12 +35,7 @@ export function OverrideNote({ selector, onSelect }: { selector: string; onSelec
   return (
     <div className="embed-editor_override-note">
       <span>Overridden by a more specific selector:</span>
-      <button
-        type="button"
-        className="embed-editor_override-note-sel"
-        title="Select this selector"
-        onClick={onSelect}
-      >
+      <button type="button" className="embed-editor_override-note-sel" title="Select this selector" onClick={onSelect}>
         {selector}
       </button>
     </div>
@@ -72,14 +67,7 @@ export function PropLabel({
   const tip = clearProps ?? [prop];
   if (display.present && !display.isSelected) {
     return (
-      <ProvenanceLabel
-        label={label}
-        props={tip}
-        className={`embed-editor_size-label ${className}`}
-        anchorProp={prop}
-        busy={busy}
-        onProvenance={onProvenance}
-      />
+      <ProvenanceLabel label={label} props={tip} className={`embed-editor_size-label ${className}`} anchorProp={prop} busy={busy} onProvenance={onProvenance} />
     );
   }
   const overriddenClass = display.overridden ? 'is-overridden' : '';
@@ -126,7 +114,5 @@ export function PropLabel({
 // the border rows lay their fields out beside a swatch, so the wrapper is theirs
 // while the field itself is the same one every other row uses.
 export function LiveInput(props: Omit<Parameters<typeof SharedLiveInput>[0], 'wrapClassName'>) {
-  return (
-    <SharedLiveInput wrapClassName="embed-editor_field embed-editor_border-field" {...props} />
-  );
+  return <SharedLiveInput wrapClassName="embed-editor_field embed-editor_border-field" {...props} />;
 }

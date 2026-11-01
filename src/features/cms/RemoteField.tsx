@@ -4,7 +4,9 @@
 // The label turns blue once the field holds something, and carries an asterisk
 // when the CMS requires it; its help is the `?` beside it; a broken rule shows
 // under the control, red when it blocks publishing and amber when it only warns.
+// A field the Studio locks (`readOnly`) shows its value without a control.
 import {
+  isLocked,
   remoteObject,
   type RemoteOption,
   type RemoteSchemaField,
@@ -19,6 +21,8 @@ import { RemoteValueEditor, type RemoteEditContext } from './RemoteValueEditor';
 import AssetField from '../../ui/AssetField';
 import Dropdown from '../../ui/Dropdown';
 import { hasOptionImage, OPTION_IMAGE_MENU, OptionImage } from './projectImages';
+import { ReferenceIcon, referenceTitle, useReferenceOptions } from './RemoteReferenceInput';
+import { typeIcons } from './SanityTypeIcon';
 
 export function RemoteField(props: {
   readonly field: RemoteSchemaField;
@@ -32,22 +36,18 @@ export function RemoteField(props: {
   const scalar = scalarOf(field.type);
   const { icon: Icon } = fieldTypeOf(field.type);
   return (
-    <div
-      className={`remote-cms-field${field.required ? ' is-required' : ''}`}
-      data-kind={field.type.kind}
-    >
-      {isImagePath(field.type) ? (
+    <div className={`remote-cms-field${field.required ? ' is-required' : ''}`} data-kind={field.type.kind}>
+      {isLocked(field, value) ? (
+        <CmsFieldFrame name={name} help={lockedHelp(field)} icon={<Icon size={12} />} set={!isEmptyValue(value)}>
+          <LockedValue type={field.type} value={value} context={props.context} />
+        </CmsFieldFrame>
+      ) : isImagePath(field.type) ? (
         <CmsFieldFrame name={name} help={help} icon={<Icon size={12} />} set={!isEmptyValue(value)}>
           <ImagePathField value={value} context={props.context} onChange={props.onChange} />
         </CmsFieldFrame>
       ) : titledOptions(field.type) ? (
         <CmsFieldFrame name={name} help={help} icon={<Icon size={12} />} set={!isEmptyValue(value)}>
-          <TitledChoice
-            label={name}
-            options={titledOptions(field.type) ?? []}
-            value={value}
-            onChange={props.onChange}
-          />
+          <TitledChoice label={name} options={titledOptions(field.type) ?? []} value={value} onChange={props.onChange} />
         </CmsFieldFrame>
       ) : scalar ? (
         <CmsPropField
@@ -60,13 +60,7 @@ export function RemoteField(props: {
         />
       ) : (
         <CmsFieldFrame name={name} help={help} icon={<Icon size={12} />} set={!isEmptyValue(value)}>
-          <RemoteValueEditor
-            type={field.type}
-            label={name}
-            value={value}
-            context={props.context}
-            onChange={props.onChange}
-          />
+          <RemoteValueEditor type={field.type} label={name} value={value} context={props.context} onChange={props.onChange} />
         </CmsFieldFrame>
       )}
       {/* Required is the label's asterisk; Publish still waits for it (remoteValidation.ts). */}
@@ -77,6 +71,45 @@ export function RemoteField(props: {
             {problem.message}
           </span>
         ))}
+    </div>
+  );
+}
+
+// Why the field takes no edit, after what it is for.
+function lockedHelp(field: RemoteSchemaField): string {
+  const why = field.readOnly === 'when-set' ? 'Set once: the Studio locks it after it is chosen.' : 'Read-only in the Studio.';
+  return field.description === '' ? why : `${field.description} ${why}`;
+}
+
+// A locked field's value as it reads: a reference by its document, a simple
+// value as text, anything larger as its own control with every input disabled.
+function LockedValue(props: { readonly type: RemoteType; readonly value: RemoteValue | undefined; readonly context: RemoteEditContext }) {
+  const { type, value } = props;
+  if (type.kind === 'reference') {
+    return <LockedReference to={type.to} value={value} context={props.context} />;
+  }
+  const scalar = scalarOf(type);
+  if (scalar !== undefined) {
+    const read = scalar.read(value);
+    const option = type.kind === 'string' ? type.options.find((entry) => entry.value === read) : undefined;
+    const text = option?.title ?? (typeof read === 'boolean' ? (read ? 'Yes' : 'No') : String(read ?? ''));
+    return <div className="remote-cms-locked">{text === '' ? <span className="remote-cms-locked-empty">Empty</span> : text}</div>;
+  }
+  return (
+    <fieldset className="remote-cms-locked-control" disabled>
+      <RemoteValueEditor type={type} label="" value={value} context={props.context} onChange={() => undefined} />
+    </fieldset>
+  );
+}
+
+function LockedReference(props: { readonly to: readonly string[]; readonly value: RemoteValue | undefined; readonly context: RemoteEditContext }) {
+  const options = useReferenceOptions(props.context, props.to);
+  const id = remoteObject(props.value)?.['_ref'];
+  const option = options.find((entry) => entry.id === id);
+  return (
+    <div className="remote-cms-locked">
+      {option && <ReferenceIcon option={option} sanity={typeIcons(props.context.connectionId).get(option.type)} placeholder={false} />}
+      {referenceTitle(props.value, options)}
     </div>
   );
 }
@@ -169,22 +202,9 @@ export function RemoteObjectEditor(props: {
     props.onChange({ ...typed, ...rest, ...(next === undefined ? {} : { [name]: next }) });
   };
   return (
-    <div
-      className="remote-cms-group"
-      style={
-        props.columns
-          ? { gridTemplateColumns: `repeat(${props.columns}, minmax(0, 1fr))` }
-          : undefined
-      }
-    >
+    <div className="remote-cms-group" style={props.columns ? { gridTemplateColumns: `repeat(${props.columns}, minmax(0, 1fr))` } : undefined}>
       {props.fields.map((field) => (
-        <RemoteField
-          key={field.name}
-          field={field}
-          value={object[field.name]}
-          context={context}
-          onChange={(next) => change(field.name, next)}
-        />
+        <RemoteField key={field.name} field={field} value={object[field.name]} context={context} onChange={(next) => change(field.name, next)} />
       ))}
     </div>
   );
@@ -234,8 +254,7 @@ function scalarOf(type: RemoteType): Scalar | undefined {
         kind: 'string',
         options: [],
         read: (value) => asText(remoteObject(value)?.['current']),
-        write: (value) =>
-          value === undefined ? undefined : { _type: 'slug', current: String(value) },
+        write: (value) => (value === undefined ? undefined : { _type: 'slug', current: String(value) }),
       };
     case 'date':
     case 'datetime':

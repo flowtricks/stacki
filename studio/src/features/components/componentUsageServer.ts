@@ -1,23 +1,15 @@
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { aliasMap } from '../../../vendor/stacki/electron/content/cmsRefs';
-import {
-  instanceCounts,
-  instancesIn,
-} from '../../../vendor/stacki/electron/properties/componentUsage';
+import { instanceCounts, instancesIn } from '../../../vendor/stacki/electron/properties/componentUsage';
 import type { ComponentUsageFile } from '../../../vendor/stacki/src/features/palette/paletteModel';
 import { walk, readSource } from '../project/projectServer';
 import { packageComponentFiles } from '../../../vendor/stacki/electron/lib/componentSources';
 import { componentFile } from '../../../vendor/stacki/shared/properties/componentDefaults';
 
 export async function scanComponentUsage(root: string, selected?: string) {
-  const paths = (await walk(root, 'src')).filter(
-    (file) => file.endsWith('.astro') || /^src\/pages\/.+\.mdx?$/.test(file),
-  );
-  const targets = [
-    ...packageComponentFiles(root),
-    ...paths.filter((file) => file.endsWith('.astro') && !file.startsWith('src/pages/')),
-  ];
+  const paths = (await walk(root, 'src')).filter((file) => file.endsWith('.astro') || /^src\/pages\/.+\.mdx?$/.test(file));
+  const targets = [...packageComponentFiles(root), ...paths.filter((file) => file.endsWith('.astro') && !file.startsWith('src/pages/'))];
   if (selected && !targets.includes(selected)) {
     throw new Error('Select a component inside this project');
   }
@@ -76,12 +68,7 @@ function usageKind(file: string): ComponentUsageFile['kind'] {
   return 'file';
 }
 
-export async function componentUsageRoute(
-  root: string,
-  request: IncomingMessage,
-  response: ServerResponse,
-  pathname: string,
-): Promise<boolean> {
+export async function componentUsageRoute(root: string, request: IncomingMessage, response: ServerResponse, pathname: string): Promise<boolean> {
   if (pathname !== '/studio/api/component-usage') {
     return false;
   }
@@ -91,8 +78,6 @@ export async function componentUsageRoute(
   const input = new URL(request.url ?? '/', 'http://studio').searchParams.get('file');
   const usage = await scanComponentUsage(root, input === null ? undefined : componentFile(input));
   response.setHeader('Content-Type', 'application/json');
-  response.end(
-    JSON.stringify(input === null ? usage.map(({ file, total }) => ({ file, total })) : usage[0]),
-  );
+  response.end(JSON.stringify(input === null ? usage.map(({ file, total }) => ({ file, total })) : usage[0]));
   return true;
 }

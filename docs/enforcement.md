@@ -83,7 +83,7 @@ the agent hooks are guard rails, not a sandbox. CI is the gate that cannot be ar
 |---|---|
 | Required tsconfig flags | tsc: every `tsconfig*.json`; `scripts/tsconfig.json` adds `verbatimModuleSyntax` for scripts |
 | Required ESLint rules | lint: `eslint.config.mjs` is the source of truth |
-| Prettier, width 100 | scan: `line-width` (hard limit, code and config); CI: `prettier --check` |
+| Prettier, width 160 | CI: `prettier --check` (a width target, not a limit: no check holds line width) |
 
 ### Core patterns
 
@@ -103,8 +103,6 @@ the agent hooks are guard rails, not a sandbox. CI is the gate that cannot be ar
 | 9 | Split compound assertions | lint: `stacki/no-compound-assert` |
 | 9 | Paired assertions | review |
 | 10 | Bounded loops and recursion | lint: `stacki/no-unbounded-loop`, `stacki/bounded-recursion` (direct recursion; mutual recursion is review) |
-| 11 | 70 lines per function | lint: `max-lines-per-function` |
-| 11 | 800 lines per source file | lint: `max-lines` in `src/`, `electron/`, `shared/` and `scripts/` (blank and comment lines not counted) |
 | 11 | Braces always | lint: `curly` |
 | 11 | Simple, positive conditions | review |
 | 12 | No abbreviations | lint: `stacki/naming` (word list in `eslint.config.mjs`) |

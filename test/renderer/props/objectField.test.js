@@ -42,9 +42,7 @@ const check = (what, condition, detail) => {
     platform: 'node',
     logLevel: 'silent',
   });
-  const { objectFields, objectText } = await import(
-    `${pathToFileURL(modOut).href}?v=${Date.now()}`
-  );
+  const { objectFields, objectText } = await import(`${pathToFileURL(modOut).href}?v=${Date.now()}`);
 
   const TAGS = '{ legend: "Ministry Role", options: ["Pastors", "Staff", "Prayer"] }';
   {
@@ -55,62 +53,29 @@ const check = (what, condition, detail) => {
       fields?.map((field) => field.key).join() === 'legend,options',
       fields?.map((field) => field.key).join(),
     );
-    check(
-      'a word is a word',
-      fields?.[0].kind === 'text' && fields[0].text === 'Ministry Role',
-      JSON.stringify(fields?.[0]),
-    );
-    check(
-      'and a list is a list',
-      fields?.[1].kind === 'list' && fields[1].items.length === 3,
-      JSON.stringify(fields?.[1]),
-    );
+    check('a word is a word', fields?.[0].kind === 'text' && fields[0].text === 'Ministry Role', JSON.stringify(fields?.[0]));
+    check('and a list is a list', fields?.[1].kind === 'list' && fields[1].items.length === 3, JSON.stringify(fields?.[1]));
     check('written back as it was', objectText(fields) === TAGS, objectText(fields));
   }
   {
     const fields = objectFields('{ shown: true, count: 3 }');
     check('a yes-or-no is one', fields?.[0].kind === 'boolean', JSON.stringify(fields?.[0]));
     check('and a number is a number', fields?.[1].kind === 'number', JSON.stringify(fields?.[1]));
-    check(
-      'both written back unquoted',
-      objectText(fields) === '{ shown: true, count: 3 }',
-      objectText(fields),
-    );
+    check('both written back unquoted', objectText(fields) === '{ shown: true, count: 3 }', objectText(fields));
   }
   {
     // The file's own quotes are kept: a project that writes single ones should
     // not find double ones the first time a field is touched.
     const single = "{ legend: 'Ministry Role' }";
-    check(
-      'the quote the file used is the quote it keeps',
-      objectText(objectFields(single)) === single,
-      objectText(objectFields(single)),
-    );
+    check('the quote the file used is the quote it keeps', objectText(objectFields(single)) === single, objectText(objectFields(single)));
   }
-  for (const refused of [
-    '{ nested: { a: 1 } }',
-    '{ options: [...defaults] }',
-    '{ from: getTags() }',
-    '{ legend }',
-    '{ [key]: 1 }',
-    'tags',
-    '[1, 2]',
-  ]) {
-    check(
-      `what a field cannot show is refused — ${refused}`,
-      objectFields(refused) === undefined,
-      JSON.stringify(objectFields(refused)),
-    );
+  for (const refused of ['{ nested: { a: 1 } }', '{ options: [...defaults] }', '{ from: getTags() }', '{ legend }', '{ [key]: 1 }', 'tags', '[1, 2]']) {
+    check(`what a field cannot show is refused — ${refused}`, objectFields(refused) === undefined, JSON.stringify(objectFields(refused)));
   }
 
   // --- and what the control does with them --------------------------------------
   const entry = path.join(buildDirectory, 'object-field.entry.jsx');
-  fs.writeFileSync(
-    entry,
-    `export { default as ObjectField } from ${JSON.stringify(
-      repoPath('src/features/props/ObjectField.tsx'),
-    )};\n`,
-  );
+  fs.writeFileSync(entry, `export { default as ObjectField } from ${JSON.stringify(repoPath('src/features/props/ObjectField.tsx'))};\n`);
   const bundle = path.join(buildDirectory, 'object-field.bundle.js');
   await esbuild.build({
     entryPoints: [entry],
@@ -165,8 +130,7 @@ const check = (what, condition, detail) => {
   };
   await render();
 
-  const keys = () =>
-    [...host.querySelectorAll('.object-field-key')].map((keyElement) => keyElement.textContent);
+  const keys = () => [...host.querySelectorAll('.object-field-key')].map((keyElement) => keyElement.textContent);
   const inputs = () => [...host.querySelectorAll('.object-field-input')];
   const rows = () => [...host.querySelectorAll('.list-field-row')];
 
@@ -181,8 +145,7 @@ const check = (what, condition, detail) => {
   check('and the list is rows, not text', rows().length === 3, `${rows().length} rows`);
   check(
     'each row saying what its item says',
-    [...host.querySelectorAll('.list-field-text')].map((button) => button.textContent).join() ===
-      'Pastors,Staff,Prayer',
+    [...host.querySelectorAll('.list-field-text')].map((button) => button.textContent).join() === 'Pastors,Staff,Prayer',
     [...host.querySelectorAll('.list-field-text')].map((button) => button.textContent).join(),
   );
 
@@ -190,60 +153,29 @@ const check = (what, condition, detail) => {
   // holds — and says it is not the edit yet.
   await act(async () => {
     const input = inputs()[0];
-    const setter = Object.getOwnPropertyDescriptor(
-      dom.window.HTMLInputElement.prototype,
-      'value',
-    ).set;
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
     setter.call(input, 'Ministry Area');
     input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
   });
   await render();
-  check(
-    'typing writes the object back',
-    /Ministry Area/.test(wrote[wrote.length - 1] || ''),
-    wrote[wrote.length - 1],
-  );
-  check(
-    'with the list beside it untouched',
-    /\["Pastors", "Staff", "Prayer"\]/.test(wrote[wrote.length - 1] || ''),
-    wrote[wrote.length - 1],
-  );
-  check(
-    'and says it is still being typed',
-    immediate[immediate.length - 1] === false,
-    String(immediate[immediate.length - 1]),
-  );
+  check('typing writes the object back', /Ministry Area/.test(wrote[wrote.length - 1] || ''), wrote[wrote.length - 1]);
+  check('with the list beside it untouched', /\["Pastors", "Staff", "Prayer"\]/.test(wrote[wrote.length - 1] || ''), wrote[wrote.length - 1]);
+  check('and says it is still being typed', immediate[immediate.length - 1] === false, String(immediate[immediate.length - 1]));
 
   // Dropping an item from the list inside writes the object back too.
   const bin = host.querySelectorAll('.list-field-remove')[1];
   // A missing control is a FAILURE to report, not a stack trace: every check
   // after it would otherwise be lost.
-  check(
-    'the list inside has a bin on each row',
-    !!bin,
-    `${host.querySelectorAll('.list-field-remove').length} bins`,
-  );
+  check('the list inside has a bin on each row', !!bin, `${host.querySelectorAll('.list-field-remove').length} bins`);
   if (bin) {
     await act(async () => {
       bin.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
     await render();
   }
-  check(
-    'removing an item from the list inside says so',
-    /\["Pastors", "Prayer"\]/.test(wrote[wrote.length - 1] || ''),
-    wrote[wrote.length - 1],
-  );
-  check(
-    'and that one IS the edit',
-    immediate[immediate.length - 1] === true,
-    String(immediate[immediate.length - 1]),
-  );
-  check(
-    'the field beside it survives the change',
-    /Ministry Area/.test(wrote[wrote.length - 1] || ''),
-    wrote[wrote.length - 1],
-  );
+  check('removing an item from the list inside says so', /\["Pastors", "Prayer"\]/.test(wrote[wrote.length - 1] || ''), wrote[wrote.length - 1]);
+  check('and that one IS the edit', immediate[immediate.length - 1] === true, String(immediate[immediate.length - 1]));
+  check('the field beside it survives the change', /Ministry Area/.test(wrote[wrote.length - 1] || ''), wrote[wrote.length - 1]);
 
   // --- the panel reaches for it --------------------------------------------------
   const panel = fs.readFileSync(repoPath('src/features/props/PropField.tsx'), 'utf8');
@@ -252,16 +184,10 @@ const check = (what, condition, detail) => {
     /type === 'code' && !showExpr && valueText && objectFields\(valueText\)/.test(panel),
     'an object prop still shows as raw code',
   );
-  check(
-    'and `{}` still leads back to the code editor',
-    /!showExpr/.test(panel),
-    'there would be no way back to the text',
-  );
+  check('and `{}` still leads back to the code editor', /!showExpr/.test(panel), 'there would be no way back to the text');
 
   if (failures.length) {
-    console.error(
-      `\nobject-field: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\nobject-field: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

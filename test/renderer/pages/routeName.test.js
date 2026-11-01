@@ -3,9 +3,7 @@
 // endpoints, MDX, Unicode, and invalid filesystem segments.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { routeName, pageRenameBase } = require('../../helpers/rendererModule')(
-  'src/features/pages/routeName.ts',
-);
+const { routeName, pageRenameBase } = require('../../helpers/rendererModule')('src/features/pages/routeName.ts');
 
 test('unchanged route names never request a rename', () => {
   for (const name of ['[slug]', '[...path]', '[lang]-[slug]', 'feed.xml', '@preview', 'café']) {

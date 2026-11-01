@@ -11,11 +11,7 @@ export type PublishPurpose = 'github' | 'hosting';
 // Git can hash a larger source without duplicating it. These are inspection, not checkout, budgets.
 export const PUBLISH_GIT_LIMITS = { filesMax: 100_000, bytesMax: 8 * 1024 * 1024 * 1024 } as const;
 
-export async function checkPublishWorkingSize(
-  root: string,
-  index: string,
-  purpose: PublishPurpose,
-): Promise<Result<void>> {
+export async function checkPublishWorkingSize(root: string, index: string, purpose: PublishPurpose): Promise<Result<void>> {
   ensureToolPath();
   let files = 0;
   let bytes = 0;
@@ -49,11 +45,7 @@ export async function checkPublishWorkingSize(
 }
 
 /** Measure the captured blobs: working-file sizes can change and clean filters can expand them. */
-export async function checkPublishTreeSize(
-  root: string,
-  tree: string,
-  purpose: PublishPurpose,
-): Promise<Result<void>> {
+export async function checkPublishTreeSize(root: string, tree: string, purpose: PublishPurpose): Promise<Result<void>> {
   ensureToolPath();
   let files = 0;
   let bytes = 0;
@@ -69,10 +61,7 @@ export async function checkPublishTreeSize(
 }
 
 export function parsePublishTreeEntry(record: string): Result<number> {
-  const match =
-    /^(?:100644|100755|120000) blob (?:[a-f0-9]{40}|[a-f0-9]{64}) +([0-9]+)\t([\s\S]+)$/.exec(
-      record,
-    );
+  const match = /^(?:100644|100755|120000) blob (?:[a-f0-9]{40}|[a-f0-9]{64}) +([0-9]+)\t([\s\S]+)$/.exec(record);
   if (match?.[1] === undefined || match[2] === undefined) {
     return err({ code: 'git-output', message: 'Unsupported or malformed Git tree entry.' });
   }

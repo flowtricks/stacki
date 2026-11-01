@@ -1,13 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { usePreview } from '../preview/usePreview';
 
-export function useCursorChatShortcut({
-  preview,
-  disabled,
-}: {
-  readonly preview: ReturnType<typeof usePreview>;
-  readonly disabled: boolean;
-}) {
+export function useCursorChatShortcut({ preview, disabled }: { readonly preview: ReturnType<typeof usePreview>; readonly disabled: boolean }) {
   const current = useRef(preview);
   current.current = preview;
   useEffect(() => {
@@ -15,22 +9,10 @@ export function useCursorChatShortcut({
       return;
     }
     const key = (event: KeyboardEvent) => {
-      if (
-        event.key !== '/' ||
-        event.defaultPrevented ||
-        event.isComposing ||
-        event.ctrlKey ||
-        event.metaKey ||
-        event.altKey
-      ) {
+      if (event.key !== '/' || event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) {
         return;
       }
-      if (
-        event.target instanceof Element &&
-        event.target.closest(
-          'input, textarea, select, [contenteditable=true], .cm-editor, [role=dialog]',
-        )
-      ) {
+      if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable=true], .cm-editor, [role=dialog]')) {
         return;
       }
       if (document.querySelector('[role=dialog], [role=listbox]')) {

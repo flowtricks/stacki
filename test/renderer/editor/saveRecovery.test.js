@@ -32,11 +32,7 @@ async function fixture(context, build, beforeEdit = async () => {}) {
     bridge: {
       editPage: async ({ pagePath, authoredChecksum, edit }) => {
         await beforeEdit();
-        const report = documents.submitEdit(
-          pagePath,
-          { authoredChecksum, gone: 'anchor-moved' },
-          (base) => buildEdit(edit, base),
-        );
+        const report = documents.submitEdit(pagePath, { authoredChecksum, gone: 'anchor-moved' }, (base) => buildEdit(edit, base));
         if (report.tag !== 'applied') {
           return { ok: false, error: pageEditError(pagePath, report) };
         }
@@ -99,11 +95,7 @@ test('an edit reaches disk after a brief file lock without another edit', async 
   assert.equal(fs.readFileSync(file, 'utf8'), SOURCE);
   assert.equal(attempts, 1);
   await app.act(async () => releaseRetry());
-  await waitForSave(
-    app,
-    () => __panels.StructurePanel.pageState.save.tag === 'clean',
-    'the released retry finishes saving',
-  );
+  await waitForSave(app, () => __panels.StructurePanel.pageState.save.tag === 'clean', 'the released retry finishes saving');
   assert.equal(fs.readFileSync(file, 'utf8'), SOURCE.replace('Before', 'After'));
   assert.equal(attempts, 2, 'the same edit is retried after the lock releases');
   assert.equal(__panels.StructurePanel.pageState.save.tag, 'clean');
@@ -124,11 +116,7 @@ test('a failed save stays visible and Retry saves the retained edit', async (con
     return rename(from, to);
   });
   await gesture(app, async () => __panels.PropsPanel.onSetContent('After'));
-  await waitForSave(
-    app,
-    () => __panels.StructurePanel.pageState.save.tag === 'failed',
-    'exhausted retries expose the failed save',
-  );
+  await waitForSave(app, () => __panels.StructurePanel.pageState.save.tag === 'failed', 'exhausted retries expose the failed save');
   assert.equal(attempts, 4, 'automatic retries have a fixed bound');
   assert.equal(fs.readFileSync(file, 'utf8'), SOURCE);
   assert.equal(__panels.StructurePanel.pageState.save.tag, 'failed');
@@ -138,18 +126,12 @@ test('a failed save stays visible and Retry saves the retained edit', async (con
   assert.match(document.body.textContent, /has not been saved/);
   assert.equal(attempts, 4, 'no endless background retries');
   locked = false;
-  const retry = [...document.querySelectorAll('button')].find(
-    (button) => button.textContent === 'Retry save',
-  );
+  const retry = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Retry save');
   assert.ok(retry);
   await app.act(async () => {
     retry.click();
   });
-  await waitForSave(
-    app,
-    () => __panels.StructurePanel.pageState.save.tag === 'clean',
-    'manual retry finishes saving',
-  );
+  await waitForSave(app, () => __panels.StructurePanel.pageState.save.tag === 'clean', 'manual retry finishes saving');
   assert.equal(fs.readFileSync(file, 'utf8'), SOURCE.replace('Before', 'After'));
   assert.equal(__panels.StructurePanel.pageState.save.tag, 'clean');
   assert.doesNotMatch(document.body.textContent, /has not been saved/);

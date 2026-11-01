@@ -125,25 +125,13 @@ function parseProps(input: unknown, where: string): Readonly<Record<string, Attr
   return Object.fromEntries(entries);
 }
 
-function parseChildren(
-  input: unknown,
-  where: string,
-  depth: number,
-  context: ParseContext,
-): PageNodeList {
+function parseChildren(input: unknown, where: string, depth: number, context: ParseContext): PageNodeList {
   if (!Array.isArray(input)) {
     fail(where, 'expected children array');
   }
-  const nodes = input.map((child, index) =>
-    parsePageNode(child, `${where}[${index}]`, depth + 1, context),
-  );
-  const trailingBlanks = parseMarkdownBlanks(
-    Reflect.get(input, 'mdTrailingBlanks'),
-    `${where}.mdTrailingBlanks`,
-  );
-  return trailingBlanks === undefined
-    ? nodes
-    : Object.assign(nodes, { mdTrailingBlanks: trailingBlanks });
+  const nodes = input.map((child, index) => parsePageNode(child, `${where}[${index}]`, depth + 1, context));
+  const trailingBlanks = parseMarkdownBlanks(Reflect.get(input, 'mdTrailingBlanks'), `${where}.mdTrailingBlanks`);
+  return trailingBlanks === undefined ? nodes : Object.assign(nodes, { mdTrailingBlanks: trailingBlanks });
 }
 
 function parseMarkdownBlanks(input: unknown, where: string): number | undefined {
@@ -161,17 +149,7 @@ function parseMarkdownBlanks(input: unknown, where: string): number | undefined 
 
 function markdownExtras(record: Record<string, unknown>, where: string): MarkdownNodeMetadata {
   const out: Record<string, unknown> = {};
-  for (const field of [
-    'mdIndent',
-    'mdFence',
-    'mdInfo',
-    'mdRaw',
-    'mdGap',
-    'mdTrail',
-    'mdSetext',
-    'mdMarker',
-    'mdSource',
-  ] as const) {
+  for (const field of ['mdIndent', 'mdFence', 'mdInfo', 'mdRaw', 'mdGap', 'mdTrail', 'mdSetext', 'mdMarker', 'mdSource'] as const) {
     if (record[field] !== undefined) {
       out[field] = asString(record[field], `${where}.${field}`, LIMITS.nodeValueCharsMax);
     }
@@ -208,16 +186,10 @@ function markdownExtras(record: Record<string, unknown>, where: string): Markdow
 
 // Layout/preservation fields shared by the tag-bearing kinds. Each is
 // validated only when present, so a producer that omits them stays valid.
-function tagExtras(
-  record: Record<string, unknown>,
-  where: string,
-): Pick<PairedNode, 'attrOrder' | 'attrSource' | 'blankBefore' | 'blankAfter'> {
+function tagExtras(record: Record<string, unknown>, where: string): Pick<PairedNode, 'attrOrder' | 'attrSource' | 'blankBefore' | 'blankAfter'> {
   const out: Record<string, unknown> = {};
   if (record['attrOrder'] !== undefined) {
-    if (
-      !Array.isArray(record['attrOrder']) ||
-      !record['attrOrder'].every((name) => typeof name === 'string')
-    ) {
+    if (!Array.isArray(record['attrOrder']) || !record['attrOrder'].every((name) => typeof name === 'string')) {
       fail(where, 'attrOrder: expected string array');
     }
     out['attrOrder'] = record['attrOrder'] as readonly string[];
@@ -249,12 +221,7 @@ function tagExtras(
 // A self-closing tag has no children list. JSON cannot say `undefined`, so a
 // stored `null` (the sentinel before AGENTS.md §6) and a missing key both mean
 // self-closing.
-function parsePairedChildren(
-  input: unknown,
-  where: string,
-  depth: number,
-  context: ParseContext,
-): PageNodeList | undefined {
+function parsePairedChildren(input: unknown, where: string, depth: number, context: ParseContext): PageNodeList | undefined {
   if (input === undefined) {
     return undefined;
   }
@@ -264,12 +231,7 @@ function parsePairedChildren(
   return parseChildren(input, where, depth, context);
 }
 
-function parsePaired(
-  record: Record<string, unknown>,
-  where: string,
-  depth: number,
-  context: ParseContext,
-): PairedNode {
+function parsePaired(record: Record<string, unknown>, where: string, depth: number, context: ParseContext): PairedNode {
   const kind = record['kind'];
   if (kind !== 'component' && kind !== 'element') {
     fail(where, `parsePaired called for kind ${JSON.stringify(kind)}`);
@@ -288,12 +250,7 @@ function parsePaired(
   return out as unknown as PairedNode;
 }
 
-function parseByKind(
-  record: Record<string, unknown>,
-  where: string,
-  depth: number,
-  context: ParseContext,
-): PageNode {
+function parseByKind(record: Record<string, unknown>, where: string, depth: number, context: ParseContext): PageNode {
   const kind = record['kind'];
   switch (kind) {
     case 'component':
@@ -365,12 +322,7 @@ function parseRaw(record: Record<string, unknown>, where: string): RawNode {
   return out as unknown as RawNode;
 }
 
-function parseMap(
-  record: Record<string, unknown>,
-  where: string,
-  depth: number,
-  context: ParseContext,
-): MapNode {
+function parseMap(record: Record<string, unknown>, where: string, depth: number, context: ParseContext): MapNode {
   // Paired with parsePageNode, which dispatched on the kind and bounded the depth.
   assert(record['kind'] === 'map', 'parseMap: dispatched on its kind');
   assert(depth <= LIMITS.treeDepthMax, 'parseMap: depth was bounded by the caller');
@@ -393,9 +345,7 @@ function parseMap(
     if (body.length > LIMITS.treeNodesMax) {
       fail(where, 'body: exceeds statement limit');
     }
-    out['body'] = body.map((line: unknown, index) =>
-      asString(line, `${where}.body[${index}]`, LIMITS.nodeValueCharsMax),
-    );
+    out['body'] = body.map((line: unknown, index) => asString(line, `${where}.body[${index}]`, LIMITS.nodeValueCharsMax));
   }
   if (record['bare'] !== undefined) {
     if (typeof record['bare'] !== 'boolean') {
@@ -409,12 +359,7 @@ function parseMap(
   return out as unknown as MapNode;
 }
 
-function parseCond(
-  record: Record<string, unknown>,
-  where: string,
-  depth: number,
-  context: ParseContext,
-): CondNode {
+function parseCond(record: Record<string, unknown>, where: string, depth: number, context: ParseContext): CondNode {
   // Paired with parsePageNode, which dispatched on the kind and bounded the depth.
   assert(record['kind'] === 'cond', 'parseCond: dispatched on its kind');
   assert(depth <= LIMITS.treeDepthMax, 'parseCond: depth was bounded by the caller');
@@ -439,12 +384,7 @@ function parseCond(
 
 /** Parse one node subtree. Throws on any violation — boundary code decides
  * whether to let that propagate or convert it to a Result. */
-export function parsePageNode(
-  input: unknown,
-  where = 'node',
-  depth = 0,
-  context: ParseContext = { nodes: 0 },
-): PageNode {
+export function parsePageNode(input: unknown, where = 'node', depth = 0, context: ParseContext = { nodes: 0 }): PageNode {
   if (depth > LIMITS.treeDepthMax) {
     fail(where, `exceeds depth ${LIMITS.treeDepthMax}`);
   }
@@ -556,9 +496,7 @@ function checkAttrSpanNames(node: PageNode, where: string): void {
     fail(where, `attrSpans: a ${node.kind} node has no attributes`);
   }
   // A Markdown attribute is a string the syntax places, not a typed attribute.
-  const last = new Map(
-    node.attrSpans.map((entry) => [entry.name, entry.type === 'markdown' ? 'string' : entry.type]),
-  );
+  const last = new Map(node.attrSpans.map((entry) => [entry.name, entry.type === 'markdown' ? 'string' : entry.type]));
   const names = Object.keys(props);
   if (last.size !== names.length) {
     fail(where, 'attrSpans: names differ from props');
@@ -577,13 +515,8 @@ export function parsePageTree(input: unknown): PageNodeList {
   }
   const context: ParseContext = { nodes: 0 };
   const nodes = input.map((child, index) => parsePageNode(child, `tree[${index}]`, 0, context));
-  const trailingBlanks = parseMarkdownBlanks(
-    Reflect.get(input, 'mdTrailingBlanks'),
-    'tree.mdTrailingBlanks',
-  );
-  return trailingBlanks === undefined
-    ? nodes
-    : Object.assign(nodes, { mdTrailingBlanks: trailingBlanks });
+  const trailingBlanks = parseMarkdownBlanks(Reflect.get(input, 'mdTrailingBlanks'), 'tree.mdTrailingBlanks');
+  return trailingBlanks === undefined ? nodes : Object.assign(nodes, { mdTrailingBlanks: trailingBlanks });
 }
 
 function parseImport(input: unknown, where: string): ImportDecl {
@@ -637,16 +570,8 @@ export function parsePageModel(input: unknown): PageModel {
   }
   const out: Record<string, unknown> = {
     imports: record['imports'].map((entry, index) => parseImport(entry, `model.imports[${index}]`)),
-    frontmatterLead: asString(
-      record['frontmatterLead'],
-      'model.frontmatterLead',
-      LIMITS.nodeValueCharsMax,
-    ),
-    extraFrontmatter: asString(
-      record['extraFrontmatter'],
-      'model.extraFrontmatter',
-      LIMITS.nodeValueCharsMax,
-    ),
+    frontmatterLead: asString(record['frontmatterLead'], 'model.frontmatterLead', LIMITS.nodeValueCharsMax),
+    extraFrontmatter: asString(record['extraFrontmatter'], 'model.extraFrontmatter', LIMITS.nodeValueCharsMax),
     extraFrontmatterSpaced: record['extraFrontmatterSpaced'] === true,
     frontmatterLayout: {
       extra: asString(layout['extra'], 'model.frontmatterLayout.extra', LIMITS.nodeValueCharsMax),
@@ -731,11 +656,7 @@ function parseMarkdownPageModel(record: Record<string, unknown>): PageModel {
     ...located,
     imports,
     frontmatterLead: '',
-    extraFrontmatter: asString(
-      record['extraFrontmatter'],
-      'model.extraFrontmatter',
-      LIMITS.nodeValueCharsMax,
-    ),
+    extraFrontmatter: asString(record['extraFrontmatter'], 'model.extraFrontmatter', LIMITS.nodeValueCharsMax),
     extraFrontmatterSpaced: true,
     frontmatterLayout: { extra: '', slots: [] },
     hadFrontmatter: record['mdHasFrontmatter'] === true,

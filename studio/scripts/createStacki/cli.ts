@@ -34,15 +34,11 @@ Report external setup that still needs my action. Updates are always opt-in.`;
 
 async function confirm(project: string): Promise<boolean> {
   if (!stdin.isTTY || !stdout.isTTY) {
-    throw new Error(
-      'Use --yes for a noninteractive installation, or --agent for setup instructions',
-    );
+    throw new Error('Use --yes for a noninteractive installation, or --agent for setup instructions');
   }
   const input = createInterface({ input: stdin, output: stdout });
   try {
-    const answer = await input.question(
-      `Install Stacki Studio in ${path.join(project, 'studio')}? [y/N] `,
-    );
+    const answer = await input.question(`Install Stacki Studio in ${path.join(project, 'studio')}? [y/N] `);
     return /^(y|yes)$/i.test(answer.trim());
   } finally {
     input.close();
@@ -56,12 +52,7 @@ async function main(): Promise<void> {
     return;
   }
   requireSupportedNode(process.versions.node);
-  const release = parseRelease(
-    await readJson(
-      fileURLToPath(new URL('./stacki-studio.json', import.meta.url)),
-      RELEASE_BYTES_MAX,
-    ),
-  );
+  const release = parseRelease(await readJson(fileURLToPath(new URL('./stacki-studio.json', import.meta.url)), RELEASE_BYTES_MAX));
   if (options.mode === 'version') {
     console.log(release.version);
     return;
@@ -70,9 +61,7 @@ async function main(): Promise<void> {
   const installed = await installedVersion(project);
   if (installed) {
     console.log(`Stacki Studio ${installed} is already installed. No files were changed.`);
-    console.log(
-      'Open Studio to manage its version. Run npm --prefix studio run dev in this project.',
-    );
+    console.log('Open Studio to manage its version. Run npm --prefix studio run dev in this project.');
     return;
   }
   console.log(`Stacki Studio ${release.version} — 1/3 Install`);
@@ -84,9 +73,7 @@ async function main(): Promise<void> {
   await installNewRelease(path.join(project, 'studio'), release);
   console.log(`\nInstalled Stacki Studio ${release.version} in ${path.join(project, 'studio')}`);
   console.log('\n2/3 Local preview\nFrom your project root, run: npm --prefix studio run dev');
-  console.log(
-    '\n3/3 Go live\nFollow studio/docs/cloudflare.md to configure GitHub and Cloudflare.',
-  );
+  console.log('\n3/3 Go live\nFollow studio/docs/cloudflare.md to configure GitHub and Cloudflare.');
   console.log('For a prompt to give your agent: npm create stacki@latest -- --agent');
   console.log('Commit /studio to keep this version with your project. Updates are opt-in.');
 }

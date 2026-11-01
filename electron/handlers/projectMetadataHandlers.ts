@@ -6,20 +6,14 @@ import type { MainHost } from './mainHost';
 import { createProjectText } from '../documents/documentWrites';
 import { ensureExcluded } from '../lib/projectExclusions';
 
-export function registerProjectMetadataHandlers(
-  host: Pick<MainHost, 'ipcMain' | 'assertInProject'>,
-): void {
+export function registerProjectMetadataHandlers(host: Pick<MainHost, 'ipcMain' | 'assertInProject'>): void {
   const root = (projectPath: string, kind: MetadataKind): string => {
     const canonical = fs.realpathSync(projectPath);
     host.assertInProject(path.join(canonical, METADATA_FILES[kind]));
     return canonical;
   };
-  host.ipcMain.handle('project:metadata', (_event, input) =>
-    readProjectMetadata(root(input.projectPath, input.kind), input.kind),
-  );
-  host.ipcMain.handle('project:writeMetadata', (_event, input) =>
-    writeProjectMetadata(root(input.projectPath, input.write.kind), input.write),
-  );
+  host.ipcMain.handle('project:metadata', (_event, input) => readProjectMetadata(root(input.projectPath, input.kind), input.kind));
+  host.ipcMain.handle('project:writeMetadata', (_event, input) => writeProjectMetadata(root(input.projectPath, input.write.kind), input.write));
   host.ipcMain.handle('project:createDefaultsCanvas', (_event, input) => {
     const project = root(input.projectPath, 'components');
     const file = canvasPath(project, input.canvas.file);

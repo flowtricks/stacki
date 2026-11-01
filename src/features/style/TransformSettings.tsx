@@ -38,11 +38,7 @@ const effectiveValue = (read: Read, prop: string): string => {
   if (!resolved) {
     return '';
   }
-  return (
-    resolved.source === 'selected' && resolved.selectedValue
-      ? resolved.selectedValue.value
-      : resolved.winner.value
-  ).trim();
+  return (resolved.source === 'selected' && resolved.selectedValue ? resolved.selectedValue.value : resolved.winner.value).trim();
 };
 
 const pxNumber = (value: string): number | undefined => {
@@ -66,9 +62,7 @@ function Heading({
   onClear: () => void;
   cleared: boolean;
 }) {
-  const help = useHoverTip<HTMLSpanElement>(
-    note ? <PropTip props={props} note={note} /> : undefined,
-  );
+  const help = useHoverTip<HTMLSpanElement>(note ? <PropTip props={props} note={note} /> : undefined);
   return (
     <div className="embed-editor_tsettings-head">
       <FieldLabel
@@ -83,21 +77,10 @@ function Heading({
       </FieldLabel>
       {note ? (
         <>
-          <span
-            className="embed-editor_tsettings-help"
-            ref={help.ref}
-            {...help.hoverProps}
-            aria-label={note}
-            role="img"
-          >
+          <span className="embed-editor_tsettings-help" ref={help.ref} {...help.hoverProps} aria-label={note} role="img">
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="14" height="14">
               <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
-              <path
-                d="M6.4 6.2a1.7 1.7 0 1 1 1.9 1.7v1"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-              />
+              <path d="M6.4 6.2a1.7 1.7 0 1 1 1.9 1.7v1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
               <circle cx="8.3" cy="11.2" r=".7" fill="currentColor" />
             </svg>
           </span>
@@ -126,13 +109,7 @@ function OriginRow({
     <div className="embed-editor_size-row embed-editor_grad-pos-row">
       <span className="embed-editor_size-label embed-editor_bg-caption">{label}</span>
       <div className="embed-editor_grad-pos">
-        <PositionGrid
-          x={origin.x}
-          y={origin.y}
-          busy={busy}
-          ariaLabel={ariaLabel}
-          onPick={(px, py) => onChange({ ...origin, x: px, y: py }, false)}
-        />
+        <PositionGrid x={origin.x} y={origin.y} busy={busy} ariaLabel={ariaLabel} onPick={(px, py) => onChange({ ...origin, x: px, y: py }, false)} />
         <div className="embed-editor_grad-pos-fields">
           {/* A <div>, not a <label>: the field here is VariableConnect's contenteditable
               editor, and the plain input behind it is opacity:0 / pointer-events:none.
@@ -269,12 +246,8 @@ function stepDistanceKey(event: KeyboardEvent<HTMLInputElement>): string | undef
 }
 
 // The explanatory notes under the two perspective headings.
-const SELF_PERSPECTIVE_NOTE =
-  "Depth for this element's own transform — written as perspective() at the front of " +
-  'the transform list.';
-const CHILDREN_PERSPECTIVE_NOTE =
-  "Depth for this element's CHILDREN, so they share one viewpoint. It does nothing to " +
-  'the element itself.';
+const SELF_PERSPECTIVE_NOTE = "Depth for this element's own transform — written as perspective() at the front of " + 'the transform list.';
+const CHILDREN_PERSPECTIVE_NOTE = "Depth for this element's CHILDREN, so they share one viewpoint. It does nothing to " + 'the element itself.';
 
 export default function TransformSettings({
   read,
@@ -305,13 +278,7 @@ export default function TransformSettings({
 
   return (
     <div className="embed-editor_tsettings">
-      <TransformSection
-        read={read}
-        busy={busy}
-        setProp={setProp}
-        clearProp={clearProp}
-        writeOrigin={writeOrigin}
-      />
+      <TransformSection read={read} busy={busy} setProp={setProp} clearProp={clearProp} writeOrigin={writeOrigin} />
 
       <section className="embed-editor_tsettings-section">
         <Heading
@@ -331,13 +298,7 @@ export default function TransformSettings({
         />
       </section>
 
-      <ChildrenPerspectiveSection
-        read={read}
-        busy={busy}
-        setProp={setProp}
-        clearProp={clearProp}
-        writeOrigin={writeOrigin}
-      />
+      <ChildrenPerspectiveSection read={read} busy={busy} setProp={setProp} clearProp={clearProp} writeOrigin={writeOrigin} />
     </div>
   );
 }
@@ -360,12 +321,7 @@ function TransformSection({ read, busy, setProp, clearProp, writeOrigin }: Secti
   // this the control showed NEITHER segment lit, which reads as "no answer" when
   // the real answer is always one or the other — backface-visibility has no unset
   // state at render time, it is `visible` until something says otherwise.
-  const shownBackface = useHighlight(
-    backface,
-    'backface-visibility',
-    ['visible', 'hidden'],
-    'visible',
-  );
+  const shownBackface = useHighlight(backface, 'backface-visibility', ['visible', 'hidden'], 'visible');
   return (
     <section className="embed-editor_tsettings-section">
       <Heading
@@ -375,13 +331,7 @@ function TransformSection({ read, busy, setProp, clearProp, writeOrigin }: Secti
         cleared={!!effectiveValue(read, 'transform-origin') || !!backface}
         onClear={() => clearProp(['transform-origin', 'backface-visibility'])}
       />
-      <OriginRow
-        label="Origin"
-        origin={transformOrigin}
-        busy={busy}
-        ariaLabel="Transform origin"
-        onChange={(next) => writeOrigin('transform-origin', next)}
-      />
+      <OriginRow label="Origin" origin={transformOrigin} busy={busy} ariaLabel="Transform origin" onChange={(next) => writeOrigin('transform-origin', next)} />
       <div className="embed-editor_size-row">
         <span className="embed-editor_size-label embed-editor_bg-caption">Backface</span>
         <SegmentedControl

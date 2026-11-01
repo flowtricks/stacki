@@ -34,18 +34,8 @@ export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms
   const variables = variableRoutes(root, rooms);
   const properties = propertyRoutes(root, rooms);
   const { cleanup, publisher, synchronization, proposals } = featureServices(root, rooms);
-  const git = gitWorkspaceRoutes(
-    root,
-    repository,
-    rooms,
-    () => publisher.state.kind === 'building',
-  );
-  return async (
-    request: IncomingMessage,
-    response: ServerResponse,
-    pathname: string,
-    readBody: () => Promise<string>,
-  ): Promise<boolean> => {
+  const git = gitWorkspaceRoutes(root, repository, rooms, () => publisher.state.kind === 'building');
+  return async (request: IncomingMessage, response: ServerResponse, pathname: string, readBody: () => Promise<string>): Promise<boolean> => {
     if (
       (await git(request, response, pathname, readBody)) ||
       (await pageRenameRoute(root, rooms, request, response, pathname, readBody)) ||
@@ -67,22 +57,14 @@ export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms
       return true;
     }
     if (pathname === '/studio/api/styles' && request.method === 'GET') {
-      respond(
-        response,
-        await styleFiles(
-          root,
-          new URL(request.url ?? '/', 'http://studio').searchParams.has('astro'),
-        ),
-      );
+      respond(response, await styleFiles(root, new URL(request.url ?? '/', 'http://studio').searchParams.has('astro')));
       return true;
     }
     if (pathname === '/studio/api/source') {
       respond(response, await saveSource(request, rooms, readBody));
       return true;
     }
-    if (
-      await synchronizationRoute(request, response, pathname, readBody, publisher, synchronization)
-    ) {
+    if (await synchronizationRoute(request, response, pathname, readBody, publisher, synchronization)) {
       return true;
     }
     if (publishRoute(publisher, request, response, pathname)) {
@@ -104,10 +86,7 @@ function featureServices(root: string, rooms: ReturnType<typeof createRooms>) {
   const repository = githubFromEnvironment(root);
   const synchronization = new RepositorySync(root, repository, rooms);
   const publisher = publisherFor(root, rooms, cleanup, synchronization);
-  const automatic = automaticSync(
-    synchronization,
-    () => !!repository && rooms.hasClients() && publisher.state.kind !== 'building',
-  );
+  const automatic = automaticSync(synchronization, () => !!repository && rooms.hasClients() && publisher.state.kind !== 'building');
   rooms.sockets.once('close', automatic.stop);
   return {
     cleanup,
@@ -118,13 +97,7 @@ function featureServices(root: string, rooms: ReturnType<typeof createRooms>) {
   };
 }
 
-async function storageRoute(
-  cleanup: StorageCleanup,
-  request: IncomingMessage,
-  response: ServerResponse,
-  pathname: string,
-  readBody: () => Promise<string>,
-) {
+async function storageRoute(cleanup: StorageCleanup, request: IncomingMessage, response: ServerResponse, pathname: string, readBody: () => Promise<string>) {
   if (pathname === '/studio/api/storage' && request.method === 'GET') {
     respond(response, await cleanup.inspect());
     return true;
@@ -137,12 +110,7 @@ async function storageRoute(
   return false;
 }
 
-function publisherFor(
-  root: string,
-  rooms: ReturnType<typeof createRooms>,
-  cleanup: StorageCleanup,
-  synchronization: RepositorySync,
-) {
+function publisherFor(root: string, rooms: ReturnType<typeof createRooms>, cleanup: StorageCleanup, synchronization: RepositorySync) {
   const publisher = new Publisher(
     root,
     synchronization.repository,
@@ -166,9 +134,7 @@ async function syncProject(publisher: Publisher, synchronization: RepositorySync
   }
   const input = body ? record(JSON.parse(body)) : {};
   const side = input['side'];
-  return synchronization.sync(
-    side === 'draft' || side === 'github' ? { side, sha: string(input['sha'], 64) } : undefined,
-  );
+  return synchronization.sync(side === 'draft' || side === 'github' ? { side, sha: string(input['sha'], 64) } : undefined);
 }
 import { defaultsCanvasRoute } from '../features/settings/defaultsCanvasServer';
 

@@ -221,11 +221,7 @@ function welcomeStart(canvas: HTMLCanvasElement): (() => void) | undefined {
   }
   return welcomeAnimate(canvas, gl, resources);
 }
-function compileShader(
-  gl: WebGLRenderingContext,
-  type: number,
-  source: string,
-): WebGLShader | undefined {
+function compileShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | undefined {
   const shader = gl.createShader(type);
   if (!shader) {
     return undefined;
@@ -296,15 +292,7 @@ function welcomeResources(gl: WebGLRenderingContext): WelcomeResources | undefin
   const resolutionLocation = program ? gl.getUniformLocation(program, 'u_res') : undefined;
   const fieldLocation = program ? gl.getUniformLocation(program, 'u_field') : undefined;
 
-  if (
-    !program ||
-    !buffer ||
-    !fieldTexture ||
-    positionLocation < 0 ||
-    !timeLocation ||
-    !resolutionLocation ||
-    !fieldLocation
-  ) {
+  if (!program || !buffer || !fieldTexture || positionLocation < 0 || !timeLocation || !resolutionLocation || !fieldLocation) {
     if (buffer) {
       gl.deleteBuffer(buffer);
     }
@@ -371,13 +359,8 @@ function welcomePointer(previous: PointerState, event: MouseEvent): PointerState
   };
 }
 // This session alone mutates its preallocated field buffers, avoiding per-frame arrays.
-function welcomeAnimate(
-  canvasElement: HTMLCanvasElement,
-  gl: WebGLRenderingContext,
-  resources: WelcomeResources,
-): () => void {
-  const { fieldTexture, fieldLocation, timeLocation, resolutionLocation, buffer, program } =
-    resources;
+function welcomeAnimate(canvasElement: HTMLCanvasElement, gl: WebGLRenderingContext, resources: WelcomeResources): () => void {
+  const { fieldTexture, fieldLocation, timeLocation, resolutionLocation, buffer, program } = resources;
   const field = welcomeField();
   let pointer: PointerState = {
     mouseX: -1,
@@ -393,10 +376,7 @@ function welcomeAnimate(
     pointer = welcomePointer(pointer, event);
   };
   const render = (now: number) => {
-    const { width, height } = welcomeDrawingSize(
-      canvasElement.clientWidth,
-      canvasElement.clientHeight,
-    );
+    const { width, height } = welcomeDrawingSize(canvasElement.clientWidth, canvasElement.clientHeight);
 
     if (canvasElement.width !== width || canvasElement.height !== height) {
       canvasElement.width = width;
@@ -492,10 +472,7 @@ function welcomeInject(field: WelcomeField, pointer: PointerState): void {
       fieldX[index] = welcomeFieldValue(fieldX, index) + directionX * weight;
       fieldY[index] = welcomeFieldValue(fieldY, index) + directionY * weight;
 
-      const magnitude = Math.hypot(
-        welcomeFieldValue(fieldX, index),
-        welcomeFieldValue(fieldY, index),
-      );
+      const magnitude = Math.hypot(welcomeFieldValue(fieldX, index), welcomeFieldValue(fieldY, index));
       if (magnitude > 0.001) {
         const softMax = magnitude / (1 + magnitude * 5);
         const scale = softMax / magnitude;
@@ -549,37 +526,17 @@ function welcomeBlur(field: WelcomeField): void {
     fieldY.set(temporaryFieldY);
   }
 }
-function welcomeUpload(
-  gl: WebGLRenderingContext,
-  fieldTexture: WebGLTexture,
-  field: WelcomeField,
-): void {
+function welcomeUpload(gl: WebGLRenderingContext, fieldTexture: WebGLTexture, field: WelcomeField): void {
   const { fieldX, fieldY, fieldData } = field;
   for (let index = 0; index < FIELD_LENGTH; index += 1) {
-    fieldData[index * 4] = Math.max(
-      0,
-      Math.min(255, Math.floor((welcomeFieldValue(fieldX, index) * 4 + 0.5) * 255)),
-    );
-    fieldData[index * 4 + 1] = Math.max(
-      0,
-      Math.min(255, Math.floor((welcomeFieldValue(fieldY, index) * 4 + 0.5) * 255)),
-    );
+    fieldData[index * 4] = Math.max(0, Math.min(255, Math.floor((welcomeFieldValue(fieldX, index) * 4 + 0.5) * 255)));
+    fieldData[index * 4 + 1] = Math.max(0, Math.min(255, Math.floor((welcomeFieldValue(fieldY, index) * 4 + 0.5) * 255)));
     fieldData[index * 4 + 2] = 0;
     fieldData[index * 4 + 3] = 255;
   }
 
   gl.bindTexture(gl.TEXTURE_2D, fieldTexture);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA,
-    FIELD_SIZE,
-    FIELD_SIZE,
-    0,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    fieldData,
-  );
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, FIELD_SIZE, FIELD_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, fieldData);
 }
 
 function welcomeFieldValue(field: Float32Array, index: number): number {

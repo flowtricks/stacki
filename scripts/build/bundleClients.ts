@@ -47,9 +47,7 @@ const BUILDS: Readonly<Record<Client, ClientBuild>> = {
 // The sandbox's require answers only for electron; anything else throws as the
 // preload loads, in every frame.
 function preloadProblems(text: string): readonly string[] {
-  const required = [...text.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)].map(
-    (match) => match[1],
-  );
+  const required = [...text.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)].map((match) => match[1]);
   const problems: string[] = [];
   if (required.length === 0) {
     problems.push('the preload requires nothing, so it cannot reach electron');

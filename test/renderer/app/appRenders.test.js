@@ -107,12 +107,7 @@ const check = (what, condition, detail) => {
     {
       // Anything else: a function returning null, and an `on*` subscription
       // returning its own unsubscribe.
-      get: (target, prop) =>
-        prop in target
-          ? target[prop]
-          : typeof prop === 'string' && prop.startsWith('on')
-            ? () => () => {}
-            : noop,
+      get: (target, prop) => (prop in target ? target[prop] : typeof prop === 'string' && prop.startsWith('on') ? () => () => {} : noop),
     },
   );
   dom.window.avb = bridge;
@@ -152,14 +147,10 @@ const check = (what, condition, detail) => {
   check(
     'no hook reads something declared later in the component',
     !tdz,
-    tdz &&
-      `${tdz.split('\n').slice(0, 3).join('\n    ')}\n` +
-        `    → move that hook below the declaration it names`,
+    tdz && `${tdz.split('\n').slice(0, 3).join('\n    ')}\n` + `    → move that hook below the declaration it names`,
   );
 
-  const other = errors.filter(
-    (error) => !/before initialization/.test(error) && /Error|Warning: Failed/.test(error),
-  );
+  const other = errors.filter((error) => !/before initialization/.test(error) && /Error|Warning: Failed/.test(error));
   check(
     'nothing else was reported during render',
     other.length === 0,

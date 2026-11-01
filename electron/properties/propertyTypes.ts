@@ -25,11 +25,7 @@ export function createPropertyTypeReader(document: ts.SourceFile): (type: ts.Typ
   return (type) => readPropertyType(type, aliases, duplicates);
 }
 
-function readPropertyType(
-  type: ts.TypeNode,
-  aliases: ReadonlyMap<string, ts.TypeAliasDeclaration>,
-  duplicates: ReadonlySet<string>,
-): string {
+function readPropertyType(type: ts.TypeNode, aliases: ReadonlyMap<string, ts.TypeAliasDeclaration>, duplicates: ReadonlySet<string>): string {
   const work: TypeWork[] = [{ node: type, aliases: [] }];
   const values: string[] = [];
   for (let count = 0; count < PROPERTY_LIMITS.nodesMax && work.length > 0; count++) {
@@ -81,10 +77,6 @@ function expandPropertyType(
   if (ts.isLiteralTypeNode(node)) {
     return [];
   }
-  const primitives = [
-    ts.SyntaxKind.StringKeyword,
-    ts.SyntaxKind.NumberKeyword,
-    ts.SyntaxKind.BooleanKeyword,
-  ];
+  const primitives = [ts.SyntaxKind.StringKeyword, ts.SyntaxKind.NumberKeyword, ts.SyntaxKind.BooleanKeyword];
   return primitives.includes(node.kind) ? [] : undefined;
 }

@@ -106,10 +106,7 @@ function graphics() {
 async function main() {
   const directory = repoPath('node_modules/.stacki-test/welcome-background');
   await require('esbuild').build({
-    entryPoints: [
-      repoPath('src/features/welcome/WelcomeBackground.tsx'),
-      repoPath('src/features/welcome/welcomeMotion.ts'),
-    ],
+    entryPoints: [repoPath('src/features/welcome/WelcomeBackground.tsx'), repoPath('src/features/welcome/welcomeMotion.ts')],
     outdir: directory,
     bundle: true,
     format: 'cjs',
@@ -119,9 +116,7 @@ async function main() {
     logLevel: 'silent',
   });
   const WelcomeBackground = require(path.join(directory, 'WelcomeBackground.js')).default;
-  const { welcomeMotionAllowed, welcomeDrawingSize, welcomeFrames } = require(
-    path.join(directory, 'welcomeMotion.js'),
-  );
+  const { welcomeMotionAllowed, welcomeDrawingSize, welcomeFrames } = require(path.join(directory, 'welcomeMotion.js'));
 
   await test('hardware hints fail closed at invalid and low-resource boundaries', () => {
     for (const processors of [undefined, '8', 0, -1, 1, 2, 4, 4.5, NaN, Infinity, 1025]) {

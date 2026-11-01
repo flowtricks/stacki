@@ -38,8 +38,7 @@ const { act } = React;
 const { createRoot } = require('react-dom/client');
 const StudioSetup = require(output).default;
 const click = (element) => act(async () => element.click());
-const button = (label) =>
-  [...document.querySelectorAll('button')].find((item) => item.textContent.trim() === label);
+const button = (label) => [...document.querySelectorAll('button')].find((item) => item.textContent.trim() === label);
 const currentStep = () => document.querySelector('[aria-current="step"]').textContent;
 const missing = { kind: 'missing', desktopVersion: '0.1.48' };
 
@@ -109,10 +108,7 @@ test('Add to project installs once, shows progress, and advances to local previe
     assert.equal(state.opened.length, 0);
     await click(button('Open Studio'));
     assert.deepEqual(state.opened, ['http://localhost:4327/studio']);
-    assert.equal(
-      document.querySelector('[aria-label="Launch command"]').value,
-      'npm run dev -- --config node_modules/.avb/astro.config.mjs',
-    );
+    assert.equal(document.querySelector('[aria-label="Launch command"]').value, 'npm run dev -- --config node_modules/.avb/astro.config.mjs');
     assert.equal(button('Close').disabled, false);
     await click(button('Back'));
     assert.match(currentStep(), /Install/);
@@ -215,10 +211,7 @@ test('unmount removes the progress listener while installation is pending', asyn
 
 test('Studio cannot open missing, malformed or remote website preview addresses', async () => {
   for (const url of ['', 'invalid', 'https://example.com', 'http://user:secret@localhost:4321']) {
-    const state = await fixture(
-      { kind: 'installed', desktopVersion: '0.1.48', version: '0.1.48' },
-      url,
-    );
+    const state = await fixture({ kind: 'installed', desktopVersion: '0.1.48', version: '0.1.48' }, url);
     try {
       await click(button('Manage Stacki Studio'));
       assert.equal(button('Open Studio').disabled, true);

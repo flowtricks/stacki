@@ -1,9 +1,5 @@
 import { assert } from '../../../vendor/stacki/shared/core/assert';
-import {
-  parseSlots,
-  rootTag,
-  defaultSlotInline,
-} from '../../../vendor/stacki/electron/parse/astroComponentApi';
+import { parseSlots, rootTag, defaultSlotInline } from '../../../vendor/stacki/electron/parse/astroComponentApi';
 import { componentSchema } from '../components/componentSchema';
 import { numericStyleBindings } from '../preview/numericStyleBindings';
 
@@ -44,11 +40,7 @@ export class ComponentAnalysis {
       return text;
     });
     this.remove(file);
-    const bytes =
-      2 *
-      (source.length +
-        JSON.stringify(value).length +
-        [...dependencies.values()].reduce((total, text) => total + (text?.length ?? 0), 0));
+    const bytes = 2 * (source.length + JSON.stringify(value).length + [...dependencies.values()].reduce((total, text) => total + (text?.length ?? 0), 0));
     if (reusable && bytes <= BYTES_MAX) {
       this.store(file, { source, dependencies, value, bytes });
     }
@@ -76,10 +68,7 @@ export class ComponentAnalysis {
   }
 }
 
-async function dependenciesMatch(
-  dependencies: ReadonlyMap<string, string | undefined>,
-  read: (file: string) => Promise<string>,
-): Promise<boolean> {
+async function dependenciesMatch(dependencies: ReadonlyMap<string, string | undefined>, read: (file: string) => Promise<string>): Promise<boolean> {
   for (const [file, source] of dependencies) {
     if ((await readOptional(file, read)) !== source) {
       return false;
@@ -99,11 +88,7 @@ async function readOptional(file: string, read: (file: string) => Promise<string
   }
 }
 
-async function analyzeComponent(
-  file: string,
-  source: string,
-  read: (file: string) => Promise<string>,
-) {
+async function analyzeComponent(file: string, source: string, read: (file: string) => Promise<string>) {
   const renderTag = rootTag(source);
   return {
     fields: await componentSchema(file, source, read),

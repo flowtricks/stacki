@@ -32,21 +32,9 @@ test('collaborator outlines exclude every connection owned by the signed-in acco
     { id: 'other', githubId: 456, updatedAt: 20 },
   ];
   assert.deepEqual(otherPresenceUsers(peers, 'self', 123), [peers[3]]);
-  assert.deepEqual(
-    otherPresenceUsers(peers.slice(1), 'self', 123),
-    [peers[3]],
-    'The viewer does not need to be present in the current peer snapshot',
-  );
-  assert.deepEqual(
-    otherPresenceUsers(peers, 'reconnected-self', 123),
-    [peers[3]],
-    'An old connection must not become a collaborator after reconnecting',
-  );
-  assert.deepEqual(
-    otherPresenceUsers(peers, '', 123),
-    [peers[3]],
-    'Account identity excludes self even before the socket handshake',
-  );
+  assert.deepEqual(otherPresenceUsers(peers.slice(1), 'self', 123), [peers[3]], 'The viewer does not need to be present in the current peer snapshot');
+  assert.deepEqual(otherPresenceUsers(peers, 'reconnected-self', 123), [peers[3]], 'An old connection must not become a collaborator after reconnecting');
+  assert.deepEqual(otherPresenceUsers(peers, '', 123), [peers[3]], 'Account identity excludes self even before the socket handshake');
 });
 
 test('local overlays wait for a self identity and do not hide other people with the same name', () => {

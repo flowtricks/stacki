@@ -126,8 +126,7 @@ export function readDeclarations(text: string): Rule[] {
       const end = node.source?.end?.offset ?? start;
       const declText = text.slice(start, end);
       const rawValue = node.raws.value?.raw ?? node.value;
-      const valueStart =
-        start + node.prop.length + (node.raws.between ?? ':').length + leading(rawValue);
+      const valueStart = start + node.prop.length + (node.raws.between ?? ':').length + leading(rawValue);
       // Trailing `;` and whitespace are not part of the value.
       // PostCSS keeps whitespace in an empty custom property's node.value.
       // That whitespace was already skipped above, so using its length again

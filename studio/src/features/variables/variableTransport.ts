@@ -12,9 +12,7 @@ export function readVariables() {
       if (Object.keys(incoming).length > 1000) {
         throw new Error('Variable file limit exceeded');
       }
-      versions = Object.fromEntries(
-        Object.entries(incoming).map(([file, version]) => [sourcePath(file), string(version, 64)]),
-      );
+      versions = Object.fromEntries(Object.entries(incoming).map(([file, version]) => [sourcePath(file), string(version, 64)]));
       return data;
     })
     .finally(() => {
@@ -35,10 +33,7 @@ export function onVariablesChanged(callback: () => void) {
   window.addEventListener('studio:source-updated', callback);
   return () => window.removeEventListener('studio:source-updated', callback);
 }
-export async function restoreVariableTexts(
-  expected: Readonly<Record<string, string>>,
-  texts: Readonly<Record<string, string>>,
-) {
+export async function restoreVariableTexts(expected: Readonly<Record<string, string>>, texts: Readonly<Record<string, string>>) {
   const result = record(await editVariables('restoreCssVariables', { expected, texts }));
   if (result['ok'] !== true) {
     throw new Error(string(result['error'] ?? 'Could not restore the stylesheet.'));

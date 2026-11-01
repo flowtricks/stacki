@@ -20,10 +20,7 @@ export default function App() {
   return (
     <>
       <AppContent app={app} />
-      <Settings
-        projectPath={app.project?.path}
-        previewURL={app.devStatus === 'on' ? app.devUrl : undefined}
-      />
+      <Settings projectPath={app.project?.path} previewURL={app.devStatus === 'on' ? app.devUrl : undefined} />
     </>
   );
 }
@@ -115,10 +112,7 @@ function canvasRouteOf(app: AppView) {
   const pageEntry = app.editStack[0] || app.currentPage;
   const patternRoute = pageEntry?.route;
   const component = app.currentPage?.kind === 'component' ? app.currentPage : undefined;
-  const focusPath =
-    app.defaultsCanvas.state.kind === 'idle'
-      ? component?.focusPath
-      : app.defaultsCanvas.state.session.targetPath;
+  const focusPath = app.defaultsCanvas.state.kind === 'idle' ? component?.focusPath : app.defaultsCanvas.state.session.targetPath;
   const focusOcc = component ? (component.focusOcc ?? 0) : 0;
   // The focus routes clicks either way; this says whether it also draws.
   const focusWhole = !!component?.focusWhole;
@@ -129,18 +123,15 @@ function canvasRouteOf(app: AppView) {
   // from an integration, before one is picked — the dev server is still serving
   // a site. Show its root rather than an empty canvas: something running should
   // look like it is running.
-  const rootFallback =
-    !patternRoute && !app.scan.pages.length && app.devStatus === 'on' ? '/' : undefined;
+  const rootFallback = !patternRoute && !app.scan.pages.length && app.devStatus === 'on' ? '/' : undefined;
   const pageRoute = dynamicEntry ? dynamicEntry.route : patternRoute || rootFallback;
   const pageUrlPath = pageRoute ? routeToPath(pageRoute, app.trailingSlash) : undefined;
   const liveUrl = app.devUrl && pageUrlPath ? app.devUrl + pageUrlPath : undefined;
   // The old version is served by its own dev server, on the same route the
   // editor is on, so switching in and out is a like-for-like comparison.
-  const oldVersionUrl =
-    app.previewInfo && pageUrlPath ? app.previewInfo.url + pageUrlPath : undefined;
+  const oldVersionUrl = app.previewInfo && pageUrlPath ? app.previewInfo.url + pageUrlPath : undefined;
   const openPath = app.currentPage?.path;
-  const currentScanPage =
-    openPath === undefined ? undefined : app.scan.pages.find((page) => page.path === openPath);
+  const currentScanPage = openPath === undefined ? undefined : app.scan.pages.find((page) => page.path === openPath);
   const repository = app.gitInfo?.isRepo ? app.gitInfo : undefined;
   return {
     patternRoute,
@@ -185,10 +176,7 @@ function bindContextOf(app: AppView, route: CanvasRoute) {
       // A component's frontmatter is not the page's, so the page's entry is not
       // its data. What it does have is the instance it was opened from, whose
       // props are its Astro.props — the values it is rendering with right now.
-      propsSample:
-        app.currentPage?.kind === 'component'
-          ? app.instanceProps
-          : dynamicEntry?.props || undefined,
+      propsSample: app.currentPage?.kind === 'component' ? app.instanceProps : dynamicEntry?.props || undefined,
       propsSchema: schemaFor(editedEntry),
       collectionSamples: app.collectionSamples,
       valueSamples: valueSamplesOf(app.valueSamples, app.currentPage?.path),
@@ -221,10 +209,7 @@ function entryNavOf(app: AppView, dynamicEntry: DynamicEntry | undefined) {
   };
 }
 
-function defaultsSelection(
-  scope: AppScope,
-  canvas: AppView['defaultsCanvas'],
-): AppScope['setSelectedId'] {
+function defaultsSelection(scope: AppScope, canvas: AppView['defaultsCanvas']): AppScope['setSelectedId'] {
   return (input) => {
     const id = typeof input === 'function' ? input(scope.selectedId) : input;
     if (canvas.isOpen && canvas.state.kind !== 'idle') {
@@ -240,10 +225,7 @@ function defaultsSelection(
 
 // The open file's own value samples, by value name: the store keys them by
 // file too, so two files' `pastors` never answer for each other.
-function valueSamplesOf(
-  samples: Readonly<Record<string, unknown>>,
-  file: string | undefined,
-): Record<string, unknown> {
+function valueSamplesOf(samples: Readonly<Record<string, unknown>>, file: string | undefined): Record<string, unknown> {
   const prefix = `${file ?? ''}|`;
   return Object.fromEntries(
     Object.entries(samples)

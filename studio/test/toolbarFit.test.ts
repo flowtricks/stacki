@@ -37,14 +37,8 @@ test('invalid and unbounded measurements fail loudly', () => {
   assert.throws(() => toolbarOverflow(items, 300, Infinity, 4), /overflow button width/);
   assert.throws(() => toolbarOverflow(items, 300, 36, -1), /toolbar gap/);
   assert.throws(() => toolbarOverflow([...items, items[0]], 300, 36, 4), /Duplicate/);
-  assert.throws(
-    () => toolbarOverflow([{ id: 'bad', width: NaN, priority: 1 }], 300, 36, 4),
-    /action width/,
-  );
-  assert.throws(
-    () => toolbarOverflow([{ id: 'bad', width: 40, priority: NaN }], 300, 36, 4),
-    /action priority/,
-  );
+  assert.throws(() => toolbarOverflow([{ id: 'bad', width: NaN, priority: 1 }], 300, 36, 4), /action width/);
+  assert.throws(() => toolbarOverflow([{ id: 'bad', width: 40, priority: NaN }], 300, 36, 4), /action priority/);
   assert.throws(
     () =>
       toolbarOverflow(

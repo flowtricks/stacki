@@ -60,11 +60,7 @@ export async function removeStoredAsset(request: Request, environment: Environme
   if (!object) {
     return Response.json({ removed: false });
   }
-  if (
-    object.version !== candidate.version ||
-    object.size !== candidate.size ||
-    object.size > 20_000_000
-  ) {
+  if (object.version !== candidate.version || object.size !== candidate.size || object.size > 20_000_000) {
     throw new Error('Upload changed since the cleanup preview; scan again');
   }
   const bytes = new Uint8Array(await object.arrayBuffer());

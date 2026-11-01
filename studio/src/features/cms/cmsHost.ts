@@ -9,10 +9,7 @@ import { string } from '../../shared/validation';
 
 export interface MainHost {
   readonly ipcMain: {
-    readonly handle: <K extends IpcChannel>(
-      channel: K,
-      handler: (event: unknown, payload: IpcPayloads[K]) => Promise<IpcResults[K]>,
-    ) => void;
+    readonly handle: <K extends IpcChannel>(channel: K, handler: (event: unknown, payload: IpcPayloads[K]) => Promise<IpcResults[K]>) => void;
   };
   readonly send: (channel: string, payload?: unknown) => void;
   readonly noteAppWrite: () => void;

@@ -50,11 +50,7 @@ export async function restoreAssetState(root: string) {
     try {
       await rmdir(await safePath(root, directory));
     } catch (error) {
-      if (!(
-        error instanceof Error &&
-        'code' in error &&
-        ['ENOENT', 'ENOTEMPTY'].includes(String(error.code))
-      )) {
+      if (!(error instanceof Error && 'code' in error && ['ENOENT', 'ENOTEMPTY'].includes(String(error.code)))) {
         throw error;
       }
     }

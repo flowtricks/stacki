@@ -72,41 +72,22 @@ const BASELINE: Counts = {
 };
 
 const FILES_MAX = 20_000;
-const FIELDS = [
-  'props|children|attrOrder|attrSource|kind|name|value|id',
-  'dynamicTag|slots|body|test|nodes|mdRaw|mdSource',
-].join('|');
+const FIELDS = ['props|children|attrOrder|attrSource|kind|name|value|id', 'dynamicTag|slots|body|test|nodes|mdRaw|mdSource'].join('|');
 const MUTATORS = 'push|pop|splice|shift|unshift|sort|reverse|fill|copyWithin';
-const EXCLUDED_RECEIVERS = new Set([
-  'event',
-  'target',
-  'currentTarget',
-  'gain',
-  'input',
-  'field',
-  'style',
-  'dataset',
-]);
+const EXCLUDED_RECEIVERS = new Set(['event', 'target', 'currentTarget', 'gain', 'input', 'field', 'style', 'dataset']);
 const DOM_ELEMENT_NAME = /[eE]lement$/;
 const RECEIVER = '([A-Za-z_$][\\w$]*(?:\\??\\.[A-Za-z_$][\\w$]*|\\[[^\\]]*\\])*)';
 
 const ASSIGN_RE = new RegExp(`${RECEIVER}\\.(?:${FIELDS})\\s*(?:=(?![=>])|\\+=|-=)`, 'g');
 const MUTATE_RE = new RegExp(`${RECEIVER}\\.(?:${FIELDS})\\.(?:${MUTATORS})\\(`, 'g');
 const DELETE_RE = new RegExp(`delete\\s+${RECEIVER}\\.(?:${FIELDS})\\b(?!\\[)`, 'g');
-const ALIAS_RE = new RegExp(
-  String.raw`(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*` +
-    String.raw`[^;\n]*\.(?:children|nodes)\b\s*(?:[;\n|?]|$)`,
-  'g',
-);
+const ALIAS_RE = new RegExp(String.raw`(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*` + String.raw`[^;\n]*\.(?:children|nodes)\b\s*(?:[;\n|?]|$)`, 'g');
 const LIST_MUTATE_RE = new RegExp(`${RECEIVER}\\.list\\.(?:${MUTATORS})\\(`, 'g');
 const LIST_ALIAS_RE = /(?:const|let)\s+\{[^}]*\blist\b(?:\s*:\s*([A-Za-z_$][\w$]*))?[^}]*\}\s*=/g;
 const PROP_INDEX_RE = /(?:\bprops\[[^\]]+\]\s*=(?![=>]))|(?:delete\s+[\w$.?]+\.props\[)/g;
 const MUTATE_MODEL_RE = /\bmutateModel\(/g;
 const APPLY_EDIT_RE = /\bapplyEdit\(/g;
-const DEFINITION_RE = new RegExp(
-  String.raw`(?:function\s+(?:mutateModel|applyEdit)\b|` +
-    String.raw`(?:const|let)\s+(?:mutateModel|applyEdit)\s*=)`,
-);
+const DEFINITION_RE = new RegExp(String.raw`(?:function\s+(?:mutateModel|applyEdit)\b|` + String.raw`(?:const|let)\s+(?:mutateModel|applyEdit)\s*=)`);
 const WHOLE_FILE_RE = /\breplaceSource\(|['"]replace-source['"]/g;
 
 export function sourceFiles(directory: string): readonly string[] {
@@ -258,13 +239,7 @@ function main(): void {
     wholeFileWrites: 'whole-file write sites (replace-source)',
   };
   let slipped = false;
-  const keys = [
-    'mutations',
-    'propIndexWrites',
-    'mutateModelCalls',
-    'applyEditCalls',
-    'wholeFileWrites',
-  ] as const;
+  const keys = ['mutations', 'propIndexWrites', 'mutateModelCalls', 'applyEditCalls', 'wholeFileWrites'] as const;
   for (const key of keys) {
     const now = counts[key];
     const baseline = BASELINE[key];

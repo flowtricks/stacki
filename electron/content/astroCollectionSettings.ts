@@ -19,10 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { assert } from '../../shared/core/assert';
-import type {
-  CollectionSettings,
-  SettingsChange,
-} from '../../shared/properties/collectionSettings';
+import type { CollectionSettings, SettingsChange } from '../../shared/properties/collectionSettings';
 import { createProjectText, writeProjectText } from '../documents/documentWrites';
 import { cmsSourcePath } from '../lib/contentPaths';
 import type { AstroRemoteHost } from './astroRemoteService';
@@ -77,9 +74,7 @@ export async function changeCollectionSettings(
     rewriteSources(projectPath, config.rel, (source) => renameCollectionIn(source, name, renamed));
   }
   if (change.kind === 'renameField') {
-    rewriteSources(projectPath, config.rel, (source) =>
-      namesCollection(source, name) ? renameFieldIn(source, change.from, change.to) : source,
-    );
+    rewriteSources(projectPath, config.rel, (source) => (namesCollection(source, name) ? renameFieldIn(source, change.from, change.to) : source));
   }
   return readCollectionSettings(projectPath, renamed);
 }
@@ -135,15 +130,9 @@ function entryFiles(projectPath: string, collection: ContentCollection): readonl
 export function unlinkCollectionIn(source: string, name: string): string {
   const quoted = `(['"\`])${escape(name)}\\1`;
   return source
-    .replace(
-      new RegExp(`getCollection\\(\\s*${quoted}\\s*(?:,[^()]*)?\\)`, 'g'),
-      'Promise.resolve([])',
-    )
+    .replace(new RegExp(`getCollection\\(\\s*${quoted}\\s*(?:,[^()]*)?\\)`, 'g'), 'Promise.resolve([])')
     .replace(new RegExp(`getEntries\\(\\s*${quoted}[^()]*\\)`, 'g'), 'Promise.resolve([])')
-    .replace(
-      new RegExp(`getEntry\\(\\s*${quoted}\\s*,[^()]*\\)`, 'g'),
-      'Promise.resolve(undefined)',
-    )
+    .replace(new RegExp(`getEntry\\(\\s*${quoted}\\s*,[^()]*\\)`, 'g'), 'Promise.resolve(undefined)')
     .replace(new RegExp(`CollectionEntry<\\s*${quoted}\\s*>`, 'g'), 'any');
 }
 
@@ -161,11 +150,7 @@ function configText(projectPath: string): {
 }
 
 // Renames (or, with no `to`, removes) a key in every entry holding it, one write per file.
-function migrateEntries(
-  projectPath: string,
-  collection: ContentCollection,
-  key: { readonly from: string; readonly to: string | undefined },
-): void {
+function migrateEntries(projectPath: string, collection: ContentCollection, key: { readonly from: string; readonly to: string | undefined }): void {
   const byFile = new Map<string, Entry[]>();
   for (const entry of listEntries(projectPath, collection).entries) {
     const data = entry.data;
@@ -175,9 +160,7 @@ function migrateEntries(
   }
   for (const [file, entries] of byFile) {
     const edits = entries.map((entry) =>
-      key.to === undefined
-        ? { path: [...entry.locator, key.from], value: undefined }
-        : { path: [...entry.locator, key.from], rename: key.to },
+      key.to === undefined ? { path: [...entry.locator, key.from], value: undefined } : { path: [...entry.locator, key.from], rename: key.to },
     );
     writeEntry(projectPath, { file, locator: [] }, edits);
   }
@@ -185,11 +168,7 @@ function migrateEntries(
 }
 
 // A glob collection's files, moved to its renamed folder; the old ones go to the Trash.
-async function moveFolder(
-  projectPath: string,
-  host: AstroRemoteHost,
-  move: { readonly from: string; readonly to: string },
-): Promise<void> {
+async function moveFolder(projectPath: string, host: AstroRemoteHost, move: { readonly from: string; readonly to: string }): Promise<void> {
   const from = cmsSourcePath(projectPath, move.from);
   const to = cmsSourcePath(projectPath, move.to);
   if (fs.existsSync(to)) {
@@ -205,11 +184,7 @@ async function moveFolder(
 }
 
 // Every code file under src, bounded; the config itself is edited on its own.
-function rewriteSources(
-  projectPath: string,
-  configRel: string,
-  rewrite: (source: string) => string,
-): number {
+function rewriteSources(projectPath: string, configRel: string, rewrite: (source: string) => string): number {
   let changed = 0;
   const root = cmsSourcePath(projectPath, 'src');
   for (const rel of filesUnder(root).filter((file) => CODE_FILE.test(file))) {
@@ -255,10 +230,7 @@ export function renameCollectionIn(source: string, from: string, to: string): st
 export function namesCollection(source: string, name: string): boolean {
   // The calls' pattern holds the first group, so the quote is the second there, the first here.
   const escaped = escape(name);
-  return (
-    new RegExp(`${COLLECTION_CALLS}\\(\\s*(['"\`])${escaped}\\2`).test(source) ||
-    new RegExp(`CollectionEntry<\\s*(['"\`])${escaped}\\1`).test(source)
-  );
+  return new RegExp(`${COLLECTION_CALLS}\\(\\s*(['"\`])${escaped}\\2`).test(source) || new RegExp(`CollectionEntry<\\s*(['"\`])${escaped}\\1`).test(source);
 }
 
 /** A field's reads renamed: `.data.old`, `data["old"]`, and `["old"]` where it is quoted. */
@@ -266,9 +238,7 @@ export function renameFieldIn(source: string, from: string, to: string): string 
   const name = escape(from);
   const identifier = /^[A-Za-z_$][\w$]*$/;
   const dotted = identifier.test(to) ? `.data.${to}` : `.data[${JSON.stringify(to)}]`;
-  const renamedDots = identifier.test(from)
-    ? source.replace(new RegExp(`\\.data\\.${name}(?![\\w$])`, 'g'), dotted)
-    : source;
+  const renamedDots = identifier.test(from) ? source.replace(new RegExp(`\\.data\\.${name}(?![\\w$])`, 'g'), dotted) : source;
   return renamedDots.replace(new RegExp(`\\[(['"\`])${name}\\1\\]`, 'g'), `[$1${to}$1]`);
 }
 
@@ -279,9 +249,7 @@ function escape(text: string): string {
 // Files below `root`, as relative paths, without dot folders or node_modules; bounded.
 function filesUnder(root: string): string[] {
   const out: string[] = [];
-  const pending: { readonly directory: string; readonly depth: number }[] = [
-    { directory: root, depth: 0 },
-  ];
+  const pending: { readonly directory: string; readonly depth: number }[] = [{ directory: root, depth: 0 }];
   while (pending.length > 0 && out.length < SOURCE_FILES_MAX) {
     const next = pending.pop();
     if (next === undefined || next.depth > SOURCE_DEPTH_MAX || !fs.existsSync(next.directory)) {

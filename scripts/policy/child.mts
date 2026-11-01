@@ -22,11 +22,7 @@ export interface ChildOptions {
 // signal): distinct from any real exit code.
 export const CHILD_STATUS_FAILED_TO_RUN = -1;
 
-export function runChild(
-  command: string,
-  argumentsList: readonly string[],
-  options: ChildOptions,
-): ChildResult {
+export function runChild(command: string, argumentsList: readonly string[], options: ChildOptions): ChildResult {
   const timeoutMs = options.timeoutMs ?? POLICY_LIMITS.childTimeoutMsMax;
   assert(timeoutMs > 0, 'runChild: timeout must be positive');
   assert(timeoutMs <= POLICY_LIMITS.childTimeoutMsMax, 'runChild: timeout exceeds limit');

@@ -17,8 +17,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const PAGE = (color, heading = 'Home') =>
-  `<main><h1>${heading}</h1></main>\n<style>.box { color: ${color}; }</style>\n`;
+const PAGE = (color, heading = 'Home') => `<main><h1>${heading}</h1></main>\n<style>.box { color: ${color}; }</style>\n`;
 
 // A temporary project with the generated config imported: the two plugins
 // under test, and a function that writes the page and returns its path.
@@ -54,10 +53,7 @@ function fakeServer(file, holders, settle = 'resolve') {
   const environment = (name, consumer) => ({
     config: { consumer },
     moduleGraph: {
-      getModulesByFile: (asked) =>
-        asked === file && holders.includes(name)
-          ? new Set([{ id: file, url: '/src/pages/index.astro' }])
-          : undefined,
+      getModulesByFile: (asked) => (asked === file && holders.includes(name) ? new Set([{ id: file, url: '/src/pages/index.astro' }]) : undefined),
     },
     transformRequest: (url) => {
       log.push(`start ${name} ${url}`);
@@ -100,8 +96,7 @@ async function hotUpdate(morph, file, server, log) {
   return returned;
 }
 
-const filtered = (returned) =>
-  Array.isArray(returned) && returned.length === 1 && returned[0] === PAGE_MODULE;
+const filtered = (returned) => Array.isArray(returned) && returned.length === 1 && returned[0] === PAGE_MODULE;
 
 test('a real style change compiles on the server first, then passes', async () => {
   const { markers, morph, file, dispose } = await preview();

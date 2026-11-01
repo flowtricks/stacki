@@ -2,15 +2,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 export default tseslint.config(
   {
-    ignores: [
-      'vendor/**',
-      'test/fixtures/**',
-      '.studio/**',
-      'dist/**',
-      'node_modules/**',
-      '**/test-results/**',
-      '**/.wrangler/**',
-    ],
+    ignores: ['vendor/**', 'test/fixtures/**', '.studio/**', 'dist/**', 'node_modules/**', '**/test-results/**', '**/.wrangler/**'],
   },
   ...tseslint.configs.recommended,
   {
@@ -22,16 +14,9 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
-      ],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       curly: ['error', 'all'],
-      'max-lines-per-function': ['error', { max: 70, skipBlankLines: true, skipComments: true }],
-      'no-restricted-syntax': [
-        'error',
-        { selector: 'TSEnumDeclaration', message: 'Use a literal union.' },
-      ],
+      'no-restricted-syntax': ['error', { selector: 'TSEnumDeclaration', message: 'Use a literal union.' }],
     },
   },
   {

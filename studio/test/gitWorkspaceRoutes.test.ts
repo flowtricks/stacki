@@ -31,19 +31,11 @@ test('shared branch changes retire old rooms and reject stale browser mutations'
     assert.notEqual(fresh.document.getMap('metadata').get('epoch'), epoch);
     const stale = await command(server.origin, 'commit', { message: 'Stale browser' });
     assert.equal(stale.status, 409);
-    const committed = await command(
-      server.origin,
-      'commit',
-      { message: 'Shared heading' },
-      identity,
-    );
+    const committed = await command(server.origin, 'commit', { message: 'Shared heading' }, identity);
     assert.equal(committed.status, 200, await committed.text());
     const main = await command(server.origin, 'checkout', { branch: 'main' }, identity);
     assert.equal(main.status, 200, await main.text());
-    assert.equal(
-      await readFile(path.join(setup.root, 'src/pages/index.astro'), 'utf8'),
-      '<h1>Original</h1>',
-    );
+    assert.equal(await readFile(path.join(setup.root, 'src/pages/index.astro'), 'utf8'), '<h1>Original</h1>');
   } finally {
     await server.stop();
     await rm(setup.parent, { recursive: true, force: true });
@@ -53,10 +45,7 @@ test('a pull conflict resolves the witnessed remote commit rather than the local
   const setup = await createGitWorkspaceFixture();
   const server = await startGitWorkspaceHTTP(setup.root, setup.connection);
   try {
-    assert.equal(
-      (await command(server.origin, 'commit', { message: 'Local changes' })).status,
-      200,
-    );
+    assert.equal((await command(server.origin, 'commit', { message: 'Local changes' })).status, 200);
     await writeFile(path.join(setup.remote, 'src/pages/index.astro'), '<h1>Remote</h1>');
     await setup.git('add', '.');
     await setup.git('commit', '--quiet', '-m', 'Remote');
@@ -70,17 +59,9 @@ test('a pull conflict resolves the witnessed remote commit rather than the local
       choices: { 'src/pages/index.astro': 'theirs' },
     });
     assert.equal(resolved.status, 200, await resolved.text());
-    assert.equal(
-      await readFile(path.join(setup.root, 'src/pages/index.astro'), 'utf8'),
-      '<h1>Remote</h1>',
-    );
+    assert.equal(await readFile(path.join(setup.root, 'src/pages/index.astro'), 'utf8'), '<h1>Remote</h1>');
     const state = await setup.workspace.load();
-    const parents = await gitWorkspaceRun(state.git)([
-      'show',
-      '--no-patch',
-      '--format=%P',
-      gitWorkspaceBranch(state.manifest).head,
-    ]);
+    const parents = await gitWorkspaceRun(state.git)(['show', '--no-patch', '--format=%P', gitWorkspaceBranch(state.manifest).head]);
     assert.equal(parents.split(' ').length, 2);
   } finally {
     await server.stop();

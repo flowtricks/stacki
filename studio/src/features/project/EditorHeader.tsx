@@ -46,25 +46,13 @@ export function EditorHeader({
   const direct = session?.kind === 'local' && session.editing === 'source';
   const pages = projectPages(project);
   const componentOpen = !isCanvasPage(file) && file.endsWith('.astro');
-  const back = defaultsMode
-    ? closeDefaults
-    : () => headerBack({ document, previewFile, open, report });
+  const back = defaultsMode ? closeDefaults : () => headerBack({ document, previewFile, open, report });
   useComponentBack((componentOpen || defaultsMode) && !interactivePreview.active, back);
-  const switcher = (
-    <PageSwitcher
-      pages={pages}
-      currentPage={pages.find((page) => page.path === previewFile)}
-      onSelect={(page) => open(page.path)}
-    />
-  );
+  const switcher = <PageSwitcher pages={pages} currentPage={pages.find((page) => page.path === previewFile)} onSelect={(page) => open(page.path)} />;
   return (
     <header className={`titlebar studio-titlebar ${componentOpen ? 'component-open' : ''}`}>
       <div className="studio-titlebar-start">
-        <AccountMenu
-          saved={!defaultsMode && document?.status === 'Saved'}
-          session={session}
-          cursorChat={cursorChat}
-        />
+        <AccountMenu saved={!defaultsMode && document?.status === 'Saved'} session={session} cursorChat={cursorChat} />
         <span className="project-name">{project.name}</span>
         <span className="save-state" role="status">
           {document?.status ?? 'Connecting'}
@@ -73,13 +61,7 @@ export function EditorHeader({
         {componentOpen && switcher}
       </div>
       <div className="studio-titlebar-center">
-        <HeaderNavigation
-          defaultsMode={defaultsMode}
-          componentOpen={componentOpen}
-          back={back}
-          file={file}
-          switcher={switcher}
-        />
+        <HeaderNavigation defaultsMode={defaultsMode} componentOpen={componentOpen} back={back} file={file} switcher={switcher} />
       </div>
       <div className="studio-titlebar-end">
         <Collaborators document={document} session={session} follow={follow} />
@@ -90,12 +72,7 @@ export function EditorHeader({
   );
 }
 
-function headerBack({
-  document,
-  previewFile,
-  open,
-  report,
-}: Pick<HeaderProps, 'document' | 'previewFile' | 'open' | 'report'>) {
+function headerBack({ document, previewFile, open, report }: Pick<HeaderProps, 'document' | 'previewFile' | 'open' | 'report'>) {
   if (!document) {
     open(previewFile);
     return;
@@ -106,15 +83,7 @@ function headerBack({
     .catch(report);
 }
 
-function Collaborators({
-  document,
-  session,
-  follow,
-}: {
-  document: SharedDocument | undefined;
-  session: Session | undefined;
-  follow: (peer: Peer) => void;
-}) {
+function Collaborators({ document, session, follow }: { document: SharedDocument | undefined; session: Session | undefined; follow: (peer: Peer) => void }) {
   return (
     <div className="collaborators">
       {presenceUsers(document?.peers ?? []).map((peer) => (
@@ -125,19 +94,13 @@ function Collaborators({
           key={peer.githubId === undefined ? `connection:${peer.id}` : `github:${peer.githubId}`}
           title={`${peer.name} · ${peer.page}${peer.selection ? ' · ' + peer.selection : ''}`}
           style={
-            peer.id === document?.selfId ||
-            (session?.kind === 'github' && peer.githubId === session.id)
+            peer.id === document?.selfId || (session?.kind === 'github' && peer.githubId === session.id)
               ? undefined
               : { background: presenceColor(peer), borderColor: presenceColor(peer) }
           }
         >
           <Avatar
-            id={
-              peer.githubId ??
-              (session?.kind === 'github' && session.login.toLowerCase() === peer.name.toLowerCase()
-                ? session.id
-                : undefined)
-            }
+            id={peer.githubId ?? (session?.kind === 'github' && session.login.toLowerCase() === peer.name.toLowerCase() ? session.id : undefined)}
             name={peer.name}
           />
         </button>
@@ -162,23 +125,12 @@ function HeaderNavigation({
   return (
     <>
       {defaultsMode ? (
-        <button
-          className="page-switch-btn comp-back"
-          onClick={back}
-          title="Close defaults"
-          aria-label="Close defaults"
-          aria-keyshortcuts="Escape"
-        >
+        <button className="page-switch-btn comp-back" onClick={back} title="Close defaults" aria-label="Close defaults" aria-keyshortcuts="Escape">
           <span>←</span>
           <span>Close defaults</span>
         </button>
       ) : componentOpen ? (
-        <button
-          className="page-switch-btn comp-back"
-          onClick={back}
-          title="Back to page"
-          aria-keyshortcuts="Escape"
-        >
+        <button className="page-switch-btn comp-back" onClick={back} title="Back to page" aria-keyshortcuts="Escape">
           <span>←</span>
           <span className="page-switch-label">{file.split('/').at(-1)}</span>
         </button>

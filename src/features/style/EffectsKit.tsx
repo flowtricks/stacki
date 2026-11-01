@@ -116,12 +116,7 @@ export function draftInputHandlers({
 
 // Write a whole property value: live writes skip an empty value; a committed empty
 // value clears the property.
-export function writeValue(
-  prop: string,
-  value: string,
-  options: WriteOptions,
-  writers: Pick<Props, 'setProp' | 'clearProp' | 'liveSetProp'>,
-) {
+export function writeValue(prop: string, value: string, options: WriteOptions, writers: Pick<Props, 'setProp' | 'clearProp' | 'liveSetProp'>) {
   if (options.live) {
     if (value) {
       writers.liveSetProp(prop, value, false);
@@ -228,17 +223,7 @@ export function EffLabel({ label, prop, props }: { label: string; prop: string; 
 }
 
 // A live text field bound to one property (raw CSS value editors).
-export function LiveText({
-  prop,
-  placeholder,
-  props,
-  dragging,
-}: {
-  prop: string;
-  placeholder: string;
-  props: Props;
-  dragging?: string;
-}) {
+export function LiveText({ prop, placeholder, props, dragging }: { prop: string; placeholder: string; props: Props; dragging?: string }) {
   const { read, busy, setProp, clearProp, liveSetProp } = props;
   const display = displayOf(read(prop));
   // `dragging` is what a swatch beside this field is showing mid-drag.
@@ -441,12 +426,7 @@ export function CustomInput(props: CustomInputProps) {
     setProp(prop, parsed.value, parsed.important);
   };
   return (
-    <VariableConnect
-      ariaLabel={`Connect ${prop} to a variable`}
-      disabled={busy}
-      prop={prop}
-      onPick={(binding) => setProp(prop, binding, false)}
-    >
+    <VariableConnect ariaLabel={`Connect ${prop} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
       <input
         className="u-input u-select-custom-input"
         value={draft}
@@ -516,8 +496,7 @@ export function PresetSelectRow(row: PresetSelectRowProps) {
     setProp(prop, choice, false);
   };
   // "Custom…" has no value of its own to show, so landing on it reverts the preview.
-  const preview = (option: string | undefined) =>
-    liveSetProp(prop, option === CUSTOM ? undefined : option, false);
+  const preview = (option: string | undefined) => liveSetProp(prop, option === CUSTOM ? undefined : option, false);
   const written = display.important ? `${display.value} !important` : display.value;
   const inputValue = forceCustom && isPreset ? '' : display.present ? written : '';
   const selectOptions = presetSelectOptions({

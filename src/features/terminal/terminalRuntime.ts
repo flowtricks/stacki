@@ -1,14 +1,7 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import { assert } from '../../../shared/core/assert';
-import {
-  acknowledgeTerminalData,
-  onTerminalData,
-  onTerminalExit,
-  resizeTerminal,
-  sendTerminalInput,
-  startTerminal,
-} from './terminalBridge';
+import { acknowledgeTerminalData, onTerminalData, onTerminalExit, resizeTerminal, sendTerminalInput, startTerminal } from './terminalBridge';
 import { installTerminalInteractions } from './terminalInteractions';
 
 const SCROLLBACK_LINES_MAX = 10_000;
@@ -43,9 +36,7 @@ interface TerminalDimensions {
   readonly rows: number;
 }
 
-type ProcessState =
-  | { readonly kind: 'idle' | 'starting' | 'failed' }
-  | { readonly kind: 'ready'; readonly size: TerminalDimensions };
+type ProcessState = { readonly kind: 'idle' | 'starting' | 'failed' } | { readonly kind: 'ready'; readonly size: TerminalDimensions };
 
 interface TerminalRuntimeOptions {
   readonly host: HTMLDivElement;

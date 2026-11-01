@@ -11,13 +11,7 @@ import { parseTerminalAck, parseTerminalInput } from '../../shared/ipc/ipcPayloa
 import type { IpcPayloads } from '../../shared/ipc/ipcPayloads';
 import type { IpcResults } from '../../shared/ipc/ipcResults';
 import { toRecord } from '../../shared/core/record';
-import {
-  isPathWithin,
-  mergeToolPaths,
-  pathEnvironmentValue,
-  setPathEnvironment,
-  staticToolPathGuesses,
-} from '../lib/platform';
+import { isPathWithin, mergeToolPaths, pathEnvironmentValue, setPathEnvironment, staticToolPathGuesses } from '../lib/platform';
 
 // Embedded terminal — a real login shell in the open project, hosted by
 // node-pty and rendered by xterm in the bottom dock.
@@ -208,9 +202,7 @@ function spawnError(error: unknown): SpawnFields {
   return fields;
 }
 
-type SpawnResult =
-  | { readonly proc: PseudoTerminal; readonly error: undefined }
-  | { readonly proc: undefined; readonly error: SpawnFields };
+type SpawnResult = { readonly proc: PseudoTerminal; readonly error: undefined } | { readonly proc: undefined; readonly error: SpawnFields };
 
 type PtySpawn = (typeof import('node-pty'))['spawn'];
 let ptySpawnPromise: Promise<PtySpawn> | undefined;
@@ -220,11 +212,7 @@ function loadPtySpawn(): Promise<PtySpawn> {
   return ptySpawnPromise;
 }
 
-async function spawnWithRetry(
-  shell: string,
-  args: readonly string[],
-  options: SpawnOptions,
-): Promise<SpawnResult> {
+async function spawnWithRetry(shell: string, args: readonly string[], options: SpawnOptions): Promise<SpawnResult> {
   let spawnPty: PtySpawn;
   try {
     spawnPty = await loadPtySpawn();
@@ -327,11 +315,7 @@ function stopPolling(): void {
 
 // A `send` payload that fails its parser is dropped: the channel has no reply
 // to carry the refusal, so the log is where a renderer bug surfaces.
-function parseSendPayload<T>(
-  channel: string,
-  input: unknown,
-  parse: (input: unknown) => T,
-): T | undefined {
+function parseSendPayload<T>(channel: string, input: unknown, parse: (input: unknown) => T): T | undefined {
   try {
     return parse(input);
   } catch (error: unknown) {
@@ -346,16 +330,8 @@ type Send = (channel: string, payload: unknown) => void;
  * @param send        (channel, payload) => void — posts to the renderer
  * @param projectRoot () => string|undefined — the open project, for the cwd check
  */
-function registerTerminalHandlers({
-  send,
-  projectRoot,
-}: {
-  readonly send: Send;
-  readonly projectRoot: () => string | undefined;
-}): void {
-  ipcMain.handle('terminal:start', (_event: unknown, payload) =>
-    startTerminal(payload, { send, root: projectRoot() }),
-  );
+function registerTerminalHandlers({ send, projectRoot }: { readonly send: Send; readonly projectRoot: () => string | undefined }): void {
+  ipcMain.handle('terminal:start', (_event: unknown, payload) => startTerminal(payload, { send, root: projectRoot() }));
   // `on`, not `handle`: keystrokes and acks are high-frequency one-way signals
   // that need no reply, so they shouldn't pay for a round trip.
   nativeIpcMain.on('terminal:input', (_event: unknown, input: unknown) => {
@@ -372,9 +348,7 @@ function registerTerminalHandlers({
   });
   ipcMain.handle('terminal:resize', (_event: unknown, payload) => resizeTerminal(payload));
   ipcMain.handle('terminal:close', (_event: unknown, payload) => closeTerminal(payload.id));
-  ipcMain.handle('terminal:clipboardImage', (_event: unknown, payload) =>
-    saveClipboardImage(payload),
-  );
+  ipcMain.handle('terminal:clipboardImage', (_event: unknown, payload) => saveClipboardImage(payload));
 }
 
 type StartResult = IpcResults['terminal:start'];
@@ -443,10 +417,8 @@ function retireTerminal(id: string): void {
 function spawnFailureMessage(shell: string, error: SpawnFields): string {
   const code = error.code;
   return FD_LIMIT_CODES.has(code ?? '')
-    ? `Couldn't open a terminal — too many open files (${code}). ` +
-        'Close a few tabs and try again.'
-    : `Couldn't start ${shell}${code ? ` (${code})` : ''}: ` +
-        `${error.message || 'unknown error'}`;
+    ? `Couldn't open a terminal — too many open files (${code}). ` + 'Close a few tabs and try again.'
+    : `Couldn't start ${shell}${code ? ` (${code})` : ''}: ` + `${error.message || 'unknown error'}`;
 }
 
 // Output, flow control, the optional auto-launch command, and exit.
@@ -457,11 +429,7 @@ function spawnFailureMessage(shell: string, error: SpawnFields): string {
 // nothing is reading stdin yet, leaving the user at an empty prompt. Wait
 // for init to fall quiet instead, which is a reliable proxy for "the
 // prompt is up".
-function wireTerminal(
-  id: string,
-  proc: PseudoTerminal,
-  { send, command }: { readonly send: Send; readonly command: string },
-): void {
+function wireTerminal(id: string, proc: PseudoTerminal, { send, command }: { readonly send: Send; readonly command: string }): void {
   let launched = !command;
   let quietTimer: ReturnType<typeof setTimeout> | undefined = undefined;
   let fallbackTimer: ReturnType<typeof setTimeout> | undefined = undefined;
@@ -600,9 +568,7 @@ function closeTerminal(id: string): IpcResults['terminal:close'] {
 
 // Persist pasted image bytes and hand back the path. Returns ok:false so the
 // renderer can fall back to forwarding the raw Ctrl+V byte.
-function saveClipboardImage(
-  payload: IpcPayloads['terminal:clipboardImage'],
-): IpcResults['terminal:clipboardImage'] {
+function saveClipboardImage(payload: IpcPayloads['terminal:clipboardImage']): IpcResults['terminal:clipboardImage'] {
   const buf = Buffer.from(payload.bytes);
   if (buf.length === 0) {
     return { ok: false as const, error: 'empty image' };

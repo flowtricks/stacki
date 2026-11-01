@@ -22,8 +22,7 @@ test('guide migration, coalesced saves, and stale editor protection', async () =
   const writes = [];
   globalThis.CSS = { supports: () => true };
   globalThis.localStorage = {
-    getItem: () =>
-      JSON.stringify({ columns: 8, visible: true, color: '#abc', columnDefaultsVersion: 1 }),
+    getItem: () => JSON.stringify({ columns: 8, visible: true, color: '#abc', columnDefaultsVersion: 1 }),
   };
   globalThis.window = {
     avb: {
@@ -69,15 +68,7 @@ test('guide migration, coalesced saves, and stale editor protection', async () =
   delete globalThis.CSS;
 });
 
-for (const legacy of [
-  JSON.parse('null'),
-  undefined,
-  '{broken',
-  'null',
-  '[]',
-  '42',
-  'x'.repeat(2049),
-]) {
+for (const legacy of [JSON.parse('null'), undefined, '{broken', 'null', '[]', '42', 'x'.repeat(2049)]) {
   test(`guide saves on change with legacy record ${String(legacy).slice(0, 20)}`, async () => {
     let source;
     const writes = [];

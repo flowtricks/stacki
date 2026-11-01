@@ -1,8 +1,5 @@
 import { canvasContentEdits } from '../../../vendor/stacki/src/app/model/canvasTextContent';
-import {
-  canvasPropEdits,
-  type ComponentSource,
-} from '../../../vendor/stacki/src/app/model/canvasPropText';
+import { canvasPropEdits, type ComponentSource } from '../../../vendor/stacki/src/app/model/canvasPropText';
 import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import type { ScanComponent } from '../../../vendor/stacki/shared/properties/projectScan';
 import type { Attr } from '../../../vendor/stacki/shared/page/pageNode';
@@ -55,8 +52,7 @@ export function studioCanvasText(
         relative: (path) => path.slice(ROOT.length + 1),
         read: readComponent,
         // A prop typed on the canvas is written as the props panel writes it.
-        setProp: (id: string, prop: string, value: Attr) =>
-          replace(setAttributes(source, id, { [prop]: value })),
+        setProp: (id: string, prop: string, value: Attr) => replace(setAttributes(source, id, { [prop]: value })),
       })),
     ],
     pathFor: pathOf,

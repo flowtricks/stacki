@@ -57,10 +57,7 @@ function fixture(context) {
     requests,
     read: () => latest,
     change: () => act(async () => changed({ files: ['/project/src/page.astro'] })),
-    show: (saveState, repository, settingsRevision) =>
-      act(async () =>
-        root.render(React.createElement(Harness, { saveState, repository, settingsRevision })),
-      ),
+    show: (saveState, repository, settingsRevision) => act(async () => root.render(React.createElement(Harness, { saveState, repository, settingsRevision }))),
   };
 }
 

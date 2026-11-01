@@ -20,8 +20,7 @@ type Props = { readonly projectPath: string } & (
       readonly change: (hosting: Hosting) => void;
     }
 );
-type ConnectionState =
-  PublishDiscovery | { readonly kind: 'loading'; readonly previous: PublishDiscovery | undefined };
+type ConnectionState = PublishDiscovery | { readonly kind: 'loading'; readonly previous: PublishDiscovery | undefined };
 
 export function PublishConnections(props: Props) {
   const [state, setState] = useState<ConnectionState>({ kind: 'loading', previous: undefined });
@@ -33,11 +32,7 @@ export function PublishConnections(props: Props) {
       kind: 'loading',
       previous: previous.kind === 'loading' ? previous.previous : previous,
     }));
-    void cachedPublishingDiscovery(
-      projectPath,
-      { provider, account: '' },
-      attempt === 0 ? 'reuse' : 'refresh',
-    )
+    void cachedPublishingDiscovery(projectPath, { provider, account: '' }, attempt === 0 ? 'reuse' : 'refresh')
       .then((result) => {
         if (active) {
           setState(result);
@@ -58,26 +53,11 @@ export function PublishConnections(props: Props) {
   const busy = state.kind === 'loading';
   const selected = props.provider === 'github' ? props.value : hostingKey(props.value);
   return (
-    <div
-      className="publish-connections"
-      aria-busy={busy}
-      data-loading={busy && !selected && !displayed}
-    >
+    <div className="publish-connections" aria-busy={busy} data-loading={busy && !selected && !displayed}>
       {props.provider === 'github' ? (
-        <GitHubChoice
-          {...props}
-          accounts={accounts}
-          busy={busy}
-          refresh={() => setAttempt(attempt + 1)}
-        />
+        <GitHubChoice {...props} accounts={accounts} busy={busy} refresh={() => setAttempt(attempt + 1)} />
       ) : (
-        <HostingChoice
-          {...props}
-          accounts={accounts}
-          projects={projects}
-          busy={busy}
-          refresh={() => setAttempt(attempt + 1)}
-        />
+        <HostingChoice {...props} accounts={accounts} projects={projects} busy={busy} refresh={() => setAttempt(attempt + 1)} />
       )}
       {displayed?.kind === 'failed' && (
         <ErrorToast
@@ -85,9 +65,7 @@ export function PublishConnections(props: Props) {
           recovery={[{ label: 'Refresh connection', run: () => setAttempt(attempt + 1) }]}
         />
       )}
-      {displayed?.kind === 'ready' && displayed.notice && (
-        <p className="hint-text">{displayed.notice}</p>
-      )}
+      {displayed?.kind === 'ready' && displayed.notice && <p className="hint-text">{displayed.notice}</p>}
       {displayed?.kind === 'failed' && <ConnectionHelp provider={provider} />}
     </div>
   );
@@ -108,9 +86,7 @@ function GitHubChoice(
     }
   }, [props]);
   const accounts =
-    props.accounts.some((account) => account.id === props.value) || !props.value
-      ? props.accounts
-      : [...props.accounts, { id: props.value, name: props.value }];
+    props.accounts.some((account) => account.id === props.value) || !props.value ? props.accounts : [...props.accounts, { id: props.value, name: props.value }];
   return (
     <div className="publish-field">
       <div className="publish-field-heading">
@@ -150,11 +126,7 @@ function GitHubChoice(
   );
 }
 
-function RefreshLabel(props: {
-  readonly label: string;
-  readonly busy: boolean;
-  readonly refresh: () => void;
-}) {
+function RefreshLabel(props: { readonly label: string; readonly busy: boolean; readonly refresh: () => void }) {
   return (
     <div className="publish-field-heading publish-label-refresh">
       <span className="publish-label">{props.label}</span>

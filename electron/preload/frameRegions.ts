@@ -33,8 +33,7 @@ export let trackedPaths: string[] = [];
 // namespace while one is open. Every .astro under src carries markers now,
 // so hover and click must resolve within the file being edited.
 export let activeScope = '';
-export const inScope = (nodePath: string) =>
-  activeScope ? nodePath.startsWith(activeScope) : !nodePath.includes('|');
+export const inScope = (nodePath: string) => (activeScope ? nodePath.startsWith(activeScope) : !nodePath.includes('|'));
 
 // Which rendered copy of the open component is being edited. A component
 // used inside a loop renders once per item, and drilling into one card
@@ -60,12 +59,7 @@ export function resetFocusCache(): void {
 // What the app tracks, set as one by its `avb:track` message: the paths it
 // watches, the scope that decides what is hit-testable, and the instance
 // being edited.
-export function setTracking(next: {
-  readonly paths: string[];
-  readonly scope: string;
-  readonly focus: string;
-  readonly occurrence: number;
-}): void {
+export function setTracking(next: { readonly paths: string[]; readonly scope: string; readonly focus: string; readonly occurrence: number }): void {
   trackedPaths = next.paths;
   activeScope = next.scope;
   focusPath = next.focus;
@@ -237,9 +231,7 @@ const readManifest = (): { file: string; checksum: string }[] | undefined => {
   if (byFile.size > MANIFEST_FILES_MAX) {
     return undefined;
   }
-  return [...byFile.keys()]
-    .sort((left, right) => (left < right ? -1 : left === right ? 0 : 1))
-    .map((file) => ({ file, checksum: byFile.get(file) ?? '' }));
+  return [...byFile.keys()].sort((left, right) => (left < right ? -1 : left === right ? 0 : 1)).map((file) => ({ file, checksum: byFile.get(file) ?? '' }));
 };
 const announceRender = () => {
   renderSeq += 1;
@@ -276,10 +268,7 @@ export function reportRender(): void {
     return;
   }
   try {
-    window.parent.postMessage(
-      { type: 'avb:render', token: renderToken, stamps: renderStamps },
-      '*',
-    );
+    window.parent.postMessage({ type: 'avb:render', token: renderToken, stamps: renderStamps }, '*');
   } catch {
     /* no parent to tell */
   }
@@ -300,8 +289,7 @@ export const PATH_ATTR = 'data-avb-p';
 // the serializer, since a slotted node can't be wrapped in markers); the
 // component that renders the slot addresses that same element by its own
 // path. Whichever file is open picks its namespace out of the list.
-export const pathsOf = (element: Element): string[] =>
-  (element.getAttribute(PATH_ATTR) || '').split(' ').filter(Boolean);
+export const pathsOf = (element: Element): string[] => (element.getAttribute(PATH_ATTR) || '').split(' ').filter(Boolean);
 // Which tags this file put on an element itself, as opposed to the ones the
 // page arrived with. The serializer writes a tag into the markup wherever a
 // marker pair can't go — a slotted node, a word in an inline run, a component
@@ -343,8 +331,7 @@ const nsParent = (element: Element, file: string, inner: string): Element | unde
   return undefined;
 };
 // The nearest strict ancestor that carries a path, if any.
-export const taggedAncestor = (element: Element): Element | undefined =>
-  element.parentElement?.closest(`[${PATH_ATTR}]`) ?? undefined;
+export const taggedAncestor = (element: Element): Element | undefined => element.parentElement?.closest(`[${PATH_ATTR}]`) ?? undefined;
 
 // What the page calls a component instance belongs on the element the
 // instance rendered as its root. It does not always land there: the
@@ -391,9 +378,7 @@ const rodeIn = (element: Element, path: string): boolean => {
 
 const promoteInstanceTags = () => {
   for (const element of Array.from(document.querySelectorAll(`[${PATH_ATTR}]`))) {
-    const page = pathsOf(element).filter(
-      (nodePath) => !nodePath.includes('|') && rodeIn(element, nodePath),
-    );
+    const page = pathsOf(element).filter((nodePath) => !nodePath.includes('|') && rodeIn(element, nodePath));
     if (!page.length) {
       continue;
     }
@@ -455,12 +440,8 @@ const addPath = (element: Element, nodePath: string): void => {
 // "copy 2" for a click in the wrong half of itself — and the classes and
 // spacing lists, which are one entry per occurrence, disagree with the boxes.
 export const elementsWithPath = (nodePath: string): Element[] => {
-  const all: Element[] = Array.from(elementsTaggedForPath(nodePath)).filter(
-    (element) => pathsOf(element).includes(nodePath) && inFocus(element),
-  );
-  return all.filter(
-    (element) => !all.some((other) => other !== element && other.contains(element)),
-  );
+  const all: Element[] = Array.from(elementsTaggedForPath(nodePath)).filter((element) => pathsOf(element).includes(nodePath) && inFocus(element));
+  return all.filter((element) => !all.some((other) => other !== element && other.contains(element)));
 };
 
 // A source class edit changes every rendering of that node, including loop
@@ -481,9 +462,7 @@ export const allElementsWithPath = (nodePath: string, countMax: number): Element
       return undefined;
     }
   }
-  return all.filter(
-    (element) => !all.some((other) => other !== element && other.contains(element)),
-  );
+  return all.filter((element) => !all.some((other) => other !== element && other.contains(element)));
 };
 
 function elementsTaggedForPath(nodePath: string): NodeListOf<Element> {
@@ -491,9 +470,7 @@ function elementsTaggedForPath(nodePath: string): NodeListOf<Element> {
   // tags in JavaScript. This stays live, so clones and morphs need no cache
   // invalidation. Unusual file names use the original exact-token filter rather
   // than interpolating untrusted quotes, escapes or whitespace into a selector.
-  const selector = /[^A-Za-z0-9_./:|@-]/.test(nodePath)
-    ? `[${PATH_ATTR}]`
-    : `[${PATH_ATTR}~="${nodePath}"]`;
+  const selector = /[^A-Za-z0-9_./:|@-]/.test(nodePath) ? `[${PATH_ATTR}]` : `[${PATH_ATTR}~="${nodePath}"]`;
   return document.querySelectorAll(selector);
 }
 
@@ -653,12 +630,7 @@ const recordRun = (nodePath: string, run: Node[]) => {
 const untagStale = (collected: Map<string, Set<Node>>) => {
   for (const element of Array.from(document.querySelectorAll(`[${PATH_ATTR}]`))) {
     const mine = ourTags.get(element);
-    const kept = pathsOf(element).filter(
-      (nodePath) =>
-        !mine?.has(nodePath) ||
-        !collected.has(nodePath) ||
-        (collected.get(nodePath)?.has(element) ?? false),
-    );
+    const kept = pathsOf(element).filter((nodePath) => !mine?.has(nodePath) || !collected.has(nodePath) || (collected.get(nodePath)?.has(element) ?? false));
     if (kept.length === pathsOf(element).length) {
       continue;
     }

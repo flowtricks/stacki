@@ -65,17 +65,7 @@ interface CommitProps {
   readonly onCommit: () => void;
 }
 
-function Branches({
-  colors,
-  info,
-  working,
-  newBranch,
-  onSwitch,
-  onMerge,
-  onDelete,
-  onNewBranch,
-  onCreateBranch,
-}: BranchesProps) {
+function Branches({ colors, info, working, newBranch, onSwitch, onMerge, onDelete, onNewBranch, onCreateBranch }: BranchesProps) {
   return (
     <section className="git-branches" aria-label="Branches">
       <div className="history-branches-heading">
@@ -84,25 +74,10 @@ function Branches({
       </div>
       <div className="git-branch-list">
         {info.branches.map((branch) => (
-          <BranchRow
-            key={branch}
-            branch={branch}
-            colors={colors}
-            info={info}
-            working={working}
-            onSwitch={onSwitch}
-            onMerge={onMerge}
-            onDelete={onDelete}
-          />
+          <BranchRow key={branch} branch={branch} colors={colors} info={info} working={working} onSwitch={onSwitch} onMerge={onMerge} onDelete={onDelete} />
         ))}
       </div>
-      <BranchCreate
-        branches={info.branches}
-        working={working}
-        name={newBranch}
-        onName={onNewBranch}
-        onCreate={onCreateBranch}
-      />
+      <BranchCreate branches={info.branches} working={working} name={newBranch} onName={onNewBranch} onCreate={onCreateBranch} />
     </section>
   );
 }
@@ -128,10 +103,7 @@ function BranchRow({
         aria-label={current ? `${branch}, current branch` : `Switch to ${branch}`}
         onClick={() => onSwitch(branch)}
       >
-        <span
-          className="history-branch-icon"
-          style={{ color: gitBranchColor(colors.get(branch) ?? 0) }}
-        >
+        <span className="history-branch-icon" style={{ color: gitBranchColor(colors.get(branch) ?? 0) }}>
           <BranchIcon size={14} />
         </span>
         <Tooltip className="history-branch-name" text={branch} />
@@ -141,14 +113,7 @@ function BranchRow({
           </span>
         )}
       </button>
-      <BranchActions
-        branch={branch}
-        current={info.branch}
-        trunk={info.trunk}
-        disabled={working}
-        onMerge={onMerge}
-        onDelete={onDelete}
-      />
+      <BranchActions branch={branch} current={info.branch} trunk={info.trunk} disabled={working} onMerge={onMerge} onDelete={onDelete} />
     </div>
   );
 }
@@ -170,11 +135,7 @@ function CommitControls({
   error,
 }: CommitProps) {
   const pickedCount = picked?.length ?? 0;
-  const label = !dirty
-    ? 'Nothing to commit'
-    : !picking
-      ? 'Commit all changes'
-      : `Commit ${pickedCount} file${pickedCount === 1 ? '' : 's'}`;
+  const label = !dirty ? 'Nothing to commit' : !picking ? 'Commit all changes' : `Commit ${pickedCount} file${pickedCount === 1 ? '' : 's'}`;
   return (
     <>
       <div className="divider" />
@@ -199,11 +160,7 @@ function CommitControls({
           }}
         />
         <div className="git-commit-action-row">
-          <button
-            className="primary"
-            disabled={working || !dirty || (picking && pickedCount === 0)}
-            onClick={onCommit}
-          >
+          <button className="primary" disabled={working || !dirty || (picking && pickedCount === 0)} onClick={onCommit}>
             {label}
           </button>
           {dirty && (
@@ -235,14 +192,7 @@ export default function GitChipView(props: GitChipViewProps) {
         </p>
       )}
 
-      {props.info.remote && (
-        <GitPullControl
-          incoming={props.incoming}
-          busy={props.busy}
-          info={props.info}
-          onPull={props.onPull}
-        />
-      )}
+      {props.info.remote && <GitPullControl incoming={props.incoming} busy={props.busy} info={props.info} onPull={props.onPull} />}
       <Branches
         colors={colors}
         info={props.info}

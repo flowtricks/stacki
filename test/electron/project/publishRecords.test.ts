@@ -82,12 +82,8 @@ for (const scenario of [
 ]) {
   test(`stream reports ${scenario.name} as an operating failure`, async (context) => {
     const spawn = childProcess.spawn;
-    context.mock.method(childProcess, 'spawn', () =>
-      spawn(process.execPath, ['-e', scenario.script], { stdio: ['ignore', 'pipe', 'pipe'] }),
-    );
-    const result = await readPublishRecords(process.cwd(), [], process.env, () =>
-      Promise.resolve(ok(undefined)),
-    );
+    context.mock.method(childProcess, 'spawn', () => spawn(process.execPath, ['-e', scenario.script], { stdio: ['ignore', 'pipe', 'pipe'] }));
+    const result = await readPublishRecords(process.cwd(), [], process.env, () => Promise.resolve(ok(undefined)));
     assert.equal(result.ok, false);
   });
 }
@@ -102,9 +98,7 @@ test('stream timeout kills and reaps a child that never produces records', async
     child.once('spawn', () => context.mock.timers.tick(PUBLISH_RECORD_LIMITS.timeoutMs + 1));
     return child;
   });
-  const result = await readPublishRecords(process.cwd(), [], process.env, () =>
-    Promise.resolve(ok(undefined)),
-  );
+  const result = await readPublishRecords(process.cwd(), [], process.env, () => Promise.resolve(ok(undefined)));
   assert.equal(result.ok, false);
   if (!result.ok) {
     assert.match(result.error.message, /ten-minute/);

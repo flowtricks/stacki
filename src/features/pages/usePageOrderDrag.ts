@@ -1,12 +1,7 @@
 import { allowDragEffect } from '../../editor/dragState';
 import { useRef, useState, type DragEvent } from 'react';
 import { useTreeDragCleanup } from '../../ui/TreeDragDrop';
-import {
-  pageOrderKey,
-  pageOrderParent,
-  reorderPageEntries,
-  type PageOrder,
-} from '../../../shared/properties/pageOrder';
+import { pageOrderKey, pageOrderParent, reorderPageEntries, type PageOrder } from '../../../shared/properties/pageOrder';
 
 const PAGE_ORDER_DRAG_TYPE = 'application/x-stacki-page-order';
 interface DropTarget {

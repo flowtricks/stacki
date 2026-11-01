@@ -9,8 +9,7 @@ import { CheckIcon, ExternalIcon } from '../../ui/Icons';
 import { repoSlug, useGitHubStatus } from './gitPublish';
 
 export type PublishRequest = (
-  | { readonly kind: 'new'; readonly repoName: string; readonly isPrivate: boolean }
-  | { readonly kind: 'existing'; readonly repository: string }
+  { readonly kind: 'new'; readonly repoName: string; readonly isPrivate: boolean } | { readonly kind: 'existing'; readonly repository: string }
 ) & { readonly onStep: (step: string) => void };
 interface Props {
   readonly projectPath: string;
@@ -67,9 +66,7 @@ function usePublishForm({ defaultName, onPublish, projectPath }: Props) {
     setState({ kind: 'publishing', step: 'Preparing…' });
     try {
       const result = await onPublish({
-        ...(kind === 'new'
-          ? { kind, repoName: name.trim(), isPrivate }
-          : { kind, repository: name.trim() }),
+        ...(kind === 'new' ? { kind, repoName: name.trim(), isPrivate } : { kind, repository: name.trim() }),
         onStep: (step) => {
           if (lifetime.current === 'active') {
             setState({ kind: 'publishing', step });
@@ -77,9 +74,7 @@ function usePublishForm({ defaultName, onPublish, projectPath }: Props) {
         },
       });
       if (lifetime.current === 'active') {
-        setState(
-          result.ok ? { kind: 'done', url: result.value } : { kind: 'form', error: result.error },
-        );
+        setState(result.ok ? { kind: 'done', url: result.value } : { kind: 'form', error: result.error });
       }
     } finally {
       running.current = false;
@@ -95,9 +90,7 @@ function PublishDialog(props: Props) {
     <Popup className="modal" onClose={props.onClose} dismissible={!publishing}>
       {({ close }) => (
         <>
-          <div className="modal-header">
-            {form.state.kind === 'done' ? 'Published to GitHub' : 'Publish to GitHub'}
-          </div>
+          <div className="modal-header">{form.state.kind === 'done' ? 'Published to GitHub' : 'Publish to GitHub'}</div>
           {form.state.kind === 'done' ? (
             <PublishDone {...props} onClose={close} name={form.name} url={form.state.url} />
           ) : (
@@ -185,12 +178,7 @@ function PublishFields({ form }: { readonly form: Form }) {
             />
           </div>
           <label className="check-row">
-            <input
-              type="checkbox"
-              checked={form.isPrivate}
-              disabled={publishing}
-              onChange={(event) => form.setIsPrivate(event.target.checked)}
-            />
+            <input type="checkbox" checked={form.isPrivate} disabled={publishing} onChange={(event) => form.setIsPrivate(event.target.checked)} />
             Private repository
           </label>
         </>
@@ -206,24 +194,10 @@ function PublishPreflight({ preflight }: { readonly preflight: Preflight }) {
     return <ErrorToast message={preflight.error} />;
   }
   if (!preflight.status.installed) {
-    return (
-      <ErrorToast
-        message={
-          'GitHub CLI (gh) isn’t installed. Install it from cli.github.com, ' +
-          'then run gh auth login.'
-        }
-      />
-    );
+    return <ErrorToast message={'GitHub CLI (gh) isn’t installed. Install it from cli.github.com, ' + 'then run gh auth login.'} />;
   }
   if (!preflight.status.authed) {
-    return (
-      <ErrorToast
-        message={
-          'GitHub CLI isn’t signed in. Run gh auth login in a terminal, ' +
-          'then reopen this dialog.'
-        }
-      />
-    );
+    return <ErrorToast message={'GitHub CLI isn’t signed in. Run gh auth login in a terminal, ' + 'then reopen this dialog.'} />;
   }
   return undefined;
 }
@@ -265,11 +239,7 @@ function PublishFooter({ form, onClose }: { readonly form: Form; readonly onClos
       <button onClick={onClose} disabled={publishing}>
         Cancel
       </button>
-      <button
-        className="primary"
-        disabled={!form.name.trim() || !form.ready || publishing}
-        onClick={() => void form.go()}
-      >
+      <button className="primary" disabled={!form.name.trim() || !form.ready || publishing} onClick={() => void form.go()}>
         {publishing ? 'Publishing…' : error ? 'Try again' : 'Publish'}
       </button>
     </div>

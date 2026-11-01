@@ -50,34 +50,13 @@ import {
   type SpanMapper,
   type Target,
 } from './planSupport';
-import {
-  planAppendBody,
-  planInsertNode,
-  planMoveNode,
-  planRemoveNode,
-  planWrapNodes,
-} from './planTree';
-import {
-  planCodePatch,
-  planFrontmatterSlot,
-  planInsertFrontmatter,
-  planRenameBinding,
-  planRewriteText,
-  planRevertSplices,
-  planRewriteNode,
-} from './planText';
+import { planAppendBody, planInsertNode, planMoveNode, planRemoveNode, planWrapNodes } from './planTree';
+import { planCodePatch, planFrontmatterSlot, planInsertFrontmatter, planRenameBinding, planRewriteText, planRevertSplices, planRewriteNode } from './planText';
 import type { AnchorRef, NodeKind, StructuralPath } from '../page/ref';
 import { err, ok, type Result } from '../core/result';
 import type { Snapshot } from '../page/snapshot';
 import type { ProjectedAttribute, ProjectedNode } from '../page/sourceProjection';
-import {
-  byteStringsEqual,
-  encodeUtf8,
-  toByteSpan,
-  toByteString,
-  type ByteSpan,
-  type ByteString,
-} from '../core/span';
+import { byteStringsEqual, encodeUtf8, toByteSpan, toByteString, type ByteSpan, type ByteString } from '../core/span';
 
 /** The only write primitive (plan §3.4): replace `range` with
  * `replacementBytes`, but only while it still holds `expectedBytes`. An
@@ -129,10 +108,7 @@ export interface PlanningBase {
  * brute-force reference and must agree with it (plan §10). */
 export function planIntent(base: PlanningBase, intent: Intent): Result<Plan, RejectionReason> {
   if (base.authored.checksum === base.current.checksum) {
-    assert(
-      byteStringsEqual(base.authored.bytes, base.current.bytes),
-      'Equal checksums name equal bytes',
-    );
+    assert(byteStringsEqual(base.authored.bytes, base.current.bytes), 'Equal checksums name equal bytes');
     return planWith(base, intent, (span) => ({ tag: 'resolved', span }));
   }
   return planIntentThroughDiff(base, intent);
@@ -141,10 +117,7 @@ export function planIntent(base: PlanningBase, intent: Intent): Result<Plan, Rej
 /** The same planner with every span mapped through a computed diff, even an
  * empty one. The actor calls `planIntent`; tests call this to hold the
  * identity fast path to it. */
-export function planIntentThroughDiff(
-  base: PlanningBase,
-  intent: Intent,
-): Result<Plan, RejectionReason> {
+export function planIntentThroughDiff(base: PlanningBase, intent: Intent): Result<Plan, RejectionReason> {
   // The diff runs once, on the first span that needs it, and only then: a
   // rejection before any mapping costs no diff. Local, private memo state.
   let computed: ReturnType<typeof diffBytes> | undefined;
@@ -152,11 +125,7 @@ export function planIntentThroughDiff(
     computed ??= diffBytes(base.authored.bytes, base.current.bytes, DIFF_BUDGET);
     switch (computed.tag) {
       case 'computed':
-        return uniqueOrAmbiguous(
-          base,
-          computed.diff.distance,
-          mapSpanThroughDiff(computed.diff, span),
-        );
+        return uniqueOrAmbiguous(base, computed.diff.distance, mapSpanThroughDiff(computed.diff, span));
       case 'too-costly':
         return { tag: 'too-costly' };
       default: {
@@ -208,17 +177,10 @@ function uniqueOrAmbiguous(base: PlanningBase, distance: number, mapped: SpanMap
   return mapped;
 }
 
-function planWith(
-  base: PlanningBase,
-  intent: Intent,
-  mapSpan: SpanMapper,
-): Result<Plan, RejectionReason> {
+function planWith(base: PlanningBase, intent: Intent, mapSpan: SpanMapper): Result<Plan, RejectionReason> {
   assert(base.authored.path === intent.file, 'An intent is planned against its own file');
   assert(base.current.path === intent.file, 'The current snapshot is of the intent file');
-  assert(
-    base.authored.checksum === intent.authoredChecksum,
-    'The authored snapshot is the one the intent names',
-  );
+  assert(base.authored.checksum === intent.authoredChecksum, 'The authored snapshot is the one the intent names');
   const context: PlanContext = { authored: base.authored, current: base.current, mapSpan };
   const anchor = intent.anchor;
   const operation = intent.operation;
@@ -262,19 +224,12 @@ function planWith(
   }
 }
 
-type AttributeOperation = Extract<
-  Operation,
-  { tag: 'set-attribute' | 'remove-attribute' | 'set-inline-style' }
->;
+type AttributeOperation = Extract<Operation, { tag: 'set-attribute' | 'remove-attribute' | 'set-inline-style' }>;
 
 // The control flow of the attribute family: every rejection is decided here;
 // the helpers below compute and do not branch on outcomes. Rejections that need
 // no diff come first, so they cost none.
-function planAttributeOperation(
-  context: PlanContext,
-  anchor: AnchorRef,
-  operation: AttributeOperation,
-): Result<Plan, RejectionReason> {
+function planAttributeOperation(context: PlanContext, anchor: AnchorRef, operation: AttributeOperation): Result<Plan, RejectionReason> {
   const resolved = resolveTarget(context, anchor);
   if (!resolved.ok) {
     return resolved;
@@ -359,11 +314,7 @@ function planRenameAttribute(
  * without a name (`<>`), or one neither self-closing nor closed (a void
  * `<img>`), has no rename that keeps the page's structure: refused. The kind
  * may change with the name (`div` → `Card`), so none is promised. */
-function planRenameTag(
-  context: PlanContext,
-  anchor: AnchorRef,
-  operation: Extract<Operation, { tag: 'rename-tag' }>,
-): Result<Plan, RejectionReason> {
+function planRenameTag(context: PlanContext, anchor: AnchorRef, operation: Extract<Operation, { tag: 'rename-tag' }>): Result<Plan, RejectionReason> {
   const resolved = resolveTarget(context, anchor);
   if (!resolved.ok) {
     return resolved;
@@ -397,12 +348,7 @@ function planRenameTag(
 }
 
 // The name in the `</name>` that ends a paired tag's node, when it is `name`.
-function closingName(
-  bytes: ByteString,
-  node: ProjectedNode,
-  openEnd: number,
-  name: string,
-): ByteSpan | undefined {
+function closingName(bytes: ByteString, node: ProjectedNode, openEnd: number, name: string): ByteSpan | undefined {
   const start = closeTagStart(bytes, node, openEnd);
   if (start === undefined) {
     return undefined;
@@ -448,10 +394,7 @@ function attributeSplices(
  * names are ambiguous — which one the page uses is a guess. The attribute is
  * read in the current bytes, where the resolved region moved whole, so it is
  * the authored attribute shifted (asserted). */
-function soleAttribute(
-  target: Target,
-  name: string,
-): Result<ProjectedAttribute | undefined, RejectionReason> {
+function soleAttribute(target: Target, name: string): Result<ProjectedAttribute | undefined, RejectionReason> {
   const node = target.current;
   assert(node.attributes.length <= LIMITS.attrsPerNodeMax, 'Attributes are inside their bound');
   const found = node.attributes.filter((attribute) => attribute.name === name);
@@ -544,8 +487,7 @@ function quoted(value: string): string {
 function insertionSplice(bytes: ByteString, node: ProjectedNode, text: string): Splice {
   const nameEnd = tagNameEnd(bytes, node);
   const last = node.attributes.reduce<ProjectedAttribute | undefined>(
-    (latest, attribute) =>
-      latest === undefined || attribute.span.end > latest.span.end ? attribute : latest,
+    (latest, attribute) => (latest === undefined || attribute.span.end > latest.span.end ? attribute : latest),
     undefined,
   );
   if (last === undefined) {
@@ -558,11 +500,7 @@ function insertionSplice(bytes: ByteString, node: ProjectedNode, text: string): 
 
 /** The attribute and the whitespace before it, back to the previous attribute
  * or the tag name, so no gap is left behind. */
-function removalSplice(
-  bytes: ByteString,
-  node: ProjectedNode,
-  attribute: ProjectedAttribute,
-): Splice {
+function removalSplice(bytes: ByteString, node: ProjectedNode, attribute: ProjectedAttribute): Splice {
   const floor = tagNameEnd(bytes, node);
   const start = whitespaceBefore(bytes, attribute.span.start, floor);
   assert(start < attribute.span.start, 'An attribute is separated from what precedes it');
@@ -582,9 +520,7 @@ function inlineStyleSplices(
   if (attribute === undefined) {
     if (declaration.tag === 'set') {
       const text = `${operation.property}: ${declaration.value}`;
-      return ok([
-        insertionSplice(bytes, node, attributeText('style', { type: 'string', value: text })),
-      ]);
+      return ok([insertionSplice(bytes, node, attributeText('style', { type: 'string', value: text }))]);
     }
     return ok([]); // Removing from no style at all: nothing to do.
   }

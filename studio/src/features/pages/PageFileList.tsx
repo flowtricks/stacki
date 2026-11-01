@@ -13,16 +13,8 @@ import { orderedPageTree } from '../../../vendor/stacki/src/features/pages/pageT
 import { type PageOrderDrag } from '../../../vendor/stacki/src/features/pages/usePageOrderDrag';
 import type { PageOrder } from '../../../vendor/stacki/shared/properties/pageOrder';
 import type { ScanPage } from '../../../vendor/stacki/shared/properties/projectScan';
-import {
-  comparePageNames,
-  isCollectionRoute,
-} from '../../../vendor/stacki/src/features/pages/pageOrder';
-import {
-  FileIcon,
-  CollectionIcon,
-  FolderIcon,
-  FolderOpenIcon,
-} from '../../../vendor/stacki/src/ui/Icons';
+import { comparePageNames, isCollectionRoute } from '../../../vendor/stacki/src/features/pages/pageOrder';
+import { FileIcon, CollectionIcon, FolderIcon, FolderOpenIcon } from '../../../vendor/stacki/src/ui/Icons';
 import type { Peer } from '../collaboration/presence';
 import { routeFor } from '../project/projectClient';
 import { PagePresence } from './PagePresence';
@@ -53,22 +45,16 @@ export function PageFileList(props: Props) {
   const tree = useMemo(() => buildPageTree(pages, props.folders ?? []), [pages, props.folders]);
   const query = props.query.trim().toLowerCase();
   const results = pages
-    .filter((page) =>
-      [page.name, pageDisplayName(page)].some((name) => name.toLowerCase().includes(query)),
-    )
+    .filter((page) => [page.name, pageDisplayName(page)].some((name) => name.toLowerCase().includes(query)))
     .sort((a, b) => comparePageNames(a.name, b.name));
   return (
     <div className="panel-body studio-page-list">
       {query ? (
-        results.map((page) => (
-          <FileRow key={page.path} page={page} depth={0} props={props} siblings={[]} />
-        ))
+        results.map((page) => <FileRow key={page.path} page={page} depth={0} props={props} siblings={[]} />)
       ) : (
         <PageBranch tree={tree} relative="" depth={0} props={props} />
       )}
-      {query && !results.length && (
-        <div className="props-empty">No matching {props.collection ? 'items' : 'pages'}</div>
-      )}
+      {query && !results.length && <div className="props-empty">No matching {props.collection ? 'items' : 'pages'}</div>}
     </div>
   );
 }
@@ -90,37 +76,15 @@ function PageBranch({
     <>
       {entries.map((entry, index) => (
         <Fragment key={entry.key}>
-          {!props.collection && (
-            <PageOrderGap
-              reorder={props.reorder}
-              parent={relative}
-              depth={depth}
-              siblings={siblings}
-              index={index}
-            />
-          )}
+          {!props.collection && <PageOrderGap reorder={props.reorder} parent={relative} depth={depth} siblings={siblings} index={index} />}
           {entry.kind === 'page' ? (
             <FileRow page={entry.page} depth={depth} props={props} siblings={siblings} />
           ) : (
-            <FolderBranch
-              name={entry.name}
-              tree={entry.node}
-              relative={entry.key.slice(0, -1)}
-              depth={depth}
-              props={props}
-            />
+            <FolderBranch name={entry.name} tree={entry.node} relative={entry.key.slice(0, -1)} depth={depth} props={props} />
           )}
         </Fragment>
       ))}
-      {!props.collection && (
-        <PageOrderGap
-          reorder={props.reorder}
-          parent={relative}
-          depth={depth}
-          siblings={siblings}
-          index={entries.length}
-        />
-      )}
+      {!props.collection && <PageOrderGap reorder={props.reorder} parent={relative} depth={depth} siblings={siblings} index={entries.length} />}
     </>
   );
 }
@@ -159,16 +123,12 @@ function FolderBranch({
         onDragStart={(event) => props.reorder.start(event, key)}
         onDragEnd={props.reorder.finish}
       >
-        <span className="icon">
-          {collapsed ? <FolderIcon size={13} /> : <FolderOpenIcon size={13} />}
-        </span>
+        <span className="icon">{collapsed ? <FolderIcon size={13} /> : <FolderOpenIcon size={13} />}</span>
         <span className="page-list-copy">
           <span className="label">{pageFolderDisplayName(name)}</span>
           <span className="sub">/{relative}</span>
         </span>
-        {!props.collection && props.rename && (
-          <PageRenameButton kind="folder" rename={() => props.rename?.('folder', relative)} />
-        )}
+        {!props.collection && props.rename && <PageRenameButton kind="folder" rename={() => props.rename?.('folder', relative)} />}
       </div>
       {!collapsed && <PageBranch tree={tree} relative={relative} depth={depth + 1} props={props} />}
     </>
@@ -209,21 +169,13 @@ function FileRow({
       onDragStart={(event) => reorder.start(event, page.name)}
       onDragEnd={reorder.finish}
     >
-      <span className="icon">
-        {collection ? <CollectionIcon size={13} /> : <FileIcon size={13} />}
-      </span>
+      <span className="icon">{collection ? <CollectionIcon size={13} /> : <FileIcon size={13} />}</span>
       <span className="page-list-copy">
-        <span className="label file-row-name">
-          {props.collection
-            ? stripPageExtension(page.name.split('/').at(-1) ?? page.name)
-            : pageDisplayName(page)}
-        </span>
+        <span className="label file-row-name">{props.collection ? stripPageExtension(page.name.split('/').at(-1) ?? page.name) : pageDisplayName(page)}</span>
         {!props.collection && <PageSearchPath path={page.route} query={props.query} />}
       </span>
       {!props.collection && <PagePresence peers={props.peers} page={page.path} />}
-      {!props.collection && props.rename && (
-        <PageRenameButton kind="page" rename={() => props.rename?.('page', page.name)} />
-      )}
+      {!props.collection && props.rename && <PageRenameButton kind="page" rename={() => props.rename?.('page', page.name)} />}
     </div>
   );
 }

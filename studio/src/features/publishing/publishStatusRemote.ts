@@ -7,18 +7,9 @@ export interface PublishedStatusTree {
   readonly files: ReadonlyMap<string, { readonly sha: string; readonly mode: string }>;
 }
 
-export async function readPublishedStatusTree(
-  connection: PublishConnection,
-  transport: typeof fetch = fetch,
-): Promise<PublishedStatusTree> {
+export async function readPublishedStatusTree(connection: PublishConnection, transport: typeof fetch = fetch): Promise<PublishedStatusTree> {
   const base = `https://api.github.com/repos/${connection.repository}`;
-  const head = record(
-    await githubJSON(
-      `${base}/git/ref/heads/${encodeURIComponent(connection.branch)}`,
-      connection,
-      transport,
-    ),
-  );
+  const head = record(await githubJSON(`${base}/git/ref/heads/${encodeURIComponent(connection.branch)}`, connection, transport));
   const sha = statusRevision(record(head['object'])['sha']);
   const tree = await githubJSON(`${base}/git/trees/${sha}?recursive=1`, connection, transport);
   return { sha, files: parsePublishedStatusFiles(tree) };
@@ -40,11 +31,7 @@ export function parsePublishedStatusFiles(input: unknown): PublishedStatusTree['
       throw new Error('Invalid publishing tree entry.');
     }
     const name = string(entry['path'], 500);
-    if (
-      name.startsWith('/') ||
-      /[\\\x00-\x1f]/.test(name) ||
-      name.split('/').some((part) => ['', '.', '..', '.git'].includes(part.toLowerCase()))
-    ) {
+    if (name.startsWith('/') || /[\\\x00-\x1f]/.test(name) || name.split('/').some((part) => ['', '.', '..', '.git'].includes(part.toLowerCase()))) {
       throw new Error('Invalid publishing path.');
     }
     const mode = string(entry['mode'], 6);
@@ -59,10 +46,7 @@ export function parsePublishedStatusFiles(input: unknown): PublishedStatusTree['
   return files;
 }
 
-export async function readDeployedStatusRevision(
-  endpoint: string,
-  transport: typeof fetch = fetch,
-): Promise<string> {
+export async function readDeployedStatusRevision(endpoint: string, transport: typeof fetch = fetch): Promise<string> {
   const url = new URL(endpoint);
   if (url.protocol !== 'https:' || url.username || url.password) {
     throw new Error('Invalid deployment status endpoint.');

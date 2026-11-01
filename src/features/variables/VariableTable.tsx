@@ -6,7 +6,7 @@ import type { VariableSlot, VariableRename, SlotOffset } from './variableRows';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { buildSheetSlots, stemOf, sectionPrefix, rowRenames } from './variableRows';
-import type { createScrollSync } from './variableScroll';
+import type { ScrollLanes } from './variableScroll';
 import { useVariableSheetScroll, VariableScrollBar } from './VariableSheetScroll';
 import Cell from './VariableCell';
 import useListReorder from '../../ui/useListReorder';
@@ -15,23 +15,13 @@ import VariableTypeIcon from './VariableTypeIcon';
 import { PencilIcon, CopyIcon, TrashIcon, DragIcon, PlusIcon } from '../../ui/Icons';
 
 type EditName = (name: string) => boolean | void | Promise<boolean | void>;
-type AddVariable = (
-  block: VariableBlock,
-  columns: readonly WireColumn[],
-  word: string,
-) => void | Promise<void>;
+type AddVariable = (block: VariableBlock, columns: readonly WireColumn[], word: string) => void | Promise<void>;
 export interface SheetActions {
   readonly onSave: VariableCellProps['onSave'];
-  readonly onMove?: (
-    slots: readonly VariableSlot[],
-    from: number,
-    to: number,
-  ) => void | Promise<void>;
+  readonly onMove?: (slots: readonly VariableSlot[], from: number, to: number) => void | Promise<void>;
   readonly onAdd?: AddVariable | undefined;
-  readonly onRename?:
-    ((renames: readonly VariableRename[]) => boolean | void | Promise<boolean | void>) | undefined;
-  readonly onRetitle?:
-    ((block: VariableBlock, title: string) => boolean | Promise<boolean>) | undefined;
+  readonly onRename?: ((renames: readonly VariableRename[]) => boolean | void | Promise<boolean | void>) | undefined;
+  readonly onRetitle?: ((block: VariableBlock, title: string) => boolean | Promise<boolean>) | undefined;
   readonly onDuplicateSection?: ((block: VariableBlock) => void | Promise<void>) | undefined;
   readonly onDeleteSection?: ((block: VariableBlock) => void | Promise<void>) | undefined;
   readonly fluidOf?: VariableCellProps['fluidOf'];
@@ -70,7 +60,7 @@ interface TableProps extends SheetActions {
     readonly props: React.HTMLAttributes<HTMLElement>;
     readonly className: string;
   };
-  readonly scrollSync: ReturnType<typeof createScrollSync>;
+  readonly scrollLanes: ScrollLanes;
   readonly rowsDrag: Reorder;
   readonly slotOffset?: number;
   readonly showHead?: boolean;
@@ -83,8 +73,10 @@ function reportEditFailure(error: unknown): void {
   console.error('[stacki] variable edit failed:', error);
 }
 const LABEL_TRACKS = 'calc(var(--vars-inset) + 18px) var(--vars-name-col)';
+// --vars-col-fit is the widest heading on the page, set by the sheet: every
+// value column grows to it together, so tables with the same count still line up.
 const valueTracks = (count: number) =>
-  `repeat(${count}, minmax(var(--vars-col-min), var(--vars-col)))`;
+  `repeat(${count}, minmax(max(var(--vars-col-min), var(--vars-col-fit, 0px)), max(var(--vars-col), var(--vars-col-fit, 0px))))`;
 function sheetOffset(offsets: readonly SlotOffset[], index: number): SlotOffset {
   const offset = offsets[index];
   assert(offset !== undefined, 'Variable table: missing block offset');
@@ -239,6 +231,7 @@ function useSheet(props: SheetProps) {
   // drag is: what it coordinates is the tables against each other.
   const scroll = useVariableSheetScroll(blocks, group.columns.length);
   const scrollSync = scroll.sync;
+  const scrollLanes = scroll.lanes;
 
   // The column headings name the selector's modes, not any one group's rows, so
   // they are the sheet's rather than the first table's. Written here, they stay
@@ -276,6 +269,7 @@ function useSheet(props: SheetProps) {
     rowsDrag,
     scroll,
     scrollSync,
+    scrollLanes,
     headRef,
     headStripRef,
     single,
@@ -286,19 +280,8 @@ export default function Sheet(props: SheetProps) {
   return <SheetView state={state} />;
 }
 function SheetView({ state }: { readonly state: ReturnType<typeof useSheet> }) {
-  const {
-    blocks,
-    group,
-    onSave,
-    onAdd,
-    onRename,
-    onRetitle,
-    onDuplicateSection,
-    onDeleteSection,
-    fluidOf,
-    onDraft,
-  } = state;
-  const { slotOffsets, rowsDrag, scrollSync } = state;
+  const { blocks, group, onSave, onAdd, onRename, onRetitle, onDuplicateSection, onDeleteSection, fluidOf, onDraft } = state;
+  const { slotOffsets, rowsDrag, scrollLanes } = state;
   return (
     <div className="vars-sheet">
       <div className="cms-detail-body vars-body" ref={state.scroll.bodyRef}>
@@ -310,14 +293,8 @@ function SheetView({ state }: { readonly state: ReturnType<typeof useSheet> }) {
             group={group}
             onSave={onSave}
             sectionDrag={{
-              props:
-                block.title !== undefined
-                  ? rowsDrag.rowProps(sheetOffset(slotOffsets, index).head)
-                  : {},
-              className:
-                block.title !== undefined
-                  ? rowsDrag.rowClass(sheetOffset(slotOffsets, index).head)
-                  : '',
+              props: block.title !== undefined ? rowsDrag.rowProps(sheetOffset(slotOffsets, index).head) : {},
+              className: block.title !== undefined ? rowsDrag.rowClass(sheetOffset(slotOffsets, index).head) : '',
             }}
             onAdd={onAdd}
             onRename={onRename}
@@ -328,7 +305,7 @@ function SheetView({ state }: { readonly state: ReturnType<typeof useSheet> }) {
             slotOffset={sheetOffset(slotOffsets, index).rows}
             fluidOf={fluidOf}
             onDraft={onDraft}
-            scrollSync={scrollSync}
+            scrollLanes={scrollLanes}
             // The group's headings are the sheet's now; only a matrix, whose
             // columns are its own, still writes its own.
             showHead={block.kind === 'matrix'}
@@ -377,11 +354,7 @@ function NewVariableView({ state }: { readonly state: ReturnType<typeof useNewVa
   const { typing, setTyping, word, setWord, inputRef, commit } = state;
   if (!typing) {
     return (
-      <div
-        className={`vars-row vars-add ${dropping ? 'drop-before' : ''}`}
-        style={{ gridTemplateColumns: template }}
-        {...(slotProps || {})}
-      >
+      <div className={`vars-row vars-add ${dropping ? 'drop-before' : ''}`} style={{ gridTemplateColumns: template }} {...(slotProps || {})}>
         <span />
         <button className="vars-add-btn" onClick={() => setTyping(true)}>
           <PlusIcon size={11} /> New variable
@@ -391,11 +364,7 @@ function NewVariableView({ state }: { readonly state: ReturnType<typeof useNewVa
   }
 
   return (
-    <div
-      className={`vars-row vars-add ${dropping ? 'drop-before' : ''}`}
-      style={{ gridTemplateColumns: template }}
-      {...(slotProps || {})}
-    >
+    <div className={`vars-row vars-add ${dropping ? 'drop-before' : ''}`} style={{ gridTemplateColumns: template }} {...(slotProps || {})}>
       <span />
       <span className="vars-add-field">
         <span className="vars-add-stem">{block.kind === 'matrix' ? '…-' : stemOf(block)}</span>
@@ -425,7 +394,7 @@ function NewVariableView({ state }: { readonly state: ReturnType<typeof useNewVa
 }
 
 function useVariableTable(props: TableProps) {
-  const { block, group, scrollSync, rowsDrag, slotOffset = 0 } = props;
+  const { block, group, scrollLanes, rowsDrag, slotOffset = 0 } = props;
 
   // A matrix carries its own columns (the family's prefixes); everything else
   // uses the group's (one per rule).
@@ -433,6 +402,9 @@ function useVariableTable(props: TableProps) {
   assert(columns !== undefined, 'Variable table: matrix columns are required');
   assert(columns.length <= LIMITS.scanEntriesMax, 'Variable table: column limit exceeded');
   const single = columns.length === 1;
+  // Scrolls with the tables whose columns line up with its own — see
+  // createScrollLanes.
+  const scrollSync = scrollLanes.lane(columns.length);
   // Two stacks side by side: the labels, which never move, and a scroller
   // holding every value. One grid per row with the label cells stuck to the
   // left was the obvious shape and the wrong one — the values showed through
@@ -491,6 +463,7 @@ function useVariableTable(props: TableProps) {
     setHovered,
     headRef,
     rowsRef,
+    scrollSync,
     prefix,
     renameSignal,
     setRenameSignal,
@@ -554,11 +527,8 @@ function SheetHeader({ state }: { readonly state: ReturnType<typeof useSheet> })
         </div>
       </div>
       <div className="vars-scroll">
-        <div className="vars-scroll-head" ref={headStripRef}>
-          <div
-            className="vars-row is-head"
-            style={{ gridTemplateColumns: valueTracks(group.columns.length) }}
-          >
+        <div className="vars-scroll-head" ref={headStripRef} data-scroll-lane={group.columns.length}>
+          <div className="vars-row is-head" style={{ gridTemplateColumns: valueTracks(group.columns.length) }}>
             {group.columns.map((column) => (
               <div key={column.id} className="vars-head" title={column.selector || column.label}>
                 {single && group.kind === 'single' ? 'Value' : column.label}
@@ -572,24 +542,12 @@ function SheetHeader({ state }: { readonly state: ReturnType<typeof useSheet> })
 }
 
 // A comment heading's menu carries the two things that are not renaming.
-function CommentHeading({
-  state,
-  title,
-}: {
-  readonly state: ReturnType<typeof useVariableTable>;
-  readonly title: string;
-}) {
+function CommentHeading({ state, title }: { readonly state: ReturnType<typeof useVariableTable>; readonly title: string }) {
   const { block, onRetitle, onDuplicateSection, onDeleteSection } = state;
   const { renameSignal, setRenameSignal } = state;
   return (
     <>
-      <EditableName
-        className="vars-section-text"
-        value={title}
-        title={title}
-        openSignal={renameSignal}
-        onRename={(next) => onRetitle?.(block, next)}
-      />
+      <EditableName className="vars-section-text" value={title} title={title} openSignal={renameSignal} onRename={(next) => onRetitle?.(block, next)} />
       <SectionMenu
         onRename={() => setRenameSignal((signal) => signal + 1)}
         onDuplicate={() => {
@@ -610,11 +568,7 @@ function TableTitle({ state }: { readonly state: ReturnType<typeof useVariableTa
       {block.title && (
         // The heading lines up with the names under it, and drags the same way
         // a row does — a group is a run of lines in the file like any other.
-        <h3
-          className={`vars-row vars-section ${sectionDrag?.className || ''}`}
-          style={{ gridTemplateColumns: labelTemplate }}
-          {...(sectionDrag?.props || {})}
-        >
+        <h3 className={`vars-row vars-section ${sectionDrag?.className || ''}`} style={{ gridTemplateColumns: labelTemplate }} {...(sectionDrag?.props || {})}>
           <span className="vars-grip" title="Drag to reorder">
             <DragIcon size={11} />
           </span>
@@ -702,17 +656,13 @@ function TableRowNames({ state }: { readonly state: ReturnType<typeof useVariabl
 function TableScrollHead({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
   const { block, group, showHead, columns, single, valueTemplate, headRef } = state;
   return (
-    <div className="vars-scroll-head" ref={headRef}>
+    <div className="vars-scroll-head" ref={headRef} data-scroll-lane={columns.length}>
       {block.title && (
         // The heading's counterpart carries the same tracks as the rows
         // below it, or it measures the width of the scroller instead of the
         // width of its contents — and its rule stops at the visible edge
         // while every other line runs the full scroll.
-        <div
-          className="vars-row vars-section"
-          style={{ gridTemplateColumns: valueTemplate }}
-          aria-hidden="true"
-        />
+        <div className="vars-row vars-section" style={{ gridTemplateColumns: valueTemplate }} aria-hidden="true" />
       )}
       {showHead && (
         <div className="vars-row is-head" style={{ gridTemplateColumns: valueTemplate }}>
@@ -728,31 +678,21 @@ function TableScrollHead({ state }: { readonly state: ReturnType<typeof useVaria
 }
 
 function TableScrollRows({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
-  const { block, onSave, fluidOf, onDraft, scrollSync, columns, valueTemplate, rowsRef, rowProps } =
-    state;
+  const { block, onSave, fluidOf, onDraft, scrollSync, columns, valueTemplate, rowsRef, rowProps } = state;
   return (
     <div
       className="vars-scroll-rows"
       ref={rowsRef}
+      data-scroll-lane={columns.length}
       onScroll={(event) => {
         const { scrollLeft } = event.currentTarget;
         scrollSync.broadcast(event.currentTarget, scrollLeft);
       }}
     >
       {block.rows.map((row, index) => (
-        <div
-          key={row.name || row.label}
-          style={{ gridTemplateColumns: valueTemplate }}
-          {...rowProps(index)}
-        >
+        <div key={row.name || row.label} style={{ gridTemplateColumns: valueTemplate }} {...rowProps(index)}>
           {columns.map((column, at) => (
-            <Cell
-              key={column.id}
-              cell={row.cells[at]}
-              onSave={onSave}
-              fluidOf={fluidOf}
-              onDraft={onDraft}
-            />
+            <Cell key={column.id} cell={row.cells[at]} onSave={onSave} fluidOf={fluidOf} onDraft={onDraft} />
           ))}
         </div>
       ))}

@@ -78,9 +78,7 @@ export function readPackagePreviews(root: string) {
 }
 
 export function packageSourcePath(root: string, file: string): string {
-  const source = readComponentSources(root).find((entry) =>
-    file.startsWith(`node_modules/${entry.package}/`),
-  );
+  const source = readComponentSources(root).find((entry) => file.startsWith(`node_modules/${entry.package}/`));
   if (!source || file.split('/').some((segment) => segment === '..' || segment === '.')) {
     throw new Error('Source is outside configured component packages.');
   }
@@ -100,12 +98,8 @@ export function packageSourcePath(root: string, file: string): string {
 }
 
 export function packageComponentImport(root: string, file: string): string | undefined {
-  const relative = path.isAbsolute(file)
-    ? path.relative(root, file).split(path.sep).join('/')
-    : file;
-  const source = readComponentSources(root).find((entry) =>
-    relative.startsWith(componentSourceRoot(entry) + '/'),
-  );
+  const relative = path.isAbsolute(file) ? path.relative(root, file).split(path.sep).join('/') : file;
+  const source = readComponentSources(root).find((entry) => relative.startsWith(componentSourceRoot(entry) + '/'));
   if (!source) {
     return undefined;
   }

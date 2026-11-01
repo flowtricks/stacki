@@ -14,24 +14,14 @@ export type DeclarationValue = { readonly value: string; readonly important: boo
 export const squash = (text: string) => text.replace(/\s+/g, '').toLowerCase();
 
 // The first direct child rule of `container` that `matches` accepts.
-export function childRule(
-  container: Root | Rule | AtRule,
-  matches: (rule: Rule) => boolean,
-): Rule | undefined {
+export function childRule(container: Root | Rule | AtRule, matches: (rule: Rule) => boolean): Rule | undefined {
   return container.nodes?.find((child): child is Rule => child.type === 'rule' && matches(child));
 }
 
 // The first direct child at-rule named `name` (lowercase) whose params equal `params`.
-export function childAtRule(
-  container: Root | Rule | AtRule,
-  name: string,
-  params: string,
-): AtRule | undefined {
+export function childAtRule(container: Root | Rule | AtRule, name: string, params: string): AtRule | undefined {
   return container.nodes?.find(
-    (child): child is AtRule =>
-      child.type === 'atrule' &&
-      child.name.toLowerCase() === name &&
-      squash(child.params) === squash(params),
+    (child): child is AtRule => child.type === 'atrule' && child.name.toLowerCase() === name && squash(child.params) === squash(params),
   );
 }
 
@@ -44,10 +34,7 @@ export function terminateDeclarations(node: Rule | AtRule): void {
 // A direct child rule of `container` whose selector is the SAME target as `selector`
 // (by selectorKey, so `.a.b` === `.b.a`) — used to merge into an existing rule rather
 // than appending a duplicate. Only direct children (not nested) so a flat add stays flat.
-export function findChildRuleBySelector(
-  container: Root | AtRule,
-  selector: string,
-): Rule | undefined {
+export function findChildRuleBySelector(container: Root | AtRule, selector: string): Rule | undefined {
   const key = selectorKey(selector);
   return childRule(container, (rule) => selectorKey(rule.selector) === key);
 }
@@ -170,11 +157,7 @@ export function directDecls(node: Rule | AtRule): Declaration[] {
 
 /** Append a declaration, placing it before any nested rules so a parent's own decls stay
  *  grouped above its nested rules (e.g. bare decls at the top of a query block). */
-export function appendDecl(
-  node: Rule | AtRule,
-  prop: string,
-  declared: DeclarationValue,
-): Declaration {
+export function appendDecl(node: Rule | AtRule, prop: string, declared: DeclarationValue): Declaration {
   const decl = postcss.decl({ prop, value: declared.value, important: declared.important });
   const firstNested = node.nodes?.find((child) => child.type === 'rule' || child.type === 'atrule');
   if (firstNested) {
@@ -194,9 +177,7 @@ export function setDeclDirect(node: Rule | AtRule, prop: string, declared: Decla
     return;
   }
   const key = prop.trim().toLowerCase();
-  const existing = directDecls(node).find(
-    (declaration) => declaration.prop.trim().toLowerCase() === key,
-  );
+  const existing = directDecls(node).find((declaration) => declaration.prop.trim().toLowerCase() === key);
   if (existing) {
     existing.value = declared.value;
     existing.important = declared.important;

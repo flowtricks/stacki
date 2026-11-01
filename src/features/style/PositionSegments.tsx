@@ -12,22 +12,11 @@ import { commitInPlace } from './model/commitInPlace';
 import { ChevronIcon, MenuItem } from './components/MenuParts';
 import { useCustomFocus } from './model/fieldHooks';
 import { parseImportant } from './model/styleDisplay';
-import {
-  CloseIcon,
-  FloatLeftIcon,
-  FloatRightIcon,
-  ClearLeftIcon,
-  ClearRightIcon,
-  ClearBothIcon,
-} from './PositionIcons';
+import { CloseIcon, FloatLeftIcon, FloatRightIcon, ClearLeftIcon, ClearRightIcon, ClearBothIcon } from './PositionIcons';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
-export type LiveSetProp = (
-  prop: string | readonly string[],
-  value: string | undefined,
-  important: boolean,
-) => void;
+export type LiveSetProp = (prop: string | readonly string[], value: string | undefined, important: boolean) => void;
 export type Read = (prop: string) => ResolvedProp | undefined;
 
 export type Props = {
@@ -54,16 +43,7 @@ export type SegmentedIconControlProps = {
   current: string;
 } & Props & { read?: Read };
 
-export function SegmentedIconControl({
-  prop,
-  ariaLabel,
-  segments,
-  current,
-  busy,
-  setProp,
-  liveSetProp,
-  clearProp,
-}: SegmentedIconControlProps) {
+export function SegmentedIconControl({ prop, ariaLabel, segments, current, busy, setProp, liveSetProp, clearProp }: SegmentedIconControlProps) {
   const supported = new Set(segments.map((segment) => segment.value));
   const customMode = !supported.has(current);
   const [open, setOpen] = useState(false);
@@ -83,12 +63,7 @@ export function SegmentedIconControl({
   };
 
   return (
-    <div
-      ref={rootRef}
-      className={`embed-editor_display ${customMode ? 'is-custom' : ''}`}
-      role="group"
-      aria-label={ariaLabel}
-    >
+    <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label={ariaLabel}>
       <SegmentPill />
       {customMode ? (
         <SegmentCustomInput
@@ -130,10 +105,9 @@ export function SegmentCustomInput({
   setProp,
   liveSetProp,
   clearProp,
-}: Pick<
-  SegmentedIconControlProps,
-  'prop' | 'ariaLabel' | 'current' | 'busy' | 'setProp' | 'liveSetProp' | 'clearProp'
-> & { inputRef: React.RefObject<HTMLInputElement> }) {
+}: Pick<SegmentedIconControlProps, 'prop' | 'ariaLabel' | 'current' | 'busy' | 'setProp' | 'liveSetProp' | 'clearProp'> & {
+  inputRef: React.RefObject<HTMLInputElement>;
+}) {
   const [draft, setDraft] = useState(current);
   const focused = useRef(false);
   useEffect(() => {
@@ -151,13 +125,7 @@ export function SegmentCustomInput({
     setProp(prop, parsed.value, parsed.important);
   };
   return (
-    <VariableConnect
-      code
-      ariaLabel={`Connect ${ariaLabel} to a variable`}
-      disabled={busy}
-      prop={prop}
-      onPick={(binding) => setProp(prop, binding, false)}
-    >
+    <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
       <input
         ref={inputRef}
         className="embed-editor_value-input embed-editor_display-input"
@@ -257,21 +225,10 @@ export function SegmentMenu({
         <ChevronIcon />
       </button>
       {open ? (
-        <Popup
-          mode="popover"
-          portal={false}
-          onClose={onToggle}
-          className="embed-editor_display-menu"
-          role="menu"
-        >
+        <Popup mode="popover" portal={false} onClose={onToggle} className="embed-editor_display-menu" role="menu">
           {customMode ? (
             segments.map((segment) => (
-              <MenuItem
-                key={segment.value}
-                label={segment.label}
-                selected={current === segment.value}
-                onClick={() => onPick(segment.value)}
-              />
+              <MenuItem key={segment.value} label={segment.label} selected={current === segment.value} onClick={() => onPick(segment.value)} />
             ))
           ) : (
             <MenuItem label="Custom" selected={false} onClick={onEnterCustom} />

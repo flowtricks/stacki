@@ -18,16 +18,9 @@ export function GitPullControl({
   const description = pullDescription(incoming);
   return (
     <div className="dropdown-row git-pull-control" title={description}>
-      <button
-        className="git-pull"
-        disabled={busy !== undefined || !canPull || info.branch === 'HEAD' || !info.head}
-        onClick={onPull}
-        title={description}
-      >
+      <button className="git-pull" disabled={busy !== undefined || !canPull || info.branch === 'HEAD' || !info.head} onClick={onPull} title={description}>
         <GitHubIcon size={14} />
-        <span className="git-pull-label">
-          {busy === 'Pulling…' ? 'Pulling…' : 'Pull from GitHub'}
-        </span>
+        <span className="git-pull-label">{busy === 'Pulling…' ? 'Pulling…' : 'Pull from GitHub'}</span>
         {busy === 'Pulling…' ? <span className="mini-spinner" /> : <PullIcon size={14} />}
       </button>
     </div>
@@ -41,8 +34,6 @@ function pullDescription(incoming: GitIncomingState): string {
     case 'unavailable':
       return `Could not check GitHub. Retrying automatically. ${incoming.message}`;
     case 'ready':
-      return incoming.commits === 0
-        ? 'No changes to pull'
-        : `${incoming.commits} commit${incoming.commits === 1 ? '' : 's'} to pull`;
+      return incoming.commits === 0 ? 'No changes to pull' : `${incoming.commits} commit${incoming.commits === 1 ? '' : 's'} to pull`;
   }
 }

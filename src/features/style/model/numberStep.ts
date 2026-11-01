@@ -52,10 +52,7 @@ function stepSizeFor(mode: StepMode, unit: string, scale: number): number {
 // Next multiple of `step` strictly past `value` in the given direction.
 function snapStep(value: number, step: number, direction: 1 | -1): number {
   const quotient = value / step;
-  const raw =
-    direction > 0
-      ? (Math.floor(quotient + 1e-9) + 1) * step
-      : (Math.ceil(quotient - 1e-9) - 1) * step;
+  const raw = direction > 0 ? (Math.floor(quotient + 1e-9) + 1) * step : (Math.ceil(quotient - 1e-9) - 1) * step;
   return Math.round(raw * 1e5) / 1e5; // shed float dust (0.1 + 0.2 …)
 }
 
@@ -101,8 +98,7 @@ export function stepNumberAtCaret(
   const nextText = String(min !== undefined && stepped < min ? min : stepped);
   // Keep the caret where it was: end of the new number if it was in the number,
   // else shift it along with the unit by the number's length change.
-  const nextCaret =
-    caret <= hit.numEnd ? hit.start + nextText.length : caret + (nextText.length - hit.raw.length);
+  const nextCaret = caret <= hit.numEnd ? hit.start + nextText.length : caret + (nextText.length - hit.raw.length);
   return { text: text.slice(0, hit.start) + nextText + text.slice(hit.numEnd), caret: nextCaret };
 }
 
@@ -210,19 +206,12 @@ export function hasScrubTarget(text: string): boolean {
  * changing the modifier mid-drag rescales from the same base rather than from wherever
  * the previous mode happened to leave it.
  */
-export function scrubNumber(
-  text: string,
-  run: NumberRun,
-  steps: number,
-  mode: StepMode,
-  scale = 1,
-): string {
+export function scrubNumber(text: string, run: NumberRun, steps: number, mode: StepMode, scale = 1): string {
   const base = Number.parseFloat(run.raw);
   if (!Number.isFinite(base)) {
     return text;
   }
-  const next =
-    Math.round((base + steps * stepSizeFor(mode, run.unit.toLowerCase(), scale)) * 1e5) / 1e5;
+  const next = Math.round((base + steps * stepSizeFor(mode, run.unit.toLowerCase(), scale)) * 1e5) / 1e5;
   return text.slice(0, run.start) + String(next) + text.slice(run.numEnd);
 }
 
@@ -245,12 +234,5 @@ export function handleArrowStep(
     return undefined;
   }
   const element = event.currentTarget;
-  return stepNumberAtCaret(
-    element.value,
-    element.selectionStart ?? element.value.length,
-    event.key === 'ArrowUp' ? 1 : -1,
-    stepModeOf(event),
-    min,
-    scale,
-  );
+  return stepNumberAtCaret(element.value, element.selectionStart ?? element.value.length, event.key === 'ArrowUp' ? 1 : -1, stepModeOf(event), min, scale);
 }

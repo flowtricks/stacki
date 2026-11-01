@@ -41,16 +41,7 @@ test('opening Studio wakes its status route without executing the homepage', asy
 
 test('assets and mutations never initiate additional workspace warmups', () => {
   for (const pathname of ['/studio/studio.js', '/studio/studio.css', '/studio/api/project', '/']) {
-    assert.equal(
-      warmupRequest(new Request('https://editor.test' + pathname), 'https://preview.test'),
-      undefined,
-    );
+    assert.equal(warmupRequest(new Request('https://editor.test' + pathname), 'https://preview.test'), undefined);
   }
-  assert.equal(
-    warmupRequest(
-      new Request('https://editor.test/studio', { method: 'POST' }),
-      'https://preview.test',
-    ),
-    undefined,
-  );
+  assert.equal(warmupRequest(new Request('https://editor.test/studio', { method: 'POST' }), 'https://preview.test'), undefined);
 });

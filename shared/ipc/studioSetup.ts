@@ -10,9 +10,7 @@ export type StudioStatus =
   | { readonly kind: 'installed'; readonly desktopVersion: string; readonly version: string }
   | { readonly kind: 'blocked'; readonly desktopVersion: string; readonly message: string };
 export type StudioInstallResult =
-  | { readonly kind: 'installed'; readonly version: string }
-  | { readonly kind: 'canceled' }
-  | { readonly kind: 'error'; readonly message: string };
+  { readonly kind: 'installed'; readonly version: string } | { readonly kind: 'canceled' } | { readonly kind: 'error'; readonly message: string };
 
 export function parseStudioSource(input: unknown): 'published' | 'file' {
   if (input === 'published' || input === 'file') {

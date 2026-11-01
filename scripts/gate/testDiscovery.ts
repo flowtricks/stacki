@@ -30,9 +30,7 @@ export interface Suite {
 /** Every test file under `test/`, repository-relative, sorted. */
 export function discoverTestFiles(root: string): readonly string[] {
   const found: string[] = [];
-  const pending: { readonly folder: string; readonly depth: number }[] = [
-    { folder: 'test', depth: 0 },
-  ];
+  const pending: { readonly folder: string; readonly depth: number }[] = [{ folder: 'test', depth: 0 }];
   while (pending.length > 0) {
     const next = pending.pop();
     if (next === undefined) {

@@ -19,13 +19,8 @@ const files = Object.freeze([
 const paths = (values) => values.map((file) => file.path);
 
 test('filters share the summary categories and retain original file objects', () => {
-  assert.deepEqual(paths(selectHistoryFiles(files, { filter: 'added', sort: 'path' })), [
-    'a-copy',
-    'z-new',
-  ]);
-  assert.deepEqual(paths(selectHistoryFiles(files, { filter: 'deleted', sort: 'path' })), [
-    'b-deleted',
-  ]);
+  assert.deepEqual(paths(selectHistoryFiles(files, { filter: 'added', sort: 'path' })), ['a-copy', 'z-new']);
+  assert.deepEqual(paths(selectHistoryFiles(files, { filter: 'deleted', sort: 'path' })), ['b-deleted']);
   const changed = selectHistoryFiles(files, { filter: 'updated', sort: 'path' });
   assert.deepEqual(paths(changed), ['a-moved', 'b-changed', 'c-type', 'd-unknown']);
   assert.equal(changed[0], files[4]);

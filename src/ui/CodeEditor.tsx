@@ -43,8 +43,7 @@ export const appTheme = EditorView.theme(
     // The same selection as the rest of the app. CodeMirror paints its own
     // layer rather than using ::selection, so it has to be told separately or
     // code is the one place a selection looks different.
-    ['&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, ' +
-    '.cm-selectionBackground']: { backgroundColor: 'var(--selection)' },
+    ['&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, ' + '.cm-selectionBackground']: { backgroundColor: 'var(--selection)' },
     '.cm-content ::selection': {
       backgroundColor: 'var(--selection)',
       color: 'var(--selection-text)',
@@ -163,9 +162,7 @@ const codeDecorationField = StateField.define({
   create: () => Decoration.none,
   update: (decorations, transaction) => {
     const changed = transaction.effects.find((effect) => effect.is(codeDecorations));
-    return changed
-      ? codeEditorDecorations(transaction.state.doc.length, changed.value)
-      : decorations.map(transaction.changes);
+    return changed ? codeEditorDecorations(transaction.state.doc.length, changed.value) : decorations.map(transaction.changes);
   },
   provide: (field) => EditorView.decorations.from(field),
 });
@@ -230,10 +227,7 @@ function EditableCodeEditor(props: CodeEditorProps) {
 
 /** The one change that turns `current` into `next`: the region between their
  * common prefix and suffix, or undefined when they are equal. */
-export function externalChange(
-  current: string,
-  next: string,
-): { readonly from: number; readonly to: number; readonly insert: string } | undefined {
+export function externalChange(current: string, next: string): { readonly from: number; readonly to: number; readonly insert: string } | undefined {
   if (current === next) {
     return undefined;
   }
@@ -243,10 +237,7 @@ export function externalChange(
     prefix++;
   }
   let suffix = 0;
-  while (
-    suffix < shorter - prefix &&
-    current.charCodeAt(current.length - 1 - suffix) === next.charCodeAt(next.length - 1 - suffix)
-  ) {
+  while (suffix < shorter - prefix && current.charCodeAt(current.length - 1 - suffix) === next.charCodeAt(next.length - 1 - suffix)) {
     suffix++;
   }
   const change = {
@@ -255,10 +246,7 @@ export function externalChange(
     insert: next.slice(prefix, next.length - suffix),
   };
   assert(change.from <= change.to, 'The changed region keeps its order');
-  assert(
-    current.slice(0, change.from) + change.insert + current.slice(change.to) === next,
-    'The change turns the document into the value',
-  );
+  assert(current.slice(0, change.from) + change.insert + current.slice(change.to) === next, 'The change turns the document into the value');
   return change;
 }
 
@@ -295,11 +283,7 @@ function useCodeDecorations(
       read: (editor) => {
         const start = editor.lineBlockAt(range.from);
         const end = editor.lineBlockAt(Math.max(range.from, range.to - 1));
-        return selectedCodeScrollTop(
-          start.top,
-          end.top + end.height,
-          editor.scrollDOM.clientHeight,
-        );
+        return selectedCodeScrollTop(start.top, end.top + end.height, editor.scrollDOM.clientHeight);
       },
       write: (top, editor) => {
         if (top !== undefined) {
@@ -311,11 +295,7 @@ function useCodeDecorations(
   }, [activeRange, viewRef]);
 }
 
-export function selectedCodeScrollTop(
-  startTop: number,
-  endBottom: number,
-  viewportHeight: number,
-): number | undefined {
+export function selectedCodeScrollTop(startTop: number, endBottom: number, viewportHeight: number): number | undefined {
   if (viewportHeight <= 0 || !Number.isFinite(viewportHeight)) {
     return undefined;
   }
@@ -327,11 +307,7 @@ export function selectedCodeScrollTop(
   return Math.max(0, startTop - offset);
 }
 
-function codeEditorCreate(
-  parent: HTMLDivElement,
-  language: string | undefined,
-  latest: MutableRefObject<CodeEditorProps>,
-): EditorView {
+function codeEditorCreate(parent: HTMLDivElement, language: string | undefined, latest: MutableRefObject<CodeEditorProps>): EditorView {
   const view = new EditorView({
     parent,
     state: EditorState.create({
@@ -349,10 +325,7 @@ function codeEditorCreate(
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             if (!update.transactions.some((transaction) => transaction.annotation(externalValue))) {
-              latest.current.onChange?.(
-                update.state.doc.toString(),
-                update.state.selection.main.head,
-              );
+              latest.current.onChange?.(update.state.doc.toString(), update.state.selection.main.head);
             }
           }
         }),
@@ -378,18 +351,12 @@ function codeEditorInteractions(latest: MutableRefObject<CodeEditorProps>) {
   });
 }
 
-function codeEditorClick(
-  event: MouseEvent,
-  view: EditorView,
-  latest: MutableRefObject<CodeEditorProps>,
-): boolean {
+function codeEditorClick(event: MouseEvent, view: EditorView, latest: MutableRefObject<CodeEditorProps>): boolean {
   const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
   if (position === null) {
     return false;
   }
-  const component = latest.current.componentRanges?.find(
-    (range) => range.from <= position && position <= range.to,
-  );
+  const component = latest.current.componentRanges?.find((range) => range.from <= position && position <= range.to);
   if (event.metaKey && component) {
     event.preventDefault();
     latest.current.onOpenComponent?.(component.name, component.id);
@@ -424,10 +391,7 @@ function codeEditorDecorations(length: number, state: CodeDecorations) {
   return Decoration.set(ranges, true);
 }
 
-function codeEditorRangeWithin(
-  range: CodeEditorRange | undefined,
-  length: number,
-): CodeEditorRange | undefined {
+function codeEditorRangeWithin(range: CodeEditorRange | undefined, length: number): CodeEditorRange | undefined {
   if (!range || range.from < 0 || range.to < range.from || range.to > length) {
     return undefined;
   }

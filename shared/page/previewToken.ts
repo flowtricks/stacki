@@ -139,9 +139,7 @@ export type ManifestProblem = 'too-many-files' | 'conflicting-stamps';
  * Every rendered copy of a component stamps the same entry; two different
  * checksums for one file mean the rendering mixes versions of it, which no
  * token can name. */
-export function manifestOf(
-  stamps: readonly PreviewStamp[],
-): Result<readonly PreviewStamp[], ManifestProblem> {
+export function manifestOf(stamps: readonly PreviewStamp[]): Result<readonly PreviewStamp[], ManifestProblem> {
   if (LIMITS.previewMarkersMax < stamps.length) {
     return err('too-many-files');
   }
@@ -199,10 +197,7 @@ export function parsePreviewRender(input: unknown): PreviewRender {
 }
 
 /** Whether an event's token names the frame's latest rendering. */
-export function judgeEventToken(
-  eventToken: Digest | undefined,
-  render: PreviewRender | undefined,
-): PreviewVerdict {
+export function judgeEventToken(eventToken: Digest | undefined, render: PreviewRender | undefined): PreviewVerdict {
   if (render === undefined) {
     return stale('no-render', undefined);
   }
@@ -214,11 +209,7 @@ export function judgeEventToken(
 
 /** Whether the open file rendered from the bytes the editor shows. `shown` is
  * undefined when the editor shows no disk version (unsaved structure). */
-export function judgeShownFile(
-  render: PreviewRender,
-  file: string,
-  shown: Digest | undefined,
-): PreviewVerdict {
+export function judgeShownFile(render: PreviewRender, file: string, shown: Digest | undefined): PreviewVerdict {
   const stamp = render.stamps.find((entry) => entry.file === file);
   if (stamp === undefined) {
     return stale('unstamped-file', file);

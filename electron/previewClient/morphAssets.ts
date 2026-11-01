@@ -52,10 +52,7 @@ function scriptsOf(page: Document): ScriptInfo[] {
     if (isStyleModule(source)) {
       continue;
     }
-    let attrs: [string, string][] = Array.from(script.attributes, (attribute) => [
-      attribute.name,
-      attribute.value,
-    ]);
+    let attrs: [string, string][] = Array.from(script.attributes, (attribute) => [attribute.name, attribute.value]);
     attrs = attrs.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
     out.push({
       src: source,
@@ -80,10 +77,7 @@ export function scriptSignature(page: Document): string {
  * where it sits, and this cannot put it there: the copy the patch inserted is
  * inert and replacing it is a different job. So an inline arrival still reloads.
  */
-export function addedScripts(
-  previousDocument: Document,
-  nextDocument: Document,
-): ScriptInfo[] | undefined {
+export function addedScripts(previousDocument: Document, nextDocument: Document): ScriptInfo[] | undefined {
   const before = scriptsOf(previousDocument);
   const after = scriptsOf(nextDocument);
   const had = new Set(before.map((script) => script.signature));

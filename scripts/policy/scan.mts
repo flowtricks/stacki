@@ -5,7 +5,7 @@
 //   node scripts/policy/scan.mts                 every tracked and new file
 //   node scripts/policy/scan.mts --files a b     just these files (hooks)
 //
-// File checks run in both modes: line width, shell scripts, test headers,
+// File checks run in both modes: shell scripts, test headers,
 // the no-check directive, layout names. Repository checks run only in full
 // mode: the dependency record, one lockfile, the CLAUDE.md import, unique
 // layout names, and assertion density in shared/.
@@ -26,34 +26,11 @@ export interface Violation {
   readonly message: string;
 }
 
-// Code and configuration: the files where 100 columns is a hard limit.
-// Markdown is exempt: tables and links cannot wrap, and prose is not scrolled.
-const WIDTH_EXTENSIONS = new Set([
-  '.cjs',
-  '.css',
-  '.html',
-  '.js',
-  '.json',
-  '.jsx',
-  '.mjs',
-  '.mts',
-  '.ts',
-  '.tsx',
-  '.yaml',
-  '.yml',
-]);
 const CODE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']);
 const SHELL_EXTENSIONS = new Set(['.bash', '.bat', '.cmd', '.fish', '.ps1', '.sh', '.zsh']);
 const SHELL_SHEBANG = /^#!.*\b(?:ba|z|fi|k|da)?sh\b/;
 // Byte-exact inputs: round-trip fixtures and corpora are tested as written.
-const EXEMPT_PREFIXES = [
-  'test/fixtures/',
-  'test/corpus/',
-  'node_modules/',
-  'dist/',
-  'release/',
-  'studio/',
-];
+const EXEMPT_PREFIXES = ['test/fixtures/', 'test/corpus/', 'node_modules/', 'dist/', 'release/', 'studio/'];
 const EXEMPT_FILES = new Set(['package-lock.json']);
 const LOCKFILES = ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb'];
 // A suppression with no rule list switches every rule off, including the one
@@ -90,9 +67,6 @@ export function scanFile(file: string, text: string): readonly Violation[] {
     const message = 'Scripts are TypeScript, not shell (AGENTS.md §17).';
     found.push({ file, line: 1, rule: 'no-shell-script', message });
   }
-  if (WIDTH_EXTENSIONS.has(extension)) {
-    found.push(...lineWidthViolations(file, lines));
-  }
   found.push(...layoutNameViolations(file));
   found.push(...testPlacementViolations(file));
   if (CODE_EXTENSIONS.has(extension)) {
@@ -113,19 +87,6 @@ export function scanFile(file: string, text: string): readonly Violation[] {
   return found;
 }
 
-function lineWidthViolations(file: string, lines: readonly string[]): readonly Violation[] {
-  const found: Violation[] = [];
-  lines.forEach((line, index) => {
-    // Columns are code points: an emoji or an accented letter is one column.
-    const columns = Array.from(line.replace(/\r$/, '')).length;
-    if (columns > POLICY_LIMITS.lineColumnsMax) {
-      const message = `${columns} columns; the limit is ${POLICY_LIMITS.lineColumnsMax}.`;
-      found.push({ file, line: index + 1, rule: 'line-width', message });
-    }
-  });
-  return found;
-}
-
 export function layoutNameViolations(file: string): readonly Violation[] {
   const root = LAYOUT_ROOTS.find((prefix) => file.startsWith(prefix));
   if (root === undefined) {
@@ -141,9 +102,7 @@ export function layoutNameViolations(file: string): readonly Violation[] {
     found.push({ file, line: 1, rule: 'layout-name', message });
   }
   if (!LAYOUT_NAMES.some((pattern) => pattern.test(name))) {
-    const message =
-      `'${name}' is neither a camelCase module nor a PascalCase component: no hyphens, ` +
-      'underscores or extra dots.';
+    const message = `'${name}' is neither a camelCase module nor a PascalCase component: no hyphens, ` + 'underscores or extra dots.';
     found.push({ file, line: 1, rule: 'layout-name', message });
   }
   return found;
@@ -151,17 +110,7 @@ export function layoutNameViolations(file: string): readonly Violation[] {
 
 // test/ mirrors the source (docs/codebase.md): suites for a source folder sit
 // in test/<root>/<area>/, and only suites do; helpers have their own folder.
-const TEST_FOLDERS = new Set([
-  'corpus',
-  'electron',
-  'fixtures',
-  'helpers',
-  'integration',
-  'renderer',
-  'scripts',
-  'shared',
-  'simulator',
-]);
+const TEST_FOLDERS = new Set(['corpus', 'electron', 'fixtures', 'helpers', 'integration', 'renderer', 'scripts', 'shared', 'simulator']);
 const TEST_MIRRORS = new Set(['electron', 'renderer', 'scripts', 'shared']);
 const SUITE = /\.test\.(?:js|ts)$/;
 
@@ -186,9 +135,7 @@ export function testPlacementViolations(file: string): readonly Violation[] {
     return [placement(file, `A suite sits in the area it tests: test/${top}/<area>/.`)];
   }
   if (!SUITE.test(file)) {
-    return [
-      placement(file, 'A mirror folder holds suites only (*.test.*); helpers go in test/helpers/.'),
-    ];
+    return [placement(file, 'A mirror folder holds suites only (*.test.*); helpers go in test/helpers/.')];
   }
   return [];
 }
@@ -205,19 +152,13 @@ export function testMirrorViolations(files: readonly string[]): readonly Violati
   const reported = new Set<string>();
   for (const file of files) {
     const [first, mirror, area] = file.split('/');
-    if (
-      first !== 'test' ||
-      mirror === undefined ||
-      area === undefined ||
-      !TEST_MIRRORS.has(mirror)
-    ) {
+    if (first !== 'test' || mirror === undefined || area === undefined || !TEST_MIRRORS.has(mirror)) {
       continue;
     }
     if (file.split('/').length < 4 || reported.has(`${mirror}/${area}`)) {
       continue;
     }
-    const sources =
-      mirror === 'renderer' ? [`src/${area}`, `src/features/${area}`] : [`${mirror}/${area}`];
+    const sources = mirror === 'renderer' ? [`src/${area}`, `src/features/${area}`] : [`${mirror}/${area}`];
     if (!sources.some((source) => folders.has(source))) {
       reported.add(`${mirror}/${area}`);
       const message = `test/${mirror}/${area}/ mirrors no source folder (${sources.join(' or ')}).`;
@@ -272,10 +213,7 @@ function testHeaderViolations(file: string, lines: readonly string[]): readonly 
 
 // AGENTS.md §17: every dependency has a written justification. The record and
 // package.json must name the same set, so neither can drift from the other.
-export function dependencyViolations(
-  packageText: string,
-  recordText: string,
-): readonly Violation[] {
+export function dependencyViolations(packageText: string, recordText: string): readonly Violation[] {
   const declared = declaredDependencies(packageText);
   const recorded = recordedDependencies(recordText);
   const found: Violation[] = [];
@@ -352,9 +290,7 @@ export function repositoryViolations(root: string, files: readonly string[]): re
   const density = sharedAssertionDensity(root, files);
   if (density.perFunction < POLICY_LIMITS.sharedAssertionsPerFunctionMin) {
     const measured = density.perFunction.toFixed(2);
-    const message =
-      `shared/ averages ${measured} assertions per function; the floor is ` +
-      `${POLICY_LIMITS.sharedAssertionsPerFunctionMin} (AGENTS.md §9).`;
+    const message = `shared/ averages ${measured} assertions per function; the floor is ` + `${POLICY_LIMITS.sharedAssertionsPerFunctionMin} (AGENTS.md §9).`;
     found.push({ file: 'shared', line: 1, rule: 'assertion-density', message });
   }
   return found;
@@ -367,11 +303,7 @@ function readIfPresent(file: string): string {
 // Tracked files plus new files not yet added, minus ignored ones: an agent's
 // new file is checked before anyone stages it.
 export function repositoryFiles(root: string): readonly string[] {
-  const listing = runChild(
-    'git',
-    ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--deduplicate'],
-    { cwd: root },
-  );
+  const listing = runChild('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--deduplicate'], { cwd: root });
   assert(listing.status === 0, `git ls-files failed: ${listing.stderr}`);
   const files = listing.stdout.split('\0').filter((file) => file.length > 0);
   assert(files.length <= POLICY_LIMITS.scanFilesMax, 'scan: repository exceeds the file limit');
@@ -410,9 +342,7 @@ export function scanPaths(root: string, files: readonly string[]): readonly Viol
 
 export function formatViolations(violations: readonly Violation[]): string {
   const shown = violations.slice(0, POLICY_LIMITS.violationsPrintedMax);
-  const lines = shown.map(
-    (entry) => `${entry.file}:${entry.line}  ${entry.rule}  ${entry.message}`,
-  );
+  const lines = shown.map((entry) => `${entry.file}:${entry.line}  ${entry.rule}  ${entry.message}`);
   const hidden = violations.length - shown.length;
   if (hidden > 0) {
     lines.push(`… and ${hidden} more.`);

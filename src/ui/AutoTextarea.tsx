@@ -12,15 +12,9 @@ import { assert } from '../../shared/core/assert';
 const HEIGHT_PX_MAX = 360;
 
 // Textarea that grows and shrinks to fit its content, up to a height past
-// which it scrolls. Height tracks the value on every change (and on width
+// which it scrolls. One row unless asked for more: a field is as tall as its text. Height tracks the value on every change (and on width
 // changes via ResizeObserver, since wrapping depends on width).
-export default function AutoTextarea({
-  value,
-  minRows: rowsMin = 2,
-  heightPxMax = HEIGHT_PX_MAX,
-  style,
-  ...props
-}: AutoTextareaProps) {
+export default function AutoTextarea({ value, minRows: rowsMin = 1, heightPxMax = HEIGHT_PX_MAX, style, ...props }: AutoTextareaProps) {
   assert(Number.isFinite(heightPxMax), 'A textarea height bound is a number');
   assert(heightPxMax > 0, 'A textarea height bound is positive');
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -37,15 +31,7 @@ export default function AutoTextarea({
     return () => ro.disconnect();
   }, [heightPxMax]);
 
-  return (
-    <textarea
-      ref={ref}
-      rows={rowsMin}
-      value={value}
-      style={{ overflowX: 'hidden', resize: 'none', ...style }}
-      {...props}
-    />
-  );
+  return <textarea ref={ref} rows={rowsMin} value={value} style={{ overflowX: 'hidden', resize: 'none', ...style }} {...props} />;
 }
 
 // The height its text needs, up to the bound; past it, a scrollbar.

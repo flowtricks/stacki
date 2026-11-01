@@ -15,15 +15,11 @@ import { SANITY_API_VERSION, sanityGet, sanityRequest, type SanityDataset } from
 
 const MANAGE_VERSION = 'v2021-06-07';
 
-export async function sanityRevisions(
-  target: SanityDataset,
-  id: string,
-): Promise<RemoteRevision[]> {
+export async function sanityRevisions(target: SanityDataset, id: string): Promise<RemoteRevision[]> {
   const ids = [id, `drafts.${id}`].map(encodeURIComponent).join(',');
   const text = await sanityGet(
     target,
-    `${dataAddress(target)}/history/${target.dataset}/transactions/${ids}` +
-      `?excludeContent=true&reverse=true&limit=${CMS_REMOTE_LIMITS.revisionsMax}`,
+    `${dataAddress(target)}/history/${target.dataset}/transactions/${ids}` + `?excludeContent=true&reverse=true&limit=${CMS_REMOTE_LIMITS.revisionsMax}`,
   );
   const rows = text
     .split('\n')
@@ -45,17 +41,9 @@ export async function sanityRevisions(
   }));
 }
 
-export async function sanityRestore(
-  target: SanityDataset,
-  id: string,
-  revision: string,
-): Promise<void> {
+export async function sanityRestore(target: SanityDataset, id: string, revision: string): Promise<void> {
   const ids = [`drafts.${id}`, id].map(encodeURIComponent).join(',');
-  const text = await sanityGet(
-    target,
-    `${dataAddress(target)}/history/${target.dataset}/documents/${ids}` +
-      `?revision=${encodeURIComponent(revision)}`,
-  );
+  const text = await sanityGet(target, `${dataAddress(target)}/history/${target.dataset}/documents/${ids}` + `?revision=${encodeURIComponent(revision)}`);
   const body: unknown = JSON.parse(text);
   const documents: unknown = isObject(body) ? Reflect.get(body, 'documents') : undefined;
   const list: readonly unknown[] = Array.isArray(documents) ? documents : [];
@@ -65,9 +53,7 @@ export async function sanityRestore(
     throw new Error('That version can no longer be read.');
   }
   // The content as it was; Sanity sets the system fields of the new draft itself.
-  const attributes = Object.fromEntries(
-    Object.entries(shown).filter(([key]) => !['_rev', '_createdAt', '_updatedAt'].includes(key)),
-  );
+  const attributes = Object.fromEntries(Object.entries(shown).filter(([key]) => !['_rev', '_createdAt', '_updatedAt'].includes(key)));
   assert(typeof Reflect.get(attributes, '_type') === 'string', 'A restored version has a type');
   await sanityRequest(target, `actions/${target.dataset}`, {
     actions: [
@@ -81,10 +67,7 @@ export async function sanityRestore(
 }
 
 // Display names for user ids, from the project's members; any it cannot read are left out.
-async function authorNames(
-  target: SanityDataset,
-  ids: readonly string[],
-): Promise<ReadonlyMap<string, string>> {
+async function authorNames(target: SanityDataset, ids: readonly string[]): Promise<ReadonlyMap<string, string>> {
   const named = ids.filter((id) => /^[A-Za-z0-9_-]{1,64}$/.test(id)).slice(0, 50);
   if (named.length === 0) {
     return new Map();

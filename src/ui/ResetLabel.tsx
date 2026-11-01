@@ -10,11 +10,7 @@ export interface ResetMenuProps {
   readonly unbindLabel: string;
   readonly onClose: () => void;
 }
-export function ResetLabel(props: {
-  readonly label: React.ReactNode;
-  readonly active: boolean;
-  readonly onReset: () => void;
-}) {
+export function ResetLabel(props: { readonly label: React.ReactNode; readonly active: boolean; readonly onReset: () => void }) {
   const [position, setPosition] = useState<ResetMenuProps['position']>();
   const reset = () => {
     setPosition(undefined);
@@ -48,35 +44,17 @@ export function ResetLabel(props: {
       >
         {props.label}
       </span>
-      {props.active && position && (
-        <ResetMenu
-          position={position}
-          onReset={reset}
-          resetLabel="Reset"
-          unbindLabel=""
-          onClose={() => setPosition(undefined)}
-        />
-      )}
+      {props.active && position && <ResetMenu position={position} onReset={reset} resetLabel="Reset" unbindLabel="" onClose={() => setPosition(undefined)} />}
     </>
   );
 }
 
-export function ResetMenu({
-  position,
-  onReset,
-  resetLabel = 'Reset to default property value',
-  onUnbind,
-  unbindLabel,
-  onClose,
-}: ResetMenuProps) {
+export function ResetMenu({ position, onReset, resetLabel = 'Reset to default property value', onUnbind, unbindLabel, onClose }: ResetMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onDown = (event: MouseEvent) => {
-      if (
-        ref.current &&
-        !(event.target instanceof window.Node && ref.current.contains(event.target))
-      ) {
+      if (ref.current && !(event.target instanceof window.Node && ref.current.contains(event.target))) {
         onClose();
       }
     };
@@ -86,11 +64,7 @@ export function ResetMenu({
       }
     };
     const onScroll = (event: Event) => {
-      if (
-        ref.current &&
-        event.target instanceof window.Node &&
-        ref.current.contains(event.target)
-      ) {
+      if (ref.current && event.target instanceof window.Node && ref.current.contains(event.target)) {
         return;
       }
       onClose();

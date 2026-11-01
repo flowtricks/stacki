@@ -27,19 +27,11 @@ import { diffBytes, type ByteDiff, type DiffBudget } from './diff';
 import { toByteSpan, type ByteSpan, type ByteString } from '../core/span';
 
 export type SpanMapping =
-  | { readonly tag: 'resolved'; readonly span: ByteSpan }
-  | { readonly tag: 'ambiguous' }
-  | { readonly tag: 'gone' }
-  | { readonly tag: 'too-costly' };
+  { readonly tag: 'resolved'; readonly span: ByteSpan } | { readonly tag: 'ambiguous' } | { readonly tag: 'gone' } | { readonly tag: 'too-costly' };
 
 /** Diff, then map. For several spans through one pair of files, diff once with
  * `diffBytes` and call `mapSpanThroughDiff` per span. */
-export function mapSpan(
-  source: ByteString,
-  target: ByteString,
-  span: ByteSpan,
-  budget: DiffBudget,
-): SpanMapping {
+export function mapSpan(source: ByteString, target: ByteString, span: ByteSpan, budget: DiffBudget): SpanMapping {
   const outcome = diffBytes(source, target, budget);
   switch (outcome.tag) {
     case 'computed':
@@ -164,12 +156,7 @@ function runsAgree(diff: ByteDiff, source: number, target: number, length: numbe
 // `ambiguous`. A script keeps it at j exactly when it matches the first byte at
 // j and the bytes agree from there: the free diagonal is then optimal to the
 // end of the span, because the distance after never grows along a match.
-function keptBySomeScript(
-  diff: ByteDiff,
-  span: ByteSpan,
-  first: Crossings,
-  workLeft: number,
-): SpanMapping {
+function keptBySomeScript(diff: ByteDiff, span: ByteSpan, first: Crossings, workLeft: number): SpanMapping {
   const length = span.end - span.start;
   assert(length > 0, 'A mapped span is non-empty');
   assert(first.matches.length <= 2 * diff.distance + 1, 'Matches come from the candidate band');

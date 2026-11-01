@@ -6,12 +6,14 @@ import type { ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import { ChevronDownIcon, RepeatIcon } from '../../ui/Icons';
-import { LOOP_QUERY_LIMITS, sortOrderFor, type LoopSort } from '../../editor/loopQuery';
+import { LOOP_QUERY_LIMITS, sortOrderFor, type LoopQuery, type LoopSort } from '../../editor/loopQuery';
 import { type CatalogField } from './loopCatalog';
 import { fieldNamed, orderLabels, sortParts, wholeNumberOf } from './loopSettingsModel';
 import { EditorRow, ListRow, SectionHeader, fieldIcon } from './LoopRows';
 import type { SectionProps } from './LoopFilters';
-import { SettingDot, type BindingContext } from './LoopBinding';
+import { SettingDot, type BindingContext, type DraftEditor } from './LoopBinding';
+import { moved, staysPut } from './LoopItems';
+import useListReorder from '../../ui/useListReorder';
 import { LinkedSetting } from './LoopLinked';
 
 // The Field menu's entry for a shuffle, beside the fields; never a field name
@@ -34,14 +36,18 @@ type SortSectionProps = SectionProps & {
 export function SortSection(props: SortSectionProps) {
   const { binding } = props;
   return binding?.settings.sort.kind === 'prop' ? (
-    <LinkedSetting
-      setting="sort"
-      binding={binding}
-      editor={<SortEditor {...props} binding={undefined} />}
-    />
+    <LinkedSetting setting="sort" binding={binding} editor={<SortEditor {...props} binding={undefined} />} draft={sortDraft(props)} />
   ) : (
     <SortEditor {...props} />
   );
+}
+
+// The sort as a new property's default: the same editor over a draft.
+function sortDraft(props: SortSectionProps): DraftEditor {
+  return {
+    query: props.query,
+    render: (query, onChange) => <SortEditor {...props} query={query} binding={undefined} label={undefined} onChange={onChange} />,
+  };
 }
 
 function SortEditor(props: SortSectionProps) {
@@ -49,64 +55,63 @@ function SortEditor(props: SortSectionProps) {
   const [open, setOpen] = useState<number | undefined>(undefined);
   const sortable = (fields ?? []).filter((field) => sortOrderFor(field.kind) !== undefined);
   const first = sortable[0];
-  const addable =
-    !query.random && query.sorts.length < LOOP_QUERY_LIMITS.sortsMax && first !== undefined;
+  const addable = !query.random && query.sorts.length < LOOP_QUERY_LIMITS.sortsMax && first !== undefined;
   const add = (): void => {
     const order = first === undefined ? undefined : sortOrderFor(first.kind);
     if (first === undefined || order === undefined) {
       return;
     }
-    props.onChange({
-      ...query,
-      sorts: [...query.sorts, { field: first.path, direction: 'ascending', order }],
-    });
+    props.onChange({ ...query, sorts: [...query.sorts, { field: first.path, direction: 'ascending', order }] });
     setOpen(query.sorts.length);
   };
+  const reorder = useListReorder({
+    count: query.sorts.length,
+    onMove: (source, target) => {
+      // A drop back in its own place changes nothing, so writes nothing.
+      if (staysPut(source, target)) {
+        return;
+      }
+      setOpen(undefined);
+      props.onChange({ ...query, sorts: moved(query.sorts, source, target) });
+    },
+  });
   const replace = (index: number, sort: LoopSort | undefined): void => {
-    const sorts =
-      sort === undefined
-        ? query.sorts.filter((_, at) => at !== index)
-        : query.sorts.map((existing, at) => (at === index ? sort : existing));
+    const sorts = sort === undefined ? query.sorts.filter((_, at) => at !== index) : query.sorts.map((existing, at) => (at === index ? sort : existing));
     props.onChange({ ...query, sorts });
   };
   const fieldOptions = [
-    ...sortable.map((field) => ({
-      value: field.path,
-      label: field.title,
-      icon: fieldIcon(field.kind),
-    })),
+    ...sortable.map((field) => ({ value: field.path, label: field.title, icon: fieldIcon(field.kind) })),
     // A shuffle runs in JS after the fetch, so a query kept in another file's
     // string cannot hold one.
-    ...(props.randomOrder === 'available'
-      ? [{ value: RANDOM_FIELD, label: 'Random order', icon: <RepeatIcon size={13} /> }]
-      : []),
+    ...(props.randomOrder === 'available' ? [{ value: RANDOM_FIELD, label: 'Random order', icon: <RepeatIcon size={13} /> }] : []),
   ];
   return (
     <div className="loop-settings-section">
       <SectionHeader
         title="Sort"
         label={props.label}
-        dot={<SettingDot setting="sort" binding={props.binding} />}
+        dot={<SettingDot setting="sort" binding={props.binding} draft={sortDraft(props)} />}
         addable={addable}
         onAdd={add}
       />
       {(query.random || query.sorts.length > 0) && (
         <div className="loop-settings-list">
-          {query.random && (
-            <RandomRow onRemove={() => props.onChange({ ...query, random: false })} />
-          )}
+          {query.random && <RandomRow onRemove={() => props.onChange({ ...query, random: false })} />}
           {!query.random &&
             query.sorts.map((sort, index) => (
-              <SortChip
-                key={`${index}:${sort.field}`}
-                sort={sort}
-                fields={fields}
-                fieldOptions={fieldOptions}
-                open={open === index}
-                onToggle={() => setOpen(open === index ? undefined : index)}
-                onRandom={() => props.onChange({ ...query, random: true, sorts: [] })}
-                onChange={(next) => replace(index, next)}
-              />
+              // The first sort decides the order, the next breaks its ties, so
+              // their order matters: a row drags to a new place.
+              <div key={`${index}:${sort.field}`} {...reorder.rowProps(index)} className={`loop-settings-sortable ${reorder.rowClass(index)}`}>
+                <SortChip
+                  sort={sort}
+                  fields={fields}
+                  fieldOptions={fieldOptions}
+                  open={open === index}
+                  onToggle={() => setOpen(open === index ? undefined : index)}
+                  onRandom={() => props.onChange({ ...query, random: true, sorts: [] })}
+                  onChange={(next) => replace(index, next)}
+                />
+              </div>
             ))}
         </div>
       )}
@@ -153,6 +158,7 @@ function SortChip(props: {
   return (
     <>
       <ListRow
+        dragThrough={true}
         parts={sortParts(sort, props.fields)}
         open={props.open}
         removeLabel="Remove sort"
@@ -196,31 +202,19 @@ function SortChip(props: {
 // Limit.
 // ---------------------------------------------------------------------------
 
-export function LimitSection(
-  props: Omit<SectionProps, 'fields'> & { readonly binding?: BindingContext | undefined },
-) {
+export function LimitSection(props: Omit<SectionProps, 'fields'> & { readonly binding?: BindingContext | undefined }) {
   const { query } = props;
   // A linked Show or Skip keeps the section open: its row is the purple bar.
-  const linked =
-    props.binding?.settings.limit.kind === 'prop' || props.binding?.settings.offset.kind === 'prop';
+  const linked = props.binding?.settings.limit.kind === 'prop' || props.binding?.settings.offset.kind === 'prop';
   const on = linked || query.limit !== undefined || query.offset > 0;
   const toggle = (): void => {
-    props.onChange(
-      on ? { ...query, limit: undefined, offset: 0 } : { ...query, limit: LIMIT_DEFAULT },
-    );
+    props.onChange(on ? { ...query, limit: undefined, offset: 0 } : { ...query, limit: LIMIT_DEFAULT });
   };
   return (
     <div className="loop-settings-section">
       <div className="loop-settings-header">
         <span className="prop-label">Limit items</span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={on}
-          aria-label="Limit items"
-          className={`cms-toggle ${on ? 'on' : ''}`}
-          onClick={toggle}
-        >
+        <button type="button" role="switch" aria-checked={on} aria-label="Limit items" className={`cms-toggle ${on ? 'on' : ''}`} onClick={toggle}>
           <span className="cms-toggle-knob" />
         </button>
       </div>
@@ -229,28 +223,32 @@ export function LimitSection(
           <LimitRow
             setting="limit"
             binding={props.binding}
-            row={(dot) => (
+            query={query}
+            onChange={props.onChange}
+            row={(dot, value, onChange) => (
               <NumberRow
                 label="Show"
                 dot={dot}
-                value={query.limit}
+                value={value.limit}
                 placeholder="All"
                 bounds={{ min: 1, max: LOOP_QUERY_LIMITS.limitMax }}
-                onCommit={(limit) => props.onChange({ ...query, limit })}
+                onCommit={(limit) => onChange({ ...value, limit })}
               />
             )}
           />
           <LimitRow
             setting="offset"
             binding={props.binding}
-            row={(dot) => (
+            query={query}
+            onChange={props.onChange}
+            row={(dot, value, onChange) => (
               <NumberRow
                 label="Skip"
                 dot={dot}
-                value={query.offset}
+                value={value.offset}
                 placeholder="0"
                 bounds={{ min: 0, max: LOOP_QUERY_LIMITS.offsetMax }}
-                onCommit={(offset) => props.onChange({ ...query, offset: offset ?? 0 })}
+                onCommit={(offset) => onChange({ ...value, offset: offset ?? 0 })}
               />
             )}
           />
@@ -265,20 +263,22 @@ export function LimitSection(
 function LimitRow(props: {
   readonly setting: 'limit' | 'offset';
   readonly binding: BindingContext | undefined;
-  readonly row: (dot: ReactNode) => ReactNode;
+  readonly query: LoopQuery;
+  readonly onChange: (query: LoopQuery) => void;
+  readonly row: (dot: ReactNode, query: LoopQuery, onChange: (query: LoopQuery) => void) => ReactNode;
 }) {
   const { binding } = props;
+  // A new property's default is edited with the same number field, over a draft.
+  const draft: DraftEditor = { query: props.query, render: (query, onChange) => props.row(undefined, query, onChange) };
   return binding?.settings[props.setting].kind === 'prop' ? (
-    <LinkedSetting setting={props.setting} binding={binding} editor={props.row(undefined)} />
+    <LinkedSetting setting={props.setting} binding={binding} editor={props.row(undefined, props.query, props.onChange)} draft={draft} />
   ) : (
-    props.row(<SettingDot setting={props.setting} binding={binding} />)
+    props.row(<SettingDot setting={props.setting} binding={binding} draft={draft} />, props.query, props.onChange)
   );
 }
 
 // The up and down buttons beside a number, shown while it is pointed at.
-function Steppers(props: {
-  readonly onStep: (direction: 1 | -1, size: { readonly large: boolean }) => void;
-}) {
+function Steppers(props: { readonly onStep: (direction: 1 | -1, size: { readonly large: boolean }) => void }) {
   return (
     <span className="num-steppers">
       {([1, -1] as const).map((direction) => (
@@ -290,10 +290,7 @@ function Steppers(props: {
           title={`${direction > 0 ? 'Increase' : 'Decrease'} — ⇧ by 10`}
           onClick={(event) => props.onStep(direction, { large: event.shiftKey })}
         >
-          <ChevronDownIcon
-            size={11}
-            style={direction > 0 ? { transform: 'rotate(180deg)' } : undefined}
-          />
+          <ChevronDownIcon size={11} style={direction > 0 ? { transform: 'rotate(180deg)' } : undefined} />
         </button>
       ))}
     </span>
@@ -329,10 +326,7 @@ function NumberRow(props: {
   // held inside the bounds, as the props panel's number fields step.
   const step = (direction: 1 | -1, size: { readonly large: boolean }): void => {
     const current = wholeNumberOf(draft, props.bounds) ?? committed.current ?? props.bounds.min;
-    const next = Math.min(
-      props.bounds.max,
-      Math.max(props.bounds.min, current + direction * (size.large ? 10 : 1)),
-    );
+    const next = Math.min(props.bounds.max, Math.max(props.bounds.min, current + direction * (size.large ? 10 : 1)));
     assert(Number.isSafeInteger(next), 'A stepped value is whole');
     setDraft(String(next));
     if (next !== committed.current) {

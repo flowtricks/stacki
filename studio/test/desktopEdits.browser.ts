@@ -62,9 +62,7 @@ async function checkText(page: Page) {
 
 async function checkStructure(page: Page) {
   await select(page, 'p');
-  const row = page
-    .locator('.structure-node')
-    .filter({ has: page.locator('.label', { hasText: /^p$/ }) });
+  const row = page.locator('.structure-node').filter({ has: page.locator('.label', { hasText: /^p$/ }) });
   const gap = page.locator('.nav-gap[data-drop-parent="n0"][data-drop-index="0"]');
   const source = await row.boundingBox();
   const target = await gap.boundingBox();

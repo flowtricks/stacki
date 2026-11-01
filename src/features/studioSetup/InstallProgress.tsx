@@ -1,9 +1,5 @@
 import { useEffect, useRef } from 'react';
-import {
-  STUDIO_INSTALL_STAGES,
-  studioCompletedStages,
-  type StudioInstallStage,
-} from '../../../shared/ipc/studioProgress';
+import { STUDIO_INSTALL_STAGES, studioCompletedStages, type StudioInstallStage } from '../../../shared/ipc/studioProgress';
 import type { StudioActivity } from './useStudioSetup';
 
 const STAGE_LABELS: Readonly<Record<StudioInstallStage, string>> = {
@@ -39,12 +35,7 @@ export default function InstallProgress({ activity }: { readonly activity: Studi
           Step {Math.min(completed + 1, total)} of {total}
         </span>
       </div>
-      <progress
-        max={total}
-        value={completed}
-        aria-label="Studio installation progress"
-        aria-valuetext={label}
-      />
+      <progress max={total} value={completed} aria-label="Studio installation progress" aria-valuetext={label} />
       <div className="studio-install-output-title">Installation output</div>
       <pre
         ref={log}
@@ -55,15 +46,12 @@ export default function InstallProgress({ activity }: { readonly activity: Studi
         tabIndex={0}
         onScroll={(event) => {
           const element = event.currentTarget;
-          followOutput.current =
-            element.scrollHeight - element.scrollTop - element.clientHeight < 32;
+          followOutput.current = element.scrollHeight - element.scrollTop - element.clientHeight < 32;
         }}
       >
         {progress.output || 'Preparing installation…'}
       </pre>
-      {activity.kind === 'busy' && (
-        <p className="studio-setup-note">Keep Stacki open while installation runs.</p>
-      )}
+      {activity.kind === 'busy' && <p className="studio-setup-note">Keep Stacki open while installation runs.</p>}
     </div>
   );
 }

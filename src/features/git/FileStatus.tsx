@@ -24,13 +24,7 @@ const WORDS: Readonly<Record<string, { readonly word: string; readonly why: stri
  * did — "Changed" is a state the working tree is in, but a commit that touched
  * a file did the changing, and "was changed" is what it says.
  */
-export default function FileStatus({
-  status,
-  inCommit = false,
-}: {
-  readonly status?: string | undefined;
-  readonly inCommit?: boolean;
-}) {
+export default function FileStatus({ status, inCommit = false }: { readonly status?: string | undefined; readonly inCommit?: boolean }) {
   if (!status) {
     return undefined;
   }
@@ -38,11 +32,7 @@ export default function FileStatus({
   // An unrecognised letter keeps the letter. Inventing a word for something
   // git meant differently would be worse than showing what git said.
   const word = known ? known.word : status;
-  const why = known
-    ? inCommit
-      ? `${known.word} in this version`
-      : known.why
-    : `git calls this “${status}”`;
+  const why = known ? (inCommit ? `${known.word} in this version` : known.why) : `git calls this “${status}”`;
   return (
     <span className={`file-status s-${status}`} title={why}>
       {word}

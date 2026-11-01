@@ -53,15 +53,11 @@ export function addDataRecord(
     // A list of records names each by an `id` field, unless the others go by position.
     const named = last === undefined || 'id' in (toRecord(last.data) ?? {});
     const record = named ? { id, ...seeded } : seeded;
-    writeEntry(projectPath, { file: context.file, locator: container }, [
-      { path: [place + 1], value: record },
-    ]);
+    writeEntry(projectPath, { file: context.file, locator: container }, [{ path: [place + 1], value: record }]);
     return { id: named ? id : String(place + 1) };
   }
   assert(typeof place === 'string', 'A keyed record sits under its key');
-  writeEntry(projectPath, { file: context.file, locator: container }, [
-    { path: [id], value: seeded },
-  ]);
+  writeEntry(projectPath, { file: context.file, locator: container }, [{ path: [id], value: seeded }]);
   return { id };
 }
 
@@ -85,9 +81,7 @@ export function removeDataRecords(projectPath: string, entries: readonly Entry[]
   for (const entry of ordered) {
     writableFormat(entry.format);
     assert(entry.locator.length > 0, 'A record in a data file has a place in it');
-    writeEntry(projectPath, { file: entry.file, locator: [] }, [
-      { path: entry.locator, value: undefined },
-    ]);
+    writeEntry(projectPath, { file: entry.file, locator: [] }, [{ path: entry.locator, value: undefined }]);
   }
   assert(ordered.length === entries.length, 'Every record named is removed');
   return ordered.length;
@@ -118,10 +112,7 @@ function freeId(entries: readonly Entry[]): string {
 }
 
 // A value for each required field, so the new record parses; its name says it is new.
-function seed(
-  fields: readonly RemoteSchemaField[],
-  entries: readonly Entry[],
-): Record<string, unknown> {
+function seed(fields: readonly RemoteSchemaField[], entries: readonly Entry[]): Record<string, unknown> {
   const record: Record<string, unknown> = {};
   for (const field of fields) {
     if (field.required) {

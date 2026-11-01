@@ -5,10 +5,7 @@ import { err, type Result } from '../../../vendor/stacki/shared/core/result';
 export class PublishFailure extends Error {}
 
 export function publishFailure(error: unknown): Result<never> {
-  if (
-    error instanceof AssertionError ||
-    (error instanceof Error && error.message.startsWith('Assertion failed:'))
-  ) {
+  if (error instanceof AssertionError || (error instanceof Error && error.message.startsWith('Assertion failed:'))) {
     throw error;
   }
   return err({

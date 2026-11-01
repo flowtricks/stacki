@@ -36,9 +36,7 @@ async function runEditors() {
   const browser = await chromium.launch({
     executablePath:
       process.env['CHROME_PATH'] ??
-      (process.platform === 'darwin'
-        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-        : chromium.executablePath()),
+      (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
     headless: true,
   });
   try {
@@ -69,17 +67,11 @@ async function runEditors() {
     await delayed.drain();
     for (const page of [first, second]) {
       const body = page.frameLocator('iframe[title="Site preview"]').locator('body');
-      assert.equal(
-        await body.getAttribute('data-text-regression'),
-        null,
-        'Delayed authoritative HTML must never erase newer typed text',
-      );
+      assert.equal(await body.getAttribute('data-text-regression'), null, 'Delayed authoritative HTML must never erase newer typed text');
     }
     delayed.assertDelivered();
     assert.deepEqual(errors, []);
-    console.log(
-      'Two independent sessions: reorder, duplicate, delete, insertion and typing passed.',
-    );
+    console.log('Two independent sessions: reorder, duplicate, delete, insertion and typing passed.');
   } finally {
     await browser.close();
   }

@@ -19,22 +19,13 @@
 
 import { assert } from '../../shared/core/assert';
 import { toArray, toRecord } from '../../shared/core/record';
-import {
-  REMOTE_SCHEMA_LIMITS,
-  type RemoteOption,
-  type RemoteRule,
-  type RemoteSchemaField,
-  type RemoteType,
-} from '../../shared/properties/cmsRemoteSchema';
+import { REMOTE_SCHEMA_LIMITS, type RemoteOption, type RemoteRule, type RemoteSchemaField, type RemoteType } from '../../shared/properties/cmsRemoteSchema';
 
 /** Each collection's entries as a reference to it offers them: id and title. */
 export type ReferenceTargets = ReadonlyMap<string, readonly RemoteOption[]>;
 
 /** A collection schema's top-level fields, in their declared order. */
-export function astroSchemaFields(
-  schema: unknown,
-  targets: ReferenceTargets,
-): readonly RemoteSchemaField[] {
+export function astroSchemaFields(schema: unknown, targets: ReferenceTargets): readonly RemoteSchemaField[] {
   const root = toRecord(schema);
   if (root === undefined) {
     return [];
@@ -93,12 +84,7 @@ function objectFields(node: SchemaNode, context: MapContext): RemoteSchemaField[
   return fields;
 }
 
-function fieldOf(
-  name: string,
-  property: SchemaNode | undefined,
-  placement: { readonly listed: boolean },
-  context: MapContext,
-): RemoteSchemaField | undefined {
+function fieldOf(name: string, property: SchemaNode | undefined, placement: { readonly listed: boolean }, context: MapContext): RemoteSchemaField | undefined {
   if (property === undefined || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(name)) {
     return undefined;
   }
@@ -205,11 +191,7 @@ function objectType(name: string, node: SchemaNode, context: MapContext): Remote
   return fields.length === 0 ? undefined : { kind: 'object', name, fields };
 }
 
-function rulesOf(
-  node: SchemaNode,
-  type: RemoteType,
-  presence: { readonly required: boolean },
-): RemoteRule[] {
+function rulesOf(node: SchemaNode, type: RemoteType, presence: { readonly required: boolean }): RemoteRule[] {
   const rules: RemoteRule[] = presence.required ? [{ level: 'error', kind: 'required' }] : [];
   const limit = (kind: 'min' | 'max', value: unknown) => {
     if (typeof value === 'number' && Number.isFinite(value)) {
@@ -286,8 +268,5 @@ export function labelize(key: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
-  return (words.charAt(0).toUpperCase() + words.slice(1)).slice(
-    0,
-    REMOTE_SCHEMA_LIMITS.titleCharsMax,
-  );
+  return (words.charAt(0).toUpperCase() + words.slice(1)).slice(0, REMOTE_SCHEMA_LIMITS.titleCharsMax);
 }

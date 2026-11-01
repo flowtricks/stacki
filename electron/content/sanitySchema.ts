@@ -14,12 +14,20 @@
 // own options say `hidden: true` is hidden in the Studio, and so here; a hidden
 // callback depends on the document, so the field is shown. An entry spreading
 // `orderRankField(…)` is the orderable plugin's hidden `orderRank`.
+//
+// A document type's `groups: [ … ]` split its fields into tabs, each field
+// naming its own in `group: "pastor"` (or a list of them). The tabs are read
+// as the Studio shows them: a group whose `hidden` is `true`, or that holds no
+// shown field, has no tab. The panel always opens on all fields, so the
+// group marked `default: true` is not read.
 
 import fs from 'node:fs';
 import { assert } from '../../shared/core/assert';
+import { CMS_REMOTE_LIMITS, type RemoteFieldGroup } from '../../shared/properties/cmsRemote';
 import {
   REMOTE_SCHEMA_LIMITS,
   type RemoteOption,
+  type RemoteReadOnly,
   type RemoteRowPreview,
   type RemoteRule,
   type RemoteScalarKind,
@@ -28,15 +36,7 @@ import {
 } from '../../shared/properties/cmsRemoteSchema';
 import { rulesOf } from './sanityRules';
 import { projectSourceFiles } from './sanityStructure';
-import {
-  closing,
-  entries,
-  entryObject,
-  ownBracketed,
-  ownKey,
-  ownSource,
-  ownString,
-} from './sanitySource';
+import { closing, entries, entryObject, ownBracketed, ownKey, ownSource, ownString } from './sanitySource';
 
 /** A field as the schema states it; a type the code does not settle is `undefined`. */
 export interface SanitySchemaField {
@@ -46,6 +46,9 @@ export interface SanitySchemaField {
   readonly required: boolean;
   readonly rules: readonly RemoteRule[];
   readonly type: RemoteType | undefined;
+  /** The groups its `group:` names, in order; none for an ungrouped or nested field. */
+  readonly groups: readonly string[];
+  readonly readOnly?: RemoteReadOnly;
 }
 
 /**
@@ -66,21 +69,13 @@ export interface SanityDocumentSchema {
   readonly fields: readonly SanitySchemaField[];
   /** Fields the Studio hides, kept out of the panel even though documents hold them. */
   readonly hidden: ReadonlySet<string>;
+  /** The tabs its fields are split into; absent when its schema names no groups. */
+  readonly fieldGroups: readonly RemoteFieldGroup[] | undefined;
 }
 
 // `defineType` calls one file may hold.
 const TYPES_PER_FILE_MAX = 64;
-const SCALARS: readonly RemoteScalarKind[] = [
-  'string',
-  'text',
-  'url',
-  'email',
-  'number',
-  'boolean',
-  'date',
-  'datetime',
-  'slug',
-];
+const SCALARS: readonly RemoteScalarKind[] = ['string', 'text', 'url', 'email', 'number', 'boolean', 'date', 'datetime', 'slug'];
 
 /** Every type the project's source defines, by name: the body of its `defineType({…})`. */
 export function sanityNamedTypes(projectRoot: string): ReadonlyMap<string, string> {
@@ -125,8 +120,7 @@ export function sanityTypeIcons(projectRoot: string): ReadonlyMap<string, string
   return icons;
 }
 
-const ICON_IMPORT =
-  /import\s*\{([^}]{1,2000})\}\s*from\s*["'](@sanity\/icons(?:\/[A-Za-z]+)?)["']/g;
+const ICON_IMPORT = /import\s*\{([^}]{1,2000})\}\s*from\s*["'](@sanity\/icons(?:\/[A-Za-z]+)?)["']/g;
 
 /** The symbol of the `@sanity/icons` icon a type's `icon:` names, if it names one. */
 export function iconSymbol(text: string, body: string): string | undefined {
@@ -163,7 +157,47 @@ export function sanityDocumentSchema(
   const hidden = new Set<string>();
   const fields = fieldsOf(body, { named, lists, depth: 0, hidden });
   assert(fields.length <= REMOTE_SCHEMA_LIMITS.fieldsMax, 'A schema stays within its field bound');
-  return { preview: previewOf(body), fields, hidden };
+  return { preview: previewOf(body), fields, hidden, fieldGroups: fieldGroupsOf(body, fields) };
+}
+
+// The type's `groups`, each with a tab only when a shown field names it.
+function fieldGroupsOf(body: string, fields: readonly SanitySchemaField[]): RemoteFieldGroup[] | undefined {
+  const list = ownBracketed(body, 'groups', '[');
+  if (list === undefined) {
+    return undefined;
+  }
+  const declared = entries(list)
+    .slice(0, CMS_REMOTE_LIMITS.fieldGroupsMax)
+    .flatMap((entry): RemoteFieldGroup[] => {
+      const own = entryObject(entry);
+      const name = ownString(own, 'name');
+      if (name === undefined || !GROUP_NAME.test(name) || literalTrue(own, 'hidden')) {
+        return [];
+      }
+      const title = ownString(own, 'title') ?? '';
+      return [{ name, title: title === '' ? name : title }];
+    });
+  const used = new Set(fields.flatMap((field) => field.groups));
+  const groups = declared.filter((group, index) => used.has(group.name) && declared.findIndex((other) => other.name === group.name) === index);
+  if (groups.length === 0) {
+    return undefined;
+  }
+  assert(groups.length <= CMS_REMOTE_LIMITS.fieldGroupsMax, 'A type has few field groups');
+  assert(
+    groups.every((group) => used.has(group.name)),
+    'Every tab holds a field',
+  );
+  return groups;
+}
+
+const GROUP_NAME = /^[A-Za-z_][\w-]{0,63}$/;
+
+// `group: "pastor"` or `group: ["pastor", "media"]`.
+function groupsOf(own: string): string[] {
+  const one = ownString(own, 'group');
+  const many = one === undefined ? ownBracketed(own, 'group', '[') : undefined;
+  const names = one !== undefined ? [one] : many === undefined ? [] : entries(many).map((entry) => /^\s*["'`]([^"'`]{1,64})["'`]\s*$/.exec(entry)?.[1]);
+  return names.filter((name): name is string => name !== undefined && GROUP_NAME.test(name)).slice(0, CMS_REMOTE_LIMITS.fieldGroupsMax);
 }
 
 /** Each `defineType({ name: … })` in this source text, as name and body. */
@@ -198,14 +232,10 @@ function previewOf(body: string): SanityPreview | undefined {
     return undefined;
   }
   const paths = entries(select).flatMap((entry) => {
-    const match = /^\s*["']?([A-Za-z_][A-Za-z0-9_]*)["']?\s*:\s*["'`]([^"'`]+)["'`]\s*$/.exec(
-      entry,
-    );
+    const match = /^\s*["']?([A-Za-z_][A-Za-z0-9_]*)["']?\s*:\s*["'`]([^"'`]+)["'`]\s*$/.exec(entry);
     const key = match?.[1];
     const path = match?.[2];
-    return key !== undefined && path !== undefined && PREVIEW_PATH.test(path)
-      ? [{ key, path }]
-      : [];
+    return key !== undefined && path !== undefined && PREVIEW_PATH.test(path) ? [{ key, path }] : [];
   });
   const find = (key: string) => paths.find((entry) => entry.key === key)?.path;
   const parts = subtitleParts(preview, paths).slice(0, PREVIEW_OTHERS_MAX);
@@ -219,9 +249,7 @@ function previewOf(body: string): SanityPreview | undefined {
 // `options: { columns: 2 }`: the Studio lays the group's fields out side by side.
 function columnsOf(own: string): { readonly columns?: number } {
   const options = ownBracketed(own, 'options', '{');
-  const columns = Number(
-    /^\s*(\d)\b/.exec(options === undefined ? '' : (ownSource(options, 'columns') ?? ''))?.[1],
-  );
+  const columns = Number(/^\s*(\d)\b/.exec(options === undefined ? '' : (ownSource(options, 'columns') ?? ''))?.[1]);
   return columns >= 2 && columns <= 4 ? { columns } : {};
 }
 
@@ -262,11 +290,7 @@ function subtitleParts(
 // read as if they had been written by hand. Only helpers whose arguments are
 // all string literals are expanded; anything else is left to the value.
 const HELPERS_MAX = 16;
-const HELPER = new RegExp(
-  String.raw`\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*\(([^()]{0,200})\)` +
-    String.raw`\s*(?::[^=]{0,80})?=>\s*defineField\(\s*\{`,
-  'g',
-);
+const HELPER = new RegExp(String.raw`\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*\(([^()]{0,200})\)` + String.raw`\s*(?::[^=]{0,80})?=>\s*defineField\(\s*\{`, 'g');
 
 function inlineHelpers(body: string, text: string): string {
   let out = body;
@@ -283,28 +307,21 @@ function inlineHelpers(body: string, text: string): string {
       continue;
     }
     const keys = text.slice(open + 1, close);
-    out = out.replace(
-      new RegExp(`(\\.\\.\\.\\s*)?\\b${name}\\(([^()]{0,400})\\)`, 'g'),
-      (call: string, spread: string | undefined, args: string) => {
-        const values = entries(args).map((arg) => /^\s*(["'`])([^"'`]*)\1\s*$/.exec(arg)?.[2]);
-        if (values.length !== params.length || values.some((value) => value === undefined)) {
-          return call;
-        }
-        const filled = withArguments(keys, params, values);
-        return spread === undefined ? `{${filled}}` : filled;
-      },
-    );
+    out = out.replace(new RegExp(`(\\.\\.\\.\\s*)?\\b${name}\\(([^()]{0,400})\\)`, 'g'), (call: string, spread: string | undefined, args: string) => {
+      const values = entries(args).map((arg) => /^\s*(["'`])([^"'`]*)\1\s*$/.exec(arg)?.[2]);
+      if (values.length !== params.length || values.some((value) => value === undefined)) {
+        return call;
+      }
+      const filled = withArguments(keys, params, values);
+      return spread === undefined ? `{${filled}}` : filled;
+    });
   }
   return out;
 }
 
 // A helper's object keys with each parameter replaced by its argument: a
 // shorthand `name,` becomes `name: "icon1",`, and `title: title` takes the text.
-function withArguments(
-  keys: string,
-  params: readonly string[],
-  values: readonly (string | undefined)[],
-): string {
+function withArguments(keys: string, params: readonly string[], values: readonly (string | undefined)[]): string {
   let out = keys;
   params.forEach((param, index) => {
     const literal = JSON.stringify(values[index] ?? '');
@@ -351,6 +368,9 @@ function fieldsOf(body: string, context: Resolving): SanitySchemaField[] {
       required: /\.required\(\)/.test(ownSource(own, 'validation') ?? ''),
       rules: rulesOf(ownSource(own, 'validation')),
       type: typeOf(own, { ...context, hidden: undefined }),
+      // Only a document's own fields are tabbed; an object's inner groups are not.
+      groups: context.depth === 0 ? groupsOf(own) : [],
+      ...readOnlyOf(own),
     });
   }
   return out;
@@ -411,11 +431,7 @@ function arrayOf(own: string, context: Resolving): RemoteType | undefined {
   const choices = optionsOf(own, context.lists);
   const of = members
     .filter((member): member is RemoteType => member !== undefined)
-    .map((member) =>
-      member.kind === 'string' && member.options.length === 0 && choices.length > 0
-        ? { ...member, options: choices }
-        : member,
-    );
+    .map((member) => (member.kind === 'string' && member.options.length === 0 && choices.length > 0 ? { ...member, options: choices } : member));
   return of.length === 0 ? undefined : { kind: 'array', of };
 }
 
@@ -461,9 +477,7 @@ function optionsOf(own: string, lists: ReadonlyMap<string, readonly string[]>): 
 export function sanityConstantLists(projectRoot: string): ReadonlyMap<string, readonly string[]> {
   const lists = new Map<string, readonly string[]>();
   const declaration = /\bconst\s+([A-Za-z_$][\w$]*)\s*(?::[^=]{0,80})?=\s*\[/g;
-  for (const file of projectSourceFiles(projectRoot, (text) =>
-    /\bconst\s+\w+\s*=\s*\[/.test(text),
-  )) {
+  for (const file of projectSourceFiles(projectRoot, (text) => /\bconst\s+\w+\s*=\s*\[/.test(text))) {
     let text: string;
     try {
       text = fs.readFileSync(file, 'utf8');
@@ -505,7 +519,24 @@ function stringItems(list: string): string[] | undefined {
 // Nested fields need a settled type to be part of an object's shape; one the
 // code does not settle is edited as text, which is what most such fields hold.
 function settled(fields: readonly SanitySchemaField[]): RemoteSchemaField[] {
-  return fields.map((field) => ({ ...field, type: field.type ?? { kind: 'string', options: [] } }));
+  return fields.map(({ groups: _groups, ...field }) => ({ ...field, type: field.type ?? { kind: 'string', options: [] } }));
+}
+
+// `readOnly: true`, or a callback that locks the field once it holds a value:
+// `({ value }) => value !== undefined` (or `!= null`, `!!value`, `Boolean(value)`).
+// Any other callback depends on what the Studio knows (who is signed in), so
+// the field stays editable rather than locked by a guess.
+const LOCKED_WHEN_SET = /^\s*\(\s*\{\s*value\s*\}\s*\)\s*=>\s*(?:value\s*!==?\s*(?:undefined|null)|!!\s*value|Boolean\(\s*value\s*\))\s*$/;
+
+function readOnlyOf(own: string): { readonly readOnly?: RemoteReadOnly } {
+  if (literalTrue(own, 'readOnly')) {
+    return { readOnly: 'always' };
+  }
+  const source = ownSource(own, 'readOnly');
+  if (source !== undefined && LOCKED_WHEN_SET.test(source)) {
+    return { readOnly: 'when-set' };
+  }
+  return {};
 }
 
 function literalTrue(own: string, key: string): boolean {

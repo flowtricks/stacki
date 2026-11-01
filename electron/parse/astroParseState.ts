@@ -9,12 +9,7 @@ import { findMatchingParen } from './astroScan';
 
 // A branch spans its side of the conditional as written, whitespace trimmed:
 // `( <p/> )` after the `?`, or the markup after the `&&`.
-export function makeBranch(
-  name: 'then' | 'else',
-  children: ParserNode[],
-  raw: string,
-  base: number | undefined,
-): BranchNode {
+export function makeBranch(name: 'then' | 'else', children: ParserNode[], raw: string, base: number | undefined): BranchNode {
   const branch: BranchNode = { id: makeId(), kind: 'branch', name, children };
   if (base !== undefined) {
     const start = base + (raw.length - raw.trimStart().length);
@@ -25,8 +20,7 @@ export function makeBranch(
 }
 
 // Whether a branch renders markup, as opposed to a value.
-export const branchIsMarkup = (kids: readonly ParserNode[] | undefined) =>
-  (kids || []).some((kid) => kid.kind !== 'expr' && kid.kind !== 'text');
+export const branchIsMarkup = (kids: readonly ParserNode[] | undefined) => (kids || []).some((kid) => kid.kind !== 'expr' && kid.kind !== 'text');
 
 // The other side of a conditional whose one side is markup: a plain value, as
 // an expression child.
@@ -39,10 +33,7 @@ export const branchIsMarkup = (kids: readonly ParserNode[] | undefined) =>
 // Written with braces, like every other expression node: it lands in JSX
 // context on the canvas (inside the branch's Fragment). The writer takes them
 // off again for the file, where a branch's parens are JS.
-export function exprBranch(
-  raw: string,
-  base: number | undefined = undefined,
-): ParserNode[] | undefined {
+export function exprBranch(raw: string, base: number | undefined = undefined): ParserNode[] | undefined {
   const text = String(raw);
   let expression = text.trimStart();
   let at = base === undefined ? undefined : base + (text.length - expression.length);
@@ -84,12 +75,7 @@ export const parseState: {
   nodes: 0,
   conditions: 0,
 };
-export function bail(
-  nodes: ParserNode[],
-  template: string,
-  at: number,
-  what: string,
-): ParsedTemplate {
+export function bail(nodes: ParserNode[], template: string, at: number, what: string): ParsedTemplate {
   if (!parseState.lastBail) {
     parseState.lastBail = { what, near: template.slice(at, at + 60) };
   }
@@ -105,12 +91,7 @@ export type TemplateTagResult =
   | { readonly kind: 'bail'; readonly what: string }
   | { readonly kind: 'child-bail' };
 
-export function parseTemplateAt(
-  node: ParserNode,
-  base: number | undefined,
-  from: number,
-  to: number,
-): ParserNode {
+export function parseTemplateAt(node: ParserNode, base: number | undefined, from: number, to: number): ParserNode {
   if (base === undefined) {
     return node;
   }

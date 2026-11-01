@@ -12,10 +12,7 @@ export async function styleFiles(root: string, astro: boolean) {
       continue;
     }
     const size = (await stat(await safePath(root, file))).size;
-    if (
-      astro &&
-      (size > 512 * 1024 || !/<style\b[^>]*\bis:global\b[^>]*>/i.test(await readSource(root, file)))
-    ) {
+    if (astro && (size > 512 * 1024 || !/<style\b[^>]*\bis:global\b[^>]*>/i.test(await readSource(root, file)))) {
       continue;
     }
     files.push({
@@ -25,18 +22,10 @@ export async function styleFiles(root: string, astro: boolean) {
       size,
     });
   }
-  files.sort(
-    (left, right) =>
-      (astro ? 0 : left.rel.split('/').length - right.rel.split('/').length) ||
-      left.rel.localeCompare(right.rel),
-  );
+  files.sort((left, right) => (astro ? 0 : left.rel.split('/').length - right.rel.split('/').length) || left.rel.localeCompare(right.rel));
   return { files };
 }
-export async function saveSource(
-  request: IncomingMessage,
-  rooms: ReturnType<typeof createRooms>,
-  readBody: () => Promise<string>,
-) {
+export async function saveSource(request: IncomingMessage, rooms: ReturnType<typeof createRooms>, readBody: () => Promise<string>) {
   if (request.method !== 'POST') {
     throw new Error('Use POST to save source');
   }
@@ -47,9 +36,7 @@ export async function saveSource(
   const room = await rooms.get(file);
   return rooms.coordinator.run(async () => {
     if (room.text.toString() !== base) {
-      throw new Error(
-        'Another editor changed this file. Reload the style panel before editing again.',
-      );
+      throw new Error('Another editor changed this file. Reload the style panel before editing again.');
     }
     await room.setSource(source);
     return { ok: true };

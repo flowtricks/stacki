@@ -3,13 +3,9 @@
 // invalid topology through the pure layout, including its explicit capacity bounds.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildHistoryGraph, HISTORY_COMMITS_MAX } = require('../../helpers/rendererModule')(
-  'src/features/history/historyGraph.ts',
-);
+const { buildHistoryGraph, HISTORY_COMMITS_MAX } = require('../../helpers/rendererModule')('src/features/history/historyGraph.ts');
 
-const { gitBranchColors, gitRefColor, gitBranchColor } = require('../../helpers/rendererModule')(
-  'src/lib/gitBranchColors.ts',
-);
+const { gitBranchColors, gitRefColor, gitBranchColor } = require('../../helpers/rendererModule')('src/lib/gitBranchColors.ts');
 
 const commit = (hash, parents = [], refs = []) => ({ hash, parents, refs });
 const outgoing = (row) => row.edges.filter((edge) => edge.kind === 'outgoing');
@@ -77,12 +73,7 @@ test('custom trunk, shared tips, tags and merge side histories keep accurate col
 });
 
 test('a merge splits into two lanes and rejoins at the shared ancestor', () => {
-  const graph = buildHistoryGraph([
-    commit('merge', ['main', 'feature']),
-    commit('feature', ['base']),
-    commit('main', ['base']),
-    commit('base'),
-  ]);
+  const graph = buildHistoryGraph([commit('merge', ['main', 'feature']), commit('feature', ['base']), commit('main', ['base']), commit('base')]);
   assert.equal(graph.width, 2);
   assert.deepEqual(
     graph.rows.map((row) => row.lane),
@@ -100,12 +91,7 @@ test('a merge splits into two lanes and rejoins at the shared ancestor', () => {
 });
 
 test('unmerged tips stay independent until they reach their common ancestor', () => {
-  const graph = buildHistoryGraph([
-    commit('feature', ['base']),
-    commit('main', ['base']),
-    commit('base'),
-    commit('orphan'),
-  ]);
+  const graph = buildHistoryGraph([commit('feature', ['base']), commit('main', ['base']), commit('base'), commit('orphan')]);
   assert.deepEqual(
     graph.rows.map((row) => row.lane),
     [0, 1, 0, 0],
@@ -115,13 +101,7 @@ test('unmerged tips stay independent until they reach their common ancestor', ()
 });
 
 test('octopus merges connect all parents, and loading a page preserves earlier rows', () => {
-  const commits = [
-    commit('merge', ['a', 'b', 'c']),
-    commit('a', ['root']),
-    commit('b', ['root']),
-    commit('c', ['root']),
-    commit('root'),
-  ];
+  const commits = [commit('merge', ['a', 'b', 'c']), commit('a', ['root']), commit('b', ['root']), commit('c', ['root']), commit('root')];
   const partial = buildHistoryGraph(commits.slice(0, 2));
   const complete = buildHistoryGraph(commits);
   assert.equal(complete.width, 3);
@@ -131,23 +111,11 @@ test('octopus merges connect all parents, and loading a page preserves earlier r
 });
 
 test('invalid graphs fail loudly instead of drawing misleading ancestry', () => {
-  assert.throws(
-    () => buildHistoryGraph([commit('a'), commit('a')]),
-    /History graph: duplicate commit/,
-  );
+  assert.throws(() => buildHistoryGraph([commit('a'), commit('a')]), /History graph: duplicate commit/);
   assert.throws(() => buildHistoryGraph([commit('a', ['a'])]), /History graph: self parent/);
-  assert.throws(
-    () => buildHistoryGraph([commit('parent'), commit('child', ['parent'])]),
-    /History graph: parents must follow their children/,
-  );
-  assert.throws(
-    () => buildHistoryGraph([commit('a', ['b', 'b'])]),
-    /History graph: duplicate parent/,
-  );
-  assert.throws(
-    () => buildHistoryGraph(Array(HISTORY_COMMITS_MAX + 1).fill(commit('a'))),
-    /History graph: commit limit exceeded/,
-  );
+  assert.throws(() => buildHistoryGraph([commit('parent'), commit('child', ['parent'])]), /History graph: parents must follow their children/);
+  assert.throws(() => buildHistoryGraph([commit('a', ['b', 'b'])]), /History graph: duplicate parent/);
+  assert.throws(() => buildHistoryGraph(Array(HISTORY_COMMITS_MAX + 1).fill(commit('a'))), /History graph: commit limit exceeded/);
   assert.throws(
     () =>
       buildHistoryGraph([
@@ -158,20 +126,13 @@ test('invalid graphs fail loudly instead of drawing misleading ancestry', () => 
       ]),
     /History graph: parent limit exceeded/,
   );
-  const divergent = Array.from({ length: 257 }, (_, index) =>
-    commit(`child-${index}`, [`parent-${index}`]),
-  );
+  const divergent = Array.from({ length: 257 }, (_, index) => commit(`child-${index}`, [`parent-${index}`]));
   assert.throws(() => buildHistoryGraph(divergent), /History graph: lane limit exceeded/);
 });
 
 test('each local branch has a distinct color shared by its remote labels', () => {
   const branches = ['tim', 'main', 'codex/fix-workflow-node', 'one', 'two', 'three', 'four'];
-  const colors = gitBranchColors(branches, 'main', [
-    'origin/main',
-    'origin/codex/fix-workflow-node',
-    'origin/tim',
-    'origin/remote-only',
-  ]);
+  const colors = gitBranchColors(branches, 'main', ['origin/main', 'origin/codex/fix-workflow-node', 'origin/tim', 'origin/remote-only']);
   assert.equal(colors.size, 8);
   assert.equal(new Set([...colors.values()].map(gitBranchColor)).size, 8);
   for (const branch of branches) {

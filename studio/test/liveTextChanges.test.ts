@@ -7,9 +7,7 @@ import { hasOnlyLiteralTextChanges } from '../src/features/preview/liveTextChang
 import { structuralEdits } from '../src/features/source/sourceOperations';
 import { nodesOf, applyEdits } from '../src/features/source/source';
 
-const source =
-  '<main><Button variant="primary">Choose a campus</Button>' +
-  '<Button variant="secondary">Plan your visit</Button></main>';
+const source = '<main><Button variant="primary">Choose a campus</Button>' + '<Button variant="secondary">Plan your visit</Button></main>';
 const snapshot = (source: string) => ({ source, nodes: nodesOf(source) });
 
 test('moving equal-shaped buttons and undoing must use the complete Astro render', () => {
@@ -31,10 +29,7 @@ test('moving equal-shaped buttons and undoing must use the complete Astro render
   assert.equal(
     hasOnlyLiteralTextChanges(
       before,
-      snapshot(
-        '<main><Button variant="secondary">Plan your visit</Button>' +
-          '<Button variant="primary">Choose a campus</Button></main>',
-      ),
+      snapshot('<main><Button variant="secondary">Plan your visit</Button>' + '<Button variant="primary">Choose a campus</Button></main>'),
     ),
     false,
   );
@@ -44,13 +39,7 @@ test('literal typing, entities and sequential edits retain the immediate path', 
   const before = snapshot(source);
   const after = snapshot(source.replace('Choose a campus', 'Come &amp; visit'));
   assert.equal(hasOnlyLiteralTextChanges(before, after), true);
-  assert.equal(
-    hasOnlyLiteralTextChanges(
-      after,
-      snapshot(after.source.replace('Plan your visit', 'Visit today')),
-    ),
-    true,
-  );
+  assert.equal(hasOnlyLiteralTextChanges(after, snapshot(after.source.replace('Plan your visit', 'Visit today'))), true);
 });
 
 test('prop, tag, expression, import and structural edits invalidate pending text', () => {

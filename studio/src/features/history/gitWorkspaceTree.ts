@@ -18,7 +18,5 @@ export async function gitWorkspaceTree(run: GitWorkspaceRun, tree: string) {
     return { mode: match[1], type: match[2], sha: match[3], path: match[4] };
   });
   const parsed = parsePublishedStatusFiles({ truncated: false, tree: entries });
-  return [...parsed].flatMap(([file, entry]) =>
-    entry.mode === '100644' || entry.mode === '100755' ? [{ path: file, ...entry }] : [],
-  );
+  return [...parsed].flatMap(([file, entry]) => (entry.mode === '100644' || entry.mode === '100755' ? [{ path: file, ...entry }] : []));
 }

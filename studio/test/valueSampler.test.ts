@@ -53,8 +53,5 @@ test('only what a render would run is run', async () => {
   await assert.rejects(ask('pkg', 'getAll'), /under src\//, 'a dependency is not project code');
   await assert.rejects(ask('missing', 'getAll'), /under src\//);
   await assert.rejects(ask('@/sanity/queries.ts', 'get(); process.exit'), /Not an export name/);
-  await assert.rejects(
-    sample({ file: '../outside.astro', spec: '@/sanity/queries.ts', name: 'getPastors' }),
-    /under src\//,
-  );
+  await assert.rejects(sample({ file: '../outside.astro', spec: '@/sanity/queries.ts', name: 'getPastors' }), /under src\//);
 });

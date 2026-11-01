@@ -7,23 +7,10 @@ import type { usePreview } from '../preview/usePreview';
 export interface FollowTarget extends Peer {
   readonly request: number;
 }
-export function useCollaborators(
-  document: SharedDocument | undefined,
-  page: string,
-  preview: ReturnType<typeof usePreview>,
-  session: Session | undefined,
-) {
+export function useCollaborators(document: SharedDocument | undefined, page: string, preview: ReturnType<typeof usePreview>, session: Session | undefined) {
   const { subscribeLoad } = preview;
-  const others = session
-    ? otherPresenceUsers(
-        document?.peers ?? [],
-        document?.selfId ?? '',
-        session.kind === 'github' ? session.id : undefined,
-      )
-    : [];
-  const peers = others
-    .filter((peer) => peer.page === page && /^(layout|n\d+(\.\d+)*)$/.test(peer.selection))
-    .slice(0, 30);
+  const others = session ? otherPresenceUsers(document?.peers ?? [], document?.selfId ?? '', session.kind === 'github' ? session.id : undefined) : [];
+  const peers = others.filter((peer) => peer.page === page && /^(layout|n\d+(\.\d+)*)$/.test(peer.selection)).slice(0, 30);
   const paths = JSON.stringify(peers.map(peerPath));
   const send = useRef(preview.send);
   send.current = preview.send;

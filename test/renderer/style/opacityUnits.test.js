@@ -35,9 +35,7 @@ const check = (what, condition, detail) => {
     platform: 'node',
     logLevel: 'silent',
   });
-  const { parseOpacity, opacityText, findScrubTarget, scrubNumber, stepNumberAtCaret } = require(
-    bundlePath,
-  );
+  const { parseOpacity, opacityText, findScrubTarget, scrubNumber, stepNumberAtCaret } = require(bundlePath);
 
   const number = parseOpacity('0.42');
   check(
@@ -51,50 +49,25 @@ const check = (what, condition, detail) => {
     percent?.unit === 'percent' && percent.value === 0.42 && opacityText(percent) === '42%',
     JSON.stringify(percent),
   );
-  check(
-    'the default opaque value renders as one without a percent',
-    opacityText({ value: 1, unit: 'number' }) === '1',
-  );
-  check(
-    'the same value uses percent only in explicit percent mode',
-    opacityText({ value: 1, unit: 'percent' }) === '100%',
-  );
-  check(
-    'CSS expressions are not mistaken for numeric opacity',
-    parseOpacity('var(--fade)') === undefined,
-  );
-  check(
-    'numeric opacity is clamped to the CSS rendering range',
-    opacityText(parseOpacity('1.4')) === '1' && opacityText(parseOpacity('-0.2')) === '0',
-  );
+  check('the default opaque value renders as one without a percent', opacityText({ value: 1, unit: 'number' }) === '1');
+  check('the same value uses percent only in explicit percent mode', opacityText({ value: 1, unit: 'percent' }) === '100%');
+  check('CSS expressions are not mistaken for numeric opacity', parseOpacity('var(--fade)') === undefined);
+  check('numeric opacity is clamped to the CSS rendering range', opacityText(parseOpacity('1.4')) === '1' && opacityText(parseOpacity('-0.2')) === '0');
 
   const stepped = stepNumberAtCaret('0.50', 2, 1, 'whole', 0, 0.01);
-  check(
-    'unitless arrow stepping advances by one hundredth',
-    stepped?.text === '0.51',
-    stepped?.text,
-  );
+  check('unitless arrow stepping advances by one hundredth', stepped?.text === '0.51', stepped?.text);
   const run = findScrubTarget('0.50', 2);
-  check(
-    'unitless opacity scrubbing advances in hundredths',
-    run !== undefined && scrubNumber('0.50', run, 10, 'whole', 0.01) === '0.6',
-  );
+  check('unitless opacity scrubbing advances in hundredths', run !== undefined && scrubNumber('0.50', run, 10, 'whole', 0.01) === '0.6');
 
   const source = fs.readFileSync(repoPath('src/features/style/OpacityRow.tsx'), 'utf8');
-  check(
-    'the opacity slider exposes the normalized zero-to-one range',
-    /<DragSlider\s+[\s\S]*?min=\{0\}[\s\S]*?max=\{1\}[\s\S]*?step=\{0\.01\}/.test(source),
-  );
+  check('the opacity slider exposes the normalized zero-to-one range', /<DragSlider\s+[\s\S]*?min=\{0\}[\s\S]*?max=\{1\}[\s\S]*?step=\{0\.01\}/.test(source));
   check(
     'slider writes reuse the authored unit instead of forcing percent',
-    /onInput=\{\(value\) => live\(\{ value, unit \}\)\}/.test(source) &&
-      /commit\(\{ value, unit \}\)/.test(source),
+    /onInput=\{\(value\) => live\(\{ value, unit \}\)\}/.test(source) && /commit\(\{ value, unit \}\)/.test(source),
   );
 
   if (failures.length) {
-    console.error(
-      `\nopacity-units: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\nopacity-units: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(`${failures.join('\n')}\n`);
     process.exit(1);
   }

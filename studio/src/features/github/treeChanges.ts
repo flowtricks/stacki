@@ -17,15 +17,8 @@ export function treeChanges(before: unknown, after: unknown) {
     if (a?.sha === b?.sha && a?.mode === b?.mode) {
       return [];
     }
-    if (
-      (a && a.type !== 'blob') ||
-      (b && b.type !== 'blob') ||
-      a?.mode === '120000' ||
-      b?.mode === '120000'
-    ) {
-      throw new Error(
-        `GitHub changed a link or submodule at ${filename}. Update the runtime before syncing.`,
-      );
+    if ((a && a.type !== 'blob') || (b && b.type !== 'blob') || a?.mode === '120000' || b?.mode === '120000') {
+      throw new Error(`GitHub changed a link or submodule at ${filename}. Update the runtime before syncing.`);
     }
     return [{ filename, status: !a ? 'added' : !b ? 'removed' : 'modified' }];
   });
@@ -34,9 +27,7 @@ export function treeFiles(input: unknown): Map<string, TreeEntry> {
   const data = record(input);
   const tree = data['tree'];
   if (data['truncated'] !== false || !Array.isArray(tree) || tree.length > 100_000) {
-    throw new Error(
-      'GitHub returned an incomplete repository tree; sync cannot safely skip unseen files.',
-    );
+    throw new Error('GitHub returned an incomplete repository tree; sync cannot safely skip unseen files.');
   }
   const files = new Map<string, TreeEntry>();
   for (const input of tree) {

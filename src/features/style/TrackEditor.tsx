@@ -54,23 +54,13 @@ export function TrackIcon({ track, axis }: { track: string; axis: 'column' | 'ro
   const kind = trackKind(track);
   return (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-      <path
-        opacity="0.4"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={axis === 'column' ? FAINT_COL : FAINT_ROW}
-        fill="currentColor"
-      />
+      <path opacity="0.4" fillRule="evenodd" clipRule="evenodd" d={axis === 'column' ? FAINT_COL : FAINT_ROW} fill="currentColor" />
       {kind === 'minmax' ? (
         <path fillRule="evenodd" clipRule="evenodd" d={GEAR_PATH} fill="currentColor" />
       ) : kind === 'auto' || kind === 'content' ? (
         <path fillRule="evenodd" clipRule="evenodd" d={AUTO_PATH} fill="currentColor" />
       ) : (
-        <path
-          d={ARROW_PATH}
-          fill="currentColor"
-          transform={axis === 'column' ? 'rotate(90 8 8)' : undefined}
-        />
+        <path d={ARROW_PATH} fill="currentColor" transform={axis === 'column' ? 'rotate(90 8 8)' : undefined} />
       )}
     </svg>
   );
@@ -196,17 +186,7 @@ export function switchedSize(track: string, mode: 'default' | 'minmax'): TrackSi
 
 // The per-track editor: Default (a single size) or Min/Max (a minmax pair). Track lists
 // (not the auto sections) also get the Auto-fit toggle + its constraint warning.
-export function TrackSizeEditor({
-  track,
-  busy,
-  autoFit,
-  onChange,
-}: {
-  track: string;
-  busy: boolean;
-  autoFit?: AutoFit;
-  onChange: (size: TrackSize) => void;
-}) {
+export function TrackSizeEditor({ track, busy, autoFit, onChange }: { track: string; busy: boolean; autoFit?: AutoFit; onChange: (size: TrackSize) => void }) {
   const size = parseTrackSize(track);
   const switchMode = (mode: 'default' | 'minmax') => {
     if (mode !== size.mode) {
@@ -217,13 +197,7 @@ export function TrackSizeEditor({
     <div className="embed-editor_grid-track-editor">
       <div className="embed-editor_size-row">
         <span className="embed-editor_size-label embed-editor_bg-caption">Sizing</span>
-        <SegmentedControl
-          value={size.mode}
-          options={SIZING_OPTIONS}
-          onChange={switchMode}
-          ariaLabel="Track sizing"
-          disabled={busy}
-        />
+        <SegmentedControl value={size.mode} options={SIZING_OPTIONS} onChange={switchMode} ariaLabel="Track sizing" disabled={busy} />
       </div>
       <TrackSizeFields size={size} busy={busy} onChange={onChange} />
       {autoFit ? <AutoFitToggle autoFit={autoFit} busy={busy} /> : undefined}
@@ -232,15 +206,7 @@ export function TrackSizeEditor({
 }
 
 // Default: one Size field; Min/Max: the two bounds.
-export function TrackSizeFields({
-  size,
-  busy,
-  onChange,
-}: {
-  size: TrackSize;
-  busy: boolean;
-  onChange: (size: TrackSize) => void;
-}) {
+export function TrackSizeFields({ size, busy, onChange }: { size: TrackSize; busy: boolean; onChange: (size: TrackSize) => void }) {
   if (size.mode === 'default') {
     return (
       <div className="embed-editor_size-row">
@@ -298,10 +264,7 @@ export function AutoFitToggle({ autoFit, busy }: { autoFit: AutoFit; busy: boole
           <span className="embed-editor_grid-warning-icon">
             <WarnIcon />
           </span>
-          <span>
-            Auto-fit can’t be enabled when there are auto, flexible (FR), minmax(auto, fr),
-            minmax(auto, auto), or other auto-fit columns or rows.
-          </span>
+          <span>Auto-fit can’t be enabled when there are auto, flexible (FR), minmax(auto, fr), minmax(auto, auto), or other auto-fit columns or rows.</span>
         </div>
       ) : undefined}
     </>
@@ -318,15 +281,7 @@ export interface PopoverPosition {
 // accordion — portaled over the modal, positioned below the clicked row (flips above
 // when there isn't room), with a caret pointing at it. Closes on outside click /
 // Escape / scroll.
-export function TrackPopover({
-  anchorElement,
-  onClose,
-  children,
-}: {
-  anchorElement: HTMLElement;
-  onClose: () => void;
-  children: ReactNode;
-}) {
+export function TrackPopover({ anchorElement, onClose, children }: { anchorElement: HTMLElement; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<PopoverPosition | undefined>(undefined);
   // The panel's span, read at mount so the first layout (which measures this
@@ -356,11 +311,7 @@ export function TrackPopover({
         visibility: position === undefined ? 'hidden' : 'visible',
       }}
     >
-      <span
-        className="embed-editor_grid-popover-caret"
-        style={{ left: position?.caretLeft ?? 16 }}
-        aria-hidden="true"
-      />
+      <span className="embed-editor_grid-popover-caret" style={{ left: position?.caretLeft ?? 16 }} aria-hidden="true" />
       {children}
     </Popup>
   );
@@ -368,20 +319,13 @@ export function TrackPopover({
 
 // Below the anchor when the popover fits there, else above it; the caret points at
 // the anchor's middle.
-export function popoverPosition(
-  anchorElement: HTMLElement,
-  height: number,
-  span: { left: number; width: number },
-): PopoverPosition {
+export function popoverPosition(anchorElement: HTMLElement, height: number, span: { left: number; width: number }): PopoverPosition {
   const anchor = anchorElement.getBoundingClientRect();
   const gap = 8;
   const below = anchor.bottom + gap + height <= window.innerHeight;
   const top = below ? anchor.bottom + gap : Math.max(gap, anchor.top - gap - height);
   // The caret is absolutely positioned inside the popover, so its x is local
   // to the popover's left edge — not the window's.
-  const caretLeft = Math.min(
-    Math.max(anchor.left + anchor.width / 2 - span.left, 16),
-    span.width - 16,
-  );
+  const caretLeft = Math.min(Math.max(anchor.left + anchor.width / 2 - span.left, 16), span.width - 16);
   return { top, caretLeft, below };
 }

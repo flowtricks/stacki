@@ -41,11 +41,7 @@ export function hasOnlyLiteralTextChanges(before: TextSnapshot, after: TextSnaps
   return before.source.slice(oldEnd) === after.source.slice(newEnd);
 }
 
-function hasRange(
-  node: ParserNode,
-  previousEnd: number,
-  length: number,
-): node is ParserNode & { readonly start: number; readonly end: number } {
+function hasRange(node: ParserNode, previousEnd: number, length: number): node is ParserNode & { readonly start: number; readonly end: number } {
   return (
     typeof node.start === 'number' &&
     typeof node.end === 'number' &&

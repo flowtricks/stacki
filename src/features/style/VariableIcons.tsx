@@ -4,13 +4,7 @@
 export function CheckIcon() {
   return (
     <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
-      <path
-        d="M3.5 8.5 6.5 11.5 12.5 5"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M3.5 8.5 6.5 11.5 12.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -23,13 +17,7 @@ export function CheckIcon() {
 export function PlusIcon() {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M8 4v8M4 8h8"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+      <path d="M8 4v8M4 8h8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -120,22 +108,14 @@ export const FONT_FAMILY_TYPE_ICON_PATH =
 export function FontFamilyTypeIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={FONT_FAMILY_TYPE_ICON_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={FONT_FAMILY_TYPE_ICON_PATH} fill="currentColor" />
     </svg>
   );
 }
 export function SizeTypeIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M12 4.70711L4.70711 12H7.5V13H3V8.5H4V11.2929L11.2929 4H8.5V3H13V7.5H12V4.70711Z"
-        fill="currentColor"
-      />
+      <path d="M12 4.70711L4.70711 12H7.5V13H3V8.5H4V11.2929L11.2929 4H8.5V3H13V7.5H12V4.70711Z" fill="currentColor" />
     </svg>
   );
 }
@@ -156,13 +136,7 @@ export function VariableTypeIcon({ type }: { type: string }) {
 export function ChevronRightIcon() {
   return (
     <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
-      <path
-        d="M6 4l4 4-4 4"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

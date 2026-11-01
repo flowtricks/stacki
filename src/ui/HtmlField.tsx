@@ -27,13 +27,7 @@ import {
   type FormatState,
   type RichTextAction,
 } from './richTextCommands';
-import {
-  blockShortcut,
-  cleanPastedHTML,
-  inlineShortcut,
-  linkAddress,
-  textCounts,
-} from './richTextModel';
+import { blockShortcut, cleanPastedHTML, inlineShortcut, linkAddress, textCounts } from './richTextModel';
 import './contentInputs.css';
 import './richText.css';
 
@@ -75,18 +69,12 @@ export default function HtmlField({ value, label = 'Rich text', onChange }: Prop
           setSource(!source);
         }}
       />
-      <HtmlBody
-        {...{ value, label, source, projection, editor, formatCount }}
-        onAction={state.run}
-        onChange={onChange}
-      />
+      <HtmlBody {...{ value, label, source, projection, editor, formatCount }} onAction={state.run} onChange={onChange} />
       {bubble && !source && (
         <HtmlLinkEditor
           bubble={bubble}
           onEdit={() => setBubble({ ...bubble, kind: 'edit' })}
-          onApply={(href) =>
-            linkEdit(editor, (element) => applyLink(element, href), state.closeBubble)
-          }
+          onApply={(href) => linkEdit(editor, (element) => applyLink(element, href), state.closeBubble)}
           onRemove={() => linkEdit(editor, removeLink, state.closeBubble)}
           onClose={state.closeBubble}
         />
@@ -98,11 +86,7 @@ export default function HtmlField({ value, label = 'Rich text', onChange }: Prop
 
 // The editor's state: the live text, what the caret is in, the link bubble, the
 // counts, and the actions the toolbar and keyboard run.
-function useHtmlEditor(options: {
-  readonly value: string;
-  readonly projection: ReturnType<typeof editableHTML>;
-  readonly onChange: (value: string) => void;
-}) {
+function useHtmlEditor(options: { readonly value: string; readonly projection: ReturnType<typeof editableHTML>; readonly onChange: (value: string) => void }) {
   const { value, projection, onChange } = options;
   const host = useRef<HTMLDivElement>();
   const saved = useRef<Range>();
@@ -177,22 +161,11 @@ interface BodyProps extends Props {
 function HtmlBody(props: BodyProps) {
   const { editor } = props;
   if (props.source) {
-    return (
-      <HtmlSourceEditor
-        value={props.value}
-        label={props.label ?? 'Rich text'}
-        formatCount={props.formatCount}
-        onChange={props.onChange}
-      />
-    );
+    return <HtmlSourceEditor value={props.value} label={props.label ?? 'Rich text'} formatCount={props.formatCount} onChange={props.onChange} />;
   }
   return (
     <>
-      {props.projection.restricted && (
-        <div className="html-notice">
-          This HTML includes markup that cannot be edited visually. Use HTML to preserve it.
-        </div>
-      )}
+      {props.projection.restricted && <div className="html-notice">This HTML includes markup that cannot be edited visually. Use HTML to preserve it.</div>}
       <div
         ref={(element) => {
           editor.host.current = element ?? undefined;
@@ -225,9 +198,7 @@ function HtmlBody(props: BodyProps) {
 function HtmlFooter(props: { readonly words: number; readonly characters: number }) {
   return (
     <div className="html-footer" aria-hidden="true">
-      <span className="html-footer-hint">
-        ## heading · - list · &gt; quote · **bold** · `code` · {MOD}K link
-      </span>
+      <span className="html-footer-hint">## heading · - list · &gt; quote · **bold** · `code` · {MOD}K link</span>
       <span className="html-footer-counts">
         {props.words} {props.words === 1 ? 'word' : 'words'} · {props.characters} characters
       </span>
@@ -254,11 +225,7 @@ function useSelectionTracking(editor: Editor, onFormat: (format: FormatState) =>
   }, [host, saved]);
 }
 
-function keyDown(
-  editor: Editor,
-  event: KeyboardEvent<HTMLDivElement>,
-  onAction: (action: RichTextAction) => void,
-): void {
+function keyDown(editor: Editor, event: KeyboardEvent<HTMLDivElement>, onAction: (action: RichTextAction) => void): void {
   const element = editor.host.current;
   if (element === undefined) {
     return;
@@ -351,10 +318,7 @@ function paste(editor: Editor, data: DataTransfer): void {
 
 // A link in the text is not followed on a click, which places the caret in it;
 // ⌘-click opens it, as in other editors.
-function followLink(
-  event: { readonly target: EventTarget; preventDefault(): void },
-  options: { readonly open: boolean },
-): void {
+function followLink(event: { readonly target: EventTarget; preventDefault(): void }, options: { readonly open: boolean }): void {
   const link = event.target instanceof Element ? event.target.closest('a') : undefined;
   if (link === null || link === undefined) {
     return;
@@ -376,11 +340,7 @@ function linkEdit(editor: Editor, edit: (element: HTMLElement) => void, done: ()
 }
 
 // The bubble the caret calls for: a link's address under it, kept while editing.
-function bubbleFor(
-  element: HTMLElement | undefined,
-  format: FormatState,
-  open: LinkBubble | undefined,
-): LinkBubble | undefined {
+function bubbleFor(element: HTMLElement | undefined, format: FormatState, open: LinkBubble | undefined): LinkBubble | undefined {
   if (open?.kind === 'edit') {
     return open;
   }
@@ -408,10 +368,7 @@ function placeUnder(element: HTMLElement, rect: DOMRect | undefined): LinkBubble
   return { top: rect.bottom - box.top + 6, left };
 }
 
-function restoreSelection(
-  element: HTMLDivElement | undefined,
-  range: Range | undefined,
-): HTMLDivElement | undefined {
+function restoreSelection(element: HTMLDivElement | undefined, range: Range | undefined): HTMLDivElement | undefined {
   if (element === undefined) {
     return undefined;
   }

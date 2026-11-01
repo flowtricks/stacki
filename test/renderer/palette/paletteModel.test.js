@@ -33,10 +33,7 @@ test('preview URLs respect the project slash policy and preserve encoded file id
 
 test('component preview messages accept only known status updates', () => {
   for (const status of ['empty', 'ready']) {
-    assert.deepEqual(
-      model.parseComponentPreviewMessage({ type: 'avb:component-preview', status }),
-      { status },
-    );
+    assert.deepEqual(model.parseComponentPreviewMessage({ type: 'avb:component-preview', status }), { status });
   }
   for (const value of [
     PLATFORM_NULL,
@@ -80,12 +77,7 @@ test('component groups keep the root first and folders in name order', () => {
   const component = (name, folder) => ({ path: `/p/${name}.astro`, name, folder });
   assert.deepEqual(
     model
-      .groupPaletteComponents([
-        component('Zed', 'Z'),
-        component('Root', ''),
-        component('Alpha', 'A'),
-        component('Again', 'A'),
-      ])
+      .groupPaletteComponents([component('Zed', 'Z'), component('Root', ''), component('Alpha', 'A'), component('Again', 'A')])
       .map(([folder, items]) => [folder, items.map((item) => item.name)]),
     [
       ['', ['Root']],

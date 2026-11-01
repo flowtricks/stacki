@@ -14,19 +14,8 @@ interface PropertyProps {
   readonly classes: string[];
   readonly change: (value: string | undefined, expression: boolean) => void;
 }
-export function Property({
-  field,
-  value,
-  expression,
-  applies,
-  options,
-  fallback,
-  classes,
-  change,
-}: PropertyProps) {
-  const [mode, setMode] = useState(
-    expression && !field.shape && !['boolean', 'number'].includes(field.type),
-  );
+export function Property({ field, value, expression, applies, options, fallback, classes, change }: PropertyProps) {
+  const [mode, setMode] = useState(expression && !field.shape && !['boolean', 'number'].includes(field.type));
   let literal: unknown;
   let literalError = '';
   if (field.shape) {
@@ -36,12 +25,7 @@ export function Property({
       literalError = 'This value uses an expression. Switch to {} to edit its source.';
     }
   }
-  const template = Object.fromEntries(
-    (field.shape ?? []).map((item) => [
-      item.name,
-      item.type === 'number' ? 0 : item.type === 'boolean' ? false : '',
-    ]),
-  );
+  const template = Object.fromEntries((field.shape ?? []).map((item) => [item.name, item.type === 'number' ? 0 : item.type === 'boolean' ? false : '']));
   const [suggest, setSuggest] = useState(false);
   const shown = value === undefined ? '' : mode ? value : decode(value);
   const last = shown.split(/\s+/).at(-1) ?? '';
@@ -62,35 +46,19 @@ export function Property({
         change={change}
       />
       {field.name === 'class' && suggest && !mode && (
-        <ClassSuggestions
-          onClose={() => setSuggest(false)}
-          classes={classes}
-          shown={shown}
-          last={last}
-          change={change}
-        />
+        <ClassSuggestions onClose={() => setSuggest(false)} classes={classes} shown={shown} last={last} change={change} />
       )}
       {!applies && <small>Not used by this variant</small>}
     </div>
   );
 }
 
-function PropertyLabel({
-  field,
-  mode,
-  setMode,
-  change,
-}: Pick<PropertyProps, 'field' | 'change'> & { mode: boolean; setMode: (value: boolean) => void }) {
+function PropertyLabel({ field, mode, setMode, change }: Pick<PropertyProps, 'field' | 'change'> & { mode: boolean; setMode: (value: boolean) => void }) {
   return (
     <span className="field-label">
       {field.name}
       <span className="field-tools">
-        <button
-          type="button"
-          title="Reset to default"
-          aria-label={`Reset ${field.name}`}
-          onClick={() => change(undefined, mode)}
-        >
+        <button type="button" title="Reset to default" aria-label={`Reset ${field.name}`} onClick={() => change(undefined, mode)}>
           ↺
         </button>
         <button
@@ -139,21 +107,13 @@ function PropertyControl({
       />
     )
   ) : !mode && field.type === 'boolean' ? (
-    <select
-      aria-label={field.name}
-      value={value ?? ''}
-      onChange={(event) => change(event.target.value || undefined, true)}
-    >
+    <select aria-label={field.name} value={value ?? ''} onChange={(event) => change(event.target.value || undefined, true)}>
       <option value="">Default{fallback !== undefined ? ` (${fallback})` : ''}</option>
       <option value="true">True</option>
       <option value="false">False</option>
     </select>
   ) : !mode && options?.length ? (
-    <select
-      aria-label={field.name}
-      value={shown}
-      onChange={(event) => change(event.target.value || undefined, !!field.numeric)}
-    >
+    <select aria-label={field.name} value={shown} onChange={(event) => change(event.target.value || undefined, !!field.numeric)}>
       <option value="">Default{fallback !== undefined ? ` (${fallback})` : ''}</option>
       {options.map((option) => (
         <option key={option}>{option}</option>

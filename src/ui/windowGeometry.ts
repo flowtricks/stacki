@@ -28,11 +28,7 @@ export function initialWindowRectangle(viewport: WindowSize, minimum: WindowSize
   );
 }
 
-export function fitWindowRectangle(
-  rectangle: WindowRectangle,
-  viewport: WindowSize,
-  minimum: WindowSize,
-): WindowRectangle {
+export function fitWindowRectangle(rectangle: WindowRectangle, viewport: WindowSize, minimum: WindowSize): WindowRectangle {
   assert(Number.isFinite(viewport.width), 'Window viewport width must be finite');
   assert(viewport.width > 0, 'Window viewport width must be positive');
   assert(Number.isFinite(viewport.height), 'Window viewport height must be finite');
@@ -44,11 +40,7 @@ export function fitWindowRectangle(
     height: Math.max(1, viewport.height - top - MARGIN_PX),
   };
   const width = clamp(rectangle.width, Math.min(minimum.width, available.width), available.width);
-  const height = clamp(
-    rectangle.height,
-    Math.min(minimum.height, available.height),
-    available.height,
-  );
+  const height = clamp(rectangle.height, Math.min(minimum.height, available.height), available.height);
   return {
     x: clamp(rectangle.x, left, Math.max(left, viewport.width - width - MARGIN_PX)),
     y: clamp(rectangle.y, top, Math.max(top, viewport.height - height - MARGIN_PX)),
@@ -72,15 +64,9 @@ export function resizeWindowRectangle(
   const right = fitted.x + fitted.width;
   const bottom = fitted.y + fitted.height;
   const x = edge.includes('w') ? clamp(fitted.x + delta.x, MARGIN_PX, right - widthMin) : fitted.x;
-  const y = edge.includes('n')
-    ? clamp(fitted.y + delta.y, fitted.y < TOP_PX ? 0 : TOP_PX, bottom - heightMin)
-    : fitted.y;
-  const width = edge.includes('e')
-    ? clamp(fitted.width + delta.x, widthMin, viewport.width - fitted.x - MARGIN_PX)
-    : right - x;
-  const height = edge.includes('s')
-    ? clamp(fitted.height + delta.y, heightMin, viewport.height - fitted.y - MARGIN_PX)
-    : bottom - y;
+  const y = edge.includes('n') ? clamp(fitted.y + delta.y, fitted.y < TOP_PX ? 0 : TOP_PX, bottom - heightMin) : fitted.y;
+  const width = edge.includes('e') ? clamp(fitted.width + delta.x, widthMin, viewport.width - fitted.x - MARGIN_PX) : right - x;
+  const height = edge.includes('s') ? clamp(fitted.height + delta.y, heightMin, viewport.height - fitted.y - MARGIN_PX) : bottom - y;
   return fitWindowRectangle({ x, y, width, height }, viewport, minimum);
 }
 

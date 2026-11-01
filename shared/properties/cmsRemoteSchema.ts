@@ -26,8 +26,7 @@ export const REMOTE_SCHEMA_LIMITS = {
   valueCharsMax: 100_000,
 } as const;
 
-export type RemoteScalarKind =
-  'string' | 'text' | 'url' | 'email' | 'number' | 'boolean' | 'date' | 'datetime' | 'slug';
+export type RemoteScalarKind = 'string' | 'text' | 'url' | 'email' | 'number' | 'boolean' | 'date' | 'datetime' | 'slug';
 
 export type RemoteType =
   | {
@@ -75,6 +74,34 @@ export interface RemoteSchemaField {
   /** The checks its schema states that can be read without running code. */
   readonly rules: readonly RemoteRule[];
   readonly type: RemoteType;
+  /** Shown but not edited, as the Studio locks it; absent where it can be edited. */
+  readonly readOnly?: RemoteReadOnly;
+}
+
+/**
+ * When the Studio refuses edits to a field: `always` (`readOnly: true`), or
+ * `when-set`, once it holds a value (`readOnly: ({ value }) => value !== undefined`),
+ * so a choice made once is kept. A rule that asks who is signed in is the
+ * Studio's own code, so that field stays editable.
+ */
+export type RemoteReadOnly = 'always' | 'when-set';
+
+const READ_ONLY = ['always', 'when-set'] as const;
+
+/** Whether a field takes no edit while it holds `value`. */
+export function isLocked(field: Pick<RemoteSchemaField, 'readOnly'>, value: RemoteValue | undefined): boolean {
+  switch (field.readOnly) {
+    case undefined:
+      return false;
+    case 'always':
+      return true;
+    case 'when-set':
+      return value !== undefined;
+    default: {
+      const exhaustive: never = field.readOnly;
+      return exhaustive;
+    }
+  }
 }
 
 /**
@@ -112,9 +139,7 @@ export function parseRemoteRule(input: unknown): RemoteRule {
   if (kind !== 'uri') {
     throw new Error('Unknown rule.');
   }
-  const schemes = bounded(value['schemes'], REMOTE_SCHEMA_LIMITS.optionsMax).map((scheme) =>
-    short(scheme, 32),
-  );
+  const schemes = bounded(value['schemes'], REMOTE_SCHEMA_LIMITS.optionsMax).map((scheme) => short(scheme, 32));
   const relative = value['relative'];
   if (typeof relative !== 'boolean') {
     throw new Error('Invalid rule option.');
@@ -124,20 +149,9 @@ export function parseRemoteRule(input: unknown): RemoteRule {
 }
 
 /** A JSON value as a CMS stores it. Absence is `undefined`; JSON's null is dropped. */
-export type RemoteValue =
-  string | number | boolean | readonly RemoteValue[] | { readonly [key: string]: RemoteValue };
+export type RemoteValue = string | number | boolean | readonly RemoteValue[] | { readonly [key: string]: RemoteValue };
 
-const SCALARS: readonly RemoteScalarKind[] = [
-  'string',
-  'text',
-  'url',
-  'email',
-  'number',
-  'boolean',
-  'date',
-  'datetime',
-  'slug',
-];
+const SCALARS: readonly RemoteScalarKind[] = ['string', 'text', 'url', 'email', 'number', 'boolean', 'date', 'datetime', 'slug'];
 
 // A leading digit is allowed: exported content names fields `1-logo-svg`.
 const NAME = /^[A-Za-z0-9_][\w.-]{0,127}$/;
@@ -194,6 +208,7 @@ export function parseRemoteSchemaField(input: unknown, depth = 0): RemoteSchemaF
     title: short(value['title'], REMOTE_SCHEMA_LIMITS.titleCharsMax),
     description: short(value['description'], REMOTE_SCHEMA_LIMITS.descriptionCharsMax),
     type: parseRemoteType(value['type'], depth + 1),
+    ...parseReadOnly(value['readOnly']),
   };
   assert(field.name.length > 0, 'A field has a name');
   return field;
@@ -247,11 +262,7 @@ function valueAt(input: unknown, depth: number, tick: () => void): RemoteValue |
   return objectValue(record(input), depth, tick);
 }
 
-function objectValue(
-  input: Readonly<Record<string, unknown>>,
-  depth: number,
-  tick: () => void,
-): RemoteValue {
+function objectValue(input: Readonly<Record<string, unknown>>, depth: number, tick: () => void): RemoteValue {
   const out: Record<string, RemoteValue> = {};
   for (const [key, entry] of Object.entries(input)) {
     if (!/^[A-Za-z0-9_$][\w$-]{0,127}$/.test(key)) {
@@ -266,11 +277,20 @@ function objectValue(
   return out;
 }
 
+function parseReadOnly(input: unknown): { readonly readOnly?: RemoteReadOnly } {
+  if (input === undefined) {
+    return {};
+  }
+  const readOnly = READ_ONLY.find((candidate) => candidate === input);
+  if (readOnly === undefined) {
+    throw new Error('Invalid read-only rule.');
+  }
+  assert(READ_ONLY.includes(readOnly), 'A read-only rule is a known one');
+  return { readOnly };
+}
+
 // Only a string names a file; an asset mark on anything else is refused.
-function parseAsset(
-  value: Readonly<Record<string, unknown>>,
-  kind: RemoteScalarKind,
-): { readonly asset?: 'image' } {
+function parseAsset(value: Readonly<Record<string, unknown>>, kind: RemoteScalarKind): { readonly asset?: 'image' } {
   const asset = value['asset'];
   if (asset === undefined) {
     return {};
@@ -311,9 +331,7 @@ function parseRowPreview(input: unknown): RemoteRowPreview {
 }
 
 function parseFields(input: unknown, depth: number): RemoteSchemaField[] {
-  const fields = bounded(input, REMOTE_SCHEMA_LIMITS.fieldsMax).map((field) =>
-    parseRemoteSchemaField(field, depth),
-  );
+  const fields = bounded(input, REMOTE_SCHEMA_LIMITS.fieldsMax).map((field) => parseRemoteSchemaField(field, depth));
   if (new Set(fields.map((field) => field.name)).size !== fields.length) {
     throw new Error('A field is named twice.');
   }
@@ -327,9 +345,7 @@ function parseOptions(input: unknown): RemoteOption[] {
     return {
       title: short(value['title'], REMOTE_SCHEMA_LIMITS.titleCharsMax),
       value: short(value['value'], REMOTE_SCHEMA_LIMITS.titleCharsMax),
-      ...(value['imageFile'] === undefined
-        ? {}
-        : { imageFile: parseProjectFile(value['imageFile']) }),
+      ...(value['imageFile'] === undefined ? {} : { imageFile: parseProjectFile(value['imageFile']) }),
     };
   });
 }
@@ -377,9 +393,7 @@ function bounded(input: unknown, max: number): unknown[] {
 }
 
 /** The plain-object view of a value, or undefined when it is not one. */
-export function remoteObject(
-  value: RemoteValue | undefined,
-): { readonly [key: string]: RemoteValue } | undefined {
+export function remoteObject(value: RemoteValue | undefined): { readonly [key: string]: RemoteValue } | undefined {
   if (value === undefined || typeof value !== 'object' || isRemoteList(value)) {
     return undefined;
   }

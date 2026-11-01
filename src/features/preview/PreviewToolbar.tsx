@@ -78,11 +78,7 @@ export function PreviewToolbar(props: PreviewToolbarProps) {
   const shownCrumbs = useFoldedCrumbs(props.crumbs);
   return (
     <ToolbarOverflow items={toolbarItems(props)}>
-      <CrumbTrail
-        crumbs={shownCrumbs.crumbs}
-        {...(props.onCrumb === undefined ? {} : { onCrumb: props.onCrumb })}
-        onExpand={shownCrumbs.expand}
-      />
+      <CrumbTrail crumbs={shownCrumbs.crumbs} {...(props.onCrumb === undefined ? {} : { onCrumb: props.onCrumb })} onExpand={shownCrumbs.expand} />
     </ToolbarOverflow>
   );
 }
@@ -138,14 +134,9 @@ function toolbarItems(props: PreviewToolbarProps): readonly ToolbarItem[] {
 
 // Treat the original segmented switch as one overflow item so its shared surface
 // and sliding selection remain intact whenever the toolbar has room for it.
-function DeviceButtons({
-  activeDevice,
-  onDevice,
-}: Pick<PreviewToolbarProps, 'activeDevice' | 'onDevice'>) {
+function DeviceButtons({ activeDevice, onDevice }: Pick<PreviewToolbarProps, 'activeDevice' | 'onDevice'>) {
   const buttons = useRef(new Map<FixedDevice, HTMLButtonElement>());
-  const [indicator, setIndicator] = useState<
-    { readonly left: number; readonly width: number } | undefined
-  >();
+  const [indicator, setIndicator] = useState<{ readonly left: number; readonly width: number } | undefined>();
   useLayoutEffect(() => {
     const element = activeDevice === 'custom' ? undefined : buttons.current.get(activeDevice);
     setIndicator(element ? { left: element.offsetLeft, width: element.offsetWidth } : undefined);
@@ -219,11 +210,7 @@ function useFoldedCrumbs(crumbs: readonly PreviewCrumb[]): {
       kind: 'folded',
       hidden: crumbs.slice(1, crumbs.length - 3),
     };
-    return [
-      head,
-      folded,
-      ...crumbs.slice(crumbs.length - 3).map((crumb): VisibleCrumb => ({ kind: 'visible', crumb })),
-    ];
+    return [head, folded, ...crumbs.slice(crumbs.length - 3).map((crumb): VisibleCrumb => ({ kind: 'visible', crumb }))];
   }, [crumbs, expanded]);
   return { crumbs: shown, expand: () => setExpanded(true) };
 }
@@ -251,11 +238,7 @@ function CrumbTrail({
               …
             </span>
           ) : (
-            <span
-              className={`crumb ${index === crumbs.length - 1 ? 'last' : ''}`}
-              title={item.crumb.label}
-              onClick={() => onCrumb?.(item.crumb.id)}
-            >
+            <span className={`crumb ${index === crumbs.length - 1 ? 'last' : ''}`} title={item.crumb.label} onClick={() => onCrumb?.(item.crumb.id)}>
               {item.crumb.label}
             </span>
           )}

@@ -14,10 +14,7 @@ interface ProbeResponse {
   arrayBuffer(): Promise<unknown>;
 }
 
-type FetchLike = (
-  url: string,
-  init: { redirect: 'follow'; signal: AbortSignal },
-) => Promise<ProbeResponse>;
+type FetchLike = (url: string, init: { redirect: 'follow'; signal: AbortSignal }) => Promise<ProbeResponse>;
 
 /**
  * Ask the dev server for a URL and report only the verdict.
@@ -27,10 +24,7 @@ type FetchLike = (
  * on. The body is drained and dropped — it can be a megabyte of stack trace,
  * and none of it is wanted.
  */
-async function probeUrl(
-  url: unknown,
-  fetchImpl: FetchLike = fetch,
-): Promise<{ ok: boolean; status: number }> {
+async function probeUrl(url: unknown, fetchImpl: FetchLike = fetch): Promise<{ ok: boolean; status: number }> {
   if (!url || typeof url !== 'string') {
     return { ok: false, status: 0 };
   }

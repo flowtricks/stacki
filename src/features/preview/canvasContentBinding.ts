@@ -10,10 +10,7 @@ export interface CanvasContentBinding {
 
 // Only an explicit Astro getEntry import with literal collection and ID proves
 // ownership. Never infer a CMS record by matching a rendered title or array index.
-export function canvasContentBinding(
-  source: string,
-  node: CanvasSourceNode,
-): CanvasContentBinding | undefined {
+export function canvasContentBinding(source: string, node: CanvasSourceNode): CanvasContentBinding | undefined {
   if (node.kind !== 'expr' || node.start === undefined || node.end === undefined) {
     return undefined;
   }
@@ -37,9 +34,7 @@ export function canvasContentBinding(
         invalid = true;
       }
       if (entry.name === 'ImportDeclaration') {
-        imported ||= /^import\s*\{\s*getEntry\s*\}\s*from\s*['"]astro:content['"];?$/.test(
-          code.slice(entry.from, entry.to).trim(),
-        );
+        imported ||= /^import\s*\{\s*getEntry\s*\}\s*from\s*['"]astro:content['"];?$/.test(code.slice(entry.from, entry.to).trim());
       }
       if (entry.name === 'VariableDefinition' && code.slice(entry.from, entry.to) === name) {
         definitions++;

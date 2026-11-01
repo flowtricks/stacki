@@ -1,8 +1,6 @@
 import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import { useEffect, useState } from 'react';
-import InsertSearch, {
-  type InsertItem,
-} from '../../../vendor/stacki/src/features/palette/InsertSearch';
+import InsertSearch, { type InsertItem } from '../../../vendor/stacki/src/features/palette/InsertSearch';
 import { insertTargetFor } from '../../../vendor/stacki/src/editor/insertTarget';
 import { parsePageModel } from '../../../vendor/stacki/shared/page/pageNode';
 import type { useEditor } from '../project/useEditor';
@@ -52,11 +50,7 @@ export function QuickInsert({
   );
 }
 
-async function insertChoice(
-  model: ReturnType<typeof useEditor>,
-  project: Project,
-  item: InsertItem,
-) {
+async function insertChoice(model: ReturnType<typeof useEditor>, project: Project, item: InsertItem) {
   const document = model.document;
   if (!document?.ready) {
     return;
@@ -65,18 +59,12 @@ async function insertChoice(
   if (!parsed.editable) {
     return;
   }
-  const location = insertTargetFor(
-    parsePageModel(parsed.model),
-    model.selected,
-    item,
-    project.components,
-  );
+  const location = insertTargetFor(parsePageModel(parsed.model), model.selected, item, project.components);
   const target = dropTarget(parsed.model.nodes, location);
   let action: TreeAction;
   if (item.type === 'component') {
     const component =
-      project.components.find((component) => component.file === item.path) ??
-      project.components.find((component) => component.name === item.name);
+      project.components.find((component) => component.file === item.path) ?? project.components.find((component) => component.name === item.name);
     if (!component) {
       return;
     }

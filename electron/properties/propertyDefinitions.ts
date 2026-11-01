@@ -7,12 +7,7 @@ import { createPropertyTypeReader } from './propertyTypes';
 import { bindComponentDefault } from './propertyRename';
 import ts from 'typescript';
 import { assert } from '../../shared/core/assert';
-import type {
-  ComponentProperties,
-  ComponentProperty,
-  PropertyChange,
-  PropertyEditing,
-} from '../../shared/properties/propertyEditing';
+import type { ComponentProperties, ComponentProperty, PropertyChange, PropertyEditing } from '../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import { err, ok, type Result } from '../../shared/core/result';
 import { parsePropSchema } from '../parse/astroParser';
@@ -46,9 +41,7 @@ export function readComponentProperties(source: string): ComponentProperties {
   const contracts = readPropertyContracts(definitions.document);
   return {
     source,
-    properties: [...fields.values()].map((property) =>
-      sourcedProperty(property, definitions, origins, contracts),
-    ),
+    properties: [...fields.values()].map((property) => sourcedProperty(property, definitions, origins, contracts)),
     frontmatter: definitions.document.frontmatter,
     advanced: definitions.advanced,
   };
@@ -82,9 +75,7 @@ function readDefinitionFields(definitions: Definitions): ReadonlyMap<string, Com
       name,
       type: member.type ? definitions.readType(member.type) : 'unknown',
       required: member.questionToken === undefined,
-      readonly:
-        member.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword) ??
-        false,
+      readonly: member.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword) ?? false,
       defaultValue: '',
       description: readDescription(member, definitions.document.frontmatter),
     });
@@ -111,24 +102,13 @@ function readDefinitionFields(definitions: Definitions): ReadonlyMap<string, Com
 
 function schemaPropertyType(field: SchemaField): string {
   if (field.type === 'enum' && field.options?.length) {
-    return field.options
-      .map((value) => (field.numeric ? value : JSON.stringify(value)))
-      .join(' | ');
+    return field.options.map((value) => (field.numeric ? value : JSON.stringify(value))).join(' | ');
   }
-  return ['enum', 'other', 'code', 'attrs', 'slot', 'style'].includes(field.type)
-    ? 'unknown'
-    : field.type || 'unknown';
+  return ['enum', 'other', 'code', 'attrs', 'slot', 'style'].includes(field.type) ? 'unknown' : field.type || 'unknown';
 }
 
-function sourcedProperty(
-  property: ComponentProperty,
-  definitions: Definitions,
-  origins: PropertyOrigins,
-  contracts: PropertyContracts,
-): ComponentProperty {
-  const binding = definitions.bindings.find(
-    (item) => propertyKey(item.propertyName ?? item.name) === property.name,
-  );
+function sourcedProperty(property: ComponentProperty, definitions: Definitions, origins: PropertyOrigins, contracts: PropertyContracts): ComponentProperty {
+  const binding = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === property.name);
   const types = (origins.members.get(property.name) ?? [])
     .flatMap((member) => (member.type ? [definitions.readType(member.type)] : []))
     .filter((type) => type !== 'never');
@@ -138,8 +118,7 @@ function sourcedProperty(
     ...(member
       ? {
           required: member.questionToken === undefined,
-          readonly:
-            member.modifiers?.some((item) => item.kind === ts.SyntaxKind.ReadonlyKeyword) ?? false,
+          readonly: member.modifiers?.some((item) => item.kind === ts.SyntaxKind.ReadonlyKeyword) ?? false,
           description: readDescription(member, definitions.document.frontmatter),
         }
       : {}),
@@ -154,15 +133,8 @@ function sourcedProperty(
   };
 }
 
-function contractEditing(
-  definitions: Definitions,
-  contracts: PropertyContracts,
-  name: string,
-): PropertyEditing {
-  if (
-    definitions.patterns.length > 1 ||
-    definitions.bindings.some((binding) => !ts.isIdentifier(binding.name))
-  ) {
+function contractEditing(definitions: Definitions, contracts: PropertyContracts, name: string): PropertyEditing {
+  if (definitions.patterns.length > 1 || definitions.bindings.some((binding) => !ts.isIdentifier(binding.name))) {
     return {
       kind: 'restricted',
       reason: 'This prop uses complex destructuring. Edit it in source.',
@@ -205,10 +177,7 @@ export function editPropertyDefinition(source: string, change: PropertyChange): 
   return saveDefinition(definitions, change.originalName, change.property);
 }
 
-function editCommonDefinition(
-  definitions: Definitions,
-  change: Exclude<PropertyChange, { readonly kind: 'source' }>,
-): Result<string> {
+function editCommonDefinition(definitions: Definitions, change: Exclude<PropertyChange, { readonly kind: 'source' }>): Result<string> {
   if (change.kind === 'order' || (change.kind === 'save' && !change.originalName)) {
     return err({
       code: 'advanced',
@@ -229,9 +198,7 @@ function editCommonDefinition(
     if (change.kind === 'save' && change.property.name !== name) {
       return err({ code: 'inherited', message: 'Inherited HTML attributes cannot be renamed.' });
     }
-    return change.kind === 'options'
-      ? saveDefinitionOptions(definitions, name, change.type)
-      : saveDefinition(definitions, name, change.property);
+    return change.kind === 'options' ? saveDefinitionOptions(definitions, name, change.type) : saveDefinition(definitions, name, change.property);
   }
   const member = contracts.editable.get(name);
   assert(member !== undefined, 'An editable common property has a declaration');
@@ -250,8 +217,7 @@ function readDefinitions(source: string): Definitions {
   const document = readPropertySyntax(source);
   const declarations = document.syntax.statements.filter(
     (statement): statement is ts.InterfaceDeclaration | ts.TypeAliasDeclaration =>
-      (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) &&
-      statement.name.text === 'Props',
+      (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) && statement.name.text === 'Props',
   );
   const declaration = declarations[0];
   const container = definitionContainer(declaration);
@@ -261,31 +227,17 @@ function readDefinitions(source: string): Definitions {
     .filter((node) => isAstroProps(node.initializer))
     .map((node) => node.name)
     .filter(ts.isObjectBindingPattern);
-  const bindings = patterns
-    .flatMap((pattern) => pattern.elements)
-    .filter((binding) => !binding.dotDotDotToken);
-  const typedProps = syntaxNodes(document.syntax).some(
-    (node) =>
-      ts.isAsExpression(node) && isAstroProps(node.expression) && node.type.getText() !== 'Props',
-  );
-  const imported = document.syntax.statements.some(
-    (statement) =>
-      ts.isImportDeclaration(statement) && statement.importClause?.getText().match(/\bProps\b/),
-  );
+  const bindings = patterns.flatMap((pattern) => pattern.elements).filter((binding) => !binding.dotDotDotToken);
+  const typedProps = syntaxNodes(document.syntax).some((node) => ts.isAsExpression(node) && isAstroProps(node.expression) && node.type.getText() !== 'Props');
+  const imported = document.syntax.statements.some((statement) => ts.isImportDeclaration(statement) && statement.importClause?.getText().match(/\bProps\b/));
   const advanced =
     declarations.length > 1 ||
     imported ||
     typedProps ||
-    (declaration !== undefined &&
-      ts.isTypeAliasDeclaration(declaration) &&
-      declaration.typeParameters !== undefined) ||
-    (declaration !== undefined &&
-      ts.isTypeAliasDeclaration(declaration) &&
-      !ts.isTypeLiteralNode(declaration.type)) ||
+    (declaration !== undefined && ts.isTypeAliasDeclaration(declaration) && declaration.typeParameters !== undefined) ||
+    (declaration !== undefined && ts.isTypeAliasDeclaration(declaration) && !ts.isTypeLiteralNode(declaration.type)) ||
     (container !== undefined && container.members.length !== members.length) ||
-    (container !== undefined &&
-      ts.isInterfaceDeclaration(container) &&
-      container.typeParameters !== undefined) ||
+    (container !== undefined && ts.isInterfaceDeclaration(container) && container.typeParameters !== undefined) ||
     members.some((member) => !/^[A-Za-z_$][\w$]*$/.test(propertyKey(member.name) ?? '')) ||
     bindings.some((binding) => !ts.isIdentifier(binding.name)) ||
     patterns.length > 1;
@@ -327,19 +279,10 @@ function readDescription(member: ts.PropertySignature, source: string): string {
 }
 function renderDefinition(property: ComponentProperty): string {
   const documentation = property.description.trim();
-  const description = documentation
-    ? `  /** ${documentation.replace(/\*\//g, '* /').replace(/\n/g, '\n   * ')} */\n`
-    : '';
-  return (
-    `\n${description}  ${property.readonly ? 'readonly ' : ''}${property.name}` +
-    `${property.required ? '' : '?'}: ${property.type};`
-  );
+  const description = documentation ? `  /** ${documentation.replace(/\*\//g, '* /').replace(/\n/g, '\n   * ')} */\n` : '';
+  return `\n${description}  ${property.readonly ? 'readonly ' : ''}${property.name}` + `${property.required ? '' : '?'}: ${property.type};`;
 }
-function saveDefinition(
-  definitions: Definitions,
-  originalName: string,
-  property: ComponentProperty,
-): Result<string> {
+function saveDefinition(definitions: Definitions, originalName: string, property: ComponentProperty): Result<string> {
   const valid = validatePropertyCode(property.type, property.defaultValue);
   if (!valid.ok) {
     return valid;
@@ -348,10 +291,7 @@ function saveDefinition(
   if (originalName && !snapshot.properties.some((field) => field.name === originalName)) {
     return err({ code: 'missing', message: 'This property no longer exists. Reload the panel.' });
   }
-  if (
-    originalName !== property.name &&
-    snapshot.properties.some((field) => field.name === property.name)
-  ) {
+  if (originalName !== property.name && snapshot.properties.some((field) => field.name === property.name)) {
     return err({ code: 'duplicate', message: `A property named ${property.name} already exists.` });
   }
   if (!originalName && snapshot.properties.length >= PROPERTY_LIMITS.fieldsMax) {
@@ -391,23 +331,14 @@ function saveDefinition(
   }
   const output = replaceFrontmatter(definitions.document, frontmatter);
   if (property.defaultValue.trim()) {
-    const local =
-      definitions.bindings
-        .find((item) => propertyKey(item.propertyName ?? item.name) === originalName)
-        ?.name.getText() ?? property.name;
+    const local = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === originalName)?.name.getText() ?? property.name;
     return bindComponentDefault(output, originalName || property.name, local);
   }
   return ok(output);
 }
 
-function saveDefinitionOptions(
-  definitions: Definitions,
-  name: string,
-  type: string,
-): Result<string> {
-  const property = readComponentProperties(definitions.document.source).properties.find(
-    (field) => field.name === name,
-  );
+function saveDefinitionOptions(definitions: Definitions, name: string, type: string): Result<string> {
+  const property = readComponentProperties(definitions.document.source).properties.find((field) => field.name === name);
   if (!property) {
     return err({ code: 'missing', message: 'This property no longer exists. Reload the panel.' });
   }
@@ -416,11 +347,7 @@ function saveDefinitionOptions(
   return saveDefinition(definitions, name, { ...property, type });
 }
 
-function renderSavedDefinition(
-  definitions: Definitions,
-  member: ts.PropertySignature,
-  property: ComponentProperty,
-): string {
+function renderSavedDefinition(definitions: Definitions, member: ts.PropertySignature, property: ComponentProperty): string {
   const type = member.type;
   // Required, tooltip, default, and name edits must retain the authored alias.
   // An option edit affects this property alone, not other consumers of that alias.
@@ -430,17 +357,9 @@ function renderSavedDefinition(
   return renderDefinition(property);
 }
 
-function saveDefinitionBinding(
-  definitions: Definitions,
-  originalName: string,
-  property: ComponentProperty,
-): Result<readonly SourceEdit[]> {
-  const binding = definitions.bindings.find(
-    (item) => propertyKey(item.propertyName ?? item.name) === originalName,
-  );
-  const fallback = property.defaultValue.trim()
-    ? ` = ${defaultExpression(property.defaultValue.trim())}`
-    : '';
+function saveDefinitionBinding(definitions: Definitions, originalName: string, property: ComponentProperty): Result<readonly SourceEdit[]> {
+  const binding = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === originalName);
+  const fallback = property.defaultValue.trim() ? ` = ${defaultExpression(property.defaultValue.trim())}` : '';
   if (binding) {
     // Keep the lexical binding: aliases prevent accidental edits to shadowed locals in templates.
     const local = binding.name.getText();
@@ -454,18 +373,14 @@ function saveDefinitionBinding(
   if (locals.some((node) => node.text === property.name && !ts.isPropertySignature(node.parent))) {
     return err({
       code: 'binding',
-      message:
-        `The name ${property.name} is already in scope. ` +
-        'Add an aliased default in TypeScript source.',
+      message: `The name ${property.name} is already in scope. ` + 'Add an aliased default in TypeScript source.',
     });
   }
   const pattern = definitions.patterns[0];
   if (pattern) {
     const first = pattern.elements[0];
     const position = first?.getStart() ?? pattern.end - 1;
-    return ok([
-      { start: position, end: position, text: `${property.name}${fallback}${first ? ', ' : ''}` },
-    ]);
+    return ok([{ start: position, end: position, text: `${property.name}${fallback}${first ? ', ' : ''}` }]);
   }
   const position = definitions.document.frontmatter.length;
   return ok([
@@ -479,11 +394,7 @@ function saveDefinitionBinding(
 
 function reorderDefinitions(definitions: Definitions, names: readonly string[]): Result<string> {
   const fields = readComponentProperties(definitions.document.source).properties;
-  if (
-    new Set(names).size !== names.length ||
-    names.length !== fields.length ||
-    names.some((name) => !fields.some((field) => field.name === name))
-  ) {
+  if (new Set(names).size !== names.length || names.length !== fields.length || names.some((name) => !fields.some((field) => field.name === name))) {
     return err({
       code: 'order',
       message: 'Reorder must include every declared property exactly once.',
@@ -504,12 +415,7 @@ function reorderDefinitions(definitions: Definitions, names: readonly string[]):
     .join('');
   const container = definitions.container;
   if (!container) {
-    return ok(
-      replaceFrontmatter(
-        definitions.document,
-        `interface Props {${text}\n}\n${definitions.document.frontmatter}`,
-      ),
-    );
+    return ok(replaceFrontmatter(definitions.document, `interface Props {${text}\n}\n${definitions.document.frontmatter}`));
   }
   const first = definitions.members[0];
   const last = definitions.members.at(-1);
@@ -529,15 +435,11 @@ function reorderDefinitions(definitions: Definitions, names: readonly string[]):
 
 function removeDefinition(definitions: Definitions, name: string): Result<string> {
   const member = definitions.members.find((item) => propertyKey(item.name) === name);
-  const binding = definitions.bindings.find(
-    (item) => propertyKey(item.propertyName ?? item.name) === name,
-  );
+  const binding = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === name);
   if (!member && !binding) {
     return err({ code: 'missing', message: 'Property not found.' });
   }
-  const edits: SourceEdit[] = member
-    ? [{ start: member.getFullStart(), end: member.end, text: '' }]
-    : [];
+  const edits: SourceEdit[] = member ? [{ start: member.getFullStart(), end: member.end, text: '' }] : [];
   if (binding) {
     const pattern = definitions.patterns.find((item) => item.elements.includes(binding));
     assert(pattern !== undefined, 'A prop binding belongs to an Astro.props pattern');

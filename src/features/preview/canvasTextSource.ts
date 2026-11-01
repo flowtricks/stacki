@@ -2,11 +2,7 @@
 // supplied by project code can replace an Astro element or expression.
 import { textValueCanonical } from '../../../shared/page/htmlText';
 import { assert } from '../../../shared/core/assert';
-import {
-  CANVAS_TARGET_LIMIT,
-  CANVAS_TEXT_LIMIT,
-  type CanvasTextTarget,
-} from '../../../shared/properties/canvasText';
+import { CANVAS_TARGET_LIMIT, CANVAS_TEXT_LIMIT, type CanvasTextTarget } from '../../../shared/properties/canvasText';
 import { canvasTextBinding } from './canvasTextBinding';
 import type { CanvasFormatAction, CanvasFormatState } from './canvasTextSelection';
 
@@ -26,11 +22,7 @@ export interface CanvasTextPlan {
   readonly encoding: 'html' | 'string';
 }
 
-export function canvasTextPlans(
-  source: string,
-  nodes: readonly CanvasSourceNode[],
-  pathFor: (id: string) => string | undefined,
-): readonly CanvasTextPlan[] {
+export function canvasTextPlans(source: string, nodes: readonly CanvasSourceNode[], pathFor: (id: string) => string | undefined): readonly CanvasTextPlan[] {
   const plans = canvasTextNodes(nodes).flatMap(({ node, parent, scoped }) => {
     if (!parent || !['element', 'component'].includes(parent.kind)) {
       return [];
@@ -64,12 +56,7 @@ export function canvasTextNodes(nodes: readonly CanvasSourceNode[]) {
   return queue;
 }
 
-function textPlan(
-  source: string,
-  node: CanvasSourceNode,
-  parent: CanvasSourceNode,
-  pathFor: (id: string) => string | undefined,
-): CanvasTextPlan | undefined {
+function textPlan(source: string, node: CanvasSourceNode, parent: CanvasSourceNode, pathFor: (id: string) => string | undefined): CanvasTextPlan | undefined {
   const path = node.id ? pathFor(node.id) : undefined;
   const parentPath = parent.id ? pathFor(parent.id) : undefined;
   if (!path || !parentPath || node.start === undefined || node.end === undefined) {
@@ -89,13 +76,7 @@ function textPlan(
   if (start < 0 || end < start || end > source.length) {
     return undefined;
   }
-  const target = canvasTextTarget(
-    node,
-    parent,
-    value,
-    binding ? 'Shared variable · changes other uses too' : 'Edit text',
-    pathFor,
-  );
+  const target = canvasTextTarget(node, parent, value, binding ? 'Shared variable · changes other uses too' : 'Edit text', pathFor);
   return target ? { start, end, encoding: literal ? 'html' : 'string', target } : undefined;
 }
 
@@ -129,9 +110,7 @@ export function canvasTextTarget(
     label,
     tag: parent.name ?? '',
     siblings: siblings.filter((path): path is string => path !== undefined),
-    nested: ['span', 'a', 'strong', 'em', 'b', 'i', 'small', 'mark', 'sup', 'sub'].includes(
-      parent.name ?? '',
-    ),
+    nested: ['span', 'a', 'strong', 'em', 'b', 'i', 'small', 'mark', 'sup', 'sub'].includes(parent.name ?? ''),
     // A component instance's own content: marked while that instance is selected.
     ...(parent.kind === 'component' ? { from: 'slot', scope: parentPath } : {}),
   };
@@ -149,12 +128,7 @@ export function applyCanvasText(source: string, plan: CanvasTextPlan, value: str
 
 function escapeCanvasText(value: string): string {
   // Braces must remain literal text rather than introducing executable Astro expressions.
-  return textValueCanonical(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('{', '&#123;')
-    .replaceAll('}', '&#125;');
+  return textValueCanonical(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('{', '&#123;').replaceAll('}', '&#125;');
 }
 
 export interface CanvasTextEdit {
@@ -177,8 +151,5 @@ export interface CanvasTextEdit {
 export interface CanvasEditFormat {
   readonly states: () => CanvasFormatState | undefined;
   /** False when the press changes nothing or cannot be laid out. */
-  readonly apply: (
-    selection: { readonly start: number; readonly end: number; readonly value: string },
-    action: CanvasFormatAction,
-  ) => boolean;
+  readonly apply: (selection: { readonly start: number; readonly end: number; readonly value: string }, action: CanvasFormatAction) => boolean;
 }

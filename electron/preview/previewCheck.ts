@@ -10,12 +10,7 @@ import * as path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import { toDigest, type Digest } from '../../shared/core/brand';
 import { LIMITS } from '../../shared/core/limits';
-import {
-  judgePreviewRender,
-  type PreviewRender,
-  type PreviewVerdict,
-  type StampedFileState,
-} from '../../shared/page/previewToken';
+import { judgePreviewRender, type PreviewRender, type PreviewVerdict, type StampedFileState } from '../../shared/page/previewToken';
 
 /** Judge `render` against the files under `projectPath` now. */
 export function checkPreviewRender(projectPath: string, render: PreviewRender): PreviewVerdict {

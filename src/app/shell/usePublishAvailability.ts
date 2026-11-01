@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  UNKNOWN_PUBLISH_AVAILABILITY,
-  type DesktopPublishState,
-  type PublishAvailability,
-} from '../../../shared/properties/publishState';
+import { UNKNOWN_PUBLISH_AVAILABILITY, type DesktopPublishState, type PublishAvailability } from '../../../shared/properties/publishState';
 import { readPublishAvailability } from '../../features/publishing/publishBridge';
 import { onFilesChanged, onCmsInventoryChanged } from '../../ipc/appBridge';
 import { onAssetEntriesChanged } from '../../ipc/assetBridge';
@@ -20,9 +16,7 @@ export function usePublishAvailability(
   repository?: IpcResults['git:info'],
   settingsRevision = 0,
 ): PublishAvailability {
-  const [availability, setAvailability] = useState<PublishAvailability>(
-    UNKNOWN_PUBLISH_AVAILABILITY,
-  );
+  const [availability, setAvailability] = useState<PublishAvailability>(UNKNOWN_PUBLISH_AVAILABILITY);
   const requestRefresh = useRef<() => void>(() => undefined);
   useEffect(() => {
     let active = true;

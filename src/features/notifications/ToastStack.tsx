@@ -39,14 +39,8 @@ export function ToastStack<Notice extends ToastNotice>(props: ToastStackProps<No
       <div className="toast-viewport" style={{ height: layout.height }}>
         <div className="toast-list" style={{ height: layout.height }}>
           {layout.expanded && layout.overflow && (
-            <button
-              type="button"
-              className="toast-more"
-              onClick={layout.showAll ? layout.showLess : layout.loadMore}
-            >
-              {layout.showAll
-                ? 'Show fewer'
-                : `Load more (${props.notices.length - layout.visibleCount})`}
+            <button type="button" className="toast-more" onClick={layout.showAll ? layout.showLess : layout.loadMore}>
+              {layout.showAll ? 'Show fewer' : `Load more (${props.notices.length - layout.visibleCount})`}
             </button>
           )}
           {props.notices.slice(0, TOAST_LIMIT).map((notice, index) => (
@@ -94,13 +88,7 @@ function ToastCard({
   readonly adornment: ReactNode;
   readonly action: ReactNode;
 }) {
-  const {
-    leaving,
-    offset,
-    dragging,
-    dismiss: close,
-    ...interaction
-  } = useToastInteraction({ paused: layout.paused }, dismiss);
+  const { leaving, offset, dragging, dismiss: close, ...interaction } = useToastInteraction({ paused: layout.paused }, dismiss);
   const style = {
     '--toast-index': layout.index,
     '--toast-stack-offset': `${layout.offset}px`,
@@ -109,13 +97,7 @@ function ToastCard({
     zIndex: TOAST_LIMIT - layout.index,
   } satisfies CSSProperties & Record<string, string | number>;
   return (
-    <div
-      className="toast-slot"
-      style={style}
-      data-toast-id={notice.id}
-      data-hidden={layout.hidden}
-      aria-hidden={layout.hidden}
-    >
+    <div className="toast-slot" style={style} data-toast-id={notice.id} data-hidden={layout.hidden} aria-hidden={layout.hidden}>
       <div
         className={`toast ${notice.kind} ${className}`}
         data-leaving={leaving}
@@ -145,13 +127,7 @@ function ToastClose({ close }: { readonly close: () => void }) {
   return (
     <button type="button" className="toast-close" aria-label="Dismiss notification" onClick={close}>
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-        <path
-          d="m4 4 8 8m0-8-8 8"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
+        <path d="m4 4 8 8m0-8-8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
     </button>
   );
@@ -160,34 +136,15 @@ function ToastClose({ close }: { readonly close: () => void }) {
 function ToastIcon({ kind }: { readonly kind: ToastNotice['kind'] }) {
   return (
     <span className="toast-icon" aria-hidden="true">
-      <svg
-        viewBox="0 0 20 20"
-        width="18"
-        height="18"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
+      <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="10" cy="10" r="7.25" />
-        {kind === 'success' ? (
-          <path d="m6.5 10 2.25 2.25 4.75-4.5" />
-        ) : (
-          <path d="M10 9v4m0-6.5v.1" />
-        )}
+        {kind === 'success' ? <path d="m6.5 10 2.25 2.25 4.75-4.5" /> : <path d="M10 9v4m0-6.5v.1" />}
       </svg>
     </span>
   );
 }
 
-function ToastRecoveryActions({
-  notice,
-  close,
-}: {
-  readonly notice: ToastNotice;
-  readonly close: () => void;
-}) {
+function ToastRecoveryActions({ notice, close }: { readonly notice: ToastNotice; readonly close: () => void }) {
   return (
     <>
       {notice.recovery?.map((item) => (

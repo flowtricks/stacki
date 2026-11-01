@@ -1,11 +1,5 @@
 import { request } from '../project/projectClient';
-import {
-  chatState,
-  updateChat,
-  parseProposal,
-  type ChatThread,
-  type ChatMessage,
-} from './chatState';
+import { chatState, updateChat, parseProposal, type ChatThread, type ChatMessage } from './chatState';
 import type { ChatContext } from './chatContracts';
 
 const running = new Map<string, AbortController>();
@@ -21,12 +15,7 @@ function context(chat: ChatThread): readonly ChatContext[] {
 }
 export async function sendChat(id: string, file: string) {
   const chat = chatState().threads.find((thread) => thread.id === id);
-  if (
-    !chat ||
-    chat.status !== 'idle' ||
-    (!chat.draft.trim() && !chat.images.length) ||
-    !chat.model
-  ) {
+  if (!chat || chat.status !== 'idle' || (!chat.draft.trim() && !chat.images.length) || !chat.model) {
     return;
   }
   if (running.size >= 3) {
@@ -50,9 +39,7 @@ export async function sendChat(id: string, file: string) {
     images: [],
     status: 'working',
     error: '',
-    title: thread.messages.length
-      ? thread.title
-      : (message.content || 'Image conversation').slice(0, 60),
+    title: thread.messages.length ? thread.title : (message.content || 'Image conversation').slice(0, 60),
     messages: [...thread.messages, message].slice(-39),
   }));
   try {
@@ -76,11 +63,7 @@ export async function sendChat(id: string, file: string) {
   } catch (error) {
     updateChat(id, (thread) => ({
       ...thread,
-      error: controller.signal.aborted
-        ? 'Response stopped.'
-        : error instanceof Error
-          ? error.message
-          : 'Could not send message.',
+      error: controller.signal.aborted ? 'Response stopped.' : error instanceof Error ? error.message : 'Could not send message.',
       draft: thread.draft || chat.draft,
       images: thread.images.length ? thread.images : chat.images,
     }));
@@ -144,9 +127,7 @@ async function generateReply(chat: ChatThread, file: string, signal: AbortSignal
         prompt: chat.draft.trim() || 'Describe these images and how they relate to this page.',
         images: chat.images.length
           ? chat.images
-          : ([...chat.messages]
-              .reverse()
-              .find((message) => message.role === 'user' && message.images.length)?.images ?? []),
+          : ([...chat.messages].reverse().find((message) => message.role === 'user' && message.images.length)?.images ?? []),
         history: context(chat),
       }),
     }),

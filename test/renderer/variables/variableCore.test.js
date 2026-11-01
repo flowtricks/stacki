@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
 const rows = load('src/features/variables/variableRows.ts');
-const { createScrollSync, SCROLL_PEERS_MAX } = load('src/features/variables/variableScroll.ts');
+const { createScrollSync, createScrollLanes, SCROLL_PEERS_MAX } = load('src/features/variables/variableScroll.ts');
 const cell = (name) => ({
   name,
   file: 'tokens.css',
@@ -33,42 +33,25 @@ assert.deepEqual(offsets, [
 ]);
 assert.equal(rows.stemOf(block), '--color-');
 assert.equal(rows.sectionPrefix(block), 'color');
-assert.deepEqual(rows.rowRenames(block, first, 'accent'), [
-  { from: '--color-primary', to: '--color-accent' },
-]);
-assert.deepEqual(rows.movesForDrop(slots, 1, 3), [
-  { file: 'tokens.css', selector: ':root', name: '--color-primary', at: 90 },
-]);
+assert.deepEqual(rows.rowRenames(block, first, 'accent'), [{ from: '--color-primary', to: '--color-accent' }]);
+assert.deepEqual(rows.movesForDrop(slots, 1, 3), [{ file: 'tokens.css', selector: ':root', name: '--color-primary', at: 90 }]);
 assert.equal(rows.dropPlan(slots, 0, 1), undefined);
 assert.equal(rows.dropPlan(slots, 99, 0), undefined);
 assert.equal(rows.dropPlan(slots, 0, 2).before, '--color-secondary');
 const matrix = { kind: 'matrix', title: 'Heading', rows: [] };
 assert.equal(rows.sectionPrefix(matrix), undefined);
-assert.deepEqual(
-  rows.rowRenames(
-    matrix,
-    { label: 'size', cells: [cell('--h1-size'), undefined, cell('--h3-size')] },
-    'weight',
-  ),
-  [
-    { from: '--h1-size', to: '--h1-weight' },
-    { from: '--h3-size', to: '--h3-weight' },
-  ],
-);
+assert.deepEqual(rows.rowRenames(matrix, { label: 'size', cells: [cell('--h1-size'), undefined, cell('--h3-size')] }, 'weight'), [
+  { from: '--h1-size', to: '--h1-weight' },
+  { from: '--h3-size', to: '--h3-weight' },
+]);
 for (const invalid of [-1, 0.5, NaN, Infinity]) {
   assert.throws(() => rows.movesForDrop(slots, invalid, 0), /source index/);
   assert.throws(() => rows.dropPlan(slots, 0, invalid), /target index/);
 }
 assert.throws(() => rows.buildSheetSlots(Array(10001).fill(empty)), /block limit exceeded/);
-assert.throws(
-  () => rows.buildSheetSlots([{ ...block, rows: Array(10000).fill(first) }]),
-  /slot limit exceeded/,
-);
+assert.throws(() => rows.buildSheetSlots([{ ...block, rows: Array(10000).fill(first) }]), /slot limit exceeded/);
 assert.throws(() => rows.rowRenames(block, first, 'x'.repeat(8193)), /name limit exceeded/);
-assert.throws(
-  () => rows.stemOf({ ...block, rows: [{ name: '--x', label: 'too long' }] }),
-  /label exceeds name/,
-);
+assert.throws(() => rows.stemOf({ ...block, rows: [{ name: '--x', label: 'too long' }] }), /label exceeds name/);
 const sync = createScrollSync();
 const firstPeer = { scrollLeft: 0 };
 const secondPeer = { scrollLeft: 0 };
@@ -121,4 +104,23 @@ for (let index = 0; index < SCROLL_PEERS_MAX; index++) {
 }
 assert.throws(() => sync.register({ scrollLeft: 0 }), /peer limit exceeded/);
 sync.dispose();
-console.log('variable-core: moves, rename rules, bounds, scroll echoes and cleanup passed');
+// Lanes: tables with the same column count scroll together, others do not.
+const lanes = createScrollLanes();
+assert.equal(lanes.lane(3), lanes.lane(3), 'one lane per column count');
+const sheetPeer = { scrollLeft: 0 };
+const sameColumnsPeer = { scrollLeft: 0 };
+const matrixPeer = { scrollLeft: 0 };
+lanes.lane(3).register(sheetPeer);
+lanes.lane(3).register(sameColumnsPeer);
+lanes.lane(5).register(matrixPeer);
+lanes.lane(3).broadcast(sheetPeer, 60);
+assert.equal(sameColumnsPeer.scrollLeft, 60);
+assert.equal(matrixPeer.scrollLeft, 0, 'a table with other columns keeps its own position');
+lanes.lane(5).broadcast(matrixPeer, 25);
+assert.equal(sheetPeer.scrollLeft, 60, 'and does not move the sheet');
+const kept = lanes.lane(5);
+lanes.dispose();
+assert.equal(lanes.lane(5), kept, 'dispose resets lanes without replacing them');
+assert.throws(() => lanes.lane(-1), /nonnegative/);
+assert.throws(() => lanes.lane(1.5), /integer/);
+console.log('variable-core: moves, rename rules, bounds, scroll echoes, lanes and cleanup passed');

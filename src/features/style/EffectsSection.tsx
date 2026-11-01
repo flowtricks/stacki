@@ -2,18 +2,7 @@ import SegmentedField from './SegmentedField';
 import ColorSwatch from './components/ColorSwatch';
 import { useLiveColor } from './model/liveColor';
 import { displayOf } from './model/styleDisplay';
-import {
-  type Props,
-  EffLabel,
-  LiveText,
-  BLEND_MODES,
-  CURSORS,
-  OUTLINE_OPTIONS,
-  EVENTS_OPTIONS,
-  BLEND_SET,
-  CURSOR_SET,
-  PresetSelectRow,
-} from './EffectsKit';
+import { type Props, EffLabel, LiveText, BLEND_MODES, CURSORS, OUTLINE_OPTIONS, EVENTS_OPTIONS, BLEND_SET, CURSOR_SET, PresetSelectRow } from './EffectsKit';
 import { OpacityRow } from './OpacityRow';
 import { FiltersRow, TransformsRow } from './TransformsRow';
 import { TransitionsRow } from './TransitionsRow';
@@ -48,12 +37,7 @@ function OutlineColor({ props, value }: { props: Props; value: string }) {
           }
         }}
       />
-      <LiveText
-        prop="outline-color"
-        placeholder="currentColor"
-        props={props}
-        {...(shown === value ? {} : { dragging: shown })}
-      />
+      <LiveText prop="outline-color" placeholder="currentColor" props={props} {...(shown === value ? {} : { dragging: shown })} />
     </>
   );
 }

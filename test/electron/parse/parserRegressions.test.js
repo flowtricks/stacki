@@ -48,10 +48,7 @@ test('unknown entities never resolve through Object.prototype', () => {
 test('package attribution handles Windows, nested dependencies, and pnpm', () => {
   assert.equal(packageOf('C:\\site\\node_modules\\@scope\\cards\\Page.astro'), '@scope/cards');
   assert.equal(packageOf('/site/node_modules/outer/node_modules/inner/Page.astro'), 'inner');
-  assert.equal(
-    packageOf('/site/node_modules/.pnpm/@scope+cards@1.0/node_modules/@scope/cards/Page.astro'),
-    '@scope/cards',
-  );
+  assert.equal(packageOf('/site/node_modules/.pnpm/@scope+cards@1.0/node_modules/@scope/cards/Page.astro'), '@scope/cards');
   assert.equal(packageOf('/site/mynode_modules/not-a-package/Page.astro'), undefined);
   assert.equal(packageOf('node_modules/package/Page.astro'), 'package');
 });

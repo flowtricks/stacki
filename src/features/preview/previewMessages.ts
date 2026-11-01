@@ -1,16 +1,7 @@
 import { parseContextPoint, type ContextPoint } from './contextPosition';
 import type { Box } from './outlineBoxes';
 import type { Spacing } from './spacingBands';
-import {
-  boolean,
-  count,
-  dictionary,
-  digest,
-  list,
-  optional,
-  pathText,
-  record,
-} from '../../../shared/core/boundary';
+import { boolean, count, dictionary, digest, list, optional, pathText, record } from '../../../shared/core/boundary';
 import type { Digest } from '../../../shared/core/brand';
 import { parsePreviewRender, type PreviewRender } from '../../../shared/page/previewToken';
 import { GUIDE_LIMITS, parseGuideVariableName, type GuideMetrics } from './guideModel';
@@ -71,12 +62,7 @@ export interface TextMarkBox extends Box {
 
 /** Why the canvas patcher reloaded (electron/previewClient/morphClient.ts): past one of its
  * caps, or for the reasons a patch was never possible. */
-export const PREVIEW_RELOAD_REASONS = [
-  'markers-over-cap',
-  'diff-over-cap',
-  'scripts-changed',
-  'patch-failed',
-] as const;
+export const PREVIEW_RELOAD_REASONS = ['markers-over-cap', 'diff-over-cap', 'scripts-changed', 'patch-failed'] as const;
 export type PreviewReloadReason = (typeof PREVIEW_RELOAD_REASONS)[number];
 
 /** The notice for a reload a cap caused, or undefined for one the canvas could
@@ -100,9 +86,7 @@ export function describePreviewReload(reason: PreviewReloadReason): string | und
 /** A shortcut the canvas frame forwards while it holds keyboard focus
  * (electron/preload/frameDesign.ts): the app replays it as its own key event. */
 export type ShortcutMessage =
-  | { readonly name: 'insert' }
-  | { readonly name: 'arrow'; readonly key: string }
-  | { readonly name: 'key'; readonly key: string; readonly meta: boolean };
+  { readonly name: 'insert' } | { readonly name: 'arrow'; readonly key: string } | { readonly name: 'key'; readonly key: string; readonly meta: boolean };
 
 // A KeyboardEvent key is one character or a short name ("ArrowDown").
 const SHORTCUT_KEY_CHARS_MAX = 32;
@@ -241,15 +225,8 @@ function parseGuideMetrics(value: Readonly<Record<string, unknown>>): GuideMetri
     marginPx: optional(guideLength)(value['margin']),
     gutterPx: optional(guideLength)(value['gutter']),
     widthMaxPx: optional(guideLength)(value['widthMax']),
-    variablesPx: Object.fromEntries(
-      guideVariableEntries(value['variables']).map(([name, px]) => [
-        name,
-        optional(guideLength)(px),
-      ]),
-    ),
-    variableCounts: Object.fromEntries(
-      guideVariableEntries(value['counts']).map(([name, input]) => [name, declaredCount(input)]),
-    ),
+    variablesPx: Object.fromEntries(guideVariableEntries(value['variables']).map(([name, px]) => [name, optional(guideLength)(px)])),
+    variableCounts: Object.fromEntries(guideVariableEntries(value['counts']).map(([name, input]) => [name, declaredCount(input)])),
   };
 }
 

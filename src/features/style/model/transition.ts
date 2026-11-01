@@ -8,8 +8,7 @@ import { splitTopLevelCommas, splitTopLevelSpaces } from './background';
 export type Transition = { property: string; duration: string; timing: string; delay: string };
 // One control's edit. Each member names the fields that control owns — an
 // explicit update surface rather than `Partial<T>` (AGENTS.md §4).
-export type TransitionPatch =
-  Pick<Transition, 'property'> | Pick<Transition, 'duration'> | Pick<Transition, 'timing'>;
+export type TransitionPatch = Pick<Transition, 'property'> | Pick<Transition, 'duration'> | Pick<Transition, 'timing'>;
 
 export type TransitionProp = { value: string; label: string };
 
@@ -112,29 +111,15 @@ export const TRANSITION_GROUPS: ReadonlyArray<{
   { heading: 'Advanced', items: [{ value: 'all', label: 'All Properties' }] },
 ];
 
-const PROP_LABEL = new Map(
-  TRANSITION_GROUPS.flatMap((group) => group.items).map((i) => [i.value, i.label]),
-);
+const PROP_LABEL = new Map(TRANSITION_GROUPS.flatMap((group) => group.items).map((i) => [i.value, i.label]));
 export function transitionPropLabel(prop: string): string {
   return PROP_LABEL.get(prop.trim().toLowerCase()) ?? prop.trim();
 }
 
-const TIMING_KEYWORDS = new Set([
-  'ease',
-  'linear',
-  'ease-in',
-  'ease-out',
-  'ease-in-out',
-  'step-start',
-  'step-end',
-]);
+const TIMING_KEYWORDS = new Set(['ease', 'linear', 'ease-in', 'ease-out', 'ease-in-out', 'step-start', 'step-end']);
 function isTiming(token: string): boolean {
   const normalized = token.trim().toLowerCase();
-  return (
-    TIMING_KEYWORDS.has(normalized) ||
-    normalized.startsWith('cubic-bezier(') ||
-    normalized.startsWith('steps(')
-  );
+  return TIMING_KEYWORDS.has(normalized) || normalized.startsWith('cubic-bezier(') || normalized.startsWith('steps(');
 }
 function isTime(token: string): boolean {
   return /^-?[\d.]+m?s$/i.test(token.trim());
@@ -193,11 +178,7 @@ export function serializeTransitions(list: Transition[]): string {
     return '';
   }
   return list
-    .map((token) =>
-      [token.property || 'all', token.duration || '0s', token.timing, token.delay]
-        .filter((part) => part && part.trim())
-        .join(' '),
-    )
+    .map((token) => [token.property || 'all', token.duration || '0s', token.timing, token.delay].filter((part) => part && part.trim()).join(' '))
     .join(', ');
 }
 
@@ -229,9 +210,7 @@ export function isEasing(value: string): boolean {
   if (/^(?:ease|linear|ease-in|ease-out|ease-in-out)$/.test(normalized)) {
     return true;
   }
-  return /^cubic-bezier\(\s*[\d.-]+\s*,\s*[\d.-]+\s*,\s*[\d.-]+\s*,\s*[\d.-]+\s*\)$/.test(
-    normalized,
-  );
+  return /^cubic-bezier\(\s*[\d.-]+\s*,\s*[\d.-]+\s*,\s*[\d.-]+\s*,\s*[\d.-]+\s*\)$/.test(normalized);
 }
 
 export function easingToBezier(timing: string): [number, number, number, number] {
@@ -246,16 +225,9 @@ export function easingToBezier(timing: string): [number, number, number, number]
   if (named[normalized]) {
     return named[normalized];
   }
-  const match = normalized.match(
-    /^cubic-bezier\(\s*([\d.-]+)\s*,\s*([\d.-]+)\s*,\s*([\d.-]+)\s*,\s*([\d.-]+)\s*\)$/,
-  );
+  const match = normalized.match(/^cubic-bezier\(\s*([\d.-]+)\s*,\s*([\d.-]+)\s*,\s*([\d.-]+)\s*,\s*([\d.-]+)\s*\)$/);
   if (match) {
-    return [
-      parseFloat(match[1] ?? ''),
-      parseFloat(match[2] ?? ''),
-      parseFloat(match[3] ?? ''),
-      parseFloat(match[4] ?? ''),
-    ];
+    return [parseFloat(match[1] ?? ''), parseFloat(match[2] ?? ''), parseFloat(match[3] ?? ''), parseFloat(match[4] ?? '')];
   }
   return [0.25, 0.1, 0.25, 1]; // fall back to ease
 }

@@ -96,11 +96,7 @@ class SpanParser {
       return { type: 'scalar', start: span.start, end: span.end };
     }
     const text = this.#text;
-    while (
-      this.#position < text.length &&
-      !WS.test(text.charAt(this.#position)) &&
-      !',}]'.includes(text.charAt(this.#position))
-    ) {
+    while (this.#position < text.length && !WS.test(text.charAt(this.#position)) && !',}]'.includes(text.charAt(this.#position))) {
       this.#position++;
     }
     if (this.#position === start) {
@@ -272,9 +268,7 @@ function locate(root: JsonNode, path: readonly (string | number)[]): Located | u
   for (let level = 0; level < path.length; level++) {
     const member = childAt(node, path[level]);
     if (!member) {
-      return level === path.length - 1
-        ? { parent: node, key: path[level], member: undefined }
-        : undefined;
+      return level === path.length - 1 ? { parent: node, key: path[level], member: undefined } : undefined;
     }
     if (level === path.length - 1) {
       return { parent: node, key: path[level], member };
@@ -290,17 +284,8 @@ function locate(root: JsonNode, path: readonly (string | number)[]): Located | u
 
 // Where a new member goes, and what has to be written around it: after the last
 // one (with a comma), or on its own line inside an empty container.
-function insertion(
-  text: string,
-  container: JsonNode,
-  unit: string,
-): { at: number; before: string; after: string; inner: string } {
-  const parts: readonly { start: number; end: number }[] =
-    container.type === 'object'
-      ? container.members
-      : container.type === 'array'
-        ? container.items
-        : [];
+function insertion(text: string, container: JsonNode, unit: string): { at: number; before: string; after: string; inner: string } {
+  const parts: readonly { start: number; end: number }[] = container.type === 'object' ? container.members : container.type === 'array' ? container.items : [];
   const openIndent = indentAt(text, container.start);
   const inner = openIndent + unit;
   if (!parts.length) {
@@ -346,10 +331,7 @@ function applyEdits(text: string, edits: readonly Edit[]): string {
       const found = locate(root, path);
       const member = found?.member;
       if (member && 'keyEnd' in member) {
-        out =
-          out.slice(0, member.keyStart) +
-          JSON.stringify(String(edit.rename)) +
-          out.slice(member.keyEnd);
+        out = out.slice(0, member.keyStart) + JSON.stringify(String(edit.rename)) + out.slice(member.keyEnd);
       }
       continue;
     }
@@ -394,18 +376,12 @@ function applyEdits(text: string, edits: readonly Edit[]): string {
 
     if (remaining.length === 1 && target) {
       const baseIndent = indentAt(out, target.value.start);
-      out =
-        out.slice(0, target.value.start) +
-        print(value, baseIndent, unit) +
-        out.slice(target.value.end);
+      out = out.slice(0, target.value.start) + print(value, baseIndent, unit) + out.slice(target.value.end);
       continue;
     }
 
     const spot = insertion(out, node, unit);
-    const written =
-      node.type === 'object'
-        ? `${JSON.stringify(String(remaining[0]))}: ${print(value, spot.inner, unit)}`
-        : print(value, spot.inner, unit);
+    const written = node.type === 'object' ? `${JSON.stringify(String(remaining[0]))}: ${print(value, spot.inner, unit)}` : print(value, spot.inner, unit);
     out = out.slice(0, spot.at) + spot.before + written + spot.after + out.slice(spot.at);
   }
 
@@ -417,11 +393,7 @@ function applyEdits(text: string, edits: readonly Edit[]): string {
 // diff stays limited to those lines.
 function removeMember(text: string, container: JsonNode, member: Child): string {
   const parts: readonly Child[] | readonly { start: number; end: number }[] =
-    container.type === 'object'
-      ? container.members
-      : container.type === 'array'
-        ? container.items
-        : [];
+    container.type === 'object' ? container.members : container.type === 'array' ? container.items : [];
   const index = parts.findIndex((part) => part.start === member.start);
   const only = parts.length === 1;
   let from = member.start;

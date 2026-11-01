@@ -33,10 +33,7 @@ export function PageTreeRenameDialog({
     />
   );
 }
-function renameItem(
-  editing: Exclude<PageEditing, { readonly kind: 'none' }>,
-  pages: readonly ScanPage[],
-) {
+function renameItem(editing: Exclude<PageEditing, { readonly kind: 'none' }>, pages: readonly ScanPage[]) {
   if (editing.kind === 'folder') {
     return { kind: 'folder', from: editing.key } as const;
   }

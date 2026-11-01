@@ -52,13 +52,10 @@ const SVGS = [
   '<svg viewBox="0 0 100 100"><path d="M10 50 C10 10 90 10 90 50 S10 90 10 50 Z"/></svg>',
   '<svg viewBox="0 0 100 100"><path d="M10 50 A40 40 0 0 1 90 50 A40 40 0 0 1 10 50 Z"/></svg>',
   '<svg viewBox="0 0 100 100"><path d="M10 10 Q50 0 90 10 T90 90 H10 V10 z"/></svg>',
-  '<svg viewBox="0 0 100 100"><rect x="0" y="0" width="50" height="50"/>' +
-    '<rect x="50" y="50" width="50" height="50"/></svg>',
-  '<svg viewBox="0 0 100 100"><g transform="translate(5 5)">' +
-    '<rect width="10" height="10"/></g></svg>',
+  '<svg viewBox="0 0 100 100"><rect x="0" y="0" width="50" height="50"/>' + '<rect x="50" y="50" width="50" height="50"/></svg>',
+  '<svg viewBox="0 0 100 100"><g transform="translate(5 5)">' + '<rect width="10" height="10"/></g></svg>',
   '<svg width="64" height="32"><rect x="4" y="4" width="56" height="24" rx="4"/></svg>',
-  '<svg viewBox="0 0 100 100"><defs><rect width="10" height="10"/></defs>' +
-    '<circle cx="50" cy="50" r="10"/></svg>',
+  '<svg viewBox="0 0 100 100"><defs><rect width="10" height="10"/></defs>' + '<circle cx="50" cy="50" r="10"/></svg>',
   '<svg viewBox="0 0 100 100"></svg>',
   'not svg at all',
   'M 0 0 L 100 0 L 100 100 Z',
@@ -86,11 +83,7 @@ const DRAG_POINTS = [
   [50, 50],
   [110, -10],
 ];
-const DRAG_OPTIONS = [
-  {},
-  { insetSideMode: 'mirror', insetRadiusMode: 'all', ellipseScaleProportional: true },
-  { insetRadiusUnlocked: true },
-];
+const DRAG_OPTIONS = [{}, { insetSideMode: 'mirror', insetRadiusMode: 'all', ellipseScaleProportional: true }, { insetRadiusUnlocked: true }];
 const KEYS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'];
 const KEY_OPTIONS = [{}, { step: 10 }, { polygonPointIndexes: [0, 1], step: 1 }];
 
@@ -144,25 +137,15 @@ function runCases(functions) {
       const css = typeof formatted === 'string' ? formatted : value;
       record.formatted = formatted;
       record.reparsed = attempt(() => functions.parseClipPath(css));
-      record.preview = attempt(() =>
-        functions.formatClipPathForPreview(shape, css, { width: 200, height: 100 }),
-      );
-      record.previewNoSize = attempt(() =>
-        functions.formatClipPathForPreview(shape, css, undefined),
-      );
-      record.highlights = attempt(() =>
-        functions.buildClipPathCodeHighlights(shape, css, ['a', 'b']),
-      );
+      record.preview = attempt(() => functions.formatClipPathForPreview(shape, css, { width: 200, height: 100 }));
+      record.previewNoSize = attempt(() => functions.formatClipPathForPreview(shape, css, undefined));
+      record.highlights = attempt(() => functions.buildClipPathCodeHighlights(shape, css, ['a', 'b']));
       record.tokens = attempt(() => functions.clipPathValueTokenRanges(css, shape));
       record.preset = attempt(() => functions.matchPreset(shape));
       record.drags = handlesFor(shape).flatMap((handle) =>
         DRAG_POINTS.flatMap(([x, y]) =>
           DRAG_OPTIONS.map((options) =>
-            attempt(() =>
-              functions.formatClipPath(
-                functions.updateShapeForDrag(shape, { ...handle, before: shape }, x, y, options),
-              ),
-            ),
+            attempt(() => functions.formatClipPath(functions.updateShapeForDrag(shape, { ...handle, before: shape }, x, y, options))),
           ),
         ),
       );

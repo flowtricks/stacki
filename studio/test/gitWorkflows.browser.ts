@@ -20,10 +20,7 @@ const history = new HistoryRepository(fixture.root, async () => ({
 }));
 const browser = await chromium.launch({
   executablePath:
-    process.env['CHROME_PATH'] ??
-    (process.platform === 'darwin'
-      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-      : chromium.executablePath()),
+    process.env['CHROME_PATH'] ?? (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
   headless: true,
 });
 try {
@@ -53,10 +50,7 @@ try {
   await page.route('**/studio/api/history/*', async (route) => {
     const url = new URL(route.request().url());
     const value = url.pathname.endsWith('/log')
-      ? await history.read(
-          Number(url.searchParams.get('skip') ?? 0),
-          url.searchParams.get('scope') === 'current' ? 'current' : 'all',
-        )
+      ? await history.read(Number(url.searchParams.get('skip') ?? 0), url.searchParams.get('scope') === 'current' ? 'current' : 'all')
       : url.pathname.endsWith('/commit')
         ? await history.commit(url.searchParams.get('hash') ?? '')
         : await history.diff(parseCommitDiffRequest(route.request().postDataJSON()));
@@ -97,10 +91,7 @@ try {
   });
   await pull.click();
   await page.getByText('Pulled changes from GitHub', { exact: true }).waitFor();
-  assert.equal(
-    await readFile(path.join(fixture.root, 'src/pages/contact.astro'), 'utf8'),
-    '<h1>Pulled remotely</h1>',
-  );
+  assert.equal(await readFile(path.join(fixture.root, 'src/pages/contact.astro'), 'utf8'), '<h1>Pulled remotely</h1>');
   await page.getByText('Remote contact', { exact: true }).waitFor();
   await page.screenshot({ path: '/tmp/stacki-git-workflows-browser.png', fullPage: true });
 } finally {

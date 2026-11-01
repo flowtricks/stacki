@@ -5,8 +5,7 @@ import { mkdir } from 'node:fs/promises';
 
 const fixture = await startStyleFixture();
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -65,9 +64,7 @@ try {
   await mkdir('test-results', { recursive: true });
   await page.screenshot({ path: 'test-results/style-selectors.png' });
   assert.deepEqual(errors, []);
-  console.log(
-    'Selector loading recovers after interrupted inventories; Stacki chip selection, global filters, element switching, and reopening pass.',
-  );
+  console.log('Selector loading recovers after interrupted inventories; Stacki chip selection, global filters, element switching, and reopening pass.');
 } finally {
   await browser.close();
   await fixture.stop();
@@ -94,8 +91,5 @@ async function checkRecovery(page: Page) {
     .waitFor();
   unavailable = false;
   await page.getByRole('button', { name: 'Retry stylesheet loading', exact: true }).click();
-  await page
-    .getByRole('alert')
-    .filter({ hasText: 'Could not load stylesheet sources' })
-    .waitFor({ state: 'hidden' });
+  await page.getByRole('alert').filter({ hasText: 'Could not load stylesheet sources' }).waitFor({ state: 'hidden' });
 }

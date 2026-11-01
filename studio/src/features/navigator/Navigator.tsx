@@ -38,9 +38,7 @@ export function Navigator(props: NavigatorProps) {
             editable: true as const,
             model: parsePageModel({
               ...parsed.model,
-              nodes: client
-                ? parsed.model.nodes.filter((node) => node.id === 'layout')
-                : parsed.model.nodes,
+              nodes: client ? parsed.model.nodes.filter((node) => node.id === 'layout') : parsed.model.nodes,
             }),
             source,
           }

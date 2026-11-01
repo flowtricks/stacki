@@ -26,8 +26,7 @@ export function VariantPreview({ file, node, component, source, children }: Prop
                 prop,
                 values: values.map((value) => value ?? null),
               }),
-            hover: (value: string | number | undefined) =>
-              send({ action: 'hover', value: value ?? null }),
+            hover: (value: string | number | undefined) => send({ action: 'hover', value: value ?? null }),
             cancel: () => send({ action: 'cancel' }),
             commit: () => send({ action: 'commit' }),
           }

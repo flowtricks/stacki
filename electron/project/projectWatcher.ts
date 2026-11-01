@@ -29,9 +29,7 @@ function watchProject({
 }: WatchProjectDeps): { close: () => void } {
   const watchers: fs.FSWatcher[] = [];
   const notifier = createNotifier(send);
-  const astroFiles = createAstroFileMonitor(projectPath, (astroChanges) =>
-    send('fs:changed', { files: [], astroChanges }),
-  );
+  const astroFiles = createAstroFileMonitor(projectPath, (astroChanges) => send('fs:changed', { files: [], astroChanges }));
   const close = (): void => {
     notifier.close();
     astroFiles.close();
@@ -96,11 +94,7 @@ function watchProject({
 type ChangeChannel = 'cms:changed' | 'assets:changed' | 'css:changed' | 'fs:changed';
 
 // The panel a changed file under src/ concerns, or undefined when none does.
-function sourceChangeChannel(
-  name: string,
-  mediaPattern: RegExp,
-  event: string,
-): ChangeChannel | undefined {
+function sourceChangeChannel(name: string, mediaPattern: RegExp, event: string): ChangeChannel | undefined {
   if (/\.json$/i.test(name)) {
     return 'cms:changed';
   }
@@ -161,11 +155,7 @@ function createNotifier(send: WatchProjectDeps['send']): Notifier {
 export { watchProject };
 
 function watchPublicFiles(
-  {
-    projectPath,
-    isSelfWrite,
-    watch = fs.watch,
-  }: Pick<WatchProjectDeps, 'projectPath' | 'isSelfWrite' | 'watch'>,
+  { projectPath, isSelfWrite, watch = fs.watch }: Pick<WatchProjectDeps, 'projectPath' | 'isSelfWrite' | 'watch'>,
   notifier: Notifier,
 ): fs.FSWatcher | undefined {
   const publicDirectory = path.join(projectPath, 'public');

@@ -14,8 +14,7 @@ const files = {
   Slider: 'interactive/Slider',
   Card: 'item/Card',
 } as const;
-const original =
-  '---\r\n// Preserve this comment.\r\nconst untouched = 17;\r\n---\r\n<main><p>Keep existing content.</p></main>\r\n';
+const original = '---\r\n// Preserve this comment.\r\nconst untouched = 17;\r\n---\r\n<main><p>Keep existing content.</p></main>\r\n';
 function insert(name: keyof typeof files, source = original) {
   const target = nodesOf(source)[0]?.id;
   assert.ok(target);
@@ -39,22 +38,15 @@ test('insertion recipes initialize text and nested children without altering exi
   for (const name of ['Heading', 'Paragraph', 'Button'] as const) {
     const source = insert(name);
     const node = flatten(nodesOf(source)).find((node) => node.name === name);
-    assert.equal(
-      node?.children?.[0]?.value,
-      name === 'Heading' ? HEADING_TEXT : name === 'Paragraph' ? PARAGRAPH_TEXT : 'Button Text',
-    );
+    assert.equal(node?.children?.[0]?.value, name === 'Heading' ? HEADING_TEXT : name === 'Paragraph' ? PARAGRAPH_TEXT : 'Button Text');
     assert.ok(source.includes('// Preserve this comment.\r\nconst untouched = 17;'));
     assert.ok(source.includes('<p>Keep existing content.</p>'));
   }
-  const wrapper = flatten(nodesOf(insert('ButtonWrapper'))).find(
-    (node) => node.name === 'ButtonWrapper',
-  );
+  const wrapper = flatten(nodesOf(insert('ButtonWrapper'))).find((node) => node.name === 'ButtonWrapper');
   assert.equal(wrapper?.children?.length, 1);
   assert.equal(wrapper?.children?.[0]?.name, 'Button');
   assert.equal(wrapper?.children?.[0]?.children?.[0]?.value, 'Button Text');
-  const content = flatten(nodesOf(insert('ContentWrapper'))).find(
-    (node) => node.name === 'ContentWrapper',
-  );
+  const content = flatten(nodesOf(insert('ContentWrapper'))).find((node) => node.name === 'ContentWrapper');
   assert.deepEqual(
     content?.children?.map((node) => node.name),
     ['Heading', 'Paragraph', 'ButtonWrapper'],
@@ -85,20 +77,13 @@ test('Grid, Slider and Card initialize their instance props and card content', (
   }
 });
 test('nested recipes reuse aliased imports and avoid unrelated name collisions', () => {
-  const source =
-    '---\nimport MyButton from "@/components/Button.astro";\nimport Heading from "@/components/custom/Heading.astro";\n---\n<main />';
+  const source = '---\nimport MyButton from "@/components/Button.astro";\nimport Heading from "@/components/custom/Heading.astro";\n---\n<main />';
   const next = insert('ContentWrapper', source);
   const parsed = parsePage(next);
   assert.ok(parsed.editable);
-  assert.equal(
-    parsed.model.imports.filter((item) => item.path === '@/components/Button.astro').length,
-    1,
-  );
+  assert.equal(parsed.model.imports.filter((item) => item.path === '@/components/Button.astro').length, 1);
   const nodes = flatten(parsed.model.nodes);
   assert.equal(nodes.find((node) => node.name === 'MyButton')?.children?.[0]?.value, 'Button Text');
-  assert.equal(
-    nodes.find((node) => node.name === 'HeadingInserted')?.children?.[0]?.value,
-    HEADING_TEXT,
-  );
+  assert.equal(nodes.find((node) => node.name === 'HeadingInserted')?.children?.[0]?.value, HEADING_TEXT);
   assert.ok(next.includes('import Heading from "@/components/custom/Heading.astro";'));
 });

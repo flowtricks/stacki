@@ -1,10 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type {
-  Dispatch,
-  MutableRefObject,
-  PointerEvent as ReactPointerEvent,
-  SetStateAction,
-} from 'react';
+import type { Dispatch, MutableRefObject, PointerEvent as ReactPointerEvent, SetStateAction } from 'react';
 import { assert } from '../../../shared/core/assert';
 import Dropdown from '../../ui/Dropdown';
 import type { DropdownOption } from '../../ui/Dropdown';
@@ -64,30 +59,18 @@ export function tabLabels(tabs: readonly TerminalTab[]): readonly string[] {
   for (const label of raw) {
     counts.set(label, (counts.get(label) ?? 0) + 1);
   }
-  return raw.map((label, index) =>
-    (counts.get(label) ?? 0) > 1 ? `${label} ${index + 1}` : label,
-  );
+  return raw.map((label, index) => ((counts.get(label) ?? 0) > 1 ? `${label} ${index + 1}` : label));
 }
 
 export default function TerminalDock(props: TerminalDockProps) {
   const settings = useDockSettings();
   const terminals = useTerminalTabs(props.projectPath, { open: props.open });
   const onHandleDown = useDockResize(settings.height, settings.setHeight, settings.setDragging);
-  useVisiblePaneFit(
-    { open: props.open, activeId: terminals.activeId, height: settings.height },
-    terminals.paneRefs.current,
-  );
+  useVisiblePaneFit({ open: props.open, activeId: terminals.activeId, height: settings.height }, terminals.paneRefs.current);
   const autoLaunch = launchCommand(settings.mode, settings.custom);
   return (
-    <div
-      className={`term-dock ${props.open ? 'on' : ''}`}
-      style={{ height: props.open ? settings.height : 0 }}
-    >
-      <div
-        className={`term-resize ${settings.dragging ? 'on' : ''}`}
-        onPointerDown={onHandleDown}
-        title="Drag to resize"
-      />
+    <div className={`term-dock ${props.open ? 'on' : ''}`} style={{ height: props.open ? settings.height : 0 }}>
+      <div className={`term-resize ${settings.dragging ? 'on' : ''}`} onPointerDown={onHandleDown} title="Drag to resize" />
       <TerminalBar
         tabs={terminals.tabs}
         activeId={terminals.activeId}
@@ -99,11 +82,7 @@ export default function TerminalDock(props: TerminalDockProps) {
       />
       <div className="term-panes">
         {terminals.tabs.map((tab) => (
-          <div
-            key={tab.id}
-            className="term-pane-wrap"
-            style={{ display: tab.id === terminals.activeId ? 'block' : 'none' }}
-          >
+          <div key={tab.id} className="term-pane-wrap" style={{ display: tab.id === terminals.activeId ? 'block' : 'none' }}>
             <Suspense fallback={<div className="term-pane">Loading terminal…</div>}>
               <TerminalPane
                 ref={(pane) => terminals.setPaneRef(tab.id, pane ?? undefined)}
@@ -208,12 +187,7 @@ interface LifecycleRefs {
   readonly setActiveId: Dispatch<SetStateAction<string | undefined>>;
 }
 
-function useProjectTerminalLifecycle(
-  projectPath: string,
-  dock: { readonly open: boolean },
-  refs: LifecycleRefs,
-  createTab: () => void,
-): void {
+function useProjectTerminalLifecycle(projectPath: string, dock: { readonly open: boolean }, refs: LifecycleRefs, createTab: () => void): void {
   const { open } = dock;
   const { paneRefs, seeded, setActiveId, setTabs, tabsRef, nextNumber } = refs;
   useEffect(() => {
@@ -251,11 +225,7 @@ function useTerminalProcessNames(setTabs: Dispatch<SetStateAction<readonly Termi
   );
 }
 
-function closeTabFromList(
-  previous: readonly TerminalTab[],
-  id: string,
-  setActiveId: Dispatch<SetStateAction<string | undefined>>,
-): readonly TerminalTab[] {
+function closeTabFromList(previous: readonly TerminalTab[], id: string, setActiveId: Dispatch<SetStateAction<string | undefined>>): readonly TerminalTab[] {
   const index = previous.findIndex((tab) => tab.id === id);
   assert(index >= 0, 'Closed terminal tab must exist');
   const next = previous.filter((tab) => tab.id !== id);
@@ -268,12 +238,7 @@ function closeTabFromList(
   return next;
 }
 
-function updateTab(
-  tabs: readonly TerminalTab[],
-  id: string,
-  field: 'oscTitle' | 'processName',
-  value: string,
-): readonly TerminalTab[] {
+function updateTab(tabs: readonly TerminalTab[], id: string, field: 'oscTitle' | 'processName', value: string): readonly TerminalTab[] {
   if (!tabs.some((tab) => tab.id === id && tab[field] !== value)) {
     return tabs;
   }
@@ -317,12 +282,7 @@ function TerminalBar(props: TerminalBarProps) {
             )}
           </button>
         ))}
-        <button
-          className="ghost term-add"
-          title="New terminal"
-          onClick={props.createTab}
-          disabled={props.tabs.length >= TERMINAL_TABS_MAX}
-        >
+        <button className="ghost term-add" title="New terminal" onClick={props.createTab} disabled={props.tabs.length >= TERMINAL_TABS_MAX}>
           <PlusIcon size={13} />
         </button>
       </div>
@@ -358,11 +318,7 @@ function TerminalSettings(props: Pick<TerminalBarProps, 'settings' | 'onClose'>)
           storeSetting(MODE_KEY, mode);
         }}
       />
-      <button
-        className="ghost"
-        title={`Hide terminal (${shortcutLabel('J', 'primary', currentDesktopPlatform())})`}
-        onClick={props.onClose}
-      >
+      <button className="ghost" title={`Hide terminal (${shortcutLabel('J', 'primary', currentDesktopPlatform())})`} onClick={props.onClose}>
         <ChevronDownIcon size={13} />
       </button>
     </div>
@@ -385,10 +341,7 @@ function useDockResize(
     startDrag(event, {
       cursor: 'ns-resize',
       onMove: (move) => {
-        nextHeight = Math.min(
-          heightMax,
-          Math.max(HEIGHT_PX_MIN, startHeight + startY - move.clientY),
-        );
+        nextHeight = Math.min(heightMax, Math.max(HEIGHT_PX_MIN, startHeight + startY - move.clientY));
         setHeight(nextHeight);
       },
       onEnd: () => {
@@ -424,9 +377,7 @@ function useVisiblePaneFit(
 function cleanLabel(raw: string): string {
   const flat = raw.replace(CONTROL_CHARS, ' ').replace(/\s+/g, ' ').trim();
   const short = shortenPathLike(flat);
-  return short.length <= LABEL_CHARS_MAX
-    ? short
-    : `${short.slice(0, LABEL_CHARS_MAX - 1).trimEnd()}…`;
+  return short.length <= LABEL_CHARS_MAX ? short : `${short.slice(0, LABEL_CHARS_MAX - 1).trimEnd()}…`;
 }
 
 function shortenPathLike(label: string): string {

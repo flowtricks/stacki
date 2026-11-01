@@ -63,10 +63,7 @@ export function useLifecycle(coreState: ReturnType<typeof useCoreState>) {
 }
 
 // Opening a page, and opening a project.
-export function useSelectPage(
-  lifecycle: ReturnType<typeof useLifecycle>,
-  coreState: ReturnType<typeof useCoreState>,
-) {
+export function useSelectPage(lifecycle: ReturnType<typeof useLifecycle>, coreState: ReturnType<typeof useCoreState>) {
   const { openFile, rescan, showToast, startPreview } = lifecycle;
   const { setDevice, setLeftTab, setProject } = coreState;
 
@@ -110,8 +107,7 @@ export function useSelectPage(
       void startPreview(projectPath);
       const result = await rescan(projectPath);
 
-      const first =
-        result.pages.find((page) => page.name === 'index.astro') || result.pages[0] || undefined;
+      const first = result.pages.find((page) => page.name === 'index.astro') || result.pages[0] || undefined;
       if (first) {
         // Opening a page reports its own failures as toasts.
         void selectPage(first);
@@ -198,16 +194,7 @@ export function useProjectMenu(
       setSelectedId(undefined);
       setHoverNodeId(undefined);
     },
-    [
-      flushSave,
-      showToast,
-      pageLoadRef,
-      setCurrentPage,
-      setEditStack,
-      setHoverNodeId,
-      setPageState,
-      setSelectedId,
-    ],
+    [flushSave, showToast, pageLoadRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState, setSelectedId],
   );
   return { selectRoute };
 }
@@ -258,10 +245,7 @@ export function useGoToUrl(
 }
 
 // Reading the open file again from disk.
-export function useReload(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useReload(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
   const { pageStateRef, projectRef, setCodeWin, setCurrentPage, setEditStack } = coreState;
   const { setPageState, setRefreshKey, setSelectedId } = coreState;
   const { dropPageHistory, editDrafts, openFile, pageLoadRef, rescan } = lifecycle;
@@ -276,10 +260,7 @@ export function useReload(
     const proj = projectRef.current;
     const { currentPage: open, pageState: state } = pageStateRef.current;
     const request = pageLoadRef.current;
-    const stillCurrent = () =>
-      request === pageLoadRef.current &&
-      pageStateRef.current.currentPage === open &&
-      pageStateRef.current.pageState === state;
+    const stillCurrent = () => request === pageLoadRef.current && pageStateRef.current.currentPage === open && pageStateRef.current.pageState === state;
     if (!proj) {
       return;
     }
@@ -339,10 +320,7 @@ export function useReload(
 }
 
 // Drilling into a component.
-export function useOpenComponent(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useOpenComponent(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
   const { editStackRef, pageStateRef, projectRef, scan } = coreState;
   const { openFile, pageLoadRef, showToast } = lifecycle;
 
@@ -350,12 +328,7 @@ export function useOpenComponent(
   // stack remembers what to come back to (pages and components alike, so
   // nesting works to any depth).
   const openComponent = useCallback(
-    async (
-      name: string,
-      hostPath: string | undefined,
-      hostOcc = 0,
-      filePath: string | undefined = undefined,
-    ) => {
+    async (name: string, hostPath: string | undefined, hostOcc = 0, filePath: string | undefined = undefined) => {
       // A tag is only a local binding — `import Layout from
       // '@/layouts/BaseLayout.astro'` renders as <Layout> — so follow the
       // page's own import first, and fall back to matching by filename.
@@ -365,9 +338,7 @@ export function useOpenComponent(
         return;
       }
       const request = pageLoadRef.current;
-      const spec = (state?.editable ? state.model.imports : []).find(
-        (item) => item.name === name,
-      )?.path;
+      const spec = (state?.editable ? state.model.imports : []).find((item) => item.name === name)?.path;
       let comp = undefined;
       // A caller that already knows the file means THAT file — the instances
       // popup names a component by where it lives, and two folders can hold
@@ -390,10 +361,7 @@ export function useOpenComponent(
           comp = { name: fileName.replace(/\.astro$/i, ''), path: file };
         } else if (file) {
           // A framework island (.jsx/.svelte/…) has no Astro tree to show.
-          showToast(
-            `<${name}> is a ${file.split('.').pop()} component — edit it in code.`,
-            'error',
-          );
+          showToast(`<${name}> is a ${file.split('.').pop()} component — edit it in code.`, 'error');
           return;
         }
       }
@@ -413,10 +381,7 @@ export function useOpenComponent(
 }
 
 // Backing out of a component, and previewing an earlier version.
-export function useCommitPreview(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useCommitPreview(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
   const { editStackRef, project, setBusy, setPreviewInfo, setPreviewRef } = coreState;
   const { openFile, showToast } = lifecycle;
 
@@ -501,10 +466,7 @@ export function useCommitPreview(
 }
 
 // The git state the History panel and the branch chip share.
-export function useGitInfo(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useGitInfo(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
   const { project, projectRef, refreshKey, setGitInfo, pageState } = coreState;
   const { showToast } = lifecycle;
   const requestRefresh = useRef<() => void>(() => undefined);

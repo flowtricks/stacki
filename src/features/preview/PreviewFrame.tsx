@@ -17,10 +17,7 @@ interface PreviewFrameProps {
 /** Keep at most two documents: the last ready page and its replacement.
  * Distinct windows keep the old page's messages out of the new editor session. */
 export function PreviewFrame({ url, refreshKey, title, frameRef, onLoad }: PreviewFrameProps) {
-  const target = useMemo(
-    () => ({ key: JSON.stringify([url, refreshKey]), url }),
-    [url, refreshKey],
-  );
+  const target = useMemo(() => ({ key: JSON.stringify([url, refreshKey]), url }), [url, refreshKey]);
   const latest = useRef(target.key);
   latest.current = target.key;
   const [shown, setShown] = useState<FrameSource>();

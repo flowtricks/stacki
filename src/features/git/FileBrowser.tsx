@@ -120,9 +120,7 @@ export function buildTree<T extends BrowserFile>(files: readonly T[]): FileTree<
   }
   for (const node of nodes) {
     node.files.sort((left, right) => left.name.localeCompare(right.name));
-    node.dirs = new Map(
-      [...node.dirs.entries()].sort(([left], [right]) => left.localeCompare(right)),
-    );
+    node.dirs = new Map([...node.dirs.entries()].sort(([left], [right]) => left.localeCompare(right)));
   }
   return root;
 }
@@ -162,13 +160,7 @@ export default function FileBrowser<T extends BrowserFile>(props: FileBrowserPro
   return (
     <div className="file-browser">
       <div className="fb-search">
-        <input
-          ref={inputRef}
-          value={query}
-          placeholder="Search files…"
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={onKeyDown}
-        />
+        <input ref={inputRef} value={query} placeholder="Search files…" onChange={(event) => setQuery(event.target.value)} onKeyDown={onKeyDown} />
         {query && (
           <button className="ghost" onClick={() => setQuery('')} title="Clear">
             ×
@@ -193,12 +185,7 @@ export default function FileBrowser<T extends BrowserFile>(props: FileBrowserPro
 
       {selectable && (
         <div className="fb-foot">
-          <button
-            className="ghost"
-            onClick={() =>
-              onSelect?.(selected?.length === files.length ? [] : files.map((file) => file.path))
-            }
-          >
+          <button className="ghost" onClick={() => onSelect?.(selected?.length === files.length ? [] : files.map((file) => file.path))}>
             {selected?.length === files.length ? 'Clear all' : 'Select all'}
           </button>
           <span className="fb-selected">
@@ -210,14 +197,7 @@ export default function FileBrowser<T extends BrowserFile>(props: FileBrowserPro
   );
 }
 
-function useFileBrowser<T extends BrowserFile>({
-  files,
-  selected,
-  onSelect,
-  onOpen,
-  selectable = false,
-  autoFocusSearch = false,
-}: FileBrowserProps<T>) {
+function useFileBrowser<T extends BrowserFile>({ files, selected, onSelect, onOpen, selectable = false, autoFocusSearch = false }: FileBrowserProps<T>) {
   const [query, setQuery] = useState('');
   const [closed, setClosed] = useState(() => new Set<string>());
   const [active, setActive] = useState(0);
@@ -301,13 +281,9 @@ function FileRow<T extends BrowserFile>({
   const { active, searching, isOn, selectable, toggle, onOpen } = state;
   return (
     <div
-      className={`fb-row ${index === active && searching ? 'active' : ''} ${
-        isOn(file.path) ? 'on' : ''
-      }`}
+      className={`fb-row ${index === active && searching ? 'active' : ''} ${isOn(file.path) ? 'on' : ''}`}
       style={{ paddingLeft: 6 + depth * 13 }}
-      onClick={() =>
-        selectable ? toggle([file.path], { remove: isOn(file.path) }) : onOpen?.(file)
-      }
+      onClick={() => (selectable ? toggle([file.path], { remove: isOn(file.path) }) : onOpen?.(file))}
       title={file.path}
     >
       {selectable && (
@@ -377,12 +353,8 @@ function FileFolder<T extends BrowserFile>({
             })
           }
         >
-          <span className="fb-caret">
-            {shut ? <ChevronRightIcon size={11} /> : <ChevronDownIcon size={11} />}
-          </span>
-          <span className="fb-folder-icon">
-            {shut ? <FolderIcon size={12} /> : <FolderOpenIcon size={12} />}
-          </span>
+          <span className="fb-caret">{shut ? <ChevronRightIcon size={11} /> : <ChevronDownIcon size={11} />}</span>
+          <span className="fb-folder-icon">{shut ? <FolderIcon size={12} /> : <FolderOpenIcon size={12} />}</span>
           <span className="fb-name">{name}</span>
           <span className="fb-count">{paths.length}</span>
         </button>
@@ -407,14 +379,7 @@ function FileNode<T extends BrowserFile>({
   return (
     <>
       {[...node.dirs.entries()].map(([name, child]) => (
-        <FileFolder
-          state={state}
-          key={prefix + name}
-          name={name}
-          node={child}
-          prefix={prefix}
-          depth={depth}
-        />
+        <FileFolder state={state} key={prefix + name} name={name} node={child} prefix={prefix} depth={depth} />
       ))}
       {node.files.map((file) => (
         <FileRow state={state} key={file.path} file={file} depth={depth} index={-1} />
@@ -423,11 +388,7 @@ function FileNode<T extends BrowserFile>({
   );
 }
 
-function fileBrowserSelection(
-  selected: readonly string[],
-  paths: readonly string[],
-  options: { readonly remove: boolean },
-): string[] {
+function fileBrowserSelection(selected: readonly string[], paths: readonly string[], options: { readonly remove: boolean }): string[] {
   assert(selected.length <= FILE_LIMITS.entriesMax, 'FileBrowser: selection limit exceeded');
   assert(paths.length <= FILE_LIMITS.entriesMax, 'FileBrowser: toggle limit exceeded');
   const next = new Set(selected);

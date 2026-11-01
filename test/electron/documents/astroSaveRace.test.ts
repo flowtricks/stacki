@@ -26,10 +26,7 @@ async function fixture(context: TestContext) {
   fs.mkdirSync(pages, { recursive: true });
   const file = toFilePath(path.join(pages, 'index.astro'));
   fs.writeFileSync(file, SOURCE);
-  const { astroConfig } = await resolveConfig(
-    { root, configFile: false, logLevel: 'silent' },
-    'dev',
-  );
+  const { astroConfig } = await resolveConfig({ root, configFile: false, logLevel: 'silent' }, 'dev');
   return { file, pages, settings: settings.createBaseSettings(astroConfig, 'silent') };
 }
 
@@ -71,11 +68,7 @@ test('Astro can scan while a document lock disappears', async (context) => {
 
 test('Astro can scan across text, grid insertion, and grid removal saves', async (context) => {
   const site = await fixture(context);
-  const versions = [
-    '<section><p>After</p></section>\n',
-    '<section><div class="grid"><p>After</p></div></section>\n',
-    '<section><p>After</p></section>\n',
-  ];
+  const versions = ['<section><p>After</p></section>\n', '<section><div class="grid"><p>After</p></div></section>\n', '<section><p>After</p></section>\n'];
   for (const source of versions) {
     const rename = fs.renameSync;
     let scan: ReturnType<typeof routing.createRoutesList> | undefined;

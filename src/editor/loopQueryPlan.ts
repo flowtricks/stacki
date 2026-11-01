@@ -20,20 +20,14 @@
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import type { ImportDecl } from '../../shared/page/pageNode';
-import {
-  astroQueryCode,
-  assertLoopQuery,
-  chainQueryCode,
-  sanityQueryCode,
-  type LoopField,
-  type LoopQuery,
-} from './loopQuery';
+import { astroQueryCode, assertLoopQuery, chainQueryCode, sanityQueryCode, type LoopField, type LoopQuery } from './loopQuery';
 import { readingChain, readLoop, type LoopReading } from './loopQueryRead';
 import { reboundItem, type ItemShape } from './loopRebind';
 import { parseFrontmatter, type ParsedFrontmatter } from './loopSyntax';
 import { dataFormProblem, optionsLiteral, rewrittenOptions } from './optionsQuery';
 import { LIST_ITEMS_HELPER, LIST_ITEMS_NAME, listItemsNeed } from './listItemsHelper';
 import { reboundOptions, type BindingChange } from './optionsBinding';
+import { fieldListCode, type FieldList } from './loopFieldList';
 import { splitMapHead } from './loopBindings';
 import { autoQueryName, QUERY_MARK } from './dataScope';
 import type { EditorModel, EditorNode } from './pageView';
@@ -50,7 +44,9 @@ export type LoopTarget =
   | { readonly kind: 'value'; readonly data: string }
   | { readonly kind: 'empty' }
   /** One of the list's settings linked to a component prop, or unlinked. */
-  | { readonly kind: 'binding'; readonly change: BindingChange };
+  | { readonly kind: 'binding'; readonly change: BindingChange }
+  /** A list field inside a content collection's items, across all of them. */
+  | { readonly kind: 'field'; readonly list: FieldList };
 
 export interface LoopPlanInput {
   readonly model: Pick<EditorModel, 'extraFrontmatter' | 'imports' | 'nodes'>;
@@ -80,8 +76,7 @@ export interface LoopPlan {
   readonly restored: boolean;
 }
 
-export type LoopPlanResult =
-  { readonly ok: true; readonly plan: LoopPlan } | { readonly ok: false; readonly message: string };
+export type LoopPlanResult = { readonly ok: true; readonly plan: LoopPlan } | { readonly ok: false; readonly message: string };
 
 const DEFAULT_SANITY_CLIENT = 'sanityClient';
 const CLEANUP_PASSES_MAX = 16;
@@ -89,23 +84,12 @@ const CLEANUP_PASSES_MAX = 16;
 export function planLoop(input: LoopPlanInput): LoopPlanResult {
   const head = splitMapHead(input.loop.head);
   if (head === undefined) {
-    return {
-      ok: false,
-      message: 'This loop is written as custom code. Edit it in the Code field.',
-    };
+    return { ok: false, message: 'This loop is written as custom code. Edit it in the Code field.' };
   }
   const before = parseFrontmatter(input.model.extraFrontmatter);
-  const reading = readLoop({
-    frontmatter: input.model.extraFrontmatter,
-    imports: input.model.imports,
-    data: head.data,
-  });
+  const reading = readLoop({ frontmatter: input.model.extraFrontmatter, imports: input.model.imports, data: head.data });
   if (input.target.kind === 'binding') {
-    return bindingEdit(input, input.target.change, {
-      reading,
-      frontmatter: before,
-      data: head.data,
-    });
+    return bindingEdit(input, input.target.change, { reading, frontmatter: before, data: head.data });
   }
   const inPlace = optionsEdit(input, reading, before);
   if (inPlace !== undefined) {
@@ -123,20 +107,14 @@ export function planLoop(input: LoopPlanInput): LoopPlanResult {
   const markupAfter = `${markup}\n${loopHead}`;
   const removable = new Set(readingChain(reading).filter((name) => name !== written.name));
   // The holder was replaced in place: what it read is now possibly unread.
-  const replaced =
-    holder === undefined ? '' : input.model.extraFrontmatter.slice(holder.from, holder.to);
+  const replaced = holder === undefined ? '' : input.model.extraFrontmatter.slice(holder.from, holder.to);
   for (const use of before.uses) {
     if (holder !== undefined && use.from >= holder.from && use.from < holder.to) {
       removable.add(use.name);
     }
   }
-  const cleaned = cleanedUp(
-    { frontmatter: written.frontmatter, imports: written.imports, removed: replaced },
-    removable,
-    markupAfter,
-  );
-  const restoring =
-    input.restore !== undefined && readingKeyOf(reading, head.data) !== targetKey(input.target);
+  const cleaned = cleanedUp({ frontmatter: written.frontmatter, imports: written.imports, removed: replaced }, removable, markupAfter);
+  const restoring = input.restore !== undefined && readingKeyOf(reading, head.data) !== targetKey(input.target);
   const rebound = reboundChildren(input, { reading, item: head.item, restoring });
   const loop = { ...input.loop, head: loopHead, children: rebound.nodes };
   assert(loop.id === input.loop.id, 'A planned loop keeps its id');
@@ -160,11 +138,7 @@ export function planLoop(input: LoopPlanInput): LoopPlanResult {
 function reboundChildren(
   input: LoopPlanInput,
   read: { readonly reading: LoopReading; readonly item: string; readonly restoring: boolean },
-): {
-  readonly nodes: readonly EditorNode[];
-  readonly unbound: number;
-  readonly lost: readonly string[];
-} {
+): { readonly nodes: readonly EditorNode[]; readonly unbound: number; readonly lost: readonly string[] } {
   const children = input.loop.children ?? [];
   const shape = itemShape(input.target);
   if (read.restoring && input.restore !== undefined) {
@@ -179,11 +153,7 @@ function reboundChildren(
 // A builder's options object read from this file, edited with the same
 // collection: the settings are rewritten where they are, and the loop, its
 // children and the rest of the file stay exactly as they were.
-function optionsEdit(
-  input: LoopPlanInput,
-  reading: LoopReading,
-  frontmatter: ParsedFrontmatter,
-): LoopPlanResult | undefined {
+function optionsEdit(input: LoopPlanInput, reading: LoopReading, frontmatter: ParsedFrontmatter): LoopPlanResult | undefined {
   const target = input.target;
   if (reading.kind !== 'query' || reading.home === undefined || target.kind !== 'query') {
     return undefined;
@@ -197,46 +167,24 @@ function optionsEdit(
   const query = target.query;
   const home = reading.home;
   if (init === undefined) {
-    return {
-      ok: false,
-      message: 'The list settings changed in the code since they were read. Select the loop again.',
-    };
+    return { ok: false, message: 'The list settings changed in the code since they were read. Select the loop again.' };
   }
   if (home.kind === 'chain') {
     return {
       ok: true,
-      plan: inPlacePlan(
-        input,
-        chainEdit(
-          input.model.extraFrontmatter,
-          init,
-          chainQueryCode(query, home.list, home.itemPath),
-        ),
-        targetKey(target),
-      ),
+      plan: inPlacePlan(input, chainEdit(input.model.extraFrontmatter, init, chainQueryCode(query, home.list, home.itemPath)), targetKey(target)),
     };
   }
 
   const call = init.kind === 'await' ? init.value : init;
   const options = call.kind === 'call' ? call.args[1] : undefined;
   if (options?.kind !== 'object' || options.from !== home.options.from) {
-    return {
-      ok: false,
-      message: 'The list settings changed in the code since they were read. Select the loop again.',
-    };
+    return { ok: false, message: 'The list settings changed in the code since they were read. Select the loop again.' };
   }
   const unsupported =
-    query.random ||
-    query.conditions.some(
-      (condition) =>
-        condition.kind === 'test' &&
-        (condition.operator === 'inPast' || condition.operator === 'inFuture'),
-    );
+    query.random || query.conditions.some((condition) => condition.kind === 'test' && (condition.operator === 'inPast' || condition.operator === 'inFuture'));
   if (unsupported) {
-    return {
-      ok: false,
-      message: 'This list’s settings can’t shuffle or compare with today’s date.',
-    };
+    return { ok: false, message: 'This list’s settings can’t shuffle or compare with today’s date.' };
   }
   const extraFrontmatter = rewrittenOptions(input.model.extraFrontmatter, home, options, query);
   assert(extraFrontmatter !== '', 'Rewritten settings leave a frontmatter');
@@ -248,45 +196,26 @@ function optionsEdit(
 function bindingEdit(
   input: LoopPlanInput,
   change: BindingChange,
-  read: {
-    readonly reading: LoopReading;
-    readonly frontmatter: ParsedFrontmatter;
-    readonly data: string;
-  },
+  read: { readonly reading: LoopReading; readonly frontmatter: ParsedFrontmatter; readonly data: string },
 ): LoopPlanResult {
   const { reading, frontmatter } = read;
   if (reading.kind === 'query' && reading.home === undefined && change.kind !== 'unbind') {
     return convertedBinding(input, reading.query, change);
   }
   if (reading.kind !== 'query' || reading.home?.kind !== 'options') {
-    return {
-      ok: false,
-      message: 'Only a list whose settings are kept as data can link them to properties.',
-    };
+    return { ok: false, message: 'Only a list whose settings are kept as data can link them to properties.' };
   }
   const holder = reading.chain[reading.chain.length - 1];
   const declaration = holder === undefined ? undefined : frontmatter.declarations.get(holder);
   const init = declaration?.init;
   const call = init?.kind === 'await' ? init.value : init;
   const options = call?.kind === 'call' ? call.args[1] : undefined;
-  if (
-    declaration === undefined ||
-    options?.kind !== 'object' ||
-    options.from !== reading.home.options.from
-  ) {
-    return {
-      ok: false,
-      message: 'The list settings changed in the code since they were read. Select the loop again.',
-    };
+  if (declaration === undefined || options?.kind !== 'object' || options.from !== reading.home.options.from) {
+    return { ok: false, message: 'The list settings changed in the code since they were read. Select the loop again.' };
   }
   const result = reboundOptions(
     input.model.extraFrontmatter,
-    {
-      home: reading.home,
-      options,
-      statementFrom: declaration.statement.from,
-      taken: frontmatter.bound,
-    },
+    { home: reading.home, options, statementFrom: declaration.statement.from, taken: frontmatter.bound },
     change,
   );
   if (!result.ok) {
@@ -300,35 +229,17 @@ function bindingEdit(
 // A list written as code is first rewritten as data, in its place and with
 // the helper that reads it; then the setting is linked as on any data list.
 // Both land as one plan, so one undo puts the code back.
-function convertedBinding(
-  input: LoopPlanInput,
-  query: LoopQuery,
-  change: BindingChange,
-): LoopPlanResult {
+function convertedBinding(input: LoopPlanInput, query: LoopQuery, change: BindingChange): LoopPlanResult {
   const problem = dataFormProblem(query);
   if (problem !== undefined) {
     return { ok: false, message: problem };
   }
-  const converted = planLoop({
-    ...input,
-    target: { kind: 'query', query, fields: [], form: 'data' },
-    restore: undefined,
-  });
+  const converted = planLoop({ ...input, target: { kind: 'query', query, fields: [], form: 'data' }, restore: undefined });
   if (!converted.ok) {
     return converted;
   }
-  const model = {
-    ...input.model,
-    extraFrontmatter: converted.plan.extraFrontmatter,
-    imports: converted.plan.imports,
-  };
-  const bound = planLoop({
-    ...input,
-    model,
-    loop: converted.plan.loop,
-    target: { kind: 'binding', change },
-    restore: undefined,
-  });
+  const model = { ...input.model, extraFrontmatter: converted.plan.extraFrontmatter, imports: converted.plan.imports };
+  const bound = planLoop({ ...input, model, loop: converted.plan.loop, target: { kind: 'binding', change }, restore: undefined });
   if (!bound.ok) {
     return bound;
   }
@@ -338,11 +249,7 @@ function convertedBinding(
 }
 
 // The holder's value is the kept list with its refinements: rewrite the value only.
-function chainEdit(
-  frontmatter: string,
-  init: { readonly from: number; readonly to: number },
-  code: string,
-): string {
+function chainEdit(frontmatter: string, init: { readonly from: number; readonly to: number }, code: string): string {
   assert(init.from < init.to, 'A holder has a value to rewrite');
   assert(init.to <= frontmatter.length, 'A holder is inside the frontmatter');
   return `${frontmatter.slice(0, init.from)}${code}${frontmatter.slice(init.to)}`;
@@ -350,15 +257,7 @@ function chainEdit(
 
 // Settings rewritten where they are: the loop, its children and the imports stay.
 function inPlacePlan(input: LoopPlanInput, extraFrontmatter: string, previous: string): LoopPlan {
-  return {
-    extraFrontmatter,
-    imports: input.model.imports,
-    loop: input.loop,
-    unbound: 0,
-    lost: [],
-    previous,
-    restored: false,
-  };
+  return { extraFrontmatter, imports: input.model.imports, loop: input.loop, unbound: 0, lost: [], previous, restored: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -384,13 +283,7 @@ function writtenTarget(
   const frontmatter = input.model.extraFrontmatter;
   switch (target.kind) {
     case 'empty':
-      return {
-        ok: true,
-        frontmatter: holder ? spliced(frontmatter, holder, '') : frontmatter,
-        imports: input.model.imports,
-        data: '[]',
-        name: undefined,
-      };
+      return { ok: true, frontmatter: holder ? spliced(frontmatter, holder, '') : frontmatter, imports: input.model.imports, data: '[]', name: undefined };
     case 'value':
       return {
         ok: true,
@@ -401,6 +294,8 @@ function writtenTarget(
       };
     case 'query':
       return writtenQuery(input, target, holder, before);
+    case 'field':
+      return writtenFieldList(input, target.list, holder, before);
     case 'binding':
       // Linking a setting edits the options in place (bindingEdit); it never
       // writes a new source.
@@ -435,10 +330,7 @@ function writtenQuery(
   } else {
     const client = importedName(imports, 'sanity:client', 'sanityClient');
     if (client === undefined && input.sanityClient === 'unavailable') {
-      return {
-        ok: false,
-        message: 'Add the @sanity/astro integration to this project to loop over Sanity content.',
-      };
+      return { ok: false, message: 'Add the @sanity/astro integration to this project to loop over Sanity content.' };
     }
     if (client === undefined) {
       imports = [...imports, newImport(DEFAULT_SANITY_CLIENT, 'sanity:client')];
@@ -461,29 +353,64 @@ function writtenQuery(
   // A list kept as data is read through the helper, written once, above it.
   const need = target.form === 'data' ? listItemsNeed(before) : { kind: 'present' as const };
   if (need.kind === 'taken') {
-    return {
-      ok: false,
-      message: `This file already has its own ${LIST_ITEMS_NAME}. Rename it to link list settings to properties.`,
-    };
+    return { ok: false, message: `This file already has its own ${LIST_ITEMS_NAME}. Rename it to link list settings to properties.` };
   }
   const written = need.kind === 'add' ? `${LIST_ITEMS_HELPER}\n${statement}` : statement;
-  const frontmatter = holder
-    ? spliced(input.model.extraFrontmatter, holder, `${written}\n`)
-    : appended(input.model.extraFrontmatter, written);
+  const frontmatter = holder ? spliced(input.model.extraFrontmatter, holder, `${written}\n`) : appended(input.model.extraFrontmatter, written);
   return { ok: true, frontmatter, imports, data: name, name };
 }
 
-function importedName(
-  imports: readonly ImportDecl[],
-  path: string,
-  exported: string,
-): string | undefined {
-  const entry = imports.find(
-    (candidate) =>
-      candidate.path === path &&
-      (candidate.imported ?? candidate.name) === exported &&
-      candidate.typeOnly !== true,
-  );
+// A list inside every item of a collection, as a marked query in the holder's
+// slot (or at the end), named for the field: `campusPastors`.
+function writtenFieldList(
+  input: LoopPlanInput,
+  list: FieldList,
+  holder: Holder | undefined,
+  before: ParsedFrontmatter,
+): Written | { readonly ok: false; readonly message: string } {
+  const astro = list.source.kind === 'astro';
+  const [path, exported, fallback] = astro
+    ? (['astro:content', 'getCollection', 'getCollection'] as const)
+    : (['sanity:client', 'sanityClient', DEFAULT_SANITY_CLIENT] as const);
+  const reader = importedName(input.model.imports, path, exported);
+  if (reader === undefined && !astro && input.sanityClient === 'unavailable') {
+    return { ok: false, message: 'Add the @sanity/astro integration to this project to loop over Sanity content.' };
+  }
+  const imports = reader === undefined ? [...input.model.imports, newImport(fallback, path)] : input.model.imports;
+  const taken = new Set(before.bound);
+  if (holder !== undefined) {
+    taken.delete(holder.name);
+  }
+  for (const entry of imports) {
+    taken.add(entry.name);
+  }
+  const field = list.path[list.path.length - 1];
+  assert(field !== undefined, 'A field list names a field');
+  const name = fieldListName(`${list.source.collection}-${field}`, taken);
+  assert(!taken.has(name), 'A field list gets a name of its own');
+  const statement = `const ${name} = ${fieldListCode(list, reader ?? fallback)}; // ${QUERY_MARK}`;
+  assert(!statement.includes('\n'), 'A field list is written on one line');
+  const frontmatter = holder ? spliced(input.model.extraFrontmatter, holder, `${statement}\n`) : appended(input.model.extraFrontmatter, statement);
+  return { ok: true, frontmatter, imports, data: name, name };
+}
+
+// `campus-pastors` → `campusPastors`, or `campusPastors2` past a name in use.
+const FIELD_LIST_NAMES_MAX = 100;
+function fieldListName(words: string, taken: ReadonlySet<string>): string {
+  const camel = words.replace(/[^A-Za-z0-9]+(.)?/g, (_whole: string, letter?: string) => (letter ? letter.toUpperCase() : '')).replace(/^[0-9]+/, '');
+  const base = camel === '' ? 'items' : camel;
+  for (let suffix = 1; suffix <= FIELD_LIST_NAMES_MAX; suffix++) {
+    const name = suffix === 1 ? base : `${base}${suffix}`;
+    if (!taken.has(name)) {
+      return name;
+    }
+  }
+  assert(false, 'A free name is found within the suffix bound');
+  return base;
+}
+
+function importedName(imports: readonly ImportDecl[], path: string, exported: string): string | undefined {
+  const entry = imports.find((candidate) => candidate.path === path && (candidate.imported ?? candidate.name) === exported && candidate.typeOnly !== true);
   return entry?.name;
 }
 
@@ -508,33 +435,19 @@ interface Holder {
   readonly collection: string | undefined;
 }
 
-function ownedHolder(
-  data: string,
-  reading: LoopReading,
-  frontmatter: ParsedFrontmatter,
-  markup: string,
-): Holder | undefined {
+function ownedHolder(data: string, reading: LoopReading, frontmatter: ParsedFrontmatter, markup: string): Holder | undefined {
   const name = readingChain(reading)[0];
   if (name === undefined || data.trim() !== name) {
     return undefined;
   }
   const declaration = frontmatter.declarations.get(name);
-  if (
-    declaration === undefined ||
-    !declaration.alone ||
-    exported(frontmatter, declaration.statement.from)
-  ) {
+  if (declaration === undefined || !declaration.alone || exported(frontmatter, declaration.statement.from)) {
     return undefined;
   }
   if (readsOutside(frontmatter, name, declaration.statement) > 0 || mentions(markup, name)) {
     return undefined;
   }
-  const collection =
-    reading.kind === 'query'
-      ? reading.query.source.collection
-      : reading.kind === 'partial'
-        ? reading.source.collection
-        : undefined;
+  const collection = reading.kind === 'query' ? reading.query.source.collection : reading.kind === 'partial' ? reading.source.collection : undefined;
   return { name, from: declaration.statement.from, to: declaration.statement.to, collection };
 }
 
@@ -550,11 +463,7 @@ function spliced(frontmatter: string, holder: Pick<Holder, 'from' | 'to'>, text:
 // nothing reads any more, and then the imports only they read. Each pass
 // removes at least one statement or stops; the passes are bounded.
 function cleanedUp(
-  start: {
-    readonly frontmatter: string;
-    readonly imports: readonly ImportDecl[];
-    readonly removed: string;
-  },
+  start: { readonly frontmatter: string; readonly imports: readonly ImportDecl[]; readonly removed: string },
   candidates: ReadonlySet<string>,
   markup: string,
 ): { readonly frontmatter: string; readonly imports: readonly ImportDecl[] } {
@@ -601,11 +510,7 @@ function cleanedUp(
   return { frontmatter: code, imports: kept };
 }
 
-function readsOutside(
-  frontmatter: ParsedFrontmatter,
-  name: string,
-  span: { readonly from: number; readonly to: number },
-): number {
+function readsOutside(frontmatter: ParsedFrontmatter, name: string, span: { readonly from: number; readonly to: number }): number {
   let count = 0;
   for (const use of frontmatter.uses) {
     if (use.name === name && (use.from < span.from || use.from >= span.to)) {
@@ -638,10 +543,7 @@ function markupWithout(nodes: readonly EditorNode[], loopId: string): string {
   return at < 0 ? text : `${text.slice(0, at)}${text.slice(at + head.length + 7)}`;
 }
 
-function findLoop(
-  nodes: readonly EditorNode[],
-  id: string,
-): Extract<EditorNode, { readonly kind: 'map' }> | undefined {
+function findLoop(nodes: readonly EditorNode[], id: string): Extract<EditorNode, { readonly kind: 'map' }> | undefined {
   const pending = [...nodes];
   for (let count = 0; pending.length > 0 && count < LIMITS.treeNodesMax; count++) {
     const node = pending.pop();
@@ -662,9 +564,7 @@ const SOURCE_KEYS = new Set(['id', 'start', 'end', 'at', 'attrSpans', 'headSourc
  * markup and bindings are, however often the file was saved and read since.
  */
 export function childrenFingerprint(nodes: readonly EditorNode[]): string {
-  const text = JSON.stringify(nodes, (key: string, value: unknown) =>
-    SOURCE_KEYS.has(key) ? undefined : value,
-  );
+  const text = JSON.stringify(nodes, (key: string, value: unknown) => (SOURCE_KEYS.has(key) ? undefined : value));
   assert(text.length <= LIMITS.ipcFieldCharsMax, 'A loop body is bounded');
   return text;
 }
@@ -676,8 +576,7 @@ function withoutSourceSpans(nodes: readonly EditorNode[], depth: number): readon
   return nodes.map((node) => {
     const { attrSpans: staleSpans, ...rest } = node;
     void staleSpans;
-    const children =
-      rest.children === undefined ? undefined : withoutSourceSpans(rest.children, depth + 1);
+    const children = rest.children === undefined ? undefined : withoutSourceSpans(rest.children, depth + 1);
     return Object.assign({}, rest, children === undefined ? {} : { children });
   });
 }
@@ -694,6 +593,8 @@ export function targetKey(target: LoopTarget): string {
     case 'binding':
       // Not a source: no children are kept or restored under it.
       return `binding:${target.change.setting}`;
+    case 'field':
+      return `field:${target.list.source.kind}:${target.list.source.collection}:${target.list.path.join('.')}`;
     default: {
       const exhaustive: never = target;
       return exhaustive;
@@ -738,16 +639,9 @@ function shapeChanged(reading: LoopReading, target: LoopTarget): boolean {
   if (target.kind !== 'query') {
     return false;
   }
-  const source =
-    reading.kind === 'query'
-      ? reading.query.source
-      : reading.kind === 'partial'
-        ? reading.source
-        : undefined;
+  const source = reading.kind === 'query' ? reading.query.source : reading.kind === 'partial' ? reading.source : undefined;
   if (source === undefined) {
     return reading.kind !== 'empty';
   }
-  return (
-    source.kind !== target.query.source.kind || source.collection !== target.query.source.collection
-  );
+  return source.kind !== target.query.source.kind || source.collection !== target.query.source.collection;
 }

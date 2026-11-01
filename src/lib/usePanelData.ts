@@ -4,10 +4,7 @@ import { createCoalescedRun } from './coalescedRun';
 import { onWindowReturn } from './windowReturn';
 import { assert } from '../../shared/core/assert';
 
-export type PanelData<T> =
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'ready'; readonly value: T }
-  | { readonly kind: 'error'; readonly message: string };
+export type PanelData<T> = { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly value: T } | { readonly kind: 'error'; readonly message: string };
 
 // Panels share bounded refresh work and retry when the window returns. A failed
 // read is never an empty collection, and an unmounted project cannot publish data.
@@ -17,9 +14,7 @@ export function usePanelData<T>(
   read: () => Promise<Result<T, string>>,
   subscribe: (changed: () => void) => () => void,
 ) {
-  const [state, setState] = useState<PanelData<T>>(
-    () => cache.get(projectPath) ?? { kind: 'loading' },
-  );
+  const [state, setState] = useState<PanelData<T>>(() => cache.get(projectPath) ?? { kind: 'loading' });
   const request = useRef<() => Promise<void>>(() => Promise.resolve());
   const refresh = useCallback(() => request.current(), []);
   useEffect(() => {
@@ -33,11 +28,7 @@ export function usePanelData<T>(
         if (result.ok) {
           cache.set(projectPath, result.value);
         }
-        setState(
-          result.ok
-            ? { kind: 'ready', value: result.value }
-            : { kind: 'error', message: result.error },
-        );
+        setState(result.ok ? { kind: 'ready', value: result.value } : { kind: 'error', message: result.error });
       }
     });
     request.current = reader.request;

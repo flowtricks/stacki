@@ -46,10 +46,7 @@ export function documentHost(): DocumentHost {
 export function writeProjectText(file: string, text: string, expectedSource?: string): Digest {
   const host = documentHost();
   host.noteWrite(file);
-  const report =
-    expectedSource === undefined
-      ? host.documents.writeCurrent(file, text)
-      : host.documents.writeText(file, text, digestOf(expectedSource));
+  const report = expectedSource === undefined ? host.documents.writeCurrent(file, text) : host.documents.writeText(file, text, digestOf(expectedSource));
   if (report.tag === 'applied') {
     return report.checksum;
   }
@@ -68,10 +65,7 @@ export function createProjectText(file: string, text: string): Digest {
 }
 
 /** A user-facing sentence for a write that did not apply. */
-export function describeWriteReport(
-  file: string,
-  report: Exclude<WriteReport, { readonly tag: 'applied' }>,
-): string {
+export function describeWriteReport(file: string, report: Exclude<WriteReport, { readonly tag: 'applied' }>): string {
   switch (report.tag) {
     case 'rejected':
       return report.message === '' ? `Could not save ${file} (${report.reason}).` : report.message;

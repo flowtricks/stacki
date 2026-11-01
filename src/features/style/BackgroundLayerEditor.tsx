@@ -2,19 +2,8 @@
 // kind, its raw value and tiling (BackgroundSection.tsx).
 
 import SegmentedControl from './components/SegmentedControl';
-import {
-  blankLayer,
-  layerKind,
-  serializeLayers,
-  type BgLayer,
-  type LayerKind,
-} from './model/background';
-import {
-  blankGradientOf,
-  parseGradient,
-  serializeGradient,
-  type GradientType,
-} from './model/gradient';
+import { blankLayer, layerKind, serializeLayers, type BgLayer, type LayerKind } from './model/background';
+import { blankGradientOf, parseGradient, serializeGradient, type GradientType } from './model/gradient';
 import GradientEditor from './GradientEditor';
 import { type WriteOptions, replaceLayer } from './BackgroundKit';
 import {
@@ -59,13 +48,7 @@ export function LayerEditor(props: LayerEditorProps) {
         {typeRow}
         <div className="embed-editor_size-row">
           <span className="embed-editor_size-label embed-editor_bg-caption">Color</span>
-          <LayerColorField
-            layers={layers}
-            index={index}
-            busy={busy}
-            setProp={setProp}
-            liveSetProp={liveSetProp}
-          />
+          <LayerColorField layers={layers} index={index} busy={busy} setProp={setProp} liveSetProp={liveSetProp} />
         </div>
       </div>
     );
@@ -90,11 +73,7 @@ export function LayerEditor(props: LayerEditorProps) {
     <div className="embed-editor_bg-editor">
       {typeRow}
       {gradient ? (
-        <GradientEditor
-          gradient={gradient}
-          busy={busy}
-          onChange={(next, live) => writeImage(serializeGradient(next), { live })}
-        />
+        <GradientEditor gradient={gradient} busy={busy} onChange={(next, live) => writeImage(serializeGradient(next), { live })} />
       ) : (
         <LayerRawFields displayKind={displayKind} props={props} />
       )}
@@ -114,8 +93,7 @@ export function displayKindOf(kind: ReturnType<typeof layerKind>): LayerKind {
   return kind === 'conic' ? 'linear' : 'image';
 }
 
-export const isGradientType = (value: LayerKind): value is GradientType =>
-  value === 'linear' || value === 'radial' || value === 'conic';
+export const isGradientType = (value: LayerKind): value is GradientType => value === 'linear' || value === 'radial' || value === 'conic';
 
 // Switch a layer's kind. Switching between gradient kinds keeps the colours.
 //
@@ -126,15 +104,7 @@ export const isGradientType = (value: LayerKind): value is GradientType =>
 // The geometry does NOT carry, because it does not mean the same thing: an angle is a
 // direction for a linear gradient and nothing at all for a radial one, and a centre
 // point is the reverse. Each kind starts on its own defaults and keeps the colours.
-export function setLayerKind({
-  next,
-  displayKind,
-  props,
-}: {
-  next: LayerKind;
-  displayKind: LayerKind;
-  props: LayerEditorProps;
-}) {
+export function setLayerKind({ next, displayKind, props }: { next: LayerKind; displayKind: LayerKind; props: LayerEditorProps }) {
   const { layers, index, applyLayers } = props;
   const layer = layers[index];
   if (next === displayKind || layer === undefined) {
@@ -157,35 +127,16 @@ export function setLayerKind({
 }
 
 // An image layer's picker, or an unparsed gradient's raw text; then Size and Position.
-export function LayerRawFields({
-  displayKind,
-  props,
-}: {
-  displayKind: LayerKind;
-  props: LayerEditorProps;
-}) {
+export function LayerRawFields({ displayKind, props }: { displayKind: LayerKind; props: LayerEditorProps }) {
   const { applyLayers, ...fieldProps } = props;
   return (
     <>
       <div className="embed-editor_size-row embed-editor_bg-row-top">
-        <span className="embed-editor_size-label embed-editor_bg-caption">
-          {displayKind === 'image' ? 'Image' : 'Gradient'}
-        </span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{displayKind === 'image' ? 'Image' : 'Gradient'}</span>
         {displayKind === 'image' ? (
-          <LayerImageField
-            layers={fieldProps.layers}
-            index={fieldProps.index}
-            busy={fieldProps.busy}
-            applyLayers={applyLayers}
-          />
+          <LayerImageField layers={fieldProps.layers} index={fieldProps.index} busy={fieldProps.busy} applyLayers={applyLayers} />
         ) : (
-          <LayerLonghandField
-            {...fieldProps}
-            field="image"
-            prop="background-image"
-            label="Layer value"
-            placeholder="gradient(…)"
-          />
+          <LayerLonghandField {...fieldProps} field="image" prop="background-image" label="Layer value" placeholder="gradient(…)" />
         )}
       </div>
       <div className="embed-editor_size-row embed-editor_bg-row-top">
@@ -210,14 +161,8 @@ export function LayerTileFields({ layer, props }: { layer: BgLayer; props: Layer
         <span className="embed-editor_size-label embed-editor_bg-caption">Tile</span>
         <SegmentedControl
           options={TILE_OPTIONS}
-          value={
-            ['repeat-x', 'repeat-y', 'no-repeat'].includes(layer.repeat.trim())
-              ? layer.repeat.trim()
-              : 'repeat'
-          }
-          onChange={(next) =>
-            applyLayers(replaceLayer(layers, index, { repeat: next === 'repeat' ? '' : next }))
-          }
+          value={['repeat-x', 'repeat-y', 'no-repeat'].includes(layer.repeat.trim()) ? layer.repeat.trim() : 'repeat'}
+          onChange={(next) => applyLayers(replaceLayer(layers, index, { repeat: next === 'repeat' ? '' : next }))}
           ariaLabel="Layer tile"
           disabled={busy}
         />
@@ -227,9 +172,7 @@ export function LayerTileFields({ layer, props }: { layer: BgLayer; props: Layer
         <SegmentedControl
           options={FIXED_OPTIONS}
           value={layer.attachment.trim() === 'fixed' ? 'fixed' : 'scroll'}
-          onChange={(next) =>
-            applyLayers(replaceLayer(layers, index, { attachment: next === 'scroll' ? '' : next }))
-          }
+          onChange={(next) => applyLayers(replaceLayer(layers, index, { attachment: next === 'scroll' ? '' : next }))}
           ariaLabel="Layer fixed"
           disabled={busy}
         />

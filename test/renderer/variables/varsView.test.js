@@ -138,15 +138,12 @@ const STYLESHEET = `/* =========================================================
       // The same split the main process makes: a group carries names, a row
       // does not.
       for (const move of moves) {
-        last = move.names
-          ? cssVars.moveSection(directory, move)
-          : cssVars.moveVariable(directory, move);
+        last = move.names ? cssVars.moveSection(directory, move) : cssVars.moveVariable(directory, move);
       }
       return last;
     },
     renameCssVariables: async ({ renames }) => cssVars.renameVariables(directory, { renames }),
-    setCssSectionTitle: async ({ projectPath, ...edit }) =>
-      cssVars.setSectionTitle(directory, edit),
+    setCssSectionTitle: async ({ projectPath, ...edit }) => cssVars.setSectionTitle(directory, edit),
     removeCssSection: async ({ projectPath, ...edit }) => cssVars.removeSection(directory, edit),
     addCssSection: async ({ projectPath, ...edit }) => cssVars.addSection(directory, edit),
     moveCssHeading: async ({ projectPath, ...edit }) => cssVars.moveHeading(directory, edit),
@@ -199,27 +196,13 @@ const STYLESHEET = `/* =========================================================
   // --- the :root group: a comment section and a family table ----------------
   await show(0);
   check('the sheet renders', !!find('.vars-table'), container.innerHTML.slice(0, 200));
-  check(
-    'private variables are absent from the sheet',
-    !rowNames().some((name) => name.includes('_panel-private')),
-    rowNames().join('|'),
-  );
-  check(
-    'a comment becomes a heading',
-    texts('.vars-section').includes('Swatches'),
-    texts('.vars-section').join(),
-  );
+  check('private variables are absent from the sheet', !rowNames().some((name) => name.includes('_panel-private')), rowNames().join('|'));
+  check('a comment becomes a heading', texts('.vars-section').includes('Swatches'), texts('.vars-section').join());
   check('swatch names are rows', rowNames().includes('light-100'), rowNames().join('|'));
-  check(
-    'a colour gets a swatch',
-    all('.u-color-swatch').length >= 3,
-    `${all('.u-color-swatch').length}`,
-  );
+  check('a colour gets a swatch', all('.u-color-swatch').length >= 3, `${all('.u-color-swatch').length}`);
   check(
     'the swatch is the colour it resolves to',
-    all('.u-color-swatch-fill').some((swatch) =>
-      /255, 255, 255|#ffffff/.test(swatch.getAttribute('style') || ''),
-    ),
+    all('.u-color-swatch-fill').some((swatch) => /255, 255, 255|#ffffff/.test(swatch.getAttribute('style') || '')),
     all('.u-color-swatch-fill')
       .map((node) => node.getAttribute('style'))
       .join(' | '),
@@ -235,22 +218,14 @@ const STYLESHEET = `/* =========================================================
       if (!table) {
         return undefined;
       }
-      const at = [...table.querySelectorAll('.vars-fixed .vars-name-text')].findIndex(
-        (node) => node.textContent === name,
-      );
-      const valueRows = table.querySelectorAll(
-        '.vars-scroll .vars-row:not(.is-head):not(.vars-section)',
-      );
+      const at = [...table.querySelectorAll('.vars-fixed .vars-name-text')].findIndex((node) => node.textContent === name);
+      const valueRows = table.querySelectorAll('.vars-scroll .vars-row:not(.is-head):not(.vars-section)');
       return valueRows[at]?.querySelector('.u-color-swatch-fill') ?? undefined;
     };
     const fill = swatchFor('tint-100');
     const painted = fill?.getAttribute('style') || '';
     check('a colour written as a mix gets a swatch', !!fill, rowNames().join('|'));
-    check(
-      'and the swatch is the mix, not a chequerboard',
-      /color-mix\(/.test(painted) && !/transparent/.test(painted),
-      painted,
-    );
+    check('and the swatch is the mix, not a chequerboard', /color-mix\(/.test(painted) && !/transparent/.test(painted), painted);
     check(
       // Whichever way the engine spells it back: what matters is that the
       // variable is no longer a name the panel's own document has never heard
@@ -265,11 +240,7 @@ const STYLESHEET = `/* =========================================================
     'the swatch is beside the field, not inside it',
     all('.var-cell').every((cell) => !cell.querySelector('input .u-color-swatch')),
   );
-  check(
-    'a value is a field, not a button',
-    all('input.var-input').length > 0 && all('.var-token').length === 0,
-    `${all('input.var-input').length} fields`,
-  );
+  check('a value is a field, not a button', all('input.var-input').length > 0 && all('.var-token').length === 0, `${all('input.var-input').length} fields`);
   check(
     'a colour row carries the colour glyph',
     all('.vars-name svg title').some((node) => node.textContent === 'Colour'),
@@ -285,20 +256,12 @@ const STYLESHEET = `/* =========================================================
       .join('|'),
   );
 
-  const headingTable = all('.vars-table').find((table) =>
-    table.textContent.includes('Heading styles'),
-  );
+  const headingTable = all('.vars-table').find((table) => table.textContent.includes('Heading styles'));
   check('a family becomes a table', !!headingTable);
-  check(
-    'with a column per heading',
-    headingTable && /h1/.test(headingTable.textContent) && /h2/.test(headingTable.textContent),
-  );
+  check('with a column per heading', headingTable && /h1/.test(headingTable.textContent) && /h2/.test(headingTable.textContent));
   check(
     'and the shared properties as rows',
-    headingTable &&
-      ['value', 'line-height', 'margin-top'].every((property) =>
-        headingTable.textContent.includes(property),
-      ),
+    headingTable && ['value', 'line-height', 'margin-top'].every((property) => headingTable.textContent.includes(property)),
     headingTable?.textContent,
   );
 
@@ -310,12 +273,8 @@ const STYLESHEET = `/* =========================================================
         return undefined;
       }
       const table = all('.vars-fixed .vars-name-text')[row].closest('.vars-table');
-      const at = [...table.querySelectorAll('.vars-fixed .vars-name-text')].findIndex(
-        (node) => node.textContent === name,
-      );
-      const valueRows = table.querySelectorAll(
-        '.vars-scroll .vars-row:not(.is-head):not(.vars-section)',
-      );
+      const at = [...table.querySelectorAll('.vars-fixed .vars-name-text')].findIndex((node) => node.textContent === name);
+      const valueRows = table.querySelectorAll('.vars-scroll .vars-row:not(.is-head):not(.vars-section)');
       return valueRows[at]?.querySelector('.fluid-badge') ?? undefined;
     };
 
@@ -324,9 +283,7 @@ const STYLESHEET = `/* =========================================================
     check('as an error', steep?.classList.contains('is-error'), steep?.className);
     check(
       'saying what is wrong, in the words the rule uses',
-      /does not reach 2x of its original size at a 500% zoom/i.test(
-        steep?.getAttribute('aria-label') || '',
-      ),
+      /does not reach 2x of its original size at a 500% zoom/i.test(steep?.getAttribute('aria-label') || ''),
       steep?.getAttribute('aria-label'),
     );
     // The message is drawn on the document, not inside the scrolling column
@@ -339,11 +296,7 @@ const STYLESHEET = `/* =========================================================
     });
     const tip = { textContent: toastMessages() };
     check('and showing it outside the scroller', !!tip, 'the message is inside the column');
-    check(
-      'with the whole message in it',
-      /reduce difference between max and min variable size/i.test(tip?.textContent || ''),
-      tip?.textContent,
-    );
+    check('with the whole message in it', /reduce difference between max and min variable size/i.test(tip?.textContent || ''), tip?.textContent);
     check('and a way to read why', toastNotices()[0]?.recovery?.[0]?.label === 'Read why');
     await act(async () => {
       steep.dispatchEvent(
@@ -355,20 +308,12 @@ const STYLESHEET = `/* =========================================================
       await settle(20);
     });
     check('it goes away again', !dom.window.document.querySelector('body > .fluid-tip'));
-    check(
-      'and linking to why',
-      steep?.getAttribute('href')?.includes('smashingmagazine.com'),
-      steep?.getAttribute('href'),
-    );
+    check('and linking to why', steep?.getAttribute('href')?.includes('smashingmagazine.com'), steep?.getAttribute('href'));
 
     const flat = badgeFor('no-rem');
     check('a value with no rem part is flagged', !!flat);
     check('as a warning', flat?.classList.contains('is-warning'), flat?.className);
-    check(
-      'with its own words',
-      /shrinks when increasing zoom/i.test(flat?.getAttribute('aria-label') || ''),
-      flat?.getAttribute('aria-label'),
-    );
+    check('with its own words', /shrinks when increasing zoom/i.test(flat?.getAttribute('aria-label') || ''), flat?.getAttribute('aria-label'));
     check('shown on focus too, not only hover', typeof flat?.onfocus !== 'undefined');
     check('and reachable from the keyboard', flat?.getAttribute('tabindex') === '0');
 
@@ -380,14 +325,8 @@ const STYLESHEET = `/* =========================================================
     const table = all('.vars-fixed .vars-name-text')
       .find((node) => node.textContent === 'too-steep')
       .closest('.vars-table');
-    const minInput = [...table.querySelectorAll('input.var-input')].find(
-      (node) => node.value === '16',
-    );
-    check(
-      'the value it depends on is in the same table',
-      !!minInput,
-      'no field holding the minimum',
-    );
+    const minInput = [...table.querySelectorAll('input.var-input')].find((node) => node.value === '16');
+    check('the value it depends on is in the same table', !!minInput, 'no field holding the minimum');
 
     // Typed where it is actually typed: the rich field over the input. It
     // commits on blur, so a badge watching the value only moves with the
@@ -404,11 +343,7 @@ const STYLESHEET = `/* =========================================================
       });
 
     await type('40');
-    check(
-      'raising it clears the error as it is typed',
-      !badgeFor('too-steep'),
-      'the badge is still there',
-    );
+    check('raising it clears the error as it is typed', !badgeFor('too-steep'), 'the badge is still there');
     check('and nothing has been written yet', fs.readFileSync(file, 'utf8') === before);
 
     await type('16');
@@ -432,11 +367,7 @@ const STYLESHEET = `/* =========================================================
         .join(' | '),
     );
     const cell = long.closest('.var-cell');
-    check(
-      'and it is drawn as a chip, with the field behind it',
-      !!cell.querySelector('[data-chip]'),
-      cell.innerHTML.slice(0, 200),
-    );
+    check('and it is drawn as a chip, with the field behind it', !!cell.querySelector('[data-chip]'), cell.innerHTML.slice(0, 200));
     check('nothing is open yet', !dom.window.document.querySelector('.var-custom'));
 
     // Pressing the CHIP of a value too long to read opens the value, not the
@@ -444,20 +375,13 @@ const STYLESHEET = `/* =========================================================
     // is not enough to stop the chip's own handler; the press has to be
     // stopped where it is caught, or both open at once and fight for the space.
     await act(async () => {
-      cell
-        .querySelector('[data-chip]')
-        .dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      cell.querySelector('[data-chip]').dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
       await settle(40);
     });
     check('pressing its chip opens the value', !!dom.window.document.querySelector('.var-custom'));
-    check(
-      'and not the variable picker as well',
-      !dom.window.document.querySelector('.embed-editor_varpicker'),
-    );
+    check('and not the variable picker as well', !dom.window.document.querySelector('.embed-editor_varpicker'));
     await act(async () => {
-      dom.window.document.dispatchEvent(
-        new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-      );
+      dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await settle(40);
     });
     check('closed again', !dom.window.document.querySelector('.var-custom'));
@@ -485,27 +409,19 @@ const STYLESHEET = `/* =========================================================
     );
     check(
       'and each remembers its own',
-      chips.map((chip) => chip.dataset.binding).join(',') ===
-        'var(--h1-min),var(--h1-min),var(--h1-max)',
+      chips.map((chip) => chip.dataset.binding).join(',') === 'var(--h1-min),var(--h1-min),var(--h1-max)',
       chips.map((chip) => chip.dataset.binding).join(','),
     );
 
     // Editing there writes the file, the same as editing in place.
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        dom.window.HTMLTextAreaElement.prototype,
-        'value',
-      ).set;
+      const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set;
       setter.call(area, 'clamp(2rem, 5vw, 5rem)');
       area.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
       area.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       await settle(80);
     });
-    check(
-      'Enter saves it',
-      fs.readFileSync(file, 'utf8').includes('--h1: clamp(2rem, 5vw, 5rem);'),
-      fs.readFileSync(file, 'utf8').slice(200, 420),
-    );
+    check('Enter saves it', fs.readFileSync(file, 'utf8').includes('--h1: clamp(2rem, 5vw, 5rem);'), fs.readFileSync(file, 'utf8').slice(200, 420));
     check('and closes the editor', !dom.window.document.querySelector('.var-custom'));
 
     // "=" opens it on any field, however short the value.
@@ -514,21 +430,14 @@ const STYLESHEET = `/* =========================================================
       short.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: '=', bubbles: true }));
       await settle(40);
     });
-    check(
-      'pressing = opens it on a short value too',
-      !!dom.window.document.querySelector('.var-custom'),
-    );
+    check('pressing = opens it on a short value too', !!dom.window.document.querySelector('.var-custom'));
     // Opened to be edited, so the caret is already in it — and in the field
     // that is actually visible, not the input behind it.
     const opened = dom.window.document.querySelector('.var-custom');
     // The focus is set a tick after the box mounts (see CustomValue), so let
     // that tick happen before asking where it went.
     await act(async () => settle(40));
-    check(
-      'and it arrives focused',
-      opened?.contains(dom.window.document.activeElement),
-      dom.window.document.activeElement?.className,
-    );
+    check('and it arrives focused', opened?.contains(dom.window.document.activeElement), dom.window.document.activeElement?.className);
     check(
       'in the field, not the value carrier behind it',
       dom.window.document.activeElement?.classList.contains('embed-editor_varconnect-editor'),
@@ -550,9 +459,7 @@ const STYLESHEET = `/* =========================================================
         cancelable: true,
         deltaY: 120,
       });
-      dom.window.document
-        .querySelector('.var-custom .embed-editor_varconnect-editor')
-        .dispatchEvent(inside);
+      dom.window.document.querySelector('.var-custom .embed-editor_varconnect-editor').dispatchEvent(inside);
       check('and a scroll inside it is not', !inside.defaultPrevented);
     }
 
@@ -563,9 +470,7 @@ const STYLESHEET = `/* =========================================================
         .filter((cell) => cell.querySelector('.embed-editor_varconnect-editor'))
         .pop();
       await act(async () => {
-        other
-          .querySelector('.embed-editor_varconnect-editor')
-          .dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: '=', bubbles: true }));
+        other.querySelector('.embed-editor_varconnect-editor').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: '=', bubbles: true }));
         await settle(60);
       });
       check(
@@ -574,34 +479,22 @@ const STYLESHEET = `/* =========================================================
         `${dom.window.document.querySelectorAll('.var-custom').length} boxes`,
       );
       await act(async () => {
-        dom.window.document.dispatchEvent(
-          new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-        );
+        dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         await settle(40);
       });
     }
     await act(async () => {
-      dom.window.document.dispatchEvent(
-        new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-      );
+      dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await settle(40);
     });
-    check(
-      'and Escape closes it without writing',
-      !dom.window.document.querySelector('.var-custom'),
-    );
-    check(
-      'leaving the value alone',
-      fs.readFileSync(file, 'utf8').includes('--h1-line-height: 1;'),
-    );
+    check('and Escape closes it without writing', !dom.window.document.querySelector('.var-custom'));
+    check('leaving the value alone', fs.readFileSync(file, 'utf8').includes('--h1-line-height: 1;'));
 
     // What decides is whether the value FITS, not how many characters it has.
     // A value drawn with a chip in it runs wider than its own text, so counting
     // characters called cells readable when they were showing half an
     // expression. Layout is the authority wherever there is layout to read.
-    const editing = all('.var-cell').find((cell) =>
-      cell.querySelector('.embed-editor_varconnect-editor'),
-    );
+    const editing = all('.var-cell').find((cell) => cell.querySelector('.embed-editor_varconnect-editor'));
     const field = editing?.querySelector('.embed-editor_varconnect-editor');
     check('the cells are fields that can be measured', !!field);
     if (field) {
@@ -613,14 +506,9 @@ const STYLESHEET = `/* =========================================================
         field.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
         await settle(40);
       });
-      check(
-        'a value wider than its field opens, however short its text',
-        !!dom.window.document.querySelector('.var-custom'),
-      );
+      check('a value wider than its field opens, however short its text', !!dom.window.document.querySelector('.var-custom'));
       await act(async () => {
-        dom.window.document.dispatchEvent(
-          new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-        );
+        dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         await settle(40);
       });
       // And the reverse: one that fits is edited where it is.
@@ -629,10 +517,7 @@ const STYLESHEET = `/* =========================================================
         field.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
         await settle(40);
       });
-      check(
-        'a value that fits is edited in place',
-        !dom.window.document.querySelector('.var-custom'),
-      );
+      check('a value that fits is edited in place', !dom.window.document.querySelector('.var-custom'));
     }
   }
 
@@ -642,20 +527,14 @@ const STYLESHEET = `/* =========================================================
     // one of those selects the input's text — which focuses the input. That put
     // the caret in the hidden element behind every cell: the value looked
     // clickable and nothing typed into it.
-    const cell = all('.var-cell').find((cell) =>
-      cell.querySelector('.embed-editor_varconnect-editor'),
-    );
+    const cell = all('.var-cell').find((cell) => cell.querySelector('.embed-editor_varconnect-editor'));
     const editor = cell?.querySelector('.embed-editor_varconnect-editor');
     check('a cell is a rich field', !!editor);
     await act(async () => {
       editor.focus();
       await settle(40);
     });
-    check(
-      'focusing it leaves the focus there',
-      dom.window.document.activeElement === editor,
-      dom.window.document.activeElement?.className,
-    );
+    check('focusing it leaves the focus there', dom.window.document.activeElement === editor, dom.window.document.activeElement?.className);
   }
 
   // --- an easing value opens the curve editor --------------------------------
@@ -666,25 +545,16 @@ const STYLESHEET = `/* =========================================================
     // timing function the bezier editor cannot represent.
     // By the value itself: the names are in one stack and the values in the
     // other, and it is the value's own cell that carries the button.
-    const cellShowing = (text) =>
-      all('.var-cell').find((cell) => cell.textContent.trim() === text) ?? undefined;
+    const cellShowing = (text) => all('.var-cell').find((cell) => cell.textContent.trim() === text) ?? undefined;
     const easeCell = cellShowing('cubic-bezier(0.16, 1, 0.3, 1)');
-    check(
-      'a curve value offers the editor',
-      !!easeCell?.querySelector('.var-ease'),
-      easeCell?.innerHTML.slice(0, 120),
-    );
+    check('a curve value offers the editor', !!easeCell?.querySelector('.var-ease'), easeCell?.innerHTML.slice(0, 120));
     check('a keyword curve does too', !!cellShowing('linear')?.querySelector('.var-ease'));
     check('a duration beside it does not', !cellShowing('260ms')?.querySelector('.var-ease'));
     // The glyph is the curve it opens, so two different easings do not draw the
     // same button.
     const glyph = (cell) => cell?.querySelector('.var-ease svg path')?.getAttribute('d');
     check("the button draws the value's curve", !!glyph(easeCell), glyph(easeCell));
-    check(
-      'and a different curve draws differently',
-      glyph(easeCell) !== glyph(cellShowing('linear')),
-      `${glyph(easeCell)} vs ${glyph(cellShowing('linear'))}`,
-    );
+    check('and a different curve draws differently', glyph(easeCell) !== glyph(cellShowing('linear')), `${glyph(easeCell)} vs ${glyph(cellShowing('linear'))}`);
 
     // `jsdom` measures everything as zero; give the sheet a box so the editor has
     // one to be placed over.
@@ -700,9 +570,7 @@ const STYLESHEET = `/* =========================================================
       y: 0,
     });
     await act(async () => {
-      easeCell
-        .querySelector('.var-ease')
-        .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      easeCell.querySelector('.var-ease').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
       await settle(60);
     });
     const modal = dom.window.document.querySelector('.embed-editor_ease-modal');
@@ -711,92 +579,51 @@ const STYLESHEET = `/* =========================================================
     check('placed over the sheet', modal?.classList.contains('is-framed'), modal?.className);
     // A dialog centred in the sheet's box (left 100, width 800), not the whole
     // width of it: 480 wide, so (800 - 480) / 2 = 160 in from the sheet's edge.
-    check(
-      'sized as a dialog',
-      modal?.style.width === '480px',
-      `${modal?.style.left} / ${modal?.style.width}`,
-    );
-    check(
-      'centred over the sheet it came from',
-      modal?.style.left === '260px',
-      `${modal?.style.left} / ${modal?.style.width}`,
-    );
+    check('sized as a dialog', modal?.style.width === '480px', `${modal?.style.left} / ${modal?.style.width}`);
+    check('centred over the sheet it came from', modal?.style.left === '260px', `${modal?.style.left} / ${modal?.style.width}`);
     // …but never past the window. A box measured wider than the viewport (or
     // measured mid-layout) must not put the editor off-screen, or take the
     // app's own panels with it.
     check(
       'and never wider than the window',
-      Number.parseFloat(modal.style.width) + Number.parseFloat(modal.style.left) <=
-        dom.window.innerWidth,
+      Number.parseFloat(modal.style.width) + Number.parseFloat(modal.style.left) <= dom.window.innerWidth,
       `${modal.style.left} + ${modal.style.width} in ${dom.window.innerWidth}px`,
     );
-    check(
-      'on this value',
-      modal?.textContent.includes('cubic-bezier(0.16, 1, 0.3, 1)'),
-      modal?.textContent.slice(0, 200),
-    );
-    check(
-      'naming the curve it recognises',
-      modal?.textContent.includes('Ease Out Expo'),
-      modal?.textContent.slice(0, 120),
-    );
+    check('on this value', modal?.textContent.includes('cubic-bezier(0.16, 1, 0.3, 1)'), modal?.textContent.slice(0, 200));
+    check('naming the curve it recognises', modal?.textContent.includes('Ease Out Expo'), modal?.textContent.slice(0, 120));
 
     // The value under the curve is the sheet's own code field: editable, and
     // coloured. Typing a curve into it moves the editor and the cell together.
     const valueField = modal?.querySelector('.embed-editor_varconnect-editor');
-    check(
-      'the value is an editable field',
-      !!valueField,
-      modal?.querySelector('.embed-editor_ease-value')?.innerHTML.slice(0, 160),
-    );
-    check(
-      'with the value coloured in it',
-      (valueField?.querySelectorAll('span').length || 0) > 1,
-      valueField?.innerHTML.slice(0, 160),
-    );
+    check('the value is an editable field', !!valueField, modal?.querySelector('.embed-editor_ease-value')?.innerHTML.slice(0, 160));
+    check('with the value coloured in it', (valueField?.querySelectorAll('span').length || 0) > 1, valueField?.innerHTML.slice(0, 160));
     await act(async () => {
       // What committing a typed value does — the field hands its text over on
       // Enter, the same as it does on blur.
       valueField.textContent = 'ease-in-out';
       valueField.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-      valueField.dispatchEvent(
-        new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-      );
+      valueField.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       await settle(80);
     });
-    check(
-      'typing a curve moves the editor to it',
-      modal?.textContent.includes('Ease In Out'),
-      modal?.textContent.slice(0, 120),
-    );
+    check('typing a curve moves the editor to it', modal?.textContent.includes('Ease In Out'), modal?.textContent.slice(0, 120));
 
     // A preset moves the value in the field, and the file is written once —
     // when the editor closes, not per frame of a drag.
     const before = fs.readFileSync(file, 'utf8');
-    const preset = [...modal.querySelectorAll('button')].find(
-      (button) => (button.getAttribute('title') || '') === 'Ease In Back',
-    );
-    check(
-      'the presets are there',
-      !!preset,
-      [...modal.querySelectorAll('button')].map((button) => button.getAttribute('title')).join('|'),
-    );
+    const preset = [...modal.querySelectorAll('button')].find((button) => (button.getAttribute('title') || '') === 'Ease In Back');
+    check('the presets are there', !!preset, [...modal.querySelectorAll('button')].map((button) => button.getAttribute('title')).join('|'));
     await act(async () => {
       preset.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
       await settle(60);
     });
     check('picking one leaves the file alone for now', fs.readFileSync(file, 'utf8') === before);
     await act(async () => {
-      dom.window.document.dispatchEvent(
-        new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-      );
+      dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await settle(80);
     });
     check(
       'closing it writes the new curve',
-      /--ease-out-expo: cubic-bezier\(0\.36, 0, 0\.66, -0\.56\)/.test(
-        fs.readFileSync(file, 'utf8'),
-      ),
+      /--ease-out-expo: cubic-bezier\(0\.36, 0, 0\.66, -0\.56\)/.test(fs.readFileSync(file, 'utf8')),
       fs.readFileSync(file, 'utf8').slice(0, 300),
     );
     check('and the editor is gone', !dom.window.document.querySelector('.embed-editor_ease-modal'));
@@ -830,9 +657,7 @@ const STYLESHEET = `/* =========================================================
       );
     }
     await act(async () => {
-      dom.window.document.dispatchEvent(
-        new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-      );
+      dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await settle(60);
     });
 
@@ -860,9 +685,7 @@ const STYLESHEET = `/* =========================================================
       dom.window.document.querySelector('.embed-editor_ease-modal')?.textContent.slice(0, 120),
     );
     await act(async () => {
-      dom.window.document.dispatchEvent(
-        new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-      );
+      dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await settle(60);
     });
   }
@@ -873,10 +696,7 @@ const STYLESHEET = `/* =========================================================
     const input = all('input.var-input').find((node) => node.value === '#c6fb50');
     check('the value is in a field, ready to type in', !!input);
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        dom.window.HTMLInputElement.prototype,
-        'value',
-      ).set;
+      const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
       setter.call(input, '#00ff00');
       input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
       input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -884,15 +704,8 @@ const STYLESHEET = `/* =========================================================
       await settle(80);
     });
     const after = fs.readFileSync(file, 'utf8');
-    check(
-      'the file has the new value',
-      after.includes('--brand-500: #00ff00;'),
-      after.slice(0, 300),
-    );
-    check(
-      'and one line changed',
-      before.split('\n').filter((line, i) => line !== after.split('\n')[i]).length === 1,
-    );
+    check('the file has the new value', after.includes('--brand-500: #00ff00;'), after.slice(0, 300));
+    check('and one line changed', before.split('\n').filter((line, i) => line !== after.split('\n')[i]).length === 1);
     check('nothing was reported to the user', toasts.length === 0, toasts.join());
   }
 
@@ -929,25 +742,17 @@ const STYLESHEET = `/* =========================================================
     // Pressing and dragging are separate turns: the hook only starts listening
     // for the move once the press has re-rendered.
     await act(async () => {
-      grip.dispatchEvent(
-        new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientY: 148 }),
-      );
+      grip.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientY: 148 }));
       await settle(10);
     });
     await act(async () => {
       // Past the slop threshold first, so it counts as a drag and not a click.
-      dom.window.dispatchEvent(
-        new dom.window.MouseEvent('pointermove', { bubbles: true, clientY: 130 }),
-      );
-      dom.window.dispatchEvent(
-        new dom.window.MouseEvent('pointermove', { bubbles: true, clientY: 104 }),
-      );
+      dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { bubbles: true, clientY: 130 }));
+      dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { bubbles: true, clientY: 104 }));
       await settle(10);
     });
     await act(async () => {
-      dom.window.dispatchEvent(
-        new dom.window.MouseEvent('pointerup', { bubbles: true, clientY: 104 }),
-      );
+      dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, clientY: 104 }));
       await settle(90);
     });
     const order = fs
@@ -955,11 +760,7 @@ const STYLESHEET = `/* =========================================================
       .split('\n')
       .filter((line) => /^\s*--(light|dark|brand)/.test(line))
       .map((line) => line.trim().split(':')[0]);
-    check(
-      'dragging a row to the top moves its line in the file',
-      order[0] === '--brand-500',
-      order.join(' '),
-    );
+    check('dragging a row to the top moves its line in the file', order[0] === '--brand-500', order.join(' '));
     check('and takes nothing else with it', order.length === 3, order.join(' '));
   }
 
@@ -977,9 +778,7 @@ const STYLESHEET = `/* =========================================================
     // full width of the columns.
     // Each table has its own column count — a matrix brings its own — so the
     // comparison is within a table, not across the sheet.
-    const tables = all('.vars-table').filter((table) =>
-      table.querySelector('.vars-scroll .vars-section'),
-    );
+    const tables = all('.vars-table').filter((table) => table.querySelector('.vars-scroll .vars-section'));
     check(
       'the heading rule runs as wide as the columns do',
       tables.length > 0 &&
@@ -990,10 +789,8 @@ const STYLESHEET = `/* =========================================================
         }),
       tables
         .map((table) => {
-          const sectionColumns = table.querySelector('.vars-scroll .vars-section')?.style
-            .gridTemplateColumns;
-          const headColumns = table.querySelector('.vars-scroll .vars-row.is-head')?.style
-            .gridTemplateColumns;
+          const sectionColumns = table.querySelector('.vars-scroll .vars-section')?.style.gridTemplateColumns;
+          const headColumns = table.querySelector('.vars-scroll .vars-row.is-head')?.style.gridTemplateColumns;
           return `${sectionColumns} vs ${headColumns}`;
         })
         .join(' | '),
@@ -1011,11 +808,7 @@ const STYLESHEET = `/* =========================================================
     const addRow = swatchTable.querySelector('.vars-fixed .vars-add');
     check('every group ends with a way to add one', !!addRow, swatchTable.innerHTML.slice(-200));
     check('and it reads as a row', addRow.classList.contains('vars-row'));
-    check(
-      'the value side needs no add-variable row',
-      !swatchTable.querySelector('.vars-scroll .vars-add'),
-      'adding a variable is a label-side action',
-    );
+    check('the value side needs no add-variable row', !swatchTable.querySelector('.vars-scroll .vars-add'), 'adding a variable is a label-side action');
     check(
       'it starts where the names do, not in the middle of the column',
       addRow.querySelector('.vars-add-btn')?.previousElementSibling?.tagName === 'SPAN',
@@ -1030,10 +823,7 @@ const STYLESHEET = `/* =========================================================
     check('clicking it asks for a name', !!input);
 
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        dom.window.HTMLInputElement.prototype,
-        'value',
-      ).set;
+      const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
       setter.call(input, 'mid-500');
       input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
       input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -1046,17 +836,9 @@ const STYLESHEET = `/* =========================================================
     // variable, wherever the group itself has ended up.
     const lines = written.split('\n').map((line) => line.trim());
     const at = lines.findIndex((line) => line.startsWith('--mid-500'));
-    check(
-      'under the group it was added to, not at the end of the rule',
-      /^--(light|dark|brand)/.test(lines[at - 1] || ''),
-      `after: ${lines[at - 1]}`,
-    );
+    check('under the group it was added to, not at the end of the rule', /^--(light|dark|brand)/.test(lines[at - 1] || ''), `after: ${lines[at - 1]}`);
     check('and it shows up in the sheet', rowNames().includes('mid-500'), rowNames().join('|'));
-    check(
-      'with unset as its initial value',
-      written.includes('--mid-500: unset;'),
-      written.slice(0, 300),
-    );
+    check('with unset as its initial value', written.includes('--mid-500: unset;'), written.slice(0, 300));
     check(
       'the new value field shows unset without the semicolon',
       all('input.var-input').filter((node) => node.value === 'unset').length === 1,
@@ -1068,16 +850,8 @@ const STYLESHEET = `/* =========================================================
 
   // --- the theme group: modes as columns ------------------------------------
   await show(1);
-  check(
-    'the modes are columns',
-    texts('.vars-head').slice(0, 3).join('|') === 'Name|Theme light|Theme dark',
-    texts('.vars-head').join('|'),
-  );
-  check(
-    'and the heading is written once, not per section',
-    texts('.vars-head').filter((text) => text === 'Name').length === 1,
-    texts('.vars-head').join('|'),
-  );
+  check('the modes are columns', texts('.vars-head').slice(0, 3).join('|') === 'Name|Theme light|Theme dark', texts('.vars-head').join('|'));
+  check('and the heading is written once, not per section', texts('.vars-head').filter((text) => text === 'Name').length === 1, texts('.vars-head').join('|'));
   check('a name is one row across them', rowNames().includes('background'), rowNames().join('|'));
   check(
     'each mode has its own value',
@@ -1086,11 +860,7 @@ const STYLESHEET = `/* =========================================================
       .map((node) => node.value)
       .join(' | '),
   );
-  check(
-    'a shared prefix becomes a section',
-    texts('.vars-section').includes('selection'),
-    texts('.vars-section').join(),
-  );
+  check('a shared prefix becomes a section', texts('.vars-section').includes('selection'), texts('.vars-section').join());
   // The chip is the style panel's control, rendered inside the field.
   await settle(400);
   check(
@@ -1109,19 +879,12 @@ const STYLESHEET = `/* =========================================================
   // --- search ---------------------------------------------------------------
   await act(async () => {
     const search = find('.vars-search');
-    const setter = Object.getOwnPropertyDescriptor(
-      dom.window.HTMLInputElement.prototype,
-      'value',
-    ).set;
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
     setter.call(search, 'selection');
     search.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     await settle(30);
   });
-  check(
-    'search narrows to matching rows',
-    rowNames().join('|') === 'background|text',
-    rowNames().join('|'),
-  );
+  check('search narrows to matching rows', rowNames().join('|') === 'background|text', rowNames().join('|'));
 
   // --- renaming -------------------------------------------------------------
   //
@@ -1132,10 +895,7 @@ const STYLESHEET = `/* =========================================================
   // The search above is still narrowing the sheet; renaming needs all of it.
   await act(async () => {
     const search = find('.vars-search');
-    const setter = Object.getOwnPropertyDescriptor(
-      dom.window.HTMLInputElement.prototype,
-      'value',
-    ).set;
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
     setter.call(search, '');
     search.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     await settle(30);
@@ -1160,40 +920,23 @@ const STYLESHEET = `/* =========================================================
       return;
     }
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        dom.window.HTMLInputElement.prototype,
-        'value',
-      ).set;
+      const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
       setter.call(input, text);
       input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-      input.dispatchEvent(
-        new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
-      );
+      input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
       await settle(60);
     });
   };
 
   {
     const field = await clickName('line-height');
-    check(
-      'clicking a name opens a field',
-      !!field,
-      container.innerHTML.includes('vars-rename-input') ? 'somewhere else' : 'no field',
-    );
+    check('clicking a name opens a field', !!field, container.innerHTML.includes('vars-rename-input') ? 'somewhere else' : 'no field');
     check('with the name in it', field?.value === 'line-height', field?.value);
 
     await typeInto(field, 'leading');
     const css = fs.readFileSync(file, 'utf8');
-    check(
-      'the file takes the new name',
-      css.includes('--h1-leading: 1;'),
-      css.match(/--h1-[a-z-]+: 1;/)?.[0],
-    );
-    check(
-      'every column of the row is renamed',
-      css.includes('--h2-leading: 1.1;'),
-      css.match(/--h2-[a-z-]+: 1.1;/)?.[0],
-    );
+    check('the file takes the new name', css.includes('--h1-leading: 1;'), css.match(/--h1-[a-z-]+: 1;/)?.[0]);
+    check('every column of the row is renamed', css.includes('--h2-leading: 1.1;'), css.match(/--h2-[a-z-]+: 1.1;/)?.[0]);
     check('and the sheet shows it', rowNames().includes('leading'), rowNames().join('|'));
     check('the old name is gone', !css.includes('--h1-line-height'), css);
   }
@@ -1209,11 +952,7 @@ const STYLESHEET = `/* =========================================================
       toasts.join('|'),
     );
     check('and the file is untouched', fs.readFileSync(file, 'utf8') === before);
-    check(
-      'and the sheet still shows the old name',
-      rowNames().includes('margin-top'),
-      rowNames().join('|'),
-    );
+    check('and the sheet still shows the old name', rowNames().includes('margin-top'), rowNames().join('|'));
   }
 
   {
@@ -1255,11 +994,7 @@ const STYLESHEET = `/* =========================================================
       return true;
     };
     const items = await openMenu('Heading styles');
-    check(
-      'a heading has a menu',
-      !!items,
-      container.innerHTML.includes('vars-section-menu') ? 'no menu opened' : 'no button',
-    );
+    check('a heading has a menu', !!items, container.innerHTML.includes('vars-section-menu') ? 'no menu opened' : 'no button');
     check(
       'offering rename, duplicate and delete',
       items?.map((i) => i.textContent.trim()).join('|') === 'Rename|Duplicate|Delete',
@@ -1289,70 +1024,29 @@ const STYLESHEET = `/* =========================================================
     const dupItems = await openMenu('Swatches');
     await clickItem(dupItems, 1, 'duplicate');
     const css = fs.readFileSync(file, 'utf8');
-    check(
-      'duplicate writes another heading',
-      css.includes('/* Swatches copy */'),
-      css.slice(0, 300),
-    );
-    check(
-      'and the sheet grows a group',
-      headings().length === before + 1,
-      `${before} → ${headings().length}: ${headings().join('|')}`,
-    );
-    check(
-      'named after the one it came from',
-      headings().includes('Swatches copy'),
-      headings().join('|'),
-    );
+    check('duplicate writes another heading', css.includes('/* Swatches copy */'), css.slice(0, 300));
+    check('and the sheet grows a group', headings().length === before + 1, `${before} → ${headings().length}: ${headings().join('|')}`);
+    check('named after the one it came from', headings().includes('Swatches copy'), headings().join('|'));
     // Above the group it came from, and empty: its variables are the ones you
     // put in it, not a copy of somebody else's.
-    check(
-      'sitting above that group',
-      headings().indexOf('Swatches copy') === headings().indexOf('Swatches') - 1,
-      headings().join('|'),
-    );
-    const newTable = all('.vars-table').find((table) =>
-      table.textContent.includes('Swatches copy'),
-    );
-    check(
-      'with no variables in it',
-      newTable?.querySelectorAll('.vars-name').length === 0,
-      `${newTable?.querySelectorAll('.vars-name').length} rows`,
-    );
-    check(
-      'but a way to add one',
-      !!newTable?.querySelector('.vars-add-btn'),
-      newTable?.textContent?.slice(0, 60),
-    );
-    const originalTable = all('.vars-table').find(
-      (table) => table !== newTable && table.textContent.includes('Swatches'),
-    );
+    check('sitting above that group', headings().indexOf('Swatches copy') === headings().indexOf('Swatches') - 1, headings().join('|'));
+    const newTable = all('.vars-table').find((table) => table.textContent.includes('Swatches copy'));
+    check('with no variables in it', newTable?.querySelectorAll('.vars-name').length === 0, `${newTable?.querySelectorAll('.vars-name').length} rows`);
+    check('but a way to add one', !!newTable?.querySelector('.vars-add-btn'), newTable?.textContent?.slice(0, 60));
+    const originalTable = all('.vars-table').find((table) => table !== newTable && table.textContent.includes('Swatches'));
     check(
       'and the group it came from keeps its own',
       (originalTable?.querySelectorAll('.vars-name').length ?? 0) > 0,
-      `${originalTable?.querySelectorAll('.vars-name').length} ` +
-        `rows in ${originalTable?.textContent?.slice(0, 40)}`,
+      `${originalTable?.querySelectorAll('.vars-name').length} ` + `rows in ${originalTable?.textContent?.slice(0, 40)}`,
     );
 
     // Delete: the comment goes, its variables stay.
     const delItems = await openMenu('Swatches copy');
     await clickItem(delItems, 2, 'delete');
     const after = fs.readFileSync(file, 'utf8');
-    check(
-      'delete takes the comment away',
-      !after.includes('/* Swatches copy */'),
-      after.slice(0, 300),
-    );
-    check(
-      'and leaves the variables alone',
-      after.includes('--light-100: #ffffff'),
-      after.slice(0, 600),
-    );
-    check(
-      'the sheet is back to what it was',
-      headings().length === before,
-      `${headings().join('|')} vs ${before}`,
-    );
+    check('delete takes the comment away', !after.includes('/* Swatches copy */'), after.slice(0, 300));
+    check('and leaves the variables alone', after.includes('--light-100: #ffffff'), after.slice(0, 600));
+    check('the sheet is back to what it was', headings().length === before, `${headings().join('|')} vs ${before}`);
   }
 
   {
@@ -1385,46 +1079,22 @@ const STYLESHEET = `/* =========================================================
         await settle(80);
       });
     }
-    check(
-      'deleting a group is recorded',
-      commands.length === before + 1,
-      `${commands.length - before} commands`,
-    );
-    check(
-      'and it says what it was',
-      /group/i.test(commands[commands.length - 1]?.label || ''),
-      commands[commands.length - 1]?.label,
-    );
-    check(
-      'the heading is gone',
-      !fs.readFileSync(file, 'utf8').includes('/* Curves */'),
-      fs.readFileSync(file, 'utf8').slice(0, 200),
-    );
+    check('deleting a group is recorded', commands.length === before + 1, `${commands.length - before} commands`);
+    check('and it says what it was', /group/i.test(commands[commands.length - 1]?.label || ''), commands[commands.length - 1]?.label);
+    check('the heading is gone', !fs.readFileSync(file, 'utf8').includes('/* Curves */'), fs.readFileSync(file, 'utf8').slice(0, 200));
 
     await act(async () => {
       await commands[commands.length - 1].undo();
       await settle(60);
     });
-    check(
-      'undo brings the group back',
-      fs.readFileSync(file, 'utf8') === was,
-      fs.readFileSync(file, 'utf8').slice(0, 300),
-    );
-    check(
-      'and the sheet shows it again',
-      texts('.vars-section').includes('Curves'),
-      texts('.vars-section').join('|'),
-    );
+    check('undo brings the group back', fs.readFileSync(file, 'utf8') === was, fs.readFileSync(file, 'utf8').slice(0, 300));
+    check('and the sheet shows it again', texts('.vars-section').includes('Curves'), texts('.vars-section').join('|'));
 
     await act(async () => {
       await commands[commands.length - 1].redo();
       await settle(60);
     });
-    check(
-      'redo takes it away again',
-      !fs.readFileSync(file, 'utf8').includes('/* Curves */'),
-      fs.readFileSync(file, 'utf8').slice(0, 200),
-    );
+    check('redo takes it away again', !fs.readFileSync(file, 'utf8').includes('/* Curves */'), fs.readFileSync(file, 'utf8').slice(0, 200));
     await act(async () => {
       await commands[commands.length - 1].undo();
       await settle(60);
@@ -1439,9 +1109,7 @@ const STYLESHEET = `/* =========================================================
     {
       const valueBefore = commands.length;
       const wasFile = fs.readFileSync(file, 'utf8');
-      const cell = all('.var-cell').find(
-        (cell) => cell.querySelector('input.var-input')?.value === 'linear',
-      );
+      const cell = all('.var-cell').find((cell) => cell.querySelector('input.var-input')?.value === 'linear');
       const rich = cell?.querySelector('.embed-editor_varconnect-editor');
       if (!rich) {
         check('there is a value field to type into', false, 'no rich editor over a value');
@@ -1453,25 +1121,13 @@ const STYLESHEET = `/* =========================================================
           rich.dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true }));
           await settle(80);
         });
-        check(
-          'the value is written',
-          fs.readFileSync(file, 'utf8').includes('ease-in'),
-          fs.readFileSync(file, 'utf8').slice(0, 200),
-        );
-        check(
-          'and editing a value is recorded',
-          commands.length > valueBefore,
-          `${commands.length - valueBefore} commands`,
-        );
+        check('the value is written', fs.readFileSync(file, 'utf8').includes('ease-in'), fs.readFileSync(file, 'utf8').slice(0, 200));
+        check('and editing a value is recorded', commands.length > valueBefore, `${commands.length - valueBefore} commands`);
         await act(async () => {
           await commands[commands.length - 1].undo();
           await settle(60);
         });
-        check(
-          'undo puts the old value back',
-          fs.readFileSync(file, 'utf8') === wasFile,
-          fs.readFileSync(file, 'utf8').slice(0, 200),
-        );
+        check('undo puts the old value back', fs.readFileSync(file, 'utf8') === wasFile, fs.readFileSync(file, 'utf8').slice(0, 200));
         await act(async () => {
           await commands[commands.length - 1].redo();
           await settle(60);
@@ -1496,34 +1152,19 @@ const STYLESHEET = `/* =========================================================
           await settle(20);
         });
         await typeInto(find('.vars-add-field input'), 'extra');
-        check(
-          'adding a variable is recorded',
-          commands.length > addBefore,
-          `${commands.length - addBefore} commands`,
-        );
+        check('adding a variable is recorded', commands.length > addBefore, `${commands.length - addBefore} commands`);
         const added = fs.readFileSync(file, 'utf8');
-        check(
-          'the recorded variable starts unset',
-          /--[\w-]*extra: unset;/.test(added),
-          added.slice(0, 300),
-        );
+        check('the recorded variable starts unset', /--[\w-]*extra: unset;/.test(added), added.slice(0, 300));
         await act(async () => {
           await commands[commands.length - 1].undo();
           await settle(60);
         });
-        check(
-          'and undo takes it out again',
-          fs.readFileSync(file, 'utf8') === wasFile,
-          fs.readFileSync(file, 'utf8').slice(0, 300),
-        );
+        check('and undo takes it out again', fs.readFileSync(file, 'utf8') === wasFile, fs.readFileSync(file, 'utf8').slice(0, 300));
         await act(async () => {
           await commands[commands.length - 1].redo();
           await settle(60);
         });
-        check(
-          'redo restores the variable with its unset value',
-          fs.readFileSync(file, 'utf8') === added,
-        );
+        check('redo restores the variable with its unset value', fs.readFileSync(file, 'utf8') === added);
         await act(async () => {
           await commands[commands.length - 1].undo();
           await settle(60);
@@ -1538,35 +1179,21 @@ const STYLESHEET = `/* =========================================================
     const renameBefore = commands.length;
     const field = await clickName('margin-top');
     await typeInto(field, 'gap');
-    check(
-      'renaming is recorded too',
-      commands.length === renameBefore + 1,
-      `${commands.length - renameBefore}`,
-    );
-    check(
-      'the file has the new name',
-      fs.readFileSync(file, 'utf8').includes('--h1-gap'),
-      fs.readFileSync(file, 'utf8').slice(0, 400),
-    );
+    check('renaming is recorded too', commands.length === renameBefore + 1, `${commands.length - renameBefore}`);
+    check('the file has the new name', fs.readFileSync(file, 'utf8').includes('--h1-gap'), fs.readFileSync(file, 'utf8').slice(0, 400));
     await act(async () => {
       await commands[commands.length - 1].undo();
       await settle(60);
     });
     const undone = fs.readFileSync(file, 'utf8');
-    check(
-      'undoing a rename puts the old name back',
-      undone.includes('--h1-margin-top') && !undone.includes('--h1-gap'),
-      undone.slice(0, 400),
-    );
+    check('undoing a rename puts the old name back', undone.includes('--h1-margin-top') && !undone.includes('--h1-gap'), undone.slice(0, 400));
   }
 
   {
     // The other kind of heading: a comment above some names. Most of a
     // single-rule file's headings are these, and they were the ones that could
     // not be clicked — the check that sent me looking was the user's, not mine.
-    const heading = all('.vars-section .vars-rename').find(
-      (button) => button.textContent === 'Swatches',
-    );
+    const heading = all('.vars-section .vars-rename').find((button) => button.textContent === 'Swatches');
     check('a comment heading can be clicked too', !!heading, texts('.vars-section').join('|'));
     if (heading) {
       await act(async () => {
@@ -1578,25 +1205,15 @@ const STYLESHEET = `/* =========================================================
       await typeInto(field, 'Palette');
       const css = fs.readFileSync(file, 'utf8');
       check('the comment is rewritten', css.includes('/* Palette */'), css.slice(0, 120));
-      check(
-        'and the names under it are untouched',
-        css.includes('--light-100: #ffffff'),
-        css.slice(0, 200),
-      );
-      check(
-        'the sheet shows the new heading',
-        texts('.vars-section').includes('Palette'),
-        texts('.vars-section').join('|'),
-      );
+      check('and the names under it are untouched', css.includes('--light-100: #ffffff'), css.slice(0, 200));
+      check('the sheet shows the new heading', texts('.vars-section').includes('Palette'), texts('.vars-section').join('|'));
     }
   }
 
   {
     // A group heading that is a shared prefix renames every member under it.
     await show(1); // the light/dark modes group, whose `selection` names form a section
-    const heading = all('.vars-section .vars-rename').find(
-      (button) => button.textContent === 'selection',
-    );
+    const heading = all('.vars-section .vars-rename').find((button) => button.textContent === 'selection');
     check('a prefix heading is renamable', !!heading, texts('.vars-section').join('|'));
     if (heading) {
       await act(async () => {
@@ -1631,13 +1248,8 @@ const STYLESHEET = `/* =========================================================
     const swatches = heads[0];
     const headings = heads[1];
     const title = swatches?.textContent.trim();
-    const firstName = () =>
-      (fs.readFileSync(file, 'utf8').match(/--[\w-]+:/) || [''])[0].replace(':', '');
-    check(
-      'there are headings to drag',
-      !!swatches && !!headings,
-      heads.map((head) => head.textContent.trim()).join('|'),
-    );
+    const firstName = () => (fs.readFileSync(file, 'utf8').match(/--[\w-]+:/) || [''])[0].replace(':', '');
+    check('there are headings to drag', !!swatches && !!headings, heads.map((head) => head.textContent.trim()).join('|'));
     if (!swatches || !headings) {
       return;
     }
@@ -1659,45 +1271,28 @@ const STYLESHEET = `/* =========================================================
     const namesBefore = (fs.readFileSync(file, 'utf8').match(/--[\w-]+:/g) || []).join('|');
 
     await act(async () => {
-      swatches.dispatchEvent(
-        new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientY: 106 }),
-      );
+      swatches.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientY: 106 }));
       await settle(10);
     });
     await act(async () => {
-      dom.window.dispatchEvent(
-        new dom.window.MouseEvent('pointermove', { bubbles: true, clientY: 150 }),
-      );
-      dom.window.dispatchEvent(
-        new dom.window.MouseEvent('pointermove', { bubbles: true, clientY: 260 }),
-      );
+      dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { bubbles: true, clientY: 150 }));
+      dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { bubbles: true, clientY: 260 }));
       await settle(10);
     });
     await act(async () => {
-      dom.window.dispatchEvent(
-        new dom.window.MouseEvent('pointerup', { bubbles: true, clientY: 260 }),
-      );
+      dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, clientY: 260 }));
       await settle(90);
     });
 
     const written = fs.readFileSync(file, 'utf8');
-    check(
-      'dragging a heading moves the heading',
-      written.indexOf(`/* ${title} */`) > written.indexOf(`${firstName()}:`),
-      written.slice(0, 400),
-    );
-    check(
-      'there is still only one of it',
-      (written.match(new RegExp(`\\/\\* ${title} \\*\\/`, 'g')) || []).length === 1,
-      written.slice(0, 400),
-    );
+    check('dragging a heading moves the heading', written.indexOf(`/* ${title} */`) > written.indexOf(`${firstName()}:`), written.slice(0, 400));
+    check('there is still only one of it', (written.match(new RegExp(`\\/\\* ${title} \\*\\/`, 'g')) || []).length === 1, written.slice(0, 400));
     // The whole point: the variables did not travel with it. What changed is
     // which side of the comment they are on.
     check(
       'and every variable stays exactly where it was',
       (written.match(/--[\w-]+:/g) || []).join('|') === namesBefore,
-      `${(written.match(/--[\w-]+:/g) || []).slice(0, 6).join('|')} ` +
-        `vs ${namesBefore.split('|').slice(0, 6).join('|')}`,
+      `${(written.match(/--[\w-]+:/g) || []).slice(0, 6).join('|')} ` + `vs ${namesBefore.split('|').slice(0, 6).join('|')}`,
     );
     check(
       'so the variables it left behind are not in it any more',

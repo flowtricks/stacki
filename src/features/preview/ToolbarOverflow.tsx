@@ -1,12 +1,5 @@
 import { ToolbarTooltip } from './ToolbarTooltip';
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { MoreIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
 import { toolbarOverflow } from './toolbarFit';
@@ -19,13 +12,7 @@ export interface ToolbarItem {
   readonly menu: (finish: (action: () => void) => void) => ReactNode;
 }
 
-export function ToolbarOverflow({
-  items,
-  children,
-}: {
-  readonly items: readonly ToolbarItem[];
-  readonly children: ReactNode;
-}) {
+export function ToolbarOverflow({ items, children }: { readonly items: readonly ToolbarItem[]; readonly children: ReactNode }) {
   const toolbar = useRef<HTMLDivElement>(null);
   const more = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -88,11 +75,7 @@ export function ToolbarOverflow({
   );
 }
 
-function useToolbarOverflow(
-  toolbar: RefObject<HTMLDivElement>,
-  more: RefObject<HTMLButtonElement>,
-  items: readonly ToolbarItem[],
-): readonly string[] {
+function useToolbarOverflow(toolbar: RefObject<HTMLDivElement>, more: RefObject<HTMLButtonElement>, items: readonly ToolbarItem[]): readonly string[] {
   const [hidden, setHidden] = useState<readonly string[]>([]);
   useLayoutEffect(() => {
     const element = toolbar.current;
@@ -103,22 +86,13 @@ function useToolbarOverflow(
     const controls = Array.from(element.querySelectorAll<HTMLElement>('[data-toolbar-item]'));
     const measure = () => {
       const style = window.getComputedStyle(element);
-      const available =
-        element.clientWidth -
-        (parseFloat(style.paddingLeft) || 0) -
-        (parseFloat(style.paddingRight) || 0) -
-        (parseFloat(style.columnGap) || 0);
+      const available = element.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0) - (parseFloat(style.columnGap) || 0);
       const measurements = items.map((item, index) => ({
         id: item.id,
         priority: item.priority,
         width: controls[index]?.offsetWidth ?? 0,
       }));
-      const next = toolbarOverflow(
-        measurements,
-        available,
-        button.offsetWidth,
-        parseFloat(style.columnGap) || 0,
-      );
+      const next = toolbarOverflow(measurements, available, button.offsetWidth, parseFloat(style.columnGap) || 0);
       setHidden((previous) => (previous.join('|') === next.join('|') ? previous : next));
     };
     measure();

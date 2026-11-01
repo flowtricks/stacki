@@ -56,14 +56,8 @@ function isShuffle(body: Js): boolean {
   if (body.kind !== 'binary' || body.operator !== '-') {
     return false;
   }
-  const random = (node: Js): boolean =>
-    node.kind === 'call' &&
-    node.args.length === 0 &&
-    namePath(node.callee)?.join('.') === 'Math.random';
-  return (
-    (random(body.left) && body.right.kind === 'number') ||
-    (random(body.right) && body.left.kind === 'number')
-  );
+  const random = (node: Js): boolean => node.kind === 'call' && node.args.length === 0 && namePath(node.callee)?.join('.') === 'Math.random';
+  return (random(body.left) && body.right.kind === 'number') || (random(body.right) && body.left.kind === 'number');
 }
 
 interface ComparatorBases {
@@ -74,29 +68,13 @@ interface ComparatorBases {
 function comparatorKey(node: Js, bases: ComparatorBases): LoopSort | undefined {
   // Generated: `(x === y ? 0 : x == null ? -1 : … : String(x).localeCompare(String(y))) * 1`,
   // `* -1` for descending; the test names the field.
-  if (
-    node.kind === 'binary' &&
-    node.operator === '*' &&
-    node.right.kind === 'number' &&
-    Math.abs(node.right.value) === 1 &&
-    node.left.kind === 'conditional'
-  ) {
+  if (node.kind === 'binary' && node.operator === '*' && node.right.kind === 'number' && Math.abs(node.right.value) === 1 && node.left.kind === 'conditional') {
     const test = node.left.test;
-    const key =
-      test.kind === 'binary' && test.operator === '==='
-        ? keyOf(sortValue(test.left), sortValue(test.right), bases, 'text')
-        : undefined;
-    return key === undefined || node.right.value > 0
-      ? key
-      : { ...key, direction: key.direction === 'ascending' ? 'descending' : 'ascending' };
+    const key = test.kind === 'binary' && test.operator === '===' ? keyOf(sortValue(test.left), sortValue(test.right), bases, 'text') : undefined;
+    return key === undefined || node.right.value > 0 ? key : { ...key, direction: key.direction === 'ascending' ? 'descending' : 'ascending' };
   }
   // `A.localeCompare(B)`: alphabetical.
-  if (
-    node.kind === 'call' &&
-    node.callee.kind === 'member' &&
-    node.callee.property === 'localeCompare' &&
-    node.args[0]
-  ) {
+  if (node.kind === 'call' && node.callee.kind === 'member' && node.callee.property === 'localeCompare' && node.args[0]) {
     const left = sortValue(node.callee.object);
     const right = sortValue(node.args[0]);
     return keyOf(left, right, bases, 'text');
@@ -131,18 +109,10 @@ function sortValue(node: Js): SortValue | undefined {
   let current = node;
   let kind: SortValue['kind'] = 'number';
   for (let depth = 0; depth < 6; depth++) {
-    if (
-      current.kind === 'binary' &&
-      current.operator === '===' &&
-      current.right.kind === 'boolean' &&
-      current.right.value
-    ) {
+    if (current.kind === 'binary' && current.operator === '===' && current.right.kind === 'boolean' && current.right.value) {
       kind = 'boolean';
       current = current.left;
-    } else if (
-      current.kind === 'binary' &&
-      (current.operator === '??' || current.operator === '||')
-    ) {
+    } else if (current.kind === 'binary' && (current.operator === '??' || current.operator === '||')) {
       current = current.left;
     } else if (current.kind === 'unary' && current.operator === '+') {
       current = current.value;
@@ -153,20 +123,10 @@ function sortValue(node: Js): SortValue | undefined {
       (isName(current.callee, 'String') || isName(current.callee, 'Number'))
     ) {
       current = current.args[0];
-    } else if (
-      current.kind === 'call' &&
-      current.args.length === 1 &&
-      current.args[0] &&
-      namePath(current.callee)?.join('.') === 'Date.parse'
-    ) {
+    } else if (current.kind === 'call' && current.args.length === 1 && current.args[0] && namePath(current.callee)?.join('.') === 'Date.parse') {
       kind = 'date';
       current = current.args[0];
-    } else if (
-      current.kind === 'new' &&
-      isName(current.callee, 'Date') &&
-      current.args.length === 1 &&
-      current.args[0]
-    ) {
+    } else if (current.kind === 'new' && isName(current.callee, 'Date') && current.args.length === 1 && current.args[0]) {
       kind = 'date';
       current = current.args[0];
     } else if (
@@ -185,12 +145,7 @@ function sortValue(node: Js): SortValue | undefined {
   return path === undefined ? undefined : { path, kind };
 }
 
-function keyOf(
-  left: SortValue | undefined,
-  right: SortValue | undefined,
-  bases: ComparatorBases,
-  order: LoopSortOrder,
-): LoopSort | undefined {
+function keyOf(left: SortValue | undefined, right: SortValue | undefined, bases: ComparatorBases, order: LoopSortOrder): LoopSort | undefined {
   if (left === undefined || right === undefined) {
     return undefined;
   }

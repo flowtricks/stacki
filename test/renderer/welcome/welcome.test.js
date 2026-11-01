@@ -29,10 +29,7 @@ const check = (what, condition, detail) => {
 };
 const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const PIXEL =
-  'data:image/png;base64,' +
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk' +
-  'YAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+const PIXEL = 'data:image/png;base64,' + 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk' + 'YAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
 (async () => {
   const esbuild = require('esbuild');
@@ -64,8 +61,7 @@ const PIXEL =
   // the background is expected to cope with it — the cards are what is under
   // test here.
   dom.window.HTMLCanvasElement.prototype.getContext = () => PLATFORM_NULL;
-  global.WebGLRenderingContext = dom.window.WebGLRenderingContext =
-    function WebGLRenderingContext() {};
+  global.WebGLRenderingContext = dom.window.WebGLRenderingContext = function WebGLRenderingContext() {};
 
   const React = require('react');
   const { createRoot } = require('react-dom/client');
@@ -138,20 +134,12 @@ const PIXEL =
 
   await mount();
 
-  check(
-    'every recent project gets a card',
-    all('.recent-card').length === 4,
-    `${all('.recent-card').length}`,
-  );
+  check('every recent project gets a card', all('.recent-card').length === 4, `${all('.recent-card').length}`);
 
   // Three ways to start, in the order they are reached for — and the one the
   // situation calls for is the one that looks like the answer.
   const actions = all('.actions button').map((button) => button.textContent.trim());
-  check(
-    'the actions read in that order',
-    actions.join(' | ') === 'Open from folder |  | Start from Lumos | ',
-    actions.join(' | '),
-  );
+  check('the actions read in that order', actions.join(' | ') === 'Open from folder |  | Start from Lumos | ', actions.join(' | '));
   check(
     'with projects to return to, opening one leads',
     all('.actions button')[0].classList.contains('primary'),
@@ -169,14 +157,8 @@ const PIXEL =
   check('the main Open from folder button opens the folder picker', folderRequests === 1);
   const arrows = all('.welcome-split-arrow');
   await act(async () => arrows[0].click());
-  check(
-    'the open menu reveals GitHub',
-    all('[role=menuitem]')[0]?.textContent === 'Open from GitHub',
-  );
-  check(
-    'opening the menu focuses its action',
-    document.activeElement === all('[role=menuitem]')[0],
-  );
+  check('the open menu reveals GitHub', all('[role=menuitem]')[0]?.textContent === 'Open from GitHub');
+  check('opening the menu focuses its action', document.activeElement === all('[role=menuitem]')[0]);
   await act(async () => {
     document.activeElement.dispatchEvent(
       new dom.window.KeyboardEvent('keydown', {
@@ -185,25 +167,16 @@ const PIXEL =
       }),
     );
   });
-  check(
-    'Escape closes the menu and restores its trigger',
-    all('[role=menuitem]').length === 0 && document.activeElement === arrows[0],
-  );
+  check('Escape closes the menu and restores its trigger', all('[role=menuitem]').length === 0 && document.activeElement === arrows[0]);
   await act(async () => arrows[1].click());
-  check(
-    'the starter menu reveals the empty project option',
-    all('[role=menuitem]')[0]?.textContent === 'Start from Astro',
-  );
+  check('the starter menu reveals the empty project option', all('[role=menuitem]')[0]?.textContent === 'Start from Astro');
   let emptyRequests = 0;
   dom.window.avb.parentDialog = async () => {
     emptyRequests++;
     return { canceled: true };
   };
   await act(async () => all('[role=menuitem]')[0].click());
-  check(
-    'the empty project option asks where the site should go and closes the menu',
-    emptyRequests === 1 && all('[role=menuitem]').length === 0,
-  );
+  check('the empty project option asks where the site should go and closes the menu', emptyRequests === 1 && all('[role=menuitem]').length === 0);
   await act(async () => arrows[0].click());
   await act(async () => {
     document.body.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
@@ -217,21 +190,13 @@ const PIXEL =
     openFromFolder.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
     openFromFolder.click();
   });
-  check(
-    'with its menu open, Open from folder opens the picker on the first click',
-    folderRequests === 2,
-    String(folderRequests),
-  );
+  check('with its menu open, Open from folder opens the picker on the first click', folderRequests === 2, String(folderRequests));
   check('and closes the menu', all('[role=menuitem]').length === 0);
   check('nothing tells the user a picture is old', !/out of date/i.test(text()), text());
   check('and nothing offers to fix it', all('.recent-refresh').length === 0);
 
   // The queue: stale first, one at a time, skipping what cannot be rendered.
-  check(
-    'the first stale project is being re-rendered',
-    asked[0] === '/p/stale',
-    JSON.stringify(asked),
-  );
+  check('the first stale project is being re-rendered', asked[0] === '/p/stale', JSON.stringify(asked));
   check('one at a time', maxInFlight === 1, `${maxInFlight} at once`);
   check('a card that is up to date is left alone', !asked.includes('/p/fresh'));
 
@@ -245,11 +210,7 @@ const PIXEL =
     release?.();
     await settle(30);
   });
-  check(
-    'a project with no dependencies is never asked for',
-    !asked.includes('/p/nodeps'),
-    JSON.stringify(asked),
-  );
+  check('a project with no dependencies is never asked for', !asked.includes('/p/nodeps'), JSON.stringify(asked));
   check('so the queue ends', asked.length === 2, JSON.stringify(asked));
   check('quietly', toasts.length === 0, JSON.stringify(toasts));
 
@@ -269,34 +230,18 @@ const PIXEL =
     });
     check('choosing it asks where the site should go', asked);
     const wizard = dom.window.document.querySelector('.new-project-modal');
-    check(
-      'and then asks what it is called',
-      !!wizard,
-      'no wizard appeared after the folder was chosen',
-    );
-    check(
-      'naming it Lumos',
-      /Start from Lumos/.test(wizard?.textContent || ''),
-      wizard?.textContent?.slice(0, 80),
-    );
+    check('and then asks what it is called', !!wizard, 'no wizard appeared after the folder was chosen');
+    check('naming it Lumos', /Start from Lumos/.test(wizard?.textContent || ''), wizard?.textContent?.slice(0, 80));
     check(
       'with a name to edit and where it will land',
       !!wizard?.querySelector('input') && /\/tmp\/sites\/my-site/.test(wizard?.textContent || ''),
       wizard?.textContent?.slice(0, 200),
     );
     const note = () => wizard.querySelector('.starter-note')?.textContent || '';
-    check(
-      'with npm, the note names only the command it runs',
-      note().startsWith('Runs npm create lumos@latest, then starts a git history'),
-      note(),
-    );
+    check('with npm, the note names only the command it runs', note().startsWith('Runs npm create lumos@latest, then starts a git history'), note());
     await act(async () => wizard.querySelector('.dd-trigger').click());
     await act(async () => dom.window.document.querySelectorAll('.dd-option')[1].click());
-    check(
-      'with pnpm, it also says pnpm installs it',
-      note().startsWith('Runs npm create lumos@latest, installs it with pnpm, then starts'),
-      note(),
-    );
+    check('with pnpm, it also says pnpm installs it', note().startsWith('Runs npm create lumos@latest, installs it with pnpm, then starts'), note());
 
     // Cancelling the folder dialog leaves the screen where it was.
     await act(async () => {
@@ -309,10 +254,7 @@ const PIXEL =
       all('.actions button')[2].click();
       await settle(30);
     });
-    check(
-      'and cancelling the folder shows nothing',
-      !dom.window.document.querySelector('.new-project-modal'),
-    );
+    check('and cancelling the folder shows nothing', !dom.window.document.querySelector('.new-project-modal'));
   }
 
   // An empty Astro project is named the same way: where it goes, then its name.
@@ -333,11 +275,7 @@ const PIXEL =
       await settle(30);
     });
     const wizard = dom.window.document.querySelector('.new-project-modal');
-    check(
-      'the Astro wizard opens after the folder',
-      /New Astro Project/.test(wizard?.textContent || ''),
-      wizard?.textContent?.slice(0, 80),
-    );
+    check('the Astro wizard opens after the folder', /New Astro Project/.test(wizard?.textContent || ''), wizard?.textContent?.slice(0, 80));
     check(
       'with the site name and the folder it becomes',
       !!wizard?.querySelector('input') && /\/tmp\/sites\/my-site/.test(wizard?.textContent || ''),
@@ -346,44 +284,26 @@ const PIXEL =
     const input = wizard.querySelector('input');
     const create = () => [...wizard.querySelectorAll('.modal-footer button')].at(-1);
     await act(async () => {
-      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(
-        input,
-        'bad name/',
-      );
+      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(input, 'bad name/');
       input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     });
     check('a name that is not a folder name cannot be created', create().disabled === true);
     await act(async () => {
-      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(
-        input,
-        'blog-site',
-      );
+      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(input, 'blog-site');
       input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     });
     const trigger = wizard.querySelector('.dd-trigger');
-    check(
-      'the package manager is npm by default',
-      trigger?.textContent === 'npm',
-      trigger?.outerHTML,
-    );
+    check('the package manager is npm by default', trigger?.textContent === 'npm', trigger?.outerHTML);
     await act(async () => trigger.click());
     const managers = [...dom.window.document.querySelectorAll('.dd-option')];
-    check(
-      'and offers npm and pnpm',
-      managers.map((option) => option.textContent).join() === 'npm,pnpm',
-      managers.map((option) => option.textContent).join(),
-    );
+    check('and offers npm and pnpm', managers.map((option) => option.textContent).join() === 'npm,pnpm', managers.map((option) => option.textContent).join());
     await act(async () => managers[1].click());
     check('picking pnpm shows it', trigger?.textContent === 'pnpm', trigger?.textContent);
     await act(async () => {
       create().click();
       await settle(30);
     });
-    check(
-      'and the one chosen is sent with the site',
-      created[0]?.packageManager === 'pnpm',
-      JSON.stringify(created),
-    );
+    check('and the one chosen is sent with the site', created[0]?.packageManager === 'pnpm', JSON.stringify(created));
     check(
       'while it runs, dots animate after the last line of the log',
       !!wizard.querySelector('.create-log .create-log-dots'),
@@ -395,16 +315,10 @@ const PIXEL =
     });
     check(
       'creating sends the parent folder and the name, not a folder of its own',
-      created.length === 1 &&
-        created[0].parentPath === '/tmp/sites' &&
-        created[0].name === 'blog-site' &&
-        !('dir' in created[0]),
+      created.length === 1 && created[0].parentPath === '/tmp/sites' && created[0].name === 'blog-site' && !('dir' in created[0]),
       JSON.stringify(created),
     );
-    check(
-      'and the wizard closes on the project it made',
-      !dom.window.document.querySelector('.new-project-modal'),
-    );
+    check('and the wizard closes on the project it made', !dom.window.document.querySelector('.new-project-modal'));
   }
 
   // A first run has nothing to return to, so starting a site is the answer
@@ -429,11 +343,7 @@ const PIXEL =
       await settle(40);
     });
     const buttons = all('.actions button');
-    check(
-      'with no projects, starting from Lumos leads',
-      buttons[2]?.classList.contains('primary'),
-      buttons.map((button) => button.className).join(' | '),
-    );
+    check('with no projects, starting from Lumos leads', buttons[2]?.classList.contains('primary'), buttons.map((button) => button.className).join(' | '));
     check('and opening one does not', !buttons[0]?.classList.contains('primary'));
   }
 
@@ -448,11 +358,7 @@ const PIXEL =
     reactRoot.unmount();
     await settle(40);
   });
-  check(
-    'nothing carries on after the screen closes',
-    stopped.length === 0,
-    JSON.stringify(stopped),
-  );
+  check('nothing carries on after the screen closes', stopped.length === 0, JSON.stringify(stopped));
 
   if (failures.length) {
     console.error(`\nwelcome: ${failures.length} failed, ${checked - failures.length} passed\n`);

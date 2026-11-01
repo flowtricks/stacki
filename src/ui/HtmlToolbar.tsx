@@ -108,12 +108,7 @@ export function HtmlToolbar(props: Props) {
         </fieldset>
       )}
       {props.source && (
-        <button
-          type="button"
-          className="html-source-toggle html-format"
-          title="Lay the HTML out to read"
-          onClick={props.onFormat}
-        >
+        <button type="button" className="html-source-toggle html-format" title="Lay the HTML out to read" onClick={props.onFormat}>
           Format
         </button>
       )}
@@ -138,38 +133,18 @@ function InsertButtons(props: Pick<Props, 'format' | 'onAction'>) {
   return (
     <>
       <span className="html-toolbar-group">
-        <ToolButton
-          label={format.link ? 'Edit link' : 'Link'}
-          keys={`${MOD}K`}
-          pressed={format.link !== undefined}
-          onPress={() => onAction({ kind: 'link' })}
-        >
+        <ToolButton label={format.link ? 'Edit link' : 'Link'} keys={`${MOD}K`} pressed={format.link !== undefined} onPress={() => onAction({ kind: 'link' })}>
           <LinkIcon size={14} />
         </ToolButton>
       </span>
       <span className="html-toolbar-group">
-        <ToolButton
-          label="Bulleted list"
-          keys={`${MOD}⇧8`}
-          pressed={format.list === 'ul'}
-          onPress={() => onAction({ kind: 'list', list: 'ul' })}
-        >
+        <ToolButton label="Bulleted list" keys={`${MOD}⇧8`} pressed={format.list === 'ul'} onPress={() => onAction({ kind: 'list', list: 'ul' })}>
           <BulletListIcon size={14} />
         </ToolButton>
-        <ToolButton
-          label="Numbered list"
-          keys={`${MOD}⇧7`}
-          pressed={format.list === 'ol'}
-          onPress={() => onAction({ kind: 'list', list: 'ol' })}
-        >
+        <ToolButton label="Numbered list" keys={`${MOD}⇧7`} pressed={format.list === 'ol'} onPress={() => onAction({ kind: 'list', list: 'ol' })}>
           <NumberListIcon size={14} />
         </ToolButton>
-        <ToolButton
-          label="Quote"
-          keys={`${MOD}⇧9`}
-          pressed={quote}
-          onPress={() => onAction({ kind: 'block', block: 'blockquote' })}
-        >
+        <ToolButton label="Quote" keys={`${MOD}⇧9`} pressed={quote} onPress={() => onAction({ kind: 'block', block: 'blockquote' })}>
           <QuoteIcon size={14} />
         </ToolButton>
         <ToolButton label="Divider" keys="---" onPress={() => onAction({ kind: 'rule' })}>
@@ -185,25 +160,13 @@ function HistoryButtons(props: Pick<Props, 'onAction'>) {
   const { onAction } = props;
   return (
     <span className="html-toolbar-group">
-      <ToolButton
-        label="Clear formatting"
-        keys={`${MOD}\\`}
-        onPress={() => onAction({ kind: 'clear' })}
-      >
+      <ToolButton label="Clear formatting" keys={`${MOD}\\`} onPress={() => onAction({ kind: 'clear' })}>
         <ClearFormatIcon size={14} />
       </ToolButton>
-      <ToolButton
-        label="Undo"
-        keys={`${MOD}Z`}
-        onPress={() => onAction({ kind: 'history', step: 'undo' })}
-      >
+      <ToolButton label="Undo" keys={`${MOD}Z`} onPress={() => onAction({ kind: 'history', step: 'undo' })}>
         <UndoIcon size={14} />
       </ToolButton>
-      <ToolButton
-        label="Redo"
-        keys={`${MOD}⇧Z`}
-        onPress={() => onAction({ kind: 'history', step: 'redo' })}
-      >
+      <ToolButton label="Redo" keys={`${MOD}⇧Z`} onPress={() => onAction({ kind: 'history', step: 'redo' })}>
         <RedoIcon size={14} />
       </ToolButton>
     </span>

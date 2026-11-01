@@ -10,17 +10,12 @@ import { resolveImportPath, declarationLine } from '../properties/importPaths';
 import { listCssFiles, listAstroStyleFiles } from '../project/styleFiles';
 import type { MainHost } from './mainHost';
 
-export function registerStyleSourceHandlers(
-  host: Pick<MainHost, 'assertInProject' | 'ipcMain'>,
-): void {
+export function registerStyleSourceHandlers(host: Pick<MainHost, 'assertInProject' | 'ipcMain'>): void {
   registerStyleListFilesHandlers(host);
   registerSourceWriteTextHandler(host);
 }
 
-function registerStyleListFilesHandlers({
-  ipcMain,
-  assertInProject,
-}: Pick<MainHost, 'ipcMain' | 'assertInProject'>): void {
+function registerStyleListFilesHandlers({ ipcMain, assertInProject }: Pick<MainHost, 'ipcMain' | 'assertInProject'>): void {
   ipcMain.handle('style:listFiles', async (_event, projectPath) => {
     if (!projectPath) {
       return { files: [] };
@@ -91,10 +86,7 @@ function registerStyleListFilesHandlers({
   });
 }
 
-function registerSourceWriteTextHandler({
-  ipcMain,
-  assertInProject,
-}: Pick<MainHost, 'ipcMain' | 'assertInProject'>): void {
+function registerSourceWriteTextHandler({ ipcMain, assertInProject }: Pick<MainHost, 'ipcMain' | 'assertInProject'>): void {
   ipcMain.handle('src:writeText', async (_event, { projectPath, rel, text }) => {
     const abs = assertInProject(path.resolve(projectPath, rel));
     writeProjectText(abs, text);

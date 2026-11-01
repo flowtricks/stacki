@@ -20,14 +20,7 @@ import {
   taggedPlaces,
   trackedPaths,
 } from './frameRegions';
-import {
-  STACKI_CLASSES,
-  classesForPath,
-  ownClasses,
-  rectsForPath,
-  resetThinCache,
-  spacingForPath,
-} from './frameMeasure';
+import { STACKI_CLASSES, classesForPath, ownClasses, rectsForPath, resetThinCache, spacingForPath } from './frameMeasure';
 
 // The boxes as last reported, so the watcher below can tell whether the page
 // has moved since — see `followMotion`.
@@ -212,9 +205,7 @@ export const sendRendered = () => {
 let lastStatesKey = '';
 const firstElementFor = (nodePath: string): Element | undefined => {
   for (const run of runsOf(nodePath) || []) {
-    const element = run.find(
-      (node): node is Element => isElement(node) && node.tagName !== 'TEMPLATE',
-    );
+    const element = run.find((node): node is Element => isElement(node) && node.tagName !== 'TEMPLATE');
     if (element && element.isConnected) {
       return element;
     }
@@ -358,10 +349,7 @@ export const scrollPathIntoView = (nodePath: string, occ: number): void => {
 // A component's region holds its <script> and <style> too. They are elements,
 // and they are not what anyone means by the root of the component.
 const UNRENDERED = new Set(['TEMPLATE', 'SCRIPT', 'STYLE', 'LINK', 'META', 'TITLE']);
-const openedRoots = (): Element[] =>
-  (focusRoots() || []).filter(
-    (node): node is Element => isElement(node) && !UNRENDERED.has(node.tagName),
-  );
+const openedRoots = (): Element[] => (focusRoots() || []).filter((node): node is Element => isElement(node) && !UNRENDERED.has(node.tagName));
 
 let openedEls: Element[] = [];
 export const paintOpened = () => {
@@ -485,8 +473,7 @@ const ownNode = (node: Node): boolean => {
   }
   return ownElement(node);
 };
-const classTokens = (value: string | undefined): Set<string> =>
-  new Set((value ?? '').split(/\s+/).filter((token) => token !== ''));
+const classTokens = (value: string | undefined): Set<string> => new Set((value ?? '').split(/\s+/).filter((token) => token !== ''));
 // Only the canvas's own classes came or went.
 const ownClassChange = (record: MutationRecord): boolean => {
   if (!isElement(record.target)) {
@@ -501,8 +488,7 @@ const ownClassChange = (record: MutationRecord): boolean => {
   }
   return true;
 };
-const withoutViewportHeight = (style: string | undefined): string =>
-  (style ?? '').replace(/--avb-vh:[^;]*;?\s*/g, '').trim();
+const withoutViewportHeight = (style: string | undefined): string => (style ?? '').replace(/--avb-vh:[^;]*;?\s*/g, '').trim();
 const ownAttributeChange = (record: MutationRecord): boolean => {
   const target = record.target;
   if (ownElement(target) || record.attributeName === PATH_ATTR) {

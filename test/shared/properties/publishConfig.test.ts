@@ -2,12 +2,7 @@
 // Method: parse round trips, corrupt each boundary, and inspect provider command arguments.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  DEFAULT_PUBLISH_CONFIG,
-  parsePublishConfig,
-  parsePublishSource,
-  parsePublishTarget,
-} from '#dist/shared/properties/publishConfig.js';
+import { DEFAULT_PUBLISH_CONFIG, parsePublishConfig, parsePublishSource, parsePublishTarget } from '#dist/shared/properties/publishConfig.js';
 import { savedPublishedSite } from '#dist/shared/properties/publishSite.js';
 import { hostingCommand, scriptCommand } from '#dist/shared/properties/publishCommands.js';
 import { parseDesktopPublishState } from '#dist/shared/properties/publishState.js';
@@ -92,16 +87,7 @@ test('the shared Publish button preference defaults to both and preserves each c
 test('provider commands pin account and project without changing global CLI state', () => {
   assert.deepEqual(hostingCommand(cloudflare), {
     executable: 'wrangler',
-    arguments: [
-      'pages',
-      'deploy',
-      'dist',
-      '--project-name',
-      'my-site',
-      '--branch',
-      'main',
-      '--commit-dirty=true',
-    ],
+    arguments: ['pages', 'deploy', 'dist', '--project-name', 'my-site', '--branch', 'main', '--commit-dirty=true'],
     environment: { CLOUDFLARE_ACCOUNT_ID: 'account123' },
   });
   assert.deepEqual(
@@ -132,10 +118,7 @@ test('provider commands pin account and project without changing global CLI stat
 test('Publishing parses commit messages at the IPC boundary', () => {
   const input = { projectPath: '/project', target: 'github' };
   assert.deepEqual(parseIpcPayload('publish:start', input), input);
-  assert.deepEqual(
-    parseIpcPayload('publish:start', { ...input, commitMessage: '  Fix heading  ' }),
-    { ...input, commitMessage: 'Fix heading' },
-  );
+  assert.deepEqual(parseIpcPayload('publish:start', { ...input, commitMessage: '  Fix heading  ' }), { ...input, commitMessage: 'Fix heading' });
   for (const commitMessage of ['', '  ', 123, 'x'.repeat(4001)]) {
     assert.throws(() => parseIpcPayload('publish:start', { ...input, commitMessage }));
   }
@@ -167,10 +150,7 @@ test('Publish progress accepts bounded stage counts and rejects impossible progr
   ]) {
     assert.throws(() => parseDesktopPublishState({ ...state, progress }));
   }
-  assert.throws(
-    () => parseDesktopPublishState({ ...state, progress: { completed: 4, total: 4 } }),
-    /Running publish progress must be incomplete/,
-  );
+  assert.throws(() => parseDesktopPublishState({ ...state, progress: { completed: 4, total: 4 } }), /Running publish progress must be incomplete/);
 });
 
 test('Workers keep their Wrangler configuration and require an explicit account when saved', () => {
@@ -187,9 +167,7 @@ test('Workers keep their Wrangler configuration and require an explicit account 
     environment: { CLOUDFLARE_ACCOUNT_ID: 'account123' },
   });
   assert.throws(() => parsePublishConfig({ ...config, hosting: { ...hosting, accountId: '' } }));
-  assert.throws(() =>
-    parsePublishConfig({ ...config, hosting: { ...hosting, project: '--help' } }),
-  );
+  assert.throws(() => parsePublishConfig({ ...config, hosting: { ...hosting, project: '--help' } }));
 });
 
 test('published site links round-trip with their destination and reject unsafe metadata', () => {
@@ -207,9 +185,7 @@ test('published site links round-trip with their destination and reject unsafe m
     { hosting: { provider: 'none' } },
     { hosting: { ...cloudflare, accountId: '' } },
   ]) {
-    assert.throws(() =>
-      parsePublishConfig({ ...config, publishedSite: { ...publishedSite, ...change } }),
-    );
+    assert.throws(() => parsePublishConfig({ ...config, publishedSite: { ...publishedSite, ...change } }));
   }
 });
 

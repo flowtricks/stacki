@@ -22,11 +22,7 @@ export function managedHostingFromEnvironment(): Hosting | undefined {
   }).hosting;
 }
 
-export function managedPublishConfig(
-  config: PublishConfig,
-  target: PublishTarget,
-  managed: Hosting | undefined,
-): PublishConfig {
+export function managedPublishConfig(config: PublishConfig, target: PublishTarget, managed: Hosting | undefined): PublishConfig {
   if (config.githubWorkflow?.kind === 'pull-request') {
     return config;
   }
@@ -44,18 +40,10 @@ export function managedPublishConfig(
     return config;
   }
   if (target === 'hosting') {
-    throw new PublishFailure(
-      'This site deploys automatically from GitHub. Use Publish to save and deploy changes together.',
-    );
+    throw new PublishFailure('This site deploys automatically from GitHub. Use Publish to save and deploy changes together.');
   }
-  if (
-    config.beforePublish.length > 0 ||
-    config.afterPublish.length > 0 ||
-    config.buildScript !== 'build'
-  ) {
-    throw new PublishFailure(
-      'This site builds through GitHub. Configure custom publish scripts in Cloudflare Workers Builds.',
-    );
+  if (config.beforePublish.length > 0 || config.afterPublish.length > 0 || config.buildScript !== 'build') {
+    throw new PublishFailure('This site builds through GitHub. Configure custom publish scripts in Cloudflare Workers Builds.');
   }
   // The connected GitHub build owns validation and deployment. Keep the saved destination,
   // but use the existing commit-and-confirm path so Studio never builds or deploys it twice.

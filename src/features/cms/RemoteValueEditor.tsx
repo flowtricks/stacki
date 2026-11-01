@@ -6,13 +6,7 @@
 // above it decides when to save (RemoteFieldInput.tsx).
 import { useRef } from 'react';
 import { assert } from '../../../shared/core/assert';
-import {
-  REMOTE_SCHEMA_LIMITS,
-  remoteObject,
-  type RemoteOption,
-  type RemoteType,
-  type RemoteValue,
-} from '../../../shared/properties/cmsRemoteSchema';
+import { REMOTE_SCHEMA_LIMITS, remoteObject, type RemoteOption, type RemoteType, type RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
 import type { RemoteAsset } from '../../../shared/properties/cmsRemote';
 import AutoTextarea from '../../ui/AutoTextarea';
 import CalendarField from '../../ui/DateField';
@@ -56,49 +50,22 @@ export function RemoteValueEditor(props: RemoteValueProps) {
     case 'email':
     case 'text':
     case 'slug':
-      return (
-        <TextControl
-          {...props}
-          kind={type.kind}
-          options={type.kind === 'string' ? type.options : []}
-        />
-      );
+      return <TextControl {...props} kind={type.kind} options={type.kind === 'string' ? type.options : []} />;
     case 'number':
       return <NumberControl value={value} onChange={onChange} />;
     case 'boolean':
       return <SwitchControl on={value === true} onChange={onChange} />;
     case 'date':
-      return (
-        <CalendarField
-          value={typeof value === 'string' ? value : ''}
-          label={props.label}
-          onChange={(next) => onChange(next || undefined)}
-        />
-      );
+      return <CalendarField value={typeof value === 'string' ? value : ''} label={props.label} onChange={(next) => onChange(next || undefined)} />;
     case 'datetime':
       return <DateTimeControl value={value} label={props.label} onChange={onChange} />;
     case 'geopoint':
       return <GeopointControl value={value} onChange={onChange} />;
     case 'object':
-      return (
-        <RemoteObjectEditor
-          fields={type.fields}
-          typeName={type.name}
-          columns={type.columns}
-          value={value}
-          context={props.context}
-          onChange={onChange}
-        />
-      );
+      return <RemoteObjectEditor fields={type.fields} typeName={type.name} columns={type.columns} value={value} context={props.context} onChange={onChange} />;
     case 'image':
     case 'file':
-      return (
-        <RemoteAssetInput
-          {...props}
-          kind={type.kind}
-          fields={type.kind === 'image' ? type.fields : []}
-        />
-      );
+      return <RemoteAssetInput {...props} kind={type.kind} fields={type.kind === 'image' ? type.fields : []} />;
     case 'reference':
       return <RemoteReferenceInput {...props} to={type.to} />;
     case 'array':
@@ -148,9 +115,7 @@ function TextControl(
     );
   }
   if (kind === 'text') {
-    return (
-      <AutoTextarea value={shown} minRows={3} onChange={(event) => emit(event.target.value)} />
-    );
+    return <AutoTextarea value={shown} minRows={3} onChange={(event) => emit(event.target.value)} />;
   }
   return (
     <input
@@ -163,10 +128,7 @@ function TextControl(
   );
 }
 
-function NumberControl(props: {
-  readonly value: RemoteValue | undefined;
-  readonly onChange: (value: RemoteValue | undefined) => void;
-}) {
+function NumberControl(props: { readonly value: RemoteValue | undefined; readonly onChange: (value: RemoteValue | undefined) => void }) {
   return (
     <input
       type="number"
@@ -184,16 +146,9 @@ function NumberControl(props: {
   );
 }
 
-function SwitchControl(props: {
-  readonly on: boolean;
-  readonly onChange: (value: RemoteValue | undefined) => void;
-}) {
+function SwitchControl(props: { readonly on: boolean; readonly onChange: (value: RemoteValue | undefined) => void }) {
   return (
-    <button
-      type="button"
-      className={`cms-toggle ${props.on ? 'on' : ''}`}
-      onClick={() => props.onChange(!props.on)}
-    >
+    <button type="button" className={`cms-toggle ${props.on ? 'on' : ''}`} onClick={() => props.onChange(!props.on)}>
       <span className="cms-toggle-knob" />
       <span className="cms-toggle-label">{props.on ? 'On' : 'Off'}</span>
     </button>
@@ -232,10 +187,7 @@ export function localDateTime(iso: string): string {
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
-function GeopointControl(props: {
-  readonly value: RemoteValue | undefined;
-  readonly onChange: (value: RemoteValue | undefined) => void;
-}) {
+function GeopointControl(props: { readonly value: RemoteValue | undefined; readonly onChange: (value: RemoteValue | undefined) => void }) {
   const point = remoteObject(props.value) ?? {};
   const change = (axis: 'lat' | 'lng', text: string) => {
     const next = Number(text);

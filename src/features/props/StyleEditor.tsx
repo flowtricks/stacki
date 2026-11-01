@@ -1,12 +1,6 @@
 import { useCodeAccess, ManagedValue } from '../../ui/CodeAccess';
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  EditorView,
-  keymap,
-  highlightSpecialChars,
-  drawSelection,
-  placeholder as cmPlaceholder,
-} from '@codemirror/view';
+import { EditorView, keymap, highlightSpecialChars, drawSelection, placeholder as cmPlaceholder } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
@@ -97,9 +91,7 @@ function styleStep(stream: StringStream, state: StyleState): StyleStep {
     return { style: 'num', inValue, depth }; // hex color
   }
   // Number with an optional unit (12px, 1.5rem, 50%, -.3em)
-  if (
-    stream.match(/^[-+]?(\d*\.\d+|\d+)(px|r?em|%|vh|vw|vmin|vmax|s|ms|deg|fr|ch|ex|pt|cm|mm|in)?/)
-  ) {
+  if (stream.match(/^[-+]?(\d*\.\d+|\d+)(px|r?em|%|vh|vw|vmin|vmax|s|ms|deg|fr|ch|ex|pt|cm|mm|in)?/)) {
     return { style: 'num', inValue, depth };
   }
   // Bare word: a property before the colon, a function if a ( follows,

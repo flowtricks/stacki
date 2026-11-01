@@ -11,12 +11,10 @@ export { literalOptions };
 import { useRef, useState } from 'react';
 import Popup from '../../ui/Popup';
 import { assert } from '../../../shared/core/assert';
-import type {
-  ComponentProperty,
-  PropertyChange,
-  PropertyOptionRename,
-} from '../../../shared/properties/propertyEditing';
+import type { ComponentProperty, PropertyChange, PropertyOptionRename } from '../../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
+import { listPropsOf, type ListProp } from '../../editor/listProps';
+import { SETTING_PROP_TYPES } from '../../editor/optionsBinding';
 
 interface PropertyEditorProps {
   readonly property: ComponentProperty;
@@ -27,18 +25,27 @@ interface PropertyEditorProps {
   readonly onSave: (change: PropertyChange) => Promise<void>;
   readonly onCommit: (change: PropertyChange) => Promise<boolean>;
 }
+// Types loose enough that a list setting's own type only says more.
+const LOOSE_TYPES = new Set(['', 'unknown', 'any', 'object', 'Record<string, unknown>']);
+
+/**
+ * The property with its type set to the list setting its component's loop
+ * reads from it (`"filter": propFilters` makes `filters` a Filter), when its
+ * type says no more than `unknown`. Saving writes it; nothing changes unsaved.
+ */
+export function withListSettingType(property: ComponentProperty, listProps: ReadonlyMap<string, ListProp>): ComponentProperty {
+  if (!LOOSE_TYPES.has(property.type.trim())) {
+    return property;
+  }
+  const listProp = listProps.get(property.name);
+  return listProp === undefined ? property : { ...property, type: SETTING_PROP_TYPES[listProp.setting] };
+}
+
 export function PropertyEditor(props: PropertyEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const draft = usePropertyEditorDraft(props);
   return (
-    <Popup
-      mode="popover"
-      portal={false}
-      className="property-editor"
-      ref={editorRef}
-      onClose={props.onClose}
-      dismissible={props.access !== 'saving'}
-    >
+    <Popup mode="popover" portal={false} className="property-editor" ref={editorRef} onClose={props.onClose} dismissible={props.access !== 'saving'}>
       {({ close }) => (
         <>
           <header>
@@ -46,18 +53,12 @@ export function PropertyEditor(props: PropertyEditorProps) {
               <strong>{props.originalName ? 'Property settings' : 'New property'}</strong>
               <PropertyDeclarationInfo property={props.property} />
             </div>
-            <button
-              aria-label="Close property settings"
-              disabled={props.access === 'saving'}
-              onClick={close}
-            >
+            <button aria-label="Close property settings" disabled={props.access === 'saving'} onClick={close}>
               ×
             </button>
           </header>
           <PropertyConditions property={props.property} />
-          {props.property.editing?.kind === 'override' && (
-            <p className="property-help">{props.property.editing.reason}</p>
-          )}
+          {props.property.editing?.kind === 'override' && <p className="property-help">{props.property.editing.reason}</p>}
           {props.access === 'readonly' ? (
             <PropertyReadOnlyFields property={draft.property} />
           ) : (
@@ -80,7 +81,7 @@ export function PropertyEditor(props: PropertyEditorProps) {
 }
 
 function usePropertyEditorDraft(props: PropertyEditorProps) {
-  const [property, setProperty] = useState(props.property);
+  const [property, setProperty] = useState(() => withListSettingType(props.property, listPropsOf(props.frontmatter)));
   const [optionRenames, setOptionRenames] = useState<readonly PropertyOptionRename[]>([]);
   const [error, setError] = useState('');
   const update = <Key extends keyof ComponentProperty>(key: Key, value: ComponentProperty[Key]) => {
@@ -109,11 +110,7 @@ function usePropertyEditorDraft(props: PropertyEditorProps) {
   };
   const changeOptions = (change: PropertyOptionChange): void => {
     const previous = property;
-    const next = changePropertyOptions(
-      previous,
-      change.type,
-      change.kind === 'draft' ? change.rename : undefined,
-    );
+    const next = changePropertyOptions(previous, change.type, change.kind === 'draft' ? change.rename : undefined);
     const nextRenames = changePropertyOptionRenames(optionRenames, change);
     setProperty(next);
     setOptionRenames(nextRenames);
@@ -127,9 +124,7 @@ function usePropertyEditorDraft(props: PropertyEditorProps) {
         })
         .then((saved) => {
           if (!saved) {
-            setProperty((current) =>
-              current.type === change.type ? { ...current, type: previous.type } : current,
-            );
+            setProperty((current) => (current.type === change.type ? { ...current, type: previous.type } : current));
           }
         });
     }
@@ -146,39 +141,15 @@ interface PropertyEditorFieldsProps extends PropertyControls {
   readonly submit: () => void;
   readonly changeOptions: (change: PropertyOptionChange) => void;
 }
-function PropertyEditorFields({
-  property,
-  originalName,
-  frontmatter,
-  access,
-  onSave,
-  update,
-  error,
-  submit,
-  changeOptions,
-}: PropertyEditorFieldsProps) {
+function PropertyEditorFields({ property, originalName, frontmatter, access, onSave, update, error, submit, changeOptions }: PropertyEditorFieldsProps) {
   const inherited = property.editing?.kind === 'override';
   return (
     <fieldset disabled={access === 'saving'}>
-      <PropertyIdentity
-        property={property}
-        originalName={originalName}
-        inherited={inherited}
-        update={update}
-      />
+      <PropertyIdentity property={property} originalName={originalName} inherited={inherited} update={update} />
       <PropertyType type={property.type} onChange={(type) => update('type', type)} />
-      <PropertyOptions
-        type={property.type}
-        disabled={access === 'saving'}
-        onChange={changeOptions}
-      />
+      <PropertyOptions type={property.type} disabled={access === 'saving'} onChange={changeOptions} />
       <PropertyFlags property={property} update={update} />
-      <PropertyDefault
-        key={property.type}
-        property={property}
-        frontmatter={frontmatter}
-        onChange={(value) => update('defaultValue', value)}
-      />
+      <PropertyDefault key={property.type} property={property} frontmatter={frontmatter} onChange={(value) => update('defaultValue', value)} />
       <label>
         Tooltip
         <textarea
@@ -190,12 +161,7 @@ function PropertyEditorFields({
         />
       </label>
       {error && <ErrorToast message={error} />}
-      <PropertyActions
-        originalName={originalName}
-        removable={!inherited}
-        onSave={onSave}
-        submit={submit}
-      />
+      <PropertyActions originalName={originalName} removable={!inherited} onSave={onSave} submit={submit} />
     </fieldset>
   );
 }
@@ -232,10 +198,7 @@ function PropertyActions({
 
 interface PropertyControls {
   readonly property: ComponentProperty;
-  readonly update: <Key extends keyof ComponentProperty>(
-    key: Key,
-    value: ComponentProperty[Key],
-  ) => void;
+  readonly update: <Key extends keyof ComponentProperty>(key: Key, value: ComponentProperty[Key]) => void;
 }
 function PropertyIdentity({
   property,
@@ -259,9 +222,7 @@ function PropertyIdentity({
         />
       </label>
       {originalName && originalName !== property.name && (
-        <p className="property-help">
-          Renaming updates this component’s prop references and its instances across the website.
-        </p>
+        <p className="property-help">Renaming updates this component’s prop references and its instances across the website.</p>
       )}
     </>
   );
@@ -270,35 +231,21 @@ function PropertyFlags({ property, update }: PropertyControls) {
   return (
     <div className="property-flags">
       <label>
-        <input
-          type="checkbox"
-          checked={property.required}
-          onChange={(event) => update('required', event.target.checked)}
-        />
+        <input type="checkbox" checked={property.required} onChange={(event) => update('required', event.target.checked)} />
         Required
       </label>
       <label>
-        <input
-          type="checkbox"
-          checked={property.readonly}
-          onChange={(event) => update('readonly', event.target.checked)}
-        />
+        <input type="checkbox" checked={property.readonly} onChange={(event) => update('readonly', event.target.checked)} />
         Readonly
       </label>
     </div>
   );
 }
 
-function changePropertyOptions(
-  property: ComponentProperty,
-  type: string,
-  rename?: PropertyOptionRename,
-): ComponentProperty {
+function changePropertyOptions(property: ComponentProperty, type: string, rename?: PropertyOptionRename): ComponentProperty {
   if (rename && property.defaultValue.trim()) {
     const current = propertyDefaultText(property.defaultValue);
-    const same =
-      property.defaultValue.trim() === rename.from ||
-      (current !== undefined && current === propertyDefaultText(rename.from));
+    const same = property.defaultValue.trim() === rename.from || (current !== undefined && current === propertyDefaultText(rename.from));
     if (same) {
       return { ...property, type, defaultValue: rename.to };
     }
@@ -306,10 +253,7 @@ function changePropertyOptions(
   return { ...property, type };
 }
 
-function changePropertyOptionRenames(
-  current: readonly PropertyOptionRename[],
-  change: PropertyOptionChange,
-): readonly PropertyOptionRename[] {
+function changePropertyOptionRenames(current: readonly PropertyOptionRename[], change: PropertyOptionChange): readonly PropertyOptionRename[] {
   const options = literalOptions(change.type);
   assert(options !== undefined, 'Edited property options remain a literal union');
   const retained = current.filter((rename) => options.includes(rename.to));

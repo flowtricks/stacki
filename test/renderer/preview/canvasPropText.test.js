@@ -12,15 +12,12 @@ const loadRenderer = require('../../helpers/rendererModule');
 
 const dom = new JSDOM('<body></body>');
 for (const name of ['document', 'window', 'HTMLElement', 'Node', 'Element', 'Text', 'Comment']) {
-  global[name] =
-    name === 'document' ? dom.window.document : name === 'window' ? dom.window : dom.window[name];
+  global[name] = name === 'document' ? dom.window.document : name === 'window' ? dom.window : dom.window[name];
 }
 const { parsePage } = require('#dist/electron/parse/astroParser.js');
 const { canvasPropEdits, propName } = loadRenderer('src/app/model/canvasPropText.ts');
 const { createTreeIndex } = loadRenderer('src/editor/editorTree.ts');
-const { canvasTextFocus, parseCanvasTextFocus } = loadRenderer(
-  'shared/properties/canvasTextOverlay.ts',
-);
+const { canvasTextFocus, parseCanvasTextFocus } = loadRenderer('shared/properties/canvasTextOverlay.ts');
 const { marked } = loadRenderer('electron/preload/frameTextMarks.ts');
 
 const ROOT = '/site';
@@ -47,8 +44,7 @@ const SOURCES = {
     '{render && <section><Heading>{headingText}</Heading><Title text={headingText} /></section>}',
   ].join('\n'),
   '/site/src/components/Heading.astro': '<h2><slot /></h2>',
-  '/site/src/components/Card.astro':
-    '---\nconst { body } = Astro.props;\n---\n<p set:html={body} />',
+  '/site/src/components/Card.astro': '---\nconst { body } = Astro.props;\n---\n<p set:html={body} />',
   '/site/src/components/Title.astro': '---\nconst { text } = Astro.props;\n---\n<h3>{text}</h3>',
 };
 const COMPONENTS = [
@@ -99,9 +95,7 @@ test('each single instance gets its own prop text, printed directly or handed on
   }
   assert.equal(byScope.size, 2, 'the looped and the expression instances are left alone');
   // Slider's own text before the text it hands to Title.
-  const [unset, set] = [...byScope.values()].map((targets) =>
-    [...targets].sort((left, right) => left.path.localeCompare(right.path)),
-  );
+  const [unset, set] = [...byScope.values()].map((targets) => [...targets].sort((left, right) => left.path.localeCompare(right.path)));
   assert.deepEqual(
     unset.map((target) => [target.value, target.tag, target.from]),
     [
@@ -152,11 +146,7 @@ test('the selection focus contract accepts paths and rejects malformed messages'
     paths: ['0', '0.3'],
   });
   assert.equal(parseCanvasTextFocus({ type: 'avb:text-close' }), undefined, 'other messages');
-  assert.deepEqual(
-    parseCanvasTextFocus({ type: 'avb:text-focus', paths: [''] }).paths,
-    [],
-    'an empty path is no path',
-  );
+  assert.deepEqual(parseCanvasTextFocus({ type: 'avb:text-focus', paths: [''] }).paths, [], 'an empty path is no path');
   assert.throws(() => parseCanvasTextFocus({ type: 'avb:text-focus', paths: '0' }));
   assert.throws(() => parseCanvasTextFocus({ type: 'avb:text-focus', paths: [3] }));
   const deep = Array.from({ length: 257 }, (_, index) => String(index));

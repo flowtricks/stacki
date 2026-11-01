@@ -7,9 +7,7 @@ import { flatten, type ParserNode } from '../source/source';
 async function resolvePreviewURL(url: string): Promise<string> {
   const parsed = new URL(url);
   const page = parsed.pathname + parsed.search;
-  return parsePreviewTarget(
-    await request('/studio/api/preview-url?page=' + encodeURIComponent(page)),
-  ).url;
+  return parsePreviewTarget(await request('/studio/api/preview-url?page=' + encodeURIComponent(page))).url;
 }
 export function ComponentsPanel({
   project,
@@ -54,14 +52,8 @@ export function ComponentsPanel({
       trailingSlash="ignore"
       onInsert={insert}
       onDragBegin={onDragBegin}
-      onUsage={(component) =>
-        request('/studio/api/component-usage?file=' + encodeURIComponent(component.path))
-      }
-      pageInstances={(name) =>
-        flatten(nodes).flatMap((node) =>
-          node.kind === 'component' && node.name === name && node.id ? [{ id: node.id }] : [],
-        )
-      }
+      onUsage={(component) => request('/studio/api/component-usage?file=' + encodeURIComponent(component.path))}
+      pageInstances={(name) => flatten(nodes).flatMap((node) => (node.kind === 'component' && node.name === name && node.id ? [{ id: node.id }] : []))}
       onSelectInstance={select}
       onOpenUsage={(file) => open(file.path)}
       createFrom={{

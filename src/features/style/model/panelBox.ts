@@ -16,11 +16,7 @@
 export function panelBox(anchor: Element): HTMLElement | undefined {
   // `.app_body` first (moden), where `.embed-editor_root` is an inner box and
   // the wrong answer; `closest` on both at once would pick the nearer root.
-  return (
-    anchor.closest<HTMLElement>('.app_body') ??
-    anchor.closest<HTMLElement>('.embed-editor_root') ??
-    undefined
-  );
+  return anchor.closest<HTMLElement>('.app_body') ?? anchor.closest<HTMLElement>('.embed-editor_root') ?? undefined;
 }
 
 /** That box's rect, or the window when the panel isn't found. */

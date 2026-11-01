@@ -25,20 +25,11 @@ test('concurrent and repeated callbacks perform only one token exchange', async 
     return Response.json({ id: 123, login: 'editor' });
   });
   const state = crypto.randomUUID();
-  const signed = await signSession(
-    { id: 1, login: state, audience: 'login', expires: Date.now() + 600_000 },
-    config.SESSION_SECRET,
-  );
-  const request = new Request(
-    `${config.STUDIO_ORIGIN}/studio/auth/callback?state=${state}&code=one`,
-    {
-      headers: { Cookie: '__Host-studio-state=' + signed },
-    },
-  );
-  const responses = await Promise.all([
-    githubLogin(request, config, attempts, async () => true),
-    githubLogin(request, config, attempts, async () => true),
-  ]);
+  const signed = await signSession({ id: 1, login: state, audience: 'login', expires: Date.now() + 600_000 }, config.SESSION_SECRET);
+  const request = new Request(`${config.STUDIO_ORIGIN}/studio/auth/callback?state=${state}&code=one`, {
+    headers: { Cookie: '__Host-studio-state=' + signed },
+  });
+  const responses = await Promise.all([githubLogin(request, config, attempts, async () => true), githubLogin(request, config, attempts, async () => true)]);
   assert.equal(responses[0]?.status, 302);
   assert.equal(responses[1]?.status, 302);
   assert.equal(exchanges, 1);
@@ -53,18 +44,13 @@ test('HEAD requests and browser prefetches cannot begin or complete sign-in', as
   for (const pathname of ['/studio/auth/login', '/studio/auth/callback']) {
     const url = config.STUDIO_ORIGIN + pathname;
     for (const method of ['HEAD', 'POST', 'OPTIONS']) {
-      const response = await githubLogin(new Request(url, { method }), config, attempts, async () =>
-        assert.fail('No authorization lookup'),
-      );
+      const response = await githubLogin(new Request(url, { method }), config, attempts, async () => assert.fail('No authorization lookup'));
       assert.equal(response?.status, 405);
       assert.equal(response?.headers.get('Set-Cookie'), null);
     }
     for (const header of ['Sec-Purpose', 'Purpose']) {
-      const response = await githubLogin(
-        new Request(url, { headers: { [header]: 'prefetch' } }),
-        config,
-        attempts,
-        async () => assert.fail('No authorization lookup'),
+      const response = await githubLogin(new Request(url, { headers: { [header]: 'prefetch' } }), config, attempts, async () =>
+        assert.fail('No authorization lookup'),
       );
       assert.equal(response?.status, 204);
       assert.equal(response?.headers.get('Set-Cookie'), null);
@@ -74,10 +60,7 @@ test('HEAD requests and browser prefetches cannot begin or complete sign-in', as
 
 test('an old callback reuses an authorized session without another OAuth exchange', async (context) => {
   context.mock.method(globalThis, 'fetch', async () => assert.fail('No OAuth request'));
-  const session = await signSession(
-    { id: 123, login: 'editor', audience: 'studio', expires: Date.now() + 60_000 },
-    config.SESSION_SECRET,
-  );
+  const session = await signSession({ id: 123, login: 'editor', audience: 'studio', expires: Date.now() + 60_000 }, config.SESSION_SECRET);
   const response = await githubLogin(
     new Request(`${config.STUDIO_ORIGIN}/studio/auth/callback?code=old&state=old`, {
       headers: { Cookie: '__Host-studio=' + session },

@@ -72,10 +72,7 @@ type Props = {
 test('preview metadata rejects malformed and oversized inputs', () => {
   assert.throws(() => componentPreviewInputs({}, 'Card'), /expected string/);
   assert.throws(() => componentPreviewInputs('', 'x'.repeat(201)), /exceeds length limit/);
-  assert.throws(
-    () => componentPreviewInputs('x'.repeat(10 * 1024 * 1024 + 1), 'Card'),
-    /exceeds length limit/,
-  );
+  assert.throws(() => componentPreviewInputs('x'.repeat(10 * 1024 * 1024 + 1), 'Card'), /exceeds length limit/);
 });
 
 test('required page data blocks standalone rendering without inventing object values', () => {
@@ -123,25 +120,12 @@ interface Props { src: string; count: number; active: boolean; items: Item[]; da
 });
 
 test('exact project paths distinguish duplicate component names and support layouts', () => {
-  const paths = [
-    '/src/components/One/Card.astro',
-    '/src/components/Two/Card.astro',
-    '/src/layouts/BaseLayout.astro',
-  ];
+  const paths = ['/src/components/One/Card.astro', '/src/components/Two/Card.astro', '/src/layouts/BaseLayout.astro'];
   assert.equal(componentPreviewPath(paths, 'src/components/Two/Card.astro', 'Card'), paths[1]);
   assert.equal(componentPreviewPath(paths, 'src/layouts/BaseLayout.astro', 'BaseLayout'), paths[2]);
   assert.equal(componentPreviewPath(paths, '', 'Card'), paths[0], 'legacy name URLs still work');
-  for (const selected of [
-    '../../Card.astro',
-    '/etc/Card.astro',
-    'src/pages/Card.astro',
-    'src/components/Missing/Card.astro',
-  ]) {
-    assert.equal(
-      componentPreviewPath(paths, selected, 'Card'),
-      undefined,
-      'invalid explicit paths cannot fall back to another component with the same name',
-    );
+  for (const selected of ['../../Card.astro', '/etc/Card.astro', 'src/pages/Card.astro', 'src/components/Missing/Card.astro']) {
+    assert.equal(componentPreviewPath(paths, selected, 'Card'), undefined, 'invalid explicit paths cannot fall back to another component with the same name');
   }
   assert.equal(componentPreviewPath(paths, '', '<script>'), undefined);
   assert.throws(() => componentPreviewPath(paths, jsonNull, 'Card'), /expected string/);
@@ -175,18 +159,10 @@ test('generated Astro route keeps its default slot and loads the selected source
   assert.match(template, /reportStatus\('empty'\)/);
   assert.match(template, /reportStatus\('ready'\)/);
   assert.doesNotMatch(template, /__STACKI_PREVIEW_/);
-  assert.doesNotMatch(
-    template,
-    /require\(|componentPreview\.js|node:/,
-    'edge-rendered pages cannot import the app CommonJS or Node helpers',
-  );
+  assert.doesNotMatch(template, /require\(|componentPreview\.js|node:/, 'edge-rendered pages cannot import the app CommonJS or Node helpers');
   const compiled = await compiler.transform(template, { filename: 'preview.astro' });
   assert.equal(compiled.diagnostics.filter((item) => item.severity === 1).length, 0);
-  assert.doesNotMatch(
-    compiled.code,
-    /__stacki_unused_|\[undefined\]/,
-    'the preview must not create artificial named slots',
-  );
+  assert.doesNotMatch(compiled.code, /__stacki_unused_|\[undefined\]/, 'the preview must not create artificial named slots');
 
   const loaded = [];
   const selected = '/src/components/Two/Card.astro';
@@ -213,10 +189,7 @@ test('generated Astro route keeps its default slot and loads the selected source
     .split('---')[1]
     .replace(/export const prerender = false;/, '')
     .replace("import 'virtual:stacki-component-preview-styles';", '')
-    .replace(
-      "import { packageModules, packageInputs } from 'virtual:stacki-package-components';",
-      '',
-    )
+    .replace("import { packageModules, packageInputs } from 'virtual:stacki-package-components';", '')
     .replaceAll('import.meta.glob', 'glob');
   const run = vm.runInNewContext(`(async () => { ${frontmatter}; return { name, C, props }; })`, {
     Astro: { url: new URL('http://localhost/__avb/preview?p=' + selected) },
@@ -230,8 +203,7 @@ test('generated Astro route keeps its default slot and loads the selected source
   assert.deepEqual(loaded, [selected + '?raw&stacki-preview-props', selected]);
 
   loaded.length = 0;
-  sources[selected] = async () =>
-    componentPreviewInputs('---\ninterface Props { data: PageData; }\n---\n<div />', 'Overview');
+  sources[selected] = async () => componentPreviewInputs('---\ninterface Props { data: PageData; }\n---\n<div />', 'Overview');
   const unavailable = await run();
   assert.equal(unavailable.C, jsonNull, 'missing required data must prevent component execution');
   assert.deepEqual(loaded, [], 'the component module is not even imported without its data');
@@ -251,23 +223,11 @@ test('Vite metadata exports plain ESM data and reflects source edits', async (co
   const imported = await import('data:text/javascript,' + encodeURIComponent(first));
   assert.deepEqual(imported.default, { props: { heading: 'AccordionItem' }, missing: [] });
   fs.writeFileSync(file, accordion.replace('heading, headingTag', "heading = 'Saved', headingTag"));
-  assert.equal(
-    plugin.load(id),
-    'export default {"props":{},"missing":[]};',
-    'a later load sees authored defaults after a source edit',
-  );
+  assert.equal(plugin.load(id), 'export default {"props":{},"missing":[]};', 'a later load sees authored defaults after a source edit');
   for (const query of ['', '?raw', '?stacki-preview-props', '?raw&not-stacki-preview-props']) {
     assert.equal(plugin.load(file + query), undefined);
   }
-  for (const relative of [
-    'src/pages/index.astro',
-    'src/components/../../private.astro',
-    '../outside.astro',
-    'src/components/private.json',
-  ]) {
-    assert.throws(
-      () => plugin.load(path.join(project, relative) + '?raw&stacki-preview-props'),
-      /must belong to a project component or layout/,
-    );
+  for (const relative of ['src/pages/index.astro', 'src/components/../../private.astro', '../outside.astro', 'src/components/private.json']) {
+    assert.throws(() => plugin.load(path.join(project, relative) + '?raw&stacki-preview-props'), /must belong to a project component or layout/);
   }
 });

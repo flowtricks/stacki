@@ -3,18 +3,11 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
-import {
-  checkInteractivePreview,
-  checkPreviewNavigation,
-  checkPreviewOverflow,
-} from './interactivePreview.browser';
+import { checkInteractivePreview, checkPreviewNavigation, checkPreviewOverflow } from './interactivePreview.browser';
 
 const browser = await chromium.launch({
   executablePath:
-    process.env['CHROME_PATH'] ??
-    (process.platform === 'darwin'
-      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-      : chromium.executablePath()),
+    process.env['CHROME_PATH'] ?? (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
   headless: true,
 });
 const auth = process.env['STUDIO_STORAGE_STATE'];
@@ -47,10 +40,7 @@ await first.route('**/studio/morph.js', async (route) => {
   await route.continue();
 });
 try {
-  await Promise.all([
-    first.goto(url, { waitUntil: 'domcontentloaded' }),
-    second.goto(url, { waitUntil: 'domcontentloaded' }),
-  ]);
+  await Promise.all([first.goto(url, { waitUntil: 'domcontentloaded' }), second.goto(url, { waitUntil: 'domcontentloaded' })]);
   await first.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
   await second.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
   const accountMenu = first.getByLabel('Stacki account menu', { exact: true });
@@ -95,24 +85,14 @@ try {
     }
   });
   await first.locator('.rich-content').fill('Collaborative studio');
-  await second
-    .frameLocator('iframe')
-    .getByRole('heading', { name: 'Collaborative studio', exact: true })
-    .waitFor();
+  await second.frameLocator('iframe').getByRole('heading', { name: 'Collaborative studio', exact: true }).waitFor();
   releaseMorph();
-  await preview
-    .getByRole('heading', { name: 'Collaborative studio', exact: true })
-    .waitFor({ timeout: 20000 });
+  await preview.getByRole('heading', { name: 'Collaborative studio', exact: true }).waitFor({ timeout: 20000 });
   assert.equal(navigations, 0, 'Text updates should morph without reloading the page');
-  assert.equal(
-    await preview.locator('h1').evaluate((node) => getComputedStyle(node).cursor),
-    'default',
-  );
+  assert.equal(await preview.locator('h1').evaluate((node) => getComputedStyle(node).cursor), 'default');
   await checkInteractivePreview(first);
   // Exercise actual pointer sorting and the originating editor's structural undo.
-  const headingGrip = first
-    .locator('.structure-node')
-    .filter({ has: first.locator('.label', { hasText: /^Heading$/ }) });
+  const headingGrip = first.locator('.structure-node').filter({ has: first.locator('.label', { hasText: /^Heading$/ }) });
   const eyebrowGrip = first.locator('.nav-gap[data-drop-parent="n0.0.0"][data-drop-index="3"]');
   const headingBox = await headingGrip.boundingBox();
   const eyebrowBox = await eyebrowGrip.boundingBox();
@@ -123,17 +103,12 @@ try {
   await first.mouse.move(eyebrowBox.x + 5, eyebrowBox.y + eyebrowBox.height / 2, { steps: 12 });
   await first.mouse.up();
   await first.waitForFunction(() => {
-    const labels = [...document.querySelectorAll('.structure-node .label')].map(
-      (node) => node.textContent,
-    );
+    const labels = [...document.querySelectorAll('.structure-node .label')].map((node) => node.textContent);
     return labels.indexOf('Heading') > labels.indexOf('Eyebrow');
   });
   await first.keyboard.press('ControlOrMeta+z');
   await first.waitForFunction(
-    (expected) =>
-      JSON.stringify(
-        [...document.querySelectorAll('.structure-node .label')].map((node) => node.textContent),
-      ) === JSON.stringify(expected),
+    (expected) => JSON.stringify([...document.querySelectorAll('.structure-node .label')].map((node) => node.textContent)) === JSON.stringify(expected),
     beforeOrder,
   );
   await first
@@ -149,10 +124,7 @@ try {
   await first.keyboard.press('Escape');
   await first.locator('.rich-content').fill(original);
   await preview.getByRole('heading', { name: original, exact: true }).waitFor();
-  assert.equal(
-    await preview.locator('h1').evaluate((node) => getComputedStyle(node).cursor),
-    'default',
-  );
+  assert.equal(await preview.locator('h1').evaluate((node) => getComputedStyle(node).cursor), 'default');
   await first
     .locator('.structure-node')
     .filter({ has: first.locator('.label', { hasText: /^Img$/ }) })
@@ -175,9 +147,7 @@ try {
     .filter({ has: phone.locator('.label', { hasText: /^Heading$/ }) })
     .locator('.drag-handle')
     .boundingBox();
-  const to = await phone
-    .locator('.nav-gap[data-drop-parent="n0.0.0"][data-drop-index="3"]')
-    .boundingBox();
+  const to = await phone.locator('.nav-gap[data-drop-parent="n0.0.0"][data-drop-index="3"]').boundingBox();
   assert.ok(from && to);
   const touch = await mobile.newCDPSession(phone);
   await touch.send('Input.dispatchTouchEvent', {
@@ -198,9 +168,7 @@ try {
   }
   await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await phone.waitForFunction(() => {
-    const labels = [...document.querySelectorAll('.structure-node .label')].map(
-      (node) => node.textContent,
-    );
+    const labels = [...document.querySelectorAll('.structure-node .label')].map((node) => node.textContent);
     return labels.indexOf('Heading') > labels.indexOf('Eyebrow');
   });
   await phone.getByRole('button', { name: 'Git', exact: true }).click();
@@ -208,33 +176,21 @@ try {
   await phone.getByRole('button', { name: 'Navigator', exact: true }).click();
   await phone.getByRole('button', { name: 'Expand all', exact: true }).click();
   await phone.waitForFunction(() => {
-    const labels = [...document.querySelectorAll('.structure-node .label')].map(
-      (node) => node.textContent,
-    );
+    const labels = [...document.querySelectorAll('.structure-node .label')].map((node) => node.textContent);
     return labels.indexOf('Heading') < labels.indexOf('Eyebrow');
   });
   await phone.getByLabel('Close panel').click();
-  await phone
-    .locator('.preview-toolbar')
-    .getByRole('button', { name: 'Settings', exact: true })
-    .click();
+  await phone.locator('.preview-toolbar').getByRole('button', { name: 'Settings', exact: true }).click();
   await phone.locator('.studio-right.mobile-open').waitFor();
   await phone.screenshot({ path: 'test-results/mobile.png' });
-  assert.equal(
-    await phone.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    true,
-  );
+  assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   await first.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
   original = undefined; // The restored draft is saved before preview navigation changes pages.
   await checkPreviewNavigation(first);
   await first.clock.install();
   await first.clock.fastForward('05:20');
   await first.getByRole('button', { name: 'Resume editing' }).waitFor();
-  assert.equal(
-    await first.locator('iframe').count(),
-    0,
-    'Idle preview must release its connection',
-  );
+  assert.equal(await first.locator('iframe').count(), 0, 'Idle preview must release its connection');
   await first.getByRole('button', { name: 'Resume editing' }).click();
   await first.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
   await first.frameLocator('iframe').locator('h1').waitFor();

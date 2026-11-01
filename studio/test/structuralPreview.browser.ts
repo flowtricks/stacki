@@ -34,8 +34,7 @@ const { variant } = Astro.props;
 );
 await writeFile(path.join(root, file), source, { flag: 'wx' });
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1920, height: 1100 } });
@@ -130,11 +129,7 @@ async function holdRenders(page: Page) {
     });
   });
   await page.route('**/*', async (route) => {
-    if (
-      state.hold &&
-      route.request().resourceType() === 'fetch' &&
-      new URL(route.request().url()).pathname === '/' + suffix
-    ) {
+    if (state.hold && route.request().resourceType() === 'fetch' && new URL(route.request().url()).pathname === '/' + suffix) {
       await gate;
     }
     await route.continue();

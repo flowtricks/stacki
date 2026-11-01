@@ -32,10 +32,7 @@ if (!bootstrap.ok) {
 }
 const connection: unknown = JSON.parse(await boundedText(bootstrap, 16_384));
 const baseline = published(await restorePublishRepository(root, connection));
-await writeFile(
-  path.join(root, '.stacki/studio/state/github-base.json'),
-  JSON.stringify({ sha: baseline }),
-);
+await writeFile(path.join(root, '.stacki/studio/state/github-base.json'), JSON.stringify({ sha: baseline }));
 await restoreGitWorkspace(root, connection, baseline);
 const headers = await gitDraftHeaders(root);
 const filesResponse = await fetch(backend + '/studio/internal/files', { headers });
@@ -74,10 +71,7 @@ for (let offset = 0; offset < assets.length; offset += 4) {
   await Promise.all(
     assets.slice(offset, offset + 4).map(async (input: unknown) => {
       const file = filePath(input);
-      const response = await fetch(
-        backend + '/studio/internal/asset?file=' + encodeURIComponent(file),
-        { headers },
-      );
+      const response = await fetch(backend + '/studio/internal/asset?file=' + encodeURIComponent(file), { headers });
       if (!response.ok) {
         throw new Error('Could not restore asset');
       }
@@ -89,30 +83,13 @@ await restoreCmsDeletions(root);
 await restoreAssetState(root);
 if (!(await linkImageDependencies(root))) {
   console.log('Installing changed site dependencies from cache');
-  await command('npm', [
-    'ci',
-    '--prefer-offline',
-    '--no-audit',
-    '--no-fund',
-    '--cache',
-    '/opt/npm-cache',
-  ]);
+  await command('npm', ['ci', '--prefer-offline', '--no-audit', '--no-fund', '--cache', '/opt/npm-cache']);
 }
 console.log('Starting Astro preview');
 await writeStudioConfig(root, '/opt/studio', 4350);
 await command(
   process.execPath,
-  [
-    path.join(root, 'node_modules/astro/bin/astro.mjs'),
-    'dev',
-    '--config',
-    'astro.studio.config.ts',
-    '--host',
-    '0.0.0.0',
-    '--port',
-    '4350',
-    '--ignore-lock',
-  ],
+  [path.join(root, 'node_modules/astro/bin/astro.mjs'), 'dev', '--config', 'astro.studio.config.ts', '--host', '0.0.0.0', '--port', '4350', '--ignore-lock'],
   0,
 );
 async function command(executable: string, args: string[], timeoutMs = 180_000) {

@@ -17,13 +17,8 @@ import type { CmsConnectionStore } from './cmsConnectionStore';
 
 export type PreviewEnvironment = Readonly<Record<string, string>>;
 
-export function cmsPreviewEnvironment(
-  store: CmsConnectionStore,
-  projectRoot: string,
-): PreviewEnvironment {
-  const sanity = store
-    .list(projectRoot)
-    .connections.find((connection) => connection.kind === 'sanity');
+export function cmsPreviewEnvironment(store: CmsConnectionStore, projectRoot: string): PreviewEnvironment {
+  const sanity = store.list(projectRoot).connections.find((connection) => connection.kind === 'sanity');
   if (sanity?.kind !== 'sanity') {
     return {};
   }

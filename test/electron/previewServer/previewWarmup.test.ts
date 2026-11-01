@@ -6,10 +6,7 @@ import { IncomingMessage, ServerResponse } from 'node:http';
 import { Socket } from 'node:net';
 import { test } from 'node:test';
 import { setImmediate } from 'node:timers/promises';
-import {
-  previewWarmupAfterPage,
-  previewWarmupFiles,
-} from '#dist/electron/previewServer/previewWarmup.js';
+import { previewWarmupAfterPage, previewWarmupFiles } from '#dist/electron/previewServer/previewWarmup.js';
 
 type WarmupServer = Parameters<typeof previewWarmupAfterPage>[0];
 type Middleware = Parameters<WarmupServer['middlewares']['use']>[0];
@@ -53,20 +50,9 @@ function harness() {
 }
 
 test('warmup chooses two reusable templates, excluding endpoints and the homepage', () => {
-  const files = [
-    'index.astro',
-    '404.astro',
-    'about.astro',
-    'api.ts',
-    '[...slug].astro',
-    'blog/[slug].astro',
-    '[...slug].astro',
-  ];
+  const files = ['index.astro', '404.astro', 'about.astro', 'api.ts', '[...slug].astro', 'blog/[slug].astro', '[...slug].astro'];
   const routes = files.map((file) => ({ origin: 'project', entrypoint: `src/pages/${file}` }));
-  assert.deepEqual(previewWarmupFiles(routes), [
-    'src/pages/[...slug].astro',
-    'src/pages/blog/[slug].astro',
-  ]);
+  assert.deepEqual(previewWarmupFiles(routes), ['src/pages/[...slug].astro', 'src/pages/blog/[slug].astro']);
   assert.deepEqual(previewWarmupFiles([{ origin: 'external', entrypoint: 'external.astro' }]), []);
   assert.deepEqual(previewWarmupFiles([{ origin: 'project' }]), []);
   const redirects = Array.from({ length: 2100 }, () => ({ origin: 'project', entrypoint: '/go' }));

@@ -16,9 +16,7 @@ import { GUIDE_LIMITS } from '../../../shared/properties/guideLimits';
 
 /** Automatic project defaults remain distinct from deliberate menu overrides. */
 export type GuideColumnSetting =
-  | { readonly kind: 'automatic' }
-  | { readonly kind: 'count'; readonly count: number }
-  | { readonly kind: 'variable'; readonly name: string };
+  { readonly kind: 'automatic' } | { readonly kind: 'count'; readonly count: number } | { readonly kind: 'variable'; readonly name: string };
 
 /** The initial count and the fallback when a connected variable cannot supply one. */
 export const GUIDE_COLUMN_COUNT_DEFAULT = 12;
@@ -33,9 +31,7 @@ export interface GuideLength {
 }
 
 /** What the menu holds for a margin, gutter or maximum width. */
-export type GuideSize =
-  | { readonly kind: 'length'; readonly length: GuideLength }
-  | { readonly kind: 'variable'; readonly name: string };
+export type GuideSize = { readonly kind: 'length'; readonly length: GuideLength } | { readonly kind: 'variable'; readonly name: string };
 
 /**
  * The variables a Lumos project declares the layout with, measured by the
@@ -292,10 +288,7 @@ export function parseGuideColumnSetting(text: string): GuideColumnSetting | unde
   return size?.kind === 'variable' ? size : undefined;
 }
 
-export function guideColumnText(
-  setting: GuideColumnSetting,
-  metrics: GuideMetrics | undefined = undefined,
-): string {
+export function guideColumnText(setting: GuideColumnSetting, metrics: GuideMetrics | undefined = undefined): string {
   switch (setting.kind) {
     case 'automatic':
       return isGuideColumnPick(metrics?.variableCounts[GUIDE_COLUMN_VARIABLE_DEFAULT])
@@ -314,10 +307,7 @@ export function guideColumnText(
 
 // A missing or unusable connection follows the project's default before using
 // 12, matching the spacing fields' fallback to their project variables.
-function columnCountOf(
-  metrics: GuideMetrics,
-  settings: GuideSettings,
-): Pick<ResolvedGuide, 'columnCount' | 'columnSource'> {
+function columnCountOf(metrics: GuideMetrics, settings: GuideSettings): Pick<ResolvedGuide, 'columnCount' | 'columnSource'> {
   const setting = settings.columns;
   if (setting.kind === 'count') {
     assert(isGuideColumnPick(setting.count), 'Guide: the literal count is within range');
@@ -338,12 +328,7 @@ function columnCountOf(
 // A margin or gutter: the menu's, else the project's own, else the
 // fixed rem default. A menu variable the page does not declare
 // falls through to the next source.
-function spacingValue(
-  projectPx: number | undefined,
-  setting: GuideSize | undefined,
-  metrics: GuideMetrics,
-  fallback: GuideLength,
-): GuideValue {
+function spacingValue(projectPx: number | undefined, setting: GuideSize | undefined, metrics: GuideMetrics, fallback: GuideLength): GuideValue {
   const chosen = settingValue(setting, metrics);
   if (chosen !== undefined) {
     return chosen;
@@ -357,10 +342,7 @@ function spacingValue(
 
 // The maximum width follows the same priority as the margin. Unusable or
 // missing values fall back to the project width, then to 90rem.
-function widthMaxValue(
-  metrics: GuideMetrics,
-  setting: GuideSize | undefined,
-): GuideValue | undefined {
+function widthMaxValue(metrics: GuideMetrics, setting: GuideSize | undefined): GuideValue | undefined {
   const chosen = settingValue(setting, metrics);
   if (chosen !== undefined) {
     if (chosen.px > 0) {
@@ -377,10 +359,7 @@ function widthMaxValue(
 
 // What the menu sets, in pixels: a length as written, a variable as the page
 // resolves it. Undefined when nothing is set or the variable is not declared.
-function settingValue(
-  setting: GuideSize | undefined,
-  metrics: GuideMetrics,
-): GuideValue | undefined {
+function settingValue(setting: GuideSize | undefined, metrics: GuideMetrics): GuideValue | undefined {
   if (setting === undefined) {
     return undefined;
   }

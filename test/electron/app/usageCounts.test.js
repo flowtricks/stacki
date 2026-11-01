@@ -25,10 +25,7 @@ test('offline and rejected requests cannot interrupt project editing', async () 
   const offline = await sendUsageCount({ signal: controller.signal }, async () => {
     throw new Error('offline');
   });
-  const rejected = await sendUsageCount(
-    { signal: controller.signal },
-    async () => new Response(undefined, { status: 503 }),
-  );
+  const rejected = await sendUsageCount({ signal: controller.signal }, async () => new Response(undefined, { status: 503 }));
   assert.equal(offline, false);
   assert.equal(rejected, false);
 });

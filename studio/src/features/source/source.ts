@@ -79,12 +79,7 @@ export function bounds(node: ParserNode) {
 export function applyEdits(source: string, edits: readonly Edit[]): string {
   let previous = source.length + 1;
   for (const edit of [...edits].sort((a, b) => b.start - a.start)) {
-    if (
-      edit.start < 0 ||
-      edit.end < edit.start ||
-      edit.end > source.length ||
-      edit.end > previous
-    ) {
+    if (edit.start < 0 || edit.end < edit.start || edit.end > source.length || edit.end > previous) {
       throw new Error('Overlapping edit');
     }
     source = source.slice(0, edit.start) + edit.text + source.slice(edit.end);
@@ -95,13 +90,7 @@ export function applyEdits(source: string, edits: readonly Edit[]): string {
   }
   return source;
 }
-export function attributeEdit(
-  source: string,
-  id: string,
-  name: string,
-  value: string | undefined,
-  expression = false,
-): Edit {
+export function attributeEdit(source: string, id: string, name: string, value: string | undefined, expression = false): Edit {
   if (!/^[A-Za-z_:][\w:.-]*$/.test(name)) {
     throw new Error('Invalid property name');
   }
@@ -113,12 +102,7 @@ export function attributeEdit(
   if (spans.length > 1) {
     throw new Error('Duplicate attributes require source editing');
   }
-  const text =
-    value === undefined
-      ? ''
-      : expression
-        ? `${name}={${value}}`
-        : `${name}="${escapeAttribute(value)}"`;
+  const text = value === undefined ? '' : expression ? `${name}={${value}}` : `${name}="${escapeAttribute(value)}"`;
   const span = spans[0];
   if (span) {
     return { start: span.span.start, end: span.span.end, text };
@@ -201,11 +185,7 @@ export function parseAction(input: unknown): TreeAction {
       name: string(action['name'], 100),
       importPath: string(action['importPath'], 500),
       paired: action['paired'] === true,
-      ...(action['placement'] === 'before' ||
-      action['placement'] === 'after' ||
-      action['placement'] === 'inside'
-        ? { placement: action['placement'] }
-        : {}),
+      ...(action['placement'] === 'before' || action['placement'] === 'after' || action['placement'] === 'inside' ? { placement: action['placement'] } : {}),
     };
   }
   throw new Error('Unknown operation');

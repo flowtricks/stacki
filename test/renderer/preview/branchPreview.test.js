@@ -15,9 +15,7 @@ test('branch preview pauses before checkout and restarts after success or failur
   const outfile = path.join(directory, 'hooks.cjs');
   esbuild.buildSync({
     stdin: {
-      contents:
-        `export {useBranchPreview, usePreviewStart} from ` +
-        `${sourceSpecifier('src/app/state/appLifecycle.ts')};`,
+      contents: `export {useBranchPreview, usePreviewStart} from ` + `${sourceSpecifier('src/app/state/appLifecycle.ts')};`,
       resolveDir: repoPath('src'),
       loader: 'ts',
     },

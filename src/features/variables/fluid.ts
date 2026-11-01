@@ -17,12 +17,7 @@ const FLUID_LIMITS = { referenceDepthMax: 8 } as const;
 // A value with its variables substituted, following references until nothing
 // is left to follow. `overrides` is what is being typed right now, which is not
 // yet what the file says.
-export function resolveValue(
-  value: string,
-  values?: Readonly<Record<string, string>>,
-  overrides?: Readonly<Record<string, string>>,
-  depth = 0,
-): string {
+export function resolveValue(value: string, values?: Readonly<Record<string, string>>, overrides?: Readonly<Record<string, string>>, depth = 0): string {
   if (depth > FLUID_LIMITS.referenceDepthMax) {
     return value;
   }
@@ -188,9 +183,7 @@ class ArithmeticReader {
   }
 }
 
-export const FLUID_LINK =
-  'https://www.smashingmagazine.com/2023/11/' +
-  'addressing-accessibility-concerns-fluid-type/#conclusion';
+export const FLUID_LINK = 'https://www.smashingmagazine.com/2023/11/' + 'addressing-accessibility-concerns-fluid-type/#conclusion';
 
 /**
  * What a fluid clamp() is worth, accessibility-wise: { status, min, max, rem,
@@ -214,9 +207,7 @@ export function fluidCheck(resolved: unknown) {
   // viewport at all is the rem part, and the step to one vw is the coefficient.
   const base = evaluate(args[1], 0);
   const atOne = evaluate(args[1], 1);
-  if (
-    [min, max, base, atOne].some((reading) => reading === undefined || !Number.isFinite(reading))
-  ) {
+  if ([min, max, base, atOne].some((reading) => reading === undefined || !Number.isFinite(reading))) {
     return undefined;
   }
   if (min === undefined || max === undefined || base === undefined || atOne === undefined) {

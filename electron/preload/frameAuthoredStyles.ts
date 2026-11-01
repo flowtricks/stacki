@@ -26,10 +26,7 @@ export function authoredProperties(element: Element, properties: readonly string
   return inspectAuthoredProperties(element, properties).values;
 }
 
-export function inspectAuthoredProperties(
-  element: Element,
-  properties: readonly string[],
-): AuthoredInspection {
+export function inspectAuthoredProperties(element: Element, properties: readonly string[]): AuthoredInspection {
   const empty: AuthoredInspection = { values: {}, sources: {} };
   if (typeof window.CSS?.registerProperty !== 'function') {
     return empty;
@@ -135,10 +132,7 @@ function authoredPatch(style: CSSStyleDeclaration): AuthoredPatch {
   return { text: style.cssText, all: style.getPropertyValue('all') !== '', probes: new Set() };
 }
 
-function restoreAuthoredStyles(
-  patches: ReadonlyMap<CSSStyleDeclaration, AuthoredPatch>,
-  inline: readonly InlineStyle[],
-): void {
+function restoreAuthoredStyles(patches: ReadonlyMap<CSSStyleDeclaration, AuthoredPatch>, inline: readonly InlineStyle[]): void {
   assert(patches.size <= STYLE_LIMITS.workMax, 'Authored probe cleanup is bounded');
   // Remove only the probes. Reassigning cssText loses a shorthand that holds a
   // var() followed by one of its longhands (`font: 800 2rem var(--f);
@@ -261,12 +255,10 @@ function sheetRules(sheet: CSSStyleSheet): CSSRuleList | undefined {
 
 function authoredStyles(element: Element): CollectedStyles | undefined {
   const styles: CSSStyleDeclaration[] = [];
-  const sheets = [...Array.from(document.styleSheets), ...document.adoptedStyleSheets].filter(
-    (sheet) => {
-      const owner = sheet.ownerNode;
-      return !(owner instanceof Element && /^avb-(design-style|vh-override)$/.test(owner.id));
-    },
-  );
+  const sheets = [...Array.from(document.styleSheets), ...document.adoptedStyleSheets].filter((sheet) => {
+    const owner = sheet.ownerNode;
+    return !(owner instanceof Element && /^avb-(design-style|vh-override)$/.test(owner.id));
+  });
   if (sheets.length > STYLE_LIMITS.rulesMax) {
     return undefined;
   }

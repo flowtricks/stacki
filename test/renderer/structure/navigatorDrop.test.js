@@ -7,9 +7,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { LIMITS } = require('#dist/shared/core/limits.js');
-const { parseNavigatorDrop } = require('../../helpers/rendererModule')(
-  'src/features/structure/navigatorDrop.ts',
-);
+const { parseNavigatorDrop } = require('../../helpers/rendererModule')('src/features/structure/navigatorDrop.ts');
 
 const transfer = (data) => (type) => data[type] ?? '';
 
@@ -28,12 +26,7 @@ test('palette components and tree nodes parse; the component wins when both are 
 
 test('empty, foreign and oversized drag data is no drop', () => {
   const over = 'x'.repeat(LIMITS.tagNameCharsMax + 1);
-  for (const data of [
-    {},
-    { 'text/plain': 'Hero' },
-    { 'avb/component': over },
-    { 'avb/node': over },
-  ]) {
+  for (const data of [{}, { 'text/plain': 'Hero' }, { 'avb/component': over }, { 'avb/node': over }]) {
     assert.equal(parseNavigatorDrop(transfer(data)), undefined);
   }
 });

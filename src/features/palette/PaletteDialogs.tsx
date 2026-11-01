@@ -129,8 +129,7 @@ function ComponentNameField({
         <ErrorToast message={error} />
       ) : (
         <div className="hint-text">
-          {source.label} becomes <code>&lt;{name || 'Name'} /&gt;</code>, saved as{' '}
-          <code>src/components/{name || 'Name'}.astro</code>
+          {source.label} becomes <code>&lt;{name || 'Name'} /&gt;</code>, saved as <code>src/components/{name || 'Name'}.astro</code>
         </div>
       )}
     </div>
@@ -151,14 +150,9 @@ function PropsOffer({
   }
   return (
     <label className="check-row">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.currentTarget.checked)}
-      />
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.currentTarget.checked)} />
       <span>
-        Take {names.length === 1 ? 'this page value' : `these ${names.length} page values`} as
-        props: <PropNames names={names} />
+        Take {names.length === 1 ? 'this page value' : `these ${names.length} page values`} as props: <PropNames names={names} />
       </span>
     </label>
   );
@@ -182,14 +176,7 @@ interface InstancesPopupProps {
   readonly onSelect: (id: string) => void;
 }
 
-export function InstancesPopup({
-  popupRef,
-  usage,
-  here,
-  onClose,
-  onOpen,
-  onSelect,
-}: InstancesPopupProps) {
+export function InstancesPopup({ popupRef, usage, here, onClose, onOpen, onSelect }: InstancesPopupProps) {
   const place = usePopupPlacement(usage, here.length, popupRef);
   return (
     <Popup
@@ -219,27 +206,19 @@ function usePopupPlacement(
   currentCount: number,
   popupRef: React.RefObject<HTMLDivElement>,
 ): { readonly top: number; readonly left: number } | undefined {
-  const [place, setPlace] = useState<{ readonly top: number; readonly left: number } | undefined>(
-    undefined,
-  );
+  const [place, setPlace] = useState<{ readonly top: number; readonly left: number } | undefined>(undefined);
   useLayoutEffect(() => {
     const element = popupRef.current;
     if (!element) {
       return;
     }
     const next = popupPosition(usage.anchor, element.offsetWidth, element.offsetHeight);
-    setPlace((previous) =>
-      previous?.top === next.top && previous.left === next.left ? previous : next,
-    );
+    setPlace((previous) => (previous?.top === next.top && previous.left === next.left ? previous : next));
   }, [currentCount, popupRef, usage]);
   return place;
 }
 
-function popupPosition(
-  anchor: UsageAnchor,
-  width: number,
-  height: number,
-): { readonly top: number; readonly left: number } {
+function popupPosition(anchor: UsageAnchor, width: number, height: number): { readonly top: number; readonly left: number } {
   const margin = 8;
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
   const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
@@ -248,9 +227,7 @@ function popupPosition(
     !viewportHeight || below + height <= viewportHeight - margin
       ? below
       : Math.max(margin, Math.min(anchor.top - 6 - height, viewportHeight - margin - height));
-  const left = viewportWidth
-    ? Math.max(margin, Math.min(anchor.left, viewportWidth - margin - width))
-    : anchor.left;
+  const left = viewportWidth ? Math.max(margin, Math.min(anchor.left, viewportWidth - margin - width)) : anchor.left;
   return { top, left };
 }
 
@@ -270,12 +247,7 @@ function CurrentInstances({
     <div className="instances-group">
       <div className="instances-label">On this page</div>
       {instances.map((instance, index) => (
-        <button
-          key={instance.id}
-          type="button"
-          className="instances-row"
-          onClick={() => onSelect(instance.id)}
-        >
+        <button key={instance.id} type="button" className="instances-row" onClick={() => onSelect(instance.id)}>
           <span className="icon">
             <ElementComponentIcon size={13} />
           </span>
@@ -305,9 +277,7 @@ function UsageFiles({
       ) : usage.kind === 'loading' ? (
         <div className="instances-empty">Looking…</div>
       ) : usage.files.length === 0 ? (
-        <div className="instances-empty">
-          {hasCurrent ? 'Nowhere else.' : 'Not used anywhere yet.'}
-        </div>
+        <div className="instances-empty">{hasCurrent ? 'Nowhere else.' : 'Not used anywhere yet.'}</div>
       ) : (
         usage.files.map((file) => <UsageFileRow key={file.rel} file={file} onOpen={onOpen} />)
       )}
@@ -315,20 +285,9 @@ function UsageFiles({
   );
 }
 
-function UsageFileRow({
-  file,
-  onOpen,
-}: {
-  readonly file: ComponentUsageFile;
-  readonly onOpen: (file: ComponentUsageFile) => void;
-}) {
+function UsageFileRow({ file, onOpen }: { readonly file: ComponentUsageFile; readonly onOpen: (file: ComponentUsageFile) => void }) {
   return (
-    <button
-      type="button"
-      className={`instances-row ${file.kind === 'page' ? 'is-page' : ''}`}
-      title={file.rel}
-      onClick={() => onOpen(file)}
-    >
+    <button type="button" className={`instances-row ${file.kind === 'page' ? 'is-page' : ''}`} title={file.rel} onClick={() => onOpen(file)}>
       <span className="icon">{usageFileIcon(file)}</span>
       <span className="instances-name">{usageFileLabel(file)}</span>
       <span className="instances-count">{file.count}</span>

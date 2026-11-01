@@ -30,10 +30,7 @@ export function parseAccountRequest(input: unknown): AccountRequest {
     throw new Error('Unknown GitHub sign-in action.');
   }
   const id = text(value['id']);
-  assert(
-    /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id),
-    'Invalid GitHub sign-in session.',
-  );
+  assert(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id), 'Invalid GitHub sign-in session.');
   return { action, id, ...(provider === undefined ? {} : { provider }) };
 }
 

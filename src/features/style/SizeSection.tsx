@@ -5,15 +5,7 @@ import { type SegmentedOption } from './components/SegmentedControl';
 import type { Contributor } from './model/resolved';
 import { ChevronIcon } from './components/MenuParts';
 import { displayOf, type Display } from './model/styleDisplay';
-import {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type Props,
-  SizeLabel,
-  LivePropField,
-  LENGTH_FIELDS,
-} from './SizeKit';
+import { type SetProp, type ClearProp, type LiveSetProp, type Props, SizeLabel, LivePropField, LENGTH_FIELDS } from './SizeKit';
 import { type SegmentBarConfig, SegmentBar } from './SizeSegmentBar';
 import { AspectRatioField } from './AspectRatioField';
 import { ImageFitField } from './ObjectFitFields';
@@ -30,8 +22,7 @@ export { RatioOtherInput } from './AspectRatioField';
 // ─────────────────────────── Overflow ───────────────────────────
 
 const SHOW_ICON_FIRST_PATH =
-  'M8 9.5C8.82843 9.5 9.5 8.82843 9.5 8C9.5 7.17157 8.82843 6.5 8 6.5' +
-  'C7.17157 6.5 6.5 7.17157 6.5 8C6.5 8.82843 7.17157 9.5 8 9.5Z';
+  'M8 9.5C8.82843 9.5 9.5 8.82843 9.5 8C9.5 7.17157 8.82843 6.5 8 6.5' + 'C7.17157 6.5 6.5 7.17157 6.5 8C6.5 8.82843 7.17157 9.5 8 9.5Z';
 const SHOW_ICON_SECOND_PATH =
   'M8.00004 4C5.37598 4 3.11613 5.55492 2.08964 7.79148' +
   'C2.02887 7.92388 2.02888 8.07621 2.08965 8.20861C3.11615 10.4451 5.37597 12 8.00001 12' +
@@ -71,9 +62,7 @@ function HideIcon() {
     </svg>
   );
 }
-const CROP_ICON_PATH =
-  'M12 12C12.5523 12 13 11.5523 13 11V5H15.5V4H13V1.5H12V4H5C4.44772 4 4 4.44772 4 5V11H1.5' +
-  'V12H4V14.5H5V12H12ZM5 11H12V5H5V11Z';
+const CROP_ICON_PATH = 'M12 12C12.5523 12 13 11.5523 13 11V5H15.5V4H13V1.5H12V4H5C4.44772 4 4 4.44772 4 5V11H1.5' + 'V12H4V14.5H5V12H12ZM5 11H12V5H5V11Z';
 
 function CropIcon() {
   return (
@@ -82,9 +71,7 @@ function CropIcon() {
     </svg>
   );
 }
-const SCROLL_ICON_FOURTH_PATH =
-  'M12 11.2929L10.3536 9.64645L9.64645 10.3536L12.5 13.2071L15.3536 10.3536L14.6464 9.64645' +
-  'L13 11.2929V5H12V11.2929Z';
+const SCROLL_ICON_FOURTH_PATH = 'M12 11.2929L10.3536 9.64645L9.64645 10.3536L12.5 13.2071L15.3536 10.3536L14.6464 9.64645' + 'L13 11.2929V5H12V11.2929Z';
 
 function ScrollIcon() {
   return (
@@ -122,9 +109,8 @@ const OVERFLOW_TOOLTIPS: Record<string, ReactNode> = {
   ),
   clip: (
     <>
-      <strong>Clip</strong> clips content to the element's padding box, similar to{' '}
-      <strong>hidden</strong>, but it also prevents any scrolling of the overflowed content,
-      including programmatic scrolling.
+      <strong>Clip</strong> clips content to the element's padding box, similar to <strong>hidden</strong>, but it also prevents any scrolling of the overflowed
+      content, including programmatic scrolling.
     </>
   ),
   scroll: (
@@ -189,12 +175,7 @@ function OverflowRow({
 }) {
   // Nothing authored here → the page's own computed overflow, then the caller's
   // fallback (the shorthand's value, for the X / Y rows).
-  const value = useHighlight(
-    display.present ? display.value.toLowerCase() : fallback || '',
-    prop,
-    OVERFLOW_VALUES,
-    '',
-  );
+  const value = useHighlight(display.present ? display.value.toLowerCase() : fallback || '', prop, OVERFLOW_VALUES, '');
   const labelElement = (
     <SizeLabel
       label={label}
@@ -229,15 +210,7 @@ function OverflowRow({
   );
 }
 
-function OverflowField({
-  read,
-  busy,
-  setProp,
-  clearProp,
-  liveSetProp,
-  onProvenance,
-  onSelectSelector,
-}: Props) {
+function OverflowField({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Props) {
   const shorthand = displayOf(read('overflow'));
   const x = displayOf(read('overflow-x'));
   const y = displayOf(read('overflow-y'));
@@ -304,54 +277,28 @@ function OverflowField({
 // ─────────────────────────── Box sizing ───────────────────────────
 
 const BORDER_BOX_ICON_FIRST_PATH =
-  'M4 5C3.44772 5 3 5.44772 3 6V10C3 10.5523 3.44772 11 4 11H12C12.5523 11 13 10.5523 13 10V6' +
-  'C13 5.44772 12.5523 5 12 5H4ZM12 6H4V10H12V6Z';
+  'M4 5C3.44772 5 3 5.44772 3 6V10C3 10.5523 3.44772 11 4 11H12C12.5523 11 13 10.5523 13 10V6' + 'C13 5.44772 12.5523 5 12 5H4ZM12 6H4V10H12V6Z';
 const BORDER_BOX_ICON_SECOND_PATH =
-  'M4 2C3.44772 2 3 2.44772 3 3V13C3 13.5523 3.44772 14 4 14H12C12.5523 14 13 13.5523 13 13V3' +
-  'C13 2.44772 12.5523 2 12 2H4ZM12 3H4V13H12V3Z';
+  'M4 2C3.44772 2 3 2.44772 3 3V13C3 13.5523 3.44772 14 4 14H12C12.5523 14 13 13.5523 13 13V3' + 'C13 2.44772 12.5523 2 12 2H4ZM12 3H4V13H12V3Z';
 
 function BorderBoxIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={BORDER_BOX_ICON_FIRST_PATH}
-        fill="currentColor"
-      />
-      <path
-        opacity="0.4"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={BORDER_BOX_ICON_SECOND_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={BORDER_BOX_ICON_FIRST_PATH} fill="currentColor" />
+      <path opacity="0.4" fillRule="evenodd" clipRule="evenodd" d={BORDER_BOX_ICON_SECOND_PATH} fill="currentColor" />
     </svg>
   );
 }
 const CONTENT_BOX_ICON_FIRST_PATH =
-  'M3 5C2.44772 5 2 5.44772 2 6V10C2 10.5523 2.44772 11 3 11H13C13.5523 11 14 10.5523 14 10V6' +
-  'C14 5.44772 13.5523 5 13 5H3ZM13 6H3L3 10H13V6Z';
+  'M3 5C2.44772 5 2 5.44772 2 6V10C2 10.5523 2.44772 11 3 11H13C13.5523 11 14 10.5523 14 10V6' + 'C14 5.44772 13.5523 5 13 5H3ZM13 6H3L3 10H13V6Z';
 const CONTENT_BOX_ICON_SECOND_PATH =
-  'M3 2C2.44772 2 2 2.44772 2 3V13C2 13.5523 2.44772 14 3 14H10C10.5523 14 11 13.5523 11 13V3' +
-  'C11 2.44772 10.5523 2 10 2H3ZM10 3H3L3 13H10V3Z';
+  'M3 2C2.44772 2 2 2.44772 2 3V13C2 13.5523 2.44772 14 3 14H10C10.5523 14 11 13.5523 11 13V3' + 'C11 2.44772 10.5523 2 10 2H3ZM10 3H3L3 13H10V3Z';
 
 function ContentBoxIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={CONTENT_BOX_ICON_FIRST_PATH}
-        fill="currentColor"
-      />
-      <path
-        opacity="0.4"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={CONTENT_BOX_ICON_SECOND_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={CONTENT_BOX_ICON_FIRST_PATH} fill="currentColor" />
+      <path opacity="0.4" fillRule="evenodd" clipRule="evenodd" d={CONTENT_BOX_ICON_SECOND_PATH} fill="currentColor" />
     </svg>
   );
 }
@@ -363,9 +310,8 @@ const BOX_OPTIONS: ReadonlyArray<SegmentedOption<string>> = [
     ariaLabel: 'Border box',
     tooltip: (
       <>
-        <strong>Border-box</strong> makes the width and height of the element include the content,
-        padding, and border. The overall dimensions of the box do not increase regardless of padding
-        and border sizes.
+        <strong>Border-box</strong> makes the width and height of the element include the content, padding, and border. The overall dimensions of the box do not
+        increase regardless of padding and border sizes.
       </>
     ),
   },
@@ -375,8 +321,8 @@ const BOX_OPTIONS: ReadonlyArray<SegmentedOption<string>> = [
     ariaLabel: 'Content box',
     tooltip: (
       <>
-        <strong>Content-box</strong> makes the width and height of the element include only the
-        content. Padding and border sizes are added to the outside of the box's dimensions.
+        <strong>Content-box</strong> makes the width and height of the element include only the content. Padding and border sizes are added to the outside of
+        the box's dimensions.
       </>
     ),
   },
@@ -399,15 +345,7 @@ const BOX_SIZING_BAR: SegmentBarConfig = {
   customLabel: 'Box sizing value',
 };
 
-function BoxSizingField({
-  read,
-  busy,
-  setProp,
-  clearProp,
-  liveSetProp,
-  onProvenance,
-  onSelectSelector,
-}: Props) {
+function BoxSizingField({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Props) {
   const display = displayOf(read('box-sizing'));
   return (
     <div className="embed-editor_size-row">
@@ -441,12 +379,7 @@ export default function SizeSection(props: Props) {
       <div className="embed-editor_size-grid">
         {LENGTH_FIELDS.map((field) => (
           <Fragment key={field.prop}>
-            <LivePropField
-              prop={field.prop}
-              label={field.label}
-              placeholder={field.placeholder}
-              {...props}
-            />
+            <LivePropField prop={field.prop} label={field.label} placeholder={field.placeholder} {...props} />
           </Fragment>
         ))}
       </div>

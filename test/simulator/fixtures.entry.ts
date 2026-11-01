@@ -28,8 +28,7 @@ export interface SimulationFixtures {
 }
 
 export function loadSimulationFixtures(): SimulationFixtures {
-  const read = (directory: string, name: string) =>
-    fs.readFileSync(path.join(directory, name), 'utf8');
+  const read = (directory: string, name: string) => fs.readFileSync(path.join(directory, name), 'utf8');
   const inputs = fs
     .readdirSync(HOSTILE)
     .filter((name) => !name.includes('.expected.'))
@@ -46,9 +45,6 @@ export function loadSimulationFixtures(): SimulationFixtures {
       alternates.set(name, [read(HOSTILE, name), read(HOSTILE, expected)]);
     }
   }
-  alternates.set('malformed.astro', [
-    read(HOSTILE, 'malformed.astro'),
-    '<div>\n  <span>closed</span>\n</div>\n',
-  ]);
+  alternates.set('malformed.astro', [read(HOSTILE, 'malformed.astro'), '<div>\n  <span>closed</span>\n</div>\n']);
   return { files, alternates };
 }

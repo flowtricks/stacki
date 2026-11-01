@@ -45,13 +45,7 @@ const BRACES_ICON_PATH =
 // The expression toggle's glyph: the braces you write one in.
 const BracesIcon = () => (
   <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-    <path
-      d={BRACES_ICON_PATH}
-      stroke="currentColor"
-      strokeWidth="1.3"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
+    <path d={BRACES_ICON_PATH} stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
@@ -232,12 +226,7 @@ function TrackSection({ title, prop, axis, setProp, labels }: TrackSectionProps)
       )}
       {open !== undefined && edits.anchorElement && openTrack ? (
         <TrackPopover anchorElement={edits.anchorElement} onClose={() => edits.setOpen(undefined)}>
-          <TrackSizeEditor
-            track={openTrack}
-            busy={busy}
-            autoFit={list.autoFit}
-            onChange={(size) => edits.setTrack(open, size)}
-          />
+          <TrackSizeEditor track={openTrack} busy={busy} autoFit={list.autoFit} onChange={(size) => edits.setTrack(open, size)} />
         </TrackPopover>
       ) : undefined}
     </section>
@@ -249,11 +238,7 @@ type TrackList = ReturnType<typeof useTrackList>;
 // The track list as the value says it, and how it is written back. Every edit writes
 // the list in the form the repeat() switch is showing, so adding a track to a
 // repeat() keeps it one.
-function useTrackList({
-  prop,
-  setProp,
-  labels,
-}: Pick<TrackSectionProps, 'prop' | 'setProp' | 'labels'>) {
+function useTrackList({ prop, setProp, labels }: Pick<TrackSectionProps, 'prop' | 'setProp' | 'labels'>) {
   const { read, clearProp } = labels;
   const rawTemplate = resolvedValue(read, prop);
   // `!important` is carried beside the value, not in it — the field shows it,
@@ -280,8 +265,7 @@ function useTrackList({
   // switch stays available and simply waits.
   const canRepeat = tracks.length < 2 || sameTracks(tracks);
   const repeatOn = form === 'repeat' ? true : form === 'list' ? false : canRepeat && preferRepeat;
-  const asWritten = (next: string[]) =>
-    repeatOn && sameTracks(next) ? `repeat(${next.length}, ${next[0]})` : serializeTrackList(next);
+  const asWritten = (next: string[]) => (repeatOn && sameTracks(next) ? `repeat(${next.length}, ${next[0]})` : serializeTrackList(next));
   const write = (next: string[]) => {
     const written = asWritten(next);
     if (written) {
@@ -307,17 +291,7 @@ function useTrackList({
 // Auto-fit wraps the whole track list in repeat(auto-fit, …) — valid only when every
 // track is a `<fixed-size>` (a fixed length or a minmax() with a fixed min, e.g.
 // minmax(20rem, 1fr)); otherwise the warning explains why.
-function autoFitFor({
-  prop,
-  rawTemplate,
-  tracks,
-  setProp,
-}: {
-  prop: string;
-  rawTemplate: string;
-  tracks: string[];
-  setProp: SetProp;
-}): AutoFit {
+function autoFitFor({ prop, rawTemplate, tracks, setProp }: { prop: string; rawTemplate: string; tracks: string[]; setProp: SetProp }): AutoFit {
   return {
     on: /\bauto-fit\b/i.test(rawTemplate),
     can: tracks.length > 0 && tracks.every(isFixedSizeTrack),
@@ -340,15 +314,7 @@ type TrackEdits = ReturnType<typeof useTrackEdits>;
 
 // Which track's popover is open (and the row it hangs from), the drag in progress,
 // and the list edits — each written back through `write`.
-function useTrackEdits({
-  tracks,
-  axis,
-  write,
-}: {
-  tracks: string[];
-  axis: 'column' | 'row';
-  write: (next: string[]) => void;
-}) {
+function useTrackEdits({ tracks, axis, write }: { tracks: string[]; axis: 'column' | 'row'; write: (next: string[]) => void }) {
   const [open, setOpen] = useState<number | undefined>(undefined);
   const [anchorElement, setAnchorElement] = useState<HTMLElement | undefined>(undefined);
   const [dragFrom, setDragFrom] = useState<number | undefined>(undefined);
@@ -378,8 +344,7 @@ function useTrackEdits({
     write(tracks.filter((_, other) => other !== i));
     setOpen((previous) => openAfterRemoval(previous, i));
   };
-  const setTrack = (i: number, size: TrackSize) =>
-    write(tracks.map((track, other) => (other === i ? serializeTrackSize(size) : track)));
+  const setTrack = (i: number, size: TrackSize) => write(tracks.map((track, other) => (other === i ? serializeTrackSize(size) : track)));
   const duplicate = (i: number) => {
     const track = tracks[i];
     if (track === undefined) {
@@ -452,13 +417,7 @@ function TrackSectionHead({
         title={title}
         onChange={(next) => switchRepeat({ next, prop, list, setProp })}
       />
-      <ExpressionToggle
-        title={title}
-        busy={busy}
-        tracksCanHold={tracksCanHold}
-        asExpression={asExpression}
-        onToggle={onToggleExpression}
-      />
+      <ExpressionToggle title={title} busy={busy} tracksCanHold={tracksCanHold} asExpression={asExpression} onToggle={onToggleExpression} />
       {asExpression ? undefined : (
         <button
           type="button"
@@ -477,17 +436,7 @@ function TrackSectionHead({
 
 // Flipping the repeat() switch remembers the choice, then rewrites a non-empty list
 // in the chosen form.
-function switchRepeat({
-  next,
-  prop,
-  list,
-  setProp,
-}: {
-  next: boolean;
-  prop: string;
-  list: TrackList;
-  setProp: SetProp;
-}) {
+function switchRepeat({ next, prop, list, setProp }: { next: boolean; prop: string; list: TrackList; setProp: SetProp }) {
   list.setPreferRepeat(next);
   if (!list.tracks.length) {
     return;
@@ -519,13 +468,7 @@ function ExpressionToggle({
       disabled={busy || !tracksCanHold}
       aria-pressed={asExpression}
       aria-label={`Edit ${title.toLowerCase()} as an expression`}
-      title={
-        !tracksCanHold
-          ? 'This value can’t be shown as tracks'
-          : asExpression
-            ? 'Back to tracks'
-            : 'Edit the whole value as an expression'
-      }
+      title={!tracksCanHold ? 'This value can’t be shown as tracks' : asExpression ? 'Back to tracks' : 'Edit the whole value as an expression'}
       onClick={onToggle}
     >
       <BracesIcon />
@@ -535,26 +478,13 @@ function ExpressionToggle({
 
 // One track row: the drag grip, the track (click to open its size popover), and its
 // duplicate / remove actions. The row is also the drop target while dragging.
-function TrackRow({
-  track,
-  index,
-  axis,
-  busy,
-  edits,
-}: {
-  track: string;
-  index: number;
-  axis: 'column' | 'row';
-  busy: boolean;
-  edits: TrackEdits;
-}) {
+function TrackRow({ track, index, axis, busy, edits }: { track: string; index: number; axis: 'column' | 'row'; busy: boolean; edits: TrackEdits }) {
   const { dragFrom, dragOver, setDragFrom, setDragOver } = edits.drag;
   const isOpen = edits.open === index;
   return (
     <li
       className={
-        `embed-editor_grid-track ${isOpen ? 'is-open' : ''} ` +
-        `${dragOver === index ? 'is-drop-target' : ''} ${dragFrom === index ? 'is-dragging' : ''}`
+        `embed-editor_grid-track ${isOpen ? 'is-open' : ''} ` + `${dragOver === index ? 'is-drop-target' : ''} ${dragFrom === index ? 'is-dragging' : ''}`
       }
       onDragOver={(event) => {
         event.preventDefault();
@@ -588,12 +518,7 @@ function TrackRow({
         >
           <GripIcon />
         </span>
-        <button
-          type="button"
-          className="embed-editor_grid-track-main"
-          onClick={(event) => edits.openAt(index, event.currentTarget)}
-          disabled={busy}
-        >
+        <button type="button" className="embed-editor_grid-track-main" onClick={(event) => edits.openAt(index, event.currentTarget)} disabled={busy}>
           <span className="embed-editor_grid-track-glyph" aria-hidden="true">
             <TrackIcon track={track} axis={axis} />
           </span>
@@ -652,34 +577,10 @@ export default function GridSettings({
   const labels: LabelProps = { read, busy, clearProp, onProvenance, onSelectSelector };
   return (
     <Modal onClose={onClose}>
-      <TrackSection
-        title="Columns"
-        prop="grid-template-columns"
-        axis="column"
-        setProp={setProp}
-        labels={labels}
-      />
-      <AutoSection
-        title="Auto-generated columns"
-        prop="grid-auto-columns"
-        axis="column"
-        setProp={setProp}
-        labels={labels}
-      />
-      <TrackSection
-        title="Rows"
-        prop="grid-template-rows"
-        axis="row"
-        setProp={setProp}
-        labels={labels}
-      />
-      <AutoSection
-        title="Auto-generated rows"
-        prop="grid-auto-rows"
-        axis="row"
-        setProp={setProp}
-        labels={labels}
-      />
+      <TrackSection title="Columns" prop="grid-template-columns" axis="column" setProp={setProp} labels={labels} />
+      <AutoSection title="Auto-generated columns" prop="grid-auto-columns" axis="column" setProp={setProp} labels={labels} />
+      <TrackSection title="Rows" prop="grid-template-rows" axis="row" setProp={setProp} labels={labels} />
+      <AutoSection title="Auto-generated rows" prop="grid-auto-rows" axis="row" setProp={setProp} labels={labels} />
       <AreasSection setProp={setProp} labels={labels} />
     </Modal>
   );

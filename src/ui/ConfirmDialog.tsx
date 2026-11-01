@@ -84,16 +84,7 @@ export function ConfirmHost() {
   if (!ask) {
     return undefined;
   }
-  return (
-    <ConfirmSurface
-      ask={ask}
-      checked={checked}
-      setChecked={setChecked}
-      answer={answer}
-      confirmRef={confirmRef}
-      cancelRef={cancelRef}
-    />
-  );
+  return <ConfirmSurface ask={ask} checked={checked} setChecked={setChecked} answer={answer} confirmRef={confirmRef} cancelRef={cancelRef} />;
 }
 
 interface SurfaceProps {
@@ -115,16 +106,10 @@ function ConfirmSurface({ ask, checked, setChecked, answer, confirmRef, cancelRe
               {ask.body && <div>{ask.body}</div>}
               {ask.checkbox && (
                 <label className="confirm-check">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={(event) => setChecked(event.target.checked)}
-                  />
+                  <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} />
                   <span>
                     {ask.checkbox.label}
-                    {ask.checkbox.hint && (
-                      <em className="confirm-check-hint">{ask.checkbox.hint}</em>
-                    )}
+                    {ask.checkbox.hint && <em className="confirm-check-hint">{ask.checkbox.hint}</em>}
                   </span>
                 </label>
               )}
@@ -134,11 +119,7 @@ function ConfirmSurface({ ask, checked, setChecked, answer, confirmRef, cancelRe
             <button ref={cancelRef} onClick={close}>
               {ask.cancelLabel}
             </button>
-            <button
-              ref={confirmRef}
-              className={ask.danger ? 'danger' : 'primary'}
-              onClick={() => finish(() => answer(true))}
-            >
+            <button ref={confirmRef} className={ask.danger ? 'danger' : 'primary'} onClick={() => finish(() => answer(true))}>
               {ask.confirmLabel}
             </button>
           </div>

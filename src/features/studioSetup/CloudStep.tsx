@@ -30,10 +30,7 @@ export default function CloudStep({ status }: { readonly status: StudioStatus | 
       </section>
       {status ? (
         <AgentHandoff
-          text={studioSetupPrompt(
-            status.kind === 'installed' ? status.version : status.desktopVersion,
-            { installed: status.kind === 'installed' },
-          )}
+          text={studioSetupPrompt(status.kind === 'installed' ? status.version : status.desktopVersion, { installed: status.kind === 'installed' })}
         />
       ) : (
         <p role="status">Checking Studio before preparing your instructions…</p>
@@ -49,46 +46,26 @@ function AgentHandoff({ text }: { readonly text: string }) {
       <section className="studio-agent-card" aria-labelledby="studio-agent-title">
         <h4 id="studio-agent-title">Let your agent handle setup</h4>
         <p>Paste these instructions into your coding agent, in this project.</p>
-        <button
-          className="primary studio-copy-action"
-          disabled={clipboard.status === 'copying'}
-          onClick={() => void clipboard.copy()}
-        >
+        <button className="primary studio-copy-action" disabled={clipboard.status === 'copying'} onClick={() => void clipboard.copy()}>
           {clipboard.status === 'copied' ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
           {clipboard.status === 'copied' ? 'Instructions copied' : 'Copy setup instructions'}
         </button>
-        <p className="studio-setup-note">
-          Your agent guides account connection and deployment approval.
-        </p>
+        <p className="studio-setup-note">Your agent guides account connection and deployment approval.</p>
         {clipboard.status === 'copied' && (
           <span className="studio-command-status" role="status">
             Setup instructions copied.
           </span>
         )}
-        {clipboard.status === 'failed' && (
-          <ErrorToast message="Could not copy. Copy the instructions manually." />
-        )}
+        {clipboard.status === 'failed' && <ErrorToast message="Could not copy. Copy the instructions manually." />}
       </section>
       <details className="studio-setup-details" open={clipboard.status === 'failed' || undefined}>
         <summary>View instructions &amp; guides</summary>
         <div className="studio-setup-details-content">
-          <textarea
-            aria-label="Agent setup prompt"
-            readOnly
-            value={text}
-            rows={7}
-            onFocus={(event) => event.currentTarget.select()}
-          />
+          <textarea aria-label="Agent setup prompt" readOnly value={text} rows={7} onFocus={(event) => event.currentTarget.select()} />
           <div className="studio-setup-actions">
+            <DocumentationLink url="https://developers.cloudflare.com/containers/get-started/" label="Cloudflare guide" />
             <DocumentationLink
-              url="https://developers.cloudflare.com/containers/get-started/"
-              label="Cloudflare guide"
-            />
-            <DocumentationLink
-              url={
-                'https://docs.github.com/en/apps/creating-github-apps/' +
-                'registering-a-github-app/registering-a-github-app'
-              }
+              url={'https://docs.github.com/en/apps/creating-github-apps/' + 'registering-a-github-app/registering-a-github-app'}
               label="GitHub App guide"
             />
           </div>

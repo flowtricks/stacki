@@ -10,12 +10,7 @@ import { batchedRead } from '../../shared/batchedRead';
 type Rooms = ReturnType<typeof createRooms>;
 export function variableRoutes(root: string, rooms: Rooms) {
   const read = cachedVariableReader();
-  return async (
-    request: IncomingMessage,
-    response: ServerResponse,
-    pathname: string,
-    readBody: () => Promise<string>,
-  ) => {
+  return async (request: IncomingMessage, response: ServerResponse, pathname: string, readBody: () => Promise<string>) => {
     if (pathname !== '/studio/api/variables') {
       return false;
     }
@@ -36,30 +31,21 @@ export function variableRoutes(root: string, rooms: Rooms) {
   };
 }
 function cachedVariableReader() {
-  let cached:
-    | { readonly signature: string; readonly value: ReturnType<typeof readVariableSnapshot> }
-    | undefined;
+  let cached: { readonly signature: string; readonly value: ReturnType<typeof readVariableSnapshot> } | undefined;
   return (sources: Map<string, string>) => {
     const versions = Object.fromEntries([...sources].map(([file, text]) => [file, checksum(text)]));
-    const signature = JSON.stringify(
-      Object.entries(versions).sort(([left], [right]) => left.localeCompare(right)),
-    );
+    const signature = JSON.stringify(Object.entries(versions).sort(([left], [right]) => left.localeCompare(right)));
     if (cached?.signature !== signature) {
       cached = { signature, value: readVariableSnapshot(sources, versions) };
     }
     return cached.value;
   };
 }
-function readVariableSnapshot(
-  sources: Map<string, string>,
-  versions: Readonly<Record<string, string>>,
-) {
+function readVariableSnapshot(sources: Map<string, string>, versions: Readonly<Record<string, string>>) {
   return withVariableWorkspace(sources, () => ({ ...readVariables(VARIABLE_ROOT), versions }));
 }
 async function variableSources(root: string, rooms: Rooms) {
-  const paths = [...(await walk(root, 'src')), ...(await walk(root, 'public'))].filter((file) =>
-    /\.(astro|md|mdx|css|ts|js)$/.test(file),
-  );
+  const paths = [...(await walk(root, 'src')), ...(await walk(root, 'public'))].filter((file) => /\.(astro|md|mdx|css|ts|js)$/.test(file));
   if (paths.length > 1000) {
     throw new Error('Variable scan exceeds 1,000 source files');
   }
@@ -74,15 +60,9 @@ async function variableSources(root: string, rooms: Rooms) {
   });
   return new Map(entries);
 }
-async function editVariables(
-  rooms: Rooms,
-  before: Map<string, string>,
-  input: Record<string, unknown>,
-) {
+async function editVariables(rooms: Rooms, before: Map<string, string>, input: Record<string, unknown>) {
   const next = new Map(before);
-  const result = withVariableWorkspace(next, () =>
-    applyVariableOperation(string(input['operation'], 50), input['payload']),
-  );
+  const result = withVariableWorkspace(next, () => applyVariableOperation(string(input['operation'], 50), input['payload']));
   if (!result.ok) {
     return result;
   }
@@ -90,16 +70,11 @@ async function editVariables(
   const changed = [...next].filter(([file, text]) => before.get(file) !== text);
   // Check every file before committing any of a multi-file rename or mode edit.
   for (const [file] of changed) {
-    if (
-      input['operation'] !== 'restoreCssVariables' &&
-      versions[file] !== checksum(before.get(file) ?? '')
-    ) {
+    if (input['operation'] !== 'restoreCssVariables' && versions[file] !== checksum(before.get(file) ?? '')) {
       return { ok: false, error: 'A collaborator changed this source. Refresh and try again.' };
     }
   }
-  const targets = await Promise.all(
-    changed.map(async ([file, text]) => ({ room: await rooms.get(file), text })),
-  );
+  const targets = await Promise.all(changed.map(async ([file, text]) => ({ room: await rooms.get(file), text })));
   for (const { room, text } of targets) {
     await room.setSource(text);
   }

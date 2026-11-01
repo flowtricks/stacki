@@ -104,11 +104,7 @@ function clampWidth(width: number, kind: PanelKind): number {
   return next;
 }
 
-function keyboardWidth(
-  event: KeyboardEvent<HTMLDivElement>,
-  kind: PanelKind,
-  width: number,
-): number | undefined {
+function keyboardWidth(event: KeyboardEvent<HTMLDivElement>, kind: PanelKind, width: number): number | undefined {
   switch (event.key) {
     case 'Home':
       return WIDTH_PX_MIN[kind];
@@ -125,8 +121,7 @@ function keyboardWidth(
 }
 
 function readWidth(kind: PanelKind): number {
-  const fallback =
-    kind === 'code' ? clampWidth(window.innerWidth * 0.34, kind) : WIDTH_PX_MIN[kind];
+  const fallback = kind === 'code' ? clampWidth(window.innerWidth * 0.34, kind) : WIDTH_PX_MIN[kind];
   try {
     return parsePanelWidth(localStorage.getItem(`stacki.panel.width.${kind}`), kind) ?? fallback;
   } catch {

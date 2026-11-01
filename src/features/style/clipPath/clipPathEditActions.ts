@@ -3,14 +3,7 @@
 // history, deleting and duplicating points, choosing a preset or breakpoint,
 // and edits typed in the code view (ClipPath.tsx).
 
-import {
-  type Point,
-  type ClipShape,
-  type KeyboardModifiers,
-  type HandleTarget,
-  type PolygonSelectionDrag,
-  type ShapeTransformDrag,
-} from './clipPathTypes';
+import { type Point, type ClipShape, type KeyboardModifiers, type HandleTarget, type PolygonSelectionDrag, type ShapeTransformDrag } from './clipPathTypes';
 import {
   DEFAULT_SHAPE_SCALE_VARIABLE_NAME,
   DEFAULT_SHAPE_OFFSET_LEFT_VARIABLE_NAME,
@@ -20,14 +13,7 @@ import {
   SVG_POINT_EPSILON,
   NONE_SHAPE,
 } from './clipPathConstants';
-import {
-  clampValue,
-  rectFromPoints,
-  pointInRect,
-  snappedShapeMoveDelta,
-  polygonHandleDisplayPoint,
-  offsetDuplicatePoint,
-} from './clipPathMeasure';
+import { clampValue, rectFromPoints, pointInRect, snappedShapeMoveDelta, polygonHandleDisplayPoint, offsetDuplicatePoint } from './clipPathMeasure';
 import {
   isInsetHandle,
   shapesClose,
@@ -54,8 +40,7 @@ import { writePastedShapeMetadata } from './clipPathStyleRead';
 import { styleOptionsForBreakpoint } from './clipPathStyleWrite';
 import { type EditorAfterPastedCacheActions, handleSelectionActions } from './clipPathEditorState';
 
-export type EditorAfterHandleSelectionActions = EditorAfterPastedCacheActions &
-  ReturnType<typeof handleSelectionActions>;
+export type EditorAfterHandleSelectionActions = EditorAfterPastedCacheActions & ReturnType<typeof handleSelectionActions>;
 
 // Selecting handles from the pointer and the keyboard.
 export function pointerSelectionActions(editor: EditorAfterHandleSelectionActions) {
@@ -107,19 +92,13 @@ export function pointerSelectionActions(editor: EditorAfterHandleSelectionAction
   return { selectHandleFromPointer, selectHandleForKeyboard, canvasPointFromClient };
 }
 
-export type EditorAfterPointerSelectionActions = EditorAfterHandleSelectionActions &
-  ReturnType<typeof pointerSelectionActions>;
+export type EditorAfterPointerSelectionActions = EditorAfterHandleSelectionActions & ReturnType<typeof pointerSelectionActions>;
 
 // The marquee selection of polygon points.
 export function polygonSelectionActions(editor: EditorAfterPointerSelectionActions) {
   const { handleBoundsRef, polygonDisplayProjectionsRef, shapeRef, setHandleSelection } = editor;
   const polygonDisplayPointForSelection = (points: Point[], index: number): Point => {
-    const display = polygonHandleDisplayPoint(
-      points,
-      index,
-      handleBoundsRef.current,
-      polygonDisplayProjectionsRef.current.get(index),
-    ).point;
+    const display = polygonHandleDisplayPoint(points, index, handleBoundsRef.current, polygonDisplayProjectionsRef.current.get(index)).point;
     const bounds = handleBoundsRef.current;
     if (!bounds || bounds.minX > bounds.maxX || bounds.minY > bounds.maxY) {
       return display;
@@ -139,33 +118,23 @@ export function polygonSelectionActions(editor: EditorAfterPointerSelectionActio
     const rect = rectFromPoints(selection.start, selection.current);
     const selectedByRect = current.points
       .map((_, index) => ({ kind: 'polygon-point' as const, index }))
-      .filter((handle) =>
-        pointInRect(polygonDisplayPointForSelection(current.points, handle.index), rect),
-      );
-    const validBaseHandles = selection.baseHandles.filter(
-      (handle) => handle.index >= 0 && handle.index < current.points.length,
-    );
-    const nextHandles = selection.additive
-      ? uniqueHandles([...validBaseHandles, ...selectedByRect])
-      : selectedByRect;
-    const nextPrimary =
-      selectedByRect[selectedByRect.length - 1] || nextHandles[nextHandles.length - 1] || undefined;
+      .filter((handle) => pointInRect(polygonDisplayPointForSelection(current.points, handle.index), rect));
+    const validBaseHandles = selection.baseHandles.filter((handle) => handle.index >= 0 && handle.index < current.points.length);
+    const nextHandles = selection.additive ? uniqueHandles([...validBaseHandles, ...selectedByRect]) : selectedByRect;
+    const nextPrimary = selectedByRect[selectedByRect.length - 1] || nextHandles[nextHandles.length - 1] || undefined;
 
     setHandleSelection(nextPrimary, nextHandles);
   };
 
   const focusSelectedHandle = () => {
     window.requestAnimationFrame(() => {
-      document
-        .querySelector<HTMLButtonElement>('.clip-path_handle.is-selected')
-        ?.focus({ preventScroll: true });
+      document.querySelector<HTMLButtonElement>('.clip-path_handle.is-selected')?.focus({ preventScroll: true });
     });
   };
   return { polygonDisplayPointForSelection, applyPolygonSelectionRect, focusSelectedHandle };
 }
 
-export type EditorAfterPolygonSelectionActions = EditorAfterPointerSelectionActions &
-  ReturnType<typeof polygonSelectionActions>;
+export type EditorAfterPolygonSelectionActions = EditorAfterPointerSelectionActions & ReturnType<typeof polygonSelectionActions>;
 
 // Pointer capture, the undo commit, and closing what a drag leaves open.
 export function dragSupportActions(editor: EditorAfterPolygonSelectionActions) {
@@ -212,8 +181,7 @@ export function dragSupportActions(editor: EditorAfterPolygonSelectionActions) {
   return { releaseActivePointerCapture, commit, closePresetDropdown, stopCodeTransition };
 }
 
-export type EditorAfterDragSupportActions = EditorAfterPolygonSelectionActions &
-  ReturnType<typeof dragSupportActions>;
+export type EditorAfterDragSupportActions = EditorAfterPolygonSelectionActions & ReturnType<typeof dragSupportActions>;
 
 // Ending a handle drag and a marquee drag.
 export function dragFinishActions(editor: EditorAfterDragSupportActions) {
@@ -222,10 +190,7 @@ export function dragFinishActions(editor: EditorAfterDragSupportActions) {
   const { syncInsetModifierMode, setActiveInsetModifierMode, focusSelectedHandle } = editor;
   const { polygonSelectionDragRef, applyPolygonSelectionRect, selectHandle } = editor;
   const { setSelectionRect } = editor;
-  const finishDrag = (
-    focusHandle = true,
-    modifiers: KeyboardModifiers = keyboardModifiersRef.current,
-  ) => {
+  const finishDrag = (focusHandle = true, modifiers: KeyboardModifiers = keyboardModifiersRef.current) => {
     const target = dragTargetRef.current;
     if (target) {
       setShape((current) => {
@@ -271,19 +236,13 @@ export function dragFinishActions(editor: EditorAfterDragSupportActions) {
   return { finishDrag, finishPolygonSelectionDrag };
 }
 
-export type EditorAfterDragFinishActions = EditorAfterDragSupportActions &
-  ReturnType<typeof dragFinishActions>;
+export type EditorAfterDragFinishActions = EditorAfterDragSupportActions & ReturnType<typeof dragFinishActions>;
 
 // Moving and resizing a whole shape by its bounding box.
 export function transformDragActions(editor: EditorAfterDragFinishActions) {
   const { keyboardModifiersRef, showSnapGuides, clearSnapGuides } = editor;
-  const shapeFromTransformDrag = (
-    drag: ShapeTransformDrag,
-    point: Point,
-    modifiers: KeyboardModifiers = keyboardModifiersRef.current,
-  ) => {
-    const containModel =
-      drag.fitMode === 'contain' ? containModelFromShape(drag.before) : undefined;
+  const shapeFromTransformDrag = (drag: ShapeTransformDrag, point: Point, modifiers: KeyboardModifiers = keyboardModifiersRef.current) => {
+    const containModel = drag.fitMode === 'contain' ? containModelFromShape(drag.before) : undefined;
 
     if (drag.mode === 'move') {
       const rawDx = point.x - drag.start.x;
@@ -293,12 +252,7 @@ export function transformDragActions(editor: EditorAfterDragFinishActions) {
       if (containModel) {
         return shapeFromContainModel(drag.before, moveContainModel(containModel, dx, dy));
       }
-      return transformShapeCanvasPoints(
-        drag.before,
-        drag.fitMode,
-        drag.scaleOptions,
-        (currentPoint) => ({ x: currentPoint.x + dx, y: currentPoint.y + dy }),
-      );
+      return transformShapeCanvasPoints(drag.before, drag.fitMode, drag.scaleOptions, (currentPoint) => ({ x: currentPoint.x + dx, y: currentPoint.y + dy }));
     }
 
     if (!drag.corner) {
@@ -320,28 +274,21 @@ export function transformDragActions(editor: EditorAfterDragFinishActions) {
       return undefined;
     }
 
-    const rawScale =
-      (nextVector.x * startVector.x + nextVector.y * startVector.y) / startLengthSquared;
+    const rawScale = (nextVector.x * startVector.x + nextVector.y * startVector.y) / startLengthSquared;
     const scale = Math.max(0, rawScale);
     clearSnapGuides();
     if (containModel) {
       return shapeFromContainModel(drag.before, resizeContainModel(containModel, anchor, scale));
     }
-    return transformShapeCanvasPoints(
-      drag.before,
-      drag.fitMode,
-      drag.scaleOptions,
-      (currentPoint) => ({
-        x: anchor.x + (currentPoint.x - anchor.x) * scale,
-        y: anchor.y + (currentPoint.y - anchor.y) * scale,
-      }),
-    );
+    return transformShapeCanvasPoints(drag.before, drag.fitMode, drag.scaleOptions, (currentPoint) => ({
+      x: anchor.x + (currentPoint.x - anchor.x) * scale,
+      y: anchor.y + (currentPoint.y - anchor.y) * scale,
+    }));
   };
   return { shapeFromTransformDrag };
 }
 
-export type EditorAfterTransformDragActions = EditorAfterDragFinishActions &
-  ReturnType<typeof transformDragActions>;
+export type EditorAfterTransformDragActions = EditorAfterDragFinishActions & ReturnType<typeof transformDragActions>;
 
 // Ending a shape drag, and loading a shape read from the selection.
 export function selectionLoadActions(editor: EditorAfterTransformDragActions) {
@@ -396,8 +343,7 @@ export function selectionLoadActions(editor: EditorAfterTransformDragActions) {
   return { finishShapeTransformDrag, loadShapeFromSelection };
 }
 
-export type EditorAfterSelectionLoadActions = EditorAfterTransformDragActions &
-  ReturnType<typeof selectionLoadActions>;
+export type EditorAfterSelectionLoadActions = EditorAfterTransformDragActions & ReturnType<typeof selectionLoadActions>;
 
 // Undo and redo.
 export function historyActions(editor: EditorAfterSelectionLoadActions) {
@@ -437,8 +383,7 @@ export function historyActions(editor: EditorAfterSelectionLoadActions) {
   return { undo, redo };
 }
 
-export type EditorAfterHistoryActions = EditorAfterSelectionLoadActions &
-  ReturnType<typeof historyActions>;
+export type EditorAfterHistoryActions = EditorAfterSelectionLoadActions & ReturnType<typeof historyActions>;
 
 // Deleting the selected polygon points.
 export function pointDeleteActions(editor: EditorAfterHistoryActions) {
@@ -464,34 +409,20 @@ export function pointDeleteActions(editor: EditorAfterHistoryActions) {
 
     const indexesToDelete = new Set(selectedIndexes);
     const activeIndex =
-      selectedHandleRef.current?.kind === 'polygon-point' &&
-      indexesToDelete.has(selectedHandleRef.current.index)
+      selectedHandleRef.current?.kind === 'polygon-point' && indexesToDelete.has(selectedHandleRef.current.index)
         ? selectedHandleRef.current.index
         : selectedIndexes[0];
     if (activeIndex === undefined) {
       return false;
     }
-    const previousOldIndex = previousSurvivingPolygonIndex(
-      current.points.length,
-      indexesToDelete,
-      activeIndex,
-    );
-    const previousNewIndex =
-      previousOldIndex === undefined
-        ? undefined
-        : remapPolygonIndexAfterDelete(previousOldIndex, indexesToDelete);
-    const nextSelectedHandle: HandleTarget | undefined =
-      previousNewIndex === undefined
-        ? undefined
-        : { kind: 'polygon-point', index: previousNewIndex };
+    const previousOldIndex = previousSurvivingPolygonIndex(current.points.length, indexesToDelete, activeIndex);
+    const previousNewIndex = previousOldIndex === undefined ? undefined : remapPolygonIndexAfterDelete(previousOldIndex, indexesToDelete);
+    const nextSelectedHandle: HandleTarget | undefined = previousNewIndex === undefined ? undefined : { kind: 'polygon-point', index: previousNewIndex };
     const next: ClipShape = {
       kind: 'polygon',
       points: current.points.filter((_, index) => !indexesToDelete.has(index)),
     };
-    const nextColors = normalizePolygonPointColors(
-      current.points.length,
-      polygonPointColorsRef.current,
-    ).filter((_, index) => !indexesToDelete.has(index));
+    const nextColors = normalizePolygonPointColors(current.points.length, polygonPointColorsRef.current).filter((_, index) => !indexesToDelete.has(index));
 
     markLocalShapeChange();
     setHandleSelection(nextSelectedHandle);
@@ -508,18 +439,14 @@ export function pointDeleteActions(editor: EditorAfterHistoryActions) {
   return { deleteSelectedPolygonPoints };
 }
 
-export type EditorAfterPointDeleteActions = EditorAfterHistoryActions &
-  ReturnType<typeof pointDeleteActions>;
+export type EditorAfterPointDeleteActions = EditorAfterHistoryActions & ReturnType<typeof pointDeleteActions>;
 
 // Duplicating polygon points, and opening the preset menu.
 export function pointDuplicateActions(editor: EditorAfterPointDeleteActions) {
   const { shapeRef, markLocalShapeChange, insertPolygonPointColor, setShape, commit } = editor;
   const { syncPresetForShape, setHandleSelection, getActivePolygonSelection } = editor;
   const { presetListRef, activePreset, setActivePresetIndex, setIsPresetOpen } = editor;
-  const duplicatePolygonPoint = (
-    index: number,
-    options: { commitChange?: boolean; selectDuplicate?: boolean } = {},
-  ) => {
+  const duplicatePolygonPoint = (index: number, options: { commitChange?: boolean; selectDuplicate?: boolean } = {}) => {
     const current = shapeRef.current;
     if (current.kind !== 'polygon') {
       return undefined;
@@ -533,11 +460,7 @@ export function pointDuplicateActions(editor: EditorAfterPointDeleteActions) {
     const duplicateIndex = index + 1;
     const next: ClipShape = {
       kind: 'polygon',
-      points: [
-        ...current.points.slice(0, duplicateIndex),
-        offsetDuplicatePoint(point),
-        ...current.points.slice(duplicateIndex),
-      ],
+      points: [...current.points.slice(0, duplicateIndex), offsetDuplicatePoint(point), ...current.points.slice(duplicateIndex)],
     };
     const duplicateHandle: HandleTarget = { kind: 'polygon-point', index: duplicateIndex };
 
@@ -582,8 +505,7 @@ export function pointDuplicateActions(editor: EditorAfterPointDeleteActions) {
   };
 }
 
-export type EditorAfterPointDuplicateActions = EditorAfterPointDeleteActions &
-  ReturnType<typeof pointDuplicateActions>;
+export type EditorAfterPointDuplicateActions = EditorAfterPointDeleteActions & ReturnType<typeof pointDuplicateActions>;
 
 // Choosing a preset shape.
 export function presetChoiceActions(editor: EditorAfterPointDuplicateActions) {
@@ -637,8 +559,7 @@ export function presetChoiceActions(editor: EditorAfterPointDuplicateActions) {
   return { choosePreset };
 }
 
-export type EditorAfterPresetChoiceActions = EditorAfterPointDuplicateActions &
-  ReturnType<typeof presetChoiceActions>;
+export type EditorAfterPresetChoiceActions = EditorAfterPointDuplicateActions & ReturnType<typeof presetChoiceActions>;
 
 // Resetting the breakpoint's clip-path, class selection, and the source label.
 export function breakpointActions(editor: EditorAfterPresetChoiceActions) {
@@ -708,8 +629,7 @@ export function breakpointActions(editor: EditorAfterPresetChoiceActions) {
   return { resetCurrentBreakpointClipPath, handleClassSelectionChange, onClipPathLabelClick };
 }
 
-export type EditorAfterBreakpointActions = EditorAfterPresetChoiceActions &
-  ReturnType<typeof breakpointActions>;
+export type EditorAfterBreakpointActions = EditorAfterPresetChoiceActions & ReturnType<typeof breakpointActions>;
 
 // Editing the shape as code.
 export function codeEditActions(editor: EditorAfterBreakpointActions) {

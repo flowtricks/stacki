@@ -7,10 +7,7 @@ import { encodeRenderedHTML } from '../src/features/preview/renderEncoding';
 import { decodeRenderedHTML } from '../src/features/preview/renderDecoding';
 
 test('full page render compression preserves Unicode and complete markup', async () => {
-  const html =
-    '<main>' +
-    '<section><h2>Hello 🌍</h2><p>Content &amp; text</p></section>'.repeat(3000) +
-    '</main>';
+  const html = '<main>' + '<section><h2>Hello 🌍</h2><p>Content &amp; text</p></section>'.repeat(3000) + '</main>';
   const encoded = await encodeRenderedHTML(html);
   assert.ok('htmlGzip' in encoded);
   assert.ok(encoded.htmlGzip.length < html.length / 10);
@@ -21,8 +18,5 @@ test('full page render compression preserves Unicode and complete markup', async
 test('invalid compressed messages and expanded HTML above the limit are rejected', async () => {
   assert.equal(await decodeRenderedHTML({ htmlGzip: 'not!base64' }), undefined);
   await assert.rejects(decodeRenderedHTML({ htmlGzip: 'YWJj' }));
-  await assert.rejects(
-    decodeRenderedHTML({ htmlGzip: gzipSync('x'.repeat(4_000_001)).toString('base64') }),
-    /size limit/,
-  );
+  await assert.rejects(decodeRenderedHTML({ htmlGzip: gzipSync('x'.repeat(4_000_001)).toString('base64') }), /size limit/);
 });

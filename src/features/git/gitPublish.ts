@@ -8,9 +8,7 @@ import { cleanError } from '../../lib/cleanError';
 
 type GitHubStatus = IpcResults['git:ghStatus'];
 type PreflightState =
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'error'; readonly error: string }
-  | { readonly kind: 'ready'; readonly status: GitHubStatus };
+  { readonly kind: 'loading' } | { readonly kind: 'error'; readonly error: string } | { readonly kind: 'ready'; readonly status: GitHubStatus };
 
 export function parseGitHubStatus(input: unknown): GitHubStatus {
   const value = record(input);
@@ -22,9 +20,7 @@ export function parseGitHubStatus(input: unknown): GitHubStatus {
     }
     return { installed: false, authed: false };
   }
-  return authed
-    ? { installed: true, authed: true, user: optional(text)(value['user']) }
-    : { installed: true, authed: false };
+  return authed ? { installed: true, authed: true, user: optional(text)(value['user']) } : { installed: true, authed: false };
 }
 export async function readGitHubStatus(projectPath: string): Promise<Result<GitHubStatus, string>> {
   const payload = parseIpcPayload('git:ghStatus', projectPath);
@@ -45,11 +41,7 @@ export function useGitHubStatus(projectPath: string): PreflightState {
       if (lifetime === 'disposed') {
         return;
       }
-      setState(
-        result.ok
-          ? { kind: 'ready', status: result.value }
-          : { kind: 'error', error: result.error },
-      );
+      setState(result.ok ? { kind: 'ready', status: result.value } : { kind: 'error', error: result.error });
     });
     return () => {
       lifetime = 'disposed';

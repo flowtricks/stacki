@@ -11,12 +11,7 @@ interface Props {
 export function CreateFileDialog({ create, collection, busy, close }: Props) {
   const [name, setName] = useState('');
   return (
-    <Popup
-      className="modal studio-file-dialog"
-      label={collection ? 'New item' : 'New Page'}
-      dismissible={!busy}
-      onClose={close}
-    >
+    <Popup className="modal studio-file-dialog" label={collection ? 'New item' : 'New Page'} dismissible={!busy} onClose={close}>
       {({ close }) => (
         <>
           <form
@@ -27,9 +22,7 @@ export function CreateFileDialog({ create, collection, busy, close }: Props) {
           >
             <div className="modal-header">{collection ? 'New item' : 'New Page'}</div>
             <div className="modal-body">
-              <label htmlFor="studio-file-name">
-                {collection ? 'Item path' : 'Page name (e.g. “about” or “blog/post-1”)'}
-              </label>
+              <label htmlFor="studio-file-name">{collection ? 'Item path' : 'Page name (e.g. “about” or “blog/post-1”)'}</label>
               <input
                 id="studio-file-name"
                 autoFocus
@@ -46,11 +39,7 @@ export function CreateFileDialog({ create, collection, busy, close }: Props) {
               <button type="button" disabled={busy} onClick={close}>
                 Cancel
               </button>
-              <button
-                type="button"
-                disabled={busy || !name.trim()}
-                onClick={() => void create(name.trim(), true)}
-              >
+              <button type="button" disabled={busy || !name.trim()} onClick={() => void create(name.trim(), true)}>
                 Duplicate current
               </button>
               <button className="primary" disabled={busy || !name.trim()}>

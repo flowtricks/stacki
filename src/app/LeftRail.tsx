@@ -44,10 +44,7 @@ export default function LeftRail({
   const showSoon = (id: RailTab) => (event: MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(
-      () => setTip({ id, left: rect.right + 10, top: rect.top + rect.height / 2 }),
-      TOOLTIP_DELAY,
-    );
+    timerRef.current = setTimeout(() => setTip({ id, left: rect.right + 10, top: rect.top + rect.height / 2 }), TOOLTIP_DELAY);
   };
 
   const hide = () => {
@@ -100,10 +97,7 @@ function useRailKeys({ componentOpen }: { readonly componentOpen: boolean }, onS
       const target = event.target;
       if (
         target instanceof HTMLElement &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable)
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)
       ) {
         return;
       }

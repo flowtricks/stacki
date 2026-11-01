@@ -1,13 +1,7 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { createDefaultsCanvas, removeDefaultsCanvas } from '../../ipc/projectMetadataBridge';
-import {
-  CANVAS_DIRECTORY,
-  type DefaultsCanvasSession,
-} from '../../../shared/properties/defaultsCanvas';
-import {
-  parseComponentDefaults,
-  resolveComponentRecipe,
-} from '../../../shared/properties/componentDefaults';
+import { CANVAS_DIRECTORY, type DefaultsCanvasSession } from '../../../shared/properties/defaultsCanvas';
+import { parseComponentDefaults, resolveComponentRecipe } from '../../../shared/properties/componentDefaults';
 import { recipeFromCanvas, type CanvasModel } from './defaultsCanvasModel';
 import type { DefaultsHost } from './defaultsHost';
 import { prepareDefaultsCanvas, type DefaultsContext } from './defaultsCanvasContext';
@@ -56,23 +50,14 @@ export function useDefaultsCanvas(host: CanvasHost) {
       throw new Error('Close the current defaults editor first.');
     }
     const snapshot = await host.defaults.load();
-    const prepared = prepareDefaultsCanvas(
-      CANVAS_DIRECTORY + crypto.randomUUID() + '.astro',
-      snapshot,
-      context,
-    );
+    const prepared = prepareDefaultsCanvas(CANVAS_DIRECTORY + crypto.randomUUID() + '.astro', snapshot, context);
     await startCanvas(host, control, prepared.session, prepared.source);
   };
   const run = (kind: CanvasAction) => runCanvas(host, control, kind);
   return { state, start, run, isOpen: host.isOpen };
 }
 
-async function startCanvas(
-  host: CanvasHost,
-  control: CanvasControl,
-  session: DefaultsCanvasSession,
-  source: string,
-) {
+async function startCanvas(host: CanvasHost, control: CanvasControl, session: DefaultsCanvasSession, source: string) {
   if (control.active.current || control.operation.current) {
     throw new Error('Finish editing the current component defaults first.');
   }
@@ -134,10 +119,7 @@ async function runCanvas(host: CanvasHost, control: CanvasControl, kind: CanvasA
   }
 }
 
-async function saveCanvas(
-  host: CanvasHost,
-  session: DefaultsCanvasSession,
-): Promise<DefaultsCanvasSession> {
+async function saveCanvas(host: CanvasHost, session: DefaultsCanvasSession): Promise<DefaultsCanvasSession> {
   const recipe = recipeFromCanvas(await host.read(session), session);
   const config = parseComponentDefaults({
     version: 1,

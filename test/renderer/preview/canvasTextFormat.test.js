@@ -68,10 +68,7 @@ test('the lit buttons are the markup the text already sits in', () => {
   assert.equal(states.bold, true);
   assert.equal(states.italic, true);
   assert.equal(states.code, false);
-  assert.throws(
-    () => format.inlineStatesAt(found.root.children, []),
-    /A trail reaches a text node/,
-  );
+  assert.throws(() => format.inlineStatesAt(found.root.children, []), /A trail reaches a text node/);
 });
 
 test('typed but unsaved words replace only the text they were typed into', () => {
@@ -97,15 +94,8 @@ test('a span press wraps the selected words, and pressing again takes it off', (
     );
     assert.equal(wrapped[1].name, 'span');
     assert.equal(wrapped[1].children[0].value, 'hope');
-    const again = format.formatInlineSelection(
-      wrapped,
-      { trail: [1, 0], start: 0, end: 4, value: 'hope' },
-      { kind: 'wrap', tag: 'span' },
-    );
-    assert.deepEqual(
-      again.map((node) => node.kind === 'text' && node.value).join(''),
-      'Find hope today',
-    );
+    const again = format.formatInlineSelection(wrapped, { trail: [1, 0], start: 0, end: 4, value: 'hope' }, { kind: 'wrap', tag: 'span' });
+    assert.deepEqual(again.map((node) => node.kind === 'text' && node.value).join(''), 'Find hope today');
     assert.ok(!again.some((node) => node.kind === 'element'), 'the span is gone');
     assert.equal(document.body.children.length, 0, 'the working copy is removed');
   });
@@ -115,10 +105,7 @@ test('a press refuses text that does not read what the canvas selected', () => {
   withDocument(() => {
     const children = [{ kind: 'text', value: 'Find hope' }];
     const stale = { trail: [0], start: 0, end: 4, value: 'Lose hope' };
-    assert.equal(
-      format.formatInlineSelection(children, stale, { kind: 'wrap', tag: 'code' }),
-      undefined,
-    );
+    assert.equal(format.formatInlineSelection(children, stale, { kind: 'wrap', tag: 'code' }), undefined);
     assert.throws(
       () =>
         format.formatInlineSelection(
@@ -161,8 +148,7 @@ test('the selection message is parsed before the host acts on it', () => {
   });
   assert.equal(cleared.range, undefined);
   assert.equal(parseCanvasTextSelection({ type: 'avb:text-active' }), undefined);
-  const bad = (range) => () =>
-    parseCanvasTextSelection({ ...good, range: { ...good.range, ...range } });
+  const bad = (range) => () => parseCanvasTextSelection({ ...good, range: { ...good.range, ...range } });
   assert.throws(bad({ start: 6, end: 6 }), /non-empty text selection/);
   assert.throws(bad({ start: -1 }), /outside the editing limit/);
   assert.throws(bad({ end: 10_001 }), /outside the editing limit/);

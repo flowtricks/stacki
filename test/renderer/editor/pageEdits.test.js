@@ -145,10 +145,7 @@ async function sent(answers, count = answers.length, refOk = true) {
   let index = 0;
   const many = {
     ...gesture(undefined, refOk),
-    request: () =>
-      refOk
-        ? Array.from({ length: count }, () => ({ tag: 'remove-node', target: REF }))
-        : undefined,
+    request: () => (refOk ? Array.from({ length: count }, () => ({ tag: 'remove-node', target: REF })) : undefined),
   };
   const origin = { checksum: sum(1), source: '', model: { imports: [], nodes: [] } };
   const outcome = await edits.sendGesture({
@@ -181,11 +178,7 @@ test('sending a gesture: every outcome, and what the answers mean', async () => 
   );
 
   const unstated = await sent([], 1, false);
-  assert.deepEqual(
-    unstated.outcome,
-    { tag: 'applied', replies: [] },
-    'a gesture with no request and no model change has nothing left to save',
-  );
+  assert.deepEqual(unstated.outcome, { tag: 'applied', replies: [] }, 'a gesture with no request and no model change has nothing left to save');
   assert.equal(unstated.sent, 0);
   assert.deepEqual(unstated.step.outcome, { tag: 'applied', applied: [] });
 
@@ -202,16 +195,9 @@ test('sending a gesture: every outcome, and what the answers mean', async () => 
 
   const busy = await sent([{ ok: false, error: { code: 'backpressured', message: 'busy' } }], 2);
   assert.deepEqual(busy.outcome, { tag: 'retry', message: 'busy' }, 'never accepted: sent again');
-  assert.deepEqual(
-    busy.step.outcome,
-    { tag: 'pending', waiting: 1, applied: [] },
-    'a second request that never went out is not waited for: the retry owes it',
-  );
+  assert.deepEqual(busy.step.outcome, { tag: 'pending', waiting: 1, applied: [] }, 'a second request that never went out is not waited for: the retry owes it');
 
-  const maybe = await sent([
-    PAGE_OK(sum(2)),
-    { ok: false, error: { code: 'uncertain', message: '?' } },
-  ]);
+  const maybe = await sent([PAGE_OK(sum(2)), { ok: false, error: { code: 'uncertain', message: '?' } }]);
   assert.equal(maybe.outcome.tag, 'uncertain', 'may have landed: never sent twice blind');
   assert.equal(maybe.outcome.replies.length, 1);
 });
@@ -354,32 +340,17 @@ test('nodeRefIn names nodes of the origin by path, kind and range, and nothing e
 
 test('propsGesture: values of every type but a spread are requests; the effect copies', () => {
   const refOf = (id) => (id === 'a' ? REF : undefined);
-  const set = gestures.propsGesture(
-    'a',
-    { title: { type: 'string', value: 'T' }, alt: undefined },
-    { coalesceKey: 'k', urgency: false },
-  );
+  const set = gestures.propsGesture('a', { title: { type: 'string', value: 'T' }, alt: undefined }, { coalesceKey: 'k', urgency: false });
   assert.deepEqual(set.request(refOf), [
     { tag: 'set-attribute', target: REF, name: 'title', value: { type: 'string', value: 'T' } },
     { tag: 'remove-attribute', target: REF, name: 'alt' },
   ]);
   assert.equal(set.stream, undefined, 'two fields are no one stream');
   const one = { coalesceKey: undefined, urgency: true };
-  assert.equal(
-    gestures.propsGesture('a', { title: undefined }, one).stream,
-    'attribute:a:title',
-    'one field of one node, by its handle',
-  );
-  assert.equal(
-    gestures
-      .propsGesture('b', { title: undefined }, { coalesceKey: undefined, urgency: true })
-      .request(refOf),
-    undefined,
-  );
+  assert.equal(gestures.propsGesture('a', { title: undefined }, one).stream, 'attribute:a:title', 'one field of one node, by its handle');
+  assert.equal(gestures.propsGesture('b', { title: undefined }, { coalesceKey: undefined, urgency: true }).request(refOf), undefined);
   const options = { coalesceKey: undefined, urgency: true };
-  const expr = gestures
-    .propsGesture('a', { n: { type: 'expr', value: 'x' } }, options)
-    .request(refOf);
+  const expr = gestures.propsGesture('a', { n: { type: 'expr', value: 'x' } }, options).request(refOf);
   assert.deepEqual(expr?.[0]?.value, { type: 'expr', value: 'x' }, 'the prop step');
   const bare = gestures.propsGesture('a', { hidden: { type: 'bare' } }, options).request(refOf);
   assert.deepEqual(bare?.[0]?.value, { type: 'bare' });
@@ -397,11 +368,7 @@ test('propsGesture: values of every type but a spread are requests; the effect c
     nodes: [{ id: 'r', kind: 'element', name: 'div', children: [node] }],
   };
   const next = set.apply(model);
-  assert.deepEqual(
-    Object.keys(next.nodes[0].children[0].props),
-    ['src', 'title'],
-    'order kept, new last',
-  );
+  assert.deepEqual(Object.keys(next.nodes[0].children[0].props), ['src', 'title'], 'order kept, new last');
   assert.deepEqual(Object.keys(node.props), ['alt', 'src'], 'the old model is untouched');
   assert.notEqual(next.nodes[0], model.nodes[0], 'every list on the path is new');
 });
@@ -449,13 +416,8 @@ test('requests reach the page as splices; the undo step restores every byte', as
     assert.equal(outcome.tag, 'applied');
   }
   assert.equal(outcome.tag, 'applied');
-  const written =
-    '<main>\n  <img\n    src="/a.png"\n    alt="Newer"\n    loading="lazy"\n  />\n</main>\n';
-  assert.equal(
-    fs.readFileSync(file, 'utf8'),
-    written,
-    'two requests: the coalesced value and the new one',
-  );
+  const written = '<main>\n  <img\n    src="/a.png"\n    alt="Newer"\n    loading="lazy"\n  />\n</main>\n';
+  assert.equal(fs.readFileSync(file, 'utf8'), written, 'two requests: the coalesced value and the new one');
   assert.equal(step.outcome.tag, 'applied');
   for (const applied of [...step.outcome.applied].reverse()) {
     const undone = await send({
@@ -532,51 +494,42 @@ test('a delete and the prune it leaves undo together: every import comes back', 
   assert.equal(fs.readFileSync(file, 'utf8'), text, 'the nodes and their imports, byte for byte');
 });
 
-test(
-  'visual attributes stay editable on ' + 'markup with runtime-provided children',
-  async (context) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-opaque-visual-edit-'));
-    fs.mkdirSync(path.join(root, 'src/pages'), { recursive: true });
-    fs.mkdirSync(path.join(root, 'user'));
-    fs.writeFileSync(path.join(root, 'package.json'), '{"dependencies":{"astro":"*"}}');
-    const { mainHarness } = await import('../../helpers/mainHarness.ts');
-    const harness = mainHarness(path.join(root, 'user'));
-    context.after(() => {
-      harness.dispose();
-      fs.rmSync(root, { recursive: true, force: true });
-    });
-    const file = path.join(root, 'src/pages/index.astro');
-    const text =
-      '---\nconst content = "<strong>Hello</strong>";\n---\n<div set:html={content} />\n';
-    fs.writeFileSync(file, text);
-    const read = parsePageDiskRead(await harness.invoke('page:read', file));
-    assert.ok(read.editable);
-    const element = read.model.nodes[0];
-    assert.equal(element?.kind, 'element');
-    const made = gestures.propsGesture(
-      element.id,
-      { class: { type: 'string', value: 'card' } },
-      { coalesceKey: undefined, urgency: true },
-    );
-    const step = record();
-    step.outcome = { tag: 'pending', waiting: 1, applied: [] };
-    const send = async (request) => parsePageEditResult(await harness.invoke('page:edit', request));
-    const outcome = await edits.sendGesture({
-      path: file,
-      origin: { checksum: read.checksum, source: read.source, model: read.model },
-      gesture: made,
-      record: step,
-      send,
-    });
-    assert.equal(outcome.tag, 'applied');
-    assert.equal(
-      fs.readFileSync(file, 'utf8'),
-      '---\nconst content = "<strong>Hello</strong>";\n---\n' +
-        '<div set:html={content} class="card" />\n',
-      'the opaque expression stays byte-for-byte while the visual attribute changes',
-    );
-  },
-);
+test('visual attributes stay editable on ' + 'markup with runtime-provided children', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-opaque-visual-edit-'));
+  fs.mkdirSync(path.join(root, 'src/pages'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'user'));
+  fs.writeFileSync(path.join(root, 'package.json'), '{"dependencies":{"astro":"*"}}');
+  const { mainHarness } = await import('../../helpers/mainHarness.ts');
+  const harness = mainHarness(path.join(root, 'user'));
+  context.after(() => {
+    harness.dispose();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const file = path.join(root, 'src/pages/index.astro');
+  const text = '---\nconst content = "<strong>Hello</strong>";\n---\n<div set:html={content} />\n';
+  fs.writeFileSync(file, text);
+  const read = parsePageDiskRead(await harness.invoke('page:read', file));
+  assert.ok(read.editable);
+  const element = read.model.nodes[0];
+  assert.equal(element?.kind, 'element');
+  const made = gestures.propsGesture(element.id, { class: { type: 'string', value: 'card' } }, { coalesceKey: undefined, urgency: true });
+  const step = record();
+  step.outcome = { tag: 'pending', waiting: 1, applied: [] };
+  const send = async (request) => parsePageEditResult(await harness.invoke('page:edit', request));
+  const outcome = await edits.sendGesture({
+    path: file,
+    origin: { checksum: read.checksum, source: read.source, model: read.model },
+    gesture: made,
+    record: step,
+    send,
+  });
+  assert.equal(outcome.tag, 'applied');
+  assert.equal(
+    fs.readFileSync(file, 'utf8'),
+    '---\nconst content = "<strong>Hello</strong>";\n---\n' + '<div set:html={content} class="card" />\n',
+    'the opaque expression stays byte-for-byte while the visual attribute changes',
+  );
+});
 
 test('a structural fallback can edit page roots as semantic hunks', async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-page-visual-fallback-'));
@@ -617,160 +570,128 @@ test('a structural fallback can edit page roots as semantic hunks', async (conte
   assert.equal(fs.readFileSync(file, 'utf8'), '\n');
 });
 
-test(
-  'insertGesture stands the new node beside the ' + 'one at its place, or inside an empty parent',
-  () => {
-    const refOf = (id) => ({ path: [id.length], kind: 'element', span: { start: 0, end: 1 } });
-    const text = (id, value) => ({ id, kind: 'text', value });
-    const node = { id: 'new', kind: 'element', name: 'p', props: {}, children: [] };
-    const model = {
-      imports: [],
-      nodes: [
-        { id: 'a', kind: 'element', name: 'div', props: {}, children: [] },
-        text('gap', '\n'),
-        {
-          id: 'bb',
-          kind: 'element',
-          name: 'ul',
-          props: {},
-          children: [{ id: 'ccc', kind: 'element', name: 'li', props: {}, children: undefined }],
-        },
-      ],
-    };
-    const options = { urgency: true };
-    const placed = (place) => {
-      const [first] = gestures.insertGesture(model, node, place, options).request(refOf) ?? [];
-      return first && [first.placement, first.target.path[0]];
-    };
-    assert.deepEqual(
-      placed({ parentId: undefined, index: 0 }),
-      ['before', 1],
-      'before the node at the place',
-    );
-    assert.deepEqual(
-      placed({ parentId: undefined, index: 1 }),
-      ['before', 2],
-      'blank text is not a neighbour',
-    );
-    assert.deepEqual(
-      placed({ parentId: undefined, index: 9 }),
-      ['after', 2],
-      'past the end: after the last',
-    );
-    assert.deepEqual(
-      placed({ parentId: 'a', index: 0 }),
-      ['first-child', 1],
-      'inside an empty parent',
-    );
-    assert.deepEqual(placed({ parentId: 'bb', index: 1 }), ['after', 3]);
-    const loop = {
-      imports: [],
-      nodes: [
-        {
-          id: 'loop',
-          kind: 'map',
-          head: 'items.map((item) => (',
-          children: [{ id: 'inside', kind: 'element', name: 'li', props: {}, children: [] }],
-        },
-      ],
-    };
-    const [inLoop] =
-      gestures.insertGesture(loop, node, { parentId: 'loop', index: 1 }, options).request(refOf) ??
-      [];
-    assert.equal(inLoop?.placement, 'last-child', 'a loop owns the insertion point');
-    assert.equal(inLoop?.target.path[0], 4, 'the loop, not its repeated child, is the anchor');
-    assert.deepEqual(
-      gestures.insertGesture({ imports: [], nodes: [] }, node, undefined, options).request(refOf),
-      [{ tag: 'append-body', nodes: [node] }],
-      'an empty body takes its first node',
-    );
-    const inserted = gestures
-      .insertGesture(model, node, { parentId: 'bb', index: 0 }, options)
-      .apply(model);
-    assert.deepEqual(
-      inserted.nodes[2].children.map((child) => child.id),
-      ['new', 'ccc'],
-    );
-    assert.deepEqual(
-      model.nodes[2].children.map((child) => child.id),
-      ['ccc'],
-      'the old model is untouched',
-    );
-    const without = gestures.withoutNodes(model, ['ccc', 'gap']);
-    assert.deepEqual(
-      without.nodes.map((node) => node.id),
-      ['a', 'bb'],
-    );
-    assert.deepEqual(without.nodes[1].children, []);
-    assert.equal(model.nodes.length, 3);
-  },
-);
+test('insertGesture stands the new node beside the ' + 'one at its place, or inside an empty parent', () => {
+  const refOf = (id) => ({ path: [id.length], kind: 'element', span: { start: 0, end: 1 } });
+  const text = (id, value) => ({ id, kind: 'text', value });
+  const node = { id: 'new', kind: 'element', name: 'p', props: {}, children: [] };
+  const model = {
+    imports: [],
+    nodes: [
+      { id: 'a', kind: 'element', name: 'div', props: {}, children: [] },
+      text('gap', '\n'),
+      {
+        id: 'bb',
+        kind: 'element',
+        name: 'ul',
+        props: {},
+        children: [{ id: 'ccc', kind: 'element', name: 'li', props: {}, children: undefined }],
+      },
+    ],
+  };
+  const options = { urgency: true };
+  const placed = (place) => {
+    const [first] = gestures.insertGesture(model, node, place, options).request(refOf) ?? [];
+    return first && [first.placement, first.target.path[0]];
+  };
+  assert.deepEqual(placed({ parentId: undefined, index: 0 }), ['before', 1], 'before the node at the place');
+  assert.deepEqual(placed({ parentId: undefined, index: 1 }), ['before', 2], 'blank text is not a neighbour');
+  assert.deepEqual(placed({ parentId: undefined, index: 9 }), ['after', 2], 'past the end: after the last');
+  assert.deepEqual(placed({ parentId: 'a', index: 0 }), ['first-child', 1], 'inside an empty parent');
+  assert.deepEqual(placed({ parentId: 'bb', index: 1 }), ['after', 3]);
+  const loop = {
+    imports: [],
+    nodes: [
+      {
+        id: 'loop',
+        kind: 'map',
+        head: 'items.map((item) => (',
+        children: [{ id: 'inside', kind: 'element', name: 'li', props: {}, children: [] }],
+      },
+    ],
+  };
+  const [inLoop] = gestures.insertGesture(loop, node, { parentId: 'loop', index: 1 }, options).request(refOf) ?? [];
+  assert.equal(inLoop?.placement, 'last-child', 'a loop owns the insertion point');
+  assert.equal(inLoop?.target.path[0], 4, 'the loop, not its repeated child, is the anchor');
+  assert.deepEqual(
+    gestures.insertGesture({ imports: [], nodes: [] }, node, undefined, options).request(refOf),
+    [{ tag: 'append-body', nodes: [node] }],
+    'an empty body takes its first node',
+  );
+  const inserted = gestures.insertGesture(model, node, { parentId: 'bb', index: 0 }, options).apply(model);
+  assert.deepEqual(
+    inserted.nodes[2].children.map((child) => child.id),
+    ['new', 'ccc'],
+  );
+  assert.deepEqual(
+    model.nodes[2].children.map((child) => child.id),
+    ['ccc'],
+    'the old model is untouched',
+  );
+  const without = gestures.withoutNodes(model, ['ccc', 'gap']);
+  assert.deepEqual(
+    without.nodes.map((node) => node.id),
+    ['a', 'bb'],
+  );
+  assert.deepEqual(without.nodes[1].children, []);
+  assert.equal(model.nodes.length, 3);
+});
 
-test(
-  'moveGesture: a note travels with its node, a ' +
-    'stale slot goes first, nothing moves into itself',
-  () => {
-    const refOf = (id) => ({
-      path: [id.charCodeAt(0)],
-      kind: 'element',
-      span: { start: 0, end: 1 },
-    });
-    const model = {
-      imports: [],
-      nodes: [
-        { id: 'n', kind: 'comment', value: ' note ' },
-        {
-          id: 'x',
-          kind: 'element',
-          name: 'p',
-          source: '\n  <b>kept</b>\n',
-          props: { slot: { type: 'string', value: 's' } },
-          children: [{ id: 'b', kind: 'element', name: 'b', props: {}, children: [] }],
-        },
-        { id: 'z', kind: 'element', name: 'div', props: {}, children: [] },
-      ],
-    };
-    const rules = { keepsSlot: () => false };
-    const tags = (place) =>
-      gestures
-        .moveGesture(model, 'x', place, rules, { urgency: true })
-        .request(refOf)
-        .map((edit) => [edit.tag, edit.target.path[0], edit.placement]);
-    const [note, x, z] = ['n', 'x', 'z'].map((id) => id.charCodeAt(0));
-    assert.deepEqual(
-      tags({ parentId: undefined, index: 3 }),
-      [
-        ['remove-attribute', x, undefined],
-        ['move-node', x, 'after'],
-        ['move-node', note, 'after'],
-      ],
-      'after a node: the node, then its note in front of it',
-    );
-    assert.deepEqual(tags({ parentId: 'z', index: 0 }).slice(1), [
-      ['move-node', x, 'first-child'],
-      ['move-node', note, 'first-child'],
-    ]);
-    const moved = gestures
-      .moveGesture(model, 'x', { parentId: 'z', index: 0 }, rules, { urgency: true })
-      .apply(model);
-    assert.deepEqual(
-      moved.nodes.map((node) => node.id),
-      ['z'],
-    );
-    assert.deepEqual(
-      moved.nodes[0].children.map((node) => node.id),
-      ['n', 'x'],
-      'the note lands above',
-    );
-    assert.equal(moved.nodes[0].children[1].props.slot, undefined, 'the slot meant nothing there');
-    assert.equal(
-      gestures.moveGesture(model, 'x', { parentId: 'b', index: 0 }, rules, { urgency: true }),
-      undefined,
-    );
-    // Emptied of its only child, an element forgets the inner source the legacy
-    // printer would otherwise write back.
-    const emptied = gestures.withoutNodes(model, ['b']);
-    assert.equal(Object.hasOwn(emptied.nodes[1], 'source'), false);
-    assert.equal(model.nodes[1].source, '\n  <b>kept</b>\n', 'the old model keeps its own');
-  },
-);
+test('moveGesture: a note travels with its node, a ' + 'stale slot goes first, nothing moves into itself', () => {
+  const refOf = (id) => ({
+    path: [id.charCodeAt(0)],
+    kind: 'element',
+    span: { start: 0, end: 1 },
+  });
+  const model = {
+    imports: [],
+    nodes: [
+      { id: 'n', kind: 'comment', value: ' note ' },
+      {
+        id: 'x',
+        kind: 'element',
+        name: 'p',
+        source: '\n  <b>kept</b>\n',
+        props: { slot: { type: 'string', value: 's' } },
+        children: [{ id: 'b', kind: 'element', name: 'b', props: {}, children: [] }],
+      },
+      { id: 'z', kind: 'element', name: 'div', props: {}, children: [] },
+    ],
+  };
+  const rules = { keepsSlot: () => false };
+  const tags = (place) =>
+    gestures
+      .moveGesture(model, 'x', place, rules, { urgency: true })
+      .request(refOf)
+      .map((edit) => [edit.tag, edit.target.path[0], edit.placement]);
+  const [note, x, z] = ['n', 'x', 'z'].map((id) => id.charCodeAt(0));
+  assert.deepEqual(
+    tags({ parentId: undefined, index: 3 }),
+    [
+      ['remove-attribute', x, undefined],
+      ['move-node', x, 'after'],
+      ['move-node', note, 'after'],
+    ],
+    'after a node: the node, then its note in front of it',
+  );
+  assert.deepEqual(tags({ parentId: 'z', index: 0 }).slice(1), [
+    ['move-node', x, 'first-child'],
+    ['move-node', note, 'first-child'],
+  ]);
+  const moved = gestures.moveGesture(model, 'x', { parentId: 'z', index: 0 }, rules, { urgency: true }).apply(model);
+  assert.deepEqual(
+    moved.nodes.map((node) => node.id),
+    ['z'],
+  );
+  assert.deepEqual(
+    moved.nodes[0].children.map((node) => node.id),
+    ['n', 'x'],
+    'the note lands above',
+  );
+  assert.equal(moved.nodes[0].children[1].props.slot, undefined, 'the slot meant nothing there');
+  assert.equal(gestures.moveGesture(model, 'x', { parentId: 'b', index: 0 }, rules, { urgency: true }), undefined);
+  // Emptied of its only child, an element forgets the inner source the legacy
+  // printer would otherwise write back.
+  const emptied = gestures.withoutNodes(model, ['b']);
+  assert.equal(Object.hasOwn(emptied.nodes[1], 'source'), false);
+  assert.equal(model.nodes[1].source, '\n  <b>kept</b>\n', 'the old model keeps its own');
+});

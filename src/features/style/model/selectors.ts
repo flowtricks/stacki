@@ -8,15 +8,7 @@
 // It's async because element snapshots are read (and cached) on demand.
 
 import type { ElementSnapshot } from './styleTypes';
-import {
-  type HasAxis,
-  type HasCond,
-  type AttrCond,
-  type Compound,
-  type PositionalPseudo,
-  type CompiledSelector,
-  compileSelectorList,
-} from './selectorParse';
+import { type HasAxis, type HasCond, type AttrCond, type Compound, type PositionalPseudo, type CompiledSelector, compileSelectorList } from './selectorParse';
 export {
   parseSelectorList,
   type SelectorListMember,
@@ -83,10 +75,7 @@ const HAS_DESCENDANTS_MAX = 2000;
 const SELECTOR_LIMITS = { chainDepthMax: 256 } as const;
 
 /** Match every selector in a list against the target element; results in order. */
-export async function matchSelectorList(
-  selectorText: string,
-  target: MatchTarget,
-): Promise<MatchResult[]> {
+export async function matchSelectorList(selectorText: string, target: MatchTarget): Promise<MatchResult[]> {
   const compiled = compileSelectorList(selectorText);
   const results: MatchResult[] = [];
   for (const selector of compiled) {
@@ -100,11 +89,7 @@ export async function matchSelectorList(
   return results;
 }
 
-async function matchComplex(
-  selector: CompiledSelector,
-  subjectKey: string,
-  view: TreeView,
-): Promise<MatchResult> {
+async function matchComplex(selector: CompiledSelector, subjectKey: string, view: TreeView): Promise<MatchResult> {
   if (!selector.compounds.length) {
     return NO_MATCH;
   }
@@ -121,12 +106,7 @@ async function matchComplex(
 }
 
 /** Anchor compounds to the left of `compoundIndex` by walking the real tree. */
-async function matchUpchain(
-  selector: CompiledSelector,
-  compoundIndex: number,
-  currentKey: string,
-  view: TreeView,
-): Promise<boolean> {
+async function matchUpchain(selector: CompiledSelector, compoundIndex: number, currentKey: string, view: TreeView): Promise<boolean> {
   if (compoundIndex === 0) {
     return true;
   }
@@ -159,10 +139,7 @@ async function matchUpchain(
     // Descendant: some real ancestor must satisfy `left`.
     let ancestor = view.parentKey(currentKey);
     while (ancestor !== undefined) {
-      if (
-        (await matchCompound(left, ancestor, view)) &&
-        (await matchUpchain(selector, compoundIndex - 1, ancestor, view))
-      ) {
+      if ((await matchCompound(left, ancestor, view)) && (await matchUpchain(selector, compoundIndex - 1, ancestor, view))) {
         return true;
       }
       ancestor = view.parentKey(ancestor);
@@ -173,10 +150,7 @@ async function matchUpchain(
   // Sibling (`~` any preceding, `+` immediately preceding).
   const reach = combinator === '+' ? 'adjacent' : 'all';
   for (const sibling of precedingSiblings(currentKey, view, reach)) {
-    if (
-      (await matchCompound(left, sibling, view)) &&
-      (await matchUpchain(selector, compoundIndex - 1, sibling, view))
-    ) {
+    if ((await matchCompound(left, sibling, view)) && (await matchUpchain(selector, compoundIndex - 1, sibling, view))) {
       return true;
     }
   }
@@ -213,11 +187,7 @@ async function matchCompound(compound: Compound, key: string, view: TreeView): P
   // type selector (`div`, `a`) never matches.
   if (compound.tag && compound.tag !== '*') {
     const hasOther =
-      compound.id !== undefined ||
-      compound.classes.length > 0 ||
-      compound.attrs.length > 0 ||
-      compound.requireAny.length > 0 ||
-      compound.hasGroups.length > 0;
+      compound.id !== undefined || compound.classes.length > 0 || compound.attrs.length > 0 || compound.requireAny.length > 0 || compound.hasGroups.length > 0;
     if (snapshot.tag !== undefined) {
       if (snapshot.tag !== compound.tag) {
         return false;
@@ -327,11 +297,7 @@ function nthMatches(position: number, step: number, offset: number): boolean {
  * panel can't see, so its element type is unknowable). Undefined keeps the old
  * optimistic behaviour instead of guessing.
  */
-async function matchesPosition(
-  entry: PositionalPseudo,
-  key: string,
-  view: TreeView,
-): Promise<boolean | undefined> {
+async function matchesPosition(entry: PositionalPseudo, key: string, view: TreeView): Promise<boolean | undefined> {
   const parent = view.parentKey(key);
   if (parent === undefined) {
     return undefined;
@@ -423,9 +389,7 @@ function precedingSiblings(key: string, view: TreeView, reach: SiblingReach): st
   }
   const adjacent = siblings[index - 1];
   // The preceding siblings come back nearest-first.
-  return reach === 'adjacent' && adjacent !== undefined
-    ? [adjacent]
-    : siblings.slice(0, index).reverse();
+  return reach === 'adjacent' && adjacent !== undefined ? [adjacent] : siblings.slice(0, index).reverse();
 }
 
 function followingSiblings(key: string, view: TreeView, reach: SiblingReach): string[] {

@@ -2,10 +2,7 @@ import { canEdit, type AccessConfig } from './repositoryAccess';
 import { verifySession } from './session';
 import { record, string } from '../../shared/validation';
 
-export async function authorizeConnection(
-  request: Request,
-  environment: AccessConfig & { readonly SESSION_SECRET: string },
-) {
+export async function authorizeConnection(request: Request, environment: AccessConfig & { readonly SESSION_SECRET: string }) {
   if (request.method !== 'POST') {
     return new Response(null, { status: 405 });
   }
@@ -14,11 +11,7 @@ export async function authorizeConnection(
   if (audience !== 'studio' && audience !== 'preview') {
     return new Response(null, { status: 400 });
   }
-  const identity = await verifySession(
-    string(input['session'], 4096),
-    environment.SESSION_SECRET,
-    audience,
-  );
+  const identity = await verifySession(string(input['session'], 4096), environment.SESSION_SECRET, audience);
   if (!identity) {
     return new Response(null, { status: 401 });
   }

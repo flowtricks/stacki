@@ -10,11 +10,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 // Main parses every payload before it reaches a handler.
 const invoke =
   <K extends IpcChannel>(channel: K) =>
-  (
-    ...args: undefined extends IpcPayloads[K]
-      ? [payload?: IpcPayloads[K]]
-      : [payload: IpcPayloads[K]]
-  ): Promise<unknown> =>
+  (...args: undefined extends IpcPayloads[K] ? [payload?: IpcPayloads[K]] : [payload: IpcPayloads[K]]): Promise<unknown> =>
     ipcRenderer.invoke(channel, args[0]);
 
 export function exposeBridge(): void {
@@ -261,8 +257,7 @@ function terminalBridge() {
     closeTerminal: invoke('terminal:close'),
     terminalInput: (id: string, data: string) => ipcRenderer.send('terminal:input', { id, data }),
     terminalAck: (id: string, count: number) => ipcRenderer.send('terminal:ack', { id, count }),
-    terminalClipboardImage: (bytes: Uint8Array, mime: string) =>
-      ipcRenderer.invoke('terminal:clipboardImage', { bytes, mime }),
+    terminalClipboardImage: (bytes: Uint8Array, mime: string) => ipcRenderer.invoke('terminal:clipboardImage', { bytes, mime }),
     onTerminalData: (callback: (data: unknown) => void) => {
       const listener = (_event: unknown, data: unknown) => callback(data);
       ipcRenderer.on('terminal:data', listener);

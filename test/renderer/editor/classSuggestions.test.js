@@ -3,9 +3,7 @@
 // exclusion and prefix ranking using the same search as the rendered menu.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { classMatches } = require('../../helpers/rendererModule')(
-  'src/features/props/ClassInput.tsx',
-);
+const { classMatches } = require('../../helpers/rendererModule')('src/features/props/ClassInput.tsx');
 
 test('all matching classes remain available to the scrollable menu', () => {
   const suggestions = Array.from({ length: 100 }, (_, index) => `margin-bottom-${index}`);

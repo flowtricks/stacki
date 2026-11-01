@@ -8,13 +8,7 @@ import { assert } from '../../shared/core/assert';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import type { PropertyOptionRename } from '../../shared/properties/propertyEditing';
 import { err, ok, type Result } from '../../shared/core/result';
-import {
-  applySourceEdits,
-  isAstroProps,
-  propertyKey,
-  readPropertySyntax,
-  syntaxNodes,
-} from './propertySyntax';
+import { applySourceEdits, isAstroProps, propertyKey, readPropertySyntax, syntaxNodes } from './propertySyntax';
 import type { SourceEdit } from './propertySyntax';
 
 export interface PropertyRename {
@@ -53,16 +47,8 @@ export function renameComponentReferences(
   rename: PropertyRename,
   owner: 'definition' | 'consumer',
 ): Result<string> {
-  const typeNames =
-    owner === 'definition'
-      ? readPropertyContracts(readPropertySyntax(source)).names
-      : new Set<string>();
-  return editComponentReferences(
-    source,
-    names,
-    { kind: 'rename', ...rename, typeNames: new Set(['Props', ...typeNames]) },
-    owner,
-  );
+  const typeNames = owner === 'definition' ? readPropertyContracts(readPropertySyntax(source)).names : new Set<string>();
+  return editComponentReferences(source, names, { kind: 'rename', ...rename, typeNames: new Set(['Props', ...typeNames]) }, owner);
 }
 
 export function renameComponentOptionValues(
@@ -110,9 +96,7 @@ function parseAstroRenameSource(source: string): Result<Node> {
   }
 }
 
-function parseOptionRenames(
-  renames: readonly PropertyOptionRename[],
-): Result<readonly ParsedOptionRename[]> {
+function parseOptionRenames(renames: readonly PropertyOptionRename[]): Result<readonly ParsedOptionRename[]> {
   assert(renames.length <= PROPERTY_LIMITS.fieldsMax, 'Option rename count is bounded');
   const parsed: ParsedOptionRename[] = [];
   const sources = new Set<string>();
@@ -185,15 +169,8 @@ function renameOptionAttribute(
   return ok(renameOptionExpression(attribute.value, position, renames));
 }
 
-function renameQuotedOption(
-  source: string,
-  attribute: AttributeNode,
-  renames: readonly ParsedOptionRename[],
-  start: number,
-): Result<readonly SourceEdit[]> {
-  const rename = renames.find(
-    (entry) => entry.from.kind === 'string' && entry.from.value === attribute.value,
-  );
+function renameQuotedOption(source: string, attribute: AttributeNode, renames: readonly ParsedOptionRename[], start: number): Result<readonly SourceEdit[]> {
+  const rename = renames.find((entry) => entry.from.kind === 'string' && entry.from.value === attribute.value);
   if (!rename) {
     return ok([]);
   }
@@ -205,8 +182,7 @@ function renameQuotedOption(
   if (position < 0) {
     return positionError();
   }
-  const text =
-    rename.to.kind === 'string' ? JSON.stringify(rename.to.value) : `{${rename.replacement}}`;
+  const text = rename.to.kind === 'string' ? JSON.stringify(rename.to.value) : `{${rename.replacement}}`;
   return ok([{ start: position, end: position + raw.length, text }]);
 }
 
@@ -218,20 +194,12 @@ function renameOptionSpread(
   position: number,
 ): Result<readonly SourceEdit[]> {
   const prefix = 'const spread = (';
-  const syntax = ts.createSourceFile(
-    'spread.ts',
-    prefix + attribute.name + ');',
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const syntax = ts.createSourceFile('spread.ts', prefix + attribute.name + ');', ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const object = syntaxNodes(syntax).find(ts.isObjectLiteralExpression);
   if (!object || optionSpreadIsDynamic(object)) {
     return err({
       code: 'spread',
-      message:
-        'An instance uses a dynamic prop spread. ' +
-        'Make its props explicit before renaming this option.',
+      message: 'An instance uses a dynamic prop spread. ' + 'Make its props explicit before renaming this option.',
     });
   }
   const start = source.indexOf(attribute.name, Math.max(0, position - attribute.name.length - 4));
@@ -249,26 +217,12 @@ function renameOptionSpread(
 }
 
 function optionSpreadIsDynamic(object: ts.ObjectLiteralExpression): boolean {
-  return object.properties.some(
-    (property) =>
-      ts.isSpreadAssignment(property) ||
-      (property.name !== undefined && ts.isComputedPropertyName(property.name)),
-  );
+  return object.properties.some((property) => ts.isSpreadAssignment(property) || (property.name !== undefined && ts.isComputedPropertyName(property.name)));
 }
 
-function renameOptionExpression(
-  expression: string,
-  start: number,
-  renames: readonly ParsedOptionRename[],
-): readonly SourceEdit[] {
+function renameOptionExpression(expression: string, start: number, renames: readonly ParsedOptionRename[]): readonly SourceEdit[] {
   const prefix = 'const value = (';
-  const syntax = ts.createSourceFile(
-    'option.ts',
-    prefix + expression + ');',
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const syntax = ts.createSourceFile('option.ts', prefix + expression + ');', ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const declaration = syntaxNodes(syntax).find(ts.isVariableDeclaration);
   const initializer = declaration?.initializer;
   assert(initializer !== undefined, 'Option expression has an initializer');
@@ -276,20 +230,14 @@ function renameOptionExpression(
   return renameOptionExpressionNode(value, start - prefix.length, renames);
 }
 
-function renameOptionExpressionNode(
-  expression: ts.Expression,
-  start: number,
-  renames: readonly ParsedOptionRename[],
-): readonly SourceEdit[] {
+function renameOptionExpressionNode(expression: ts.Expression, start: number, renames: readonly ParsedOptionRename[]): readonly SourceEdit[] {
   const edits: SourceEdit[] = [];
   for (const node of syntaxNodes(expression)) {
     if (ts.isNumericLiteral(node) && ts.isPrefixUnaryExpression(node.parent)) {
       continue;
     }
     const scalar = optionScalarNode(node);
-    const rename = scalar
-      ? renames.find((entry) => optionScalarKey(entry.from) === optionScalarKey(scalar))
-      : undefined;
+    const rename = scalar ? renames.find((entry) => optionScalarKey(entry.from) === optionScalarKey(scalar)) : undefined;
     if (rename) {
       edits.push({
         start: start + node.getStart(),
@@ -303,13 +251,7 @@ function renameOptionExpressionNode(
 
 function optionScalar(expression: string): OptionScalar | undefined {
   const prefix = 'const value = (';
-  const syntax = ts.createSourceFile(
-    'literal.ts',
-    prefix + expression + ');',
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const syntax = ts.createSourceFile('literal.ts', prefix + expression + ');', ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const declaration = syntaxNodes(syntax).find(ts.isVariableDeclaration);
   const initializer = declaration?.initializer;
   if (!initializer || !ts.isParenthesizedExpression(initializer)) {
@@ -340,21 +282,13 @@ function optionScalarKey(value: OptionScalar): string {
   return `${value.kind}:${String(value.value)}`;
 }
 
-export function bindComponentDefault(
-  source: string,
-  name: string,
-  binding: string,
-): Result<string> {
+export function bindComponentDefault(source: string, name: string, binding: string): Result<string> {
   const document = readPropertySyntax(source);
   const declaration = syntaxNodes(document.syntax).find(
     (node) =>
       ts.isVariableStatement(node) &&
       node.declarationList.declarations.some(
-        (item) =>
-          ts.isObjectBindingPattern(item.name) &&
-          item.name.elements.some(
-            (element) => ts.isIdentifier(element.name) && element.name.text === binding,
-          ),
+        (item) => ts.isObjectBindingPattern(item.name) && item.name.elements.some((element) => ts.isIdentifier(element.name) && element.name.text === binding),
       ),
   );
   assert(declaration !== undefined, 'A default has an Astro.props binding');
@@ -373,12 +307,7 @@ export function bindComponentDefault(
   );
 }
 
-function editComponentReferences(
-  source: string,
-  names: ReadonlySet<string>,
-  rename: PropertyReferenceEdit,
-  owner: 'definition' | 'consumer',
-): Result<string> {
+function editComponentReferences(source: string, names: ReadonlySet<string>, rename: PropertyReferenceEdit, owner: 'definition' | 'consumer'): Result<string> {
   let root: Node;
   try {
     const result = parse(source, { position: true });
@@ -408,9 +337,7 @@ function editComponentReferences(
     if (edits.some((edit) => edit.start < rename.declarationEnd)) {
       return err({
         code: 'default-order',
-        message:
-          'A prop read precedes its default. ' +
-          'Move the Astro.props binding before that read in source.',
+        message: 'A prop read precedes its default. ' + 'Move the Astro.props binding before that read in source.',
       });
     }
     // A unique alias prevents a template loop variable from shadowing the defaulted prop.
@@ -431,9 +358,7 @@ function editAstroNodes(
   owner: 'definition' | 'consumer',
 ): Result<readonly SourceEdit[]> {
   const edits: SourceEdit[] = [];
-  const pending: { readonly node: Node; readonly expression: boolean }[] = [
-    { node: root, expression: false },
-  ];
+  const pending: { readonly node: Node; readonly expression: boolean }[] = [{ node: root, expression: false }];
   for (let index = 0; index < pending.length; index += 1) {
     assert(pending.length <= PROPERTY_LIMITS.nodesMax, 'Astro rename node budget');
     const entry = pending[index];
@@ -466,19 +391,12 @@ function renameNode(
   node: Node,
   names: ReadonlySet<string>,
   rename: PropertyReferenceEdit,
-  {
-    owner,
-    expression,
-  }: { readonly owner: 'definition' | 'consumer'; readonly expression: boolean },
+  { owner, expression }: { readonly owner: 'definition' | 'consumer'; readonly expression: boolean },
 ): Result<readonly SourceEdit[]> {
   const edits: SourceEdit[] = [];
   if ('attributes' in node) {
     const target = rename.kind === 'rename' && node.type === 'component' && names.has(node.name);
-    if (
-      target &&
-      rename.kind === 'rename' &&
-      node.attributes.some((attribute) => attribute.name === rename.to)
-    ) {
+    if (target && rename.kind === 'rename' && node.attributes.some((attribute) => attribute.name === rename.to)) {
       return err({
         code: 'collision',
         message: `An instance already passes ${rename.to}.`,
@@ -531,11 +449,7 @@ function positionError(): Result<never> {
   });
 }
 
-function renameAttribute(
-  source: string,
-  attribute: AttributeNode,
-  rename: PropertyRename,
-): Result<readonly SourceEdit[]> {
+function renameAttribute(source: string, attribute: AttributeNode, rename: PropertyRename): Result<readonly SourceEdit[]> {
   const start = offset(source, attribute);
   if (attribute.kind === 'spread') {
     return renameSpread(source, attribute, rename, start);
@@ -561,20 +475,13 @@ function renameAttribute(
   return ok([{ start, end: start + attribute.name.length, text: rename.to }]);
 }
 
-function renameSpread(
-  source: string,
-  attribute: AttributeNode,
-  rename: PropertyRename,
-  position: number,
-): Result<readonly SourceEdit[]> {
+function renameSpread(source: string, attribute: AttributeNode, rename: PropertyRename, position: number): Result<readonly SourceEdit[]> {
   const prefix = 'const spread = (';
   const object = literalSpreadObject(attribute.name, prefix);
   if (!object) {
     return err({
       code: 'spread',
-      message:
-        'An instance uses a dynamic prop spread. ' +
-        'Make its props explicit before editing this property.',
+      message: 'An instance uses a dynamic prop spread. ' + 'Make its props explicit before editing this property.',
     });
   }
   const start = source.indexOf(attribute.name, Math.max(0, position - attribute.name.length - 4));
@@ -606,17 +513,8 @@ function renameSpread(
   return ok(edits);
 }
 
-function literalSpreadObject(
-  expression: string,
-  prefix: string,
-): ts.ObjectLiteralExpression | undefined {
-  const syntax = ts.createSourceFile(
-    'spread.ts',
-    prefix + expression + ');',
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+function literalSpreadObject(expression: string, prefix: string): ts.ObjectLiteralExpression | undefined {
+  const syntax = ts.createSourceFile('spread.ts', prefix + expression + ');', ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const nodes = syntaxNodes(syntax);
   const object = nodes.find(ts.isObjectLiteralExpression);
   const initializer = nodes.find(ts.isVariableDeclaration)?.initializer;
@@ -629,18 +527,8 @@ function literalSpreadObject(
   return object;
 }
 
-function renameAstroAccess(
-  source: string,
-  start: number,
-  rename: PropertyReferenceEdit,
-): Result<readonly SourceEdit[]> {
-  const syntax = ts.createSourceFile(
-    'expression.ts',
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+function renameAstroAccess(source: string, start: number, rename: PropertyReferenceEdit): Result<readonly SourceEdit[]> {
+  const syntax = ts.createSourceFile('expression.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const edits: SourceEdit[] = [];
   for (const node of syntaxNodes(syntax)) {
     if (rename.kind === 'rename') {
@@ -665,9 +553,7 @@ function renameAstroAccess(
       if (!ts.isStringLiteral(parent.argumentExpression)) {
         return err({
           code: 'computed',
-          message:
-            'Astro.props has a computed key. ' +
-            'Make that access explicit before editing this property.',
+          message: 'Astro.props has a computed key. ' + 'Make that access explicit before editing this property.',
         });
       }
       if (parent.argumentExpression.text === rename.from) {
@@ -679,21 +565,14 @@ function renameAstroAccess(
     } else {
       return err({
         code: 'alias',
-        message:
-          'Astro.props is forwarded or aliased. ' +
-          'Update that code explicitly before editing this property.',
+        message: 'Astro.props is forwarded or aliased. ' + 'Update that code explicitly before editing this property.',
       });
     }
   }
   return ok(edits);
 }
 
-function astroReferenceEdit(
-  access: ts.Node,
-  key: ts.Node,
-  start: number,
-  change: PropertyReferenceEdit,
-): SourceEdit {
+function astroReferenceEdit(access: ts.Node, key: ts.Node, start: number, change: PropertyReferenceEdit): SourceEdit {
   if (change.kind === 'default') {
     return {
       start: start + access.getStart(),
@@ -718,31 +597,17 @@ function defaultBindingName(source: string): string {
   assert(false, 'Default alias generation is bounded');
 }
 
-function renameIndexedPropType(
-  node: ts.Node,
-  start: number,
-  rename: PropertyRename,
-  typeNames: ReadonlySet<string>,
-): SourceEdit | undefined {
-  if (
-    !ts.isLiteralTypeNode(node) ||
-    !ts.isStringLiteral(node.literal) ||
-    node.literal.text !== rename.from
-  ) {
+function renameIndexedPropType(node: ts.Node, start: number, rename: PropertyRename, typeNames: ReadonlySet<string>): SourceEdit | undefined {
+  if (!ts.isLiteralTypeNode(node) || !ts.isStringLiteral(node.literal) || node.literal.text !== rename.from) {
     return undefined;
   }
   let parent = node.parent;
   if (ts.isUnionTypeNode(parent)) {
     parent = parent.parent;
   }
-  const indexed =
-    ts.isIndexedAccessTypeNode(parent) &&
-    ts.isTypeReferenceNode(parent.objectType) &&
-    typeNames.has(parent.objectType.typeName.getText());
+  const indexed = ts.isIndexedAccessTypeNode(parent) && ts.isTypeReferenceNode(parent.objectType) && typeNames.has(parent.objectType.typeName.getText());
   const picked =
-    ts.isTypeReferenceNode(parent) &&
-    ['Pick', 'Omit'].includes(parent.typeName.getText()) &&
-    typeNames.has(parent.typeArguments?.[0]?.getText() ?? '');
+    ts.isTypeReferenceNode(parent) && ['Pick', 'Omit'].includes(parent.typeName.getText()) && typeNames.has(parent.typeArguments?.[0]?.getText() ?? '');
   if (!indexed && !picked) {
     return undefined;
   }

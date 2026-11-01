@@ -186,9 +186,7 @@ async function handedOn(
   depth: number,
   inner: (component: ScanComponent, depth: number) => Promise<PropTextSite[]>,
 ): Promise<PropTextSite[]> {
-  const handed = Object.entries(('props' in node ? node.props : undefined) ?? {}).filter(
-    ([, attr]) => attr.type === 'expr' && props.has(propName(attr.value)),
-  );
+  const handed = Object.entries(('props' in node ? node.props : undefined) ?? {}).filter(([, attr]) => attr.type === 'expr' && props.has(propName(attr.value)));
   if (handed.length === 0) {
     return [];
   }
@@ -204,11 +202,7 @@ async function handedOn(
   }
   const sites = await inner(nested, depth + 1);
   return handed.flatMap(([name, attr]) =>
-    attr.type === 'expr'
-      ? sites
-          .filter((site) => site.prop === name)
-          .map((site) => ({ ...site, prop: propName(attr.value) }))
-      : [],
+    attr.type === 'expr' ? sites.filter((site) => site.prop === name).map((site) => ({ ...site, prop: propName(attr.value) })) : [],
   );
 }
 

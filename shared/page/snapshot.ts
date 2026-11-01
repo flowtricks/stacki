@@ -22,15 +22,9 @@ export interface Snapshot {
  * checksum of other bytes; the projection must describe bytes of this length.
  * The hash is a parameter because shared/ runs in the renderer as well, where
  * `node:crypto` does not exist. */
-export function createSnapshot(
-  input: Pick<Snapshot, 'path' | 'bytes' | 'projection'>,
-  hash: (bytes: ByteString) => Digest,
-): Snapshot {
+export function createSnapshot(input: Pick<Snapshot, 'path' | 'bytes' | 'projection'>, hash: (bytes: ByteString) => Digest): Snapshot {
   assert(input.bytes.length <= LIMITS.sourceBytesMax, 'Snapshot bytes are inside the file bound');
-  assert(
-    input.projection.byteLength === input.bytes.length,
-    'The projection was derived from bytes of this length',
-  );
+  assert(input.projection.byteLength === input.bytes.length, 'The projection was derived from bytes of this length');
   return {
     path: input.path,
     checksum: hash(input.bytes),
@@ -61,10 +55,7 @@ export function createLazySnapshot(
     get projection(): Projection {
       if (derived === undefined) {
         const projection = project(input.bytes);
-        assert(
-          projection.byteLength === input.bytes.length,
-          'The projection was derived from bytes of this length',
-        );
+        assert(projection.byteLength === input.bytes.length, 'The projection was derived from bytes of this length');
         derived = projection;
       }
       return derived;

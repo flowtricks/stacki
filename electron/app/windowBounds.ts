@@ -32,8 +32,7 @@ interface WindowBounds {
   readonly minHeight: number;
 }
 
-const rounded = (value: number | undefined): number =>
-  value === undefined ? NaN : Math.round(value);
+const rounded = (value: number | undefined): number => (value === undefined ? NaN : Math.round(value));
 
 /**
  * The bounds to open at on a display, given that display's work area — the

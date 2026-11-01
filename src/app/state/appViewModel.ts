@@ -13,11 +13,7 @@ import { resolveInstanceProps } from '../../editor/instanceProps';
 import { cleanError } from '../../lib/cleanError';
 import { findImportOf } from '../../editor/dataSuggest';
 import type { TagOption } from '../../features/props/propNodeEditors';
-import {
-  codeWindowFor,
-  FRONTMATTER_SUBJECT,
-  type CodeSubject,
-} from '../../features/code/codeWindowTarget';
+import { codeWindowFor, FRONTMATTER_SUBJECT, type CodeSubject } from '../../features/code/codeWindowTarget';
 import { toEditorPageState } from '../../editor/pageState';
 import { readProjectAsset } from '../../ipc/appBridge';
 import { useCoreState } from './appLifecycle';
@@ -36,14 +32,7 @@ import {
   useCreateFrom,
   useSelectedSchema,
 } from './appPageOps';
-export {
-  useCanvasGate,
-  useCanvasNotices,
-  useCrumbLabels,
-  useCanvasMarks,
-  useSelectionPaths,
-  useOverlayInfo,
-} from './appCanvasModel';
+export { useCanvasGate, useCanvasNotices, useCrumbLabels, useCanvasMarks, useSelectionPaths, useOverlayInfo } from './appCanvasModel';
 
 // The page’s layout, pages and folders, and the selection.
 export function usePageOps(
@@ -61,13 +50,7 @@ export function usePageOps(
   const deletePageFolderScope = useDeletePageFolder(coreState, lifecycle, navigation);
   const selectionModel = useSelectionModel(shortcuts, coreState, history);
   const createFromScope = useCreateFrom(shortcuts, coreState, selectionModel, nodeEdits);
-  const selectedSchemaScope = useSelectedSchema(
-    selectionModel,
-    layoutChange,
-    shortcuts,
-    coreState,
-    createFromScope,
-  );
+  const selectedSchemaScope = useSelectedSchema(selectionModel, layoutChange, shortcuts, coreState, createFromScope);
   return {
     ...layoutChange,
     ...pageCreation,
@@ -97,8 +80,7 @@ export function useScopeContext(
     const parent = selectedId ? tree.parent(selectedId) : undefined;
     if (parent) {
       if (parent.id === 'layout') {
-        slotOptions =
-          scan.layouts.find((layout) => layout.name === currentLayoutName)?.slots || undefined;
+        slotOptions = scan.layouts.find((layout) => layout.name === currentLayoutName)?.slots || undefined;
       } else if (parent.kind === 'component') {
         slotOptions = componentReference({
           name: parent.name,
@@ -133,19 +115,14 @@ export function useScopeContext(
   // field showing `{heading}` could not say what heading was. The instance
   // says: it is in the file this one was opened from, at the focused path, and
   // the page's own scope is what its expressions come to.
-  const [instanceProps, setInstanceProps] = useState<Readonly<Record<string, unknown>> | undefined>(
-    undefined,
-  );
+  const [instanceProps, setInstanceProps] = useState<Readonly<Record<string, unknown>> | undefined>(undefined);
   const focusOf = currentPage?.kind === 'component' ? currentPage.focusPath : undefined;
   const hostFile = editStack.length > 1 ? editStack[0] : undefined;
   return { focusOf, hostFile, instanceProps, loopContext, setInstanceProps, slotOptions };
 }
 
 // What the instance being edited is given.
-export function useInstanceProps(
-  scopeContext: ReturnType<typeof useScopeContext>,
-  coreState: ReturnType<typeof useCoreState>,
-) {
+export function useInstanceProps(scopeContext: ReturnType<typeof useScopeContext>, coreState: ReturnType<typeof useCoreState>) {
   const { focusOf, hostFile, setInstanceProps } = scopeContext;
   const { collectionSamples, collections, scan } = coreState;
 
@@ -198,11 +175,7 @@ export function useInstanceProps(
 }
 
 // Link targets and the Tag field’s options.
-export function useTagOptions(
-  coreState: ReturnType<typeof useCoreState>,
-  pageOps: ReturnType<typeof usePageOps>,
-  shortcuts: ReturnType<typeof useShortcuts>,
-) {
+export function useTagOptions(coreState: ReturnType<typeof useCoreState>, pageOps: ReturnType<typeof usePageOps>, shortcuts: ReturnType<typeof useShortcuts>) {
   const { insertables, project, scan } = coreState;
   const { tree } = pageOps;
   const { model } = shortcuts;
@@ -265,10 +238,7 @@ export function useCodeWindow(
   // Floating code window target value: page frontmatter, a raw node's inner
   // content, or a text file from public/ (loaded into fileText).
   const isFileWin = codeWin?.kind === 'file';
-  const codeWinNode =
-    codeWin && !isFileWin && codeWin.targetId && codeWin.targetId !== 'frontmatter' && model
-      ? tree.node(codeWin.targetId)
-      : undefined;
+  const codeWinNode = codeWin && !isFileWin && codeWin.targetId && codeWin.targetId !== 'frontmatter' && model ? tree.node(codeWin.targetId) : undefined;
   const codeWinValue = !codeWin
     ? undefined
     : isFileWin
@@ -327,11 +297,7 @@ export function useCodeWindow(
 }
 
 // Opening the file an imported symbol comes from.
-export function useSymbolFile(
-  coreState: ReturnType<typeof useCoreState>,
-  pageOps: ReturnType<typeof usePageOps>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useSymbolFile(coreState: ReturnType<typeof useCoreState>, pageOps: ReturnType<typeof usePageOps>, lifecycle: ReturnType<typeof useLifecycle>) {
   const { currentPage, editStackRef, projectRef, setCodeWin, setFileText } = coreState;
   const { frontmatterCode } = pageOps;
   const { showToast } = lifecycle;
@@ -359,9 +325,7 @@ export function useSymbolFile(
         const symbol = await readSymbol(projectPath, fromFile, imp.spec, name);
         if (!symbol?.ok) {
           showToast(
-            symbol?.reason === 'too-large'
-              ? 'That file is too large to edit in the app.'
-              : `Couldn't find where ${name} is defined (${imp.spec}).`,
+            symbol?.reason === 'too-large' ? 'That file is too large to edit in the app.' : `Couldn't find where ${name} is defined (${imp.spec}).`,
             'error',
           );
           return false;

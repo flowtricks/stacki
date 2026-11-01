@@ -8,13 +8,8 @@ import type { IpcResults } from '../../shared/ipc/ipcResults';
 export function createIpcRegistrar(ipcMain: Pick<Electron.IpcMain, 'handle'>) {
   return function handle<K extends IpcChannel>(
     channel: K,
-    listener: (
-      event: IpcMainInvokeEvent,
-      payload: IpcPayloads[K],
-    ) => IpcResults[K] | Promise<IpcResults[K]>,
+    listener: (event: IpcMainInvokeEvent, payload: IpcPayloads[K]) => IpcResults[K] | Promise<IpcResults[K]>,
   ): void {
-    ipcMain.handle(channel, (event, input: unknown) =>
-      listener(event, parseIpcPayload(channel, input)),
-    );
+    ipcMain.handle(channel, (event, input: unknown) => listener(event, parseIpcPayload(channel, input)));
   };
 }

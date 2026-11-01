@@ -4,13 +4,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const load = require('../../helpers/rendererModule');
-const {
-  parseStoredWindowRectangle,
-  readWindowRectangle,
-  storeWindowRectangle,
-  readWindowMode,
-  storeWindowMode,
-} = load('src/ui/windowPreferences.ts');
+const { parseStoredWindowRectangle, readWindowRectangle, storeWindowRectangle, readWindowMode, storeWindowMode } = load('src/ui/windowPreferences.ts');
 const viewport = { width: 1440, height: 900 };
 const minimum = { width: 560, height: 280 };
 const rectangle = { x: 80, y: 70, width: 720, height: 500 };
@@ -22,10 +16,7 @@ test('stored geometry validates every field and rejects malformed boundaries', (
   }
   for (const field of ['x', 'y', 'width', 'height']) {
     for (const value of ['10', -1, 1.5, 100001, undefined]) {
-      assert.equal(
-        parseStoredWindowRectangle(JSON.stringify({ ...rectangle, [field]: value })),
-        undefined,
-      );
+      assert.equal(parseStoredWindowRectangle(JSON.stringify({ ...rectangle, [field]: value })), undefined);
     }
   }
   assert.equal(parseStoredWindowRectangle(JSON.stringify({ ...rectangle, width: 0 })), undefined);

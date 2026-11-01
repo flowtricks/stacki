@@ -6,14 +6,7 @@ import Select, { type SelectOption } from './components/Select';
 import SegmentedControl from './components/SegmentedControl';
 import { useHighlight } from './model/computedStyle';
 import { displayOf } from './model/styleDisplay';
-import {
-  type Props,
-  joinImportant,
-  CUSTOM,
-  PropLabel,
-  LiveInput,
-  useSegCustomFocus,
-} from './TypographyKit';
+import { type Props, joinImportant, CUSTOM, PropLabel, LiveInput, useSegCustomFocus } from './TypographyKit';
 
 // ─────────────── Breaking (word-break / white-space) ───────────────
 
@@ -86,10 +79,7 @@ export function EnumSelect(props: EnumSelectProps) {
   );
   const customMode = forceCustom || (display.present && !matched);
 
-  const options: SelectOption<string>[] = [
-    ...choices.map(([value, optionLabel]) => ({ value, label: optionLabel })),
-    { value: CUSTOM, label: 'Custom…' },
-  ];
+  const options: SelectOption<string>[] = [...choices.map(([value, optionLabel]) => ({ value, label: optionLabel })), { value: CUSTOM, label: 'Custom…' }];
 
   // Focus + select the custom field once its `unset` write settles (busy clears), so
   // its draft has synced to `unset` — autoFocus would grab it before the write lands.
@@ -113,9 +103,7 @@ export function EnumSelect(props: EnumSelectProps) {
       value={customMode ? CUSTOM : (matched ?? shownComputed)}
       options={options}
       onChange={pick}
-      onPreview={(value) =>
-        liveSetProp(prop, value === CUSTOM ? undefined : (value ?? undefined), false)
-      }
+      onPreview={(value) => liveSetProp(prop, value === CUSTOM ? undefined : (value ?? undefined), false)}
       ariaLabel={ariaLabel}
       disabled={busy}
       customInput={
@@ -211,15 +199,7 @@ export const WRAP_OPTIONS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 // A single full-width row: the "Wrap" label + the overflow-wrap dropdown.
-export function WrapRow({
-  read,
-  busy,
-  setProp,
-  clearProp,
-  liveSetProp,
-  onProvenance,
-  onSelectSelector,
-}: Props) {
+export function WrapRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Props) {
   const [forceCustom, setForceCustom] = useState(false);
   const display = displayOf(read('overflow-wrap'));
   const onClear = () => {
@@ -259,26 +239,10 @@ export function WrapRow({
 
 // ─────────────── Truncate (text-overflow) ───────────────
 
-export function TruncateRow({
-  read,
-  busy,
-  setProp,
-  clearProp,
-  onProvenance,
-  onSelectSelector,
-}: Props) {
+export function TruncateRow({ read, busy, setProp, clearProp, onProvenance, onSelectSelector }: Props) {
   const display = displayOf(read('text-overflow'));
-  const shownOverflow = useHighlight(
-    '',
-    display.present ? '' : 'text-overflow',
-    ['clip', 'ellipsis'],
-    'clip',
-  );
-  const current = display.present
-    ? display.value.trim().toLowerCase() === 'ellipsis'
-      ? 'ellipsis'
-      : 'clip'
-    : shownOverflow;
+  const shownOverflow = useHighlight('', display.present ? '' : 'text-overflow', ['clip', 'ellipsis'], 'clip');
+  const current = display.present ? (display.value.trim().toLowerCase() === 'ellipsis' ? 'ellipsis' : 'clip') : shownOverflow;
   return (
     <div className="embed-editor_size-row">
       <PropLabel

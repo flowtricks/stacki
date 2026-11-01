@@ -12,24 +12,13 @@ import { connectRepository } from '../git/githubRepository';
 import { git } from '../lib/nodeTools';
 import type { MainHost } from './mainHost';
 
-export function registerGitRepositoryHandlers({
-  ipcMain,
-  showOpenDialog,
-}: Pick<MainHost, 'ipcMain' | 'showOpenDialog'>): void {
+export function registerGitRepositoryHandlers({ ipcMain, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'showOpenDialog'>): void {
   ipcMain.handle('git:repositories', async () => {
-    const response = await run(
-      'gh',
-      [
-        'api',
-        'user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member',
-      ],
-      homedir(),
-      { timeout: 30000 },
-    );
+    const response = await run('gh', ['api', 'user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member'], homedir(), {
+      timeout: 30000,
+    });
     const data: unknown = JSON.parse(response.stdout);
-    return parseGitHubRepositories(
-      list((entry) => parseGitHubRepository(record(entry)['full_name']))(data),
-    );
+    return parseGitHubRepositories(list((entry) => parseGitHubRepository(record(entry)['full_name']))(data));
   });
   ipcMain.handle('git:clone', async (_event, { repository }) => {
     const result = await showOpenDialog({
@@ -52,22 +41,14 @@ export function registerGitRepositoryHandlers({
     if (!isAstroProject(projectPath)) {
       return {
         canceled: false as const,
-        error:
-          `Downloaded to ${projectPath}, but its root is not an Astro project. ` +
-          'Use Open Project to choose the Astro folder inside it.',
+        error: `Downloaded to ${projectPath}, but its root is not an Astro project. ` + 'Use Open Project to choose the Astro folder inside it.',
       };
     }
     return { canceled: false as const, projectPath };
   });
   ipcMain.handle('git:connect', async (_event, payload) => {
-    const environment = await publishingGitEnvironment(
-      payload.projectPath,
-      readPublishConfig(payload.projectPath),
-    );
-    const result = await connectRepository(
-      (root, argumentsList) => git(root, argumentsList, { env: environment }),
-      payload,
-    );
+    const environment = await publishingGitEnvironment(payload.projectPath, readPublishConfig(payload.projectPath));
+    const result = await connectRepository((root, argumentsList) => git(root, argumentsList, { env: environment }), payload);
     if (!result.ok) {
       throw new Error(result.error);
     }

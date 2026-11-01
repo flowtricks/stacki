@@ -12,10 +12,7 @@ export default function SegSwitch<T extends string | number | boolean>({
 }) {
   const at = options.findIndex((option) => option.value === current);
   return (
-    <div
-      className={`bool-seg ${at < 0 ? 'is-unset' : at === 1 ? 'is-second' : 'is-first'}`}
-      role="group"
-    >
+    <div className={`bool-seg ${at < 0 ? 'is-unset' : at === 1 ? 'is-second' : 'is-first'}`} role="group">
       {options.map((option) => (
         <button
           key={String(option.value)}

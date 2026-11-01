@@ -72,9 +72,7 @@ test('Studio validates optional title metadata before exposing labels', () => {
   const page = { path: file, name: 'resources.astro', route: '/resources' };
   for (const title of [42, {}, [], null, 'x'.repeat(LIMITS.ipcFieldCharsMax + 1)]) {
     assert.throws(() => parseProject({ ...project, pageMetadata: [{ ...page, title }] }));
-    assert.throws(() =>
-      parseProject({ ...project, pageMetadata: [{ ...page, inheritedTitle: title }] }),
-    );
+    assert.throws(() => parseProject({ ...project, pageMetadata: [{ ...page, inheritedTitle: title }] }));
   }
   assert.throws(() => parseProject({ ...project, pageMetadata: {} }));
 });

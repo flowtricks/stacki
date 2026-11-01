@@ -62,11 +62,7 @@ function ItemEditor({ item, position, trigger, onChange, onClose }: ItemEditorPr
   };
 
   return (
-    <div
-      ref={ref}
-      className="attr-editor list-item-editor"
-      style={{ top: position.top, left: position.left, width: position.width }}
-    >
+    <div ref={ref} className="attr-editor list-item-editor" style={{ top: position.top, left: position.left, width: position.width }}>
       <div className="var-src-head">
         <span className="var-src-name">{item.fields ? 'Item' : 'Value'}</span>
         <span style={{ flex: 1 }} />
@@ -178,9 +174,7 @@ export default function ListField(props: ListFieldProps) {
   const note = emptyNote(props.placeholder);
   return (
     <div className="list-field" onDragOver={(event) => event.preventDefault()} onDrop={state.drop}>
-      {state.items.length === 0 && note ? (
-        <div className="list-field-empty">{note}</div>
-      ) : undefined}
+      {state.items.length === 0 && note ? <div className="list-field-empty">{note}</div> : undefined}
       {state.items.length > 0 && (
         <div className="list-field-items" onScroll={() => closeListRowEditor(state)}>
           {state.items.map((item, index) => (
@@ -209,22 +203,12 @@ export default function ListField(props: ListFieldProps) {
 }
 
 function useListField(props: ListFieldProps) {
-  const {
-    value,
-    onChange,
-    disabled = false,
-    itemsMin = 0,
-    itemsMax = LIMITS.scanEntriesMax,
-    valueCharsMax = LIMITS.attrCharsMax,
-  } = props;
+  const { value, onChange, disabled = false, itemsMin = 0, itemsMax = LIMITS.scanEntriesMax, valueCharsMax = LIMITS.attrCharsMax } = props;
   assert((value?.length ?? 0) <= valueCharsMax, 'ListField: value limit exceeded');
   const items = arrayItems(value) || [];
   assert(items.length <= itemsMax, 'ListField: item count limit exceeded');
   const [editor, setEditor] = useState<Editor>({ kind: 'closed' });
-  const write = (
-    next: readonly Item[],
-    options: { readonly immediate: boolean; readonly change: ListFieldChange },
-  ) => {
+  const write = (next: readonly Item[], options: { readonly immediate: boolean; readonly change: ListFieldChange }) => {
     if (disabled) {
       return;
     }
@@ -235,11 +219,7 @@ function useListField(props: ListFieldProps) {
   };
   const { drag, setDrag, drop } = useListDrag(items, write);
   // No index opens a new item, not yet in the list.
-  const openAt = (
-    event: React.MouseEvent<HTMLElement>,
-    index: number | undefined,
-    item: Item,
-  ): void => {
+  const openAt = (event: React.MouseEvent<HTMLElement>, index: number | undefined, item: Item): void => {
     setEditor(listEditorAt(event.currentTarget, index, item));
   };
   const closePending = (): void => {
@@ -280,18 +260,14 @@ function useListField(props: ListFieldProps) {
 }
 function listEditorAt(trigger: HTMLElement, index: number | undefined, item: Item): Editor {
   const position = listPopupPosition(trigger);
-  return index === undefined
-    ? { kind: 'pending', item, position, trigger }
-    : { kind: 'existing', index, position, trigger };
+  return index === undefined ? { kind: 'pending', item, position, trigger } : { kind: 'existing', index, position, trigger };
 }
 
 function pendingListItem(editor: Editor): Item | undefined {
   if (editor.kind !== 'pending') {
     return undefined;
   }
-  const said = editor.item.fields
-    ? editor.item.fields.some((field) => String(field.text).trim())
-    : String(editor.item.text).trim();
+  const said = editor.item.fields ? editor.item.fields.some((field) => String(field.text).trim()) : String(editor.item.text).trim();
   return said ? editor.item : undefined;
 }
 
@@ -335,15 +311,7 @@ function listPopupPosition(element: HTMLElement): Position {
 
 type ListState = ReturnType<typeof useListField>;
 
-function ListRow({
-  item,
-  index,
-  state,
-}: {
-  readonly item: Item;
-  readonly index: number;
-  readonly state: ListState;
-}) {
+function ListRow({ item, index, state }: { readonly item: Item; readonly index: number; readonly state: ListState }) {
   const { drag, editor, setDrag, remove, drop } = state;
   const dragging = drag.kind === 'dragging' ? drag.index : undefined;
   const gap = drag.kind === 'dragging' ? drag.gap : undefined;
@@ -384,12 +352,7 @@ function ListRow({
   );
 }
 
-function toggleListRow(
-  event: React.MouseEvent<HTMLElement>,
-  state: ListState,
-  index: number,
-  item: Item,
-): void {
+function toggleListRow(event: React.MouseEvent<HTMLElement>, state: ListState, index: number, item: Item): void {
   if (state.editor.kind === 'existing' && state.editor.index === index) {
     state.write(state.items, {
       immediate: true,
@@ -449,9 +412,7 @@ function ListEditor({ state }: { readonly state: ListState }) {
           item={editor.item}
           position={editor.position}
           trigger={editor.trigger}
-          onChange={(item) =>
-            setEditor((current) => (current.kind === 'pending' ? { ...current, item } : current))
-          }
+          onChange={(item) => setEditor((current) => (current.kind === 'pending' ? { ...current, item } : current))}
           onClose={closePending}
         />
       );

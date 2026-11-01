@@ -8,10 +8,7 @@ import { once } from 'node:events';
 import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { git, setToolPathHome } from '../vendor/stacki/electron/lib/nodeTools';
-import {
-  repositoryState,
-  connectPublishingRepository,
-} from '../vendor/stacki/electron/project/publishRepositories';
+import { repositoryState, connectPublishingRepository } from '../vendor/stacki/electron/project/publishRepositories';
 import { parseRepositoryRequest } from '../vendor/stacki/shared/ipc/publishRepository';
 import path from 'node:path';
 import { build } from 'esbuild';
@@ -29,9 +26,7 @@ export async function sharedPublishingFixture() {
   setToolPathHome(homedir());
   const root = await prepareProject();
   const rooms = createRooms(root);
-  const opened = await Promise.all(
-    ['index', 'other'].map((name) => rooms.get(`src/pages/${name}.astro`)),
-  );
+  const opened = await Promise.all(['index', 'other'].map((name) => rooms.get(`src/pages/${name}.astro`)));
   let incoming: IncomingChanges = { sha: 'a'.repeat(40), files: [] };
   let checks = 0;
   const repository: RepositoryAccess = {
@@ -54,11 +49,7 @@ export async function sharedPublishingFixture() {
   });
   publisher.subscribe(rooms.publishing);
   const sync = new RepositorySync(root, repository, rooms);
-  const automatic = automaticSync(
-    sync,
-    () => rooms.hasClients() && publisher.state.kind !== 'building',
-    100,
-  );
+  const automatic = automaticSync(sync, () => rooms.hasClients() && publisher.state.kind !== 'building', 100);
   const { server, url } = await serveFixture(publisher, rooms, opened);
   return {
     root,
@@ -93,32 +84,19 @@ async function prepareProject() {
     await mkdir(path.join(root, directory), { recursive: true });
   }
   await symlink(path.resolve('node_modules'), path.join(root, 'node_modules'), 'dir');
-  await writeFile(
-    path.join(root, 'package.json'),
-    JSON.stringify({ type: 'module', scripts: { build: 'astro build' } }),
-  );
-  await writeFile(
-    path.join(root, '.vercel/project.json'),
-    JSON.stringify({ orgId: 'team_123', projectId: 'prj_123' }),
-  );
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({ type: 'module', scripts: { build: 'astro build' } }));
+  await writeFile(path.join(root, '.vercel/project.json'), JSON.stringify({ orgId: 'team_123', projectId: 'prj_123' }));
   const source = '<h1>Original</h1>';
   for (const name of ['index', 'other']) {
     await writeFile(path.join(root, `src/pages/${name}.astro`), source);
   }
-  await writeFile(
-    path.join(root, '.stacki/studio/state/github-base.json'),
-    JSON.stringify({ sha: 'a'.repeat(40) }),
-  );
+  await writeFile(path.join(root, '.stacki/studio/state/github-base.json'), JSON.stringify({ sha: 'a'.repeat(40) }));
   await git(root, ['init', '--initial-branch=main']);
   await git(root, ['remote', 'add', 'origin', 'https://github.com/flowtricks/site.git']);
   return root;
 }
 
-async function serveFixture(
-  publisher: Publisher,
-  rooms: ReturnType<typeof createRooms>,
-  opened: readonly Room[],
-) {
+async function serveFixture(publisher: Publisher, rooms: ReturnType<typeof createRooms>, opened: readonly Room[]) {
   const bundle = await build({
     entryPoints: ['test/sharedPublishing.entry.tsx'],
     bundle: true,
@@ -140,21 +118,14 @@ async function serveFixture(
     if (publishRoute(publisher, request, response, (request.url ?? '').split('?')[0] ?? '')) {
       return;
     }
-    const asset = bundle.outputFiles.find((file) =>
-      file.path.endsWith(request.url === '/app.css' ? '.css' : '.js'),
-    );
+    const asset = bundle.outputFiles.find((file) => file.path.endsWith(request.url === '/app.css' ? '.css' : '.js'));
     if (request.url === '/app.js' || request.url === '/app.css') {
-      response.setHeader(
-        'Content-Type',
-        request.url.endsWith('.css') ? 'text/css' : 'application/javascript',
-      );
+      response.setHeader('Content-Type', request.url.endsWith('.css') ? 'text/css' : 'application/javascript');
       response.end(asset?.contents);
       return;
     }
     response.setHeader('Content-Type', 'text/html');
-    response.end(
-      '<!doctype html><link rel="stylesheet" href="/app.css"><div id="root"></div><script type="module" src="/app.js"></script>',
-    );
+    response.end('<!doctype html><link rel="stylesheet" href="/app.css"><div id="root"></div><script type="module" src="/app.js"></script>');
   });
   server.on('upgrade', (request, socket, head) => {
     const file = new URL(request.url ?? '/', 'http://local').searchParams.get('file');
@@ -188,16 +159,9 @@ async function fixtureBody(request: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-function serveSettings(
-  root: string,
-  rooms: ReturnType<typeof createRooms>,
-  request: IncomingMessage,
-  response: ServerResponse,
-): boolean {
+function serveSettings(root: string, rooms: ReturnType<typeof createRooms>, request: IncomingMessage, response: ServerResponse): boolean {
   if (request.url?.startsWith('/studio/api/metadata')) {
-    void metadataRoute(root, rooms, request, response, '/studio/api/metadata', () =>
-      fixtureBody(request),
-    ).catch(() => {
+    void metadataRoute(root, rooms, request, response, '/studio/api/metadata', () => fixtureBody(request)).catch(() => {
       response.statusCode = 400;
       response.end(JSON.stringify({ error: 'Invalid metadata request' }));
     });
@@ -214,11 +178,7 @@ function serveSettings(
   return false;
 }
 
-async function serveLinkedProject(
-  root: string,
-  request: IncomingMessage,
-  response: ServerResponse,
-) {
+async function serveLinkedProject(root: string, request: IncomingMessage, response: ServerResponse) {
   try {
     const input: unknown = JSON.parse(await fixtureBody(request));
     const { provider } = parseDiscoveryRequest(input);
@@ -271,11 +231,7 @@ async function serveRepositories(root: string, request: IncomingMessage, respons
             ok: true,
             value: {
               ...state,
-              repositories: [
-                state.connected,
-                `${action.account}/next`,
-                ...Array.from({ length: 6 }, (_, index) => `${action.account}/example-${index}`),
-              ],
+              repositories: [state.connected, `${action.account}/next`, ...Array.from({ length: 6 }, (_, index) => `${action.account}/example-${index}`)],
             },
           };
     response.setHeader('Content-Type', 'application/json');

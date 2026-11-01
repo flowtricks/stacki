@@ -10,19 +10,7 @@ import type { PageNode } from './pageNode';
 import { toRecord, toArray } from '../core/record';
 import { parseByteSpan, type ByteSpan } from '../core/span';
 
-export const NODE_KINDS = [
-  'component',
-  'element',
-  'raw',
-  'text',
-  'expr',
-  'raw-line',
-  'comment',
-  'map',
-  'cond',
-  'branch',
-  'chunk-group',
-] as const;
+export const NODE_KINDS = ['component', 'element', 'raw', 'text', 'expr', 'raw-line', 'comment', 'map', 'cond', 'branch', 'chunk-group'] as const;
 
 export type NodeKind = (typeof NODE_KINDS)[number];
 

@@ -56,23 +56,11 @@ function CommitFilesDialog(props: CommitFilePickerProps & { readonly onClose: ()
             </button>
           </div>
           <div className="git-commit-files-content">
-            {props.error ? (
-              <ErrorToast
-                message={props.error}
-                recovery={[{ label: 'Retry', run: props.onRefresh }]}
-              />
-            ) : undefined}
+            {props.error ? <ErrorToast message={props.error} recovery={[{ label: 'Retry', run: props.onRefresh }]} /> : undefined}
             {props.picked === undefined ? (
               <p role="status">Loading changed files…</p>
             ) : (
-              <FileBrowser
-                files={props.files}
-                selectable
-                selected={props.picked}
-                onSelect={props.onPick}
-                emptyMessage="Nothing has changed."
-                autoFocusSearch
-              />
+              <FileBrowser files={props.files} selectable selected={props.picked} onSelect={props.onPick} emptyMessage="Nothing has changed." autoFocusSearch />
             )}
           </div>
           <div className="modal-footer">

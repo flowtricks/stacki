@@ -5,15 +5,7 @@
 import { type Point, type SvgShapeCommand, type SvgShapeSubpath } from './clipPathTypes';
 import { SVG_POINT_EPSILON, SVG_ARC_KAPPA } from './clipPathConstants';
 import { clampValue } from './clipPathMeasure';
-import {
-  parseSvgNumber,
-  parseSvgNumberList,
-  svgAttribute,
-  svgPointsAlmostEqual,
-  simplifySvgContour,
-  svgSubpathHasArea,
-  closeSvgSubpath,
-} from './svgElements';
+import { parseSvgNumber, parseSvgNumberList, svgAttribute, svgPointsAlmostEqual, simplifySvgContour, svgSubpathHasArea, closeSvgSubpath } from './svgElements';
 
 export function parseSvgRectShape(element: Element) {
   const x = parseSvgNumber(svgAttribute(element, 'x')) || 0;
@@ -158,10 +150,7 @@ export function parseSvgPolygonShape(element: Element, requireClosed = true) {
   }
   const firstPoint = points[0];
   const lastPoint = points[points.length - 1];
-  if (
-    requireClosed &&
-    (!firstPoint || !lastPoint || !svgPointsAlmostEqual(firstPoint, lastPoint))
-  ) {
+  if (requireClosed && (!firstPoint || !lastPoint || !svgPointsAlmostEqual(firstPoint, lastPoint))) {
     return undefined;
   }
 
@@ -174,10 +163,7 @@ export function parseSvgPolygonShape(element: Element, requireClosed = true) {
   return [
     {
       start,
-      commands: [
-        ...rest.map((point) => ({ kind: 'line' as const, to: point })),
-        { kind: 'close' as const },
-      ],
+      commands: [...rest.map((point) => ({ kind: 'line' as const, to: point })), { kind: 'close' as const }],
     },
   ];
 }
@@ -325,13 +311,7 @@ export function parseSimpleSvgPath(element: Element) {
   const points = reader.corners;
   const firstPoint = points[0];
   const lastPoint = points[points.length - 1];
-  if (
-    !reader.closed &&
-    firstPoint &&
-    lastPoint &&
-    points.length > 1 &&
-    !svgPointsAlmostEqual(firstPoint, lastPoint)
-  ) {
+  if (!reader.closed && firstPoint && lastPoint && points.length > 1 && !svgPointsAlmostEqual(firstPoint, lastPoint)) {
     return undefined;
   }
   return simplifySvgContour(points);
@@ -381,11 +361,7 @@ export function applySimpleSvgCommand(reader: SimpleSvgPathReader, cursor: SvgPa
 
 // A straight-edged path starts once: a second move-to is a second contour, which
 // this reader does not take.
-export function simpleSvgMove(
-  reader: SimpleSvgPathReader,
-  cursor: SvgPathCursor,
-  { relative }: { relative: boolean },
-): boolean {
+export function simpleSvgMove(reader: SimpleSvgPathReader, cursor: SvgPathCursor, { relative }: { relative: boolean }): boolean {
   if (reader.corners.length) {
     return false;
   }
@@ -398,11 +374,7 @@ export function simpleSvgMove(
 }
 
 // The point `[x, y]` names: as written, or from `current` for a relative command.
-export function offsetSvgPoint(
-  current: Point,
-  [x = 0, y = 0]: readonly number[],
-  { relative }: { relative: boolean },
-): Point {
+export function offsetSvgPoint(current: Point, [x = 0, y = 0]: readonly number[], { relative }: { relative: boolean }): Point {
   return relative ? { x: current.x + x, y: current.y + y } : { x, y };
 }
 
@@ -463,11 +435,7 @@ export function svgArcToCubicCurves(
   }
 
   const sign = largeArc === sweep ? -1 : 1;
-  const coefficient =
-    sign *
-    Math.sqrt(
-      Math.max(0, (rx2 * ry2 - rx2 * rotatedYSquared - ry2 * rotatedXSquared) / denominator),
-    );
+  const coefficient = sign * Math.sqrt(Math.max(0, (rx2 * ry2 - rx2 * rotatedYSquared - ry2 * rotatedXSquared) / denominator));
   const cxp = (coefficient * (rx * rotatedY)) / ry;
   const cyp = (coefficient * (-ry * rotatedX)) / rx;
   const center = {

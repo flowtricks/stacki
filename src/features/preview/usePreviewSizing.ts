@@ -8,11 +8,7 @@ export function usePreviewDimensions() {
   const [customHeight, setCustomHeight] = useState<number | undefined>(undefined);
   return { customWidth, setCustomWidth, customHeight, setCustomHeight };
 }
-export function usePreviewSizing(
-  device: PreviewDevice,
-  dimensions: ReturnType<typeof usePreviewDimensions>,
-  onDevice: (device: PreviewDevice) => void,
-) {
+export function usePreviewSizing(device: PreviewDevice, dimensions: ReturnType<typeof usePreviewDimensions>, onDevice: (device: PreviewDevice) => void) {
   const startDrag = usePointerDrag();
   const wrapRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -60,17 +56,13 @@ export function usePreviewSizing(
   };
 }
 
-function useMeasuredSize(
-  ref: React.RefObject<HTMLDivElement>,
-  setSize: React.Dispatch<React.SetStateAction<{ width: number; height: number }>>,
-): void {
+function useMeasuredSize(ref: React.RefObject<HTMLDivElement>, setSize: React.Dispatch<React.SetStateAction<{ width: number; height: number }>>): void {
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) {
       return;
     }
-    const measure = (): void =>
-      setSize({ width: element.clientWidth, height: element.clientHeight });
+    const measure = (): void => setSize({ width: element.clientWidth, height: element.clientHeight });
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
@@ -83,12 +75,7 @@ function useDeviceShortcuts(onDevice: (device: PreviewDevice) => void): void {
   onDeviceRef.current = onDevice;
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      if (
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        isTypingTarget(event.target ?? undefined)
-      ) {
+      if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target ?? undefined)) {
         return;
       }
       const device = deviceFromKey(event.key);
@@ -102,10 +89,7 @@ function useDeviceShortcuts(onDevice: (device: PreviewDevice) => void): void {
 }
 
 function isTypingTarget(target: EventTarget | undefined): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.matches('input, textarea, select') || target.isContentEditable)
-  );
+  return target instanceof HTMLElement && (target.matches('input, textarea, select') || target.isContentEditable);
 }
 
 function deviceFromKey(key: string): PreviewDevice | undefined {

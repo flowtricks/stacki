@@ -1,19 +1,10 @@
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
-import {
-  parseComponentProperties,
-  parsePropertiesResult,
-} from '../../../shared/properties/propertyEditing';
-import type {
-  ComponentProperties,
-  PropertyChange,
-} from '../../../shared/properties/propertyEditing';
+import { parseComponentProperties, parsePropertiesResult } from '../../../shared/properties/propertyEditing';
+import type { ComponentProperties, PropertyChange } from '../../../shared/properties/propertyEditing';
 import { toRecord } from '../../../shared/core/record';
 import type { Result } from '../../../shared/core/result';
 
-export async function readComponentProperties(
-  projectPath: string,
-  file: string,
-): Promise<Result<ComponentProperties>> {
+export async function readComponentProperties(projectPath: string, file: string): Promise<Result<ComponentProperties>> {
   const payload = parseIpcPayload('component:properties', { projectPath, file });
   const result: unknown = await window.avb.componentProperties(payload);
   return parsePropertiesResult(result, parseComponentProperties);
@@ -21,12 +12,7 @@ export async function readComponentProperties(
 /** An applied property batch, and the token of its inverse (step 6: Undo). */
 export type EditedProperties = ComponentProperties & { readonly undo: string };
 
-export async function editComponentProperties(
-  projectPath: string,
-  file: string,
-  source: string,
-  change: PropertyChange,
-): Promise<Result<EditedProperties>> {
+export async function editComponentProperties(projectPath: string, file: string, source: string, change: PropertyChange): Promise<Result<EditedProperties>> {
   const payload = parseIpcPayload('component:editProperties', {
     projectPath,
     file,
@@ -41,9 +27,7 @@ export async function editComponentProperties(
 }
 
 /** Apply a property batch's inverse; the result names the batch that redoes it. */
-export async function revertComponentProperties(
-  token: string,
-): Promise<Result<{ readonly undo: string }>> {
+export async function revertComponentProperties(token: string): Promise<Result<{ readonly undo: string }>> {
   const payload = parseIpcPayload('component:revertProperties', { token });
   const result: unknown = await window.avb.revertComponentProperties(payload);
   return parsePropertiesResult(result, (value) => ({ undo: undoToken(value) }));

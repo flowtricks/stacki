@@ -13,16 +13,7 @@ import useScrub from './components/useScrub';
 import VariableConnect from './VariableConnect';
 import { splitTopLevelSpaces } from './model/background';
 import { displayOf, type Display } from './model/styleDisplay';
-import {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type Props,
-  SizeLabel,
-  withImportant,
-  useFollowingDraft,
-  stepSizeKey,
-} from './SizeKit';
+import { type SetProp, type ClearProp, type LiveSetProp, type Props, SizeLabel, withImportant, useFollowingDraft, stepSizeKey } from './SizeKit';
 import { RatioOtherInput } from './AspectRatioField';
 
 // ─────────────────────── Image fit (object-fit / object-position) ───────────────────────
@@ -45,13 +36,7 @@ export function objectPositionAxis(token: string): number {
   if (normalized === '' || normalized === 'center' || normalized === '50%') {
     return 1;
   }
-  if (
-    normalized === 'left' ||
-    normalized === 'top' ||
-    normalized === '0' ||
-    normalized === '0%' ||
-    normalized === '0px'
-  ) {
+  if (normalized === 'left' || normalized === 'top' || normalized === '0' || normalized === '0%' || normalized === '0px') {
     return 0;
   }
   if (normalized === 'right' || normalized === 'bottom' || normalized === '100%') {
@@ -101,13 +86,7 @@ export function ObjectPositionInput({
     onCommit: commitScrub,
   });
   return (
-    <VariableConnect
-      code
-      ariaLabel={`Connect ${label} to a variable`}
-      disabled={busy}
-      prop="object-position"
-      onPick={(binding) => onCommit(binding)}
-    >
+    <VariableConnect code ariaLabel={`Connect ${label} to a variable`} disabled={busy} prop="object-position" onPick={(binding) => onCommit(binding)}>
       <input
         {...scrub.input}
         className="u-input embed-editor_size-input"
@@ -164,15 +143,7 @@ export function PositionModal({ onClose, children }: { onClose: () => void; chil
   );
 }
 
-export function ImageFitField({
-  read,
-  busy,
-  setProp,
-  clearProp,
-  liveSetProp,
-  onProvenance,
-  onSelectSelector,
-}: Props) {
+export function ImageFitField({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Props) {
   const fit = displayOf(read('object-fit'));
   const positionDisplay = displayOf(read('object-position'));
   const [positionOpen, setPositionOpen] = useState(false);
@@ -193,19 +164,8 @@ export function ImageFitField({
           onSelectSelector={onSelectSelector}
         />
         <div className="embed-editor_imgfit-controls">
-          <ObjectFitSelect
-            fit={fit}
-            busy={busy}
-            setProp={setProp}
-            clearProp={clearProp}
-            liveSetProp={liveSetProp}
-          />
-          <ObjectPositionButton
-            busy={busy}
-            positionSet={positionSet}
-            positionOpen={positionOpen}
-            onToggle={() => setPositionOpen((open) => !open)}
-          />
+          <ObjectFitSelect fit={fit} busy={busy} setProp={setProp} clearProp={clearProp} liveSetProp={liveSetProp} />
+          <ObjectPositionButton busy={busy} positionSet={positionSet} positionOpen={positionOpen} onToggle={() => setPositionOpen((open) => !open)} />
         </div>
       </div>
       {positionOpen ? (
@@ -245,9 +205,7 @@ export function ObjectPositionButton({
       <button
         ref={moreRef}
         type="button"
-        className={
-          'embed-editor_icon-btn embed-editor_imgfit-more ' + (positionSet ? 'is-active' : '')
-        }
+        className={'embed-editor_icon-btn embed-editor_imgfit-more ' + (positionSet ? 'is-active' : '')}
         disabled={busy}
         aria-haspopup="dialog"
         aria-expanded={positionOpen}
@@ -261,9 +219,7 @@ export function ObjectPositionButton({
       >
         <DotsIcon />
       </button>
-      {tip.open && moreRef.current && !positionOpen ? (
-        <HoverTooltip anchor={moreRef.current}>Object position settings</HoverTooltip>
-      ) : undefined}
+      {tip.open && moreRef.current && !positionOpen ? <HoverTooltip anchor={moreRef.current}>Object position settings</HoverTooltip> : undefined}
     </>
   );
 }
@@ -336,9 +292,7 @@ export function ObjectFitSelect({
       ariaLabel="Object fit"
       disabled={busy}
       onChange={pickFit}
-      onPreview={(choice) =>
-        liveSetProp('object-fit', choice === FIT_CUSTOM ? undefined : (choice ?? undefined), false)
-      }
+      onPreview={(choice) => liveSetProp('object-fit', choice === FIT_CUSTOM ? undefined : (choice ?? undefined), false)}
       customInput={
         fitCustom ? (
           <RatioOtherInput
@@ -445,9 +399,7 @@ export function ObjectPositionFields({
           busy={busy}
           label="Object position left"
           onLive={(value) => writePosition(`${value || '50%'} ${top || '50%'}`, 'live')}
-          onCommit={(value) =>
-            writePosition(value || top ? `${value || '50%'} ${top || '50%'}` : '', 'commit')
-          }
+          onCommit={(value) => writePosition(value || top ? `${value || '50%'} ${top || '50%'}` : '', 'commit')}
         />
       </div>
       <div className="embed-editor_bg-posfield">
@@ -457,9 +409,7 @@ export function ObjectPositionFields({
           busy={busy}
           label="Object position top"
           onLive={(value) => writePosition(`${left || '50%'} ${value || '50%'}`, 'live')}
-          onCommit={(value) =>
-            writePosition(left || value ? `${left || '50%'} ${value || '50%'}` : '', 'commit')
-          }
+          onCommit={(value) => writePosition(left || value ? `${left || '50%'} ${value || '50%'}` : '', 'commit')}
         />
       </div>
     </div>
@@ -485,17 +435,10 @@ export function ObjectPositionGrid({
           <button
             key={`${row}-${column}`}
             type="button"
-            className={
-              'embed-editor_bg-poscell ' +
-              (activeColumn === column && activeRow === row ? 'is-active' : '')
-            }
+            className={'embed-editor_bg-poscell ' + (activeColumn === column && activeRow === row ? 'is-active' : '')}
             disabled={busy}
-            aria-label={
-              `${['Left', 'Center', 'Right'][column]} ` + `${['top', 'center', 'bottom'][row]}`
-            }
-            onClick={() =>
-              onPick(`${OBJECT_POSITION_PERCENTS[column]} ${OBJECT_POSITION_PERCENTS[row]}`)
-            }
+            aria-label={`${['Left', 'Center', 'Right'][column]} ` + `${['top', 'center', 'bottom'][row]}`}
+            onClick={() => onPick(`${OBJECT_POSITION_PERCENTS[column]} ${OBJECT_POSITION_PERCENTS[row]}`)}
           />
         )),
       )}

@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Hosting, PublishConfig } from '../../../shared/properties/publishConfig';
 import { cachedPublishingDiscovery } from './publishDiscoveryCache';
 
-export function usePublishSettingsConfig(
-  projectPath: string,
-  stored: { readonly config: PublishConfig; readonly base: string | undefined },
-) {
+export function usePublishSettingsConfig(projectPath: string, stored: { readonly config: PublishConfig; readonly base: string | undefined }) {
   const [state, setState] = useState<{
     readonly config: PublishConfig;
     readonly hostingOrigin: 'discovering' | 'settled';
@@ -23,10 +20,7 @@ export function usePublishSettingsConfig(
     void cachedPublishingDiscovery(projectPath, { provider: 'linked', account: '' }, 'reuse')
       .then((result) => {
         if (active) {
-          const linked =
-            result.kind === 'ready' && result.projects.length === 1
-              ? result.projects[0]
-              : undefined;
+          const linked = result.kind === 'ready' && result.projects.length === 1 ? result.projects[0] : undefined;
           setState((previous) => {
             if (previous.hostingOrigin === 'settled') {
               return previous;

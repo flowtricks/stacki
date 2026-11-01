@@ -5,8 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const firstContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
@@ -150,9 +149,7 @@ try {
   await firstContext.close();
   await remote.waitFor({ state: 'detached' });
   assert.deepEqual(errors, []);
-  console.log(
-    'Live cursors, matching colors, persistent pointer chat, frame replacement, Backspace erasure, source preservation, and disconnect passed.',
-  );
+  console.log('Live cursors, matching colors, persistent pointer chat, frame replacement, Backspace erasure, source preservation, and disconnect passed.');
 } catch (error) {
   await mkdir('test-results', { recursive: true });
   await first.screenshot({ path: 'test-results/cursors-failure-first.png' }).catch(() => {});
@@ -209,10 +206,7 @@ async function checkMessageWrapping(page: Page, preview: FrameLocator) {
     const submitted = await bubble.boundingBox();
     assert.ok(submitted);
     for (const dimension of ['x', 'y', 'width', 'height'] as const) {
-      assert.ok(
-        Math.abs(editing[dimension] - submitted[dimension]) < 1,
-        `Same ${dimension} before and after submission`,
-      );
+      assert.ok(Math.abs(editing[dimension] - submitted[dimension]) < 1, `Same ${dimension} before and after submission`);
     }
     await page.keyboard.press('/');
     await input.waitFor();

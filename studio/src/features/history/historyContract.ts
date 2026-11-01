@@ -12,11 +12,7 @@ export function parseHistoryInfo(input: unknown): HistoryInfo {
   const branches = value['branches'];
   const repository = string(value['repository'], 200);
   const head = string(value['head'], 40);
-  if (
-    !/^[\w.-]+\/[\w.-]+$/.test(repository) ||
-    repository.split('/').includes('..') ||
-    !/^[a-f0-9]{40}$/.test(head)
-  ) {
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repository) || repository.split('/').includes('..') || !/^[a-f0-9]{40}$/.test(head)) {
     throw new Error('Invalid repository history.');
   }
   if (!Array.isArray(branches) || branches.length > 100) {

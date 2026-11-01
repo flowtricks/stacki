@@ -13,32 +13,15 @@ import {
   type SourceKey,
   type StyleContext,
 } from '../model/resolved';
-import {
-  breakpointTier,
-  buildStyleContexts,
-  nativeContribsFor,
-  nativeHasValues,
-  selectedNativeIndexFor,
-} from '../model/nativeStyles';
+import { breakpointTier, buildStyleContexts, nativeContribsFor, nativeHasValues, selectedNativeIndexFor } from '../model/nativeStyles';
 import { listAtRuleBlocks } from '../model/css';
 import { nativeStylingAvailable } from '../model/webflow';
 import { EMPTY_RULE_MODEL } from './EditorBasics';
 import { chipsFor, styledSelectorsFor } from './editorModel';
 import { isGlobalSelector } from './LayoutRows';
-import {
-  useScanState,
-  useSelectionState,
-  useNativeState,
-  usePendingWrites,
-} from './useEditorFoundation';
+import { useScanState, useSelectionState, useNativeState, usePendingWrites } from './useEditorFoundation';
 import { useElementTokens } from './useEditorRuleEdits';
-import {
-  useTokenDefault,
-  useActiveSelector,
-  useSelectorPick,
-  useSourceDocument,
-  useContextKeys,
-} from './useEditorElement';
+import { useTokenDefault, useActiveSelector, useSelectorPick, useSourceDocument, useContextKeys } from './useEditorElement';
 
 // The queries the source file holds and the ones styling the element.
 export function useEmbedContexts(
@@ -108,39 +91,18 @@ export function useStyleContexts(
   // breakpoints/queries the element uses. Drives the dropdown and which breakpoint
   // native reads/writes target.
   const styleContexts = useMemo<StyleContext[]>(() => {
-    const list = buildStyleContexts(
-      allContextKeys,
-      nativeModel,
-      currentBreakpoint,
-      styledEmbedContexts,
-      sourceContexts,
-    );
+    const list = buildStyleContexts(allContextKeys, nativeModel, currentBreakpoint, styledEmbedContexts, sourceContexts);
     // Keep the manually-selected query available on any element — even one with no
     // styles there yet — so switching elements stays on it and you can add a style.
     // Only needed for custom @media/@container (breakpoints are always built).
     const sticky = stickyContextRef.current;
-    if (
-      context &&
-      sticky &&
-      sticky.key === context &&
-      !list.some((entry) => entry.key === context)
-    ) {
+    if (context && sticky && sticky.key === context && !list.some((entry) => entry.key === context)) {
       list.push(sticky);
     }
     return list;
-  }, [
-    allContextKeys,
-    nativeModel,
-    currentBreakpoint,
-    styledEmbedContexts,
-    sourceContexts,
-    context,
-    stickyContextRef,
-  ]);
+  }, [allContextKeys, nativeModel, currentBreakpoint, styledEmbedContexts, sourceContexts, context, stickyContextRef]);
   const currentContext = useMemo<StyleContext>(
-    () =>
-      styleContexts.find((entry) => entry.key === context) ??
-      styleContexts[0] ?? { key: '', label: 'Base', breakpoint: 'main', embedAtContext: '' },
+    () => styleContexts.find((entry) => entry.key === context) ?? styleContexts[0] ?? { key: '', label: 'Base', breakpoint: 'main', embedAtContext: '' },
     [styleContexts, context],
   );
   // Remember the selected context object so it survives an element switch (the list
@@ -166,10 +128,7 @@ export function useNativeTarget(
   // Which native class style the picked class tokens map to (if any), whether the
   // Native layer is available, and the layer actually in effect (Native falls back
   // to Embed for the tag / attributes / complex selectors that have no class Style).
-  const nativeIndex = useMemo(
-    () => selectedNativeIndexFor(nativeModel, selectedTokens),
-    [nativeModel, selectedTokens],
-  );
+  const nativeIndex = useMemo(() => selectedNativeIndexFor(nativeModel, selectedTokens), [nativeModel, selectedTokens]);
   const nativeAvailable = nativeIndex !== undefined;
   // A single class with no class Style yet (e.g. one that exists only as a combo,
   // like `is-2`) can still be edited natively — we create its base class on the
@@ -189,26 +148,17 @@ export function useNativeTarget(
 
   // Every embed that could style this element, in page/cascade order — later embeds
   // win (their CSS is injected after Webflow's stylesheet and after earlier embeds).
-  const embedList = useMemo(
-    () => [...documentByKey.values()].sort((left, right) => left.source.order - right.source.order),
-    [documentByKey],
-  );
+  const embedList = useMemo(() => [...documentByKey.values()].sort((left, right) => left.source.order - right.source.order), [documentByKey]);
 
   // The dropdown picks the fallback embed only — Webflow is never a choice. Styles
   // always try to apply natively first; whatever the class can't take natively
   // lands in the selected embed. The user's pick (sourceSel) overrides the default
   // (first embed in page order) and persists across element switches.
-  const sourceKeys = useMemo(
-    () => embedList.map((embedDocument) => embedDocument.source.key),
-    [embedList],
-  );
+  const sourceKeys = useMemo(() => embedList.map((embedDocument) => embedDocument.source.key), [embedList]);
   // The source dropdown only picks where NEW styles are created — it does not scope
   // which existing rule is editable. So it just tracks the user's pick, defaulting to
   // the first embed in page order.
-  const effectiveSourceSelection =
-    sourceSelection && sourceKeys.includes(sourceSelection)
-      ? sourceSelection
-      : (sourceKeys[0] ?? '');
+  const effectiveSourceSelection = sourceSelection && sourceKeys.includes(sourceSelection) ? sourceSelection : (sourceKeys[0] ?? '');
   return { canNative, creatableClass, effectiveSourceSelection, embedList, nativeIndex };
 }
 
@@ -219,13 +169,7 @@ export function useComponentSource(
   nativeTarget: ReturnType<typeof useNativeTarget>,
 ) {
   const { scan } = scanState;
-  const {
-    pageSourceRef,
-    previousInComponentRef,
-    setSourceSelection,
-    sourceSelectionRef,
-    wantCompSourceRef,
-  } = nativeState;
+  const { pageSourceRef, previousInComponentRef, setSourceSelection, sourceSelectionRef, wantCompSourceRef } = nativeState;
   const { embedList } = nativeTarget;
 
   // Open a component → point the source at that component's own embed; close it →
@@ -237,14 +181,10 @@ export function useComponentSource(
   // a node source is one only while a component file is open. Pinning follows
   // them too, not just the scan's flag, so a component drilled into from a page
   // defaults to its own <style> rather than whichever source sorts first.
-  const ownKey = embedList.find(
-    (embedDocument) =>
-      embedDocument.source.fromComponent && embedDocument.source.origin.kind === 'node',
-  )?.source.key;
+  const ownKey = embedList.find((embedDocument) => embedDocument.source.fromComponent && embedDocument.source.origin.kind === 'node')?.source.key;
   const inComponentContext = (scan?.inComponentContext ?? false) || ownKey !== undefined;
   useEffect(() => {
-    const componentSourceKey =
-      ownKey ?? embedList.find((embedDocument) => embedDocument.source.fromComponent)?.source.key;
+    const componentSourceKey = ownKey ?? embedList.find((embedDocument) => embedDocument.source.fromComponent)?.source.key;
     if (inComponentContext !== previousInComponentRef.current) {
       previousInComponentRef.current = inComponentContext;
       if (inComponentContext) {
@@ -261,16 +201,7 @@ export function useComponentSource(
       wantCompSourceRef.current = false;
       setSourceSelection(componentSourceKey);
     }
-  }, [
-    inComponentContext,
-    embedList,
-    ownKey,
-    pageSourceRef,
-    previousInComponentRef,
-    setSourceSelection,
-    sourceSelectionRef,
-    wantCompSourceRef,
-  ]);
+  }, [inComponentContext, embedList, ownKey, pageSourceRef, previousInComponentRef, setSourceSelection, sourceSelectionRef, wantCompSourceRef]);
   return { inComponentContext };
 }
 
@@ -309,36 +240,18 @@ export function useResolved(
   const selectedNativeIndex = canNative && nativeContextOk ? nativeIndex : undefined;
 
   // Native contributions for the current context + state, folded into the model.
-  const nativeContribs = useMemo(
-    () => nativeContribsFor(nativeModel, currentContext, stateKey),
-    [nativeModel, currentContext, stateKey],
-  );
+  const nativeContribs = useMemo(() => nativeContribsFor(nativeModel, currentContext, stateKey), [nativeModel, currentContext, stateKey]);
 
   const resolved = useMemo(
     () =>
-      resolveStyle(
-        model ?? EMPTY_RULE_MODEL,
-        currentContext.embedAtContext ?? ' native-only',
-        activeSelector,
-        {
-          source: effectiveSource,
-          contribs: nativeContribs,
-          selectedIndex: selectedNativeIndex,
-          selectedEmbedKey,
-          ...(currentContext.breakpoint
-            ? { currentTier: breakpointTier(currentContext.breakpoint) }
-            : {}),
-        },
-      ),
-    [
-      model,
-      currentContext,
-      activeSelector,
-      effectiveSource,
-      nativeContribs,
-      selectedNativeIndex,
-      selectedEmbedKey,
-    ],
+      resolveStyle(model ?? EMPTY_RULE_MODEL, currentContext.embedAtContext ?? ' native-only', activeSelector, {
+        source: effectiveSource,
+        contribs: nativeContribs,
+        selectedIndex: selectedNativeIndex,
+        selectedEmbedKey,
+        ...(currentContext.breakpoint ? { currentTier: breakpointTier(currentContext.breakpoint) } : {}),
+      }),
+    [model, currentContext, activeSelector, effectiveSource, nativeContribs, selectedNativeIndex, selectedEmbedKey],
   );
 
   // The stylesheet the active selector's rule already lives in. resolveStyle
@@ -393,16 +306,7 @@ export function useSelectorChips(
         classList: snapshot?.classList ?? [],
         removedClasses,
       }),
-    [
-      model,
-      nativeModel,
-      currentContext,
-      activeSelector,
-      selectedSelectorText,
-      tokens,
-      snapshot,
-      removedClasses,
-    ],
+    [model, nativeModel, currentContext, activeSelector, selectedSelectorText, tokens, snapshot, removedClasses],
   );
 
   // Per-context dropdown info: embed hasStyles/combos (for the dot + auto-highlight)
@@ -410,15 +314,9 @@ export function useSelectorChips(
   const contextInfos = useMemo<ContextInfo[]>(() => {
     const projectedModel = model ?? EMPTY_RULE_MODEL;
     const embedKeys = [
-      ...new Set(
-        styleContexts
-          .map((styleContext) => styleContext.embedAtContext)
-          .filter((atContext): atContext is string => atContext !== undefined),
-      ),
+      ...new Set(styleContexts.map((styleContext) => styleContext.embedAtContext).filter((atContext): atContext is string => atContext !== undefined)),
     ];
-    const embedByKey = new Map(
-      indexContexts(projectedModel, embedKeys).map((info) => [info.key, info]),
-    );
+    const embedByKey = new Map(indexContexts(projectedModel, embedKeys).map((info) => [info.key, info]));
     return styleContexts.map((sc) => {
       const embed = sc.embedAtContext !== undefined ? embedByKey.get(sc.embedAtContext) : undefined;
       const nativeHas = sc.breakpoint ? nativeHasValues(nativeModel, sc.breakpoint) : false;
@@ -462,9 +360,7 @@ export function useContextChange(
       // Only selectors with styles IN this context (drop the dimmed other-context ones).
       // Never jump to a global selector (`:focus-visible`, `*`): editing one edits
       // most of the site, and it isn't about this element.
-      const styled = styledSelectorsFor(model, nativeModel, nextContext).filter(
-        (entry) => entry.inContext !== false && !isGlobalSelector(entry.text),
-      );
+      const styled = styledSelectorsFor(model, nativeModel, nextContext).filter((entry) => entry.inContext !== false && !isGlobalSelector(entry.text));
       if (!styled.length) {
         return;
       }
@@ -476,15 +372,7 @@ export function useContextChange(
         selectActiveSelector(strongest.text);
       }
     },
-    [
-      styleContexts,
-      model,
-      nativeModel,
-      activeSelector,
-      selectActiveSelector,
-      pendingDefaultRef,
-      setContext,
-    ],
+    [styleContexts, model, nativeModel, activeSelector, selectActiveSelector, pendingDefaultRef, setContext],
   );
   return { onContextChange };
 }

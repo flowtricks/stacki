@@ -32,10 +32,7 @@ const source = `<!doctype html>
 await writeFile(file, source, { flag: 'wx' });
 const browser = await chromium.launch({
   executablePath:
-    process.env['CHROME_PATH'] ??
-    (process.platform === 'darwin'
-      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-      : chromium.executablePath()),
+    process.env['CHROME_PATH'] ?? (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1920, height: 1100 } });
@@ -58,11 +55,7 @@ try {
   await checkFrames(page, { hero: 1, inline: 0.25, tail: 1800 });
   const states = await page
     .locator('.canvas-frame iframe')
-    .evaluateAll((frames) =>
-      frames.map((frame) =>
-        frame instanceof HTMLIFrameElement ? frame.contentDocument?.readyState : undefined,
-      ),
-    );
+    .evaluateAll((frames) => frames.map((frame) => (frame instanceof HTMLIFrameElement ? frame.contentDocument?.readyState : undefined)));
   assert.ok(
     states.every((state) => state !== 'complete'),
     'Freeze must precede image load',
@@ -76,19 +69,14 @@ try {
   await changeFrameContent(page, 'shrink');
   await checkFrames(page, { hero: 0.5, inline: 0.5, tail: 100 });
   assert.equal(await readFile(file, 'utf8'), source, 'Canvas sizing never rewrites website source');
-  console.log(
-    'Full-page canvas: fixed vh/svh/dvh/lvh, slow load, inline updates and shrink passed.',
-  );
+  console.log('Full-page canvas: fixed vh/svh/dvh/lvh, slow load, inline updates and shrink passed.');
 } finally {
   releaseImage();
   await browser.close();
   await unlink(file);
 }
 
-async function checkFrames(
-  page: Page,
-  expected: { readonly hero: number; readonly inline: number; readonly tail: number },
-) {
+async function checkFrames(page: Page, expected: { readonly hero: number; readonly inline: number; readonly tail: number }) {
   await page.waitForFunction((sizes) => {
     const frames = [...document.querySelectorAll('.canvas-frame iframe')];
     const viewports = [900, 1024, 812];
@@ -132,9 +120,7 @@ async function changeFrameContent(page: Page, action: 'grow' | 'shrink') {
         throw new Error('Missing canvas document');
       }
       if (change === 'grow') {
-        document
-          .querySelector('.inline')
-          ?.setAttribute('style', 'height: calc(50dvh + 10px) !important');
+        document.querySelector('.inline')?.setAttribute('style', 'height: calc(50dvh + 10px) !important');
       } else {
         const style = document.createElement('style');
         style.textContent = '.hero { height: 50lvh; } .tail { height: 100px; }';

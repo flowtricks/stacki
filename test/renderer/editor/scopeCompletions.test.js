@@ -76,9 +76,7 @@ const year = new Date().getFullYear();`;
   check('no scope at all is an empty list', scopeCompletions({}).length === 0);
 
   // --- the note beside a name ------------------------------------------------
-  const withDetail = scopeCompletions({ frontmatter, imports: [] }).find(
-    (completion) => completion.label === 'title',
-  );
+  const withDetail = scopeCompletions({ frontmatter, imports: [] }).find((completion) => completion.label === 'title');
   check('a value carries what it holds', !!withDetail, JSON.stringify(withDetail));
 
   // --- and the same names, drawn as chips ------------------------------------
@@ -88,48 +86,24 @@ const year = new Date().getFullYear();`;
   // drawn as a chip would claim to be a value you could swap.
   const { scopeChips } = require(bundlePath);
   const names = new Set(['render', 'content', 'background', 'post', 'items']);
-  const chipped = (source) =>
-    scopeChips(source, names).map((chip) => source.slice(chip.from, chip.to));
+  const chipped = (source) => scopeChips(source, names).map((chip) => source.slice(chip.from, chip.to));
 
   check(
     'every value in a boolean is a chip',
     chipped('render && (content || background)').join(',') === 'render,content,background',
     JSON.stringify(chipped('render && (content || background)')),
   );
-  check(
-    'a path is one chip, not three',
-    chipped('post.data.title').join(',') === 'post.data.title',
-    JSON.stringify(chipped('post.data.title')),
-  );
-  check(
-    'a call chips the value, not the method',
-    chipped('items.map((i) => i.id)').join(',') === 'items',
-    JSON.stringify(chipped('items.map((i) => i.id)')),
-  );
+  check('a path is one chip, not three', chipped('post.data.title').join(',') === 'post.data.title', JSON.stringify(chipped('post.data.title')));
+  check('a call chips the value, not the method', chipped('items.map((i) => i.id)').join(',') === 'items', JSON.stringify(chipped('items.map((i) => i.id)')));
   check('a name that is not in scope is not a chip', chipped('other && helper()').length === 0);
-  check(
-    'a word inside a string is not a value',
-    chipped('content === "content"').length === 1,
-    JSON.stringify(chipped('content === "content"')),
-  );
+  check('a word inside a string is not a value', chipped('content === "content"').length === 1, JSON.stringify(chipped('content === "content"')));
   const typedNames = new Set(['src', 'as', 'string']);
-  const typedChips = scopeChips('src as string', typedNames).map((chip) =>
-    'src as string'.slice(chip.from, chip.to),
-  );
-  check(
-    'a TypeScript assertion chips only its runtime value',
-    typedChips.join(',') === 'src',
-    JSON.stringify(typedChips),
-  );
-  check(
-    'nothing in scope, nothing chipped',
-    scopeChips('render && content', new Set()).length === 0,
-  );
+  const typedChips = scopeChips('src as string', typedNames).map((chip) => 'src as string'.slice(chip.from, chip.to));
+  check('a TypeScript assertion chips only its runtime value', typedChips.join(',') === 'src', JSON.stringify(typedChips));
+  check('nothing in scope, nothing chipped', scopeChips('render && content', new Set()).length === 0);
 
   if (failures.length) {
-    console.error(
-      `scope-completions: ${failures.length} of ${checked} failed\n${failures.join('\n')}`,
-    );
+    console.error(`scope-completions: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
   console.log(`scope-completions: ${checked} passed  [names offered, names chipped]`);

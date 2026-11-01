@@ -38,14 +38,7 @@ global.IS_REACT_ACT_ENVIRONMENT = true;
 const React = require('react');
 const { act } = React;
 const { createRoot } = require('react-dom/client');
-const {
-  PropField,
-  PropValuePolicyContext,
-  useLayoutText,
-  setCanvasFrame,
-  receiveCanvasReply,
-  noteCanvasReady,
-} = require(output);
+const { PropField, PropValuePolicyContext, useLayoutText, setCanvasFrame, receiveCanvasReply, noteCanvasReady } = require(output);
 const root = createRoot(document.getElementById('root'));
 const requests = [];
 const changes = [];
@@ -83,10 +76,7 @@ async function answer(request, pageText) {
   await act(async () => receiveCanvasReply({ id: request.id, found: true, pageText }));
 }
 function placeholders() {
-  return [
-    document.querySelector('input').placeholder,
-    document.querySelector('textarea').placeholder,
-  ];
+  return [document.querySelector('input').placeholder, document.querySelector('textarea').placeholder];
 }
 async function checkFallbacks() {
   await render(base);

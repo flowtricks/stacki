@@ -13,22 +13,13 @@ export type Urgency = boolean | 'live';
 
 /** A copy of the model with one node replaced; every list on the path to it
  * is new, every other node shared. Unchanged when no node has the id. */
-export function withNode(
-  model: EditorModel,
-  nodeId: string,
-  update: (node: EditorNode) => EditorNode,
-): EditorModel {
+export function withNode(model: EditorModel, nodeId: string, update: (node: EditorNode) => EditorNode): EditorModel {
   const nodes = replacedIn(model.nodes, nodeId, 0, update);
   return nodes === model.nodes ? model : { ...model, nodes };
 }
 
 // Recursion bounded by the tree's depth bound, asserted.
-export function replacedIn(
-  list: readonly EditorNode[],
-  nodeId: string,
-  depth: number,
-  update: (node: EditorNode) => EditorNode,
-): readonly EditorNode[] {
+export function replacedIn(list: readonly EditorNode[], nodeId: string, depth: number, update: (node: EditorNode) => EditorNode): readonly EditorNode[] {
   assert(depth <= LIMITS.treeDepthMax, 'A model is no deeper than its bound');
   for (const [index, node] of list.entries()) {
     if (node.id === nodeId) {
@@ -61,12 +52,7 @@ export type Placement = 'before' | 'after' | 'first-child' | 'last-child';
  * position (before it, or after the last one), or inside an empty parent;
  * main prints it at its indentation. On a page whose body is empty there is
  * nothing to stand beside: it is the body's first node (`append-body`). */
-export function insertGesture(
-  model: EditorModel,
-  node: EditorNode,
-  place: InsertPlace | undefined,
-  options: { readonly urgency: Urgency },
-): EditGesture {
+export function insertGesture(model: EditorModel, node: EditorNode, place: InsertPlace | undefined, options: { readonly urgency: Urgency }): EditGesture {
   const beside = besidePlace(model, place);
   return {
     coalesceKey: undefined,
@@ -94,11 +80,7 @@ export function insertGesture(
 
 /** A copy of a node right after it: the request copies the node's own bytes
  * (plan §3.4: never a reprint), the effect its clone with new ids. */
-export function duplicateGesture(
-  nodeId: string,
-  clone: EditorNode,
-  options: { readonly urgency: Urgency },
-): EditGesture {
+export function duplicateGesture(nodeId: string, clone: EditorNode, options: { readonly urgency: Urgency }): EditGesture {
   return {
     coalesceKey: undefined,
     urgency: options.urgency,
@@ -118,10 +100,7 @@ export function duplicateGesture(
 /** Remove nodes, in the order given (a note before the node it annotates).
  * What the removal leaves unused in the frontmatter is its own gesture,
  * sequenced after this one (App.tsx, removeNode). */
-export function removalGesture(
-  nodeIds: readonly string[],
-  options: { readonly urgency: Urgency },
-): EditGesture {
+export function removalGesture(nodeIds: readonly string[], options: { readonly urgency: Urgency }): EditGesture {
   return {
     coalesceKey: undefined,
     urgency: options.urgency,
@@ -148,11 +127,7 @@ export function withoutNodes(model: EditorModel, nodeIds: readonly string[]): Ed
   return nodes === model.nodes ? model : { ...model, nodes };
 }
 
-export function filteredList(
-  list: readonly EditorNode[],
-  gone: ReadonlySet<string>,
-  depth: number,
-): readonly EditorNode[] {
+export function filteredList(list: readonly EditorNode[], gone: ReadonlySet<string>, depth: number): readonly EditorNode[] {
   assert(depth <= LIMITS.treeDepthMax, 'A model is no deeper than its bound');
   let changed = false;
   const next: EditorNode[] = [];
@@ -178,11 +153,7 @@ export function filteredList(
 /** The model with `node` inserted where `place` says — the legacy
  * insertIntoModel's rule, without editing a model in place: no place, or a
  * parent that is gone, means the end of the page. */
-export function withInserted(
-  model: EditorModel,
-  node: EditorNode,
-  place: InsertPlace | undefined,
-): EditorModel {
+export function withInserted(model: EditorModel, node: EditorNode, place: InsertPlace | undefined): EditorModel {
   const parentId = place?.parentId;
   if (parentId === undefined || !containsNode(model.nodes, parentId)) {
     const index = place === undefined || parentId !== undefined ? model.nodes.length : place.index;
@@ -195,21 +166,12 @@ export function withInserted(
   });
 }
 
-export function withInsertedAfter(
-  model: EditorModel,
-  anchorId: string,
-  node: EditorNode,
-): EditorModel {
+export function withInsertedAfter(model: EditorModel, anchorId: string, node: EditorNode): EditorModel {
   const nodes = afterIn(model.nodes, anchorId, node, 0);
   return nodes === model.nodes ? model : { ...model, nodes };
 }
 
-export function afterIn(
-  list: readonly EditorNode[],
-  anchorId: string,
-  node: EditorNode,
-  depth: number,
-): readonly EditorNode[] {
+export function afterIn(list: readonly EditorNode[], anchorId: string, node: EditorNode, depth: number): readonly EditorNode[] {
   assert(depth <= LIMITS.treeDepthMax, 'A model is no deeper than its bound');
   for (const [index, candidate] of list.entries()) {
     if (candidate.id === anchorId) {
@@ -241,11 +203,7 @@ export function withChildren(node: EditorNode, children: readonly EditorNode[]):
   return copy;
 }
 
-export function spliced(
-  list: readonly EditorNode[],
-  index: number,
-  node: EditorNode,
-): readonly EditorNode[] {
+export function spliced(list: readonly EditorNode[], index: number, node: EditorNode): readonly EditorNode[] {
   return [...list.slice(0, index), node, ...list.slice(index)];
 }
 
@@ -276,10 +234,7 @@ export function besidePlace(
   const parentId = place?.parentId;
   const parent = parentId === undefined ? undefined : findNode(model.nodes, parentId);
   const list = parent === undefined ? model.nodes : (parent.children ?? []);
-  const index =
-    parent === undefined && parentId !== undefined
-      ? list.length
-      : Math.min(place?.index ?? list.length, list.length);
+  const index = parent === undefined && parentId !== undefined ? list.length : Math.min(place?.index ?? list.length, list.length);
   // A loop body and a conditional branch are code-owned lists. Their child
   // nodes cannot safely serve as sibling anchors, because they are repeated
   // source nodes or sit inside a JavaScript expression. Address the list's

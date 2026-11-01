@@ -16,13 +16,7 @@ const renderer: Suite = {
   name: 'scripts/build/buildLayout',
   options: { build: 'renderer' },
 };
-const TYPESCRIPT_BUILDS = [
-  'build:contracts',
-  'build:electron',
-  'build:scripts',
-  'build:morph',
-  'build:preload',
-];
+const TYPESCRIPT_BUILDS = ['build:contracts', 'build:electron', 'build:scripts', 'build:morph', 'build:preload'];
 
 test('no suite named is the full gate: every build, the bundle beside the chain', () => {
   const plan = gatePlanFor({ queries: [], selected: [plain, renderer] });
@@ -40,13 +34,7 @@ test('the full gate builds the bundle even when no suite declares it', () => {
 test('a named suite builds over the tree, without the scripts build or the bundle', () => {
   const plan = gatePlanFor({ queries: ['x'], selected: [plain] });
   assert.equal(plan.kind, 'targeted');
-  assert.deepEqual(plan.chain, [
-    'build:contracts',
-    'build:electron',
-    'build:morph',
-    'build:preload',
-    'stage:runtime',
-  ]);
+  assert.deepEqual(plan.chain, ['build:contracts', 'build:electron', 'build:morph', 'build:preload', 'stage:runtime']);
   assert.deepEqual(plan.beside, []);
   assert.match(targetedNotice(plan), /skipping the clean, tsc, ESLint, Prettier/);
   assert.match(targetedNotice(plan), /the renderer bundle\./);
@@ -61,13 +49,7 @@ test('a named suite that reads the renderer bundle builds it beside the chain', 
 });
 
 test('a run with no suite, and a notice for the full gate, are refused', () => {
-  assert.throws(
-    () => gatePlanFor({ queries: [], selected: [] }),
-    /^Error: gatePlanFor: no suite is selected$/,
-  );
+  assert.throws(() => gatePlanFor({ queries: [], selected: [] }), /^Error: gatePlanFor: no suite is selected$/);
   const full = gatePlanFor({ queries: [], selected: [plain] });
-  assert.throws(
-    () => targetedNotice(full),
-    /^Error: targetedNotice: only a targeted run skips anything$/,
-  );
+  assert.throws(() => targetedNotice(full), /^Error: targetedNotice: only a targeted run skips anything$/);
 });

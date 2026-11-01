@@ -4,10 +4,7 @@ import { newId } from '../model/nodeFactory';
 import type { useCoreState } from './appLifecycle';
 import type { useHistory } from './appNodeEdits';
 
-export function useWrapNode(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useWrapNode(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef, setSelectedId } = coreState;
   const { commitEdit } = history;
   const wrapNode = useCallback(

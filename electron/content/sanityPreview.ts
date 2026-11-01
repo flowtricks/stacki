@@ -27,11 +27,24 @@ export function previewProjection(preview: SanityPreview | undefined): string {
     preview?.media ? `"media": ${read(preview.media, '.asset->url')}` : '',
     // Each subtitle value in its place and under its selected name, so a list
     // is counted as what it holds ("4 links").
-    ...(preview?.parts ?? []).map(
-      (part, index) => `"part${index}_${part.key}": ${read(part.path)}`,
-    ),
+    ...(preview?.parts ?? []).map((part, index) => `"part${index}_${part.key}": ${read(part.path)}`),
   ].filter((part) => part !== '');
   return `"preview": {${parts.join(', ')}}`;
+}
+
+/**
+ * The query projection that reads each document's picture by its own type's
+ * preview `media`, for a list that mixes types (a reference's choices). A type
+ * whose preview shows no picture reads none.
+ */
+export function mediaProjection(types: readonly string[], mediaOf: (type: string) => string | undefined): string {
+  const cases = types.flatMap((type) => {
+    const media = mediaOf(type);
+    // The type is quoted as JSON, so no type name is read as GROQ.
+    return media === undefined ? [] : [`_type == ${JSON.stringify(type)} => ${read(media, '.asset->url')}`];
+  });
+  assert(cases.length <= types.length, 'One picture path per type at most');
+  return cases.length === 0 ? '' : `, "media": select(${cases.join(', ')})`;
 }
 
 /** A row's title, subtitle and image from what the projection read. */
@@ -41,8 +54,7 @@ export function previewOf(row: unknown): {
   readonly imageURL: string | undefined;
 } {
   const preview: unknown = isObject(row) ? Reflect.get(row, 'preview') : undefined;
-  const value = (key: string): unknown =>
-    isObject(preview) ? Reflect.get(preview, key) : undefined;
+  const value = (key: string): unknown => (isObject(preview) ? Reflect.get(preview, key) : undefined);
   const title = value('title');
   const media = value('media');
   const parts = Object.keys(isObject(preview) ? preview : {})

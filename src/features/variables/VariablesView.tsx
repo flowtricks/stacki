@@ -1,11 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onVariablesChanged } from '../../ipc/editorEnvironment';
-import type {
-  VariableBlock,
-  VariableCell,
-  VariableFile,
-  VariableSelection,
-} from './variablesBridge';
+import type { VariableBlock, VariableCell, VariableFile, VariableSelection } from './variablesBridge';
 import type { WireColumn } from '../../../shared/ipc/ipcResults';
 import type { VariableSlot, VariableRename } from './variableRows';
 import { assert } from '../../../shared/core/assert';
@@ -309,11 +304,7 @@ function useVariableMove(model: VariableModel, writeWithUndo: VariableHistory) {
           async () => {
             const result = await bridge('moveCssVariables', {
               projectPath: project.path,
-              moves: plan.moves.map((move) =>
-                'target' in move
-                  ? definedFields({ ...move, target: move.target ?? undefined })
-                  : move,
-              ),
+              moves: plan.moves.map((move) => ('target' in move ? definedFields({ ...move, target: move.target ?? undefined }) : move)),
             });
             if (!result.ok) {
               showToast?.(result.error || 'Could not move that.', 'error');
@@ -386,8 +377,7 @@ function useVariableAdd(model: VariableModel, writeWithUndo: VariableHistory) {
         if (!anchor) {
           return;
         }
-        const name =
-          block.kind === 'matrix' ? `--${column.label}-${typed}` : `${stemOf(block)}${typed}`;
+        const name = block.kind === 'matrix' ? `--${column.label}-${typed}` : `${stemOf(block)}${typed}`;
         adds.push({
           file: anchor.file,
           selector: anchor.selector,
@@ -584,10 +574,7 @@ function useVariableDrafts(model: VariableModel) {
           return next;
         }
         if (!(name in current)) {
-          assert(
-            Object.keys(current).length < LIMITS.scanEntriesMax,
-            'Variable drafts: limit exceeded',
-          );
+          assert(Object.keys(current).length < LIMITS.scanEntriesMax, 'Variable drafts: limit exceeded');
         }
         return current[name] === value ? current : { ...current, [name]: value };
       });
@@ -609,9 +596,7 @@ function useVariableDrafts(model: VariableModel) {
         rows: block.rows.filter(
           (row) =>
             `${block.title || ''} ${row.label} ${row.name || ''}`.toLowerCase().includes(needle) ||
-            row.cells.some(
-              (cell) => cell && `${cell.name} ${cell.value}`.toLowerCase().includes(needle),
-            ),
+            row.cells.some((cell) => cell && `${cell.name} ${cell.value}`.toLowerCase().includes(needle)),
         ),
       }))
       .filter((block) => block.rows.length);

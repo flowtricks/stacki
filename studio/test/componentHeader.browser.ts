@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
@@ -26,14 +25,10 @@ try {
   const otherPage = await other.newPage();
   await otherPage.goto(url);
   await saved(otherPage);
-  await page.waitForFunction(
-    () => document.querySelectorAll('.collaborators > button').length === 2,
-  );
+  await page.waitForFunction(() => document.querySelectorAll('.collaborators > button').length === 2);
   assert.equal(await centered(page), initial);
   await other.close();
-  await page.waitForFunction(
-    () => document.querySelectorAll('.collaborators > button').length === 1,
-  );
+  await page.waitForFunction(() => document.querySelectorAll('.collaborators > button').length === 1);
   assert.equal(await centered(page), initial);
   await page.getByRole('button', { name: 'Current page', exact: true }).click();
   await page.getByRole('listbox', { name: 'Pages' }).waitFor();
@@ -57,9 +52,7 @@ try {
   await page.keyboard.press('Escape');
   await back.waitFor({ state: 'hidden' });
   assert.deepEqual(errors, []);
-  console.log(
-    'Component Escape works from preview and header; menus keep Escape; the back button stays centered as editors join/leave and on mobile.',
-  );
+  console.log('Component Escape works from preview and header; menus keep Escape; the back button stays centered as editors join/leave and on mobile.');
 } finally {
   await browser.close();
 }
@@ -71,19 +64,11 @@ async function saved(page: Page) {
 async function centered(page: Page) {
   const header = await page.locator('.studio-titlebar').boundingBox();
   const back = await page.getByTitle('Back to page', { exact: true }).boundingBox();
-  const switcher = await page
-    .getByRole('button', { name: 'Current page', exact: true })
-    .boundingBox();
+  const switcher = await page.getByRole('button', { name: 'Current page', exact: true }).boundingBox();
   const publish = await page.getByRole('button', { name: 'Publish', exact: true }).boundingBox();
   assert.ok(header && back && switcher && publish);
   const center = back.x + back.width / 2;
-  assert.ok(
-    Math.abs(center - header.x - header.width / 2) < 1,
-    'Back button is centered in the header',
-  );
-  assert.ok(
-    switcher.x + switcher.width <= back.x && back.x + back.width <= publish.x,
-    'Header controls do not overlap',
-  );
+  assert.ok(Math.abs(center - header.x - header.width / 2) < 1, 'Back button is centered in the header');
+  assert.ok(switcher.x + switcher.width <= back.x && back.x + back.width <= publish.x, 'Header controls do not overlap');
   return center;
 }

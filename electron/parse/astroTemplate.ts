@@ -6,14 +6,7 @@ import { textValue } from '../../shared/page/htmlText';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import type { ParserNode, MapNode, CondNode, ParsedTemplate } from './astroParserTypes';
-import {
-  VOID_ELEMENTS,
-  RAW_ELEMENTS,
-  makeId,
-  assignPathIds,
-  tagProps,
-  required,
-} from './astroAttrs';
+import { VOID_ELEMENTS, RAW_ELEMENTS, makeId, assignPathIds, tagProps, required } from './astroAttrs';
 import {
   findMatchingBrace,
   findMatchingParen,
@@ -50,7 +43,22 @@ function tryParseMap(exprText: string, base: number | undefined = undefined): Ma
   // The syntax tree chooses the callback form before the compact readers run.
   // Other forms preserve their code around independently editable markup roots.
   const inBase = base === undefined ? undefined : base + 1;
-  return parseMapSimple(inner, syntax, inBase) || parseMapCallback(inner, syntax, inBase);
+  return parseMapEmpty(syntax) || parseMapSimple(inner, syntax, inBase) || parseMapCallback(inner, syntax, inBase);
+}
+
+// A loop with nothing in it yet, as the serializer writes one: `.map((item) =>
+// (null))`. It is an ordinary loop with no children, not hand-written code, so
+// its settings stay editable; read as code, a just-inserted loop showed only
+// its Code field.
+function parseMapEmpty(syntax: MapSyntax): MapNode | undefined {
+  const [part] = syntax.parts;
+  if (syntax.markup.length !== 0 || syntax.parts.length !== 1 || part === undefined) {
+    return undefined;
+  }
+  if (!/^\(?\s*null\s*\)\s*\)\s*\}?\s*$/.test(part)) {
+    return undefined;
+  }
+  return { id: makeId(), kind: 'map', head: normalizeHead(syntax.head), headSource: syntax.head, children: [] };
 }
 
 function parseMapSimple(inner: string, syntax: MapSyntax, base: number | undefined) {
@@ -70,19 +78,12 @@ function parseMapSimple(inner: string, syntax: MapSyntax, base: number | undefin
   }
 }
 
-function parseMapCallback(
-  inner: string,
-  syntax: MapSyntax,
-  base: number | undefined,
-): MapNode | undefined {
+function parseMapCallback(inner: string, syntax: MapSyntax, base: number | undefined): MapNode | undefined {
   const children: ParserNode[] = [];
   const count = parseState.nodes;
   const previousBail = parseState.lastBail;
   for (const span of syntax.markup) {
-    const parsed = parseTemplate(
-      inner.slice(span.start, span.end),
-      base === undefined ? undefined : base + span.start,
-    );
+    const parsed = parseTemplate(inner.slice(span.start, span.end), base === undefined ? undefined : base + span.start);
     if (!parsed.clean || parsed.nodes.length !== 1) {
       parseState.nodes = count;
       parseState.lastBail = previousBail;
@@ -104,10 +105,7 @@ function parseMapCallback(
 // A map callback can return a conditional directly, with or without parens
 // around the ternary. Parse the conditional before treating its JSX branches
 // as unrelated template text, so both rendered alternatives remain editable.
-function tryParseConditionalMap(
-  inner: string,
-  base: number | undefined = undefined,
-): MapNode | undefined {
+function tryParseConditionalMap(inner: string, base: number | undefined = undefined): MapNode | undefined {
   const arrow = inner.match(/^([\s\S]*?\.map\(\s*(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*)/);
   if (!arrow) {
     return undefined;
@@ -164,10 +162,7 @@ function conditionalMapBody(raw: string, base: number | undefined): CondNode | u
   return child;
 }
 
-function tryParseConciseMap(
-  inner: string,
-  base: number | undefined = undefined,
-): MapNode | undefined {
+function tryParseConciseMap(inner: string, base: number | undefined = undefined): MapNode | undefined {
   // The callback's parameter list may be parenthesized — `(post)`, `(post, i)`,
   // `([k, v])` — or a bare name, which is how many people write a one-argument
   // arrow. Both are the same loop; only the first used to be recognized.
@@ -227,10 +222,7 @@ function tryParseBareMap(inner: string, base: number | undefined = undefined): M
   if (inner.slice(mapClose + 1).trim()) {
     return undefined;
   }
-  const parsed = parseTemplate(
-    inner.slice(headRaw.length, mapClose),
-    base === undefined ? undefined : base + headRaw.length,
-  );
+  const parsed = parseTemplate(inner.slice(headRaw.length, mapClose), base === undefined ? undefined : base + headRaw.length);
   if (!parsed.clean) {
     return undefined;
   }
@@ -246,10 +238,7 @@ function tryParseBareMap(inner: string, base: number | undefined = undefined): M
 // The same loop, written with a statement body. Normalized to the same node
 // the concise form produces — head ending in `=> (` so the Loop editor reads
 // it unchanged — with the declarations parked in `body` for serializing back.
-function tryParseBlockMap(
-  inner: string,
-  base: number | undefined = undefined,
-): MapNode | undefined {
+function tryParseBlockMap(inner: string, base: number | undefined = undefined): MapNode | undefined {
   const arrow = inner.match(/^([\s\S]*?\.map\(\s*(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*)\{/);
   if (!arrow) {
     return undefined;
@@ -268,10 +257,7 @@ function tryParseBlockMap(
   if (!split) {
     return undefined;
   }
-  const parsed = parseTemplate(
-    split.markup,
-    base === undefined ? undefined : base + openIndex + 1 + split.at,
-  );
+  const parsed = parseTemplate(split.markup, base === undefined ? undefined : base + openIndex + 1 + split.at);
   if (!parsed.clean) {
     return undefined;
   }
@@ -333,10 +319,7 @@ function branchNodes(raw: string, base: number | undefined = undefined): ParserN
 // `test ? ( … ) : ( … )` and `test && ( … )` as a structural node. Returns undefined
 // for anything whose branches aren't markup (a ternary picking between two
 // strings, say) — those stay code.
-function parseCondSource(
-  source: string,
-  base: number | undefined = undefined,
-): CondNode | undefined {
+function parseCondSource(source: string, base: number | undefined = undefined): CondNode | undefined {
   if (parseState.conditions >= LIMITS.treeDepthMax) {
     return undefined;
   }
@@ -390,12 +373,7 @@ function parseCondSourceBody(source: string, base: number | undefined): CondNode
       op: '?',
       test,
       children: [
-        makeBranch(
-          'then',
-          thenKids,
-          thenRaw,
-          from === undefined ? undefined : from + ternary.at + 1,
-        ),
+        makeBranch('then', thenKids, thenRaw, from === undefined ? undefined : from + ternary.at + 1),
         makeBranch('else', elseKids, elseRaw, from === undefined ? undefined : from + colon.at + 1),
       ],
     };
@@ -428,10 +406,7 @@ function parseCondSourceBody(source: string, base: number | undefined): CondNode
 // Recognizes conditional markup — {cond ? ( … ) : ( … )}, {cond && ( … )} —
 // and turns it into a 'cond' node whose branches are parsed child trees, so
 // each side is navigable and editable instead of a wall of code.
-function tryParseMapWithSource(
-  exprText: string,
-  base: number | undefined = undefined,
-): MapNode | undefined {
+function tryParseMapWithSource(exprText: string, base: number | undefined = undefined): MapNode | undefined {
   const node = tryParseMap(exprText, base);
   if (node) {
     node.source = exprText;
@@ -439,10 +414,7 @@ function tryParseMapWithSource(
   return node;
 }
 
-function tryParseCond(
-  exprText: string,
-  base: number | undefined = undefined,
-): CondNode | undefined {
+function tryParseCond(exprText: string, base: number | undefined = undefined): CondNode | undefined {
   const node = parseCondSource(exprText.slice(1, -1), base === undefined ? undefined : base + 1);
   // The text it was written as. A condition that has not been edited is
   // written back exactly, rather than reflowed onto the shape this file would
@@ -461,10 +433,7 @@ function tryParseCond(
 // (what locateSelection turns into line numbers). The editor's own parse
 // leaves it undefined on purpose: offsets describe the file as it was on disk and
 // go stale the moment the model is mutated, so only a fresh parse may use them.
-export function parseTemplate(
-  template: string,
-  base: number | undefined = undefined,
-): ParsedTemplate {
+export function parseTemplate(template: string, base: number | undefined = undefined): ParsedTemplate {
   if (typeof template !== 'string') {
     return bail([], '', 0, 'a non-string template');
   }
@@ -516,8 +485,7 @@ function parseTemplateBody(template: string, base: number | undefined): ParsedTe
 
   // Tags a node with its source range and returns it — a no-op when offsets
   // weren't asked for.
-  const at = (node: ParserNode, from: number, to: number): ParserNode =>
-    parseTemplateAt(node, base, from, to);
+  const at = (node: ParserNode, from: number, to: number): ParserNode => parseTemplateAt(node, base, from, to);
 
   // Searching afresh every iteration rescanned the same text once per tag
   // whenever the next brace was far away — quadratic in a brace-free region.
@@ -603,15 +571,9 @@ function parseTemplateBody(template: string, base: number | undefined): ParsedTe
   return { nodes, clean: true, trailingBlank: pendingBlank };
 }
 
-function parseTemplateTag(
-  template: string,
-  lt: number,
-  base: number | undefined,
-): TemplateTagResult {
+function parseTemplateTag(template: string, lt: number, base: number | undefined): TemplateTagResult {
   const shorthand = template.startsWith('<>', lt);
-  const match = shorthand
-    ? { full: '<>', name: 'Fragment', attrs: '', selfClose: '' }
-    : scanTag(template, lt);
+  const match = shorthand ? { full: '<>', name: 'Fragment', attrs: '', selfClose: '' } : scanTag(template, lt);
   if (!match) {
     return { kind: 'bail', what: 'a stray < or unclosed tag attribute' };
   }
@@ -688,11 +650,7 @@ function parseTemplateExpression(exprText: string, base: number | undefined): Pa
   return structural || { id: makeId(), kind: 'expr', value: exprText };
 }
 
-function parseTemplateMarkup(
-  template: string,
-  lt: number,
-  base: number | undefined,
-): TemplateTagResult {
+function parseTemplateMarkup(template: string, lt: number, base: number | undefined): TemplateTagResult {
   if (template.startsWith('<!--', lt)) {
     const end = template.indexOf('-->', lt + 4);
     if (end === -1) {
@@ -756,9 +714,7 @@ function parseTemplateGaps(
 }
 function parseTemplateTagPaired(open: TemplateTagOpen): TemplateTagResult {
   const { template, lt, base, name, attrs, afterOpen, shorthand, kind } = open;
-  const closeIndex = shorthand
-    ? findMatchingFragmentClose(template, afterOpen)
-    : findMatchingClose(template, afterOpen, name);
+  const closeIndex = shorthand ? findMatchingFragmentClose(template, afterOpen) : findMatchingClose(template, afterOpen, name);
   if (closeIndex === -1) {
     return { kind: 'bail', what: `an unclosed <${shorthand ? '' : name}> tag` };
   }
@@ -771,10 +727,7 @@ function parseTemplateTagPaired(open: TemplateTagOpen): TemplateTagResult {
   // hold it: whitespace-only text between the tags is dropped, so the break
   // before a closing tag exists nowhere else, and the serializer needs it to
   // put a hand-wrapped paragraph back the way it found it.
-  const source =
-    inner.includes('\n') && (isInlineRun(innerResult.nodes, 0) || innerResult.nodes.length === 0)
-      ? inner
-      : undefined;
+  const source = inner.includes('\n') && (isInlineRun(innerResult.nodes, 0) || innerResult.nodes.length === 0) ? inner : undefined;
   const blankAfter = innerResult.trailingBlank || 0;
   // The close tag may contain whitespace: </Name >
   const closeEnd = template.indexOf('>', closeIndex) + 1;
@@ -792,10 +745,7 @@ function parseTemplateTagPaired(open: TemplateTagOpen): TemplateTagResult {
         ...(shorthand ? { shorthand: true } : {}),
         ...(source === undefined ? {} : { source }),
         ...(blankAfter ? { blankAfter } : {}),
-        ...tagProps(
-          attrs,
-          base === undefined || shorthand ? undefined : base + lt + 1 + name.length,
-        ),
+        ...tagProps(attrs, base === undefined || shorthand ? undefined : base + lt + 1 + name.length),
         ...(attrs && attrs.includes('\n') ? { attrSource: attrs } : {}),
         ...(closeText.includes('\n') ? { closeSource: closeText } : {}),
         children: innerResult.nodes,

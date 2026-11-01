@@ -9,8 +9,7 @@ import { stopServiceAndWait } from '../../../vendor/stacki/electron/content/cont
 import { createHash } from 'node:crypto';
 import { SerialQueue } from '../../shared/serialQueue';
 
-export const CMS_SOURCE =
-  /\.(astro|json|md|mdx|mdoc|markdown|css|[cm]?[jt]sx?|yaml|yml|toml|csv|ndjson)$/i;
+export const CMS_SOURCE = /\.(astro|json|md|mdx|mdoc|markdown|css|[cm]?[jt]sx?|yaml|yml|toml|csv|ndjson)$/i;
 export async function cmsSources(root: string, rooms?: ReturnType<typeof createRooms>) {
   const paths = [...(await walk(root, 'src')), ...(await walk(root, 'public'))];
   if (paths.length > 2000) {
@@ -21,9 +20,7 @@ export async function cmsSources(root: string, rooms?: ReturnType<typeof createR
     paths.filter((file) => CMS_SOURCE.test(file)),
     async (file) => {
       sourcePath(file);
-      const source = rooms
-        ? await rooms.read(file)
-        : string(await readFile(await safePath(root, file), 'utf8'));
+      const source = rooms ? await rooms.read(file) : string(await readFile(await safePath(root, file), 'utf8'));
       size += Buffer.byteLength(source);
       if (size > 32_000_000) {
         throw new Error('CMS scan exceeds 32 MB');
@@ -98,11 +95,7 @@ async function cmsConfiguration(root: string) {
   }
   return entries;
 }
-export async function withCmsSnapshot<T>(
-  root: string,
-  snapshot: Awaited<ReturnType<typeof cmsSources>>,
-  run: (stage: string) => Promise<T>,
-) {
+export async function withCmsSnapshot<T>(root: string, snapshot: Awaited<ReturnType<typeof cmsSources>>, run: (stage: string) => Promise<T>) {
   const stage = await mkdtemp(path.join(tmpdir(), 'studio-cms-'));
   try {
     await stageSources(root, stage, snapshot);
@@ -112,11 +105,7 @@ export async function withCmsSnapshot<T>(
     await rm(stage, { recursive: true, force: true });
   }
 }
-async function stageSources(
-  root: string,
-  stage: string,
-  snapshot: Awaited<ReturnType<typeof cmsSources>>,
-) {
+async function stageSources(root: string, stage: string, snapshot: Awaited<ReturnType<typeof cmsSources>>) {
   await symlink(path.join(root, 'node_modules'), path.join(stage, 'node_modules'), 'dir');
   for (const [file, source] of snapshot.configuration) {
     await writeFile(path.join(stage, file), source);

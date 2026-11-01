@@ -116,12 +116,7 @@ const settle = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
       onCssChanged: () => () => {},
     },
     {
-      get: (target, prop) =>
-        prop in target
-          ? target[prop]
-          : typeof prop === 'string' && prop.startsWith('on')
-            ? () => () => {}
-            : noop,
+      get: (target, prop) => (prop in target ? target[prop] : typeof prop === 'string' && prop.startsWith('on') ? () => () => {} : noop),
     },
   );
   dom.window.avb = bridge;
@@ -181,50 +176,23 @@ const settle = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
   dialogAnswer = { projectPath: '/projects/third' };
   await fire('openProject');
   check('switching lets the old project go', closed.length === 2, JSON.stringify(closed));
-  check(
-    'and hands over the one to open next',
-    closed[1] === '/projects/third',
-    JSON.stringify(closed),
-  );
-  check(
-    'without opening it in the window that is going away',
-    !opened.includes('/projects/third'),
-    opened.join(),
-  );
+  check('and hands over the one to open next', closed[1] === '/projects/third', JSON.stringify(closed));
+  check('without opening it in the window that is going away', !opened.includes('/projects/third'), opened.join());
 
   // --- a dialog nobody answered ----------------------------------------------------------
   dialogAnswer = { canceled: true };
   await fire('openProject');
-  check(
-    'cancelling the picker leaves the project alone',
-    closed.length === 2,
-    JSON.stringify(closed),
-  );
+  check('cancelling the picker leaves the project alone', closed.length === 2, JSON.stringify(closed));
 
   // --- what main does with it -------------------------------------------------------------
   const main = readSource('electron/main.ts');
-  check(
-    'the File menu offers a way in',
-    /label: 'Open Project…'/.test(main),
-    'no Open Project item',
-  );
+  check('the File menu offers a way in', /label: 'Open Project…'/.test(main), 'no Open Project item');
   check('and a way out', /label: 'Close Project'/.test(main), 'no Close Project item');
-  const close = main.slice(
-    main.indexOf("ipcMain.handle('project:close'"),
-    main.indexOf("app.on('window-all-closed'"),
-  );
+  const close = main.slice(main.indexOf("ipcMain.handle('project:close'"), main.indexOf("app.on('window-all-closed'"));
   check('letting go stops the dev server', /devServers\.stop\(\)/.test(close), close.slice(0, 200));
-  check(
-    'and the shells, which outlive a window',
-    /cleanupTerminals\(\)/.test(close),
-    close.slice(0, 200),
-  );
+  check('and the shells, which outlive a window', /cleanupTerminals\(\)/.test(close), close.slice(0, 200));
   check('and the watcher', /stopWatchingProject\(\)/.test(close), close.slice(0, 200));
-  check(
-    'and puts the project out of reach',
-    /openProjectRoot = undefined/.test(close),
-    close.slice(0, 200),
-  );
+  check('and puts the project out of reach', /openProjectRoot = undefined/.test(close), close.slice(0, 200));
   check(
     'and starts the window over, which is what lets the renderer go',
     /mainWindow\?\.webContents\.reload\(\)/.test(close),
@@ -244,15 +212,12 @@ const settle = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
   const preload = readFolderSource('electron/preload');
   check(
     'the app can ask for both',
-    /closeProject: invoke\('project:close'\)/.test(preload) &&
-      /pendingProject: invoke\('project:pending'\)/.test(preload),
+    /closeProject: invoke\('project:close'\)/.test(preload) && /pendingProject: invoke\('project:pending'\)/.test(preload),
     'the bridge is missing one',
   );
 
   if (failures.length) {
-    console.error(
-      `\nclose-project: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\nclose-project: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

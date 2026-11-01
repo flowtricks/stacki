@@ -433,12 +433,7 @@
   height: 12px;
   transform: translateY(-50%);
   border-radius: 4px;
-  background: linear-gradient(
-    90deg,
-    var(--border) 25%,
-    color-mix(in srgb, var(--text-dim) 45%, var(--border)) 50%,
-    var(--border) 75%
-  );
+  background: linear-gradient(90deg, var(--border) 25%, color-mix(in srgb, var(--text-dim) 45%, var(--border)) 50%, var(--border) 75%);
   background-size: 200% 100%;
   animation: publish-skeleton 1.4s ease-in-out infinite;
 }

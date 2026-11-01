@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import {
+  isLocked,
   REMOTE_SCHEMA_LIMITS,
   remoteList,
   remoteObject,
@@ -14,10 +15,11 @@ import {
   type RemoteType,
   type RemoteValue,
 } from '../../../shared/properties/cmsRemoteSchema';
+import type { RemoteReferenceOption } from '../../../shared/properties/cmsRemote';
 import { uploadRemoteAsset } from '../../ipc/cmsConnectionsBridge';
 import Dropdown from '../../ui/Dropdown';
 import { ErrorToast } from '../../ui/ErrorToast';
-import { ChevronDownIcon, ChevronRightIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
+import { ChevronRightIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import useListReorder from '../../ui/useListReorder';
 import { CmsListField } from './CmsListField';
 import { RemoteImageGrid } from './RemoteImageGrid';
@@ -26,7 +28,7 @@ import { labelize } from './cmsSchema';
 import { fieldTypeOf } from './remoteFieldTypes';
 import { SanityTypeIcon, typeIcons } from './SanityTypeIcon';
 import { pointingAt } from './RemoteAssetInput';
-import { referenceTitle, useReferenceOptions } from './RemoteReferenceInput';
+import { hasReferenceImage, ReferenceIcon, ReferenceImage, referenceTitle, useReferenceOptions } from './RemoteReferenceInput';
 import { RemoteValueEditor, type RemoteValueProps } from './RemoteValueEditor';
 import { fieldTitle, remoteKey } from './remoteValues';
 
@@ -47,24 +49,12 @@ export function RemoteListEditor(props: ListProps) {
   assert(items.length <= REMOTE_SCHEMA_LIMITS.valueNodesMax, 'A list stays within its bound');
   const plain = props.of.every((member) => PLAIN.has(member.kind) && !hasOptions(member));
   if (plain) {
-    return (
-      <CmsListField
-        layout="open"
-        value={items}
-        onChange={(next) => props.onChange(next.filter(isPlainValue))}
-      />
-    );
+    return <CmsListField layout="open" value={items} onChange={(next) => props.onChange(next.filter(isPlainValue))} />;
   }
   // Images with no fields of their own are a grid of thumbnails, not rows.
   const tiles = props.of.every((member) => member.kind === 'image' && member.fields.length === 0);
   if (tiles) {
-    return (
-      <RemoteImageGrid
-        items={items}
-        context={props.context}
-        onChange={(next) => props.onChange(next.length > 0 ? next : undefined)}
-      />
-    );
+    return <RemoteImageGrid items={items} context={props.context} onChange={(next) => props.onChange(next.length > 0 ? next : undefined)} />;
   }
   return <ItemRows {...props} items={items} />;
 }
@@ -111,17 +101,11 @@ function ItemRows(props: ListProps & { readonly items: readonly RemoteValue[] })
             setOpen(undefined);
           }}
           onItemChange={(next) => change(index, next)}
-          referencedType={
-            options.find((option) => option.id === remoteObject(item)?.['_ref'])?.type
-          }
+          referenced={options.find((option) => option.id === remoteObject(item)?.['_ref'])}
         />
       ))}
       {items.length > LIST_FOLD.rowsMax && (
-        <button
-          type="button"
-          className="remote-cms-list-fold"
-          onClick={() => setUnfolded(!unfolded)}
-        >
+        <button type="button" className="remote-cms-list-fold" onClick={() => setUnfolded(!unfolded)}>
           {folded ? `Show all ${items.length}` : 'Show fewer'}
         </button>
       )}
@@ -156,39 +140,33 @@ function ItemRow(
     readonly onToggle: () => void;
     readonly onRemove: () => void;
     readonly onItemChange: (value: RemoteValue | undefined) => void;
-    /** The type of the document a reference item points at, once known. */
-    readonly referencedType: string | undefined;
+    /** The document a reference item points at, once known. */
+    readonly referenced: RemoteReferenceOption | undefined;
   },
 ) {
   const member = memberFor(props.item, props.of);
   const { icon: Icon } = fieldTypeOf(member);
   const shape = rowShape(member);
-  // A reference shows its document's type icon, as the Studio's row does.
-  const referenced = member.kind === 'reference' ? props.referencedType : undefined;
+  // A reference shows its document's picture, or failing that its type's icon, as the Studio's row does.
+  const referenced = member.kind === 'reference' ? props.referenced : undefined;
   const context = { ...props.context, depth: props.context.depth + 1 };
   return (
     <div className={`remote-cms-list-item ${props.rowClass}`}>
-      <div
-        className={`remote-cms-list-row is-${shape}`}
-        {...props.rowProps}
-        onClick={shape === 'opens' ? props.onToggle : undefined}
-      >
+      <div className={`remote-cms-list-row is-${shape}`} {...props.rowProps} onClick={shape === 'opens' ? props.onToggle : undefined}>
         <span className="remote-cms-grip" title="Drag to reorder">
           <DragIcon size={11} />
         </span>
-        {shape === 'opens' &&
-          (props.open ? <ChevronDownIcon size={11} /> : <ChevronRightIcon size={11} />)}
-        <RowIcon
-          icon={Icon}
-          sanity={referenced && typeIcons(props.context.connectionId).get(referenced)}
-          picture={choicePicture(member, props.item)}
-        />
+        <span className="remote-cms-list-mark">
+          <RowIcon
+            icon={Icon}
+            sanity={referenced && typeIcons(props.context.connectionId).get(referenced.type)}
+            picture={choicePicture(member, props.item)}
+            imageURL={referenced?.imageURL}
+          />
+        </span>
         {shape === 'inline' ? (
           // A press inside the editor selects text; it never starts a row drag.
-          <div
-            className="remote-cms-list-inline"
-            onPointerDown={(event) => event.stopPropagation()}
-          >
+          <div className="remote-cms-list-inline" onPointerDown={(event) => event.stopPropagation()}>
             <InlineItemEditor {...props} member={member} context={context} />
           </div>
         ) : (
@@ -198,20 +176,40 @@ function ItemRow(
           </span>
         )}
         <RemoveButton onRemove={props.onRemove} />
+        {/* At the row's end, where it turns to show the row is open. */}
+        {shape === 'opens' && (
+          <span className={`remote-cms-list-chevron${props.open ? ' is-open' : ''}`}>
+            <ChevronRightIcon size={12} />
+          </span>
+        )}
       </div>
       {shape === 'opens' && props.open && (
         <div className="remote-cms-list-body">
-          <RemoteValueEditor
-            type={member}
-            label={props.label}
-            value={props.item}
-            context={context}
-            onChange={props.onItemChange}
-          />
+          <RemoteValueEditor type={bodyType(member, props.item)} label={props.label} value={props.item} context={context} onChange={props.onItemChange} />
         </div>
       )}
     </div>
   );
+}
+
+// What an open row shows below it: a group's fields, less a locked one its row
+// is already titled by (a nav dropdown's category). The value stays in the item,
+// since a group is written back whole with the fields it did not show.
+function bodyType(member: RemoteType, item: RemoteValue): RemoteType {
+  if (member.kind !== 'object') {
+    return member;
+  }
+  const titledBy = member.preview?.title?.split('.')[0];
+  const object = remoteObject(item) ?? {};
+  const shown = (field: (typeof member.fields)[number]): boolean => {
+    if (field.name === titledBy) {
+      return !isLocked(field, object[field.name]);
+    }
+    return true;
+  };
+  const fields = member.fields.filter(shown);
+  assert(fields.length >= member.fields.length - 1, 'At most the title field is left out');
+  return fields.length === member.fields.length ? member : { ...member, fields };
 }
 
 // Removing an item, without also opening or closing its row.
@@ -232,28 +230,26 @@ function RemoveButton(props: { readonly onRemove: () => void }) {
 }
 
 // A row's type icon: the picture of the record a choice names, a reference's
-// document type's Sanity icon, else the member's.
+// document's picture or its type's Sanity icon, else the member's.
 function RowIcon(props: {
   readonly icon: ReturnType<typeof fieldTypeOf>['icon'];
   readonly sanity: string | undefined;
   readonly picture: string | undefined;
+  readonly imageURL: string | undefined;
 }) {
   const Icon = props.icon;
   if (props.picture !== undefined) {
     return <OptionImage file={props.picture} placeholder={false} />;
   }
-  return props.sanity === undefined ? (
-    <Icon size={12} />
-  ) : (
-    <SanityTypeIcon symbol={props.sanity} size={12} />
-  );
+  if (props.imageURL !== undefined) {
+    return <ReferenceImage url={props.imageURL} />;
+  }
+  return props.sanity === undefined ? <Icon size={12} /> : <SanityTypeIcon symbol={props.sanity} size={12} />;
 }
 
 // The picture of the record a chosen item names (an Astro entry's first image).
 function choicePicture(member: RemoteType, item: RemoteValue): string | undefined {
-  return member.kind === 'string'
-    ? member.options.find((option) => option.value === item)?.imageFile
-    : undefined;
+  return member.kind === 'string' ? member.options.find((option) => option.value === item)?.imageFile : undefined;
 }
 
 // An item's one value, edited in its row: the item itself, or a group's only field.
@@ -267,15 +263,7 @@ function InlineItemEditor(
   const { member, item } = props;
   const only = member.kind === 'object' ? member.fields[0] : undefined;
   if (only === undefined) {
-    return (
-      <RemoteValueEditor
-        type={member}
-        label={props.label}
-        value={item}
-        context={props.context}
-        onChange={props.onItemChange}
-      />
-    );
+    return <RemoteValueEditor type={member} label={props.label} value={item} context={props.context} onChange={props.onItemChange} />;
   }
   const object = remoteObject(item) ?? {};
   const rest = Object.fromEntries(Object.entries(object).filter(([key]) => key !== only.name));
@@ -285,23 +273,12 @@ function InlineItemEditor(
       label={fieldTitle(only)}
       value={object[only.name]}
       context={props.context}
-      onChange={(next) =>
-        props.onItemChange(next === undefined ? rest : { ...rest, [only.name]: next })
-      }
+      onChange={(next) => props.onItemChange(next === undefined ? rest : { ...rest, [only.name]: next })}
     />
   );
 }
 
-const INLINE_KINDS: ReadonlySet<RemoteType['kind']> = new Set([
-  'string',
-  'url',
-  'email',
-  'number',
-  'boolean',
-  'date',
-  'datetime',
-  'slug',
-]);
+const INLINE_KINDS: ReadonlySet<RemoteType['kind']> = new Set(['string', 'url', 'email', 'number', 'boolean', 'date', 'datetime', 'slug']);
 
 function rowShape(member: RemoteType): 'fixed' | 'inline' | 'opens' {
   // A reference, or a choice from a fixed list, is the thing it names: its name
@@ -322,17 +299,10 @@ function rowShape(member: RemoteType): 'fixed' | 'inline' | 'opens' {
 }
 
 // Writing the list whole: an emptied list is removed, an edited item keeps its key.
-function listWrites(
-  items: readonly RemoteValue[],
-  onChange: (value: RemoteValue | undefined) => void,
-) {
+function listWrites(items: readonly RemoteValue[], onChange: (value: RemoteValue | undefined) => void) {
   const write = (next: readonly RemoteValue[]) => onChange(next.length > 0 ? next : undefined);
   const change = (index: number, next: RemoteValue | undefined) =>
-    write(
-      items
-        .map((entry, position) => (position === index ? keep(entry, next) : entry))
-        .filter(defined),
-    );
+    write(items.map((entry, position) => (position === index ? keep(entry, next) : entry)).filter(defined));
   return { write, change };
 }
 
@@ -419,12 +389,12 @@ function AddReference(
 ) {
   const options = useReferenceOptions(props.context, props.to);
   const icons = typeIcons(props.context.connectionId);
-  const chosen = new Set(
-    (remoteList(props.value) ?? []).map((item) => remoteObject(item)?.['_ref']),
-  );
+  const chosen = new Set((remoteList(props.value) ?? []).map((item) => remoteObject(item)?.['_ref']));
+  const pictures = hasReferenceImage(options);
   return (
     <Dropdown
       value=""
+      menuClassName={pictures ? OPTION_IMAGE_MENU : ''}
       placeholder={`Add ${props.to.map(labelize).join(' or ').toLowerCase() || 'reference'}…`}
       livePreview={false}
       searchable={true}
@@ -434,7 +404,7 @@ function AddReference(
         .map((option) => ({
           value: option.id,
           label: option.title,
-          icon: <SanityTypeIcon symbol={icons.get(option.type)} size={12} />,
+          icon: <ReferenceIcon option={option} sanity={icons.get(option.type)} placeholder={pictures} />,
         }))}
       onChange={(id) => props.onAdd({ _type: 'reference', _ref: id, _key: remoteKey() })}
     />
@@ -530,8 +500,7 @@ function itemTitle(
   }
   const object = remoteObject(item);
   if (object === undefined) {
-    const option =
-      member.kind === 'string' ? member.options.find((entry) => entry.value === item) : undefined;
+    const option = member.kind === 'string' ? member.options.find((entry) => entry.value === item) : undefined;
     return option?.title ?? (String(item) || `Item ${known.index + 1}`);
   }
   const asset = remoteObject(object['asset'])?.['_ref'];
@@ -539,18 +508,13 @@ function itemTitle(
     return known.assets.get(asset)?.filename ?? asset;
   }
   // A group whose schema says how it previews is titled as the Studio titles it.
-  const previewTitle =
-    member.kind === 'object' && member.preview?.title
-      ? pathText(object, member.preview.title, known.options)
-      : undefined;
+  const previewTitle = member.kind === 'object' && member.preview?.title ? pathText(object, member.preview.title, known.options) : undefined;
   if (previewTitle) {
     return previewTitle;
   }
   const fields = member.kind === 'object' ? member.fields : [];
   const text = fields.find((field) => titled(field.type, object[field.name]));
-  const date = fields.find(
-    (field) => DATE_KINDS.has(field.type.kind) && filled(object[field.name]),
-  );
+  const date = fields.find((field) => DATE_KINDS.has(field.type.kind) && filled(object[field.name]));
   const parts = [
     text === undefined ? undefined : titleText(text.type, object[text.name], known.options),
     date === undefined ? undefined : shortDate(String(object[date.name]), date.type.kind),
@@ -562,11 +526,7 @@ const TITLE_KINDS: ReadonlySet<RemoteType['kind']> = new Set(['string', 'text', 
 const DATE_KINDS: ReadonlySet<RemoteType['kind']> = new Set(['date', 'datetime']);
 
 /** The line under a group's title, as its schema's preview builds it ("Donaldsonville · 6 PM"). */
-function itemSubtitle(
-  item: RemoteValue,
-  member: RemoteType,
-  options: Parameters<typeof referenceTitle>[1],
-): string | undefined {
+function itemSubtitle(item: RemoteValue, member: RemoteType, options: Parameters<typeof referenceTitle>[1]): string | undefined {
   const object = remoteObject(item);
   if (object === undefined || member.kind !== 'object' || member.preview === undefined) {
     return undefined;
@@ -580,11 +540,7 @@ function itemSubtitle(
 
 // A preview path's value as text: a step through a reference reads the
 // referenced document's title; a date reads as a date; a list as its count.
-function pathText(
-  object: { readonly [key: string]: RemoteValue },
-  path: string,
-  options: Parameters<typeof referenceTitle>[1],
-): string | undefined {
+function pathText(object: { readonly [key: string]: RemoteValue }, path: string, options: Parameters<typeof referenceTitle>[1]): string | undefined {
   const [first = '', ...rest] = path.split('.');
   let value: RemoteValue | undefined = object[first];
   for (const step of rest) {
@@ -614,11 +570,7 @@ function titled(type: RemoteType, value: RemoteValue | undefined): boolean {
   return TITLE_KINDS.has(type.kind) && filled(value);
 }
 
-function titleText(
-  type: RemoteType,
-  value: RemoteValue | undefined,
-  options: Parameters<typeof referenceTitle>[1],
-): string {
+function titleText(type: RemoteType, value: RemoteValue | undefined, options: Parameters<typeof referenceTitle>[1]): string {
   return type.kind === 'reference' ? referenceTitle(value, options) : String(value);
 }
 

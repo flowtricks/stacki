@@ -1,41 +1,14 @@
 import { sendPageEditWithRetry } from './saveRetry';
-import {
-  parseAstroFileChanges,
-  type AstroFileChange,
-} from '../../shared/properties/astroFileChanges';
+import { parseAstroFileChanges, type AstroFileChange } from '../../shared/properties/astroFileChanges';
 import { parsePreviewFailure } from '../../shared/ipc/previewFailure';
 import type { Data } from '../../shared/core/boundary';
-import type {
-  IpcResults,
-  WireDataRecord,
-  WireInjectedRoute,
-  WireRouteParams,
-  WireUsageFile,
-} from '../../shared/ipc/ipcResults';
-import {
-  boolean,
-  count,
-  data,
-  dictionary,
-  list,
-  optional,
-  pathText,
-  record,
-  text,
-} from '../../shared/core/boundary';
+import type { IpcResults, WireDataRecord, WireInjectedRoute, WireRouteParams, WireUsageFile } from '../../shared/ipc/ipcResults';
+import { boolean, count, data, dictionary, list, optional, pathText, record, text } from '../../shared/core/boundary';
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 import { parseOkResult } from '../../shared/ipc/ipcContract';
 import type { EditRequest } from '../../shared/engine/editRequest';
-import {
-  parsePageEditResult,
-  type PageEditError,
-  type PageEdited,
-} from '../../shared/ipc/pageSave';
-import {
-  parsePreviewVerdict,
-  type PreviewRender,
-  type PreviewVerdict,
-} from '../../shared/page/previewToken';
+import { parsePageEditResult, type PageEditError, type PageEdited } from '../../shared/ipc/pageSave';
+import { parsePreviewVerdict, type PreviewRender, type PreviewVerdict } from '../../shared/page/previewToken';
 import type { Result } from '../../shared/core/result';
 
 export interface PageChangeEvent {
@@ -126,10 +99,7 @@ export function editProjectPage(request: EditRequest): Promise<Result<PageEdited
 /** The page `request` would leave, planned against `source` (the bytes at its
  * authoredChecksum) and never written: a page's unsaved gestures shown for
  * review. The reply has page:edit's shape. */
-export function previewProjectPageEdit(
-  request: EditRequest,
-  source: string,
-): Promise<Result<PageEdited, PageEditError>> {
+export function previewProjectPageEdit(request: EditRequest, source: string): Promise<Result<PageEdited, PageEditError>> {
   const payload = parseIpcPayload('page:previewEdit', { ...request, source });
   return window.avb.previewPageEdit(payload).then(parsePageEditResult);
 }
@@ -141,10 +111,7 @@ export function closeProject(nextProjectPath: string | undefined): Promise<void>
 
 /** Whether every file a canvas rendering came from still holds the bytes its
  * stamps name (step 7): main reads them from disk. */
-export function checkPreviewRender(
-  projectPath: string,
-  render: PreviewRender,
-): Promise<PreviewVerdict> {
+export function checkPreviewRender(projectPath: string, render: PreviewRender): Promise<PreviewVerdict> {
   const payload = parseIpcPayload('preview:check', { projectPath, render });
   return window.avb.checkPreview(payload).then(parsePreviewVerdict);
 }
@@ -154,24 +121,15 @@ export function stopProjectCommitPreview(projectPath: string): Promise<void> {
   return window.avb.previewStop(payload).then((input) => void parseOkResult(input));
 }
 
-export function copyEditorSelection(
-  projectPath: string,
-  keys: readonly string[],
-): Promise<boolean> {
+export function copyEditorSelection(projectPath: string, keys: readonly string[]): Promise<boolean> {
   const payload = parseIpcPayload('selection:copy', { projectPath, keys });
   return window.avb.copySelection(payload).then((input) => boolean(record(input)['ok']));
 }
 
-export function writeProjectFile(
-  area: 'src' | 'public',
-  projectPath: string,
-  rel: string,
-  value: string,
-): Promise<void> {
+export function writeProjectFile(area: 'src' | 'public', projectPath: string, rel: string, value: string): Promise<void> {
   const channel = area === 'src' ? 'src:writeText' : 'assets:writeText';
   const payload = parseIpcPayload(channel, { projectPath, rel, text: value });
-  const request =
-    area === 'src' ? window.avb.writeSourceText(payload) : window.avb.writeAssetText(payload);
+  const request = area === 'src' ? window.avb.writeSourceText(payload) : window.avb.writeAssetText(payload);
   return request.then((input) => void parseOkResult(input));
 }
 
@@ -201,38 +159,24 @@ export function runNativeEdit(command: 'copy' | 'paste' | 'redo' | 'undo'): void
   }
 }
 
-export function resolveProjectImport(
-  projectPath: string,
-  fromFile: string,
-  spec: string,
-): Promise<string | undefined> {
+export function resolveProjectImport(projectPath: string, fromFile: string, spec: string): Promise<string | undefined> {
   const payload = parseIpcPayload('project:resolveImport', { projectPath, fromFile, spec });
-  return window.avb
-    .resolveImport(payload)
-    .then((input) => optional(pathText)(record(input)['path']));
+  return window.avb.resolveImport(payload).then((input) => optional(pathText)(record(input)['path']));
 }
 
 export function readInjectedRoutes(projectPath: string): Promise<readonly WireInjectedRoute[]> {
   const payload = parseIpcPayload('project:injectedRoutes', { projectPath });
-  return window.avb
-    .injectedRoutes(payload)
-    .then((input) => list(parseInjectedRoute)(record(input)['routes']));
+  return window.avb.injectedRoutes(payload).then((input) => list(parseInjectedRoute)(record(input)['routes']));
 }
 
-export function readDynamicPaths(
-  projectPath: string,
-  pagePath: string,
-  devUrl: string,
-): Promise<IpcResults['page:dynamicPaths']> {
+export function readDynamicPaths(projectPath: string, pagePath: string, devUrl: string): Promise<IpcResults['page:dynamicPaths']> {
   const payload = parseIpcPayload('page:dynamicPaths', { projectPath, pagePath, devUrl });
   return window.avb.dynamicPaths(payload).then(parseDynamicPaths);
 }
 
 export function readContentCollections(projectPath: string): Promise<readonly AppCollection[]> {
   const payload = parseIpcPayload('content:collections', projectPath);
-  return window.avb
-    .contentCollections(payload)
-    .then((input) => list(parseAppCollection)(record(input)['collections']));
+  return window.avb.contentCollections(payload).then((input) => list(parseAppCollection)(record(input)['collections']));
 }
 
 export function readSampleEntry(devUrl: string, name: string, id?: string): Promise<Data> {
@@ -260,11 +204,7 @@ export function readSampleValue(request: {
   });
 }
 
-export function createProjectPage(
-  projectPath: string,
-  name: string,
-  layout: unknown,
-): Promise<string> {
+export function createProjectPage(projectPath: string, name: string, layout: unknown): Promise<string> {
   const payload = parseIpcPayload('page:create', { projectPath, name, layout });
   return window.avb.createPage(payload).then((input) => pathText(record(input)['pagePath']));
 }
@@ -279,11 +219,7 @@ export function createProjectPageFolder(projectPath: string, directory: string):
   return window.avb.createPageFolder(payload).then((input) => void parseOkResult(input));
 }
 
-export function renameProjectPageFolder(
-  projectPath: string,
-  from: string,
-  to: string,
-): Promise<void> {
+export function renameProjectPageFolder(projectPath: string, from: string, to: string): Promise<void> {
   const payload = parseIpcPayload('pagefolder:rename', { projectPath, from, to });
   return window.avb.renamePageFolder(payload).then((input) => void parseOkResult(input));
 }
@@ -303,11 +239,7 @@ export function readProjectAsset(projectPath: string, rel: string): Promise<stri
   return window.avb.readAssetText(payload).then((input) => text(record(input)['text']));
 }
 
-export function findImportPath(
-  projectPath: string,
-  pagePath: string,
-  targetPath: string,
-): Promise<ImportPaths> {
+export function findImportPath(projectPath: string, pagePath: string, targetPath: string): Promise<ImportPaths> {
   const payload = parseIpcPayload('page:importPathFor', { projectPath, pagePath, targetPath });
   return window.avb.importPathFor(payload).then((input) => {
     const value = record(input);
@@ -318,11 +250,7 @@ export function findImportPath(
   });
 }
 
-export function rebaseProjectImport(
-  fromPagePath: string,
-  toPagePath: string | undefined,
-  spec: string,
-): Promise<IpcResults['page:rebaseImport']> {
+export function rebaseProjectImport(fromPagePath: string, toPagePath: string | undefined, spec: string): Promise<IpcResults['page:rebaseImport']> {
   const payload = parseIpcPayload('page:rebaseImport', {
     fromPagePath,
     toPagePath,
@@ -333,9 +261,7 @@ export function rebaseProjectImport(
   }));
 }
 
-export function createProjectComponent(
-  input: CreateComponentInput,
-): Promise<IpcResults['component:create']> {
+export function createProjectComponent(input: CreateComponentInput): Promise<IpcResults['component:create']> {
   const payload = parseIpcPayload('component:create', {
     projectPath: input.projectPath,
     pagePath: input.pagePath,
@@ -354,11 +280,7 @@ export function createProjectComponent(
   });
 }
 
-export function readComponentUsage(
-  projectPath: string,
-  name: string,
-  exclude: string,
-): Promise<IpcResults['component:usage']> {
+export function readComponentUsage(projectPath: string, name: string, exclude: string): Promise<IpcResults['component:usage']> {
   const payload = parseIpcPayload('component:usage', { projectPath, name, exclude });
   return window.avb.componentUsage(payload).then((input) => {
     const value = record(input);
@@ -369,10 +291,7 @@ export function readComponentUsage(
   });
 }
 
-export function previewProjectCommit(
-  projectPath: string,
-  reference: string,
-): Promise<IpcResults['preview:atCommit']> {
+export function previewProjectCommit(projectPath: string, reference: string): Promise<IpcResults['preview:atCommit']> {
   const payload = parseIpcPayload('preview:atCommit', { projectPath, ref: reference });
   return window.avb.previewAtCommit(payload).then((input) => {
     const value = record(input);
@@ -384,11 +303,7 @@ export function previewProjectCommit(
   });
 }
 
-export function restoreProjectFile(
-  projectPath: string,
-  reference: string,
-  path: string,
-): Promise<IpcResults['git:restoreFile']> {
+export function restoreProjectFile(projectPath: string, reference: string, path: string): Promise<IpcResults['git:restoreFile']> {
   const payload = parseIpcPayload('git:restoreFile', { projectPath, ref: reference, path });
   return window.avb.gitRestoreFile(payload).then((input) => {
     const value = record(input);
@@ -403,10 +318,7 @@ export function restoreProjectFile(
   });
 }
 
-export function restoreProjectVersion(
-  projectPath: string,
-  reference: string,
-): Promise<IpcResults['git:restoreProject']> {
+export function restoreProjectVersion(projectPath: string, reference: string): Promise<IpcResults['git:restoreProject']> {
   const payload = parseIpcPayload('git:restoreProject', { projectPath, ref: reference });
   return window.avb.gitRestoreProject(payload).then((input) => {
     const value = record(input);
@@ -442,8 +354,7 @@ export function onFilesChanged(callback: (event: FileChangeEvent) => void): () =
     const value = record(input);
     callback({
       files: list(pathText)(value['files']),
-      astroChanges:
-        value['astroChanges'] === undefined ? [] : parseAstroFileChanges(value['astroChanges']),
+      astroChanges: value['astroChanges'] === undefined ? [] : parseAstroFileChanges(value['astroChanges']),
     });
   });
 }
@@ -551,9 +462,7 @@ function parseRouteParams(input: unknown): WireRouteParams {
   return dictionary(data)(input);
 }
 
-function parseDynamicProps(
-  input: unknown,
-): undefined | string | number | true | readonly Data[] | WireDataRecord {
+function parseDynamicProps(input: unknown): undefined | string | number | true | readonly Data[] | WireDataRecord {
   const value = data(input);
   if (value === null) {
     throw new Error('Dynamic route props have an invalid value');
@@ -567,7 +476,5 @@ function parseDynamicProps(
 function parseAppCollection(input: unknown): AppCollection {
   const value = record(input);
   const collectionCount = optional(count)(value['count']);
-  return collectionCount === undefined
-    ? { name: text(value['name']) }
-    : { name: text(value['name']), count: collectionCount };
+  return collectionCount === undefined ? { name: text(value['name']) } : { name: text(value['name']), count: collectionCount };
 }

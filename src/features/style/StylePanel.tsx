@@ -48,21 +48,9 @@ export default function StylePanel(props: StylePanelProps) {
   }
   return (
     <SoundHere>
-      <div
-        className={`style-panel-host ${popupOpen ? 'is-locked' : ''}`}
-        ref={hostRef}
-        onClick={playButtonNote}
-      >
-        {files.error || astroFiles.error ? (
-          <ErrorToast
-            message={`Could not load stylesheet sources. ${files.error || astroFiles.error}`}
-          />
-        ) : undefined}
-        {props.node ? (
-          <EmbedEditor />
-        ) : (
-          <div className="props-empty">Select an element to style it.</div>
-        )}
+      <div className={`style-panel-host ${popupOpen ? 'is-locked' : ''}`} ref={hostRef} onClick={playButtonNote}>
+        {files.error || astroFiles.error ? <ErrorToast message={`Could not load stylesheet sources. ${files.error || astroFiles.error}`} /> : undefined}
+        {props.node ? <EmbedEditor /> : <div className="props-empty">Select an element to style it.</div>}
       </div>
     </SoundHere>
   );

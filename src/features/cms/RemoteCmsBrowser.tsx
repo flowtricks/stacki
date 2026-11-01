@@ -7,21 +7,10 @@
 import { useEffect, useState } from 'react';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import './remoteCms.css';
-import {
-  AstroIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  CmsIcon,
-  GearIcon,
-  PlusIcon,
-} from '../../ui/Icons';
+import { AstroIcon, ChevronLeftIcon, ChevronRightIcon, CmsIcon, GearIcon, PlusIcon } from '../../ui/Icons';
 import { SanityTypeIcon } from './SanityTypeIcon';
 import { createContentCollection, remoteCollections, remoteDocuments } from '../../ipc/remoteSource';
-import {
-  ASTRO_CONTENT_SOURCE,
-  isAstroContent,
-  type CmsSource,
-} from '../../../shared/properties/astroContent';
+import { ASTRO_CONTENT_SOURCE, isAstroContent, type CmsSource } from '../../../shared/properties/astroContent';
 import type { RemoteCollection, RemoteStatus } from '../../../shared/properties/cmsRemote';
 import { labelize } from './cmsSchema';
 import { ConnectionLogo, Loading, useRemote, type RemoteCmsSelection } from './remoteCmsShared';
@@ -39,9 +28,7 @@ export function RemoteCmsBrowser(props: Props) {
   const { projectPath, connection } = props;
   const [opening, setOpening] = useState<string | undefined>(undefined);
   const [creating, setCreating] = useState(false);
-  const collections = useRemote(COLLECTIONS, connection.id, () =>
-    remoteCollections(projectPath, connection.id),
-  );
+  const collections = useRemote(COLLECTIONS, connection.id, () => remoteCollections(projectPath, connection.id));
   useProjectChanges(connection, collections.retry);
   // A collection of one item opens that item: there is nothing to choose.
   const open = async (entry: RemoteCollection) => {
@@ -78,13 +65,7 @@ export function RemoteCmsBrowser(props: Props) {
         onCreate={isAstroContent(connection) ? () => setCreating(true) : undefined}
       />
       <div className="panel-body">
-        {creating && (
-          <CreateCollectionRow
-            projectPath={projectPath}
-            onCreated={created}
-            onCancel={() => setCreating(false)}
-          />
-        )}
+        {creating && <CreateCollectionRow projectPath={projectPath} onCreated={created} onCancel={() => setCreating(false)} />}
         <Loading result={collections.result} retry={collections.retry}>
           {(loaded) =>
             loaded.length === 0 && isAstroContent(connection) ? (
@@ -106,18 +87,11 @@ export function RemoteCmsBrowser(props: Props) {
 }
 
 // A collection's one item; a kept list answers at once, and only an unread one waits.
-async function onlyItem(
-  projectPath: string,
-  connectionId: string,
-  collection: string,
-): Promise<RemoteCmsSelection['item']> {
+async function onlyItem(projectPath: string, connectionId: string, collection: string): Promise<RemoteCmsSelection['item']> {
   const key = listKey(connectionId, collection);
   const kept = DOCUMENT_LISTS.get(key);
-  const listed = kept?.ok
-    ? kept
-    : await DOCUMENT_LISTS.load(key, () => remoteDocuments(projectPath, connectionId, collection));
-  const only =
-    listed.ok && listed.value.documents.length === 1 ? listed.value.documents[0] : undefined;
+  const listed = kept?.ok ? kept : await DOCUMENT_LISTS.load(key, () => remoteDocuments(projectPath, connectionId, collection));
+  const only = listed.ok && listed.value.documents.length === 1 ? listed.value.documents[0] : undefined;
   return only && { id: only.id, title: only.title === only.id ? labelize(collection) : only.title };
 }
 
@@ -180,9 +154,7 @@ function CollectionList(props: {
       {/* One label: the name gives way (cut short) before its count does. */}
       <span className="cms-collection-label">
         <span className="cms-collection-name">{labelize(collection.name)}</span>
-        <span className="cms-collection-count">
-          {collection.count === 1 ? '1 item' : `${collection.count} items`}
-        </span>
+        <span className="cms-collection-count">{collection.count === 1 ? '1 item' : `${collection.count} items`}</span>
       </span>
       <span className="cms-collection-chevron">
         <ChevronRightIcon size={10} />

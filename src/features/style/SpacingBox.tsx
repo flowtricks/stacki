@@ -1,14 +1,7 @@
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useSharedVars } from './VariableConnect';
-import {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type Read,
-  type SelectSelector,
-  type Side,
-} from './spacingTypes';
+import { type SetProp, type ClearProp, type LiveSetProp, type Read, type SelectSelector, type Side } from './spacingTypes';
 import { SpacingLabel } from './SpacingLabel';
 import { SpacingEditor } from './SpacingEditor';
 export { SpacingEditor } from './SpacingEditor';
@@ -17,14 +10,7 @@ export { SpacingLabel } from './SpacingLabel';
 
 export { FRAMES, type FrameKey, SpacingFill } from './SpacingFill';
 
-export {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type Read,
-  type SelectSelector,
-  type Side,
-} from './spacingTypes';
+export { type SetProp, type ClearProp, type LiveSetProp, type Read, type SelectSelector, type Side } from './spacingTypes';
 
 // ── Orchestration hook: drag-mirroring + which side's popover is open ─────────
 
@@ -53,9 +39,7 @@ export function useSpacingBox(
   const { vars: variables } = useSharedVars({ active: !!options?.variableLabels });
   // The props the in-flight drag is writing and their shared live value, so every
   // matching label mirrors the drag in real time (only one drag runs at a time).
-  const [liveDrag, setLiveDrag] = useState<{ props: string[]; value: string } | undefined>(
-    undefined,
-  );
+  const [liveDrag, setLiveDrag] = useState<{ props: string[]; value: string } | undefined>(undefined);
   const onLive = (dragProps: string[], value: string) => setLiveDrag({ props: dragProps, value });
   const onLiveEnd = () => setLiveDrag(undefined);
 

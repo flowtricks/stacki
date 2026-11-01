@@ -24,23 +24,8 @@ import { chainOf, conditionOf } from './loopConditionRead';
 import { curatedSelection, entriesSelection, pickedIds } from './loopSelectionRead';
 import { readComparator } from './loopSortRead';
 import { LOOP_QUERY_LIMITS, assertLoopQuery, emptyQuery } from './loopQuery';
-import type {
-  AstroItemParameter,
-  LoopCondition,
-  LoopFieldKind,
-  LoopQuery,
-  LoopSort,
-  LoopSortOrder,
-  LoopSource,
-} from './loopQuery';
-import {
-  namePath,
-  parseExpression,
-  parseFrontmatter,
-  textOf,
-  type Js,
-  type ParsedFrontmatter,
-} from './loopSyntax';
+import type { AstroItemParameter, LoopCondition, LoopFieldKind, LoopQuery, LoopSort, LoopSortOrder, LoopSource } from './loopQuery';
+import { namePath, parseExpression, parseFrontmatter, textOf, type Js, type ParsedFrontmatter } from './loopSyntax';
 
 export interface LoopImport {
   readonly name: string;
@@ -55,8 +40,7 @@ export interface LoopReadInput {
   /** The loop's data expression: `posts`, `posts.slice(0, 3)`. */
   readonly data: string;
   /** What a field holds, when the collection's schema is known. */
-  readonly fieldKind?:
-    ((source: LoopSource, path: string) => LoopFieldKind | undefined) | undefined;
+  readonly fieldKind?: ((source: LoopSource, path: string) => LoopFieldKind | undefined) | undefined;
 }
 
 export type LoopValueOrigin =
@@ -75,33 +59,19 @@ export type LoopReading =
       /** Where its settings live when they are not a query Stacki writes itself. */
       readonly home?: QueryHome | undefined;
     }
-  | {
-      readonly kind: 'partial';
-      readonly source: LoopSource;
-      readonly chain: readonly string[];
-      readonly reason: string;
-    }
-  | {
-      readonly kind: 'value';
-      readonly root: string;
-      readonly origin: LoopValueOrigin;
-      readonly chain: readonly string[];
-    }
+  | { readonly kind: 'partial'; readonly source: LoopSource; readonly chain: readonly string[]; readonly reason: string }
+  | { readonly kind: 'value'; readonly root: string; readonly origin: LoopValueOrigin; readonly chain: readonly string[] }
   | { readonly kind: 'code' };
 
 /**
  * Settings kept where the code keeps them: an options object a helper applies,
  * or refinements chained on a list expression that stays as written.
  */
-export type QueryHome =
-  | OptionsHome
-  | { readonly kind: 'chain'; readonly list: string; readonly itemPath: readonly string[] };
+export type QueryHome = OptionsHome | { readonly kind: 'chain'; readonly list: string; readonly itemPath: readonly string[] };
 
 /** The declarations a reading followed, head first: where its list is held. */
 export function readingChain(reading: LoopReading): readonly string[] {
-  return reading.kind === 'query' || reading.kind === 'partial' || reading.kind === 'value'
-    ? reading.chain
-    : [];
+  return reading.kind === 'query' || reading.kind === 'partial' || reading.kind === 'value' ? reading.chain : [];
 }
 
 // Declarations followed from the loop to its source: a page never chains more
@@ -122,30 +92,16 @@ export function readLoop(input: LoopReadInput): LoopReading {
   const context: Context = { input, frontmatter };
   const pipeline = pipelineOf({ source: parsed.source, node: parsed.expression }, context, []);
   if (pipeline.kind === 'value') {
-    return {
-      kind: 'value',
-      root: pipeline.root,
-      origin: originOf(pipeline.root, context),
-      chain: pipeline.chain,
-    };
+    return { kind: 'value', root: pipeline.root, origin: originOf(pipeline.root, context), chain: pipeline.chain };
   }
   if (pipeline.kind === 'unknown') {
     return { kind: 'code' };
   }
   if (pipeline.kind === 'options') {
-    return {
-      kind: 'query',
-      query: pipeline.query,
-      chain: pipeline.chain,
-      client: undefined,
-      home: pipeline.home,
-    };
+    return { kind: 'query', query: pipeline.query, chain: pipeline.chain, client: undefined, home: pipeline.home };
   }
   const reading = queryOf(pipeline, context);
-  assert(
-    reading.kind === 'query' || reading.kind === 'partial',
-    'A collection pipeline reads as a query or partly',
-  );
+  assert(reading.kind === 'query' || reading.kind === 'partial', 'A collection pipeline reads as a query or partly');
   return reading;
 }
 
@@ -183,19 +139,9 @@ type Base =
   | { readonly kind: 'sanity'; readonly groq: string; readonly client: string };
 
 type Pipeline =
-  | {
-      readonly kind: 'collection';
-      readonly base: Base;
-      readonly steps: readonly Step[];
-      readonly chain: readonly string[];
-    }
+  | { readonly kind: 'collection'; readonly base: Base; readonly steps: readonly Step[]; readonly chain: readonly string[] }
   | { readonly kind: 'value'; readonly root: string; readonly chain: readonly string[] }
-  | {
-      readonly kind: 'options';
-      readonly query: LoopQuery;
-      readonly home: OptionsHome;
-      readonly chain: readonly string[];
-    }
+  | { readonly kind: 'options'; readonly query: LoopQuery; readonly home: OptionsHome; readonly chain: readonly string[] }
   | { readonly kind: 'unknown' };
 
 const METHOD_STEPS = new Set(['filter', 'sort', 'toSorted', 'slice', 'reverse', 'toReversed']);
@@ -208,9 +154,7 @@ function pipelineOf(start: Located, context: Context, chainStart: readonly strin
   let current = start;
   for (let pass = 0; pass < STEPS_MAX + CHAIN_STEPS_MAX; pass++) {
     const node = unwrapAwait(current.node);
-    const base =
-      baseOf({ source: current.source, node }, context) ??
-      (steps.length === 0 ? curatedOf(node, context, current.source) : undefined);
+    const base = baseOf({ source: current.source, node }, context) ?? (steps.length === 0 ? curatedOf(node, context, current.source) : undefined);
     if (base) {
       return { kind: 'collection', base, steps: steps.reverse(), chain };
     }
@@ -221,10 +165,7 @@ function pipelineOf(start: Located, context: Context, chainStart: readonly strin
       }
       chain.push(node.name);
       // A builder's collection list: its settings are an options object here.
-      const options =
-        steps.length === 0
-          ? readOptionsQuery(declaration.init, { ...optionsContext(context) })
-          : undefined;
+      const options = steps.length === 0 ? readOptionsQuery(declaration.init, { ...optionsContext(context) }) : undefined;
       if (options !== undefined) {
         return { kind: 'options', query: options.query, home: options.home, chain };
       }
@@ -245,12 +186,7 @@ function pipelineOf(start: Located, context: Context, chainStart: readonly strin
     });
     if (listed !== undefined) {
       const list = { text: textOf(current, node), itemPath: listed.itemPath };
-      return {
-        kind: 'collection',
-        base: { kind: 'astro', collection: listed.collection, filter: undefined, list },
-        steps: steps.reverse(),
-        chain,
-      };
+      return { kind: 'collection', base: { kind: 'astro', collection: listed.collection, filter: undefined, list }, steps: steps.reverse(), chain };
     }
     const path = namePath(node);
     if (path?.[0] !== undefined) {
@@ -285,9 +221,7 @@ function stepOf(located: Located): { readonly step: Step; readonly from: Located
   const from = { source: located.source, node: node.callee.object };
   if (!METHOD_STEPS.has(method)) {
     // `.map(…)` and the like reshape items; the list is no longer the collection's.
-    return namePath(node.callee) === undefined
-      ? { step: { kind: 'other', name: method }, from }
-      : undefined;
+    return namePath(node.callee) === undefined ? { step: { kind: 'other', name: method }, from } : undefined;
   }
   const argument = node.args[0];
   switch (method) {
@@ -324,9 +258,7 @@ function sliceStep(args: readonly Js[]): Step {
 }
 
 function wholeNumber(node: Js): number | undefined {
-  return node.kind === 'number' && Number.isSafeInteger(node.value) && node.value >= 0
-    ? node.value
-    : undefined;
+  return node.kind === 'number' && Number.isSafeInteger(node.value) && node.value >= 0 ? node.value : undefined;
 }
 
 // `getCollection('blog'[, filter])` through whatever name astro:content's
@@ -336,10 +268,7 @@ function baseOf(located: Located, context: Context): Base | undefined {
   if (node.kind !== 'call') {
     return undefined;
   }
-  if (
-    node.callee.kind === 'name' &&
-    importedFrom(context, node.callee.name, 'astro:content') === 'getCollection'
-  ) {
+  if (node.callee.kind === 'name' && importedFrom(context, node.callee.name, 'astro:content') === 'getCollection') {
     const [name, filter] = node.args;
     if (name?.kind !== 'string' || node.args.length > 2) {
       return undefined;
@@ -347,37 +276,16 @@ function baseOf(located: Located, context: Context): Base | undefined {
     if (filter !== undefined && filter.kind !== 'function') {
       return undefined;
     }
-    return {
-      kind: 'astro',
-      collection: name.value,
-      filter: filter ? { source: located.source, node: filter } : undefined,
-    };
+    return { kind: 'astro', collection: name.value, filter: filter ? { source: located.source, node: filter } : undefined };
   }
-  if (
-    node.callee.kind === 'name' &&
-    importedFrom(context, node.callee.name, 'astro:content') === 'getEntries'
-  ) {
+  if (node.callee.kind === 'name' && importedFrom(context, node.callee.name, 'astro:content') === 'getEntries') {
     const entries = entriesSelection(node.args);
-    return entries === undefined
-      ? undefined
-      : {
-          kind: 'astro',
-          collection: entries.collection,
-          filter: undefined,
-          selection: entries.ids,
-        };
+    return entries === undefined ? undefined : { kind: 'astro', collection: entries.collection, filter: undefined, selection: entries.ids };
   }
-  if (
-    node.callee.kind === 'member' &&
-    node.callee.property === 'fetch' &&
-    node.callee.object.kind === 'name' &&
-    node.args.length === 1
-  ) {
+  if (node.callee.kind === 'member' && node.callee.property === 'fetch' && node.callee.object.kind === 'name' && node.args.length === 1) {
     const argument = node.args[0];
     const groq = argument === undefined ? undefined : groqText(argument, context, 0);
-    return groq === undefined
-      ? undefined
-      : { kind: 'sanity', groq, client: node.callee.object.name };
+    return groq === undefined ? undefined : { kind: 'sanity', groq, client: node.callee.object.name };
   }
   return undefined;
 }
@@ -385,30 +293,14 @@ function baseOf(located: Located, context: Context): Base | undefined {
 // A builder export's picked items, as a base that keeps their list.
 function curatedOf(node: Js, context: Context, source: string): Base | undefined {
   const lookup = (name: string): Js | undefined => context.frontmatter.declarations.get(name)?.init;
-  const curated = curatedSelection(
-    node,
-    { lookup, importedFrom: (local, spec) => importedFrom(context, local, spec) },
-    source,
-  );
-  return curated === undefined
-    ? undefined
-    : {
-        kind: 'astro',
-        collection: curated.collection,
-        filter: undefined,
-        list: curated.list,
-        selection: curated.ids,
-      };
+  const curated = curatedSelection(node, { lookup, importedFrom: (local, spec) => importedFrom(context, local, spec) }, source);
+  return curated === undefined ? undefined : { kind: 'astro', collection: curated.collection, filter: undefined, list: curated.list, selection: curated.ids };
 }
 
 // A filter by id and, optionally, the sort restoring that order.
 function pickedSteps(steps: readonly Step[]): readonly string[] | undefined {
   const [filter, sort] = steps;
-  if (
-    filter?.kind !== 'filter' ||
-    steps.length > 2 ||
-    (sort !== undefined && sort.kind !== 'sort')
-  ) {
+  if (filter?.kind !== 'filter' || steps.length > 2 || (sort !== undefined && sort.kind !== 'sort')) {
     return undefined;
   }
   return pickedIds(filter.function.node, sort?.kind === 'sort' ? sort.function?.node : undefined);
@@ -423,12 +315,7 @@ function groqText(node: Js, context: Context, depth: number): string | undefined
   if (node.kind === 'string') {
     return node.value.trim().startsWith('*') ? node.value : undefined;
   }
-  if (
-    node.kind === 'call' &&
-    node.callee.kind === 'name' &&
-    node.args.length === 1 &&
-    node.args[0]
-  ) {
+  if (node.kind === 'call' && node.callee.kind === 'name' && node.args.length === 1 && node.args[0]) {
     return groqText(node.args[0], context, depth + 1);
   }
   if (node.kind === 'name') {
@@ -439,9 +326,7 @@ function groqText(node: Js, context: Context, depth: number): string | undefined
 }
 
 function importedFrom(context: Context, local: string, spec: string): string | undefined {
-  const entry = context.input.imports.find(
-    (candidate) => candidate.name === local && candidate.path === spec,
-  );
+  const entry = context.input.imports.find((candidate) => candidate.name === local && candidate.path === spec);
   return entry === undefined ? undefined : (entry.imported ?? entry.name);
 }
 
@@ -466,15 +351,9 @@ function originOf(root: string, context: Context): LoopValueOrigin {
 // A collection pipeline as a query.
 // ---------------------------------------------------------------------------
 
-function queryOf(
-  pipeline: Extract<Pipeline, { readonly kind: 'collection' }>,
-  context: Context,
-): LoopReading {
+function queryOf(pipeline: Extract<Pipeline, { readonly kind: 'collection' }>, context: Context): LoopReading {
   const base = pipeline.base;
-  const source: LoopSource =
-    base.kind === 'astro'
-      ? { kind: 'astro', collection: base.collection }
-      : { kind: 'sanity', collection: '' };
+  const source: LoopSource = base.kind === 'astro' ? { kind: 'astro', collection: base.collection } : { kind: 'sanity', collection: '' };
   if (base.kind === 'sanity') {
     return sanityQueryOf(base, pipeline, context);
   }
@@ -484,31 +363,21 @@ function queryOf(
   if (base.selection !== undefined) {
     return selectedOf(base, pipeline);
   }
-  const picked =
-    base.filter === undefined && base.list === undefined ? pickedSteps(pipeline.steps) : undefined;
+  const picked = base.filter === undefined && base.list === undefined ? pickedSteps(pipeline.steps) : undefined;
   if (picked !== undefined) {
     return selectedOf({ ...base, selection: picked }, { ...pipeline, steps: [] });
   }
   const order = stepOrder(pipeline.steps);
   if (order === undefined) {
-    return partial(
-      source,
-      pipeline,
-      'Its items are changed by code the list settings cannot show.',
-    );
+    return partial(source, pipeline, 'Its items are changed by code the list settings cannot show.');
   }
   const itemPath = base.list?.itemPath ?? ['data'];
   const filters = [...(base.filter ? [base.filter] : []), ...order.filters];
   const conditions = astroConditions(filters, source, context, itemPath);
   if (conditions === undefined) {
-    return partial(
-      source,
-      pipeline,
-      'Its filter is written in a way the list settings cannot show.',
-    );
+    return partial(source, pipeline, 'Its filter is written in a way the list settings cannot show.');
   }
-  const sorting =
-    order.sort === undefined ? { sorts: [], random: false } : readComparator(order.sort, itemPath);
+  const sorting = order.sort === undefined ? { sorts: [], random: false } : readComparator(order.sort, itemPath);
   if (sorting === undefined) {
     return partial(source, pipeline, 'Its sort order is computed by code.');
   }
@@ -518,30 +387,17 @@ function queryOf(
   if (order.reversed && sorts.length === 0 && !sorting.random) {
     return partial(source, pipeline, 'It is shown in reverse of the collection’s own order.');
   }
-  const query: LoopQuery = {
-    source,
-    ...conditions,
-    sorts,
-    random: sorting.random,
-    offset: order.offset,
-    limit: order.limit,
-    projection: undefined,
-  };
+  const query: LoopQuery = { source, ...conditions, sorts, random: sorting.random, offset: order.offset, limit: order.limit, projection: undefined };
   const read = checked(query, pipeline, undefined);
   if (read?.kind === 'query' && base.list !== undefined) {
     return { ...read, home: { kind: 'chain', list: base.list.text, itemPath: base.list.itemPath } };
   }
-  return (
-    read ?? partial(source, pipeline, 'Its settings are outside what the list settings can show.')
-  );
+  return read ?? partial(source, pipeline, 'Its settings are outside what the list settings can show.');
 }
 
 // Picked items. Filters after them only drop ids no longer found (getEntries
 // gives undefined for those); anything else done to them is code.
-function selectedOf(
-  base: Extract<Base, { readonly kind: 'astro' }>,
-  pipeline: Extract<Pipeline, { readonly kind: 'collection' }>,
-): LoopReading {
+function selectedOf(base: Extract<Base, { readonly kind: 'astro' }>, pipeline: Extract<Pipeline, { readonly kind: 'collection' }>): LoopReading {
   const source: LoopSource = { kind: 'astro', collection: base.collection };
   if (pipeline.steps.some((step) => step.kind !== 'filter')) {
     return partial(source, pipeline, 'Its picked items are changed by code.');
@@ -549,9 +405,7 @@ function selectedOf(
   const query: LoopQuery = { ...emptyQuery(source), selection: base.selection };
   const read = checked(query, pipeline, undefined);
   assert(read?.kind === 'query', 'A selection within its bounds reads as a query');
-  return base.list === undefined
-    ? read
-    : { ...read, home: { kind: 'chain', list: base.list.text, itemPath: base.list.itemPath } };
+  return base.list === undefined ? read : { ...read, home: { kind: 'chain', list: base.list.text, itemPath: base.list.itemPath } };
 }
 
 function sanityQueryOf(
@@ -562,32 +416,16 @@ function sanityQueryOf(
   const groq = readGroq(base.groq);
   if (groq === undefined || !/^[A-Za-z0-9_][\w.-]*$/.test(groq.type)) {
     // Not one type's list: only the code can say what it is.
-    return {
-      kind: 'value',
-      root: pipeline.chain[0] ?? base.client,
-      origin: { kind: 'frontmatter' },
-      chain: pipeline.chain,
-    };
+    return { kind: 'value', root: pipeline.chain[0] ?? base.client, origin: { kind: 'frontmatter' }, chain: pipeline.chain };
   }
   const source: LoopSource = { kind: 'sanity', collection: groq.type };
   if (groq.selection !== undefined) {
     // GROQ returns picked documents in its own order; one sort restores the picked one.
-    const reordered =
-      pipeline.steps.length === 0 ||
-      (pipeline.steps.length === 1 && pipeline.steps[0]?.kind === 'sort');
-    const picked: LoopQuery = {
-      ...emptyQuery(source),
-      selection: groq.selection,
-      projection: groq.projection,
-    };
+    const reordered = pipeline.steps.length === 0 || (pipeline.steps.length === 1 && pipeline.steps[0]?.kind === 'sort');
+    const picked: LoopQuery = { ...emptyQuery(source), selection: groq.selection, projection: groq.projection };
     return reordered
-      ? (checked(picked, pipeline, base.client) ??
-          partial(source, pipeline, 'Its picked items are outside the list settings.'))
-      : partial(
-          source,
-          pipeline,
-          'Its picked documents are changed by code after they are fetched.',
-        );
+      ? (checked(picked, pipeline, base.client) ?? partial(source, pipeline, 'Its picked items are outside the list settings.'))
+      : partial(source, pipeline, 'Its picked documents are changed by code after they are fetched.');
   }
   const order = stepOrder(pipeline.steps);
   if (order === undefined || order.filters.length > 0 || order.reversed) {
@@ -615,17 +453,10 @@ function sanityQueryOf(
     projection: groq.projection,
     parameter: { kind: 'data' },
   };
-  return (
-    checked(query, pipeline, base.client) ??
-    partial(source, pipeline, 'Its settings are outside what the list settings can show.')
-  );
+  return checked(query, pipeline, base.client) ?? partial(source, pipeline, 'Its settings are outside what the list settings can show.');
 }
 
-function checked(
-  query: LoopQuery,
-  pipeline: Extract<Pipeline, { readonly kind: 'collection' }>,
-  client: string | undefined,
-): LoopReading | undefined {
+function checked(query: LoopQuery, pipeline: Extract<Pipeline, { readonly kind: 'collection' }>, client: string | undefined): LoopReading | undefined {
   if (!withinLimits(query)) {
     return undefined;
   }
@@ -634,25 +465,16 @@ function checked(
 }
 
 function withinLimits(query: LoopQuery): boolean {
-  if (
-    query.conditions.length > LOOP_QUERY_LIMITS.conditionsMax ||
-    query.sorts.length > LOOP_QUERY_LIMITS.sortsMax
-  ) {
+  if (query.conditions.length > LOOP_QUERY_LIMITS.conditionsMax || query.sorts.length > LOOP_QUERY_LIMITS.sortsMax) {
     return false;
   }
   if (query.offset > LOOP_QUERY_LIMITS.offsetMax) {
     return false;
   }
-  return (
-    query.limit === undefined || (query.limit >= 1 && query.limit <= LOOP_QUERY_LIMITS.limitMax)
-  );
+  return query.limit === undefined || (query.limit >= 1 && query.limit <= LOOP_QUERY_LIMITS.limitMax);
 }
 
-function partial(
-  source: LoopSource,
-  pipeline: Extract<Pipeline, { readonly kind: 'collection' }>,
-  reason: string,
-): LoopReading {
+function partial(source: LoopSource, pipeline: Extract<Pipeline, { readonly kind: 'collection' }>, reason: string): LoopReading {
   return { kind: 'partial', source, chain: pipeline.chain, reason };
 }
 
@@ -719,22 +541,10 @@ function flipped(sort: LoopSort): LoopSort {
   return { ...sort, direction: sort.direction === 'ascending' ? 'descending' : 'ascending' };
 }
 
-function withOrder(
-  sort: LoopSort,
-  source: LoopSource,
-  fieldKind: LoopReadInput['fieldKind'],
-): LoopSort {
+function withOrder(sort: LoopSort, source: LoopSource, fieldKind: LoopReadInput['fieldKind']): LoopSort {
   const kind = fieldKind?.(source, sort.field);
   const order: LoopSortOrder | undefined =
-    kind === 'number'
-      ? 'number'
-      : kind === 'date'
-        ? 'date'
-        : kind === 'text'
-          ? 'text'
-          : kind === 'boolean'
-            ? 'boolean'
-            : undefined;
+    kind === 'number' ? 'number' : kind === 'date' ? 'date' : kind === 'text' ? 'text' : kind === 'boolean' ? 'boolean' : undefined;
   return order === undefined ? sort : { ...sort, order };
 }
 
@@ -748,12 +558,7 @@ interface AstroConditions {
   readonly parameter: AstroItemParameter;
 }
 
-function astroConditions(
-  filters: readonly Located[],
-  source: LoopSource,
-  context: Context,
-  itemPath: ItemPath,
-): AstroConditions | undefined {
+function astroConditions(filters: readonly Located[], source: LoopSource, context: Context, itemPath: ItemPath): AstroConditions | undefined {
   if (filters.length === 0) {
     return { match: 'all', conditions: [], parameter: { kind: 'data' } };
   }
@@ -767,11 +572,7 @@ function astroConditions(
     }
     // Custom conditions are written against their function's parameter, so
     // every function has to name the entry the same way to share one.
-    if (
-      parameter !== undefined &&
-      !sameParameter(parameter, read.parameter) &&
-      read.conditions.some((condition) => condition.kind === 'custom')
-    ) {
+    if (parameter !== undefined && !sameParameter(parameter, read.parameter) && read.conditions.some((condition) => condition.kind === 'custom')) {
       return undefined;
     }
     parameter = parameter ?? read.parameter;
@@ -794,12 +595,7 @@ function sameParameter(left: AstroItemParameter, right: AstroItemParameter): boo
   return right.kind === 'entry' && right.name === left.name;
 }
 
-function filterFunction(
-  filter: Located,
-  source: LoopSource,
-  context: Context,
-  itemPath: ItemPath,
-): AstroConditions | undefined {
+function filterFunction(filter: Located, source: LoopSource, context: Context, itemPath: ItemPath): AstroConditions | undefined {
   const node = filter.node;
   if (node.kind !== 'function' || node.body === undefined || node.parameters.length !== 1) {
     return undefined;
@@ -808,13 +604,7 @@ function filterFunction(
   let base: readonly string[];
   let itemParameter: AstroItemParameter;
   const field = itemPath[0];
-  if (
-    parameter?.kind === 'object' &&
-    field !== undefined &&
-    parameter.names.length === 1 &&
-    parameter.names[0] === field &&
-    itemPath.length === 1
-  ) {
+  if (parameter?.kind === 'object' && field !== undefined && parameter.names.length === 1 && parameter.names[0] === field && itemPath.length === 1) {
     base = [field];
     itemParameter = { kind: 'data' };
   } else if (parameter?.kind === 'name') {
@@ -823,26 +613,13 @@ function filterFunction(
   } else {
     return undefined;
   }
-  const located = {
-    source: filter.source,
-    base,
-    collection: source,
-    fieldKind: context.input.fieldKind,
-  };
+  const located = { source: filter.source, base, collection: source, fieldKind: context.input.fieldKind };
   const or = chainOf(node.body, '||');
   const and = chainOf(node.body, '&&');
   const read: AstroConditions =
     or.length > 1
-      ? {
-          match: 'any',
-          conditions: or.map((clause) => conditionOf(clause, located)),
-          parameter: itemParameter,
-        }
-      : {
-          match: 'all',
-          conditions: and.map((clause) => conditionOf(clause, located)),
-          parameter: itemParameter,
-        };
+      ? { match: 'any', conditions: or.map((clause) => conditionOf(clause, located)), parameter: itemParameter }
+      : { match: 'all', conditions: and.map((clause) => conditionOf(clause, located)), parameter: itemParameter };
   if (read.conditions.length > LOOP_QUERY_LIMITS.conditionsMax) {
     return undefined;
   }

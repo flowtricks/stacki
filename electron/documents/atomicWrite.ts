@@ -131,18 +131,14 @@ export function replaceFileAtomic(file: string, bytes: Uint8Array): Result<void,
     return err({
       code: 'filesystem',
       message:
-        `${path.basename(target.value)} is hard-linked to another file, so Stacki will not ` +
-        `save it: saving would leave the other copy with the old text.`,
+        `${path.basename(target.value)} is hard-linked to another file, so Stacki will not ` + `save it: saving would leave the other copy with the old text.`,
     });
   }
   const directory = prepareAtomicDirectory(target.value);
   if (!directory.ok) {
     return directory;
   }
-  const temporary = path.join(
-    directory.value,
-    `${TEMPORARY_PREFIX}${randomUUID()}${TEMPORARY_SUFFIX}`,
-  );
+  const temporary = path.join(directory.value, `${TEMPORARY_PREFIX}${randomUUID()}${TEMPORARY_SUFFIX}`);
   const staged = stageTemporary(temporary, bytes, stats);
   if (!staged.ok) {
     return discardTemporary(temporary, file, staged.error.message);
@@ -163,10 +159,7 @@ export function replaceFileAtomic(file: string, bytes: Uint8Array): Result<void,
 /** Create `file` with `bytes`, failing with `exists` if anything is there: a
  * creation can never overwrite. A crash mid-creation can leave a partial new
  * file; no existing bytes are ever at risk. */
-export function createFileExclusive(
-  file: string,
-  bytes: Uint8Array,
-): Result<void, AtomicWriteError> {
+export function createFileExclusive(file: string, bytes: Uint8Array): Result<void, AtomicWriteError> {
   if (bytes.length > LIMITS.sourceBytesMax) {
     return err({ code: 'filesystem', message: `${file} would exceed the 10 MB source limit` });
   }
@@ -189,11 +182,7 @@ export function createFileExclusive(
   return flushDirectory(path.dirname(target), file);
 }
 
-function stageTemporary(
-  temporary: string,
-  bytes: Uint8Array,
-  target: fs.Stats,
-): Result<void, AtomicWriteError> {
+function stageTemporary(temporary: string, bytes: Uint8Array, target: fs.Stats): Result<void, AtomicWriteError> {
   const mode = target.mode & MODE_BITS;
   let descriptor: number | undefined;
   try {
@@ -228,10 +217,7 @@ function keepOwner(descriptor: number, target: fs.Stats): void {
   try {
     fs.fchownSync(descriptor, target.uid, target.gid);
   } catch (error: unknown) {
-    throw new Error(
-      `Saving would change the file's owner (${target.uid}:${target.gid}), ` +
-        `and it cannot be kept: ${errorMessage(error)}`,
-    );
+    throw new Error(`Saving would change the file's owner (${target.uid}:${target.gid}), ` + `and it cannot be kept: ${errorMessage(error)}`);
   }
 }
 
@@ -262,19 +248,13 @@ function flushDirectory(directory: string, file: string): Result<void, AtomicWri
   return ok(undefined);
 }
 
-function discardTemporary(
-  temporary: string,
-  file: string,
-  reason: string,
-): Result<never, AtomicWriteError> {
+function discardTemporary(temporary: string, file: string, reason: string): Result<never, AtomicWriteError> {
   try {
     fs.rmSync(temporary, { force: true });
   } catch (error: unknown) {
     return err({
       code: 'filesystem',
-      message:
-        `Could not save ${file} or remove temporary file ${temporary}: ` +
-        `${reason}; ${errorMessage(error)}`,
+      message: `Could not save ${file} or remove temporary file ${temporary}: ` + `${reason}; ${errorMessage(error)}`,
     });
   }
   return err({ code: 'filesystem', message: `Could not save ${file}: ${reason}` });

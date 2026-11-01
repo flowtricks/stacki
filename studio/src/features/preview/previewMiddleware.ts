@@ -12,11 +12,7 @@ export const onRequest: MiddlewareHandler = async ({ request }, next) => {
   if (renderScope.getStore() === 'patch') {
     return response;
   }
-  if (
-    request.method !== 'GET' ||
-    !response.headers.get('content-type')?.includes('text/html') ||
-    (!response.ok && response.status !== 404)
-  ) {
+  if (request.method !== 'GET' || !response.headers.get('content-type')?.includes('text/html') || (!response.ok && response.status !== 404)) {
     return response;
   }
   // An authored 404 page is an editable HTML rendering, despite its status.

@@ -22,18 +22,11 @@ export const ClipCloseIcon = () => (
 );
 export const ClipEditIcon = () => (
   <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path
-      d="M10.5 2.5 13.5 5.5 6 13l-3.5.5L3 10l7.5-7.5Z"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinejoin="round"
-    />
+    <path d="M10.5 2.5 13.5 5.5 6 13l-3.5.5L3 10l7.5-7.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
   </svg>
 );
 
-export const CLIP_GLYPH_SHAPE_PATH =
-  'M8 .5c.4 4.3 2.8 6.8 7.5 7.5-4.7.7-7.1 3.2-7.5 7.5-.4-4.3-2.8-6.8-7.5-7.5' +
-  'C5.2 7.3 7.6 4.8 8 .5Z';
+export const CLIP_GLYPH_SHAPE_PATH = 'M8 .5c.4 4.3 2.8 6.8 7.5 7.5-4.7.7-7.1 3.2-7.5 7.5-.4-4.3-2.8-6.8-7.5-7.5' + 'C5.2 7.3 7.6 4.8 8 .5Z';
 
 // Canonical shape glyphs mirroring the editor's preset picker, so the trigger reads at
 // a glance. Local (not imported from the editor) to keep that module out of the bundle.
@@ -79,12 +72,7 @@ export function ClipGlyph({ type }: { type: string }) {
     default:
       return (
         <svg className={cls} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path
-            d="M2.5 8Q5 4 8 8T13.5 8"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinecap="round"
-          />
+          <path d="M2.5 8Q5 4 8 8T13.5 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
         </svg>
       );
   }
@@ -106,11 +94,7 @@ export function clipPathType(value: string): string {
   if (normalized.startsWith('ellipse')) {
     return 'Ellipse';
   }
-  if (
-    normalized.startsWith('inset') ||
-    normalized.startsWith('rect') ||
-    normalized.startsWith('xywh')
-  ) {
+  if (normalized.startsWith('inset') || normalized.startsWith('rect') || normalized.startsWith('xywh')) {
     return 'Inset';
   }
   if (normalized.startsWith('path')) {
@@ -149,12 +133,7 @@ export function ClipPathModal({ props, onClose }: { props: Props; onClose: () =>
               {/* Portal target for the editor's shortcut-help control (it renders nothing
                 when this is absent). Provided here since it's no longer a hosted tool. */}
               <div id="clip-path_header-shortcuts" />
-              <button
-                type="button"
-                className="embed-editor_bg-modal-close"
-                onClick={close}
-                aria-label="Close"
-              >
+              <button type="button" className="embed-editor_bg-modal-close" onClick={close} aria-label="Close">
                 <ClipCloseIcon />
               </button>
             </div>
@@ -223,13 +202,7 @@ export function ClipPathRow({ props }: { props: Props }) {
   return (
     <div className="embed-editor_size-row">
       <EffLabel label="Clip" prop="clip-path" props={props} />
-      <button
-        type="button"
-        className="embed-editor_clip-trigger"
-        disabled={busy}
-        aria-haspopup="dialog"
-        onClick={() => setOpen(true)}
-      >
+      <button type="button" className="embed-editor_clip-trigger" disabled={busy} aria-haspopup="dialog" onClick={() => setOpen(true)}>
         <span className="embed-editor_clip-trigger-type">
           <ClipGlyph type={type} />
           <span className="embed-editor_clip-trigger-label">{type}</span>

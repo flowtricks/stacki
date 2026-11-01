@@ -3,12 +3,7 @@ import { canvasPropEdits, type ComponentSource } from '../model/canvasPropText';
 import { readPage } from '../../ipc/bridge';
 import type { ShellView } from '../App';
 import type { CanvasTextDocument, CanvasTextFormatter } from '../../features/preview/useCanvasText';
-import {
-  formatInlineSelection,
-  inlineRootOf,
-  inlineStatesAt,
-  inlineWithValue,
-} from '../model/canvasTextFormat';
+import { formatInlineSelection, inlineRootOf, inlineStatesAt, inlineWithValue } from '../model/canvasTextFormat';
 import { isInlineOnly } from '../../features/props/richContentModel';
 import type { PageNode } from '../../../shared/page/pageNode';
 import { assert } from '../../../shared/core/assert';
@@ -53,10 +48,7 @@ export function desktopCanvasText(app: ShellView): CanvasTextDocument | undefine
 // The selected node's page path: the text of the selected component instance
 // is marked as editable. Selecting something inside it (a `strong` in its
 // content) is working on that thing, so the instance's text is not marked.
-function canvasFocus(
-  selectedId: string | undefined,
-  pathFor: (id: string) => string | undefined,
-): readonly string[] {
+function canvasFocus(selectedId: string | undefined, pathFor: (id: string) => string | undefined): readonly string[] {
   const path = selectedId ? pathFor(selectedId) : undefined;
   return path ? [path] : [];
 }
@@ -73,10 +65,7 @@ async function readComponent(path: string): Promise<ComponentSource | undefined>
 
 // The canvas bar's presses, saved the way the Content field saves: the whole
 // inline content of the element, through setNodeInline.
-function desktopCanvasFormat(
-  nodes: readonly PageNode[],
-  setNodeInline: ShellView['setNodeInline'],
-): CanvasTextFormatter {
+function desktopCanvasFormat(nodes: readonly PageNode[], setNodeInline: ShellView['setNodeInline']): CanvasTextFormatter {
   const contentOf = (textId: string) => {
     const found = inlineRootOf(nodes, textId);
     if (!found?.root.id) {

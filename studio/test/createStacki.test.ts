@@ -33,10 +33,7 @@ test('create-stacki detects Astro and existing Studio without modifying project 
     await writeFile(manifest, '{"dependencies":{"astro":"^7.0.0"}}');
     await assert.rejects(projectDirectory(project), /needs an npm lockfile/);
     await writeFile(path.join(project, 'package-lock.json'), '{"lockfileVersion":3}');
-    assert.equal(
-      await projectDirectory(project),
-      await import('node:fs/promises').then((fs) => fs.realpath(project)),
-    );
+    assert.equal(await projectDirectory(project), await import('node:fs/promises').then((fs) => fs.realpath(project)));
     assert.equal(await installedVersion(project), undefined);
     await mkdir(path.join(project, 'studio/src/shared'), { recursive: true });
     await writeFile(path.join(project, 'studio/package.json'), '{"name":"@stacki/studio"}');

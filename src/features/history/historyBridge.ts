@@ -1,9 +1,4 @@
-import type {
-  IpcResults,
-  WireCommitInfo,
-  WireFileKind,
-  WireWorktreeInfo,
-} from '../../../shared/ipc/ipcResults';
+import type { IpcResults, WireCommitInfo, WireFileKind, WireWorktreeInfo } from '../../../shared/ipc/ipcResults';
 import type { Parser } from '../../../shared/core/boundary';
 import { boolean, list, optional, pathText, record, text } from '../../../shared/core/boundary';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
@@ -148,10 +143,7 @@ function parseFileKind(input: unknown): WireFileKind {
   }
 }
 
-async function historyRequest<Value>(
-  parse: Parser<Value>,
-  invoke: () => Promise<unknown>,
-): Promise<Result<Value, string>> {
+async function historyRequest<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<Result<Value, string>> {
   let response: unknown;
   try {
     response = await invoke();

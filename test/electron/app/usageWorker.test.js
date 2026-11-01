@@ -42,10 +42,7 @@ test('only a POST to the daily route increments the date aggregate', async () =>
   const { worker, queries, env } = await workerWithQueries();
   const base = 'https://stacki-usage-counts.example/daily';
   assert.equal((await worker.fetch(new Request(base), env)).status, 404);
-  assert.equal(
-    (await worker.fetch(new Request(`${base}-other`, { method: 'POST' }), env)).status,
-    404,
-  );
+  assert.equal((await worker.fetch(new Request(`${base}-other`, { method: 'POST' }), env)).status, 404);
   assert.equal((await worker.fetch(new Request(base, { method: 'POST' }), env)).status, 204);
   assert.equal(queries.length, 1);
   assert.match(queries[0].query, /^INSERT INTO activity_days/);
@@ -54,10 +51,7 @@ test('only a POST to the daily route increments the date aggregate', async () =>
 
 test('health checks do not count and cleanup only removes old dates', async () => {
   const { worker, queries, env } = await workerWithQueries();
-  const response = await worker.fetch(
-    new Request('https://stacki-usage-counts.example/health'),
-    env,
-  );
+  const response = await worker.fetch(new Request('https://stacki-usage-counts.example/health'), env);
   assert.equal(response.status, 204);
   assert.equal(queries.length, 0);
   await worker.scheduled(undefined, env);

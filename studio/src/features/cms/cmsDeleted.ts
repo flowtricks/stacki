@@ -9,10 +9,7 @@ function deletedFiles(source: string): readonly string[] {
   }
   return value.map(sourcePath);
 }
-export function withCmsDeletions(
-  before: ReadonlyMap<string, string>,
-  after: ReadonlyMap<string, string>,
-) {
+export function withCmsDeletions(before: ReadonlyMap<string, string>, after: ReadonlyMap<string, string>) {
   const deleted = new Set(deletedFiles(before.get(CMS_DELETED) ?? '[]'));
   for (const file of before.keys()) {
     if (!after.has(file)) {

@@ -56,8 +56,7 @@ async function main() {
     plugins: [
       stubSources('script-confirmations', {
         'src/ui/ConfirmDialog.tsx': () => ({
-          contents:
-            'export const confirmDialog = (question) => globalThis.confirmQuestion(question);',
+          contents: 'export const confirmDialog = (question) => globalThis.confirmQuestion(question);',
         }),
       }),
     ],
@@ -103,12 +102,7 @@ async function main() {
     gitDeleteBranch: [{ ok: true }],
   });
   assert.deepEqual(names(merged), ['gitMerge', 'gitDeleteBranch']);
-  const trunk = await scenario(
-    'mergeBranchAction',
-    [true],
-    { gitMerge: [success] },
-    { branch: 'main' },
-  );
+  const trunk = await scenario('mergeBranchAction', [true], { gitMerge: [success] }, { branch: 'main' });
   assert.deepEqual(names(trunk), ['gitMerge']);
   assert.equal(trunk[0].checkbox, undefined);
   const parked = await scenario('mergeBranchAction', [{ checked: true }, true], {

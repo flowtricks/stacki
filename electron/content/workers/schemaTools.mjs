@@ -29,9 +29,7 @@ export function hasCrossFieldChecks(schema, depth = 0) {
     return true;
   }
   if (definition?.typeName === 'ZodEffects') {
-    return (
-      definition.effect?.type === 'refinement' || hasCrossFieldChecks(definition.schema, depth + 1)
-    );
+    return definition.effect?.type === 'refinement' || hasCrossFieldChecks(definition.schema, depth + 1);
   }
   return false;
 }
@@ -79,10 +77,7 @@ export function toJsonSchema(schema) {
           jsonSchema.astroCoerced = true;
         }
       }
-      if (
-        definition.typeName === 'ZodPipeline' ||
-        (definition.typeName === 'ZodEffects' && definition.effect?.type !== 'refinement')
-      ) {
+      if (definition.typeName === 'ZodPipeline' || (definition.typeName === 'ZodEffects' && definition.effect?.type !== 'refinement')) {
         jsonSchema.astroTransform = true;
       }
       return jsonSchema;

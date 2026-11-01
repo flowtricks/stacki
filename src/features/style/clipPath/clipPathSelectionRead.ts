@@ -6,24 +6,10 @@
 import { useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 import type { StyleHandle, StyleTargetOptions, WebflowApi } from './webflowDesigner';
-import {
-  type ClipShape,
-  type ShapeScaleOptions,
-  type ClipPathStyleOrigin,
-  type SelectionReadOptions,
-  type PastedShapeSvgCache,
-} from './clipPathTypes';
-import {
-  DEFAULT_SHAPE_OFFSET_LEFT_VARIABLE_NAME,
-  DEFAULT_SHAPE_OFFSET_TOP_VARIABLE_NAME,
-  CLIP_PATH_DEBUG,
-  NONE_SHAPE,
-} from './clipPathConstants';
+import { type ClipShape, type ShapeScaleOptions, type ClipPathStyleOrigin, type SelectionReadOptions, type PastedShapeSvgCache } from './clipPathTypes';
+import { DEFAULT_SHAPE_OFFSET_LEFT_VARIABLE_NAME, DEFAULT_SHAPE_OFFSET_TOP_VARIABLE_NAME, CLIP_PATH_DEBUG, NONE_SHAPE } from './clipPathConstants';
 import { shapesClose } from './clipPathHandles';
-import {
-  shapeOffsetVariableNamesFromValue,
-  shapeScaleVariableNameFromValue,
-} from './shapeFunctionPatterns';
+import { shapeOffsetVariableNamesFromValue, shapeScaleVariableNameFromValue } from './shapeFunctionPatterns';
 import { cacheFromShapeFitVariants, normalizeShapeFitCache } from './shapeFunctionModel';
 import { normalizeClipPathValue } from './svgContours';
 import { matchPreset } from './clipPathShortcuts';
@@ -51,8 +37,7 @@ import {
 } from './clipPathStyleWrite';
 import { type EditorAfterShortcutListeners, windowKeyDownActions } from './clipPathPointerActions';
 
-export type EditorAfterWindowKeyDownActions = EditorAfterShortcutListeners &
-  ReturnType<typeof windowKeyDownActions>;
+export type EditorAfterWindowKeyDownActions = EditorAfterShortcutListeners & ReturnType<typeof windowKeyDownActions>;
 
 // The window key listeners that move handles.
 export function useWindowKeyListeners(editor: EditorAfterWindowKeyDownActions) {
@@ -65,8 +50,7 @@ export function useWindowKeyListeners(editor: EditorAfterWindowKeyDownActions) {
       return;
     }
     const target = event.target instanceof HTMLElement ? event.target : undefined;
-    const isHandleTarget =
-      target instanceof Element && Boolean(target.closest('.clip-path_handle'));
+    const isHandleTarget = target instanceof Element && Boolean(target.closest('.clip-path_handle'));
 
     if (isRadiusUnlockKey(event.key, event.code)) {
       radiusUnlockKeyPressedRef.current = false;
@@ -127,8 +111,7 @@ export function useWindowKeyListeners(editor: EditorAfterWindowKeyDownActions) {
   return { onWindowKeyUp, onWindowKeyBlur, windowKeyHandlers, windowKeyRef };
 }
 
-export type EditorAfterWindowKeyListeners = EditorAfterWindowKeyDownActions &
-  ReturnType<typeof useWindowKeyListeners>;
+export type EditorAfterWindowKeyListeners = EditorAfterWindowKeyDownActions & ReturnType<typeof useWindowKeyListeners>;
 
 // What a selection read reads and records.
 export type SelectionReader = EditorAfterWindowKeyListeners;
@@ -173,11 +156,7 @@ export function loadNoneIfChanged(reader: SelectionReader, { force }: { force: b
 }
 
 // No clip-path on the selection, which a later write can go to `style`.
-export function loadNoneForWritableStyle(
-  reader: SelectionReader,
-  style: StyleHandle | undefined,
-  { force }: { force: boolean },
-): void {
+export function loadNoneForWritableStyle(reader: SelectionReader, style: StyleHandle | undefined, { force }: { force: boolean }): void {
   const { styleRef } = reader;
   styleRef.current = style || undefined;
   showNoClipPathSource(reader);
@@ -195,18 +174,10 @@ export function showNoClipPathSource(reader: SelectionReader): void {
 }
 
 export function shouldReloadNone(reader: SelectionReader, { force }: { force: boolean }): boolean {
-  return (
-    force ||
-    reader.lastWrittenRef.current !== 'none' ||
-    !shapesClose(reader.shapeRef.current, NONE_SHAPE)
-  );
+  return force || reader.lastWrittenRef.current !== 'none' || !shapesClose(reader.shapeRef.current, NONE_SHAPE);
 }
 
-export async function readSelectedElement(
-  session: SelectionSession,
-  element: unknown,
-  options: SelectionReadOptions = {},
-): Promise<void> {
+export async function readSelectedElement(session: SelectionSession, element: unknown, options: SelectionReadOptions = {}): Promise<void> {
   const read = startSelectionRead(session, element, options);
   if (!read) {
     return;
@@ -233,11 +204,7 @@ export async function readSelectedElement(
 // Claims the read and handles what needs no styles: a read already running, a
 // write about to land, a new element, no element at all. Undefined when the read
 // is over.
-export function startSelectionRead(
-  session: SelectionSession,
-  element: unknown,
-  options: SelectionReadOptions,
-): SelectionRead | undefined {
+export function startSelectionRead(session: SelectionSession, element: unknown, options: SelectionReadOptions): SelectionRead | undefined {
   const reader = session.readerRef.current;
   const force = options.force ?? false;
   if (reader.selectionReadInProgressRef.current && !force && !options.resetStyle) {
@@ -278,18 +245,11 @@ export function startSelectionRead(
 
 // A write (or a drag that will write) is pending; a read now would undo it.
 export function writeInFlight(reader: SelectionReader): boolean {
-  return Boolean(
-    reader.localWritePendingRef.current ||
-    reader.writeTimerRef.current !== undefined ||
-    reader.dragTargetRef.current,
-  );
+  return Boolean(reader.localWritePendingRef.current || reader.writeTimerRef.current !== undefined || reader.dragTargetRef.current);
 }
 
 // A different element: its classes, selection, and pending write start over.
-export function forgetPreviousElement(
-  reader: SelectionReader,
-  nextElementKey: string | undefined,
-): void {
+export function forgetPreviousElement(reader: SelectionReader, nextElementKey: string | undefined): void {
   const { selectedElementKeyRef, selectedClassNamesRef, selectionIsDefaultRef } = reader;
   const { cascadeWinnerCacheRef, localWritePendingRef } = reader;
   selectedElementKeyRef.current = nextElementKey;
@@ -322,11 +282,7 @@ export function finishEmptySelectionRead(session: SelectionSession, read: Select
 
 // Reads the element's clip-path — from its own styles, its classes, the cascade
 // winner, or the classes picked in the tags — and loads it into the editor.
-export async function readElementClipPath(
-  session: SelectionSession,
-  read: SelectionRead,
-  element: unknown,
-): Promise<void> {
+export async function readElementClipPath(session: SelectionSession, read: SelectionRead, element: unknown): Promise<void> {
   const found = await readElementStyles(session, read, element);
   if (!found) {
     return;
@@ -354,11 +310,7 @@ export async function readElementClipPath(
 
 // The element's styles and class names, and the style its clip-path comes from:
 // its own styles first, then its classes' styles. Undefined when the read is stale.
-export async function readElementStyles(
-  session: SelectionSession,
-  read: SelectionRead,
-  element: unknown,
-): Promise<ElementStyles | undefined> {
+export async function readElementStyles(session: SelectionSession, read: SelectionRead, element: unknown): Promise<ElementStyles | undefined> {
   const reader = session.readerRef.current;
   const styleOptions = styleOptionsForBreakpoint(reader.activeBreakpointRef.current);
   const styles = await getElementPrimaryStyleHandles(element);
@@ -376,9 +328,7 @@ export async function readElementStyles(
       classNames,
       lookupCandidates: getStyleLookupCandidates(classNames),
       styles: await debugStyleSummaries(styles, styleOptions),
-      selectedStyle: selectedStyle
-        ? await debugStyleSummary(selectedStyle.style, styleOptions)
-        : undefined,
+      selectedStyle: selectedStyle ? await debugStyleSummary(selectedStyle.style, styleOptions) : undefined,
       selectedRaw: selectedStyle?.raw || undefined,
       selectedBreakpoint: selectedStyle?.breakpoint || undefined,
     });
@@ -400,18 +350,12 @@ export async function readElementStyles(
 // Drop any manually selected classes that are no longer on the element (e.g.
 // removed in the Designer) so we don't keep resolving their style globally and
 // showing a stale preview.
-export function dropRemovedSelectedClasses(
-  session: SelectionSession,
-  read: SelectionRead,
-  classNames: string[],
-): void {
+export function dropRemovedSelectedClasses(session: SelectionSession, read: SelectionRead, classNames: string[]): void {
   const reader = session.readerRef.current;
   if (!reader.selectedClassNamesRef.current.some((name) => !classNames.includes(name))) {
     return;
   }
-  const stillPresent = reader.selectedClassNamesRef.current.filter((name) =>
-    classNames.includes(name),
-  );
+  const stillPresent = reader.selectedClassNamesRef.current.filter((name) => classNames.includes(name));
   reader.selectedClassNamesRef.current = stillPresent;
   if (isCurrentRead(session, read)) {
     reader.setSelectedClassNames(stillPresent);
@@ -447,9 +391,7 @@ export async function lookupClassClipPathStyle(
     debugClipPath('readSelectedElement:class-styles', {
       lookupResults: classLookup.diagnostics,
       classStyles: await debugStyleSummaries(classStyles, styleOptions),
-      classSelectedStyle: classSelectedStyle
-        ? await debugStyleSummary(classSelectedStyle.style, styleOptions)
-        : undefined,
+      classSelectedStyle: classSelectedStyle ? await debugStyleSummary(classSelectedStyle.style, styleOptions) : undefined,
       classSelectedRaw: classSelectedStyle?.raw || undefined,
       classSelectedBreakpoint: classSelectedStyle?.breakpoint || undefined,
       finalSelectedRaw: nextSelectedStyle?.raw || undefined,
@@ -464,40 +406,25 @@ export async function lookupClassClipPathStyle(
 // actually renders: highest specificity, then latest stylesheet position — so it
 // follows style resets and class add/remove on the same element, not just on
 // element change.
-export async function followDefaultSelection(
-  session: SelectionSession,
-  read: SelectionRead,
-  found: ElementStyles,
-): Promise<FoundClipPathStyle | 'stale'> {
+export async function followDefaultSelection(session: SelectionSession, read: SelectionRead, found: ElementStyles): Promise<FoundClipPathStyle | 'stale'> {
   const reader = session.readerRef.current;
   if (!reader.selectionIsDefaultRef.current) {
     return found.selectedStyle;
   }
   const winner = hasClipPathDeclaration(found.selectedStyle?.raw)
-    ? await resolveCascadeWinnerClipPathStyle(
-        found.classNames,
-        found.styles,
-        found.styleOptions,
-        session.webflowApi,
-      )
+    ? await resolveCascadeWinnerClipPathStyle(found.classNames, found.styles, found.styleOptions, session.webflowApi)
     : undefined;
   if (!isCurrentRead(session, read)) {
     return 'stale';
   }
-  const defaultSelection = winner
-    ? winner.namePath.filter((name) => found.classNames.includes(name))
-    : [];
+  const defaultSelection = winner ? winner.namePath.filter((name) => found.classNames.includes(name)) : [];
   const current = reader.selectedClassNamesRef.current;
-  const changed =
-    defaultSelection.length !== current.length ||
-    defaultSelection.some((name, index) => name !== current[index]);
+  const changed = defaultSelection.length !== current.length || defaultSelection.some((name, index) => name !== current[index]);
   if (changed) {
     reader.selectedClassNamesRef.current = defaultSelection;
     reader.setSelectedClassNames(defaultSelection);
   }
-  return winner
-    ? { style: winner.style, raw: winner.raw, breakpoint: winner.breakpoint }
-    : found.selectedStyle;
+  return winner ? { style: winner.style, raw: winner.raw, breakpoint: winner.breakpoint } : found.selectedStyle;
 }
 
 // Where the read lands for the classes picked in the tags, or 'done' when it has
@@ -520,11 +447,7 @@ export type ClassStyleTarget = Extract<SelectedClassTarget, { kind: 'style' }>;
 // When classes are picked in the tags, target them for reading and writing. If
 // they have no clip-path of their own, show the effective (cascade-winner) value
 // and mark it inherited — like a larger-breakpoint inheritance.
-export async function targetSelectedClasses(
-  session: SelectionSession,
-  read: SelectionRead,
-  found: ElementStyles,
-): Promise<SelectedClassTarget> {
+export async function targetSelectedClasses(session: SelectionSession, read: SelectionRead, found: ElementStyles): Promise<SelectedClassTarget> {
   const reader = session.readerRef.current;
   const selectedNames = reader.selectedClassNamesRef.current;
   const untargeted: ClassStyleTarget = {
@@ -547,9 +470,7 @@ export async function targetSelectedClasses(
   if (!isCurrentRead(session, read)) {
     return { kind: 'done' };
   }
-  const targetDeclaration = targetStyle
-    ? await readClipPathDeclarationWithSource(targetStyle, found.styleOptions)
-    : undefined;
+  const targetDeclaration = targetStyle ? await readClipPathDeclarationWithSource(targetStyle, found.styleOptions) : undefined;
   if (!isCurrentRead(session, read)) {
     return { kind: 'done' };
   }
@@ -580,20 +501,13 @@ export async function targetSelectedClasses(
 // effective one → inherited. Paint the orange label + the cheap effective value
 // INSTANTLY; resolve the exact cascade winner (slower) afterward and only re-read
 // if it actually differs.
-export function inheritForSelectedClasses(
-  session: SelectionSession,
-  read: SelectionRead,
-  found: ElementStyles,
-  target: ClassStyleTarget,
-): ClassStyleTarget {
+export function inheritForSelectedClasses(session: SelectionSession, read: SelectionRead, found: ElementStyles, target: ClassStyleTarget): ClassStyleTarget {
   const reader = session.readerRef.current;
   if (isCurrentRead(session, read)) {
     reader.setClipPathStyleOrigin('inherited');
   }
   const inherited: ClassStyleTarget = { ...target, originOverride: 'inherited' };
-  const winnerKey =
-    `${found.classNames.join('\u0000')}|` +
-    `${found.selectedStyle?.style?.id ?? ''}|${found.selectedStyle?.raw ?? ''}`;
+  const winnerKey = `${found.classNames.join('\u0000')}|` + `${found.selectedStyle?.style?.id ?? ''}|${found.selectedStyle?.raw ?? ''}`;
   const cached = reader.cascadeWinnerCacheRef.current;
   if (cached && cached.key === winnerKey) {
     // Exact winner already known — use it directly (no flash).
@@ -641,13 +555,8 @@ export async function applySelectedStyle(
   }
   // In class-selection mode never fall back to the element's combo handle; an
   // undefined target here means "create the selected class/combo on write".
-  reader.styleRef.current = target.selectedNames.length
-    ? target.writeStyleHandle
-    : target.writeStyleHandle || selectedStyle.style;
-  reader.setClipPathStyleOrigin(
-    target.originOverride ||
-      clipPathStyleOriginFromSource(selectedStyle.breakpoint, reader.activeBreakpointRef.current),
-  );
+  reader.styleRef.current = target.selectedNames.length ? target.writeStyleHandle : target.writeStyleHandle || selectedStyle.style;
+  reader.setClipPathStyleOrigin(target.originOverride || clipPathStyleOriginFromSource(selectedStyle.breakpoint, reader.activeBreakpointRef.current));
   // The selector + breakpoint the rendered value actually comes from, for the
   // "Value comes from:" popover on the inherited (orange) label.
   const sourceNamePath = await getStyleNamePath(selectedStyle.style);
@@ -655,11 +564,7 @@ export async function applySelectedStyle(
     const sourceClasses = sourceNamePath.filter((name) => found.classNames.includes(name));
     reader.setClipPathSourceSelector(sourceClasses.length ? sourceClasses : sourceNamePath);
     reader.setClipPathSourceBreakpoint(selectedStyle.breakpoint);
-    reader.setAppliedClassName(
-      target.appliedNameOverride
-        ? target.appliedNameOverride.name
-        : sourceNamePath[sourceNamePath.length - 1] || undefined,
-    );
+    reader.setAppliedClassName(target.appliedNameOverride ? target.appliedNameOverride.name : sourceNamePath[sourceNamePath.length - 1] || undefined);
   }
   return selectedStyle;
 }
@@ -670,10 +575,7 @@ export async function loadSelectedShape(
   session: SelectionSession,
   read: SelectionRead,
   found: ElementStyles,
-  {
-    selectedStyle,
-    refineKey,
-  }: { selectedStyle: NonNullable<FoundClipPathStyle>; refineKey: string | undefined },
+  { selectedStyle, refineKey }: { selectedStyle: NonNullable<FoundClipPathStyle>; refineKey: string | undefined },
 ): Promise<void> {
   const reader = session.readerRef.current;
   const normalized = normalizeClipPathValue(selectedStyle.raw);
@@ -696,10 +598,7 @@ export async function loadSelectedShape(
   }
   const shapeSvgCache = normalizeShapeFitCache(rawShapeSvgCache, loadedShapeScaleOptions);
   const loadedShape =
-    normalized.shape.kind === 'shape' &&
-    rawShapeSvgCache &&
-    shapeSvgCache &&
-    shapesClose(normalized.shape, rawShapeSvgCache.contain)
+    normalized.shape.kind === 'shape' && rawShapeSvgCache && shapeSvgCache && shapesClose(normalized.shape, rawShapeSvgCache.contain)
       ? shapeSvgCache.contain
       : normalized.shape;
   if (!isCurrentRead(session, read)) {
@@ -716,9 +615,7 @@ export async function loadSelectedShape(
   // selection event), which would otherwise destroy the just-created undo step.
   // styleRef/origin/source are already set above, so this only avoids the needless
   // reload.
-  const unchanged =
-    reader.lastWrittenRef.current === normalized.css &&
-    shapesClose(reader.shapeRef.current, loadedShape);
+  const unchanged = reader.lastWrittenRef.current === normalized.css && shapesClose(reader.shapeRef.current, loadedShape);
   if (!unchanged) {
     reader.loadShapeFromSelection(loadedShape, normalized.css);
   }
@@ -729,24 +626,17 @@ export async function loadSelectedShape(
 
 // The scale options a loaded shape was written with: its own variables, or the
 // editor's current ones without a variable for a shape that names none.
-export function loadedShapeScaleOptionsFor(
-  reader: SelectionReader,
-  shape: ClipShape,
-): ShapeScaleOptions {
-  const loadedScaleVariableName =
-    shape.kind === 'shape' ? shapeScaleVariableNameFromValue(shape.value) : undefined;
-  const loadedOffsetNames =
-    shape.kind === 'shape' ? shapeOffsetVariableNamesFromValue(shape.value) : undefined;
+export function loadedShapeScaleOptionsFor(reader: SelectionReader, shape: ClipShape): ShapeScaleOptions {
+  const loadedScaleVariableName = shape.kind === 'shape' ? shapeScaleVariableNameFromValue(shape.value) : undefined;
+  const loadedOffsetNames = shape.kind === 'shape' ? shapeOffsetVariableNamesFromValue(shape.value) : undefined;
   if (!loadedScaleVariableName) {
     return reader.currentShapeScaleOptions({ useVariable: false });
   }
   return {
     useVariable: true,
     variableName: loadedScaleVariableName,
-    offsetLeftVariableName:
-      loadedOffsetNames?.offsetLeftVar || DEFAULT_SHAPE_OFFSET_LEFT_VARIABLE_NAME,
-    offsetTopVariableName:
-      loadedOffsetNames?.offsetTopVar || DEFAULT_SHAPE_OFFSET_TOP_VARIABLE_NAME,
+    offsetLeftVariableName: loadedOffsetNames?.offsetLeftVar || DEFAULT_SHAPE_OFFSET_LEFT_VARIABLE_NAME,
+    offsetTopVariableName: loadedOffsetNames?.offsetTopVar || DEFAULT_SHAPE_OFFSET_TOP_VARIABLE_NAME,
   };
 }
 
@@ -754,18 +644,8 @@ export function loadedShapeScaleOptionsFor(
 // cascade winner in the background; cache it and, if it actually differs from what
 // we showed, re-read (which now hits the cache and loads the winner through the
 // normal shape-aware path).
-export async function refineInheritedWinner(
-  session: SelectionSession,
-  read: SelectionRead,
-  found: ElementStyles,
-  refineKey: string,
-): Promise<void> {
-  const winner = await resolveCascadeWinnerClipPathStyle(
-    found.classNames,
-    found.styles,
-    found.styleOptions,
-    session.webflowApi,
-  );
+export async function refineInheritedWinner(session: SelectionSession, read: SelectionRead, found: ElementStyles, refineKey: string): Promise<void> {
+  const winner = await resolveCascadeWinnerClipPathStyle(found.classNames, found.styles, found.styleOptions, session.webflowApi);
   if (!isCurrentRead(session, read)) {
     return;
   }

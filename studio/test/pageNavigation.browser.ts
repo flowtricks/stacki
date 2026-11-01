@@ -11,10 +11,7 @@ import { startStyleFixture } from './stylePanelFixture';
 const fixture = await startStyleFixture({ page: '<main><h1>First page</h1></main>' });
 const browser = await chromium.launch({
   executablePath:
-    process.env['CHROME_PATH'] ??
-    (process.platform === 'darwin'
-      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-      : chromium.executablePath()),
+    process.env['CHROME_PATH'] ?? (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
   headless: true,
 });
 let release = () => {};
@@ -46,10 +43,7 @@ try {
     }
     const response = await route.fetch();
     // The HTML is already rendered; a later source version must replace it.
-    await writeFile(
-      destination,
-      '<main><h1>Changed during navigation</h1><img src="/held.svg" /></main>',
-    );
+    await writeFile(destination, '<main><h1>Changed during navigation</h1><img src="/held.svg" /></main>');
     await route.fulfill({ response });
   });
   await page.getByRole('button', { name: 'second.astro', exact: true }).click();
@@ -62,9 +56,7 @@ try {
   release();
   await setTimeout(2500);
   assert.equal(pulls, beforeLoad, 'Completing iframe load must not schedule another page render');
-  console.log(
-    'Navigation catches edits during loading without waiting for images or pulling twice.',
-  );
+  console.log('Navigation catches edits during loading without waiting for images or pulling twice.');
 } finally {
   release();
   await browser.close();

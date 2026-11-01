@@ -25,16 +25,12 @@ export function desktopRenameWriter(): RenameWriter {
         return current;
       }
       const decoded = decodeUtf8(current.value.bytes);
-      return decoded.ok
-        ? ok(decoded.value)
-        : err({ code: 'encoding', message: `${file} is not UTF-8.` });
+      return decoded.ok ? ok(decoded.value) : err({ code: 'encoding', message: `${file} is not UTF-8.` });
     },
     write: (entry) => {
       noteWrite(entry.file);
       const report = documents.writeText(entry.file, entry.after, digestOf(entry.before));
-      return report.tag === 'applied'
-        ? ok(undefined)
-        : err({ code: 'write', message: describeWriteReport(entry.file, report) });
+      return report.tag === 'applied' ? ok(undefined) : err({ code: 'write', message: describeWriteReport(entry.file, report) });
     },
   };
 }

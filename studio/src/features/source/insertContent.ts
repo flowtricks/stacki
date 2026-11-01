@@ -6,10 +6,7 @@ export { parseInsertContent } from './insertContentContract';
 import { insertFragment } from './sourceOperations';
 import { parsePage, type Edit, type ParserNode, type TreeAction } from './source';
 
-export function contentInsertionEdits(
-  source: string,
-  action: Extract<TreeAction, { kind: 'insert-content' }>,
-): Edit[] {
+export function contentInsertionEdits(source: string, action: Extract<TreeAction, { kind: 'insert-content' }>): Edit[] {
   const content = parseInsertContent(action.content);
   const parsed = parsePage(source);
   if (!parsed.editable) {
@@ -17,12 +14,7 @@ export function contentInsertionEdits(
   }
   const imports = parsed.model.imports;
   const existing =
-    content.type === 'astroAsset'
-      ? imports.find(
-          (item) =>
-            item.path === 'astro:assets' && item.imported === content.name && !item.typeOnly,
-        )
-      : undefined;
+    content.type === 'astroAsset' ? imports.find((item) => item.path === 'astro:assets' && item.imported === content.name && !item.typeOnly) : undefined;
   let name = existing?.name ?? (content.type === 'astroAsset' ? content.name : '');
   if (content.type === 'astroAsset' && !existing && imports.some((item) => item.name === name)) {
     name = `Astro${content.name}`;
@@ -31,9 +23,7 @@ export function contentInsertionEdits(
     }
   }
   const node =
-    content.type === 'astroAsset'
-      ? { kind: 'component' as const, name, props: { ...PLACEHOLDER_PROPS }, children: undefined }
-      : insertedContentNode(content);
+    content.type === 'astroAsset' ? { kind: 'component' as const, name, props: { ...PLACEHOLDER_PROPS }, children: undefined } : insertedContentNode(content);
   const fragment = serializeNodes([node]);
   const edits = [insertFragment(source, action, fragment, parsed.model.nodes.length === 0)];
   if (content.type === 'astroAsset' && !existing) {
@@ -50,9 +40,7 @@ export function contentInsertionEdits(
   return edits;
 }
 
-function insertedContentNode(
-  content: Exclude<InsertContent, { readonly type: 'astroAsset' }>,
-): ParserNode {
+function insertedContentNode(content: Exclude<InsertContent, { readonly type: 'astroAsset' }>): ParserNode {
   switch (content.type) {
     case 'element': {
       const text = /^h[1-6]$/.test(content.tag) ? 'Heading' : content.tag === 'p' ? PARAGRAPH : '';
@@ -60,11 +48,7 @@ function insertedContentNode(
         kind: 'element',
         name: content.tag,
         props: {},
-        children: VOID_TAGS.has(content.tag)
-          ? undefined
-          : text
-            ? [{ kind: 'text', value: text }]
-            : [],
+        children: VOID_TAGS.has(content.tag) ? undefined : text ? [{ kind: 'text', value: text }] : [],
       };
     }
     case 'map':

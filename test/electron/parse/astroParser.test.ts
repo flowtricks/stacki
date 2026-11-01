@@ -3,18 +3,8 @@
 // one field at a time and cross each new collection, text, and depth boundary.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  parsePage,
-  parseTemplate,
-  serializeNodes,
-  serializePage,
-  serializePageMarked,
-} from '#dist/electron/parse/astroParser.js';
-import {
-  assertTreeInvariants,
-  parsePageNode,
-  parsePageResult,
-} from '#dist/shared/page/pageNode.js';
+import { parsePage, parseTemplate, serializeNodes, serializePage, serializePageMarked } from '#dist/electron/parse/astroParser.js';
+import { assertTreeInvariants, parsePageNode, parsePageResult } from '#dist/shared/page/pageNode.js';
 import { LIMITS } from '#dist/shared/core/limits.js';
 import type { ParserNode } from '#dist/electron/parse/astroParserTypes.js';
 
@@ -53,10 +43,7 @@ test('block loops and import slots survive the real IPC contract', () => {
 test('legacy component inputs retain defaults and do not gain frontmatter', () => {
   const nodes = [{ kind: 'element', name: 'div', children: [] }];
   assert.equal(serializePage({ nodes, hadFrontmatter: false }), '<div></div>\n');
-  assert.equal(
-    serializePage({ nodes, imports: [{ name: 'Card', path: './Card.astro' }] }),
-    "---\nimport Card from './Card.astro';\n---\n<div></div>\n",
-  );
+  assert.equal(serializePage({ nodes, imports: [{ name: 'Card', path: './Card.astro' }] }), "---\nimport Card from './Card.astro';\n---\n<div></div>\n");
   assert.deepEqual(nodes, [{ kind: 'element', name: 'div', children: [] }]);
 });
 
@@ -106,17 +93,13 @@ test('serializer validates optional source metadata and every attribute variant'
     { blankAfter: 0.5 },
     { start: Number.NaN },
   ]) {
-    assert.throws(
-      () => serializeNodes([{ ...node, ...patch }]),
-      /Serialize|node\.|attribute|array/,
-    );
+    assert.throws(() => serializeNodes([{ ...node, ...patch }]), /Serialize|node\.|attribute|array/);
   }
 });
 
 test('source, collection, and recursive bounds fail before exhausting the process', () => {
   assert.equal(parsePage('x'.repeat(LIMITS.ipcFieldCharsMax + 1)).editable, false);
-  const deepSource =
-    '<div>'.repeat(LIMITS.treeDepthMax + 2) + 'x' + '</div>'.repeat(LIMITS.treeDepthMax + 2);
+  const deepSource = '<div>'.repeat(LIMITS.treeDepthMax + 2) + 'x' + '</div>'.repeat(LIMITS.treeDepthMax + 2);
   assert.equal(parseTemplate(deepSource).clean, false);
   assert.equal(parseTemplate('<p>next parse still works</p>').clean, true);
   const wide = Array.from({ length: LIMITS.treeNodesMax + 1 }, () => ({
@@ -124,10 +107,7 @@ test('source, collection, and recursive bounds fail before exhausting the proces
     value: 'x',
   }));
   assert.throws(() => serializeNodes(wide), /node limit/);
-  assert.throws(
-    () => serializeNodes([{ kind: 'text', value: 'x'.repeat(LIMITS.nodeValueCharsMax + 1) }]),
-    /exceeds limit/,
-  );
+  assert.throws(() => serializeNodes([{ kind: 'text', value: 'x'.repeat(LIMITS.nodeValueCharsMax + 1) }]), /exceeds limit/);
   const cycle: { kind: string; name: string; children: unknown[] } = {
     kind: 'element',
     name: 'div',
@@ -177,10 +157,7 @@ test('loop statement wire data rejects the old string shape and malformed arrays
 });
 
 test('producer tree invariants reject missing ids and bounded traversal overflow', () => {
-  assert.throws(
-    () => assertTreeInvariants([{ kind: 'text' }]),
-    /Tree invariant violated: missing id/,
-  );
+  assert.throws(() => assertTreeInvariants([{ kind: 'text' }]), /Tree invariant violated: missing id/);
   const wide = Array.from({ length: LIMITS.treeNodesMax + 1 }, (_, index) => ({
     kind: 'text',
     id: `n${index}`,
@@ -210,5 +187,10 @@ test('an empty loop saves as code that builds and reads back empty', () => {
       return;
     }
     assert.deepEqual(read.children, [], `an empty loop reads back empty from ${written}`);
+    if (loop.bare === undefined) {
+      // Read as code, a just-inserted loop showed only its Code field instead of
+      // its Source, Filters and Sort.
+      assert.equal(read.bodyParts, undefined, `an empty loop is a loop, not code: ${written}`);
+    }
   }
 });

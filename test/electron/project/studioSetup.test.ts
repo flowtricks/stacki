@@ -8,11 +8,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, access } from 'node:f
 import os from 'node:os';
 import path from 'node:path';
 import { installNewRelease } from '#dist/electron/project/studioInstall.js';
-import {
-  automaticStudio,
-  studioStatus,
-  readStudioRelease,
-} from '#dist/electron/project/studioSetup.js';
+import { automaticStudio, studioStatus, readStudioRelease } from '#dist/electron/project/studioSetup.js';
 import { parseRelease } from '#dist/shared/ipc/studioRelease.js';
 
 function release() {
@@ -53,19 +49,12 @@ test('development setup uses its matching bundle without network', async (contex
 
 test('packaged setup downloads the exact release and reports missing bundles', async (context) => {
   const download = context.mock.method(globalThis, 'fetch', async (url: string) => {
-    assert.equal(
-      url,
-      'https://github.com/flowtricks/stacki-releases/releases/download/v1.2.3/' +
-        'stacki-studio-1.2.3.json',
-    );
+    assert.equal(url, 'https://github.com/flowtricks/stacki-releases/releases/download/v1.2.3/' + 'stacki-studio-1.2.3.json');
     return new Response(JSON.stringify(release()), { status: 200 });
   });
   assert.deepEqual(await automaticStudio('1.2.3', { kind: 'packaged' }), release());
   download.mock.mockImplementation(async () => new Response('Not found', { status: 404 }));
-  await assert.rejects(
-    automaticStudio('1.2.3', { kind: 'packaged' }),
-    /use the agent setup prompt in Go live/,
-  );
+  await assert.rejects(automaticStudio('1.2.3', { kind: 'packaged' }), /use the agent setup prompt in Go live/);
 });
 
 test('fresh setup activates validated files and refuses a second install', async () => {
@@ -75,10 +64,7 @@ test('fresh setup activates validated files and refuses a second install', async
     assert.equal((await studioStatus(root, '1.2.3')).kind, 'missing');
     await installNewRelease(path.join(root, 'studio'), release(), async (staging) => {
       await assert.rejects(access(path.join(root, 'studio')));
-      assert.equal(
-        await readFile(path.join(staging, 'cloudflare/wrangler.jsonc'), 'utf8'),
-        '{"name":"your-studio"}',
-      );
+      assert.equal(await readFile(path.join(staging, 'cloudflare/wrangler.jsonc'), 'utf8'), '{"name":"your-studio"}');
     });
     assert.deepEqual(await studioStatus(root, '2.0.0'), {
       kind: 'installed',

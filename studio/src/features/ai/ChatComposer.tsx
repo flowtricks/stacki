@@ -56,13 +56,7 @@ export function ChatComposer({ chat, file, config }: ComposerProps) {
       >
         <AttachmentStrip chat={chat} />
         <PromptInput chat={chat} dragging={dragging} />
-        <ComposerTools
-          chat={chat}
-          config={config}
-          voice={voice}
-          loading={loading}
-          attach={attach}
-        />
+        <ComposerTools chat={chat} config={config} voice={voice} loading={loading} attach={attach} />
       </form>
       <ErrorToast message={voice.error} />
       <div className="chat-composer-hint" role="status">
@@ -99,13 +93,7 @@ function AttachmentStrip({ chat }: { readonly chat: ChatThread }) {
   );
 }
 
-function PromptInput({
-  chat,
-  dragging,
-}: {
-  readonly chat: ChatThread;
-  readonly dragging: boolean;
-}) {
+function PromptInput({ chat, dragging }: { readonly chat: ChatThread; readonly dragging: boolean }) {
   const patch = (draft: string) => updateChat(chat.id, (thread) => ({ ...thread, draft }));
   return (
     <textarea
@@ -170,10 +158,7 @@ function ComposerTools({ chat, config, voice, loading, attach }: ToolsProps) {
       >
         <ChatIcon name="mic" />
       </button>
-      <SendButton
-        chat={chat}
-        disabled={loading || voice.listening || !config.models.includes(chat.model)}
-      />
+      <SendButton chat={chat} disabled={loading || voice.listening || !config.models.includes(chat.model)} />
     </div>
   );
 }
@@ -185,13 +170,9 @@ function ModelPicker({ chat, config }: Pick<ToolsProps, 'chat' | 'config'>) {
         aria-label="Choose model"
         value={chat.model}
         disabled={chat.status !== 'idle' || !config.models.length}
-        onChange={(event) =>
-          updateChat(chat.id, (thread) => ({ ...thread, model: event.target.value }))
-        }
+        onChange={(event) => updateChat(chat.id, (thread) => ({ ...thread, model: event.target.value }))}
       >
-        {!config.models.includes(chat.model) && (
-          <option value={chat.model}>{chat.model || 'No model connected'}</option>
-        )}
+        {!config.models.includes(chat.model) && <option value={chat.model}>{chat.model || 'No model connected'}</option>}
         {config.models.map((model) => (
           <option key={model} value={model}>
             {model}
@@ -205,12 +186,7 @@ function ModelPicker({ chat, config }: Pick<ToolsProps, 'chat' | 'config'>) {
 
 function SendButton({ chat, disabled }: { readonly chat: ChatThread; readonly disabled: boolean }) {
   return chat.status === 'working' ? (
-    <button
-      type="button"
-      className="chat-send"
-      aria-label="Stop response"
-      onClick={() => stopChat(chat.id)}
-    >
+    <button type="button" className="chat-send" aria-label="Stop response" onClick={() => stopChat(chat.id)}>
       <ChatIcon name="stop" />
     </button>
   ) : (

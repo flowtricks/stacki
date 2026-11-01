@@ -9,20 +9,12 @@ import { publishDisk } from './publishInventory';
 import { publishFailure } from './publishFailure';
 
 /** Git writes its download to disk; neither the Worker nor Node buffers a repository archive. */
-export async function restorePublishRepository(
-  root: string,
-  input: unknown,
-): Promise<Result<string>> {
+export async function restorePublishRepository(root: string, input: unknown): Promise<Result<string>> {
   const connection = parsePublishConnection(input);
   if (!connection.ok) {
     return connection;
   }
-  if (
-    typeof input !== 'object' ||
-    input === null ||
-    !('sha' in input) ||
-    typeof input.sha !== 'string'
-  ) {
+  if (typeof input !== 'object' || input === null || !('sha' in input) || typeof input.sha !== 'string') {
     return err({ code: 'baseline', message: 'Missing repository baseline.' });
   }
   const baseline = publishObject(input.sha);
@@ -30,10 +22,7 @@ export async function restorePublishRepository(
     return baseline;
   }
   const directory = path.join(root, '.stacki/studio/state/bootstrap.git');
-  const prepared = await mkdir(directory, { recursive: true, mode: 0o700 }).then(
-    ok,
-    publishFailure,
-  );
+  const prepared = await mkdir(directory, { recursive: true, mode: 0o700 }).then(ok, publishFailure);
   if (!prepared.ok) {
     return prepared;
   }
@@ -48,23 +37,12 @@ export async function restorePublishRepository(
   return cleanup.ok ? restored : cleanup;
 }
 
-async function restorePublishCheckout(
-  git: PublishGit,
-  repository: string,
-  baseline: string,
-): Promise<Result<string>> {
+async function restorePublishCheckout(git: PublishGit, repository: string, baseline: string): Promise<Result<string>> {
   const initialized = await publishGit(git, ['init', '--bare', git.directory]);
   if (!initialized.ok) {
     return initialized;
   }
-  const fetched = await publishGit(git, [
-    'fetch',
-    '--quiet',
-    '--depth=1',
-    '--no-tags',
-    `https://github.com/${repository}.git`,
-    baseline,
-  ]);
+  const fetched = await publishGit(git, ['fetch', '--quiet', '--depth=1', '--no-tags', `https://github.com/${repository}.git`, baseline]);
   if (!fetched.ok) {
     return fetched;
   }

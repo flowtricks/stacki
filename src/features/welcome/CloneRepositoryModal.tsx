@@ -5,14 +5,9 @@ import RepositoryPicker from '../../ui/RepositoryPicker';
 import { cloneRepository } from '../../ipc/repositoryBridge';
 import { parseGitHubRepository } from '../../../shared/ipc/githubRepository';
 
-export default function CloneRepositoryModal(props: {
-  readonly onClose: () => void;
-  readonly onOpen: (projectPath: string) => void;
-}) {
+export default function CloneRepositoryModal(props: { readonly onClose: () => void; readonly onOpen: (projectPath: string) => void }) {
   const [repository, setRepository] = useState('');
-  const [state, setState] = useState<
-    { readonly kind: 'ready'; readonly error?: string } | { readonly kind: 'cloning' }
-  >({ kind: 'ready' });
+  const [state, setState] = useState<{ readonly kind: 'ready'; readonly error?: string } | { readonly kind: 'cloning' }>({ kind: 'ready' });
   const running = useRef(false);
   const clone = async () => {
     if (running.current) {
@@ -49,9 +44,7 @@ export default function CloneRepositoryModal(props: {
           <div className="modal-header">Open from GitHub</div>
           <div className="modal-body">
             <RepositoryPicker value={repository} onChange={setRepository} disabled={busy} />
-            <p className="hint-text">
-              Choose a folder next. Stacki downloads a new local copy with its Git history.
-            </p>
+            <p className="hint-text">Choose a folder next. Stacki downloads a new local copy with its Git history.</p>
             {state.kind === 'ready' && state.error && <ErrorToast message={state.error} />}
             {busy && <div role="status">Downloading repository…</div>}
           </div>
@@ -59,11 +52,7 @@ export default function CloneRepositoryModal(props: {
             <button onClick={close} disabled={busy}>
               Cancel
             </button>
-            <button
-              className="primary"
-              disabled={busy || !repository.trim()}
-              onClick={() => void clone()}
-            >
+            <button className="primary" disabled={busy || !repository.trim()} onClick={() => void clone()}>
               {busy ? 'Downloading…' : 'Choose folder and download'}
             </button>
           </div>

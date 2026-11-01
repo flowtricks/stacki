@@ -32,18 +32,11 @@ export function RichFormatButtons({ states, onExec, onWrap, onLink }: RichFormat
         { active: states.subscript },
         () => onExec('subscript'),
       )}
-      {richButton(<span className="mono">{'</>'}</span>, 'Code', { active: states.code }, () =>
-        onWrap('code'),
-      )}
+      {richButton(<span className="mono">{'</>'}</span>, 'Code', { active: states.code }, () => onWrap('code'))}
       {/* A span is the hook for everything else: wrap some words, then
           give that node a class and style it like any other. Nothing is
           written on it here — an empty span IS the useful result. */}
-      {richButton(
-        <span className="mono">span</span>,
-        'Wrap in a span',
-        { active: states.span },
-        () => onWrap('span'),
-      )}
+      {richButton(<span className="mono">span</span>, 'Wrap in a span', { active: states.span }, () => onWrap('span'))}
       {/* The app's own link icon, not the emoji: an emoji is drawn by
           the system in its own colours and at its own weight, so it sat
           in this row as the one thing that hadn't been designed. */}
@@ -83,12 +76,7 @@ export function RichLinkField(props: RichLinkFieldProps) {
 }
 
 // Buttons use onMouseDown+preventDefault so the text selection survives.
-const richButton = (
-  label: React.ReactNode,
-  title: string,
-  { active }: { readonly active: boolean | undefined },
-  onAct: () => void,
-) => (
+const richButton = (label: React.ReactNode, title: string, { active }: { readonly active: boolean | undefined }, onAct: () => void) => (
   <button
     key={title}
     type="button"
@@ -116,8 +104,7 @@ export interface BubblePosition {
   readonly arrowX: number;
 }
 
-const clamp = (value: number, minimum: number, maximum: number): number =>
-  Math.min(Math.max(value, minimum), maximum);
+const clamp = (value: number, minimum: number, maximum: number): number => Math.min(Math.max(value, minimum), maximum);
 
 // Measure the rendered bubble and keep it inside the window: clamp
 // horizontally, flip below the selection when it would hit the titlebar,

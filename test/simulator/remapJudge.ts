@@ -36,9 +36,7 @@ import type { Splice } from '#dist/shared/engine/planner.js';
 import { survivingSpan, type Origins } from './provenance.ts';
 import { referenceMapSpan, referenceTables } from './referenceDiff.ts';
 
-export type RemapDecision =
-  | { readonly tag: 'planned'; readonly plan: Plan }
-  | { readonly tag: 'rejected'; readonly reason: RejectionReason };
+export type RemapDecision = { readonly tag: 'planned'; readonly plan: Plan } | { readonly tag: 'rejected'; readonly reason: RejectionReason };
 
 export type RemapVerdict =
   | { readonly tag: 'applied-correct' }
@@ -64,11 +62,7 @@ export interface RemapCase {
 /** The brute-force table this check builds at most: files up to about 1 KB. */
 export const JUDGE_REFERENCE_CELLS_MAX = 1_000_000;
 
-const MAPPING_REASONS: readonly RejectionReason[] = [
-  'anchor-ambiguous',
-  'anchor-moved',
-  'resource-limit',
-];
+const MAPPING_REASONS: readonly RejectionReason[] = ['anchor-ambiguous', 'anchor-moved', 'resource-limit'];
 
 type ValidProjection = Extract<Projection, { tag: 'valid' }>;
 
@@ -277,17 +271,10 @@ function blockPlanPlaced(
     case 'move-node': {
       const destination = views.authored.nodes.find(
         (candidate) =>
-          candidate.path.length === operation.destination.path.length &&
-          candidate.path.every((step, index) => step === operation.destination.path[index]),
+          candidate.path.length === operation.destination.path.length && candidate.path.every((step, index) => step === operation.destination.path[index]),
       );
       assert(destination !== undefined, 'A move names a node of its authored view');
-      const there = survivingBlock(
-        destination,
-        views.origins,
-        views.current,
-        views.bytes,
-        views.currentBytes,
-      );
+      const there = survivingBlock(destination, views.origins, views.current, views.bytes, views.currentBytes);
       if (there === undefined) {
         // Gone, or re-created identically under other origins: the same limit
         // as the node's own (identicalRewritten).
@@ -342,18 +329,9 @@ function identicalRewritten(node: ProjectedNode, input: RemapCase): boolean {
   return identicalIn(node, input.authored.bytes, current, input.current.bytes);
 }
 
-function identicalIn(
-  node: ProjectedNode,
-  bytes: ByteString,
-  current: ValidProjection,
-  currentBytes: ByteString,
-): boolean {
+function identicalIn(node: ProjectedNode, bytes: ByteString, current: ValidProjection, currentBytes: ByteString): boolean {
   const text = sliceText(bytes, node.span.start, node.span.end);
-  return current.nodes.some(
-    (candidate) =>
-      candidate.kind === node.kind &&
-      sliceText(currentBytes, candidate.span.start, candidate.span.end) === text,
-  );
+  return current.nodes.some((candidate) => candidate.kind === node.kind && sliceText(currentBytes, candidate.span.start, candidate.span.end) === text);
 }
 
 function within(inner: ByteSpan, outer: ByteSpan): boolean {
@@ -434,8 +412,7 @@ function closer(
   other: ProjectedNode,
   authored: { readonly node: ProjectedNode; readonly text: string; readonly bytes: ByteString },
 ): boolean {
-  const same = (node: ProjectedNode) =>
-    sliceText(authored.bytes, node.span.start, node.span.end) === authored.text;
+  const same = (node: ProjectedNode) => sliceText(authored.bytes, node.span.start, node.span.end) === authored.text;
   if (same(candidate) !== same(other)) {
     return same(candidate);
   }
@@ -467,10 +444,7 @@ function isSeparatorByte(byte: number): boolean {
  * the current file with the same replacements at the surviving ranges, and the
  * plan must write exactly that. Where a range did not survive, there is no
  * ground truth to compare with: unjudged. */
-export function judgeOracleRemap(
-  input: RemapCase,
-  authoredSplices: readonly Splice[],
-): RemapVerdict {
+export function judgeOracleRemap(input: RemapCase, authoredSplices: readonly Splice[]): RemapVerdict {
   assert(input.authored.checksum !== input.current.checksum, 'Only stale intents are judged');
   const decision = input.decision;
   if (input.authoredOrigins === undefined || input.currentOrigins === undefined) {
@@ -490,9 +464,7 @@ export function judgeOracleRemap(
     if (!MAPPING_REASONS.includes(decision.reason)) {
       return { tag: 'other', reason: decision.reason };
     }
-    return whole
-      ? { tag: 'conservative', reason: decision.reason }
-      : { tag: 'rejected-conflict', reason: decision.reason };
+    return whole ? { tag: 'conservative', reason: decision.reason } : { tag: 'rejected-conflict', reason: decision.reason };
   }
   if (!whole) {
     return { tag: 'unjudged', decision: decision.tag };
@@ -522,19 +494,14 @@ function firstDifference(expected: ByteString, actual: ByteString): string {
   while (at < expected.length && at < actual.length && expected[at] === actual[at]) {
     at++;
   }
-  const around = (bytes: ByteString) =>
-    JSON.stringify(Buffer.from(bytes.subarray(Math.max(0, at - 12), at + 24)).toString('utf8'));
+  const around = (bytes: ByteString) => JSON.stringify(Buffer.from(bytes.subarray(Math.max(0, at - 12), at + 24)).toString('utf8'));
   return `at byte ${at}: expected ${around(expected)}, planned ${around(actual)}`;
 }
 
 // A range's survivor: its own bytes whole, or — an insertion's point, which
 // holds no byte — the byte before it (the point follows it), else the byte
 // after it (the point precedes it).
-function survivingRange(
-  authored: Origins,
-  range: ByteSpan,
-  current: Origins,
-): ByteSpan | undefined {
+function survivingRange(authored: Origins, range: ByteSpan, current: Origins): ByteSpan | undefined {
   if (range.start < range.end) {
     return survivingSpan(authored, range, current);
   }
@@ -583,13 +550,7 @@ export function checkMappingReference(input: RemapCase): boolean {
   return true;
 }
 
-function checkDecisionFollowsMapping(
-  decision: RemapDecision,
-  mapping: SpanMapping,
-  region: ByteSpan,
-  node: ProjectedNode,
-  name: string,
-): void {
+function checkDecisionFollowsMapping(decision: RemapDecision, mapping: SpanMapping, region: ByteSpan, node: ProjectedNode, name: string): void {
   if (decision.tag === 'planned') {
     assert(mapping.tag === 'resolved', 'A stale plan follows a resolved mapping');
     const [splice] = decision.plan.splices;
@@ -636,26 +597,14 @@ function anchoredNode(projection: ValidProjection, intent: Intent): ProjectedNod
 /** The planner's identity region, rebuilt here from its definition (tag name
  * through the last attribute), so the planner's own helper is not the judge. */
 function identityRegion(node: ProjectedNode): ByteSpan | undefined {
-  const end = node.attributes.reduce<number>(
-    (last, attribute) => Math.max(last, attribute.span.end),
-    node.span.start,
-  );
+  const end = node.attributes.reduce<number>((last, attribute) => Math.max(last, attribute.span.end), node.span.start);
   return end > node.span.start + 1 ? toByteSpan(node.span.start + 1, end) : undefined;
 }
 
 // The element survived if its own `<` byte is still in the file and an element
 // of the same kind still starts there: a `<` that became comment text is gone.
-function survivingElement(
-  node: ProjectedNode,
-  authoredOrigins: Origins,
-  current: ValidProjection,
-  currentOrigins: Origins,
-): ProjectedNode | undefined {
-  const opening = survivingSpan(
-    authoredOrigins,
-    toByteSpan(node.span.start, node.span.start + 1),
-    currentOrigins,
-  );
+function survivingElement(node: ProjectedNode, authoredOrigins: Origins, current: ValidProjection, currentOrigins: Origins): ProjectedNode | undefined {
+  const opening = survivingSpan(authoredOrigins, toByteSpan(node.span.start, node.span.start + 1), currentOrigins);
   if (opening === undefined) {
     return undefined;
   }
@@ -697,14 +646,7 @@ function attributesEnd(bytes: ByteString, node: ProjectedNode): number {
   let nameEnd = node.span.start + 1;
   for (; nameEnd < node.span.end; nameEnd++) {
     const byte = bytes[nameEnd];
-    if (
-      byte === 0x20 ||
-      byte === 0x09 ||
-      byte === 0x0a ||
-      byte === 0x0d ||
-      byte === 0x2f ||
-      byte === 0x3e
-    ) {
+    if (byte === 0x20 || byte === 0x09 || byte === 0x0a || byte === 0x0d || byte === 0x2f || byte === 0x3e) {
       break;
     }
   }

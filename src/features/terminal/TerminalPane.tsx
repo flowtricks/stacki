@@ -15,63 +15,57 @@ interface TerminalPaneProps {
   readonly onTitleChange: (title: string) => void;
 }
 
-const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
-  function TerminalPane(props, ref) {
-    const hostRef = useRef<HTMLDivElement>(null);
-    const runtimeRef = useRef<TerminalRuntime>();
-    const autoLaunchRef = useRef(props.autoLaunch);
-    const titleChangedRef = useRef(props.onTitleChange);
-    const [scrolledUp, setScrolledUp] = useState(false);
-    autoLaunchRef.current = props.autoLaunch;
-    titleChangedRef.current = props.onTitleChange;
+const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(function TerminalPane(props, ref) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const runtimeRef = useRef<TerminalRuntime>();
+  const autoLaunchRef = useRef(props.autoLaunch);
+  const titleChangedRef = useRef(props.onTitleChange);
+  const [scrolledUp, setScrolledUp] = useState(false);
+  autoLaunchRef.current = props.autoLaunch;
+  titleChangedRef.current = props.onTitleChange;
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        fit: () => runtimeRef.current?.fit(),
-        focus: () => runtimeRef.current?.focus(),
-      }),
-      [],
-    );
+  useImperativeHandle(
+    ref,
+    () => ({
+      fit: () => runtimeRef.current?.fit(),
+      focus: () => runtimeRef.current?.focus(),
+    }),
+    [],
+  );
 
-    useEffect(() => {
-      const host = hostRef.current;
-      if (!host) {
-        return undefined;
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) {
+      return undefined;
+    }
+    const runtime = new TerminalRuntime({
+      host,
+      terminalId: props.terminalId,
+      projectPath: props.projectPath,
+      autoLaunch: () => autoLaunchRef.current,
+      titleChanged: (title) => titleChangedRef.current(title),
+      scrolled: setScrolledUp,
+    });
+    runtimeRef.current = runtime;
+    const unmount = runtime.mount();
+    return () => {
+      unmount();
+      if (runtimeRef.current === runtime) {
+        runtimeRef.current = undefined;
       }
-      const runtime = new TerminalRuntime({
-        host,
-        terminalId: props.terminalId,
-        projectPath: props.projectPath,
-        autoLaunch: () => autoLaunchRef.current,
-        titleChanged: (title) => titleChangedRef.current(title),
-        scrolled: setScrolledUp,
-      });
-      runtimeRef.current = runtime;
-      const unmount = runtime.mount();
-      return () => {
-        unmount();
-        if (runtimeRef.current === runtime) {
-          runtimeRef.current = undefined;
-        }
-      };
-    }, [props.projectPath, props.terminalId]);
+    };
+  }, [props.projectPath, props.terminalId]);
 
-    return (
-      <div className="term-pane">
-        <div className="term-host" ref={hostRef} />
-        {scrolledUp && (
-          <button
-            className="term-scroll-btn"
-            title="Scroll to bottom"
-            onClick={() => runtimeRef.current?.scrollToBottom()}
-          >
-            <ArrowDownIcon size={14} />
-          </button>
-        )}
-      </div>
-    );
-  },
-);
+  return (
+    <div className="term-pane">
+      <div className="term-host" ref={hostRef} />
+      {scrolledUp && (
+        <button className="term-scroll-btn" title="Scroll to bottom" onClick={() => runtimeRef.current?.scrollToBottom()}>
+          <ArrowDownIcon size={14} />
+        </button>
+      )}
+    </div>
+  );
+});
 
 export default TerminalPane;

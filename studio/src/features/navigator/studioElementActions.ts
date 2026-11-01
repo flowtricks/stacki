@@ -2,22 +2,9 @@ import type { ElementActionProps } from '../../../vendor/stacki/src/features/str
 import type { NavigatorProps } from './Navigator';
 import { copyNode, pasteNode, hasCopiedNode } from './clipboard';
 
-type ActionOptions = Pick<
-  NavigatorProps,
-  | 'document'
-  | 'selected'
-  | 'components'
-  | 'action'
-  | 'report'
-  | 'editRootId'
-  | 'setDefaults'
-  | 'openComponent'
->;
+type ActionOptions = Pick<NavigatorProps, 'document' | 'selected' | 'components' | 'action' | 'report' | 'editRootId' | 'setDefaults' | 'openComponent'>;
 
-export function studioElementActions(
-  props: ActionOptions,
-  role: 'client' | 'designer',
-): Omit<ElementActionProps, 'nodes'> {
+export function studioElementActions(props: ActionOptions, role: 'client' | 'designer'): Omit<ElementActionProps, 'nodes'> {
   return {
     clientMode: role === 'client',
     editRootId: props.editRootId,

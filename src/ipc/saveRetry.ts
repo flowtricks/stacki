@@ -12,10 +12,7 @@ interface SaveRetryDependencies {
   readonly wait?: (milliseconds: number) => Promise<void>;
 }
 
-export async function sendPageEditWithRetry(
-  request: EditRequest,
-  { send, wait = waitForSaveRetry }: SaveRetryDependencies,
-): Promise<EditReply> {
+export async function sendPageEditWithRetry(request: EditRequest, { send, wait = waitForSaveRetry }: SaveRetryDependencies): Promise<EditReply> {
   let reply = await send(request);
   // Four attempts at most, retaining the original checksum on every request.
   // The actor rechecks disk and witnesses each time; a later conflict stops here.

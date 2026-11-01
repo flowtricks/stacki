@@ -44,8 +44,7 @@ export function resolvePageTitles(
 ): readonly ScanPage[] {
   assert(pages.length <= LIMITS.scanEntriesMax, 'Page titles: page count is bounded');
   const wrapperOf = (file: string, source: PageTitleSource): string | undefined => {
-    const candidates =
-      source.specifier === undefined ? [] : resolveSpec(source.specifier, file, aliases);
+    const candidates = source.specifier === undefined ? [] : resolveSpec(source.specifier, file, aliases);
     return candidates.find((candidate) => read(candidate) !== undefined);
   };
   return pages.map((page) => {
@@ -58,9 +57,7 @@ export function resolvePageTitles(
     }
     const inheritedTitle = scanInheritedTitle(wrapperOf(page.path, source), wrapperOf, read);
     const title = source.kind === 'override' ? source.title : inheritedTitle;
-    return title === undefined && inheritedTitle === undefined
-      ? page
-      : { ...page, title, inheritedTitle };
+    return title === undefined && inheritedTitle === undefined ? page : { ...page, title, inheritedTitle };
   });
 }
 

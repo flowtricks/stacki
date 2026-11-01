@@ -3,10 +3,7 @@ import type { CommitDiffRequest, CommitDiffResult } from '../../shared/ipc/gitCo
 import { gitErrorDetail } from './git';
 import type { Git } from './git';
 
-export async function readCommitDiff(
-  git: Git,
-  request: CommitDiffRequest,
-): Promise<CommitDiffResult> {
+export async function readCommitDiff(git: Git, request: CommitDiffRequest): Promise<CommitDiffResult> {
   // Literal paths prevent filenames containing Git pathspec syntax from selecting
   // unrelated files. Disable external diff/textconv programs for read-only inspection.
   const argumentsList = [

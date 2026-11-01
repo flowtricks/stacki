@@ -32,15 +32,7 @@ export type ClassPickerProps = {
  * combined selection. The chosen tokens are always ordered to match the token
  * order given, so a combo reads `.base.combo`, never `.combo.base`.
  */
-export function ClassPicker({
-  tokens,
-  selected,
-  onChange,
-  ariaLabel = 'Selected element tokens',
-  className,
-  disabled = false,
-  tagTitle,
-}: ClassPickerProps) {
+export function ClassPicker({ tokens, selected, onChange, ariaLabel = 'Selected element tokens', className, disabled = false, tagTitle }: ClassPickerProps) {
   const order = tokens.map((token) => token.name);
 
   // Additive (Shift/Alt) toggles a token in or out of the combo; plain replaces it.
@@ -56,10 +48,7 @@ export function ClassPicker({
     // Keep the combo order matching the token order.
     const ordered = [...next].sort((left, right) => order.indexOf(left) - order.indexOf(right));
     // No-op guard so a click on the sole selected token doesn't churn.
-    if (
-      ordered.length === selected.length &&
-      ordered.every((entry, index) => entry === selected[index])
-    ) {
+    if (ordered.length === selected.length && ordered.every((entry, index) => entry === selected[index])) {
       return;
     }
     onChange(ordered);
@@ -70,11 +59,7 @@ export function ClassPicker({
   }
 
   return (
-    <div
-      className={`class-picker${className ? ` ${className}` : ''}`}
-      role="group"
-      aria-label={ariaLabel}
-    >
+    <div className={`class-picker${className ? ` ${className}` : ''}`} role="group" aria-label={ariaLabel}>
       {tokens.map((token) => {
         const isActive = selected.includes(token.name);
         const kind = token.kind ?? 'class';
@@ -85,14 +70,8 @@ export function ClassPicker({
             className={`class-picker_tag is-${kind}${isActive ? ' is-active' : ''}`}
             aria-pressed={isActive}
             disabled={disabled}
-            title={
-              tagTitle
-                ? tagTitle(token, isActive)
-                : `${token.label ?? token.name} — Shift-click to combine`
-            }
-            onClick={(event) =>
-              selectToken(token.name, { additive: event.shiftKey || event.altKey })
-            }
+            title={tagTitle ? tagTitle(token, isActive) : `${token.label ?? token.name} — Shift-click to combine`}
+            onClick={(event) => selectToken(token.name, { additive: event.shiftKey || event.altKey })}
           >
             {token.label ?? token.name}
           </button>

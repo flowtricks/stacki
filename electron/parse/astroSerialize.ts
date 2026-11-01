@@ -14,22 +14,7 @@ import { normalizeHead, blockHead } from './astroScan';
 
 // Inline runs (text + simple tags like <strong>/<em>) serialize on a single
 // line so the exact spacing between words and tags survives the round trip.
-const INLINE_TAGS = new Set([
-  'strong',
-  'em',
-  'b',
-  'i',
-  'sup',
-  'sub',
-  'code',
-  'a',
-  'span',
-  'br',
-  'small',
-  'mark',
-  'u',
-  's',
-]);
+const INLINE_TAGS = new Set(['strong', 'em', 'b', 'i', 'sup', 'sub', 'code', 'a', 'span', 'br', 'small', 'mark', 'u', 's']);
 
 // Simple {expr} interpolations (single braces, no JSX) count as inline.
 function isSimpleExpr(node: ParserNode): boolean {
@@ -50,9 +35,7 @@ export function isInlineRun(nodes: readonly ParserNode[], depth: number): boolea
         isSimpleExpr(node) ||
         (node.kind === 'element' &&
           INLINE_TAGS.has(node.name.toLowerCase()) &&
-          (node.children === undefined ||
-            node.children.length === 0 ||
-            isInlineRun(node.children, depth + 1))),
+          (node.children === undefined || node.children.length === 0 || isInlineRun(node.children, depth + 1))),
     )
   );
 }
@@ -71,19 +54,13 @@ function inlineString(nodes: readonly ParserNode[], depth: number): string {
     } else if (node.kind !== 'element') {
       assert(false, 'Inline runs contain only text, expressions, and elements');
     } else if (node.children === undefined) {
-      out +=
-        node.name === 'br'
-          ? '<br />'
-          : `<${node.name}${serializeAttrs(node.props, node.attrOrder)} />`;
+      out += node.name === 'br' ? '<br />' : `<${node.name}${serializeAttrs(node.props, node.attrOrder)} />`;
     } else if (node.children.length === 0) {
       // Written as a pair with nothing between them. Closing it as `<span />`
       // says the same thing to a browser and a different thing to a diff.
       out += `<${node.name}${serializeAttrs(node.props, node.attrOrder)}></${node.name}>`;
     } else {
-      out +=
-        `<${node.name}${serializeAttrs(node.props, node.attrOrder)}>` +
-        inlineString(node.children, depth + 1) +
-        `</${node.name}>`;
+      out += `<${node.name}${serializeAttrs(node.props, node.attrOrder)}>` + inlineString(node.children, depth + 1) + `</${node.name}>`;
     }
   }
   return out;
@@ -114,9 +91,7 @@ export function tagInlineRun(
       atRoot || forwards
         ? {
             type: 'expr',
-            value:
-              `[${JSON.stringify(childPath)}, Astro.props["data-avb-p"]]` +
-              '.filter(Boolean).join(" ")',
+            value: `[${JSON.stringify(childPath)}, Astro.props["data-avb-p"]]` + '.filter(Boolean).join(" ")',
           }
         : { type: 'string', value: childPath };
     const tagged: ParserNode = {
@@ -124,9 +99,7 @@ export function tagInlineRun(
       source: undefined,
       // As on a block element, the explicit marker precedes a spread: HTML
       // keeps the first duplicate attribute, which must name this child too.
-      props: forwards
-        ? { 'data-avb-p': pathProp, ...node.props }
-        : { ...node.props, 'data-avb-p': pathProp },
+      props: forwards ? { 'data-avb-p': pathProp, ...node.props } : { ...node.props, 'data-avb-p': pathProp },
       attrOrder: forwards && node.attrOrder ? ['data-avb-p', ...node.attrOrder] : node.attrOrder,
     };
     if (Array.isArray(node.children) && node.children.length > 0) {
@@ -154,9 +127,7 @@ function textAsWritten(node: ValueNode): string | undefined {
 // source file cannot show — become entities again.
 function textOut(node: ValueNode): string {
   const source = node.source;
-  return source !== undefined && textValue(source) === node.value
-    ? collapseText(source)
-    : encodeText(node.value);
+  return source !== undefined && textValue(source) === node.value ? collapseText(source) : encodeText(node.value);
 }
 
 // Whitespace inside an inline run is collapsed by the renderer, so the run can
@@ -225,18 +196,14 @@ function blockAsWritten(node: ParserNode, indent: string, depth: number): string
   // conditional. The rebuilt form may omit that optional separator while the
   // untouched source must retain its original spelling.
   const comparedSource =
-    node.kind === 'map' && node.children.length === 1 && node.children[0]?.kind === 'cond'
-      ? node.source.replace(/,(\s*\)\s*\})$/, '$1')
-      : node.source;
+    node.kind === 'map' && node.children.length === 1 && node.children[0]?.kind === 'cond' ? node.source.replace(/,(\s*\)\s*\})$/, '$1') : node.source;
   if (flat(rebuilt.join('\n')) !== flat(comparedSource)) {
     return undefined;
   }
   const sourceLines = node.source.split('\n');
   const finalLine = required(sourceLines[sourceLines.length - 1], 'Source has a final line');
   const base = (finalLine.match(/^[ \t]*/) || [''])[0];
-  return sourceLines.map((line, i) =>
-    i === 0 ? indent + line : line.startsWith(base) ? indent + line.slice(base.length) : line,
-  );
+  return sourceLines.map((line, i) => (i === 0 ? indent + line : line.startsWith(base) ? indent + line.slice(base.length) : line));
 }
 
 // A conditional without the { } that put it in markup context. An else-if
@@ -248,8 +215,7 @@ function serializeCondBody(node: CondNode, indent: string, lines: string[], dept
   const kidsOf = (i: number) => node.children?.[i]?.children || [];
   const thenKids = kidsOf(0);
   const elseKids = node.op === '&&' ? undefined : kidsOf(1);
-  const chained =
-    elseKids && elseKids.length === 1 && elseKids[0]?.kind === 'cond' ? elseKids[0] : undefined;
+  const chained = elseKids && elseKids.length === 1 && elseKids[0]?.kind === 'cond' ? elseKids[0] : undefined;
   // `()` is a syntax error, so a branch holding nothing is written as `null` —
   // the same thing a hand-written conditional does.
   const tail = elseKids === undefined ? '' : chained ? ' :' : elseKids.length ? ' : (' : ' : null';
@@ -285,12 +251,7 @@ function serializeCondBody(node: CondNode, indent: string, lines: string[], dept
   }
 }
 
-export function serializeNode(
-  node: ParserNode,
-  indent: string,
-  lines: string[],
-  depth: number,
-): void {
+export function serializeNode(node: ParserNode, indent: string, lines: string[], depth: number): void {
   // Every caller hands over a validated tree (parseSerializePage, parseSerializeNodes), whose
   // depth is already within the bound.
   assert(depth <= LIMITS.treeDepthMax, 'serializeNode: depth limit');
@@ -366,12 +327,7 @@ export function serializeNodes(input: readonly unknown[]): string {
   return lines.join('\n') + '\n';
 }
 
-function serializeNodeCallback(
-  node: MapNode,
-  indent: string,
-  lines: string[],
-  depth: number,
-): void {
+function serializeNodeCallback(node: MapNode, indent: string, lines: string[], depth: number): void {
   const text = serializeMapCallback(node, (child) => {
     const rendered: string[] = [];
     serializeNode(child, '', rendered, depth + 1);
@@ -455,8 +411,7 @@ function serializeNodeMap(node: MapNode, indent: string, lines: string[], depth:
   }
   // Untouched heads keep the lines they were written on; an edited one is
   // written as the single line the Loop field holds.
-  const kept =
-    node.headSource && normalizeHead(node.headSource) === node.head ? node.headSource : undefined;
+  const kept = node.headSource && normalizeHead(node.headSource) === node.head ? node.headSource : undefined;
   // The body belongs under `.map(`, which on a chain written across lines
   // is indented past the head's own first line — so the loop's contents
   // hang off the LAST head line, not off the node.
@@ -466,10 +421,7 @@ function serializeNodeMap(node: MapNode, indent: string, lines: string[], depth:
     for (const line of headLines) {
       lines.push(line ? indent + '  ' + line : '');
     }
-    inner =
-      required(headLines[headLines.length - 1], 'Loop head has a final line').match(
-        /^[ \t]*/,
-      )?.[0] ?? '';
+    inner = required(headLines[headLines.length - 1], 'Loop head has a final line').match(/^[ \t]*/)?.[0] ?? '';
   } else {
     lines.push(indent + '  ' + node.head);
   }
@@ -491,11 +443,7 @@ function serializeLoopBody(node: MapNode, indent: string, lines: string[], depth
   }
 }
 
-function serializeNodeRaw(
-  node: Extract<ParserNode, { kind: 'raw' }>,
-  indent: string,
-  lines: string[],
-): void {
+function serializeNodeRaw(node: Extract<ParserNode, { kind: 'raw' }>, indent: string, lines: string[]): void {
   const open = `${indent}<${node.name}${serializeAttrs(node.props, node.attrOrder)}>`;
   // Keep raw inner verbatim. Only the line break that ends the last line
   // goes, since the closing tag supplies its own — trimming all trailing
@@ -518,12 +466,7 @@ function serializeNodeRaw(
   return;
 }
 
-function serializeNodeElement(
-  node: Extract<ParserNode, { kind: 'element' | 'component' }>,
-  indent: string,
-  lines: string[],
-  depth: number,
-): void {
+function serializeNodeElement(node: Extract<ParserNode, { kind: 'element' | 'component' }>, indent: string, lines: string[], depth: number): void {
   const kept = attrsAsWritten(node);
   const attrs = kept === undefined ? serializeAttrs(node.props, node.attrOrder) : kept;
   // A shorthand fragment has no attributes. If the editor adds one (for
@@ -532,10 +475,7 @@ function serializeNodeElement(
   // The closing tag as written, when it was written across lines. Only
   // trusted while it still names this element: renaming the tag rebuilds
   // it the ordinary way.
-  const closeTag =
-    node.closeSource && node.closeSource.startsWith(`</${tagName}`)
-      ? node.closeSource
-      : `</${tagName}>`;
+  const closeTag = node.closeSource && node.closeSource.startsWith(`</${tagName}`) ? node.closeSource : `</${tagName}>`;
   const openTag = (close: string) => {
     // Preserved attributes carry their own trailing whitespace — the line
     // break before the closing bracket — so the usual leading space would
@@ -558,10 +498,7 @@ function serializeNodeElement(
     // the stored inner puts the tag back whole — its line breaks, its
     // indentation, and the break before the closing tag.
     if (inlineRunUnchanged(node, depth)) {
-      openTag(
-        `>${reindentRun(required(node.source, 'Unchanged inline run has source'), indent)}` +
-          closeTag,
-      );
+      openTag(`>${reindentRun(required(node.source, 'Unchanged inline run has source'), indent)}` + closeTag);
       return;
     }
     // The run's boundary spaces are content, not layout. A text node on a

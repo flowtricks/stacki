@@ -19,12 +19,7 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {
-  protocolLeftovers,
-  realHost,
-  scratch,
-  sha256,
-} = require('../../helpers/platformSupport.js');
+const { protocolLeftovers, realHost, scratch, sha256 } = require('../../helpers/platformSupport.js');
 
 const posixOnly = { skip: process.platform === 'win32' ? 'POSIX permissions and links' : false };
 
@@ -76,10 +71,7 @@ test('flush: the staged file is fsynced before the rename, the folder after it',
       fs.fsyncSync = fsync;
       fs.renameSync = rename;
     }
-    const expected =
-      process.platform === 'win32'
-        ? ['fsync file', 'rename']
-        : ['fsync file', 'rename', 'fsync folder', 'fsync folder'];
+    const expected = process.platform === 'win32' ? ['fsync file', 'rename'] : ['fsync file', 'rename', 'fsync folder', 'fsync folder'];
     assert.deepEqual(events, expected);
     const entries = fs.readdirSync(root);
     assert.deepEqual(entries.sort(), ['.stacki', 'page.astro'], 'the save directory stays stable');
@@ -87,34 +79,30 @@ test('flush: the staged file is fsynced before the rename, the folder after it',
   });
 });
 
-test(
-  'a symlink is written through; a symlinked folder reaches the same actor',
-  posixOnly,
-  async () => {
-    await scratch(os.tmpdir(), (root) => {
-      fs.mkdirSync(path.join(root, 'real'));
-      fs.mkdirSync(path.join(root, 'other'));
-      const target = path.join(root, 'other', 'page.astro');
-      fs.writeFileSync(target, 'old\n');
-      const link = path.join(root, 'real', 'page.astro');
-      fs.symlinkSync(target, link);
-      fs.symlinkSync(path.join(root, 'real'), path.join(root, 'alias'));
-      const documents = realHost();
-      assert.equal(documents.writeText(link, 'new\n', sha256('old\n')).tag, 'applied');
-      assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'the link is still a link');
-      assert.equal(fs.readFileSync(target, 'utf8'), 'new\n', 'the file it names was written');
-      assert.deepEqual(protocolLeftovers(path.join(root, 'other')), [], 'staged beside the target');
-      const viaAlias = documents.current(path.join(root, 'alias', 'page.astro'));
-      assert.equal(viaAlias.ok, true);
-      assert.equal(documents.actorCount(), 1, 'one file, one actor');
-      const dangling = path.join(root, 'real', 'gone.astro');
-      fs.symlinkSync(path.join(root, 'nowhere.astro'), dangling);
-      const refused = documents.writeCurrent(dangling, 'x\n');
-      assert.equal(refused.tag, 'rejected');
-      assert.equal(fs.existsSync(path.join(root, 'nowhere.astro')), false, 'no guessed target');
-    });
-  },
-);
+test('a symlink is written through; a symlinked folder reaches the same actor', posixOnly, async () => {
+  await scratch(os.tmpdir(), (root) => {
+    fs.mkdirSync(path.join(root, 'real'));
+    fs.mkdirSync(path.join(root, 'other'));
+    const target = path.join(root, 'other', 'page.astro');
+    fs.writeFileSync(target, 'old\n');
+    const link = path.join(root, 'real', 'page.astro');
+    fs.symlinkSync(target, link);
+    fs.symlinkSync(path.join(root, 'real'), path.join(root, 'alias'));
+    const documents = realHost();
+    assert.equal(documents.writeText(link, 'new\n', sha256('old\n')).tag, 'applied');
+    assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'the link is still a link');
+    assert.equal(fs.readFileSync(target, 'utf8'), 'new\n', 'the file it names was written');
+    assert.deepEqual(protocolLeftovers(path.join(root, 'other')), [], 'staged beside the target');
+    const viaAlias = documents.current(path.join(root, 'alias', 'page.astro'));
+    assert.equal(viaAlias.ok, true);
+    assert.equal(documents.actorCount(), 1, 'one file, one actor');
+    const dangling = path.join(root, 'real', 'gone.astro');
+    fs.symlinkSync(path.join(root, 'nowhere.astro'), dangling);
+    const refused = documents.writeCurrent(dangling, 'x\n');
+    assert.equal(refused.tag, 'rejected');
+    assert.equal(fs.existsSync(path.join(root, 'nowhere.astro')), false, 'no guessed target');
+  });
+});
 
 // An indexer or antivirus scanner opens and reads files as they change. A real
 // second process reads the page in a tight loop while this one saves it many
@@ -122,10 +110,7 @@ test(
 test('continuous readers see whole versions only, never a torn or empty file', async () => {
   await scratch(os.tmpdir(), async (root) => {
     const file = path.join(root, 'page.astro');
-    const versions = Array.from(
-      { length: 60 },
-      (_, index) => `<p>${String(index).repeat(4096)}</p>\n`,
-    );
+    const versions = Array.from({ length: 60 }, (_, index) => `<p>${String(index).repeat(4096)}</p>\n`);
     fs.writeFileSync(file, versions[0]);
     const reader = spawn(process.execPath, ['-e', READER, file], {
       stdio: ['pipe', 'pipe', 'inherit'],
@@ -176,21 +161,13 @@ test('two names that differ in case are two files on a case-sensitive disk', asy
   await scratch(os.tmpdir(), (root) => {
     fs.writeFileSync(path.join(root, 'Page.astro'), 'upper\n');
     if (fs.existsSync(path.join(root, 'page.astro'))) {
-      context.skip(
-        'the OS temp folder is case-insensitive here; windowsProtocol.test.js covers it',
-      );
+      context.skip('the OS temp folder is case-insensitive here; windowsProtocol.test.js covers it');
       return;
     }
     fs.writeFileSync(path.join(root, 'page.astro'), 'lower\n');
     const documents = realHost();
-    assert.equal(
-      documents.current(path.join(root, 'Page.astro')).value.checksum,
-      sha256('upper\n'),
-    );
-    assert.equal(
-      documents.current(path.join(root, 'page.astro')).value.checksum,
-      sha256('lower\n'),
-    );
+    assert.equal(documents.current(path.join(root, 'Page.astro')).value.checksum, sha256('upper\n'));
+    assert.equal(documents.current(path.join(root, 'page.astro')).value.checksum, sha256('lower\n'));
     assert.equal(documents.actorCount(), 2);
   });
 });

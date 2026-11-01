@@ -23,9 +23,7 @@ export class PublishStatusSource {
   constructor(private readonly root: string) {}
 
   async differs(remote: PublishedStatusTree['files']): Promise<boolean> {
-    const inventory = published(
-      await publishInventory(this.root, await sourceRoots(this.root), limits.sourceBytesMax),
-    );
+    const inventory = published(await publishInventory(this.root, await sourceRoots(this.root), limits.sourceBytesMax));
     const next = new Map<string, FileDigest>();
     const deadline = Date.now() + 30_000;
     let changed = false;
@@ -62,11 +60,7 @@ async function fileDigest(file: string, previous: FileDigest | undefined): Promi
       signal: AbortSignal.timeout(10_000),
     });
     const after = await handle.stat();
-    if (
-      info.size !== after.size ||
-      info.mtimeMs !== after.mtimeMs ||
-      info.ctimeMs !== after.ctimeMs
-    ) {
+    if (info.size !== after.size || info.mtimeMs !== after.mtimeMs || info.ctimeMs !== after.ctimeMs) {
       throw new Error('The draft changed during the status check. Retry shortly.');
     }
     return { stamp, sha: hash.digest('hex'), mode: info.mode & 0o111 ? '100755' : '100644' };

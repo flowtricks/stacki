@@ -4,11 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFrontmatter } from '#dist/shared/page/frontmatterSource.js';
-import {
-  parseImportSlots,
-  parseImportSlot,
-  parseImportMember,
-} from '#dist/shared/page/frontmatter.js';
+import { parseImportSlots, parseImportSlot, parseImportMember } from '#dist/shared/page/frontmatter.js';
 import { LIMITS } from '#dist/shared/core/limits.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
@@ -63,10 +59,7 @@ test('slot and member fields reject malformed values', () => {
 
 test('slot arrays and source fields enforce their stated bounds', () => {
   assert.throws(() => parseImportSlots({}), /expected array/);
-  assert.throws(
-    () => parseImportSlots(Array.from({ length: LIMITS.importsMax + 1 }, () => slot)),
-    /exceeds limit/,
-  );
+  assert.throws(() => parseImportSlots(Array.from({ length: LIMITS.importsMax + 1 }, () => slot)), /exceeds limit/);
   assert.throws(
     () =>
       parseImportSlot({
@@ -75,12 +68,6 @@ test('slot arrays and source fields enforce their stated bounds', () => {
       }),
     /exceeds limit/,
   );
-  assert.throws(
-    () => parseImportSlot({ ...slot, source: 'x'.repeat(LIMITS.nodeValueCharsMax + 1) }),
-    /exceeds limit/,
-  );
-  assert.throws(
-    () => parseImportSlot({ ...slot, offset: LIMITS.ipcFieldCharsMax + 1 }),
-    /outside source bounds/,
-  );
+  assert.throws(() => parseImportSlot({ ...slot, source: 'x'.repeat(LIMITS.nodeValueCharsMax + 1) }), /exceeds limit/);
+  assert.throws(() => parseImportSlot({ ...slot, offset: LIMITS.ipcFieldCharsMax + 1 }), /outside source bounds/);
 });

@@ -68,9 +68,7 @@ export function useColumnGuide(options: {
 }
 
 /** The settings for the open project, and the one way to change them. */
-export function useGuideSettings(
-  projectKey: string | undefined,
-): readonly [GuideSettings, GuideUpdate] {
+export function useGuideSettings(projectKey: string | undefined): readonly [GuideSettings, GuideUpdate] {
   const { settings, update } = useProjectGuideSettings(projectKey);
   useGuideShortcut(update);
   return [settings, update] as const;
@@ -87,8 +85,7 @@ function useGuideVariables(names: readonly string[], frame: GuideFrameLink): voi
     link.current = frame;
   });
   useEffect(() => {
-    const send = (): void =>
-      link.current.post({ type: 'avb:guide-variables', names: key === '' ? [] : key.split('\n') });
+    const send = (): void => link.current.post({ type: 'avb:guide-variables', names: key === '' ? [] : key.split('\n') });
     send();
     return link.current.subscribeLoad(send);
   }, [key]);

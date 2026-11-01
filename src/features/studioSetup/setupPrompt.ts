@@ -1,9 +1,6 @@
 // The handoff deliberately contains no account identifiers, credentials or
 // computer paths. The agent reads project-specific information in the project.
-export function studioSetupPrompt(
-  version: string,
-  options: { readonly installed: boolean },
-): string {
+export function studioSetupPrompt(version: string, options: { readonly installed: boolean }): string {
   const releaseBase = `https://github.com/flowtricks/stacki-releases/releases/download/v${version}`;
   const installation = options.installed
     ? 'Studio is already installed in ./studio. Preserve its current version and configuration.'

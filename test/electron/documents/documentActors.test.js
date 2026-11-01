@@ -24,10 +24,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { DocumentActors } = require('#dist/electron/documents/documentActors.js');
 const { NODE_PROJECTOR, NodeDocumentDisk } = require('#dist/electron/documents/documentDisk.js');
-const {
-  createDocumentTelemetry,
-  hashPath,
-} = require('#dist/electron/documents/documentTelemetry.js');
+const { createDocumentTelemetry, hashPath } = require('#dist/electron/documents/documentTelemetry.js');
 const { LIMITS } = require('#dist/shared/core/limits.js');
 const { planIntent } = require('#dist/shared/engine/planner.js');
 
@@ -72,11 +69,7 @@ test('a replace applies, returns the new checksum, and the actor holds it', () =
     const file = path.join(root, 'index.astro');
     fs.writeFileSync(file, '<h1 title="Old">Hi</h1>\n');
     const { documents, lines } = host();
-    const report = documents.writeText(
-      file,
-      '<h1 title="New">Hi</h1>\n',
-      sha256(fs.readFileSync(file)),
-    );
+    const report = documents.writeText(file, '<h1 title="New">Hi</h1>\n', sha256(fs.readFileSync(file)));
     // The inverse is the replacement's changed region only (minimal splices).
     assert.deepEqual(report, {
       tag: 'applied',
@@ -155,33 +148,29 @@ test('another writer landing right after the rename is a write-race', () => {
 });
 
 const posixOnly = { skip: process.platform === 'win32' };
-test(
-  'a replace whose folder cannot be flushed is uncertain, reconciled by comparison',
-  posixOnly,
-  () => {
-    directory((root) => {
-      const file = path.join(root, 'page.astro');
-      fs.writeFileSync(file, 'authored\n');
-      const { documents, lines } = host();
-      withFailure(
-        'fsyncSync',
-        (fsync, descriptor) => {
-          if (fs.fstatSync(descriptor).isDirectory()) {
-            throw Object.assign(new Error('Simulated EIO'), { code: 'EIO' });
-          }
-          return fsync(descriptor);
-        },
-        () => {
-          const report = documents.writeText(file, 'mine\n', sha256('authored\n'));
-          assert.equal(report.tag, 'uncertain');
-          assert.equal(report.candidateChecksum, sha256('mine\n'));
-          assert.equal(report.reconciliation, 'applied', 'the candidate is on disk');
-        },
-      );
-      assert.equal(JSON.parse(lines.at(-1)).outcome, 'uncertain');
-    });
-  },
-);
+test('a replace whose folder cannot be flushed is uncertain, reconciled by comparison', posixOnly, () => {
+  directory((root) => {
+    const file = path.join(root, 'page.astro');
+    fs.writeFileSync(file, 'authored\n');
+    const { documents, lines } = host();
+    withFailure(
+      'fsyncSync',
+      (fsync, descriptor) => {
+        if (fs.fstatSync(descriptor).isDirectory()) {
+          throw Object.assign(new Error('Simulated EIO'), { code: 'EIO' });
+        }
+        return fsync(descriptor);
+      },
+      () => {
+        const report = documents.writeText(file, 'mine\n', sha256('authored\n'));
+        assert.equal(report.tag, 'uncertain');
+        assert.equal(report.candidateChecksum, sha256('mine\n'));
+        assert.equal(report.reconciliation, 'applied', 'the candidate is on disk');
+      },
+    );
+    assert.equal(JSON.parse(lines.at(-1)).outcome, 'uncertain');
+  });
+});
 
 test('a missing file: writeText refuses, writeCurrent and create make it', () => {
   directory((root) => {
@@ -259,10 +248,7 @@ test('a full queue answers backpressured; draining gives each accepted intent on
     for (let index = 0; index <= LIMITS.intentsPendingMax; index++) {
       answers.push(documents.submitDeferred(file, `v${index + 1}\n`, base));
     }
-    assert.equal(
-      answers.filter((answer) => answer === 'accepted').length,
-      LIMITS.intentsPendingMax,
-    );
+    assert.equal(answers.filter((answer) => answer === 'accepted').length, LIMITS.intentsPendingMax);
     assert.equal(answers.at(-1), 'backpressured');
     documents.drain();
     assert.equal(documents.quiescent(), true);
@@ -288,18 +274,12 @@ test('a batch leases in sorted canonical order, whatever order it names its file
     const order = [];
     const { documents } = host({ onLease: (file) => order.push(path.basename(file)) });
     const seen = [];
-    const run = (items) =>
-      documents.withLeases(items, (ordered) =>
-        seen.push(ordered.map((item) => path.basename(item.file))),
-      );
+    const run = (items) => documents.withLeases(items, (ordered) => seen.push(ordered.map((item) => path.basename(item.file))));
     assert.equal(run(files.map((file) => ({ file }))).ok, true);
     assert.equal(run([...files].reverse().map((file) => ({ file }))).ok, true);
     assert.deepEqual(order.slice(0, 3), order.slice(3), 'both batches acquire in one order');
     assert.deepEqual(seen[0], seen[1], 'and run their items in it');
-    assert.throws(
-      () => documents.withLeases([{ file: files[0] }, { file: files[0] }], () => undefined),
-      /Assertion failed: A batch names each file once/,
-    );
+    assert.throws(() => documents.withLeases([{ file: files[0] }, { file: files[0] }], () => undefined), /Assertion failed: A batch names each file once/);
   });
 });
 
@@ -325,16 +305,9 @@ test('the actor count stays inside its bound; idle actors are dropped first', ()
       fs.writeFileSync(file, `/* ${index} */\n`);
       assert.equal(documents.current(file).ok, true);
     }
-    assert.ok(
-      documents.actorCount() <= LIMITS.documentActorsMax,
-      `${documents.actorCount()} actors`,
-    );
+    assert.ok(documents.actorCount() <= LIMITS.documentActorsMax, `${documents.actorCount()} actors`);
     const first = path.join(root, 'f0.css');
-    assert.equal(
-      documents.writeText(first, 'y\n', sha256('/* 0 */\n')).tag,
-      'applied',
-      'a dropped actor re-reads',
-    );
+    assert.equal(documents.writeText(first, 'y\n', sha256('/* 0 */\n')).tag, 'applied', 'a dropped actor re-reads');
   });
 });
 

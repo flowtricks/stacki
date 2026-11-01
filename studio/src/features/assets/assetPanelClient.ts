@@ -16,13 +16,10 @@ export async function uploadFiles(destination: string, files: readonly File[]) {
   let added = 0;
   try {
     for (const file of files) {
-      await request(
-        `/studio/api/upload?file=${encodeURIComponent((destination || 'public') + '/' + file.name)}`,
-        {
-          method: 'POST',
-          body: file,
-        },
-      );
+      await request(`/studio/api/upload?file=${encodeURIComponent((destination || 'public') + '/' + file.name)}`, {
+        method: 'POST',
+        body: file,
+      });
       added++;
     }
     return { added };

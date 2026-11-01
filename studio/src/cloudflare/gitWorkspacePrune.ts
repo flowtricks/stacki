@@ -3,11 +3,7 @@ import type { GitWorkspaceManifest } from '../features/history/gitWorkspaceContr
 
 // Old document epochs are redundant after the draft is checkpointed in Git. Keep
 // recent epochs for in-flight bootstrap requests, and bound retained namespaces.
-export async function pruneGitDrafts(
-  environment: Environment,
-  current: GitWorkspaceManifest | undefined,
-  next: GitWorkspaceManifest,
-): Promise<void> {
+export async function pruneGitDrafts(environment: Environment, current: GitWorkspaceManifest | undefined, next: GitWorkspaceManifest): Promise<void> {
   const inventory = await environment.DRAFTS.list({
     prefix: 'workspaces/',
     delimiter: '/',

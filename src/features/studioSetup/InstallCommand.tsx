@@ -27,18 +27,11 @@ export default function InstallCommand() {
       <p>Or run in your project folder:</p>
       <div className="studio-install-command-box">
         <code>
-          <span className="studio-command-executable">npm</span>{' '}
-          <span className="studio-command-action">create</span>{' '}
+          <span className="studio-command-executable">npm</span> <span className="studio-command-action">create</span>{' '}
           <span className="studio-command-package">stacki</span>
           <span className="studio-command-version">@latest</span>
         </code>
-        <button
-          type="button"
-          aria-label="Copy npm install command"
-          title="Copy command"
-          disabled={status === 'copying'}
-          onClick={() => void copy()}
-        >
+        <button type="button" aria-label="Copy npm install command" title="Copy command" disabled={status === 'copying'} onClick={() => void copy()}>
           {status === 'copied' ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
           {status === 'copied' ? 'Copied' : 'Copy'}
         </button>
@@ -46,9 +39,7 @@ export default function InstallCommand() {
       <span className="studio-command-status" role="status">
         {status === 'copied' ? 'Command copied to clipboard.' : ''}
       </span>
-      {status === 'failed' && (
-        <ErrorToast message="Could not copy. Select the command and copy it manually." />
-      )}
+      {status === 'failed' && <ErrorToast message="Could not copy. Select the command and copy it manually." />}
     </div>
   );
 }

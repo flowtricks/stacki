@@ -206,13 +206,7 @@ function useDragMoves(dragRef: DragRef, frame: () => void, finish: () => void) {
 // Hover state for the ew-resize affordance. `armed` is what the cursor reflects: over a
 // label it's enough to be hovering a value with a number in it; over an input you also
 // have to be holding the modifier that would start the scrub.
-function useScrubHover({
-  disabled,
-  value,
-}: {
-  readonly disabled: boolean;
-  readonly value: string;
-}) {
+function useScrubHover({ disabled, value }: { readonly disabled: boolean; readonly value: string }) {
   const hoverElement = useRef<HTMLElement | undefined>(undefined);
   const hoverSurface = useRef<Surface>('input');
   const [hovering, setHovering] = useState(false);
@@ -224,14 +218,8 @@ function useScrubHover({
     setModifierHeld(event.altKey || event.shiftKey);
     setHovering(true);
   }, []);
-  const onInputPointerEnter = useCallback(
-    (event: ReactPointerEvent<HTMLElement>) => enter('input', event),
-    [enter],
-  );
-  const onLabelPointerEnter = useCallback(
-    (event: ReactPointerEvent<HTMLElement>) => enter('label', event),
-    [enter],
-  );
+  const onInputPointerEnter = useCallback((event: ReactPointerEvent<HTMLElement>) => enter('input', event), [enter]);
+  const onLabelPointerEnter = useCallback((event: ReactPointerEvent<HTMLElement>) => enter('label', event), [enter]);
   const onPointerLeave = useCallback(() => {
     hoverElement.current = undefined;
     setHovering(false);
@@ -259,8 +247,7 @@ function useScrubHover({
     if (!element || !hovering) {
       return;
     }
-    const armed =
-      !disabled && hasScrubTarget(value) && (hoverSurface.current === 'label' || modifierHeld);
+    const armed = !disabled && hasScrubTarget(value) && (hoverSurface.current === 'label' || modifierHeld);
     element.style.cursor = armed ? 'ew-resize' : '';
     return () => {
       element.style.cursor = '';

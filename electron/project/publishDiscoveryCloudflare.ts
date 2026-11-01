@@ -21,18 +21,13 @@ export async function cloudflareAccounts(root: string): Promise<readonly Publish
   });
 }
 
-export async function cloudflareProjects(
-  root: string,
-  account: string,
-): Promise<readonly PublishProject[]> {
+export async function cloudflareProjects(root: string, account: string): Promise<readonly PublishProject[]> {
   const credentials = record(await discoveryCommand(root, 'wrangler', ['auth', 'token', '--json']));
   const headers = cloudflareHeaders(credentials);
   const projects: PublishProject[] = [];
   for (let page = 1; page <= PROJECT_PAGES_MAX; page++) {
     const endpoint = `https://api.cloudflare.com/client/v4/accounts/${account}/pages/projects`;
-    const result = record(
-      await cloudflareRequest(`${endpoint}?per_page=${PROJECTS_PER_PAGE}&page=${page}`, headers),
-    );
+    const result = record(await cloudflareRequest(`${endpoint}?per_page=${PROJECTS_PER_PAGE}&page=${page}`, headers));
     if (result['success'] !== true) {
       throw new Error('Cloudflare could not list Pages projects. Check account permissions.');
     }
@@ -69,9 +64,7 @@ export function parseCloudflareProject(input: unknown, account: string): Publish
   };
 }
 
-export function cloudflareHeaders(
-  credentials: Record<string, unknown>,
-): Readonly<Record<string, string>> {
+export function cloudflareHeaders(credentials: Record<string, unknown>): Readonly<Record<string, string>> {
   if (credentials['type'] === 'api_key') {
     return {
       'X-Auth-Key': credential(credentials['key']),
@@ -127,17 +120,9 @@ export async function cloudflareRequest(url: string, headers: Readonly<Record<st
   }
 }
 
-export async function cloudflareWorkers(
-  root: string,
-  account: string,
-): Promise<readonly PublishProject[]> {
+export async function cloudflareWorkers(root: string, account: string): Promise<readonly PublishProject[]> {
   const credentials = record(await discoveryCommand(root, 'wrangler', ['auth', 'token', '--json']));
-  const result = record(
-    await cloudflareRequest(
-      `https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts`,
-      cloudflareHeaders(credentials),
-    ),
-  );
+  const result = record(await cloudflareRequest(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts`, cloudflareHeaders(credentials)));
   if (result['success'] !== true) {
     throw new Error('Cloudflare could not list Workers. Check account permissions.');
   }

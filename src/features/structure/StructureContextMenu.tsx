@@ -3,8 +3,7 @@ import Popup from '../../ui/Popup';
 import { ChevronRightIcon } from '../../ui/Icons';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 
-export type ContextAction =
-  'defaults' | 'open' | 'cut' | 'copy' | 'paste' | 'duplicate' | 'delete' | 'div' | 'a';
+export type ContextAction = 'defaults' | 'open' | 'cut' | 'copy' | 'paste' | 'duplicate' | 'delete' | 'div' | 'a';
 export interface ContextPosition {
   readonly left: number;
   readonly top: number;
@@ -50,24 +49,9 @@ export function ContextMenu(props: MenuProps) {
       <WrapMenu {...props} />
       <div className="ctx-divider" role="separator" />
       <MenuItem label="Cut" disabled={!props.canCut} onSelect={() => props.onAction('cut')} />
-      <MenuItem
-        label="Copy"
-        shortcut={shortcut('C')}
-        disabled={props.protectedNode}
-        onSelect={() => props.onAction('copy')}
-      />
-      <MenuItem
-        label="Paste"
-        shortcut={shortcut('V')}
-        disabled={!props.canPaste}
-        onSelect={() => props.onAction('paste')}
-      />
-      <MenuItem
-        label="Duplicate"
-        shortcut={shortcut('D')}
-        disabled={props.protectedNode}
-        onSelect={() => props.onAction('duplicate')}
-      />
+      <MenuItem label="Copy" shortcut={shortcut('C')} disabled={props.protectedNode} onSelect={() => props.onAction('copy')} />
+      <MenuItem label="Paste" shortcut={shortcut('V')} disabled={!props.canPaste} onSelect={() => props.onAction('paste')} />
+      <MenuItem label="Duplicate" shortcut={shortcut('D')} disabled={props.protectedNode} onSelect={() => props.onAction('duplicate')} />
       <MenuItem
         label="Delete"
         shortcut={currentDesktopPlatform() === 'darwin' ? '⌫' : 'Del'}
@@ -77,11 +61,7 @@ export function ContextMenu(props: MenuProps) {
       {props.component && (
         <>
           <div className="ctx-divider" role="separator" />
-          <MenuItem
-            label="Set component defaults"
-            disabled={!props.canSetDefaults}
-            onSelect={() => props.onAction('defaults')}
-          />
+          <MenuItem label="Set component defaults" disabled={!props.canSetDefaults} onSelect={() => props.onAction('defaults')} />
         </>
       )}
     </Popup>
@@ -91,11 +71,7 @@ export function ContextMenu(props: MenuProps) {
 function ComponentMenuHeader(props: Pick<MenuProps, 'canOpen' | 'onAction'>) {
   return (
     <>
-      <MenuItem
-        label="Open component"
-        disabled={!props.canOpen}
-        onSelect={() => props.onAction('open')}
-      />
+      <MenuItem label="Open component" disabled={!props.canOpen} onSelect={() => props.onAction('open')} />
       <div className="ctx-divider" role="separator" />
     </>
   );
@@ -115,15 +91,7 @@ function MenuItem({
   readonly onSelect?: () => void;
 }) {
   return (
-    <button
-      type="button"
-      role="menuitem"
-      className="ctx-menu-item"
-      disabled={disabled}
-      aria-disabled={disabled}
-      title={title}
-      onClick={onSelect}
-    >
+    <button type="button" role="menuitem" className="ctx-menu-item" disabled={disabled} aria-disabled={disabled} title={title} onClick={onSelect}>
       <span>{label}</span>
       {shortcut && <span className="ctx-shortcut">{shortcut}</span>}
     </button>
@@ -137,11 +105,7 @@ function WrapMenu(props: MenuProps) {
   const disabled = !props.canWrapBox && !props.canWrapLink;
   useSubmenuPosition(submenu, trigger, open ? 'open' : 'closed');
   return (
-    <div
-      className="ctx-wrap"
-      onMouseEnter={() => setOpen(!disabled)}
-      onMouseLeave={() => setOpen(false)}
-    >
+    <div className="ctx-wrap" onMouseEnter={() => setOpen(!disabled)} onMouseLeave={() => setOpen(false)}>
       <button
         ref={trigger}
         type="button"
@@ -183,27 +147,15 @@ function WrapMenu(props: MenuProps) {
             }
           }}
         >
-          <MenuItem
-            label="div"
-            disabled={!props.canWrapBox}
-            onSelect={() => props.onAction('div')}
-          />
-          <MenuItem
-            label="<a>"
-            disabled={!props.canWrapLink}
-            onSelect={() => props.onAction('a')}
-          />
+          <MenuItem label="div" disabled={!props.canWrapBox} onSelect={() => props.onAction('div')} />
+          <MenuItem label="<a>" disabled={!props.canWrapLink} onSelect={() => props.onAction('a')} />
         </Popup>
       )}
     </div>
   );
 }
 
-function useSubmenuPosition(
-  submenu: React.RefObject<HTMLDivElement>,
-  trigger: React.RefObject<HTMLButtonElement>,
-  state: 'open' | 'closed',
-): void {
+function useSubmenuPosition(submenu: React.RefObject<HTMLDivElement>, trigger: React.RefObject<HTMLButtonElement>, state: 'open' | 'closed'): void {
   useLayoutEffect(() => {
     if (state === 'closed' || !submenu.current || !trigger.current) {
       return;
@@ -226,11 +178,7 @@ function navigateMenu(event: React.KeyboardEvent<HTMLDivElement>): void {
     return;
   }
   const menu = target.closest('[role="menu"]');
-  const items = Array.from(
-    menu?.querySelectorAll<HTMLButtonElement>(
-      ':scope > button:not(:disabled), ' + ':scope > .ctx-wrap > button:not(:disabled)',
-    ) ?? [],
-  );
+  const items = Array.from(menu?.querySelectorAll<HTMLButtonElement>(':scope > button:not(:disabled), ' + ':scope > .ctx-wrap > button:not(:disabled)') ?? []);
   const index = items.findIndex((item) => item === target);
   let next: HTMLButtonElement | undefined;
   switch (event.key) {

@@ -22,14 +22,7 @@ test('ContentView renders parsed entries and saves only the edited field', async
     platform: 'node',
     format: 'cjs',
     jsx: 'automatic',
-    external: [
-      'react',
-      'react-dom',
-      'react/jsx-runtime',
-      '@uiw/react-codemirror',
-      '@codemirror/*',
-      'codemirror',
-    ],
+    external: ['react', 'react-dom', 'react/jsx-runtime', '@uiw/react-codemirror', '@codemirror/*', 'codemirror'],
     logLevel: 'silent',
   });
   const dom = new JSDOM('<!doctype html><div id="root"></div>', {
@@ -56,16 +49,11 @@ test('ContentView renders parsed entries and saves only the edited field', async
     await settle(20);
   });
   assert.match(container.textContent, /Hello/);
-  const titleField = [...container.querySelectorAll('.cms-field')].find((node) =>
-    /^Title/.test(node.querySelector('label')?.textContent ?? ''),
-  );
+  const titleField = [...container.querySelectorAll('.cms-field')].find((node) => /^Title/.test(node.querySelector('label')?.textContent ?? ''));
   const input = titleField?.querySelector('input');
   assert.ok(input);
   await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(
-      dom.window.HTMLInputElement.prototype,
-      'value',
-    ).set;
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
     setter.call(input, 'Welcome');
     input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     await settle(500);

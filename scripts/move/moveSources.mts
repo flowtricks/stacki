@@ -296,11 +296,7 @@ function runNormalize(root: string, write: WriteMode): number {
 
 function runVerify(root: string, steps: readonly Step[]): number {
   const tree = readTree(root);
-  const problems = [
-    ...specifierProblems(tree),
-    ...unreachedProblems(tree),
-    ...stalePathProblems(tree, steps),
-  ];
+  const problems = [...specifierProblems(tree), ...unreachedProblems(tree), ...stalePathProblems(tree, steps)];
   if (problems.length === 0) {
     console.log('moveSources --verify: clean.');
     return 0;
@@ -361,8 +357,7 @@ function unreachedProblems(tree: Tree): string[] {
 }
 
 // An applied step's old paths must not survive as text anywhere rewritable.
-const STALE_PATH_TOKEN =
-  /(?<![\w./#$-])#?((?:dist\/)?(?:src|electron|shared|scripts|test)\/[\w./-]+)/g;
+const STALE_PATH_TOKEN = /(?<![\w./#$-])#?((?:dist\/)?(?:src|electron|shared|scripts|test)\/[\w./-]+)/g;
 function stalePathProblems(tree: Tree, steps: readonly Step[]): string[] {
   const stale = new Map<string, string>();
   for (const step of steps) {
@@ -393,11 +388,7 @@ function stalePathProblems(tree: Tree, steps: readonly Step[]): string[] {
 }
 
 function parseCommand(argumentsList: readonly string[]): Command | undefined {
-  const write: WriteMode = argumentsList.includes('--dry-run')
-    ? 'dry-run'
-    : argumentsList.includes('--accept-reports')
-      ? 'write-accepting-reports'
-      : 'write';
+  const write: WriteMode = argumentsList.includes('--dry-run') ? 'dry-run' : argumentsList.includes('--accept-reports') ? 'write-accepting-reports' : 'write';
   if (argumentsList.includes('--verify')) {
     return { kind: 'verify' };
   }

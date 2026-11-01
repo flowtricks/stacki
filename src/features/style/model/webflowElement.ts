@@ -78,8 +78,7 @@ export function webflowApi() {
   };
 }
 
-export const nodeById = (id: string | undefined): HostNode | undefined =>
-  id ? findNode(getHost().nodes, id) : undefined;
+export const nodeById = (id: string | undefined): HostNode | undefined => (id ? findNode(getHost().nodes, id) : undefined);
 
 // A node's classes. `class="a b"` is readable straight from the source, but
 // `class:list={[…]}` / `class={expr}` are expressions with no class text at
@@ -152,8 +151,7 @@ export function isHostNode(value: unknown): value is HostNode {
 }
 
 export async function buildSnapshot(element: AnyElement): Promise<ElementSnapshot> {
-  const node =
-    typeof element === 'string' ? nodeById(element) : isHostNode(element) ? element : undefined;
+  const node = typeof element === 'string' ? nodeById(element) : isHostNode(element) ? element : undefined;
   const classes = classTokens(node);
   const attributes: Record<string, string> = {};
   for (const [key, value] of Object.entries(node?.props || {})) {

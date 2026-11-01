@@ -4,8 +4,7 @@ import { CANVAS_TEXT_LIMIT } from './canvasText';
 
 // The host receives editing state only; the browser owns the text and caret.
 export type CanvasTextOverlayEvent =
-  | { readonly type: 'avb:text-active'; readonly session: string; readonly key: string }
-  | { readonly type: 'avb:text-inactive'; readonly session: string };
+  { readonly type: 'avb:text-active'; readonly session: string; readonly key: string } | { readonly type: 'avb:text-inactive'; readonly session: string };
 
 export function parseCanvasTextOverlay(input: unknown): CanvasTextOverlayEvent | undefined {
   const data = record(input);

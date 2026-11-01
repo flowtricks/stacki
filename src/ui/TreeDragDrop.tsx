@@ -13,10 +13,7 @@ type RowProps = Omit<React.HTMLAttributes<HTMLDivElement>, 'onDragOver' | 'onDro
 };
 
 // Both trees delegate native drag arbitration here so nested targets cannot handle one drop twice.
-export const TreeDragRow = forwardRef<HTMLDivElement, RowProps>(function TreeDragRow(
-  { dropBehavior, className, style, ...props },
-  ref,
-) {
+export const TreeDragRow = forwardRef<HTMLDivElement, RowProps>(function TreeDragRow({ dropBehavior, className, style, ...props }, ref) {
   return (
     <div
       {...props}
@@ -24,9 +21,7 @@ export const TreeDragRow = forwardRef<HTMLDivElement, RowProps>(function TreeDra
       className={`tree-drag-row ${className ?? ''}`}
       style={{
         ...style,
-        ...(dropBehavior?.active
-          ? { borderColor: 'var(--accent)', background: 'var(--accent-soft)' }
-          : {}),
+        ...(dropBehavior?.active ? { borderColor: 'var(--accent)', background: 'var(--accent-soft)' } : {}),
       }}
       {...treeDropHandlers(dropBehavior)}
     />
@@ -61,11 +56,7 @@ export function TreeDropGap({
   );
 }
 
-export function TreeDragHandle({
-  expansion,
-}: {
-  readonly expansion?: { readonly collapsed: boolean; readonly toggle: () => void };
-}) {
+export function TreeDragHandle({ expansion }: { readonly expansion?: { readonly collapsed: boolean; readonly toggle: () => void } }) {
   return (
     <span
       className="drag-handle"
@@ -79,15 +70,7 @@ export function TreeDragHandle({
           : undefined
       }
     >
-      {expansion ? (
-        expansion.collapsed ? (
-          <ChevronRightIcon size={10} />
-        ) : (
-          <ChevronDownIcon size={10} />
-        )
-      ) : (
-        <DragIcon size={11} />
-      )}
+      {expansion ? expansion.collapsed ? <ChevronRightIcon size={10} /> : <ChevronDownIcon size={10} /> : <DragIcon size={11} />}
     </span>
   );
 }

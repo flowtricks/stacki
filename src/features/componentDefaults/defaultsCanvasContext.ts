@@ -2,16 +2,8 @@ import { resolveSourceImport } from '../../editor/importPaths';
 import { assert } from '../../../shared/core/assert';
 import { mapModuleSpecifiers } from '../../../shared/page/frontmatterSource';
 import { componentFile, type DefaultsSnapshot } from '../../../shared/properties/componentDefaults';
-import {
-  defaultsCanvasSource,
-  type DefaultsCanvasSession,
-} from '../../../shared/properties/defaultsCanvas';
-import {
-  canvasContext,
-  canvasNodeAt,
-  renderDefaultsInstance,
-  type CanvasModel,
-} from './defaultsCanvasModel';
+import { defaultsCanvasSource, type DefaultsCanvasSession } from '../../../shared/properties/defaultsCanvas';
+import { canvasContext, canvasNodeAt, renderDefaultsInstance, type CanvasModel } from './defaultsCanvasModel';
 
 export interface DefaultsContext {
   readonly file: string;
@@ -77,7 +69,5 @@ function rebaseCanvasSource(source: string, from: string, declarations: string):
     return `---\n${declarations}\n---\n${source}`;
   }
   const frontmatter = mapModuleSpecifiers(fence[2] ?? '', rebase);
-  return (
-    `${fence[1] ?? ''}---\n${frontmatter}\n${declarations}\n---` + source.slice(fence[0].length)
-  );
+  return `${fence[1] ?? ''}---\n${frontmatter}\n${declarations}\n---` + source.slice(fence[0].length);
 }

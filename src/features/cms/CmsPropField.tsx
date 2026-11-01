@@ -137,19 +137,14 @@ function CmsLongText(props: {
   readonly onChange: (value: CmsScalar | undefined) => void;
 }) {
   assert(props.value.length > LIMITS.attrCharsMax, 'Long CMS text is past a prop field');
-  assert(
-    LIMITS.attrCharsMax < REMOTE_SCHEMA_LIMITS.valueCharsMax,
-    'A CMS value holds more than an attribute',
-  );
+  assert(LIMITS.attrCharsMax < REMOTE_SCHEMA_LIMITS.valueCharsMax, 'A CMS value holds more than an attribute');
   return (
     <CmsFieldFrame name={props.name} help={props.help} icon={<TextIcon size={12} />} set>
       <AutoTextarea
         value={props.value}
         minRows={3}
         maxLength={REMOTE_SCHEMA_LIMITS.valueCharsMax}
-        onChange={(event) =>
-          props.onChange(event.target.value === '' ? undefined : event.target.value)
-        }
+        onChange={(event) => props.onChange(event.target.value === '' ? undefined : event.target.value)}
       />
     </CmsFieldFrame>
   );
@@ -164,18 +159,9 @@ function looksLikeColor(name: string, text: string | undefined): boolean {
 }
 
 /** An on/off switch: the knob slides, and the word beside it says which. */
-export function CmsToggle(props: {
-  readonly on: boolean;
-  readonly onChange: (on: boolean) => void;
-}) {
+export function CmsToggle(props: { readonly on: boolean; readonly onChange: (on: boolean) => void }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={props.on}
-      className={`cms-toggle ${props.on ? 'on' : ''}`}
-      onClick={() => props.onChange(!props.on)}
-    >
+    <button type="button" role="switch" aria-checked={props.on} className={`cms-toggle ${props.on ? 'on' : ''}`} onClick={() => props.onChange(!props.on)}>
       <span className="cms-toggle-knob" />
       <span className="cms-toggle-label">{props.on ? 'On' : 'Off'}</span>
     </button>

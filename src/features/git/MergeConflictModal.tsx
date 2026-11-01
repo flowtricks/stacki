@@ -26,13 +26,7 @@ export default function MergeConflictModal(props: MergeConflictProps) {
     '--merge-theirs': model.colors.theirs,
   };
   return (
-    <Popup
-      className="modal conflict-modal"
-      style={style}
-      label="Review merge"
-      onClose={props.onCancel}
-      dismissible={!working}
-    >
+    <Popup className="modal conflict-modal" style={style} label="Review merge" onClose={props.onCancel} dismissible={!working}>
       {({ close }) => (
         <>
           <div className="merge-heading">
@@ -52,11 +46,7 @@ export default function MergeConflictModal(props: MergeConflictProps) {
           </div>
           <div className="modal-footer merge-footer">
             <span className="merge-status" role="status">
-              {working
-                ? props.busy
-                : model.pending > 0
-                  ? `${model.pending} ${model.pending === 1 ? 'choice' : 'choices'} to review`
-                  : 'Ready to merge'}
+              {working ? props.busy : model.pending > 0 ? `${model.pending} ${model.pending === 1 ? 'choice' : 'choices'} to review` : 'Ready to merge'}
             </span>
             <button onClick={close} disabled={working}>
               Cancel
@@ -64,9 +54,7 @@ export default function MergeConflictModal(props: MergeConflictProps) {
             <button
               className="primary"
               disabled={working || model.pending > 0}
-              onClick={() =>
-                props.onResolve(conflictDraftsForSend(props.conflict, model.drafts, model.whole))
-              }
+              onClick={() => props.onResolve(conflictDraftsForSend(props.conflict, model.drafts, model.whole))}
             >
               Merge result
             </button>
@@ -81,9 +69,7 @@ function ConflictFiles({ model }: { readonly model: MergeConflictModel }) {
   return (
     <nav className="conflict-files" aria-label="Files to merge">
       <div className="merge-files-heading">Changed files</div>
-      {Object.keys(model.drafts).length === 0 && (
-        <span className="hint-text">Choose a version to keep.</span>
-      )}
+      {Object.keys(model.drafts).length === 0 && <span className="hint-text">Choose a version to keep.</span>}
       {/* File identities come from the original conflict, including non-text files. */}
       {model.files.map((file) => {
         const pending = model.pendingFor(file.path);
@@ -97,9 +83,7 @@ function ConflictFiles({ model }: { readonly model: MergeConflictModel }) {
           >
             <span className="conflict-file-name">{file.path.split('/').pop()}</span>
             <span className="conflict-file-dir">{file.path.split('/').slice(0, -1).join('/')}</span>
-            <span className={`conflict-file-badge ${pending > 0 ? 'warn' : ''}`}>
-              {pending > 0 ? `${pending} to review` : 'Ready'}
-            </span>
+            <span className={`conflict-file-badge ${pending > 0 ? 'warn' : ''}`}>{pending > 0 ? `${pending} to review` : 'Ready'}</span>
           </button>
         );
       })}

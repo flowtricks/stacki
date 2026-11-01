@@ -21,32 +21,17 @@ export interface CuratedSelection {
 
 // `getEntries([{ collection: 'team', id: 'a' }, …])`: entries picked from one
 // collection, in the order listed.
-export function entriesSelection(
-  args: readonly Js[],
-): { readonly collection: string; readonly ids: readonly string[] } | undefined {
+export function entriesSelection(args: readonly Js[]): { readonly collection: string; readonly ids: readonly string[] } | undefined {
   const [list] = args;
-  if (
-    list?.kind !== 'array' ||
-    args.length !== 1 ||
-    list.items.length > LOOP_QUERY_LIMITS.selectionMax
-  ) {
+  if (list?.kind !== 'array' || args.length !== 1 || list.items.length > LOOP_QUERY_LIMITS.selectionMax) {
     return undefined;
   }
   let collection: string | undefined;
   const ids: string[] = [];
   for (const item of list.items) {
-    const name =
-      item.kind === 'object'
-        ? item.entries.find((entry) => entry.key === 'collection')?.value
-        : undefined;
-    const id =
-      item.kind === 'object' ? item.entries.find((entry) => entry.key === 'id')?.value : undefined;
-    if (
-      name?.kind !== 'string' ||
-      id?.kind !== 'string' ||
-      !isItemId(id.value) ||
-      (collection !== undefined && name.value !== collection)
-    ) {
+    const name = item.kind === 'object' ? item.entries.find((entry) => entry.key === 'collection')?.value : undefined;
+    const id = item.kind === 'object' ? item.entries.find((entry) => entry.key === 'id')?.value : undefined;
+    if (name?.kind !== 'string' || id?.kind !== 'string' || !isItemId(id.value) || (collection !== undefined && name.value !== collection)) {
       return undefined;
     }
     collection = name.value;
@@ -58,20 +43,9 @@ export function entriesSelection(
 
 // `["a", "b"].map((id) => list.find((entry) => entry.id === id)).filter(Boolean)`:
 // a builder export's picked items, found in a list by id, in the order listed.
-export function curatedSelection(
-  node: Js,
-  context: ListContext,
-  source: string,
-): CuratedSelection | undefined {
-  const mapped =
-    node.kind === 'call' && node.callee.kind === 'member' && node.callee.property === 'filter'
-      ? node.callee.object
-      : node;
-  if (
-    mapped.kind !== 'call' ||
-    mapped.callee.kind !== 'member' ||
-    mapped.callee.property !== 'map'
-  ) {
+export function curatedSelection(node: Js, context: ListContext, source: string): CuratedSelection | undefined {
+  const mapped = node.kind === 'call' && node.callee.kind === 'member' && node.callee.property === 'filter' ? node.callee.object : node;
+  if (mapped.kind !== 'call' || mapped.callee.kind !== 'member' || mapped.callee.property !== 'map') {
     return undefined;
   }
   const ids = mapped.callee.object;
@@ -86,9 +60,7 @@ export function curatedSelection(
   ) {
     return undefined;
   }
-  const picked = ids.items.flatMap((item) =>
-    item.kind === 'string' && isItemId(item.value) ? [item.value] : [],
-  );
+  const picked = ids.items.flatMap((item) => (item.kind === 'string' && isItemId(item.value) ? [item.value] : []));
   const list = find.callee.object;
   const listed = listCollectionOf(list, context);
   if (picked.length !== ids.items.length || listed === undefined) {
@@ -107,35 +79,21 @@ export function pickedIds(callback: Js, sort: Js | undefined): readonly string[]
   }
   const parameter = callback.kind === 'function' ? callback.parameters[0] : undefined;
   const body = callback.kind === 'function' ? callback.body : undefined;
-  if (
-    parameter?.kind !== 'name' ||
-    body?.kind !== 'call' ||
-    body.callee.kind !== 'member' ||
-    body.callee.property !== 'includes'
-  ) {
+  if (parameter?.kind !== 'name' || body?.kind !== 'call' || body.callee.kind !== 'member' || body.callee.property !== 'includes') {
     return undefined;
   }
   const list = body.callee.object;
   const argument = namePath(body.args[0] ?? body.callee);
-  if (
-    list.kind !== 'array' ||
-    list.items.length > LOOP_QUERY_LIMITS.selectionMax ||
-    argument?.join('.') !== `${parameter.name}.id`
-  ) {
+  if (list.kind !== 'array' || list.items.length > LOOP_QUERY_LIMITS.selectionMax || argument?.join('.') !== `${parameter.name}.id`) {
     return undefined;
   }
-  const ids = list.items.flatMap((item) =>
-    item.kind === 'string' && isItemId(item.value) ? [item.value] : [],
-  );
+  const ids = list.items.flatMap((item) => (item.kind === 'string' && isItemId(item.value) ? [item.value] : []));
   return ids.length === list.items.length ? ids : undefined;
 }
 
 // `(a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)`.
 function ordersByIndex(node: Js): boolean {
   const body = node.kind === 'function' ? node.body : undefined;
-  const indexed = (side: Js): boolean =>
-    side.kind === 'call' && side.callee.kind === 'member' && side.callee.property === 'indexOf';
-  return (
-    body?.kind === 'binary' && body.operator === '-' && indexed(body.left) && indexed(body.right)
-  );
+  const indexed = (side: Js): boolean => side.kind === 'call' && side.callee.kind === 'member' && side.callee.property === 'indexOf';
+  return body?.kind === 'binary' && body.operator === '-' && indexed(body.left) && indexed(body.right);
 }

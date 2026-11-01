@@ -214,15 +214,9 @@ export function arrayItems(source: unknown): Item[] | undefined {
 }
 
 /** How a string is written back, in the quote it was written with. */
-function quoted(
-  item: { readonly text: string; readonly quote: string | undefined | undefined },
-  fallback: string,
-): string {
+function quoted(item: { readonly text: string; readonly quote: string | undefined | undefined }, fallback: string): string {
   const quote = item.quote || fallback;
-  const body = String(item.text)
-    .replace(/\\/g, '\\\\')
-    .replace(new RegExp(quote, 'g'), `\\${quote}`)
-    .replace(/\n/g, '\\n');
+  const body = String(item.text).replace(/\\/g, '\\\\').replace(new RegExp(quote, 'g'), `\\${quote}`).replace(/\n/g, '\\n');
   return `${quote}${body}${quote}`;
 }
 
@@ -233,10 +227,7 @@ function quoted(
  */
 export function arrayText(items: readonly Item[] | undefined): string {
   const list = items ?? [];
-  const fallback =
-    list.find((item) => item.quote)?.quote ||
-    list.flatMap((item) => item.fields ?? []).find((field) => field.quote)?.quote ||
-    '"';
+  const fallback = list.find((item) => item.quote)?.quote || list.flatMap((item) => item.fields ?? []).find((field) => field.quote)?.quote || '"';
   const one = (item: Item): string => {
     if (item.fields) {
       const inner = item.fields
@@ -339,19 +330,13 @@ export function objectFields(source: unknown): ObjectRow[] | undefined {
 /** The fields as an object literal, in the quotes the file was written with. */
 export function objectText(fields: readonly ObjectRow[] | undefined): string {
   const list = fields ?? [];
-  const fallback =
-    list.find((row) => row.quote)?.quote ||
-    list.flatMap((row) => row.items ?? []).find((item) => item.quote)?.quote ||
-    '"';
+  const fallback = list.find((row) => row.quote)?.quote || list.flatMap((row) => row.items ?? []).find((item) => item.quote)?.quote || '"';
   const one = (row: ObjectRow): string => {
     const name = row.keyQuote ? `${row.keyQuote}${row.key}${row.keyQuote}` : row.key;
     if (row.items) {
       return `${name}: ${arrayText(row.items)}`;
     }
-    const valueText =
-      row.quote === undefined
-        ? String(row.text)
-        : quoted({ text: row.text ?? '', quote: row.quote }, fallback);
+    const valueText = row.quote === undefined ? String(row.text) : quoted({ text: row.text ?? '', quote: row.quote }, fallback);
     return `${name}: ${valueText}`;
   };
   return `{ ${list.map(one).join(', ')} }`;

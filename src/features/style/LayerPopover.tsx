@@ -59,12 +59,7 @@ export default function LayerPopover({
         visibility: top === undefined ? 'hidden' : 'visible',
       }}
     >
-      <div
-        ref={boxRef}
-        className={
-          'embed-editor_layer-popover-box u-surface-surface' + (scrolls ? ' is-scrolling' : '')
-        }
-      >
+      <div ref={boxRef} className={'embed-editor_layer-popover-box u-surface-surface' + (scrolls ? ' is-scrolling' : '')}>
         {children}
       </div>
     </Popup>
@@ -73,10 +68,7 @@ export default function LayerPopover({
 
 // The popover's top edge: directly below the anchor row, or flipped above it
 // when there is no room to drop down. Undefined until the first measurement.
-function usePopoverTop(
-  ref: RefObject<HTMLDivElement>,
-  anchorElement: HTMLElement,
-): number | undefined {
+function usePopoverTop(ref: RefObject<HTMLDivElement>, anchorElement: HTMLElement): number | undefined {
   const [top, setTop] = useState<number | undefined>(undefined);
   useLayoutEffect(() => {
     const element = ref.current;
@@ -106,8 +98,7 @@ function usePopoverOverflow(boxRef: RefObject<HTMLDivElement>): boolean {
     resize.observe(box);
     // A max-height box can keep the same border size while its contents grow,
     // so ResizeObserver alone misses the exact change that makes it scroll.
-    const mutations =
-      typeof MutationObserver === 'undefined' ? undefined : new MutationObserver(measure);
+    const mutations = typeof MutationObserver === 'undefined' ? undefined : new MutationObserver(measure);
     mutations?.observe(box, { attributes: true, childList: true, subtree: true });
     window.addEventListener('resize', measure);
     return () => {

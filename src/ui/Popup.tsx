@@ -1,12 +1,5 @@
 import { forwardRef, useLayoutEffect, useRef } from 'react';
-import type {
-  CSSProperties,
-  ForwardedRef,
-  ReactNode,
-  RefObject,
-  RefCallback,
-  HTMLAttributes,
-} from 'react';
+import type { CSSProperties, ForwardedRef, ReactNode, RefObject, RefCallback, HTMLAttributes } from 'react';
 import { createPortal } from 'react-dom';
 import { POPUP_MOTION_MS, usePopupLifecycle } from './popupLifecycle';
 import { usePopupDismiss, popupIsTop } from './popupDismiss';
@@ -19,15 +12,7 @@ export interface PopupActions {
 }
 export interface PopupProps extends Pick<
   HTMLAttributes<HTMLDivElement>,
-  | 'onKeyDownCapture'
-  | 'aria-activedescendant'
-  | 'onKeyDown'
-  | 'onMouseDown'
-  | 'onPointerDown'
-  | 'onMouseEnter'
-  | 'onMouseLeave'
-  | 'tabIndex'
-  | 'id'
+  'onKeyDownCapture' | 'aria-activedescendant' | 'onKeyDown' | 'onMouseDown' | 'onPointerDown' | 'onMouseEnter' | 'onMouseLeave' | 'tabIndex' | 'id'
 > {
   readonly mode?: 'modal' | 'popover';
   readonly portal?: boolean;
@@ -120,10 +105,7 @@ const Popup = forwardRef<HTMLDivElement, PopupProps>(function Popup(props, forwa
 });
 export default Popup;
 
-function assignPopupRef(
-  ref: ForwardedRef<HTMLDivElement>,
-  element: Parameters<RefCallback<HTMLDivElement>>[0],
-): void {
+function assignPopupRef(ref: ForwardedRef<HTMLDivElement>, element: Parameters<RefCallback<HTMLDivElement>>[0]): void {
   if (typeof ref === 'function') {
     ref(element);
   } else if (ref) {
@@ -169,9 +151,7 @@ function usePopupFocus(
     return () => {
       const focused = document.activeElement;
       // Unanchored editors own their focus; restoring their input can reopen them on blur.
-      const restore =
-        mode === 'modal' ||
-        (anchor !== undefined && (focused === document.body || content?.contains(focused)));
+      const restore = mode === 'modal' || (anchor !== undefined && (focused === document.body || content?.contains(focused)));
       const target = anchor ?? previousFocus;
       element?.close();
       if (restore && target instanceof window.HTMLElement && target.isConnected) {

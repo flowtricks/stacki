@@ -9,14 +9,7 @@ import * as fs from 'fs';
 import { toPosix } from '../lib/mainHelpers';
 import { isStudioDirectory } from '../lib/studioDirectory';
 
-export const CSS_SKIP_DIRECTORIES = new Set([
-  'node_modules',
-  'dist',
-  '.git',
-  '.astro',
-  'release',
-  '.avb',
-]);
+export const CSS_SKIP_DIRECTORIES = new Set(['node_modules', 'dist', '.git', '.astro', 'release', '.avb']);
 
 // The top-level folders a site's stylesheets live in, matching the variables
 // panel (cssVarRead.ts). The project root also holds whatever else its owner

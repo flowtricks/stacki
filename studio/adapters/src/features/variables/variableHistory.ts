@@ -62,10 +62,7 @@ export function createVariableHistory(options: HistoryOptions) {
   };
 }
 
-async function readTexts(
-  projectPath: string,
-  files: readonly string[],
-): Promise<Result<FileTexts, string>> {
+async function readTexts(projectPath: string, files: readonly string[]): Promise<Result<FileTexts, string>> {
   assert(files.length <= LIMITS.scanEntriesMax, 'Variable undo: read limit exceeded');
   const texts: Record<string, string> = {};
   // Reading sequentially bounds outstanding disk requests even for project-wide edits.
@@ -89,11 +86,7 @@ function selectTexts(texts: FileTexts, paths: readonly string[]): FileTexts {
     }),
   );
 }
-async function restoreTexts(
-  options: HistoryOptions,
-  texts: FileTexts,
-  expected: FileTexts,
-): Promise<void> {
+async function restoreTexts(options: HistoryOptions, texts: FileTexts, expected: FileTexts): Promise<void> {
   const entries = Object.entries(texts);
   assert(entries.length <= LIMITS.scanEntriesMax, 'Variable undo: restore limit exceeded');
   try {

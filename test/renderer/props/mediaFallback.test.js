@@ -17,6 +17,7 @@ buildSync({
       export { PropValuePolicyContext } from
         ${sourceSpecifier('src/features/props/propValuePolicy.ts')};
       export { getPendingAsset } from ${sourceSpecifier('src/ui/assetPick.ts')};
+      export { assetReferenceFor } from ${sourceSpecifier('src/features/props/elementState.ts')};
       export { useLayoutMetadata } from
         ${sourceSpecifier('src/features/props/useLayoutMetadata.ts')};
       export { setCanvasFrame, receiveCanvasReply, noteCanvasReady } from
@@ -57,6 +58,7 @@ const {
   PropField,
   PropValuePolicyContext,
   getPendingAsset,
+  assetReferenceFor,
   useLayoutMetadata,
   setCanvasFrame,
   receiveCanvasReply,
@@ -93,9 +95,7 @@ function change(value) {
   renderCurrent();
 }
 async function click(text) {
-  const button = [...document.querySelectorAll('button')].find(
-    (candidate) => candidate.textContent === text,
-  );
+  const button = [...document.querySelectorAll('button')].find((candidate) => candidate.textContent === text);
   assert.ok(button, `Button exists: ${text}`);
   await act(async () => button.click());
 }
@@ -121,11 +121,7 @@ async function checkLocalFallback() {
   assert.doesNotMatch(document.body.textContent, /Component fallback/);
   assert.deepEqual(changes, [{ type: 'string', value: '/override.jpg' }]);
   await act(async () => {
-    document
-      .querySelector('.prop-label')
-      .dispatchEvent(
-        new dom.window.MouseEvent('click', { bubbles: true, cancelable: true, altKey: true }),
-      );
+    document.querySelector('.prop-label').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true, altKey: true }));
   });
   assert.equal(assetName(), 'og-image.jpg');
   assert.equal(isSet(), false);
@@ -143,6 +139,14 @@ async function checkFallbackBoundaries() {
   await render({ field: { ...baseField, default: undefined } });
   assert.equal(assetName(), 'No asset selected');
   await render({ field: { ...baseField, default: 'SITE_IMAGE', defaultExpr: true } });
+  assert.equal(assetName(), 'No asset selected');
+  // An expression default the schema reader followed to its imported file
+  // previews that file, without writing the expression or the path.
+  await render({ field: { ...baseField, default: 'heroImage.src', defaultExpr: true, defaultAsset: 'public/og-image.jpg' } });
+  assert.equal(assetName(), 'og-image.jpg');
+  assert.match(document.body.textContent, /Component fallback/);
+  assert.equal(isSet(), false);
+  await render({ field: { ...baseField, default: 'heroImage.src', defaultExpr: true, defaultAsset: 'public/og-image.jpg' } }, 'defaults');
   assert.equal(assetName(), 'No asset selected');
   await render({ field: { ...baseField, default: undefined, hint: 'Automatic' } });
   assert.equal(assetName(), 'No asset selected');
@@ -211,9 +215,7 @@ async function checkRuntimeFallback() {
   };
   const answer = async (request, image) => {
     assert.equal(request.pageMetadata, true);
-    await act(async () =>
-      receiveCanvasReply({ id: request.id, found: true, pageImage: image, pageType: 'website' }),
-    );
+    await act(async () => receiveCanvasReply({ id: request.id, found: true, pageImage: image, pageType: 'website' }));
   };
   await renderLayout(base);
   await answer(requests.at(-1), 'https://cdn.example.com/church-share.jpg');
@@ -246,8 +248,24 @@ async function checkRuntimeFallback() {
   setCanvasFrame(undefined);
 }
 
+// A picked src/ image is written as `photo.src` wherever a URL is expected —
+// a plain element, or a component prop typed as a string — and as the
+// imported object otherwise. Handing a string prop the object renders a broken
+// <img src="[object Object]">.
+function checkAssetReference() {
+  const schema = [
+    { name: 'src', type: 'string' },
+    { name: 'image', type: 'other' },
+  ];
+  assert.equal(assetReferenceFor('element', schema, 'image'), 'url');
+  assert.equal(assetReferenceFor('component', schema, 'src'), 'url');
+  assert.equal(assetReferenceFor('component', schema, 'image'), 'module');
+  assert.equal(assetReferenceFor('component', schema, 'undeclared'), 'module');
+}
+
 (async () => {
   try {
+    checkAssetReference();
     await checkLocalFallback();
     const changeCount = changes.length;
     await checkFallbackBoundaries();

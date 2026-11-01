@@ -37,14 +37,7 @@ import {
   authoredClasses,
   contentForCurrentTree,
 } from './editorModel';
-import {
-  useEditorRefs,
-  useScanState,
-  useSelectionState,
-  useNativeState,
-  useContentRebuild,
-  useApplyResolve,
-} from './useEditorFoundation';
+import { useEditorRefs, useScanState, useSelectionState, useNativeState, useContentRebuild, useApplyResolve } from './useEditorFoundation';
 
 // Rebuild content in the background, then re-resolve the selection.
 export function useBackgroundRefresh(
@@ -88,25 +81,13 @@ export function useBackgroundRefresh(
         setRefreshing(false);
       }
     },
-    [
-      applyResolve,
-      rebuildAndStore,
-      busyRef,
-      lastScanAtRef,
-      refreshingRef,
-      selectedRef,
-      seqRef,
-      setRefreshing,
-    ],
+    [applyResolve, rebuildAndStore, busyRef, lastScanAtRef, refreshingRef, selectedRef, seqRef, setRefreshing],
   );
   return { backgroundRefresh };
 }
 
 // Re-match the selectors when the element's classes or attributes changed.
-export function useRematch(
-  editorRefs: ReturnType<typeof useEditorRefs>,
-  scanState: ReturnType<typeof useScanState>,
-) {
+export function useRematch(editorRefs: ReturnType<typeof useEditorRefs>, scanState: ReturnType<typeof useScanState>) {
   const { busyRef, classListRef, primedRef, selectedRef, targetRef } = editorRefs;
   const { setScan } = scanState;
 
@@ -119,11 +100,7 @@ export function useRematch(
   // embeds and refresh the header identity. Reuses the answer the identity read
   // already got back.
   const rematchChanged = useCallback(
-    async (
-      element: unknown,
-      content: Content,
-      read: { target: MatchTarget; snap: ElementSnapshot; asked: CanvasAnswer },
-    ) => {
+    async (element: unknown, content: Content, read: { target: MatchTarget; snap: ElementSnapshot; asked: CanvasAnswer }) => {
       const { target, snap } = read;
       await primeDomMatches(target, content.rules, read.asked);
       primedRef.current = { target, key: selectorKeyOf(content.rules) };
@@ -198,16 +175,7 @@ export function useDesignerSync(
     if (snapChanged) {
       await rematchChanged(element, content, { target, snap, asked });
     }
-  }, [
-    rematchChanged,
-    busyRef,
-    contentRef,
-    lastSnapSigRef,
-    nativeModelRef,
-    refreshingRef,
-    selectedRef,
-    setNativeModel,
-  ]);
+  }, [rematchChanged, busyRef, contentRef, lastSnapSigRef, nativeModelRef, refreshingRef, selectedRef, setNativeModel]);
   return { syncFromDesigner };
 }
 
@@ -220,13 +188,7 @@ export function useElementReset(
 ) {
   const { selectedElementKeyRef } = editorRefs;
   const { setQuickSnapshot, setScan } = scanState;
-  const {
-    pendingDefaultRef,
-    setSelectedSelectorText,
-    setSelectedTokens,
-    setStateKey,
-    tokenIdentityRef,
-  } = selectionState;
+  const { pendingDefaultRef, setSelectedSelectorText, setSelectedTokens, setStateKey, tokenIdentityRef } = selectionState;
   const { nativeIdentityRef, nativeModelRef, setNativeModel } = nativeState;
 
   // A new element must not inherit the previous one's picked selector. Reset the
@@ -249,9 +211,7 @@ export function useElementReset(
       // scan takes. Blank them now: an empty well for a moment is honest,
       // another element's selectors are not. A cached native model comes
       // straight back in the identity effect, so that case barely blinks.
-      setScan((previous) =>
-        previous ? { ...previous, rootSnapshot: undefined, model: EMPTY_RULE_MODEL } : previous,
-      );
+      setScan((previous) => (previous ? { ...previous, rootSnapshot: undefined, model: EMPTY_RULE_MODEL } : previous));
       setNativeModel(undefined);
       nativeModelRef.current = undefined;
       nativeIdentityRef.current = '';
@@ -308,9 +268,7 @@ export function useScanWithoutSelection(
       }
       setScanningMore(true);
       try {
-        const content = await rebuildAndStore({ rescanComponents: options.force }, (partial) =>
-          showContent(partial),
-        );
+        const content = await rebuildAndStore({ rescanComponents: options.force }, (partial) => showContent(partial));
         showContent(content);
       } catch (error: unknown) {
         if (seq !== seqRef.current || selectedRef.current) {
@@ -320,17 +278,7 @@ export function useScanWithoutSelection(
         setStatus(error instanceof Error ? error.message : String(error));
       }
     },
-    [
-      rebuildAndStore,
-      contentRef,
-      pageDocsRef,
-      selectedRef,
-      seqRef,
-      setPhase,
-      setScan,
-      setScanningMore,
-      setStatus,
-    ],
+    [rebuildAndStore, contentRef, pageDocsRef, selectedRef, seqRef, setPhase, setScan, setScanningMore, setStatus],
   );
   return { scanWithoutSelection };
 }
@@ -399,27 +347,12 @@ export function useScanSelection(
         setStatus(error instanceof Error ? error.message : String(error));
       }
     },
-    [
-      applyResolve,
-      backgroundRefresh,
-      rebuildAndStore,
-      contentRef,
-      seqRef,
-      setPhase,
-      setQuickSnapshot,
-      setScanningMore,
-      setStatus,
-    ],
+    [applyResolve, backgroundRefresh, rebuildAndStore, contentRef, seqRef, setPhase, setQuickSnapshot, setScanningMore, setStatus],
   );
   return { scanSelection };
 }
 
-function showSourceSnapshot(
-  element: unknown,
-  seq: number,
-  seqRef: { readonly current: number },
-  publish: (snapshot: ElementSnapshot) => void,
-): void {
+function showSourceSnapshot(element: unknown, seq: number, seqRef: { readonly current: number }, publish: (snapshot: ElementSnapshot) => void): void {
   void buildSnapshot(element)
     .then((snapshot) => {
       if (seq === seqRef.current) {
@@ -429,11 +362,7 @@ function showSourceSnapshot(
     .catch(() => {});
 }
 
-async function reuseSelectedContent(
-  cached: Content | undefined,
-  element: unknown,
-  options: { readonly force?: boolean },
-): Promise<Content | undefined> {
+async function reuseSelectedContent(cached: Content | undefined, element: unknown, options: { readonly force?: boolean }): Promise<Content | undefined> {
   if (!cached || options.force) {
     return undefined;
   }
@@ -543,9 +472,7 @@ export function useSelectionSubscriptions(
     void api.getSelectedElement().then((element) => refresh(element));
     void getCurrentBreakpoint().then(setCurrentBreakpoint);
     const unsubscribe = api.subscribe?.('selectedelement', (element) => void refresh(element));
-    const unsubBreakpoint = api.subscribe?.('mediaquery', (bp) =>
-      setCurrentBreakpoint(isBreakpointId(bp) ? bp : 'main'),
-    );
+    const unsubBreakpoint = api.subscribe?.('mediaquery', (bp) => setCurrentBreakpoint(isBreakpointId(bp) ? bp : 'main'));
     return () => {
       seqRef.current += 1;
       unsubscribe?.();
@@ -619,10 +546,7 @@ export function useChangeSubscriptions(
 }
 
 // Rebuild the panel's model after an edit.
-export function useRefreshDerived(
-  editorRefs: ReturnType<typeof useEditorRefs>,
-  scanState: ReturnType<typeof useScanState>,
-) {
+export function useRefreshDerived(editorRefs: ReturnType<typeof useEditorRefs>, scanState: ReturnType<typeof useScanState>) {
   const { classListRef, contentRef, docsRef, primedRef, targetRef } = editorRefs;
   const { setScan } = scanState;
 
@@ -658,9 +582,7 @@ export function useRefreshDerived(
       primedRef.current = { target, key };
     }
     const model = await computeRuleModel(rules, target);
-    const placeholders = contentRef.current?.scan.inComponentContext
-      ? computePlaceholders(contentRef.current.docs, classListRef.current)
-      : [];
+    const placeholders = contentRef.current?.scan.inComponentContext ? computePlaceholders(contentRef.current.docs, classListRef.current) : [];
     setScan((previous) => (previous ? { ...previous, model, placeholders } : previous));
   }, [classListRef, contentRef, docsRef, primedRef, setScan, targetRef]);
 

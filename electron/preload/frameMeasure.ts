@@ -4,18 +4,7 @@
 
 import type { Box, GapBand, GapRow, Rect, Spacing, ThinTarget } from './frameBasics';
 import { isElement } from './frameBasics';
-import {
-  PATH_ATTR,
-  addNode,
-  elementsWithPath,
-  inFocus,
-  inScope,
-  pathsOf,
-  regions,
-  runsOf,
-  taggedPlaces,
-  toRect,
-} from './frameRegions';
+import { PATH_ATTR, addNode, elementsWithPath, inFocus, inScope, pathsOf, regions, runsOf, taggedPlaces, toRect } from './frameRegions';
 import { inlineTextRuns } from './inlineText';
 
 // One rect per marker-pair occurrence (a loop child renders once per
@@ -112,10 +101,7 @@ export const rectsForPath = (nodePath: string): Rect[] | undefined => {
   // box. Repeated occurrences (a loop child, once per item) are meant to
   // stay separate boxes, so they keep the per-run rects above.
   if (runs.length === 1) {
-    let acc = (runs[0] || []).reduce<Box | undefined>(
-      (grown, node) => addNode(grown, node),
-      undefined,
-    );
+    let acc = (runs[0] || []).reduce<Box | undefined>((grown, node) => addNode(grown, node), undefined);
     for (const element of elementsWithPath(nodePath)) {
       acc = addNode(acc, element);
     }
@@ -163,15 +149,12 @@ export const rectsForPath = (nodePath: string): Rect[] | undefined => {
 // selector well, and in the navigator's labels as if the project had written
 // them.
 export const STACKI_CLASSES = new Set(['stacki-opened', 'stacki-designer', 'stacki-preview']);
-export const ownClasses = (element: Element): string[] =>
-  Array.from(element.classList).filter((className) => !STACKI_CLASSES.has(className));
+export const ownClasses = (element: Element): string[] => Array.from(element.classList).filter((className) => !STACKI_CLASSES.has(className));
 
 export const classesForPath = (nodePath: string): string[][] => {
   const out: string[][] = [];
   for (const run of runsOf(nodePath) || []) {
-    const element = run.find(
-      (node): node is Element => isElement(node) && node.tagName !== 'TEMPLATE',
-    );
+    const element = run.find((node): node is Element => isElement(node) && node.tagName !== 'TEMPLATE');
     if (element) {
       out.push(ownClasses(element));
     }
@@ -312,18 +295,13 @@ export const gapBandsFor = (element: Element, cs: CSSStyleDeclaration): GapBand[
     return [];
   }
   const rows = visualRows(kids);
-  return [
-    ...(colGap > 0 ? columnGapBands(rows, colGap) : []),
-    ...(rowGap > 0 ? rowGapBands(rows, rowGap) : []),
-  ];
+  return [...(colGap > 0 ? columnGapBands(rows, colGap) : []), ...(rowGap > 0 ? rowGapBands(rows, rowGap) : [])];
 };
 
 export const spacingForPath = (nodePath: string): (Spacing | undefined)[] => {
   const out: Element[] = [];
   for (const run of runsOf(nodePath) || []) {
-    const element = run.find(
-      (node): node is Element => isElement(node) && node.tagName !== 'TEMPLATE',
-    );
+    const element = run.find((node): node is Element => isElement(node) && node.tagName !== 'TEMPLATE');
     if (element) {
       out.push(element);
     }
@@ -334,13 +312,7 @@ export const spacingForPath = (nodePath: string): (Spacing | undefined)[] => {
   return out.map((element) => {
     try {
       const cs = window.getComputedStyle(element);
-      const box = (kind: string) =>
-        Object.fromEntries(
-          SIDES.map((side): [string, number] => [
-            side,
-            parseFloat(cs.getPropertyValue(`${kind}-${side}`)) || 0,
-          ]),
-        );
+      const box = (kind: string) => Object.fromEntries(SIDES.map((side): [string, number] => [side, parseFloat(cs.getPropertyValue(`${kind}-${side}`)) || 0]));
       // What a length is worth here, so a value being dragged in the panel can
       // be drawn in pixels before the page has laid it out (withLiveSpacing in
       // the app): em is this element's font, rem the root's, vw and vh the frame.

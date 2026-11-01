@@ -156,8 +156,7 @@ export function asRepeat(value: string): string {
   return `repeat(${tracks.length}, ${tracks[0]})`;
 }
 
-export type TrackSize =
-  { mode: 'default'; value: string } | { mode: 'minmax'; min: string; max: string };
+export type TrackSize = { mode: 'default'; value: string } | { mode: 'minmax'; min: string; max: string };
 
 /** Parse a single track into its sizing (a minmax pair, or a single value). */
 export function parseTrackSize(track: string): TrackSize {
@@ -210,8 +209,7 @@ export function trackKind(track: string): TrackKind {
  */
 export function isFixedSizeTrack(track: string): boolean {
   const isFixedBreadth = (track: string) => trackKind(track) === 'length';
-  const isInflexibleBreadth = (track: string) =>
-    ['length', 'auto', 'content'].includes(trackKind(track));
+  const isInflexibleBreadth = (track: string) => ['length', 'auto', 'content'].includes(trackKind(track));
   const size = parseTrackSize(track);
   if (size.mode === 'default') {
     return isFixedBreadth(size.value);
@@ -242,11 +240,7 @@ export type GridArea = {
 // One control's edit. Each member names the fields that control owns — an
 // explicit update surface rather than `Partial<T>` (AGENTS.md §4).
 export type GridAreaPatch =
-  | Pick<GridArea, 'name'>
-  | Pick<GridArea, 'colStart'>
-  | Pick<GridArea, 'colEnd'>
-  | Pick<GridArea, 'rowStart'>
-  | Pick<GridArea, 'rowEnd'>;
+  Pick<GridArea, 'name'> | Pick<GridArea, 'colStart'> | Pick<GridArea, 'colEnd'> | Pick<GridArea, 'rowStart'> | Pick<GridArea, 'rowEnd'>;
 
 /** Parse a `grid-template-areas` value into its named areas (in first-appearance
  *  order), each as the bounding box of the cells its name occupies. `.` = empty. */
@@ -297,17 +291,13 @@ export function parseAreas(value: string): GridArea[] {
 /** Emit a `grid-template-areas` value from named areas — paints each area's rectangle
  *  into a grid sized to the furthest extent, `.` for uncovered cells ('' → clear). */
 export function serializeAreas(areas: GridArea[]): string {
-  const valid = areas.filter(
-    (area) => area.name.trim() && area.colStart >= 1 && area.rowStart >= 1,
-  );
+  const valid = areas.filter((area) => area.name.trim() && area.colStart >= 1 && area.rowStart >= 1);
   if (!valid.length) {
     return '';
   }
   const rows = Math.max(...valid.map((area) => Math.max(area.rowStart, area.rowEnd)));
   const cols = Math.max(...valid.map((area) => Math.max(area.colStart, area.colEnd)));
-  const grid: string[][] = Array.from({ length: rows }, () =>
-    Array.from({ length: cols }, () => '.'),
-  );
+  const grid: string[][] = Array.from({ length: rows }, () => Array.from({ length: cols }, () => '.'));
   for (const area of valid) {
     const rowFirst = Math.min(area.rowStart, area.rowEnd),
       rowLast = Math.max(area.rowStart, area.rowEnd);

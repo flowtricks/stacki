@@ -16,8 +16,7 @@ import { reviewBranch } from '#dist/shared/properties/publishReview.js';
 
 const execute = promisify(execFile);
 setToolPathHome(os.homedir());
-const git = async (root: string, args: readonly string[]) =>
-  (await execute('git', args, { cwd: root, timeout: 10000, maxBuffer: 1024 * 1024 })).stdout.trim();
+const git = async (root: string, args: readonly string[]) => (await execute('git', args, { cwd: root, timeout: 10000, maxBuffer: 1024 * 1024 })).stdout.trim();
 
 test('review push leaves HEAD, index and base unchanged and retries the same PR', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'stacki-review-'));
@@ -60,10 +59,7 @@ test('review push leaves HEAD, index and base unchanged and retries the same PR'
       assert.equal(await git(root, ['rev-parse', 'HEAD']), head);
       assert.equal(await git(root, ['write-tree']), index);
       assert.equal(await git(remote, ['rev-parse', 'main']), head);
-      assert.equal(
-        await git(remote, ['show', first.value.branch + ':index.html']),
-        '<h1>Review me</h1>',
-      );
+      assert.equal(await git(remote, ['show', first.value.branch + ':index.html']), '<h1>Review me</h1>');
     } finally {
       await rm(captured.value.temporary, { recursive: true, force: true });
     }

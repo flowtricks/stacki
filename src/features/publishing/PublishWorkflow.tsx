@@ -2,13 +2,7 @@ import type { PublishConfig } from '../../../shared/properties/publishConfig';
 import type { GitHubWorkflow } from '../../../shared/properties/publishReview';
 import Dropdown from '../../ui/Dropdown';
 
-export function PublishWorkflow({
-  config,
-  change,
-}: {
-  readonly config: PublishConfig;
-  readonly change: (config: PublishConfig) => void;
-}) {
+export function PublishWorkflow({ config, change }: { readonly config: PublishConfig; readonly change: (config: PublishConfig) => void }) {
   const reviewing = config.githubWorkflow?.kind === 'pull-request';
   return (
     <div className="publish-field">
@@ -30,9 +24,7 @@ export function PublishWorkflow({
           });
         }}
       />
-      {reviewing && (
-        <span>Review submissions stay off the live site. Merge and deploy through GitHub.</span>
-      )}
+      {reviewing && <span>Review submissions stay off the live site. Merge and deploy through GitHub.</span>}
     </div>
   );
 }

@@ -73,10 +73,7 @@ test('accepted edits reach peers before a delayed source write, without acknowle
     await written;
     await persisted;
     await state.room.durable.flush();
-    assert.equal(
-      await readFile(path.join(state.root, file), 'utf8'),
-      '<!-- next edit -->' + edited,
-    );
+    assert.equal(await readFile(path.join(state.root, file), 'utf8'), '<!-- next edit -->' + edited);
   } finally {
     release();
     context.mock.restoreAll();
@@ -91,11 +88,7 @@ for (const failure of ['source', 'durable'] as const) {
     const blocked =
       failure === 'source'
         ? path.join(state.root, file + '.studio-tmp')
-        : path.join(
-            state.root,
-            '.stacki/studio/state',
-            Buffer.from(file).toString('base64url') + '.bin.tmp',
-          );
+        : path.join(state.root, '.stacki/studio/state', Buffer.from(file).toString('base64url') + '.bin.tmp');
     try {
       await mkdir(blocked);
       const failed = response(state.client, 'error');

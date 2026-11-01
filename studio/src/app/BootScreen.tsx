@@ -30,12 +30,7 @@ export function BootScreen({
       </div>
       {!failure && <p>Opening your studio…</p>}
       {!failure && (
-        <div
-          className="boot-progress"
-          role="progressbar"
-          aria-label="Opening Studio"
-          aria-valuetext={stage}
-        >
+        <div className="boot-progress" role="progressbar" aria-label="Opening Studio" aria-valuetext={stage}>
           <span />
         </div>
       )}
@@ -44,9 +39,7 @@ export function BootScreen({
           {stage}
         </p>
       )}
-      {!failure && seconds >= 10 && (
-        <p className="boot-detail">This is taking longer than usual. {seconds}s elapsed.</p>
-      )}
+      {!failure && seconds >= 10 && <p className="boot-detail">This is taking longer than usual. {seconds}s elapsed.</p>}
       {(failure || seconds >= 10) && <button onClick={retry}>Retry opening Studio</button>}
     </div>
   );

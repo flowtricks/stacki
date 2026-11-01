@@ -89,11 +89,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     // browser would do, so the verdict has to match what the frame will see.
     mode = 'redirect';
     const red = await probeUrl(`${base}/`);
-    check(
-      'a redirect is followed to what it lands on',
-      red.ok === true && red.status === 200,
-      JSON.stringify(red),
-    );
+    check('a redirect is followed to what it lands on', red.ok === true && red.status === 200, JSON.stringify(red));
 
     mode = 'ok';
     check('and recovering reads as ok again', (await probeUrl(`${base}/`)).ok === true);
@@ -171,22 +167,14 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const harness = makeWatch([{ ok: true }]);
     harness.watch.poke();
     await sleep(80);
-    check(
-      'a healthy preview is asked about',
-      harness.asked.length >= 1,
-      JSON.stringify(harness.asked),
-    );
+    check('a healthy preview is asked about', harness.asked.length >= 1, JSON.stringify(harness.asked));
     check('and is not reloaded', harness.reloads() === 0, `${harness.reloads()} reloads`);
     // Repeatedly, because this is what every keystroke does.
     for (let i = 0; i < 5; i++) {
       harness.watch.poke();
       await sleep(15);
     }
-    check(
-      'and stays un-reloaded across many edits',
-      harness.reloads() === 0,
-      `${harness.reloads()} reloads`,
-    );
+    check('and stays un-reloaded across many edits', harness.reloads() === 0, `${harness.reloads()} reloads`);
     harness.watch.stop();
   }
 
@@ -205,20 +193,12 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       await sleep(10);
     }
     await sleep(60);
-    check(
-      'a healthy preview is asked about once, not once per edit',
-      harness.asked.length === 1,
-      `${harness.asked.length} asks`,
-    );
+    check('a healthy preview is asked about once, not once per edit', harness.asked.length === 1, `${harness.asked.length} asks`);
     // …but not never: it is how a breakage is noticed at all.
     await sleep(140);
     harness.watch.poke();
     await sleep(40);
-    check(
-      'and again once the quiet spell is over',
-      harness.asked.length === 2,
-      `${harness.asked.length} asks`,
-    );
+    check('and again once the quiet spell is over', harness.asked.length === 2, `${harness.asked.length} asks`);
     harness.watch.stop();
   }
   {
@@ -232,11 +212,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     check('a broken preview is asked about', first === 1, `${first} asks`);
     harness.watch.poke();
     await sleep(40);
-    check(
-      'and asked again on the next edit, quiet spell or not',
-      harness.asked.length === 2,
-      `${first} → ${harness.asked.length}`,
-    );
+    check('and asked again on the next edit, quiet spell or not', harness.asked.length === 2, `${first} → ${harness.asked.length}`);
     harness.watch.stop();
   }
 
@@ -246,16 +222,8 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const harness = makeWatch([{ ok: false }, { ok: false }, { ok: true }]);
     harness.watch.poke();
     await sleep(200);
-    check(
-      'a broken preview keeps being asked about',
-      harness.asked.length >= 3,
-      JSON.stringify(harness.asked),
-    );
-    check(
-      'and is reloaded once it serves again',
-      harness.reloads() === 1,
-      `${harness.reloads()} reloads`,
-    );
+    check('a broken preview keeps being asked about', harness.asked.length >= 3, JSON.stringify(harness.asked));
+    check('and is reloaded once it serves again', harness.reloads() === 1, `${harness.reloads()} reloads`);
     // And exactly once — a second reload would be a loop.
     await sleep(120);
     check('exactly once', harness.reloads() === 1, `${harness.reloads()} reloads`);
@@ -269,11 +237,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     await sleep(120);
     const settled = harness.asked.length;
     await sleep(150);
-    check(
-      'a recovered preview stops being polled',
-      harness.asked.length === settled,
-      `${settled} → ${harness.asked.length} asks`,
-    );
+    check('a recovered preview stops being polled', harness.asked.length === settled, `${settled} → ${harness.asked.length} asks`);
     harness.watch.stop();
   }
 
@@ -310,16 +274,8 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const seen = harness.asked.length;
     harness.watch.stop();
     await sleep(120);
-    check(
-      'stopping ends the polling',
-      harness.asked.length === seen,
-      `${seen} → ${harness.asked.length} asks after stop`,
-    );
-    check(
-      'and a poke afterwards does nothing',
-      (harness.watch.poke(), await sleep(40), harness.asked.length === seen),
-      `${harness.asked.length} asks`,
-    );
+    check('stopping ends the polling', harness.asked.length === seen, `${seen} → ${harness.asked.length} asks after stop`);
+    check('and a poke afterwards does nothing', (harness.watch.poke(), await sleep(40), harness.asked.length === seen), `${harness.asked.length} asks`);
   }
 
   // --- who asks the first question -------------------------------------------
@@ -348,8 +304,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     check(
       'and not for the app’s own writes, which say it themselves',
       new RegExp(
-        String.raw`if \(isSelfWrite\(changed\)\) \{\s*return;\s*\}\s*` +
-          String.raw`noteExternalChange\(changed\);\s*notePageMayHaveChanged\(true\);`,
+        String.raw`if \(isSelfWrite\(changed\)\) \{\s*return;\s*\}\s*` + String.raw`noteExternalChange\(changed\);\s*notePageMayHaveChanged\(true\);`,
       ).test(handler),
       handler.slice(0, 400),
     );
@@ -361,9 +316,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   if (failures.length) {
-    console.error(
-      `preview-recovery: ${failures.length} of ${checked} failed\n${failures.join('\n')}`,
-    );
+    console.error(`preview-recovery: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
   console.log(`preview-recovery: ${checked} passed  [real 500s, and the edge]`);

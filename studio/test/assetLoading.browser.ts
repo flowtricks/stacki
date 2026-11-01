@@ -10,19 +10,13 @@ import { startStyleFixture } from './stylePanelFixture';
 const fixture = await startStyleFixture();
 const browser = await chromium.launch({
   executablePath:
-    process.env['CHROME_PATH'] ??
-    (process.platform === 'darwin'
-      ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-      : chromium.executablePath()),
+    process.env['CHROME_PATH'] ?? (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
   headless: true,
 });
 try {
   await mkdir(path.join(fixture.root, 'src/assets/images'), { recursive: true });
   await mkdir(path.join(fixture.root, 'src/assets/fonts'), { recursive: true });
-  await copyFile(
-    'test/fixtures/site/src/assets/fonts/inter-regular.woff2',
-    path.join(fixture.root, 'src/assets/fonts/inter.woff2'),
-  );
+  await copyFile('test/fixtures/site/src/assets/fonts/inter-regular.woff2', path.join(fixture.root, 'src/assets/fonts/inter.woff2'));
   await writeFile(path.join(fixture.root, 'src/assets/fonts/large.woff2'), Buffer.alloc(262145));
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   page.setDefaultTimeout(20_000);
@@ -47,9 +41,7 @@ async function openAssets(page: Page): Promise<void> {
   await page.goto(fixture.url);
   await page.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
   await page.getByRole('button', { name: 'Assets', exact: true }).click();
-  await page
-    .getByRole('status', { name: 'Loading assets…', exact: true })
-    .waitFor({ state: 'hidden' });
+  await page.getByRole('status', { name: 'Loading assets…', exact: true }).waitFor({ state: 'hidden' });
 }
 
 async function checkFonts(page: Page): Promise<void> {
@@ -81,11 +73,7 @@ async function checkFonts(page: Page): Promise<void> {
   assert.equal(downloads, 1, 'Font starts loading while the images folder is still open');
   assert.equal(largeDownloads, 0, 'Large fonts must not be prefetched');
   release();
-  await page.waitForFunction(() =>
-    Array.from(document.fonts).some(
-      (face) => face.family.startsWith('avb-font-') && face.status === 'loaded',
-    ),
-  );
+  await page.waitForFunction(() => Array.from(document.fonts).some((face) => face.family.startsWith('avb-font-') && face.status === 'loaded'));
   // The oversized invalid file tested the preload budget; remove it before viewing fonts.
   await rm(path.join(fixture.root, 'src/assets/fonts/large.woff2'));
   await page

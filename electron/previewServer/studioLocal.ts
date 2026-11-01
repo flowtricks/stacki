@@ -3,14 +3,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { prepareStudioLocal } from './studioLocalMove';
 import { STUDIO_STATE_DIRECTORY } from '../../shared/properties/studioLocal';
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -74,15 +67,10 @@ interface LaunchHost {
   readonly log: (text: string) => void;
 }
 
-async function launchLocalStudio(
-  project: string,
-  host: LaunchHost,
-): Promise<Result<string, string>> {
+async function launchLocalStudio(project: string, host: LaunchHost): Promise<Result<string, string>> {
   const assets = path.join(project, 'studio/dist');
   if (!existsSync(path.join(assets, 'integration.mjs'))) {
-    return err(
-      'Studio needs a build. Run npm --prefix studio run build, then restart the preview.',
-    );
+    return err('Studio needs a build. Run npm --prefix studio run build, then restart the preview.');
   }
   const port = await availablePort();
   if (!host.active()) {
@@ -137,9 +125,7 @@ export function writeLocalStudioConfig(project: string, assets: string, port: nu
   assert(port <= 65535, 'Studio port must be a nonprivileged TCP port');
   const names = ['astro.config.mjs', 'astro.config.js', 'astro.config.ts', 'astro.config.mts'];
   const userConfig = names.find((name) => existsSync(path.join(project, name)));
-  const source = userConfig
-    ? `import config from ${JSON.stringify(pathToFileURL(path.join(project, userConfig)).href)};`
-    : 'const config = {};';
+  const source = userConfig ? `import config from ${JSON.stringify(pathToFileURL(path.join(project, userConfig)).href)};` : 'const config = {};';
   const integration = pathToFileURL(path.join(assets, 'integration.mjs')).href;
   const directory = path.join(project, 'node_modules/.avb');
   const state = path.join(project, STUDIO_STATE_DIRECTORY);
@@ -173,9 +159,7 @@ async function availablePort(): Promise<number> {
   const address = server.address();
   assert(address !== null, 'Listening Studio probe must have an address');
   assert(typeof address !== 'string', 'Studio probe must use TCP');
-  await new Promise<void>((resolve, reject) =>
-    server.close((error) => (error ? reject(error) : resolve())),
-  );
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   return address.port;
 }
 
@@ -224,10 +208,7 @@ function stopLocalStudio(child: ChildProcess): void {
   }
   try {
     if (process.platform === 'win32') {
-      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true }).once(
-        'error',
-        () => child.kill(),
-      );
+      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true }).once('error', () => child.kill());
     } else {
       process.kill(-child.pid, 'SIGTERM');
     }

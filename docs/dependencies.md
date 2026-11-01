@@ -188,7 +188,7 @@ large tree; tests only.
 
 ### `prettier`
 
-**Does:** the formatter (AGENTS.md §17: one formatter; `printWidth: 100`). **Why not the
+**Does:** the formatter (AGENTS.md §17: one formatter; `printWidth: 160`). **Why not the
 platform:** no formatter ships with Node or TypeScript. **Cost:** dependency-free; pinned to an
 exact version because a formatter upgrade reformats code, and that must be a deliberate commit.
 

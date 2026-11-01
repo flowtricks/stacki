@@ -22,21 +22,16 @@ const FIELD_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 // Kinds a list's members are told apart by when inferred from its items.
 const MEMBERS_INFERRED_MAX = 4;
 
-export function documentFields(
-  document: object,
-  schema: SanityDocumentSchema | undefined,
-): RemoteDocumentField[] {
+export function documentFields(document: object, schema: SanityDocumentSchema | undefined): RemoteDocumentField[] {
   // `orderRank` is the orderable plugin's sort key, written by dragging rows;
   // the Studio never shows it, whatever a schema says or does not say.
-  const values = new Map<string, unknown>(
-    Object.entries(document).filter(([key]) => key !== ORDER_RANK),
-  );
+  const values = new Map<string, unknown>(Object.entries(document).filter(([key]) => key !== ORDER_RANK));
   const named = new Set(schema?.fields.map((field) => field.name) ?? []);
   const declared = (schema?.fields ?? [])
     .filter((field) => field.name !== ORDER_RANK)
-    .map((field) => {
+    .map(({ groups, ...field }): RemoteDocumentField => {
       const value = parseRemoteValue(values.get(field.name));
-      return { ...field, type: field.type ?? inferType(value), value };
+      return { ...field, type: field.type ?? inferType(value), value, ...(groups.length === 0 ? {} : { groups }) };
     });
   const extra = [...values.keys()]
     .filter((key) => FIELD_NAME.test(key) && !named.has(key) && !schema?.hidden.has(key))
@@ -113,11 +108,7 @@ function objectType(value: { readonly [key: string]: RemoteValue }, depth: numbe
   }
 }
 
-function fieldsInferred(
-  value: { readonly [key: string]: RemoteValue },
-  depth: number,
-  skipped: readonly string[],
-): RemoteSchemaField[] {
+function fieldsInferred(value: { readonly [key: string]: RemoteValue }, depth: number, skipped: readonly string[]): RemoteSchemaField[] {
   return Object.entries(value)
     .filter(([key]) => FIELD_NAME.test(key) && !skipped.includes(key))
     .slice(0, REMOTE_SCHEMA_LIMITS.fieldsMax)

@@ -21,9 +21,7 @@
 const fs = require('fs');
 const path = require('path');
 const Module = require('module');
-const { parsePreviewMessage } = require('../../helpers/rendererModule')(
-  'src/features/preview/previewMessages.ts',
-);
+const { parsePreviewMessage } = require('../../helpers/rendererModule')('src/features/preview/previewMessages.ts');
 const { repoPath } = require('../../helpers/sources.js');
 
 const failures = [];
@@ -143,30 +141,16 @@ const settle = (ms = 40) => new Promise((resolve) => setTimeout(resolve, ms));
   const pointAt = (box, y) => {
     const element = window.document.querySelector(`[data-box="${box}"]`);
     sent.length = 0;
-    element.dispatchEvent(
-      new window.MouseEvent('mousemove', { bubbles: true, clientX: 100, clientY: y }),
-    );
+    element.dispatchEvent(new window.MouseEvent('mousemove', { bubbles: true, clientX: 100, clientY: y }));
     return sent.filter((message) => message.type === 'avb:hover-node').pop();
   };
 
   // 290: inside the word's box, above the component's. Nothing is drawn there.
-  check(
-    'the gap above a component is not the component',
-    pointAt('word', 290)?.path === '0',
-    JSON.stringify(pointAt('word', 290)),
-  );
+  check('the gap above a component is not the component', pointAt('word', 290)?.path === '0', JSON.stringify(pointAt('word', 290)));
   // 400: inside both. This is the component, and always was.
-  check(
-    'pointing at the component is the component',
-    pointAt('word', 400)?.path === '0.1',
-    JSON.stringify(pointAt('word', 400)),
-  );
+  check('pointing at the component is the component', pointAt('word', 400)?.path === '0.1', JSON.stringify(pointAt('word', 400)));
   // The neighbour above keeps its own space.
-  check(
-    'and its neighbour keeps its own',
-    pointAt('eyebrow', 30)?.path === '0.0',
-    JSON.stringify(pointAt('eyebrow', 30)),
-  );
+  check('and its neighbour keeps its own', pointAt('eyebrow', 30)?.path === '0.0', JSON.stringify(pointAt('eyebrow', 30)));
   // A click says the same thing as the hover — the two resolve the same way,
   // so what you select is what lit up.
   {
@@ -181,11 +165,7 @@ const settle = (ms = 40) => new Promise((resolve) => setTimeout(resolve, ms));
       }),
     );
     const message = sent.filter((message) => message.type === 'avb:click-node').pop();
-    check(
-      'and a click in that gap selects what a hover showed',
-      message?.path === '0',
-      JSON.stringify(message),
-    );
+    check('and a click in that gap selects what a hover showed', message?.path === '0', JSON.stringify(message));
   }
 
   // The renderer's boundary must accept the actual preload's leave message;
@@ -211,17 +191,11 @@ const settle = (ms = 40) => new Promise((resolve) => setTimeout(resolve, ms));
     sent.length = 0;
     element.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
     const message = sent.filter((message) => message.type === 'avb:click-node').pop();
-    check(
-      'a click with nowhere to be still resolves',
-      message?.path === '0.1',
-      JSON.stringify(message),
-    );
+    check('a click with nowhere to be still resolves', message?.path === '0.1', JSON.stringify(message));
   }
 
   if (failures.length) {
-    console.error(
-      `\nhover-within: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\nhover-within: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

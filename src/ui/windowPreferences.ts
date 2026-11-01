@@ -1,11 +1,6 @@
 import type { WindowMode } from './DockableWindow';
 import { toRecord } from '../../shared/core/record';
-import {
-  fitWindowRectangle,
-  initialWindowRectangle,
-  type WindowRectangle,
-  type WindowSize,
-} from './windowGeometry';
+import { fitWindowRectangle, initialWindowRectangle, type WindowRectangle, type WindowSize } from './windowGeometry';
 
 const STORED_VALUE_CHARS_MAX = 256;
 const COORDINATE_PX_MAX = 100_000;
@@ -32,11 +27,7 @@ export function storeWindowMode(key: string, mode: WindowMode): void {
 }
 
 // Stored geometry is only a preference: corrupt or unavailable storage falls back to the center.
-export function readWindowRectangle(
-  key: string | undefined,
-  viewport: WindowSize,
-  minimum: WindowSize,
-): WindowRectangle {
+export function readWindowRectangle(key: string | undefined, viewport: WindowSize, minimum: WindowSize): WindowRectangle {
   let stored: WindowRectangle | undefined;
   if (key) {
     try {
@@ -45,9 +36,7 @@ export function readWindowRectangle(
       // Privacy modes can deny storage; the tool must remain usable.
     }
   }
-  return stored
-    ? fitWindowRectangle(stored, viewport, minimum)
-    : initialWindowRectangle(viewport, minimum);
+  return stored ? fitWindowRectangle(stored, viewport, minimum) : initialWindowRectangle(viewport, minimum);
 }
 
 export function storeWindowRectangle(key: string | undefined, rectangle: WindowRectangle): void {
@@ -92,10 +81,5 @@ export function parseStoredWindowRectangle(raw: unknown): WindowRectangle | unde
 }
 
 function storedCoordinate(value: unknown, minimum: number): value is number {
-  return (
-    typeof value === 'number' &&
-    Number.isSafeInteger(value) &&
-    value >= minimum &&
-    value <= COORDINATE_PX_MAX
-  );
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= minimum && value <= COORDINATE_PX_MAX;
 }

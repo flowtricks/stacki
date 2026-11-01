@@ -25,10 +25,7 @@ function pageOf(kilobytes, styled) {
   const cards = [];
   let index = 0;
   while (cards.join('\n').length < kilobytes * 1024) {
-    cards.push(
-      `  <article class="card"><h3>Card ${index}</h3><p>Text for card ${index}.</p>` +
-        `<a href="/c/${index}">Read</a></article>`,
-    );
+    cards.push(`  <article class="card"><h3>Card ${index}</h3><p>Text for card ${index}.</p>` + `<a href="/c/${index}">Read</a></article>`);
     index += 1;
   }
   const style = styled ? '\n<style>.card { color: rgb(1, 0, 0); }</style>\n' : '\n';
@@ -82,8 +79,7 @@ async function main() {
   // those lines do not split it.
   const lines = [];
   lines.push(
-    `page:edit end to end in main, ms; p50 / p95 of ${SAMPLES} samples after ` +
-      `${WARM_UPS} warm-ups. "parse" is the reply's parse of the same text, alone.`,
+    `page:edit end to end in main, ms; p50 / p95 of ${SAMPLES} samples after ` + `${WARM_UPS} warm-ups. "parse" is the reply's parse of the same text, alone.`,
   );
   lines.push('page             bytes    style  edit p50  edit p95  parse p50  parse p95');
   try {

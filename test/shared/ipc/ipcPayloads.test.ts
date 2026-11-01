@@ -332,10 +332,7 @@ test('CSS group and row moves preserve both supported payload variants', () => {
 });
 
 test('IPC collection, string, integer, depth, and path bounds fail explicitly', () => {
-  assert.throws(
-    () => parseIpcPayload('project:scan', 'x'.repeat(BOUNDARY_LIMITS.pathLengthMax + 1)),
-    /Path exceeds limit/,
-  );
+  assert.throws(() => parseIpcPayload('project:scan', 'x'.repeat(BOUNDARY_LIMITS.pathLengthMax + 1)), /Path exceeds limit/);
   assert.throws(() => parseIpcPayload('project:scan', '/site\0suffix'), /NUL/);
   assert.throws(
     () =>
@@ -416,21 +413,11 @@ test('terminal send channels accept keystrokes and acks and refuse every malform
   assert.deepEqual(parseTerminalInput({ id: 't1', data: 'ls\r' }), { id: 't1', data: 'ls\r' });
   assert.deepEqual(parseTerminalAck({ id: 't1', count: 0 }), { id: 't1', count: 0 });
   assert.deepEqual(parseTerminalAck({ id: 't1', count: 4096 }), { id: 't1', count: 4096 });
-  const malformedInputs = [
-    undefined,
-    jsonNull,
-    'ls',
-    { id: 't' },
-    { data: 'x' },
-    { id: 1, data: 'x' },
-  ];
+  const malformedInputs = [undefined, jsonNull, 'ls', { id: 't' }, { data: 'x' }, { id: 1, data: 'x' }];
   for (const input of malformedInputs) {
     assert.throws(() => parseTerminalInput(input));
   }
-  assert.throws(
-    () => parseTerminalInput({ id: 't1', data: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) }),
-    /String exceeds limit/,
-  );
+  assert.throws(() => parseTerminalInput({ id: 't1', data: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) }), /String exceeds limit/);
   // A NaN, negative, fractional or unsafe count would poison the flow-control
   // total and leave a paused pty paused (or never pause it again).
   for (const count of [Number.NaN, -1, 1.5, Number.POSITIVE_INFINITY, 2 ** 53, '10', undefined]) {
@@ -439,14 +426,8 @@ test('terminal send channels accept keystrokes and acks and refuse every malform
 });
 
 type Assignable<Source, Target> = [Source] extends [Target] ? true : false;
-const channelsStayDistinct: Assignable<
-  IpcContract['style:writeFile']['payload'],
-  IpcContract['page:edit']['payload']
-> = false;
-const terminalSuccessNeedsId: Assignable<
-  { readonly ok: true },
-  IpcContract['terminal:start']['result']
-> = false;
+const channelsStayDistinct: Assignable<IpcContract['style:writeFile']['payload'], IpcContract['page:edit']['payload']> = false;
+const terminalSuccessNeedsId: Assignable<{ readonly ok: true }, IpcContract['terminal:start']['result']> = false;
 void channelsStayDistinct;
 void terminalSuccessNeedsId;
 
@@ -455,11 +436,7 @@ test('desktop preferences reject unknown keys and nonboolean toggle values', () 
     setting: 'sound',
     enabled: false,
   });
-  for (const input of [
-    { setting: 'unknown', enabled: true },
-    { setting: 'sound', enabled: 'true' },
-    { setting: 'usageCountsEnabled' },
-  ]) {
+  for (const input of [{ setting: 'unknown', enabled: true }, { setting: 'sound', enabled: 'true' }, { setting: 'usageCountsEnabled' }]) {
     assert.throws(() => parseIpcPayload('settings:set', input));
   }
 });
@@ -470,21 +447,9 @@ test('terminal startup and resize reject unmeasured or unrepresentable native gr
     assert.equal(parseIpcPayload(channel, payload).cols, 92);
     assert.equal(parseIpcPayload(channel, payload).rows, 18);
     assert.equal(parseIpcPayload(channel, { ...payload, cols: 1 }).cols, 1);
-    assert.equal(
-      parseIpcPayload(channel, { ...payload, rows: TERMINAL_DIMENSION_MAX }).rows,
-      TERMINAL_DIMENSION_MAX,
-    );
+    assert.equal(parseIpcPayload(channel, { ...payload, rows: TERMINAL_DIMENSION_MAX }).rows, TERMINAL_DIMENSION_MAX);
     for (const field of ['cols', 'rows'] as const) {
-      for (const value of [
-        undefined,
-        0,
-        -1,
-        1.5,
-        NaN,
-        Infinity,
-        '80',
-        TERMINAL_DIMENSION_MAX + 1,
-      ]) {
+      for (const value of [undefined, 0, -1, 1.5, NaN, Infinity, '80', TERMINAL_DIMENSION_MAX + 1]) {
         assert.throws(() => parseIpcPayload(channel, { ...payload, [field]: value }));
       }
     }

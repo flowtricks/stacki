@@ -79,8 +79,5 @@ test('path highlights preserve original text and treat search punctuation litera
     assert.equal(element.querySelector('script') === null, true);
     dom.window.close();
   }
-  assert.throws(
-    () => PageSearchPath({ path: '/about', query: 'x'.repeat(513) }),
-    /query length is bounded/,
-  );
+  assert.throws(() => PageSearchPath({ path: '/about', query: 'x'.repeat(513) }), /query length is bounded/);
 });

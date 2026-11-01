@@ -51,12 +51,7 @@ export default function FieldLabel(props: Props) {
   const source = useInheritedSource(property);
   if (source) {
     return (
-      <InheritedPropertyLabel
-        property={property}
-        source={source}
-        disabled={props.disabled ?? false}
-        className={props.className ?? ''}
-      >
+      <InheritedPropertyLabel property={property} source={source} disabled={props.disabled ?? false} className={props.className ?? ''}>
         {props.children}
       </InheritedPropertyLabel>
     );
@@ -102,11 +97,7 @@ function ClearableFieldLabel(props: Props) {
   });
 
   return (
-    <span
-      ref={hoverTip.ref}
-      className={['u-field-label-wrap', props.className].filter(Boolean).join(' ')}
-      {...hoverTip.hoverProps}
-    >
+    <span ref={hoverTip.ref} className={['u-field-label-wrap', props.className].filter(Boolean).join(' ')} {...hoverTip.hoverProps}>
       <button
         type="button"
         className="u-field-label is-active"
@@ -140,12 +131,7 @@ function ClearableFieldLabel(props: Props) {
 }
 
 // A click on the active label toggles its menu; Option/Alt-click resets at once.
-function labelClickHandler(actions: {
-  readonly disabled: boolean;
-  readonly reset: () => void;
-  readonly toggle: () => void;
-  readonly hideTip: () => void;
-}) {
+function labelClickHandler(actions: { readonly disabled: boolean; readonly reset: () => void; readonly toggle: () => void; readonly hideTip: () => void }) {
   return (event: MouseEvent<HTMLButtonElement>) => {
     // preventDefault so this works even when nested in a <label>.
     event.preventDefault();
@@ -176,9 +162,7 @@ function DimCaption({
   return (
     <span
       ref={hoverTip.ref}
-      className={['u-field-label', props.tooltip ? 'is-hoverable' : '', props.className]
-        .filter(Boolean)
-        .join(' ')}
+      className={['u-field-label', props.tooltip ? 'is-hoverable' : '', props.className].filter(Boolean).join(' ')}
       title={nativeTitle}
       onMouseDown={props.onMouseDown}
       {...props.scrubProps}
@@ -215,12 +199,7 @@ function useMenuPlacement({
     const naturalLeft = rootRect.right - element.offsetWidth;
     const leftLimit = bounds.left + margin;
     const rightLimit = bounds.right - margin;
-    const next =
-      naturalLeft < leftLimit
-        ? leftLimit - naturalLeft
-        : naturalRight > rightLimit
-          ? rightLimit - naturalRight
-          : 0;
+    const next = naturalLeft < leftLimit ? leftLimit - naturalLeft : naturalRight > rightLimit ? rightLimit - naturalRight : 0;
     element.style.transform = next ? `translateX(${next}px)` : '';
     // Vertical flip: if opening below would overflow the container's bottom and
     // there's more room above (a bottom-row label), open the menu above the label.
@@ -276,11 +255,7 @@ function FieldLabelMenu({
         <span>{resetLabel}</span>
         <span className="u-field-label-menu-shortcut">Option + click</span>
       </button>
-      {menuNote ? (
-        <div className="u-field-label-menu-note">
-          {typeof menuNote === 'function' ? menuNote(onClose) : menuNote}
-        </div>
-      ) : undefined}
+      {menuNote ? <div className="u-field-label-menu-note">{typeof menuNote === 'function' ? menuNote(onClose) : menuNote}</div> : undefined}
     </Popup>
   );
 }

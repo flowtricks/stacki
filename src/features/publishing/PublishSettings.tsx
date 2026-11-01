@@ -12,13 +12,7 @@ import { UploadCloudIcon } from '../../ui/Icons';
 import { PublishConnections } from './PublishConnections';
 import { useEffect, useState } from 'react';
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
-import {
-  DEFAULT_PUBLISH_CONFIG,
-  parsePublishConfig,
-  parsePublishSource,
-  type PublishConfig,
-  type Hosting,
-} from '../../../shared/properties/publishConfig';
+import { DEFAULT_PUBLISH_CONFIG, parsePublishConfig, parsePublishSource, type PublishConfig, type Hosting } from '../../../shared/properties/publishConfig';
 import { cleanError } from '../../lib/cleanError';
 
 interface Props {
@@ -52,22 +46,13 @@ export function PublishSettings(props: Props) {
     };
   }, [props.projectPath, attempt]);
   return (
-    <Popup
-      className="modal publish-settings"
-      label="Publish settings"
-      onClose={props.close}
-      dismissible={true}
-    >
+    <Popup className="modal publish-settings" label="Publish settings" onClose={props.close} dismissible={true}>
       {({ close }) => (
         <>
           <div className="modal-header" aria-busy={state.kind === 'loading'}>
             Publish settings
           </div>
-          <span
-            className="publish-settings-loading mini-spinner"
-            role="status"
-            aria-label="Loading publish settings"
-          />
+          <span className="publish-settings-loading mini-spinner" role="status" aria-label="Loading publish settings" />
           {state.kind === 'ready' ? (
             <PublishSettingsForm key={props.projectPath} {...props} close={close} stored={state} />
           ) : state.kind === 'loading' ? (
@@ -96,22 +81,13 @@ function PublishSettingsSkeleton({ close }: Pick<Props, 'close'>) {
   return (
     <>
       <div className="publish-settings-scroll">
-        <fieldset
-          className="modal-body publish-fields"
-          disabled
-          aria-busy="true"
-          data-loading="true"
-        >
+        <fieldset className="modal-body publish-fields" disabled aria-busy="true" data-loading="true">
           {[
             { name: 'Publish button', labels: ['Main publish button action'] },
             { name: 'GitHub', labels: ['GitHub account', 'GitHub repository'] },
             { name: 'Hosting', labels: ['Hosting provider', 'Hosting project'] },
           ].map((section) => (
-            <section
-              className="publish-settings-section"
-              aria-label={section.name}
-              key={section.name}
-            >
+            <section className="publish-settings-section" aria-label={section.name} key={section.name}>
               {section.labels.map((label) => (
                 <div className="publish-field" key={label}>
                   <span className="publish-label">{label}</span>
@@ -141,10 +117,7 @@ function PublishSettingsSkeleton({ close }: Pick<Props, 'close'>) {
 
 function settingsErrorMessage(message: string): string {
   if (message.includes('No handler registered')) {
-    return (
-      'Desktop needs to reload its new publishing support. ' +
-      'Use View → Reload All Code, then open Publish settings to configure your provider.'
-    );
+    return 'Desktop needs to reload its new publishing support. ' + 'Use View → Reload All Code, then open Publish settings to configure your provider.';
   }
   return message;
 }
@@ -155,12 +128,7 @@ function PublishSettingsForm({
 }: Props & {
   readonly stored: Extract<SettingsState, { kind: 'ready' }>;
 }) {
-  const {
-    config,
-    changeConfig: setConfig,
-    changeHosting,
-    discoveringHosting,
-  } = usePublishSettingsConfig(projectPath, stored);
+  const { config, changeConfig: setConfig, changeHosting, discoveringHosting } = usePublishSettingsConfig(projectPath, stored);
   const [repository, setRepository] = useState<Extract<RepositoryRequest, { action: 'connect' }>>();
   const [repositoryBusy, setRepositoryBusy] = useState(false);
   const { error, saving, save } = usePublishSettingsSave({
@@ -193,36 +161,19 @@ function PublishSettingsForm({
             />
           </section>
           <section className="publish-settings-section" aria-label="Hosting">
-            <HostingFields
-              projectPath={projectPath}
-              hosting={config.hosting}
-              discoveringHosting={discoveringHosting}
-              change={changeHosting}
-            />
+            <HostingFields projectPath={projectPath} hosting={config.hosting} discoveringHosting={discoveringHosting} change={changeHosting} />
             <PublishedSiteField config={config} change={setConfig} />
           </section>
           <AdvancedFields config={config} setConfig={setConfig} />
           {error && <ErrorToast message={error} />}
         </fieldset>
       </div>
-      <SettingsFooter
-        busy={saving || repositoryBusy}
-        discoveringHosting={discoveringHosting}
-        saving={saving}
-        close={close}
-        save={save}
-      />
+      <SettingsFooter busy={saving || repositoryBusy} discoveringHosting={discoveringHosting} saving={saving} close={close} save={save} />
     </>
   );
 }
 
-function PublishTargetField({
-  config,
-  setConfig,
-}: {
-  readonly config: PublishConfig;
-  readonly setConfig: (config: PublishConfig) => void;
-}) {
+function PublishTargetField({ config, setConfig }: { readonly config: PublishConfig; readonly setConfig: (config: PublishConfig) => void }) {
   return (
     <section className="publish-settings-section" aria-label="Publish button">
       <div className="publish-field">
@@ -248,10 +199,7 @@ function PublishTargetToggle({
   const other = target === 'github' ? 'hosting' : 'github';
   const lastEnabled = config.defaultTarget === target;
   return (
-    <label
-      className="publish-target-card"
-      title={lastEnabled ? 'Keep at least one publish destination enabled' : undefined}
-    >
+    <label className="publish-target-card" title={lastEnabled ? 'Keep at least one publish destination enabled' : undefined}>
       {target === 'github' ? <PublishProviderIcon provider="github" /> : <UploadCloudIcon />}
       <span>{target === 'github' ? 'GitHub' : 'Hosting'}</span>
       <input
@@ -260,9 +208,7 @@ function PublishTargetToggle({
         role="switch"
         checked={config.defaultTarget !== other}
         disabled={lastEnabled}
-        onChange={(event) =>
-          setConfig({ ...config, defaultTarget: event.currentTarget.checked ? 'all' : other })
-        }
+        onChange={(event) => setConfig({ ...config, defaultTarget: event.currentTarget.checked ? 'all' : other })}
       />
     </label>
   );
@@ -344,13 +290,7 @@ function HostingFields({
           ]}
           menuClassName="publish-dropdown"
           livePreview={false}
-          value={
-            discoveringHosting
-              ? undefined
-              : hosting.provider === 'cloudflare-workers'
-                ? 'cloudflare'
-                : hosting.provider
-          }
+          value={discoveringHosting ? undefined : hosting.provider === 'cloudflare-workers' ? 'cloudflare' : hosting.provider}
           onChange={(provider) => {
             if (provider !== undefined) {
               change(emptyHosting(provider));
@@ -378,15 +318,7 @@ function HostingFields({
   );
 }
 
-function TextField({
-  label,
-  value,
-  change,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly change: (value: string) => void;
-}) {
+function TextField({ label, value, change }: { readonly label: string; readonly value: string; readonly change: (value: string) => void }) {
   return (
     <label>
       {label}
@@ -426,39 +358,17 @@ function ScriptField({
   );
 }
 
-function AdvancedFields({
-  config,
-  setConfig,
-}: {
-  readonly config: PublishConfig;
-  readonly setConfig: (config: PublishConfig) => void;
-}) {
+function AdvancedFields({ config, setConfig }: { readonly config: PublishConfig; readonly setConfig: (config: PublishConfig) => void }) {
   return (
     <details className="publish-advanced">
       <summary>Advanced</summary>
       <div className="publish-advanced-fields">
-        <ManualHosting
-          hosting={config.hosting}
-          change={(hosting) => setConfig({ ...config, hosting })}
-        />
-        <TextField
-          label="Build script"
-          value={config.buildScript}
-          change={(buildScript) => setConfig({ ...config, buildScript })}
-        />
-        <ScriptField
-          label="Before publish"
-          values={config.beforePublish}
-          change={(beforePublish) => setConfig({ ...config, beforePublish })}
-        />
-        <ScriptField
-          label="After publish"
-          values={config.afterPublish}
-          change={(afterPublish) => setConfig({ ...config, afterPublish })}
-        />
+        <ManualHosting hosting={config.hosting} change={(hosting) => setConfig({ ...config, hosting })} />
+        <TextField label="Build script" value={config.buildScript} change={(buildScript) => setConfig({ ...config, buildScript })} />
+        <ScriptField label="Before publish" values={config.beforePublish} change={(beforePublish) => setConfig({ ...config, beforePublish })} />
+        <ScriptField label="After publish" values={config.afterPublish} change={(afterPublish) => setConfig({ ...config, afterPublish })} />
         <p className="hint-text">
-          Scripts run only when deploying to hosting. Push to GitHub skips the build and both hooks.
-          Use npm script names, separated by commas.
+          Scripts run only when deploying to hosting. Push to GitHub skips the build and both hooks. Use npm script names, separated by commas.
         </p>
       </div>
     </details>
@@ -474,47 +384,21 @@ function CloudflareFields({
 }) {
   return (
     <>
-      <TextField
-        label="Pages project name"
-        value={hosting.project}
-        change={(project) => change({ ...hosting, project })}
-      />
-      <TextField
-        label="Production branch"
-        value={hosting.branch}
-        change={(branch) => change({ ...hosting, branch })}
-      />
-      <TextField
-        label="Build output directory"
-        value={hosting.directory}
-        change={(directory) => change({ ...hosting, directory })}
-      />
+      <TextField label="Pages project name" value={hosting.project} change={(project) => change({ ...hosting, project })} />
+      <TextField label="Production branch" value={hosting.branch} change={(branch) => change({ ...hosting, branch })} />
+      <TextField label="Build output directory" value={hosting.directory} change={(directory) => change({ ...hosting, directory })} />
     </>
   );
 }
 
-function ManualHosting({
-  hosting,
-  change,
-}: {
-  readonly hosting: Hosting;
-  readonly change: (hosting: Hosting) => void;
-}) {
+function ManualHosting({ hosting, change }: { readonly hosting: Hosting; readonly change: (hosting: Hosting) => void }) {
   return (
     <>
       {hosting.provider === 'cloudflare' && <CloudflareFields hosting={hosting} change={change} />}
       {hosting.provider === 'vercel' && (
         <>
-          <TextField
-            label="Vercel organization / team ID"
-            value={hosting.organizationId}
-            change={(organizationId) => change({ ...hosting, organizationId })}
-          />
-          <TextField
-            label="Vercel project ID"
-            value={hosting.projectId}
-            change={(projectId) => change({ ...hosting, projectId })}
-          />
+          <TextField label="Vercel organization / team ID" value={hosting.organizationId} change={(organizationId) => change({ ...hosting, organizationId })} />
+          <TextField label="Vercel project ID" value={hosting.projectId} change={(projectId) => change({ ...hosting, projectId })} />
         </>
       )}
     </>
@@ -564,9 +448,5 @@ function validateSettings(config: PublishConfig): PublishConfig {
     throw new Error('Choose the Worker under its Cloudflare account before saving.');
   }
   const saved = config.publishedSite;
-  return parsePublishConfig(
-    saved === undefined
-      ? config
-      : { ...config, publishedSite: { ...saved, url: saved.url.trim().replace(/\/$/, '') } },
-  );
+  return parsePublishConfig(saved === undefined ? config : { ...config, publishedSite: { ...saved, url: saved.url.trim().replace(/\/$/, '') } });
 }

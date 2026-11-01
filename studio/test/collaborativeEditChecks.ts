@@ -29,11 +29,7 @@ export async function checkCollaborativeEdits(first: Page, second: Page) {
   report('delete', started);
   await verifyLabels(first, second);
   // Deletion removes the element range; its inserted blank separator may remain.
-  assert.equal(
-    (await readSource(first)).replace(/\n{2,}/g, '\n'),
-    original,
-    'Duplicate/delete preserves authored content and imports',
-  );
+  assert.equal((await readSource(first)).replace(/\n{2,}/g, '\n'), original, 'Duplicate/delete preserves authored content and imports');
   await checkInsertion(first, second);
   await checkTyping(first, second);
 }
@@ -64,14 +60,8 @@ async function checkTyping(first: Page, second: Page) {
   await input.pressSequentially(' typed rapidly', { delay: 15 });
   const expected = 'Hello nested world typed rapidly';
   for (const page of [first, second]) {
-    await page
-      .frameLocator('iframe[title="Site preview"]')
-      .getByRole('heading', { name: expected, exact: true })
-      .waitFor();
-    assert.equal(
-      await page.frameLocator('iframe[title="Site preview"]').locator('h1 strong').textContent(),
-      'nested',
-    );
+    await page.frameLocator('iframe[title="Site preview"]').getByRole('heading', { name: expected, exact: true }).waitFor();
+    assert.equal(await page.frameLocator('iframe[title="Site preview"]').locator('h1 strong').textContent(), 'nested');
   }
   report('type-text', started);
   assert.match(await readSource(first), /<strong>nested<\/strong> world typed rapidly/);
@@ -79,27 +69,18 @@ async function checkTyping(first: Page, second: Page) {
   await second.locator('.rich-content').fill('Second participant text');
   await waitBoth(first, second, 'main > p:text-is("Second participant text")');
   for (const page of [first, second]) {
-    await page
-      .frameLocator('iframe[title="Site preview"]')
-      .getByRole('heading', { name: expected, exact: true })
-      .waitFor();
+    await page.frameLocator('iframe[title="Site preview"]').getByRole('heading', { name: expected, exact: true }).waitFor();
   }
   const source = await readSource(first);
   assert.ok(source.includes('Second participant text'));
   assert.ok(source.includes('typed rapidly'));
-  await Promise.all([
-    input.pressSequentially(' first', { delay: 15 }),
-    second.locator('.rich-content').pressSequentially(' second', { delay: 15 }),
-  ]);
+  await Promise.all([input.pressSequentially(' first', { delay: 15 }), second.locator('.rich-content').pressSequentially(' second', { delay: 15 })]);
   for (const page of [first, second]) {
     await page
       .frameLocator('iframe[title="Site preview"]')
       .getByRole('heading', { name: `${expected} first`, exact: true })
       .waitFor();
-    await page
-      .frameLocator('iframe[title="Site preview"]')
-      .getByText('Second participant text second', { exact: true })
-      .waitFor();
+    await page.frameLocator('iframe[title="Site preview"]').getByText('Second participant text second', { exact: true }).waitFor();
   }
 }
 
@@ -185,9 +166,7 @@ async function watchTextProgress(first: Page, second: Page) {
 }
 
 async function readSource(page: Page) {
-  const response = await page.request.get(
-    new URL('/studio/api/file?file=src/pages/index.astro', page.url()).href,
-  );
+  const response = await page.request.get(new URL('/studio/api/file?file=src/pages/index.astro', page.url()).href);
   assert.ok(response.ok(), 'Read the shared draft source');
   const data: unknown = await response.json();
   return string(record(data)['source']);

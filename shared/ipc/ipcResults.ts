@@ -1,9 +1,5 @@
 import type { AccountState } from './publishAccount';
-import type {
-  CmsConnectionList,
-  CmsSaveResult,
-  SanityLoginState,
-} from '../properties/cmsConnections';
+import type { CmsConnectionList, CmsSaveResult, SanityLoginState } from '../properties/cmsConnections';
 import type {
   RemoteCollection,
   RemoteAsset,
@@ -793,10 +789,8 @@ export interface IpcResults {
     | {
         readonly ok: true;
       };
-  readonly 'terminal:start':
-    { readonly ok: true; readonly id: string } | { readonly ok: false; readonly error: string };
+  readonly 'terminal:start': { readonly ok: true; readonly id: string } | { readonly ok: false; readonly error: string };
   readonly 'terminal:resize': { readonly ok: boolean };
   readonly 'terminal:close': { readonly ok: boolean };
-  readonly 'terminal:clipboardImage':
-    { readonly ok: true; readonly path: string } | { readonly ok: false; readonly error: string };
+  readonly 'terminal:clipboardImage': { readonly ok: true; readonly path: string } | { readonly ok: false; readonly error: string };
 }

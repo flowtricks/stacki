@@ -23,10 +23,7 @@ export function useEditorKeys(
         void document.history.step(event.shiftKey || value === 'y' ? 'redo' : 'undo').catch(report);
         return;
       }
-      if (
-        event.target instanceof Element &&
-        event.target.closest('input, textarea, select, [contenteditable=true], .cm-editor')
-      ) {
+      if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable=true], .cm-editor')) {
         return;
       }
       if (!selected || selected === 'frontmatter') {

@@ -8,11 +8,7 @@ import {
   type DefaultComponent,
   type ResolvedNode,
 } from '../../../vendor/stacki/shared/properties/componentDefaults';
-import {
-  starterDefaults,
-  INSTANCE_HEADING,
-  INSTANCE_PARAGRAPH,
-} from '../../../vendor/stacki/shared/properties/componentStarterDefaults';
+import { starterDefaults, INSTANCE_HEADING, INSTANCE_PARAGRAPH } from '../../../vendor/stacki/shared/properties/componentStarterDefaults';
 export const HEADING_TEXT = INSTANCE_HEADING;
 export const PARAGRAPH_TEXT = INSTANCE_PARAGRAPH;
 

@@ -26,8 +26,7 @@ const ignored = new Set([
   '.wrangler',
   '.cache',
 ]);
-const binary =
-  /\.(png|jpe?g|webp|gif|ico|avif|pdf|woff2?|ttf|otf|eot|mp[34]|mov|webm|zip|gz|br|wasm)$/i;
+const binary = /\.(png|jpe?g|webp|gif|ico|avif|pdf|woff2?|ttf|otf|eot|mp[34]|mov|webm|zip|gz|br|wasm)$/i;
 
 /** Inventory authored files once; never follow links into dependencies or another project. */
 export function pageRenameInventory(root: string): PageRenameInventory {
@@ -65,9 +64,7 @@ export function pageRenameInventory(root: string): PageRenameInventory {
   return {
     files,
     folders,
-    pages: files
-      .filter((file) => /^src\/pages\/.*\.(astro|mdx?)$/i.test(file))
-      .map((file) => file.slice(10)),
+    pages: files.filter((file) => /^src\/pages\/.*\.(astro|mdx?)$/i.test(file)).map((file) => file.slice(10)),
     texts: inventoryTexts(root, files),
   };
 }

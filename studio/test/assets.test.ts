@@ -20,10 +20,7 @@ async function fixture() {
   for (const directory of ['src/assets', 'public', '.stacki/studio/state', 'node_modules']) {
     await mkdir(path.join(root, directory), { recursive: true });
   }
-  await writeFile(
-    path.join(root, '.stacki/studio/state/github-base.json'),
-    JSON.stringify({ sha: 'a'.repeat(40) }),
-  );
+  await writeFile(path.join(root, '.stacki/studio/state/github-base.json'), JSON.stringify({ sha: 'a'.repeat(40) }));
   return root;
 }
 test('Stacki listing and real folder, upload, rename, move, delete and recovery', async () => {
@@ -44,10 +41,7 @@ test('Stacki listing and real folder, upload, rename, move, delete and recovery'
       rel: 'public/photos/second.png',
       destination: 'src/assets',
     });
-    assert.equal(
-      await readFile(path.join(root, 'src/assets/second.png'), 'utf8'),
-      'original bytes',
-    );
+    assert.equal(await readFile(path.join(root, 'src/assets/second.png'), 'utf8'), 'original bytes');
     await mutateAsset(root, { kind: 'rename', rel: 'public/photos', name: 'gallery' });
     await assert.rejects(access(path.join(root, 'public/photos')));
     await access(path.join(root, 'public/gallery'));
@@ -57,11 +51,7 @@ test('Stacki listing and real folder, upload, rename, move, delete and recovery'
     await writeFile(path.join(root, 'src/assets/second.png'), 'restored old durable upload');
     await restoreAssetState(root);
     await assert.rejects(access(path.join(root, 'src/assets/second.png')));
-    assert.deepEqual((await readAssetState(root)).deleted, [
-      'public/photos/first.png',
-      'public/photos/second.png',
-      'src/assets/second.png',
-    ]);
+    assert.deepEqual((await readAssetState(root)).deleted, ['public/photos/first.png', 'public/photos/second.png', 'src/assets/second.png']);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -71,25 +61,13 @@ test('asset operations reject collisions, traversal, root moves and mixed code f
   try {
     await saveAsset(root, 'public/one.png', Buffer.from('one'));
     await saveAsset(root, 'public/two.png', Buffer.from('two'));
-    await assert.rejects(
-      mutateAsset(root, { kind: 'rename', rel: 'public/one.png', name: 'two.png' }),
-      /already exists/,
-    );
-    await assert.rejects(
-      mutateAsset(root, { kind: 'move', rel: 'public', destination: 'src' }),
-      /Invalid project path/,
-    );
+    await assert.rejects(mutateAsset(root, { kind: 'rename', rel: 'public/one.png', name: 'two.png' }), /already exists/);
+    await assert.rejects(mutateAsset(root, { kind: 'move', rel: 'public', destination: 'src' }), /Invalid project path/);
     await assert.rejects(mutateAsset(root, { kind: 'mkdir', rel: 'public', name: '../outside' }));
     await writeFile(path.join(root, 'src/assets/code.ts'), 'keep code');
-    await assert.rejects(
-      mutateAsset(root, { kind: 'rename', rel: 'src/assets', name: 'new' }),
-      /Unsupported asset/,
-    );
+    await assert.rejects(mutateAsset(root, { kind: 'rename', rel: 'src/assets', name: 'new' }), /Unsupported asset/);
     await symlink(path.join(root, 'public/one.png'), path.join(root, 'src/assets/link.png'));
-    await assert.rejects(
-      mutateAsset(root, { kind: 'delete', rel: 'src/assets/link.png' }),
-      /Symbolic/,
-    );
+    await assert.rejects(mutateAsset(root, { kind: 'delete', rel: 'src/assets/link.png' }), /Symbolic/);
     assert.equal(await readFile(path.join(root, 'public/one.png'), 'utf8'), 'one');
     assert.equal(await readFile(path.join(root, 'src/assets/code.ts'), 'utf8'), 'keep code');
     assert.deepEqual((await readAssetState(root)).deleted, []);

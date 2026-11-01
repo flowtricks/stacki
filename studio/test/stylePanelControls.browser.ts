@@ -15,10 +15,7 @@ export async function checkStyleControls(page: Page) {
     assert.equal(await button.getAttribute('aria-expanded'), 'true');
     await button.click();
   }
-  await page
-    .getByRole('list', { name: 'Background layers' })
-    .getByText('pattern.svg', { exact: true })
-    .click();
+  await page.getByRole('list', { name: 'Background layers' }).getByText('pattern.svg', { exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Background layer' });
   await dialog.waitFor();
   await dialog.getByText('32 × 32', { exact: true }).waitFor();
@@ -48,19 +45,11 @@ async function checkModifiers(page: Page) {
     .locator('#target')
     .click({ position: { x: 5, y: 5 } });
   await page.keyboard.down('Shift');
-  await page.waitForFunction(() =>
-    document.documentElement.dataset['styleModifiers']?.includes('"shiftKey":true'),
-  );
+  await page.waitForFunction(() => document.documentElement.dataset['styleModifiers']?.includes('"shiftKey":true'));
   await page.keyboard.up('Shift');
-  await page.waitForFunction(() =>
-    document.documentElement.dataset['styleModifiers']?.includes('"shiftKey":false'),
-  );
+  await page.waitForFunction(() => document.documentElement.dataset['styleModifiers']?.includes('"shiftKey":false'));
   await page.keyboard.down('Alt');
-  await page.waitForFunction(() =>
-    document.documentElement.dataset['styleModifiers']?.includes('"altKey":true'),
-  );
+  await page.waitForFunction(() => document.documentElement.dataset['styleModifiers']?.includes('"altKey":true'));
   await page.keyboard.up('Alt');
-  await page.waitForFunction(() =>
-    document.documentElement.dataset['styleModifiers']?.includes('"altKey":false'),
-  );
+  await page.waitForFunction(() => document.documentElement.dataset['styleModifiers']?.includes('"altKey":false'));
 }

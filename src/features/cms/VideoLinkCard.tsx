@@ -15,10 +15,7 @@ import './videoLinkCard.css';
 const PREVIEWS_MAX = 64;
 const previews = new Map<string, Promise<RemoteResult<LinkPreview | undefined>>>();
 
-type CardState =
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'none' }
-  | { readonly kind: 'ready'; readonly preview: LinkPreview };
+type CardState = { readonly kind: 'loading' } | { readonly kind: 'none' } | { readonly kind: 'ready'; readonly preview: LinkPreview };
 
 export function VideoLinkCard(props: { readonly link: VideoLink; readonly onRemove: () => void }) {
   const { url } = props.link;
@@ -58,10 +55,7 @@ export function VideoLinkCard(props: { readonly link: VideoLink; readonly onRemo
 
 const NONE: CardState = { kind: 'none' };
 
-function VideoLinkCardReady(props: {
-  readonly preview: LinkPreview;
-  readonly onRemove: () => void;
-}) {
+function VideoLinkCardReady(props: { readonly preview: LinkPreview; readonly onRemove: () => void }) {
   const { preview } = props;
   const open = () => void openLinkPreview(preview.url);
   return (
@@ -76,12 +70,8 @@ function VideoLinkCardReady(props: {
             <ExternalIcon size={12} />
           </button>
         </div>
-        {preview.description ? (
-          <p className="video-card-description">{preview.description}</p>
-        ) : undefined}
-        {preview.author ? (
-          <span className="video-card-meta">Author: {preview.author}</span>
-        ) : undefined}
+        {preview.description ? <p className="video-card-description">{preview.description}</p> : undefined}
+        {preview.author ? <span className="video-card-meta">Author: {preview.author}</span> : undefined}
         <span className="video-card-meta">Source: {preview.source}</span>
         <button type="button" className="video-card-remove" onClick={props.onRemove}>
           <TrashIcon size={12} /> Remove
@@ -97,12 +87,10 @@ function previewOf(url: string): Promise<RemoteResult<LinkPreview | undefined>> 
   if (known !== undefined) {
     return known;
   }
-  const request = linkPreview(url).catch(
-    (error: unknown): RemoteResult<LinkPreview | undefined> => ({
-      ok: false,
-      message: String(error),
-    }),
-  );
+  const request = linkPreview(url).catch((error: unknown): RemoteResult<LinkPreview | undefined> => ({
+    ok: false,
+    message: String(error),
+  }));
   previews.set(url, request);
   if (previews.size > PREVIEWS_MAX) {
     const oldest = previews.keys().next().value;

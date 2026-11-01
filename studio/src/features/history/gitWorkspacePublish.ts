@@ -26,79 +26,43 @@ export async function publishGitWorkspace(
   await verifyPublishAncestry(git, remote, expected, branch.head);
   const tree = published(await overlayPublishSource(git, source, branch.head));
   const original = await run(['rev-parse', branch.head + '^{tree}']);
-  const head =
-    tree === original
-      ? branch.head
-      : await gitWorkspaceCommit(run, tree, [branch.head], 'Publish website from Stacki Studio');
+  const head = tree === original ? branch.head : await gitWorkspaceCommit(run, tree, [branch.head], 'Publish website from Stacki Studio');
   if (head !== expected) {
-    await run([
-      'push',
-      '--quiet',
-      '--force-with-lease=refs/heads/' + manifest.branch + ':' + expected,
-      remote,
-      head + ':refs/heads/' + manifest.branch,
-    ]);
+    await run(['push', '--quiet', '--force-with-lease=refs/heads/' + manifest.branch + ':' + expected, remote, head + ':refs/heads/' + manifest.branch]);
   }
   const local = gitWorkspaceRun(workspace);
   await local(['fetch', '--quiet', '--update-shallow', git.directory, head]);
   const next = {
     ...manifest,
     draft: undefined,
-    branches: manifest.branches.map((entry) =>
-      entry.name === manifest.branch ? { ...entry, head: gitRevision(head) } : entry,
-    ),
-    remote: [
-      ...manifest.remote.filter((entry) => entry.name !== manifest.branch),
-      { name: manifest.branch, head },
-    ],
+    branches: manifest.branches.map((entry) => (entry.name === manifest.branch ? { ...entry, head: gitRevision(head) } : entry)),
+    remote: [...manifest.remote.filter((entry) => entry.name !== manifest.branch), { name: manifest.branch, head }],
   };
   try {
     await checkpointGitWorkspace(workspace, manifest, next);
   } catch (error) {
     throw new Error(
-      'Saved to GitHub, but the local Git checkpoint could not be updated. ' +
-        'Let Studio restart to recover its checkpoint before publishing again.',
+      'Saved to GitHub, but the local Git checkpoint could not be updated. ' + 'Let Studio restart to recover its checkpoint before publishing again.',
       { cause: error },
     );
   }
   return { sha: head, url: `https://github.com/${manifest.repository}/commit/${head}` };
 }
 
-async function verifyPublishHead(
-  run: ReturnType<typeof gitWorkspaceRun>,
-  remote: string,
-  branch: string,
-  expected: string,
-) {
-  const witnessed =
-    (await run(['ls-remote', '--heads', remote, 'refs/heads/' + branch])).split('\t')[0] ?? '';
+async function verifyPublishHead(run: ReturnType<typeof gitWorkspaceRun>, remote: string, branch: string, expected: string) {
+  const witnessed = (await run(['ls-remote', '--heads', remote, 'refs/heads/' + branch])).split('\t')[0] ?? '';
   if (witnessed !== expected) {
     throw new Error('GitHub changed. Pull from GitHub before publishing.');
   }
 }
 
-async function verifyPublishAncestry(
-  git: PublishSource['git'],
-  remote: string,
-  expected: string,
-  head: string,
-) {
+async function verifyPublishAncestry(git: PublishSource['git'], remote: string, expected: string, head: string) {
   if (!expected) {
     return;
   }
-  await gitWorkspaceRun(git)([
-    'fetch',
-    '--quiet',
-    '--depth=301',
-    '--filter=blob:none',
-    '--no-tags',
-    remote,
-    expected,
-  ]);
+  await gitWorkspaceRun(git)(['fetch', '--quiet', '--depth=301', '--filter=blob:none', '--no-tags', remote, expected]);
   const ancestor = await publishGit(git, ['merge-base', '--is-ancestor', expected, head]);
   if (!ancestor.ok) {
-    throw new Error(
-      'Pull from GitHub before publishing; the remote has changes this branch lacks.',
-    );
+    throw new Error('Pull from GitHub before publishing; the remote has changes this branch lacks.');
   }
 }

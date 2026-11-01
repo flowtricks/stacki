@@ -11,14 +11,12 @@ export async function projectPageFolders(root: string): Promise<readonly string[
     const relative = pending[index];
     assert(relative !== undefined, 'Page folder queue has a current entry');
     assert(index <= 10_000, 'Page folder traversal stays bounded');
-    const directory = await opendir(path.join(root, 'src/pages', relative)).catch(
-      (error: unknown) => {
-        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-          return undefined;
-        }
-        throw error;
-      },
-    );
+    const directory = await opendir(path.join(root, 'src/pages', relative)).catch((error: unknown) => {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        return undefined;
+      }
+      throw error;
+    });
     if (!directory) {
       continue;
     }

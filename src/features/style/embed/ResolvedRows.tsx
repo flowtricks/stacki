@@ -42,12 +42,7 @@ export function SectionBlock({
       {/* A row (not one big button) so an optional action can sit next to the chevron
           without nesting a button inside a button. */}
       <div className="embed-editor_section-header">
-        <button
-          type="button"
-          className="embed-editor_section-toggle"
-          aria-expanded={open}
-          onClick={onToggle}
-        >
+        <button type="button" className="embed-editor_section-toggle" aria-expanded={open} onClick={onToggle}>
           <span className="embed-editor_section-title">{label}</span>
         </button>
         {headerAction}
@@ -61,11 +56,7 @@ export function SectionBlock({
           <span
             className={`embed-editor_section-dot ${mark === 'own' ? 'is-own' : ''}`}
             role="img"
-            aria-label={
-              mark === 'own'
-                ? `${label} has styles on this selector`
-                : `${label} has styles from another selector`
-            }
+            aria-label={mark === 'own' ? `${label} has styles on this selector` : `${label} has styles from another selector`}
             title={mark === 'own' ? 'Set on this selector' : 'Set on another selector'}
           />
         ) : undefined}
@@ -77,14 +68,7 @@ export function SectionBlock({
           onClick={onToggle}
         >
           <svg className="embed-editor_section-chevron" viewBox="0 0 16 16" aria-hidden="true">
-            <path
-              d="M4.2 6.2 8 10l3.8-3.8"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <path d="M4.2 6.2 8 10l3.8-3.8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
       </div>
@@ -128,12 +112,7 @@ export function ProvenancePopover({
     >
       <div className="embed-editor_provenance-head">
         <code>{headerLabel}</code>
-        <button
-          type="button"
-          className="embed-editor_icon-btn"
-          onClick={onClose}
-          aria-label="Close"
-        >
+        <button type="button" className="embed-editor_icon-btn" onClick={onClose} aria-label="Close">
           ✕
         </button>
       </div>
@@ -175,36 +154,16 @@ export function ResolvedRow({
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
   const isSelected = resolved.source === 'selected';
-  const display =
-    isSelected && resolved.selectedValue
-      ? resolved.selectedValue
-      : { value: resolved.winner.value, important: resolved.winner.important };
+  const display = isSelected && resolved.selectedValue ? resolved.selectedValue : { value: resolved.winner.value, important: resolved.winner.important };
   const isDisplay = prop === 'display';
 
   return (
     <div className={`embed-editor_decl ${isDisplay ? 'is-control' : ''}`}>
-      <ResolvedRowLabel
-        prop={prop}
-        resolved={resolved}
-        busy={busy}
-        clearProp={clearProp}
-        onProvenance={onProvenance}
-        onSelectSelector={onSelectSelector}
-      />
+      <ResolvedRowLabel prop={prop} resolved={resolved} busy={busy} clearProp={clearProp} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
       {isDisplay ? (
-        <DisplayControl
-          value={display.value}
-          important={display.important}
-          busy={busy}
-          onCommit={(value, important) => setProp(prop, value, important)}
-        />
+        <DisplayControl value={display.value} important={display.important} busy={busy} onCommit={(value, important) => setProp(prop, value, important)} />
       ) : (
-        <VariableConnect
-          ariaLabel={`Connect ${prop} to a variable`}
-          disabled={busy}
-          prop={prop}
-          onPick={(binding) => setProp(prop, binding, false)}
-        >
+        <VariableConnect ariaLabel={`Connect ${prop} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
           <ValueField
             value={display.value}
             important={display.important}
@@ -298,13 +257,7 @@ export function SizeRowLabel({
 }) {
   if (!resolved) {
     return (
-      <FieldLabel
-        className="embed-editor_size-label"
-        active={false}
-        disabled={busy}
-        onReset={() => {}}
-        tooltip={<PropTip props={[prop]} />}
-      >
+      <FieldLabel className="embed-editor_size-label" active={false} disabled={busy} onReset={() => {}} tooltip={<PropTip props={[prop]} />}>
         {label}
       </FieldLabel>
     );
@@ -379,12 +332,7 @@ export function DisplayRow({
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
       />
-      <DisplayControl
-        value={current.value}
-        important={current.important}
-        busy={busy}
-        onCommit={(value, important) => setProp('display', value, important)}
-      />
+      <DisplayControl value={current.value} important={current.important} busy={busy} onCommit={(value, important) => setProp('display', value, important)} />
     </div>
   );
 }
@@ -404,14 +352,7 @@ export const VALIGN_OPTIONS: readonly SelectOption<string>[] = [
 ];
 export const VALIGN_VALUES = new Set(VALIGN_OPTIONS.map((option) => option.value));
 // Display values for which `vertical-align` actually applies (else the row dims).
-export const VALIGN_DISPLAYS = new Set([
-  'inline',
-  'inline-block',
-  'inline-flex',
-  'inline-grid',
-  'inline-table',
-  'table-cell',
-]);
+export const VALIGN_DISPLAYS = new Set(['inline', 'inline-block', 'inline-flex', 'inline-grid', 'inline-table', 'table-cell']);
 
 export function VerticalAlignRow({
   resolved,
@@ -433,27 +374,17 @@ export function VerticalAlignRow({
 }) {
   const prop = 'vertical-align';
   const isSelected = resolved?.source === 'selected';
-  const effective = resolved
-    ? isSelected && resolved.selectedValue
-      ? resolved.selectedValue
-      : resolved.winner
-    : undefined;
+  const effective = resolved ? (isSelected && resolved.selectedValue ? resolved.selectedValue : resolved.winner) : undefined;
   const raw = effective ? effective.value.trim() : '';
   const matched = VALIGN_VALUES.has(raw.toLowerCase()) ? raw.toLowerCase() : undefined;
 
   // Surface a pre-existing non-preset value (e.g. a length) as a trailing option so
   // the trigger reflects it instead of silently snapping back to Baseline.
-  const options: SelectOption<string>[] =
-    matched === undefined && raw
-      ? [...VALIGN_OPTIONS, { value: raw, label: raw }]
-      : [...VALIGN_OPTIONS];
+  const options: SelectOption<string>[] = matched === undefined && raw ? [...VALIGN_OPTIONS, { value: raw, label: raw }] : [...VALIGN_OPTIONS];
   const pick = (value: string) => setProp(prop, value, false);
 
   return (
-    <div
-      className={`embed-editor_size-row ${dimmed ? 'is-inactive' : ''}`}
-      title={dimmed ? 'Align Y applies when Display is inline or table-cell' : undefined}
-    >
+    <div className={`embed-editor_size-row ${dimmed ? 'is-inactive' : ''}`} title={dimmed ? 'Align Y applies when Display is inline or table-cell' : undefined}>
       <SizeRowLabel
         label="Align Y"
         prop={prop}
@@ -464,13 +395,7 @@ export function VerticalAlignRow({
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
       />
-      <Select
-        value={matched ?? (raw || 'baseline')}
-        options={options}
-        onChange={pick}
-        ariaLabel="Align Y"
-        disabled={busy}
-      />
+      <Select value={matched ?? (raw || 'baseline')} options={options} onChange={pick} ariaLabel="Align Y" disabled={busy} />
     </div>
   );
 }
@@ -499,10 +424,7 @@ export function effectiveValue(resolved: ResolvedProp | undefined): string {
   if (!resolved) {
     return '';
   }
-  const effective =
-    resolved.source === 'selected' && resolved.selectedValue
-      ? resolved.selectedValue.value
-      : resolved.winner.value;
+  const effective = resolved.source === 'selected' && resolved.selectedValue ? resolved.selectedValue.value : resolved.winner.value;
   return effective.trim().toLowerCase();
 }
 
@@ -514,10 +436,7 @@ export function rawEffective(resolved: ResolvedProp | undefined): {
   if (!resolved) {
     return { value: '', important: false };
   }
-  const effective =
-    resolved.source === 'selected' && resolved.selectedValue
-      ? resolved.selectedValue
-      : resolved.winner;
+  const effective = resolved.source === 'selected' && resolved.selectedValue ? resolved.selectedValue : resolved.winner;
   return { value: effective.value, important: effective.important };
 }
 
@@ -573,13 +492,7 @@ export const LAYOUT_CONTROL_PROPS = new Set([
 // Properties that can only apply as raw CSS — Webflow exposes no Designer API to
 // populate its native Transitions UI, so `transition` (and its longhands) always
 // write to the embed (custom code) rather than the native class.
-export const EMBED_ONLY_PROPS = new Set([
-  'transition',
-  'transition-property',
-  'transition-duration',
-  'transition-timing-function',
-  'transition-delay',
-]);
+export const EMBED_ONLY_PROPS = new Set(['transition', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay']);
 // Effects props owned by dedicated controls in EffectsSection — kept out of the
 // generic fall-through rows (like TYPOGRAPHY_CONTROL_PROPS).
 export const EFFECTS_CONTROL_PROPS = new Set([

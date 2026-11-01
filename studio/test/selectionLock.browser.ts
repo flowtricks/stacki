@@ -6,8 +6,7 @@ import { mkdir } from 'node:fs/promises';
 import { record, string } from '../src/shared/validation';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const firstContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
@@ -38,26 +37,15 @@ try {
   await heading.click();
   await selected(second, 'Heading');
   await locked(second);
-  assert.equal(
-    await second.locator('.toast').count(),
-    0,
-    'Selection does not show a blocking toast',
-  );
-  assert.equal(
-    await second.locator('.rich-content').count(),
-    0,
-    'Locked settings cannot be edited',
-  );
+  assert.equal(await second.locator('.toast').count(), 0, 'Selection does not show a blocking toast');
+  assert.equal(await second.locator('.rich-content').count(), 0, 'Locked settings cannot be edited');
   await first.locator('.rich-content').waitFor();
   await row(second, 'Heading').click();
   await selected(second, 'Heading');
   await locked(second);
   await mkdir('test-results', { recursive: true });
   await second.screenshot({ path: 'test-results/selection-takeover.png' });
-  await second
-    .locator('.studio-right')
-    .getByRole('button', { name: 'Take over', exact: true })
-    .click();
+  await second.locator('.studio-right').getByRole('button', { name: 'Take over', exact: true }).click();
   await selected(second, 'Heading');
   await selected(first, 'Heading');
   await locked(first);
@@ -65,26 +53,16 @@ try {
   await sharedContainerInsertion(first, second);
   await row(first, 'Img').click();
   await selected(first, 'Img');
-  await second
-    .locator('.studio-right')
-    .getByRole('button', { name: 'Take over', exact: true })
-    .waitFor({ state: 'detached' });
+  await second.locator('.studio-right').getByRole('button', { name: 'Take over', exact: true }).waitFor({ state: 'detached' });
   await row(first, 'ContentWrapper').click();
   await selected(first, 'ContentWrapper');
   await locked(first);
   await secondContext.close();
-  await first.waitForFunction(
-    () => document.querySelectorAll('.collaborator-outline').length === 0,
-  );
-  await first
-    .locator('.studio-right')
-    .getByRole('button', { name: 'Take over', exact: true })
-    .waitFor({ state: 'detached' });
+  await first.waitForFunction(() => document.querySelectorAll('.collaborator-outline').length === 0);
+  await first.locator('.studio-right').getByRole('button', { name: 'Take over', exact: true }).waitFor({ state: 'detached' });
   await selected(first, 'ContentWrapper');
   assert.deepEqual(errors, []);
-  console.log(
-    'Shared canvas/navigator selection, Settings takeover, child insertion without takeover, owner release and disconnect passed.',
-  );
+  console.log('Shared canvas/navigator selection, Settings takeover, child insertion without takeover, owner release and disconnect passed.');
 } finally {
   await browser.close();
 }
@@ -100,14 +78,8 @@ async function selected(page: Page, name: string) {
 }
 
 async function locked(page: Page) {
-  await page
-    .locator('.studio-right')
-    .getByRole('heading', { name: 'This element is being edited', exact: true })
-    .waitFor();
-  await page
-    .locator('.studio-right')
-    .getByRole('button', { name: 'Take over', exact: true })
-    .waitFor();
+  await page.locator('.studio-right').getByRole('heading', { name: 'This element is being edited', exact: true }).waitFor();
+  await page.locator('.studio-right').getByRole('button', { name: 'Take over', exact: true }).waitFor();
 }
 
 async function sharedContainerInsertion(owner: Page, inspector: Page) {

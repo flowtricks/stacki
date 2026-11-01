@@ -10,9 +10,7 @@ try {
   const browser = await chromium.launch({
     executablePath:
       process.env['CHROME_PATH'] ??
-      (process.platform === 'darwin'
-        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-        : chromium.executablePath()),
+      (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : chromium.executablePath()),
     headless: true,
   });
   try {
@@ -46,9 +44,7 @@ async function checkDeadline(page: Page) {
   await page.clock.runFor(1600);
   assert.equal(pulls, 0, 'Acknowledged work suppresses the old 1500ms fallback');
   await preview.evaluate(() => document.dispatchEvent(new Event('studio:render-pending')));
-  const request = page.waitForRequest(
-    (item) => item.resourceType() === 'fetch' && new URL(item.url()).pathname === '/',
-  );
+  const request = page.waitForRequest((item) => item.resourceType() === 'fetch' && new URL(item.url()).pathname === '/');
   await page.clock.runFor(18_400);
   await request;
   assert.equal(pulls, 1, 'Repeated pending messages cannot postpone the 20-second watchdog');
@@ -57,9 +53,7 @@ async function checkDeadline(page: Page) {
 async function checkDisconnect(page: Page) {
   const preview = page.frames().find((frame) => frame.url().includes('#avb-design'));
   assert.ok(preview);
-  const request = page.waitForRequest(
-    (item) => item.resourceType() === 'fetch' && new URL(item.url()).pathname === '/',
-  );
+  const request = page.waitForRequest((item) => item.resourceType() === 'fetch' && new URL(item.url()).pathname === '/');
   await preview.evaluate(() => {
     document.dispatchEvent(new Event('studio:render-pending'));
     document.dispatchEvent(new CustomEvent('studio:render-push', { detail: false }));

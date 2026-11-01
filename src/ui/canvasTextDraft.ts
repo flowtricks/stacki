@@ -34,26 +34,16 @@ export function clearCanvasTextDraft(session: string): void {
   }
 }
 
-export function useCanvasTextDraft(scope: {
-  readonly projectPath?: string | undefined;
-  readonly filePath?: string | undefined;
-}): CanvasTextDraft | undefined {
+export function useCanvasTextDraft(scope: { readonly projectPath?: string | undefined; readonly filePath?: string | undefined }): CanvasTextDraft | undefined {
   const draft = useLiveValue(canvasTextDraft);
   if (!draft || !scope.projectPath || !scope.filePath) {
     return undefined;
   }
-  const file = projectRelativePath(
-    scope.projectPath,
-    scope.filePath,
-    window.avb?.platform ?? 'linux',
-  );
+  const file = projectRelativePath(scope.projectPath, scope.filePath, window.avb?.platform ?? 'linux');
   return draft.projectPath === scope.projectPath && draft.file === file ? draft : undefined;
 }
 
-export function canvasDraftValue(
-  node: { readonly id?: string; readonly value: string },
-  draft: CanvasTextDraft | undefined,
-): string {
+export function canvasDraftValue(node: { readonly id?: string; readonly value: string }, draft: CanvasTextDraft | undefined): string {
   if (draft?.kind !== 'text') {
     return node.value;
   }
@@ -87,11 +77,7 @@ export function canvasTypedText(source: string, typed: string): string {
 }
 
 /** The words being typed on the canvas for this instance's prop, as the field shows them. */
-export function canvasDraftProp(
-  nodeID: string | undefined,
-  prop: string,
-  draft: CanvasTextDraft | undefined,
-): Attr | undefined {
+export function canvasDraftProp(nodeID: string | undefined, prop: string, draft: CanvasTextDraft | undefined): Attr | undefined {
   if (draft?.kind !== 'prop' || draft.nodeID !== nodeID || draft.prop !== prop) {
     return undefined;
   }

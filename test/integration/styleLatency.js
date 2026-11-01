@@ -52,8 +52,7 @@ const PAGE = [
   '<style>.box { background-color: rgb(1, 0, 0); }</style>',
   '',
 ].join('\n');
-const THEME = (blue) =>
-  `<p>theme</p>\n<style is:global>.box { color: rgb(0, 0, ${blue}); }</style>\n`;
+const THEME = (blue) => `<p>theme</p>\n<style is:global>.box { color: rgb(0, 0, ${blue}); }</style>\n`;
 
 function versionsFromArguments() {
   const index = process.argv.indexOf('--astro');
@@ -230,16 +229,13 @@ async function openCanvas(BrowserWindow, url) {
   return canvas;
 }
 
-const readCounters = (canvas) =>
-  canvas.webContents.executeJavaScript('[window.__styleRewrites, window.__pageFetches]');
+const readCounters = (canvas) => canvas.webContents.executeJavaScript('[window.__styleRewrites, window.__pageFetches]');
 
 // How long from starting the write until its exact expected value is observed.
 // Use one monotonic clock in the test process, never a server/browser timestamp.
 async function timeToShow(canvas, row, started) {
   const read =
-    row.property === 'textContent'
-      ? "document.querySelector('.box h1').textContent"
-      : `getComputedStyle(document.querySelector('.box')).${row.property}`;
+    row.property === 'textContent' ? "document.querySelector('.box h1').textContent" : `getComputedStyle(document.querySelector('.box')).${row.property}`;
   let shown = '';
   while (performance.now() - started <= WATCH_MS_MAX) {
     shown = await canvas.webContents.executeJavaScript(read);
@@ -309,23 +305,17 @@ async function runEdits(invoke, canvas, project) {
     const red = edit * 20;
     const row = { path: 'page:edit', edit, property: 'backgroundColor' };
     await measure(canvas, rows, { ...row, expected: `rgb(${red}, 0, 0)` }, () =>
-      editPage(invoke, codePatch, pagePath, (source) =>
-        source.replace(/background-color: rgb\(\d+, 0, 0\)/, `background-color: rgb(${red}, 0, 0)`),
-      ),
+      editPage(invoke, codePatch, pagePath, (source) => source.replace(/background-color: rgb\(\d+, 0, 0\)/, `background-color: rgb(${red}, 0, 0)`)),
     );
   }
   for (let edit = 1; edit <= EDITS; edit += 1) {
     const blue = edit * 20;
     const row = { path: 'style:writeFile', edit, property: 'color' };
-    await measure(canvas, rows, { ...row, expected: `rgb(0, 0, ${blue})` }, () =>
-      invoke('style:writeFile', { filePath: themePath, css: THEME(blue) }),
-    );
+    await measure(canvas, rows, { ...row, expected: `rgb(0, 0, ${blue})` }, () => invoke('style:writeFile', { filePath: themePath, css: THEME(blue) }));
   }
   const text = { path: 'text only', edit: 1, property: 'textContent' };
   await measure(canvas, rows, { ...text, expected: 'Style latency, typed' }, () =>
-    editPage(invoke, codePatch, pagePath, (source) =>
-      source.replace('<h1>Style latency</h1>', '<h1>Style latency, typed</h1>'),
-    ),
+    editPage(invoke, codePatch, pagePath, (source) => source.replace('<h1>Style latency</h1>', '<h1>Style latency, typed</h1>')),
   );
   return rows;
 }
@@ -333,9 +323,7 @@ async function runEdits(invoke, canvas, project) {
 function report(version, rows) {
   const say = (message) => fs.writeSync(1, message + '\n');
   say(`\nAstro ${version}: write-to-observed-value latency (not input-to-paint)`);
-  say(
-    'path             edit  expected            ms     write   shown instead       sheets  fetches',
-  );
+  say('path             edit  expected            ms     write   shown instead       sheets  fetches');
   for (const row of rows) {
     const ms = row.ms === undefined ? 'never' : row.ms.toFixed(1);
     const instead = row.ms === undefined ? row.shown : '';

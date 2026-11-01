@@ -60,11 +60,7 @@ export function readPropsDestructure(frontmatter: string): PropsDestructure | un
     return undefined;
   }
   const entries: PropEntry[] = [];
-  for (
-    let child = pattern.firstChild;
-    child !== null && entries.length < LIMITS.propSchemaFieldsMax;
-    child = child.nextSibling
-  ) {
+  for (let child = pattern.firstChild; child !== null && entries.length < LIMITS.propSchemaFieldsMax; child = child.nextSibling) {
     if (child.name === 'PatternProperty') {
       const entry = entryOf(child, frontmatter);
       if (entry !== undefined) {
@@ -107,33 +103,22 @@ export function withProp(frontmatter: string, prop: NewProp, anchor: number): st
   assert(anchor >= 0, 'A new destructure has a place');
   assert(anchor <= frontmatter.length, 'A new destructure is inside the frontmatter');
   const destructure = readPropsDestructure(frontmatter);
-  assert(
-    destructure?.entries.every((entry) => entry.key !== prop.key) ?? true,
-    'A new prop is not one the component has',
-  );
+  assert(destructure?.entries.every((entry) => entry.key !== prop.key) ?? true, 'A new prop is not one the component has');
   const entry = `${prop.key}: ${prop.local} = ${prop.defaultCode}`;
   const edits: { readonly at: number; readonly text: string }[] = [];
   if (destructure === undefined) {
     edits.push({ at: anchor, text: `const { ${entry} } = Astro.props;\n` });
   } else {
     // A destructure on one line stays on one line; one entry per line stays so.
-    const oneLine = !frontmatter
-      .slice(destructure.pattern.from, destructure.pattern.to)
-      .includes('\n');
+    const oneLine = !frontmatter.slice(destructure.pattern.from, destructure.pattern.to).includes('\n');
     const separator = oneLine ? ', ' : ',\n  ';
     const first = oneLine ? ` ${entry} ` : `\n  ${entry}\n`;
-    edits.push({
-      at: destructureEnd(frontmatter, destructure),
-      text: destructure.entries.length === 0 ? first : `${separator}${entry}`,
-    });
+    edits.push({ at: destructureEnd(frontmatter, destructure), text: destructure.entries.length === 0 ? first : `${separator}${entry}` });
   }
   const members = propsInterfaceEnd(frontmatter);
   if (members !== undefined) {
     const lineBreak = frontmatter.slice(0, members).trimEnd().length === members ? '\n' : '';
-    edits.push({
-      at: members,
-      text: `${lineBreak}  /** ${prop.description} */\n  ${prop.key}?: ${prop.type};\n`,
-    });
+    edits.push({ at: members, text: `${lineBreak}  /** ${prop.description} */\n  ${prop.key}?: ${prop.type};\n` });
   }
   // From the end, so an earlier position still points at its text.
   edits.sort((left, right) => right.at - left.at);
@@ -152,11 +137,7 @@ export function propTooltip(frontmatter: string, key: string): string {
     return '';
   }
   let comment = '';
-  for (
-    let child = body.firstChild, count = 0;
-    child !== null && count < LIMITS.propSchemaFieldsMax;
-    child = child.nextSibling, count++
-  ) {
+  for (let child = body.firstChild, count = 0; child !== null && count < LIMITS.propSchemaFieldsMax; child = child.nextSibling, count++) {
     if (child.name === 'BlockComment') {
       comment = frontmatter.slice(child.from, child.to);
     } else if (child.name === 'PropertyType') {
@@ -191,9 +172,7 @@ function propsInterfaceEnd(frontmatter: string): number | undefined {
   assert(frontmatter.charAt(close) === '}', 'An interface body ends with its brace');
   // Back to the start of the brace's line, so the member goes above it.
   const lineStart = frontmatter.lastIndexOf('\n', close) + 1;
-  return frontmatter.slice(lineStart, close).trim() === '' && lineStart > body.from
-    ? lineStart
-    : close;
+  return frontmatter.slice(lineStart, close).trim() === '' && lineStart > body.from ? lineStart : close;
 }
 
 // The `{ … }` of `interface Props`, if the frontmatter declares one.
@@ -205,14 +184,8 @@ function propsInterfaceBody(frontmatter: string): SyntaxNode | undefined {
     statement !== null && count < LOOP_SYNTAX_LIMITS.declarationsMax;
     statement = statement.nextSibling, count++
   ) {
-    const declaration =
-      statement.name === 'ExportDeclaration'
-        ? statement.getChild('InterfaceDeclaration')
-        : statement;
-    if (
-      declaration?.name === 'InterfaceDeclaration' &&
-      textOf(source, declaration.getChild('TypeDefinition') ?? undefined) === 'Props'
-    ) {
+    const declaration = statement.name === 'ExportDeclaration' ? statement.getChild('InterfaceDeclaration') : statement;
+    if (declaration?.name === 'InterfaceDeclaration' && textOf(source, declaration.getChild('TypeDefinition') ?? undefined) === 'Props') {
       return declaration.getChild('ObjectType') ?? undefined;
     }
   }
@@ -230,11 +203,7 @@ function propsPattern(frontmatter: string): SyntaxNode | undefined {
     if (statement.name === 'VariableDeclaration') {
       const pattern = statement.getChild('ObjectPattern');
       const value = statement.getChild('MemberExpression');
-      if (
-        pattern !== null &&
-        value !== null &&
-        source.slice(value.from, value.to).replace(/\s/g, '') === 'Astro.props'
-      ) {
+      if (pattern !== null && value !== null && source.slice(value.from, value.to).replace(/\s/g, '') === 'Astro.props') {
         return pattern;
       }
     }
@@ -251,11 +220,7 @@ function entryOf(node: SyntaxNode, source: string): PropEntry | undefined {
   const local = textOf(source, node.getChild('VariableDefinition') ?? undefined) ?? key;
   const equals = node.getChild('Equals');
   const value = equals?.nextSibling ?? undefined;
-  return {
-    key,
-    local,
-    defaultValue: value === undefined ? undefined : { from: value.from, to: value.to },
-  };
+  return { key, local, defaultValue: value === undefined ? undefined : { from: value.from, to: value.to } };
 }
 
 function textOf(source: string, node: SyntaxNode | undefined): string | undefined {

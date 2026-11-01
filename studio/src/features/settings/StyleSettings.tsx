@@ -45,11 +45,7 @@ export function StyleSettings({
       openFilePath={document.file}
       openFileKind={document.file.startsWith('src/pages/') ? 'page' : 'component'}
       projectClasses={classes}
-      renderedClasses={
-        preview.selected?.id === path
-          ? preview.classes[path]?.[preview.selected.occurrence ?? 0]
-          : []
-      }
+      renderedClasses={preview.selected?.id === path ? preview.classes[path]?.[preview.selected.occurrence ?? 0] : []}
       historyTick={document.revision}
       onSelectNode={select}
       pathOf={(id) => prefix + pathFor(id)}

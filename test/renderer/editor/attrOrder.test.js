@@ -32,12 +32,7 @@ const check = (what, condition, detail) => {
   }
 };
 
-const {
-  parsePage,
-  serializePage,
-  parseTemplate,
-  serializeNodes,
-} = require('#dist/electron/parse/astroParser.js');
+const { parsePage, serializePage, parseTemplate, serializeNodes } = require('#dist/electron/parse/astroParser.js');
 
 // `src/editor/attrOrder.ts` is the renderer's module, so it comes in the way the app
 // gets it rather than as a copy of its rules.
@@ -88,41 +83,25 @@ const INPUT = '<Input variant="first-name" required />';
     delete node.props.variant;
     node.props.variant = stringValue('given-name');
   });
-  check(
-    'a prop cleared and retyped stays where it was',
-    out === '<Input variant="given-name" required />',
-    out,
-  );
+  check('a prop cleared and retyped stays where it was', out === '<Input variant="given-name" required />', out);
 }
 {
   const out = after(INPUT, (node) => {
     node.props.variant = stringValue('given-name');
   });
-  check(
-    'editing one in place is still in place',
-    out === '<Input variant="given-name" required />',
-    out,
-  );
+  check('editing one in place is still in place', out === '<Input variant="given-name" required />', out);
 }
 {
   const out = after(INPUT, (node) => {
     delete node.props.required;
   });
-  check(
-    'removing one leaves the rest where they were',
-    out === '<Input variant="first-name" />',
-    out,
-  );
+  check('removing one leaves the rest where they were', out === '<Input variant="first-name" />', out);
 }
 {
   const out = after(INPUT, (node) => {
     node.props.placeholder = stringValue('First name');
   });
-  check(
-    'a prop the file never had goes at the end',
-    out === '<Input variant="first-name" required placeholder="First name" />',
-    out,
-  );
+  check('a prop the file never had goes at the end', out === '<Input variant="first-name" required placeholder="First name" />', out);
 }
 {
   // What the props panel does when a union branch forbids a prop and then
@@ -133,11 +112,7 @@ const INPUT = '<Input variant="first-name" required />';
     node.props.disabled = { type: 'bare' };
     node.props.variant = held;
   });
-  check(
-    'one set aside and put back returns to its own slot',
-    out === '<Input variant="first-name" required disabled />',
-    out,
-  );
+  check('one set aside and put back returns to its own slot', out === '<Input variant="first-name" required disabled />', out);
 }
 
 // --- the shapes an attribute comes in -----------------------------------------
@@ -159,11 +134,7 @@ const INPUT = '<Input variant="first-name" required />';
     delete node.props.title;
     node.props.title = stringValue('Hello');
   });
-  check(
-    'a spread holds its place too',
-    out === '<Card {...rest} title="Hello" class:list={[base]} data-x="1" />',
-    out,
-  );
+  check('a spread holds its place too', out === '<Card {...rest} title="Hello" class:list={[base]} data-x="1" />', out);
 }
 
 // --- a tag written across lines ------------------------------------------------
@@ -174,35 +145,21 @@ const INPUT = '<Input variant="first-name" required />';
 />`;
   const parsed = parsePage(page(source));
   const node = parsed.model.nodes[0];
-  check(
-    'a multi-line tag is kept as written',
-    serializePage(parsed.model).includes('\n  variant="first-name"\n'),
-    'reflowed',
-  );
+  check('a multi-line tag is kept as written', serializePage(parsed.model).includes('\n  variant="first-name"\n'), 'reflowed');
   delete node.props.variant;
   node.props.variant = stringValue('given-name');
   const out = serializePage(parsed.model);
-  check(
-    'and once edited it reflows in the file’s order',
-    out.includes('<Input variant="given-name" required />'),
-    out.split('\n').slice(2, -1).join('\n'),
-  );
+  check('and once edited it reflows in the file’s order', out.includes('<Input variant="given-name" required />'), out.split('\n').slice(2, -1).join('\n'));
 }
 
 // --- an element inside a line of prose -----------------------------------------
 {
-  const nodes = parseTemplate(
-    '<p>Call <a href="/x" class="link" target="_blank">us</a> today.</p>',
-  ).nodes;
+  const nodes = parseTemplate('<p>Call <a href="/x" class="link" target="_blank">us</a> today.</p>').nodes;
   const link = nodes[0].children.find((child) => child.name === 'a');
   delete link.props.href;
   link.props.href = stringValue('/y');
   const out = serializeNodes(nodes, '');
-  check(
-    'an inline tag keeps its order as well',
-    out.includes('<a href="/y" class="link" target="_blank">'),
-    out,
-  );
+  check('an inline tag keeps its order as well', out.includes('<a href="/y" class="link" target="_blank">'), out);
 }
 
 // --- renaming one -------------------------------------------------------------
@@ -215,36 +172,20 @@ const INPUT = '<Input variant="first-name" required />';
   const moved = renameAttr(node, 'data-role', 'data-kind');
   check('a rename reports that it happened', moved === true, String(moved));
   const out = serializePage(parsed.model).split('\n')[2];
-  check(
-    'and the renamed prop stays in its slot',
-    out === '<div data-kind="hero" class="wrap" id="one"></div>',
-    out,
-  );
+  check('and the renamed prop stays in its slot', out === '<div data-kind="hero" class="wrap" id="one"></div>', out);
 }
 {
   const parsed = parsePage(page('<div id="one" class="wrap" title="Hi"></div>'));
   const node = parsed.model.nodes[0];
   renameAttr(node, 'title', 'class'); // onto a name the tag already had
   const out = serializePage(parsed.model).split('\n')[2];
-  check(
-    'renaming onto an existing name takes that slot over',
-    out === '<div id="one" class="Hi"></div>',
-    out,
-  );
+  check('renaming onto an existing name takes that slot over', out === '<div id="one" class="Hi"></div>', out);
 }
 {
   const parsed = parsePage(page('<div id="one"></div>'));
   const node = parsed.model.nodes[0];
-  check(
-    'renaming what is not there does nothing',
-    renameAttr(node, 'title', 'alt') === false,
-    'it did something',
-  );
-  check(
-    'and renaming to the same name does nothing',
-    renameAttr(node, 'id', 'id') === false,
-    'it did something',
-  );
+  check('renaming what is not there does nothing', renameAttr(node, 'title', 'alt') === false, 'it did something');
+  check('and renaming to the same name does nothing', renameAttr(node, 'id', 'id') === false, 'it did something');
 }
 
 // The app's rename goes through it — a second copy of the rule elsewhere would
@@ -265,11 +206,7 @@ const INPUT = '<Input variant="first-name" required />';
   const nodes = parseTemplate('<div></div>').nodes;
   nodes[0].props = { class: stringValue('card'), id: stringValue('one') };
   const out = serializeNodes(nodes, '');
-  check(
-    'a tag with no file behind it writes what it was given',
-    out.includes('<div class="card" id="one">'),
-    out,
-  );
+  check('a tag with no file behind it writes what it was given', out.includes('<div class="card" id="one">'), out);
 }
 
 // --- the canvas still marks what it marks ---------------------------------------

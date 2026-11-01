@@ -13,10 +13,7 @@ try {
   const assets = await shared('/studio/api/assets', 'asset-scan');
   assert.ok(project.durationMs >= 0);
   assert.ok(assets.durationMs >= 0);
-  await writeFile(
-    path.join(fixture.root, 'src/pages/catalog-added.astro'),
-    '<h1>New page</h1><style>.fresh-page { color: red; }</style>',
-  );
+  await writeFile(path.join(fixture.root, 'src/pages/catalog-added.astro'), '<h1>New page</h1><style>.fresh-page { color: red; }</style>');
   const response = await fetch(new URL('/studio/api/project', fixture.url), {
     signal: AbortSignal.timeout(10_000),
   });
@@ -27,17 +24,12 @@ try {
     assert.ok(parseProject(value).classes.includes(name), 'Component, page and CSS classes remain');
   }
   assert.notEqual(timing(response, 'project-scan').identifier, project.identifier);
-  await writeFile(
-    path.join(fixture.root, 'src/components/Card.astro'),
-    '<section><slot name="updated" /></section>',
-  );
+  await writeFile(path.join(fixture.root, 'src/components/Card.astro'), '<section><slot name="updated" /></section>');
   const changed = await fetch(new URL('/studio/api/project', fixture.url), {
     signal: AbortSignal.timeout(10_000),
   });
   const updated: unknown = await changed.json();
-  const component = parseProject(updated).components.find(
-    (item) => item.file === 'src/components/Card.astro',
-  );
+  const component = parseProject(updated).components.find((item) => item.file === 'src/components/Card.astro');
   assert.deepEqual(component?.slots, ['updated'], 'Outside edits replace cached slot analysis');
   assert.ok(!parseProject(updated).classes.includes('card'), 'Removed component CSS is not cached');
   console.log(JSON.stringify({ workload: 'four-concurrent-readers', project, assets }));
@@ -46,11 +38,7 @@ try {
 }
 
 async function shared(route: string, name: string) {
-  const responses = await Promise.all(
-    Array.from({ length: 4 }, () =>
-      fetch(new URL(route, fixture.url), { signal: AbortSignal.timeout(10_000) }),
-    ),
-  );
+  const responses = await Promise.all(Array.from({ length: 4 }, () => fetch(new URL(route, fixture.url), { signal: AbortSignal.timeout(10_000) })));
   const timings = responses.map((response) => {
     assert.equal(response.status, 200);
     return timing(response, name);

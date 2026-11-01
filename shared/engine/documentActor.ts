@@ -58,17 +58,13 @@ export interface DiskLock {
   readonly token: string;
 }
 
-export type LockError =
-  | { readonly code: 'held'; readonly message: string }
-  | { readonly code: 'failed'; readonly message: string };
+export type LockError = { readonly code: 'held'; readonly message: string } | { readonly code: 'failed'; readonly message: string };
 
 /** A replace either left the target untouched (`failed`) or replaced it and
  * cannot promise the replacement survives a power loss (`not-durable`: the
  * directory could not be flushed). The second is the crash window of plan
  * §3.5 made visible, so it reaches the caller as `uncertain`. */
-export type ReplaceError =
-  | { readonly code: 'failed'; readonly message: string }
-  | { readonly code: 'not-durable'; readonly message: string };
+export type ReplaceError = { readonly code: 'failed'; readonly message: string } | { readonly code: 'not-durable'; readonly message: string };
 
 export interface DocumentDisk {
   read(path: FilePath): Result<DiskRead, DiskError>;
@@ -120,9 +116,7 @@ export interface InFlight {
 }
 
 export type ActorPhase =
-  | { readonly tag: 'idle' }
-  | ({ readonly tag: 'planned' } & InFlight)
-  | ({ readonly tag: 'written'; readonly lock: DiskLock } & InFlight);
+  { readonly tag: 'idle' } | ({ readonly tag: 'planned' } & InFlight) | ({ readonly tag: 'written'; readonly lock: DiskLock } & InFlight);
 
 /** The watcher is a hint (plan §2): it only says "read again before trusting". */
 export type WatcherHint = 'clean' | 'dirty';
@@ -173,18 +167,12 @@ export function createActor(path: FilePath): ActorState {
 
 /** Accept the intent or push back: a full queue is backpressure, not rejection,
  * and never a silent drop — the caller still holds the draft (plan §3.5). */
-export function submitIntent(
-  state: ActorState,
-  submission: Submission,
-): { readonly state: ActorState; readonly result: SubmissionResult } {
+export function submitIntent(state: ActorState, submission: Submission): { readonly state: ActorState; readonly result: SubmissionResult } {
   const intent = submission.intent;
   assert(intent.file === state.path, 'An intent is submitted to its own file actor');
   if (submission.authored !== undefined) {
     assert(submission.authored.path === intent.file, 'The authored snapshot is of the file');
-    assert(
-      submission.authored.checksum === intent.authoredChecksum,
-      'The authored snapshot is the one the intent names',
-    );
+    assert(submission.authored.checksum === intent.authoredChecksum, 'The authored snapshot is the one the intent names');
   }
   assert(state.queue.length <= LIMITS.intentsPendingMax, 'The queue never exceeds its bound');
   if (state.queue.length < LIMITS.intentsPendingMax) {
@@ -233,10 +221,7 @@ export function stepActor(state: ActorState, dependencies: ActorDependencies): A
 /** Re-read the file now (§5.2 step 1, and the watcher tick of §7: one read and
  * at most one parse). Only an idle actor refreshes; a failed read changes
  * nothing and is returned, so the caller can tell a missing file apart. */
-export function refreshActor(
-  state: ActorState,
-  dependencies: ActorDependencies,
-): Result<ActorStep, DiskError> {
+export function refreshActor(state: ActorState, dependencies: ActorDependencies): Result<ActorStep, DiskError> {
   assert(state.phase.tag === 'idle', 'Only an idle actor refreshes');
   const refreshed = refresh(state, dependencies);
   if ('code' in refreshed) {
@@ -457,11 +442,7 @@ function postKindsHold(candidate: Snapshot, plan: Plan): boolean {
 // §5.2 steps 7–8. The lock is taken first, so the re-read and the replace see
 // no cooperating writer between them; it stays held through the verifying read
 // of the next step and is released there.
-function stepPlanned(
-  state: ActorState,
-  phase: Extract<ActorPhase, { tag: 'planned' }>,
-  dependencies: ActorDependencies,
-): ActorStep {
+function stepPlanned(state: ActorState, phase: Extract<ActorPhase, { tag: 'planned' }>, dependencies: ActorDependencies): ActorStep {
   const disk = dependencies.disk;
   const idle: ActorState = { ...state, phase: { tag: 'idle' }, hint: 'dirty' };
   const intent = phase.intent;
@@ -497,11 +478,7 @@ function stepPlanned(
 }
 
 // §5.2 steps 9–10: verify, release, commit.
-function stepWritten(
-  state: ActorState,
-  phase: Extract<ActorPhase, { tag: 'written' }>,
-  dependencies: ActorDependencies,
-): ActorStep {
+function stepWritten(state: ActorState, phase: Extract<ActorPhase, { tag: 'written' }>, dependencies: ActorDependencies): ActorStep {
   const disk = dependencies.disk;
   const idle: ActorState = { ...state, phase: { tag: 'idle' }, hint: 'dirty' };
   const intent = phase.intent;
@@ -547,11 +524,7 @@ function stepWritten(
   };
 }
 
-function release(
-  disk: DocumentDisk,
-  lock: DiskLock,
-  effects: readonly ActorEffect[],
-): readonly ActorEffect[] {
+function release(disk: DocumentDisk, lock: DiskLock, effects: readonly ActorEffect[]): readonly ActorEffect[] {
   const released = disk.unlock(lock);
   return released.ok ? effects : [...effects, { tag: 'lock-leaked', path: lock.path }];
 }
@@ -569,13 +542,7 @@ function uncertain(state: ActorState, phase: InFlight, earlier: readonly ActorEf
   return { state, effects: [...earlier, { tag: 'outcome', outcome }], parses: 0 };
 }
 
-function reject(
-  state: ActorState,
-  intent: Intent,
-  reason: RejectionReason,
-  parses: number,
-  earlier: readonly ActorEffect[] = [],
-): ActorStep {
+function reject(state: ActorState, intent: Intent, reason: RejectionReason, parses: number, earlier: readonly ActorEffect[] = []): ActorStep {
   assert(parses <= LIMITS.parseTasksInFlightMax, 'A step runs at most the parse bound');
   const outcome: Outcome = { tag: 'rejected', intentId: intent.id, reason };
   return { state, effects: [...earlier, { tag: 'outcome', outcome }], parses };

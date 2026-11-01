@@ -7,20 +7,14 @@ import { publishFailure } from './publishFailure';
 import { STUDIO_PUBLISH_LIMITS as limits } from './publishLimits';
 
 /** Copy sequentially; reflinks save disk where available without sharing mutable file contents. */
-export async function createHostingSnapshot(
-  root: string,
-  destination: string,
-): Promise<Result<void>> {
+export async function createHostingSnapshot(root: string, destination: string): Promise<Result<void>> {
   assert(root !== destination, 'Hosting uses an isolated directory');
   assert(path.isAbsolute(destination), 'Hosting destination is absolute');
   const inventory = await publishInventory(root, ['.'], limits.hostingBytesMax);
   if (!inventory.ok) {
     return inventory;
   }
-  const prepared = await mkdir(destination, { recursive: true, mode: 0o700 }).then(
-    ok,
-    publishFailure,
-  );
+  const prepared = await mkdir(destination, { recursive: true, mode: 0o700 }).then(ok, publishFailure);
   if (!prepared.ok) {
     return prepared;
   }
@@ -35,17 +29,11 @@ export async function createHostingSnapshot(
       return err({ code: 'timeout', message: 'Hosting copy exceeded ten minutes.' });
     }
     const target = path.join(destination, file);
-    const directory = await mkdir(path.dirname(target), { recursive: true }).then(
-      ok,
-      publishFailure,
-    );
+    const directory = await mkdir(path.dirname(target), { recursive: true }).then(ok, publishFailure);
     if (!directory.ok) {
       return directory;
     }
-    const copied = await copyFile(path.join(root, file), target, constants.COPYFILE_FICLONE).then(
-      ok,
-      publishFailure,
-    );
+    const copied = await copyFile(path.join(root, file), target, constants.COPYFILE_FICLONE).then(ok, publishFailure);
     if (!copied.ok) {
       return copied;
     }
@@ -54,8 +42,5 @@ export async function createHostingSnapshot(
   if (!dependencies.ok) {
     return dependencies;
   }
-  return symlink(dependencies.value, path.join(destination, 'node_modules'), 'dir').then(
-    () => ok(undefined),
-    publishFailure,
-  );
+  return symlink(dependencies.value, path.join(destination, 'node_modules'), 'dir').then(() => ok(undefined), publishFailure);
 }

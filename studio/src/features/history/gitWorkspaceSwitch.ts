@@ -1,10 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { GitWorkspaceState } from './gitWorkspace';
-import {
-  gitBranchName,
-  gitWorkspaceBranch,
-  type GitWorkspaceManifest,
-} from './gitWorkspaceContract';
+import { gitBranchName, gitWorkspaceBranch, type GitWorkspaceManifest } from './gitWorkspaceContract';
 import { gitWorkspaceRun, snapshotGitWorkspace, gitWorkspaceCommit } from './gitWorkspaceObjects';
 
 export async function switchGitWorkspace(
@@ -36,9 +32,7 @@ export async function switchGitWorkspace(
     branch: name,
     branches: input.create
       ? [...manifest.branches, { name, head, workspace: randomUUID() }]
-      : manifest.branches.map((branch) =>
-          branch.name === name ? { ...branch, workspace: randomUUID() } : branch,
-        ),
+      : manifest.branches.map((branch) => (branch.name === name ? { ...branch, workspace: randomUUID() } : branch)),
     parked: parked.filter((branch) => branch.name !== name),
     draft: input.create ? draft : (waiting?.head ?? head),
   };

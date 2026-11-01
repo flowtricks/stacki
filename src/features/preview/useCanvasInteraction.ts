@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import {
-  parseCanvasNavigation,
-  type CanvasInteraction,
-} from '../../../shared/properties/canvasInteraction';
+import { parseCanvasNavigation, type CanvasInteraction } from '../../../shared/properties/canvasInteraction';
 
 interface Options {
   readonly projectKey: string | undefined;
@@ -19,10 +16,7 @@ export function useCanvasInteraction(options: Options) {
     readonly projectKey: string | undefined;
     readonly mode: CanvasInteraction;
   }>();
-  const mode =
-    options.available && choice && choice.projectKey === options.projectKey
-      ? choice.mode
-      : 'select';
+  const mode = options.available && choice && choice.projectKey === options.projectKey ? choice.mode : 'select';
   const { subscribeLoad } = options;
   const current = useRef({ ...options, mode });
   current.current = { ...options, mode };

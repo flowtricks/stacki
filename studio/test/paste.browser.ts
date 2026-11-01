@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import { record, string } from '../src/shared/validation';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -28,13 +27,7 @@ try {
   await page.keyboard.press('Meta+v');
   await page.waitForFunction(async (endpoint) => {
     const data: unknown = await (await fetch(endpoint)).json();
-    return (
-      !!data &&
-      typeof data === 'object' &&
-      'source' in data &&
-      typeof data.source === 'string' &&
-      data.source.includes('src={logo_icon}')
-    );
+    return !!data && typeof data === 'object' && 'source' in data && typeof data.source === 'string' && data.source.includes('src={logo_icon}');
   }, endpoint);
   const changed = string(record(await (await page.request.get(endpoint)).json())['source']);
   for (const binding of ['Icon', 'Img', 'Eyebrow', 'logo_icon', 'lumos_background']) {
@@ -50,17 +43,13 @@ try {
   await sourceEquals(page, original);
   await insertExistingSection(page, original);
   assert.deepEqual(errors, []);
-  console.log(
-    'Cross-page paste carries real component and asset bindings, renders, and undoes/redoes atomically.',
-  );
+  console.log('Cross-page paste carries real component and asset bindings, renders, and undoes/redoes atomically.');
 } finally {
   await browser.close();
 }
 
 function row(page: Page, name: string) {
-  return page
-    .locator('.structure-node')
-    .filter({ has: page.locator('.label', { hasText: new RegExp(`^${name}$`) }) });
+  return page.locator('.structure-node').filter({ has: page.locator('.label', { hasText: new RegExp(`^${name}$`) }) });
 }
 async function sourceEquals(page: Page, expected: string) {
   await page.waitForFunction(
@@ -83,13 +72,7 @@ async function insertExistingSection(page: Page, original: string) {
     .click();
   await page.waitForFunction(async (endpoint) => {
     const data: unknown = await (await fetch(endpoint)).json();
-    return (
-      !!data &&
-      typeof data === 'object' &&
-      'source' in data &&
-      typeof data.source === 'string' &&
-      data.source.includes('<Section />')
-    );
+    return !!data && typeof data === 'object' && 'source' in data && typeof data.source === 'string' && data.source.includes('<Section />');
   }, endpoint);
   const changed = string(record(await (await page.request.get(endpoint)).json())['source']);
   assert.equal(changed.match(/import Section from/g)?.length, 1);
@@ -110,10 +93,7 @@ async function insertExistingSection(page: Page, original: string) {
     }),
   );
   assert.equal(rectangles.length, 2);
-  assert.ok(
-    rectangles[0] && rectangles[1] && rectangles[0].bottom <= rectangles[1].top + 1,
-    'Inserted sections keep separate layout boxes',
-  );
+  assert.ok(rectangles[0] && rectangles[1] && rectangles[0].bottom <= rectangles[1].top + 1, 'Inserted sections keep separate layout boxes');
   await page.keyboard.press('Meta+z');
   await sourceEquals(page, changed);
   await page.keyboard.press('Meta+z');

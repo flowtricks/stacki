@@ -1,8 +1,4 @@
-import {
-  parseDefaultsSource,
-  type DefaultComponent,
-  type DefaultsSnapshot,
-} from '../../../shared/properties/componentDefaults';
+import { parseDefaultsSource, type DefaultComponent, type DefaultsSnapshot } from '../../../shared/properties/componentDefaults';
 import { starterDefaults } from '../../../shared/properties/componentStarterDefaults';
 import { scanProject } from '../../ipc/bridge';
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
@@ -15,22 +11,15 @@ export interface DefaultsHost {
 export function desktopDefaultsHost(projectPath: string): DefaultsHost {
   return {
     load: async () => {
-      const [project, stored] = await Promise.all([
-        scanProject(projectPath),
-        readMetadata(projectPath, 'components'),
-      ]);
-      const catalog: readonly DefaultComponent[] = [...project.components, ...project.layouts].map(
-        (component) => ({
-          file: relativeComponentPath(projectPath, component.path),
-          ...(component.origin?.kind === 'package'
-            ? { importPath: component.origin.importPath }
-            : {}),
-          name: component.name,
-          props: (component.schema ?? []).map((field) => field.name),
-          slots: component.slots ?? [],
-          slotText: component.slotText ?? false,
-        }),
-      );
+      const [project, stored] = await Promise.all([scanProject(projectPath), readMetadata(projectPath, 'components')]);
+      const catalog: readonly DefaultComponent[] = [...project.components, ...project.layouts].map((component) => ({
+        file: relativeComponentPath(projectPath, component.path),
+        ...(component.origin?.kind === 'package' ? { importPath: component.origin.importPath } : {}),
+        name: component.name,
+        props: (component.schema ?? []).map((field) => field.name),
+        slots: component.slots ?? [],
+        slotText: component.slotText ?? false,
+      }));
       return defaultsSnapshot(stored.source, catalog);
     },
     save: async (snapshot) => {
@@ -44,10 +33,7 @@ export function desktopDefaultsHost(projectPath: string): DefaultsHost {
   };
 }
 
-export function defaultsSnapshot(
-  source: string | undefined,
-  catalog: readonly DefaultComponent[],
-): DefaultsSnapshot {
+export function defaultsSnapshot(source: string | undefined, catalog: readonly DefaultComponent[]): DefaultsSnapshot {
   if (source === undefined) {
     return { catalog, config: starterDefaults(catalog) };
   }

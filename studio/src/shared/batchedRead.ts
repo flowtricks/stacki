@@ -6,10 +6,7 @@ const READS_MAX = 8;
 
 // Keep filesystem latency from serializing a catalog without opening every file
 // simultaneously. Each callback releases source bytes before its batch completes.
-export async function batchedRead<T, R>(
-  items: readonly T[],
-  read: (item: T) => Promise<R>,
-): Promise<readonly R[]> {
+export async function batchedRead<T, R>(items: readonly T[], read: (item: T) => Promise<R>): Promise<readonly R[]> {
   assert(items.length <= ITEMS_MAX, 'Catalog input stays within both project root limits');
   const results: R[] = [];
   for (let offset = 0; offset < items.length; offset += READS_MAX) {

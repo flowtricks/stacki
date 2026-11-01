@@ -11,10 +11,7 @@ import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { PublishStatusSource } from '../src/features/publishing/publishStatusSource';
 import { availabilityRoutes } from '../src/features/publishing/availabilityRoutes';
-import {
-  parsePublishedStatusFiles,
-  readDeployedStatusRevision,
-} from '../src/features/publishing/publishStatusRemote';
+import { parsePublishedStatusFiles, readDeployedStatusRevision } from '../src/features/publishing/publishStatusRemote';
 import { parsePublishAvailability } from '../vendor/stacki/shared/properties/publishState';
 import { ok } from '../vendor/stacki/shared/core/result';
 
@@ -78,9 +75,10 @@ test('remote parsers reject partial trees, bad revisions, traversal, modes, and 
     {},
     { truncated: true, tree: [entry] },
     { truncated: false, tree: new Array(100_001) },
-    ...[{ sha: 'invalid' }, { path: '../secret' }, { path: '/absolute' }, { mode: 'bad' }].map(
-      (change) => ({ truncated: false, tree: [{ ...entry, ...change }] }),
-    ),
+    ...[{ sha: 'invalid' }, { path: '../secret' }, { path: '/absolute' }, { mode: 'bad' }].map((change) => ({
+      truncated: false,
+      tree: [{ ...entry, ...change }],
+    })),
     { truncated: false, tree: [entry, entry] },
   ]) {
     assert.throws(() => parsePublishedStatusFiles(input));
@@ -121,15 +119,8 @@ for (const scenario of [
             assert.equal(options.headers, undefined, 'GitHub credentials never go to the site');
             return Response.json({ sha: scenario.deployed });
           }
-          assert.equal(
-            new Headers(options?.headers).get('Authorization'),
-            'Bearer private-test-token',
-          );
-          return Response.json(
-            url.includes('/git/ref/')
-              ? { object: { sha: revision } }
-              : { truncated: false, tree: [fixture.entry] },
-          );
+          assert.equal(new Headers(options?.headers).get('Authorization'), 'Bearer private-test-token');
+          return Response.json(url.includes('/git/ref/') ? { object: { sha: revision } } : { truncated: false, tree: [fixture.entry] });
         },
       },
     );
@@ -170,9 +161,7 @@ test('deployment checks reject redirects, HTML, oversized JSON, and invalid revi
     Response.json({ sha: 'bad' }),
     Response.json({ sha: revision, extra: 'x'.repeat(1000) }),
   ]) {
-    await assert.rejects(
-      readDeployedStatusRevision('https://site.test/status', async () => response),
-    );
+    await assert.rejects(readDeployedStatusRevision('https://site.test/status', async () => response));
   }
   await assert.rejects(readDeployedStatusRevision('http://site.test/status'));
 });

@@ -18,9 +18,7 @@ import type { MainHost } from './mainHost';
 import { packageComponentFiles, packageComponentImport } from '../lib/componentSources';
 import { packageOf } from '../lib/installedPackages';
 
-export function registerProjectScanHandlers(
-  host: Pick<MainHost, 'ipcMain' | 'noteProjectRoot' | 'readTrailingSlash'>,
-): void {
+export function registerProjectScanHandlers(host: Pick<MainHost, 'ipcMain' | 'noteProjectRoot' | 'readTrailingSlash'>): void {
   registerProjectScanHandler(host);
   registerProjectClassesHandler(host);
 }
@@ -61,24 +59,21 @@ function registerProjectScanHandler({
       ...safeSchema(filePath, projectPath),
     }));
 
-    const components = [
-      ...listAstroFiles(componentsDirectory),
-      ...packageComponentFiles(projectPath).map((file) => path.join(projectPath, file)),
-    ].map((filePath) => ({
-      path: filePath,
-      name: path.basename(filePath, '.astro'),
-      folder: toPosix(path.relative(componentsDirectory, path.dirname(filePath))),
-      instances: 0,
-      ...safeSchema(filePath, projectPath),
-      ...scanComponentOrigin(projectPath, filePath),
-    }));
+    const components = [...listAstroFiles(componentsDirectory), ...packageComponentFiles(projectPath).map((file) => path.join(projectPath, file))].map(
+      (filePath) => ({
+        path: filePath,
+        name: path.basename(filePath, '.astro'),
+        folder: toPosix(path.relative(componentsDirectory, path.dirname(filePath))),
+        instances: 0,
+        ...safeSchema(filePath, projectPath),
+        ...scanComponentOrigin(projectPath, filePath),
+      }),
+    );
 
     // Instance counts: how often each component is used across every .astro
     // file in src (pages, layouts, and other components).
     const importAliases = aliasMap(projectPath);
-    const allSources = listAstroFiles(sourceDirectory).map((file) =>
-      scanCountSource(file, importAliases),
-    );
+    const allSources = listAstroFiles(sourceDirectory).map((file) => scanCountSource(file, importAliases));
     // Layouts are counted too: they show up in the palette alongside
     // components, so the instance line has to mean the same thing for both.
     // Counted by the same function the "where is it used" list counts with —

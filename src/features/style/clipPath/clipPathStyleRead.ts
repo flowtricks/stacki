@@ -2,13 +2,7 @@
 // classes, lookup candidates, and the declaration at a breakpoint with where
 // it came from (ClipPath.tsx).
 
-import type {
-  ApiNullable,
-  ElementAttributeHandle,
-  StyleHandle,
-  StyleTargetOptions,
-  WebflowStyleLookup,
-} from './webflowDesigner';
+import type { ApiNullable, ElementAttributeHandle, StyleHandle, StyleTargetOptions, WebflowStyleLookup } from './webflowDesigner';
 import { type StyleLookupDiagnostic, type PastedShapeSvgCache } from './clipPathTypes';
 import {
   isElementStyleSource,
@@ -21,11 +15,7 @@ import {
 import { formatClipPath } from './clipPathFormat';
 import { isNoneClipPathValue } from './svgContours';
 
-export async function writePastedShapeMetadata(
-  style: StyleHandle,
-  cache: PastedShapeSvgCache | undefined,
-  options?: StyleTargetOptions,
-) {
+export async function writePastedShapeMetadata(style: StyleHandle, cache: PastedShapeSvgCache | undefined, options?: StyleTargetOptions) {
   const writeProperty = async (property: string, nextValue: string) => {
     try {
       await style.setProperty?.(property, nextValue, options);
@@ -43,10 +33,7 @@ export async function writePastedShapeMetadata(
   };
 
   if (!cache) {
-    await Promise.all([
-      removeProperty(SHAPE_STRETCH_PROPERTY),
-      removeProperty(SHAPE_CONTAIN_PROPERTY),
-    ]);
+    await Promise.all([removeProperty(SHAPE_STRETCH_PROPERTY), removeProperty(SHAPE_CONTAIN_PROPERTY)]);
     return;
   }
 
@@ -87,9 +74,7 @@ export async function writeClipPathToStyle(
 export type StyleHandleList = ApiNullable<Array<ApiNullable<StyleHandle>>>;
 
 export function isStyleHandle(style: ApiNullable<StyleHandle> | undefined): style is StyleHandle {
-  return Boolean(
-    style?.getProperty || style?.getProperties || style?.setProperty || style?.removeProperty,
-  );
+  return Boolean(style?.getProperty || style?.getProperties || style?.setProperty || style?.removeProperty);
 }
 
 export function debugClipPath(label: string, details?: unknown) {
@@ -107,21 +92,14 @@ export function canWriteClipPathValue(style: ApiNullable<StyleHandle> | undefine
   if (!style) {
     return false;
   }
-  return isNoneClipPathValue(value)
-    ? Boolean(style.setProperty || style.removeProperty)
-    : Boolean(style.setProperty);
+  return isNoneClipPathValue(value) ? Boolean(style.setProperty || style.removeProperty) : Boolean(style.setProperty);
 }
 
 export function getStyleHandles(styles: StyleHandleList | undefined) {
   return Array.isArray(styles) ? styles.filter(isStyleHandle) : [];
 }
 
-export function addUniqueStyleHandle(
-  styles: StyleHandle[],
-  style: StyleHandle,
-  seenRefs: Set<StyleHandle>,
-  seenIds: Set<string>,
-) {
+export function addUniqueStyleHandle(styles: StyleHandle[], style: StyleHandle, seenRefs: Set<StyleHandle>, seenIds: Set<string>) {
   if (style.id) {
     if (seenIds.has(style.id)) {
       return;
@@ -147,10 +125,7 @@ export async function readOptional<T>(reader: (() => Promise<T> | undefined) | u
   }
 }
 
-export async function readOptionalWithTimeout<T>(
-  reader: (() => Promise<T> | undefined) | undefined,
-  timeoutMs: number,
-) {
+export async function readOptionalWithTimeout<T>(reader: (() => Promise<T> | undefined) | undefined, timeoutMs: number) {
   if (!reader) {
     return undefined;
   }
@@ -191,12 +166,7 @@ export function selectedElementKey(element: unknown) {
   }
 }
 
-export function addStyleHandles(
-  styles: StyleHandle[],
-  nextStyles: StyleHandleList | undefined,
-  seenRefs: Set<StyleHandle>,
-  seenIds: Set<string>,
-) {
+export function addStyleHandles(styles: StyleHandle[], nextStyles: StyleHandleList | undefined, seenRefs: Set<StyleHandle>, seenIds: Set<string>) {
   getStyleHandles(nextStyles).forEach((style) => {
     addUniqueStyleHandle(styles, style, seenRefs, seenIds);
   });
@@ -233,10 +203,7 @@ export function addClassNamesFromValue(classNames: Set<string>, value: unknown) 
     .forEach((className) => classNames.add(className));
 }
 
-export function addClassNamesFromAttributes(
-  classNames: Set<string>,
-  attributes: ApiNullable<Array<ElementAttributeHandle>> | undefined,
-) {
+export function addClassNamesFromAttributes(classNames: Set<string>, attributes: ApiNullable<Array<ElementAttributeHandle>> | undefined) {
   if (!Array.isArray(attributes)) {
     return;
   }
@@ -248,19 +215,10 @@ export function addClassNamesFromAttributes(
   });
 }
 
-export async function addClassNamesFromStyleHandles(
-  classNames: Set<string>,
-  styles: StyleHandleList | undefined,
-) {
-  const styleNames = await Promise.all(
-    getStyleHandles(styles).map((style) =>
-      readOptionalWithTimeout(() => style.getName?.(), STYLE_LOOKUP_TIMEOUT_MS),
-    ),
-  );
+export async function addClassNamesFromStyleHandles(classNames: Set<string>, styles: StyleHandleList | undefined) {
+  const styleNames = await Promise.all(getStyleHandles(styles).map((style) => readOptionalWithTimeout(() => style.getName?.(), STYLE_LOOKUP_TIMEOUT_MS)));
 
-  styleNames
-    .filter((name): name is string => typeof name === 'string' && Boolean(name.trim()))
-    .forEach((name) => classNames.add(name.trim()));
+  styleNames.filter((name): name is string => typeof name === 'string' && Boolean(name.trim())).forEach((name) => classNames.add(name.trim()));
 }
 
 export async function getElementClassNames(element: unknown, styles?: StyleHandleList | undefined) {
@@ -274,19 +232,9 @@ export async function getElementClassNames(element: unknown, styles?: StyleHandl
     return [...classNames];
   }
 
-  const [
-    attributeClass,
-    resolvedAttributeClass,
-    customAttributeClass,
-    attributes,
-    resolvedAttributes,
-    customAttributes,
-  ] = await Promise.all([
+  const [attributeClass, resolvedAttributeClass, customAttributeClass, attributes, resolvedAttributes, customAttributes] = await Promise.all([
     readOptionalWithTimeout(() => source.getAttributeValue?.('class'), STYLE_LOOKUP_TIMEOUT_MS),
-    readOptionalWithTimeout(
-      () => source.getResolvedAttributeValue?.('class'),
-      STYLE_LOOKUP_TIMEOUT_MS,
-    ),
+    readOptionalWithTimeout(() => source.getResolvedAttributeValue?.('class'), STYLE_LOOKUP_TIMEOUT_MS),
     readOptionalWithTimeout(() => source.getCustomAttribute?.('class'), STYLE_LOOKUP_TIMEOUT_MS),
     readOptionalWithTimeout(() => source.getAttributes?.(), STYLE_LOOKUP_TIMEOUT_MS),
     readOptionalWithTimeout(() => source.getResolvedAttributes?.(), STYLE_LOOKUP_TIMEOUT_MS),
@@ -341,20 +289,14 @@ export async function getStyleNamePath(style: StyleHandle, depth = 0): Promise<s
     return [];
   }
 
-  const parent = await readOptionalWithTimeout(
-    () => style.getParent?.(),
-    STYLE_PATH_LOOKUP_TIMEOUT_MS,
-  );
+  const parent = await readOptionalWithTimeout(() => style.getParent?.(), STYLE_PATH_LOOKUP_TIMEOUT_MS);
   const parentPath = isStyleHandle(parent) ? await getStyleNamePath(parent, depth + 1) : [];
   const name = await readOptionalWithTimeout(() => style.getName?.(), STYLE_PATH_LOOKUP_TIMEOUT_MS);
 
   return typeof name === 'string' && name.trim() ? [...parentPath, name] : parentPath;
 }
 
-export async function lookupStyleByNameCandidate(
-  webflowApi: WebflowStyleLookup,
-  candidate: string | string[],
-) {
+export async function lookupStyleByNameCandidate(webflowApi: WebflowStyleLookup, candidate: string | string[]) {
   const timeout = Symbol('timeout');
   let timeoutId: number | undefined = undefined;
 
@@ -390,10 +332,7 @@ export async function lookupStyleByNameCandidate(
   }
 }
 
-export async function getClassStyleHandlesWithDiagnostics(
-  classNames: string[],
-  webflowApi: WebflowStyleLookup,
-) {
+export async function getClassStyleHandlesWithDiagnostics(classNames: string[], webflowApi: WebflowStyleLookup) {
   if (!classNames.length) {
     const diagnostics: StyleLookupDiagnostic[] = [];
     return { styles: [], diagnostics };
@@ -406,9 +345,7 @@ export async function getClassStyleHandlesWithDiagnostics(
   const diagnostics: StyleLookupDiagnostic[] = [];
 
   if (webflowApi.getStyleByName) {
-    const lookupResults = await Promise.all(
-      candidates.map((candidate) => lookupStyleByNameCandidate(webflowApi, candidate)),
-    );
+    const lookupResults = await Promise.all(candidates.map((candidate) => lookupStyleByNameCandidate(webflowApi, candidate)));
     lookupResults.forEach((result) => {
       diagnostics.push({
         candidate: result.candidate,
@@ -426,14 +363,7 @@ export async function getClassStyleHandlesWithDiagnostics(
   return { styles, diagnostics };
 }
 
-export async function getElementClassStyleHandles(
-  element: unknown,
-  webflowApi: WebflowStyleLookup,
-  elementStyles?: StyleHandleList | undefined,
-) {
-  const { styles } = await getClassStyleHandlesWithDiagnostics(
-    await getElementClassNames(element, elementStyles),
-    webflowApi,
-  );
+export async function getElementClassStyleHandles(element: unknown, webflowApi: WebflowStyleLookup, elementStyles?: StyleHandleList | undefined) {
+  const { styles } = await getClassStyleHandlesWithDiagnostics(await getElementClassNames(element, elementStyles), webflowApi);
   return styles;
 }

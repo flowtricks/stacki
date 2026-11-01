@@ -10,14 +10,7 @@ import { type PropsPanelProps } from '../../../vendor/stacki/src/features/props/
 import { applyEdits, contentEdit, flatten, nodeAt, type ParserNode } from '../source/source';
 import { routeFor, type Project, type Component } from '../project/projectClient';
 import type { SharedDocument } from '../collaboration/useDocument';
-import {
-  assetProp,
-  frontmatterEdit,
-  inlineContentEdit,
-  nodeTextEdit,
-  renameTag,
-  setAttributes,
-} from './settingsEdits';
+import { assetProp, frontmatterEdit, inlineContentEdit, nodeTextEdit, renameTag, setAttributes } from './settingsEdits';
 
 interface Props {
   readonly document: SharedDocument;
@@ -48,19 +41,10 @@ export function Settings(props: Props) {
     return <LockedSettings notice={notice} report={props.error} />;
   }
   return (
-    <VariantPreview
-      file={document.file}
-      node={selected}
-      component={component?.file}
-      source={source}
-    >
+    <VariantPreview file={document.file} node={selected} component={component?.file} source={source}>
       <PropsPanel
         valuePolicy={isDefaultsCanvas(document.file) ? 'defaults' : 'instance'}
-        node={
-          client && !['element', 'component', 'text'].includes(current?.kind ?? '')
-            ? undefined
-            : current
-        }
+        node={client && !['element', 'component', 'text'].includes(current?.kind ?? '') ? undefined : current}
         schema={component?.fields ?? []}
         isLayout={node?.id === 'layout'}
         currentLayoutName={node?.name ?? ''}
@@ -77,20 +61,15 @@ export function Settings(props: Props) {
             name: file.replace('src/pages/', ''),
             route: routeFor(file),
           })),
-          sectionIds: flatten(nodes).flatMap((node) =>
-            node.props?.['id']?.type === 'string' ? [node.props['id'].value] : [],
-          ),
+          sectionIds: flatten(nodes).flatMap((node) => (node.props?.['id']?.type === 'string' ? [node.props['id'].value] : [])),
           projectPath: 'studio',
         }}
-        onSetAssetProp={(id, name, picked) =>
-          change((source) => assetProp(source, id, document.file, name, picked.rel))
-        }
+        onSetAssetProp={(id, name, picked) => change((source) => assetProp(source, id, document.file, name, picked.rel))}
         {...(props.openCode && !client ? { onOpenCode: props.openCode } : {})}
         {...(client
           ? {}
           : {
-              onSetFrontmatter: (value: string) =>
-                change((source) => applyEdits(source, [frontmatterEdit(source, value)])),
+              onSetFrontmatter: (value: string) => change((source) => applyEdits(source, [frontmatterEdit(source, value)])),
             })}
         {...handlers}
       />
@@ -100,16 +79,7 @@ export function Settings(props: Props) {
 function settingsHandlers(
   props: Props,
   change: (edit: (source: string) => string) => void,
-): Pick<
-  PropsPanelProps,
-  | 'onSetProp'
-  | 'onSetProps'
-  | 'onRenameProp'
-  | 'onSetText'
-  | 'onSetContent'
-  | 'onSetInline'
-  | 'onChangeTag'
-> {
+): Pick<PropsPanelProps, 'onSetProp' | 'onSetProps' | 'onRenameProp' | 'onSetText' | 'onSetContent' | 'onSetInline' | 'onChangeTag'> {
   const id = props.selected;
   return {
     onSetProp: (name, value) => change((source) => setAttributes(source, id, { [name]: value })),
@@ -119,8 +89,7 @@ function settingsHandlers(
         const value = nodeAt(source, id).props?.[previous];
         return setAttributes(source, id, { [previous]: undefined, [next]: value });
       }),
-    onSetContent: (value) =>
-      change((source) => applyEdits(source, [contentEdit(source, id, value)])),
+    onSetContent: (value) => change((source) => applyEdits(source, [contentEdit(source, id, value)])),
     onSetText: (value, renames) =>
       change((source) => {
         if (renames?.some((rename) => rename.from !== rename.to)) {
@@ -128,8 +97,7 @@ function settingsHandlers(
         }
         return applyEdits(source, [nodeTextEdit(source, id, value)]);
       }),
-    onSetInline: (nodes) =>
-      change((source) => applyEdits(source, [inlineContentEdit(source, id, nodes)])),
+    onSetInline: (nodes) => change((source) => applyEdits(source, [inlineContentEdit(source, id, nodes)])),
     onChangeTag: (name) => change((source) => renameTag(source, id, name)),
   };
 }

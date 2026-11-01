@@ -52,10 +52,7 @@ export async function metadataRoute(
   }
   const result =
     request.method === 'GET'
-      ? await readMetadataSource(
-          root,
-          metadataKind(new URL(request.url ?? '/', 'http://studio').searchParams.get('kind')),
-        )
+      ? await readMetadataSource(root, metadataKind(new URL(request.url ?? '/', 'http://studio').searchParams.get('kind')))
       : await saveMetadata(root, rooms, JSON.parse(await readBody()));
   response.setHeader('Content-Type', 'application/json');
   response.end(JSON.stringify(result));

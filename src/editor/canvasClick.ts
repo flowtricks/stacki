@@ -35,10 +35,7 @@ export interface CanvasEventContext {
  * edited. Leaving a component only changes navigation, so requiring that
  * component to be stamped in the page render would reject the very click that
  * is meant to close it. */
-export function canvasEventSelectsSource(
-  request: CanvasEventRequest,
-  context: CanvasEventContext,
-): boolean {
+export function canvasEventSelectsSource(request: CanvasEventRequest, context: CanvasEventContext): boolean {
   switch (request.kind) {
     case 'open':
       return true;

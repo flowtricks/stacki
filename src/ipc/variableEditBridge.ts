@@ -5,8 +5,7 @@ import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 import { boolean, record, text } from '../../shared/core/boundary';
 
 const RESTART = 'Stacki needs to be restarted before this can be used.';
-export type VariableEditResult =
-  { readonly ok: false; readonly error: string } | { readonly ok: true; readonly css?: string };
+export type VariableEditResult = { readonly ok: false; readonly error: string } | { readonly ok: true; readonly css?: string };
 
 // Preparing calls validates payloads outside the I/O catch. A bad program request
 // must remain loud; missing handlers and disk failures are expected operating errors.

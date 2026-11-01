@@ -33,17 +33,11 @@ import {
   type LoopSort,
   type LoopSource,
 } from './loopQuery';
-import {
-  destructuredDefault,
-  parseExpression,
-  type Js,
-  type JsEntry,
-  type ParsedFrontmatter,
-} from './loopSyntax';
+import { destructuredDefault, parseExpression, type Js, type JsEntry, type ParsedFrontmatter } from './loopSyntax';
 import { propNamed } from './loopProps';
 
 /** The settings a component prop can hold. */
-export const LOOP_SETTINGS = ['filter', 'sort', 'limit', 'offset'] as const;
+export const LOOP_SETTINGS = ['filter', 'sort', 'limit', 'offset', 'curated'] as const;
 export type LoopSetting = (typeof LOOP_SETTINGS)[number];
 
 /**
@@ -52,9 +46,7 @@ export type LoopSetting = (typeof LOOP_SETTINGS)[number];
  * at all yet (`none`).
  */
 export type SettingHome =
-  | { readonly kind: 'inline' }
-  | { readonly kind: 'prop'; readonly key: string; readonly local: string; readonly literal: Span }
-  | { readonly kind: 'none' };
+  { readonly kind: 'inline' } | { readonly kind: 'prop'; readonly key: string; readonly local: string; readonly literal: Span } | { readonly kind: 'none' };
 
 /** Where an options query lives in the frontmatter, so an edit rewrites just that. */
 export interface OptionsHome {
@@ -64,6 +56,8 @@ export interface OptionsHome {
   /** The options object literal. */
   readonly options: Span;
   readonly settings: Readonly<Record<LoopSetting, SettingHome>>;
+  /** Where an item keeps its fields: `fields` in a builder export's reshaped items, `data` as Astro gives them. */
+  readonly itemPath: readonly string[];
 }
 
 interface Span {
@@ -71,15 +65,7 @@ interface Span {
   readonly to: number;
 }
 
-const OPTION_KEYS = new Set([
-  'sort',
-  'filter',
-  'limit',
-  'offset',
-  'skip',
-  'curated',
-  'curatedItemIds',
-]);
+const OPTION_KEYS = new Set(['sort', 'filter', 'limit', 'offset', 'skip', 'curated', 'curatedItemIds']);
 const COLLECTION_STEPS_MAX = 12;
 
 type Lookup = (name: string) => Js | undefined;
@@ -90,8 +76,7 @@ export function readOptionsQuery(
   context: {
     readonly frontmatter: ParsedFrontmatter;
     readonly importedFrom: (local: string, spec: string) => string | undefined;
-    readonly fieldKind?:
-      ((source: LoopSource, path: string) => LoopFieldKind | undefined) | undefined;
+    readonly fieldKind?: ((source: LoopSource, path: string) => LoopFieldKind | undefined) | undefined;
   },
 ): { readonly query: LoopQuery; readonly home: OptionsHome } | undefined {
   const call = init.kind === 'await' ? init.value : init;
@@ -99,19 +84,15 @@ export function readOptionsQuery(
     return undefined;
   }
   const [list, options] = call.args;
-  if (
-    list === undefined ||
-    options?.kind !== 'object' ||
-    !options.entries.some((entry) => entry.key !== undefined && OPTION_KEYS.has(entry.key))
-  ) {
+  if (list === undefined || options?.kind !== 'object' || !options.entries.some((entry) => entry.key !== undefined && OPTION_KEYS.has(entry.key))) {
     return undefined;
   }
   const lookup: Lookup = (name) => context.frontmatter.declarations.get(name)?.init;
-  const collection = collectionOf(list, lookup, context.importedFrom);
-  if (collection === undefined) {
+  const listed = listCollectionOf(list, { lookup, importedFrom: context.importedFrom });
+  if (listed === undefined) {
     return undefined;
   }
-  const source: LoopSource = { kind: 'astro', collection };
+  const source: LoopSource = { kind: 'astro', collection: listed.collection };
   const kind = (path: string): LoopFieldKind | undefined => context.fieldKind?.(source, path);
   const settings = settingsOf(options.entries, context.frontmatter.source);
   if (settings === undefined) {
@@ -126,11 +107,12 @@ export function readOptionsQuery(
     reader: call.callee.name,
     options: { from: options.from, to: options.to },
     settings: settings.homes,
+    itemPath: listed.itemPath,
   };
-  const selection = curatedOf(
-    entryValue(options.entries, 'curated'),
-    entryValue(options.entries, 'curatedItemIds'),
-  );
+  const picked = curatedOf(settings.values.curated, entryValue(options.entries, 'curatedItemIds'));
+  // Picked items linked to a property stay picked items with none picked yet,
+  // so the list keeps showing Selected rather than switching itself back.
+  const selection = picked ?? (settings.homes.curated.kind === 'prop' ? [] : undefined);
   if (selection !== undefined) {
     // Picked items: the helper starts from them, so they are the list.
     return { query: { ...emptyQuery(source), selection }, home };
@@ -140,14 +122,8 @@ export function readOptionsQuery(
 }
 
 /** The options key a setting is written under; a builder may say `skip` for the offset. */
-export function settingEntry(
-  entries: readonly JsEntry[],
-  setting: LoopSetting,
-): JsEntry | undefined {
-  return (
-    entries.find((entry) => entry.key === setting) ??
-    (setting === 'offset' ? entries.find((entry) => entry.key === 'skip') : undefined)
-  );
+export function settingEntry(entries: readonly JsEntry[], setting: LoopSetting): JsEntry | undefined {
+  return entries.find((entry) => entry.key === setting) ?? (setting === 'offset' ? entries.find((entry) => entry.key === 'skip') : undefined);
 }
 
 // Each setting's value and where it is written. A setting naming a prop is
@@ -156,23 +132,14 @@ export function settingEntry(
 function settingsOf(
   entries: readonly JsEntry[],
   frontmatter: string,
-):
-  | {
-      readonly values: Readonly<Record<LoopSetting, Js | undefined>>;
-      readonly homes: Readonly<Record<LoopSetting, SettingHome>>;
-    }
-  | undefined {
-  const values: Record<LoopSetting, Js | undefined> = {
-    filter: undefined,
-    sort: undefined,
-    limit: undefined,
-    offset: undefined,
-  };
+): { readonly values: Readonly<Record<LoopSetting, Js | undefined>>; readonly homes: Readonly<Record<LoopSetting, SettingHome>> } | undefined {
+  const values: Record<LoopSetting, Js | undefined> = { filter: undefined, sort: undefined, limit: undefined, offset: undefined, curated: undefined };
   const homes: Record<LoopSetting, SettingHome> = {
     filter: { kind: 'none' },
     sort: { kind: 'none' },
     limit: { kind: 'none' },
     offset: { kind: 'none' },
+    curated: { kind: 'none' },
   };
   for (const setting of LOOP_SETTINGS) {
     const value = settingEntry(entries, setting)?.value;
@@ -185,17 +152,9 @@ function settingsOf(
       if (prop === undefined || prop.defaultValue === undefined || fallback === undefined) {
         return undefined;
       }
-      assert(
-        fallback.from === prop.defaultValue.from,
-        'A prop default is read where the destructure says',
-      );
+      assert(fallback.from === prop.defaultValue.from, 'A prop default is read where the destructure says');
       values[setting] = fallback;
-      homes[setting] = {
-        kind: 'prop',
-        key: prop.key,
-        local: prop.local,
-        literal: prop.defaultValue,
-      };
+      homes[setting] = { kind: 'prop', key: prop.key, local: prop.local, literal: prop.defaultValue };
     } else {
       values[setting] = value;
       homes[setting] = { kind: 'inline' };
@@ -209,20 +168,12 @@ function settingsOf(
 // one of them is outside what the list settings can show.
 function dynamicQuery(
   values: Readonly<Record<LoopSetting, Js | undefined>>,
-  read: {
-    readonly source: LoopSource;
-    readonly filter: FilterReading;
-    readonly kind: (path: string) => LoopFieldKind | undefined;
-  },
+  read: { readonly source: LoopSource; readonly filter: FilterReading; readonly kind: (path: string) => LoopFieldKind | undefined },
 ): LoopQuery | undefined {
   const sorts = sortsOf(values.sort, read.kind);
   const offset = wholeOf(values.offset) ?? 0;
   const limit = wholeOf(values.limit);
-  if (
-    sorts === undefined ||
-    offset > LOOP_QUERY_LIMITS.offsetMax ||
-    (limit !== undefined && limit > LOOP_QUERY_LIMITS.limitMax)
-  ) {
+  if (sorts === undefined || offset > LOOP_QUERY_LIMITS.offsetMax || (limit !== undefined && limit > LOOP_QUERY_LIMITS.limitMax)) {
     return undefined;
   }
   const query: LoopQuery = {
@@ -236,21 +187,8 @@ function dynamicQuery(
     projection: undefined,
     parameter: { kind: 'data' },
   };
-  assert(
-    query.conditions.length <= LOOP_QUERY_LIMITS.conditionsMax,
-    'An options query has bounded conditions',
-  );
+  assert(query.conditions.length <= LOOP_QUERY_LIMITS.conditionsMax, 'An options query has bounded conditions');
   return query;
-}
-
-// `collections["campus"] || []` → `campus`, through names, object entries,
-// awaits and method chains, to the getCollection call. Iterative and bounded.
-function collectionOf(
-  start: Js,
-  lookup: Lookup,
-  importedFrom: (local: string, spec: string) => string | undefined,
-): string | undefined {
-  return listCollectionOf(start, { lookup, importedFrom })?.collection;
 }
 
 /**
@@ -261,10 +199,7 @@ function collectionOf(
  */
 export function listCollectionOf(
   start: Js,
-  context: {
-    readonly lookup: (name: string) => Js | undefined;
-    readonly importedFrom: (local: string, spec: string) => string | undefined;
-  },
+  context: { readonly lookup: (name: string) => Js | undefined; readonly importedFrom: (local: string, spec: string) => string | undefined },
 ): { readonly collection: string; readonly itemPath: readonly string[] } | undefined {
   let current: Js | undefined = start;
   const keys: string[] = [];
@@ -284,15 +219,9 @@ export function listCollectionOf(
     } else if (node.kind === 'object') {
       const key = keys.pop();
       current = key === undefined ? undefined : entryValue(node.entries, key);
-    } else if (
-      node.kind === 'call' &&
-      node.callee.kind === 'name' &&
-      context.importedFrom(node.callee.name, 'astro:content') === 'getCollection'
-    ) {
+    } else if (node.kind === 'call' && node.callee.kind === 'name' && context.importedFrom(node.callee.name, 'astro:content') === 'getCollection') {
       const first = node.args[0];
-      return first?.kind === 'string'
-        ? { collection: first.value, itemPath: itemPath ?? ['data'] }
-        : undefined;
+      return first?.kind === 'string' ? { collection: first.value, itemPath: itemPath ?? ['data'] } : undefined;
     } else if (node.kind === 'call' && node.callee.kind === 'member') {
       if (node.callee.property === 'map' && itemPath === undefined) {
         const shaped = shapeOf(node.args[0]);
@@ -324,16 +253,10 @@ function shapeOf(callback: Js | undefined): readonly string[] | undefined {
 // `"curated": {"itemIds": [...]}` or `"curatedItemIds": [...]`, when it picks any.
 function curatedOf(curated: Js | undefined, flat: Js | undefined): readonly string[] | undefined {
   const list = curated?.kind === 'object' ? entryValue(curated.entries, 'itemIds') : flat;
-  if (
-    list?.kind !== 'array' ||
-    list.items.length === 0 ||
-    list.items.length > LOOP_QUERY_LIMITS.selectionMax
-  ) {
+  if (list?.kind !== 'array' || list.items.length === 0 || list.items.length > LOOP_QUERY_LIMITS.selectionMax) {
     return undefined;
   }
-  const ids = list.items.flatMap((item) =>
-    item.kind === 'string' && isItemId(item.value) ? [item.value] : [],
-  );
+  const ids = list.items.flatMap((item) => (item.kind === 'string' && isItemId(item.value) ? [item.value] : []));
   return ids.length === list.items.length ? ids : undefined;
 }
 
@@ -346,26 +269,17 @@ export interface FilterReading {
   readonly conditions: readonly LoopCondition[];
 }
 
-function filterOf(
-  value: Js | undefined,
-  frontmatter: string,
-  kind: (path: string) => LoopFieldKind | undefined,
-): FilterReading | undefined {
+function filterOf(value: Js | undefined, frontmatter: string, kind: (path: string) => LoopFieldKind | undefined): FilterReading | undefined {
   if (value === undefined) {
     return { match: 'all', conditions: [] };
   }
   return value.kind === 'object' ? filterObject(value, frontmatter, kind) : undefined;
 }
 
-function filterObject(
-  value: Extract<Js, { readonly kind: 'object' }>,
-  frontmatter: string,
-  kind: (path: string) => LoopFieldKind | undefined,
-) {
+function filterObject(value: Extract<Js, { readonly kind: 'object' }>, frontmatter: string, kind: (path: string) => LoopFieldKind | undefined) {
   const filterFor = entryValue(value.entries, 'filterFor');
   const fields = entryValue(value.entries, 'fields');
-  const match: 'all' | 'any' =
-    filterFor?.kind === 'string' && filterFor.value.toUpperCase() === 'ANY' ? 'any' : 'all';
+  const match: 'all' | 'any' = filterFor?.kind === 'string' && filterFor.value.toUpperCase() === 'ANY' ? 'any' : 'all';
   if (fields !== undefined && fields.kind !== 'array') {
     return undefined;
   }
@@ -373,21 +287,12 @@ function filterObject(
   if (items.length > LOOP_QUERY_LIMITS.conditionsMax) {
     return undefined;
   }
-  const conditions = items.map(
-    (item) =>
-      conditionOf(item, kind) ?? {
-        kind: 'custom' as const,
-        code: frontmatter.slice(item.from, item.to),
-      },
-  );
+  const conditions = items.map((item) => conditionOf(item, kind) ?? { kind: 'custom' as const, code: frontmatter.slice(item.from, item.to) });
   return { match, conditions };
 }
 
 // One `{ fieldPath, operatorName, value }` as a condition, or undefined to keep it verbatim.
-function conditionOf(
-  item: Js,
-  kind: (path: string) => LoopFieldKind | undefined,
-): LoopCondition | undefined {
+function conditionOf(item: Js, kind: (path: string) => LoopFieldKind | undefined): LoopCondition | undefined {
   if (item.kind !== 'object') {
     return undefined;
   }
@@ -409,15 +314,11 @@ function conditionOf(
       return equalityOf(field, operator.value, value, fieldKind);
     case 'contains': {
       const text = value?.kind === 'string' ? value.value : undefined;
-      return text === undefined || text === ''
-        ? undefined
-        : { kind: 'test', field, operator: 'contains', value: text };
+      return text === undefined || text === '' ? undefined : { kind: 'test', field, operator: 'contains', value: text };
     }
     case 'idin': {
       const literal = literalOf(value, fieldKind);
-      return literal === undefined
-        ? undefined
-        : { kind: 'test', field, operator: 'has', value: literal };
+      return literal === undefined ? undefined : { kind: 'test', field, operator: 'has', value: literal };
     }
     case 'gt':
     case 'gte':
@@ -429,18 +330,11 @@ function conditionOf(
   }
 }
 
-function equalityOf(
-  field: string,
-  operator: 'eq' | 'ne',
-  value: Js | undefined,
-  fieldKind: LoopFieldKind | undefined,
-): LoopCondition | undefined {
+function equalityOf(field: string, operator: 'eq' | 'ne', value: Js | undefined, fieldKind: LoopFieldKind | undefined): LoopCondition | undefined {
   const switched =
     value?.kind === 'boolean'
       ? value.value
-      : value?.kind === 'string' &&
-          (value.value === 'true' || value.value === 'false') &&
-          fieldKind === 'boolean'
+      : value?.kind === 'string' && (value.value === 'true' || value.value === 'false') && fieldKind === 'boolean'
         ? value.value === 'true'
         : undefined;
   if (switched !== undefined) {
@@ -451,15 +345,10 @@ function equalityOf(
     return switched && operator === 'ne' ? { kind: 'test', field, operator: 'isFalse' } : undefined;
   }
   const literal = literalOf(value, fieldKind);
-  return literal === undefined
-    ? undefined
-    : { kind: 'test', field, operator: operator === 'eq' ? 'is' : 'isNot', value: literal };
+  return literal === undefined ? undefined : { kind: 'test', field, operator: operator === 'eq' ? 'is' : 'isNot', value: literal };
 }
 
-function literalOf(
-  value: Js | undefined,
-  fieldKind: LoopFieldKind | undefined,
-): LoopLiteral | undefined {
+function literalOf(value: Js | undefined, fieldKind: LoopFieldKind | undefined): LoopLiteral | undefined {
   if (value?.kind === 'number') {
     return { kind: 'number', number: value.value };
   }
@@ -471,25 +360,14 @@ function literalOf(
     : { kind: 'text', text: value.value };
 }
 
-function comparisonOf(
-  field: string,
-  operator: 'gt' | 'gte' | 'lt' | 'lte',
-  value: Js | undefined,
-): LoopCondition | undefined {
+function comparisonOf(field: string, operator: 'gt' | 'gte' | 'lt' | 'lte', value: Js | undefined): LoopCondition | undefined {
   if (value?.kind === 'string' && isDateValue(value.value.slice(0, 10))) {
     if (operator === 'lt') {
       return { kind: 'test', field, operator: 'before', value: value.value.slice(0, 10) };
     }
-    return operator === 'gt'
-      ? { kind: 'test', field, operator: 'after', value: value.value.slice(0, 10) }
-      : undefined;
+    return operator === 'gt' ? { kind: 'test', field, operator: 'after', value: value.value.slice(0, 10) } : undefined;
   }
-  const number =
-    value?.kind === 'number'
-      ? value.value
-      : value?.kind === 'string' && value.value.trim() !== ''
-        ? Number(value.value)
-        : Number.NaN;
+  const number = value?.kind === 'number' ? value.value : value?.kind === 'string' && value.value.trim() !== '' ? Number(value.value) : Number.NaN;
   if (!Number.isFinite(number)) {
     return undefined;
   }
@@ -497,10 +375,7 @@ function comparisonOf(
   return { kind: 'test', field, operator: named[operator], value: number };
 }
 
-function sortsOf(
-  value: Js | undefined,
-  kind: (path: string) => LoopFieldKind | undefined,
-): readonly LoopSort[] | undefined {
+function sortsOf(value: Js | undefined, kind: (path: string) => LoopFieldKind | undefined): readonly LoopSort[] | undefined {
   if (value === undefined) {
     return [];
   }
@@ -517,28 +392,15 @@ function sortsOf(
     const fieldKind = kind(field.value);
     sorts.push({
       field: field.value,
-      direction:
-        direction?.kind === 'string' && direction.value === 'desc' ? 'descending' : 'ascending',
-      order:
-        fieldKind === 'number'
-          ? 'number'
-          : fieldKind === 'date'
-            ? 'date'
-            : fieldKind === 'boolean'
-              ? 'boolean'
-              : 'text',
+      direction: direction?.kind === 'string' && direction.value === 'desc' ? 'descending' : 'ascending',
+      order: fieldKind === 'number' ? 'number' : fieldKind === 'date' ? 'date' : fieldKind === 'boolean' ? 'boolean' : 'text',
     });
   }
   return sorts;
 }
 
 function wholeOf(value: Js | undefined): number | undefined {
-  const number =
-    value?.kind === 'number'
-      ? value.value
-      : value?.kind === 'string' && /^\d+$/.test(value.value)
-        ? Number(value.value)
-        : undefined;
+  const number = value?.kind === 'number' ? value.value : value?.kind === 'string' && /^\d+$/.test(value.value) ? Number(value.value) : undefined;
   return number !== undefined && Number.isSafeInteger(number) && number >= 0 ? number : undefined;
 }
 
@@ -546,19 +408,13 @@ function wholeOf(value: Js | undefined): number | undefined {
  * A filter a page passes a component's prop (`filters={{"filterFor": …}}`),
  * or undefined when the value is anything the Filters editor cannot show.
  */
-export function readFilterValue(
-  text: string,
-  kind: (path: string) => LoopFieldKind | undefined,
-): FilterReading | undefined {
+export function readFilterValue(text: string, kind: (path: string) => LoopFieldKind | undefined): FilterReading | undefined {
   const parsed = parseExpression(text);
   return parsed === undefined ? undefined : filterOf(parsed.expression, parsed.source, kind);
 }
 
 /** A sort a page passes a component's prop, or undefined when it is not one. */
-export function readSortValue(
-  text: string,
-  kind: (path: string) => LoopFieldKind | undefined,
-): readonly LoopSort[] | undefined {
+export function readSortValue(text: string, kind: (path: string) => LoopFieldKind | undefined): readonly LoopSort[] | undefined {
   const parsed = parseExpression(text);
   return parsed === undefined ? undefined : sortsOf(parsed.expression, kind);
 }
@@ -578,7 +434,7 @@ export function optionsLiteral(query: LoopQuery): string {
     entries.push(`"offset": ${query.offset}`);
   }
   if (query.selection !== undefined) {
-    entries.push(`"curated": {"itemIds": ${JSON.stringify(query.selection)}}`);
+    entries.push(`"curated": ${curatedText(query.selection)}`);
   }
   return `{${entries.join(', ')}}`;
 }
@@ -602,6 +458,17 @@ export function dataFormProblem(query: LoopQuery): string | undefined {
   return undefined;
 }
 
+/** The items a page picks through a component's prop, or undefined when the value is not a pick. */
+export function readCuratedValue(text: string): readonly string[] | undefined {
+  const parsed = parseExpression(text);
+  const value = parsed?.expression;
+  const list = value?.kind === 'object' ? entryValue(value.entries, 'itemIds') : undefined;
+  if (list?.kind === 'array' && list.items.length === 0) {
+    return [];
+  }
+  return curatedOf(value, undefined);
+}
+
 /** The filter value a prop is given, in the helper's own data form. */
 export function filterValueText(query: Pick<LoopQuery, 'match' | 'conditions'>): string {
   return filterText(query);
@@ -621,12 +488,7 @@ export function sortValueText(sorts: readonly LoopSort[]): string {
  * `query`. Every entry this module does not own is kept as written; owned
  * entries are rewritten, and a limit or start is added only when set.
  */
-export function rewrittenOptions(
-  frontmatter: string,
-  home: OptionsHome,
-  original: Extract<Js, { readonly kind: 'object' }>,
-  query: LoopQuery,
-): string {
+export function rewrittenOptions(frontmatter: string, home: OptionsHome, original: Extract<Js, { readonly kind: 'object' }>, query: LoopQuery): string {
   assert(original.from === home.options.from, 'The options rewritten are the ones read');
   assert(query.source.kind === 'astro', 'An options query reads an Astro collection');
   const filter = filterText(query);
@@ -637,10 +499,9 @@ export function rewrittenOptions(
     sort: sortText(query.sorts),
     limit: String(query.limit ?? 0),
     offset: String(query.offset),
+    curated: curatedText(query.selection ?? []),
   };
-  const owned = new Map<string, string>([
-    ['curated', `{"itemIds": ${JSON.stringify(query.selection ?? [])}}`],
-  ]);
+  const owned = new Map<string, string>();
   // A setting a prop holds is written as the prop's default; its options
   // entry, which names the prop, is kept as written.
   const edits: { readonly span: Span; readonly text: string }[] = [];
@@ -691,6 +552,11 @@ export function rewrittenOptions(
 function entryText(frontmatter: string, entry: JsEntry): string {
   const value = frontmatter.slice(entry.value.from, entry.value.to);
   return entry.key === undefined ? value : `${JSON.stringify(entry.key)}: ${value}`;
+}
+
+/** The picked items as a prop's value or an options entry holds them. */
+export function curatedText(ids: readonly string[]): string {
+  return `{"itemIds": ${JSON.stringify(ids)}}`;
 }
 
 function filterText(query: Pick<LoopQuery, 'match' | 'conditions'>): string {

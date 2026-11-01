@@ -21,10 +21,7 @@ test('nested creation works while symlink and traversal writes are rejected', as
     await assert.rejects(() => safePath(root, 'src/escape/secret.json'), /Symbolic links/);
     await assert.rejects(() => preparePath(root, 'src/../outside.json'), /Invalid/);
   } finally {
-    await Promise.all([
-      rm(root, { recursive: true, force: true }),
-      rm(outside, { recursive: true, force: true }),
-    ]);
+    await Promise.all([rm(root, { recursive: true, force: true }), rm(outside, { recursive: true, force: true })]);
   }
 });
 test('collection JSON edits preserve neighboring formatting; Markdown edits preserve body', () => {
@@ -43,11 +40,7 @@ test('AI proposals reject stale, ambiguous, and oversized replacements', async (
   try {
     await mkdir(path.join(root, 'src/pages'), { recursive: true });
     await writeFile(path.join(root, 'src/pages/index.astro'), '<h1>Hello</h1>\n<p>Hello</p>');
-    await assert.rejects(
-      () =>
-        proposedSource(root, { file: 'src/pages/index.astro', before: 'Hello', after: 'Changed' }),
-      /ambiguous/,
-    );
+    await assert.rejects(() => proposedSource(root, { file: 'src/pages/index.astro', before: 'Hello', after: 'Changed' }), /ambiguous/);
     await assert.rejects(
       () =>
         proposedSource(root, {
@@ -96,12 +89,6 @@ const { label, enabled = true } = Astro.props;
   });
   assert.ok(fields.some((field) => field.name === 'label' && field.type === 'string'));
   assert.ok(fields.some((field) => field.name === 'enabled' && field.type === 'boolean'));
-  assert.equal(
-    resolveImport('src/pages/blog/index.astro', '../../components/Button.astro'),
-    'src/components/Button.astro',
-  );
-  assert.equal(
-    relativeImport('src/pages/blog/index.astro', 'src/components/Button.astro'),
-    '../../components/Button.astro',
-  );
+  assert.equal(resolveImport('src/pages/blog/index.astro', '../../components/Button.astro'), 'src/components/Button.astro');
+  assert.equal(relativeImport('src/pages/blog/index.astro', 'src/components/Button.astro'), '../../components/Button.astro');
 });

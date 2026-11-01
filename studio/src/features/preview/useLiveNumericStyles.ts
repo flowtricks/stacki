@@ -8,12 +8,7 @@ import type { usePreview } from './usePreview';
 import type { parsePage } from '../source/source';
 
 type Parsed = ReturnType<typeof parsePage> | undefined;
-export function useLiveNumericStyles(
-  file: string,
-  parsed: Parsed,
-  project: Project,
-  preview: ReturnType<typeof usePreview>,
-) {
+export function useLiveNumericStyles(file: string, parsed: Parsed, project: Project, preview: ReturnType<typeof usePreview>) {
   const previous = useRef<{ file: string; nodes: readonly ParserNode[] }>({ file, nodes: [] });
   const send = useRef(preview.send);
   send.current = preview.send;
@@ -22,13 +17,7 @@ export function useLiveNumericStyles(
     const before = previous.current.nodes;
     const sameFile = previous.current.file === file;
     previous.current = { file, nodes: after };
-    if (
-      !sameFile ||
-      before.length !== after.length ||
-      after.some(
-        (node, index) => node.id !== before[index]?.id || node.name !== before[index]?.name,
-      )
-    ) {
+    if (!sameFile || before.length !== after.length || after.some((node, index) => node.id !== before[index]?.id || node.name !== before[index]?.name)) {
       send.current({ type: 'studio:live-styles', reset: true, changes: [] });
       return;
     }
@@ -44,10 +33,7 @@ export function useLiveNumericStyles(
           if (JSON.stringify(value) === JSON.stringify(before[index]?.props?.[binding.prop])) {
             return [];
           }
-          if (
-            node.props?.['style'] ||
-            (value && (value.type !== 'expr' || !/^-?(?:\d+\.?\d*|\.\d+)$/.test(value.value)))
-          ) {
+          if (node.props?.['style'] || (value && (value.type !== 'expr' || !/^-?(?:\d+\.?\d*|\.\d+)$/.test(value.value)))) {
             reset = true;
             return [];
           }

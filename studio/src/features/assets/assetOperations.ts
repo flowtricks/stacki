@@ -57,9 +57,7 @@ export async function mutateAsset(root: string, input: unknown) {
   return { ok: true };
 }
 async function relocate(root: string, rel: string, destination: string, directory: boolean) {
-  const contents = directory
-    ? await assetDirectoryContents(root, rel)
-    : { files: [rel], directories: [] };
+  const contents = directory ? await assetDirectoryContents(root, rel) : { files: [rel], directories: [] };
   const { files } = contents;
   if (files.length > 200) {
     throw new Error('Move at most 200 assets at once');
@@ -77,22 +75,12 @@ async function relocate(root: string, rel: string, destination: string, director
     await saveAsset(root, target, await readFile(await safePath(root, file)));
   }
   const targets = files.map((file) => destination + file.slice(rel.length));
-  const directories = state.directories.map((item) =>
-    item === rel || item.startsWith(rel + '/') ? destination + item.slice(rel.length) : item,
-  );
+  const directories = state.directories.map((item) => (item === rel || item.startsWith(rel + '/') ? destination + item.slice(rel.length) : item));
   await saveAssetState(root, {
     deleted: [...state.deleted.filter((file) => !targets.includes(file)), ...files],
-    directories: [
-      ...directories,
-      ...contents.directories.map((item) => destination + item.slice(rel.length)),
-    ],
+    directories: [...directories, ...contents.directories.map((item) => destination + item.slice(rel.length))],
     removedDirectories: directory
-      ? [
-          ...state.removedDirectories.filter(
-            (item) => item !== destination && !item.startsWith(destination + '/'),
-          ),
-          ...contents.directories,
-        ]
+      ? [...state.removedDirectories.filter((item) => item !== destination && !item.startsWith(destination + '/')), ...contents.directories]
       : state.removedDirectories,
   });
   for (const file of files) {

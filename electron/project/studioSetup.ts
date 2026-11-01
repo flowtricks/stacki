@@ -3,12 +3,7 @@
 import * as path from 'node:path';
 import { lstat, readFile } from 'node:fs/promises';
 import { downloadRelease } from './studioCatalog';
-import {
-  parseRelease,
-  releaseVersion,
-  RELEASE_BYTES_MAX,
-  type StudioRelease,
-} from '../../shared/ipc/studioRelease';
+import { parseRelease, releaseVersion, RELEASE_BYTES_MAX, type StudioRelease } from '../../shared/ipc/studioRelease';
 import { installNewRelease } from './studioInstall';
 import { record } from '../../shared/core/boundary';
 import type { StudioStatus } from '../../shared/ipc/studioSetup';
@@ -17,13 +12,9 @@ import { isWin } from '../lib/mainHelpers';
 import type { StudioInstallUpdate } from '../../shared/ipc/studioProgress';
 import { runStudioCommand } from './studioCommand';
 
-export type StudioReleaseEnvironment =
-  { readonly kind: 'packaged' } | { readonly kind: 'development'; readonly appPath: string };
+export type StudioReleaseEnvironment = { readonly kind: 'packaged' } | { readonly kind: 'development'; readonly appPath: string };
 
-export async function automaticStudio(
-  input: string,
-  environment: StudioReleaseEnvironment,
-): Promise<StudioRelease> {
+export async function automaticStudio(input: string, environment: StudioReleaseEnvironment): Promise<StudioRelease> {
   const version = releaseVersion(input);
   if (environment.kind === 'packaged') {
     return publishedStudio(version);
@@ -42,9 +33,7 @@ export async function automaticStudio(
   }
   const release = await readStudioRelease(file);
   if (release.version !== version) {
-    throw new Error(
-      'Development Studio version does not match Stacki. Run npm run studio:release.',
-    );
+    throw new Error('Development Studio version does not match Stacki. Run npm run studio:release.');
   }
   return release;
 }
@@ -79,8 +68,7 @@ export async function studioStatus(project: string, desktopVersion: string): Pro
   return {
     kind: 'blocked',
     desktopVersion,
-    message:
-      'A studio folder already exists. Setup will not overwrite it. Ask your agent to inspect it.',
+    message: 'A studio folder already exists. Setup will not overwrite it. Ask your agent to inspect it.',
   };
 }
 
@@ -93,11 +81,7 @@ export async function readStudioRelease(file: string): Promise<StudioRelease> {
   return parseRelease(value);
 }
 
-export async function installStudio(
-  project: string,
-  release: StudioRelease,
-  onProgress: (update: StudioInstallUpdate) => void = () => {},
-): Promise<string> {
+export async function installStudio(project: string, release: StudioRelease, onProgress: (update: StudioInstallUpdate) => void = () => {}): Promise<string> {
   onProgress({ kind: 'stage', stage: 'files' });
   await installNewRelease(path.join(project, 'studio'), release, async (directory, projectRoot) => {
     await validateStudio(directory, projectRoot, onProgress);
@@ -120,11 +104,7 @@ export async function publishedStudio(version: string): Promise<StudioRelease> {
   }
 }
 
-async function validateStudio(
-  directory: string,
-  project: string,
-  onProgress: (update: StudioInstallUpdate) => void,
-): Promise<void> {
+async function validateStudio(directory: string, project: string, onProgress: (update: StudioInstallUpdate) => void): Promise<void> {
   const node = resolveNodeBin();
   if (!node) {
     throw new Error('Install Node.js 22.19 or newer, then reopen Stacki and retry.');
@@ -155,12 +135,7 @@ async function validateStudio(
     );
     if (!outcome.ok) {
       onProgress({ kind: 'output', text: `\n${outcome.error}\n` });
-      throw new Error(
-        'Studio could not finish npm ' +
-          command.args.join(' ') +
-          '. ' +
-          'See the output above. Your project was not replaced.',
-      );
+      throw new Error('Studio could not finish npm ' + command.args.join(' ') + '. ' + 'See the output above. Your project was not replaced.');
     }
   }
 }

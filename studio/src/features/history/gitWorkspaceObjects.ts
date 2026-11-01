@@ -31,24 +31,12 @@ export async function initializeGitWorkspace(
   const run = gitWorkspaceRun(git);
   await mkdir(git.directory, { recursive: true, mode: 0o700 });
   await run(['init', '--bare', '--quiet', git.directory]);
-  await run([
-    'config',
-    'remote.origin.url',
-    options.remote ?? `https://github.com/${connection.repository}.git`,
-  ]);
+  await run(['config', 'remote.origin.url', options.remote ?? `https://github.com/${connection.repository}.git`]);
   await run(['config', 'remote.origin.promisor', 'true']);
   await run(['config', 'remote.origin.partialclonefilter', 'blob:none']);
   const references = manifest?.remote ?? [];
   for (const reference of references) {
-    await run([
-      'fetch',
-      '--quiet',
-      '--depth=301',
-      '--filter=blob:none',
-      '--no-tags',
-      'origin',
-      reference.head,
-    ]);
+    await run(['fetch', '--quiet', '--depth=301', '--filter=blob:none', '--no-tags', 'origin', reference.head]);
     await run(['update-ref', 'refs/remotes/origin/' + reference.name, reference.head]);
   }
   if (manifest?.bundle) {
@@ -56,11 +44,7 @@ export async function initializeGitWorkspace(
     if (process.env['STUDIO_BACKEND_URL']) {
       await downloadGitBundle(manifest.bundle, bundle);
     } else {
-      await copyVerifiedGitBundle(
-        path.join(git.root, '.stacki/studio/state/' + manifest.bundle + '.bundle'),
-        bundle,
-        manifest.bundle,
-      );
+      await copyVerifiedGitBundle(path.join(git.root, '.stacki/studio/state/' + manifest.bundle + '.bundle'), bundle, manifest.bundle);
     }
     await run(['bundle', 'verify', bundle]);
     await run(['fetch', '--quiet', bundle, '+refs/*:refs/*']);
@@ -93,9 +77,7 @@ export async function fetchGitWorkspaceHeads(run: GitWorkspaceRun) {
       '--filter=blob:none',
       '--no-tags',
       'origin',
-      ...references.map(
-        (reference) => `+refs/heads/${reference.name}:refs/remotes/origin/${reference.name}`,
-      ),
+      ...references.map((reference) => `+refs/heads/${reference.name}:refs/remotes/origin/${reference.name}`),
     ]);
   }
   return references;
@@ -103,53 +85,27 @@ export async function fetchGitWorkspaceHeads(run: GitWorkspaceRun) {
 /** Only editor-managed files enter the snapshot; installed Studio and runtime state stay out. */
 export async function snapshotGitWorkspace(git: PublishGit, head: string): Promise<string> {
   const run = gitWorkspaceRun(git);
-  const inventory = published(
-    await publishInventory(git.root, await sourceRoots(git.root), 8 * 1024 ** 3),
-  );
+  const inventory = published(await publishInventory(git.root, await sourceRoots(git.root), 8 * 1024 ** 3));
   const files = await gitWorkspaceTree(run, head);
   await run(['read-tree', head]);
   const removed = files.filter((file) => gitWorkspaceFile(file.path));
-  await run(
-    ['update-index', '-z', '--index-info'],
-    removed.map((file) => `0 ${'0'.repeat(40)}\t${file.path}\0`).join(''),
-  );
+  await run(['update-index', '-z', '--index-info'], removed.map((file) => `0 ${'0'.repeat(40)}\t${file.path}\0`).join(''));
   const list = path.join(git.directory, 'snapshot-paths');
   await writeFile(list, inventory.files.map((file) => file + '\0').join(''));
   if (inventory.files.length) {
-    await run([
-      '--literal-pathspecs',
-      'add',
-      '--force',
-      '--pathspec-from-file=' + list,
-      '--pathspec-file-nul',
-    ]);
+    await run(['--literal-pathspecs', 'add', '--force', '--pathspec-from-file=' + list, '--pathspec-file-nul']);
   }
   // Inherited entries already came from a validated Git tree. Requiring their blobs
   // here would download unchanged files just to report status or stage a selection.
   return gitRevision(await run(['write-tree', '--missing-ok']));
 }
 export function gitWorkspaceFile(file: string): boolean {
-  return (
-    /^(src|public)\//.test(file) || Object.values(METADATA_FILES).some((name) => name === file)
-  );
+  return /^(src|public)\//.test(file) || Object.values(METADATA_FILES).some((name) => name === file);
 }
-export async function gitWorkspaceCommit(
-  run: GitWorkspaceRun,
-  tree: string,
-  parents: readonly string[],
-  message: string,
-): Promise<string> {
+export async function gitWorkspaceCommit(run: GitWorkspaceRun, tree: string, parents: readonly string[], message: string): Promise<string> {
   assert(parents.length <= 2, 'Workspace commits have at most two parents');
   assert(message.length <= 10_000, 'Commit messages are bounded');
-  return gitRevision(
-    await run([
-      'commit-tree',
-      tree,
-      ...parents.flatMap((parent) => ['-p', gitRevision(parent)]),
-      '-m',
-      message,
-    ]),
-  );
+  return gitRevision(await run(['commit-tree', tree, ...parents.flatMap((parent) => ['-p', gitRevision(parent)]), '-m', message]));
 }
 export async function readGitWorkspaceBaseline(root: string): Promise<string> {
   const handle = await open(path.join(root, '.stacki/studio/state/github-base.json'), 'r');

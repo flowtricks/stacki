@@ -14,23 +14,8 @@ import { RUNTIME_PATHS } from '../lib/runtimePaths';
 import { commandNeedsShell, sameFilesystemPath } from '../lib/platform';
 import { createKeyedQueue } from '../lib/serialQueue';
 import type { DevServer } from '../lib/mainTypes';
-import {
-  SHORT_COMMAND,
-  errorMessage,
-  isWin,
-  parseOptionalString,
-  parseRecord,
-  readJson,
-  toPosix,
-} from '../lib/mainHelpers';
-import {
-  findFreePort,
-  nodeCliCommand,
-  resolveNodeBin,
-  run,
-  spawnAstroServer,
-  stopProcessTree,
-} from '../lib/nodeTools';
+import { SHORT_COMMAND, errorMessage, isWin, parseOptionalString, parseRecord, readJson, toPosix } from '../lib/mainHelpers';
+import { findFreePort, nodeCliCommand, resolveNodeBin, run, spawnAstroServer, stopProcessTree } from '../lib/nodeTools';
 import { renderComponentPreviewPage } from '../previewServer/componentPreview';
 import { probeUrl } from '../preview/devProbe';
 import { readDevServerLog } from '../preview/devServerLog';
@@ -47,12 +32,7 @@ import {
   serverAlive,
   trailingSlashFromSource,
 } from '../preview/devServerChecks';
-import {
-  DATA_ENDPOINT,
-  PATHS_ENDPOINT,
-  VALUE_ENDPOINT,
-  renderMarkerConfig,
-} from '../preview/markerConfig';
+import { DATA_ENDPOINT, PATHS_ENDPOINT, VALUE_ENDPOINT, renderMarkerConfig } from '../preview/markerConfig';
 import { PROGRESS_CLEARED, installDependencies } from './projectHandlers';
 import type { MainHost } from './mainHost';
 import type { Thumbnails } from './thumbnails';
@@ -90,9 +70,7 @@ try {
     previewMarkersMax: LIMITS.previewMarkersMax,
     previewMorphWorkMax: LIMITS.previewMorphWorkMax,
   };
-  MORPH_CLIENT =
-    `const AVB_PREVIEW_LIMITS = Object.freeze(${JSON.stringify(bounds)});\n` +
-    readSource(RUNTIME_PATHS.morphClient);
+  MORPH_CLIENT = `const AVB_PREVIEW_LIMITS = Object.freeze(${JSON.stringify(bounds)});\n` + readSource(RUNTIME_PATHS.morphClient);
 } catch {
   MORPH_CLIENT = '';
 }
@@ -120,9 +98,7 @@ export class DevServers {
   constructor(
     private readonly host: Pick<MainHost, 'send'>,
     // Extra variables the project's dev server gets (cms/cmsPreviewEnvironment.ts).
-    private readonly previewEnvironment: (
-      projectRoot: string,
-    ) => Readonly<Record<string, string>> = () => ({}),
+    private readonly previewEnvironment: (projectRoot: string) => Readonly<Record<string, string>> = () => ({}),
   ) {}
 
   /** The dev server the canvas shows, while one runs. */
@@ -151,10 +127,7 @@ export class DevServers {
   }
 
   /** Runs `task` as the project's one dev start; a later start cancels it. */
-  run(
-    projectPath: string,
-    task: (assertActive: () => void) => Promise<IpcResults['dev:start']>,
-  ): Promise<IpcResults['dev:start']> {
+  run(projectPath: string, task: (assertActive: () => void) => Promise<IpcResults['dev:start']>): Promise<IpcResults['dev:start']> {
     return this.starts.run(projectPath, task);
   }
 
@@ -171,12 +144,7 @@ export class DevServers {
     if (daemon && bin) {
       try {
         const [cmd, argv] = nodeCliCommand(bin, ['dev', 'stop']);
-        execFile(
-          cmd,
-          argv,
-          { ...SHORT_COMMAND, cwd: projectPath, shell: commandNeedsShell(cmd) },
-          () => {},
-        );
+        execFile(cmd, argv, { ...SHORT_COMMAND, cwd: projectPath, shell: commandNeedsShell(cmd) }, () => {});
       } catch {
         /* best effort */
       }
@@ -195,17 +163,12 @@ export class DevServers {
     // one running — an adopted external server never loads the marker config,
     // and a file left behind by an earlier run would answer for a config that
     // has since changed.
-    const ours =
-      this.server &&
-      sameFilesystemPath(this.server.projectPath, projectPath) &&
-      !this.server.external;
+    const ours = this.server && sameFilesystemPath(this.server.projectPath, projectPath) && !this.server.external;
     try {
       if (!ours) {
         throw new Error('no server of ours');
       }
-      const resolved = parseRecord(
-        readJson(path.join(projectPath, 'node_modules', '.avb', 'resolved.json')),
-      );
+      const resolved = parseRecord(readJson(path.join(projectPath, 'node_modules', '.avb', 'resolved.json')));
       const mode = parseOptionalString(resolved['trailingSlash']);
       if (mode && TRAILING_SLASH_MODES.includes(mode)) {
         return mode;
@@ -238,18 +201,14 @@ export class DevServers {
       // config's own text is the better answer.
       fs.rmSync(path.join(directory, 'resolved.json'), { force: true });
       fs.rmSync(path.join(directory, 'routes.json'), { force: true });
-      const userConfig = ['astro.config.mjs', 'astro.config.js', 'astro.config.ts'].find((name) =>
-        fs.existsSync(path.join(projectPath, name)),
-      );
+      const userConfig = ['astro.config.mjs', 'astro.config.js', 'astro.config.ts'].find((name) => fs.existsSync(path.join(projectPath, name)));
       // Unpacked copies: the dev server is plain Node (see runtimePaths.ts).
       const markersPath = RUNTIME_PATHS.previewMarkers;
       const previewHelperPath = RUNTIME_PATHS.componentPreview;
       // Vite normally resolves symlinks before loading source (including
       // macOS /var -> /private/var). Match both spellings because a project's
       // preserveSymlinks option can keep the original one instead.
-      const projectDirectories = [
-        ...new Set([toPosix(path.resolve(projectPath)), toPosix(fs.realpathSync(projectPath))]),
-      ];
+      const projectDirectories = [...new Set([toPosix(path.resolve(projectPath)), toPosix(fs.realpathSync(projectPath))])];
       const config = renderMarkerConfig([
         userConfig ? `import userConfig from '../../${userConfig}';` : 'const userConfig = {};',
         JSON.stringify(markersPath),
@@ -349,12 +308,7 @@ export class DevServers {
     // markers and no live patching — an edit reloads the page, the way it did
     // before any of this — but the canvas is a canvas again.
     try {
-      const url = await this.spawn(
-        projectPath,
-        localBin,
-        { force: true, bare: true },
-        assertActive,
-      );
+      const url = await this.spawn(projectPath, localBin, { force: true, bare: true }, assertActive);
       this.pushLog(
         "\n[stacki] the preview would not start with this app's config, so it is " +
           "running on the project's own. Outlines and live updates are off; the " +
@@ -371,12 +325,7 @@ export class DevServers {
     }
   }
 
-  private async spawn(
-    projectPath: string,
-    localBin: string,
-    { force, bare }: { readonly force: boolean; readonly bare: boolean },
-    assertActive: () => void,
-  ) {
+  private async spawn(projectPath: string, localBin: string, { force, bare }: { readonly force: boolean; readonly bare: boolean }, assertActive: () => void) {
     const port = await findFreePort(previewPort(fs.realpathSync(projectPath)));
     assertActive();
     const args = ['dev', '--port', String(port), '--host', '127.0.0.1'];
@@ -433,10 +382,7 @@ export class DevServers {
     while (Date.now() < deadline) {
       assertActive();
       if (!this.server) {
-        throw new Error(
-          'Dev server exited before it was ready.\n\n' +
-            (await this.failureDetail(projectPath, localBin, startedAtMs)),
-        );
+        throw new Error('Dev server exited before it was ready.\n\n' + (await this.failureDetail(projectPath, localBin, startedAtMs)));
       }
       if (await serverResponds(url)) {
         assertActive();
@@ -447,10 +393,7 @@ export class DevServers {
       }
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
-    throw new Error(
-      'Astro dev server did not start within 60 seconds.\n\n' +
-        (await this.failureDetail(projectPath, localBin, startedAtMs)),
-    );
+    throw new Error('Astro dev server did not start within 60 seconds.\n\n' + (await this.failureDetail(projectPath, localBin, startedAtMs)));
   }
 
   // The project's astro CLI, installing the project's dependencies first when it
@@ -474,8 +417,7 @@ export class DevServers {
       this.host.send('progress', PROGRESS_CLEARED);
       if (!fs.existsSync(localBin)) {
         throw new Error(
-          'astro is not installed in this project (no node_modules/.bin/astro after install). ' +
-            'Is astro listed in package.json dependencies?',
+          'astro is not installed in this project (no node_modules/.bin/astro after install). ' + 'Is astro listed in package.json dependencies?',
         );
       }
     }
@@ -483,11 +425,7 @@ export class DevServers {
     return localBin;
   }
 
-  private async failureDetail(
-    projectPath: string,
-    localBin: string,
-    startedAtMs: number,
-  ): Promise<string> {
+  private async failureDetail(projectPath: string, localBin: string, startedAtMs: number): Promise<string> {
     let log = this.recentLog();
     const daemonLog = await readDevServerLog(projectPath, startedAtMs);
     if (daemonLog) {
@@ -496,11 +434,8 @@ export class DevServers {
     try {
       const [logCmd, logArgs] = nodeCliCommand(localBin, ['dev', 'logs']);
       const { stdout } = await new Promise<{ stdout: string }>((resolve, reject) =>
-        execFile(
-          logCmd,
-          logArgs,
-          { ...SHORT_COMMAND, cwd: projectPath, shell: commandNeedsShell(logCmd) },
-          (error, so) => (error ? reject(error) : resolve({ stdout: so.toString() })),
+        execFile(logCmd, logArgs, { ...SHORT_COMMAND, cwd: projectPath, shell: commandNeedsShell(logCmd) }, (error, so) =>
+          error ? reject(error) : resolve({ stdout: so.toString() }),
         ),
       );
       const tail = stdout.trim().split('\n').slice(-12).join('\n');
@@ -560,9 +495,7 @@ export function registerDevServerHandlers({
     let astroVersion: string | undefined = undefined;
     let requires: string | undefined = undefined;
     try {
-      const pkg = parseRecord(
-        readJson(path.join(projectPath, 'node_modules', 'astro', 'package.json')),
-      );
+      const pkg = parseRecord(readJson(path.join(projectPath, 'node_modules', 'astro', 'package.json')));
       astroVersion = parseOptionalString(pkg['version']) || undefined;
       requires = parseOptionalString(toRecord(pkg['engines'])?.['node']) || undefined;
     } catch {

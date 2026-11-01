@@ -30,9 +30,6 @@ export function summarizeHistoryFiles(files: readonly HistoryCommitFile[]): Hist
   for (const file of files) {
     counts[historyFileCategory(file)] += 1;
   }
-  assert(
-    counts.added + counts.deleted + counts.updated === files.length,
-    'History files: every file is counted once',
-  );
+  assert(counts.added + counts.deleted + counts.updated === files.length, 'History files: every file is counted once');
   return counts;
 }

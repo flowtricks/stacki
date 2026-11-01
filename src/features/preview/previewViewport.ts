@@ -13,11 +13,7 @@ export function parsePreviewWidth(input: string): number | undefined {
   return width;
 }
 
-export function previewViewport(
-  width: number | undefined,
-  available: { readonly width: number; readonly height: number },
-  height: number | undefined,
-) {
+export function previewViewport(width: number | undefined, available: { readonly width: number; readonly height: number }, height: number | undefined) {
   assert(Number.isFinite(available.width), 'Preview container width must be finite');
   assert(Number.isFinite(available.height), 'Preview container height must be finite');
   const fixed = width !== undefined;

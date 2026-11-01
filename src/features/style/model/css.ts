@@ -11,33 +11,10 @@ import type { ParsedDeclaration, ParsedRule, StyleRegion } from './styleTypes';
 import { parseSelectorList, selectorListMembers } from './selectors';
 import { assert } from '../../../../shared/core/assert';
 import { LIMITS } from '../../../../shared/core/limits';
-import {
-  type DeclarationValue,
-  squash,
-  childRule,
-  childAtRule,
-  findChildRuleBySelector,
-  setDeclOnRule,
-  appendDecl,
-  setDeclDirect,
-} from './cssRegions';
-export {
-  type DeclarationValue,
-  extractStyleRegions,
-  parseRegion,
-  splitEmbed,
-  renderEmbed,
-  directDecls,
-  appendDecl,
-} from './cssRegions';
+import { type DeclarationValue, squash, childRule, childAtRule, findChildRuleBySelector, setDeclOnRule, appendDecl, setDeclDirect } from './cssRegions';
+export { type DeclarationValue, extractStyleRegions, parseRegion, splitEmbed, renderEmbed, directDecls, appendDecl } from './cssRegions';
 
-export {
-  atRuleQueryText,
-  queryKey,
-  splitQuery,
-  countAtRuleQuery,
-  renameAtRuleQuery,
-} from './cssQueries';
+export { atRuleQueryText, queryKey, splitQuery, countAtRuleQuery, renameAtRuleQuery } from './cssQueries';
 
 type WalkContext = {
   embedKey: string;
@@ -113,13 +90,7 @@ export function collectRules(region: StyleRegion, context: WalkContext): ParsedR
   // parentSelectors: undefined at the top level; the enclosing rule's RESOLVED selectors
   // once inside one. ancestorDisplay: the enclosing rules' RAW selectors plus `@`
   // markers for enclosing queries, in order, for the nested display.
-  const walk = (
-    container: Root | Rule | AtRule,
-    atContext: string[],
-    parentSelectors: string[] | undefined,
-    ancestorDisplay: string[],
-    depth: number,
-  ) => {
+  const walk = (container: Root | Rule | AtRule, atContext: string[], parentSelectors: string[] | undefined, ancestorDisplay: string[], depth: number) => {
     // A stylesheet is untrusted input: rules nested deeper than a page tree can be are
     // not offered, rather than walked without bound.
     if (depth > LIMITS.treeDepthMax) {
@@ -129,21 +100,16 @@ export function collectRules(region: StyleRegion, context: WalkContext): ParsedR
       if (child.type === 'rule') {
         const node = child as Rule;
         const raw = node.selector.trim();
-        const resolved = parentSelectors
-          ? resolveNestedSelectors(node.selector, parentSelectors)
-          : undefined;
+        const resolved = parentSelectors ? resolveNestedSelectors(node.selector, parentSelectors) : undefined;
         // Display path: enclosing selectors + `@` query markers. `&` collapses to the
         // parent (its decls belong to the enclosing selector).
         const displayPath = raw === '&' ? ancestorDisplay : [...ancestorDisplay, raw];
         const selectorsOnly = displayPath.filter((part) => part !== '@');
         // nestedDisplay: selector nesting only (Base view). queryDisplay: with `@` at
         // the query position (shown when viewing that query).
-        const nestedDisplay =
-          selectorsOnly.length > 1 ? renderNestedPath(selectorsOnly) : undefined;
+        const nestedDisplay = selectorsOnly.length > 1 ? renderNestedPath(selectorsOnly) : undefined;
         const queryDisplay = displayPath.includes('@') ? renderNestedPath(displayPath) : undefined;
-        rules.push(
-          buildRule(node, atContext, context, ruleCounter++, resolved, nestedDisplay, queryDisplay),
-        );
+        rules.push(buildRule(node, atContext, context, ruleCounter++, resolved, nestedDisplay, queryDisplay));
         const nextSelectors = resolved ?? splitTopLevelCommas(node.selector);
         walk(node, atContext, nextSelectors, displayPath, depth + 1);
       } else if (child.type === 'atrule') {
@@ -158,26 +124,11 @@ export function collectRules(region: StyleRegion, context: WalkContext): ParsedR
           // A nested query's OWN bare declarations style the ENCLOSING selector within
           // the query. Surface them as a rule bound to the at-rule node itself (its
           // direct decls), so the authored bare form round-trips without an `& { }`.
-          if (
-            parentSelectors &&
-            parentSelectors.length &&
-            at.some((child) => child.type === 'decl')
-          ) {
+          if (parentSelectors && parentSelectors.length && at.some((child) => child.type === 'decl')) {
             const selectorsOnly = nextDisplay.filter((part) => part !== '@');
-            const nestedDisplay =
-              selectorsOnly.length > 1 ? renderNestedPath(selectorsOnly) : undefined;
+            const nestedDisplay = selectorsOnly.length > 1 ? renderNestedPath(selectorsOnly) : undefined;
             const queryDisplay = renderNestedPath(nextDisplay);
-            rules.push(
-              buildRule(
-                at as unknown as Rule,
-                nextContext,
-                context,
-                ruleCounter++,
-                parentSelectors,
-                nestedDisplay,
-                queryDisplay,
-              ),
-            );
+            rules.push(buildRule(at as unknown as Rule, nextContext, context, ruleCounter++, parentSelectors, nestedDisplay, queryDisplay));
           }
           walk(at, nextContext, parentSelectors, nextDisplay, depth + 1);
         } else if (name === 'layer' && at.nodes) {
@@ -200,12 +151,9 @@ export function collectRules(region: StyleRegion, context: WalkContext): ParsedR
  * left for the caller to use as-is.
  */
 /** One step of a typed nesting path: a selector level or a query (at-rule) level. */
-export type NestStep =
-  { kind: 'selector'; selector: string } | { kind: 'atrule'; name: string; params: string };
+export type NestStep = { kind: 'selector'; selector: string } | { kind: 'atrule'; name: string; params: string };
 
-export function parseNestedInput(
-  input: string,
-): { selector: string; atContext: string[]; path: NestStep[] } | undefined {
+export function parseNestedInput(input: string): { selector: string; atContext: string[]; path: NestStep[] } | undefined {
   const text = input.trim();
   if (!text) {
     return undefined;
@@ -234,11 +182,7 @@ export function parseNestedInput(
     container.each((child: ChildNode) => {
       children.push(child);
     });
-    const next = children.find(
-      (child) =>
-        child.type === 'rule' ||
-        (child.type === 'atrule' && QUERY_ATS.has((child as AtRule).name.toLowerCase())),
-    );
+    const next = children.find((child) => child.type === 'rule' || (child.type === 'atrule' && QUERY_ATS.has((child as AtRule).name.toLowerCase())));
     if (!next) {
       break;
     }
@@ -276,12 +220,7 @@ export function parseNestedInput(
  * the embed gets real nested source (`.hero { @container (…) { .title { prop } } }`).
  * A path whose leaf is an at-rule styles the ENCLOSING selector via an `& { }` rule.
  */
-export function createNestedRule(
-  region: StyleRegion,
-  path: NestStep[],
-  prop: string,
-  declared: DeclarationValue,
-): boolean {
+export function createNestedRule(region: StyleRegion, path: NestStep[], prop: string, declared: DeclarationValue): boolean {
   if (!region.root || !path.length) {
     return false;
   }
@@ -317,20 +256,13 @@ export function createNestedRule(
 
 // The child of `container` for one nesting step, reused when present; otherwise a new,
 // detached node — the caller decides where it is attached.
-function findOrMakeStep(
-  container: Root | Rule | AtRule,
-  step: NestStep,
-): { readonly node: Rule | AtRule; readonly created: boolean } {
+function findOrMakeStep(container: Root | Rule | AtRule, step: NestStep): { readonly node: Rule | AtRule; readonly created: boolean } {
   if (step.kind === 'selector') {
     const found = childRule(container, (rule) => squash(rule.selector) === squash(step.selector));
-    return found
-      ? { node: found, created: false }
-      : { node: postcss.rule({ selector: step.selector }), created: true };
+    return found ? { node: found, created: false } : { node: postcss.rule({ selector: step.selector }), created: true };
   }
   const found = childAtRule(container, step.name, step.params);
-  return found
-    ? { node: found, created: false }
-    : { node: postcss.atRule({ name: step.name, params: step.params }), created: true };
+  return found ? { node: found, created: false } : { node: postcss.atRule({ name: step.name, params: step.params }), created: true };
 }
 
 /** A conditional at-rule block (@media/@container/@supports) available to scaffold into. */
@@ -418,9 +350,7 @@ function appendTopLevel(root: Root, node: ChildNode): void {
 
 // The whitespace around a block (before its selector, before its closing brace),
 // when the node is a block that has both.
-function blockRaws(
-  node: ChildNode | undefined,
-): { readonly before: string; readonly after: string } | undefined {
+function blockRaws(node: ChildNode | undefined): { readonly before: string; readonly after: string } | undefined {
   if (node === undefined) {
     return undefined;
   }
@@ -435,12 +365,7 @@ function blockRaws(
 }
 
 /** Create `selector { prop: value }` inside an at-rule block. Returns false on empty input. */
-export function createRuleInAtRule(
-  atRule: AtRule,
-  selector: string,
-  prop: string,
-  declared: DeclarationValue,
-): boolean {
+export function createRuleInAtRule(atRule: AtRule, selector: string, prop: string, declared: DeclarationValue): boolean {
   const cleanProp = prop.trim();
   const cleanValue = declared.value.trim();
   if (!cleanProp || !cleanValue) {
@@ -461,13 +386,7 @@ export function createRuleInAtRule(
  * existing equivalent block when present or appending a new one. Used to write a
  * value at a Webflow breakpoint that the embed doesn't yet have a query for.
  */
-export function createRuleInMedia(
-  region: StyleRegion,
-  params: string,
-  selector: string,
-  prop: string,
-  declared: DeclarationValue,
-): boolean {
+export function createRuleInMedia(region: StyleRegion, params: string, selector: string, prop: string, declared: DeclarationValue): boolean {
   if (!region.root) {
     return false;
   }
@@ -492,13 +411,7 @@ export function createRuleInMedia(
  * at-rule blocks and creating any missing ones. Generalizes createRuleInMedia to
  * arbitrary @media/@container/@supports the user typed in the add-selector field.
  */
-export function createRuleInQuery(
-  region: StyleRegion,
-  atContextKey: string,
-  selector: string,
-  prop: string,
-  declared: DeclarationValue,
-): boolean {
+export function createRuleInQuery(region: StyleRegion, atContextKey: string, selector: string, prop: string, declared: DeclarationValue): boolean {
   if (!region.root) {
     return false;
   }
@@ -547,12 +460,7 @@ function ensureQueryChain(root: Root, segments: readonly string[]): Root | AtRul
  * Create `selector { prop: value }` at the region root (base, non-@ level). Returns false on
  * empty input.
  */
-export function createRuleAtRoot(
-  region: StyleRegion,
-  selector: string,
-  prop: string,
-  declared: DeclarationValue,
-): boolean {
+export function createRuleAtRoot(region: StyleRegion, selector: string, prop: string, declared: DeclarationValue): boolean {
   if (!region.root) {
     return false;
   }
@@ -642,8 +550,7 @@ function buildRule(
 
   // A nested rule matches/displays by its selector RESOLVED against the parent; the
   // postcss node keeps the raw nested selector (`.hero_title`) for editing.
-  const selectorText =
-    resolvedSelectors && resolvedSelectors.length ? resolvedSelectors.join(', ') : node.selector;
+  const selectorText = resolvedSelectors && resolvedSelectors.length ? resolvedSelectors.join(', ') : node.selector;
 
   return {
     ruleId,
@@ -723,11 +630,7 @@ export function removeRuleIfEmpty(rule: ParsedRule): boolean {
 }
 
 /** Append a new declaration to a rule. Returns false on invalid input. */
-export function addDeclaration(
-  rule: ParsedRule,
-  prop: string,
-  declared: DeclarationValue,
-): boolean {
+export function addDeclaration(rule: ParsedRule, prop: string, declared: DeclarationValue): boolean {
   const cleanProp = prop.trim();
   const cleanValue = declared.value.trim();
   if (!cleanProp || !cleanValue) {
@@ -743,21 +646,14 @@ export function addDeclaration(
  * comments keep their relative position at the front).
  */
 export function reorderDeclarations(rule: ParsedRule, orderedDeclIds: string[]) {
-  const byId = new Map(
-    rule.declarations.map((declaration) => [declaration.declId, declaration.node]),
-  );
-  const nodes = orderedDeclIds
-    .map((id) => byId.get(id))
-    .filter((node): node is NonNullable<typeof node> => Boolean(node));
+  const byId = new Map(rule.declarations.map((declaration) => [declaration.declId, declaration.node]));
+  const nodes = orderedDeclIds.map((id) => byId.get(id)).filter((node): node is NonNullable<typeof node> => Boolean(node));
   nodes.forEach((node) => node.remove());
   nodes.forEach((node) => rule.node.append(node));
 }
 
 /** Replace a rule's entire body by re-parsing edited CSS text for that rule. */
-export function replaceRuleCss(
-  rule: ParsedRule,
-  ruleCss: string,
-): { ok: true } | { ok: false; error: string } {
+export function replaceRuleCss(rule: ParsedRule, ruleCss: string): { ok: true } | { ok: false; error: string } {
   try {
     const parsed = postcss.parse(ruleCss);
     const nodes = parsed.nodes.filter((node): node is Rule => node.type === 'rule');

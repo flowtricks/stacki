@@ -3,12 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { BatchedWriter } from '../src/features/storage/batchedWriter';
-import {
-  beginOperation,
-  hasPendingOperations,
-  mayPause,
-  onOperationsSettled,
-} from '../src/features/session/activity';
+import { beginOperation, hasPendingOperations, mayPause, onOperationsSettled } from '../src/features/session/activity';
 
 test('many edits share one durable snapshot and acknowledge only after storage succeeds', async () => {
   const writes: Uint8Array[] = [];
@@ -114,10 +109,7 @@ test('asset totals reject uploads before durable storage grows past the allowanc
     await mkdir(join(root, 'public'));
     await writeFile(join(root, 'public/existing.bin'), '');
     await truncate(join(root, 'public/existing.bin'), 100_000_000);
-    await assert.rejects(
-      saveAsset(root, 'public/new.png', new Uint8Array([1])),
-      /Asset allowance reached/,
-    );
+    await assert.rejects(saveAsset(root, 'public/new.png', new Uint8Array([1])), /Asset allowance reached/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

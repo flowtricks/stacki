@@ -49,16 +49,7 @@ export interface FunctionTrace {
   readonly reshaped: readonly string[];
 }
 
-const RESHAPING = new Set([
-  'map',
-  'filter',
-  'flatMap',
-  'sort',
-  'toSorted',
-  'slice',
-  'reduce',
-  'reverse',
-]);
+const RESHAPING = new Set(['map', 'filter', 'flatMap', 'sort', 'toSorted', 'slice', 'reduce', 'reverse']);
 // Modules whose imports read data rather than lead to more of the project's code.
 const FRAMEWORK = new Set(['astro:content', 'sanity:client', 'groq', 'astro']);
 
@@ -78,8 +69,7 @@ export function traceFunction(text: string, file: string, functionName: string):
     }
     seen.add(name);
     for (const call of found.calls) {
-      const method =
-        call.kind === 'call' && call.callee.kind === 'member' ? call.callee.property : undefined;
+      const method = call.kind === 'call' && call.callee.kind === 'member' ? call.callee.property : undefined;
       if (method !== undefined && RESHAPING.has(method)) {
         reshaped.add(method);
       }
@@ -99,63 +89,34 @@ export function traceFunction(text: string, file: string, functionName: string):
 }
 
 // The first call that reads a collection: getCollection, or a GROQ query.
-function readIn(
-  calls: readonly Js[],
-  module: ParsedModule,
-  file: string,
-): readonly TraceStep[] | undefined {
+function readIn(calls: readonly Js[], module: ParsedModule, file: string): readonly TraceStep[] | undefined {
   for (const call of calls) {
     if (call.kind !== 'call') {
       continue;
     }
     const callee = call.callee.kind === 'name' ? call.callee.name : undefined;
-    const imported =
-      callee === undefined ? undefined : module.imports.find((entry) => entry.name === callee);
+    const imported = callee === undefined ? undefined : module.imports.find((entry) => entry.name === callee);
     const first = call.args[0];
-    if (
-      imported?.path === 'astro:content' &&
-      imported.imported === 'getCollection' &&
-      first?.kind === 'string'
-    ) {
-      return [
-        {
-          kind: 'collection',
-          source: { kind: 'astro', collection: first.value },
-          groq: undefined,
-          file,
-          literal: undefined,
-        },
-      ];
+    if (imported?.path === 'astro:content' && imported.imported === 'getCollection' && first?.kind === 'string') {
+      return [{ kind: 'collection', source: { kind: 'astro', collection: first.value }, groq: undefined, file, literal: undefined }];
     }
     for (const argument of call.args) {
       const query = groqOf(argument, module, 0);
       if (query !== undefined) {
-        return [
-          ...(query.name === undefined ? [] : [{ kind: 'query' as const, name: query.name, file }]),
-          collectionStep(query, file),
-        ];
+        return [...(query.name === undefined ? [] : [{ kind: 'query' as const, name: query.name, file }]), collectionStep(query, file)];
       }
     }
   }
   return undefined;
 }
 
-function collectionStep(
-  query: { readonly text: string; readonly from: number; readonly to: number },
-  file: string,
-): TraceStep {
+function collectionStep(query: { readonly text: string; readonly from: number; readonly to: number }, file: string): TraceStep {
   const groq = query.text;
   const reading = readGroq(groq);
   // A query the reader cannot model still names its type, which is what the
   // trace is for: the collection the list comes from.
   const type = reading?.type ?? /_type\s*==\s*["']([\w.-]+)["']/.exec(groq)?.[1] ?? 'documents';
-  return {
-    kind: 'collection',
-    source: { kind: 'sanity', collection: type },
-    groq: reading,
-    file,
-    literal: { from: query.from, to: query.to, text: groq },
-  };
+  return { kind: 'collection', source: { kind: 'sanity', collection: type }, groq: reading, file, literal: { from: query.from, to: query.to, text: groq } };
 }
 
 // A GROQ string, `defineQuery(…)` of one, or a constant holding either.
@@ -172,9 +133,7 @@ function groqOf(node: Js, module: ParsedModule, depth: number): FoundGroq | unde
     return undefined;
   }
   if (node.kind === 'string') {
-    return node.value.trim().startsWith('*')
-      ? { text: node.value, name: undefined, from: node.from, to: node.to }
-      : undefined;
+    return node.value.trim().startsWith('*') ? { text: node.value, name: undefined, from: node.from, to: node.to } : undefined;
   }
   if (node.kind === 'call' && node.args.length === 1 && node.args[0]) {
     return groqOf(node.args[0], module, depth + 1);
@@ -188,31 +147,20 @@ function groqOf(node: Js, module: ParsedModule, depth: number): FoundGroq | unde
 }
 
 // The first call to a function this module imports from the project.
-function importCalled(
-  calls: readonly Js[],
-  module: ParsedModule,
-): { readonly name: string; readonly spec: string } | undefined {
+function importCalled(calls: readonly Js[], module: ParsedModule): { readonly name: string; readonly spec: string } | undefined {
   for (const call of calls) {
     const path = call.kind === 'call' ? namePath(call.callee) : undefined;
     const root = path?.[0];
-    const imported =
-      root === undefined ? undefined : module.imports.find((entry) => entry.name === root);
+    const imported = root === undefined ? undefined : module.imports.find((entry) => entry.name === root);
     if (imported !== undefined && !FRAMEWORK.has(imported.path) && path?.length === 1) {
-      return {
-        name: imported.imported === 'default' ? imported.name : imported.imported,
-        spec: imported.path,
-      };
+      return { name: imported.imported === 'default' ? imported.name : imported.imported, spec: imported.path };
     }
   }
   return undefined;
 }
 
 function localCalls(calls: readonly Js[], module: ParsedModule): readonly string[] {
-  return calls.flatMap((call) =>
-    call.kind === 'call' && call.callee.kind === 'name' && module.functions.has(call.callee.name)
-      ? [call.callee.name]
-      : [],
-  );
+  return calls.flatMap((call) => (call.kind === 'call' && call.callee.kind === 'name' && module.functions.has(call.callee.name) ? [call.callee.name] : []));
 }
 
 /**
@@ -220,11 +168,7 @@ function localCalls(calls: readonly Js[], module: ParsedModule): readonly string
  * quotes, or undefined when the file no longer holds the query the trace read
  * there (it was edited since): an edit is never written over code it did not see.
  */
-export function rewrittenGroqLiteral(
-  fileText: string,
-  literal: GroqLiteral,
-  groq: string,
-): string | undefined {
+export function rewrittenGroqLiteral(fileText: string, literal: GroqLiteral, groq: string): string | undefined {
   if (literal.to > fileText.length || literal.from >= literal.to) {
     return undefined;
   }

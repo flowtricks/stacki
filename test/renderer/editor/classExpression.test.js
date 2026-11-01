@@ -11,9 +11,7 @@ const { transform } = require(repoPath('studio/node_modules/@astrojs/compiler-rs
 const { withClass } = load('src/editor/classAttr.ts');
 
 async function compiledURL(source) {
-  const internalURL = pathToFileURL(
-    repoPath('studio/node_modules/astro/dist/runtime/compiler/index.js'),
-  ).href;
+  const internalURL = pathToFileURL(repoPath('studio/node_modules/astro/dist/runtime/compiler/index.js')).href;
   const compiled = await transform(source, {
     internalURL,
     filename: '/class-expression.astro',

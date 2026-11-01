@@ -76,9 +76,7 @@ export const noUnboundedLoop: RuleModule<'unbounded'> = {
     type: 'problem',
     docs: { description: 'Loops state their bound (AGENTS.md §10).' },
     messages: {
-      unbounded:
-        'This loop has no bound in its condition; loop on the bounded quantity, or count ' +
-        'iterations against a LIMITS constant (AGENTS.md §10).',
+      unbounded: 'This loop has no bound in its condition; loop on the bounded quantity, or count ' + 'iterations against a LIMITS constant (AGENTS.md §10).',
     },
     schema: [],
   },
@@ -111,27 +109,14 @@ function isConstantTrue(test: TSESTree.Expression): boolean {
 // §14: an index or a count is an integer; a bare `/` feeding one hides the
 // rounding decision. Division is fine for floats (scaling, ratios), so only
 // the positions that demand an integer are checked.
-const INTEGER_ARGUMENT_METHODS = new Set([
-  'at',
-  'charAt',
-  'charCodeAt',
-  'codePointAt',
-  'padEnd',
-  'padStart',
-  'repeat',
-  'slice',
-  'splice',
-  'substring',
-]);
+const INTEGER_ARGUMENT_METHODS = new Set(['at', 'charAt', 'charCodeAt', 'codePointAt', 'padEnd', 'padStart', 'repeat', 'slice', 'splice', 'substring']);
 
 export const divisionIntent: RuleModule<'bareDivision'> = {
   meta: {
     type: 'problem',
     docs: { description: 'Integer positions state their rounding (AGENTS.md §14).' },
     messages: {
-      bareDivision:
-        'This division feeds an index or count: state the rounding with Math.floor, ' +
-        'Math.ceil, or Math.trunc (AGENTS.md §14).',
+      bareDivision: 'This division feeds an index or count: state the rounding with Math.floor, ' + 'Math.ceil, or Math.trunc (AGENTS.md §14).',
     },
     schema: [],
   },

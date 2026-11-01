@@ -7,9 +7,7 @@ import { parseRelease, releaseVersion, RELEASE_FILES_MAX } from '../src/features
 import { record } from '../src/shared/validation';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const version = releaseVersion(
-  record(JSON.parse(await readFile(path.join(root, 'src/shared/release.json'), 'utf8')))['version'],
-);
+const version = releaseVersion(record(JSON.parse(await readFile(path.join(root, 'src/shared/release.json'), 'utf8')))['version']);
 const files: { path: string; content: string }[] = [];
 async function collect(relative: string): Promise<void> {
   if (relative.split('/').length > 20) {

@@ -74,15 +74,13 @@ export function colorOf(resolved: unknown): string | undefined {
 
 // True for values that name a colour but cannot be drawn as one — the swatch
 // shows a checkerboard rather than pretending.
-export const isUncomputableColor = (resolved: unknown): boolean =>
-  /(^|\s|\()color-mix\(/i.test(String(resolved));
+export const isUncomputableColor = (resolved: unknown): boolean => /(^|\s|\()color-mix\(/i.test(String(resolved));
 
 // What kind of thing a variable holds, which is what picks its glyph — the same
 // four the style panel's variable picker uses, so a colour is a droplet in both
 // places and a bare number is a number in both.
 export const FONT_WORDS = new RegExp(
-  '(serif|sans-serif|monospace|cursive|system-ui|uppercase|lowercase|capitalize|' +
-    'balance|pretty|italic|normal|inherit)',
+  '(serif|sans-serif|monospace|cursive|system-ui|uppercase|lowercase|capitalize|' + 'balance|pretty|italic|normal|inherit)',
   'i',
 );
 
@@ -101,10 +99,7 @@ export function kindOf(value: unknown, resolved: unknown): string {
   if (/^-?\d*\.?\d+([a-z%]+)$/i.test(text) || /^(calc|clamp|min|max)\(/i.test(text)) {
     return 'size';
   }
-  if (
-    /[a-z]/i.test(text) &&
-    (FONT_WORDS.test(text) || text.includes(',') || /^[a-z-]+$/i.test(text))
-  ) {
+  if (/[a-z]/i.test(text) && (FONT_WORDS.test(text) || text.includes(',') || /^[a-z-]+$/i.test(text))) {
     return 'font';
   }
   return 'size';

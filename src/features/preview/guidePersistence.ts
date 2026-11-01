@@ -64,10 +64,7 @@ export function useProjectGuideSettings(project: string | undefined) {
   };
 }
 
-export function createGuideController(
-  project: string,
-  notify: (state: GuideState) => void,
-): GuideController {
+export function createGuideController(project: string, notify: (state: GuideState) => void): GuideController {
   const controller = new ProjectGuideController(project, notify);
   return {
     change: (change) => controller.change(change),
@@ -114,10 +111,8 @@ class ProjectGuideController {
         }
         this.source = stored.source;
         // Without a file, only settings from app storage are written; defaults wait for a change.
-        const legacy =
-          this.source === undefined ? loadLegacyGuideSettings(this.project) : undefined;
-        this.settings =
-          this.source === undefined ? (legacy ?? GUIDE_DEFAULTS) : guideFromSource(this.source);
+        const legacy = this.source === undefined ? loadLegacyGuideSettings(this.project) : undefined;
+        this.settings = this.source === undefined ? (legacy ?? GUIDE_DEFAULTS) : guideFromSource(this.source);
         this.status = 'ready';
         this.report('');
         if (legacy !== undefined) {
@@ -160,12 +155,7 @@ class ProjectGuideController {
     try {
       const result = await writeMetadata(this.project, {
         kind: 'guide',
-        source:
-          JSON.stringify(
-            { version: 1, settings: { ...next, columnDefaultsVersion: 1 } },
-            undefined,
-            2,
-          ) + '\n',
+        source: JSON.stringify({ version: 1, settings: { ...next, columnDefaultsVersion: 1 } }, undefined, 2) + '\n',
         ...(this.source === undefined ? {} : { base: this.source }),
       });
       this.source = result.source;

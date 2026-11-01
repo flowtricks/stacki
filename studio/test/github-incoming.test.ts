@@ -31,9 +31,7 @@ function repository(changes: readonly Change[], trees?: readonly unknown[]) {
     reads.push(file);
     return Response.json({
       encoding: 'base64',
-      content: Buffer.from(url.searchParams.get('ref') === base ? 'before' : 'after').toString(
-        'base64',
-      ),
+      content: Buffer.from(url.searchParams.get('ref') === base ? 'before' : 'after').toString('base64'),
     });
   };
   return {
@@ -54,9 +52,7 @@ function repository(changes: readonly Change[], trees?: readonly unknown[]) {
 test('deployment-only commits advance sync without reading deployment files', async () => {
   for (const status of ['added', 'modified', 'removed']) {
     const { client, reads } = repository(
-      ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml', 'studio/src/cloudflare/site.ts'].map(
-        (filename) => ({ filename, status }),
-      ),
+      ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml', 'studio/src/cloudflare/site.ts'].map((filename) => ({ filename, status })),
     );
     assert.deepEqual(await client.incoming(base), { sha: head, files: [] });
     assert.deepEqual(reads, []);
@@ -76,34 +72,18 @@ test('deployment changes do not block or discard accompanying source changes', a
 
 test('renames across the independently deployed boundary retain both editable sides', async () => {
   for (const outside of ['wrangler.json', 'studio/page.astro']) {
-    const movedOut = repository([
-      { filename: outside, previous_filename: page, status: 'renamed' },
-    ]);
-    assert.deepEqual((await movedOut.client.incoming(base)).files, [
-      { file: page, before: 'before', after: null },
-    ]);
+    const movedOut = repository([{ filename: outside, previous_filename: page, status: 'renamed' }]);
+    assert.deepEqual((await movedOut.client.incoming(base)).files, [{ file: page, before: 'before', after: null }]);
     const movedIn = repository([{ filename: page, previous_filename: outside, status: 'renamed' }]);
-    assert.deepEqual((await movedIn.client.incoming(base)).files, [
-      { file: page, before: null, after: 'after' },
-    ]);
+    assert.deepEqual((await movedIn.client.incoming(base)).files, [{ file: page, before: null, after: 'after' }]);
   }
 });
 
 test('runtime and binary changes still block syncing, including renamed old paths', async () => {
-  for (const filename of [
-    'package.json',
-    'package-lock.json',
-    'astro.config.mjs',
-    'public/a.png',
-  ]) {
+  for (const filename of ['package.json', 'package-lock.json', 'astro.config.mjs', 'public/a.png']) {
+    await assert.rejects(repository([{ filename, status: 'modified' }]).client.incoming(base), /fresh repository revision/);
     await assert.rejects(
-      repository([{ filename, status: 'modified' }]).client.incoming(base),
-      /fresh repository revision/,
-    );
-    await assert.rejects(
-      repository([
-        { filename: 'wrangler.json', previous_filename: filename, status: 'renamed' },
-      ]).client.incoming(base),
+      repository([{ filename: 'wrangler.json', previous_filename: filename, status: 'renamed' }]).client.incoming(base),
       /fresh repository revision/,
     );
   }

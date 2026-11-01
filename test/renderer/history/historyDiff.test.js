@@ -29,10 +29,7 @@ test('line numbers distinguish both sides of a change', () => {
   assert.equal(rows.at(-1).after, 99);
   assert.equal(parseHistoryPatch('Binary files a/image and b/image differ')[0].kind, 'metadata');
   assert.equal(parseHistoryPatch('rename from old\nrename to new\n').length, 2);
-  assert.equal(
-    parseHistoryPatch('@@ -0,0 +1 @@\n+line\n\\ No newline at end of file')[2].kind,
-    'metadata',
-  );
+  assert.equal(parseHistoryPatch('@@ -0,0 +1 @@\n+line\n\\ No newline at end of file')[2].kind, 'metadata');
 });
 
 test('malformed and oversized hunks fail loudly', () => {

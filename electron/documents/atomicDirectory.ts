@@ -79,10 +79,7 @@ function prepareAtomicDirectoryExists(error: unknown): boolean {
   return false;
 }
 
-function prepareAtomicDirectoryFailure(
-  directory: string,
-  error: unknown,
-): Result<never, AtomicDirectoryError> {
+function prepareAtomicDirectoryFailure(directory: string, error: unknown): Result<never, AtomicDirectoryError> {
   const message = error instanceof Error ? error.message : String(error);
   return err({ code: 'filesystem', message: `Could not prepare ${directory}: ${message}` });
 }

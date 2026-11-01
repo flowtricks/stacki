@@ -10,54 +10,15 @@ import { contextKeyOf } from '../model/resolved';
 import type { ParsedRule } from '../model/styleTypes';
 import { optionsFor } from '../model/nativeStyles';
 import { embedSourceClassSuffix, type EmbedDocument } from '../model/webflow';
-import {
-  type SetProp,
-  type PropWrite,
-  type LiveSetProp,
-  EMPTY_RESOLVED,
-  EMPTY_RULE_MODEL,
-} from './EditorBasics';
+import { type SetProp, type PropWrite, type LiveSetProp, EMPTY_RESOLVED, EMPTY_RULE_MODEL } from './EditorBasics';
 import { isSupportedCssValue } from './ResolvedRows';
 import { type SourceOption } from './LayoutRows';
-import {
-  useBusyState,
-  useScanState,
-  useSelectionState,
-  useNativeState,
-} from './useEditorFoundation';
+import { useBusyState, useScanState, useSelectionState, useNativeState } from './useEditorFoundation';
 import { useRefresh } from './useEditorScanning';
-import {
-  usePropEdits,
-  useLiveEdits,
-  useRuleActions,
-  useOpenEmbed,
-  useElementTokens,
-} from './useEditorRuleEdits';
-import {
-  useActiveSelector,
-  useSelectorPick,
-  useTypedSelector,
-  useFocusProp,
-  useSourceDocument,
-  useRenameQuery,
-  useQuerySuggestions,
-} from './useEditorElement';
-import {
-  useStyleContexts,
-  useNativeTarget,
-  useResolved,
-  useSelectorChips,
-  useContextChange,
-} from './useEditorContexts';
-import {
-  useNativeOps,
-  useWriteNewRule,
-  useCreateRule,
-  useAddQuery,
-  useNativeSet,
-  useNativeCreate,
-  useAutoSelect,
-} from './useEditorResolution';
+import { usePropEdits, useLiveEdits, useRuleActions, useOpenEmbed, useElementTokens } from './useEditorRuleEdits';
+import { useActiveSelector, useSelectorPick, useTypedSelector, useFocusProp, useSourceDocument, useRenameQuery, useQuerySuggestions } from './useEditorElement';
+import { useStyleContexts, useNativeTarget, useResolved, useSelectorChips, useContextChange } from './useEditorContexts';
+import { useNativeOps, useWriteNewRule, useCreateRule, useAddQuery, useNativeSet, useNativeCreate, useAutoSelect } from './useEditorResolution';
 
 // Commit a property to the pick's layer.
 export function useSetProp(
@@ -271,9 +232,7 @@ export function useSourceOptions(
   const nativeStyleName =
     effectiveSource === 'native'
       ? selectedNativeIndex !== undefined && nativeModel
-        ? nativeModel.styles[selectedNativeIndex]?.displayName ||
-          nativeModel.styles[selectedNativeIndex]?.className ||
-          ''
+        ? nativeModel.styles[selectedNativeIndex]?.displayName || nativeModel.styles[selectedNativeIndex]?.className || ''
         : creatableClass
       : undefined;
   const sourceNote: string | undefined = undefined;
@@ -360,10 +319,7 @@ export function useEmbedNav(
 
   // Provided to every ProvenanceList so its embed chips can name (full label) and
   // navigate to the source embed on the canvas.
-  const embedNav = useMemo(
-    () => ({ open: openEmbedByKey, labelFor: (key: string) => embedLabelByKey.get(key) ?? key }),
-    [openEmbedByKey, embedLabelByKey],
-  );
+  const embedNav = useMemo(() => ({ open: openEmbedByKey, labelFor: (key: string) => embedLabelByKey.get(key) ?? key }), [openEmbedByKey, embedLabelByKey]);
 
   const nativeHasAny = nativeModel?.styles.some((style) => style.propsByContext.size > 0) ?? false;
   return { embedLabelByKey, embedNav, nativeHasAny };
@@ -444,10 +400,7 @@ export function useContextCard(
     queryUses,
     // The name the source pill below shows for the same file, so the two lines agree
     // on what "ContentWrapper" is called.
-    sourceLabel:
-      (sourceDocument && embedLabelByKey.get(sourceDocument.source.key)) ??
-      sourceDocument?.source.label ??
-      'this file',
+    sourceLabel: (sourceDocument && embedLabelByKey.get(sourceDocument.source.key)) ?? sourceDocument?.source.label ?? 'this file',
     querySuggestions,
   };
   return { cardContexts };

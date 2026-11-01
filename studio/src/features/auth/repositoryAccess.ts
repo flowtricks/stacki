@@ -16,10 +16,7 @@ export function hasWritePermission(value: unknown, id: number): boolean {
   const user = record(data['user']);
   return user['id'] === id && ['write', 'admin'].includes(String(data['permission']));
 }
-export function createAccessCheck(
-  lookup: (config: GitHubConfig, login: string) => Promise<unknown>,
-  now = Date.now,
-) {
+export function createAccessCheck(lookup: (config: GitHubConfig, login: string) => Promise<unknown>, now = Date.now) {
   const cache = new Map<string, { allowed: boolean; until: number }>();
   return async (identity: Pick<Identity, 'id' | 'login'>, config: AccessConfig, fresh = false) => {
     // Callers must verify GitHub OAuth or the signed session before checking access.
@@ -30,13 +27,7 @@ export function createAccessCheck(
     if (config.EDITOR_ACCESS !== 'repository') {
       return config.EDITOR_GITHUB_IDS.split(',').some((id) => id.trim() === String(identity.id));
     }
-    const key = [
-      config.GITHUB_APP_ID,
-      config.GITHUB_INSTALLATION_ID,
-      config.GITHUB_REPOSITORY,
-      identity.id,
-      identity.login,
-    ].join(':');
+    const key = [config.GITHUB_APP_ID, config.GITHUB_INSTALLATION_ID, config.GITHUB_REPOSITORY, identity.id, identity.login].join(':');
     const cached = cache.get(key);
     if (!fresh && cached && cached.until > now()) {
       return cached.allowed;
@@ -61,18 +52,15 @@ export function createAccessCheck(
 }
 export const canEdit = createAccessCheck(async (config, login) => {
   const token = await new GitHubRepository(config).installationToken();
-  const response = await fetch(
-    `https://api.github.com/repos/${config.repository}/collaborators/${encodeURIComponent(login)}/permission`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'Astro-Studio',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-      signal: AbortSignal.timeout(15_000),
+  const response = await fetch(`https://api.github.com/repos/${config.repository}/collaborators/${encodeURIComponent(login)}/permission`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'Astro-Studio',
+      'X-GitHub-Api-Version': '2022-11-28',
     },
-  );
+    signal: AbortSignal.timeout(15_000),
+  });
   if (response.status === 404) {
     return null;
   }

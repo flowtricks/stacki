@@ -10,8 +10,7 @@ const workspace = process.env['STUDIO_NOTIFICATION_WORKSPACE'];
 assert.ok(workspace, 'Set STUDIO_NOTIFICATION_WORKSPACE to the running scratch draft');
 const directory = path.join(workspace, 'src/components/ToastRegression');
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const url = process.env['STUDIO_URL'] ?? 'http://localhost:4350/studio';
@@ -19,9 +18,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 page.setDefaultTimeout(15000);
 const errors: string[] = [];
 page.on('pageerror', (error) => errors.push(error.message));
-await page.route('**/studio/api/sync', (route) =>
-  route.fulfill({ json: { kind: 'synced', sha: 'b'.repeat(40) } }),
-);
+await page.route('**/studio/api/sync', (route) => route.fulfill({ json: { kind: 'synced', sha: 'b'.repeat(40) } }));
 try {
   await page.goto(url);
   await page.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
@@ -73,9 +70,7 @@ try {
   assert.equal(await cards.count(), 0);
   await bootFailure();
   assert.deepEqual(errors, []);
-  console.log(
-    'Toast stacking, overlap, drag, timers, hover/focus, mobile, Astro add/remove/edit, and startup retry passed.',
-  );
+  console.log('Toast stacking, overlap, drag, timers, hover/focus, mobile, Astro add/remove/edit, and startup retry passed.');
 } finally {
   await browser.close();
   await rm(directory, { recursive: true, force: true });
@@ -118,11 +113,7 @@ async function drag(card: Locator, distance: number) {
   await page.mouse.move(x + distance, y, { steps: 8 });
   if (Math.abs(distance) >= 72) {
     await page.waitForTimeout(220);
-    assert.equal(
-      await page.locator('.toast').count(),
-      count - 1,
-      'Dismissal occurs before release',
-    );
+    assert.equal(await page.locator('.toast').count(), count - 1, 'Dismissal occurs before release');
   }
   await page.mouse.up();
   await page.waitForTimeout(220);
@@ -138,11 +129,7 @@ async function bottomToast(target: Page) {
 
 async function bootFailure() {
   const boot = await browser.newPage();
-  await boot.route(
-    '**/studio/api/project',
-    (route) => route.fulfill({ status: 400, json: { error: 'Startup regression failure.' } }),
-    { times: 1 },
-  );
+  await boot.route('**/studio/api/project', (route) => route.fulfill({ status: 400, json: { error: 'Startup regression failure.' } }), { times: 1 });
   await boot.goto(url);
   await boot.locator('.studio-toast').filter({ hasText: 'Startup regression failure' }).waitFor();
   await boot.getByRole('button', { name: 'Retry opening Studio', exact: true }).click();

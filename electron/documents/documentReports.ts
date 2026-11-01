@@ -3,11 +3,7 @@
 // and the state and errors of a current read (documentActors.ts).
 
 import { type Digest } from '../../shared/core/brand';
-import {
-  type Planner,
-  type Projector,
-  type Reconciliation,
-} from '../../shared/engine/documentActor';
+import { type Planner, type Projector, type Reconciliation } from '../../shared/engine/documentActor';
 import { type Intent, type RejectionReason, type SourceEdit } from '../../shared/engine/intent';
 import type { Snapshot } from '../../shared/page/snapshot';
 import { type ByteString } from '../../shared/core/span';
@@ -80,10 +76,7 @@ export interface BuiltEdit {
   readonly basis: 'authored' | 'current';
 }
 
-export type HostDisk = Pick<
-  NodeDocumentDisk,
-  'read' | 'lock' | 'unlock' | 'replace' | 'create' | 'canonical'
->;
+export type HostDisk = Pick<NodeDocumentDisk, 'read' | 'lock' | 'unlock' | 'replace' | 'create' | 'canonical'>;
 
 export interface DocumentActorsOptions {
   readonly disk: HostDisk;

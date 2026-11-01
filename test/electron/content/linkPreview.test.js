@@ -8,12 +8,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { fetchLinkPreview, metaDescription } = require('#dist/electron/content/linkPreview.js');
-const {
-  LINK_PREVIEW_LIMITS,
-  parseLinkPreview,
-  parseVideoLinkURL,
-  videoLinkOf,
-} = require('#dist/shared/properties/linkPreview.js');
+const { LINK_PREVIEW_LIMITS, parseLinkPreview, parseVideoLinkURL, videoLinkOf } = require('#dist/shared/properties/linkPreview.js');
 
 const PNG = Buffer.from('89504e470d0a1a0a', 'hex');
 
@@ -97,10 +92,7 @@ test('a YouTube card takes oEmbed details and the page description', async () =>
 
 test('a Vimeo description comes from oEmbed, so the page is never fetched', async () => {
   const { fetcher, asked } = fakeFetch([
-    [
-      'https://vimeo.com/api/oembed.json',
-      JSON.stringify({ title: 'Sermon', description: 'From oEmbed', author_name: 'TCI' }),
-    ],
+    ['https://vimeo.com/api/oembed.json', JSON.stringify({ title: 'Sermon', description: 'From oEmbed', author_name: 'TCI' })],
   ]);
   const preview = await fetchLinkPreview('https://vimeo.com/76979871', fetcher);
   assert.equal(preview.description, 'From oEmbed');
@@ -112,15 +104,9 @@ test('a private video has no card, and what is optional fails quietly', async ()
   const gone = fakeFetch([['https://www.youtube.com/oembed', 'Unauthorized', { status: 401 }]]);
   assert.equal(await fetchLinkPreview('https://youtu.be/private', gone.fetcher), undefined);
   const down = fakeFetch([['https://www.youtube.com/oembed', 'down', { status: 503 }]]);
-  await assert.rejects(
-    fetchLinkPreview('https://youtu.be/x', down.fetcher),
-    /YouTube returned 503/,
-  );
+  await assert.rejects(fetchLinkPreview('https://youtu.be/x', down.fetcher), /YouTube returned 503/);
   const partial = fakeFetch([
-    [
-      'https://www.youtube.com/oembed',
-      JSON.stringify({ title: 'T', thumbnail_url: 'http://insecure.example/x.png' }),
-    ],
+    ['https://www.youtube.com/oembed', JSON.stringify({ title: 'T', thumbnail_url: 'http://insecure.example/x.png' })],
     // The page wandered off the video host: its description is not read.
     [
       'https://youtu.be/',
@@ -133,12 +119,7 @@ test('a private video has no card, and what is optional fails quietly', async ()
   const preview = await fetchLinkPreview('https://youtu.be/x', partial.fetcher);
   assert.deepEqual(preview, { url: 'https://youtu.be/x', title: 'T', source: 'YouTube' });
   assert.ok(!partial.asked.some((url) => url.startsWith('http://insecure')), 'no HTTP thumbnail');
-  const huge = fakeFetch([
-    [
-      'https://www.youtube.com/oembed',
-      JSON.stringify({ title: 'T', description: 'd'.repeat(9000) }),
-    ],
-  ]);
+  const huge = fakeFetch([['https://www.youtube.com/oembed', JSON.stringify({ title: 'T', description: 'd'.repeat(9000) })]]);
   const clipped = await fetchLinkPreview('https://youtu.be/x', huge.fetcher);
   assert.equal(clipped.description.length, LINK_PREVIEW_LIMITS.descriptionCharsMax);
   await assert.rejects(fetchLinkPreview('https://example.com/x'), /video host link/);
@@ -146,16 +127,8 @@ test('a private video has no card, and what is optional fails quietly', async ()
 
 test('page descriptions are read from Open Graph, then standard tags', () => {
   assert.equal(metaDescription('<meta content="A" property="og:description">'), 'A');
-  assert.equal(
-    metaDescription('<meta name="description" content=" Plain &quot;x&quot; ">'),
-    'Plain "x"',
-  );
-  assert.equal(
-    metaDescription(
-      '<meta name="description" content="B"><meta property="og:description" content="A">',
-    ),
-    'A',
-  );
+  assert.equal(metaDescription('<meta name="description" content=" Plain &quot;x&quot; ">'), 'Plain "x"');
+  assert.equal(metaDescription('<meta name="description" content="B"><meta property="og:description" content="A">'), 'A');
   assert.equal(metaDescription('<title>None</title>'), undefined);
 });
 

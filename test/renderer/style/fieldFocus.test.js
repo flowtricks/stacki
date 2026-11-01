@@ -43,9 +43,7 @@ const check = (what, condition, detail) => {
     }
   })();
   if (typeof electronPath !== 'string') {
-    console.log(
-      'field-focus: skipped  [needs a Chromium — see test/renderer/style/computedColor.test.js]',
-    );
+    console.log('field-focus: skipped  [needs a Chromium — see test/renderer/style/computedColor.test.js]');
     return;
   }
 
@@ -266,11 +264,7 @@ const check = (what, condition, detail) => {
       );
     }
     // The cause, kept out directly: a <label> forwards the press to the input.
-    check(
-      'no field is wrapped in a label',
-      out.labelWrapped === 0,
-      `${out.labelWrapped} still are`,
-    );
+    check('no field is wrapped in a label', out.labelWrapped === 0, `${out.labelWrapped} still are`);
   }
 
   if (failures.length) {

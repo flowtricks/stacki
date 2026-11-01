@@ -1,10 +1,6 @@
 // A single in-flight save prevents reordered lists from overwriting each other's disk revision.
 import { useEffect, useRef, useState } from 'react';
-import {
-  EMPTY_PAGE_ORDER,
-  parsePageOrder,
-  type PageOrder,
-} from '../../../shared/properties/pageOrder';
+import { EMPTY_PAGE_ORDER, parsePageOrder, type PageOrder } from '../../../shared/properties/pageOrder';
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
 
 export type PageOrderState =

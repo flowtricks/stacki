@@ -6,11 +6,7 @@ import { type EditReport, type WriteReport } from './documentActors';
 import { describeWriteReport } from './documentWrites';
 import { isPathWithin } from '../lib/platform';
 import type { IpcPayloads } from '../../shared/ipc/ipcPayloads';
-import type {
-  IpcResults,
-  WirePageEditError,
-  WirePageWriteFailure,
-} from '../../shared/ipc/ipcResults';
+import type { IpcResults, WirePageEditError, WirePageWriteFailure } from '../../shared/ipc/ipcResults';
 import { describeRejection } from '../../shared/engine/intent';
 import * as path from 'path';
 import { parsePage, locateSelection, resolveChunks } from '../parse/astroParser';
@@ -49,10 +45,7 @@ export function parsePageSource(pagePath: string, source: string): IpcResults['p
 
 // What a write that did not happen, or may have, means to the renderer's save
 // state (plan §7). A refusal is the edit's own (`rejected`, pageEditError).
-export function pageWriteFailure(
-  file: string,
-  report: Extract<WriteReport, { readonly tag: 'uncertain' | 'backpressured' }>,
-): WirePageWriteFailure {
+export function pageWriteFailure(file: string, report: Extract<WriteReport, { readonly tag: 'uncertain' | 'backpressured' }>): WirePageWriteFailure {
   const name = path.basename(file);
   switch (report.tag) {
     case 'uncertain':
@@ -69,10 +62,7 @@ export function pageWriteFailure(
   }
 }
 
-export function pageEditError(
-  file: string,
-  report: Exclude<EditReport, { readonly tag: 'applied' }>,
-): WirePageEditError {
+export function pageEditError(file: string, report: Exclude<EditReport, { readonly tag: 'applied' }>): WirePageEditError {
   if (report.tag === 'rejected') {
     const { reason, diskChecksum } = report;
     const message = report.message === '' ? describeRejection(reason) : report.message;
@@ -104,23 +94,20 @@ export const resolvePagesDirectory = (projectPath: string, rel: string) => {
 // → /posts/a. A rest param ([...path]) holds a whole segment run, and an
 // undefined one collapses rather than writing "undefined" into the URL.
 export function fillRoute(pattern: string, params: Readonly<Record<string, unknown>>) {
-  const filled = pattern.replace(
-    /\[(\.\.\.)?([^\]]+)\]/g,
-    (_match: string, _rest: string | undefined, name: string) => {
-      // Dev-server JSON writes null for a missing param, as absent as undefined.
-      const value = params?.[name];
-      if (value === undefined) {
-        return '';
-      }
-      if (value === null) {
-        return '';
-      }
-      return String(value)
-        .split('/')
-        .map((segment) => encodeURIComponent(segment))
-        .join('/');
-    },
-  );
+  const filled = pattern.replace(/\[(\.\.\.)?([^\]]+)\]/g, (_match: string, _rest: string | undefined, name: string) => {
+    // Dev-server JSON writes null for a missing param, as absent as undefined.
+    const value = params?.[name];
+    if (value === undefined) {
+      return '';
+    }
+    if (value === null) {
+      return '';
+    }
+    return String(value)
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+  });
   // A dropped rest param leaves a double slash or a trailing one behind.
   return filled.replace(/\/{2,}/g, '/').replace(/(.)\/$/, '$1');
 }

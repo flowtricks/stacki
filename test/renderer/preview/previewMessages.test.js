@@ -8,8 +8,9 @@ const assert = require('node:assert/strict');
 // so the negative space below includes it. It is read from JSON, because our own
 // code never writes a null.
 const PLATFORM_NULL = JSON.parse('null');
-const { parsePreviewMessage, parseShortcutMessage, describePreviewReload, PREVIEW_RELOAD_REASONS } =
-  require('../../helpers/rendererModule')('src/features/preview/previewMessages.ts');
+const { parsePreviewMessage, parseShortcutMessage, describePreviewReload, PREVIEW_RELOAD_REASONS } = require('../../helpers/rendererModule')(
+  'src/features/preview/previewMessages.ts',
+);
 
 const box = { x: -1.5, y: 2, w: 30, h: 40 };
 const TOKEN = 'a'.repeat(64);
@@ -45,19 +46,7 @@ test('preview message parser preserves every supported message variant', () => {
   ];
   assert.deepEqual(
     messages.map((message) => parsePreviewMessage(message)?.kind),
-    [
-      'rects',
-      'node-classes',
-      'rendered-nodes',
-      'node-states',
-      'modifiers',
-      'hover-node',
-      'click-node',
-      'open-node',
-      'canvas-ready',
-      'query-result',
-      'render',
-    ],
+    ['rects', 'node-classes', 'rendered-nodes', 'node-states', 'modifiers', 'hover-node', 'click-node', 'open-node', 'canvas-ready', 'query-result', 'render'],
   );
   assert.deepEqual(parsePreviewMessage(messages[0]).spacing['0'], [spacing]);
 });
@@ -81,10 +70,7 @@ test('located events carry the rendering token they landed on (step 7)', () => {
   // The protocol spells absence `undefined`, like the rest of the app; the
   // retired `null` spelling is a malformed message, not an absent value.
   assert.equal(parsePreviewMessage({ ...click, token: PLATFORM_NULL }), undefined);
-  assert.equal(
-    parsePreviewMessage({ type: 'avb:hover-node', path: PLATFORM_NULL, occurrence: 0 }),
-    undefined,
-  );
+  assert.equal(parsePreviewMessage({ type: 'avb:hover-node', path: PLATFORM_NULL, occurrence: 0 }), undefined);
   assert.equal(
     parsePreviewMessage({
       type: 'avb:rects',
@@ -94,10 +80,7 @@ test('located events carry the rendering token they landed on (step 7)', () => {
     }),
     undefined,
   );
-  assert.equal(
-    parsePreviewMessage({ type: 'avb:open-node', path: '1', occurrence: 2, token: TOKEN }).token,
-    TOKEN,
-  );
+  assert.equal(parsePreviewMessage({ type: 'avb:open-node', path: '1', occurrence: 2, token: TOKEN }).token, TOKEN);
 });
 
 test('a reload names its reason; only the caps are announced to the user (step 7)', () => {
@@ -151,15 +134,9 @@ test('forwarded shortcuts parse each variant and ignore every other or malformed
   const shortcut = (fields) => parseShortcutMessage({ type: 'avb:shortcut', ...fields });
   assert.deepEqual(shortcut({ name: 'insert' }), { name: 'insert' });
   assert.deepEqual(shortcut({ name: 'arrow', key: 'ArrowUp' }), { name: 'arrow', key: 'ArrowUp' });
-  assert.deepEqual(
-    parseShortcutMessage({ type: 'avb:shortcut', name: 'key', key: 'd', meta: true }),
-    { name: 'key', key: 'd', meta: true },
-  );
+  assert.deepEqual(parseShortcutMessage({ type: 'avb:shortcut', name: 'key', key: 'd', meta: true }), { name: 'key', key: 'd', meta: true });
   // Anything but a literal true is no modifier: a page cannot smuggle one in.
-  assert.deepEqual(
-    parseShortcutMessage({ type: 'avb:shortcut', name: 'key', key: 'Delete', meta: 'yes' }),
-    { name: 'key', key: 'Delete', meta: false },
-  );
+  assert.deepEqual(parseShortcutMessage({ type: 'avb:shortcut', name: 'key', key: 'Delete', meta: 'yes' }), { name: 'key', key: 'Delete', meta: false });
   for (const input of [
     undefined,
     PLATFORM_NULL,

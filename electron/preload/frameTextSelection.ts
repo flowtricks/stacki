@@ -5,10 +5,7 @@ export interface TextOffsets {
   readonly end: number;
 }
 
-export function textSelection(
-  nodes: readonly Text[],
-  range?: AbstractRange,
-): TextOffsets | undefined {
+export function textSelection(nodes: readonly Text[], range?: AbstractRange): TextOffsets | undefined {
   const selection = window.getSelection();
   const current = range ?? (selection?.rangeCount ? selection.getRangeAt(0) : undefined);
   if (!current) {
@@ -37,8 +34,7 @@ export function selectTextOffsets(nodes: readonly Text[], offsets: TextOffsets):
 }
 
 export function placeTextCaret(nodes: readonly Text[], event: MouseEvent): void {
-  const offsets =
-    caretOffsetsAt(nodes, event.clientX, event.clientY) ?? caretBesideText(nodes, event);
+  const offsets = caretOffsetsAt(nodes, event.clientX, event.clientY) ?? caretBesideText(nodes, event);
   if (offsets) {
     selectTextOffsets(nodes, offsets);
   }

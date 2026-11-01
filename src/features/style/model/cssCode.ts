@@ -86,11 +86,7 @@ function escapeHtml(text: string): string {
  *  the DOM the caret walks — is no deeper than it needs to be. */
 export function highlightCss(value: string): string {
   return cssTokens(value)
-    .map((token) =>
-      token.kind === 'plain'
-        ? escapeHtml(token.text)
-        : `<span class="cx-${token.kind}">${escapeHtml(token.text)}</span>`,
-    )
+    .map((token) => (token.kind === 'plain' ? escapeHtml(token.text) : `<span class="cx-${token.kind}">${escapeHtml(token.text)}</span>`))
     .join('');
 }
 
@@ -154,10 +150,7 @@ export function stepNumberAt(
   }
   // A `-` immediately before, and not part of a larger expression, is this
   // number's sign — `-4px` steps up to `-3px`, not to `-5px`.
-  const signed =
-    hit.start > 0 &&
-    text[hit.start - 1] === '-' &&
-    !/[\d.\w%)]\s*$/.test(text.slice(0, hit.start - 1));
+  const signed = hit.start > 0 && text[hit.start - 1] === '-' && !/[\d.\w%)]\s*$/.test(text.slice(0, hit.start - 1));
   const start = signed ? hit.start - 1 : hit.start;
   const current = Number((signed ? '-' : '') + hit.text);
   if (!Number.isFinite(current)) {
@@ -183,8 +176,7 @@ export function stepNumberAt(
 // are gone by then. A chip counts as one character, matching the placeholder
 // the value serialiser uses.
 
-const isChip = (node: Node): boolean =>
-  node instanceof HTMLElement && node.dataset['chip'] !== undefined;
+const isChip = (node: Node): boolean => node instanceof HTMLElement && node.dataset['chip'] !== undefined;
 
 /** Where the caret is, as an offset into the field's text. */
 export function caretOffset(root: HTMLElement): number | undefined {

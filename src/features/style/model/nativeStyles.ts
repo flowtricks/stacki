@@ -49,13 +49,11 @@ const PSEUDO_FOR_STATE: Record<StateKey, string | undefined> = {
   ':active': 'active',
 };
 
-export const breakpointLabel = (id: BreakpointId): string =>
-  BREAKPOINTS.find((bp) => bp.id === id)?.label ?? id;
+export const breakpointLabel = (id: BreakpointId): string => BREAKPOINTS.find((bp) => bp.id === id)?.label ?? id;
 
 /** The `@media` condition for a breakpoint (e.g. `(max-width: 767px)`), or undefined for
  *  main/base. */
-export const mediaParamsForBreakpoint = (id: BreakpointId): string | undefined =>
-  BREAKPOINTS.find((bp) => bp.id === id)?.media;
+export const mediaParamsForBreakpoint = (id: BreakpointId): string | undefined => BREAKPOINTS.find((bp) => bp.id === id)?.media;
 
 // Same compilation Webflow applies to a class display name → CSS class name.
 // Duplicated (not imported from webflow.ts) to keep this module free of the
@@ -101,10 +99,7 @@ export function breakpointForAtContext(atContext: string): BreakpointId | undefi
  * specified" path, which reads the Designer's *current* breakpoint instead of
  * base — hiding desktop/base styles whenever the Designer isn't on desktop.
  */
-export function readOptionsFor(
-  breakpoint: BreakpointId,
-  state: StateKey,
-): NativeStyleOptions | undefined {
+export function readOptionsFor(breakpoint: BreakpointId, state: StateKey): NativeStyleOptions | undefined {
   const options: NativeStyleOptions = {};
   if (breakpoint !== 'main') {
     options.breakpoint = breakpoint;
@@ -241,11 +236,7 @@ export function buildStyleContexts(
 
   return list
     .map((context, index) => ({ context, index }))
-    .sort(
-      (left, right) =>
-        rank(left.context, ownContexts) - rank(right.context, ownContexts) ||
-        left.index - right.index,
-    )
+    .sort((left, right) => rank(left.context, ownContexts) - rank(right.context, ownContexts) || left.index - right.index)
     .map((entry) => entry.context);
 }
 
@@ -300,11 +291,7 @@ export function breakpointTier(target: BreakpointId): number {
  * narrower breakpoint wins a same-specificity tie. Empty for a non-breakpoint
  * context.
  */
-export function nativeContribsFor(
-  model: NativeModel | undefined,
-  context: StyleContext,
-  state: StateKey,
-): NativeContribution[] {
+export function nativeContribsFor(model: NativeModel | undefined, context: StyleContext, state: StateKey): NativeContribution[] {
   if (!model) {
     return [];
   }
@@ -370,10 +357,7 @@ export type NativeSelectorChip = {
  * than hide) selectors styled only in other breakpoints — matching how embed
  * selectors from every query are listed.
  */
-export function nativeSelectorChips(
-  model: NativeModel | undefined,
-  breakpoint: BreakpointId,
-): NativeSelectorChip[] {
+export function nativeSelectorChips(model: NativeModel | undefined, breakpoint: BreakpointId): NativeSelectorChip[] {
   if (!model) {
     return [];
   }
@@ -417,10 +401,7 @@ function pickedClassNames(selectedTokens: string[]): string[] | undefined {
  * where the element carries the class via its `class` attribute, not the Styles
  * panel, yet a Webflow class of that name exists and is editable.
  */
-export function selectedNativeIndexFor(
-  model: NativeModel | undefined,
-  selectedTokens: string[],
-): number | undefined {
+export function selectedNativeIndexFor(model: NativeModel | undefined, selectedTokens: string[]): number | undefined {
   if (!model) {
     return undefined;
   }

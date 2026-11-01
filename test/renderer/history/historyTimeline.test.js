@@ -94,8 +94,7 @@ test('graph inspection, filters, paging and stale responses', async () => {
     onRestoreProject: (value) => actions.push(['project', value.hash]),
   };
   const render = (values) => act(async () => root.render(React.createElement(Timeline, values)));
-  const reply = (index, commits, atEnd) =>
-    act(async () => requests[index].resolve({ commits, atEnd }));
+  const reply = (index, commits, atEnd) => act(async () => requests[index].resolve({ commits, atEnd }));
   const click = (element) => act(async () => element.click());
   try {
     await render(props);
@@ -106,18 +105,11 @@ test('graph inspection, filters, paging and stale responses', async () => {
     assert.match(document.querySelector('.history-refs').textContent, /main.*tag: v1/);
     assert.equal(document.querySelector('.history-day') === null, true);
     const subject = document.querySelector('.history-subject');
-    await act(async () =>
-      subject.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })),
-    );
+    await act(async () => subject.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })));
     assert.equal(document.querySelector('[role="tooltip"]').textContent, subject.textContent);
-    await act(async () =>
-      subject.dispatchEvent(new window.MouseEvent('mouseout', { bubbles: true })),
-    );
+    await act(async () => subject.dispatchEvent(new window.MouseEvent('mouseout', { bubbles: true })));
     await click(document.querySelector('.history-commit-head'));
-    assert.equal(
-      document.querySelector('.history-commit-head').getAttribute('aria-expanded'),
-      'true',
-    );
+    assert.equal(document.querySelector('.history-commit-head').getAttribute('aria-expanded'), 'true');
     assert.equal(document.querySelector('.history-file') === null, true);
     assert.match(document.querySelector('.history-file-summary').textContent, /\+2−1~2/);
     await click(document.querySelector('.history-commit-actions button'));
@@ -126,14 +118,9 @@ test('graph inspection, filters, paging and stale responses', async () => {
     assert.equal(document.querySelectorAll('dialog .history-file').length, 5);
     assert.equal(document.querySelector('.history-file-path').textContent, 'copy.astro');
     assert.match(document.querySelector('dialog').textContent, /From before.astro/);
-    const filterButton = (label) =>
-      [...document.querySelectorAll('.history-file-filters button')].find((button) =>
-        button.textContent.startsWith(label),
-      );
+    const filterButton = (label) => [...document.querySelectorAll('.history-file-filters button')].find((button) => button.textContent.startsWith(label));
     const visiblePaths = () =>
-      [...document.querySelectorAll('dialog .history-file-open')].map((button) =>
-        button.getAttribute('aria-label').replace('View diff for ', ''),
-      );
+      [...document.querySelectorAll('dialog .history-file-open')].map((button) => button.getAttribute('aria-label').replace('View diff for ', ''));
     await click(filterButton('New'));
     assert.deepEqual(visiblePaths(), ['copy.astro', 'new.astro']);
     await click(filterButton('Deleted'));
@@ -142,18 +129,8 @@ test('graph inspection, filters, paging and stale responses', async () => {
     assert.deepEqual(visiblePaths(), ['renamed.astro', 'src/pages/index.astro']);
     await click(filterButton('All'));
     await click(document.querySelector('[aria-label="Sort changed files"]'));
-    await click(
-      [...document.querySelectorAll('.dd-option')].find((option) =>
-        option.textContent.includes('Status'),
-      ),
-    );
-    assert.deepEqual(visiblePaths(), [
-      'renamed.astro',
-      'src/pages/index.astro',
-      'copy.astro',
-      'new.astro',
-      'gone.astro',
-    ]);
+    await click([...document.querySelectorAll('.dd-option')].find((option) => option.textContent.includes('Status')));
+    assert.deepEqual(visiblePaths(), ['renamed.astro', 'src/pages/index.astro', 'copy.astro', 'new.astro', 'gone.astro']);
     await click(filterButton('New'));
     await click(document.querySelector('.history-file-open'));
     await click(document.querySelector('.history-diff-toolbar button'));
@@ -161,9 +138,7 @@ test('graph inspection, filters, paging and stale responses', async () => {
     assert.equal(filterButton('New').getAttribute('aria-pressed'), 'true');
     assert.match(document.querySelector('[aria-label="Sort changed files"]').textContent, /Status/);
     await act(async () => {
-      document
-        .querySelector('dialog')
-        .dispatchEvent(new window.Event('cancel', { cancelable: true }));
+      document.querySelector('dialog').dispatchEvent(new window.Event('cancel', { cancelable: true }));
     });
     assert.equal(document.querySelector('dialog') === null, true);
     await click(document.querySelector('.history-view-files'));
@@ -214,24 +189,14 @@ test('graph inspection, filters, paging and stale responses', async () => {
     await act(async () => window.dispatchEvent(new window.Event('focus')));
     assert.equal(requests[4].payload.ref, 'HEAD');
     await reply(4, [base], true);
-    assert.equal(
-      document.querySelector('.history-commit-head').getAttribute('aria-expanded'),
-      'true',
-    );
+    assert.equal(document.querySelector('.history-commit-head').getAttribute('aria-expanded'), 'true');
     assert.equal(polls.size, 1, 'only the active project owns a polling timer');
     await act(async () => [...polls.values()][0]());
     await reply(5, [], true);
     assert.match(document.querySelector('.history-empty').textContent, /Nothing saved yet/);
 
     await render({ ...props, branch: 'new-design-test', head: 'feature-tip' });
-    await reply(
-      6,
-      [
-        commit('feature-tip', ['main-tip'], ['HEAD -> new-design-test']),
-        commit('main-tip', [], ['main']),
-      ],
-      true,
-    );
+    await reply(6, [commit('feature-tip', ['main-tip'], ['HEAD -> new-design-test']), commit('main-tip', [], ['main'])], true);
     const nodes = [...document.querySelectorAll('.history-graph-node')];
     assert.ok(nodes[0].classList.contains('history-graph-color-1'));
     assert.ok(nodes[1].classList.contains('history-graph-color-0'));

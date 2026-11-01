@@ -3,26 +3,11 @@
 // a contentEditable that keeps the browser's own undo history: ⌘Z steps back
 // through toolbar actions, shortcuts and Markdown conversions alike.
 import { assert } from '../../shared/core/assert';
-import {
-  BLOCKS,
-  escapeHTML,
-  type Block,
-  type BlockShortcut,
-  type InlineShortcut,
-} from './richTextModel';
+import { BLOCKS, escapeHTML, type Block, type BlockShortcut, type InlineShortcut } from './richTextModel';
 
 /** The inline marks the toolbar toggles. */
-export type Mark =
-  'bold' | 'italic' | 'underline' | 'strike' | 'code' | 'superscript' | 'subscript';
-export const MARKS: readonly Mark[] = [
-  'bold',
-  'italic',
-  'underline',
-  'strike',
-  'code',
-  'superscript',
-  'subscript',
-];
+export type Mark = 'bold' | 'italic' | 'underline' | 'strike' | 'code' | 'superscript' | 'subscript';
+export const MARKS: readonly Mark[] = ['bold', 'italic', 'underline', 'strike', 'code', 'superscript', 'subscript'];
 
 /** What the selection sits in, so the toolbar can show it. */
 export interface FormatState {
@@ -94,10 +79,7 @@ export function shortcutAction(press: KeyPress): RichTextAction | undefined {
 }
 
 /** Carries out an action other than a link, which needs the field's own bubble. */
-export function performAction(
-  host: HTMLElement,
-  action: Exclude<RichTextAction, { readonly kind: 'link' }>,
-): void {
+export function performAction(host: HTMLElement, action: Exclude<RichTextAction, { readonly kind: 'link' }>): void {
   switch (action.kind) {
     case 'mark':
       toggleMark(host, action.mark);
@@ -141,14 +123,7 @@ const MARK_COMMANDS: Readonly<Record<Exclude<Mark, 'code'>, string>> = {
   subscript: 'subscript',
 };
 
-const BROWSER_MARKS: readonly Exclude<Mark, 'code'>[] = [
-  'bold',
-  'italic',
-  'underline',
-  'strike',
-  'superscript',
-  'subscript',
-];
+const BROWSER_MARKS: readonly Exclude<Mark, 'code'>[] = ['bold', 'italic', 'underline', 'strike', 'superscript', 'subscript'];
 
 const BLOCK_SELECTOR = 'p, div, h1, h2, h3, h4, h5, h6, blockquote, pre, li';
 
@@ -326,9 +301,7 @@ export function inParagraph(host: HTMLElement): boolean {
 /** Whether the caret is in code, where Markdown is text. */
 export function inCode(host: HTMLElement): boolean {
   const range = rangeIn(host);
-  return (
-    range !== undefined && inside(elementOf(range.startContainer), host, 'code, pre') !== undefined
-  );
+  return range !== undefined && inside(elementOf(range.startContainer), host, 'code, pre') !== undefined;
 }
 
 // Code: wraps the selection's text, or unwraps the code the caret is in.
