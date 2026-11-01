@@ -1,4 +1,5 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import { dataPickerPosition } from './dataPickerPosition';
 import Popup from '../../ui/Popup';
 // The fields and editors a bound prop is edited with: the source button, an
 // expression or condition, the bind handle and the data picker, and the code
@@ -14,13 +15,7 @@ import type { PickerNode } from './DataPicker';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { definedFields } from '../../../shared/core/boundary';
-import {
-  dataTree,
-  findDeclaration,
-  findImportOf,
-  scopeChips,
-  scopeCompletions,
-} from '../../editor/dataSuggest';
+import { dataTree, findDeclaration, findImportOf, scopeChips, scopeCompletions } from '../../editor/dataSuggest';
 import { resolvePick } from '../../editor/bindings';
 import { checkStatement } from './jsCheck';
 import DataPicker from './DataPicker';
@@ -60,12 +55,7 @@ export function symbolTarget(name: string, dataContext: SourceContext | undefine
   return undefined;
 }
 
-export function SourceEditButton({
-  name,
-  dataContext,
-  anchorRef,
-  className = 'attr-asset-toggle',
-}: SourceEditButtonProps) {
+export function SourceEditButton({ name, dataContext, anchorRef, className = 'attr-asset-toggle' }: SourceEditButtonProps) {
   const [position, setPosition] = useState<FieldPosition | undefined>(undefined);
   const target = symbolTarget(name, dataContext);
   const allowCode = useCodeAccess();
@@ -124,22 +114,14 @@ export function ExprValueField({ value, placeholder, dataContext, onChange }: Ex
         // if the value itself were the word.
         placeholder={placeholder || ''}
         onChange={(draft) => onChange({ type: 'expr', value: draft })}
-        onCommit={(committed) =>
-          committed !== value && onChange({ type: 'expr', value: committed }, true)
-        }
+        onCommit={(committed) => committed !== value && onChange({ type: 'expr', value: committed }, true)}
       />
       <SourceEditButton name={name} dataContext={dataContext} anchorRef={wrapRef} />
     </div>
   );
 }
 
-export function ConditionField({
-  test,
-  scope,
-  chipsOf,
-  bindContext,
-  onSetText,
-}: ConditionFieldProps) {
+export function ConditionField({ test, scope, chipsOf, bindContext, onSetText }: ConditionFieldProps) {
   const [pick, setPick] = useState<ChipPick | undefined>(undefined); // {chip, pos}
   const apiRef = useRef<ExprInputAPI | undefined>(undefined);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -151,11 +133,7 @@ export function ConditionField({
     }
     setPick({
       chip: chip || undefined,
-      pos: {
-        left: rect.left,
-        top: Math.min(rect.bottom + 4, Math.max(60, window.innerHeight - 340)),
-        width: Math.max(rect.width, 240),
-      },
+      pos: dataPickerPosition(rect),
     });
   };
 
@@ -173,9 +151,7 @@ export function ConditionField({
           // it, rather than retyping a name inside a boolean.
           chipsOf={chipsOf}
           onChipClick={(chip) => open(chip)}
-          onCommit={(committed) =>
-            committed.trim() && committed !== test && onSetText(committed.trim())
-          }
+          onCommit={(committed) => committed.trim() && committed !== test && onSetText(committed.trim())}
         />
         {/* And the way a new one gets in: the same purple dot every bindable field
             has, inserting at the caret. */}
@@ -189,9 +165,7 @@ export function ConditionField({
           onPick={(path) => {
             const chip = pick.chip;
             setPick(undefined);
-            const next = chip
-              ? apiRef.current?.replaceRange(chip.from, chip.to, path)
-              : apiRef.current?.insert(path);
+            const next = chip ? apiRef.current?.replaceRange(chip.from, chip.to, path) : apiRef.current?.insert(path);
             if (next !== undefined) {
               onSetText(next);
             }
@@ -203,12 +177,7 @@ export function ConditionField({
   );
 }
 
-export function ExpressionBindingField({
-  value,
-  placeholder,
-  bindContext,
-  onChange,
-}: ExpressionBindingFieldProps) {
+export function ExpressionBindingField({ value, placeholder, bindContext, onChange }: ExpressionBindingFieldProps) {
   const [pick, setPick] = useState<ChipPick | undefined>(undefined);
   const apiRef = useRef<ExprInputAPI | undefined>(undefined);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -222,11 +191,7 @@ export function ExpressionBindingField({
     }
     setPick({
       chip,
-      pos: {
-        left: rectangle.left,
-        top: Math.min(rectangle.bottom + 4, Math.max(60, window.innerHeight - 340)),
-        width: Math.max(rectangle.width, 240),
-      },
+      pos: dataPickerPosition(rectangle),
     });
   };
   return (
@@ -285,19 +250,8 @@ export function BindHandle({ active, onOpen }: BindHandleProps) {
   );
 }
 
-export function FieldDataPicker({
-  pos: position,
-  bindContext,
-  current,
-  tree,
-  sourceInspection,
-  onEditSource,
-  onPick,
-  onWrite,
-  onClose,
-}: FieldDataPickerProps) {
-  const pick = (path: string, query: PickerNode['query'] | undefined) =>
-    onPick(resolvePick(path, query ?? undefined, bindContext ?? undefined));
+export function FieldDataPicker({ pos: position, bindContext, current, tree, sourceInspection, onEditSource, onPick, onWrite, onClose }: FieldDataPickerProps) {
+  const pick = (path: string, query: PickerNode['query'] | undefined) => onPick(resolvePick(path, query ?? undefined, bindContext ?? undefined));
 
   return (
     <Popup
@@ -335,11 +289,7 @@ export function useValueCodeEditor(onClose: () => void) {
     }
     setPick({
       chip: chip || undefined,
-      pos: {
-        left: rect.left,
-        top: Math.min(rect.bottom + 4, Math.max(60, window.innerHeight - 340)),
-        width: Math.max(rect.width, 240),
-      },
+      pos: dataPickerPosition(rect),
     });
   };
   return { ref, apiRef, pick, setPick, open };
@@ -347,10 +297,7 @@ export function useValueCodeEditor(onClose: () => void) {
 export function useValueCodeEditorDismiss(ref: RefObject<HTMLElement>, onClose: () => void) {
   useEffect(() => {
     const onDown = (event: PointerEvent) => {
-      if (
-        ref.current &&
-        !(event.target instanceof window.Node && ref.current.contains(event.target))
-      ) {
+      if (ref.current && !(event.target instanceof window.Node && ref.current.contains(event.target))) {
         onClose();
       }
     };
@@ -370,16 +317,7 @@ export function useValueCodeEditorDismiss(ref: RefObject<HTMLElement>, onClose: 
 export function ValueCodeEditor(props: ValueCodeEditorProps) {
   return useCodeAccess() ? <EditableValueCodeEditor {...props} /> : undefined;
 }
-function EditableValueCodeEditor({
-  pos: position,
-  name,
-  value,
-  scope,
-  chipsOf,
-  bindContext,
-  onChange,
-  onClose,
-}: ValueCodeEditorProps) {
+function EditableValueCodeEditor({ pos: position, name, value, scope, chipsOf, bindContext, onChange, onClose }: ValueCodeEditorProps) {
   const { ref, apiRef, pick, setPick, open } = useValueCodeEditor(onClose);
 
   return (
@@ -418,9 +356,7 @@ function EditableValueCodeEditor({
           onPick={(path) => {
             const chip = pick.chip;
             setPick(undefined);
-            const next = chip
-              ? apiRef.current?.replaceRange(chip.from, chip.to, path)
-              : apiRef.current?.insert(path);
+            const next = chip ? apiRef.current?.replaceRange(chip.from, chip.to, path) : apiRef.current?.insert(path);
             if (next !== undefined) {
               onChange(next);
             }
@@ -509,10 +445,7 @@ export type SourceEditorState = ReturnType<typeof useVarSourceEditor>;
 export function useVarSourceEditorDismiss({ ref, commit, draftRef, onClose }: SourceEditorState) {
   useEffect(() => {
     const onDown = (event: PointerEvent) => {
-      if (
-        !ref.current ||
-        (event.target instanceof window.Node && ref.current.contains(event.target))
-      ) {
+      if (!ref.current || (event.target instanceof window.Node && ref.current.contains(event.target))) {
         return;
       }
       // A press outside commits, the way leaving any field does — and if that
@@ -537,18 +470,7 @@ export function useVarSourceEditorDismiss({ ref, commit, draftRef, onClose }: So
   });
 }
 export function VarSourceEditorView({ state }: { readonly state: SourceEditorState }) {
-  const {
-    ref,
-    pos: position,
-    onClose,
-    name,
-    draft,
-    external,
-    error,
-    setDraft,
-    setError,
-    commit,
-  } = state;
+  const { ref, pos: position, onClose, name, draft, external, error, setDraft, setError, commit } = state;
   return (
     <div
       ref={ref}
@@ -590,13 +512,7 @@ export function eventElement(target: unknown): Element | undefined {
   return target instanceof window.Element ? target : undefined;
 }
 
-export function SourceEditorHeader({
-  name,
-  onClose,
-}: {
-  readonly name: string;
-  readonly onClose: () => void;
-}) {
+export function SourceEditorHeader({ name, onClose }: { readonly name: string; readonly onClose: () => void }) {
   return (
     <div className="var-src-head">
       <CodeIcon size={12} />

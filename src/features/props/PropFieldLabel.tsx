@@ -2,23 +2,15 @@
 // reset menu (PropField.tsx).
 
 import React from 'react';
+import { dataPickerPosition } from './dataPickerPosition';
 import { ResetMenu } from '../../ui/ResetLabel';
 import { partsFromValue, valueFromParts } from '../../editor/bindings';
 import { BindHandle, FieldDataPicker } from './propBindings';
 import PropTip from './PropTip';
-import {
-  FieldNumberIcon,
-  ComponentPropertiesIcon,
-  FieldSwitchIcon,
-  BracesIcon,
-  CodeIcon,
-  ElementSlotIcon,
-  VariableTextSizeIcon,
-} from '../../ui/Icons';
+import { FieldNumberIcon, ComponentPropertiesIcon, FieldSwitchIcon, BracesIcon, CodeIcon, ElementSlotIcon, VariableTextSizeIcon } from '../../ui/Icons';
 import { controlWord, type PropState } from './propFieldModel';
 
-export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) =>
-  event.preventDefault();
+export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) => event.preventDefault();
 export function PropFieldPill({ state }: { readonly state: PropState }) {
   const { name, type, isSet, showExpr, onLabelClick } = state;
 
@@ -33,12 +25,8 @@ export function PropFieldPill({ state }: { readonly state: PropState }) {
       {type === 'enum' && <ComponentPropertiesIcon size={12} className="prop-label-icon" />}
       {type === 'attrs' && <BracesIcon size={12} className="prop-label-icon" />}
       {(type === 'code' || type === 'style') && <CodeIcon size={12} className="prop-label-icon" />}
-      {(type === 'slot' || name === 'slot') && (
-        <ElementSlotIcon size={12} className="prop-label-icon" />
-      )}
-      {(type === 'string' || type === 'other') && name !== 'slot' && (
-        <VariableTextSizeIcon size={12} className="prop-label-icon" />
-      )}
+      {(type === 'slot' || name === 'slot') && <ElementSlotIcon size={12} className="prop-label-icon" />}
+      {(type === 'string' || type === 'other') && name !== 'slot' && <VariableTextSizeIcon size={12} className="prop-label-icon" />}
       {name}
     </span>
   );
@@ -114,11 +102,7 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
             if (!bounds) {
               return;
             }
-            setInsertAt({
-              left: bounds.left,
-              top: Math.min(bounds.bottom + 4, Math.max(60, window.innerHeight - 340)),
-              width: Math.max(bounds.width, 240),
-            });
+            setInsertAt(dataPickerPosition(bounds));
           }}
         />
       )}
@@ -127,17 +111,7 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
   );
 }
 export function PropFieldPicker({ state }: { readonly state: PropState }) {
-  const {
-    field,
-    value,
-    bindContext,
-    onChange,
-    type,
-    setCustom,
-    insertAt,
-    setInsertAt,
-    bindApiRef,
-  } = state;
+  const { field, value, bindContext, onChange, type, setCustom, insertAt, setInsertAt, bindApiRef } = state;
 
   return (
     insertAt && (
@@ -158,11 +132,7 @@ export function PropFieldPicker({ state }: { readonly state: PropState }) {
           // data into "Read more about " should not throw the sentence away. A
           // control's value can't be joined to anything (`true` and a binding is
           // not a value), so those are replaced.
-          const numeric = !!(
-            type === 'number' ||
-            type === 'boolean' ||
-            (type === 'enum' && field.numeric)
-          );
+          const numeric = !!(type === 'number' || type === 'boolean' || (type === 'enum' && field.numeric));
           const keep = numeric || type === 'enum' ? undefined : partsFromValue(value);
           const next = keep?.length ? [...keep, { expr: path }] : [{ expr: path }];
           onChange(valueFromParts(next, { numeric }), true);

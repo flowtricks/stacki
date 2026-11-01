@@ -91,21 +91,8 @@ button:is(:disabled, [aria-disabled='true']) * {
   cursor: not-allowed !important;
 }
 /* A selected option is already in effect, rather than an unavailable action. */
-button:is(:disabled, [aria-disabled='true']):is(
-    [aria-current]:not([aria-current='false']),
-    [aria-selected='true'],
-    [aria-pressed='true'],
-    .active,
-    .on
-  ),
-button:is(:disabled, [aria-disabled='true']):is(
-    [aria-current]:not([aria-current='false']),
-    [aria-selected='true'],
-    [aria-pressed='true'],
-    .active,
-    .on
-  )
-  * {
+button:is(:disabled, [aria-disabled='true']):is([aria-current]:not([aria-current='false']), [aria-selected='true'], [aria-pressed='true'], .active, .on),
+button:is(:disabled, [aria-disabled='true']):is([aria-current]:not([aria-current='false']), [aria-selected='true'], [aria-pressed='true'], .active, .on) * {
   cursor: default !important;
 }
 button.primary {
@@ -3026,6 +3013,11 @@ body > .embed-editor_provenance {
 .dp-twist.hidden {
   visibility: hidden;
 }
+/* A nested field with nothing to open takes no chevron slot at all: the depth
+   indent already sets it inside its parent. */
+.dp-twist.absent {
+  display: none;
+}
 .dp-twist.open > svg {
   transform: rotate(90deg);
 }
@@ -4826,19 +4818,8 @@ body > .embed-editor_provenance {
   background:
     /* Bottom band keeps the recents rail readable now that the strip itself
        is transparent. */
-    linear-gradient(
-      to top,
-      rgba(0, 0, 0, 0.82) 0%,
-      rgba(0, 0, 0, 0.6) 14%,
-      rgba(0, 0, 0, 0.2) 26%,
-      transparent 34%
-    ),
-    radial-gradient(
-      ellipse 70% 60% at 50% 42%,
-      rgba(0, 0, 0, 0.74) 0%,
-      rgba(0, 0, 0, 0.55) 45%,
-      rgba(0, 0, 0, 0.28) 100%
-    );
+    linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.6) 14%, rgba(0, 0, 0, 0.2) 26%, transparent 34%),
+    radial-gradient(ellipse 70% 60% at 50% 42%, rgba(0, 0, 0, 0.74) 0%, rgba(0, 0, 0, 0.55) 45%, rgba(0, 0, 0, 0.28) 100%);
 }
 /* Lift just the start screen's own sections above the backdrop — a blanket
    child rule would also re-position overlays (the new-project modal is
@@ -4999,9 +4980,7 @@ body > .embed-editor_provenance {
   outline: 2px solid #111;
   outline-offset: -2px;
 }
-.welcome
-  .welcome-split-menu:is([data-popup-phase='opening'], [data-popup-phase='closing'])
-  > button {
+.welcome .welcome-split-menu:is([data-popup-phase='opening'], [data-popup-phase='closing']) > button {
   opacity: 0;
   transform: translateY(-5px);
 }
@@ -5330,11 +5309,7 @@ body > .embed-editor_provenance {
   justify-content: center;
   overflow: hidden;
   background-color: color-mix(in srgb, var(--band) 14%, transparent);
-  background-image: repeating-linear-gradient(
-    -45deg,
-    color-mix(in srgb, var(--band) 42%, transparent) 0 1px,
-    transparent 1px 6px
-  );
+  background-image: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--band) 42%, transparent) 0 1px, transparent 1px 6px);
   outline: 1px solid color-mix(in srgb, var(--band) 45%, transparent);
   outline-offset: -1px;
 }
@@ -5417,9 +5392,7 @@ body:has(#stacki-canvas-text-editor[data-shared]) .node-outline.sel .node-outlin
 body:has(#stacki-canvas-text-editor[data-shared='cms']) .node-outline.sel .node-outline-tag::after {
   content: 'Shared CMS content · changes other uses too';
 }
-body:has(#stacki-canvas-text-editor[data-shared='variable'])
-  .node-outline.sel
-  .node-outline-tag::after {
+body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .node-outline-tag::after {
   content: 'Shared variable · changes other uses too';
 }
 /* Hover: bare colored label above (no chip). Only components get a

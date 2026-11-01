@@ -1,4 +1,5 @@
 import Popup from '../../ui/Popup';
+import { dataPickerPosition } from './dataPickerPosition';
 import { useEffect, useRef, useState } from 'react';
 import { useCodeAccess, ManagedValue } from '../../ui/CodeAccess';
 import type { BindInputHandle } from './BindInput';
@@ -8,13 +9,7 @@ import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { definedFields } from '../../../shared/core/boundary';
 import { dataTree, scopeChips, scopeCompletions } from '../../editor/dataSuggest';
-import {
-  partsFromValue,
-  resolvePick,
-  templateHoles,
-  valueFromParts,
-  valueModeOf,
-} from '../../editor/bindings';
+import { partsFromValue, resolvePick, templateHoles, valueFromParts, valueModeOf } from '../../editor/bindings';
 import BindInput from './BindInput';
 import DataPicker from './DataPicker';
 import ExprInput from '../../ui/ExprInput';
@@ -31,12 +26,7 @@ export {
   ValueCodeEditor,
 } from './BindingEditors';
 
-export {
-  type FieldPosition,
-  type SourceContext,
-  type ValueChange,
-  type InsertAPI,
-} from './bindingTypes';
+export { type FieldPosition, type SourceContext, type ValueChange, type InsertAPI } from './bindingTypes';
 
 function chipExpr(chip: Chip | undefined) {
   if (!chip) {
@@ -65,13 +55,7 @@ function ClientBindField({ value, onChange, placeholder }: BindFieldProps) {
   if (value && value.type !== 'string') {
     return <ManagedValue />;
   }
-  return (
-    <input
-      value={value?.value ?? ''}
-      placeholder={placeholder ?? ''}
-      onChange={(event) => onChange({ type: 'string', value: event.target.value })}
-    />
-  );
+  return <input value={value?.value ?? ''} placeholder={placeholder ?? ''} onChange={(event) => onChange({ type: 'string', value: event.target.value })} />;
 }
 function EditableBindField(props: BindFieldProps) {
   const state = useBindFieldModel(props);
@@ -83,30 +67,20 @@ function useBindFieldModel(props: BindFieldProps) {
   const { value, field, bindContext } = props;
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<BindInputHandle>(null);
-  const [menu, setMenu] = useState<
-    (FieldPosition & { readonly chip: Chip | undefined }) | undefined
-  >(undefined);
+  const [menu, setMenu] = useState<(FieldPosition & { readonly chip: Chip | undefined }) | undefined>(undefined);
   // Editing a `const` from this file happens right under the field, the way the
   // pencil used to open it — it is the menu that asks for it now.
-  const [source, setSource] = useState<(FieldPosition & { readonly name: string }) | undefined>(
-    undefined,
-  );
+  const [source, setSource] = useState<(FieldPosition & { readonly name: string }) | undefined>(undefined);
   // The code editor, so a chip pressed inside it can be repointed in place.
   const exprApiRef = useRef<ExprInputAPI | undefined>(undefined);
   const [raw, setRaw] = useState(false);
   // What the code editor draws as chips: every `${…}` hole naming a path, plus
   // every value in scope the code names outright.
-  const scopeNames = new Set(
-    scopeCompletions(bindContext || {}).map((completion) => completion.label.split('.')[0] ?? ''),
-  );
+  const scopeNames = new Set(scopeCompletions(bindContext || {}).map((completion) => completion.label.split('.')[0] ?? ''));
   const codeChips = (text: string) => {
     const holes = templateHoles(text);
-    const taken = (from: number, to: number) =>
-      holes.some((hole) => from < hole.to && to > hole.from);
-    return [
-      ...holes,
-      ...scopeChips(text, scopeNames).filter((chip) => !taken(chip.from, chip.to)),
-    ].sort((left, right) => left.from - right.from);
+    const taken = (from: number, to: number) => holes.some((hole) => from < hole.to && to > hole.from);
+    return [...holes, ...scopeChips(text, scopeNames).filter((chip) => !taken(chip.from, chip.to))].sort((left, right) => left.from - right.from);
   };
   // Typing must not move the field out from under the caret: an expression
   // half-way to becoming a call reads as code the moment the bracket lands,
@@ -130,12 +104,7 @@ function useBindFieldModel(props: BindFieldProps) {
   // which is a string the component then calls .map on. It also cost the field
   // its own editor: a string is text, so the panel showed the array in a plain
   // box with no highlighting, and there was no way to type one that stayed code.
-  const numeric = !!(
-    field?.type === 'number' ||
-    field?.type === 'boolean' ||
-    field?.type === 'code' ||
-    (field?.type === 'enum' && field?.numeric)
-  );
+  const numeric = !!(field?.type === 'number' || field?.type === 'boolean' || field?.type === 'code' || (field?.type === 'enum' && field?.numeric));
 
   return {
     ...props,
@@ -158,30 +127,14 @@ function useBindFieldModel(props: BindFieldProps) {
 }
 type BindingState = ReturnType<typeof useBindFieldModel>;
 function useBindFieldActions(state: BindingState) {
-  const {
-    menu,
-    wrapRef,
-    setMenu,
-    dataContext,
-    setSource,
-    bindContext,
-    showInput,
-    exprApiRef,
-    onChange,
-    setRaw,
-    inputRef,
-  } = state;
+  const { menu, wrapRef, setMenu, dataContext, setSource, bindContext, showInput, exprApiRef, onChange, setRaw, inputRef } = state;
   const open = (chip: Chip | undefined) => {
     const rect = wrapRef.current?.getBoundingClientRect();
     if (!rect) {
       return;
     }
     setMenu({
-      left: rect.left,
-      // Below the field, or above it when the field sits near the bottom of
-      // the panel — the popup is fixed, so it would otherwise run off-screen.
-      top: Math.min(rect.bottom + 4, Math.max(60, window.innerHeight - 340)),
-      width: Math.max(rect.width, 240),
+      ...dataPickerPosition(rect),
       chip: chip || undefined,
     });
   };
@@ -254,18 +207,7 @@ function useBindFieldAPI({ apiRef, showInput, inputRef }: BindingState) {
 }
 type BindingViewState = BindingState & ReturnType<typeof useBindFieldActions>;
 function BindFieldMenu({ state }: { readonly state: BindingViewState }) {
-  const {
-    menu,
-    bindContext,
-    showInput,
-    expr,
-    pick,
-    editTarget,
-    editChip,
-    editName,
-    setMenu,
-    setRaw,
-  } = state;
+  const { menu, bindContext, showInput, expr, pick, editTarget, editChip, editName, setMenu, setRaw } = state;
   return (
     menu && (
       <Popup
@@ -286,9 +228,7 @@ function BindFieldMenu({ state }: { readonly state: BindingViewState }) {
           onPick={pick}
           onExpand={(node) => node.query && bindContext?.onNeedSample?.(node.query.collection)}
           onEdit={editTarget ? editChip : undefined}
-          editLabel={
-            editTarget === 'file' ? `Open where ${editName} is defined` : `Edit ${editName}`
-          }
+          editLabel={editTarget === 'file' ? `Open where ${editName} is defined` : `Edit ${editName}`}
           onWrite={() => {
             setMenu(undefined);
             setRaw(true);
@@ -313,23 +253,7 @@ function BindFieldSource({ state }: { readonly state: BindingState }) {
   );
 }
 function BindFieldView({ state }: { readonly state: BindingViewState }) {
-  const {
-    showInput,
-    wrapRef,
-    inputRef,
-    parts,
-    placeholder,
-    onChange,
-    numeric,
-    field,
-    mode,
-    open,
-    setEditing,
-    expr,
-    exprApiRef,
-    codeChips,
-    wrapCode,
-  } = state;
+  const { showInput, wrapRef, inputRef, parts, placeholder, onChange, numeric, field, mode, open, setEditing, expr, exprApiRef, codeChips, wrapCode } = state;
   const list = <BindFieldMenu state={state} />;
   const sourceEditor = <BindFieldSource state={state} />;
   if (showInput) {
@@ -342,11 +266,7 @@ function BindFieldView({ state }: { readonly state: BindingViewState }) {
           // A code prop's parts join as code: text beside a chip is an
           // expression with a value in it, not a sentence with one quoted into
           // it, so `[...items, other]` stays what was typed.
-          onChange={(next) =>
-            onChange(
-              valueFromParts(next, { numeric, mode: field?.type === 'code' ? 'code' : mode }),
-            )
-          }
+          onChange={(next) => onChange(valueFromParts(next, { numeric, mode: field?.type === 'code' ? 'code' : mode }))}
           onChipClick={(chip) => open(chip)}
           onFocus={() => setEditing(true)}
           onBlur={() => setEditing(false)}
@@ -379,9 +299,7 @@ function BindFieldView({ state }: { readonly state: BindingViewState }) {
         // can opt into wrapping so the whole value remains readable in the panel.
         wrap={wrapCode ?? false}
         onChange={(draft) => onChange({ type: 'expr', value: draft })}
-        onCommit={(committed) =>
-          committed !== expr && onChange({ type: 'expr', value: committed }, true)
-        }
+        onCommit={(committed) => committed !== expr && onChange({ type: 'expr', value: committed }, true)}
       />
       {list}
       {sourceEditor}

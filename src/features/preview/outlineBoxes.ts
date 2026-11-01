@@ -32,10 +32,7 @@ interface Occurrence {
 const SLACK = 1;
 
 const covers = (outer: Box, inner: Box): boolean =>
-  inner.x >= outer.x - SLACK &&
-  inner.y >= outer.y - SLACK &&
-  inner.x + inner.w <= outer.x + outer.w + SLACK &&
-  inner.y + inner.h <= outer.y + outer.h + SLACK;
+  inner.x >= outer.x - SLACK && inner.y >= outer.y - SLACK && inner.x + inner.w <= outer.x + outer.w + SLACK && inner.y + inner.h <= outer.y + outer.h + SLACK;
 
 /**
  * The boxes worth drawing, in the order they were reported — which is document
@@ -56,15 +53,19 @@ export function onePerPlace<T extends Box>(boxes: readonly T[] | undefined): rea
   return list.filter((box) => kept.includes(box));
 }
 
-/** A map renders through its children, but its outline should sit on the
- * containing node's box. Preserve the namespace when a component is open. */
+/** A map has no box of its own: it is on the page only as the copies of what
+ * it renders. Its outline sits on its first child's boxes, so hovering a loop
+ * outlines the same item its child would, drawn in the loop's colour. Borrowing
+ * the containing node's box instead drew nothing for a loop at the top of a
+ * page, where there is no containing node. */
 export function outlineBoxPath(path: string, nodeKind: string | undefined): string {
+  assert(path.length > 0, 'outlineBoxPath: path must not be empty');
   if (nodeKind !== 'map') {
     return path;
   }
-  const namespaceEnd = path.lastIndexOf('|');
-  const parentEnd = path.lastIndexOf('.');
-  return parentEnd > namespaceEnd ? path.slice(0, parentEnd) : path;
+  const childPath = `${path}.0`;
+  assert(childPath.startsWith(path), 'outlineBoxPath: child path must extend its map');
+  return childPath;
 }
 
 /**
@@ -80,10 +81,7 @@ export function outlineBoxPath(path: string, nodeKind: string | undefined): stri
  * Navigator hover and selection supply occurrence zero; this fallback still
  * handles a selection before a particular occurrence is known.
  */
-export function hoverIsSelection(
-  hover: Occurrence | undefined,
-  selection: Occurrence | undefined,
-): boolean {
+export function hoverIsSelection(hover: Occurrence | undefined, selection: Occurrence | undefined): boolean {
   if (!hover?.path || !selection?.path) {
     return false;
   }

@@ -1,4 +1,5 @@
 import { useCodeAccess } from '../../ui/CodeAccess';
+import { dataPickerPosition } from './dataPickerPosition';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import type { Attr } from '../../../shared/page/pageNode';
@@ -13,16 +14,7 @@ import AssetField from '../../ui/AssetField';
 import { looksLikeAssetPath, mediaKindFor } from '../../ui/AssetThumb';
 import { BindField, BindHandle, FieldDataPicker, ValueCodeEditor } from './propBindings';
 import { BracesIcon, PlusIcon, TrashIcon, ElementImageIcon, MaximizeIcon } from '../../ui/Icons';
-import {
-  type AttributePair,
-  type ObjectEntry,
-  decodeAttr,
-  attributeDisplayName,
-  encodeAttr,
-  parseAttrPaste,
-  decodeRaw,
-  encodeRaw,
-} from './attributeText';
+import { type AttributePair, type ObjectEntry, decodeAttr, attributeDisplayName, encodeAttr, parseAttrPaste, decodeRaw, encodeRaw } from './attributeText';
 export { parseAttrPaste, parseObjectLiteral, serializeObjectLiteral } from './attributeText';
 
 interface AttributeNode {
@@ -82,12 +74,7 @@ export function AttributesSection(props: AttributesSectionProps) {
           <BracesIcon size={12} className="prop-label-icon" />
           Attributes
         </span>
-        <button
-          className="ghost"
-          title="Add attribute"
-          data-attribute-editor-trigger
-          onClick={() => openEditor(undefined)}
-        >
+        <button className="ghost" title="Add attribute" data-attribute-editor-trigger onClick={() => openEditor(undefined)}>
           <PlusIcon size={12} />
         </button>
       </div>
@@ -246,11 +233,7 @@ function AttrEditor(props: AttrEditorProps) {
   const { ref, pos: position, syntax, isStyleValue, assetMode, setAssetMode } = state;
 
   return (
-    <div
-      ref={ref}
-      className="attr-editor"
-      style={{ top: position.top, left: position.left, width: position.width }}
-    >
+    <div ref={ref} className="attr-editor" style={{ top: position.top, left: position.left, width: position.width }}>
       <AttributeName state={state} />
       {/* The field sits beside its label like the name row, whichever kind it
           is; `top` just stops the label and toggle from centring against a
@@ -342,11 +325,7 @@ function useAttrEditor(props: AttrEditorProps) {
   };
 }
 type AttributeState = ReturnType<typeof useAttrEditor>;
-function useAttrEditorDismiss(
-  ref: RefObject<HTMLElement>,
-  triggerRootRef: RefObject<HTMLElement>,
-  onClose: () => void,
-) {
+function useAttrEditorDismiss(ref: RefObject<HTMLElement>, triggerRootRef: RefObject<HTMLElement>, onClose: () => void) {
   useEffect(() => {
     const onDown = (event: MouseEvent) => {
       const target = event.target;
@@ -356,10 +335,7 @@ function useAttrEditorDismiss(
       if (ref.current?.contains(target)) {
         return;
       }
-      const trigger =
-        target instanceof window.Element
-          ? target.closest('[data-attribute-editor-trigger]')
-          : undefined;
+      const trigger = target instanceof window.Element ? target.closest('[data-attribute-editor-trigger]') : undefined;
       if (trigger && triggerRootRef.current?.contains(trigger)) {
         return;
       }
@@ -379,16 +355,7 @@ function useAttrEditorDismiss(
   }, [onClose, ref, triggerRootRef]);
 }
 function AttributeName({ state }: { readonly state: AttributeState }) {
-  const {
-    syntax,
-    isNew,
-    draftName,
-    setDraftName,
-    setDraftValue,
-    onCommitPair,
-    onCommitMany,
-    commitName,
-  } = state;
+  const { syntax, isNew, draftName, setDraftName, setDraftValue, onCommitPair, onCommitMany, commitName } = state;
   return (
     <div className="attr-editor-row">
       <span>Name</span>
@@ -430,15 +397,7 @@ function AttributeName({ state }: { readonly state: AttributeState }) {
   );
 }
 function AttributeValue({ state }: { readonly state: AttributeState }) {
-  const {
-    isStyleValue,
-    draftValue,
-    focusValue,
-    setDraftValue,
-    onChangeValue,
-    assetMode,
-    projectPath,
-  } = state;
+  const { isStyleValue, draftValue, focusValue, setDraftValue, onChangeValue, assetMode, projectPath } = state;
   return isStyleValue ? (
     // A style attribute is CSS, so edit it as CSS — one declaration per
     // line, highlighted. An {expression} value stays a plain field:
@@ -478,18 +437,7 @@ function AttributeValue({ state }: { readonly state: AttributeState }) {
 }
 function AttributeBinding({ state }: { readonly state: AttributeState }) {
   const allowCode = useCodeAccess();
-  const {
-    draftValue,
-    setDraftValue,
-    onChangeValue,
-    bindContext,
-    dataContext,
-    bindApiRef,
-    insertAt,
-    setInsertAt,
-    ref,
-    setBigAt,
-  } = state;
+  const { draftValue, setDraftValue, onChangeValue, bindContext, dataContext, bindApiRef, insertAt, setInsertAt, ref, setBigAt } = state;
   const valueRef = useRef<HTMLDivElement>(null);
   return (
     <>
@@ -526,11 +474,7 @@ function AttributeBinding({ state }: { readonly state: AttributeState }) {
             if (!rect) {
               return;
             }
-            setInsertAt({
-              left: rect.left,
-              top: Math.min(rect.bottom + 4, Math.max(60, window.innerHeight - 340)),
-              width: Math.max(rect.width, 240),
-            });
+            setInsertAt(dataPickerPosition(rect));
           }}
         />
       </div>
@@ -560,20 +504,7 @@ function expandedAttributeEditorPosition(host: HTMLElement): FieldPosition {
   };
 }
 function AttributePopups({ state }: { readonly state: AttributeState }) {
-  const {
-    bigAt,
-    draftName,
-    draftValue,
-    scope,
-    chipsInScope,
-    bindContext,
-    setDraftValue,
-    onChangeValue,
-    setBigAt,
-    insertAt,
-    setInsertAt,
-    bindApiRef,
-  } = state;
+  const { bigAt, draftName, draftValue, scope, chipsInScope, bindContext, setDraftValue, onChangeValue, setBigAt, insertAt, setInsertAt, bindApiRef } = state;
   return (
     <>
       {bigAt ? (
@@ -623,12 +554,7 @@ export function ObjectAttrsField(props: ObjectAttrsFieldProps) {
     <div className="props-field" ref={listRef}>
       <div className="props-label-row">
         {pill}
-        <button
-          className="ghost"
-          title="Add attribute"
-          data-attribute-editor-trigger
-          onClick={() => openEditor(undefined)}
-        >
+        <button className="ghost" title="Add attribute" data-attribute-editor-trigger onClick={() => openEditor(undefined)}>
           <PlusIcon size={12} />
         </button>
         {menu}
@@ -726,9 +652,7 @@ function ObjectAttrsFieldPopup({ state }: { readonly state: ObjectAttributesStat
       }}
       onChangeValue={(text) => {
         if (editor.index !== undefined) {
-          onCommit(
-            entries.map((en, i) => (i === editor.index ? { ...en, raw: encodeRaw(text) } : en)),
-          );
+          onCommit(entries.map((en, i) => (i === editor.index ? { ...en, raw: encodeRaw(text) } : en)));
         }
       }}
       onCommitPair={(name, value) => {
@@ -757,10 +681,7 @@ function ObjectAttrsFieldPopup({ state }: { readonly state: ObjectAttributesStat
   );
 }
 
-function openExpandedAttribute(
-  host: HTMLElement | undefined,
-  open: (position: FieldPosition) => void,
-): void {
+function openExpandedAttribute(host: HTMLElement | undefined, open: (position: FieldPosition) => void): void {
   if (host) {
     open(expandedAttributeEditorPosition(host));
   }

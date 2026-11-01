@@ -1,4 +1,5 @@
 import Popup from '../../ui/Popup';
+import { dataPickerPosition } from './dataPickerPosition';
 import React, { useEffect, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import DataPicker from './DataPicker';
@@ -9,29 +10,9 @@ import { resolvePick } from '../../editor/bindings';
 import { deleteChipAtCaret } from './chipKeys';
 import { nodesToHtml, isChippable } from './richContentModel';
 import type { InlineNode } from './richContentModel';
-import {
-  richApplyLink,
-  richContentNodes,
-  richExec,
-  richReadStates,
-  richWrapTag,
-  type FormatState,
-  type RichTarget,
-} from './richFormat';
-import {
-  RichFormatButtons,
-  RichLinkField,
-  richBubblePlace,
-  type Bubble,
-  type BubblePosition,
-} from './RichFormatButtons';
-export {
-  INLINE_TAGS,
-  isSimpleExpr,
-  isInlineOnly,
-  isChippable,
-  nodesToHtml,
-} from './richContentModel';
+import { richApplyLink, richContentNodes, richExec, richReadStates, richWrapTag, type FormatState, type RichTarget } from './richFormat';
+import { RichFormatButtons, RichLinkField, richBubblePlace, type Bubble, type BubblePosition } from './RichFormatButtons';
+export { INLINE_TAGS, isSimpleExpr, isInlineOnly, isChippable, nodesToHtml } from './richContentModel';
 export type { InlineNode } from './richContentModel';
 
 export interface RichContext extends DataContext {
@@ -53,6 +34,7 @@ interface ChipMenu {
   readonly chip: Element;
   readonly left: number;
   readonly top: number;
+  readonly width: number;
   readonly current: string;
 }
 export default function RichContent({ nodes, onChange, bindContext, insertRef }: RichContentProps) {
@@ -192,11 +174,7 @@ function useRichCaret(state: RichState): void {
     return () => document.removeEventListener('selectionchange', onSelectionChange);
   }, [hostRef, caretRef]);
 }
-function useRichInsertion(
-  insertRef: RichContentProps['insertRef'],
-  state: RichState,
-  emit: () => void,
-) {
+function useRichInsertion(insertRef: RichContentProps['insertRef'], state: RichState, emit: () => void) {
   const { hostRef, caretRef } = state;
   // Dropping data in from outside — the Content field's own insert button.
   useEffect(() => {
@@ -225,11 +203,7 @@ function useRichInsertion(
         }
         selection.removeAllRanges();
         selection.addRange(range);
-        document.execCommand(
-          'insertHTML',
-          false,
-          `<span class="expr-chip" contenteditable="false" data-expr="{${path}}">${path}</span>`,
-        );
+        document.execCommand('insertHTML', false, `<span class="expr-chip" contenteditable="false" data-expr="{${path}}">${path}</span>`);
         emit();
       },
     };
@@ -310,10 +284,7 @@ function richChipActions(state: RichState, emit: () => void) {
   // click, and preventDefault, so the caret never lands inside the chip.
   const onChipMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     const ElementType = event.currentTarget.ownerDocument.defaultView?.Element;
-    const chip =
-      ElementType && event.target instanceof ElementType
-        ? event.target.closest('.expr-chip')
-        : undefined;
+    const chip = ElementType && event.target instanceof ElementType ? event.target.closest('.expr-chip') : undefined;
     if (!chip) {
       return;
     }
@@ -321,8 +292,7 @@ function richChipActions(state: RichState, emit: () => void) {
     const rect = chip.getBoundingClientRect();
     setChipMenu({
       chip,
-      left: rect.left,
-      top: rect.bottom + 4,
+      ...dataPickerPosition(rect),
       current: (chip.getAttribute('data-expr') || '').replace(/^\{|\}$/g, ''),
     });
   };
@@ -359,16 +329,14 @@ function RichChipMenu({
       portal={false}
       onClose={() => state.setChipMenu(undefined)}
       className="dd-popup bind-menu"
-      style={{ left: chipMenu.left, top: chipMenu.top, width: 260 }}
+      style={{ left: chipMenu.left, top: chipMenu.top, width: chipMenu.width }}
     >
       <DataPicker
         tree={dataTree(bindContext || {})}
         current={chipMenu.current}
         entries={bindContext?.entryNav ?? undefined}
         {...(bindContext?.onStepItem ? { onStepItem: bindContext.onStepItem } : {})}
-        onPick={(path, query) =>
-          pickExpr(resolvePick(path, query ?? undefined, bindContext ?? undefined))
-        }
+        onPick={(path, query) => pickExpr(resolvePick(path, query ?? undefined, bindContext ?? undefined))}
         onExpand={(node) => node.query && bindContext?.onNeedSample?.(node.query.collection)}
         footer={false}
       />
@@ -388,17 +356,8 @@ function RichBubble({ state, emit }: { readonly state: RichState; readonly emit:
     '--arrow-x': position ? `${position.arrowX}px` : '50%',
   };
   return (
-    <div
-      ref={bubbleRef}
-      className={`rich-bubble ${position?.below ? 'below' : ''}`}
-      style={style}
-      onMouseDown={(event) => event.stopPropagation()}
-    >
-      {linkMode ? (
-        <RichLinkInput state={state} emit={emit} />
-      ) : (
-        <RichButtons state={state} emit={emit} />
-      )}
+    <div ref={bubbleRef} className={`rich-bubble ${position?.below ? 'below' : ''}`} style={style} onMouseDown={(event) => event.stopPropagation()}>
+      {linkMode ? <RichLinkInput state={state} emit={emit} /> : <RichButtons state={state} emit={emit} />}
     </div>
   );
 }

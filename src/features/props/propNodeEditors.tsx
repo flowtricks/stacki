@@ -1,4 +1,5 @@
 import Popup from '../../ui/Popup';
+import { dataPickerPosition } from './dataPickerPosition';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { MapNode } from '../../../shared/page/pageNode';
 import type { RichContext } from './RichContent';
@@ -12,14 +13,7 @@ import ExprInput from '../../ui/ExprInput';
 import { BindHandle, FieldDataPicker, SourceEditButton, referencedName } from './propBindings';
 import { VarSourceEditor } from './BindingEditors';
 import { useLoopSourceInspection } from './useLoopSourceInspection';
-import {
-  elementIcon,
-  astroAssetIcon,
-  LayoutIcon,
-  ElementComponentIcon,
-  CodeIcon,
-  TagIcon,
-} from '../../ui/Icons';
+import { elementIcon, astroAssetIcon, LayoutIcon, ElementComponentIcon, CodeIcon, TagIcon } from '../../ui/Icons';
 
 export interface Rename {
   readonly from: string;
@@ -214,11 +208,7 @@ function useMapEditor(props: MapEditorProps) {
     }
     setInsertAt({
       field,
-      pos: {
-        left: rect.left,
-        top: Math.min(rect.bottom + 4, Math.max(60, window.innerHeight - 340)),
-        width: Math.max(rect.width, 240),
-      },
+      pos: dataPickerPosition(rect),
     });
   };
   const openSourceMenu = () => {
@@ -226,11 +216,7 @@ function useMapEditor(props: MapEditorProps) {
     if (!rect) {
       return;
     }
-    setSourceMenu({
-      left: rect.left,
-      top: Math.min(rect.bottom + 4, Math.max(60, window.innerHeight - 564)),
-      width: Math.max(rect.width, 240),
-    });
+    setSourceMenu(dataPickerPosition(rect, { heightPxMax: 564 }));
   };
 
   const parseableNow = node.bodyParts === undefined && !!parseMapHead(node.head);
@@ -281,10 +267,7 @@ function MapEditorView({ state }: { readonly state: ReturnType<typeof useMapEdit
           <MapNames state={state} />
         </>
       ) : (
-        <div
-          className="props-field"
-          style={{ marginTop: 8, fontSize: 11, color: 'var(--text-faint)' }}
-        >
+        <div className="props-field" style={{ marginTop: 8, fontSize: 11, color: 'var(--text-faint)' }}>
           Custom loop code — edit it below.
         </div>
       )}
@@ -345,8 +328,7 @@ function useTagModel({ tag, options }: TagFieldProps) {
   // frontmatter already imports).
   assert(tag.length <= LIMITS.tagNameCharsMax, 'TagField: tag limit exceeded');
   assert((options?.length ?? 0) <= LIMITS.scanEntriesMax, 'TagField: option limit exceeded');
-  const pool =
-    options && options.length ? options : HTML_TAGS.map((name) => ({ name, kind: 'element' }));
+  const pool = options && options.length ? options : HTML_TAGS.map((name) => ({ name, kind: 'element' }));
   const query = draft.trim();
   const ql = query.toLowerCase();
   const matches =
@@ -473,20 +455,7 @@ export function TagField(props: TagFieldProps) {
 }
 
 function TagFieldView({ state }: { readonly state: ReturnType<typeof useTagField> }) {
-  const {
-    draft,
-    setFocused,
-    highlight,
-    setHighlight,
-    popupPos: popupPosition,
-    wrapRef,
-    inputRef,
-    draftRef,
-    updateDraft,
-    matches,
-    commit,
-    onKeyDown,
-  } = state;
+  const { draft, setFocused, highlight, setHighlight, popupPos: popupPosition, wrapRef, inputRef, draftRef, updateDraft, matches, commit, onKeyDown } = state;
   return (
     <div className="props-field" ref={wrapRef}>
       <label onClick={noLabelActivation}>
@@ -561,9 +530,7 @@ function MapSourcePicker({ state }: { readonly state: ReturnType<typeof useMapEd
   const source = useLoopSourceInspection(dataContext, path, { open: sourceMenu !== undefined });
   const [sourceEditor, setSourceEditor] = useState<FieldPosition | undefined>(undefined);
   const tree = dataTree(bindContext || loopContext || {}).map((node) =>
-    node.path === source.root && source.inspection?.tree
-      ? { ...source.inspection.tree, ...(node.section ? { section: node.section } : {}) }
-      : node,
+    node.path === source.root && source.inspection?.tree ? { ...source.inspection.tree, ...(node.section ? { section: node.section } : {}) } : node,
   );
   const editSource = () => {
     if (source.local && sourceMenu) {
@@ -636,10 +603,7 @@ function MapDataField({ state }: { readonly state: ReturnType<typeof useMapEdito
     <div className="props-field" style={{ marginTop: 8 }} ref={dataRef}>
       <label onClick={noLabelActivation}>
         <span className="prop-label">Data</span>
-        <BindHandle
-          active={insertAt?.field === 'data'}
-          onOpen={() => openInsert('data', dataRef)}
-        />
+        <BindHandle active={insertAt?.field === 'data'} onOpen={() => openInsert('data', dataRef)} />
       </label>
       {/* One field, holding one expression. What names the source is
                 drawn as a chip inside it — the same purple a binding wears
@@ -661,11 +625,7 @@ function MapDataField({ state }: { readonly state: ReturnType<typeof useMapEdito
           onChange={(value) => update({ data: value })}
           onCommit={(value) => commitSource(value.trim() || NO_SOURCE)}
         />
-        <SourceEditButton
-          name={referencedName(fields.data)}
-          dataContext={dataContext}
-          anchorRef={dataRef}
-        />
+        <SourceEditButton name={referencedName(fields.data)} dataContext={dataContext} anchorRef={dataRef} />
       </div>
       <MapSourcePicker state={state} />
     </div>
@@ -739,17 +699,9 @@ function MapCodeField({ state }: { readonly state: ReturnType<typeof useMapEdito
           <CodeIcon size={12} className="prop-label-icon" />
           Code
         </span>
-        <BindHandle
-          active={insertAt?.field === 'code'}
-          onOpen={() => openInsert('code', codeRef)}
-        />
+        <BindHandle active={insertAt?.field === 'code'} onOpen={() => openInsert('code', codeRef)} />
       </label>
-      <ExprInput
-        value={node.head}
-        syncValue={node.head}
-        apiRef={codeApiRef}
-        onCommit={(value) => value !== node.head && onSetText(value)}
-      />
+      <ExprInput value={node.head} syncValue={node.head} apiRef={codeApiRef} onCommit={(value) => value !== node.head && onSetText(value)} />
     </div>
   );
 }
@@ -779,10 +731,7 @@ function MapInsertPicker({ state }: { readonly state: ReturnType<typeof useMapEd
           onPick={(path) => {
             const field = insertAt.field;
             setInsertAt(undefined);
-            const next =
-              field === 'data'
-                ? dataApiRef.current?.insert(path)
-                : codeApiRef.current?.insert(path);
+            const next = field === 'data' ? dataApiRef.current?.insert(path) : codeApiRef.current?.insert(path);
             if (next === undefined) {
               return;
             }

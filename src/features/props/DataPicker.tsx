@@ -3,14 +3,7 @@ import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import type { LoopSourceInspection } from './loopSourceInspection';
-import {
-  ChevronRightIcon,
-  ChevronLeftIcon,
-  CheckIcon,
-  CodeIcon,
-  SearchIcon,
-  PencilIcon,
-} from '../../ui/Icons';
+import { ChevronRightIcon, ChevronLeftIcon, CheckIcon, CodeIcon, SearchIcon, PencilIcon } from '../../ui/Icons';
 
 // The data behind the page, as something you can look through rather than
 // something you have to already know. Every row is a value that is in scope
@@ -46,9 +39,10 @@ function ancestorsOf(path: string | undefined): string[] {
   return out;
 }
 
-// How far a nested field steps in: enough to read as inside its parent, with
-// its name starting just past the parent's chevron rather than far beyond it.
-const DEPTH_INDENT_PX = 8;
+// How far a nested field steps in: the width of a chevron and the gap after
+// it. A nested field with nothing beneath it drops its empty chevron slot, so
+// its name lines up under its parent's name, just past the parent's chevron.
+const DEPTH_INDENT_PX = 18;
 
 function flatten(nodes: readonly PickerNode[]): PickerNode[] {
   const pending = nodes.map((node) => ({ node, depth: 0 })).reverse();
@@ -61,10 +55,7 @@ function flatten(nodes: readonly PickerNode[]): PickerNode[] {
     assert(next.depth <= LIMITS.treeDepthMax, 'DataPicker: depth limit exceeded');
     out.push(next.node);
     const children = next.node.children ?? [];
-    assert(
-      out.length + pending.length + children.length <= LIMITS.treeNodesMax,
-      'DataPicker: node limit exceeded',
-    );
+    assert(out.length + pending.length + children.length <= LIMITS.treeNodesMax, 'DataPicker: node limit exceeded');
     for (let index = children.length - 1; index >= 0; index--) {
       const node = children[index];
       assert(node !== undefined, 'DataPicker: child exists');
@@ -163,17 +154,7 @@ export interface DataPickerProps {
 
 export default function DataPicker(props: DataPickerProps) {
   const allowCode = useCodeAccess();
-  const {
-    entries,
-    onStepItem,
-    onPick,
-    onWrite,
-    onEdit,
-    editLabel = 'Edit',
-    footer = true,
-    sourceInspection,
-    onEditSource,
-  } = props;
+  const { entries, onStepItem, onPick, onWrite, onEdit, editLabel = 'Edit', footer = true, sourceInspection, onEditSource } = props;
   const state = useDataPicker(props);
   const { query, setQuery, searchRef, listRef } = state;
   return (
@@ -183,22 +164,10 @@ export default function DataPicker(props: DataPickerProps) {
           stepping through them previews the page against other content and
           re-reads this list against it at the same time. */}
       {entries && entries.count > 1 && <EntryNavigation entries={entries} />}
-      {sourceInspection && (
-        <LoopSourceSummary
-          source={sourceInspection}
-          onEdit={allowCode ? onEditSource : undefined}
-        />
-      )}
+      {sourceInspection && <LoopSourceSummary source={sourceInspection} onEdit={allowCode ? onEditSource : undefined} />}
       <div className="dp-search">
         <SearchIcon size={12} />
-        <input
-          ref={searchRef}
-          value={query}
-          placeholder="Search data…"
-          spellCheck={false}
-          autoFocus
-          onChange={(event) => setQuery(event.target.value)}
-        />
+        <input ref={searchRef} value={query} placeholder="Search data…" spellCheck={false} autoFocus onChange={(event) => setQuery(event.target.value)} />
       </div>
       <DataPickerResults state={state} onPick={onPick} onStepItem={onStepItem} listRef={listRef} />
       {/* Above "Write an expression…", because it is about the thing already
@@ -237,39 +206,18 @@ function DataPickerResults({
     <div className="dp-list" ref={listRef}>
       {/* Search uses full paths because the flattened rows lose their parents. */}
       {matches ? (
-        matches.map((node) => (
-          <DataRow
-            key={node.path}
-            node={node}
-            depth={0}
-            showPath
-            root={undefined}
-            state={state}
-            onPick={onPick}
-            onStepItem={onStepItem}
-          />
-        ))
+        matches.map((node) => <DataRow key={node.path} node={node} depth={0} showPath root={undefined} state={state} onPick={onPick} onStepItem={onStepItem} />)
       ) : (
         <DataRoots nodes={tree} state={state} onPick={onPick} onStepItem={onStepItem} />
       )}
       {((matches && !matches.length) || (!matches && !tree.length)) && (
-        <div className="dp-empty">
-          {matches
-            ? 'Nothing matches'
-            : 'No data in scope here — add a prop to this file, or a const to its frontmatter.'}
-        </div>
+        <div className="dp-empty">{matches ? 'Nothing matches' : 'No data in scope here — add a prop to this file, or a const to its frontmatter.'}</div>
       )}
     </div>
   );
 }
 
-function LoopSourceSummary({
-  source,
-  onEdit,
-}: {
-  readonly source: LoopSourceInspection;
-  readonly onEdit: (() => void) | undefined;
-}) {
+function LoopSourceSummary({ source, onEdit }: { readonly source: LoopSourceInspection; readonly onEdit: (() => void) | undefined }) {
   return (
     <div className="dp-source-summary">
       <div className="dp-source-heading">Looping over</div>
@@ -277,9 +225,7 @@ function LoopSourceSummary({
         {source.path}
       </div>
       <div className="dp-source-origin" title={source.origin}>
-        {source.count === undefined
-          ? 'Source'
-          : `${source.count} ${source.count === 1 ? 'item' : 'items'}`}
+        {source.count === undefined ? 'Source' : `${source.count} ${source.count === 1 ? 'item' : 'items'}`}
         {' · '}
         {source.origin}
       </div>
@@ -348,11 +294,7 @@ function useDataPicker({ tree: rawTree, current, onExpand }: DataPickerProps) {
     if (!needle) {
       return undefined;
     }
-    return flatten(tree || []).filter(
-      (node) =>
-        node.path.toLowerCase().includes(needle) ||
-        String(node.preview).toLowerCase().includes(needle),
-    );
+    return flatten(tree || []).filter((node) => node.path.toLowerCase().includes(needle) || String(node.preview).toLowerCase().includes(needle));
   }, [needle, tree]);
 
   const toggle = (node: PickerNode) => {
@@ -395,9 +337,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
     <React.Fragment key={node.path}>
       <div
         ref={isCurrent ? selectedRef : undefined}
-        className={`dp-row ${isCurrent ? 'selected' : ''} ${
-          node.pickable === false ? 'path-only' : ''
-        } ${node.missing ? 'missing' : ''}`}
+        className={`dp-row ${isCurrent ? 'selected' : ''} ${node.pickable === false ? 'path-only' : ''} ${node.missing ? 'missing' : ''}`}
         style={{ paddingLeft: 6 + depth * DEPTH_INDENT_PX }}
         title={`${node.path}${node.kind ? ` — ${node.kind}` : ''}`}
         onMouseDown={(event) => event.preventDefault()}
@@ -411,7 +351,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
         }
       >
         <span
-          className={`dp-twist ${expandable ? '' : 'hidden'} ${isOpen ? 'open' : ''}`}
+          className={`dp-twist ${expandable ? '' : depth > 0 ? 'absent' : 'hidden'} ${isOpen ? 'open' : ''}`}
           onClick={
             expandable
               ? (event) => {
@@ -440,19 +380,10 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
       {isOpen &&
         (node.children?.length ? (
           node.children.map((child) => (
-            <DataRow
-              key={child.path}
-              node={child}
-              depth={depth + 1}
-              showPath={false}
-              root={from}
-              state={state}
-              onPick={onPick}
-              onStepItem={onStepItem}
-            />
+            <DataRow key={child.path} node={child} depth={depth + 1} showPath={false} root={from} state={state} onPick={onPick} onStepItem={onStepItem} />
           ))
         ) : node.lazy ? (
-          <div className="dp-loading" style={{ paddingLeft: 19 + depth * DEPTH_INDENT_PX }}>
+          <div className="dp-loading" style={{ paddingLeft: 6 + (depth + 1) * DEPTH_INDENT_PX }}>
             Reading one entry…
           </div>
         ) : undefined)}
@@ -515,17 +446,7 @@ function DataRoots({
     return (
       <React.Fragment key={`s:${node.path}`}>
         {head && <div className="dp-section">{head}</div>}
-        {
-          <DataRow
-            node={node}
-            depth={0}
-            showPath={false}
-            root={undefined}
-            state={state}
-            onPick={onPick}
-            onStepItem={onStepItem}
-          />
-        }
+        {<DataRow node={node} depth={0} showPath={false} root={undefined} state={state} onPick={onPick} onStepItem={onStepItem} />}
       </React.Fragment>
     );
   });
@@ -533,13 +454,7 @@ function DataRoots({
 function EntryNavigation({ entries }: { readonly entries: Entries }) {
   return (
     <div className="dp-entry">
-      <button
-        type="button"
-        className="dp-step"
-        title="Previous entry"
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={() => entries.onStep(-1)}
-      >
+      <button type="button" className="dp-step" title="Previous entry" onMouseDown={(event) => event.preventDefault()} onClick={() => entries.onStep(-1)}>
         <ChevronLeftIcon size={12} />
       </button>
       <span className="dp-entry-label" title={entries.label}>
@@ -548,13 +463,7 @@ function EntryNavigation({ entries }: { readonly entries: Entries }) {
       <span className="dp-entry-count">
         {entries.index + 1}/{entries.count}
       </span>
-      <button
-        type="button"
-        className="dp-step"
-        title="Next entry"
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={() => entries.onStep(1)}
-      >
+      <button type="button" className="dp-step" title="Next entry" onMouseDown={(event) => event.preventDefault()} onClick={() => entries.onStep(1)}>
         <ChevronRightIcon size={12} />
       </button>
     </div>
@@ -563,11 +472,7 @@ function EntryNavigation({ entries }: { readonly entries: Entries }) {
 
 // What a field holds, as a person reads it: words without the quotes a sample
 // writes around them, a link without its scheme, and an image as the image.
-function PreviewValue(props: {
-  readonly preview: string;
-  readonly kind: string;
-  readonly image: string | undefined;
-}) {
+function PreviewValue(props: { readonly preview: string; readonly kind: string; readonly image: string | undefined }) {
   if (props.image) {
     return (
       <span className="dp-val" title={props.image}>
