@@ -20,8 +20,9 @@ import { createServer, type ViteDevServer } from 'vite';
 // documents, remote schema): three more. A video link's card (linkPreview) and the
 // project's content collections shown as a connection (astroContent): two more.
 // A content collection's settings (collectionSettings) and its fields' checks (fieldChecks):
-// two more.
-const MODULES_MAX = 57;
+// two more. The unused-selector payloads (selectorUsage) and the styles keep list
+// (styleKeepList) that project metadata validates: two more.
+const MODULES_MAX = 59;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [
   { file: 'src/lib/cleanError.ts', exportName: 'cleanError' },

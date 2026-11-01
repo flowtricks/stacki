@@ -14,14 +14,16 @@ let pending: readonly ToastNotice[] = [];
 
 // A bounded handoff lets child mount effects report before the application's toast owner mounts.
 // This is an internal renderer channel, never an IPC or browser-message boundary.
-export function reportErrorToast(
-  message: string,
-  recovery: readonly ToastRecovery[] = [],
-): string | undefined {
+export function reportErrorToast(message: string, recovery: readonly ToastRecovery[] = []): string | undefined {
+  return reportActionToast(message, 'error', recovery);
+}
+
+/** A toast that offers actions; it stays up until it is dismissed or acted on. */
+export function reportActionToast(message: string, kind: ToastNotice['kind'], recovery: readonly ToastRecovery[]): string | undefined {
   if (message.trim().length === 0) {
     return;
   }
-  const notice: ToastNotice = { id: crypto.randomUUID(), kind: 'error', message, recovery };
+  const notice: ToastNotice = { id: crypto.randomUUID(), kind, message, recovery };
   if (listener) {
     listener(notice);
   } else {

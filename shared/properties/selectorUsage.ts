@@ -211,8 +211,11 @@ function parseVerdict(input: unknown): SelectorVerdict {
     case 'kept':
     case 'checking':
       return { kind, names: parseNames(value['names']) };
-    case 'unknown':
-      return { kind, names: parseNames(value['names']), reason: text(value['reason']) };
+    case 'unknown': {
+      const names = parseNames(value['names']);
+      const reason = text(value['reason']);
+      return { kind, names, reason };
+    }
     default:
       throw new Error('Unknown selector verdict');
   }

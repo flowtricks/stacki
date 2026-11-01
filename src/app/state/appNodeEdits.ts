@@ -37,21 +37,9 @@ import {
   readAppSettings,
 } from '../../ipc/appBridge';
 import { parseShortcutMessage } from '../../features/preview/previewMessages';
-import {
-  newId,
-  withNewIds,
-  usesPageScope,
-  slotHostOf,
-  definitionOf,
-  frontmatterOf,
-} from '../model/nodeFactory';
-import {
-  extractionGesture,
-  createdComponentMessage,
-  pasteNeeds,
-  pastedImports,
-  pastePlace,
-} from '../model/pageGestures';
+import { namesInSubtree, offerStyleCleanup } from '../../features/selectors/deleteCleanup';
+import { newId, withNewIds, usesPageScope, slotHostOf, definitionOf, frontmatterOf } from '../model/nodeFactory';
+import { extractionGesture, createdComponentMessage, pasteNeeds, pastedImports, pastePlace } from '../model/pageGestures';
 import { pastedInScope, broughtMessage } from '../model/appKeys';
 import { prunedAfterRemoval } from '../model/pageQueries';
 import { loadComponentInstance, componentInstancePlacement } from '../model/componentInstances';
@@ -315,16 +303,7 @@ export function useCreateComponent(
       const stranded = usesPageScope(node) && !props.length;
       showToast(createdComponentMessage(created.rel, props.length, { stranded }));
     },
-    [
-      commitEdit,
-      propsNeededFor,
-      rescan,
-      showToast,
-      pageStateRef,
-      projectRef,
-      selectedIdRef,
-      setSelectedId,
-    ],
+    [commitEdit, propsNeededFor, rescan, showToast, pageStateRef, projectRef, selectedIdRef, setSelectedId],
   );
   return { createComponentFromSelection };
 }
@@ -386,14 +365,10 @@ export function useMoveNode(
 }
 
 // Removing a node.
-export function useRemoveNode(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-  history: ReturnType<typeof useHistory>,
-) {
-  const { canvasPathForRef, pageStateRef, setSelectedId } = coreState;
+export function useRemoveNode(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
+  const { canvasPathForRef, pageStateRef, projectRef, setSelectedId } = coreState;
   const { showToast } = lifecycle;
-  const { commitEdit } = history;
+  const { commitEdit, pushCommand } = history;
 
   const removeNode = useCallback(
     (nodeId: string) => {
@@ -428,9 +403,16 @@ export function useRemoveNode(
       const pruning = frontmatterGesture(afterRemoval, options, prune);
       // Read before the edit: once the node is gone it has no path.
       const canvasPath = canvasPathForRef.current(nodeId);
-      if (commitEdit(changed ? sequence(removal, pruning) : removal) && canvasPath) {
+      const committed = commitEdit(changed ? sequence(removal, pruning) : removal);
+      if (committed && canvasPath) {
         // Gone from the canvas at once; the rebuilt page confirms it.
         tellCanvas({ type: 'avb:hide-pending', path: canvasPath });
+      }
+      const projectPath = projectRef.current?.path;
+      if (committed && target && projectPath) {
+        // Styles only this element used are offered for removal once it is saved.
+        const host = { projectPath, showToast, pushCommand, saved: () => pageStateRef.current.pageState?.save.tag === 'clean' };
+        void offerStyleCleanup(host, namesInSubtree(target));
       }
       if (removed.dropped.length) {
         const names = removed.dropped;
@@ -444,7 +426,7 @@ export function useRemoveNode(
       // (navigator menu, canvas) leaves what you were working on alone.
       setSelectedId((id) => (id === nodeId ? nextId : id));
     },
-    [commitEdit, showToast, canvasPathForRef, pageStateRef, setSelectedId],
+    [commitEdit, pushCommand, showToast, canvasPathForRef, pageStateRef, projectRef, setSelectedId],
   );
 
   // ----------------------------------------------------------------

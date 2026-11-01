@@ -1,7 +1,7 @@
 // The project's `.stacki/styles.json`: class and id names the unused-selector
-// cleanup must never remove, and remote scripts the owner vouches do not add
-// classes. Both are tracked project settings, shared by Desktop, Studio and the
-// `check-project` command, so every tool answers "may this go?" the same way.
+// cleanup must never remove. It is a tracked project setting, shared by
+// Desktop, Studio and the `check-project` command, so every tool answers "may
+// this go?" the same way.
 import { assert } from '../core/assert';
 import { list, record, text } from '../core/boundary';
 
@@ -10,21 +10,15 @@ export const STYLE_KEEP_LIMITS = {
   patternsMax: 1_000,
   /** Characters in one pattern: a class name with room for a wildcard. */
   patternCharsMax: 128,
-  /** Remote script prefixes one project trusts. */
-  trustedScriptsMax: 64,
-  /** Characters in one trusted script prefix: a URL up to its path. */
-  trustedScriptCharsMax: 512,
 } as const satisfies Record<string, number>;
 
 export interface StyleKeepList {
   readonly version: 1;
   /** Class or id names, `*` matching any run of characters (`is-*`). */
   readonly keep: readonly string[];
-  /** URL prefixes of remote scripts that are known not to add classes. */
-  readonly trustedScripts: readonly string[];
 }
 
-export const EMPTY_KEEP_LIST: StyleKeepList = { version: 1, keep: [], trustedScripts: [] };
+export const EMPTY_KEEP_LIST: StyleKeepList = { version: 1, keep: [] };
 
 // A pattern is a selector name as it appears unescaped in markup. Whitespace,
 // quotes and commas would let one entry silently mean several names.
@@ -39,23 +33,20 @@ export function parseStyleKeepList(input: unknown): StyleKeepList {
   if (keep.length > STYLE_KEEP_LIMITS.patternsMax) {
     throw new Error(`Keep list exceeds ${STYLE_KEEP_LIMITS.patternsMax} patterns`);
   }
-  const trustedScripts = value['trustedScripts'] === undefined ? [] : list(trustedScript)(value['trustedScripts']);
-  if (trustedScripts.length > STYLE_KEEP_LIMITS.trustedScriptsMax) {
-    throw new Error(`Trusted scripts exceed ${STYLE_KEEP_LIMITS.trustedScriptsMax} entries`);
-  }
-  return { version: 1, keep, trustedScripts };
+  // An earlier version also stored `trustedScripts`; scripts no longer affect
+  // the check, so a file that still has the key reads the same and loses it on
+  // its next save.
+  return { version: 1, keep };
 }
 
 /** The keep list as JSON text, in the stable shape a diff reviews easily. */
 export function serializeStyleKeepList(keepList: StyleKeepList): string {
   const keep = [...new Set(keepList.keep)].sort();
-  const trustedScripts = [...new Set(keepList.trustedScripts)].sort();
-  const source = JSON.stringify({ version: 1, keep, trustedScripts }, undefined, 2) + '\n';
+  const source = JSON.stringify({ version: 1, keep }, undefined, 2) + '\n';
   // Pair assertion: what is written must read back as the same list.
   const written: unknown = JSON.parse(source);
   const reread = parseStyleKeepList(written);
   assert(reread.keep.length === keep.length, 'serializeStyleKeepList: keep patterns round-trip');
-  assert(reread.trustedScripts.length === trustedScripts.length, 'serializeStyleKeepList: trusted scripts round-trip');
   return source;
 }
 
@@ -93,18 +84,6 @@ function keepPattern(input: unknown): string {
   }
   if (value.replaceAll('*', '').length === 0) {
     throw new Error('A keep pattern must name more than a wildcard');
-  }
-  return value;
-}
-
-function trustedScript(input: unknown): string {
-  const value = text(input);
-  if (value.length > STYLE_KEEP_LIMITS.trustedScriptCharsMax) {
-    throw new Error('Trusted script prefix is too long');
-  }
-  // A prefix must name a host, or "https://" alone would trust every script.
-  if (!/^https:\/\/[^/\s]+\//.test(value)) {
-    throw new Error('Trusted scripts must be https:// prefixes ending after a host and slash');
   }
   return value;
 }

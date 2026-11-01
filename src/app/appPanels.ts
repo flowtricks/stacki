@@ -13,4 +13,5 @@ export const CmsView = lazyPanel(() => import('../features/cms/CmsView'));
 export const ContentView = lazyPanel(() => import('../features/content/ContentView'));
 export const VariablesPanel = lazyPanel(() => import('../features/variables/VariablesPanel'));
 export const VariablesView = lazyPanel(() => import('../features/variables/VariablesView'));
+export const SelectorsPanel = lazyPanel(() => import('../features/selectors/SelectorsPanel'));
 export const CodePanel = lazyPanel(() => import('../features/code/CodePanel'));

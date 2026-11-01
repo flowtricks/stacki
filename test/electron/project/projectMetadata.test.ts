@@ -38,6 +38,7 @@ const firstSettings = {
   },
   pages: { version: 1, entries: ['about/', 'index.astro'] },
   componentSources: { version: 1, sources: [] },
+  styles: { version: 1, keep: ['is-*'] },
   publish: {
     ...DEFAULT_PUBLISH_CONFIG,
     defaultTarget: 'hosting',

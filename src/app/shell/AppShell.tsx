@@ -39,16 +39,10 @@ import type { HistoryCommit, HistoryCommitFile } from '../../features/history/hi
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { type LeftTab } from '../appTypes';
 import { openExternalURL, restoreProjectFile, restoreProjectVersion } from '../../ipc/appBridge';
-import { CmsPanel, VariablesPanel, CodePanel } from '../appPanels';
-import {
-  CanvasPane,
-  CanvasCovers,
-  OldVersionCover,
-  RightPanel,
-  CodeWindowHost,
-  ConflictNotice,
-  BusyOverlay,
-} from './AppPanes';
+import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel } from '../appPanels';
+import { prewarmSelectorReport } from '../../features/selectors/selectorsBridge';
+import { useEffect } from 'react';
+import { CanvasPane, CanvasCovers, OldVersionCover, RightPanel, CodeWindowHost, ConflictNotice, BusyOverlay } from './AppPanes';
 import type { AppView, ShellView } from '../App';
 
 // The start screen, before a project is open.
@@ -71,6 +65,10 @@ export function WelcomeView({ app }: { readonly app: AppView }) {
 
 // The editor around an open project.
 export function AppShell({ app }: { readonly app: ShellView }) {
+  const projectPath = app.project.path;
+  // The style selectors check reads every project file and installed package;
+  // done once in the background, opening its panel shows a finished report.
+  useEffect(() => prewarmSelectorReport(projectPath), [projectPath]);
   return (
     <div className="app">
       {app.propertySave.phase === 'saving' && (
@@ -395,13 +393,8 @@ export function LeftPanel({ app, tab }: { readonly app: ShellView; readonly tab:
       {tab === 'navigator' && <NavigatorTab app={app} />}
       {tab === 'components' && <PaletteTab app={app} />}
       {tab === 'cms' && <CmsTab app={app} />}
-      {tab === 'variables' && (
-        <VariablesPanel
-          project={app.project}
-          selected={app.varsGroup}
-          onSelect={app.setVarsGroup}
-        />
-      )}
+      {tab === 'variables' && <VariablesPanel project={app.project} selected={app.varsGroup} onSelect={app.setVarsGroup} />}
+      {tab === 'selectors' && <SelectorsPanel project={app.project} showToast={app.showToast} onRecordUndo={app.pushCommand} />}
       {tab === 'code' && <CodeTab app={app} />}
       {tab === 'history' && <HistoryTab app={app} />}
       {tab === 'assets' && (

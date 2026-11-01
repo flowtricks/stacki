@@ -7,6 +7,7 @@ import type { StyleFile } from '../lib/mainTypes';
 import * as path from 'path';
 import * as fs from 'fs';
 import { toPosix } from '../lib/mainHelpers';
+import { isStudioDirectory } from '../lib/studioDirectory';
 
 export const CSS_SKIP_DIRECTORIES = new Set([
   'node_modules',
@@ -133,37 +134,4 @@ export function listAstroStyleFiles(root: string) {
   // keeps the scan off node_modules and build output entirely.
   walk(path.join(root, 'src'), 'src', 0);
   return out.sort((left, right) => left.rel.localeCompare(right.rel));
-}
-
-// Installed Studio contains the editor's own styles, not website declarations.
-// Check its package identity so an unrelated website folder named studio still works.
-function isStudioDirectory(directory: string, name: string): boolean {
-  if (name !== 'studio') {
-    return false;
-  }
-  const manifestBytesMax = 64 * 1024;
-  try {
-    const file = path.join(directory, 'package.json');
-    if (fs.statSync(file).size > manifestBytesMax) {
-      return false;
-    }
-    const bytes = fs.readFileSync(file);
-    if (bytes.length > manifestBytesMax) {
-      return false;
-    }
-    const manifest: unknown = JSON.parse(bytes.toString('utf8'));
-    if (typeof manifest !== 'object') {
-      return false;
-    }
-    if (manifest === null) {
-      return false;
-    }
-    if ('name' in manifest) {
-      return manifest.name === '@stacki/studio';
-    }
-    return false;
-  } catch {
-    // Missing, unreadable or malformed metadata does not identify an editor installation.
-    return false;
-  }
 }

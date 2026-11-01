@@ -210,6 +210,9 @@ function pageBridge() {
     listAstroStyleFiles: invoke('style:listAstroStyles'),
     readStyleFile: invoke('style:readFile'),
     writeStyleFile: invoke('style:writeFile'),
+    selectorUsage: invoke('style:selectorUsage'),
+    removeSelectors: invoke('style:removeSelectors'),
+    restoreSelectors: invoke('style:restoreSelectors'),
 
     // Git:
     gitInfo: invoke('git:info'),

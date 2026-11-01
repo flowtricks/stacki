@@ -106,6 +106,10 @@ test('lock, clean up and undo go through to the project files', async () => {
     for (let attempt = 0; attempt < 50 && rows().length === 0; attempt += 1) {
       await act(async () => settle(40));
     }
+    // It opens on the clean-up: only what can go.
+    assert.deepEqual(rows(), ['.ghost:unused', '.is-open:unused']);
+    assert.match(container.querySelector('.selectors-summary').textContent, /2 unused styles/);
+    await click([...container.querySelectorAll('.selectors-tab')].find((tab) => tab.textContent.startsWith('All')));
     assert.deepEqual(rows(), ['.hero:used', '.ghost:unused', '.is-open:unused']);
 
     const openRow = [...container.querySelectorAll('.selectors-row')].find((row) => row.textContent.includes('.is-open'));
@@ -113,12 +117,12 @@ test('lock, clean up and undo go through to the project files', async () => {
     assert.deepEqual(keepList(root).keep, ['is-open']);
     assert.deepEqual(rows(), ['.hero:used', '.ghost:unused', '.is-open:kept']);
 
-    await click(container.querySelector('[aria-label="Clean up unused styles"]'));
+    await click([...container.querySelectorAll('button')].find((button) => button.textContent.includes('Review')));
     const listed = [...container.querySelectorAll('.selectors-confirm .selectors-chip')].map((chip) => chip.textContent);
     assert.deepEqual(listed, ['.ghost'], 'the confirmation lists only unused selectors');
-    await click([...container.querySelectorAll('button')].find((button) => button.textContent === 'Delete'));
+    await click([...container.querySelectorAll('button')].find((button) => button.textContent === 'Remove style'));
     assert.equal(fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'), '.hero { a: b }\n.is-open { a: b }\n');
-    assert.deepEqual(toasts.at(-1), ['Removed 1 unused selector', 'success']);
+    assert.deepEqual(toasts.at(-1), ['Removed 1 unused style', 'success']);
     assert.deepEqual(rows(), ['.hero:used', '.is-open:kept']);
 
     assert.equal(undos.length, 1);

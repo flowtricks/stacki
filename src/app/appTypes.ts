@@ -41,17 +41,7 @@ export interface AppHistory {
 }
 
 export type ToastKind = 'info' | 'success' | 'error';
-export type LeftTab =
-  | 'pages'
-  | 'navigator'
-  | 'properties'
-  | 'components'
-  | 'assets'
-  | 'cms'
-  | 'variables'
-  | 'code'
-  | 'history'
-  | undefined;
+export type LeftTab = 'pages' | 'navigator' | 'properties' | 'components' | 'assets' | 'cms' | 'variables' | 'selectors' | 'code' | 'history' | undefined;
 export type RightTab = 'style' | 'settings';
 export type DevStatus = 'off' | 'starting' | 'on';
 

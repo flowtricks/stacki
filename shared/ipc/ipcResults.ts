@@ -20,6 +20,7 @@ import type { RepositoryResult } from '../ipc/publishRepository';
 import type { PublishDiscovery } from '../properties/publishDiscovery';
 import type { DesktopPublishState, PublishAvailability } from '../properties/publishState';
 import type { MetadataFile } from '../properties/projectMetadata';
+import type { SelectorRemoval, SelectorReport } from '../properties/selectorUsage';
 import type { ConversionResult } from './assetConversion';
 import type { CommitDiffResult } from './gitCommitDiff';
 import type { StudioStatus, StudioInstallResult } from './studioSetup';
@@ -782,6 +783,9 @@ export interface IpcResults {
   readonly 'style:writeFile': {
     readonly ok: true;
   };
+  readonly 'style:selectorUsage': Result<SelectorReport>;
+  readonly 'style:removeSelectors': Result<SelectorRemoval>;
+  readonly 'style:restoreSelectors': Result<SelectorRemoval>;
   readonly 'watch:start':
     | {
         readonly ok: false;

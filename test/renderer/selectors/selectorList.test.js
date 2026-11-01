@@ -10,7 +10,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const loadRenderer = require('../../helpers/rendererModule.js');
 
-const { selectorCounts, selectorGroups, unusedEntries, exactPatterns } = loadRenderer('src/features/selectors/selectorList.ts');
+const { selectorCounts, selectorGroups, unusedEntries, exactPatterns, unknownReasons, initialFilter } = loadRenderer('src/features/selectors/selectorList.ts');
 const { namesInSubtree, DELETE_CLEANUP_LIMITS } = loadRenderer('src/features/selectors/deleteCleanup.ts');
 
 const entry = (id, rel, selector, verdict) => ({ id, rel, line: 1, selector, scope: 'global', verdict });
@@ -21,13 +21,21 @@ const report = {
     entry('b|0|0|0', 'src/b.astro', '.is-open', { kind: 'kept', names: ['is-open'] }),
     entry('b|0|5|0', 'src/b.astro', '.btn-large', { kind: 'unknown', names: ['btn-large'], reason: 'pieces' }),
     entry('b|0|9|0', 'src/b.astro', 'h1', { kind: 'untracked' }),
+    entry('a|1|0|0', 'src/a.css', '.ghost', { kind: 'unused', names: ['ghost'] }),
+    entry('b|0|20|0', 'src/b.astro', '.w--current', {
+      kind: 'unknown',
+      names: ['w--current'],
+      reason: 'x.astro loads a script',
+      scripts: [{ url: 'https://cdn.example.com/lib/x.js', rel: 'src/x.astro', trust: 'https://cdn.example.com/lib/' }],
+    }),
   ],
   notes: [],
   files: [],
 };
 
-test('counts each verdict once and filters by verdict and search', () => {
-  assert.deepEqual(selectorCounts(report), { all: 5, unused: 1, unknown: 1, kept: 1 });
+test('lists each selector once per file, skips ones a clean-up never touches, and filters', () => {
+  assert.deepEqual(selectorCounts(report), { all: 5, unused: 1, unknown: 2, kept: 1 }, 'h1 is not listed; the second .ghost rule is the same row');
+  assert.equal(initialFilter(report), 'unused');
   assert.deepEqual(
     selectorGroups(report, 'all', '').map((group) => [group.rel, group.entries.length]),
     [
@@ -46,12 +54,23 @@ test('counts each verdict once and filters by verdict and search', () => {
   assert.deepEqual(selectorGroups(report, 'kept', 'hero'), []);
 });
 
-test('only unused entries are offered for clean-up, and only exact keep patterns unlock', () => {
+test('"can\u2019t tell" is grouped by reason, largest first', () => {
+  const reasons = unknownReasons(report, '');
+  assert.deepEqual(
+    reasons.map((group) => [group.reason, group.entries.length]),
+    [
+      ['pieces', 1],
+      ['x.astro loads a script', 1],
+    ],
+  );
+});
+
+test('a clean-up removes every rule of an unused selector, and only exact keep patterns unlock', () => {
   assert.deepEqual(
     unusedEntries(report).map((item) => item.id),
-    ['a|0|9|0'],
+    ['a|0|9|0', 'a|1|0|0'],
   );
-  const keepList = { version: 1, keep: ['is-*', 'hero-badge'], trustedScripts: [] };
+  const keepList = { version: 1, keep: ['is-*', 'hero-badge'] };
   assert.deepEqual(exactPatterns(keepList, ['hero-badge']), ['hero-badge']);
   assert.deepEqual(exactPatterns(keepList, ['is-open']), [], 'a wildcard is edited in the file, not unlocked per name');
 });

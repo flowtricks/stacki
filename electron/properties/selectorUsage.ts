@@ -39,6 +39,7 @@ import {
   type MentionHits,
   type MentionInterest,
 } from './selectorMentions';
+import { linkedSites } from './selectorFlow';
 import { cssFileRegion, readRegionRules, type AstroSheet, type RuleSelector, type StyleRegion } from './selectorSheets';
 
 export interface ProjectText {
@@ -188,7 +189,7 @@ function hitsFor(region: StyleRegion, sheet: AstroSheet | undefined, scans: Proj
 function verdictOf(
   rule: RuleSelector,
   hits: MentionHits,
-  taint: string | undefined,
+  taint: Weakness | undefined,
   unanswered: MentionInterest | undefined,
   keep: (name: string) => boolean,
 ): SelectorVerdict {
@@ -200,7 +201,7 @@ function verdictOf(
     return { kind: 'used' };
   }
   if (taint !== undefined) {
-    return { kind: 'unknown', names: absent, reason: taint };
+    return { kind: 'unknown', names: absent, reason: taint.reason };
   }
   // A name a package search has not answered yet is neither dead nor alive.
   const waiting = unanswered === undefined ? [] : absent.filter((name) => asksAbout(unanswered, name));
@@ -226,16 +227,21 @@ function verdictOf(
   return { kind: 'kept', names: absent };
 }
 
-interface ProjectTaint {
-  /** Breaks every proof: code the scan cannot see may add any class. */
-  readonly everything: string | undefined;
-  /** Breaks global proofs: HTML whose classes are not on disk. */
-  readonly injected: string | undefined;
-  /** Breaks proofs for components that compute classes: values that are not on disk. */
-  readonly remote: string | undefined;
+/** Why a proof is weakened. */
+interface Weakness {
+  readonly reason: string;
 }
 
-function taintFor(region: StyleRegion, sheet: AstroSheet | undefined, taint: ProjectTaint): string | undefined {
+interface ProjectTaint {
+  /** Breaks every proof: code the scan cannot see may add any class. */
+  readonly everything: Weakness | undefined;
+  /** Breaks global proofs: HTML whose classes are not on disk. */
+  readonly injected: Weakness | undefined;
+  /** Breaks proofs for components that compute classes: values that are not on disk. */
+  readonly remote: Weakness | undefined;
+}
+
+function taintFor(region: StyleRegion, sheet: AstroSheet | undefined, taint: ProjectTaint): Weakness | undefined {
   if (taint.everything !== undefined) {
     return taint.everything;
   }
@@ -248,12 +254,26 @@ function taintFor(region: StyleRegion, sheet: AstroSheet | undefined, taint: Pro
   return undefined;
 }
 
-const INJECTION = /\bset:html\b|\binnerHTML\b|\bouterHTML\b|\binsertAdjacentHTML\b|\bcreateContextualFragment\b|\bDOMParser\b|\bdocument\.write\b/;
-const REMOTE_DATA = /\bfetch\s*\(|\bXMLHttpRequest\b|\bnew\s+WebSocket\b|\bnew\s+EventSource\b|\bcreateClient\s*\(/;
-// A class set from a value rather than a literal, in a script.
-const SCRIPT_CLASS_SINK =
-  /classList\s*\.\s*(?:add|toggle|replace)\s*\(\s*[^'"`\s)]|\bclassName\s*=(?!=)\s*[^'"`\s]|setAttribute\s*\(\s*['"]class['"]\s*,\s*[^'"`\s]/;
-const REMOTE_SCRIPT = /<script\b[^>]*?\bsrc\s*=\s*["']?((?:https?:)?\/\/[^"'\s>]+)|\bimport\s*(?:\(\s*|[^'"`;]*?\bfrom\s*)["'`](https?:\/\/[^"'`]+)/gi;
+const SET_HTML = /\bset:html\b/;
+const REMOTE_CHANNEL = /\bXMLHttpRequest\b|\bnew\s+WebSocket\b|\bnew\s+EventSource\b|\bcreateClient\s*\(/;
+const FETCH = /\bfetch\s*\(\s*/g;
+
+// Data from outside the project. A fetch of the site's own path (`/search.json`,
+// `./data.json`) returns what the project itself serves, which is already read;
+// any other fetch — a URL, or a value — may not be.
+function loadsRemoteData(text: string): boolean {
+  if (REMOTE_CHANNEL.test(text)) {
+    return true;
+  }
+  FETCH.lastIndex = 0;
+  for (let match = FETCH.exec(text); match !== null; match = FETCH.exec(text)) {
+    const argument = text.slice(match.index + match[0].length, match.index + match[0].length + 4);
+    if (!/^['"`](?:\/(?!\/)|\.\.?\/)/.test(argument)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 // Only code that can run can insert HTML, load data or add classes: prose that
 // mentions `innerHTML` and type declarations that mention `fetch` do neither.
@@ -284,34 +304,42 @@ function runnable(text: ProjectText): boolean {
 
 function taintOf(input: UsageInput, packages: PackageScan): ProjectTaint {
   const texts: ProjectText[] = [...input.others.filter(runnable), ...input.astro.map((sheet) => ({ rel: sheet.rel, text: sheet.ownText }))];
-  let everything: string | undefined;
+  // Every weakness at once, so settling one does not just reveal the next.
+  const weaknesses: Weakness[] = [];
   if (input.unreadable.length > 0) {
     const first = input.unreadable[0];
     assert(first !== undefined, 'taintOf: the list is not empty');
-    everything = `${first.rel} could not be read`;
+    weaknesses.push({ reason: `${first.rel} could not be read` });
   }
   if (packages.kind === 'incomplete') {
-    everything ??= packages.reason;
+    weaknesses.push({ reason: packages.reason });
   }
-  const remoteScript = firstRemoteScript(texts, input.keepList.trustedScripts);
-  if (remoteScript !== undefined) {
-    everything ??= `${remoteScript.rel} loads ${remoteScript.url}, which may add classes`;
-  }
-  const remote = firstMatch(texts, REMOTE_DATA) ?? firstRemoteLoader(texts);
-  const sink = firstMatch(texts, SCRIPT_CLASS_SINK);
-  if (remote !== undefined) {
-    if (sink !== undefined) {
-      everything ??= `${sink} sets classes from values, and ${remote} loads data from outside the project`;
+  // Classes a script adds at runtime are not tracked: a script's own class
+  // names count as mentions (so their rules stay), and nothing a script does
+  // — remote or local — weakens a verdict. Outside data matters only where it
+  // reaches a template, through set:html or a computed class (selectorFlow.ts).
+  const flowTexts = flowParts(input);
+  const remotes = flowTexts.filter((text) => loadsRemoteData(text.text)).map((text) => text.rel);
+  // A package loader's entries reach every page through `astro:content`, not
+  // through an import of the config, so it is linked to every site.
+  const loader = firstRemoteLoader(texts);
+  const flowTo = (sites: readonly string[]): { readonly from: string; readonly to: string } | undefined => {
+    const first = sites[0];
+    if (loader !== undefined && first !== undefined) {
+      return { from: loader, to: first };
     }
-  }
+    return linkedSites(flowTexts, remotes, sites);
+  };
+  const injectFlow = flowTo(input.astro.filter((sheet) => SET_HTML.test(serverText(sheet.ownText))).map((sheet) => sheet.rel));
+  const computedFlow = flowTo(input.astro.filter((sheet) => sheet.dynamicClass).map((sheet) => sheet.rel));
   // Inserted HTML built from props and content in the project's own files has
   // its classes in those files, which are already read. Only HTML that can
   // come from outside the project hides classes.
-  const injectedIn = remote === undefined ? undefined : firstMatch(texts, INJECTION);
   return {
-    everything,
-    injected: injectedIn === undefined ? undefined : `${injectedIn} inserts HTML, and ${remote} loads data from outside the project`,
-    remote: remote === undefined ? undefined : `${remote} loads data from outside the project, and classes are computed`,
+    everything: combined(weaknesses),
+    injected: injectFlow === undefined ? undefined : { reason: `${injectFlow.to} inserts HTML that ${injectFlow.from} can supply from outside the project` },
+    remote:
+      computedFlow === undefined ? undefined : { reason: `${computedFlow.to} computes classes from data ${computedFlow.from} loads from outside the project` },
   };
 }
 
@@ -326,8 +354,9 @@ function firstRemoteLoader(texts: readonly ProjectText[]): string | undefined {
     if (!CONTENT_CONFIG.test(text.rel)) {
       continue;
     }
-    for (const match of text.text.matchAll(/\bfrom\s*['"]([^'"]+)['"]/g)) {
-      const specifier = match[1] ?? '';
+    // Import statements only: a schema field named "from" is not an import.
+    for (const match of text.text.matchAll(/^\s*import\b[^;'"]*?\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]/gm)) {
+      const specifier = match[1] ?? match[2] ?? '';
       const bare = !specifier.startsWith('.') && !specifier.startsWith('/');
       if (bare && !specifier.startsWith('astro:') && !LOCAL_LOADERS.has(specifier)) {
         return text.rel;
@@ -337,23 +366,24 @@ function firstRemoteLoader(texts: readonly ProjectText[]): string | undefined {
   return undefined;
 }
 
-function firstMatch(texts: readonly ProjectText[], pattern: RegExp): string | undefined {
-  return texts.find((text) => pattern.test(text.text))?.rel;
+function combined(weaknesses: readonly Weakness[]): Weakness | undefined {
+  if (weaknesses.length === 0) {
+    return undefined;
+  }
+  return { reason: weaknesses.map((weakness) => weakness.reason).join('; and ') };
 }
 
-function firstRemoteScript(texts: readonly ProjectText[], trusted: readonly string[]): { readonly rel: string; readonly url: string } | undefined {
-  for (const text of texts) {
-    REMOTE_SCRIPT.lastIndex = 0;
-    for (let match = REMOTE_SCRIPT.exec(text.text); match !== null; match = REMOTE_SCRIPT.exec(text.text)) {
-      const written = match[1] ?? match[2];
-      assert(written !== undefined, 'firstRemoteScript: one alternative matched');
-      const url = written.startsWith('//') ? `https:${written}` : written;
-      if (!trusted.some((prefix) => url.startsWith(prefix))) {
-        return { rel: text.rel, url };
-      }
-    }
-  }
-  return undefined;
+// For data flow a component is its frontmatter and template, which run on the
+// server and pass props down through imports. Its <script> runs in the browser
+// and never reaches a template, so script bodies are left out.
+const SCRIPT_BLOCK = /(<script\b[^>]*>)([\s\S]*?)(<\/script\s*>)/gi;
+
+function serverText(text: string): string {
+  return text.replace(SCRIPT_BLOCK, (_match, open: string, body: string, close: string) => open + body.replace(/[^\n]/g, ' ') + close);
+}
+
+function flowParts(input: UsageInput): readonly ProjectText[] {
+  return [...input.others.filter(runnable), ...input.astro.map((sheet) => ({ rel: sheet.rel, text: serverText(sheet.ownText) }))];
 }
 
 function readRules(regions: readonly StyleRegion[], notes: SelectorNote[]): RuleSelector[] {

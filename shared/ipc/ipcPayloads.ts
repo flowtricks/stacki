@@ -25,6 +25,7 @@ import { parseCanvasCreate, defaultsCanvasFile } from '../properties/defaultsCan
 import { parseDiscoveryRequest } from '../properties/publishDiscovery';
 import { parsePublishCommitMessage, parsePublishTarget } from '../properties/publishConfig';
 import { metadataKind, parseMetadataWrite } from '../properties/projectMetadata';
+import { parseSelectorFileChanges, parseSelectorFileDigests, parseSelectorIds } from '../properties/selectorUsage';
 import { parseCreatePackageManager } from '../properties/packageManager';
 import { parseImageFormat, parseImagePath } from './assetConversion';
 import { parseGitHubRepository } from './githubRepository';
@@ -73,6 +74,21 @@ const nothing = (input: unknown): undefined => {
   return undefined;
 };
 const maybeText = optional(nullable(text));
+// `cached` answers at once from what earlier searches of installed packages
+// found; `search` reads the packages for anything not yet answered.
+function packageSearch(input: unknown): 'cached' | 'search' {
+  if (input === 'cached' || input === 'search') {
+    return input;
+  }
+  throw new Error('Unknown package search mode');
+}
+// Undo writes a cleanup's `before` text back; redo writes its `after` again.
+function restoreDirection(input: unknown): 'before' | 'after' {
+  if (input === 'before' || input === 'after') {
+    return input;
+  }
+  throw new Error('Unknown restore direction');
+}
 const maybePath = optional(nullable(pathText));
 // The renderer sends no target as a missing field or as `null`.
 const cssTarget = (input: unknown): string | undefined => {
@@ -417,6 +433,9 @@ export const IPC_PAYLOADS = {
   'style:listFiles': pathText,
   'style:readFile': pathText,
   'style:writeFile': object({ filePath: pathText, css: text }),
+  'style:selectorUsage': object({ ...project, packages: optional(packageSearch) }),
+  'style:removeSelectors': object({ ...project, ids: parseSelectorIds, files: parseSelectorFileDigests }),
+  'style:restoreSelectors': object({ ...project, changes: parseSelectorFileChanges, to: restoreDirection }),
   'terminal:clipboardImage': object({ bytes: imageBytes, mime: text }),
   'terminal:close': object({ id: text }),
   'terminal:resize': object({ id: text, cols: terminalDimension, rows: terminalDimension }),

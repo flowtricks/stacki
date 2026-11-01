@@ -141,6 +141,17 @@ const fields = {
 };
 
 const metadataSamples: Readonly<Record<string, unknown>> = {
+  'style:selectorUsage': { projectPath: '/site' },
+  'style:removeSelectors': {
+    projectPath: '/site',
+    ids: ['src/styles/site.css|0|0|0'],
+    files: [{ rel: 'src/styles/site.css', digest: 'a'.repeat(64) }],
+  },
+  'style:restoreSelectors': {
+    projectPath: '/site',
+    changes: [{ rel: 'src/styles/site.css', before: '.a {}', after: '' }],
+    to: 'before',
+  },
   'cmsRemote:create': {
     projectPath: '/site',
     connectionId: '00000000-0000-4000-8000-000000000000',

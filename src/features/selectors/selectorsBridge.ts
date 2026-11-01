@@ -89,7 +89,7 @@ export async function readKeepList(projectPath: string): Promise<StoredKeepList>
   return { keepList: parseStyleKeepList(input), source: stored.source };
 }
 
-/** Add or remove names, against the file as it was read; a concurrent edit is refused. */
+/** Add or remove names against the file as it was read; a concurrent edit is refused. */
 export async function updateKeepList(
   projectPath: string,
   stored: StoredKeepList,
@@ -97,7 +97,7 @@ export async function updateKeepList(
 ): Promise<StoredKeepList> {
   const removed = new Set(change.remove);
   const keep = [...stored.keepList.keep.filter((pattern) => !removed.has(pattern)), ...change.add];
-  const keepList = parseStyleKeepList({ ...stored.keepList, keep });
+  const keepList = parseStyleKeepList({ version: 1, keep });
   const source = serializeStyleKeepList(keepList);
   const saved = await writeMetadata(projectPath, stored.source === undefined ? { kind: 'styles', source } : { kind: 'styles', source, base: stored.source });
   return { keepList, source: saved.source ?? source };

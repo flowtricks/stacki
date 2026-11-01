@@ -94,6 +94,9 @@ interface InvokeChannels {
   readonly listAstroStyleFiles: 'style:listAstroStyles';
   readonly readStyleFile: 'style:readFile';
   readonly writeStyleFile: 'style:writeFile';
+  readonly selectorUsage: 'style:selectorUsage';
+  readonly removeSelectors: 'style:removeSelectors';
+  readonly restoreSelectors: 'style:restoreSelectors';
   readonly gitInfo: 'git:info';
   readonly ghStatus: 'git:ghStatus';
   readonly gitInit: 'git:init';

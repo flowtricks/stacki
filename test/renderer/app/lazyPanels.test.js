@@ -52,6 +52,7 @@ const LAZY_PANELS = [
   'ContentView',
   'VariablesPanel',
   'VariablesView',
+  'SelectorsPanel',
   'CodePanel',
 ];
 const LAZY_IMPORT = /lazyPanel\(\(\) => import\('([^']+)'\)\)/g;
@@ -96,6 +97,7 @@ test('all optional editors load without hiding the app or replacing its preview'
     assertPending(context, 'PropsPanel');
     await releasePanel(context, 'PropsPanel');
     await checkVariables(context);
+    await checkSelectors(context);
     await checkCMS(context);
     await checkCodePanel(context);
     await checkCodeWindow(context);
@@ -107,6 +109,13 @@ test('all optional editors load without hiding the app or replacing its preview'
     delete global.__lazyPanels;
   }
 });
+
+async function checkSelectors(context) {
+  await context.act(() => railButton(6).click());
+  assertPending(context, 'SelectorsPanel');
+  await releasePanel(context, 'SelectorsPanel');
+  assert.equal(__lazyPanels.SelectorsPanel.project.path, '/project');
+}
 
 async function checkVariables(context) {
   await context.act(() => railButton(5).click());
@@ -124,7 +133,7 @@ async function checkVariables(context) {
 }
 
 async function checkCodePanel(context) {
-  await context.act(() => railButton(6).click());
+  await context.act(() => railButton(7).click());
   assertPending(context, 'CodePanel');
   await releasePanel(context, 'CodePanel');
   assert.equal(__lazyPanels.CodePanel.relativePath, 'src/pages/index.astro');
@@ -144,14 +153,8 @@ async function checkCodePanel(context) {
       }),
     );
   });
-  assert.ok(
-    document.querySelector('[data-test-panel="CodePanel"]'),
-    'canvas selection keeps the code panel open',
-  );
-  const changed = __lazyPanels.CodePanel.source.replace(
-    '<main>Content</main>',
-    '<main><h1>Changed</h1></main>',
-  );
+  assert.ok(document.querySelector('[data-test-panel="CodePanel"]'), 'canvas selection keeps the code panel open');
+  const changed = __lazyPanels.CodePanel.source.replace('<main>Content</main>', '<main><h1>Changed</h1></main>');
   await context.act(async () => {
     await __lazyPanels.CodePanel.onChange(changed, changed.indexOf('<h1>') + 2);
   });
@@ -159,10 +162,7 @@ async function checkCodePanel(context) {
   await context.act(() => new Promise((resolve) => setTimeout(resolve, 200)));
   assert.equal(context.bridge.codeSaves, 1, 'typed code is saved as a patch (step 8)');
   assert.equal(context.bridge.disk(), changed, 'the patch leaves exactly the typed text');
-  assert.ok(
-    document.querySelector('.property-saving-overlay') === null,
-    'visual edits are enabled',
-  );
+  assert.ok(document.querySelector('.property-saving-overlay') === null, 'visual edits are enabled');
   await context.act(() => new Promise((resolve) => setTimeout(resolve, 200)));
   await context.act(() => __lazyPanels.PropsPanel.onSetContent('Visual edit'));
   await context.act(() => new Promise((resolve) => setTimeout(resolve, 350)));

@@ -328,7 +328,7 @@ batching/queueing write path (already the right shape).
 | `electron/parse/` | The Astro and Markdown parsers (unpacked: the dev server loads them) |
 | `electron/documents/` | The write path: document actors, edit requests, atomic writes |
 | `electron/content/` | Content collections and CMS references; `formats/` parsers, `workers/` |
-| `electron/properties/` | Component properties: definitions, consumers, renames |
+| `electron/properties/` | Component properties: definitions, consumers, renames; which selectors nothing uses |
 | `electron/project/` | Scaffolding, the watcher, thumbnails, assets, CSS variables |
 | `electron/git/`, `preview/`, `terminal/` | Git; the dev server and preview worktree; the terminal |
 | `electron/previewServer/` | Modules the project's own dev server runs (unpacked) |

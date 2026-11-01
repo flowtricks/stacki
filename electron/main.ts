@@ -76,6 +76,7 @@ import { registerPreviewHandlers } from './handlers/previewHandlers';
 import { registerProjectHandlers } from './handlers/projectHandlers';
 import { registerProjectScanHandlers } from './handlers/projectScanHandlers';
 import { registerStyleSourceHandlers } from './handlers/styleSourceHandlers';
+import { registerSelectorHandlers } from './handlers/selectorHandlers';
 
 // The facade keeps native Electron registration behind a parsed payload boundary.
 const ipcMain = { handle: createIpcRegistrar(nativeIpcMain) };
@@ -969,5 +970,6 @@ registerStudioHandlers(
 );
 registerProjectScanHandlers(host);
 registerStyleSourceHandlers(host);
+registerSelectorHandlers(host);
 registerDevServerHandlers({ ipcMain, devServers, thumbnails });
 registerThumbnailHandlers({ ipcMain, thumbnails, userDataPath: () => app.getPath('userData') });

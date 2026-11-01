@@ -705,6 +705,31 @@ restore the previous order and offer a reload in a toast. Reads and drag payload
 bounded parser. Desktop retains move-into-folder drops on folder rows. Pages and Navigator
 use `src/ui/TreeDragDrop` for gap targets, row feedback, and drag cancellation.
 
+`.stacki/styles.json` contains `{ version: 1, keep: [...] }` (`shared/properties/styleKeepList.ts`).
+`keep` lists class or id names, `*` matching any run of characters, that the unused-selector
+clean-up never removes. The style selectors panel writes it through `project:writeMetadata`
+against the bytes it read. A `trustedScripts` key from an earlier version is read and dropped.
+
+The unused-selector check (`electron/properties/selector*.ts`) reports through
+`style:selectorUsage` as a `SelectorReport` (`shared/properties/selectorUsage.ts`). A verdict
+is `unused` only when no project text, installed package or code that assembles class names
+can produce a name the selector requires. Classes a script adds at runtime are not tracked: a
+script's class names count as mentions, and no script, remote or local, weakens a verdict.
+What does is `unknown` with a reason, never removed: outside data that an import chain carries
+to a template's `set:html` or computed `class` (`electron/properties/selectorFlow.ts`; a fetch
+of the site's own path is not outside data, and a package content loader reaches every page),
+unread files, and missing `node_modules`. `<style>` blocks are located by the editor's parser,
+or by a bounded template scanner for files it cannot represent — never by Astro's compiler,
+which aborts the process on very large files. CSS is read the way a browser recovers: a missing
+semicolon, a dropped declaration and a block left open at the end are repaired in a copy, with
+offsets mapped back to the original. Installed Studio folders and stylesheets outside `src/`,
+`public/` and `styles/` are not checked. `style:removeSelectors` re-runs the check and refuses
+ids that are no longer `unused` or files whose digest changed; it verifies each edited region
+re-parses with exactly the removed selectors gone and no byte changed outside its style blocks,
+writes through the document actors, and returns each file's before and after text.
+`style:restoreSelectors` writes one side back, refusing a file that no longer holds the other.
+`astro-studio check-project` prints the same report.
+
 `project:metadata` and `project:writeMetadata` accept only registered metadata kinds.
 Desktop confines them to the open project and writes through the document actors against
 the supplied base. Studio exposes the same records through `/studio/api/metadata`, its

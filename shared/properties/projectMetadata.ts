@@ -6,6 +6,7 @@ import { parsePublishSource } from '../properties/publishConfig';
 import { object, optional, record, text, boolean } from '../core/boundary';
 import { parseComponentDefaults, DEFAULT_LIMITS } from './componentDefaults';
 import type { Result } from '../core/result';
+import { parseStyleKeepList } from './styleKeepList';
 
 export const METADATA_FILES = {
   componentSources: COMPONENT_SOURCE_FILE,
@@ -13,6 +14,7 @@ export const METADATA_FILES = {
   guide: '.stacki/guide.json',
   pages: '.stacki/pages.json',
   publish: '.stacki/publish.json',
+  styles: '.stacki/styles.json',
 } as const;
 export type MetadataKind = keyof typeof METADATA_FILES;
 export interface MetadataFile {
@@ -22,7 +24,7 @@ export function metadataKind(input: unknown): MetadataKind {
   if (input === 'componentSources') {
     return input;
   }
-  if (input === 'components' || input === 'guide' || input === 'publish' || input === 'pages') {
+  if (input === 'components' || input === 'guide' || input === 'publish' || input === 'pages' || input === 'styles') {
     return input;
   }
   throw new Error('Unknown project metadata file');
@@ -61,6 +63,10 @@ export function validateMetadata(kind: MetadataKind, source: string): void {
   }
   if (kind === 'pages') {
     parsePageOrder(input);
+    return;
+  }
+  if (kind === 'styles') {
+    parseStyleKeepList(input);
     return;
   }
   if (kind === 'components') {

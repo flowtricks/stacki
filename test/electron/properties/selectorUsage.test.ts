@@ -103,14 +103,19 @@ test('installed packages count, and missing packages make nothing unused', async
   assert.ok(verdict.kind === 'unknown' && /not installed/.test(verdict.reason));
 });
 
-test('HTML insertion, remote scripts and remote data weaken exactly the proofs they can break', async () => {
+test('outside data weakens a proof only where it reaches a template; scripts never do', async () => {
   const css = { 'src/styles/global.css': '.stray { a: b }\n', 'src/components/A.astro': page('<div class="a">x</div>', '<style>\n.gone { a: b }\n</style>') };
   const local = await report(project({ ...css, 'src/pages/blog.astro': page('<article set:html={post.html} />') }));
   assert.equal(verdictOf(local, '.stray').kind, 'unused', 'HTML from the project’s own files has its classes in them');
   const fetched = {
+    'src/pages/blog.astro': "---\nimport { posts } from '../lib/cms';\n---\n<article set:html={posts} />\n",
+    'src/lib/cms.ts': "export const posts = await fetch('https://cms.example.com');\n",
+  };
+  const unlinked = {
     'src/pages/blog.astro': page('<article set:html={post.html} />'),
     'src/lib/cms.ts': "export const posts = await fetch('https://cms.example.com');\n",
   };
+  assert.equal(verdictOf(await report(project({ ...css, ...unlinked })), '.stray').kind, 'unused', 'data that never reaches the inserted HTML hides nothing');
   const injected = await report(project({ ...css, ...fetched }));
   assert.equal(verdictOf(injected, '.stray').kind, 'unknown');
   assert.equal(verdictOf(injected, '.gone').kind, 'unused', 'inserted HTML never carries a component scope');
@@ -119,16 +124,29 @@ test('HTML insertion, remote scripts and remote data weaken exactly the proofs t
     'src/content.config.ts': "import { notionLoader } from 'notion-astro-loader';\nimport { glob } from 'astro/loaders';\n",
   };
   assert.equal(verdictOf(await report(project({ ...css, ...loader })), '.stray').kind, 'unknown', 'a package loader brings outside data');
+  const localConfig = {
+    'src/pages/blog.astro': page('<article set:html={post.html} />'),
+    'src/content.config.ts': 'import { file } from \'astro/loaders\';\nconst schema = z.object({ "from": z.string(), "to": z.string() });\n',
+  };
+  assert.equal(verdictOf(await report(project({ ...css, ...localConfig })), '.stray').kind, 'unused', 'a field named "from" is not an import');
 
+  // A script's classes are runtime state, not tracked: a remote script, or a
+  // script setting classes from fetched values, leaves every verdict alone.
   const remoteScript = page('<div />', '<script src="https://cdn.example.com/lib.js"></script>');
-  const external = await report(project({ ...css, 'src/pages/x.astro': remoteScript }));
-  assert.equal(verdictOf(external, '.gone').kind, 'unknown');
-  const trusted = parseStyleKeepList({ version: 1, trustedScripts: ['https://cdn.example.com/'] });
-  assert.equal(verdictOf(await report(project({ ...css, 'src/pages/x.astro': remoteScript }), trusted), '.gone').kind, 'unused');
-
-  const remoteSink = { 'src/scripts/a.ts': "const r = await fetch('/x');\nconst v = await r.text();\ndocument.body.classList.add(v);\n" };
-  const sunk = await report(project({ ...css, ...remoteSink }));
-  assert.equal(verdictOf(sunk, '.gone').kind, 'unknown');
+  assert.equal(verdictOf(await report(project({ ...css, 'src/pages/x.astro': remoteScript })), '.stray').kind, 'unused');
+  const remoteSink = {
+    'src/scripts/a.ts': "const r = await fetch('https://api.example.com/x');\nconst v = await r.text();\ndocument.body.classList.add(v);\nel.innerHTML = v;\n",
+  };
+  assert.equal(verdictOf(await report(project({ ...css, ...remoteSink })), '.stray').kind, 'unused');
+  const apart = {
+    'src/components/Copy.astro': page('<div />', "<script>const r = await fetch('/ai');</script>"),
+    'src/layouts/Layout.astro': page('<div />', '<script>const c = name(); document.body.classList.add(c);</script>'),
+  };
+  assert.equal(verdictOf(await report(project({ ...css, ...apart })), '.gone').kind, 'unused', 'two components’ scripts share no data');
+  const ownIndex = {
+    'src/components/Search.astro': page('<div />', "<script>const r = await fetch('/search.json'); list.innerHTML = r; el.classList.add(r.kind);</script>"),
+  };
+  assert.equal(verdictOf(await report(project({ ...css, ...ownIndex })), '.stray').kind, 'unused', 'the site’s own files are not outside data');
   const fetchOnly = await report(project({ ...css, 'src/scripts/a.ts': "await fetch('/api/contact', { method: 'POST' });\n" }));
   assert.equal(verdictOf(fetchOnly, '.gone').kind, 'unused', 'a form post sets no classes');
 });
@@ -143,8 +161,9 @@ test('the keep list protects names, and patterns match whole names', async () =>
   assert.throws(() => parseStyleKeepList({ version: 1, keep: ['*'] }), /more than a wildcard/);
   assert.throws(() => parseStyleKeepList({ version: 1, keep: ['a b'] }), /whitespace/);
   assert.throws(() => parseStyleKeepList({ version: 2 }), /version/);
-  assert.throws(() => parseStyleKeepList({ version: 1, trustedScripts: ['https://'] }), /prefixes/);
-  assert.equal(serializeStyleKeepList(keepList), '{\n  "version": 1,\n  "keep": [\n    "hero-badge",\n    "is-*"\n  ],\n  "trustedScripts": []\n}\n');
+  // A file from before scripts stopped mattering still reads, and loses the key on save.
+  assert.deepEqual(parseStyleKeepList({ version: 1, keep: ['a'], trustedScripts: ['https://x.com/'] }), { version: 1, keep: ['a'] });
+  assert.equal(serializeStyleKeepList(keepList), '{\n  "version": 1,\n  "keep": [\n    "hero-badge",\n    "is-*"\n  ]\n}\n');
 });
 
 test('only top-level names are requirements; keyframes, comments and other languages are left alone', async () => {
@@ -256,11 +275,36 @@ test('a missing semicolon is read past, and a clean-up edits the original bytes'
     fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'),
     '@keyframes out {\n  0% {\n    opacity: 1\n    transform: none;\n  }\n}\n.keep { color: red }\n',
   );
-  const broken = project({ 'src/styles/global.css': '.open { color: red\n' });
+  const broken = project({ 'src/styles/global.css': '.open { color: red }\n} .stray { x: y }\n' });
   assert.ok(
     (await report(broken)).notes.some((note) => /could not be read/.test(note.message)),
-    'an unclosed block still stops the check',
+    'a stray } at the top level still stops the check',
   );
+});
+
+test('declarations browsers drop and blocks they close are read the way a browser reads them', async () => {
+  const css = '.live {\n\tcolor: red;\n\t// pointer-events: none;\n}\n@container (width < 20em) {\n\t.gone-inside { a: b }\n]\n';
+  const root = project({ 'src/styles/global.css': css, 'src/pages/index.astro': page('<p class="live">x</p>') });
+  const analysis = await checkSelectorUsage(root, EMPTY_KEEP_LIST);
+  assert.deepEqual(analysis.report.notes, []);
+  assert.deepEqual(kinds(analysis.report), { '.live': 'used', '.gone-inside': 'unused' });
+  const ids = analysis.report.entries.filter((entry) => entry.verdict.kind === 'unused').map((entry) => entry.id);
+  const result = await removeUnusedSelectors(root, EMPTY_KEEP_LIST, { ids, files: analysis.report.files });
+  assert.ok(result.ok, JSON.stringify(result));
+  // The emptied @container goes to the end of the sheet, where the browser closed it.
+  assert.equal(fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'), '.live {\n\tcolor: red;\n\t// pointer-events: none;\n}\n');
+});
+
+test('a component the visual editor cannot represent still has its <style> blocks read', async () => {
+  // A `{` inside an attribute string makes the editor's parser give up; the
+  // template scanner skips quoted values and still finds the block inside the
+  // {visible && (…)} wrapper Webflow exports use.
+  const source =
+    '---\nconst visible = true;\n---\n{visible && (<div class="card" data-x="{">\n<style is:inline>\n.card { a: b }\n.orphan { a: b }\n</style>\n</div>)}\n';
+  const root = project({ 'src/components/Card.astro': source });
+  const result = await report(root);
+  assert.deepEqual(result.notes, []);
+  assert.deepEqual(kinds(result), { '.card': 'used', '.orphan': 'unused' });
 });
 
 test('a cached-only check says "checking" until installed packages are searched', async () => {
@@ -277,13 +321,11 @@ test('a cached-only check says "checking" until installed packages are searched'
   assert.deepEqual(kinds(later), kinds(full), 'once searched, the cached check is complete');
 });
 
-test('HTML that Astro never serves cannot weaken a proof, but still counts as a mention', async () => {
+test('HTML outside the site, like an old export, still counts as a mention', async () => {
   const exported = '<html><script src="https://cdn.example.com/jquery.js"></script><div class="kept-by-export"></div></html>';
   const root = project({
     'old-site/export/index.html': exported,
     'src/styles/global.css': '.kept-by-export { a: b }\n.gone { a: b }\n',
   });
   assert.deepEqual(kinds(await report(root)), { '.kept-by-export': 'used', '.gone': 'unused' });
-  const served = project({ 'public/legacy.html': exported, 'src/styles/global.css': '.gone { a: b }\n' });
-  assert.equal(verdictOf(await report(served), '.gone').kind, 'unknown', 'public/ HTML is served, so its script counts');
 });

@@ -1,16 +1,8 @@
 import { PropertiesIcon } from '../features/componentProperties/PropertiesIcon';
 import type { MouseEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import {
-  PagePanelIcon,
-  NavigatorIcon,
-  ComponentFillIcon,
-  AssetManagerIcon,
-  CmsIcon,
-  VariableIcon,
-  CodeIcon,
-  HistoryIcon,
-} from '../ui/Icons';
+import { StyleSelectorsIcon } from '../features/selectors/SelectorIcons';
+import { PagePanelIcon, NavigatorIcon, ComponentFillIcon, AssetManagerIcon, CmsIcon, VariableIcon, CodeIcon, HistoryIcon } from '../ui/Icons';
 
 const TABS = [
   { id: 'pages', title: 'Pages', shortcut: 'P', Icon: PagePanelIcon },
@@ -20,6 +12,7 @@ const TABS = [
   { id: 'assets', title: 'Assets', shortcut: 'J', Icon: AssetManagerIcon },
   { id: 'cms', title: 'CMS', shortcut: '⌥C', Icon: CmsIcon },
   { id: 'variables', title: 'Variables', shortcut: '⌥V', Icon: VariableIcon },
+  { id: 'selectors', title: 'Style selectors', shortcut: 'G', Icon: StyleSelectorsIcon },
   { id: 'code', title: 'Code', shortcut: 'C', Icon: CodeIcon },
   { id: 'history', title: 'Git', shortcut: '⌥H', Icon: HistoryIcon },
 ] as const;
@@ -97,11 +90,8 @@ export default function LeftRail({
   );
 }
 
-function useRailKeys(
-  { componentOpen }: { readonly componentOpen: boolean },
-  onSelect: (tab: RailTab) => void,
-): void {
-  // P / Z / ⇧A / J / ⌥C / ⌥V / ⌥H toggle the panels (ignored while typing in a field).
+function useRailKeys({ componentOpen }: { readonly componentOpen: boolean }, onSelect: (tab: RailTab) => void): void {
+  // P / Z / ⇧A / J / G / ⌥C / ⌥V / ⌥H toggle the panels (ignored while typing in a field).
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey) {
@@ -146,6 +136,8 @@ function useRailKeys(
         id = 'assets';
       } else if (key === 'c' && !event.shiftKey) {
         id = 'code';
+      } else if (key === 'g' && !event.shiftKey) {
+        id = 'selectors';
       }
       if (id) {
         event.preventDefault();

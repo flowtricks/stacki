@@ -26,13 +26,7 @@ export async function readMetadataSource(root: string, kind: MetadataKind) {
 
 /** Enumerate only shared files; a preview checkout is never part of a metadata scan. */
 export async function metadataFiles(root: string): Promise<readonly string[]> {
-  const kinds: readonly MetadataKind[] = [
-    'components',
-    'guide',
-    'publish',
-    'pages',
-    'componentSources',
-  ];
+  const kinds: readonly MetadataKind[] = ['components', 'guide', 'publish', 'pages', 'componentSources', 'styles'];
   const files = await Promise.all(
     kinds.map(async (kind) => {
       const stored = await readMetadataSource(root, kind);

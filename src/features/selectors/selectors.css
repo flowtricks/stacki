@@ -2,17 +2,94 @@
    selector is a quiet chip, an unused one red, an unproven one amber, a locked
    one blue. Fills, never borders. */
 
-.selectors-actions {
+.selectors-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* The decision at the top: how many styles can go, and the one action. */
+.selectors-summary {
   display: flex;
   align-items: center;
+  gap: 10px;
+  margin: 0 4px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+.selectors-summary.has-unused {
+  background: rgba(255, 69, 58, 0.12);
+}
+.selectors-summary-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.selectors-summary-text strong {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.selectors-summary-text span {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.selectors-review {
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--red);
+  color: #fff;
+  font-size: 11.5px;
+}
+.selectors-review:hover:not(:disabled) {
+  background: #ff6259;
+}
+
+/* One row of tabs, never wrapping: the counts sit inside each tab. */
+.selectors-tabs {
+  display: flex;
   gap: 2px;
+  margin: 0 4px;
+  padding: 2px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+/* Each tab is as wide as its label, sharing what is left; a label only
+   truncates when the panel is narrower than all four together. */
+.selectors-tab {
+  display: inline-flex;
+  flex: 1 1 auto;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 4px 8px;
+  text-overflow: ellipsis;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.selectors-tab.on {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.selectors-tab-count {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .selectors-search {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 4px 8px;
+  margin: 0 4px;
   padding: 0 8px;
   border-radius: var(--radius);
   background: var(--bg-input);
@@ -33,70 +110,62 @@
   background: var(--bg-active);
 }
 
-.selectors-filters {
+.selectors-group,
+.selectors-reason {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin: 0 4px 10px;
-}
-.selectors-filter {
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 11px;
-}
-.selectors-filter.on {
-  background: var(--bg-active);
-  color: var(--text);
-}
-.selectors-filter-count {
-  color: var(--text-faint);
-  margin-left: 2px;
-}
-
-.selectors-group {
-  margin-bottom: 10px;
+  flex-direction: column;
+  gap: 2px;
 }
 .selectors-file {
-  margin: 0 4px 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 4px 4px 2px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 500;
+}
+.selectors-file-name {
+  flex-shrink: 0;
+  color: var(--text);
+}
+.selectors-file-folder {
   overflow: hidden;
   color: var(--text-faint);
-  font-size: 10.5px;
-  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.selectors-file-count {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .selectors-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   min-height: 26px;
-  padding: 1px 4px;
+  padding: 2px 4px;
   border-radius: 6px;
 }
 .selectors-row:hover {
   background: var(--bg-hover);
 }
+/* Selectors wrap rather than cut off: the end of a selector is often the part that matters. */
 .selectors-chip {
-  max-width: 100%;
-  overflow: hidden;
+  flex: 0 1 auto;
+  min-width: 0;
   padding: 3px 7px;
   border-radius: 5px;
   background: var(--bg-active);
   color: var(--text);
   font-family: var(--mono);
   font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
-.selectors-row .selectors-chip {
-  flex: 0 1 auto;
-  min-width: 0;
-}
-.selectors-unused .selectors-chip,
-.selectors-confirm .selectors-chip {
+.selectors-unused .selectors-chip {
   background: rgba(255, 69, 58, 0.18);
   color: #ffb4ae;
 }
@@ -112,22 +181,19 @@
   background: var(--bg-input);
   color: var(--text-dim);
 }
-.selectors-progress {
-  margin: 0 4px 8px;
-  color: var(--text-faint);
-  font-size: 11px;
-}
-.selectors-untracked .selectors-chip {
-  background: transparent;
-  color: var(--text-dim);
-}
-.selectors-line {
-  margin-left: auto;
+.selectors-where {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding-top: 4px;
   color: var(--text-faint);
   font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .selectors-lock {
+  flex-shrink: 0;
+  margin-left: auto;
   padding: 3px;
   color: var(--text-faint);
   opacity: 0;
@@ -141,18 +207,58 @@
   color: #9fd6ff;
 }
 
-.selectors-confirm p {
-  margin: 4px 4px 10px;
+/* A "Can't tell" reason, said once above the selectors it covers. */
+.selectors-reason-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 2px 4px 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: rgba(255, 214, 10, 0.08);
+}
+.selectors-reason-card p {
+  margin: 0;
   color: var(--text);
-  font-size: 12px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.selectors-reason-card .selectors-reason-hint {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.selectors-empty {
+  margin: 4px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.selectors-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.selectors-confirm-title {
+  margin: 0 4px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.selectors-confirm-text {
+  margin: 0 4px;
+  color: var(--text-dim);
+  font-size: 11.5px;
   line-height: 1.45;
 }
 .selectors-confirm-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
-  margin: 0 0 12px;
-  padding: 10px;
+  padding: 8px 4px;
   border-radius: var(--radius);
   background: var(--bg-input);
 }
@@ -160,10 +266,11 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  margin: 0 4px;
 }
 
 .selectors-notes {
-  margin: 12px 4px 0;
+  margin: 4px;
   color: var(--text-dim);
   font-size: 11px;
 }
@@ -172,10 +279,10 @@
   margin-bottom: 6px;
 }
 .selectors-notes p {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   line-height: 1.4;
 }
-.selectors-notes .selectors-file {
+.selectors-note-file {
   display: block;
-  margin: 0;
+  color: var(--text);
 }

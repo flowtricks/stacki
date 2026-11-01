@@ -85,6 +85,7 @@ const PANEL_SOURCES = Object.freeze([
   'src/features/props/PropsPanel.tsx',
   'src/features/git/PublishModal.tsx',
   'src/app/SaveConflictNotice.tsx',
+  'src/features/selectors/SelectorsPanel.tsx',
   'src/features/structure/StructurePanel.tsx',
   'src/features/structure/StructureTree.tsx',
   'src/features/style/StylePanel.tsx',
