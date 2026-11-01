@@ -101,7 +101,7 @@ function useRailKeys(
   { componentOpen }: { readonly componentOpen: boolean },
   onSelect: (tab: RailTab) => void,
 ): void {
-  // P / Z / ⇧A / J / ⌥C / ⌥H toggle the panels (ignored while typing in a field).
+  // P / Z / ⇧A / J / ⌥C / ⌥V / ⌥H toggle the panels (ignored while typing in a field).
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey) {
@@ -123,6 +123,9 @@ function useRailKeys(
         if (event.code === 'KeyC') {
           event.preventDefault();
           onSelect('cms');
+        } else if (event.code === 'KeyV') {
+          event.preventDefault();
+          onSelect('variables');
         } else if (event.code === 'KeyH') {
           event.preventDefault();
           onSelect('history');

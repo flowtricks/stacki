@@ -392,7 +392,8 @@ export function useContentBuild(editorRefs: ReturnType<typeof useEditorRefs>) {
   // concurrently (bounded by the read limiter in webflow.ts).
   const buildContent = useCallback(
     async (
-      { rescanComponents = false }: RescanOptions,
+      // Every build lists its sources afresh, so a forced rescan reads the same way.
+      _rescan: RescanOptions,
       onPartial?: (content: Content) => void,
     ): Promise<Content> => {
       const page = await scanPage();
@@ -406,10 +407,10 @@ export function useContentBuild(editorRefs: ReturnType<typeof useEditorRefs>) {
       };
       const onDocument = streamDocs(pageScan, onPartial);
       // Page and component embeds both re-read their CODE fresh so out-of-app edits
-      // show up; only the component tree DFS (finding which embeds exist) is cached.
+      // show up.
       const [pageResult, componentResult] = await Promise.all([
         loadEmbedDocs(page.pageEmbeds, onDocument),
-        loadComponentDocs({ rescanComponents }, onDocument),
+        loadComponentDocs(onDocument),
       ]);
       return mergedContent(pageScan, [pageResult, componentResult]);
     },

@@ -232,10 +232,19 @@ export function useComponentSource(
   // restore the page pick. The switch is in-memory only (persistence stays the page
   // pick). Component embeds stream in after the page tree, so a pending switch waits
   // for the component embed to appear rather than firing once on the transition.
-  const inComponentContext = scan?.inComponentContext ?? false;
+  //
+  // The open component's own blocks are the node sources marked as a component's:
+  // a node source is one only while a component file is open. Pinning follows
+  // them too, not just the scan's flag, so a component drilled into from a page
+  // defaults to its own <style> rather than whichever source sorts first.
+  const ownKey = embedList.find(
+    (embedDocument) =>
+      embedDocument.source.fromComponent && embedDocument.source.origin.kind === 'node',
+  )?.source.key;
+  const inComponentContext = (scan?.inComponentContext ?? false) || ownKey !== undefined;
   useEffect(() => {
-    const componentSourceKey = embedList.find((embedDocument) => embedDocument.source.fromComponent)
-      ?.source.key;
+    const componentSourceKey =
+      ownKey ?? embedList.find((embedDocument) => embedDocument.source.fromComponent)?.source.key;
     if (inComponentContext !== previousInComponentRef.current) {
       previousInComponentRef.current = inComponentContext;
       if (inComponentContext) {
@@ -255,6 +264,7 @@ export function useComponentSource(
   }, [
     inComponentContext,
     embedList,
+    ownKey,
     pageSourceRef,
     previousInComponentRef,
     setSourceSelection,

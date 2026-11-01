@@ -45,7 +45,7 @@ export function inspectAuthoredProperties(
     return empty;
   }
   const values: string[] = [];
-  const patches = new Map<CSSStyleDeclaration, string>();
+  const patches = new Map<CSSStyleDeclaration, AuthoredPatch>();
   const names = properties.map((property) => ({ property, probe: registeredProbe(property) }));
   try {
     for (const { property, probe } of names) {
@@ -55,12 +55,12 @@ export function inspectAuthoredProperties(
           if (declaration.value) {
             const token = probeToken(declaration.value, values.length);
             values.push(declaration.value);
-            if (!patches.has(style)) {
-              patches.set(style, style.cssText);
-            }
+            const patch = patches.get(style) ?? authoredPatch(style);
+            patches.set(style, patch);
             for (const name of [probe.inherited, probe.local]) {
               const value = name === probe.local ? localToken(token, property) : token;
               style.setProperty(name, value, declaration.priority);
+              patch.probes.add(name);
             }
           }
         }
@@ -123,16 +123,39 @@ function probeSource(element: Element, name: string, token: string): Element | u
   return undefined;
 }
 
+// What one declaration block held before probing: the names written into it,
+// and its text for the one case removing them cannot restore.
+interface AuthoredPatch {
+  readonly text: string;
+  readonly all: boolean;
+  readonly probes: Set<string>;
+}
+
+function authoredPatch(style: CSSStyleDeclaration): AuthoredPatch {
+  return { text: style.cssText, all: style.getPropertyValue('all') !== '', probes: new Set() };
+}
+
 function restoreAuthoredStyles(
-  patches: ReadonlyMap<CSSStyleDeclaration, string>,
+  patches: ReadonlyMap<CSSStyleDeclaration, AuthoredPatch>,
   inline: readonly InlineStyle[],
 ): void {
   assert(patches.size <= STYLE_LIMITS.workMax, 'Authored probe cleanup is bounded');
-  // Chromium can expand `all` while editing registered custom properties. Restore
-  // each complete declaration so inspection preserves shorthand order and resets.
-  for (const [style, text] of patches) {
-    if (style.cssText !== text) {
-      style.cssText = text;
+  // Remove only the probes. Reassigning cssText loses a shorthand that holds a
+  // var() followed by one of its longhands (`font: 800 2rem var(--f);
+  // font-variant-numeric: …`): Chromium serializes the shorthand's longhands as
+  // empty while substitution is pending, and writing that text back drops them
+  // (issue #71).
+  for (const [style, patch] of patches) {
+    assert(patch.probes.size > 0, 'A saved declaration was probed');
+    for (const name of patch.probes) {
+      style.removeProperty(name);
+    }
+    // Chromium can expand `all` while editing registered custom properties; only
+    // then is the complete text restored, to keep its shorthand order and resets.
+    if (patch.all) {
+      if (style.cssText !== patch.text) {
+        style.cssText = patch.text;
+      }
     }
   }
   for (const { element, text } of inline) {

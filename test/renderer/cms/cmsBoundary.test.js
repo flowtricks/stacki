@@ -20,7 +20,9 @@ test('CMS data and declared field types retain their wire meaning', () => {
   });
   assert.deepEqual(
     bridge.parseCmsMeta({ meta: { 'data/site.json': { title: 'text', image: 'image' } } }),
-    { meta: { 'data/site.json': { title: 'text', image: 'image' } } },
+    {
+      meta: { 'data/site.json': { title: 'text', image: 'image' } },
+    },
   );
   assert.deepEqual(bridge.parseCmsUsage({ files: ['pages/index.astro'] }), {
     files: ['pages/index.astro'],
@@ -99,4 +101,14 @@ test('CMS requests parse replies outside the operating failure catch', async () 
     window.avb[channel] = async () => jsonNull;
     await assert.rejects(bridge[method](...args), /Expected object/);
   }
+});
+
+test('a declared repeater with no entries yet stays a repeater', () => {
+  const fields = [{ key: 'team', label: 'Team', type: 'list' }];
+  const declared = { team: 'objects', tags: 'objects' };
+  assert.equal(types.withDeclaredTypes(fields, declared, [])[0].type, 'objects');
+  assert.equal(types.withDeclaredTypes(fields, { team: 'text' }, [])[0].type, 'list');
+  assert.equal(types.bestType('objects', []), 'objects');
+  assert.equal(types.bestType('objects', ['a']), 'list');
+  assert.equal(types.bestType('list', []), 'list');
 });

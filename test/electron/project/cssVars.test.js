@@ -193,6 +193,40 @@ const cssFiles = (root) => {
   );
   check('and a row per name', rowLabels(themed.groups[0].blocks[0]).join() === 'bg,fg');
 
+  // Each theme's swatch resolves its references with that theme's own values
+  // (issue #69): one project-wide map let the last theme answer for every column.
+  fs.writeFileSync(
+    path.join(directory, 'src', 'styles', 'surfaces.css'),
+    [
+      ':root { --white: #ffffff; --black: #000000; --light-surface: #eeeeee; }',
+      '.theme-light { --surface: var(--paper); --paper: var(--white); }',
+      '.theme-dark { --surface: var(--paper); --paper: var(--black); }',
+      '@media (prefers-color-scheme: dark) { :root { --light-surface: #111111; } }',
+      '',
+    ].join('\n'),
+  );
+  const surfaces = readVariables(directory).files.find((file) => file.rel.endsWith('surfaces.css'));
+  const surfaceCells = surfaces.groups
+    .flatMap((group) => group.blocks.flatMap((block) => block.rows))
+    .filter((row) => row.name === '--surface')
+    .flatMap((row) => row.cells)
+    .filter(Boolean);
+  check(
+    'each theme column resolves through its own values',
+    surfaceCells.map((cell) => cell.color).join() === '#ffffff,#000000',
+    JSON.stringify(surfaceCells),
+  );
+  const lightSurface = surfaces.groups
+    .flatMap((group) => group.blocks.flatMap((block) => block.rows))
+    .filter((row) => row.name === '--light-surface')
+    .flatMap((row) => row.cells)
+    .filter(Boolean);
+  check(
+    'a media-query override does not repaint the base value',
+    lightSurface[0]?.color === '#eeeeee',
+    JSON.stringify(lightSurface),
+  );
+
   // A stylesheet with no variables is not a tab.
   fs.writeFileSync(path.join(directory, 'src', 'styles', 'plain.css'), 'body { color: red; }\n');
   check(

@@ -3,7 +3,9 @@ import type { DeclaredTypes } from './cmsTypes';
 import {
   applyToItems,
   fieldsAt,
+  objectsAt,
   putKey,
+  seedEntry,
   labelize,
   renameKey,
   dropKey,
@@ -35,6 +37,12 @@ export function createCmsSchemaOperations(options: OperationOptions): SchemaOper
         return;
       }
       void saveDeclared({ ...declared, [[...path, key].join('.')]: type });
+      const parent = path.slice(0, -1);
+      const holder = path.at(-1);
+      if (holder !== undefined && objectsAt(items, path).length === 0) {
+        commit(applyToItems(items, parent, seedEntry(holder, key, type)));
+        return;
+      }
       commit(applyToItems(items, path, putKey(key, type)));
     },
     onRenameField: (path, from, to) => {

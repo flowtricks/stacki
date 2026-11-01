@@ -119,6 +119,12 @@ test('component properties lifecycle and controls', async () => {
   await renderRail(false);
   await key('k');
   assert.equal(clicked.length, 1);
+  // Option rewrites e.key ("√" for V), so the Option panels match the physical key.
+  await key('√', { altKey: true, code: 'KeyV' });
+  await key('ç', { altKey: true, code: 'KeyC' });
+  await key('˙', { altKey: true, code: 'KeyH' });
+  assert.deepEqual(clicked.slice(1), ['variables', 'cms', 'history']);
+  clicked.length = 1;
 
   const property = {
     name: 'title',

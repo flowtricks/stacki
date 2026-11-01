@@ -284,3 +284,18 @@ test('an edit during undo waits for the restore and becomes the next snapshot', 
   assert.equal(state.records.length, 2);
   assert.deepEqual(state.errors, []);
 });
+
+test('a field defined inside an empty repeater gives it a first entry', () => {
+  const changes = [];
+  const operations = createCmsSchemaOperations({
+    items: [{ title: 'Post', team: [] }],
+    declared: { team: 'objects' },
+    commit: (value) => changes.push(value),
+    saveDeclared: async () => {},
+    report: () => {},
+  });
+  operations.onAddField(['team'], 'name', 'text');
+  assert.deepEqual(changes[0], [{ title: 'Post', team: [{ name: '' }] }]);
+  operations.onAddField(['title'], 'name', 'text');
+  assert.equal(changes.length, 2);
+});

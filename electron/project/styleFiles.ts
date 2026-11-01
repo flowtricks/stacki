@@ -17,6 +17,12 @@ export const CSS_SKIP_DIRECTORIES = new Set([
   '.avb',
 ]);
 
+// The top-level folders a site's stylesheets live in, matching the variables
+// panel (cssVarRead.ts). The project root also holds whatever else its owner
+// keeps there: a 1.7 GB backup folder beside the site made this synchronous
+// walk stall the main process, dev server start included (issue #67).
+export const CSS_ROOT_DIRECTORIES = new Set(['src', 'public', 'styles']);
+
 export function listCssFiles(root: string) {
   const out: StyleFile[] = [];
   const checkDirectory = directoryBudget(root);
@@ -38,6 +44,11 @@ export function listCssFiles(root: string) {
       if (entry.isDirectory()) {
         if (CSS_SKIP_DIRECTORIES.has(entry.name)) {
           continue;
+        }
+        if (depth === 0) {
+          if (!CSS_ROOT_DIRECTORIES.has(entry.name)) {
+            continue;
+          }
         }
         if (isStudioDirectory(full, entry.name)) {
           continue;

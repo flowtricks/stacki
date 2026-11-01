@@ -518,6 +518,15 @@ export const putKey =
   (object) =>
     key in object ? object : { ...object, [key]: emptyValueFor(type) };
 
+// The first field defined inside a repeater that holds no entries yet gives it
+// one entry to hold that field; with none, the field would have nowhere to live.
+export const seedEntry =
+  (key: string, field: string, type: string): ObjectEdit =>
+  (object) =>
+    toArray(object[key])?.length === 0
+      ? { ...object, [key]: [{ [field]: emptyValueFor(type) }] }
+      : object;
+
 export const orderKeys =
   (keys: readonly string[]): ObjectEdit =>
   (object) => {

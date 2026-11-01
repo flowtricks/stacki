@@ -41,7 +41,10 @@ const check = (what, condition, detail) => {
         export { resolveTarget, scanPage } from './src/features/style/model/webflow'
         export { setHost, onHostChange, getHost } from './src/features/style/model/host'
         export { matchSelectorList } from './src/features/style/model/selectors'
-        export { contentForCurrentTree } from './src/features/style/embed/editorModel'
+        export {
+          contentForCurrentTree,
+          loadComponentDocs,
+        } from './src/features/style/embed/editorModel'
         export {
           defaultSelectorTokens,
           tokensToSelector,
@@ -72,6 +75,7 @@ const check = (what, condition, detail) => {
     getHost,
     matchSelectorList,
     contentForCurrentTree,
+    loadComponentDocs,
     defaultSelectorTokens,
     tokensToSelector,
     snapshotTokens,
@@ -139,6 +143,41 @@ const check = (what, condition, detail) => {
       pageSource?.fromComponent === false,
     );
     setHost({ nodes: [], openFilePath: undefined, openFileKind: undefined });
+  }
+
+  {
+    // Drilling from a page into a nested component (issue #72). The sources
+    // listed while the page was open must not outlive it: the page's <style>
+    // and a disk-read copy of the now-open component would both be offered,
+    // and writes to them fail or race the model.
+    const statsPath = '/project/src/components/profile/Stats.astro';
+    const astroFiles = [
+      { rel: 'src/components/profile/Stats.astro', name: 'Stats.astro', path: statsPath, size: 1 },
+    ];
+    const pageStyle = { id: 'n1', kind: 'raw', name: 'style', inner: '.a { color: red }' };
+    setHost({
+      nodes: [pageStyle],
+      astroFiles,
+      openFilePath: '/project/src/pages/about.astro',
+      openFileKind: 'page',
+    });
+    await loadComponentDocs(() => {});
+    const statsStyle = {
+      id: 'n1',
+      kind: 'raw',
+      name: 'style',
+      props: { 'is:global': true },
+      inner: '.stat { font-weight: 800 }',
+    };
+    setHost({ nodes: [statsStyle], openFilePath: statsPath, openFileKind: 'component' });
+    const { docs } = await loadComponentDocs(() => {});
+    const keys = docs.map((document) => document.source.key);
+    check(
+      'an opened component lists only its own block',
+      keys.length === 1 && keys[0] === `node:${statsPath}:n1`,
+      JSON.stringify(keys),
+    );
+    setHost({ nodes: [], astroFiles: [], openFilePath: undefined, openFileKind: undefined });
   }
 
   // A layout: a component call in the source, `<html class="theme-dark">` on

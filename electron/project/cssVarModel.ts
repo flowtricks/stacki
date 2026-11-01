@@ -374,15 +374,67 @@ export function readVariables(projectPath: string): {
     }
   }
   const values = Object.fromEntries(map);
+  const scopes = variableScopes(files);
   for (const file of files) {
     delete file.declarations;
     for (const group of file.groups) {
       for (const block of group.blocks) {
         for (const row of block.rows) {
-          row.cells = row.cells.map((cell) => describeCell(cell, map));
+          row.cells = row.cells.map((cell) =>
+            describeCell(cell, cell === undefined ? map : scopes.mapFor(cell)),
+          );
         }
       }
     }
   }
   return { files, values };
+}
+
+// The map a cell resolves against: the base values, overlaid with what the
+// cell's own rule (its selector, under its at-rules) declares. One flat map let
+// the last theme in the project answer for every column, so a light row's
+// `var(--surface)` was drawn in the dark theme's colour (issue #69). The base is
+// what rules outside any at-rule declare first; a theme overrides it after.
+function variableScopes(files: readonly FileModel[]) {
+  const base = new Map<string, string>();
+  const fallback = new Map<string, string>();
+  const scopes = new Map<string, Map<string, string>>();
+  const scopeOfEntry = new Map<string, string>();
+  for (const file of files) {
+    for (const rule of file.declarations || []) {
+      const scope = `${rule.context.join('\n')}\n${rule.selector}`;
+      const declared = scopes.get(scope) ?? new Map<string, string>();
+      scopes.set(scope, declared);
+      for (const entry of rule.entries) {
+        if (entry.kind !== 'var') {
+          continue;
+        }
+        declared.set(entry.name, entry.value);
+        scopeOfEntry.set(`${file.rel}:${entry.valueStart}`, scope);
+        if (!fallback.has(entry.name)) {
+          fallback.set(entry.name, entry.value);
+        }
+        if (rule.context.length === 0) {
+          if (!base.has(entry.name)) {
+            base.set(entry.name, entry.value);
+          }
+        }
+      }
+    }
+  }
+  assert(base.size <= fallback.size, 'Base values are a subset of every declared name');
+  const merged = new Map<string, Map<string, string>>();
+  const mapFor = (cell: Cell): Map<string, string> => {
+    const scope = scopeOfEntry.get(`${cell.file}:${cell.valueStart}`);
+    assert(scope !== undefined, 'Every described cell was read from a rule');
+    const known = merged.get(scope);
+    if (known !== undefined) {
+      return known;
+    }
+    const map = new Map([...fallback, ...base, ...(scopes.get(scope) ?? [])]);
+    assert(map.has(cell.name), 'A cell resolves in a scope that declares it');
+    merged.set(scope, map);
+    return map;
+  };
+  return { mapFor };
 }

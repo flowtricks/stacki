@@ -99,27 +99,22 @@ export function streamDocs(
   };
 }
 
-// The component embeds. Warm cache (and not a forced rescan): skip the DFS, just
-// re-read the known component embeds' code — that's what catches external edits.
-// Cold / forced: DFS every component for its embeds (streamed) and cache the sources
-// for next time.
+// The component embeds, read fresh on every build. Which sources exist depends
+// on the file open: its own <style> blocks come from the model and its file is
+// left out of the disk-read list. A list cached while the page was open kept the
+// page's <style> and a second, disk-read copy of the component after drilling in,
+// so edits went to blocks the open file does not hold (issue #72). Listing is
+// in-memory work; only the reads touch disk, and those always ran.
 export async function loadComponentDocs(
-  { rescanComponents }: { readonly rescanComponents: boolean },
   onDocument: (embedDocument: EmbedDocument) => void,
 ): Promise<{ docs: EmbedDocument[]; errors: Content['errors'] }> {
-  if (cachedComponentSources && !rescanComponents) {
-    return loadEmbedDocs(cachedComponentSources, onDocument);
-  }
-  const sources: EmbedDocument['source'][] = [];
   const docs: EmbedDocument[] = [];
   const errors: Content['errors'] = [];
   await scanAllComponents(async (embeds) => {
-    sources.push(...embeds);
     const result = await loadEmbedDocs(embeds, onDocument);
     docs.push(...result.docs);
     errors.push(...result.errors);
   });
-  cachedComponentSources = sources;
   return { docs, errors };
 }
 
@@ -676,13 +671,6 @@ export function withoutClasses(
     attributes: { ...snapshot.attributes, class: classList.join(' ') },
   };
 }
-
-// Cache the component embed SOURCES (the expensive part: the per-component tree
-// DFS to find embeds) at module scope, reused across page switches and reopens.
-// The CODE is re-read on every build, so external edits to a component embed are
-// picked up (our own edits are saved, so a fresh read reflects them too). A forced
-// Rescan re-DFSes to catch added/removed component embeds.
-export let cachedComponentSources: EmbedDocument['source'][] | undefined = undefined;
 
 // Native class styles are determined by an element's class signature, so cache the
 // read NativeModel by that signature (module scope → survives reopen). A re-selected

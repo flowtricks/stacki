@@ -1,5 +1,6 @@
 import type { CmsField, FieldType } from './cmsSchema';
 import { CMS_FIELD_TYPES, inferType } from './cmsSchema';
+import { toArray } from '../../../shared/core/record';
 import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS, dictionary, text } from '../../../shared/core/boundary';
 
@@ -32,6 +33,11 @@ export function withDeclaredTypes(
     if (!chosen) {
       return field;
     }
+    if (field.type === 'list' && chosen === 'objects') {
+      // A new repeater holds no entries yet, and `[]` reads as a list; the
+      // declaration is the only record of what it was made to hold.
+      return { ...field, type: chosen };
+    }
     if (STRUCTURAL.includes(field.type)) {
       return field;
     }
@@ -44,6 +50,10 @@ export function withDeclaredTypes(
 export function bestType(collectionType: FieldType, value: unknown): FieldType {
   const own = inferType(value);
   if (own === 'empty') {
+    return collectionType;
+  }
+  if (own === 'list' && collectionType === 'objects' && toArray(value)?.length === 0) {
+    // An empty array fits either array control; the collection's type decides.
     return collectionType;
   }
   if (STRUCTURAL.includes(own)) {

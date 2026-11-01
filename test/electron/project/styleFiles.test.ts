@@ -82,3 +82,21 @@ test('ordinary studio folders survive missing, invalid and unrelated metadata', 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('the stylesheet list stays out of unrelated root folders', async () => {
+  // A backup or download folder beside the site is not the site's CSS, and a
+  // large one stalled the synchronous walk (issue #67).
+  const root = await mkdtemp(path.join(os.tmpdir(), 'stacki-style-roots-'));
+  try {
+    await writeFixture(root, 'root.css', 'body { margin: 0; }');
+    await writeFixture(root, 'src/styles/base.css', 'body { color: red; }');
+    await writeFixture(root, 'TEMP/joomla/templates/site.css', 'body { color: blue; }');
+    await writeFixture(root, 'TEMP/deep/a/b/c/d.css', 'body { color: green; }');
+    assert.deepEqual(
+      listCssFiles(root).map((file) => file.rel),
+      ['root.css', 'src/styles/base.css'],
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

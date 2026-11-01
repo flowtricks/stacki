@@ -42,6 +42,8 @@ async function main() {
     .reset { font-size: initial; }
     .all-reset { all: initial; }
     .all-override { all: initial; font-size: 4rem; }
+    :root { --font-sans: Arial; }
+    .stat { font: 800 2rem / 1 var(--font-sans); font-variant-numeric: tabular-nums; }
   </style><style id="avb-design-style">* { cursor: default !important; }</style>
     <div class="parent" data-avb-p="src/components/Heading.astro|0 0"
       style="font-family: var(--font);--font: Georgia">
@@ -54,6 +56,7 @@ async function main() {
     <span id="reset" class="reset">Reset</span>
     <span id="all-reset" class="all-reset">Reset all</span>
     <span id="all-override" class="all-override">Override all</span>
+    <span id="stat" class="stat">42</span>
   </div>`;
   const exercise = `(() => {
     const child = document.getElementById('child');
@@ -83,6 +86,12 @@ async function main() {
     const parentHints = reader.authoredProperties(parent, props);
     const allReset = reader.authoredProperties(document.getElementById('all-reset'), props);
     const allOverride = reader.authoredProperties(document.getElementById('all-override'), props);
+    // A var() shorthand followed by one of its longhands serializes with empty
+    // longhands; the probe cleanup must not write that text back (issue #71).
+    const stat = document.getElementById('stat');
+    reader.authoredProperties(stat, ['font-variant-numeric', 'font-weight', ...props]);
+    const statStyle = getComputedStyle(stat);
+    const statAfter = { weight: statStyle.fontWeight, size: statStyle.fontSize };
     const oversized = reader.authoredProperties(child, Array(513).fill('color'));
     const sheet = document.styleSheets[0];
     Object.defineProperty(sheet, 'cssRules', { configurable: true, get() {
@@ -114,7 +123,7 @@ async function main() {
     };
     trimSample.remove();
     return { sources, inherited, nested, inline, reset, parentHints, allReset, allOverride,
-      oversized, inaccessible, before, after, textBox,
+      oversized, inaccessible, before, after, textBox, statAfter,
       inlineBefore, inlineAfter, ignored, realChange,
       computed: getComputedStyle(child).fontSize };
   })()`;
@@ -169,6 +178,7 @@ async function main() {
   assert.equal(result.inherited.cursor, 'pointer', 'editor CSS does not replace authored values');
   assert.equal(result.allReset['font-size'], undefined, 'all: initial stops inheritance');
   assert.equal(result.allOverride['font-size'], '4rem', 'a declaration can override all');
+  assert.deepEqual(result.statAfter, { weight: '800', size: '32px' }, 'var() shorthands survive');
   assert.deepEqual(result.oversized, {}, 'inspection is bounded');
   assert.deepEqual(result.inaccessible, {}, 'inaccessible CSS cannot report a false winner');
   assert.equal(result.nested['font-size'], 'calc(1rem + 1vw)');
