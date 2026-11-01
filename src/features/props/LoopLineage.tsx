@@ -10,6 +10,7 @@ import { readSymbol } from '../../ipc/bridge';
 import { TRACE_HOPS_MAX, traceFunction, type TraceStep } from '../../editor/loopTrace';
 import type { LoopValueOrigin } from '../../editor/loopQueryRead';
 import { AstroIcon, BracesIcon, CodeIcon, LayersIcon, SanityIcon } from '../../ui/Icons';
+import { LoopDetails } from './LoopRows';
 import { assert } from '../../../shared/core/assert';
 import type { CatalogField, LoopCatalog } from './loopCatalog';
 import { titled } from './loopCatalog';
@@ -108,8 +109,26 @@ export function LoopLineage(props: {
 }) {
   const { trace } = props;
   const collection = tracedCollection(trace);
+  // Folded by default: the Source menu already names the collection, and the
+  // layers of code it passes through are for when someone asks.
   return (
-    <div className="loop-lineage">
+    <LoopDetails>
+      <LineageBody {...props} trace={trace} collection={collection} />
+    </LoopDetails>
+  );
+}
+
+function LineageBody(props: {
+  readonly names: readonly string[];
+  readonly trace: LoopTrace | undefined;
+  readonly collection: TracedCollection | undefined;
+  readonly catalog: LoopCatalog | undefined;
+  readonly fields: readonly CatalogField[] | undefined;
+  readonly editable: boolean;
+}) {
+  const { trace, collection } = props;
+  return (
+    <>
       <div className="loop-lineage-title">Comes from</div>
       {props.names.map((name) => (
         <LineageRow
@@ -144,7 +163,7 @@ export function LoopLineage(props: {
             : `These settings live in ${collection.file}. Edit them there, or choose a collection above to set filters here.`}
         </div>
       )}
-    </div>
+    </>
   );
 }
 

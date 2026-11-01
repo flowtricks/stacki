@@ -3,7 +3,12 @@
 // another file, rewritten there (LoopSettings.tsx).
 
 import { useEffect, useMemo, useState } from 'react';
-import { groqQueryText, type LoopQuery, type LoopSource } from '../../editor/loopQuery';
+import { groqQueryText, isItemId, type LoopQuery, type LoopSource } from '../../editor/loopQuery';
+import { assert } from '../../../shared/core/assert';
+import { toRecord } from '../../../shared/core/record';
+import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
+import { cmsTransport } from '../../ipc/editorEnvironment';
+import { remoteDocuments } from '../../ipc/remoteSource';
 import {
   loadCatalog,
   loadFields,
@@ -161,4 +166,63 @@ export function useReferenceChoices(
     };
   }, [projectPath, catalog, key, sourceName, typesKey]);
   return useMemo(() => (loaded?.key === key ? loaded.choices : []), [loaded, key]);
+}
+
+/** An item a selected list can pick: the id the list's code matches, and its title. */
+export interface PickableItem {
+  readonly id: string;
+  readonly title: string;
+}
+
+// A collection's items to pick from. Astro entries are read with their data,
+// so a builder export's lists, whose items are named by the CMS's `_id` where
+// they have one, get the id their code compares; a plain list gets the entry id.
+const PICKABLE_ITEMS_MAX = 500;
+
+export async function loadItems(
+  projectPath: string,
+  catalog: LoopCatalog,
+  target: { readonly source: LoopSource; readonly ids: 'entry' | 'export' },
+): Promise<readonly PickableItem[]> {
+  const { source } = target;
+  if (source.kind === 'sanity') {
+    const connectionId =
+      catalog.sanity.kind === 'connected' ? catalog.sanity.connectionId : undefined;
+    const listed =
+      connectionId === undefined
+        ? undefined
+        : await remoteDocuments(projectPath, connectionId, source.collection).catch(
+            () => undefined,
+          );
+    return listed?.ok
+      ? listed.value.documents
+          .slice(0, PICKABLE_ITEMS_MAX)
+          .map((document) => ({ id: document.id, title: document.title }))
+      : [];
+  }
+  const payload = parseIpcPayload('content:entries', { projectPath, name: source.collection });
+  const answer: unknown = await cmsTransport.contentEntries(payload).catch(() => undefined);
+  const entries = toRecord(answer)?.['entries'];
+  const items: PickableItem[] = [];
+  for (const entry of Array.isArray(entries) ? entries.slice(0, PICKABLE_ITEMS_MAX) : []) {
+    const item = pickableEntry(entry, target.ids);
+    if (item !== undefined) {
+      items.push(item);
+    }
+  }
+  assert(items.length <= PICKABLE_ITEMS_MAX, 'Pickable items are bounded');
+  return items;
+}
+
+// One `content:entries` entry: its id (or its data's `_id`) and its title.
+function pickableEntry(input: unknown, ids: 'entry' | 'export'): PickableItem | undefined {
+  const entry = toRecord(input);
+  const id = entry?.['id'];
+  const title = entry?.['title'];
+  const known = toRecord(entry?.['data'])?.['_id'];
+  const chosen = ids === 'export' && typeof known === 'string' ? known : id;
+  if (typeof chosen !== 'string' || !isItemId(chosen)) {
+    return undefined;
+  }
+  return { id: chosen, title: typeof title === 'string' && title !== '' ? title : chosen };
 }

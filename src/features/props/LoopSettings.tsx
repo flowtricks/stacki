@@ -46,6 +46,9 @@ import {
   useLoopCatalog,
   writeTracedQuery,
 } from './loopSettingsData';
+import { ItemsSection } from './LoopItems';
+import { LoopDetails } from './LoopRows';
+import SegSwitch from './SegSwitch';
 import './loopSettings.css';
 
 /** What applying a change did: nothing to say, or why it could not be done. */
@@ -178,18 +181,90 @@ export default function LoopSettings(props: LoopSettingsProps) {
         />
       )}
       {reading.kind === 'query' && (
-        <>
-          {reading.home !== undefined && <OptionsNote home={reading.home} />}
-          <QuerySections
-            {...shared}
-            query={reading.query}
-            fields={fields}
-            stored={reading.home?.kind === 'options' ? 'data' : 'code'}
-            onChange={applyQuery}
-          />
-        </>
+        <CollectionSettings
+          {...shared}
+          query={reading.query}
+          home={reading.home}
+          fields={fields}
+          onChange={applyQuery}
+        />
       )}
     </div>
+  );
+}
+
+// A collection list: Dynamic (filters, sort, limit) or Selected (items picked
+// by hand), as a builder's collection list offers both.
+function CollectionSettings(props: {
+  readonly query: LoopQuery;
+  readonly home: QueryHome | undefined;
+  readonly fields: readonly CatalogField[] | undefined;
+  readonly catalog: LoopCatalog | undefined;
+  readonly projectPath: string | undefined;
+  readonly onChange: (query: LoopQuery) => void;
+}) {
+  const { home } = props;
+  // A builder export's items carry the CMS's own ids, which its code matches.
+  const ids =
+    home?.kind === 'options' || (home?.kind === 'chain' && home.itemPath[0] === 'fields')
+      ? 'export'
+      : 'entry';
+  // Either way the other mode's settings go, as a builder clears them; the
+  // projection and the entry's name are how the code reads, and stay.
+  const base = {
+    ...emptyQuery(props.query.source),
+    projection: props.query.projection,
+    parameter: props.query.parameter,
+  };
+  // Selected with nothing picked yet is held here, not written: a list of no
+  // items has no collection to name in code. The first pick writes it.
+  const [pending, setPending] = useState(false);
+  const sourceName = sourceKey(props.query.source);
+  useEffect(() => setPending(false), [sourceName]);
+  const query =
+    props.query.selection === undefined && pending ? { ...base, selection: [] } : props.query;
+  const switchTo = (mode: 'dynamic' | 'selected'): void => {
+    setPending(mode === 'selected');
+    if (mode === 'dynamic' && props.query.selection !== undefined) {
+      props.onChange(base);
+    }
+  };
+  return (
+    <>
+      <div className="props-field loop-settings-row loop-settings-mode">
+        <label>
+          <span className="prop-label">Items</span>
+        </label>
+        <SegSwitch
+          options={[
+            { value: 'dynamic', label: 'Dynamic' },
+            { value: 'selected', label: 'Selected' },
+          ]}
+          current={query.selection === undefined ? 'dynamic' : 'selected'}
+          onPick={switchTo}
+        />
+      </div>
+      {home !== undefined && <OptionsNote home={home} />}
+      {query.selection === undefined ? (
+        <QuerySections
+          {...props}
+          query={query}
+          stored={home?.kind === 'options' ? 'data' : 'code'}
+        />
+      ) : (
+        <ItemsSection
+          query={query}
+          catalog={props.catalog}
+          projectPath={props.projectPath}
+          ids={ids}
+          onChange={(next) =>
+            next.selection?.length === 0 && props.query.selection === undefined
+              ? undefined
+              : props.onChange(next)
+          }
+        />
+      )}
+    </>
   );
 }
 
@@ -551,36 +626,39 @@ function currentOption(props: SourceRowProps, current: string): DropdownOption<s
 // Where an options object's settings are saved, said once above them.
 function OptionsNote(props: { readonly home: QueryHome }) {
   const home = props.home;
-  if (home.kind === 'chain') {
-    return (
-      <div className="loop-settings-empty loop-settings-note">{`Applied to ${home.list}, kept as written.`}</div>
-    );
-  }
   const filters =
-    home.filter.kind === 'prop'
+    home.kind === 'options' && home.filter.kind === 'prop'
       ? ' Filters are this component’s default Filters; a page using it can set its own.'
       : '';
+  const text =
+    home.kind === 'chain'
+      ? `Applied to ${home.list}, kept as written.`
+      : `Saved in this file, in the settings ${home.reader}() applies.${filters}`;
   return (
-    <div className="loop-settings-empty loop-settings-note">{`Saved in this file, in the settings ${home.reader}() applies.${filters}`}</div>
+    <LoopDetails>
+      <div className="loop-lineage-note">{text}</div>
+    </LoopDetails>
   );
 }
 
 function PartialNotice(props: { readonly reason: string; readonly onReplace: () => void }) {
   const [armed, setArmed] = useState(false);
   return (
-    <div className="loop-settings-partial">
-      <div className="loop-settings-partial-title">Custom code shapes this list</div>
-      <div className="loop-settings-partial-reason">
-        {props.reason} It still works; edit it in the code.
+    <>
+      <div className="loop-settings-partial">
+        <div className="loop-settings-partial-title">Custom code shapes this list</div>
+        <button
+          type="button"
+          className="loop-settings-link"
+          onClick={() => (armed ? props.onReplace() : setArmed(true))}
+          onBlur={() => setArmed(false)}
+        >
+          {armed ? 'Click again to replace the code' : 'Use list settings instead'}
+        </button>
       </div>
-      <button
-        type="button"
-        className="loop-settings-link"
-        onClick={() => (armed ? props.onReplace() : setArmed(true))}
-        onBlur={() => setArmed(false)}
-      >
-        {armed ? 'Click again to replace the code' : 'Use list settings instead'}
-      </button>
-    </div>
+      <LoopDetails>
+        <div className="loop-lineage-note">{props.reason} It still works; edit it in the code.</div>
+      </LoopDetails>
+    </>
   );
 }

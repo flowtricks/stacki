@@ -178,4 +178,11 @@ assert.equal(
 assert.equal(catalog.hasDependency('{"dependencies":{}}', '@sanity/astro'), false);
 assert.equal(catalog.hasDependency('not json', '@sanity/astro'), false);
 
+// Dragging a picked item: the drop slot is measured before the item is taken out.
+const { moved } = load('src/features/props/LoopItems.tsx');
+assert.deepEqual(moved(['a', 'b', 'c'], 0, 3), ['b', 'c', 'a'], 'to the end');
+assert.deepEqual(moved(['a', 'b', 'c'], 2, 0), ['c', 'a', 'b'], 'to the start');
+assert.deepEqual(moved(['a', 'b', 'c'], 1, 1), ['a', 'b', 'c'], 'onto itself');
+assert.throws(() => moved(['a'], 1, 0), /A moved item exists/);
+
 console.log('loopSettings: ok');

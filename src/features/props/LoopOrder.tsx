@@ -4,12 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import { RepeatIcon } from '../../ui/Icons';
-import {
-  LOOP_QUERY_LIMITS,
-  sortOrderFor,
-  type LoopQuery,
-  type LoopSort,
-} from '../../editor/loopQuery';
+import { LOOP_QUERY_LIMITS, sortOrderFor, type LoopSort } from '../../editor/loopQuery';
 import { type CatalogField } from './loopCatalog';
 import { fieldNamed, orderLabels, sortParts, wholeNumberOf } from './loopSettingsModel';
 import { EditorRow, ListRow, SectionHeader, fieldIcon } from './LoopRows';
@@ -86,9 +81,6 @@ export function SortSection(
             ))}
         </div>
       )}
-      {!query.random && query.sorts.length === 0 && (
-        <div className="loop-settings-empty">{defaultOrder(query, fields)}</div>
-      )}
     </div>
   );
 }
@@ -105,16 +97,6 @@ function RandomRow(props: { readonly onRemove: () => void }) {
       onRemove={props.onRemove}
     />
   );
-}
-
-// What order items come in with no sort set.
-function defaultOrder(query: LoopQuery, fields: readonly CatalogField[] | undefined): string {
-  if (fields === undefined) {
-    return 'Loading fields…';
-  }
-  return query.source.kind === 'astro'
-    ? 'In the collection’s own order.'
-    : 'In the CMS’s own order.';
 }
 
 function SortChip(props: {

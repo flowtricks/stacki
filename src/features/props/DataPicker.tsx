@@ -2,7 +2,6 @@ import { useCodeAccess } from '../../ui/CodeAccess';
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
-import type { LoopSourceInspection } from './loopSourceInspection';
 import { ChevronRightIcon, ChevronLeftIcon, CheckIcon, CodeIcon, SearchIcon, PencilIcon } from '../../ui/Icons';
 
 // The data behind the page, as something you can look through rather than
@@ -140,8 +139,6 @@ export interface PickerNode {
 export interface DataPickerProps {
   readonly tree?: readonly PickerNode[] | undefined;
   readonly current?: string | undefined;
-  readonly sourceInspection?: LoopSourceInspection | undefined;
-  readonly onEditSource?: (() => void) | undefined;
   readonly entries?: Entries | undefined;
   readonly onStepItem?: (path: string, step: -1 | 1, count: number) => void;
   readonly onPick: (path: string, query: PickerNode['query'] | undefined) => void;
@@ -154,7 +151,7 @@ export interface DataPickerProps {
 
 export default function DataPicker(props: DataPickerProps) {
   const allowCode = useCodeAccess();
-  const { entries, onStepItem, onPick, onWrite, onEdit, editLabel = 'Edit', footer = true, sourceInspection, onEditSource } = props;
+  const { entries, onStepItem, onPick, onWrite, onEdit, editLabel = 'Edit', footer = true } = props;
   const state = useDataPicker(props);
   const { query, setQuery, searchRef, listRef } = state;
   return (
@@ -164,7 +161,6 @@ export default function DataPicker(props: DataPickerProps) {
           stepping through them previews the page against other content and
           re-reads this list against it at the same time. */}
       {entries && entries.count > 1 && <EntryNavigation entries={entries} />}
-      {sourceInspection && <LoopSourceSummary source={sourceInspection} onEdit={allowCode ? onEditSource : undefined} />}
       <div className="dp-search">
         <SearchIcon size={12} />
         <input ref={searchRef} value={query} placeholder="Search data…" spellCheck={false} autoFocus onChange={(event) => setQuery(event.target.value)} />
@@ -212,41 +208,6 @@ function DataPickerResults({
       )}
       {((matches && !matches.length) || (!matches && !tree.length)) && (
         <div className="dp-empty">{matches ? 'Nothing matches' : 'No data in scope here — add a prop to this file, or a const to its frontmatter.'}</div>
-      )}
-    </div>
-  );
-}
-
-function LoopSourceSummary({ source, onEdit }: { readonly source: LoopSourceInspection; readonly onEdit: (() => void) | undefined }) {
-  return (
-    <div className="dp-source-summary">
-      <div className="dp-source-heading">Looping over</div>
-      <div className="dp-source-path" title={source.path}>
-        {source.path}
-      </div>
-      <div className="dp-source-origin" title={source.origin}>
-        {source.count === undefined ? 'Source' : `${source.count} ${source.count === 1 ? 'item' : 'items'}`}
-        {' · '}
-        {source.origin}
-      </div>
-      {source.items.length > 0 && (
-        <div className="dp-source-items">
-          {source.items.map((item, index) => (
-            <div className="dp-source-item" key={index} title={item}>
-              <span>{index + 1}</span>
-              {item}
-            </div>
-          ))}
-          {source.count !== undefined && source.count > source.items.length && (
-            <div className="dp-source-more">+{source.count - source.items.length} more items</div>
-          )}
-        </div>
-      )}
-      {source.note && <div className="dp-source-note">{source.note}</div>}
-      {onEdit && (
-        <button type="button" className="dp-source-edit" onClick={onEdit}>
-          <PencilIcon size={11} /> Open source to edit
-        </button>
       )}
     </div>
   );

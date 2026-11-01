@@ -829,3 +829,129 @@ assert.equal(
 );
 
 console.log('builder export: ok');
+
+// --- Selected items ----------------------------------------------------------------
+// A list of items picked by hand, in the order picked, in place of filters,
+// sort and limit. Each form it can be written in reads back as the same ids,
+// with nothing picked included, and ids are escaped like any other value.
+const pickedIds = ['b', "o'neil", 'a'];
+const astroPicked = {
+  ...loopQuery.emptyQuery({ kind: 'astro', collection: 'team' }),
+  selection: pickedIds,
+};
+const astroPickedCode = loopQuery.astroQueryCode(astroPicked);
+assert.ok(parseExpression(astroPickedCode), astroPickedCode);
+assert.deepEqual(queryOf(read(`const x = ${astroPickedCode};`, 'x')).selection, pickedIds);
+const astroNone = loopQuery.astroQueryCode({ ...astroPicked, selection: [] });
+assert.deepEqual(
+  queryOf(read(`const x = ${astroNone};`, 'x')).selection,
+  [],
+  'nothing picked still names its collection',
+);
+// getEntries, as code written elsewhere picks entries.
+assert.deepEqual(
+  queryOf(
+    read(
+      "const x = await getEntries([{ collection: 'team', id: 'b' }, { collection: 'team', id: 'a' }]);",
+      'x',
+      [{ name: 'getEntries', path: 'astro:content' }],
+    ),
+  ).selection,
+  ['b', 'a'],
+);
+// A filter by id followed by another sort is not a picked order.
+assert.equal(
+  read(
+    "const x = (await getCollection('team')).filter((entry) => ['a'].includes(entry.id)).sort((a, b) => a.data.n - b.data.n);",
+    'x',
+  ).query?.selection,
+  undefined,
+);
+const sanityPicked = loopQuery.sanityQueryCode(
+  { ...loopQuery.emptyQuery({ kind: 'sanity', collection: 'pastor' }), selection: ['p2', 'p1'] },
+  [],
+  'sanityClient',
+);
+assert.deepEqual(queryOf(read(`const x = ${sanityPicked};`, 'x', sanityImports)).selection, [
+  'p2',
+  'p1',
+]);
+const exportCurated =
+  collectionsCode +
+  'const items1 = ["698c", "11ab"].map(id => collections["nav-links"].find(entry => entry.id === id)).filter(Boolean);';
+const curatedReading = readLoop({
+  frontmatter: exportCurated,
+  imports: exportImports,
+  data: 'items1',
+});
+assert.deepEqual(curatedReading.query.selection, ['698c', '11ab']);
+assert.equal(curatedReading.home.kind, 'chain');
+const reordered = planLoop({
+  model: { extraFrontmatter: exportCurated, imports: exportImports, nodes: [exportLoop] },
+  loop: exportLoop,
+  target: {
+    kind: 'query',
+    query: { ...curatedReading.query, selection: ['11ab', '698c'] },
+    fields: [],
+  },
+  sanityClient: 'unavailable',
+});
+assert.ok(
+  reordered.plan.extraFrontmatter.endsWith(
+    `const items1 = ['11ab', '698c'].map((id) => collections["nav-links"].find((entry) => entry.id === id)).filter(Boolean);`,
+  ),
+);
+// Back to Dynamic: the kept list, every item.
+const dynamicAgain = planLoop({
+  model: { extraFrontmatter: exportCurated, imports: exportImports, nodes: [exportLoop] },
+  loop: exportLoop,
+  target: {
+    kind: 'query',
+    query: loopQuery.emptyQuery({ kind: 'astro', collection: 'nav-links' }),
+    fields: [],
+  },
+  sanityClient: 'unavailable',
+});
+assert.ok(
+  dynamicAgain.plan.extraFrontmatter.endsWith('const items1 = [...collections["nav-links"]];'),
+);
+// A builder's options keep picked items in `curated`.
+const optionsPicked = optionsCode.replace(
+  '"limit": 6',
+  '"curated": {"itemIds": ["q1"]}, "limit": 6',
+);
+const optionsPickedReading = readLoop({
+  frontmatter: optionsPicked,
+  imports: exportImports,
+  data: 'items1',
+});
+assert.deepEqual(optionsPickedReading.query.selection, ['q1']);
+const optionsRepicked = planLoop({
+  model: { extraFrontmatter: optionsPicked, imports: exportImports, nodes: [exportLoop] },
+  loop: exportLoop,
+  target: {
+    kind: 'query',
+    query: { ...optionsPickedReading.query, selection: ['q2', 'q1'] },
+    fields: [],
+  },
+  sanityClient: 'unavailable',
+});
+assert.deepEqual(
+  readLoop({
+    frontmatter: optionsRepicked.plan.extraFrontmatter,
+    imports: exportImports,
+    data: 'items1',
+  }).query.selection,
+  ['q2', 'q1'],
+);
+// A selection carries none of a dynamic list's settings.
+assert.throws(
+  () => loopQuery.astroQueryCode({ ...astroPicked, limit: 3 }),
+  /A selected list has no limit/,
+);
+assert.throws(
+  () => loopQuery.astroQueryCode({ ...astroPicked, selection: ['a\nb'] }),
+  /A selected item is named by an id/,
+);
+
+console.log('selected items: ok');

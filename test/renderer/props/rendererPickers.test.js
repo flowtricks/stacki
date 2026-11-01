@@ -37,21 +37,6 @@ const renderData = (props) =>
   );
 assert.match(renderData({ tree: [leaf], current: 'post.title' }), /not in this entry/);
 assert.match(renderData({ tree: [leaf], current: 'post' }), /dp-row selected/);
-const sourceDetail = {
-  path: 'home.hero.ctas',
-  origin: 'src/data/home.ts',
-  count: 2,
-  items: ['label: "Start planning"', 'label: "See destinations"'],
-  note: undefined,
-  tree: undefined,
-};
-const sourceMarkup = renderData({ sourceInspection: sourceDetail, onEditSource() {} });
-assert.match(sourceMarkup, /Looping over/);
-assert.match(sourceMarkup, /home.hero.ctas/);
-assert.match(sourceMarkup, /2 items/);
-assert.match(sourceMarkup, /src\/data\/home.ts/);
-assert.match(sourceMarkup, /Start planning/);
-assert.match(sourceMarkup, /Open source to edit/);
 assert.throws(() => renderData({ tree: Array(20001).fill(leaf) }), /node limit exceeded/);
 assert.throws(() => renderData({ current: 'x'.repeat(8193) }), /binding path limit exceeded/);
 const cyclic = { ...leaf, children: [] };

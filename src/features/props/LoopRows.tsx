@@ -2,8 +2,8 @@
 // its add button, a closed filter or sort as a row, and the pop-up its editor
 // opens in, under the row (LoopSettings.tsx).
 
-import { useLayoutEffect, useRef, useState } from 'react';
-import type { ReactNode, RefObject } from 'react';
+import { useCallback, useLayoutEffect, useState } from 'react';
+import type { ReactNode, RefCallback } from 'react';
 import Popup from '../../ui/Popup';
 import { dataPickerPosition } from './dataPickerPosition';
 import type { FieldPosition } from './bindingTypes';
@@ -18,6 +18,7 @@ import {
   PlusIcon,
   TextIcon,
   TrashIcon,
+  ChevronRightIcon,
 } from '../../ui/Icons';
 import { type LoopFieldKind } from '../../editor/loopQuery';
 import { type RowParts } from './loopSettingsModel';
@@ -34,9 +35,16 @@ export function ListRow(props: {
   readonly onRemove: () => void;
 }) {
   const { parts } = props;
-  const rowRef = useRef<HTMLDivElement>(null);
+  // The row element as state, not a ref: a row created open (a filter just
+  // added) renders its pop-up in the same pass, before a ref would be set.
+  const [row, setRow] = useState<HTMLDivElement | undefined>(undefined);
+  // Stable, so React attaches it once rather than on every render.
+  const attach = useCallback<RefCallback<HTMLDivElement>>(
+    (element) => setRow(element ?? undefined),
+    [],
+  );
   return (
-    <div ref={rowRef} className={`loop-settings-item${props.open ? ' open' : ''}`}>
+    <div ref={attach} className={`loop-settings-item${props.open ? ' open' : ''}`}>
       <button
         type="button"
         className="loop-settings-item-main"
@@ -59,7 +67,7 @@ export function ListRow(props: {
         <TrashIcon size={13} />
       </button>
       {props.open && props.editor !== undefined && (
-        <RowPopup anchorRef={rowRef} onClose={props.onToggle}>
+        <RowPopup anchor={row} onClose={props.onToggle}>
           {props.editor}
         </RowPopup>
       )}
@@ -71,26 +79,26 @@ export function ListRow(props: {
 // list keeps its place and the row being edited stays in view above it.
 const ROW_POPUP_HEIGHT_PX_MAX = 220;
 
-function RowPopup(props: {
-  readonly anchorRef: RefObject<HTMLDivElement>;
+export function RowPopup(props: {
+  readonly anchor: HTMLElement | undefined;
+  readonly heightPxMax?: number;
+  readonly label?: string;
   readonly onClose: () => void;
   readonly children: ReactNode;
 }) {
   const [placed, setPlaced] = useState<
     { readonly anchor: HTMLElement; readonly position: FieldPosition } | undefined
   >(undefined);
-  const { anchorRef } = props;
+  const { anchor } = props;
+  const heightPxMax = props.heightPxMax ?? ROW_POPUP_HEIGHT_PX_MAX;
   useLayoutEffect(() => {
-    const anchor = anchorRef.current ?? undefined;
     if (anchor !== undefined) {
       setPlaced({
         anchor,
-        position: dataPickerPosition(anchor.getBoundingClientRect(), {
-          heightPxMax: ROW_POPUP_HEIGHT_PX_MAX,
-        }),
+        position: dataPickerPosition(anchor.getBoundingClientRect(), { heightPxMax }),
       });
     }
-  }, [anchorRef]);
+  }, [anchor, heightPxMax]);
   if (placed === undefined) {
     return undefined;
   }
@@ -103,7 +111,7 @@ function RowPopup(props: {
       className="loop-settings-popup"
       style={placed.position}
       role="dialog"
-      label="Edit"
+      label={props.label ?? 'Edit'}
     >
       {props.children}
     </Popup>
@@ -164,6 +172,29 @@ export function EditorRow(props: { readonly label: string; readonly children: Re
     <div className="loop-settings-editor-row">
       <span className="loop-settings-editor-label">{props.label}</span>
       <div className="loop-settings-editor-control">{props.children}</div>
+    </div>
+  );
+}
+
+/**
+ * Explanation the settings don't need to be used: where they are saved, the
+ * code a list comes through. Folded under Details by default, so the panel
+ * reads as controls; opened when someone wants to know.
+ */
+export function LoopDetails(props: { readonly children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="loop-lineage">
+      <button
+        type="button"
+        className="loop-lineage-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <ChevronRightIcon size={10} className={`loop-lineage-chevron${open ? ' open' : ''}`} />
+        Details
+      </button>
+      {open && <div className="loop-lineage-body">{props.children}</div>}
     </div>
   );
 }

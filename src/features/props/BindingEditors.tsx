@@ -250,7 +250,7 @@ export function BindHandle({ active, onOpen }: BindHandleProps) {
   );
 }
 
-export function FieldDataPicker({ pos: position, bindContext, current, tree, sourceInspection, onEditSource, onPick, onWrite, onClose }: FieldDataPickerProps) {
+export function FieldDataPicker({ pos: position, bindContext, current, tree, onPick, onWrite, onClose }: FieldDataPickerProps) {
   const pick = (path: string, query: PickerNode['query'] | undefined) => onPick(resolvePick(path, query ?? undefined, bindContext ?? undefined));
 
   return (
@@ -258,13 +258,11 @@ export function FieldDataPicker({ pos: position, bindContext, current, tree, sou
       mode="popover"
       portal={false}
       onClose={onClose}
-      className={`dd-popup bind-menu${sourceInspection ? ' loop-source-menu' : ''}`}
+      className="dd-popup bind-menu"
       style={{ left: position.left, top: position.top, width: position.width }}
     >
       <DataPicker
         tree={tree || dataTree(bindContext || {})}
-        sourceInspection={sourceInspection}
-        onEditSource={onEditSource}
         current={current ?? undefined}
         entries={bindContext?.entryNav ?? undefined}
         {...definedFields({ onStepItem: bindContext?.onStepItem })}

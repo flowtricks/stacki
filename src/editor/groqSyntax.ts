@@ -10,6 +10,7 @@ import {
   isDateValue,
   isDocumentId,
   isFieldPath,
+  isItemId,
   LOOP_QUERY_LIMITS,
   type LoopCondition,
   type LoopLiteral,
@@ -18,6 +19,8 @@ import {
 
 export interface GroqReading {
   readonly type: string;
+  /** Documents picked by id (`_id in ["a", "b"]`), when the query picks rather than filters. */
+  readonly selection?: readonly string[];
   readonly match: 'all' | 'any';
   readonly conditions: readonly LoopCondition[];
   readonly sorts: readonly LoopSort[];
@@ -59,6 +62,7 @@ export function readGroq(text: string): GroqReading | undefined {
 
 interface FilterReading {
   readonly type: string;
+  readonly selection?: readonly string[];
   readonly match: 'all' | 'any';
   readonly conditions: readonly LoopCondition[];
 }
@@ -81,6 +85,11 @@ function readFilter(text: string): FilterReading | undefined {
   }
   if (type === undefined || rest.length > LOOP_QUERY_LIMITS.conditionsMax) {
     return undefined;
+  }
+  // `_type == "x" && _id in ["a", "b"]`: picked documents, nothing else asked.
+  const picked = rest.length === 1 && rest[0] !== undefined ? pickedIds(rest[0]) : undefined;
+  if (picked !== undefined) {
+    return { type, match: 'all', conditions: [], selection: picked };
   }
   // `_type == "x" && (a || b)`: the conditions any of which may hold.
   const only = rest[0];
@@ -317,6 +326,27 @@ function parseJSONString(text: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+// `_id in ["a", "b"]` as its ids, or undefined when the clause is anything else.
+function pickedIds(clause: string): readonly string[] | undefined {
+  const list = /^_id\s+in\s+\[([\s\S]*)\]$/.exec(clause.trim())?.[1];
+  if (list === undefined) {
+    return undefined;
+  }
+  const items = splitTop(list, ',');
+  if (items.length > LOOP_QUERY_LIMITS.selectionMax) {
+    return undefined;
+  }
+  const ids: string[] = [];
+  for (const item of items) {
+    const id = groqStringValue(item);
+    if (id === undefined || !isItemId(id)) {
+      return undefined;
+    }
+    ids.push(id);
+  }
+  return ids;
 }
 
 // ---------------------------------------------------------------------------

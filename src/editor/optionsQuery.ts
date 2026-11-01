@@ -20,8 +20,10 @@
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import {
+  emptyQuery,
   isDateValue,
   isFieldPath,
+  isItemId,
   LOOP_QUERY_LIMITS,
   type LoopCondition,
   type LoopFieldKind,
@@ -97,10 +99,37 @@ export function readOptionsQuery(
   if (filter === undefined) {
     return undefined;
   }
-  const sorts = sortsOf(entryValue(options.entries, 'sort'), kind);
-  const offset =
-    wholeOf(entryValue(options.entries, 'offset') ?? entryValue(options.entries, 'skip')) ?? 0;
-  const limit = wholeOf(entryValue(options.entries, 'limit'));
+  const home: OptionsHome = {
+    kind: 'options',
+    reader: call.callee.name,
+    options: { from: options.from, to: options.to },
+    filter: filter.home,
+  };
+  const selection = curatedOf(
+    entryValue(options.entries, 'curated'),
+    entryValue(options.entries, 'curatedItemIds'),
+  );
+  if (selection !== undefined) {
+    // Picked items: the helper starts from them, so they are the list.
+    return { query: { ...emptyQuery(source), selection }, home };
+  }
+  const query = dynamicQuery(options.entries, { source, filter, kind });
+  return query === undefined ? undefined : { query, home };
+}
+
+// Filters, sort, start and limit, as the options state them; undefined when
+// one of them is outside what the list settings can show.
+function dynamicQuery(
+  entries: readonly JsEntry[],
+  read: {
+    readonly source: LoopSource;
+    readonly filter: FilterReading;
+    readonly kind: (path: string) => LoopFieldKind | undefined;
+  },
+): LoopQuery | undefined {
+  const sorts = sortsOf(entryValue(entries, 'sort'), read.kind);
+  const offset = wholeOf(entryValue(entries, 'offset') ?? entryValue(entries, 'skip')) ?? 0;
+  const limit = wholeOf(entryValue(entries, 'limit'));
   if (
     sorts === undefined ||
     offset > LOOP_QUERY_LIMITS.offsetMax ||
@@ -109,9 +138,9 @@ export function readOptionsQuery(
     return undefined;
   }
   const query: LoopQuery = {
-    source,
-    match: filter.match,
-    conditions: filter.conditions,
+    source: read.source,
+    match: read.filter.match,
+    conditions: read.filter.conditions,
     sorts,
     random: false,
     offset,
@@ -123,15 +152,7 @@ export function readOptionsQuery(
     query.conditions.length <= LOOP_QUERY_LIMITS.conditionsMax,
     'An options query has bounded conditions',
   );
-  return {
-    query,
-    home: {
-      kind: 'options',
-      reader: call.callee.name,
-      options: { from: options.from, to: options.to },
-      filter: filter.home,
-    },
-  };
+  return query;
 }
 
 // `collections["campus"] || []` → `campus`, through names, object entries,
@@ -210,6 +231,22 @@ function shapeOf(callback: Js | undefined): readonly string[] | undefined {
     return ['fields'];
   }
   return body.entries.some((entry) => entry.key === 'data') ? ['data'] : undefined;
+}
+
+// `"curated": {"itemIds": [...]}` or `"curatedItemIds": [...]`, when it picks any.
+function curatedOf(curated: Js | undefined, flat: Js | undefined): readonly string[] | undefined {
+  const list = curated?.kind === 'object' ? entryValue(curated.entries, 'itemIds') : flat;
+  if (
+    list?.kind !== 'array' ||
+    list.items.length === 0 ||
+    list.items.length > LOOP_QUERY_LIMITS.selectionMax
+  ) {
+    return undefined;
+  }
+  const ids = list.items.flatMap((item) =>
+    item.kind === 'string' && isItemId(item.value) ? [item.value] : [],
+  );
+  return ids.length === list.items.length ? ids : undefined;
 }
 
 function entryValue(entries: readonly JsEntry[], key: string): Js | undefined {
@@ -450,10 +487,13 @@ export function rewrittenOptions(
   assert(original.from === home.options.from, 'The options rewritten are the ones read');
   assert(query.source.kind === 'astro', 'An options query reads an Astro collection');
   const filter = filterText(query);
+  // Picked items go in `curated` (the helper keeps their order); a dynamic
+  // list empties it, as a builder does when the list is switched back.
   const owned = new Map<string, string>([
     ['sort', sortText(query.sorts)],
     ['limit', String(query.limit ?? 0)],
     ['offset', String(query.offset)],
+    ['curated', `{"itemIds": ${JSON.stringify(query.selection ?? [])}}`],
   ]);
   if (home.filter.kind !== 'prop') {
     owned.set('filter', filter);
@@ -475,7 +515,8 @@ export function rewrittenOptions(
     const unset =
       (key === 'limit' && query.limit === undefined) ||
       (key === 'offset' && query.offset === 0) ||
-      (key === 'filter' && query.conditions.length === 0);
+      (key === 'filter' && query.conditions.length === 0) ||
+      (key === 'curated' && query.selection === undefined);
     if (!written.has(key) && !unset) {
       entries.push(`${JSON.stringify(key)}: ${value}`);
     }

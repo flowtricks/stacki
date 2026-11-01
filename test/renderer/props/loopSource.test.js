@@ -1,36 +1,27 @@
-// The loop's data field: a source you can type past.
+// The loop's head: one Code field, renames carried into the loop.
 //
 //   node test/renderer/props/loopSource.test.js
 //
-// Choosing a list used to replace the whole field with a purple button, which
-// said what the source was and left nowhere to say anything else about it. A
-// loop is over a list, but it is very often over part of one — `.filter(…)`,
-// `.slice(0, 3)`, `[0]` — and none of that could be written without first
-// switching the field to a different mode.
+// A loop used to be edited through four fields — Data, Item name, Index name
+// and Code — each restating part of one line. What the loop goes over is now
+// chosen in the list settings above (LoopSettings.tsx), so the head is one
+// Code field: `campusPastors.map((pastor) => (`. The separate Item name field
+// was the one place a rename carried into the bindings inside the loop, so the
+// Code field has to do it instead: renaming the item there renames every
+// `pastor.…` inside, and editing anything else renames nothing.
 //
-// So the source is a chip drawn inside the expression, over ordinary text: the
-// value is exactly what the field holds, everything after the chip is code, and
-// picking a different list swaps the chip while leaving that code alone.
+// The head parser is checked first, then the renames a new head makes, then
+// that the panel is the one field it says it is.
 
-const path = require('path');
-const { pathToFileURL } = require('url');
-
-const failures = [];
-let checked = 0;
-const check = (what, condition, detail) => {
-  checked++;
-  if (!condition) {
-    failures.push(`  ${what}${detail ? `\n    ${detail}` : ''}`);
-  }
-};
-
-// Test the implementation itself so source-selection rules cannot drift into copied fixtures.
-const { sourceChip, withSource, parseMapHead } = require('../../helpers/rendererModule')(
+const assert = require('node:assert/strict');
+const { parseMapHead, headRenames } = require('../../helpers/rendererModule')(
   'src/features/props/propNodeEditors.tsx',
 );
-const assert = require('node:assert/strict');
-const { repoPath } = require('../../helpers/sources.js');
 const { readSourceGroup } = require('../../helpers/sourceText.js');
+const fs = require('node:fs');
+const { repoPath } = require('../../helpers/sources.js');
+
+// Reading a head.
 assert.deepEqual(parseMapHead('posts.map((post, index) => ('), {
   data: 'posts',
   item: 'post',
@@ -41,110 +32,68 @@ assert.deepEqual(parseMapHead('posts.filter(p => p.live).map(post => ('), {
   item: 'post',
   index: '',
 });
-assert.equal(parseMapHead('posts.map(({title}) => ('), undefined);
+assert.equal(parseMapHead('posts.map(({title}) => ('), undefined, 'a destructured item is code');
 assert.equal(parseMapHead(''), undefined);
 assert.throws(() => parseMapHead('x'.repeat(1_000_001)), /head limit exceeded/);
-assert.throws(() => sourceChip('x'.repeat(1_000_001)), /source limit exceeded/);
-assert.throws(() => withSource('posts', 'x'.repeat(1_000_001)), /path limit exceeded/);
 
-(async () => {
-  // The panel's own copies, so a change there fails here rather than drifting.
-  const source = readSourceGroup([
-    'src/features/props/propNodeEditors.tsx',
-    'src/features/props/propBindings.tsx',
-    'src/features/props/BindingEditors.tsx',
-  ]);
-  check('the panel still derives the source the same way', source.includes('function sourceChip('));
-  check('and still swaps it in place', source.includes('function withSource('));
-  check(
-    'the field is the expression, not a button',
-    /chip=\{sourceChip\(fields\.data\)\}/.test(source),
-    'the Data field no longer passes its source as a chip',
-  );
+// Renames a new head carries into the loop.
+assert.deepEqual(
+  headRenames('campusPastors.map((pastor) => (', 'campusPastors.map((leader) => ('),
+  [{ from: 'pastor', to: 'leader' }],
+);
+assert.deepEqual(headRenames('posts.map((post, i) => (', 'posts.map((entry, index) => ('), [
+  { from: 'post', to: 'entry' },
+  { from: 'i', to: 'index' },
+]);
+assert.deepEqual(
+  headRenames('posts.map((post) => (', 'posts.slice(0, 3).map((post) => ('),
+  [],
+  'changing the list renames nothing',
+);
+assert.deepEqual(
+  headRenames('posts.map((post) => (', 'posts.map((post, index) => ('),
+  [],
+  'adding an index renames nothing',
+);
+assert.deepEqual(
+  headRenames('posts.map((post, index) => (', 'posts.map((post) => ('),
+  [],
+  'removing one renames nothing',
+);
+assert.deepEqual(
+  headRenames('posts.map(({ a }) => (', 'posts.map((post) => ('),
+  [],
+  'from code the editor does not split, nothing',
+);
+assert.throws(
+  () => headRenames('x'.repeat(1_000_001), 'posts.map((post) => ('),
+  /head limit exceeded/,
+);
 
-  // What counts as the source.
-  check('a lone name is the whole of it', sourceChip('legalEntries') === 'legalEntries');
-  check('a path is too', sourceChip('post.data.tags') === 'post.data.tags');
-  check('what follows it is not', sourceChip('posts.filter(p => !p.draft)') === 'posts');
-  check('an index is not', sourceChip('posts[0]') === 'posts');
-  check('nor is a call on it', sourceChip('posts.slice(0, 3)') === 'posts');
-  check('no source is no chip', sourceChip('[]') === '');
-  check('an empty field is no chip', sourceChip('') === '');
-  check('a literal is no chip', sourceChip('[1, 2, 3]') === '');
-  check('a function call is no chip', sourceChip('getPosts()') === '', sourceChip('getPosts()'));
+// The panel: one Code field, with no binding handle and no field restating the head.
+const source = readSourceGroup(['src/features/props/propNodeEditors.tsx']);
+assert.ok(
+  /onSetText\(value, node\.bodyParts === undefined \? headRenames\(node\.head, value\) : \[\]\)/.test(
+    source,
+  ),
+  'the Code field carries renames',
+);
+assert.equal(
+  (source.match(/<BindHandle /g) ?? []).length,
+  0,
+  'the Code field takes no binding: it is the loop itself',
+);
+for (const gone of ['Item name', 'Index name', '>Data<', 'sourceChip', 'withSource']) {
+  assert.ok(!source.includes(gone), `${gone} is gone from the loop panel`);
+}
 
-  // Choosing a different list keeps the code around it.
-  check('picking replaces the source', withSource('posts', 'authors') === 'authors');
-  check(
-    'and keeps what was done to it',
-    withSource('posts.filter(p => !p.draft)', 'authors') === 'authors.filter(p => !p.draft)',
-    withSource('posts.filter(p => !p.draft)', 'authors'),
-  );
-  check(
-    'including an index',
-    withSource('post.data.tags[0]', 'legalEntries') === 'legalEntries[0]',
-    withSource('post.data.tags[0]', 'legalEntries'),
-  );
-  check('picking into an empty field just sets it', withSource('', 'authors') === 'authors');
-  check('and into a literal replaces it', withSource('[1, 2]', 'authors') === 'authors');
+// The chip an expression field draws is a mark over text, so a value never
+// holds anything but the expression itself.
+const expr = fs.readFileSync(repoPath('src/ui/ExprInput.tsx'), 'utf8');
+assert.ok(
+  /Decoration\.mark\(\{ class: 'cm-chip' \}\)/.test(expr),
+  'the chip is a mark, not a widget',
+);
+assert.ok(/stops being a chip/.test(expr), 'a chip whose text is edited away stops being one');
 
-  // The chip is the control. A second button beside it opening the same picker
-  // was two affordances for one job.
-  const chipToggle =
-    'onChipClick={() => (sourceMenu ? setSourceMenu(undefined) : openSourceMenu())}';
-  check('the chip opens the picker', source.includes(chipToggle));
-  check(
-    'and nothing else has to',
-    !source.includes('prop-source-open'),
-    'the chevron beside the Data field is back',
-  );
-  check(
-    'and the press that opens it does not also close it',
-    /<Popup/.test(source),
-    'the picker treats the chip as outside itself, so a chip press opens and closes in one go',
-  );
-
-  // Data goes into the expression as well as choosing it: a slice needs its
-  // length from somewhere.
-  check('the Data field takes an insert', /apiRef=\{dataApiRef\}/.test(source));
-  check('and so does the Code field', /apiRef=\{codeApiRef\}/.test(source));
-  check(
-    'both have a handle to open it with',
-    (source.match(/<BindHandle\s+active=\{insertAt\?\.field ===/g) || []).length === 2,
-  );
-
-  // Renaming the item is about the source, not the expression: typing a filter
-  // after a list — or dropping a value into one — must not rename the item out
-  // from under the children that reference it.
-  const renames = (before, after) => sourceChip(before) !== sourceChip(after);
-  check('a different list renames the item', renames('posts', 'authors'));
-  check('a filter typed after it does not', !renames('posts', 'posts.filter(p => !p.draft)'));
-  check(
-    'nor does a value dropped into one',
-    !renames('posts.slice(0, 3)', 'posts.slice(0, count)'),
-  );
-  check('and a first list still does', renames('[]', 'posts'));
-
-  // The chip is a mark over text, so the value never contains anything but the
-  // expression itself.
-  const expr = require('fs').readFileSync(repoPath('src/ui/ExprInput.tsx'), 'utf8');
-  check(
-    'the chip is a mark, not a widget',
-    /Decoration\.mark\(\{ class: 'cm-chip' \}\)/.test(expr),
-  );
-  check('and clicking it is handled', /closest\('\.cm-chip, \.expr-chip'\)/.test(expr));
-  check(
-    'a chip whose text is edited away stops being one',
-    /stops being a chip/.test(expr),
-    'the decoration is mapped through edits instead of re-found',
-  );
-
-  if (failures.length) {
-    console.error(
-      `\nloop-source: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
-    console.error(failures.join('\n') + '\n');
-    process.exit(1);
-  }
-  console.log(`loop-source: ${checked} passed`);
-})();
+console.log('loop-source: ok');

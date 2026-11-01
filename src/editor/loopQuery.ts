@@ -21,6 +21,8 @@ export const LOOP_QUERY_LIMITS = {
   fieldPathCharsMax: 128,
   projectionCharsMax: 20_000,
   collectionCharsMax: 128,
+  selectionMax: 200,
+  itemIdCharsMax: 256,
 } as const;
 
 /** Where a collection's items come from: Astro's content layer, or a Sanity dataset. */
@@ -152,6 +154,11 @@ export interface LoopQuery {
   /** A Sanity projection kept verbatim from hand-written code (`{ name, "photo": … }`). */
   readonly projection: string | undefined;
   readonly parameter: AstroItemParameter;
+  /**
+   * Items picked by hand, in the order they show, in place of filters, sort
+   * and limit (a builder's "Selected" list). Absent is a dynamic list.
+   */
+  readonly selection?: readonly string[] | undefined;
 }
 
 const FIELD_SEGMENT = /^[A-Za-z_$][\w$-]*$/;
@@ -240,6 +247,7 @@ export function emptyQuery(source: LoopSource): LoopQuery {
  * and the reader only from code it fully understood.
  */
 export function assertLoopQuery(query: LoopQuery): void {
+  assertSelection(query);
   assert(COLLECTION_NAME.test(query.source.collection), 'A loop source names a collection');
   assert(
     query.source.collection.length <= LOOP_QUERY_LIMITS.collectionCharsMax,
@@ -277,6 +285,34 @@ export function assertLoopQuery(query: LoopQuery): void {
   for (const sort of query.sorts) {
     assertFieldPath(sort.field);
   }
+}
+
+// A selected list picks items instead of narrowing a collection, so it has no
+// filters, sort or limit of its own; its ids are bounded text, written escaped.
+function assertSelection(query: LoopQuery): void {
+  const selection = query.selection;
+  if (selection === undefined) {
+    return;
+  }
+  assert(selection.length <= LOOP_QUERY_LIMITS.selectionMax, 'A selection is bounded');
+  assert(query.conditions.length === 0, 'A selected list has no filters');
+  assert(query.sorts.length === 0, 'A selected list has no sort');
+  assert(!query.random, 'A selected list is not shuffled');
+  assert(query.offset === 0, 'A selected list skips nothing');
+  assert(query.limit === undefined, 'A selected list has no limit');
+  for (const id of selection) {
+    assert(isItemId(id), 'A selected item is named by an id');
+  }
+}
+
+/** Whether a text can name a selected item: present, one line, bounded. */
+export function isItemId(text: string): boolean {
+  return text.length > 0 && text.length <= LOOP_QUERY_LIMITS.itemIdCharsMax && !/[\r\n]/.test(text);
+}
+
+/** A list of item ids as a JavaScript array literal. */
+function idsCode(ids: readonly string[]): string {
+  return `[${ids.map(jsString).join(', ')}]`;
 }
 
 function assertCondition(condition: LoopCondition): void {
@@ -384,6 +420,14 @@ export function astroQueryCode(query: LoopQuery, reader = 'getCollection'): stri
   assertLoopQuery(query);
   assert(query.source.kind === 'astro', 'An Astro query reads an Astro collection');
   assert(/^[A-Za-z_$][\w$]*$/.test(reader), 'getCollection is called by its imported name');
+  if (query.selection !== undefined) {
+    // The picked entries, in the order picked. Read from the collection rather
+    // than by getEntries, so a list with nothing picked still names it; an id
+    // since deleted matches nothing and is dropped.
+    const ids = idsCode(query.selection);
+    const read = `await ${reader}(${jsString(query.source.collection)})`;
+    return `(${read}).filter((entry) => ${ids}.includes(entry.id)).sort((a, b) => ${ids}.indexOf(a.id) - ${ids}.indexOf(b.id))`;
+  }
   const filter = astroFilterCode(query);
   const read = `await ${reader}(${jsString(query.source.collection)}${filter === undefined ? '' : `, ${filter}`})`;
   const sort = query.random
@@ -416,6 +460,11 @@ export function chainQueryCode(
     itemPath.every((segment) => /^[A-Za-z_$][\w$]*$/.test(segment)),
     'An item path is names',
   );
+  if (query.selection !== undefined) {
+    // Picked items in the order picked, found by the id the list gives them;
+    // one no longer in the list is dropped.
+    return `${idsCode(query.selection)}.map((id) => ${list.trim()}.find((entry) => entry.id === id)).filter(Boolean)`;
+  }
   const name = query.parameter.kind === 'entry' ? query.parameter.name : 'entry';
   const base = [name, ...itemPath].join('.');
   const joiner = query.match === 'all' ? ' && ' : ' || ';
@@ -626,6 +675,11 @@ export function groqQueryText(query: LoopQuery, fields: readonly LoopField[]): s
   assertLoopQuery(query);
   assert(query.source.kind === 'sanity', 'A GROQ query reads a Sanity type');
   const type = `_type == ${groqString(query.source.collection)}`;
+  if (query.selection !== undefined) {
+    const projected = query.projection ?? defaultProjection(fields);
+    const ids = `[${query.selection.map(groqString).join(', ')}]`;
+    return `*[${type} && _id in ${ids}]${projected === '' ? '' : ` ${projected}`}`;
+  }
   const clauses = query.conditions.map(groqConditionCode);
   const joiner = query.match === 'all' ? ' && ' : ' || ';
   const narrowed =
@@ -658,6 +712,11 @@ export function sanityQueryCode(
 ): string {
   assert(/^[A-Za-z_$][\w$]*$/.test(client), 'A client is named by an identifier');
   const fetch = `await ${client}.fetch(${jsString(groqQueryText(query, fields))})`;
+  if (query.selection !== undefined) {
+    // GROQ returns them in its own order; the picked order is restored here.
+    const ids = idsCode(query.selection);
+    return `(${fetch}).sort((a, b) => ${ids}.indexOf(a._id) - ${ids}.indexOf(b._id))`;
+  }
   const code = query.random
     ? `(${fetch}).sort(() => Math.random() - 0.5)${sliceCode(query.offset, query.limit)}`
     : fetch;

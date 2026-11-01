@@ -21,8 +21,9 @@ import { LIMITS } from '../../shared/core/limits';
 import { readGroq } from './groqSyntax';
 import { listCollectionOf, readOptionsQuery, type OptionsHome } from './optionsQuery';
 import { chainOf, conditionOf } from './loopConditionRead';
+import { curatedSelection, entriesSelection, pickedIds } from './loopSelectionRead';
 import { readComparator } from './loopSortRead';
-import { LOOP_QUERY_LIMITS, assertLoopQuery } from './loopQuery';
+import { LOOP_QUERY_LIMITS, assertLoopQuery, emptyQuery } from './loopQuery';
 import type {
   AstroItemParameter,
   LoopCondition,
@@ -176,6 +177,8 @@ type Base =
       readonly filter: Located | undefined;
       /** A list expression kept as written (`[...collections["campus"]]`), and where its items hold fields. */
       readonly list?: { readonly text: string; readonly itemPath: ItemPath };
+      /** Items picked by id, in order, in place of a filter (`getEntries`, a curated list). */
+      readonly selection?: readonly string[];
     }
   | { readonly kind: 'sanity'; readonly groq: string; readonly client: string };
 
@@ -205,7 +208,9 @@ function pipelineOf(start: Located, context: Context, chainStart: readonly strin
   let current = start;
   for (let pass = 0; pass < STEPS_MAX + CHAIN_STEPS_MAX; pass++) {
     const node = unwrapAwait(current.node);
-    const base = baseOf({ source: current.source, node }, context);
+    const base =
+      baseOf({ source: current.source, node }, context) ??
+      (steps.length === 0 ? curatedOf(node, context, current.source) : undefined);
     if (base) {
       return { kind: 'collection', base, steps: steps.reverse(), chain };
     }
@@ -349,6 +354,20 @@ function baseOf(located: Located, context: Context): Base | undefined {
     };
   }
   if (
+    node.callee.kind === 'name' &&
+    importedFrom(context, node.callee.name, 'astro:content') === 'getEntries'
+  ) {
+    const entries = entriesSelection(node.args);
+    return entries === undefined
+      ? undefined
+      : {
+          kind: 'astro',
+          collection: entries.collection,
+          filter: undefined,
+          selection: entries.ids,
+        };
+  }
+  if (
     node.callee.kind === 'member' &&
     node.callee.property === 'fetch' &&
     node.callee.object.kind === 'name' &&
@@ -361,6 +380,38 @@ function baseOf(located: Located, context: Context): Base | undefined {
       : { kind: 'sanity', groq, client: node.callee.object.name };
   }
   return undefined;
+}
+
+// A builder export's picked items, as a base that keeps their list.
+function curatedOf(node: Js, context: Context, source: string): Base | undefined {
+  const lookup = (name: string): Js | undefined => context.frontmatter.declarations.get(name)?.init;
+  const curated = curatedSelection(
+    node,
+    { lookup, importedFrom: (local, spec) => importedFrom(context, local, spec) },
+    source,
+  );
+  return curated === undefined
+    ? undefined
+    : {
+        kind: 'astro',
+        collection: curated.collection,
+        filter: undefined,
+        list: curated.list,
+        selection: curated.ids,
+      };
+}
+
+// A filter by id and, optionally, the sort restoring that order.
+function pickedSteps(steps: readonly Step[]): readonly string[] | undefined {
+  const [filter, sort] = steps;
+  if (
+    filter?.kind !== 'filter' ||
+    steps.length > 2 ||
+    (sort !== undefined && sort.kind !== 'sort')
+  ) {
+    return undefined;
+  }
+  return pickedIds(filter.function.node, sort?.kind === 'sort' ? sort.function?.node : undefined);
 }
 
 // The query a fetch is given: a string, `defineQuery(…)`/`groq` of one, or a
@@ -430,6 +481,14 @@ function queryOf(
   if (!/^[A-Za-z0-9_][\w.-]*$/.test(source.collection)) {
     return partial(source, pipeline, 'The collection is named by code.');
   }
+  if (base.selection !== undefined) {
+    return selectedOf(base, pipeline);
+  }
+  const picked =
+    base.filter === undefined && base.list === undefined ? pickedSteps(pipeline.steps) : undefined;
+  if (picked !== undefined) {
+    return selectedOf({ ...base, selection: picked }, { ...pipeline, steps: [] });
+  }
   const order = stepOrder(pipeline.steps);
   if (order === undefined) {
     return partial(
@@ -477,6 +536,24 @@ function queryOf(
   );
 }
 
+// Picked items. Filters after them only drop ids no longer found (getEntries
+// gives undefined for those); anything else done to them is code.
+function selectedOf(
+  base: Extract<Base, { readonly kind: 'astro' }>,
+  pipeline: Extract<Pipeline, { readonly kind: 'collection' }>,
+): LoopReading {
+  const source: LoopSource = { kind: 'astro', collection: base.collection };
+  if (pipeline.steps.some((step) => step.kind !== 'filter')) {
+    return partial(source, pipeline, 'Its picked items are changed by code.');
+  }
+  const query: LoopQuery = { ...emptyQuery(source), selection: base.selection };
+  const read = checked(query, pipeline, undefined);
+  assert(read?.kind === 'query', 'A selection within its bounds reads as a query');
+  return base.list === undefined
+    ? read
+    : { ...read, home: { kind: 'chain', list: base.list.text, itemPath: base.list.itemPath } };
+}
+
 function sanityQueryOf(
   base: Extract<Base, { readonly kind: 'sanity' }>,
   pipeline: Extract<Pipeline, { readonly kind: 'collection' }>,
@@ -493,6 +570,25 @@ function sanityQueryOf(
     };
   }
   const source: LoopSource = { kind: 'sanity', collection: groq.type };
+  if (groq.selection !== undefined) {
+    // GROQ returns picked documents in its own order; one sort restores the picked one.
+    const reordered =
+      pipeline.steps.length === 0 ||
+      (pipeline.steps.length === 1 && pipeline.steps[0]?.kind === 'sort');
+    const picked: LoopQuery = {
+      ...emptyQuery(source),
+      selection: groq.selection,
+      projection: groq.projection,
+    };
+    return reordered
+      ? (checked(picked, pipeline, base.client) ??
+          partial(source, pipeline, 'Its picked items are outside the list settings.'))
+      : partial(
+          source,
+          pipeline,
+          'Its picked documents are changed by code after they are fetched.',
+        );
+  }
   const order = stepOrder(pipeline.steps);
   if (order === undefined || order.filters.length > 0 || order.reversed) {
     return partial(source, pipeline, 'Its items are changed by code after they are fetched.');

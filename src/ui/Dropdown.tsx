@@ -50,6 +50,8 @@ export interface DropdownProps<T = string> {
   readonly onChange: (value: T) => void;
   readonly className?: string;
   readonly menuClassName?: string;
+  /** The menu's least width; it is never narrower than its trigger either way. */
+  readonly menuWidthMin?: number;
   readonly placeholder?: string;
   readonly livePreview?: boolean;
   readonly onPrepare?: () => void;
@@ -95,7 +97,7 @@ export default function Dropdown<T>(props: DropdownProps<T>) {
   const state = useDropdownSelection(props);
   const actions = useDropdownActions(props, state);
   const control = { ...state, ...actions };
-  const position = useDropdownPosition(state, { searchable: props.searchable ?? false });
+  const position = useDropdownPosition(state, { searchable: props.searchable ?? false, widthPxMin: props.menuWidthMin ?? 0 });
   useDropdownSound(state);
   useDropdownFocus(state, { searchable: props.searchable ?? false });
   useEffect(() => {
@@ -276,10 +278,10 @@ function commitDropdownOption<T>(
   triggerRef.current?.focus();
 }
 
-function useDropdownPosition<T>(state: Selection<T>, options: { readonly searchable: boolean }) {
+function useDropdownPosition<T>(state: Selection<T>, options: { readonly searchable: boolean; readonly widthPxMin: number }) {
   const [position, setPosition] = useState<PopupPosition | undefined>(undefined);
   const { open, triggerRef, visible } = state;
-  const { searchable } = options;
+  const { searchable, widthPxMin } = options;
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) {
       return;
@@ -295,9 +297,12 @@ function useDropdownPosition<T>(state: Selection<T>, options: { readonly searcha
       (searchable ? SEARCH_HEIGHT : 0);
     const shown = Math.min(wanted, MENU_HEIGHT_MAX);
     const box = popupBox(rectangle, shown, window.innerHeight);
+    // A menu wider than its trigger (a compact "Match all") grows to its
+    // minimum and slides left as far as it must to stay inside the window.
+    const width = Math.min(Math.max(rectangle.width, widthPxMin), window.innerWidth - POPUP_EDGE * 2);
     const next = {
-      left: rectangle.left,
-      width: rectangle.width,
+      left: Math.max(POPUP_EDGE, Math.min(rectangle.left, window.innerWidth - POPUP_EDGE - width)),
+      width,
       ...box,
       maxHeight: wanted > shown ? Math.min(box.maxHeight ?? shown, shown) : box.maxHeight,
     };
@@ -311,7 +316,7 @@ function useDropdownPosition<T>(state: Selection<T>, options: { readonly searcha
         ? previous
         : next,
     );
-  }, [open, triggerRef, visible, searchable]);
+  }, [open, triggerRef, visible, searchable, widthPxMin]);
   return position;
 }
 

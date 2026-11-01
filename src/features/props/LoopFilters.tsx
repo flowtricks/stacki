@@ -91,11 +91,6 @@ export function FilterSection(
           )}
         </div>
       )}
-      {query.conditions.length === 0 && open !== 'new' && (
-        <div className="loop-settings-empty">
-          {fields === undefined ? 'Loading fields…' : 'Showing every item.'}
-        </div>
-      )}
     </div>
   );
 }
@@ -111,6 +106,7 @@ function MatchMenu(props: {
       value={props.query.match}
       ariaLabel="Match"
       className="loop-settings-match"
+      menuWidthMin={140}
       options={[
         { value: 'all', label: 'Match all' },
         { value: 'any', label: 'Match any' },
@@ -139,7 +135,6 @@ function NewFilterRow(props: {
           fields={props.fields}
           context={props.context}
           onCommit={props.onCommit}
-          onRemove={props.onClose}
         />
       }
       onToggle={props.onClose}
@@ -191,7 +186,6 @@ function FilterChip(props: {
               fields={(fields ?? []).filter((candidate) => operatorsFor(candidate.kind).length > 0)}
               context={props.context}
               onCommit={(next) => props.onChange(next)}
-              onRemove={() => props.onChange(undefined)}
             />
           ) : undefined
         }
@@ -209,7 +203,6 @@ function ConditionEditor(props: {
   readonly fields: readonly CatalogField[];
   readonly context: ChoiceContext;
   readonly onCommit: (condition: LoopCondition) => void;
-  readonly onRemove: () => void;
 }) {
   const [draft, setDraft] = useState(props.draft);
   const field = fieldNamed(props.fields, draft.field);
@@ -264,9 +257,6 @@ function ConditionEditor(props: {
         onChange={(value) => setDraft({ ...draft, value })}
         onCommit={(value) => commit({ ...draft, value })}
       />
-      <button type="button" className="loop-settings-link danger" onClick={props.onRemove}>
-        Remove filter
-      </button>
     </div>
   );
 }

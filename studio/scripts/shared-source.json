@@ -327,7 +327,6 @@
     "src/features/props/dataPickerPosition.ts",
     "src/features/props/elementState.ts",
     "src/features/props/jsCheck.ts",
-    "src/features/props/loopSourceInspection.ts",
     "src/features/props/propAttributes.tsx",
     "src/features/props/propBindings.tsx",
     "src/features/props/propFieldModel.ts",
@@ -340,7 +339,6 @@
     "src/features/props/useClassPopup.ts",
     "src/features/props/useLayoutMetadata.ts",
     "src/features/props/useLayoutText.ts",
-    "src/features/props/useLoopSourceInspection.ts",
     "src/features/publishing/PublishConnections.tsx",
     "src/features/publishing/PublishHosting.tsx",
     "src/features/publishing/PublishWorker.tsx",
@@ -838,7 +836,9 @@
     "src/features/props/LoopFilters.tsx",
     "src/features/props/LoopOrder.tsx",
     "src/features/props/loopSettingsData.ts",
-    "src/editor/loopSortRead.ts"
+    "src/editor/loopSortRead.ts",
+    "src/features/props/LoopItems.tsx",
+    "src/editor/loopSelectionRead.ts"
   ],
   "adapters": [
     "electron/content/contentConfig.ts",
