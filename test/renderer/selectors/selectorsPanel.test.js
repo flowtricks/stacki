@@ -87,6 +87,14 @@ test('lock, clean up and undo go through to the project files', async () => {
     [...container.querySelectorAll('.selectors-row')].map(
       (row) => `${row.querySelector('.selectors-selector').textContent}:${/is-(\w+)/.exec(row.className)[1]}`,
     );
+  // The panel re-reads the project after each write; a slow runner (Windows CI)
+  // can take longer than one click's settle, so rows are awaited, within a bound.
+  const rowsAre = async (expected) => {
+    for (let attempt = 0; attempt < 50 && JSON.stringify(rows()) !== JSON.stringify(expected); attempt += 1) {
+      await act(async () => settle(40));
+    }
+    assert.deepEqual(rows(), expected);
+  };
   const click = async (element) =>
     act(async () => {
       element.click();
@@ -108,7 +116,7 @@ test('lock, clean up and undo go through to the project files', async () => {
       await act(async () => settle(40));
     }
     // It opens on the clean-up: only what can go.
-    assert.deepEqual(rows(), ['.ghost:unused', '.is-open:unused']);
+    await rowsAre(['.ghost:unused', '.is-open:unused']);
 
     // One row's trash removes just that style, and undo puts it back.
     const ghostRow = [...container.querySelectorAll('.selectors-row')].find((row) => row.textContent.includes('.ghost'));
@@ -121,15 +129,15 @@ test('lock, clean up and undo go through to the project files', async () => {
     });
     assert.equal(fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'), CSS);
     await click([...container.querySelectorAll('.selectors-tab')].find((tab) => tab.textContent.startsWith('All')));
-    assert.deepEqual(rows(), ['.hero:used', '.ghost:unused', '.is-open:unused']);
+    await rowsAre(['.hero:used', '.ghost:unused', '.is-open:unused']);
 
     const openRow = [...container.querySelectorAll('.selectors-row')].find((row) => row.textContent.includes('.is-open'));
     await click(openRow.querySelector('.selectors-lock'));
     assert.deepEqual(keepList(root).keep, ['is-open']);
-    assert.deepEqual(rows(), ['.hero:used', '.ghost:unused', '.is-open:kept']);
+    await rowsAre(['.hero:used', '.ghost:unused', '.is-open:kept']);
     // A Locked tab appears once something is locked, and unlocking from it works.
     await click([...container.querySelectorAll('.selectors-tab')].find((tab) => tab.textContent.startsWith('Locked')));
-    assert.deepEqual(rows(), ['.is-open:kept']);
+    await rowsAre(['.is-open:kept']);
     await click(container.querySelector('.selectors-lock'));
     assert.deepEqual(keepList(root).keep, []);
     await click([...container.querySelectorAll('.selectors-tab')].find((tab) => tab.textContent.startsWith('All')));
@@ -142,7 +150,7 @@ test('lock, clean up and undo go through to the project files', async () => {
     await click([...container.querySelectorAll('button')].find((button) => button.textContent === 'Remove style'));
     assert.equal(fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'), '.hero { a: b }\n.is-open { a: b }\n');
     assert.deepEqual(toasts.at(-1), ['Removed 1 unused style', 'success']);
-    assert.deepEqual(rows(), ['.hero:used', '.is-open:kept']);
+    await rowsAre(['.hero:used', '.is-open:kept']);
 
     assert.equal(undos.length, 2);
     await act(async () => {
