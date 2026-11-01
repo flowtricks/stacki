@@ -106,6 +106,23 @@ export interface DataContext {
    * the value's name.
    */
   readonly valueSamples?: Record<string, unknown>;
+  /** How a value the file computes reads a collection (collectionReader.ts), when the app can tell. */
+  readonly collectionReader?: CollectionReader;
+}
+
+/**
+ * The loop reader's answers the data tree uses, passed in so the tree's own
+ * module stays free of the JavaScript parser.
+ */
+export interface CollectionReader {
+  /** The collection `name` lists, and where its items keep their fields. */
+  readonly listOf: (
+    name: string,
+    frontmatter: string,
+    imports: readonly ImportLike[],
+  ) => { readonly collection: string; readonly itemPath: readonly string[] } | undefined;
+  /** The keys of an object literal, or undefined when `value` is not one. */
+  readonly keysOf: (value: string) => readonly string[] | undefined;
 }
 
 export interface SchemaField {

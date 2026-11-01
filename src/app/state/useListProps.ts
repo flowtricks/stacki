@@ -18,11 +18,16 @@ export function useListProps(projectPath: string | undefined, componentPath: str
       return undefined;
     }
     let live = true;
-    void readComponentProperties(projectPath, componentPath).then((result) => {
-      if (live && result.ok) {
-        setRead({ key, props: listPropsOf(frontmatterOf(result.value.source)) });
-      }
-    });
+    // A component whose properties can't be read just has no list props: its
+    // props keep their ordinary fields.
+    readComponentProperties(projectPath, componentPath).then(
+      (result) => {
+        if (live && result.ok) {
+          setRead({ key, props: listPropsOf(frontmatterOf(result.value.source)) });
+        }
+      },
+      () => undefined,
+    );
     return () => {
       live = false;
     };

@@ -66,7 +66,9 @@ test('the complete channel inventory matches real main and terminal registration
   // The binding picker samples a page's own import calls (content:sampleValue).
   // Content collections in the CMS panel add two: their reads and their edits. A new
   // item's template (its collection's fields, edited before it is created) adds one.
-  assert.equal(harness.handlers.size, 152);
+  // The Selectors panel adds three: finding unused selectors, removing them, and
+  // restoring what a removal changed.
+  assert.equal(harness.handlers.size, 155);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name

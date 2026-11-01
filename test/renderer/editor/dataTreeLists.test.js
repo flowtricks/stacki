@@ -18,6 +18,8 @@
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
 const { dataTree } = load('src/editor/dataSuggest.ts');
+// The app hands the tree the loop reader's answers; the tree's own module stays parser-free.
+const { collectionReader } = load('src/editor/collectionReader.ts');
 
 const frontmatter = [
   'const {',
@@ -36,6 +38,7 @@ const imports = [
 const tree = dataTree({
   frontmatter,
   imports,
+  collectionReader,
   propsSchema: [{ name: 'paddingTop', type: 'enum', optional: true, default: 'large' }],
   propsSample: { paddingTop: 'main' },
   collectionSamples: { campus: { id: 'worcester', data: { _id: 'abc', name: 'Worcester' } } },
@@ -71,6 +74,7 @@ const { scopeChips } = load('src/editor/dataScope.ts');
 const dashed = dataTree({
   frontmatter,
   imports,
+  collectionReader,
   collectionSamples: { campus: { id: 'w', data: { 'campus-pastor-name': 'Tony' } } },
   ancestorHeads: ['items1.map((item0) => ('],
 })

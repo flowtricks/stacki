@@ -857,7 +857,8 @@
     "src/editor/listItemsHelper.ts",
     "src/features/props/LoopLinked.tsx",
     "src/editor/loopFieldList.ts",
-    "src/features/props/LoopSourcePicker.tsx"
+    "src/features/props/LoopSourcePicker.tsx",
+    "src/editor/collectionReader.ts"
   ],
   "adapters": [
     "electron/content/contentConfig.ts",

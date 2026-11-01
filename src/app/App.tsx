@@ -6,6 +6,7 @@ import { routeToPath } from './model/nodeFactory';
 import { schemaFor } from './model/pageGestures';
 import { useAppScope } from './state/appComposers';
 import { WelcomeView, AppShell } from './shell/AppShell';
+import { collectionReader } from '../editor/collectionReader';
 
 export default function App() {
   const scope = useAppScope();
@@ -168,6 +169,9 @@ function bindContextOf(app: AppView, route: CanvasRoute) {
       // only be taken on trust. Keyed by the item's own name, so two loops on a
       // page are two places.
       itemIndex: app.itemIndex,
+      // Which collection a value lists, however the page reshapes it, so a
+      // builder export's loop item shows its fields (collectionReader.ts).
+      collectionReader,
       onStepItem: (name: string, step: number, count: number) =>
         app.setItemIndex((current) => ({
           ...current,

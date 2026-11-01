@@ -18,9 +18,7 @@ import {
   referenceCallIn,
 } from './dataSource';
 import { sampleAt, sampleKey, type TreeNode, sampleNode, literalNode } from './dataSample';
-import { queriesInScope, namesInScope, type DataContext, type SchemaField, autoQueryName } from './dataScope';
-import { readLoop } from './loopQueryRead';
-import { parseExpression } from './loopSyntax';
+import { queriesInScope, namesInScope, type CollectionReader, type DataContext, type SchemaField, autoQueryName } from './dataScope';
 export {
   QUERY_MARK,
   type MarkedQuery,
@@ -272,7 +270,7 @@ function referenceNode(name: string, value: string, samples: Record<string, unkn
 function buildValueNodes(
   decls: ReadonlyMap<string, string>,
   destructures: readonly Destructure[],
-  page: { readonly frontmatter: string; readonly imports: readonly ImportLike[]; readonly samples: Record<string, unknown> },
+  page: PageData,
   sample: unknown,
   seen: Set<string>,
   valueSamples: Record<string, unknown> = {},
@@ -583,7 +581,7 @@ export function dataTree(context: DataContext | undefined): TreeNode[] {
   const derived = withDerivedShapes(
     decls,
     buildPropNodes(destructures, schema, sample, seen),
-    buildValueNodes(decls, destructures, { frontmatter: fm, imports, samples }, sample, seen, context?.valueSamples),
+    buildValueNodes(decls, destructures, { frontmatter: fm, imports, samples, reader: context?.collectionReader }, sample, seen, context?.valueSamples),
   );
   const props = derived.props;
   const values = [...derived.values, ...buildCollectionNodes(context?.collections ?? [], fm, imports, samples, seen)];
@@ -598,21 +596,17 @@ export function dataTree(context: DataContext | undefined): TreeNode[] {
 // `items1`, read through the loop reader to the collection it lists, with one
 // sampled entry in the shape the page gives its items: `{ id, fields }` for a
 // builder export's reshaped items, the entry itself otherwise.
-function collectionListNode(
-  name: string,
-  page: { readonly frontmatter: string; readonly imports: readonly ImportLike[]; readonly samples: Record<string, unknown> },
-): TreeNode | undefined {
-  const imports = page.imports.flatMap((entry) => (entry.name !== undefined && entry.path !== undefined ? [{ name: entry.name, path: entry.path }] : []));
-  const reading = readLoop({ frontmatter: page.frontmatter, imports, data: name });
-  if (reading.kind !== 'query' || reading.query.source.kind !== 'astro') {
+function collectionListNode(name: string, page: PageData): TreeNode | undefined {
+  const listed = page.reader?.listOf(name, page.frontmatter, page.imports);
+  if (listed === undefined) {
     return undefined;
   }
-  const collection = reading.query.source.collection;
+  const collection = listed.collection;
   const entry = page.samples[collection];
   if (entry === undefined || entry === null) {
     return undefined;
   }
-  const itemPath = reading.home === undefined ? ['data'] : reading.home.itemPath;
+  const itemPath = listed.itemPath;
   const data = toRecord(entry)?.['data'];
   const id = toRecord(data)?.['_id'] ?? toRecord(entry)?.['id'];
   const item = itemPath[0] === 'fields' ? { id, fields: data } : entry;
@@ -626,22 +620,13 @@ function collectionListNode(
 // whose entries are collection lists, each opening to one sampled item.
 // Undefined when none of its entries is one.
 const HOLDER_ENTRIES_MAX = 100;
-function listsHolderNode(
-  name: string,
-  value: string,
-  page: { readonly frontmatter: string; readonly imports: readonly ImportLike[]; readonly samples: Record<string, unknown> },
-): TreeNode | undefined {
-  const parsed = parseExpression(value);
-  const object = parsed?.expression;
-  if (object?.kind !== 'object') {
+function listsHolderNode(name: string, value: string, page: PageData): TreeNode | undefined {
+  const keys = page.reader?.keysOf(value);
+  if (keys === undefined) {
     return undefined;
   }
   const children: TreeNode[] = [];
-  for (const entry of object.entries.slice(0, HOLDER_ENTRIES_MAX)) {
-    const key = entry.key;
-    if (key === undefined) {
-      continue;
-    }
+  for (const key of keys.slice(0, HOLDER_ENTRIES_MAX)) {
     const path = /^[A-Za-z_$][\w$]*$/.test(key) ? `${name}.${key}` : `${name}[${JSON.stringify(key)}]`;
     const node = collectionListNode(path, page);
     if (node !== undefined) {
@@ -652,6 +637,15 @@ function listsHolderNode(
   return children.length === 0
     ? undefined
     : { path: name, key: name, kind: 'object', preview: `${children.length} ${children.length === 1 ? 'list' : 'lists'}`, children };
+}
+
+// The page's frontmatter, imports and sampled entries, and the loop reader's
+// answers about them when the app passes it in.
+interface PageData {
+  readonly frontmatter: string;
+  readonly imports: readonly ImportLike[];
+  readonly samples: Record<string, unknown>;
+  readonly reader: CollectionReader | undefined;
 }
 
 // What can be looped over: a list, or a value whose shape the app cannot see
