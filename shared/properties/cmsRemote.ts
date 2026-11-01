@@ -11,6 +11,7 @@ import { record, text } from '../core/boundary';
 import { assert } from '../core/assert';
 import { parseConnectionId } from './cmsConnections';
 import {
+  parseProjectFile,
   parseRemoteSchemaField,
   parseRemoteValue,
   type RemoteSchemaField,
@@ -20,6 +21,10 @@ import {
 export const CMS_REMOTE_LIMITS = {
   collectionsMax: 200,
   documentsMax: 500,
+  /** Fields a list shows as columns beside each item's name. */
+  columnsMax: 12,
+  /** How far into a value a column looks for its line: a list of named things. */
+  cellDepthMax: 2,
   fieldsMax: 200,
   assetsMax: 500,
   revisionsMax: 100,
@@ -34,6 +39,9 @@ export interface RemoteCollection {
   readonly icon: string | undefined;
 }
 
+/** A field's value as a list's column shows it: a line of text, a number, or a switch. */
+export type RemoteCell = string | number | boolean;
+
 export type RemoteStatus = 'draft' | 'published' | 'changed';
 
 export interface RemoteDocumentSummary {
@@ -44,6 +52,10 @@ export interface RemoteDocumentSummary {
   readonly subtitle: string | undefined;
   /** Its picture in a list, when its type shows one. */
   readonly imageURL: string | undefined;
+  /** Its picture as a project file (an Astro entry's first image), relative to the project. */
+  readonly imageFile?: string;
+  /** The fields a list shows as columns, by name, each as a short value to read and sort by. */
+  readonly cells?: Readonly<Record<string, RemoteCell>>;
   readonly status: RemoteStatus;
   readonly updatedAt: string;
 }
@@ -113,6 +125,11 @@ export interface RemoteDocument {
   readonly publishedAt: string | undefined;
   /** Where the document opens in the CMS's own editor, when that is known. */
   readonly editURL: string | undefined;
+  /**
+   * The project file it is stored in, relative to the project, when it is one
+   * (an Astro content entry): its image paths are relative to that file's folder.
+   */
+  readonly file?: string;
 }
 
 export type RemoteResult<T> =
@@ -125,7 +142,15 @@ export interface RemoteWrite {
   readonly value: RemoteValue | undefined;
 }
 
-const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+// Letters, digits, `_` and `-`: Astro content keys are often kebab case
+// (`campus-description`), and exported ones may start with a digit (`1-logo-svg`).
+/**
+ * The id of a collection's template: its fields with no values, edited before
+ * an item is created. No stored document has it; creating gives the real one.
+ */
+export const REMOTE_TEMPLATE_ID = 'new-item';
+
+const IDENTIFIER = /^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$/;
 
 export function parseRemoteCollectionName(input: unknown): string {
   const name = text(input);
@@ -203,10 +228,83 @@ export function parseRemoteDocuments(input: unknown): RemoteDocumentSummary[] {
       title: preview(value['title']),
       subtitle: value['subtitle'] === undefined ? undefined : preview(value['subtitle']),
       imageURL: value['imageURL'] === undefined ? undefined : parseHTTPS(value['imageURL']),
+      ...(value['imageFile'] === undefined
+        ? {}
+        : { imageFile: parseProjectFile(value['imageFile']) }),
       status: parseStatus(value['status']),
       updatedAt: preview(value['updatedAt']),
+      ...(value['cells'] === undefined ? {} : { cells: parseCells(value['cells']) }),
     };
   });
+}
+
+/** The fields a list asks to show as columns: field names, a few, no repeats. */
+export function parseRemoteColumns(input: unknown): readonly string[] {
+  const columns = boundedList(input, CMS_REMOTE_LIMITS.columnsMax).map(parseRemoteFieldName);
+  if (new Set(columns).size !== columns.length) {
+    throw new Error('A column is named twice.');
+  }
+  assert(columns.length <= CMS_REMOTE_LIMITS.columnsMax, 'A list shows few columns');
+  return columns;
+}
+
+function parseCells(input: unknown): Readonly<Record<string, RemoteCell>> {
+  const value = record(input);
+  const entries = Object.entries(value);
+  if (entries.length > CMS_REMOTE_LIMITS.columnsMax) {
+    throw new Error('Too many columns.');
+  }
+  const cells: Record<string, RemoteCell> = {};
+  for (const [name, cell] of entries) {
+    if (typeof cell === 'number' && Number.isFinite(cell)) {
+      cells[parseRemoteFieldName(name)] = cell;
+    } else if (typeof cell === 'boolean') {
+      cells[parseRemoteFieldName(name)] = cell;
+    } else {
+      cells[parseRemoteFieldName(name)] = preview(cell);
+    }
+  }
+  assert(Object.keys(cells).length === entries.length, 'Every cell parses');
+  return cells;
+}
+
+/**
+ * A stored value as a column shows it: text and numbers as they are, a switch
+ * as one, a slug or a referenced document by its name, a list by its items'
+ * names. Anything else — an image, a nested group — has no line to show.
+ */
+export function remoteCell(value: unknown, depth = 0): RemoteCell | undefined {
+  assert(depth <= CMS_REMOTE_LIMITS.cellDepthMax, 'A cell looks into a value boundedly');
+  if (typeof value === 'string') {
+    return value.length > CMS_REMOTE_LIMITS.previewCharsMax
+      ? value.slice(0, CMS_REMOTE_LIMITS.previewCharsMax)
+      : value;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    const items: unknown[] = value;
+    if (depth >= CMS_REMOTE_LIMITS.cellDepthMax) {
+      return undefined;
+    }
+    const names = items
+      .slice(0, CMS_REMOTE_LIMITS.columnsMax)
+      .map((item) => remoteCell(item, depth + 1))
+      .filter((cell) => cell !== undefined);
+    return names.length === 0 ? undefined : remoteCell(names.join(', '), depth + 1);
+  }
+  if (typeof value === 'object' && value !== null && depth < CMS_REMOTE_LIMITS.cellDepthMax) {
+    const named = ['current', 'title', 'name', 'label'].map((key): unknown =>
+      Reflect.get(value, key),
+    );
+    const first = named.find((part) => typeof part === 'string');
+    return first === undefined ? undefined : remoteCell(first, depth + 1);
+  }
+  return undefined;
 }
 
 export function parseRemoteDocument(input: unknown): RemoteDocument {
@@ -221,6 +319,7 @@ export function parseRemoteDocument(input: unknown): RemoteDocument {
     editedAt: optionalTime(value['editedAt']),
     publishedAt: optionalTime(value['publishedAt']),
     editURL: editURL === undefined ? undefined : parseHTTPS(editURL),
+    ...(value['file'] === undefined ? {} : { file: parseProjectFile(value['file']) }),
   };
 }
 

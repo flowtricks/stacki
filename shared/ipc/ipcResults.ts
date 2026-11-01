@@ -14,6 +14,8 @@ import type {
   RemoteDocumentSummary,
   RemoteResult,
 } from '../properties/cmsRemote';
+import type { LinkPreview } from '../properties/linkPreview';
+import type { AstroRemoteEditAnswer, AstroRemoteReadAnswer } from '../properties/astroContent';
 import type { RepositoryResult } from '../ipc/publishRepository';
 import type { PublishDiscovery } from '../properties/publishDiscovery';
 import type { DesktopPublishState, PublishAvailability } from '../properties/publishState';
@@ -251,6 +253,8 @@ export interface IpcResults {
     readonly parserNote?: undefined | string;
     readonly collection: WireCollection;
   };
+  readonly 'content:remoteEdit': RemoteResult<AstroRemoteEditAnswer>;
+  readonly 'content:remoteRead': RemoteResult<AstroRemoteReadAnswer>;
   readonly 'content:rename': {
     readonly renamed: boolean;
     readonly pointers: number;
@@ -466,12 +470,14 @@ export interface IpcResults {
   readonly 'cmsRemote:delete': RemoteResult<number>;
   readonly 'cmsRemote:move': RemoteResult<RemoteDocumentList>;
   readonly 'cmsRemote:document': RemoteResult<RemoteDocument>;
+  readonly 'cmsRemote:template': RemoteResult<RemoteDocument>;
   readonly 'cmsRemote:write': RemoteResult<RemoteDocument>;
   readonly 'cmsRemote:act': RemoteResult<RemoteDocument | undefined>;
   readonly 'cmsRemote:history': RemoteResult<readonly RemoteRevision[]>;
   readonly 'cmsRemote:restore': RemoteResult<RemoteDocument>;
   readonly 'cmsRemote:references': RemoteResult<readonly RemoteReferenceOption[]>;
   readonly 'cmsRemote:upload': RemoteResult<RemoteAsset | undefined>;
+  readonly 'cmsRemote:linkPreview': RemoteResult<LinkPreview | undefined>;
   readonly 'git:publish': {
     readonly ok: true;
     readonly url: undefined | string;

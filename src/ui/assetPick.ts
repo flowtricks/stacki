@@ -12,6 +12,11 @@ export interface AssetRequest {
   readonly mediaKind: 'image' | 'video' | 'audio' | 'asset';
   readonly current: string;
   readonly onPick: (rel: string, entry?: WireAssetEntry) => void;
+  /**
+   * Where the Assets panel answers: in the side panel (the default), or in a
+   * pop-up over the page, for a field that must stay open meanwhile.
+   */
+  readonly presentation?: 'panel' | 'overlay';
 }
 
 type AssetListener = (request: AssetRequest | undefined) => void;

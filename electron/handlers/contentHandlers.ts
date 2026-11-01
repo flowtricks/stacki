@@ -13,15 +13,99 @@ import { resolveImport } from '../content/cmsRefs';
 import { readContentConfig, validateEntry } from '../content/contentConfig';
 import { listEntries, writeEntry, countEntries, coveredPaths } from '../content/contentEntries';
 import { planRename, applyRename } from '../content/contentRefs';
+import { astroRemoteService, type AstroRemoteService } from '../content/astroRemoteService';
+import type {
+  AstroRemoteEdit,
+  AstroRemoteEditAnswer,
+  AstroRemoteRead,
+  AstroRemoteReadAnswer,
+} from '../../shared/properties/astroContent';
+import type { RemoteResult } from '../../shared/properties/cmsRemote';
 import { errorMessage, toPosix } from '../lib/mainHelpers';
 import { collectionOf } from './cmsFiles';
 import type { MainHost } from './mainHost';
 
 export function registerContentHandlers(
-  host: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send'>,
+  host: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send' | 'shell'>,
 ): void {
   registerContentConfigHandlers(host);
   registerContentRenameHandlers(host);
+  registerContentRemoteHandlers(host);
+}
+
+// The CMS panel's reads and edits of content collections, answered as a
+// connected CMS's are (astroRemoteService.ts): an expected failure — a config
+// that will not load, an entry deleted meanwhile — is an answer the panel
+// shows, not a crash.
+function registerContentRemoteHandlers({
+  ipcMain,
+  noteAppWrite,
+  send,
+  shell,
+}: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send' | 'shell'>): void {
+  const service = (projectPath: string) =>
+    astroRemoteService(projectPath, {
+      readConfig: async () => parseContentConfig(await readContentConfig(projectPath)),
+      trash: (file) => shell.trashItem(file),
+    });
+  ipcMain.handle('content:remoteRead', async (_event, { projectPath, request }) =>
+    answered(() => readRemote(service(projectPath), request)),
+  );
+  ipcMain.handle('content:remoteEdit', async (_event, { projectPath, request }) => {
+    const result = await answered(() => editRemote(service(projectPath), request));
+    noteAppWrite();
+    send('cms:changed', {});
+    return result;
+  });
+}
+
+function readRemote(
+  service: AstroRemoteService,
+  request: AstroRemoteRead,
+): Promise<AstroRemoteReadAnswer> {
+  switch (request.operation) {
+    case 'collections':
+      return service.collections();
+    case 'documents':
+      return service.documents(request.collection, request.columns);
+    case 'document':
+      return service.document(request.id);
+    case 'template':
+      return service.template(request.collection);
+    default: {
+      const exhaustive: never = request;
+      return exhaustive;
+    }
+  }
+}
+
+function editRemote(
+  service: AstroRemoteService,
+  request: AstroRemoteEdit,
+): Promise<AstroRemoteEditAnswer> {
+  switch (request.operation) {
+    case 'write':
+      return service.write(request.write);
+    case 'create':
+      return service.create(request.collection);
+    case 'delete':
+      return service.remove(request.ids);
+    case 'createCollection':
+      return service.createCollection(request.name);
+    default: {
+      const exhaustive: never = request;
+      return exhaustive;
+    }
+  }
+}
+
+async function answered<T>(run: () => Promise<T>): Promise<RemoteResult<T>> {
+  try {
+    return { ok: true, value: await run() };
+  } catch (error: unknown) {
+    const message = errorMessage(error).slice(0, 900);
+    return { ok: false, message: message || 'The content collection could not be read.' };
+  }
 }
 
 function registerContentConfigHandlers({

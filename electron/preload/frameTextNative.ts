@@ -10,11 +10,18 @@ export function isCanvasTextEditing(target: unknown): boolean {
   return target instanceof Node && !!editingRoot?.contains(target);
 }
 
+export interface NativeTextResult {
+  readonly value: string | undefined;
+  readonly restored: boolean;
+  /** Shows the typed words again: the save is on its way, so the old ones never flash. */
+  readonly keep: () => void;
+}
+
 export function openNativeText(
   match: TextMatch,
   event: MouseEvent,
   changed: (value: string) => void,
-  done: (result: { readonly value: string | undefined; readonly restored: boolean }) => void,
+  done: (result: NativeTextResult) => void,
 ) {
   const root = textEditorRoot(match);
   if (!root || match.nodes.map((node) => node.data).join('').length > 10_000) {
@@ -37,7 +44,8 @@ export function openNativeText(
     cleanup();
     clearNativeTextSelection(root);
     const value = action === 'apply' ? buffer.value() : undefined;
-    const restored = buffer.restore();
+    // The original words come back first: the save is checked against them.
+    const { restored, keep } = buffer.restore();
     for (const attribute of attributes) {
       if (attribute.value === null) {
         root.removeAttribute(attribute.name);
@@ -47,7 +55,7 @@ export function openNativeText(
     }
     editingRoot = undefined;
     root.blur();
-    done({ value, restored });
+    done({ value, restored, keep });
   };
   installNativeTextStyle(root);
   root.setAttribute('contenteditable', 'true');

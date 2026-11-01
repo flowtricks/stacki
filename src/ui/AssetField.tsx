@@ -95,6 +95,8 @@ export interface AssetFieldProps {
   readonly srcRel?: string | undefined;
   readonly baseDir?: string | undefined;
   readonly onCurrentDimensions?: ((dimensions: AssetDimensions) => void) | undefined;
+  /** Where the Assets panel opens to choose (assetPick.ts); the side panel by default. */
+  readonly pickPresentation?: AssetRequest['presentation'];
 }
 
 export default function AssetField(props: AssetFieldProps) {
@@ -142,6 +144,7 @@ function useAssetField({
   srcRel: sourceRel,
   baseDir: baseDirectory,
   onCurrentDimensions,
+  pickPresentation,
 }: AssetFieldProps) {
   // Preview the effective asset without writing the component's fallback into the page.
   // An explicit empty string still overrides the fallback, just as it does in Astro.
@@ -202,17 +205,30 @@ function useAssetField({
   const choose = (): void =>
     requestAsset({
       mediaKind,
+      ...(pickPresentation === undefined ? {} : { presentation: pickPresentation }),
       current: entry?.rel || target || '',
       onPick: (pickedRel, picked) => {
         justPicked.current = true;
-        if (onPickEntry) {
-          onPickEntry(picked || { rel: pickedRel, root: pickedRel.split('/')[0] ?? '' });
-          return;
-        }
-        onChange(assetValueFor(pickedRel, baseDirectory), true);
+        answerPick({ pickedRel, picked, onPickEntry, onChange, baseDirectory });
       },
     });
   return { current, isFallback, external, mode, setMode, dims, entry, target, noteDims, choose };
+}
+
+// A pick goes to the host's own handler when it has one, else into the value.
+function answerPick(answer: {
+  readonly pickedRel: string;
+  readonly picked: WireAssetEntry | undefined;
+  readonly onPickEntry: AssetFieldProps['onPickEntry'];
+  readonly onChange: AssetFieldProps['onChange'];
+  readonly baseDirectory: string | undefined;
+}): void {
+  const { pickedRel, picked, onPickEntry } = answer;
+  if (onPickEntry) {
+    onPickEntry(picked || { rel: pickedRel, root: pickedRel.split('/')[0] ?? '' });
+    return;
+  }
+  answer.onChange(assetValueFor(pickedRel, answer.baseDirectory), true);
 }
 
 type AssetFieldState = ReturnType<typeof useAssetField>;
@@ -306,7 +322,8 @@ function LocalCard({
   );
 }
 
-function useAssetEntries(projectPath: string): readonly WireAssetEntry[] {
+/** The project's asset files, kept current as they change on disk. */
+export function useAssetEntries(projectPath: string): readonly WireAssetEntry[] {
   const [entries, setEntries] = useState<readonly WireAssetEntry[]>([]);
   useEffect(() => {
     let active = true;

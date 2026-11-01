@@ -21,6 +21,7 @@ import { ChevronDownIcon, ChevronRightIcon, DragIcon, PlusIcon, TrashIcon } from
 import useListReorder from '../../ui/useListReorder';
 import { CmsListField } from './CmsListField';
 import { RemoteImageGrid } from './RemoteImageGrid';
+import { hasOptionImage, OPTION_IMAGE_MENU, OptionImage } from './projectImages';
 import { labelize } from './cmsSchema';
 import { fieldTypeOf } from './remoteFieldTypes';
 import { SanityTypeIcon, typeIcons } from './SanityTypeIcon';
@@ -32,6 +33,14 @@ import { fieldTitle, remoteKey } from './remoteValues';
 type ListProps = RemoteValueProps & { readonly of: readonly RemoteType[] };
 
 const PLAIN: ReadonlySet<RemoteType['kind']> = new Set(['string', 'number']);
+
+// A long list folds to its first rows, so the fields after it stay in reach.
+const LIST_FOLD = {
+  /** A list longer than this starts folded. */
+  rowsMax: 8,
+  /** The rows a folded list shows. */
+  rowsShown: 5,
+} as const;
 
 export function RemoteListEditor(props: ListProps) {
   const items = remoteList(props.value) ?? [];
@@ -63,7 +72,10 @@ export function RemoteListEditor(props: ListProps) {
 function ItemRows(props: ListProps & { readonly items: readonly RemoteValue[] }) {
   const { items } = props;
   const [open, setOpen] = useState<number | undefined>(undefined);
+  const [unfolded, setUnfolded] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  const folded = items.length > LIST_FOLD.rowsMax && !unfolded;
+  const shown = folded ? items.slice(0, LIST_FOLD.rowsShown) : items;
   // Documents a row may be titled by: the list's own references, and a group's
   // reference fields (a nav dropdown's category is its name).
   const targets = [...new Set(props.of.flatMap(referenceTargetsOf))];
@@ -78,7 +90,7 @@ function ItemRows(props: ListProps & { readonly items: readonly RemoteValue[] })
   });
   return (
     <div className="remote-cms-list">
-      {items.map((item, index) => (
+      {shown.map((item, index) => (
         <ItemRow
           key={keyOf(item) ?? index}
           {...props}
@@ -104,11 +116,22 @@ function ItemRows(props: ListProps & { readonly items: readonly RemoteValue[] })
           }
         />
       ))}
+      {items.length > LIST_FOLD.rowsMax && (
+        <button
+          type="button"
+          className="remote-cms-list-fold"
+          onClick={() => setUnfolded(!unfolded)}
+        >
+          {folded ? `Show all ${items.length}` : 'Show fewer'}
+        </button>
+      )}
       {error && <ErrorToast message={error} />}
       <AddControls
         {...props}
         onAdd={(item) => {
           write([...items, item]);
+          // The new item opens at the end, so the whole list shows.
+          setUnfolded(true);
           setOpen(items.length);
         }}
         onError={setError}
@@ -158,6 +181,7 @@ function ItemRow(
         <RowIcon
           icon={Icon}
           sanity={referenced && typeIcons(props.context.connectionId).get(referenced)}
+          picture={choicePicture(member, props.item)}
         />
         {shape === 'inline' ? (
           // A press inside the editor selects text; it never starts a row drag.
@@ -207,17 +231,29 @@ function RemoveButton(props: { readonly onRemove: () => void }) {
   );
 }
 
-// A row's type icon: a reference's document type's Sanity icon, else the member's.
+// A row's type icon: the picture of the record a choice names, a reference's
+// document type's Sanity icon, else the member's.
 function RowIcon(props: {
   readonly icon: ReturnType<typeof fieldTypeOf>['icon'];
   readonly sanity: string | undefined;
+  readonly picture: string | undefined;
 }) {
   const Icon = props.icon;
+  if (props.picture !== undefined) {
+    return <OptionImage file={props.picture} placeholder={false} />;
+  }
   return props.sanity === undefined ? (
     <Icon size={12} />
   ) : (
     <SanityTypeIcon symbol={props.sanity} size={12} />
   );
+}
+
+// The picture of the record a chosen item names (an Astro entry's first image).
+function choicePicture(member: RemoteType, item: RemoteValue): string | undefined {
+  return member.kind === 'string'
+    ? member.options.find((option) => option.value === item)?.imageFile
+    : undefined;
 }
 
 // An item's one value, edited in its row: the item itself, or a group's only field.
@@ -354,11 +390,21 @@ function AddOption(
   if (left.length === 0) {
     return undefined;
   }
+  const pictures = hasOptionImage(left);
   return (
     <Dropdown
       value=""
-      placeholder={`Add ${props.label.toLowerCase().replace(/s$/, '')}…`}
-      options={left.map((option) => ({ value: option.value, label: option.title }))}
+      placeholder={`Add ${singular(props.label.toLowerCase())}…`}
+      // Adding is a click: hovering a choice must not add it.
+      livePreview={false}
+      searchable={left.length > 8}
+      searchPlaceholder="Search…"
+      menuClassName={pictures ? OPTION_IMAGE_MENU : ''}
+      options={left.map((option) => ({
+        value: option.value,
+        label: option.title,
+        icon: <OptionImage file={option.imageFile} placeholder={pictures} />,
+      }))}
       onChange={(value) => props.onAdd(value)}
     />
   );
@@ -380,6 +426,7 @@ function AddReference(
     <Dropdown
       value=""
       placeholder={`Add ${props.to.map(labelize).join(' or ').toLowerCase() || 'reference'}…`}
+      livePreview={false}
       searchable={true}
       searchPlaceholder="Search…"
       options={options
@@ -392,6 +439,17 @@ function AddReference(
       onChange={(id) => props.onAdd({ _type: 'reference', _ref: id, _key: remoteKey() })}
     />
   );
+}
+
+// A plural field name as one item: "campuses" → "campus", "categories" → "category".
+function singular(plural: string): string {
+  if (plural.endsWith('ies')) {
+    return `${plural.slice(0, -3)}y`;
+  }
+  if (/(ses|xes|zes|ches|shes)$/.test(plural)) {
+    return plural.slice(0, -2);
+  }
+  return plural.endsWith('s') && !plural.endsWith('ss') ? plural.slice(0, -1) : plural;
 }
 
 // The member type an item is: by its `_type` where it names one, else the first.

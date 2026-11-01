@@ -13,7 +13,7 @@
 // connection returns (useRemote in remoteCmsShared.tsx).
 
 import { assert } from '../../../shared/core/assert';
-import { remoteCollections, remoteDocument, remoteDocuments } from '../../ipc/cmsConnectionsBridge';
+import { remoteCollections, remoteDocument, remoteDocuments } from './remoteSource';
 import type {
   RemoteCollection,
   RemoteDocument,

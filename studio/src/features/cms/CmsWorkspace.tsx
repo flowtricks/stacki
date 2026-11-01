@@ -6,6 +6,9 @@ import ContentView from '../../../vendor/stacki/src/features/content/ContentView
 import { RemoteCmsView } from '../../../vendor/stacki/src/features/cms/RemoteCmsView';
 import type { RemoteCmsSelection } from '../../../vendor/stacki/src/features/cms/remoteCmsShared';
 import { CmsConnectionsDialog } from './CmsConnectionsDialog';
+import { AssetsPanel } from '../assets/AssetsPanel';
+import { AssetPickOverlay, assetPickTitle } from '../../../vendor/stacki/src/ui/AssetPickOverlay';
+import { clearAssetRequest } from '../../../vendor/stacki/src/ui/assetPick';
 import type { CmsUndo } from '../../../vendor/stacki/src/features/cms/cmsWriter';
 import type { EditorProps } from '../../app/Editor';
 import type { SharedDocument } from '../collaboration/useDocument';
@@ -81,17 +84,7 @@ export function CmsWorkspace({
     return null;
   }
   if (cms.kind === 'remote') {
-    return (
-      <RemoteCmsView
-        key={`${cms.selection.connection.id}:${cms.selection.collection}`}
-        projectPath="studio"
-        selection={cms.selection}
-        hidden={panel !== 'collections'}
-        onSelect={(selection) =>
-          setCms(selection === undefined ? undefined : { kind: 'remote', selection })
-        }
-      />
-    );
+    return <RemoteWorkspace props={props} selection={cms.selection} />;
   }
   if (cms.kind === 'content') {
     return (
@@ -120,5 +113,40 @@ export function CmsWorkspace({
         props.refresh();
       }}
     />
+  );
+}
+
+// A connected CMS's collection, or the project's content collections; an
+// entry's image is chosen in a pop-up over it, so the entry stays open.
+function RemoteWorkspace({
+  props,
+  selection,
+}: {
+  readonly props: EditorProps;
+  readonly selection: RemoteCmsSelection;
+}) {
+  const { panel, setCms, pick } = props.view;
+  return (
+    <>
+      <RemoteCmsView
+        key={`${selection.connection.id}:${selection.collection}`}
+        projectPath="studio"
+        selection={selection}
+        hidden={panel !== 'collections'}
+        onSelect={(next) =>
+          setCms(next === undefined ? undefined : { kind: 'remote', selection: next })
+        }
+      />
+      {pick?.presentation === 'overlay' && (
+        <AssetPickOverlay title={assetPickTitle(pick.mediaKind)} onClose={clearAssetRequest}>
+          <AssetsPanel
+            project={props.project}
+            refresh={props.refresh}
+            error={props.report}
+            pick={pick}
+          />
+        </AssetPickOverlay>
+      )}
+    </>
   );
 }

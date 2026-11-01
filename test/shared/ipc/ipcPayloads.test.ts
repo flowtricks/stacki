@@ -165,6 +165,11 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
     connectionId: '00000000-0000-4000-8000-000000000000',
     collection: 'campus',
   },
+  'cmsRemote:template': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    collection: 'campus',
+  },
   'cmsRemote:document': {
     projectPath: '/site',
     connectionId: '00000000-0000-4000-8000-000000000000',
@@ -184,6 +189,15 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
     projectPath: '/site',
     connectionId: '00000000-0000-4000-8000-000000000000',
     kind: 'image',
+  },
+  'cmsRemote:linkPreview': { url: 'https://youtu.be/gQIJRzTjvCA' },
+  'content:remoteRead': {
+    projectPath: '/site',
+    request: { operation: 'documents', collection: 'blog' },
+  },
+  'content:remoteEdit': {
+    projectPath: '/site',
+    request: { operation: 'createCollection', name: 'Blog posts' },
   },
   'cmsRemote:act': {
     projectPath: '/site',

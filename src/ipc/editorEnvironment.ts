@@ -27,6 +27,10 @@ export const cmsTransport = {
     window.avb.contentEntries(payload),
   contentCollections: (payload: Parameters<PreloadBridge['contentCollections']>[0]) =>
     window.avb.contentCollections(payload),
+  contentRemoteRead: (payload: Parameters<PreloadBridge['contentRemoteRead']>[0]) =>
+    window.avb.contentRemoteRead(payload),
+  contentRemoteEdit: (payload: Parameters<PreloadBridge['contentRemoteEdit']>[0]) =>
+    window.avb.contentRemoteEdit(payload),
   cmsAssetRef: (payload: Parameters<PreloadBridge['cmsAssetRef']>[0]) =>
     window.avb.cmsAssetRef(payload),
   deleteCms: (payload: Parameters<PreloadBridge['deleteCms']>[0]) => window.avb.deleteCms(payload),
@@ -56,6 +60,8 @@ export const styleTransport = {
 export const assetDropLimit = 1_000;
 export const assetDeletionMessage = 'The file moves to your Bin.';
 export const collectionDeletionMessage = 'Moves the collection to the Trash.';
+/** What deleting content collection entries does to their files. */
+export const entryDeletionMessage = 'Their files move to the Trash.';
 export function assetSources(
   _path: string,
   native: readonly [string, string],

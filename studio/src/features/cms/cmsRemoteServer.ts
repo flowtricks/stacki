@@ -21,6 +21,8 @@ import {
   cmsRemoteService,
   type CmsRemoteService,
 } from '../../../vendor/stacki/electron/content/cmsRemoteService';
+import { fetchLinkPreview } from '../../../vendor/stacki/electron/content/linkPreview';
+import { parseVideoLinkURL } from '../../../vendor/stacki/shared/properties/linkPreview';
 import { SANITY_UPLOAD_BYTES_MAX } from '../../../vendor/stacki/electron/content/sanityUpload';
 import {
   parseCmsConnectionDraft,
@@ -29,6 +31,7 @@ import {
 import {
   parseRemoteAssetKind,
   parseRemoteCollectionName,
+  parseRemoteColumns,
   parseRemoteDocumentAction,
   parseRemoteDocumentId,
   parseRemoteIds,
@@ -56,11 +59,16 @@ type Operation = (service: CmsRemoteService, input: Record<string, unknown>) => 
 // Each call by name, its input parsed at this boundary before it reaches the service.
 const OPERATIONS: Readonly<Record<string, Operation>> = {
   collections: (service) => service.collections(),
-  documents: (service, input) => service.documents(parseRemoteCollectionName(input['collection'])),
+  documents: (service, input) =>
+    service.documents(
+      parseRemoteCollectionName(input['collection']),
+      input['columns'] === undefined ? [] : parseRemoteColumns(input['columns']),
+    ),
   create: (service, input) => service.create(parseRemoteCollectionName(input['collection'])),
   delete: (service, input) => service.remove(parseRemoteIds(input['ids'])),
   move: (service, input) => service.move(parseRemoteMove(input['move'])),
   document: (service, input) => service.document(parseRemoteDocumentId(input['id'])),
+  template: (service, input) => service.template(parseRemoteCollectionName(input['collection'])),
   write: (service, input) => service.write(parseRemoteWrite(input['write'])),
   act: (service, input) =>
     service.act(parseRemoteDocumentId(input['id']), parseRemoteDocumentAction(input['action'])),
@@ -83,6 +91,10 @@ export function cmsRemoteRoutes(root: string) {
       send(response, await local.route(request, pathname, readBody));
       return true;
     }
+    if (pathname === '/studio/api/link-preview' && request.method === 'POST') {
+      send(response, await linkPreviewRoute(await readBody()));
+      return true;
+    }
     const operation = /^\/studio\/api\/cms-remote\/([a-z]+)$/.exec(pathname)?.[1];
     if (operation === undefined || request.method !== 'POST') {
       return false;
@@ -100,6 +112,18 @@ export function cmsRemoteRoutes(root: string) {
     }
     return true;
   };
+}
+
+// A video link's card, as Desktop's main process fetches it (linkPreview.ts);
+// the parser admits links to known video hosts only, so no other address is
+// ever fetched from here.
+async function linkPreviewRoute(text: string) {
+  try {
+    const url = parseVideoLinkURL(record(JSON.parse(text))['url']);
+    return { ok: true, value: await fetchLinkPreview(url) };
+  } catch (error) {
+    return { ok: false, message: cmsFailureMessage(error).slice(0, 900) };
+  }
 }
 
 async function run(service: CmsRemoteService, operation: string, text: string) {

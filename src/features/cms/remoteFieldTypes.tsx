@@ -29,6 +29,9 @@ type Icon = (props: IconProps) => ReactElement;
 export function fieldTypeOf(type: RemoteType): { readonly icon: Icon; readonly label: string } {
   switch (type.kind) {
     case 'string':
+      if (type.asset === 'image') {
+        return { icon: ElementImageIcon, label: 'Image' };
+      }
       return type.options.length > 0
         ? { icon: ElementSelectIcon, label: 'Option' }
         : { icon: TextIcon, label: 'Plain text' };

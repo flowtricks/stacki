@@ -35,7 +35,8 @@ export function createTextBuffer(
     intact,
     value: () => (rendered.join('') === original.join('') ? undefined : rendered.join('')),
     length: () => rendered.join('').length,
-    restore: () => restoreTextBuffer(original, intact, write),
+    // The original words back; `keep` shows the typed ones again once a save is checked.
+    restore: () => closeTextBuffer(original, rendered, { intact, write }),
     replace: (range: TextOffsets, text: string) => {
       if (
         !intact() ||
@@ -79,15 +80,27 @@ export function createTextBuffer(
   };
 }
 
-function restoreTextBuffer(
+function closeTextBuffer(
   original: readonly string[],
+  typed: readonly string[],
+  buffer: { readonly intact: () => boolean; readonly write: (texts: readonly string[]) => void },
+) {
+  const restored = restoreTextBuffer(original, buffer.intact, buffer.write);
+  assert(!restored || buffer.intact(), 'A restored buffer is intact');
+  return { restored, keep: () => void restoreTextBuffer(typed, buffer.intact, buffer.write) };
+}
+
+// Writes whole words back into the editor's text nodes, unless the page has
+// replaced them since: the original on close, or the typed words after a save.
+function restoreTextBuffer(
+  texts: readonly string[],
   intact: () => boolean,
   write: (texts: readonly string[]) => void,
 ): boolean {
   if (!intact()) {
     return false;
   }
-  write(original);
+  write(texts);
   return true;
 }
 

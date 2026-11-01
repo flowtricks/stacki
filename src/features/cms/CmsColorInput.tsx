@@ -3,9 +3,6 @@
 // typed. A drag in the picker previews in the swatch and is saved on release.
 import ColorSwatch from '../style/components/ColorSwatch';
 
-/** A hex colour: #rgb, #rgba, #rrggbb or #rrggbbaa. */
-export const HEX_COLOR = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
-
 export function CmsColorInput(props: {
   readonly value: string;
   readonly label: string;

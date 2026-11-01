@@ -1,0 +1,46 @@
+/* The Assets panel in a pop-up: tall enough to browse, narrow enough to read
+   as a picker, and the full screen on a phone. */
+.asset-pick-overlay {
+  margin: auto;
+  inset: 0;
+  width: min(720px, calc(100vw - 48px));
+  height: min(760px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 1px solid #3a3a3a;
+  border-radius: 16px;
+  background: #1b1b1b;
+  color: #e8e8e8;
+  box-shadow: 0 24px 90px #0008;
+  overflow: hidden;
+}
+.asset-pick-overlay header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #333;
+}
+.asset-pick-overlay h2 {
+  font-size: 17px;
+}
+.asset-pick-overlay-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.asset-pick-overlay-body > * {
+  flex: 1;
+  min-height: 0;
+}
+@media (max-width: 700px) {
+  .asset-pick-overlay {
+    width: 100vw;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+  }
+}

@@ -428,11 +428,14 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
         {/* A loop hands its item one entry of a list, and the list has more
               than one. These say which one is being read, and move it — so the
               fields below are this service's, not always the first one's. The
-              row itself still picks the item, so the arrows stop the click. */}
+              row itself still picks the item, so the arrows stop the click.
+              They take the right edge in place of the item's field count,
+              which the open rows beneath already show. */}
         {node.nav && onStepItem ? (
           <ItemNavigation path={node.path} nav={node.nav} onStepItem={onStepItem} />
-        ) : undefined}
-        <PreviewValue preview={node.preview} kind={node.kind} image={node.image} />
+        ) : (
+          <PreviewValue preview={node.preview} kind={node.kind} image={node.image} />
+        )}
       </div>
       {isOpen &&
         (node.children?.length ? (

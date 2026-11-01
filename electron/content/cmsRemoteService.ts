@@ -24,6 +24,7 @@ import {
   sanityDocument,
   sanityDocuments,
   sanityReferenceOptions,
+  sanityTemplate,
   sanityWriteDraft,
   type SanityDataset,
 } from './sanityContent';
@@ -40,11 +41,17 @@ import { sanityUploadBytes } from './sanityUpload';
 
 export interface CmsRemoteService {
   readonly collections: () => Promise<RemoteCollection[]>;
-  readonly documents: (collection: string) => Promise<RemoteDocumentList>;
+  /** One collection's items, each with the `columns` fields' values to show beside it. */
+  readonly documents: (
+    collection: string,
+    columns?: readonly string[],
+  ) => Promise<RemoteDocumentList>;
   readonly create: (collection: string) => Promise<RemoteDocumentSummary>;
   readonly remove: (ids: readonly string[]) => Promise<number>;
   readonly move: (move: RemoteMove) => Promise<RemoteDocumentList>;
   readonly document: (id: string) => Promise<RemoteDocument>;
+  /** A collection's fields with no values, edited before a new item is created. */
+  readonly template: (collection: string) => Promise<RemoteDocument>;
   readonly write: (write: RemoteWrite) => Promise<RemoteDocument>;
   readonly act: (id: string, action: RemoteDocumentAction) => Promise<RemoteDocument | undefined>;
   readonly history: (id: string) => Promise<RemoteRevision[]>;
@@ -65,8 +72,8 @@ export function cmsRemoteService(root: string, target: SanityDataset): CmsRemote
     return (type: string) => sanityDocumentSchema(named, type, lists);
   };
   const previewFor = (type: string) => sanityDocumentSchema(sanityNamedTypes(root), type)?.preview;
-  const documents = (collection: string) =>
-    sanityDocuments(target, collection, previewFor(collection));
+  const documents = (collection: string, columns: readonly string[] = []) =>
+    sanityDocuments(target, collection, previewFor(collection), columns);
   const document = (id: string) => sanityDocument(target, id, schemaOf());
   return {
     // In the order the site's own Studio lists them, each with its schema's icon.
@@ -92,6 +99,7 @@ export function cmsRemoteService(root: string, target: SanityDataset): CmsRemote
       return documents(move.collection);
     },
     document,
+    template: async (collection) => sanityTemplate(collection, schemaOf()),
     write: async (write) => {
       await sanityWriteDraft(target, write);
       return document(write.id);

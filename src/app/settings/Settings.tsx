@@ -1,25 +1,59 @@
 import { ErrorToast } from '../../ui/ErrorToast';
 import { CmsConnections } from '../../features/cmsConnections/CmsConnections';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Popup from '../../ui/Popup';
 import StudioSetup from '../../features/studioSetup/StudioSetup';
 import { cleanError } from '../../lib/cleanError';
 import { readPreferences, savePreference } from './preferencesBridge';
 import './settings.css';
 import { InfoLabel } from '../../ui/InfoLabel';
+import { assert } from '../../../shared/core/assert';
 
 interface Props {
   readonly projectPath: string | undefined;
   readonly previewURL: string | undefined;
 }
 
-export default function Settings(props: Props) {
-  const [open, setOpen] = useState(false);
-  useEffect(() => window.avb.onMenu('settings', () => setOpen(true)), []);
-  return open ? <SettingsDialog {...props} onClose={() => setOpen(false)} /> : undefined;
+// Who opens Settings besides the File menu: the title bar's gear on Windows and
+// Linux, whose custom title bar has no menu bar to hold File > Settings.
+const settingsOpeners = new Set<(section: SettingsSection) => void>();
+
+/** Where Settings opens: at the top, or scrolled to the project's CMS connections. */
+export type SettingsSection = 'top' | 'cms';
+
+/** Opens Settings, as File > Settings… does, at `section`. */
+export function openAppSettings(section: SettingsSection = 'top'): void {
+  assert(settingsOpeners.size <= 1, 'One Settings dialog is mounted');
+  for (const open of settingsOpeners) {
+    open(section);
+  }
 }
 
-function SettingsDialog(props: Props & { readonly onClose: () => void }) {
+export default function Settings(props: Props) {
+  const [open, setOpen] = useState<SettingsSection | undefined>(undefined);
+  useEffect(() => window.avb.onMenu('settings', () => setOpen('top')), []);
+  useEffect(() => {
+    const opener = (section: SettingsSection) => setOpen(section);
+    settingsOpeners.add(opener);
+    return () => {
+      settingsOpeners.delete(opener);
+    };
+  }, []);
+  return open ? (
+    <SettingsDialog {...props} section={open} onClose={() => setOpen(undefined)} />
+  ) : undefined;
+}
+
+function SettingsDialog(
+  props: Props & { readonly section: SettingsSection; readonly onClose: () => void },
+) {
+  const cmsSection = useRef<HTMLDivElement>(null);
+  // Opened to add a CMS connection: that section is what the person came for.
+  useEffect(() => {
+    if (props.section === 'cms') {
+      cmsSection.current?.scrollIntoView({ block: 'start' });
+    }
+  }, [props.section]);
   return (
     <Popup className="app-settings" labelledBy="app-settings-title" onClose={props.onClose}>
       {({ close }) => (
@@ -33,7 +67,9 @@ function SettingsDialog(props: Props & { readonly onClose: () => void }) {
           <div className="app-settings-content">
             <Preferences />
             {props.projectPath && (
-              <CmsConnections key={`cms:${props.projectPath}`} projectPath={props.projectPath} />
+              <div ref={cmsSection}>
+                <CmsConnections key={`cms:${props.projectPath}`} projectPath={props.projectPath} />
+              </div>
             )}
             {props.projectPath ? (
               <StudioSetup

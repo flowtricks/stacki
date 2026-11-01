@@ -162,6 +162,14 @@ export const ChevronRightIcon = (props: IconProps) => (
   </I>
 );
 
+/** A pushpin: what a table pins as its columns. */
+export const PinIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="M10 2.5 13.5 6l-1.5.5-2.5 2.5.3 2.7-1 1L4.3 8.2l1-1 2.7.3 2.5-2.5z" />
+    <path d="m6.5 9.5-4 4" />
+  </I>
+);
+
 export const ChevronDownIcon = (props: IconProps) => (
   <I {...props}>
     <path d="m4 6 4 4 4-4" />
@@ -178,6 +186,15 @@ export const RefreshIcon = (props: IconProps) => (
   <I {...props}>
     <path d="M13 8a5 5 0 1 1-1.47-3.54" />
     <path d="M13.2 2.6v2.6h-2.6" />
+  </I>
+);
+
+// Two arrows chasing each other: a field kept in step with another.
+export const SyncIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="M12.75 6.5A5 5 0 0 0 3.6 5.1" />
+    <path d="M3.25 9.5a5 5 0 0 0 9.15 1.4" />
+    <path d="M3.4 2.6v2.6H6M12.6 13.4v-2.6H10" />
   </I>
 );
 
@@ -530,6 +547,14 @@ export const CalendarIcon = (props: IconProps) => (
   <I {...props}>
     <rect x="2.25" y="3.25" width="11.5" height="10.5" rx="1.5" />
     <path d="M2.25 6.5h11.5M5.5 1.75v2.5M10.5 1.75v2.5" />
+  </I>
+);
+
+// A time of day: the picker's time tab.
+export const ClockIcon = (props: IconProps) => (
+  <I {...props}>
+    <circle cx="8" cy="8" r="6.25" />
+    <path d="M8 4.75V8l2.25 1.5" />
   </I>
 );
 

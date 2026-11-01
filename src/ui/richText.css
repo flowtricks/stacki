@@ -1,0 +1,341 @@
+/* The rich text editor (HtmlField.tsx). Surfaces are told apart by their fill,
+   never by lines: the toolbar is a darker strip above the text, focus lifts the
+   whole field a shade, and the link bubble floats on its own raised fill. */
+.html-field {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  transition: background-color 120ms ease;
+}
+.html-field:hover {
+  background: rgba(255, 255, 255, 0.075);
+}
+.html-field:focus-within {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+/* The toolbar stays in reach while long text scrolls under it. */
+.html-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: rgba(0, 0, 0, 0.22);
+}
+.html-toolbar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  /* Quiet until the field is in use, so a page of fields reads as content. */
+  opacity: 0.7;
+  transition: opacity 120ms ease;
+}
+.html-field:hover .html-toolbar-controls,
+.html-field:focus-within .html-toolbar-controls {
+  opacity: 1;
+}
+.html-toolbar-controls:disabled {
+  opacity: 0.35;
+}
+.html-toolbar-group {
+  display: flex;
+  gap: 1px;
+}
+.html-tool {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.html-tool:hover:not(:disabled) {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.html-tool[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.html-tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.html-block-style.dd-trigger {
+  width: 124px;
+  height: 28px;
+  padding: 0 8px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.html-block-style.dd-trigger:hover,
+.html-block-style.dd-trigger:focus {
+  border-color: transparent;
+  background: var(--bg-active);
+  color: var(--text);
+}
+.html-source-toggle {
+  margin-left: auto;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.html-source-toggle:hover {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.html-source-toggle[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* The text itself. */
+.html-content {
+  position: relative;
+  min-height: 120px;
+  max-height: 520px;
+  padding: 14px 16px;
+  overflow: auto;
+  outline: none;
+  line-height: 1.65;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  caret-color: var(--accent);
+}
+/* The field's lift is its focus state; the app's focus ring (styles.css) is not drawn here. */
+.html-content:focus-visible,
+.html-source .cm-editor.cm-focused {
+  outline: none;
+}
+.html-content[data-empty='true']::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.html-content > * {
+  margin: 0;
+}
+.html-content > * + * {
+  margin-top: 0.75em;
+}
+.html-content h1,
+.html-content h2,
+.html-content h3,
+.html-content h4,
+.html-content h5,
+.html-content h6 {
+  line-height: 1.3;
+  font-weight: 600;
+}
+.html-content h2 {
+  font-size: 1.45em;
+}
+.html-content h3 {
+  font-size: 1.2em;
+}
+.html-content h4 {
+  font-size: 1.05em;
+}
+.html-content * + h2,
+.html-content * + h3,
+.html-content * + h4 {
+  margin-top: 1.1em;
+}
+.html-content ul,
+.html-content ol {
+  padding-left: 1.5em;
+}
+.html-content li + li {
+  margin-top: 0.2em;
+}
+.html-content li::marker {
+  color: var(--text-dim);
+}
+.html-content blockquote {
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+}
+.html-content code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.09);
+  font: 0.88em/1.4 var(--mono);
+}
+.html-content pre {
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.28);
+  font: 12.5px/1.6 var(--mono);
+  white-space: pre-wrap;
+}
+.html-content pre code {
+  padding: 0;
+  background: transparent;
+}
+.html-content hr {
+  height: 2px;
+  margin: 1.2em 0;
+  border: 0;
+  border-radius: 1px;
+  background: var(--bg-active);
+}
+.html-content a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.html-content img {
+  max-width: 100%;
+  height: auto;
+}
+.html-content table {
+  border-collapse: separate;
+  border-spacing: 2px;
+}
+.html-content td,
+.html-content th {
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* What the text holds, and the Markdown it understands, while it is in use. */
+.html-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 16px 8px;
+  color: var(--text-faint);
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.html-field:focus-within .html-footer {
+  opacity: 1;
+}
+.html-footer-hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.html-footer-counts {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.html-source {
+  min-height: 180px;
+  max-height: 520px;
+  overflow: auto;
+  padding: 6px 4px;
+  font-size: 12px;
+}
+.html-notice {
+  padding: 10px 16px 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+/* The link bubble: where a link goes, or the field to change it. */
+.html-link-bubble {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: min(380px, calc(100% - 16px));
+  padding: 4px;
+  border-radius: 8px;
+  background: #2b2b2b;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+.html-link-href {
+  min-width: 0;
+  max-width: 240px;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent);
+  font-size: 12px;
+}
+.html-link-bubble input {
+  width: 240px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--bg-input);
+  font-size: 12px;
+}
+.html-link-apply {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--accent);
+  color: white;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.html-link-apply:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.html-format + .html-source-toggle {
+  margin-left: 0;
+}
+.html-script-icon {
+  font: 500 13px/1 var(--font, inherit);
+}
+.html-script-icon > span {
+  font-size: 8px;
+}
+.html-script-icon > .is-raised {
+  vertical-align: 6px;
+}
+.html-script-icon > .is-lowered {
+  vertical-align: -3px;
+}
+.html-content h1 {
+  font-size: 1.75em;
+}
+.html-content h5 {
+  font-size: 0.95em;
+}
+.html-content h6 {
+  font-size: 0.85em;
+  color: var(--text-dim);
+}
+.html-content * + h1,
+.html-content * + h5,
+.html-content * + h6 {
+  margin-top: 1.1em;
+}

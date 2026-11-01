@@ -58,6 +58,8 @@ interface InvokeChannels {
   readonly contentTargets: 'content:targets';
   readonly contentRenamePlan: 'content:renamePlan';
   readonly renameContentEntry: 'content:rename';
+  readonly contentRemoteRead: 'content:remoteRead';
+  readonly contentRemoteEdit: 'content:remoteEdit';
   readonly setCmsMeta: 'cms:setMeta';
   readonly listRecents: 'recents:list';
   readonly addRecent: 'recents:add';
@@ -132,12 +134,14 @@ interface InvokeChannels {
   readonly remoteCollections: 'cmsRemote:collections';
   readonly remoteDocuments: 'cmsRemote:documents';
   readonly remoteDocument: 'cmsRemote:document';
+  readonly remoteTemplate: 'cmsRemote:template';
   readonly writeRemoteDocument: 'cmsRemote:write';
   readonly remoteReferenceOptions: 'cmsRemote:references';
   readonly actOnRemoteDocument: 'cmsRemote:act';
   readonly remoteHistory: 'cmsRemote:history';
   readonly restoreRemoteRevision: 'cmsRemote:restore';
   readonly uploadRemoteAsset: 'cmsRemote:upload';
+  readonly linkPreview: 'cmsRemote:linkPreview';
   readonly createRemoteDocument: 'cmsRemote:create';
   readonly deleteRemoteDocuments: 'cmsRemote:delete';
   readonly moveRemoteDocument: 'cmsRemote:move';

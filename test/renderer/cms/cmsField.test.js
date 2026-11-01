@@ -1,6 +1,7 @@
 // Mount the real CMS controls and exercise nested dialogs, focus preservation,
 // and imported-image selection. Rendering assertions also pin collection, text,
-// and recursion limits before a malformed model can grow the editor without bound.
+// and recursion limits before a malformed model can grow the editor without bound,
+// and that text past a prop attribute's limit (a sermon transcript) still renders.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -187,6 +188,38 @@ test('CMS editor bounds reject invalid depth, text, and list size', () => {
     /CMS list: item limit exceeded/,
   );
   assert.match(render({ depth: 128, value: 'ok' }), /ok/);
+});
+
+test('CMS text longer than a prop attribute keeps a text box instead of failing', async () => {
+  const { LIMITS } = require('#dist/shared/core/limits.js');
+  const root = createRoot(document.getElementById('root'));
+  const changes = [];
+  const long = 'Sermon transcript. '.repeat(Math.ceil((LIMITS.attrCharsMax + 1) / 19));
+  assert.ok(long.length > LIMITS.attrCharsMax);
+  const show = (type, value) =>
+    act(async () =>
+      root.render(
+        React.createElement(Field, {
+          ...context,
+          type,
+          value,
+          onChange: (next) => changes.push(next),
+        }),
+      ),
+    );
+  try {
+    for (const type of ['text', 'longtext']) {
+      await show(type, long);
+      const box = document.querySelector('textarea');
+      assert.ok(box, type);
+      assert.equal(box.value, long);
+    }
+    // Switching to a short item returns to the ordinary prop field.
+    await show('text', 'Short title');
+    assert.equal(document.querySelector('input').value, 'Short title');
+  } finally {
+    await act(async () => root.unmount());
+  }
 });
 
 test.after(() => dom.window.close());

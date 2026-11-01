@@ -27,6 +27,32 @@
 /* A field is a component prop field (CmsPropField.tsx): its label row, its
    control, then any broken rule. The props panel insets its fields; here the
    column does, so a field fills it. */
+/* The slug's sync button sits at the end of its label row. */
+.remote-cms-slug-sync {
+  position: relative;
+}
+.remote-cms-sync {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.remote-cms-sync:hover {
+  background: var(--bg-hover);
+  color: var(--text-dim);
+}
+.remote-cms-sync.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
 .remote-cms-field {
   display: grid;
   gap: 4px;
@@ -129,6 +155,18 @@
   display: grid;
   gap: 2px;
 }
+/* The button that unfolds a long list, or folds it again. */
+.remote-cms-list-fold {
+  justify-self: start;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.remote-cms-list-fold:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
 .remote-cms-list-item {
   border-radius: 6px;
   background: var(--bg-input);
@@ -209,6 +247,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  /* Stretched to the row, so the search stands as tall as the buttons beside it. */
+  align-self: stretch;
   width: min(260px, 30vw);
   padding: 0 8px;
   border-radius: var(--radius);
@@ -226,19 +266,38 @@
   flex: 1;
   overflow: auto;
 }
+/* Holding only the empty card, the table is a column the card centres in. */
+.remote-cms-table:has(> .remote-cms-empty) {
+  display: flex;
+  flex-direction: column;
+  padding: 24px 0;
+}
 .remote-cms-row {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 110px 130px;
+  grid-template-columns: minmax(0, 1fr) 110px 130px;
   align-items: center;
   gap: 8px;
   min-height: 48px;
-  padding: 0 16px 0 10px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
   cursor: pointer;
 }
 .remote-cms-row:hover {
   background: var(--bg-hover);
+}
+/* A project's files have no status, so their table has no column for one. */
+.remote-cms-table.is-files .remote-cms-row {
+  grid-template-columns: minmax(0, 1fr) 130px;
+}
+/* Choosing items, or a list that can be reordered, makes room for the
+   checkboxes or grips at the start of each row. */
+.remote-cms-table.has-lead .remote-cms-row {
+  grid-template-columns: 28px minmax(0, 1fr) 110px 130px;
+  padding-left: 10px;
+}
+.remote-cms-table.has-lead.is-files .remote-cms-row {
+  grid-template-columns: 28px minmax(0, 1fr) 130px;
 }
 .remote-cms-row-head {
   min-height: 32px;
@@ -462,6 +521,66 @@
   color: var(--amber);
 }
 
+/* An item's header changes layout at set widths of the item's own column,
+   not wherever a box happens to overflow:
+     wide     one row: back, title, status, times, actions;
+     medium   the times give way (the status pill keeps them as its tooltip);
+     narrow   the title takes the first row, status and actions the second,
+              aligned under the title.
+   Widths are the column's (a container query), so a zoomed or narrowed
+   window and Studio on a phone all reach the same layouts. */
+.remote-cms-item {
+  container: remote-item / inline-size;
+}
+.remote-cms-item-head {
+  flex-wrap: nowrap;
+  row-gap: 8px;
+}
+.remote-cms-item-head .cms-detail-title {
+  display: -webkit-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.remote-cms-item-meta {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.remote-cms-item-meta .remote-cms-times {
+  margin-left: 0;
+}
+.remote-cms-item-meta .remote-cms-actions {
+  flex: none;
+  margin-left: 0;
+}
+@container remote-item (max-width: 820px) {
+  .remote-cms-item-meta .remote-cms-times {
+    display: none;
+  }
+}
+@container remote-item (max-width: 560px) {
+  .remote-cms-item-head {
+    flex-wrap: wrap;
+  }
+  .remote-cms-item-head .cms-detail-title {
+    flex-basis: calc(100% - 40px);
+  }
+  .remote-cms-item-meta {
+    flex: 1 1 100%;
+    margin-left: 0;
+    padding-left: 30px;
+  }
+  .remote-cms-item-meta .remote-cms-actions {
+    margin-left: auto;
+  }
+}
+
 /* The item header's Publish and its menu, at the far right. */
 .remote-cms-actions {
   display: flex;
@@ -527,6 +646,20 @@
   object-fit: cover;
   background: var(--bg-input);
 }
+/* A project file's thumbnail fills the same square a CMS image does. */
+.remote-cms-preview-media.asset-thumb {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  aspect-ratio: auto;
+  border: 0;
+  background: var(--bg-input);
+}
+.remote-cms-preview-media.asset-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .cms-item .remote-cms-preview-media {
   width: 24px;
   height: 24px;
@@ -562,6 +695,10 @@
   place-items: center;
   color: var(--text-dim);
 }
+/* An item without a picture, in a list where others have one, keeps the square. */
+.remote-cms-preview-media.is-placeholder {
+  color: var(--text-faint);
+}
 .sanity-type-icon {
   flex: none;
   display: block;
@@ -593,4 +730,265 @@
 }
 .remote-cms-tile.is-vector img {
   object-fit: contain;
+}
+
+/* A collection beside the collections list takes two columns, and three with
+   an item open. Below this width they cannot all be read, so the collections
+   list gives way (Desktop's left panel, Studio's sidebar) and the collection
+   offers the way back to it. Below 700px one column shows at a time (the rule
+   further down). */
+.remote-cms-collections-back {
+  display: none;
+}
+.remote-cms-collections-back + .cms-items-title {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 1100px) {
+  .main:has(> .center > .remote-cms-view:not(.hidden)) > .panel.left,
+  .studio-workspace-panels:has(.remote-cms-view:not(.hidden)) > .studio-left {
+    display: none;
+  }
+  .remote-cms-collections-back {
+    display: flex;
+  }
+}
+
+/* Phones (Studio runs on them) and narrow windows: the rows keep every
+   column at a readable width and the table scrolls sideways to reach them,
+   and the toolbar wraps its search onto a line of its own instead of
+   squeezing it. */
+@media (max-width: 700px) {
+  .remote-cms-table {
+    overscroll-behavior-x: contain;
+  }
+  .remote-cms-row {
+    min-width: 560px;
+    grid-template-columns: minmax(200px, 1fr) 100px 110px;
+    padding: 0 12px;
+  }
+  .remote-cms-table.is-files .remote-cms-row {
+    min-width: 420px;
+    grid-template-columns: minmax(200px, 1fr) 110px;
+  }
+  .remote-cms-table.has-lead .remote-cms-row {
+    grid-template-columns: 28px minmax(200px, 1fr) 100px 110px;
+    padding-left: 8px;
+  }
+  .remote-cms-table.has-lead.is-files .remote-cms-row {
+    grid-template-columns: 28px minmax(200px, 1fr) 110px;
+  }
+  .remote-cms-toolbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .remote-cms-toolbar .cms-detail-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .remote-cms-search {
+    order: 1;
+    flex: 1 1 100%;
+    width: auto;
+  }
+  /* An open item takes the whole screen; its back button returns to the list. */
+  .cms-view:has(> .remote-cms-item) > .cms-items {
+    display: none;
+  }
+  .remote-cms-search input {
+    padding: 8px 0;
+    /* 16px keeps iOS from zooming the page when the search is focused. */
+    font-size: 16px;
+  }
+}
+
+/* An empty table, or a search with no match: centred in the table's space. */
+/* A card centred in the table's space, as an empty collection reads in a CMS. */
+.remote-cms-empty {
+  width: min(440px, calc(100% - 32px));
+  /* Auto margins in the table's flex column centre it both ways. */
+  margin: auto;
+  padding: 36px 32px 32px;
+  border-radius: 14px;
+  background: var(--bg-panel-2);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  font-size: 12.5px;
+}
+.remote-cms-empty .cms-empty-title {
+  margin-top: 4px;
+  font-size: 15px;
+}
+.remote-cms-empty p {
+  margin: 6px 0 0;
+}
+.remote-cms-empty .cms-empty-action {
+  margin-top: 18px;
+}
+@media (max-width: 700px) {
+  .remote-cms-empty {
+    padding: 28px 20px 24px;
+  }
+}
+.remote-cms-empty .cms-empty-action button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* A record's picture beside its name: in a choice's dropdown, and on a chosen row. */
+.option-image {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--bg-input);
+}
+/* Stated on the thumbnail itself, so it wins over the Assets panel's framed,
+   letterboxed tile (.asset-thumb in styles.css): the picture fills the square. */
+.option-image.asset-thumb {
+  aspect-ratio: auto;
+  border: 0;
+  /* The Assets panel's 8px corner is for its large tiles; a small picture takes a small one. */
+  border-radius: 3px;
+  background: var(--bg-input);
+}
+.option-image.asset-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* A choice with no picture, among choices that have one. */
+.option-image.is-placeholder {
+  color: var(--text-faint);
+}
+/* Choices with pictures: taller rows and larger pictures, with the check moved
+   to the end so every picture starts at the same edge. */
+.option-image-menu .dd-option {
+  height: 34px;
+  gap: 8px;
+  padding: 0 8px;
+}
+.option-image-menu .dd-option .option-image {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+}
+.option-image-menu .dd-check {
+  order: 1;
+  margin-left: auto;
+}
+
+/* Delete and Duplicate, after the last field, as a CMS's item page ends. */
+.remote-cms-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.remote-cms-item-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.remote-cms-item-actions > .error-toast {
+  flex-basis: 100%;
+}
+
+/* The column beside an open item is the table, narrowed: the same header, the
+   same Name row and the same rows, so nothing moves when an item opens. */
+.remote-cms-column .remote-cms-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+.remote-cms-column .remote-cms-row.on {
+  background: var(--bg-active);
+}
+/* Every header in the collection view stands as tall as the table's toolbar. */
+.remote-cms-view .cms-detail-head {
+  min-height: 52px;
+}
+
+/* A table's columns as its fields choose them (remoteColumns.ts): the grid and
+   the width below which it scrolls sideways rather than squeezing a column.
+   Stated through the view, so it wins over the fixed grids above. */
+.remote-cms-view .remote-cms-table.has-grid .remote-cms-row {
+  grid-template-columns: var(--remote-cms-grid);
+  min-width: var(--remote-cms-width);
+}
+.remote-cms-table.has-grid {
+  overflow: auto;
+}
+/* A column's name sorts by it; the arrow shows which way while it does. */
+.remote-cms-sort {
+  display: inline-flex;
+  align-items: center;
+  /* A button centres its content; a column's name starts where its cells do. */
+  justify-content: flex-start;
+  justify-self: start;
+  max-width: 100%;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.remote-cms-sort > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.remote-cms-sort:hover,
+.remote-cms-sort.is-ascending,
+.remote-cms-sort.is-descending {
+  color: var(--text);
+}
+.remote-cms-sort.is-ascending svg {
+  transform: rotate(180deg);
+}
+.remote-cms-pin {
+  justify-self: end;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.remote-cms-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.remote-cms-column-menu {
+  max-height: min(420px, 70vh);
+  overflow-y: auto;
+}
+.remote-cms-column-check {
+  width: 14px;
+  display: inline-grid;
+  place-items: center;
+}
+/* Through the header row, so the app's button look (a fill on hover, a full
+   width, centred text) never reaches a column's name. */
+.remote-cms-row-head .remote-cms-sort,
+.remote-cms-row-head .remote-cms-sort:hover,
+.remote-cms-row-head .remote-cms-sort:active {
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }

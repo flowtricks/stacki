@@ -20,11 +20,36 @@ const invoke =
 export function exposeBridge(): void {
   contextBridge.exposeInMainWorld('avb', {
     ...projectBridge(),
+    ...cmsBridge(),
     ...dataBridge(),
     ...pageBridge(),
     ...terminalBridge(),
     ...eventBridge(),
   } satisfies PreloadBridge);
+}
+
+// CMS connections and the CMS panel's connected-CMS calls.
+function cmsBridge() {
+  return {
+    cmsConnections: invoke('cmsConnections:list'),
+    saveCmsConnection: invoke('cmsConnections:save'),
+    removeCmsConnection: invoke('cmsConnections:remove'),
+    sanityLogin: invoke('cmsConnections:sanityLogin'),
+    remoteCollections: invoke('cmsRemote:collections'),
+    remoteDocuments: invoke('cmsRemote:documents'),
+    remoteDocument: invoke('cmsRemote:document'),
+    remoteTemplate: invoke('cmsRemote:template'),
+    writeRemoteDocument: invoke('cmsRemote:write'),
+    remoteReferenceOptions: invoke('cmsRemote:references'),
+    actOnRemoteDocument: invoke('cmsRemote:act'),
+    remoteHistory: invoke('cmsRemote:history'),
+    restoreRemoteRevision: invoke('cmsRemote:restore'),
+    uploadRemoteAsset: invoke('cmsRemote:upload'),
+    linkPreview: invoke('cmsRemote:linkPreview'),
+    createRemoteDocument: invoke('cmsRemote:create'),
+    deleteRemoteDocuments: invoke('cmsRemote:delete'),
+    moveRemoteDocument: invoke('cmsRemote:move'),
+  };
 }
 
 // The project, its assets and files, and the canvas selection.
@@ -41,22 +66,6 @@ function projectBridge() {
     publishingRepositories: invoke('publish:repository'),
     discoverPublishing: invoke('publish:discover'),
     publishingAccount: invoke('publish:account'),
-    cmsConnections: invoke('cmsConnections:list'),
-    saveCmsConnection: invoke('cmsConnections:save'),
-    removeCmsConnection: invoke('cmsConnections:remove'),
-    sanityLogin: invoke('cmsConnections:sanityLogin'),
-    remoteCollections: invoke('cmsRemote:collections'),
-    remoteDocuments: invoke('cmsRemote:documents'),
-    remoteDocument: invoke('cmsRemote:document'),
-    writeRemoteDocument: invoke('cmsRemote:write'),
-    remoteReferenceOptions: invoke('cmsRemote:references'),
-    actOnRemoteDocument: invoke('cmsRemote:act'),
-    remoteHistory: invoke('cmsRemote:history'),
-    restoreRemoteRevision: invoke('cmsRemote:restore'),
-    uploadRemoteAsset: invoke('cmsRemote:upload'),
-    createRemoteDocument: invoke('cmsRemote:create'),
-    deleteRemoteDocuments: invoke('cmsRemote:delete'),
-    moveRemoteDocument: invoke('cmsRemote:move'),
     projectMetadata: invoke('project:metadata'),
     writeProjectMetadata: invoke('project:writeMetadata'),
     studioStatus: invoke('studio:status'),
@@ -147,6 +156,8 @@ function dataBridge() {
     contentTargets: invoke('content:targets'),
     contentRenamePlan: invoke('content:renamePlan'),
     renameContentEntry: invoke('content:rename'),
+    contentRemoteRead: invoke('content:remoteRead'),
+    contentRemoteEdit: invoke('content:remoteEdit'),
     setCmsMeta: invoke('cms:setMeta'),
     onCmsChanged: (callback: () => void) => {
       const listener = () => callback();

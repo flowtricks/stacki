@@ -10,6 +10,8 @@ export { onPropertyFilesChanged } from '../../../../src/features/componentProper
 export const assetDropLimit = 20;
 export const assetDeletionMessage = 'The file will be removed from the draft.';
 export const collectionDeletionMessage = 'Removes the collection from the shared draft.';
+/** What deleting content collection entries does to their files. */
+export const entryDeletionMessage = 'Their files are removed from the shared draft.';
 export function assetSources(
   path: string,
   _native: readonly [string, string],

@@ -343,11 +343,21 @@ test('native text operations preserve spans and refuse external mutations', () =
     assert.equal(root.textContent, 'HeXllo world again');
     buffer.replace({ start: 0, end: 0 }, 'x'.repeat(10001));
     assert.equal(root.textContent, 'HeXllo world again');
-    assert.equal(buffer.restore(), true);
+    // Closing puts the original words back for the save's check, then keeps
+    // the typed ones on screen until the preview renders the saved source.
+    const closed = buffer.restore();
+    assert.equal(closed.restored, true);
+    assert.equal(root.textContent, 'Hello world again');
+    closed.keep();
+    assert.equal(root.textContent, 'HeXllo world again');
+    assert.equal(root.querySelector('span'), span);
     match.nodes[0].data = 'External ';
     buffer.replace({ start: 0, end: 1 }, 'Unsafe');
     assert.equal(root.textContent, 'External world again');
-    assert.equal(buffer.restore(), false);
+    const replaced = buffer.restore();
+    assert.equal(replaced.restored, false);
+    replaced.keep();
+    assert.equal(root.textContent, 'External world again', 'a page change is never overwritten');
     assert.deepEqual(drafts, ['HeXllo ', 'Hello ', 'HeXllo ']);
   });
 });
@@ -366,7 +376,7 @@ test('native composition cannot introduce elements or remove authored children',
     buffer.rollbackNative();
     assert.equal(root.firstChild, original);
     assert.equal(root.textContent, 'Text');
-    assert.equal(buffer.restore(), true);
+    assert.equal(buffer.restore().restored, true);
   });
 });
 

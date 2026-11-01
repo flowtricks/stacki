@@ -1,0 +1,242 @@
+/* Stacki's own date and time picker (DateTimePicker.tsx). Surfaces are told
+   apart by their fill, never by borders or divider lines. */
+.date-time-picker {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+.date-time-control {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 38px;
+  padding-left: 5px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  transition:
+    border-color 0.1s,
+    background 0.1s;
+}
+/* Focused, the whole control is the field: the accent border every input takes
+   on focus (styles.css), around the icon and the text together. */
+.date-time-control:focus-within,
+.date-time-control.open {
+  border-color: var(--accent);
+  background: var(--bg-input);
+}
+.date-time-control input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  padding: 0 10px 0 4px;
+}
+.date-time-control input:focus {
+  /* The global input focus would draw a second, inner field inside this one. */
+  border-color: transparent;
+  outline: none;
+  background: transparent;
+}
+.date-time-open {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.date-time-open:hover,
+.date-time-control.open .date-time-open {
+  color: var(--text);
+  background: var(--bg-active);
+}
+
+.date-time-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  width: min(296px, calc(100vw - 32px));
+  border-radius: 10px;
+  background: #242424;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  font-size: 13px;
+}
+.date-time-popover button {
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.date-time-month {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  background: #2b2b2b;
+}
+.date-time-month span {
+  font-size: 14px;
+  color: var(--text);
+}
+.date-time-month button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.date-time-month button:hover {
+  color: var(--text);
+  background: var(--bg-active);
+}
+
+.date-time-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  padding: 8px;
+}
+.date-time-weekday {
+  padding: 2px 0 6px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+}
+.date-time-day {
+  height: 32px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.date-time-day:hover {
+  background: var(--bg-active);
+}
+.date-time-day.outside {
+  color: var(--text-faint);
+}
+.date-time-day.today {
+  background: var(--bg-input);
+  color: var(--accent);
+  font-weight: 600;
+}
+.date-time-day.on,
+.date-time-grid button.on,
+.date-time-meridiem button.on {
+  background: var(--selection);
+  color: var(--selection-text);
+}
+
+.date-time-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px 8px 12px;
+}
+.date-time-chosen {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.date-time-today {
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+}
+.date-time-today:hover {
+  background: var(--bg-active);
+}
+
+.date-time-clock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px;
+}
+.date-time-heading {
+  padding: 10px 0 6px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.date-time-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 2px;
+}
+.date-time-grid button {
+  height: 30px;
+  border-radius: 5px;
+  background: var(--bg-input);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.date-time-grid button:hover {
+  background: var(--bg-active);
+}
+.date-time-meridiem {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 0;
+}
+.date-time-meridiem button {
+  min-width: 52px;
+  height: 30px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+}
+.date-time-meridiem button:hover {
+  background: var(--bg-active);
+}
+
+.date-time-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 4px;
+  background: #1c1c1c;
+}
+.date-time-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+}
+.date-time-tabs button:hover {
+  color: var(--text-dim);
+}
+.date-time-tabs button[aria-selected='true'] {
+  background: var(--bg-active);
+  color: var(--text);
+}

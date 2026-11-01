@@ -4,19 +4,21 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeftIcon } from '../../ui/Icons';
 import { ErrorToast } from '../../ui/ErrorToast';
-import { remoteDocument, writeRemoteDocument } from '../../ipc/cmsConnectionsBridge';
+import { remoteDocument, writeRemoteDocument } from './remoteSource';
 import type {
   RemoteAsset,
   RemoteDocument,
   RemoteDocumentField,
 } from '../../../shared/properties/cmsRemote';
+import { RemoteItemActions } from './RemoteItemActions';
 import type { RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
-import { RemoteFieldInput } from './RemoteFieldInput';
+import { RemoteFieldList } from './RemoteFieldList';
 import type { RemoteEditContext } from './RemoteValueEditor';
 import { STATUS_LABELS } from './RemoteCmsBrowser';
 import { Loading, useRemote, type RemoteCmsSelection } from './remoteCmsShared';
 import { DOCUMENTS, documentKey } from './remoteCmsCache';
 import { RemoteDocumentActions } from './RemoteDocumentActions';
+import { isAstroContent } from '../../../shared/properties/astroContent';
 import { relativeTime } from './remoteTime';
 
 export function RemoteItemFields(props: {
@@ -27,6 +29,8 @@ export function RemoteItemFields(props: {
   /** The item no longer exists (a never-published draft was discarded). */
   readonly onRemoved: () => void;
   readonly onSaved: () => void;
+  /** Opens a copy of this item, to be created or cancelled. */
+  readonly onDuplicate: (document: RemoteDocument) => void;
 }) {
   const { projectPath, selection } = props;
   const { connection } = selection;
@@ -49,9 +53,9 @@ export function RemoteItemFields(props: {
     }
   };
   const document = result?.ok ? result.value : undefined;
-  const context = useEditContext(projectPath, connection.id, document?.assets);
+  const context = useEditContext(projectPath, connection.id, document);
   return (
-    <div className="cms-detail">
+    <div className="cms-detail remote-cms-item">
       <ItemHeader
         {...props}
         document={document}
@@ -70,14 +74,19 @@ export function RemoteItemFields(props: {
           {(loaded) => (
             <div className="remote-cms-fields">
               {error && <ErrorToast message={error} />}
-              {loaded.fields.map((field) => (
-                <RemoteFieldInput
-                  key={`${loaded.id}:${field.name}`}
-                  field={field}
-                  context={context}
-                  onSave={(value) => void save(field, value)}
-                />
-              ))}
+              <RemoteFieldList
+                document={loaded}
+                context={context}
+                onSave={(field, value) => void save(field, value)}
+              />
+              <RemoteItemActions
+                projectPath={projectPath}
+                selection={selection}
+                document={loaded}
+                onChanged={props.onSaved}
+                onRemoved={props.onRemoved}
+                onDuplicate={props.onDuplicate}
+              />
             </div>
           )}
         </Loading>
@@ -86,23 +95,27 @@ export function RemoteItemFields(props: {
   );
 }
 
-// What every field's editor reaches: the connection, and the stored assets the
-// document points at, with any uploaded since it loaded.
-function useEditContext(
+// What every field's editor reaches: the connection, the stored assets the
+// document points at, with any uploaded since it loaded, and the folder of the
+// project file it lives in, which its image paths are relative to.
+export function useEditContext(
   projectPath: string,
   connectionId: string,
-  loaded: readonly RemoteAsset[] | undefined,
+  document: RemoteDocument | undefined,
 ): RemoteEditContext {
   const [uploaded, setUploaded] = useState<readonly RemoteAsset[]>([]);
+  const loaded = document?.assets;
+  const folder = document?.file?.split('/').slice(0, -1).join('/');
   return useMemo(
     () => ({
       projectPath,
       connectionId,
       assets: new Map([...(loaded ?? []), ...uploaded].map((asset) => [asset.id, asset])),
       addAsset: (asset: RemoteAsset) => setUploaded((known) => [...known, asset]),
+      folder,
       depth: 0,
     }),
-    [projectPath, connectionId, loaded, uploaded],
+    [projectPath, connectionId, loaded, uploaded, folder],
   );
 }
 
@@ -115,22 +128,29 @@ function ItemHeader(props: {
   readonly onChanged: (document: RemoteDocument | undefined) => void;
 }) {
   const { document } = props;
+  // A project's file has no draft to publish or discard, and its history is git's.
+  const files = isAstroContent(props.selection.connection);
   return (
-    <div className="cms-detail-head">
+    <div className="cms-detail-head remote-cms-item-head">
       {props.onBack && (
         <button className="ghost cms-back" title="Back to the list" onClick={props.onBack}>
           <ChevronLeftIcon size={13} />
         </button>
       )}
       <span className="cms-detail-title">{props.selection.item?.title}</span>
-      {document && <DocumentState document={document} />}
       {document && (
-        <RemoteDocumentActions
-          projectPath={props.projectPath}
-          connectionId={props.selection.connection.id}
-          document={document}
-          onChanged={props.onChanged}
-        />
+        // One group, so a narrow header moves state and actions to the next line together.
+        <div className="remote-cms-item-meta">
+          <DocumentState document={document} shows={files ? 'times' : 'status'} />
+          {!files && (
+            <RemoteDocumentActions
+              projectPath={props.projectPath}
+              connectionId={props.selection.connection.id}
+              document={document}
+              onChanged={props.onChanged}
+            />
+          )}
+        </div>
       )}
     </div>
   );
@@ -138,7 +158,11 @@ function ItemHeader(props: {
 
 // Where the document stands, as Sanity Studio shows it: published, a draft
 // never published, or published with unpublished edits, with when each changed.
-function DocumentState(props: { readonly document: RemoteDocument }) {
+function DocumentState(props: {
+  readonly document: RemoteDocument;
+  /** A file shows only when it changed; a CMS document also where it stands. */
+  readonly shows: 'status' | 'times';
+}) {
   const { status, editedAt, publishedAt } = props.document;
   const times = [
     editedAt === undefined ? undefined : `Edited ${relativeTime(editedAt)}`,
@@ -146,7 +170,12 @@ function DocumentState(props: { readonly document: RemoteDocument }) {
   ].filter((part): part is string => part !== undefined);
   return (
     <>
-      <span className={`remote-cms-status is-${status}`}>{STATUS_LABELS[status]}</span>
+      {/* The times are its tooltip too, for a header too narrow to show them. */}
+      {props.shows === 'status' && (
+        <span className={`remote-cms-status is-${status}`} title={times.join(' · ')}>
+          {STATUS_LABELS[status]}
+        </span>
+      )}
       {times.length > 0 && <span className="remote-cms-times">{times.join(' · ')}</span>}
     </>
   );

@@ -380,8 +380,8 @@ function fileEntries(projectPath: string, collection: ContentCollection): ListRe
   }
   let text = '';
   try {
-    if (fs.statSync(abs).size > MAIN_LIMITS.contentEntryBytesMax) {
-      return { entries: [], readOnly: true, reason: 'This file is too large to edit here.' };
+    if (fs.statSync(abs).size > MAIN_LIMITS.contentDataFileBytesMax) {
+      return { entries: [], readOnly: true, reason: `${rel} is too large to edit here.` };
     }
     text = fs.readFileSync(abs, 'utf8');
   } catch (error: unknown) {
@@ -452,9 +452,18 @@ function writeEntry(
   if (!format) {
     throw new Error(`Stacki cannot write ${path.extname(entry.file)} files.`);
   }
-  // The same bound the reader applies: a file can grow between listing and edit.
-  if (fs.statSync(abs).size > MAIN_LIMITS.contentEntryBytesMax) {
+  // The larger of the readers' bounds (a whole data file): a file can grow between
+  // listing and edit, and nothing larger was ever listed to be edited.
+  const size = fs.statSync(abs).size;
+  if (size > MAIN_LIMITS.contentDataFileBytesMax) {
     throw new Error('This file is too large to edit here.');
+  }
+  // Every project write goes through the document layer, which holds at most a source file's
+  // bound: a data file listed above it reads, but says why it cannot be saved.
+  if (size > LIMITS.sourceBytesMax) {
+    const sizeMb = Math.ceil((size / (1024 * 1024)) * 10) / 10;
+    const limitMb = Math.floor(LIMITS.sourceBytesMax / (1024 * 1024));
+    throw new Error(`${entry.file} is ${sizeMb} MB; Stacki saves files up to ${limitMb} MB.`);
   }
   const text = fs.readFileSync(abs, 'utf8');
 

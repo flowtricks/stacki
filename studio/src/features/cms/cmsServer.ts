@@ -16,6 +16,7 @@ const mutations = new Set([
   'cms:assetRef',
   'content:writeEntry',
   'content:rename',
+  'content:remoteEdit',
 ]);
 export function cmsRoutes(root: string, rooms: ReturnType<typeof createRooms>) {
   const handlers = cmsHandlers();

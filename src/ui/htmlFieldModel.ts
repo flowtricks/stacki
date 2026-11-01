@@ -8,6 +8,14 @@ const TAGS = new Set(
   ).split(' '),
 );
 const ATTRIBUTES = new Set('class title alt width height colspan rowspan scope'.split(' '));
+// Attributes that only describe their own element, which exported rich text
+// carries (Webflow writes `<ul start="">`): kept as they are, not a reason to lock the field.
+const ELEMENT_ATTRIBUTES: Readonly<Record<string, ReadonlySet<string>>> = {
+  ol: new Set(['start', 'reversed', 'type']),
+  ul: new Set(['start', 'type']),
+  li: new Set(['value']),
+  a: new Set(['target', 'rel']),
+};
 
 export function containsHTML(value: string): boolean {
   assert(value.length <= BOUNDARY_LIMITS.textLengthMax, 'HTML field: text limit exceeded');
@@ -54,6 +62,9 @@ export function editableHTML(value: string, document: Document): EditableHTML {
 
 function editableAttribute(tag: string, attribute: Attr): boolean {
   if (ATTRIBUTES.has(attribute.name)) {
+    return true;
+  }
+  if (ELEMENT_ATTRIBUTES[tag]?.has(attribute.name) === true) {
     return true;
   }
   if (tag === 'a' && attribute.name === 'href') {

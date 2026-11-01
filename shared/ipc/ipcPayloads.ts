@@ -7,6 +7,7 @@ import {
 } from '../properties/cmsConnections';
 import {
   parseRemoteCollectionName,
+  parseRemoteColumns,
   parseRemoteConnection,
   parseRemoteDocumentId,
   parseRemoteIds,
@@ -17,6 +18,8 @@ import {
   parseRemoteDocumentAction,
   parseRemoteRevisionId,
 } from '../properties/cmsRemote';
+import { parseVideoLinkURL } from '../properties/linkPreview';
+import { parseAstroRemoteEdit, parseAstroRemoteRead } from '../properties/astroContent';
 import { parseRepositoryRequest } from '../ipc/publishRepository';
 import { parseCanvasCreate, defaultsCanvasFile } from '../properties/defaultsCanvas';
 import { parseDiscoveryRequest } from '../properties/publishDiscovery';
@@ -176,6 +179,9 @@ export const IPC_PAYLOADS = {
   'content:config': object({ ...project, force: maybeFlag }),
   'content:entries': object({ ...named }),
   'content:rename': object({ ...named, from: text, to: text }),
+  // The CMS panel's reads and edits of content collections, as a connected CMS's (astroContent.ts).
+  'content:remoteEdit': object({ ...project, request: parseAstroRemoteEdit }),
+  'content:remoteRead': object({ ...project, request: parseAstroRemoteRead }),
   'content:renamePlan': object({ ...named, from: text, to: text }),
   'content:sampleEntry': object({ devUrl: maybeText, name: text, id: maybeText }),
   'content:sampleValue': object({
@@ -265,6 +271,12 @@ export const IPC_PAYLOADS = {
     ...project,
     connectionId: parseRemoteConnection,
     collection: parseRemoteCollectionName,
+    columns: optional(parseRemoteColumns),
+  }),
+  'cmsRemote:template': object({
+    ...project,
+    connectionId: parseRemoteConnection,
+    collection: parseRemoteCollectionName,
   }),
   'cmsRemote:document': object({
     ...project,
@@ -318,6 +330,7 @@ export const IPC_PAYLOADS = {
     connectionId: parseRemoteConnection,
     kind: parseRemoteAssetKind,
   }),
+  'cmsRemote:linkPreview': object({ url: parseVideoLinkURL }),
   'git:publish': object({ ...project, repoName: text, isPrivate: boolean }),
   'git:push': object({ ...branch }),
   'git:pull': object({ ...branch }),

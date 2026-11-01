@@ -22,12 +22,21 @@ export function useEditorView() {
   const [pick, setPick] = useState<AssetRequest>();
   const [variable, setVariable] = useState<VariableSelection>();
   const previous = useRef<Panel | undefined>('navigator');
+  // An overlay pick (a CMS entry's image) is answered in a pop-up: the panels stay put.
+  const overlay = useRef(false);
   useEffect(
     () =>
       onAssetRequest((request) => {
         setPick(request);
+        const opened = request !== undefined;
+        if (opened) {
+          overlay.current = request.presentation === 'overlay';
+        }
+        if (overlay.current) {
+          return;
+        }
         setPanel((current) => {
-          if (request) {
+          if (opened) {
             previous.current = current;
             return 'assets';
           }

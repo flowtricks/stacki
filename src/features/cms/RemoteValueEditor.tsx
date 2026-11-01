@@ -16,6 +16,8 @@ import {
 import type { RemoteAsset } from '../../../shared/properties/cmsRemote';
 import AutoTextarea from '../../ui/AutoTextarea';
 import CalendarField from '../../ui/DateField';
+import DateTimePicker from '../../ui/DateTimePicker';
+import { hasOptionImage, OPTION_IMAGE_MENU, OptionImage } from './projectImages';
 import Dropdown from '../../ui/Dropdown';
 import HtmlField from '../../ui/HtmlField';
 import { RemoteObjectEditor } from './RemoteField';
@@ -32,6 +34,8 @@ export interface RemoteEditContext {
   /** Stored images and files by asset id, including ones uploaded since the load. */
   readonly assets: ReadonlyMap<string, RemoteAsset>;
   readonly addAsset: (asset: RemoteAsset) => void;
+  /** The folder of the project file the document is stored in, when it is one. */
+  readonly folder: string | undefined;
   readonly depth: number;
 }
 
@@ -72,7 +76,7 @@ export function RemoteValueEditor(props: RemoteValueProps) {
         />
       );
     case 'datetime':
-      return <DateTimeControl value={value} onChange={onChange} />;
+      return <DateTimeControl value={value} label={props.label} onChange={onChange} />;
     case 'geopoint':
       return <GeopointControl value={value} onChange={onChange} />;
     case 'object':
@@ -126,11 +130,19 @@ function TextControl(
     }
   };
   if (props.options.length > 0) {
+    const pictures = hasOptionImage(props.options);
     return (
       <Dropdown
         value={shown}
         placeholder="Choose…"
-        options={props.options.map((option) => ({ value: option.value, label: option.title }))}
+        // Choosing is a click: hovering a choice must not save it.
+        livePreview={false}
+        menuClassName={pictures ? OPTION_IMAGE_MENU : ''}
+        options={props.options.map((option) => ({
+          value: option.value,
+          label: option.title,
+          icon: <OptionImage file={option.imageFile} placeholder={pictures} />,
+        }))}
         onChange={emit}
       />
     );
@@ -191,14 +203,15 @@ function SwitchControl(props: {
 // A Sanity datetime is an ISO instant; it is shown and chosen in local time.
 function DateTimeControl(props: {
   readonly value: RemoteValue | undefined;
+  readonly label: string;
   readonly onChange: (value: RemoteValue | undefined) => void;
 }) {
   return (
-    <input
-      type="datetime-local"
+    <DateTimePicker
+      mode="datetime"
+      label={props.label}
       value={typeof props.value === 'string' ? localDateTime(props.value) : ''}
-      onChange={(event) => {
-        const local = event.target.value;
+      onChange={(local) => {
         const instant = new Date(local);
         if (local === '') {
           props.onChange(undefined);

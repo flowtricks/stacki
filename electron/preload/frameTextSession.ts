@@ -10,7 +10,7 @@ import {
 } from '../../shared/properties/canvasTextOverlay';
 import { canvasTextSourceMatches } from './frameRegions';
 import { matchCanvasText, type TextMatch } from './frameTextMatch';
-import { openNativeText } from './frameTextNative';
+import { openNativeText, type NativeTextResult } from './frameTextNative';
 import { textSelection } from './frameTextSelection';
 
 interface ActiveText {
@@ -143,7 +143,7 @@ function commitCanvasText(
     readonly target: CanvasTextTarget;
     readonly match: TextMatch;
   },
-  result: { readonly value: string | undefined; readonly restored: boolean },
+  result: NativeTextResult,
   post: (message: unknown) => void,
 ) {
   const { value, restored } = result;
@@ -162,6 +162,8 @@ function commitCanvasText(
     return;
   }
   post({ type: 'avb:text-save', session: entry.catalog.session, key: entry.target.key, value });
+  // Until the preview renders the saved source, the page keeps showing what was typed.
+  result.keep();
 }
 
 function readCanvasTextRequest(input: unknown) {

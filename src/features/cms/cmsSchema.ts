@@ -33,7 +33,14 @@ type ObjectEdit = (object: Readonly<Record<string, unknown>>) => Readonly<Record
 
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico)$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}|$)/;
-const COLOR_RE = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+/**
+ * A CSS colour written out: a hex value, or a colour function such as
+ * `rgba(0, 0, 0, 0.5)` or `hsl(210 50% 40%)`. Names like `red` are left out, as
+ * a word is as likely to be plain text. Stacki's colour picker reads them all.
+ */
+const HEX_COLOR = '#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})';
+const COLOR_FUNCTION = '(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\\([^()]*\\)';
+export const CSS_COLOR = new RegExp(`^(?:${HEX_COLOR}|${COLOR_FUNCTION})$`, 'i');
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
@@ -105,7 +112,7 @@ export function inferType(value: unknown): FieldType {
   if (IMAGE_RE.test(text)) {
     return 'image';
   }
-  if (COLOR_RE.test(text)) {
+  if (CSS_COLOR.test(text.trim())) {
     return 'color';
   }
   if (DATE_RE.test(text)) {

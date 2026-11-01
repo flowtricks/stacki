@@ -9,16 +9,26 @@
 // CMS values are plain data, never code, so code access is off: there is no
 // data-binding handle, and `{}` opens a plain text box rather than the
 // expression editor.
+//
+// A prop field holds what fits in a source attribute (LIMITS.attrCharsMax). A
+// CMS text can be far longer (a sermon transcript), so text past that limit
+// gets the same growing box outside PropField instead of breaking it.
 import { useState, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
+import { LIMITS } from '../../../shared/core/limits';
+import { REMOTE_SCHEMA_LIMITS } from '../../../shared/properties/cmsRemoteSchema';
+import AutoTextarea from '../../ui/AutoTextarea';
 import type { Attr } from '../../../shared/page/pageNodeTypes';
 import { CodeAccess } from '../../ui/CodeAccess';
-import { BracesIcon, DropletIcon, FieldSwitchIcon } from '../../ui/Icons';
-import { CmsColorInput, HEX_COLOR } from './CmsColorInput';
+import { BracesIcon, DropletIcon, FieldSwitchIcon, TextIcon } from '../../ui/Icons';
+import { CmsColorInput } from './CmsColorInput';
+import { CSS_COLOR } from './cmsSchema';
 import PropField from '../props/PropField';
 import PropTip from '../props/PropTip';
 import { PropHoverPreviewContext, PropValuePolicyContext } from '../props/propValuePolicy';
 import { suggestedOptions } from './cmsSuggestions';
+import { videoLinkOf } from '../../../shared/properties/linkPreview';
+import { VideoLinkCard } from './VideoLinkCard';
 
 export type CmsScalar = string | number | boolean;
 export type CmsScalarKind = 'string' | 'text' | 'number' | 'boolean';
@@ -43,6 +53,9 @@ export function CmsPropField(props: {
   if (color) {
     return <CmsColorField {...props} value={text ?? ''} />;
   }
+  if (text !== undefined && text.length > LIMITS.attrCharsMax) {
+    return <CmsLongText {...props} value={text} />;
+  }
   if (kind === 'boolean') {
     // A CMS switch is on or off, so it is a toggle rather than a True/False pair.
     return (
@@ -50,12 +63,15 @@ export function CmsPropField(props: {
         name={props.name}
         help={props.help}
         icon={<FieldSwitchIcon size={12} />}
-        set={value !== undefined}
+        // Off reads as the default it usually is: only a switch that is on is marked as set.
+        set={value === true}
       >
         <CmsToggle on={value === true} onChange={(next) => props.onChange(next)} />
       </CmsFieldFrame>
     );
   }
+  // A link to a video shows what it links to, under the field (VideoLinkCard.tsx).
+  const video = kind === 'string' && text !== undefined ? videoLinkOf(text) : undefined;
   return (
     // Explicit choices stay explicit, as in a recipe: a CMS stores what was picked.
     <PropValuePolicyContext.Provider value="defaults">
@@ -78,6 +94,7 @@ export function CmsPropField(props: {
               props.onChange(fromAttr(kind, next));
             }}
           />
+          {video && <VideoLinkCard link={video} onRemove={() => props.onChange(undefined)} />}
         </PropHoverPreviewContext.Provider>
       </CodeAccess.Provider>
     </PropValuePolicyContext.Provider>
@@ -111,10 +128,37 @@ function CmsColorField(props: {
   );
 }
 
-// A hex value, or an empty field named for a colour ("Main colour").
+// Text longer than a prop field holds: the growing box PropField shows for
+// prose, under the same label row, bounded by what a CMS value may hold.
+function CmsLongText(props: {
+  readonly name: string;
+  readonly help: string;
+  readonly value: string;
+  readonly onChange: (value: CmsScalar | undefined) => void;
+}) {
+  assert(props.value.length > LIMITS.attrCharsMax, 'Long CMS text is past a prop field');
+  assert(
+    LIMITS.attrCharsMax < REMOTE_SCHEMA_LIMITS.valueCharsMax,
+    'A CMS value holds more than an attribute',
+  );
+  return (
+    <CmsFieldFrame name={props.name} help={props.help} icon={<TextIcon size={12} />} set>
+      <AutoTextarea
+        value={props.value}
+        minRows={3}
+        maxLength={REMOTE_SCHEMA_LIMITS.valueCharsMax}
+        onChange={(event) =>
+          props.onChange(event.target.value === '' ? undefined : event.target.value)
+        }
+      />
+    </CmsFieldFrame>
+  );
+}
+
+// A CSS colour (hex, rgb, hsl and the like), or an empty field named for a colour ("Main colour").
 function looksLikeColor(name: string, text: string | undefined): boolean {
   if (text !== undefined && text !== '') {
-    return HEX_COLOR.test(text.trim());
+    return CSS_COLOR.test(text.trim());
   }
   return /colou?r$/i.test(name.trim());
 }

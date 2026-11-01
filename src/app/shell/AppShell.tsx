@@ -31,7 +31,10 @@ import {
   ChevronLeftIcon,
   ElementComponentIcon,
   TerminalIcon,
+  GearIcon,
 } from '../../ui/Icons';
+import { openAppSettings } from '../settings/Settings';
+import { AssetPickOverlay, assetPickTitle } from '../../ui/AssetPickOverlay';
 import type { HistoryCommit, HistoryCommitFile } from '../../features/history/historyBridge';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { type LeftTab } from '../appTypes';
@@ -56,6 +59,7 @@ export function WelcomeView({ app }: { readonly app: AppView }) {
     <div className="app welcome-mode">
       <div className="titlebar">
         <span className="spacer" />
+        <SettingsButton />
       </div>
       <WelcomeScreen onOpen={app.onOpenProject} showToast={app.showToast} />
       {app.busy && <BusyOverlay message={app.busy} />}
@@ -87,6 +91,20 @@ export function AppShell({ app }: { readonly app: ShellView }) {
           <CanvasPane app={app} />
           <CanvasCovers app={app} />
         </div>
+        {app.assetPick?.presentation === 'overlay' && (
+          <AssetPickOverlay
+            title={assetPickTitle(app.assetPick.mediaKind)}
+            onClose={() => app.endAssetPick(false)}
+          >
+            <AssetsPanel
+              project={app.project}
+              showToast={app.showToast}
+              pick={app.assetPick}
+              onPickCancel={() => app.endAssetPick(false)}
+              onRecordUndo={app.pushCommand}
+            />
+          </AssetPickOverlay>
+        )}
         {app.inPreview && app.previewSource && (
           <div className="preview-mode">
             <iframe
@@ -97,11 +115,26 @@ export function AppShell({ app }: { readonly app: ShellView }) {
           </div>
         )}
         <OldVersionCover app={app} />
-        {app.pageState?.editable && !app.previewRef && <RightPanel app={app} />}
+        {app.pageState?.editable && !app.previewRef && (
+          // An open CMS item has nothing to style, so the CMS takes the Style and
+          // Settings panel's width too. Hidden, not unmounted: closing the CMS
+          // returns the panel as it was, on the same tab and scroll.
+          <div style={{ display: cmsCovering(app) ? 'none' : 'contents' }}>
+            <RightPanel app={app} />
+          </div>
+        )}
       </div>
       <AppOverlays app={app} />
     </div>
   );
+}
+
+/** Whether a CMS collection or item covers the canvas (CanvasCovers). */
+function cmsCovering(app: ShellView): boolean {
+  if (app.leftTab !== 'cms') {
+    return false;
+  }
+  return Boolean(app.cmsRel ?? app.cmsRemote ?? app.contentName);
 }
 
 // What floats over the editor: the terminal, the code window, the insert palette,
@@ -286,6 +319,26 @@ function OpenBrowserButton({ liveUrl }: { readonly liveUrl: ShellView['liveUrl']
   );
 }
 
+// Settings, where the platform has no menu bar to hold File > Settings…: Windows
+// draws its own title bar (no menu bar), and Linux may hide it. On macOS the menu
+// bar is always there, so the button would only repeat it.
+function SettingsButton() {
+  const platform = currentDesktopPlatform();
+  if (platform === 'darwin') {
+    return undefined;
+  }
+  return (
+    <button
+      className="titlebar-btn"
+      title={`Settings (${shortcutLabel(',', 'primary', platform)})`}
+      aria-label="Settings"
+      onClick={() => openAppSettings()}
+    >
+      <GearIcon size={14} />
+    </button>
+  );
+}
+
 // Terminal and interactive preview controls.
 export function TitleActions({ app }: { readonly app: ShellView }) {
   const terminalKey = shortcutLabel('J', 'primary', currentDesktopPlatform());
@@ -316,6 +369,7 @@ export function TitleActions({ app }: { readonly app: ShellView }) {
       >
         <PreviewIcon size={15} />
       </button>
+      <SettingsButton />
     </div>
   );
 }
@@ -535,6 +589,7 @@ export function CmsTab({ app }: { readonly app: ShellView }) {
         app.setCmsRel(rel);
         app.setCmsSettings(true);
       }}
+      onConnect={() => openAppSettings('cms')}
       showToast={app.showToast}
     />
   );

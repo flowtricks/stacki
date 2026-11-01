@@ -36,6 +36,11 @@ import {
   type RemoteRevision,
   type RemoteWrite,
 } from '../../../vendor/stacki/shared/properties/cmsRemote';
+import {
+  parseLinkPreview,
+  parseVideoLinkURL,
+  type LinkPreview,
+} from '../../../vendor/stacki/shared/properties/linkPreview';
 import { CMS_CONNECTION_HEADER } from './cmsConnectionBook';
 import { request } from '../project/projectClient';
 
@@ -85,8 +90,9 @@ export async function remoteDocuments(
   _projectPath: string,
   connectionId: string,
   collection: string,
+  columns: readonly string[] = [],
 ): Promise<RemoteResult<RemoteDocumentList>> {
-  return remote(connectionId, 'documents', { collection }, parseRemoteDocumentList);
+  return remote(connectionId, 'documents', { collection, columns }, parseRemoteDocumentList);
 }
 
 export async function createRemoteDocument(
@@ -130,6 +136,15 @@ export async function remoteDocument(
   id: string,
 ): Promise<RemoteResult<RemoteDocument>> {
   return remote(connectionId, 'document', { id }, parseRemoteDocument);
+}
+
+/** A collection's fields with no values: what a new item is edited as before it is created. */
+export async function remoteTemplate(
+  _projectPath: string,
+  connectionId: string,
+  collection: string,
+): Promise<RemoteResult<RemoteDocument>> {
+  return remote(connectionId, 'template', { collection }, parseRemoteDocument);
 }
 
 export async function writeRemoteDocument(
@@ -241,4 +256,19 @@ function chooseFile(accept: string): Promise<File | undefined> {
     input.addEventListener('cancel', () => resolve(undefined), { once: true });
     input.click();
   });
+}
+
+/** A video link's card (thumbnail, title, description); undefined when its host has none. */
+export async function linkPreview(url: string): Promise<RemoteResult<LinkPreview | undefined>> {
+  const link = parseVideoLinkURL(url);
+  return attempt(async () =>
+    parseRemoteResult(await post('/studio/api/link-preview', { url: link }), (value) =>
+      value === undefined ? undefined : parseLinkPreview(value),
+    ),
+  );
+}
+
+/** Opens a previewed video in a new tab, without giving it this window. */
+export async function openLinkPreview(url: string): Promise<void> {
+  window.open(parseVideoLinkURL(url), '_blank', 'noopener,noreferrer');
 }

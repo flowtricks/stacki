@@ -17,10 +17,22 @@ const SAVE_PAUSE_MS = 800;
 export function RemoteFieldInput(props: {
   readonly field: RemoteDocumentField;
   readonly context: RemoteEditContext;
+  /** A value another field set for this one (a slug following its name); saved as typed. */
+  readonly follow?: { readonly value: RemoteValue | undefined } | undefined;
+  /** Each edit as it is typed, before it is saved. */
+  readonly onDraft?: ((value: RemoteValue | undefined) => void) | undefined;
   readonly onSave: (value: RemoteValue | undefined) => void;
 }) {
-  const { field } = props;
+  const { field, follow } = props;
   const save = useDraftSave(field.value, props.onSave);
+  // Followed only when it changes, so the person's own edit stands until the next one.
+  const followed = follow === undefined ? '' : valueKey(follow.value);
+  useEffect(() => {
+    if (follow !== undefined && valueKey(save.draft) !== followed) {
+      save.change(follow.value);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `followed` names the value
+  }, [followed]);
   return (
     <div
       className="remote-cms-field-save"
@@ -35,7 +47,10 @@ export function RemoteFieldInput(props: {
         field={field}
         value={save.draft}
         context={props.context}
-        onChange={save.change}
+        onChange={(value) => {
+          save.change(value);
+          props.onDraft?.(value);
+        }}
       />
     </div>
   );
@@ -85,4 +100,9 @@ function useDraftSave(
       flush();
     },
   };
+}
+
+// A value as one comparable string; absence is the empty string, which no JSON is.
+function valueKey(value: RemoteValue | undefined): string {
+  return value === undefined ? '' : JSON.stringify(value);
 }

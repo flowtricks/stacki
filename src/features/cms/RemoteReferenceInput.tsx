@@ -23,6 +23,8 @@ export function RemoteReferenceInput(props: RemoteValueProps & { readonly to: re
   return (
     <Dropdown
       value={chosen}
+      // Choosing is a click: hovering a document must not point the field at it.
+      livePreview={false}
       searchable={true}
       searchPlaceholder="Search…"
       options={[

@@ -6,6 +6,7 @@
 // under the control, red when it blocks publishing and amber when it only warns.
 import {
   remoteObject,
+  type RemoteOption,
   type RemoteSchemaField,
   type RemoteType,
   type RemoteValue,
@@ -15,6 +16,9 @@ import { fieldTypeOf } from './remoteFieldTypes';
 import { problemsOf } from './remoteValidation';
 import { fieldTitle, isEmptyValue } from './remoteValues';
 import { RemoteValueEditor, type RemoteEditContext } from './RemoteValueEditor';
+import AssetField from '../../ui/AssetField';
+import Dropdown from '../../ui/Dropdown';
+import { hasOptionImage, OPTION_IMAGE_MENU, OptionImage } from './projectImages';
 
 export function RemoteField(props: {
   readonly field: RemoteSchemaField;
@@ -32,7 +36,20 @@ export function RemoteField(props: {
       className={`remote-cms-field${field.required ? ' is-required' : ''}`}
       data-kind={field.type.kind}
     >
-      {scalar ? (
+      {isImagePath(field.type) ? (
+        <CmsFieldFrame name={name} help={help} icon={<Icon size={12} />} set={!isEmptyValue(value)}>
+          <ImagePathField value={value} context={props.context} onChange={props.onChange} />
+        </CmsFieldFrame>
+      ) : titledOptions(field.type) ? (
+        <CmsFieldFrame name={name} help={help} icon={<Icon size={12} />} set={!isEmptyValue(value)}>
+          <TitledChoice
+            label={name}
+            options={titledOptions(field.type) ?? []}
+            value={value}
+            onChange={props.onChange}
+          />
+        </CmsFieldFrame>
+      ) : scalar ? (
         <CmsPropField
           name={name}
           help={help}
@@ -61,6 +78,76 @@ export function RemoteField(props: {
           </span>
         ))}
     </div>
+  );
+}
+
+// A choice whose options have titles of their own (a reference by id, a
+// schema's `{ title, value }` list) shows the titles; a plain list shows its values.
+function titledOptions(type: RemoteType): readonly RemoteOption[] | undefined {
+  if (type.kind !== 'string') {
+    return undefined;
+  }
+  return type.options.some((option) => option.title !== option.value) ? type.options : undefined;
+}
+
+function TitledChoice(props: {
+  readonly label: string;
+  readonly options: readonly RemoteOption[];
+  readonly value: RemoteValue | undefined;
+  readonly onChange: (value: RemoteValue | undefined) => void;
+}) {
+  const current = typeof props.value === 'string' ? props.value : '';
+  // A value the list does not hold (a removed record) still shows, as itself.
+  const known = props.options.some((option) => option.value === current);
+  const pictures = hasOptionImage(props.options);
+  const options = [
+    { value: '', label: 'None' },
+    ...(known || current === '' ? [] : [{ value: current, label: current, dim: true }]),
+    ...props.options.map((option) => ({
+      value: option.value,
+      label: option.title,
+      icon: <OptionImage file={option.imageFile} placeholder={pictures} />,
+    })),
+  ];
+  return (
+    <Dropdown
+      value={current}
+      // Choosing is a click: hovering a choice must not save it.
+      livePreview={false}
+      ariaLabel={props.label}
+      placeholder={`Choose ${props.label.toLowerCase()}…`}
+      searchable={props.options.length > 8}
+      searchPlaceholder="Search…"
+      menuClassName={pictures ? OPTION_IMAGE_MENU : ''}
+      options={options}
+      onChange={(next) => props.onChange(next === '' ? undefined : next)}
+    />
+  );
+}
+
+function isImagePath(type: RemoteType): boolean {
+  return type.kind === 'string' && type.asset === 'image';
+}
+
+// A project image named by its path (an Astro `image()`): a preview, and a
+// button that asks the Assets panel for another, as local CMS images do. The
+// path is written relative to the entry's own file, as Astro resolves it.
+function ImagePathField(props: {
+  readonly value: RemoteValue | undefined;
+  readonly context: RemoteEditContext;
+  readonly onChange: (value: RemoteValue | undefined) => void;
+}) {
+  return (
+    <AssetField
+      value={typeof props.value === 'string' ? props.value : ''}
+      mediaKind="image"
+      showModeToggle={false}
+      // In a pop-up, so the entry stays open while its image is chosen.
+      pickPresentation="overlay"
+      projectPath={props.context.projectPath}
+      baseDir={props.context.folder}
+      onChange={(next) => props.onChange(next === '' ? undefined : next)}
+    />
   );
 }
 

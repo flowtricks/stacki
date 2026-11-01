@@ -1,6 +1,7 @@
-// Goal: Keep the CMS panel useful when its current view contains no collections.
+// Goal: Keep the CMS panel useful when its current view contains no collections: the
+// project's content collections are always offered, and + still creates a collection.
 // Methodology: Mount with in-memory inventories, including collections hidden in
-// another Astro file, and exercise the empty state's creation and cancel controls.
+// another Astro file, and exercise the creation and cancel controls.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -64,21 +65,24 @@ async function mountPanel(files, collections = []) {
   return root;
 }
 
-test('empty and hidden collections offer creation and restore it on cancel', async () => {
+test('a panel with no collections offers content collections and creation', async () => {
   for (const files of [[], [hiddenCollection]]) {
     const root = await mountPanel(files);
     try {
-      assert.match(document.querySelector('.props-empty').textContent, /No collections to show/);
-      assert.equal(document.querySelectorAll('.cms-collection').length, 0);
-      await act(async () => document.querySelector('.props-empty button').click());
-      assert.ok(document.querySelector('.props-empty') === null);
+      const rows = [...document.querySelectorAll('.cms-collection')];
+      assert.deepEqual(
+        rows.map((row) => row.textContent),
+        ['Content Collections'],
+        'the content collections row is always there; a hidden file collection is not',
+      );
+      await act(async () => document.querySelector('button[title="New collection"]').click());
       const input = document.querySelector('input[placeholder="Collection name"]');
       assert.equal(document.activeElement, input);
       await act(async () => {
         input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       });
-      assert.ok(document.querySelector('.props-empty'));
       assert.ok(document.querySelector('input') === null);
+      assert.equal(document.querySelectorAll('.cms-collection').length, 1);
     } finally {
       await act(async () => root.unmount());
     }

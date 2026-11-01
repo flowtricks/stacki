@@ -12,8 +12,14 @@ const mutations = new Set([
   'cms:assetRef',
   'content:writeEntry',
   'content:rename',
+  'content:remoteEdit',
 ]);
 function keyOf(operation: string, payload: unknown) {
+  // A content collection's reads and edits share one key: the versions a read
+  // returns are the ones the next edit is checked against.
+  if (operation === 'content:remoteRead' || operation === 'content:remoteEdit') {
+    return 'content:remote';
+  }
   const input = typeof payload === 'string' ? {} : record(payload);
   if (operation === 'cms:meta' || operation === 'cms:setMeta') {
     return 'meta';
@@ -100,6 +106,8 @@ export const cmsTransport = {
   cmsAssetRef: invoke('cms:assetRef'),
   contentCollections: invoke('content:collections'),
   contentEntries: invoke('content:entries'),
+  contentRemoteRead: invoke('content:remoteRead'),
+  contentRemoteEdit: invoke('content:remoteEdit'),
   contentTargets: invoke('content:targets'),
   writeContentEntry: (payload: unknown, expected?: unknown) =>
     cmsRequest('content:writeEntry', payload, expected),

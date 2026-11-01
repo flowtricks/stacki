@@ -1,131 +1,234 @@
-import { useState } from 'react';
-import { safeHTMLLink } from './htmlFieldModel';
+// The rich text editor's toolbar: the block the caret is in, the marks, lists,
+// links and rules, and undo. Each control shows whether it applies where the
+// caret is, and its tooltip names its keyboard shortcut. Buttons never take
+// focus from the text, so the selection they act on stays where it was.
+import type { ReactNode } from 'react';
+import Dropdown from './Dropdown';
+import type { FormatState, Mark, RichTextAction } from './richTextCommands';
+import {
+  BoldIcon,
+  BulletListIcon,
+  ClearFormatIcon,
+  InlineCodeIcon,
+  ItalicIcon,
+  LinkIcon,
+  NumberListIcon,
+  QuoteIcon,
+  RedoIcon,
+  RuleIcon,
+  StrikeIcon,
+  UnderlineIcon,
+  UndoIcon,
+} from './richTextIcons';
+import type { Block } from './richTextModel';
 
-export interface HTMLCommand {
-  readonly name: string;
-  readonly value?: string;
-}
 interface Props {
+  readonly format: FormatState;
   readonly source: boolean;
-  readonly toggleSource: () => void;
-  readonly command: (command: HTMLCommand) => void;
-  readonly rememberSelection: () => void;
+  /** Markup the editor cannot show locks the visual controls; HTML still edits it. */
+  readonly locked: boolean;
+  readonly onAction: (action: RichTextAction) => void;
+  readonly onToggleSource: () => void;
+  readonly onFormat: () => void;
 }
-const FORMATS = [
-  ['bold', 'Bold', 'B'],
-  ['italic', 'Italic', 'I'],
-  ['underline', 'Underline', 'U'],
-  ['insertUnorderedList', 'Bulleted list', '• List'],
-  ['insertOrderedList', 'Numbered list', '1. List'],
-  ['removeFormat', 'Clear formatting', 'Clear'],
-] as const;
 
-export function HtmlToolbar({ source, toggleSource, command, rememberSelection }: Props) {
-  const [link, setLink] = useState<string | undefined>();
+/** The platform's modifier as tooltips write it. */
+export const MOD = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
+
+const BLOCK_OPTIONS: readonly {
+  readonly value: Block;
+  readonly label: string;
+  readonly hint: string;
+}[] = [
+  { value: 'p', label: 'Paragraph', hint: `${MOD}⌥0` },
+  { value: 'h1', label: 'Heading 1', hint: '#' },
+  { value: 'h2', label: 'Heading 2', hint: '##' },
+  { value: 'h3', label: 'Heading 3', hint: '###' },
+  { value: 'h4', label: 'Heading 4', hint: '####' },
+  { value: 'h5', label: 'Heading 5', hint: '#####' },
+  { value: 'h6', label: 'Heading 6', hint: '######' },
+  { value: 'blockquote', label: 'Quote', hint: '>' },
+  { value: 'pre', label: 'Code block', hint: '```' },
+];
+
+const MARK_BUTTONS: readonly {
+  readonly mark: Mark;
+  readonly label: string;
+  readonly keys: string;
+  readonly icon: ReactNode;
+}[] = [
+  { mark: 'bold', label: 'Bold', keys: `${MOD}B`, icon: <BoldIcon size={14} /> },
+  { mark: 'italic', label: 'Italic', keys: `${MOD}I`, icon: <ItalicIcon size={14} /> },
+  { mark: 'underline', label: 'Underline', keys: `${MOD}U`, icon: <UnderlineIcon size={14} /> },
+  { mark: 'strike', label: 'Strikethrough', keys: `${MOD}⇧X`, icon: <StrikeIcon size={14} /> },
+  { mark: 'code', label: 'Inline code', keys: `${MOD}E`, icon: <InlineCodeIcon size={14} /> },
+  { mark: 'superscript', label: 'Superscript', keys: `${MOD}.`, icon: <ScriptIcon at="sup" /> },
+  { mark: 'subscript', label: 'Subscript', keys: `${MOD},`, icon: <ScriptIcon at="sub" /> },
+];
+
+// The letter x with a small figure raised (x²) or lowered (x₂).
+function ScriptIcon(props: { readonly at: 'sup' | 'sub' }) {
   return (
-    <>
-      <div className="html-toolbar" role="group" aria-label="Text formatting">
-        {!source && (
-          <>
-            <select
-              aria-label="Text style"
-              defaultValue=""
-              onMouseDown={rememberSelection}
-              onChange={(event) => {
-                command({ name: 'formatBlock', value: event.target.value });
-                const selectElement = event.target;
-                selectElement.value = '';
-              }}
-            >
-              <option value="" disabled>
-                Text style
-              </option>
-              <option value="p">Paragraph</option>
-              <option value="h2">Heading 2</option>
-              <option value="h3">Heading 3</option>
-              <option value="blockquote">Quote</option>
-            </select>
-            {FORMATS.map(([name, label, text]) => (
-              <button
-                key={name}
-                type="button"
-                title={label}
-                aria-label={label}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => command({ name })}
+    <span className="html-script-icon" aria-hidden="true">
+      x<span className={props.at === 'sup' ? 'is-raised' : 'is-lowered'}>2</span>
+    </span>
+  );
+}
+
+export function HtmlToolbar(props: Props) {
+  const { format, onAction } = props;
+  const visual = !props.source;
+  return (
+    <div className="html-toolbar" role="toolbar" aria-label="Text formatting">
+      {visual && (
+        <fieldset className="html-toolbar-controls" disabled={props.locked}>
+          <Dropdown
+            className="html-block-style"
+            ariaLabel="Text style"
+            value={format.block}
+            // Choosing is a click: hovering a style must not restyle the text.
+            livePreview={false}
+            options={BLOCK_OPTIONS}
+            onChange={(block) => onAction({ kind: 'block', block })}
+          />
+          <span className="html-toolbar-group">
+            {MARK_BUTTONS.map((button) => (
+              <ToolButton
+                key={button.mark}
+                label={button.label}
+                keys={button.keys}
+                pressed={format.marks.has(button.mark)}
+                onPress={() => onAction({ kind: 'mark', mark: button.mark })}
               >
-                <FormatLabel name={name} text={text} />
-              </button>
+                {button.icon}
+              </ToolButton>
             ))}
-            <button
-              type="button"
-              onMouseDown={rememberSelection}
-              onClick={() => setLink(link === undefined ? '' : undefined)}
-            >
-              Link
-            </button>
-          </>
-        )}
+          </span>
+          <InsertButtons format={format} onAction={onAction} />
+        </fieldset>
+      )}
+      {props.source && (
         <button
           type="button"
-          className="html-source-toggle"
-          aria-pressed={source}
-          onClick={toggleSource}
+          className="html-source-toggle html-format"
+          title="Lay the HTML out to read"
+          onClick={props.onFormat}
         >
-          {source ? 'Visual' : 'HTML'}
+          Format
         </button>
-      </div>
-      {link !== undefined && !source && (
-        <HtmlLink link={link} setLink={setLink} command={command} />
       )}
+      <button
+        type="button"
+        className="html-source-toggle"
+        aria-pressed={props.source}
+        title={props.source ? 'Back to the visual editor' : 'Edit the HTML'}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={props.onToggleSource}
+      >
+        {props.source ? 'Visual' : 'HTML'}
+      </button>
+    </div>
+  );
+}
+
+// Links, lists, quote, rule, clearing, and history.
+function InsertButtons(props: Pick<Props, 'format' | 'onAction'>) {
+  const { format, onAction } = props;
+  const quote = format.block === 'blockquote';
+  return (
+    <>
+      <span className="html-toolbar-group">
+        <ToolButton
+          label={format.link ? 'Edit link' : 'Link'}
+          keys={`${MOD}K`}
+          pressed={format.link !== undefined}
+          onPress={() => onAction({ kind: 'link' })}
+        >
+          <LinkIcon size={14} />
+        </ToolButton>
+      </span>
+      <span className="html-toolbar-group">
+        <ToolButton
+          label="Bulleted list"
+          keys={`${MOD}⇧8`}
+          pressed={format.list === 'ul'}
+          onPress={() => onAction({ kind: 'list', list: 'ul' })}
+        >
+          <BulletListIcon size={14} />
+        </ToolButton>
+        <ToolButton
+          label="Numbered list"
+          keys={`${MOD}⇧7`}
+          pressed={format.list === 'ol'}
+          onPress={() => onAction({ kind: 'list', list: 'ol' })}
+        >
+          <NumberListIcon size={14} />
+        </ToolButton>
+        <ToolButton
+          label="Quote"
+          keys={`${MOD}⇧9`}
+          pressed={quote}
+          onPress={() => onAction({ kind: 'block', block: 'blockquote' })}
+        >
+          <QuoteIcon size={14} />
+        </ToolButton>
+        <ToolButton label="Divider" keys="---" onPress={() => onAction({ kind: 'rule' })}>
+          <RuleIcon size={14} />
+        </ToolButton>
+      </span>
+      <HistoryButtons onAction={onAction} />
     </>
   );
 }
 
-interface LinkProps {
-  readonly link: string;
-  readonly setLink: (value: string | undefined) => void;
-  readonly command: Props['command'];
-}
-function FormatLabel({ name, text }: { readonly name: string; readonly text: string }) {
-  return name === 'underline' ? (
-    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none">
-      <path
-        d="M4 2v5a4 4 0 0 0 8 0V2M3 14h10"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  ) : (
-    <>{text}</>
+function HistoryButtons(props: Pick<Props, 'onAction'>) {
+  const { onAction } = props;
+  return (
+    <span className="html-toolbar-group">
+      <ToolButton
+        label="Clear formatting"
+        keys={`${MOD}\\`}
+        onPress={() => onAction({ kind: 'clear' })}
+      >
+        <ClearFormatIcon size={14} />
+      </ToolButton>
+      <ToolButton
+        label="Undo"
+        keys={`${MOD}Z`}
+        onPress={() => onAction({ kind: 'history', step: 'undo' })}
+      >
+        <UndoIcon size={14} />
+      </ToolButton>
+      <ToolButton
+        label="Redo"
+        keys={`${MOD}⇧Z`}
+        onPress={() => onAction({ kind: 'history', step: 'redo' })}
+      >
+        <RedoIcon size={14} />
+      </ToolButton>
+    </span>
   );
 }
 
-function HtmlLink({ link, setLink, command }: LinkProps) {
+function ToolButton(props: {
+  readonly label: string;
+  readonly keys: string;
+  readonly pressed?: boolean;
+  readonly children: ReactNode;
+  readonly onPress: () => void;
+}) {
   return (
-    <form
-      className="html-link"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (safeHTMLLink(link)) {
-          command({ name: 'createLink', value: link.trim() });
-          setLink(undefined);
-        }
-      }}
+    <button
+      type="button"
+      className="html-tool"
+      title={`${props.label}  ${props.keys}`}
+      aria-label={props.label}
+      aria-pressed={props.pressed}
+      // The text keeps focus, and with it the selection this acts on.
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={props.onPress}
     >
-      <input
-        aria-label="Link address"
-        placeholder="https://example.com"
-        value={link}
-        onChange={(event) => setLink(event.target.value)}
-      />
-      <button type="submit" disabled={!safeHTMLLink(link)}>
-        Apply
-      </button>
-      <button type="button" onClick={() => setLink(undefined)}>
-        Cancel
-      </button>
-    </form>
+      {props.children}
+    </button>
   );
 }

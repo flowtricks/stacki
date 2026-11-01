@@ -30,7 +30,12 @@ export type RemoteScalarKind =
   'string' | 'text' | 'url' | 'email' | 'number' | 'boolean' | 'date' | 'datetime' | 'slug';
 
 export type RemoteType =
-  | { readonly kind: RemoteScalarKind; readonly options: readonly RemoteOption[] }
+  | {
+      readonly kind: RemoteScalarKind;
+      readonly options: readonly RemoteOption[];
+      /** A string that names a project file of this kind: an Astro `image()` path. */
+      readonly asset?: 'image';
+    }
   | { readonly kind: 'geopoint' }
   | {
       readonly kind: 'object';
@@ -57,6 +62,8 @@ export interface RemoteRowPreview {
 export interface RemoteOption {
   readonly title: string;
   readonly value: string;
+  /** The picture of the record it names, as a project file (an Astro entry's first image). */
+  readonly imageFile?: string;
 }
 
 export interface RemoteSchemaField {
@@ -132,7 +139,8 @@ const SCALARS: readonly RemoteScalarKind[] = [
   'slug',
 ];
 
-const NAME = /^[A-Za-z_][\w.-]{0,127}$/;
+// A leading digit is allowed: exported content names fields `1-logo-svg`.
+const NAME = /^[A-Za-z0-9_][\w.-]{0,127}$/;
 
 export function parseRemoteType(input: unknown, depth = 0): RemoteType {
   assert(depth <= REMOTE_SCHEMA_LIMITS.typeDepthMax + 1, 'A type parse stays bounded');
@@ -143,7 +151,7 @@ export function parseRemoteType(input: unknown, depth = 0): RemoteType {
   const kind = value['kind'];
   const scalar = SCALARS.find((candidate) => candidate === kind);
   if (scalar !== undefined) {
-    return { kind: scalar, options: parseOptions(value['options']) };
+    return { kind: scalar, options: parseOptions(value['options']), ...parseAsset(value, scalar) };
   }
   switch (kind) {
     case 'geopoint':
@@ -246,7 +254,7 @@ function objectValue(
 ): RemoteValue {
   const out: Record<string, RemoteValue> = {};
   for (const [key, entry] of Object.entries(input)) {
-    if (!/^[A-Za-z_$][\w$-]{0,127}$/.test(key)) {
+    if (!/^[A-Za-z0-9_$][\w$-]{0,127}$/.test(key)) {
       throw new Error('Invalid key in a value.');
     }
     const parsed = valueAt(entry, depth + 1, tick);
@@ -256,6 +264,22 @@ function objectValue(
   }
   assert(Object.keys(out).length <= Object.keys(input).length, 'Parsing never adds keys');
   return out;
+}
+
+// Only a string names a file; an asset mark on anything else is refused.
+function parseAsset(
+  value: Readonly<Record<string, unknown>>,
+  kind: RemoteScalarKind,
+): { readonly asset?: 'image' } {
+  const asset = value['asset'];
+  if (asset === undefined) {
+    return {};
+  }
+  if (asset !== 'image' || kind !== 'string') {
+    throw new Error('Invalid asset field.');
+  }
+  assert(kind === 'string', 'Only a string field names an asset');
+  return { asset };
 }
 
 const PREVIEW_PATH = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){0,2}$/;
@@ -303,8 +327,24 @@ function parseOptions(input: unknown): RemoteOption[] {
     return {
       title: short(value['title'], REMOTE_SCHEMA_LIMITS.titleCharsMax),
       value: short(value['value'], REMOTE_SCHEMA_LIMITS.titleCharsMax),
+      ...(value['imageFile'] === undefined
+        ? {}
+        : { imageFile: parseProjectFile(value['imageFile']) }),
     };
   });
+}
+
+/** A path inside the project: relative, forward slashes, never climbing out of it. */
+export function parseProjectFile(input: unknown): string {
+  const file = text(input);
+  if (file.length === 0 || file.length > 1024 || file.startsWith('/') || file.includes('\\')) {
+    throw new Error('Invalid document file.');
+  }
+  if (file.split('/').some((part) => part === '..' || part === '' || part.includes('\0'))) {
+    throw new Error('Invalid document file.');
+  }
+  assert(!file.startsWith('/'), 'A document file is relative to its project');
+  return file;
 }
 
 function name(input: unknown): string {

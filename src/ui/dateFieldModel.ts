@@ -45,3 +45,39 @@ export function replaceCalendarDay(value: string, day: string): string {
   assert(parsed !== undefined, 'Date field: existing timestamp must be understood');
   return day + parsed.suffix;
 }
+
+/**
+ * A timestamp's day and wall-clock time as the date-and-time picker edits them
+ * (`2026-09-09T18:41`), read as written: a UTC value shows its UTC time, so a
+ * day never shifts with the editor's timezone, and the zone is kept on write.
+ */
+export function calendarLocalValue(value: CalendarValue): string {
+  assert(value.suffix !== '', 'Date field: only a timestamp has a time');
+  const time = value.suffix.slice(1, 6);
+  assert(/^\d{2}:\d{2}$/.test(time), 'Date field: a timestamp starts with its hours and minutes');
+  return `${value.day}T${time}`;
+}
+
+/**
+ * The timestamp with the picker's day and time, keeping the original separator
+ * and zone; its seconds are kept only while the minute is unchanged.
+ */
+export function replaceCalendarLocal(value: string, local: string): string {
+  const parsed = calendarValue(value);
+  assert(parsed !== undefined, 'Date field: existing timestamp must be understood');
+  assert(parsed.suffix !== '', 'Date field: only a timestamp has a time');
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/.exec(local);
+  const day = match?.[1];
+  const time = match?.[2];
+  assert(day !== undefined, 'Date field: the picker gives a day');
+  assert(validCalendarDay(day), 'Date field: the picker gives a real day');
+  assert(time !== undefined, 'Date field: the picker gives a time');
+  const separator = parsed.suffix.slice(0, 1);
+  const rest = parsed.suffix.slice(6);
+  const zone = /(?:Z|[+-]\d{2}:\d{2})$/.exec(rest)?.[0] ?? '';
+  const sameMinute = time === parsed.suffix.slice(1, 6);
+  const seconds = sameMinute ? rest.slice(0, rest.length - zone.length) : '';
+  const next = `${day}${separator}${time}${seconds}${zone}`;
+  assert(calendarValue(next) !== undefined, 'Date field: the new timestamp is readable');
+  return next;
+}

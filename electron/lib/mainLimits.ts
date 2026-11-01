@@ -22,6 +22,12 @@ export const MAIN_LIMITS = {
   runnerStderrCharsMax: 4000,
   /** One content-collection entry file. An entry is a page's worth of data. */
   contentEntryBytesMax: 2 * 1024 * 1024,
+  /**
+   * One data file holding a whole content collection (Astro's `file()` loader):
+   * every entry at once, so a few hundred sermons with transcripts run past 10 MB.
+   * Matches Studio's bound on a whole CMS scan, which must hold the file too.
+   */
+  contentDataFileBytesMax: 32 * 1024 * 1024,
   /** One JSON data file edited as a CMS collection. */
   cmsFileBytesMax: 2 * 1024 * 1024,
   /** One stylesheet scanned for CSS variables. */

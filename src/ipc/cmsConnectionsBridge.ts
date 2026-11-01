@@ -36,6 +36,11 @@ import {
   type RemoteRevision,
   type RemoteWrite,
 } from '../../shared/properties/cmsRemote';
+import {
+  parseLinkPreview,
+  parseVideoLinkURL,
+  type LinkPreview,
+} from '../../shared/properties/linkPreview';
 
 /** What this host can offer: Desktop signs in to Sanity in the browser. */
 export interface CmsConnectionHost {
@@ -98,8 +103,14 @@ export async function remoteDocuments(
   projectPath: string,
   connectionId: string,
   collection: string,
+  columns: readonly string[] = [],
 ): Promise<RemoteResult<RemoteDocumentList>> {
-  const input = parseIpcPayload('cmsRemote:documents', { projectPath, connectionId, collection });
+  const input = parseIpcPayload('cmsRemote:documents', {
+    projectPath,
+    connectionId,
+    collection,
+    columns,
+  });
   return parseRemoteResult(await window.avb.remoteDocuments(input), parseRemoteDocumentList);
 }
 
@@ -148,6 +159,16 @@ export async function remoteDocument(
 ): Promise<RemoteResult<RemoteDocument>> {
   const input = parseIpcPayload('cmsRemote:document', { projectPath, connectionId, id });
   return parseRemoteResult(await window.avb.remoteDocument(input), parseRemoteDocument);
+}
+
+/** A collection's fields with no values: what a new item is edited as before it is created. */
+export async function remoteTemplate(
+  projectPath: string,
+  connectionId: string,
+  collection: string,
+): Promise<RemoteResult<RemoteDocument>> {
+  const input = parseIpcPayload('cmsRemote:template', { projectPath, connectionId, collection });
+  return parseRemoteResult(await window.avb.remoteTemplate(input), parseRemoteDocument);
 }
 
 export async function writeRemoteDocument(
@@ -208,4 +229,18 @@ export async function restoreRemoteRevision(
 ): Promise<RemoteResult<RemoteDocument>> {
   const input = parseIpcPayload('cmsRemote:restore', { projectPath, connectionId, ...request });
   return parseRemoteResult(await window.avb.restoreRemoteRevision(input), parseRemoteDocument);
+}
+
+/** A video link's card (thumbnail, title, description); undefined when its host has none. */
+export async function linkPreview(url: string): Promise<RemoteResult<LinkPreview | undefined>> {
+  const input = parseIpcPayload('cmsRemote:linkPreview', { url });
+  return parseRemoteResult(await window.avb.linkPreview(input), (value) =>
+    value === undefined ? undefined : parseLinkPreview(value),
+  );
+}
+
+/** Opens a previewed video in the browser. */
+export async function openLinkPreview(url: string): Promise<void> {
+  const input = parseIpcPayload('shell:openExternal', parseVideoLinkURL(url));
+  parseOkResult(await window.avb.openExternal(input));
 }

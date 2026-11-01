@@ -135,6 +135,10 @@ export function useAssetPick(coreState: ReturnType<typeof useCoreState>) {
           endAssetPick(true);
         },
       });
+      // An overlay pick leaves the panels as they are: the pop-up answers it.
+      if (request.presentation === 'overlay') {
+        return;
+      }
       setLeftTab((tab) => {
         if (tab !== 'assets') {
           tabBeforePick.current = tab;

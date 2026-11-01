@@ -2,13 +2,14 @@
 // failure in place, the open document, and each CMS's logo.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { RemoteCache } from './remoteCmsCache';
-import { CmsIcon, PayloadIcon, SanityIcon } from '../../ui/Icons';
-import type { CmsConnection } from '../../../shared/properties/cmsConnections';
+import { AstroIcon, CmsIcon, PayloadIcon, SanityIcon } from '../../ui/Icons';
+import type { CmsSource } from '../../../shared/properties/astroContent';
 import type { RemoteResult } from '../../../shared/properties/cmsRemote';
 
 /** The connected-CMS collection open in the main view, and the item in it, if one is open. */
 export interface RemoteCmsSelection {
-  readonly connection: CmsConnection;
+  /** A saved connection, or the project's own content collections. */
+  readonly connection: CmsSource;
   readonly collection: string;
   readonly item: { readonly id: string; readonly title: string } | undefined;
 }
@@ -74,7 +75,7 @@ export function Loading<T>(props: {
 }
 
 export function ConnectionLogo(props: {
-  readonly kind: CmsConnection['kind'];
+  readonly kind: CmsSource['kind'];
   readonly size?: number;
 }) {
   const size = props.size ?? 14;
@@ -85,6 +86,8 @@ export function ConnectionLogo(props: {
       return <PayloadIcon size={size} />;
     case 'custom':
       return <CmsIcon size={size} />;
+    case 'astro':
+      return <AstroIcon size={size} />;
     default: {
       const exhaustive: never = props.kind;
       return exhaustive;

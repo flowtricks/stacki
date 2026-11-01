@@ -77,7 +77,10 @@ function registerCmsListHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
         const full = path.join(directory, entry.name);
         const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
         if (entry.isDirectory()) {
-          walk(full, entryRel, depth + 1);
+          // src/assets holds files the site imports (images, Lottie JSON), not content.
+          if (entryRel !== 'assets') {
+            walk(full, entryRel, depth + 1);
+          }
         } else if (/\.(cjs|cts|js|jsx|mjs|mts|ts|tsx)$/i.test(entry.name)) {
           if (!/\.d\.[cm]?ts$/i.test(entry.name)) {
             files.push(

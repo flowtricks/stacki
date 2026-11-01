@@ -206,9 +206,12 @@ textarea {
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
+  /* The back button gives up its name when the bar runs short (below). */
+  container: titlebar / inline-size;
 }
+/* Clear of the traffic lights at any zoom: they are system-drawn and never scale. */
 html[data-platform='darwin'] .titlebar {
-  padding-left: 84px;
+  padding-left: calc(80px / var(--window-zoom, 1));
 }
 html[data-platform='win32'] .titlebar {
   padding-right: 148px;
@@ -222,12 +225,30 @@ html[data-platform='win32'] .titlebar {
   color: var(--text-dim);
   -webkit-app-region: drag;
 }
-/* This title is navigation, so Electron must deliver clicks instead of window dragging. */
+/* This title is navigation, so Electron must deliver clicks instead of window dragging.
+   The project name stays on one line, shortened with an ellipsis. */
 .titlebar .project-back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 260px;
   padding: 4px 6px;
   margin-left: -6px;
   background: transparent;
   -webkit-app-region: no-drag;
+}
+.titlebar .project-back span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@container titlebar (max-width: 760px) {
+  .titlebar .project-back span {
+    display: none;
+  }
 }
 .titlebar .project-back:hover:not(:disabled) {
   color: var(--text);
@@ -2817,7 +2838,8 @@ body > .embed-editor_provenance {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  margin-left: 6px;
+  margin-left: auto;
+  padding-left: 8px;
   flex: none;
 }
 .dp-item-nav .dp-step {

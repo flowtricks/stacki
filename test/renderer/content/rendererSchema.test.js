@@ -87,6 +87,22 @@ const collection = cms.collectionOf({ rel: 'data.json', name: 'data.json', dir: 
 assert.equal(collection.raw, raw);
 assert.equal(collection.items, raw.rows);
 assert.equal(cms.inferType(raw.rows[0].image), 'image');
+// Colours are found written as hex or as CSS colour functions; a word that only
+// names a colour, or a broken function, stays text.
+for (const color of [
+  '#337ffe',
+  'hsla(0, 0.00%, 100.00%, 1.00)',
+  'hsl(210 50% 40%)',
+  'rgb(10, 20, 30)',
+  'rgba(0, 0, 0, 0.5)',
+  'oklch(70% 0.1 200)',
+  'color(display-p3 1 0 0)',
+]) {
+  assert.equal(cms.inferType(color), 'color', color);
+}
+for (const text of ['red', 'rgb(1, 2', 'hsl(1) and more', '#12345']) {
+  assert.notEqual(cms.inferType(text), 'color', text);
+}
 assert.deepEqual(cms.reassemble(collection, [{ title: 'Two' }]), {
   metadata: 'keep',
   rows: [{ title: 'Two' }],

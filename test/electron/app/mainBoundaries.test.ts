@@ -66,7 +66,9 @@ test('the complete channel inventory matches real main and terminal registration
   // panel twelve (collections, documents, one document, write, create, delete, move,
   // references, upload, publish/discard/unpublish, history, restore).
   // The binding picker samples a page's own import calls (content:sampleValue).
-  assert.equal(harness.handlers.size, 148);
+  // Content collections in the CMS panel add two: their reads and their edits. A new
+  // item's template (its collection's fields, edited before it is created) adds one.
+  assert.equal(harness.handlers.size, 152);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual(
     [...Object.keys(IPC_PAYLOADS)].sort(),
@@ -276,6 +278,9 @@ test('CMS discovers root site constants and preserves unrelated source', async (
   fs.writeFileSync(path.join(harness.root, 'src/constants.mjs'), 'export const title = "Site";');
   fs.writeFileSync(path.join(harness.root, 'src/consts.d.ts'), 'export const title: string;');
   fs.writeFileSync(path.join(harness.root, 'src/constants-helper.ts'), 'export const limit = 3;');
+  // An animation's JSON in src/assets is a file the site imports, not content.
+  fs.mkdirSync(path.join(harness.root, 'src/assets'));
+  fs.writeFileSync(path.join(harness.root, 'src/assets/animation.json'), '{"v":"5.5.8"}');
   const listed = toArray(toRecord(await harness.invoke('cms:list', harness.root))?.['files']);
   assert.ok(listed);
   assert.deepEqual(listed.map((entry) => toRecord(entry)?.['rel']).sort(), [

@@ -21,6 +21,9 @@ import type { SanityDocumentSchema, SanityPreview } from './sanitySchema';
 import { previewOf, previewProjection } from './sanityPreview';
 import {
   CMS_REMOTE_LIMITS,
+  REMOTE_TEMPLATE_ID,
+  remoteCell,
+  type RemoteCell,
   type RemoteCollection,
   type RemoteDocument,
   type RemoteDocumentList,
@@ -82,18 +85,19 @@ export async function sanityDocuments(
   target: SanityDataset,
   type: string,
   preview?: SanityPreview,
+  columns: readonly string[] = [],
 ): Promise<RemoteDocumentList> {
   const rows = await sanityQuery(
     target,
     `*[_type == $type && ${USER_DOCUMENTS}] | order(_updatedAt desc) [0...$limit]` +
-      `{_id, _updatedAt, orderRank, ${previewProjection(preview)}}`,
+      `{_id, _updatedAt, orderRank, ${previewProjection(preview)}${cellsProjection(columns)}}`,
     { type, limit: CMS_REMOTE_LIMITS.documentsMax * 2 },
     'raw',
   );
   if (!Array.isArray(rows)) {
     throw new Error('Sanity returned an unexpected document list.');
   }
-  const summaries = summarise(rows);
+  const summaries = summarise(rows, columns);
   // Ordered where every document carries a rank (the orderable plugin's list);
   // otherwise newest first, as the query returned them.
   const orderable = summaries.length > 0 && summaries.every((entry) => entry.rank !== undefined);
@@ -133,6 +137,28 @@ export async function sanityDocument(
     assets: refs.length === 0 ? [] : await sanityAssets(target, refs),
     editedAt: draft === undefined ? undefined : stringAt(draft, '_updatedAt'),
     publishedAt: published === undefined ? undefined : stringAt(published, '_updatedAt'),
+    editURL: undefined,
+  };
+}
+
+/** A type's fields with no values: what a new document is edited as before it is created. */
+export function sanityTemplate(
+  type: string,
+  schemaOf: (type: string) => SanityDocumentSchema | undefined,
+): RemoteDocument {
+  const fields = documentFields({ _type: type }, schemaOf(type));
+  assert(
+    fields.every((field) => field.value === undefined),
+    'A template holds no values',
+  );
+  return {
+    id: REMOTE_TEMPLATE_ID,
+    type,
+    status: 'draft',
+    fields,
+    assets: [],
+    editedAt: undefined,
+    publishedAt: undefined,
     editURL: undefined,
   };
 }
@@ -202,7 +228,36 @@ export async function sanityReferenceOptions(
 // Raw rows hold drafts and published documents side by side; one summary each.
 type RankedSummary = RemoteDocumentSummary & { readonly rank: string | undefined };
 
-function summarise(rows: readonly unknown[]): RankedSummary[] {
+// The fields a list shows as columns, under `cells`: a reference by its document's name.
+// Names are passed through JSON quoting into `@[...]`, so no name is read as GROQ.
+function cellsProjection(columns: readonly string[]): string {
+  assert(columns.length <= CMS_REMOTE_LIMITS.columnsMax, 'A list asks for few columns');
+  if (columns.length === 0) {
+    return '';
+  }
+  const cells = columns.map((name) => {
+    const field = `@[${JSON.stringify(name)}]`;
+    return `${JSON.stringify(name)}: coalesce(${field}->title, ${field}->name, ${field})`;
+  });
+  return `, "cells": {${cells.join(', ')}}`;
+}
+
+// A row's columns, each as its short value; a field with nothing to show is left out.
+function cellsOf(row: unknown, columns: readonly string[]): Record<string, RemoteCell> {
+  const stored: unknown = typeof row === 'object' && row !== null ? Reflect.get(row, 'cells') : {};
+  const out: Record<string, RemoteCell> = {};
+  for (const name of columns) {
+    const cell = remoteCell(
+      typeof stored === 'object' && stored !== null ? Reflect.get(stored, name) : undefined,
+    );
+    if (cell !== undefined) {
+      out[name] = cell;
+    }
+  }
+  return out;
+}
+
+function summarise(rows: readonly unknown[], columns: readonly string[]): RankedSummary[] {
   const byId = new Map<string, { draft?: unknown; published?: unknown }>();
   for (const row of rows) {
     const raw = idOf(row);
@@ -233,6 +288,7 @@ function summarise(rows: readonly unknown[]): RankedSummary[] {
         published: entry.published !== undefined,
       }),
       updatedAt: stringAt(shown, '_updatedAt') ?? '',
+      ...(columns.length === 0 ? {} : { cells: cellsOf(shown, columns) }),
       rank: rankOf(entry.published) ?? rankOf(entry.draft),
     });
   }

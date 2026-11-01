@@ -15,6 +15,42 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.97 Astro content collections in the CMS panel, richer CMS fields
+
+- The CMS panel always lists the project's Astro content collections, beside its CMS
+  connections, and opens them with the same browser, table and item editor as Sanity: search,
+  select and delete, new items, and the narrow and phone layouts. Entries are the project's own
+  files, edited in place; publish, discard, history and the status column are left out.
+- A collection can be created from the panel: it is added to `src/content.config.ts` (created
+  when missing) with a glob loader and a starter schema, and its folder is made.
+- New items and deletes work in glob collections (a file per entry, deleted to the Trash) and in
+  collections kept in one JSON or YAML data file, including an empty one.
+- A collection's schema becomes the panel's fields: kebab-case and digit-led keys, nullable
+  values, `image()` fields with a preview and a picker that opens the Assets panel in a pop-up
+  over the entry, `reference()` fields, and plain id fields that name another collection's
+  records (a Webflow export's campus ids), offered as that collection's entries by name with
+  their images. Lists show each entry's first image as its thumbnail.
+- CMS fields: a custom date and time picker; a slug that follows its document's name until it
+  is written by hand; video links shown as cards; colour functions recognised as colours;
+  dropdowns that choose on click rather than on hover; a richer rich-text editor with
+  Markdown shortcuts as you type, cleaned-up pastes, word counts and undo through every edit; rich text that stays editable with list
+  and link attributes exported by other CMSs; Sanity choices shown by their titles.
+- New items and duplicates open as unsaved drafts with Create and Cancel: nothing is written
+  until Create, and opening another item cancels one. An item's fields end with Delete and
+  Duplicate. Select turns the toolbar into what is chosen, Delete and Cancel, with a box that
+  chooses every row. Opening an item keeps the list's header and rows where they were, and a content
+  collection always shows its list, even with one entry. Clicking an open collection closes it.
+- Collection tables sort by any column (smallest first, then largest first), and the pin at
+  the end of the header chooses which fields show as columns, remembered per collection; a
+  reference shows its record's name. Many columns scroll sideways.
+- Data files up to 32 MB are read (a few hundred sermons with transcripts); saving is still
+  limited to 10 MB, and a larger file says so.
+- The CMS panel's + opens Settings at CMS connections; a Sanity connection is labelled Sanity.
+- Canvas text keeps the typed words on screen while a save is checked, and the title bar keeps
+  room for the window buttons at any page zoom.
+- Stacki Studio gets all of it through its CMS route. Desktop, the Studio source bundle and
+  `create-stacki` are aligned at 0.1.97.
+
 ## 0.1.96 component text on the canvas, live CMS data, Studio parity
 
 - Text a component shows from a prop is edited on the canvas like any other text. Select the

@@ -10,6 +10,7 @@ import type { SanityLogin } from '../content/sanityLogin';
 import type { CmsSaveResult } from '../../shared/properties/cmsConnections';
 import type { RemoteResult } from '../../shared/properties/cmsRemote';
 import { cmsFailureMessage, cmsRemoteService } from '../content/cmsRemoteService';
+import { fetchLinkPreview } from '../content/linkPreview';
 import { IMAGE_EXTENSIONS, SANITY_UPLOAD_BYTES_MAX } from '../content/sanityUpload';
 
 export function registerCmsConnectionHandlers(
@@ -45,6 +46,10 @@ export function registerCmsConnectionHandlers(
     login.request(root(input.projectPath), input.request),
   );
   registerCmsRemoteHandlers(host, store, root);
+  // A video link's card in a CMS field; the payload parser admits video host links only.
+  host.ipcMain.handle('cmsRemote:linkPreview', (_event, input) =>
+    remote(() => fetchLinkPreview(input.url)),
+  );
 }
 
 // The CMS panel's reads and draft writes, against one saved connection
@@ -61,7 +66,12 @@ function registerCmsRemoteHandlers(
     remote(() => service(input.projectPath, input.connectionId).collections()),
   );
   ipcMain.handle('cmsRemote:documents', (_event, input) =>
-    remote(() => service(input.projectPath, input.connectionId).documents(input.collection)),
+    remote(() =>
+      service(input.projectPath, input.connectionId).documents(
+        input.collection,
+        input.columns ?? [],
+      ),
+    ),
   );
   ipcMain.handle('cmsRemote:create', (_event, input) =>
     remote(() => service(input.projectPath, input.connectionId).create(input.collection)),
@@ -74,6 +84,9 @@ function registerCmsRemoteHandlers(
   );
   ipcMain.handle('cmsRemote:document', (_event, input) =>
     remote(() => service(input.projectPath, input.connectionId).document(input.id)),
+  );
+  ipcMain.handle('cmsRemote:template', (_event, input) =>
+    remote(() => service(input.projectPath, input.connectionId).template(input.collection)),
   );
   ipcMain.handle('cmsRemote:write', (_event, input) =>
     remote(() => service(input.projectPath, input.connectionId).write(input.write)),

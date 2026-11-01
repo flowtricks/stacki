@@ -4,27 +4,28 @@ import type { Result } from '../../../shared/core/result';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Collection } from './cmsSchema';
-import type { CmsPanelContent, CmsPanelContentCollection, CmsPanelFile } from './cmsPanelBridge';
-import { collectionHasContent, collectionOf, labelize } from './cmsSchema';
+import type { CmsPanelContent, CmsPanelFile } from './cmsPanelBridge';
+import { collectionHasContent, collectionOf } from './cmsSchema';
 import { createCmsCollection, readCmsFiles, readContentCollections } from './cmsPanelBridge';
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CmsIcon,
-  CollectionIcon,
   FileIcon,
   FolderDefaultIcon,
   GearIcon,
-  HideIcon,
   PlusIcon,
 } from '../../ui/Icons';
 import { listCmsConnections } from '../../ipc/cmsConnectionsBridge';
 import type { CmsConnection } from '../../../shared/properties/cmsConnections';
+import {
+  ASTRO_CONTENT_ID,
+  ASTRO_CONTENT_SOURCE,
+  type CmsSource,
+} from '../../../shared/properties/astroContent';
 import { RemoteCmsBrowser } from './RemoteCmsBrowser';
 import { prefetchConnection } from './remoteCmsCache';
 import { ConnectionLogo, type RemoteCmsSelection } from './remoteCmsShared';
-
-const CONTENT_KEY = '\u0000content';
 
 interface CmsPanelProps {
   readonly project: { readonly path: string };
@@ -73,7 +74,7 @@ export default function CmsPanel(props: CmsPanelProps) {
 
 function ProjectCmsPanel(props: CmsPanelProps) {
   const connections = useCmsConnections(props.project.path, props.refreshKey);
-  const [remote, setRemote] = useState<CmsConnection | undefined>(props.selectedRemote?.connection);
+  const [remote, setRemote] = useState<CmsSource | undefined>(props.selectedRemote?.connection);
   if (remote) {
     return (
       <RemoteCmsBrowser
@@ -85,11 +86,12 @@ function ProjectCmsPanel(props: CmsPanelProps) {
       />
     );
   }
-  // Moving to a connected CMS closes whatever local collection was open beside it.
-  const openRemote = (connection: CmsConnection) => {
+  // Moving to a connected CMS, or to the project's content collections, closes
+  // whatever local collection was open beside it.
+  const openRemote = (source: CmsSource) => {
     props.onSelect(undefined);
     props.onSelectContent(undefined);
-    setRemote(connection);
+    setRemote(source);
   };
   return <LocalCmsPanel {...props} connections={connections} onOpenRemote={openRemote} />;
 }
@@ -97,14 +99,12 @@ function ProjectCmsPanel(props: CmsPanelProps) {
 function LocalCmsPanel(
   props: CmsPanelProps & {
     readonly connections: readonly CmsConnection[];
-    readonly onOpenRemote: (connection: CmsConnection) => void;
+    readonly onOpenRemote: (source: CmsSource) => void;
   },
 ) {
   const { files, content, refresh, state } = useCmsPanelData(props.project.path, props.refreshKey);
   const [creating, setCreating] = useState(false);
-  const [openKey, setOpenKey] = useState<string | undefined>(
-    props.selectedContent ? CONTENT_KEY : undefined,
-  );
+  const [openKey, setOpenKey] = useState<string | undefined>(undefined);
   const collections = useMemo(() => visibleCollections(files, content), [files, content]);
   const groups = useMemo(
     () => collectionGroups(collections, props.currentFile),
@@ -120,30 +120,23 @@ function LocalCmsPanel(
         openKey={openKey}
         onBack={() => closeGroup(props, setOpenKey)}
         onCreate={() => setCreating(true)}
+        onConnect={props.onConnect}
       />
       <div className="panel-body">
         {creating && <CreateRow onCreate={create} />}
-        {!open && openKey !== CONTENT_KEY && (
+        {!open && (
           <>
             <ConnectionRows
               connections={props.connections}
+              content={content}
               onOpen={props.onOpenRemote}
-              onConnect={props.onConnect}
             />
             <GroupList
-              content={content}
               groups={groups}
               selectedRel={props.selectedRel}
               onOpen={(key) => openGroup(groups, key, { select: props.onSelect, open: setOpenKey })}
             />
           </>
-        )}
-        {openKey === CONTENT_KEY && (
-          <ContentCollectionList
-            collections={content.collections}
-            selected={props.selectedContent}
-            onSelect={props.onSelectContent}
-          />
         )}
         {open && (
           <JsonCollectionList
@@ -153,13 +146,8 @@ function LocalCmsPanel(
             onOpenSettings={props.onOpenSettings}
           />
         )}
-        {/* Collections in other Astro files are hidden, so count only visible groups. */}
+        {/* The content collections' row is always there, so the panel is never empty. */}
         <PanelReadStatus state={state} label="collections" retry={refresh} />
-        {state.kind === 'ready' &&
-          groups.length === 0 &&
-          content.collections.length === 0 &&
-          props.connections.length === 0 &&
-          !creating && <EmptyPanel onCreate={() => setCreating(true)} />}
       </div>
     </div>
   );
@@ -389,6 +377,8 @@ function useCmsConnections(projectPath: string, refreshKey: string | number) {
         KEPT_CONNECTIONS.set(projectPath, list.connections);
         sanity = list.connections.filter((connection) => connection.kind === 'sanity');
         readAhead();
+        // The content collections are read ahead too: their config loads in a child process.
+        prefetchConnection(projectPath, ASTRO_CONTENT_ID);
         if (active) {
           setConnections(list.connections);
         }
@@ -403,30 +393,33 @@ function useCmsConnections(projectPath: string, refreshKey: string | number) {
   return connections;
 }
 
+// Each saved connection by its CMS's name, then the project's own Astro content
+// collections, always: they open the same browser, and an empty one offers to
+// create the first collection.
 function ConnectionRows(props: {
   readonly connections: readonly CmsConnection[];
-  readonly onOpen: (connection: CmsConnection) => void;
-  readonly onConnect: (() => void) | undefined;
+  readonly content: CmsPanelContent;
+  readonly onOpen: (source: CmsSource) => void;
 }) {
   return (
     <>
       {props.connections.map((connection) => (
         <GroupRow
           key={connection.id}
-          label={connection.label}
-          count={CONNECTION_KINDS[connection.kind]}
+          label={CONNECTION_KINDS[connection.kind]}
+          title={connection.label}
           onClick={() => props.onOpen(connection)}
           icon={<ConnectionLogo kind={connection.kind} />}
         />
       ))}
-      {props.onConnect && (
-        <GroupRow
-          label="Connect a CMS"
-          count=""
-          onClick={props.onConnect}
-          icon={<CmsIcon size={14} />}
-        />
-      )}
+      <GroupRow
+        label={ASTRO_CONTENT_SOURCE.label}
+        title={
+          props.content.configPath ? `Declared in ${props.content.configPath}` : 'Astro content'
+        }
+        onClick={() => props.onOpen(ASTRO_CONTENT_SOURCE)}
+        icon={<ConnectionLogo kind="astro" />}
+      />
     </>
   );
 }
@@ -442,27 +435,37 @@ function PanelHeader({
   openKey,
   onBack,
   onCreate,
+  onConnect,
 }: {
   readonly open: CollectionGroup | undefined;
   readonly openKey: string | undefined;
   readonly onBack: () => void;
   readonly onCreate: () => void;
+  /** Where the host adds a CMS connection (Settings, or Studio's dialog). */
+  readonly onConnect: (() => void) | undefined;
 }) {
-  const title =
-    openKey === CONTENT_KEY ? 'Content collections' : (open?.label ?? 'CMS Collections');
+  const title = open?.label ?? 'CMS Collections';
+  // At the top level the + connects a CMS; inside a folder it adds a collection there.
+  const connect = openKey === undefined ? onConnect : undefined;
   return (
     <div className="panel-header">
       <div className="cms-crumb">
-        {(open || openKey === CONTENT_KEY) && (
+        {open && (
           <button className="ghost" title="All collections" onClick={onBack}>
             <ChevronLeftIcon size={14} />
           </button>
         )}
         <h2 title={open?.path}>{title}</h2>
       </div>
-      <button className="ghost" title="New collection" onClick={onCreate}>
-        <PlusIcon size={14} />
-      </button>
+      {connect ? (
+        <button className="ghost" title="Connect a CMS" onClick={connect}>
+          <PlusIcon size={14} />
+        </button>
+      ) : (
+        <button className="ghost" title="New collection" onClick={onCreate}>
+          <PlusIcon size={14} />
+        </button>
+      )}
     </div>
   );
 }
@@ -494,32 +497,20 @@ function setInputText(inputElement: HTMLInputElement, text: string): void {
 }
 
 function GroupList({
-  content,
   groups,
   selectedRel,
   onOpen,
 }: {
-  readonly content: CmsPanelContent;
   readonly groups: readonly CollectionGroup[];
   readonly selectedRel: string | undefined;
   readonly onOpen: (key: string) => void;
 }) {
   return (
     <>
-      {content.collections.length > 0 && (
-        <GroupRow
-          label="Content collections"
-          count={collectionCount(content.collections.length)}
-          title={content.configPath ? `Declared in ${content.configPath}` : undefined}
-          onClick={() => onOpen(CONTENT_KEY)}
-          icon={<CollectionIcon size={14} />}
-        />
-      )}
       {groups.map((group) => (
         <GroupRow
           key={group.key}
           label={group.label}
-          count={collectionCount(group.items.length)}
           title={group.path}
           badge={group.badge}
           selected={group.items.some((item) => item.rel === selectedRel)}
@@ -533,7 +524,6 @@ function GroupList({
 
 function GroupRow({
   label,
-  count: countLabel,
   title,
   badge,
   selected,
@@ -541,7 +531,6 @@ function GroupRow({
   icon,
 }: {
   readonly label: string;
-  readonly count: string;
   readonly title?: string | undefined;
   readonly badge?: CollectionGroup['badge'];
   /** Its collection is the one open: the row reads as the current place. */
@@ -554,41 +543,11 @@ function GroupRow({
       {icon}
       <span className="cms-collection-name">{label}</span>
       {badge && <span className="badge">{badge}</span>}
-      <span className="cms-collection-count">{countLabel}</span>
       <span className="cms-collection-chevron">
         <ChevronRightIcon size={10} />
       </span>
     </div>
   );
-}
-
-function ContentCollectionList({
-  collections,
-  selected,
-  onSelect,
-}: {
-  readonly collections: readonly CmsPanelContentCollection[];
-  readonly selected: string | undefined;
-  readonly onSelect: (name: string | undefined) => void;
-}) {
-  return collections.map((collection) => (
-    <div
-      key={collection.name}
-      className={collectionClass({
-        selected: collection.name === selected,
-        broken: collection.error !== undefined,
-      })}
-      onClick={() => onSelect(collection.name)}
-      title={contentCollectionTitle(collection)}
-    >
-      {collection.editable ? <CmsIcon size={14} /> : <HideIcon size={14} />}
-      <span className="cms-collection-name">{labelize(collection.name)}</span>
-      <span className="cms-collection-count">{contentEntryCount(collection)}</span>
-      <span className="cms-collection-chevron">
-        <ChevronRightIcon size={10} />
-      </span>
-    </div>
-  ));
 }
 
 function JsonCollectionList({
@@ -635,36 +594,8 @@ function JsonCollectionList({
   ));
 }
 
-function EmptyPanel({ onCreate }: { readonly onCreate: () => void }) {
-  return (
-    <div className="props-empty">
-      <div className="cms-empty-icon" aria-hidden="true">
-        <CmsIcon size={24} />
-      </div>
-      <h3 className="cms-empty-title">No collections to show.</h3>
-      <p>Create a collection to manage reusable content.</p>
-      <div className="cms-empty-action">
-        <button className="primary" onClick={onCreate}>
-          New collection
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function collectionClass(state: { readonly selected: boolean; readonly broken: boolean }): string {
   return `cms-collection ${state.selected ? 'on' : ''} ${state.broken ? 'broken' : ''}`;
-}
-
-function collectionCount(countValue: number): string {
-  return countValue === 1 ? '1 collection' : `${countValue} collections`;
-}
-
-function contentEntryCount(collection: CmsPanelContentCollection): string {
-  if (collection.error !== undefined) {
-    return 'unreadable';
-  }
-  return collection.count === 1 ? '1 entry' : `${collection.count} entries`;
 }
 
 function jsonItemCount(collection: Collection): string {
@@ -674,13 +605,4 @@ function jsonItemCount(collection: Collection): string {
   return collection.single || collection.items.length === 1
     ? '1 item'
     : `${collection.items.length} items`;
-}
-
-function contentCollectionTitle(collection: CmsPanelContentCollection): string {
-  if (!collection.editable) {
-    return 'Built by a loader in this project: read-only';
-  }
-  const source =
-    collection.loader?.kind === 'file' ? collection.loader.file : collection.loader?.base;
-  return `${source ?? 'Unknown source'} — ${collection.loader?.kind ?? 'unknown'} loader`;
 }
