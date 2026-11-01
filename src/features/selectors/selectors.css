@@ -1,0 +1,181 @@
+/* The style selectors panel. Verdicts read by fill colour alone: a used
+   selector is a quiet chip, an unused one red, an unproven one amber, a locked
+   one blue. Fills, never borders. */
+
+.selectors-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.selectors-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 4px 8px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-faint);
+}
+.selectors-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.selectors-search:focus-within {
+  background: var(--bg-active);
+}
+
+.selectors-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 4px 10px;
+}
+.selectors-filter {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.selectors-filter.on {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.selectors-filter-count {
+  color: var(--text-faint);
+  margin-left: 2px;
+}
+
+.selectors-group {
+  margin-bottom: 10px;
+}
+.selectors-file {
+  margin: 0 4px 4px;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectors-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 1px 4px;
+  border-radius: 6px;
+}
+.selectors-row:hover {
+  background: var(--bg-hover);
+}
+.selectors-chip {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: var(--bg-active);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.selectors-row .selectors-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.selectors-unused .selectors-chip,
+.selectors-confirm .selectors-chip {
+  background: rgba(255, 69, 58, 0.18);
+  color: #ffb4ae;
+}
+.selectors-unknown .selectors-chip {
+  background: rgba(255, 214, 10, 0.14);
+  color: #ffe58a;
+}
+.selectors-kept .selectors-chip {
+  background: var(--accent-soft);
+  color: #9fd6ff;
+}
+.selectors-checking .selectors-chip {
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.selectors-progress {
+  margin: 0 4px 8px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.selectors-untracked .selectors-chip {
+  background: transparent;
+  color: var(--text-dim);
+}
+.selectors-line {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.selectors-lock {
+  padding: 3px;
+  color: var(--text-faint);
+  opacity: 0;
+}
+.selectors-row:hover .selectors-lock,
+.selectors-lock:focus-visible,
+.selectors-kept .selectors-lock {
+  opacity: 1;
+}
+.selectors-kept .selectors-lock {
+  color: #9fd6ff;
+}
+
+.selectors-confirm p {
+  margin: 4px 4px 10px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.selectors-confirm-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+.selectors-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.selectors-notes {
+  margin: 12px 4px 0;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.selectors-notes summary {
+  cursor: pointer;
+  margin-bottom: 6px;
+}
+.selectors-notes p {
+  margin: 0 0 6px;
+  line-height: 1.4;
+}
+.selectors-notes .selectors-file {
+  display: block;
+  margin: 0;
+}
