@@ -6,7 +6,8 @@ import type { SelectorEntry, SelectorReport, SelectorVerdictKind } from '../../.
 import type { StyleKeepList } from '../../../shared/properties/styleKeepList';
 
 export type SelectorFilter = 'all' | 'unused' | 'unknown' | 'kept';
-// Ordered by what needs a decision: what can go, what cannot be proven, what was kept.
+// Ordered by what needs a decision: what can go, what cannot be proven, what
+// was locked, then everything.
 export const SELECTOR_FILTERS: readonly SelectorFilter[] = ['unused', 'unknown', 'kept', 'all'];
 
 export interface SelectorGroup {
@@ -103,6 +104,60 @@ export function unknownReasons(report: SelectorReport, search: string): readonly
 /** The filter a panel opens on: the clean-up when there is one, otherwise everything. */
 export function initialFilter(report: SelectorReport): SelectorFilter {
   return report.entries.some((entry) => entry.verdict.kind === 'unused') ? 'unused' : 'all';
+}
+
+/** A piece of a selector as the panel draws it: `flagged` marks a name the verdict is about. */
+export interface SelectorSegment {
+  readonly text: string;
+  readonly flagged: boolean;
+}
+
+// The names a verdict is about, found in the selector as written (`.name` or
+// `#name`, with CSS escapes), so the panel can tint exactly the part that
+// makes a rule removable. Names that cannot be found leave the text plain.
+export function selectorSegments(selector: string, names: readonly string[]): readonly SelectorSegment[] {
+  if (names.length === 0) {
+    return [{ text: selector, flagged: false }];
+  }
+  const written = names.map((name) => name.replace(/[^A-Za-z0-9_-]/g, (char) => `\\${char}`).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(`[.#](?:${written.join('|')})(?![A-Za-z0-9_-])`, 'g');
+  const segments: SelectorSegment[] = [];
+  let cursor = 0;
+  for (const match of selector.matchAll(pattern)) {
+    if (match.index > cursor) {
+      segments.push({ text: selector.slice(cursor, match.index), flagged: false });
+    }
+    segments.push({ text: match[0], flagged: true });
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < selector.length) {
+    segments.push({ text: selector.slice(cursor), flagged: false });
+  }
+  assert(segments.map((segment) => segment.text).join('') === selector, 'selectorSegments: the pieces spell the selector');
+  return segments;
+}
+
+/** Rows drawn at a time; more load as the list scrolls to its end. */
+export const LIST_PAGE_ROWS = 200;
+
+/** The first `limit` rows across groups, the last group cut short, and how many rows there are in all. */
+export function firstRows<G extends { readonly entries: readonly SelectorEntry[] }>(
+  groups: readonly G[],
+  limit: number,
+): { readonly groups: readonly G[]; readonly total: number } {
+  assert(Number.isSafeInteger(limit), 'firstRows: the limit is a whole number');
+  assert(limit >= 0, 'firstRows: the limit is not negative');
+  const out: G[] = [];
+  let left = limit;
+  let total = 0;
+  for (const group of groups) {
+    total += group.entries.length;
+    if (left > 0) {
+      out.push(group.entries.length <= left ? group : { ...group, entries: group.entries.slice(0, left) });
+      left -= Math.min(left, group.entries.length);
+    }
+  }
+  return { groups: out, total };
 }
 
 /** The entries a cleanup would remove, in report order. */

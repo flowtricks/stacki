@@ -43,6 +43,7 @@ function bridge(root) {
     projectMetadata: async (input) => readProjectMetadata(root, input.kind),
     writeProjectMetadata: async (input) => writeProjectMetadata(root, input.write),
     onCssChanged: () => () => {},
+    onFsChanged: () => () => {},
   };
 }
 
@@ -84,7 +85,7 @@ test('lock, clean up and undo go through to the project files', async () => {
   const reactRoot = createRoot(container);
   const rows = () =>
     [...container.querySelectorAll('.selectors-row')].map(
-      (row) => `${row.querySelector('.selectors-chip').textContent}:${row.className.split('selectors-')[2].trim()}`,
+      (row) => `${row.querySelector('.selectors-selector').textContent}:${/is-(\w+)/.exec(row.className)[1]}`,
     );
   const click = async (element) =>
     act(async () => {
@@ -108,7 +109,17 @@ test('lock, clean up and undo go through to the project files', async () => {
     }
     // It opens on the clean-up: only what can go.
     assert.deepEqual(rows(), ['.ghost:unused', '.is-open:unused']);
-    assert.match(container.querySelector('.selectors-summary').textContent, /2 unused styles/);
+
+    // One row's trash removes just that style, and undo puts it back.
+    const ghostRow = [...container.querySelectorAll('.selectors-row')].find((row) => row.textContent.includes('.ghost'));
+    await click(ghostRow.querySelector('.selectors-remove-one'));
+    assert.equal(fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'), '.hero { a: b }\n.is-open { a: b }\n');
+    assert.deepEqual(toasts.at(-1), ['Removed 1 unused style', 'success']);
+    await act(async () => {
+      await undos[0].undo();
+      await settle(80);
+    });
+    assert.equal(fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'), CSS);
     await click([...container.querySelectorAll('.selectors-tab')].find((tab) => tab.textContent.startsWith('All')));
     assert.deepEqual(rows(), ['.hero:used', '.ghost:unused', '.is-open:unused']);
 
@@ -116,23 +127,31 @@ test('lock, clean up and undo go through to the project files', async () => {
     await click(openRow.querySelector('.selectors-lock'));
     assert.deepEqual(keepList(root).keep, ['is-open']);
     assert.deepEqual(rows(), ['.hero:used', '.ghost:unused', '.is-open:kept']);
+    // A Locked tab appears once something is locked, and unlocking from it works.
+    await click([...container.querySelectorAll('.selectors-tab')].find((tab) => tab.textContent.startsWith('Locked')));
+    assert.deepEqual(rows(), ['.is-open:kept']);
+    await click(container.querySelector('.selectors-lock'));
+    assert.deepEqual(keepList(root).keep, []);
+    await click([...container.querySelectorAll('.selectors-tab')].find((tab) => tab.textContent.startsWith('All')));
+    await click([...container.querySelectorAll('.selectors-row')].find((row) => row.textContent.includes('.is-open')).querySelector('.selectors-lock'));
+    assert.deepEqual(keepList(root).keep, ['is-open']);
 
-    await click([...container.querySelectorAll('button')].find((button) => button.textContent.includes('Review')));
-    const listed = [...container.querySelectorAll('.selectors-confirm .selectors-chip')].map((chip) => chip.textContent);
+    await click(container.querySelector('[aria-label="Clean up unused styles"]'));
+    const listed = [...container.querySelectorAll('.selectors-selector')].map((selector) => selector.textContent);
     assert.deepEqual(listed, ['.ghost'], 'the confirmation lists only unused selectors');
     await click([...container.querySelectorAll('button')].find((button) => button.textContent === 'Remove style'));
     assert.equal(fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'), '.hero { a: b }\n.is-open { a: b }\n');
     assert.deepEqual(toasts.at(-1), ['Removed 1 unused style', 'success']);
     assert.deepEqual(rows(), ['.hero:used', '.is-open:kept']);
 
-    assert.equal(undos.length, 1);
+    assert.equal(undos.length, 2);
     await act(async () => {
-      await undos[0].undo();
+      await undos[1].undo();
       await settle(80);
     });
     assert.equal(fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'), CSS);
     await act(async () => {
-      await undos[0].redo();
+      await undos[1].redo();
       await settle(80);
     });
     assert.equal(fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'), '.hero { a: b }\n.is-open { a: b }\n');

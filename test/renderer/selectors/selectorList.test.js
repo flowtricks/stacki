@@ -10,7 +10,8 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const loadRenderer = require('../../helpers/rendererModule.js');
 
-const { selectorCounts, selectorGroups, unusedEntries, exactPatterns, unknownReasons, initialFilter } = loadRenderer('src/features/selectors/selectorList.ts');
+const { firstRows, selectorCounts, selectorGroups, selectorSegments, unusedEntries, exactPatterns, unknownReasons, initialFilter } =
+  loadRenderer('src/features/selectors/selectorList.ts');
 const { namesInSubtree, DELETE_CLEANUP_LIMITS } = loadRenderer('src/features/selectors/deleteCleanup.ts');
 
 const entry = (id, rel, selector, verdict) => ({ id, rel, line: 1, selector, scope: 'global', verdict });
@@ -51,7 +52,11 @@ test('lists each selector once per file, skips ones a clean-up never touches, an
     selectorGroups(report, 'all', '  OPEN ').flatMap((group) => group.entries.map((item) => item.selector)),
     ['.is-open'],
   );
-  assert.deepEqual(selectorGroups(report, 'kept', 'hero'), []);
+  assert.deepEqual(selectorGroups(report, 'unknown', 'hero'), []);
+  assert.deepEqual(
+    selectorGroups(report, 'kept', '').flatMap((group) => group.entries.map((item) => item.selector)),
+    ['.is-open'],
+  );
 });
 
 test('"can\u2019t tell" is grouped by reason, largest first', () => {
@@ -63,6 +68,38 @@ test('"can\u2019t tell" is grouped by reason, largest first', () => {
       ['x.astro loads a script', 1],
     ],
   );
+});
+
+test('the names a verdict is about are found in the selector as written, escapes included', () => {
+  const pieces = (selector, names) =>
+    selectorSegments(selector, names)
+      .map((segment) => (segment.flagged ? `[${segment.text}]` : segment.text))
+      .join('');
+  assert.equal(pieces('.wf-design-mode .card', ['wf-design-mode']), '[.wf-design-mode] .card');
+  assert.equal(pieces('.md\\:flex .x', ['md:flex']), '[.md\\:flex] .x');
+  assert.equal(pieces('.a.ab .a-b', ['a']), '[.a].ab .a-b', 'a name never matches inside a longer one');
+  assert.equal(pieces('#main .a', ['main']), '[#main] .a');
+  assert.equal(pieces('.x', []), '.x');
+});
+
+test('long lists are drawn a page at a time, cutting the last group short', () => {
+  const groups = [
+    { rel: 'a', entries: [1, 2, 3] },
+    { rel: 'b', entries: [4, 5] },
+    { rel: 'c', entries: [6] },
+  ];
+  const page = firstRows(groups, 4);
+  assert.equal(page.total, 6);
+  assert.deepEqual(
+    page.groups.map((group) => [group.rel, group.entries]),
+    [
+      ['a', [1, 2, 3]],
+      ['b', [4]],
+    ],
+  );
+  assert.deepEqual(firstRows(groups, 0).groups, []);
+  assert.equal(firstRows(groups, 100).groups.length, 3);
+  assert.throws(() => firstRows(groups, -1), /not negative/);
 });
 
 test('a clean-up removes every rule of an unused selector, and only exact keep patterns unlock', () => {

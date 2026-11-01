@@ -84,14 +84,13 @@ test('names assembled in code protect every selector they could build', async ()
     'src/scripts/ui.ts':
       "const size = 'x';\nexport const a = `btn-${size}`;\nexport const b = (base: string) => `${base}--active`;\nexport const c = 'tag' + '-' + size;\n",
   });
+  // A name the code assembles is one the code uses: in use, never flagged.
   const result = await report(root);
-  assert.equal(verdictOf(result, '.btn-large').kind, 'unknown');
-  assert.equal(verdictOf(result, '.btn-small').kind, 'unknown');
-  assert.equal(verdictOf(result, '.card--active').kind, 'unknown');
-  assert.equal(verdictOf(result, '.tag-red').kind, 'unknown');
+  assert.equal(verdictOf(result, '.btn-large').kind, 'used');
+  assert.equal(verdictOf(result, '.btn-small').kind, 'used');
+  assert.equal(verdictOf(result, '.card--active').kind, 'used');
+  assert.equal(verdictOf(result, '.tag-red').kind, 'used');
   assert.equal(verdictOf(result, '.lone-rule').kind, 'unused');
-  const reason = verdictOf(result, '.btn-large');
-  assert.ok(reason.kind === 'unknown' && reason.reason.includes('btn-…'), JSON.stringify(reason));
 });
 
 test('installed packages count, and missing packages make nothing unused', async () => {

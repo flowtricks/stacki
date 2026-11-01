@@ -1,87 +1,83 @@
-/* The style selectors panel. Verdicts read by fill colour alone: a used
-   selector is a quiet chip, an unused one red, an unproven one amber, a locked
-   one blue. Fills, never borders. */
+/* The style selectors panel. A quiet list: one line per selector in the
+   panel's own text colour, with only the class names that make a rule
+   removable tinted (orange). Fills, never borders; red is kept for the
+   confirmation's Remove button. */
 
-.selectors-body {
+.selectors-panel {
+  --selectors-unused: #ff9f4a;
+  --selectors-unknown: #e8c35a;
+  --selectors-kept: #7cc4ff;
+}
+
+.selectors-controls {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  padding: 0 12px 10px;
 }
 
-/* The decision at the top: how many styles can go, and the one action. */
-.selectors-summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 4px;
-  padding: 12px;
-  border-radius: var(--radius);
-  background: var(--bg-input);
-}
-.selectors-summary.has-unused {
-  background: rgba(255, 69, 58, 0.12);
-}
-.selectors-summary-text {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-.selectors-summary-text strong {
-  color: var(--text);
-  font-size: 12.5px;
-  font-weight: 600;
-}
-.selectors-summary-text span {
-  color: var(--text-dim);
-  font-size: 11px;
-  line-height: 1.4;
-}
-.selectors-review {
-  flex-shrink: 0;
-  gap: 6px;
-  padding: 5px 10px;
-  background: var(--red);
-  color: #fff;
-  font-size: 11.5px;
-}
-.selectors-review:hover:not(:disabled) {
-  background: #ff6259;
-}
-
-/* One row of tabs, never wrapping: the counts sit inside each tab. */
+/* Three tabs that always fit: label and count side by side. */
 .selectors-tabs {
+  position: relative;
   display: flex;
   gap: 2px;
-  margin: 0 4px;
   padding: 2px;
-  border-radius: var(--radius);
+  border-radius: 7px;
   background: var(--bg-input);
 }
-/* Each tab is as wide as its label, sharing what is left; a label only
-   truncates when the panel is narrower than all four together. */
 .selectors-tab {
   display: inline-flex;
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  align-items: baseline;
   justify-content: center;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
-  overflow: hidden;
-  padding: 4px 8px;
-  text-overflow: ellipsis;
-  border-radius: 6px;
+  padding: 4px 6px;
+  border-radius: 5px;
   background: transparent;
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 11.5px;
+  font-weight: 500;
   white-space: nowrap;
 }
-.selectors-tab.on {
-  background: var(--bg-active);
+.selectors-tab:hover:not(.on) {
   color: var(--text);
+}
+/* Hover changes only the text colour: the app's own button fills (which
+   outrank a single class) would cover the sliding background. */
+.selectors-tabs .selectors-tab,
+.selectors-tabs .selectors-tab:focus,
+.selectors-tabs .selectors-tab:active,
+.selectors-tabs .selectors-tab:hover:not(:disabled) {
+  background: transparent;
+}
+.selectors-tab.on {
+  color: var(--text);
+}
+/* The tabs sit above the sliding background; the active one draws none of its own. */
+.selectors-tab {
+  position: relative;
+  z-index: 1;
+}
+.selectors-tab-indicator {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  border-radius: 5px;
+  background: var(--bg-active);
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .selectors-tab-indicator {
+    transition: none;
+  }
 }
 .selectors-tab-count {
   color: var(--text-faint);
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -89,146 +85,161 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 4px;
   padding: 0 8px;
-  border-radius: var(--radius);
+  border-radius: 6px;
   background: var(--bg-input);
   color: var(--text-faint);
 }
 .selectors-search input {
   flex: 1;
   min-width: 0;
-  padding: 6px 0;
+  padding: 5px 0;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
 }
 .selectors-search:focus-within {
   background: var(--bg-active);
 }
 
-.selectors-group,
-.selectors-reason {
+.selectors-body {
+  padding-top: 0;
+}
+
+/* What the tab means, and the clean-up where it applies. */
+.selectors-banner {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 10px;
+  margin: 0 4px 10px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.selectors-group {
+  margin-bottom: 12px;
 }
 .selectors-file {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin: 4px 4px 2px;
-  min-width: 0;
+  margin: 0 4px 2px;
+  overflow: hidden;
+  color: var(--text-dim);
   font-size: 11px;
   font-weight: 500;
-}
-.selectors-file-name {
-  flex-shrink: 0;
-  color: var(--text);
-}
-.selectors-file-folder {
-  overflow: hidden;
-  color: var(--text-faint);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.selectors-file-count {
-  margin-left: auto;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
+.selectors-reason {
+  margin: 0 4px 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
+/* One line per selector; hovering a row shows the whole selector in a tooltip. */
 .selectors-row {
+  --selectors-row-fill: var(--bg-panel);
+  position: relative;
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
   min-height: 26px;
-  padding: 2px 4px;
-  border-radius: 6px;
+  padding: 0 4px;
+  border-radius: 5px;
 }
 .selectors-row:hover {
   background: var(--bg-hover);
 }
-/* Selectors wrap rather than cut off: the end of a selector is often the part that matters. */
-.selectors-chip {
-  flex: 0 1 auto;
+.selectors-selector {
+  flex: 1;
   min-width: 0;
-  padding: 3px 7px;
-  border-radius: 5px;
-  background: var(--bg-active);
+  overflow: hidden;
+  padding: 6px 0;
   color: var(--text);
   font-family: var(--mono);
   font-size: 11px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-.selectors-unused .selectors-chip {
-  background: rgba(255, 69, 58, 0.18);
-  color: #ffb4ae;
-}
-.selectors-unknown .selectors-chip {
-  background: rgba(255, 214, 10, 0.14);
-  color: #ffe58a;
-}
-.selectors-kept .selectors-chip {
-  background: var(--accent-soft);
-  color: #9fd6ff;
-}
-.selectors-checking .selectors-chip {
-  background: var(--bg-input);
-  color: var(--text-dim);
-}
-.selectors-where {
-  flex-shrink: 1;
-  min-width: 0;
-  overflow: hidden;
-  padding-top: 4px;
-  color: var(--text-faint);
-  font-size: 10.5px;
+  line-height: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.selectors-lock {
-  flex-shrink: 0;
-  margin-left: auto;
-  padding: 3px;
-  color: var(--text-faint);
-  opacity: 0;
-}
-.selectors-row:hover .selectors-lock,
-.selectors-lock:focus-visible,
-.selectors-kept .selectors-lock {
-  opacity: 1;
-}
-.selectors-kept .selectors-lock {
-  color: #9fd6ff;
-}
-
-/* A "Can't tell" reason, said once above the selectors it covers. */
-.selectors-reason-card {
+.selectors-tip {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  margin: 2px 4px 4px;
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  background: rgba(255, 214, 10, 0.08);
+  gap: 4px;
+  pointer-events: none;
 }
-.selectors-reason-card p {
-  margin: 0;
-  color: var(--text);
+.selectors-tip-selector {
+  color: #ededed;
+  font-family: var(--mono);
   font-size: 11.5px;
-  line-height: 1.45;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
-.selectors-reason-card .selectors-reason-hint {
-  color: var(--text-dim);
-  font-size: 11px;
+/* The tooltip renders outside the panel, so it names its tint directly. */
+.selectors-tip .selectors-flag {
+  padding: 0;
+  background: transparent;
+  color: #ff9f4a;
 }
+.selectors-row.is-used .selectors-selector,
+.selectors-row.is-checking .selectors-selector {
+  color: var(--text-dim);
+}
+.selectors-flag {
+  padding: 0;
+  background: transparent;
+  color: var(--selectors-unused);
+}
+.selectors-row.is-unknown .selectors-flag {
+  color: var(--selectors-unknown);
+}
+.selectors-row.is-kept .selectors-flag {
+  color: var(--selectors-kept);
+}
+/* The row's buttons float over its end behind a short fade, so the selector
+   keeps the full width until the row is hovered or a button is focused. A
+   locked row always shows its lock: that is its state. */
+.selectors-row:hover {
+  --selectors-row-fill: #1d1d1d;
+}
+.selectors-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px 0 18px;
+  border-radius: 0 5px 5px 0;
+  background: linear-gradient(90deg, transparent, var(--selectors-row-fill) 14px);
+  opacity: 0;
+  pointer-events: none;
+}
+.selectors-row:hover .selectors-actions,
+.selectors-actions:focus-within,
+.selectors-row.is-kept .selectors-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.selectors-lock,
+.selectors-remove-one {
+  flex-shrink: 0;
+  padding: 3px;
+  color: var(--text-faint);
+}
+.selectors-lock.on {
+  color: var(--selectors-kept);
+}
+
+.selectors-more {
+  min-height: 1px;
+  margin: 4px;
+}
+
 .selectors-empty {
   margin: 4px;
   color: var(--text-dim);
@@ -236,37 +247,38 @@
   line-height: 1.45;
 }
 
-.selectors-confirm {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* Filled buttons, as in Webflow's confirmation: a neutral Cancel and a red
+   Remove — the one place the panel uses red as a fill. */
+.selectors-cancel,
+.selectors-delete {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
 }
-.selectors-confirm-title {
-  margin: 0 4px;
+.selectors-cancel {
+  background: var(--bg-active);
   color: var(--text);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
 }
-.selectors-confirm-text {
-  margin: 0 4px;
-  color: var(--text-dim);
-  font-size: 11.5px;
-  line-height: 1.45;
+.selectors-cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
 }
-.selectors-confirm-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 4px;
-  border-radius: var(--radius);
-  background: var(--bg-input);
+.selectors-delete {
+  background: #d93f3f;
+  color: #fff;
+}
+.selectors-delete:hover:not(:disabled) {
+  background: #e5534b;
+}
+.selectors-delete:disabled {
+  opacity: 0.6;
 }
 .selectors-confirm-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin: 0 4px;
+  padding: 10px 12px 12px;
+  background: var(--bg-panel);
 }
 
 .selectors-notes {

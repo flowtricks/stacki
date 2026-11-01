@@ -219,9 +219,10 @@ function verdictOf(
   if (waiting.length > 0) {
     return { kind: 'checking', names: waiting };
   }
-  const assembled = absent.map((name) => assembledPiece(name, hits)).find((piece) => piece !== undefined);
-  if (assembled !== undefined) {
-    return { kind: 'unknown', names: absent, reason: `Code builds class names from pieces (${assembled})` };
+  // A name code assembles (`w--${state}`) is one the code uses, like a name it
+  // writes out: in use, so it is neither flagged nor removed.
+  if (absent.some((name) => assembledPiece(name, hits) !== undefined)) {
+    return { kind: 'used' };
   }
   assert(absent.every(keep), 'verdictOf: an absent name that is not dead or assembled is kept');
   return { kind: 'kept', names: absent };
