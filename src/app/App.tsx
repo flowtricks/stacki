@@ -163,15 +163,15 @@ function bindContextOf(app: AppView, route: CanvasRoute) {
   return (
     app.loopContext && {
       ...app.loopContext,
+      // Which collection a value lists, however the page reshapes it, so a
+      // builder export's loop item shows its fields (collectionReader.ts).
+      collectionReader,
       // Which item of a loop's list the picker reads the item's values as. A loop
       // hands `service` one entry of `times`, and the picker showed the first one
       // forever — so the fields under it were one service's, and the others could
       // only be taken on trust. Keyed by the item's own name, so two loops on a
       // page are two places.
       itemIndex: app.itemIndex,
-      // Which collection a value lists, however the page reshapes it, so a
-      // builder export's loop item shows its fields (collectionReader.ts).
-      collectionReader,
       onStepItem: (name: string, step: number, count: number) =>
         app.setItemIndex((current) => ({
           ...current,
