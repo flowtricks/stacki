@@ -992,3 +992,315 @@
   background: transparent;
   box-shadow: none;
 }
+
+/* A content collection's row: on hover its settings take the arrow's place,
+   and the settings button lights on its own hover. */
+.cms-collection-settings {
+  display: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  place-items: center;
+  border-radius: 5px;
+}
+.cms-collection:hover .cms-collection-settings {
+  display: grid;
+}
+.cms-collection:has(.cms-collection-settings):hover .cms-collection-chevron {
+  display: none;
+}
+.cms-collection-settings:hover {
+  background: var(--bg-active);
+}
+
+/* Collection settings: sections of plain fields on the panel's background. */
+.remote-cms-settings-body {
+  display: grid;
+  gap: 28px;
+  max-width: 720px;
+  padding: 24px;
+}
+.remote-cms-settings-section {
+  display: grid;
+  gap: 10px;
+}
+.remote-cms-settings-label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+}
+.remote-cms-settings-row {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+}
+.remote-cms-settings-row > * {
+  flex: 1;
+}
+.remote-cms-settings-row > button {
+  flex: none;
+}
+.remote-cms-settings-hint {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.remote-cms-settings-fields {
+  display: grid;
+  gap: 4px;
+}
+.remote-cms-settings-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px 0 8px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  cursor: pointer;
+}
+.remote-cms-settings-field:hover {
+  background: var(--bg-hover);
+}
+.remote-cms-settings-field.drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.remote-cms-settings-field.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.remote-cms-settings-icon {
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+}
+.remote-cms-settings-name {
+  color: var(--text);
+}
+.remote-cms-settings-kind,
+.remote-cms-settings-required {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.remote-cms-settings-required {
+  margin-left: auto;
+}
+.remote-cms-settings-editor {
+  display: grid;
+  gap: 18px;
+  padding: 14px 18px 18px;
+  border-radius: 10px;
+  /* The card is raised; its inputs sit darker in it, so each reads as a field. */
+  background: var(--bg-panel-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.remote-cms-settings-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.remote-cms-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.remote-cms-settings-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.remote-cms-settings-spacer {
+  flex: 1;
+}
+.remote-cms-settings-add {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.remote-cms-settings-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  margin: 0 -6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.remote-cms-settings-editor-head > button:not(.remote-cms-settings-tool) {
+  height: 30px;
+  padding: 0 14px;
+}
+.remote-cms-settings-tool {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 6px;
+}
+.remote-cms-settings-tool:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+/* A collection's count reads with its name ("Booklets 8 items"), not at the row's end;
+   a long name is cut short before its count is. */
+.cms-collection.is-counted .cms-collection-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.cms-collection.is-counted .cms-collection-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cms-collection.is-counted .cms-collection-count {
+  flex: none;
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Adding a field: every kind as a tile, its icon over its name. */
+.remote-cms-settings-picker {
+  display: grid;
+  gap: 12px;
+}
+.remote-cms-settings-kinds {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+}
+.remote-cms-settings-kind-tile {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 10px;
+  min-height: 96px;
+  padding: 12px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: center;
+}
+.remote-cms-settings-kind-tile:hover {
+  background: var(--bg-hover);
+}
+
+/* Deleting the collection, set apart at the end of its settings. */
+.remote-cms-settings-danger {
+  display: flex;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.remote-cms-settings-danger > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* One field's settings (RemoteFieldSettings.tsx): labelled inputs two to a row,
+   switches together, the less common checks behind a disclosure, Required last. */
+.field-settings {
+  display: grid;
+  gap: 18px;
+}
+.field-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+.field-settings-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.field-settings-field.is-wide {
+  grid-column: 1 / -1;
+}
+.field-settings-label {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+}
+.field-settings-field input,
+.field-settings-field textarea {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.field-settings-field textarea {
+  resize: vertical;
+  line-height: 1.45;
+}
+.field-settings-field input::placeholder,
+.field-settings-field textarea::placeholder {
+  color: var(--text-faint);
+}
+.field-settings-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+}
+.field-settings-flag,
+.field-settings-required {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.field-settings-disclosure {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.field-settings-disclosure:hover {
+  color: var(--text);
+  background: none;
+}
+.field-settings-advanced {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+.field-settings-required {
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.field-settings-note {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+@media (max-width: 700px) {
+  .field-settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

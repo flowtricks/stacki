@@ -12,6 +12,8 @@ export interface RemoteCmsSelection {
   readonly connection: CmsSource;
   readonly collection: string;
   readonly item: { readonly id: string; readonly title: string } | undefined;
+  /** The collection's settings are open in place of its items (content collections only). */
+  readonly mode?: 'settings' | undefined;
 }
 
 // One read per subject, through its cache (remoteCmsCache.ts): what is kept for

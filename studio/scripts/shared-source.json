@@ -784,6 +784,12 @@
     "electron/content/astroRemoteSchema.ts",
     "electron/content/astroRecordReferences.ts",
     "electron/content/astroDataRecords.ts",
+    "electron/content/astroSchemaEdit.ts",
+    "electron/content/astroSchemaSyntax.ts",
+    "electron/content/astroSchemaChecks.ts",
+    "shared/properties/fieldChecks.ts",
+    "electron/content/astroCollectionSettings.ts",
+    "shared/properties/collectionSettings.ts",
     "electron/content/astroCollectionConfig.ts",
     "src/features/cms/remoteSource.ts",
     "src/features/cms/projectImages.tsx",
@@ -791,6 +797,10 @@
     "src/features/cms/RemotePendingItem.tsx",
     "src/features/cms/remoteColumns.ts",
     "src/features/cms/RemoteColumnPicker.tsx",
+    "src/features/cms/RemoteCollectionSettings.tsx",
+    "src/features/cms/settingsDraft.ts",
+    "src/features/cms/RemoteFieldSettings.tsx",
+    "src/features/cms/fieldCheckInputs.ts",
     "electron/content/sanityContent.ts",
     "electron/content/sanityEdits.ts",
     "electron/content/sanityHistory.ts",
@@ -829,6 +839,9 @@
       "./mainHost": "src/features/cms/cmsHost"
     },
     "electron/content/astroRemoteService.ts": {
+      "../documents/documentWrites": "src/features/cms/cmsHost"
+    },
+    "electron/content/astroCollectionSettings.ts": {
       "../documents/documentWrites": "src/features/cms/cmsHost"
     },
     "electron/content/astroCollectionConfig.ts": {

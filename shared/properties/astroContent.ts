@@ -13,6 +13,11 @@ import { record, text } from '../core/boundary';
 import { assert } from '../core/assert';
 import type { CmsConnection } from './cmsConnections';
 import {
+  parseSettingsChange,
+  type CollectionSettings,
+  type SettingsChange,
+} from './collectionSettings';
+import {
   parseRemoteCollectionName,
   type RemoteCollection,
   type RemoteDocument,
@@ -57,22 +62,28 @@ export type AstroRemoteRead =
       readonly columns: readonly string[];
     }
   | { readonly operation: 'document'; readonly id: string }
-  | { readonly operation: 'template'; readonly collection: string };
+  | { readonly operation: 'template'; readonly collection: string }
+  | { readonly operation: 'settings'; readonly collection: string };
 
 /** What a read answers: the collections, one collection's entries, or one entry. */
 export type AstroRemoteReadAnswer =
-  readonly RemoteCollection[] | RemoteDocumentList | RemoteDocument;
+  readonly RemoteCollection[] | RemoteDocumentList | RemoteDocument | CollectionSettings;
 
 /** What an edit answers: the entry written, the entry made, how many went, the new collection. */
 export type AstroRemoteEditAnswer =
-  RemoteDocument | RemoteDocumentSummary | number | RemoteCollection;
+  RemoteDocument | RemoteDocumentSummary | number | RemoteCollection | CollectionSettings;
 
 /** What the panel changes in them: a field, a new or removed entry, a new collection. */
 export type AstroRemoteEdit =
   | { readonly operation: 'write'; readonly write: RemoteWrite }
   | { readonly operation: 'create'; readonly collection: string }
   | { readonly operation: 'delete'; readonly ids: readonly string[] }
-  | { readonly operation: 'createCollection'; readonly name: string };
+  | { readonly operation: 'createCollection'; readonly name: string }
+  | {
+      readonly operation: 'settings';
+      readonly collection: string;
+      readonly change: SettingsChange;
+    };
 
 export function parseAstroRemoteRead(input: unknown): AstroRemoteRead {
   const value = record(input);
@@ -85,6 +96,8 @@ export function parseAstroRemoteRead(input: unknown): AstroRemoteRead {
       const columns = value['columns'] === undefined ? [] : parseRemoteColumns(value['columns']);
       return { operation: 'documents', collection, columns };
     }
+    case 'settings':
+      return { operation: 'settings', collection: parseRemoteCollectionName(value['collection']) };
     case 'template':
       return { operation: 'template', collection: parseRemoteCollectionName(value['collection']) };
     case 'document': {
@@ -114,6 +127,12 @@ export function parseAstroRemoteEdit(input: unknown): AstroRemoteEdit {
       assert(ids.length > 0, 'A delete names at least one entry');
       return { operation: 'delete', ids };
     }
+    case 'settings':
+      return {
+        operation: 'settings',
+        collection: parseRemoteCollectionName(value['collection']),
+        change: parseSettingsChange(value['change']),
+      };
     case 'createCollection':
       return { operation: 'createCollection', name: parseAstroCollectionName(value['name']) };
     default:

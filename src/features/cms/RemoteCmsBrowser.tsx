@@ -4,9 +4,17 @@
 // of them says so and offers the first. A collection opens in the main view (RemoteCmsView.tsx),
 // as a table of its items; one holding a single item opens that item. The open
 // collection stays highlighted here.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { cmsTransport } from '../../ipc/editorEnvironment';
 import './remoteCms.css';
-import { AstroIcon, ChevronLeftIcon, ChevronRightIcon, CmsIcon, PlusIcon } from '../../ui/Icons';
+import {
+  AstroIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CmsIcon,
+  GearIcon,
+  PlusIcon,
+} from '../../ui/Icons';
 import { SanityTypeIcon } from './SanityTypeIcon';
 import { createContentCollection, remoteCollections, remoteDocuments } from './remoteSource';
 import {
@@ -34,6 +42,7 @@ export function RemoteCmsBrowser(props: Props) {
   const collections = useRemote(COLLECTIONS, connection.id, () =>
     remoteCollections(projectPath, connection.id),
   );
+  useProjectChanges(connection, collections.retry);
   // A collection of one item opens that item: there is nothing to choose.
   const open = async (entry: RemoteCollection) => {
     // The open collection's row closes it again.
@@ -86,6 +95,7 @@ export function RemoteCmsBrowser(props: Props) {
                 collections={loaded}
                 selected={opening ?? props.selected?.collection}
                 onOpen={(entry) => void open(entry)}
+                onSettings={(entry) => props.onOpen(settingsOf(connection, entry))}
               />
             )
           }
@@ -109,6 +119,18 @@ async function onlyItem(
   const only =
     listed.ok && listed.value.documents.length === 1 ? listed.value.documents[0] : undefined;
   return only && { id: only.id, title: only.title === only.id ? labelize(collection) : only.title };
+}
+
+// Content collections read again when the project's content changes: a rename or
+// delete in their settings, or an edit from elsewhere. A CMS is read when opened.
+function useProjectChanges(connection: CmsSource, reread: () => void): void {
+  const files = isAstroContent(connection);
+  useEffect(() => (files ? cmsTransport.onCmsChanged(reread) : undefined), [files, reread]);
+}
+
+// A collection's settings, open in the main view in place of its items.
+function settingsOf(connection: CmsSource, entry: RemoteCollection): RemoteCmsSelection {
+  return { connection, collection: entry.name, item: undefined, mode: 'settings' };
 }
 
 function BrowserHeader(props: {
@@ -145,19 +167,40 @@ function CollectionList(props: {
   readonly collections: readonly RemoteCollection[];
   readonly selected: string | undefined;
   readonly onOpen: (collection: RemoteCollection) => void;
+  /** Opens a content collection's settings; a CMS's schema is its own code. */
+  readonly onSettings: (collection: RemoteCollection) => void;
 }) {
   return props.collections.map((collection) => (
     <div
       key={collection.name}
-      className={`cms-collection ${collection.name === props.selected ? 'on' : ''}`}
+      className={`cms-collection is-counted ${collection.name === props.selected ? 'on' : ''}`}
       onClick={() => props.onOpen(collection)}
     >
       {props.files ? <CmsIcon size={14} /> : <SanityTypeIcon symbol={collection.icon} size={14} />}
-      <span className="cms-collection-name">{labelize(collection.name)}</span>
-      <span className="cms-collection-count">{collection.count}</span>
+      {/* One label: the name gives way (cut short) before its count does. */}
+      <span className="cms-collection-label">
+        <span className="cms-collection-name">{labelize(collection.name)}</span>
+        <span className="cms-collection-count">
+          {collection.count === 1 ? '1 item' : `${collection.count} items`}
+        </span>
+      </span>
       <span className="cms-collection-chevron">
         <ChevronRightIcon size={10} />
       </span>
+      {/* On hover the arrow gives way to the settings, as a CMS's own list does. */}
+      {props.files && (
+        <button
+          type="button"
+          className="ghost cms-collection-settings"
+          title="Collection settings"
+          onClick={(event) => {
+            event.stopPropagation();
+            props.onSettings(collection);
+          }}
+        >
+          <GearIcon size={13} />
+        </button>
+      )}
     </div>
   ));
 }

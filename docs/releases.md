@@ -15,6 +15,26 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.98 content collection settings
+
+- A content collection's row shows a settings gear on hover. Its settings open in the main
+  view: the collection's name, and its fields — dragged to reorder, opened to edit, deleted,
+  duplicated, or added from a grid of every kind a collection can hold (plain and rich text,
+  image and multi-image, video link, link, email, phone, number, date, switch, color, option,
+  file, reference and multi-reference, list, group, key–value, constant and any value).
+  Changes are made to a copy and written on Save collection; Cancel drops them.
+- A field's settings state every zod check its kind supports: lengths, ranges, a pattern,
+  starts and ends with, contains, trim, letter case, whole numbers, sign, exclusive bounds,
+  multiple of, earliest and latest dates, an image's width and height range, option values, a
+  default, and allowing null. The common ones show at once; the rest are under Advanced.
+- Each change is written to the content config, rewriting only what it touches. Renaming a
+  field renames it in every entry and in code that reads the collection; renaming a collection
+  moves a glob folder named for it and updates `getCollection`, `getEntry`, `reference` and
+  `CollectionEntry` in src. Deleting a field removes its values; deleting a collection moves its
+  entries to the Trash, removes fields that point at it, and gives code that reads it nothing to
+  read, so the site still builds.
+- Collections list their item counts beside their names.
+
 ## 0.1.97 Astro content collections in the CMS panel, richer CMS fields
 
 - The CMS panel always lists the project's Astro content collections, beside its CMS

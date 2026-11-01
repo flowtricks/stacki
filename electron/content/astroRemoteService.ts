@@ -43,6 +43,11 @@ import {
 } from '../../shared/properties/cmsRemoteSchema';
 import { astroSchemaFields, labelize, referencedCollections } from './astroRemoteSchema';
 import { createAstroCollection } from './astroCollectionConfig';
+import { changeCollectionSettings, readCollectionSettings } from './astroCollectionSettings';
+import type {
+  CollectionSettings,
+  SettingsChange,
+} from '../../shared/properties/collectionSettings';
 import { addDataRecord, removeDataRecords } from './astroDataRecords';
 import {
   entryImage,
@@ -74,6 +79,9 @@ export interface AstroRemoteService {
   readonly create: (collection: string) => Promise<RemoteDocumentSummary>;
   readonly remove: (ids: readonly string[]) => Promise<number>;
   readonly createCollection: (name: string) => Promise<RemoteCollection>;
+  /** A collection's settings (astroCollectionSettings.ts), and a change to them. */
+  readonly settings: (name: string) => Promise<CollectionSettings>;
+  readonly changeSettings: (name: string, change: SettingsChange) => Promise<CollectionSettings>;
 }
 
 /**
@@ -146,21 +154,9 @@ export function astroRemoteService(projectPath: string, host: AstroRemoteHost): 
       return document(write.id);
     },
     create: async (name) => createEntry(projectPath, await collectionNamed(name)),
-    remove: async (ids) => {
-      const found = await Promise.all(ids.map(located));
-      // Glob entries are files of their own, to the Trash; records come out of their data file.
-      const files = found.filter((each) => each.collection.loader?.kind === 'glob');
-      const records = found.filter((each) => each.collection.loader?.kind !== 'glob');
-      for (const { entry } of files) {
-        assert(entry.locator.length === 0, 'A glob entry is a whole file');
-        await host.trash(cmsSourcePath(projectPath, entry.file));
-      }
-      removeDataRecords(
-        projectPath,
-        records.map((each) => each.entry),
-      );
-      return found.length;
-    },
+    remove: async (ids) => removeEntries(projectPath, host, await Promise.all(ids.map(located))),
+    settings: async (name) => readCollectionSettings(projectPath, name),
+    changeSettings: (name, change) => changeCollectionSettings(projectPath, host, { name, change }),
     createCollection: async (name) => {
       const config = await host.readConfig();
       if (config.collections.some((collection) => collection.name === name)) {
@@ -388,6 +384,25 @@ function bodyField(
     type: { kind: 'text', options: [] },
     value: entry.body === undefined || entry.body.length === 0 ? undefined : entry.body,
   };
+}
+
+// Glob entries are files of their own, to the Trash; records come out of their data file.
+async function removeEntries(
+  projectPath: string,
+  host: AstroRemoteHost,
+  found: readonly { readonly collection: Collection; readonly entry: Entry }[],
+): Promise<number> {
+  const files = found.filter((each) => each.collection.loader?.kind === 'glob');
+  const records = found.filter((each) => each.collection.loader?.kind !== 'glob');
+  for (const { entry } of files) {
+    assert(entry.locator.length === 0, 'A glob entry is a whole file');
+    await host.trash(cmsSourcePath(projectPath, entry.file));
+  }
+  removeDataRecords(
+    projectPath,
+    records.map((each) => each.entry),
+  );
+  return found.length;
 }
 
 // A collection's fields with no values: a new entry before it is written. A

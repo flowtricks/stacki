@@ -6,6 +6,7 @@
 // the CMS's own editor does (sanityEdits.ts), deleting only after a confirm.
 import { useMemo, useState, type CSSProperties } from 'react';
 import { RemoteColumnPicker } from './RemoteColumnPicker';
+import { RemoteCollectionSettings } from './RemoteCollectionSettings';
 import {
   cellText,
   nextSort,
@@ -88,7 +89,13 @@ export function RemoteCmsView(props: Props) {
   return (
     <ProjectImagesScope projectPath={projectPath} source={connection}>
       <div className={`cms-view remote-cms-view ${props.hidden ? 'hidden' : ''}`}>
-        {selection.item !== undefined || pending !== undefined ? (
+        {selection.mode === 'settings' ? (
+          <RemoteCollectionSettings
+            projectPath={projectPath}
+            selection={selection}
+            onSelect={props.onSelect}
+          />
+        ) : selection.item !== undefined || pending !== undefined ? (
           <OpenItem
             {...props}
             list={list}

@@ -23,6 +23,11 @@ import {
   type RemoteWrite,
 } from '../../../shared/properties/cmsRemote';
 import * as connections from '../../ipc/cmsConnectionsBridge';
+import {
+  parseCollectionSettings,
+  type CollectionSettings,
+  type SettingsChange,
+} from '../../../shared/properties/collectionSettings';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 
 export function remoteCollections(
@@ -94,6 +99,23 @@ export function deleteRemoteDocuments(
   return connectionId === ASTRO_CONTENT_ID
     ? edit(projectPath, { operation: 'delete', ids }, parseRemoved)
     : connections.deleteRemoteDocuments(projectPath, connectionId, ids);
+}
+
+/** A content collection's settings: its name and fields as its config states them. */
+export function collectionSettings(
+  projectPath: string,
+  collection: string,
+): Promise<RemoteResult<CollectionSettings>> {
+  return read(projectPath, { operation: 'settings', collection }, parseCollectionSettings);
+}
+
+/** Changes a content collection's settings, its entries and the code that names it. */
+export function changeCollectionSettings(
+  projectPath: string,
+  collection: string,
+  change: SettingsChange,
+): Promise<RemoteResult<CollectionSettings>> {
+  return edit(projectPath, { operation: 'settings', collection, change }, parseCollectionSettings);
 }
 
 /** Adds a content collection named from `label` (a typed name) to the content config. */

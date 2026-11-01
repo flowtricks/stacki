@@ -72,6 +72,8 @@ function readRemote(
       return service.document(request.id);
     case 'template':
       return service.template(request.collection);
+    case 'settings':
+      return service.settings(request.collection);
     default: {
       const exhaustive: never = request;
       return exhaustive;
@@ -92,6 +94,8 @@ function editRemote(
       return service.remove(request.ids);
     case 'createCollection':
       return service.createCollection(request.name);
+    case 'settings':
+      return service.changeSettings(request.collection, request.change);
     default: {
       const exhaustive: never = request;
       return exhaustive;
