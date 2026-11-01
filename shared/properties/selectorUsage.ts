@@ -179,7 +179,10 @@ export function selectorEntryId(input: { readonly rel: string; readonly block: n
   assert(Number.isSafeInteger(input.block), 'selectorEntryId: block is an index');
   assert(input.block >= 0, 'selectorEntryId: block is nonnegative');
   assert(Number.isSafeInteger(input.offset), 'selectorEntryId: offset is an index');
+  assert(input.offset >= 0, 'selectorEntryId: offset is nonnegative');
+  assert(Number.isSafeInteger(input.index), 'selectorEntryId: list index is an index');
   assert(input.index >= 0, 'selectorEntryId: list index is nonnegative');
+  assert(input.rel !== '', 'selectorEntryId: the stylesheet is named');
   return `${input.rel}|${input.block}|${input.offset}|${input.index}`;
 }
 

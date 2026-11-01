@@ -1,6 +1,7 @@
 // Component schemas travel as arrays over IPC and as Maps in local symbol reads.
 // Parse the metadata the props panel consumes, including branch-specific defaults,
 // rather than carrying unknown shapes into control and visibility decisions.
+import { assert } from '../core/assert';
 import { LIMITS } from '../core/limits';
 import { toArray, toRecord } from '../core/record';
 import { definedFields } from '../core/boundary';
@@ -97,6 +98,7 @@ export function parsePropSchema(input: unknown): PropSchema {
     }
     out.set(key, field);
   }
+  assert(out.size === entries.size, 'parsePropSchema: every key becomes one field');
   return out;
 }
 
@@ -167,7 +169,9 @@ function schemaStrings(input: unknown, where: string, maximum: number): readonly
   if (values.some((value) => typeof value !== 'string')) {
     fail(where, 'expected string array');
   }
-  return values.map((value) => schemaText(value, where));
+  const strings = values.map((value) => schemaText(value, where));
+  assert(strings.length === values.length, 'schemaStrings: every value is kept');
+  return strings;
 }
 
 // Undefined metadata is omitted because absence has meaning to the field renderer.
