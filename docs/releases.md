@@ -15,7 +15,7 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
-## 0.1.100 collection lists, linked list settings, selectors panel
+## 1.0.0 collection lists, linked list settings, selectors panel
 
 - A loop's Settings work like a builder's collection list. Source opens a tree of the
   project's collections (Astro and Sanity, each opening to a sample item), the page's lists,
@@ -43,7 +43,7 @@ include later changes.
   longer draws a second tag over the component's; variable tables keep their columns aligned.
 - Code style: Prettier at 160 columns, with no line, function or file length check
   (AGENTS.md, docs/enforcement.md).
-- Desktop, the Studio source bundle and `create-stacki` are aligned at 0.1.100.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.0.
 
 ## 0.1.99 Windows release correction
 
