@@ -11,14 +11,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { test } from 'node:test';
-import {
-  commandSegments,
-  commandVerdict,
-  pathVerdict,
-  patchPaths,
-  repositoryPath,
-  tokenize,
-} from '../../../scripts/agent/core.mts';
+import { commandSegments, commandVerdict, pathVerdict, patchPaths, repositoryPath, tokenize, writeUnits } from '../../../scripts/agent/core.mts';
 import { parseHookPayload } from '../../../scripts/agent/payload.mts';
 import { decideStop, parseStopState, reportDigest } from '../../../scripts/agent/stopState.mts';
 import { commitMessageProblems } from '../../../scripts/policy/commitMessage.mts';
@@ -83,6 +76,45 @@ test('shell writes to gate files ask a human; shell writes elsewhere do not', ()
   }
   assert.equal(verdictOf('echo x > src/notes.txt'), 'allow');
   assert.equal(verdictOf('node_modules/.bin/eslint eslint.config.mjs 2>&1'), 'allow');
+});
+
+test('a command line that writes elsewhere and only reads a gate file is allowed', () => {
+  // Both were asked before the write check was scoped to one command.
+  const allowed = [
+    "sed -i '' 's/a/b/' electron/content/astroSchemaEdit.ts && " + 'npx tsc --noEmit -p tsconfig.json 2>&1 | head -30; ls tsconfig*.json',
+    `python3 - <<'EOF'\np='electron/project/styleFiles.ts'\n# A site's stylesheets.\n` +
+      `open(p,'w').write('x')\nEOF\nnpx tsc --noEmit -p electron/tsconfig.json`,
+    'cp a.ts b.ts; cat eslint.config.mjs',
+    'cd /tmp && rm notes.txt',
+  ];
+  for (const command of allowed) {
+    assert.equal(verdictOf(command), 'allow', command);
+  }
+});
+
+test('a write stays asked when a pipeline, subshell, cd, or heredoc carries the gate file', () => {
+  const asked = [
+    'ls tsconfig*.json | xargs rm',
+    'echo x > $(echo tsconfig.json)',
+    '(cd scripts && rm agent/core.mts)',
+    'cd scripts/agent && sed -i s/a/b/ core.mts',
+    `cd ${ROOT}/scripts && rm policy/scan.mts`,
+    `npm test && python3 - <<'EOF'\nopen('eslint.config.mjs','w')\nEOF`,
+    `cat <<-EOF > AGENTS.md\n\tx\n\tEOF`,
+  ];
+  for (const command of asked) {
+    assert.equal(verdictOf(command), 'ask', command);
+  }
+});
+
+test('writeUnits keeps heredoc bodies, pipelines, and subshells whole', () => {
+  assert.deepEqual(writeUnits('a && b || c; d\ne'), ['a', 'b', 'c', 'd', 'e']);
+  assert.deepEqual(writeUnits('a | b && (c; d) && `e; f`'), ['a | b', '(c; d)', '`e; f`']);
+  assert.deepEqual(writeUnits("a 'x; y' && b"), ["a 'x; y'", 'b']);
+  assert.deepEqual(writeUnits(`py <<'EOF'\nit's; a\nEOF\nb`), [`py <<'EOF'\nit's; a\nEOF`, 'b']);
+  assert.deepEqual(writeUnits('cat <<<"a; b" && c'), ['cat <<<"a; b"', 'c']);
+  // A heredoc that never ends runs to the end of the command line.
+  assert.deepEqual(writeUnits('py <<EOF\na; b'), ['py <<EOF\na; b']);
 });
 
 test('edits to the files that define the gates ask a human', () => {
@@ -198,8 +230,7 @@ test('commit messages: typed subject, length, separator, body', () => {
   const scissors = '# ------------------------ >8 ------------------------';
   const withComments = `${good}# Please enter the commit message\n${scissors}\ndiff`;
   assert.deepEqual(commitMessageProblems(withComments), []);
-  const kinds = (message: string): readonly string[] =>
-    commitMessageProblems(message).map((problem) => problem.kind);
+  const kinds = (message: string): readonly string[] => commitMessageProblems(message).map((problem) => problem.kind);
   assert.deepEqual(kinds(''), ['empty']);
   assert.deepEqual(kinds('wip'), ['subject-format', 'body-missing']);
   assert.deepEqual(kinds('fix: x'), ['body-missing']);
@@ -279,10 +310,7 @@ test('Claude Code: refusals and asks are PreToolUse decisions; allows are silent
   const denied = runEntry('claude.mts', 'pre-tool', bash('git commit --no-verify'));
   assert.equal(denied.status, 0);
   const decision: unknown = JSON.parse(denied.stdout);
-  assert.deepEqual(
-    Reflect.get(Reflect.get(Object(decision), 'hookSpecificOutput'), 'permissionDecision'),
-    'deny',
-  );
+  assert.deepEqual(Reflect.get(Reflect.get(Object(decision), 'hookSpecificOutput'), 'permissionDecision'), 'deny');
   const asked = runEntry('claude.mts', 'pre-tool', {
     hook_event_name: 'PreToolUse',
     session_id: 's',

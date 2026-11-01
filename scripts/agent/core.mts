@@ -83,38 +83,203 @@ export function commandVerdict(command: string, root: string): Verdict {
 }
 
 // A shell command can write a file as surely as an edit tool can. When one
-// both names a gate file and contains a way to write — a redirect, an
+// command both names a gate file and contains a way to write — a redirect, an
 // in-place editor, a file-moving command, or an interpreter running a script
-// — a human decides, as for an edit. Reading a gate file is always fine. The
-// check is a heuristic by nature (a shell is Turing-complete); CI remains the
-// gate that cannot be talked around.
+// — a human decides, as for an edit. Reading a gate file is always fine, also
+// in a command line that writes elsewhere: `sed -i … a.ts && tsc -p
+// tsconfig.json` edits a.ts and only reads the config. The check is a
+// heuristic by nature (a shell is Turing-complete); CI remains the gate that
+// cannot be talked around.
 const SHELL_WRITE = new RegExp(
   [
     '(?:^|[^>&0-9])>>?(?![&>])',
     '\\btee\\b',
     '\\b(?:sed|perl)\\b[^|;&\\n]*\\s-i',
-    '\\b(?:mv|cp|rm|ln|install|truncate|touch|chmod)\\s',
+    '\\b(?:mv|cp|rm|ln|install|truncate|touch|chmod)(?:\\s|$)',
     '\\b(?:python3?|ruby|deno|bun)\\b',
     '\\bnode\\s+(?:-e|--eval|-p|--print)\\b',
     '\\bgit\\s+(?:checkout|restore|apply|am)\\b',
   ].join('|'),
 );
-const PATH_LIKE = /[\w@.:~\\/-]+/g;
+// Globs count: `rm tsconfig*.json` names every config at once.
+const PATH_LIKE = /[\w@.:~\\/*?-]+/g;
+
+const CHANGE_DIRECTORY = /^(?:cd|pushd)\s+(['"]?)([^'"\s]+)\1$/;
+// A `cd` inside one command: `(cd scripts && rm agent/core.mts)`.
+const INNER_CHANGE_DIRECTORY = /\b(?:cd|pushd)\s+(['"]?)([^'"\s;&|()]+)\1/g;
 
 function shellWriteVerdict(command: string, root: string): Verdict {
-  if (!SHELL_WRITE.test(command)) {
-    return ALLOW;
-  }
   const prefix = `${root.split(path.sep).join('/')}/`;
-  for (const match of command.matchAll(PATH_LIKE)) {
-    const candidate = match[0].split('\\').join('/').replace(/^\.\//, '');
-    const file = candidate.startsWith(prefix) ? candidate.slice(prefix.length) : candidate;
-    if (POLICY_PATTERNS.some((pattern) => pattern.test(file))) {
-      const reason = `This command may write ${file}. ${POLICY_EDIT_REASON}`;
-      return { kind: 'ask', reason };
+  // `cd scripts/agent && sed -i … core.mts` names core.mts relative to the
+  // directory an earlier command moved to, so later paths are read from it too.
+  let directory = '';
+  for (const unit of writeUnits(command)) {
+    const change = CHANGE_DIRECTORY.exec(unit);
+    if (change !== null) {
+      directory = changedDirectory(directory, change[2] ?? '', prefix);
+      continue;
+    }
+    if (!SHELL_WRITE.test(unit)) {
+      continue;
+    }
+    const inner = [...unit.matchAll(INNER_CHANGE_DIRECTORY)].map((match) => changedDirectory(directory, match[2] ?? '', prefix));
+    const file = gateFileNamed(unit, prefix, [directory, ...inner]);
+    if (file !== undefined) {
+      return { kind: 'ask', reason: `This command may write ${file}. ${POLICY_EDIT_REASON}` };
     }
   }
   return ALLOW;
+}
+
+// The repository-relative directory after `cd target`. A directory outside
+// the repository reads as the root, so paths there are still checked as written.
+function changedDirectory(directory: string, target: string, prefix: string): string {
+  assert(!directory.startsWith('/'), 'changedDirectory: the directory is repository-relative');
+  const relative = repositoryRelative(target, prefix);
+  if (relative.startsWith('/')) {
+    return '';
+  }
+  const changed = path.posix.normalize(path.posix.join(directory, relative));
+  assert(!changed.startsWith('/'), 'changedDirectory: the result is repository-relative');
+  return changed;
+}
+
+// The first gate file a command names, read both as written and from each
+// directory the command line moved to.
+function gateFileNamed(unit: string, prefix: string, directories: readonly string[]): string | undefined {
+  assert(prefix.endsWith('/'), 'gateFileNamed: the root prefix ends with a slash');
+  assert(directories.length > 0, 'gateFileNamed: the current directory is included');
+  for (const match of unit.matchAll(PATH_LIKE)) {
+    const file = repositoryRelative(match[0], prefix);
+    const moved = directories.map((directory) => path.posix.normalize(path.posix.join(directory, file)));
+    for (const candidate of [file, ...moved]) {
+      if (POLICY_PATTERNS.some((pattern) => pattern.test(candidate))) {
+        return candidate;
+      }
+    }
+  }
+  return undefined;
+}
+
+function repositoryRelative(word: string, prefix: string): string {
+  const candidate = word.split('\\').join('/').replace(/^\.\//, '');
+  return candidate.startsWith(prefix) ? candidate.slice(prefix.length) : candidate;
+}
+
+// Splits a command line into the commands a write could apply to: at `;`,
+// `&&`, `||` and newlines outside quotes, parentheses, and backticks. A
+// pipeline stays whole, since `ls tsconfig*.json | xargs rm` removes what its
+// first stage names; so does a subshell or a substitution, for the same
+// reason. A heredoc body stays with the command that reads it and is not
+// parsed, since a script's apostrophes are not shell quotes.
+export function writeUnits(command: string): readonly string[] {
+  assert(command.length <= COMMAND_CHARS_MAX, 'writeUnits: command exceeds the size limit');
+  const units: string[] = [];
+  let start = 0;
+  let depth = 0;
+  let backtick = 0; // 1 inside a `…` substitution, which does not nest.
+  let delimiters: string[] = [];
+  for (let index = 0; index < command.length; index += 1) {
+    const character = command.charAt(index);
+    if (character === '"' || character === "'") {
+      index = quoteEnd(command, index);
+    } else if (character === '(') {
+      depth += 1;
+    } else if (character === ')') {
+      depth = Math.max(0, depth - 1);
+    } else if (character === '`') {
+      backtick = 1 - backtick;
+    } else if (command.startsWith('<<', index)) {
+      const heredoc = heredocStart(command, index);
+      if (heredoc !== undefined) {
+        delimiters.push(heredoc.delimiter);
+        index = heredoc.end - 1;
+      }
+    } else if (character === '\n' && delimiters.length > 0) {
+      index = heredocBodyEnd(command, index + 1, delimiters) - 1;
+      delimiters = [];
+    } else if (depth + backtick === 0) {
+      const length = separatorLength(command, index);
+      if (length > 0) {
+        units.push(command.slice(start, index));
+        assert(units.length <= SEGMENTS_MAX, 'writeUnits: unit limit exceeded');
+        index += length - 1;
+        start = index + 1;
+      }
+    }
+  }
+  units.push(command.slice(start));
+  return units.map((unit) => unit.trim()).filter((unit) => unit.length > 0);
+}
+
+function separatorLength(command: string, index: number): number {
+  const character = command.charAt(index);
+  if (character === ';' || character === '\n') {
+    return 1;
+  }
+  if (command.startsWith('&&', index) || command.startsWith('||', index)) {
+    return 2;
+  }
+  return 0;
+}
+
+// The index of the quote that closes the one at `index`, or the last index
+// when it never closes.
+function quoteEnd(command: string, index: number): number {
+  const quote = command.charAt(index);
+  assert(quote === '"' || quote === "'", 'quoteEnd: starts at a quote');
+  for (let position = index + 1; position < command.length; position += 1) {
+    const character = command.charAt(position);
+    if (character === quote) {
+      return position;
+    }
+    if (character === '\\' && quote === '"') {
+      position += 1;
+    }
+  }
+  return command.length - 1;
+}
+
+// `<<EOF`, `<<-EOF`, `<< 'EOF'`, `<<"EOF"`; not the here-string `<<<`.
+const HEREDOC_START = /<<-?[ \t]*(['"]?)([A-Za-z_][\w-]*)\1/y;
+
+function heredocStart(command: string, index: number): { readonly delimiter: string; readonly end: number } | undefined {
+  assert(command.startsWith('<<', index), 'heredocStart: starts at <<');
+  if (command.startsWith('<<<', index)) {
+    return undefined;
+  }
+  HEREDOC_START.lastIndex = index;
+  const match = HEREDOC_START.exec(command);
+  if (match === null) {
+    return undefined;
+  }
+  const delimiter = match[2] ?? '';
+  assert(delimiter.length > 0, 'heredocStart: the delimiter is a word');
+  return { delimiter, end: index + match[0].length };
+}
+
+// The index just past the line that ends the last of the pending heredocs, or
+// the end of the command when one never ends. `<<-` allows leading tabs, so
+// a terminator line is compared trimmed.
+function heredocBodyEnd(command: string, start: number, delimiters: readonly string[]): number {
+  assert(delimiters.length > 0, 'heredocBodyEnd: a heredoc is pending');
+  let position = start;
+  let end = command.length;
+  for (const delimiter of delimiters) {
+    end = command.length;
+    for (let line = 0; line < COMMAND_CHARS_MAX && position < command.length; line += 1) {
+      const newline = command.indexOf('\n', position);
+      const lineEnd = newline < 0 ? command.length : newline;
+      const text = command.slice(position, lineEnd);
+      position = lineEnd + 1;
+      if (text.trim() === delimiter) {
+        end = lineEnd;
+        break;
+      }
+    }
+  }
+  assert(end <= command.length, 'heredocBodyEnd: the end is within the command');
+  return end;
 }
 
 function gitSegmentVerdict(tokens: readonly string[]): Verdict {
@@ -157,16 +322,7 @@ function gitSegmentVerdict(tokens: readonly string[]): Verdict {
 
 // Global options before the subcommand that take the next word as their
 // value: `git -C ../repo commit` runs commit, not a command named ../repo.
-const GLOBAL_OPTIONS_WITH_VALUE = new Set([
-  '-C',
-  '-c',
-  '--config-env',
-  '--exec-path',
-  '--git-dir',
-  '--namespace',
-  '--super-prefix',
-  '--work-tree',
-]);
+const GLOBAL_OPTIONS_WITH_VALUE = new Set(['-C', '-c', '--config-env', '--exec-path', '--git-dir', '--namespace', '--super-prefix', '--work-tree']);
 
 function subcommandPosition(rest: readonly string[]): number {
   for (let index = 0; index < rest.length; index += 1) {
