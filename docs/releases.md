@@ -15,6 +15,27 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.1 content collection fixes, quieter guide
+
+- A content collection's list shows each entry's picture when its image field holds a root path
+  such as `/src/assets/images/staff.webp`: Stacki looks in public/ and then from the project
+  root, as Astro does.
+- Glob collections list their entries newest first, so a new entry is on top; data-file
+  collections keep their file's order.
+- Deleting a collection removes its `defineCollection` const even when its name also appears in
+  a loader path, so no dead definitions are left in the content config.
+- A collection whose entries the dev server had lost (an entry saved while a required field was
+  empty stops Astro's loader for the session) is resynced when a picker samples it: the Loop
+  Source tree opens to its fields instead of "Reading one entry…" forever, and a loop's item can
+  be bound again. A schema error is shown instead of nothing.
+- Removing a query Stacki wrote no longer leaves a stray `// stacki:query` line behind.
+- A loop whose callback returns several elements side by side stays a loop of elements instead of
+  turning into a code block.
+- Turning the column guide on or off shows no toast; only a failed load or save does. Toast icons
+  say their kind: white for information, green for success, orange for warnings, red for
+  errors. The guide button keeps its fill while the guide shows.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.1.
+
 ## 1.0.0 collection lists, linked list settings, selectors panel
 
 - A loop's Settings work like a builder's collection list. Source opens a tree of the
