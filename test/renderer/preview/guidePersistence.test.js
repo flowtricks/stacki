@@ -47,6 +47,12 @@ test('guide migration, coalesced saves, and stale editor protection', async () =
   first.change((settings) => ({ ...settings, opacity: 0.12 }));
   await until(() => writes.length === 2);
   assert.equal(JSON.parse(source).settings.opacity, 0.12);
+  // Loading and saving are progress, not problems: turning the guide on and off
+  // must raise no toast, so no state before a failure carries a problem.
+  assert.deepEqual(
+    states.map((state) => state.problem),
+    states.map(() => ''),
+  );
 
   const otherStates = [];
   const other = createGuideController('/project', (state) => otherStates.push(state));
@@ -57,7 +63,7 @@ test('guide migration, coalesced saves, and stale editor protection', async () =
   first.change((settings) => ({ ...settings, opacity: 0.2 }));
   await until(() => writes.length === 3);
   other.change((settings) => ({ ...settings, opacity: 0.3 }));
-  await until(() => otherStates.at(-1)?.message.includes('Changed in another editor.'));
+  await until(() => otherStates.at(-1)?.problem.includes('Changed in another editor.'));
   assert.equal(JSON.parse(source).settings.opacity, 0.2);
   other.reload();
   await until(() => otherStates.at(-1)?.settings.opacity === 0.2);

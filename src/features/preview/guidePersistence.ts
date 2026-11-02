@@ -8,13 +8,14 @@ import { GUIDE_DEFAULTS, type GuideSettings } from './guideModel';
 import { loadLegacyGuideSettings, parseGuideSettings, type GuideUpdate } from './guideSettings';
 
 export interface GuidePersistence {
-  readonly message: string;
+  /** Why the guide could not be loaded or saved; empty while all is well. Progress is never one. */
+  readonly problem: string;
   readonly loading: boolean;
   readonly reload: () => void;
 }
 interface GuideState {
   readonly settings: GuideSettings;
-  readonly message: string;
+  readonly problem: string;
   readonly loading: boolean;
 }
 interface GuideController {
@@ -26,13 +27,13 @@ interface GuideController {
 export function useProjectGuideSettings(project: string | undefined) {
   const [state, setState] = useState<GuideState>({
     settings: GUIDE_DEFAULTS,
-    message: '',
+    problem: '',
     loading: true,
   });
   const controller = useRef<GuideController>();
   useEffect(() => {
     if (project === undefined) {
-      setState({ settings: GUIDE_DEFAULTS, message: '', loading: false });
+      setState({ settings: GUIDE_DEFAULTS, problem: '', loading: false });
       return;
     }
     const current = createGuideController(project, setState);
@@ -58,7 +59,7 @@ export function useProjectGuideSettings(project: string | undefined) {
     update: (change: Parameters<GuideUpdate>[0]) => controller.current?.change(change),
     persistence: {
       loading: state.loading,
-      message: state.message,
+      problem: state.problem,
       reload: () => controller.current?.reload(),
     },
   };
@@ -92,7 +93,8 @@ class ProjectGuideController {
     }
     this.settings = change(this.settings);
     this.pending = this.settings;
-    this.report('Saving project guide…');
+    // A save in progress is no news: the guide already shows the change.
+    this.report('');
     this.schedule();
   }
 
@@ -103,7 +105,7 @@ class ProjectGuideController {
     const token = {};
     this.loadToken = token;
     this.status = 'loading';
-    this.report('Loading project guide…');
+    this.report('');
     void readMetadata(this.project, 'guide')
       .then(async (stored) => {
         if (this.status === 'closed' || this.loadToken !== token) {
@@ -139,9 +141,9 @@ class ProjectGuideController {
     this.timer = setTimeout(() => void this.save(), 200);
   }
 
-  private report(message: string): void {
+  private report(problem: string): void {
     if (this.status !== 'closed') {
-      this.notify({ settings: this.settings, message, loading: this.status === 'loading' });
+      this.notify({ settings: this.settings, problem, loading: this.status === 'loading' });
     }
   }
 

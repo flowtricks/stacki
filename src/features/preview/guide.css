@@ -45,6 +45,13 @@
   color: var(--text);
   background: var(--bg-input);
 }
+/* The guide button is `.on` while the guide shows. The device group's
+   `.device-btns button.on` clears backgrounds at the same specificity as the
+   rule above, so which won depended on stylesheet order; this one always wins. */
+.device-btns.guide-btns button.on {
+  color: var(--text);
+  background: var(--bg-input);
+}
 .device-btns.guide-btns button[aria-pressed='true'],
 .device-btns.guide-btns button[aria-pressed='true']:hover:not(:disabled),
 .device-btns.guide-btns button[aria-expanded='true'],

@@ -87,7 +87,7 @@ function GuideMenuRows({ settings, update, metrics, guide, persistence }: GuideM
   // ones (see styles.css).
   return (
     <div className="guide-menu style-panel-surface">
-      {persistence?.message && <ErrorToast message={persistence.message} />}
+      {persistence?.problem && <ErrorToast message={persistence.problem} />}
       <SwitchRow label="Guide" value={settings.visible} onChange={(visible) => update((previous) => ({ ...previous, visible }))} />
       <ColumnsRow settings={settings} update={update} metrics={metrics} />
       <ColorRow settings={settings} update={update} />

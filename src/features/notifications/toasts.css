@@ -122,18 +122,23 @@
   max-height: min(160px, 30vh);
   overflow: auto;
 }
+/* The icon says the kind: white for information, green for success,
+   orange for a warning, red for an error. */
 .toast-icon {
   display: grid;
   place-items: center;
   flex: 0 0 20px;
   height: 20px;
-  color: var(--text-dim);
+  color: var(--text);
 }
 .toast.success .toast-icon {
-  color: var(--green, #8cd4ab);
+  color: var(--green);
+}
+.toast.warning .toast-icon {
+  color: var(--orange);
 }
 .toast.error .toast-icon {
-  color: var(--red, #f28b82);
+  color: var(--red);
 }
 .toast-stack .toast-close {
   display: grid;
