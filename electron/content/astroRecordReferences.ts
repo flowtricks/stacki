@@ -10,6 +10,7 @@
 // A record is named by its entry id, or by an `_id` key it carries (the id the
 // old CMS gave it); whichever the values use is the one written back.
 
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { assert } from '../../shared/core/assert';
@@ -21,8 +22,8 @@ import type { Entry } from './contentEntries';
 export interface RecordCollection {
   readonly name: string;
   readonly entries: readonly Entry[];
-  /** Its first image field, whose picture a choice of its records shows. */
-  readonly imageField?: string | undefined;
+  /** The project file of a record's picture, which a choice of its records shows. */
+  readonly imageOf?: ((entry: Entry) => string | undefined) | undefined;
 }
 
 /**
@@ -91,7 +92,7 @@ function targetOptions(values: readonly string[], collections: readonly RecordCo
       if (values.every((value) => named.has(value))) {
         return collection.entries.flatMap((entry) => {
           const value = key(entry);
-          const imageFile = entryImage(entry, collection.imageField);
+          const imageFile = collection.imageOf?.(entry);
           return value === undefined ? [] : [{ title: entry.title, value, ...(imageFile === undefined ? {} : { imageFile }) }];
         });
       }
@@ -110,27 +111,48 @@ const KEYS: readonly ((entry: Entry) => string | undefined)[] = [
 
 /**
  * An image path as Astro resolves it, relative to the project: beside the
- * entry's file (`./`, `../`, or a bare name), or under public/ (`/`). A link
- * elsewhere, or a path that climbs out of the project, has no file here.
+ * entry's file (`./`, `../`, or a bare name), or from the root (`/`). Astro
+ * imports the path through Vite, which looks for a root path in public/ first
+ * and then from the project root, so `/src/assets/a.png` names a file too.
+ * A link elsewhere, or a path that climbs out of the project, has no file here.
  */
-export function projectImage(entryFile: string, value: string): string | undefined {
+export function projectImage(projectPath: string, entryFile: string, value: string): string | undefined {
   const target = value.trim().split(/[?#]/)[0] ?? '';
   if (target.length === 0 || /^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('@')) {
     return undefined;
   }
-  const joined = target.startsWith('/') ? path.posix.join('public', target) : path.posix.join(path.posix.dirname(entryFile), target);
+  if (target.startsWith('/')) {
+    const published = inProject(path.posix.join('public', target));
+    const rooted = inProject(target.slice(1));
+    // A file in neither place keeps the public/ reading, as Vite tries it first.
+    if (published !== undefined && isFile(projectPath, published)) {
+      return published;
+    }
+    return rooted !== undefined && isFile(projectPath, rooted) ? rooted : published;
+  }
+  return inProject(path.posix.join(path.posix.dirname(entryFile), target));
+}
+
+/** An entry's picture: the project file its image field names, if it names one. */
+export function entryImage(projectPath: string, entry: Entry, imageField: string | undefined): string | undefined {
+  const picture = imageField === undefined ? undefined : toRecord(entry.data)?.[imageField];
+  return typeof picture === 'string' ? projectImage(projectPath, entry.file, picture) : undefined;
+}
+
+// The path, normalized, while it stays inside the project.
+function inProject(joined: string): string | undefined {
   const file = path.posix.normalize(joined);
   if (file.startsWith('..') || path.posix.isAbsolute(file)) {
     return undefined;
   }
   assert(!file.split('/').includes('..'), 'A project image stays inside the project');
+  assert(file.length > 0, 'A project image names a file');
   return file;
 }
 
-/** An entry's picture: the project file its image field names, if it names one. */
-export function entryImage(entry: Entry, imageField: string | undefined): string | undefined {
-  const picture = imageField === undefined ? undefined : toRecord(entry.data)?.[imageField];
-  return typeof picture === 'string' ? projectImage(entry.file, picture) : undefined;
+function isFile(projectPath: string, file: string): boolean {
+  assert(path.isAbsolute(projectPath), 'A project path is absolute');
+  return fs.statSync(path.join(projectPath, file), { throwIfNoEntry: false })?.isFile() === true;
 }
 
 function isString(value: string | undefined): value is string {

@@ -184,7 +184,8 @@ function documentList(projectPath: string, collection: Collection, cellsOf: (ent
     throw new Error(listed.reason);
   }
   // A collection past the bound shows its first entries; the panel lists no more than that.
-  const entries = listed.entries.slice(0, CMS_REMOTE_LIMITS.documentsMax);
+  const ordered = collection.loader?.kind === 'glob' ? newestFirst(projectPath, listed.entries) : listed.entries;
+  const entries = ordered.slice(0, CMS_REMOTE_LIMITS.documentsMax);
   // The list's picture is the entry's first image field, as Sanity's list shows its first image.
   const image = firstImageField(collection);
   const documents = entries.map((entry) => {
@@ -251,7 +252,7 @@ function optionTitles(fields: readonly RemoteSchemaField[], name: string): Reado
 
 function summaryOf(projectPath: string, collection: string, entry: Entry, imageField?: string): RemoteDocumentSummary {
   const title = preview(entry.title);
-  const imageFile = entryImage(entry, imageField);
+  const imageFile = entryImage(projectPath, entry, imageField);
   return {
     ...(imageFile === undefined ? {} : { imageFile }),
     id: documentId(collection, entry.id),
@@ -435,7 +436,7 @@ async function referenceTargets(
       targets.set(
         name,
         entries.map((entry) => {
-          const imageFile = entryImage(entry, image);
+          const imageFile = entryImage(projectPath, entry, image);
           return {
             title: preview(entry.title),
             value: entry.id,
@@ -492,8 +493,13 @@ function recordsOf(projectPath: string, collections: readonly Collection[]): rea
   return collections.map((each) => ({
     name: each.name,
     entries: listEntries(projectPath, each).entries,
-    imageField: firstImageField(each),
+    imageOf: imageOf(projectPath, firstImageField(each)),
   }));
+}
+
+// A record's picture in a collection whose image field is `imageField`.
+function imageOf(projectPath: string, imageField: string | undefined): ((entry: Entry) => string | undefined) | undefined {
+  return imageField === undefined ? undefined : (entry) => entryImage(projectPath, entry, imageField);
 }
 
 /** The collection's first image field: its entries' picture in lists and choices. */
@@ -540,6 +546,24 @@ function starter(extension: string, options: { readonly titled: boolean }): stri
     default:
       return title === undefined ? '---\n---\n' : `---\ntitle: ${title}\n---\n`;
   }
+}
+
+// Files listed newest first, so an entry just added is on top. A file's name
+// is no order (`untitled-2.md` sorts before `untitled.md`), so its creation
+// time is; a file system that keeps none reports zero, and the last change
+// stands in. A checkout gives every file the same time: then by name.
+function newestFirst(projectPath: string, entries: readonly Entry[]): readonly Entry[] {
+  const created = new Map(entries.map((entry) => [entry, createdMs(projectPath, entry.file)]));
+  const sorted = [...entries].sort((left, right) => (created.get(right) ?? 0) - (created.get(left) ?? 0) || left.file.localeCompare(right.file));
+  assert(sorted.length === entries.length, 'Ordering keeps every entry');
+  return sorted;
+}
+
+function createdMs(projectPath: string, file: string): number {
+  const stat = fs.statSync(cmsSourcePath(projectPath, file));
+  const time = stat.birthtimeMs > 0 ? stat.birthtimeMs : stat.mtimeMs;
+  assert(Number.isFinite(time), 'A file time is a number');
+  return time;
 }
 
 function modified(projectPath: string, file: string): string {

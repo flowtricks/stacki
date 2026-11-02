@@ -255,6 +255,22 @@ test('new entries are files the glob matches, and deletes trash them', async () 
   await assert.rejects(() => content.documents('live'), /not a content collection/);
 });
 
+test('a glob collection lists its entries newest first, not by file name', async () => {
+  // `untitled-2.md` sorts before `untitled.md` by name; created later, it and
+  // `untitled-3.md` must come first. Creation time is real file-system time,
+  // so each entry is made a moment after the last.
+  const root = project({ 'src/content/blog/untitled.md': '---\ntitle: First\n---\n' });
+  const content = service(root, [BLOG]);
+  const pause = () => new Promise((resolve) => setTimeout(resolve, 20));
+  await pause();
+  const second = await content.create('blog');
+  await pause();
+  const third = await content.create('blog');
+  const listed = (await content.documents('blog')).documents.map((document) => document.id);
+  assert.deepEqual(listed, [third.id, second.id, documentId('blog', 'untitled')]);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test('a broken config is said, not hidden behind an empty list', async () => {
   const content = astroRemoteService(project({}), {
     readConfig: async () => ({ collections: [], error: 'z is not defined' }),
@@ -280,14 +296,28 @@ test('creating a collection writes the config and its folder, once', async () =>
 
 test('an entry image path resolves to the project file Astro reads, or to none', () => {
   const { projectImage } = require('#dist/electron/content/astroRemoteService.js');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-image-'));
+  fs.mkdirSync(path.join(root, 'public/images'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'src/assets/images'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'public/images/hero.webp'), '');
+  fs.writeFileSync(path.join(root, 'public/images/both.webp'), '');
+  fs.mkdirSync(path.join(root, 'images'));
+  fs.writeFileSync(path.join(root, 'images/both.webp'), '');
+  fs.writeFileSync(path.join(root, 'src/assets/images/staff.webp'), '');
   const entry = 'src/content/team/ada.md';
-  assert.equal(projectImage(entry, './ada.jpg'), 'src/content/team/ada.jpg');
-  assert.equal(projectImage(entry, '../../assets/a b.png?v=2'), 'src/assets/a b.png');
-  assert.equal(projectImage(entry, '/images/hero.webp'), 'public/images/hero.webp');
-  assert.equal(projectImage('src/data/team.json', 'photo.png'), 'src/data/photo.png');
+  assert.equal(projectImage(root, entry, './ada.jpg'), 'src/content/team/ada.jpg');
+  assert.equal(projectImage(root, entry, '../../assets/a b.png?v=2'), 'src/assets/a b.png');
+  assert.equal(projectImage(root, entry, '/images/hero.webp'), 'public/images/hero.webp');
+  // Vite reads a root path from public/ first, then from the project root.
+  assert.equal(projectImage(root, entry, '/images/both.webp'), 'public/images/both.webp');
+  assert.equal(projectImage(root, entry, '/src/assets/images/staff.webp'), 'src/assets/images/staff.webp');
+  // A root path found in neither place keeps the public/ reading.
+  assert.equal(projectImage(root, entry, '/images/missing.webp'), 'public/images/missing.webp');
+  assert.equal(projectImage(root, 'src/data/team.json', 'photo.png'), 'src/data/photo.png');
   for (const outside of ['', 'https://cdn.example.com/a.png', '@/assets/a.png', '../../../../x.png']) {
-    assert.equal(projectImage(entry, outside), undefined, outside);
+    assert.equal(projectImage(root, entry, outside), undefined, outside);
   }
+  fs.rmSync(root, { recursive: true, force: true });
 });
 
 test('a plain string of another collection’s record ids becomes a choice of its titles', () => {

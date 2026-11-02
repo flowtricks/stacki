@@ -445,13 +445,48 @@ function declarationOf(entry: ts.ObjectLiteralElementLike, file: ts.SourceFile):
   if (statement === undefined) {
     return undefined;
   }
-  const uses = (file.text.match(new RegExp(`(?<![\\w$])${named}(?![\\w$])`, 'g')) ?? []).length;
-  // Declared once and listed once: nothing else would miss it.
+  // Declared once and listed once: nothing else would miss it. Only names in
+  // code count; the same word in a string (a loader's `./src/content/team`) or
+  // as a property key (`team: teamCollection`) is no use of the const.
+  const uses = identifierUses(file, named);
+  assert(uses >= 2, 'A listed collection const is declared and listed');
   if (uses > 2) {
     return undefined;
   }
   const end = file.text.charAt(statement.getEnd()) === '\n' ? statement.getEnd() + 1 : statement.getEnd();
   return { start: statement.getStart(file), end, text: '' };
+}
+
+// How often `name` appears in the file as an identifier that names a value:
+// a declaration or a reference, never a property key or a member name.
+function identifierUses(file: ts.SourceFile, name: string): number {
+  let uses = 0;
+  const pending: ts.Node[] = [file];
+  // Every node is visited once; a config file is bounded by the read limit.
+  for (let visited = 0; visited < IDENTIFIER_NODES_MAX; visited++) {
+    const node = pending.pop();
+    if (node === undefined) {
+      return uses;
+    }
+    if (ts.isIdentifier(node) && node.text === name && namesValue(node)) {
+      uses++;
+    }
+    pending.push(...node.getChildren(file));
+  }
+  throw new Error('The content config is too large to edit.');
+}
+
+const IDENTIFIER_NODES_MAX = 1_000_000;
+
+function namesValue(identifier: ts.Identifier): boolean {
+  const parent = identifier.parent;
+  if (ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent) || ts.isMethodDeclaration(parent)) {
+    return parent.name !== identifier;
+  }
+  if (ts.isPropertyAccessExpression(parent)) {
+    return parent.expression === identifier;
+  }
+  return true;
 }
 
 function loaderSource(call: ts.CallExpression | undefined, file: ts.SourceFile): string | undefined {

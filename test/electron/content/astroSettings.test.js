@@ -316,6 +316,34 @@ test('deleting a collection unlinks it everywhere the site uses it', async () =>
   assert.match(fs.readFileSync(path.join(root, 'src/pages/team.astro'), 'utf8'), /Promise\.resolve\(\[\]\)/);
 });
 
+test('deleting a collection removes its const though its name recurs in strings and keys', () => {
+  const source = [
+    "const test = defineCollection({ loader: glob({ base: './src/content/test', pattern: '**/*.md' }), schema: z.object({ title: z.string() }) });",
+    "const team = defineCollection({ loader: glob({ base: './src/content/team', pattern: '**/*.md' }), schema: z.object({ title: z.string() }) });",
+    'export const collections = { test, staff: team };',
+    '',
+  ].join('\n');
+  const once = editCollectionSchema(source, 'test', { kind: 'deleteCollection' });
+  assert.ok(once.ok);
+  assert.doesNotMatch(once.value.text, /const test/, 'a name inside the loader path is no use of the const');
+  const twice = editCollectionSchema(once.value.text, 'staff', { kind: 'deleteCollection' });
+  assert.ok(twice.ok);
+  assert.doesNotMatch(twice.value.text, /const team/, 'a const listed under another key goes too');
+  assert.match(twice.value.text, /export const collections = \{\s*\};/);
+});
+
+test('deleting a collection keeps its const while other code still uses it', () => {
+  const source = [
+    "const team = defineCollection({ loader: glob({ base: './src/content/team', pattern: '**/*.md' }) });",
+    'export const people = team;',
+    'export const collections = { team };',
+    '',
+  ].join('\n');
+  const edit = editCollectionSchema(source, 'team', { kind: 'deleteCollection' });
+  assert.ok(edit.ok);
+  assert.match(edit.value.text, /const team = defineCollection/);
+});
+
 test('code reading a deleted collection is given nothing to read', () => {
   const page = [
     "const a = await getCollection('blog');",
