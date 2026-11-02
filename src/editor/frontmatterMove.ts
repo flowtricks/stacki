@@ -327,7 +327,10 @@ export function withoutDeclarations(code: unknown, names: readonly string[]): st
       continue;
     }
     const before = out.slice(0, found.start);
-    const after = out.slice(found.end);
+    // A comment that ends the statement's line is the statement's own: the
+    // `// stacki:query` mark Stacki writes, or a note on what it holds. Left
+    // behind, it reads as a stray line, and the mark as a query to look for.
+    const after = out.slice(found.end).replace(/^[ \t]*\/\/[^\n]*/, '');
     // The line the statement sat on goes with it, rather than leaving a blank
     // one where it was.
     out = before.replace(/[ \t]*$/, '') + after.replace(/^[ \t]*\r?\n/, '');

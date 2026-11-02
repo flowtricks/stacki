@@ -124,6 +124,20 @@ const check = (what, condition, detail) => {
     check('and the imports untouched', /import Card/.test(left) && /import hero/.test(left), left);
   }
 
+  // A query Stacki wrote ends its line with the mark that says so. Taken out,
+  // the mark goes with it: a bare `// stacki:query` left behind is a stray line.
+  {
+    const code = "const campusPastors = await getCampusPastors();\nconst teamEntries = await getCollection('team'); // stacki:query\nconst other = 1;";
+    const left = withoutDeclarations(code, ['teamEntries']);
+    check(
+      'a removed query takes its trailing mark with it',
+      left === 'const campusPastors = await getCampusPastors();\nconst other = 1;',
+      JSON.stringify(left),
+    );
+    const last = withoutDeclarations("const a = 1;\nconst teamEntries = await getCollection('team'); // stacki:query", ['teamEntries']);
+    check('and as the last line too', last === 'const a = 1;\n', JSON.stringify(last));
+  }
+
   // A const the markup never names, but another const does. `featured` is what
   // the page shows; `posts` is where it came from, and taking it out would
   // leave `featured` reading a name that is not there.
