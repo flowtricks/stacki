@@ -2,7 +2,8 @@
 // validation, renames across references, and sample data for the canvas.
 import path from 'node:path';
 
-import { definedFields } from '../../shared/core/boundary';
+import { definedFields, record } from '../../shared/core/boundary';
+import { assert } from '../../shared/core/assert';
 import { parseValidationResult, parseContentConfig, parseSampleEntry, parseSampleValue } from '../app/mainValidation';
 import { resolveImport } from '../content/cmsRefs';
 import { readContentConfig, validateEntry } from '../content/contentConfig';
@@ -190,12 +191,26 @@ function registerContentRenameHandlers({ ipcMain, noteAppWrite, send }: Pick<Mai
     }
     try {
       const query = `c=${encodeURIComponent(name)}${id ? `&id=${encodeURIComponent(id)}` : ''}`;
-      const response = await fetch(`${devUrl}/__avb/data?${query}`);
-      if (!response.ok) {
-        return { entry: undefined, error: `Dev server returned ${response.status}` };
+      const first = await fetchSampleEntry(`${devUrl}/__avb/data?${query}`);
+      if (first.error !== undefined) {
+        return first;
       }
-      const input: unknown = await response.json();
-      return parseSampleEntry(input);
+      if (first.entry !== undefined && first.entry !== null) {
+        return first;
+      }
+      // None read: the dev server's content store can be stale (see the
+      // refresh hook in markerConfig), so it syncs once and is asked again.
+      const refreshed = await fetch(`${devUrl}/__avb/refresh`, { method: 'POST' });
+      if (!refreshed.ok) {
+        // An Astro without the refresh hook answers 404: the empty read stands.
+        return first;
+      }
+      // A sync that fails names the entry its schema rejects: that is the answer.
+      const refreshError = optionalText(record(await refreshed.json())['error']);
+      if (refreshError !== undefined) {
+        return { entry: undefined, error: refreshError };
+      }
+      return await fetchSampleEntry(`${devUrl}/__avb/data?${query}`);
     } catch (error: unknown) {
       return { entry: undefined, error: errorMessage(error) };
     }
@@ -230,4 +245,19 @@ function registerContentRenameHandlers({ ipcMain, noteAppWrite, send }: Pick<Mai
   ipcMain.handle('project:resolveImport', async (_event, { projectPath, fromFile, spec }) => ({
     path: resolveImport(projectPath, fromFile, spec) ?? undefined,
   }));
+}
+
+async function fetchSampleEntry(url: string): Promise<ReturnType<typeof parseSampleEntry>> {
+  assert(url.includes('/__avb/data?'), 'A sample is read from the data route');
+  const response = await fetch(url);
+  if (!response.ok) {
+    return { entry: undefined, error: `Dev server returned ${response.status}` };
+  }
+  const input: unknown = await response.json();
+  return parseSampleEntry(input);
+}
+
+// The refresh hook writes `null` for no error.
+function optionalText(input: unknown): string | undefined {
+  return typeof input === 'string' && input.length > 0 ? input : undefined;
 }

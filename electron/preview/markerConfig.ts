@@ -525,6 +525,31 @@ const avbPreviewRoute = {
         /* an Astro without this hook simply never calls it */
       }
     },
+    // Astro's glob loader stops at the first entry its schema rejects, and
+    // only then starts watching the folder: an entry saved while a required
+    // field was still empty leaves the collection empty for the session, even
+    // after the entry is fixed. The app asks for a fresh sync here when a
+    // collection it knows has entries reads as none.
+    'astro:server:setup': ({ server, refreshContent }) => {
+      if (typeof refreshContent !== 'function') {
+        return;
+      }
+      server.middlewares.use('/__avb/refresh', (request, response) => {
+        const done = (status, error) => {
+          response.statusCode = status;
+          response.setHeader('content-type', 'application/json');
+          response.end(JSON.stringify({ error }));
+        };
+        if (request.method !== 'POST') {
+          done(405, 'POST only');
+          return;
+        }
+        refreshContent({ context: { source: 'stacki' } }).then(
+          () => done(200, null),
+          (err) => done(200, String((err && err.message) || err))
+        );
+      });
+    },
     'astro:config:setup': ({ injectRoute }) => {
       injectRoute({ pattern: '/__avb/preview', entrypoint: `,
   ` });

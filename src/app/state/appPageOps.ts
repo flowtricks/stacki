@@ -383,7 +383,9 @@ export function useSelectionModel(
   const frontmatterCode = useMemo(() => (model ? writeFrontmatter(model) : ''), [model]);
 
   // One entry of a collection, asked for when someone opens it in the picker.
-  // The ref is what stops a row that has no answer from asking again forever.
+  // The ref stops a row from asking again while its question is out; a read
+  // that found nothing is forgotten, so opening the row again asks again
+  // rather than leaving it reading forever.
   const requestCollectionSample = (name: string): void => {
     if (!name || !devUrl || devStatus !== 'on') {
       return;
@@ -392,9 +394,18 @@ export function useSelectionModel(
       return;
     }
     sampleAskedRef.current.add(name);
+    const forget = (): void => {
+      sampleAskedRef.current.delete(name);
+    };
     readSampleEntry(devUrl, name)
-      .then((entry) => setCollectionSamples((previous) => ({ ...previous, [name]: entry })))
-      .catch(() => {});
+      .then((entry) => {
+        if (entry === undefined) {
+          forget();
+          return;
+        }
+        setCollectionSamples((previous) => ({ ...previous, [name]: entry }));
+      })
+      .catch(forget);
   };
 
   // Binding to a collection this page doesn't read yet: the query that fetches
