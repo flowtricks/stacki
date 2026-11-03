@@ -9,7 +9,8 @@ import { resolveImport } from '../content/cmsRefs';
 import { readContentConfig, validateEntry } from '../content/contentConfig';
 import { listEntries, writeEntry, countEntries, coveredPaths } from '../content/contentEntries';
 import { planRename, applyRename } from '../content/contentRefs';
-import { astroRemoteService, type AstroRemoteService } from '../content/astroRemoteService';
+import { astroRemoteService, firstImageField, type AstroRemoteService } from '../content/astroRemoteService';
+import { entryImage } from '../content/astroRecordReferences';
 import type { AstroRemoteEdit, AstroRemoteEditAnswer, AstroRemoteRead, AstroRemoteReadAnswer } from '../../shared/properties/astroContent';
 import type { RemoteResult } from '../../shared/properties/cmsRemote';
 import { errorMessage, toPosix } from '../lib/mainHelpers';
@@ -117,9 +118,18 @@ function registerContentConfigHandlers({ ipcMain, noteAppWrite, send }: Pick<Mai
     };
   });
 
+  // Each entry with its picture (the project file its collection's first image
+  // field names), so a list of entries to pick from can show them.
   ipcMain.handle('content:entries', async (_event, { projectPath, name }) => {
     const { collection } = await collectionOf(projectPath, name);
-    return { collection, ...listEntries(projectPath, collection) };
+    const listed = listEntries(projectPath, collection);
+    const imageField = firstImageField(collection);
+    const entries = listed.entries.map((entry) => {
+      const imageFile = entryImage(projectPath, entry, imageField);
+      return imageFile === undefined ? entry : { ...entry, imageFile };
+    });
+    assert(entries.length === listed.entries.length, 'Every entry is listed');
+    return { collection, ...listed, entries };
   });
 
   // A save is a list of edits against one entry, not a new copy of the file: see

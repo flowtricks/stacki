@@ -23,7 +23,7 @@ import { LiteralItemsSection } from './LoopLiteralItems';
 import { fieldListOf, type FieldList } from '../../editor/loopFieldList';
 import { fieldListPath, SourcePicker, sourcePath, type SourcePick, type SourcePickerData } from './LoopSourcePicker';
 import { loadFields, LOOP_CATALOG_LIMITS, titled, type CatalogField, type LoopCatalog } from './loopCatalog';
-import { fieldNamed, readingKey, sourceKey } from './loopSettingsModel';
+import { fieldNamed, itemsModeQuery, readingKey, sourceKey } from './loopSettingsModel';
 import { connectableProps, propNameProblem, SETTING_TITLES } from '../../editor/optionsBinding';
 import { propTooltip } from '../../editor/loopProps';
 import type { BindingContext } from './LoopBinding';
@@ -285,19 +285,12 @@ function CollectionSettings(props: {
   const { home } = props;
   // A builder export's items carry the CMS's own ids, which its code matches.
   const ids = home?.kind === 'options' || (home?.kind === 'chain' && home.itemPath[0] === 'fields') ? 'export' : 'entry';
-  // Either way the other mode's settings go, as a builder clears them; the
-  // projection and the entry's name are how the code reads, and stay.
-  const base = { ...emptyQuery(props.query.source), projection: props.query.projection, parameter: props.query.parameter };
-  // Selected with nothing picked yet is held here, not written: a list of no
-  // items has no collection to name in code. The first pick writes it.
-  const [pending, setPending] = useState(false);
-  const sourceName = sourceKey(props.query.source);
-  useEffect(() => setPending(false), [sourceName]);
-  const query = props.query.selection === undefined && pending ? { ...base, selection: [] } : props.query;
+  // Each mode is code, so the switch is one undo step (itemsModeQuery).
+  const query = props.query;
   const switchTo = (mode: 'dynamic' | 'selected'): void => {
-    setPending(mode === 'selected');
-    if (mode === 'dynamic' && props.query.selection !== undefined) {
-      props.onChange(base);
+    const next = itemsModeQuery(query, mode);
+    if (next !== undefined) {
+      props.onChange(next);
     }
   };
   return (
@@ -316,16 +309,14 @@ function CollectionSettings(props: {
         />
       </div>
       {query.selection === undefined ? (
-        <QuerySections {...props} query={query} stored={home?.kind === 'options' ? 'data' : 'code'} />
-      ) : (
-        <ItemsSection
+        <QuerySections
+          {...props}
           query={query}
-          catalog={props.catalog}
-          projectPath={props.projectPath}
-          ids={ids}
-          binding={props.binding}
-          onChange={(next) => (next.selection?.length === 0 && props.query.selection === undefined ? undefined : props.onChange(next))}
+          stored={home?.kind === 'options' ? 'data' : 'code'}
+          itemPath={home?.kind === 'chain' ? home.itemPath : undefined}
         />
+      ) : (
+        <ItemsSection query={query} catalog={props.catalog} projectPath={props.projectPath} ids={ids} binding={props.binding} onChange={props.onChange} />
       )}
     </>
   );
@@ -358,6 +349,8 @@ function QuerySections(props: {
   readonly catalog: LoopCatalog | undefined;
   readonly projectPath: string | undefined;
   readonly stored: 'code' | 'data' | 'traced';
+  /** Where a kept list's items hold their fields: what custom code starts from. */
+  readonly itemPath?: readonly string[] | undefined;
   readonly binding?: BindingContext | undefined;
   readonly onChange: (query: LoopQuery) => void;
 }) {
@@ -373,10 +366,18 @@ function QuerySections(props: {
         catalog={props.catalog}
         projectPath={props.projectPath}
         operatorSet={operatorSet}
+        itemPath={props.itemPath}
         binding={props.binding}
         onChange={props.onChange}
       />
-      <SortSection query={props.query} fields={props.fields} randomOrder={randomOrder} binding={props.binding} onChange={props.onChange} />
+      <SortSection
+        query={props.query}
+        fields={props.fields}
+        itemPath={props.itemPath}
+        randomOrder={randomOrder}
+        binding={props.binding}
+        onChange={props.onChange}
+      />
       <LimitSection query={props.query} binding={props.binding} onChange={props.onChange} />
     </>
   );

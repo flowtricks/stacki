@@ -73,11 +73,11 @@ function comparatorKey(node: Js, bases: ComparatorBases): LoopSort | undefined {
     const key = test.kind === 'binary' && test.operator === '===' ? keyOf(sortValue(test.left), sortValue(test.right), bases, 'text') : undefined;
     return key === undefined || node.right.value > 0 ? key : { ...key, direction: key.direction === 'ascending' ? 'descending' : 'ascending' };
   }
-  // `A.localeCompare(B)`: alphabetical.
+  // `A.localeCompare(B)`: alphabetical; with `{ numeric: true }`, numbers in order.
   if (node.kind === 'call' && node.callee.kind === 'member' && node.callee.property === 'localeCompare' && node.args[0]) {
     const left = sortValue(node.callee.object);
     const right = sortValue(node.args[0]);
-    return keyOf(left, right, bases, 'text');
+    return keyOf(left, right, bases, isNumericCollation(node.args[2]) ? 'natural' : 'text');
   }
   if (node.kind === 'binary' && node.operator === '-') {
     const left = sortValue(node.left);
@@ -87,19 +87,33 @@ function comparatorKey(node: Js, bases: ComparatorBases): LoopSort | undefined {
   return undefined;
 }
 
-interface SortValue {
-  readonly path: readonly string[];
-  /** What the conversions said the field holds: a time, a switch, or a number. */
-  readonly kind: 'date' | 'boolean' | 'number';
+// `{ numeric: true, … }`: localeCompare's collation that orders "2" before "10".
+function isNumericCollation(options: Js | undefined): boolean {
+  if (options?.kind !== 'object') {
+    return false;
+  }
+  const numeric = options.entries.find((entry) => entry.key === 'numeric')?.value;
+  return numeric?.kind === 'boolean' && numeric.value;
 }
 
-// A subtraction compares times when either side was made a date, switches
-// when either side was asked `=== true`, and plain numbers otherwise.
+interface SortValue {
+  readonly path: readonly string[];
+  /**
+   * What the conversions said is compared: a time, a switch, a number, text's
+   * length, a list's count, or an image's file size.
+   */
+  readonly kind: 'date' | 'boolean' | 'number' | 'length' | 'count' | 'fileSize';
+}
+
+// A subtraction compares what either side was made: a time, a switch, a
+// length, a count or a file size; plain numbers otherwise.
 function subtractedOrder(left: SortValue | undefined, right: SortValue | undefined): LoopSortOrder {
-  if (left?.kind === 'date' || right?.kind === 'date') {
-    return 'date';
+  for (const kind of ['date', 'boolean', 'length', 'count', 'fileSize'] as const) {
+    if (left?.kind === kind || right?.kind === kind) {
+      return kind;
+    }
   }
-  return left?.kind === 'boolean' || right?.kind === 'boolean' ? 'boolean' : 'number';
+  return 'number';
 }
 
 // Peels the conversions a comparator wraps a field in: String(), Number(),
@@ -109,7 +123,11 @@ function sortValue(node: Js): SortValue | undefined {
   let current = node;
   let kind: SortValue['kind'] = 'number';
   for (let depth = 0; depth < 6; depth++) {
-    if (current.kind === 'binary' && current.operator === '===' && current.right.kind === 'boolean' && current.right.value) {
+    const measured = measuredValue(current);
+    if (measured !== undefined) {
+      kind = measured.kind;
+      current = measured.value;
+    } else if (current.kind === 'binary' && current.operator === '===' && current.right.kind === 'boolean' && current.right.value) {
       kind = 'boolean';
       current = current.left;
     } else if (current.kind === 'binary' && (current.operator === '??' || current.operator === '||')) {
@@ -143,6 +161,30 @@ function sortValue(node: Js): SortValue | undefined {
   }
   const path = namePath(current);
   return path === undefined ? undefined : { path, kind };
+}
+
+// The measures the writer compares (loopQuery.ts): `String(x ?? '').length`,
+// `x?.length`, and an image's `….statSync(x?.fsPath ?? '', …)?.size`. A plain
+// `x.length` is a field named length, as a hand-written sort may mean it.
+function measuredValue(node: Js): { readonly kind: 'length' | 'count' | 'fileSize'; readonly value: Js } | undefined {
+  if (node.kind !== 'member') {
+    return undefined;
+  }
+  const object = node.object;
+  if (node.property === 'length') {
+    if (object.kind === 'call' && isName(object.callee, 'String') && object.args.length === 1 && object.args[0]) {
+      return { kind: 'length', value: object.args[0] };
+    }
+    return node.optional ? { kind: 'count', value: object } : undefined;
+  }
+  if (node.property === 'size' && object.kind === 'call' && object.callee.kind === 'member' && object.callee.property === 'statSync') {
+    const [file] = object.args;
+    const path = file?.kind === 'binary' && file.operator === '??' ? file.left : file;
+    if (path?.kind === 'member' && path.property === 'fsPath') {
+      return { kind: 'fileSize', value: path.object };
+    }
+  }
+  return undefined;
 }
 
 function keyOf(left: SortValue | undefined, right: SortValue | undefined, bases: ComparatorBases, order: LoopSortOrder): LoopSort | undefined {

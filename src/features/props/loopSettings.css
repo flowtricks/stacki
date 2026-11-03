@@ -459,30 +459,83 @@
   min-height: 0;
 }
 .loop-settings-picker-row {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 28px;
-  padding: 0 6px;
+  gap: 10px;
+  min-height: 30px;
+  padding: 0 8px;
   border-radius: 6px;
   color: var(--text);
   font-size: 12px;
   cursor: pointer;
 }
+/* A row with a picture is tall enough to show it. */
+.loop-settings-picker-row.pictured {
+  min-height: 40px;
+}
 .loop-settings-picker-row:hover {
   background: var(--bg-hover);
+}
+.loop-settings-picker-row.chosen {
+  background: var(--bg-active);
 }
 .loop-settings-picker-row.all {
   color: var(--text-dim);
 }
+/* The row is the control: its checkbox stays for the keyboard and screen readers, out of sight. */
 .loop-settings-picker-row input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   margin: 0;
+  opacity: 0;
+  pointer-events: none;
 }
-.loop-settings-picker-row span {
+.loop-settings-picker-row:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.loop-settings-picker-title {
+  flex: 1 1 auto;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.loop-settings-picker-check {
+  display: flex;
+  flex: 0 0 auto;
+  width: 14px;
+  justify-content: center;
+  color: var(--accent);
+}
+/* An item's picture: larger in the picker, a small square beside a picked row's name. */
+.loop-settings-thumb {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--bg-input);
+  color: var(--text-faint);
+}
+.loop-settings-thumb.asset-thumb {
+  aspect-ratio: auto;
+  border: 0;
+}
+.loop-settings-picked .loop-settings-thumb {
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+  border-radius: 3px;
+}
+.loop-settings-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* A custom list's item: text to edit in place, on the row's own fill. */
@@ -842,4 +895,31 @@
 }
 .loop-settings-item:hover > .loop-settings-item-grip {
   opacity: 1;
+}
+
+/* Custom code for a filter or a sort: monospace, on the field fill. */
+.loop-settings-code {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.loop-settings-code textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.loop-settings-code textarea[aria-invalid='true'] {
+  background: rgba(255, 80, 80, 0.12);
+}
+.loop-settings-code-problem {
+  color: #ff8a8a;
+  font-size: 11px;
 }

@@ -144,7 +144,14 @@ export function useReferenceChoices(context: ChoiceContext, field: CatalogField 
 export interface PickableItem {
   readonly id: string;
   readonly title: string;
+  /** Its first picture, when it has one: a project file, or a CMS's address for it. */
+  readonly picture?: ItemPicture;
 }
+
+export type ItemPicture = { readonly kind: 'file'; readonly file: string } | { readonly kind: 'url'; readonly url: string };
+
+// A picture path is a project file a thumbnail can be read from: relative, inside, bounded.
+const PICTURE_PATH_CHARS_MAX = 1024;
 
 // A collection's items to pick from. Astro entries are read with their data,
 // so a builder export's lists, whose items are named by the CMS's `_id` where
@@ -160,7 +167,13 @@ export async function loadItems(
   if (source.kind === 'sanity') {
     const connectionId = catalog.sanity.kind === 'connected' ? catalog.sanity.connectionId : undefined;
     const listed = connectionId === undefined ? undefined : await remoteDocuments(projectPath, connectionId, source.collection).catch(() => undefined);
-    return listed?.ok ? listed.value.documents.slice(0, PICKABLE_ITEMS_MAX).map((document) => ({ id: document.id, title: document.title })) : [];
+    return listed?.ok
+      ? listed.value.documents.slice(0, PICKABLE_ITEMS_MAX).map((document) => ({
+          id: document.id,
+          title: document.title,
+          ...(document.imageURL === undefined ? {} : { picture: { kind: 'url' as const, url: document.imageURL } }),
+        }))
+      : [];
   }
   const payload = parseIpcPayload('content:entries', { projectPath, name: source.collection });
   const answer: unknown = await cmsTransport.contentEntries(payload).catch(() => undefined);
@@ -206,5 +219,17 @@ function pickableEntry(input: unknown, ids: 'entry' | 'export'): PickableItem | 
   if (typeof chosen !== 'string' || !isItemId(chosen)) {
     return undefined;
   }
-  return { id: chosen, title: typeof title === 'string' && title !== '' ? title : chosen };
+  const picture = pictureFile(entry?.['imageFile']);
+  return { id: chosen, title: typeof title === 'string' && title !== '' ? title : chosen, ...(picture === undefined ? {} : { picture }) };
+}
+
+// The entry's picture as main found it (content:entries), when it is a usable project path.
+function pictureFile(input: unknown): ItemPicture | undefined {
+  if (typeof input !== 'string' || input === '' || input.length > PICTURE_PATH_CHARS_MAX) {
+    return undefined;
+  }
+  if (input.startsWith('/') || input.split('/').includes('..')) {
+    return undefined;
+  }
+  return { kind: 'file', file: input };
 }

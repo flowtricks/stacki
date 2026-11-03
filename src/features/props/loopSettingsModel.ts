@@ -6,11 +6,15 @@
 
 import { assert } from '../../../shared/core/assert';
 import type { LoopReading } from '../../editor/loopQueryRead';
+import { parseExpression } from '../../editor/loopSyntax';
+import { readGroq } from '../../editor/groqSyntax';
 import {
+  emptyQuery,
   isDateValue,
   isDocumentId,
   LOOP_QUERY_LIMITS,
   operatorsFor,
+  type LoopQuery,
   type LoopCondition,
   type LoopFieldKind,
   type LoopLiteral,
@@ -18,6 +22,7 @@ import {
   type LoopSort,
   type LoopSortOrder,
   type LoopSource,
+  type LoopSourceKind,
 } from '../../editor/loopQuery';
 import type { CatalogField } from './loopCatalog';
 import { titled } from './loopCatalog';
@@ -65,6 +70,14 @@ export function orderLabels(order: LoopSortOrder): { readonly ascending: string;
       return { ascending: 'Oldest to newest', descending: 'Newest to oldest' };
     case 'boolean':
       return { ascending: 'Is Off First', descending: 'Is On First' };
+    case 'natural':
+      return { ascending: 'A to Z, numbers in order', descending: 'Z to A, numbers in order' };
+    case 'length':
+      return { ascending: 'Shortest first', descending: 'Longest first' };
+    case 'count':
+      return { ascending: 'Fewest items first', descending: 'Most items first' };
+    case 'fileSize':
+      return { ascending: 'Smallest file first', descending: 'Largest file first' };
     default: {
       const exhaustive: never = order;
       return exhaustive;
@@ -309,4 +322,63 @@ export function wholeNumberOf(text: string, bounds: { readonly min: number; read
   const number = Number(text);
   assert(bounds.min <= bounds.max, 'Bounds are ordered');
   return Number.isSafeInteger(number) ? Math.min(bounds.max, Math.max(bounds.min, number)) : undefined;
+}
+
+/**
+ * The query a collection list's Items switch writes, or undefined when it is
+ * already in that mode. Each mode is code: Selected is a list with nothing
+ * picked yet (it still names its collection, and renders no items until some
+ * are picked), so the switch is one undo step and Undo puts Dynamic back.
+ * Either way the other mode's settings go, as a builder clears them; the
+ * projection and the entry's name are how the code reads, and stay.
+ */
+export function itemsModeQuery(query: LoopQuery, mode: 'dynamic' | 'selected'): LoopQuery | undefined {
+  const base: LoopQuery = { ...emptyQuery(query.source), projection: query.projection, parameter: query.parameter };
+  assert(base.selection === undefined, 'A dynamic list picks nothing');
+  if (mode === 'selected') {
+    return query.selection === undefined ? { ...base, selection: [] } : undefined;
+  }
+  return query.selection === undefined ? undefined : base;
+}
+
+/**
+ * Why a custom filter cannot be written, or undefined when it can: one
+ * JavaScript expression over the item for an Astro list, one GROQ condition
+ * for a Sanity type. Checked before it is written, so the page never holds
+ * code that does not parse.
+ */
+export function customFilterProblem(code: string, source: LoopSourceKind): string | undefined {
+  const text = code.trim();
+  if (text === '') {
+    return 'Type a condition.';
+  }
+  if (text.length > LOOP_QUERY_LIMITS.customCodeCharsMax) {
+    return 'This condition is too long.';
+  }
+  if (source === 'sanity') {
+    // Read as a clause of the query it joins, the way the writer places it.
+    const reading = readGroq(`*[_type == "item" && (${text})]`);
+    return reading === undefined ? 'This is not a GROQ condition.' : undefined;
+  }
+  return parseExpression(text) === undefined ? 'This is not one JavaScript expression.' : undefined;
+}
+
+/** Why a custom sort cannot be written: it must be a comparator, `(a, b) => …`. */
+export function customSortProblem(code: string): string | undefined {
+  const text = code.trim();
+  if (text === '') {
+    return 'Type a comparator, such as (a, b) => a.data.order - b.data.order.';
+  }
+  if (text.length > LOOP_QUERY_LIMITS.customCodeCharsMax) {
+    return 'This sort is too long.';
+  }
+  const parsed = parseExpression(text);
+  if (parsed === undefined) {
+    return 'This is not one JavaScript expression.';
+  }
+  const expression = parsed.expression;
+  if (expression.kind !== 'function' || expression.parameters.length !== 2) {
+    return 'A sort compares two items: write (a, b) => …';
+  }
+  return undefined;
 }

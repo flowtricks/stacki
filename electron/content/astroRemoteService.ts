@@ -503,7 +503,7 @@ function imageOf(projectPath: string, imageField: string | undefined): ((entry: 
 }
 
 /** The collection's first image field: its entries' picture in lists and choices. */
-function firstImageField(collection: Collection): string | undefined {
+export function firstImageField(collection: Collection): string | undefined {
   return astroSchemaFields(collection.schema, new Map()).find((field) => field.type.kind === 'string' && field.type.asset === 'image')?.name;
 }
 

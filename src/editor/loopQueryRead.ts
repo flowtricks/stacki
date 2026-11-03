@@ -378,16 +378,31 @@ function queryOf(pipeline: Extract<Pipeline, { readonly kind: 'collection' }>, c
     return partial(source, pipeline, 'Its filter is written in a way the list settings cannot show.');
   }
   const sorting = order.sort === undefined ? { sorts: [], random: false } : readComparator(order.sort, itemPath);
-  if (sorting === undefined) {
+  // A comparator no sort key can say is kept as code: a custom sort.
+  const customSort = sorting === undefined && order.sort !== undefined ? customSortOf(order.sort) : undefined;
+  if (sorting === undefined && customSort === undefined) {
     return partial(source, pipeline, 'Its sort order is computed by code.');
   }
+  if (order.reversed && customSort !== undefined) {
+    return partial(source, pipeline, 'Its sort order is computed by code, then reversed.');
+  }
   // The schema knows better than the syntax: `+b.data.date` is a date read as a number.
-  const typed = sorting.sorts.map((sort) => withOrder(sort, source, context.input.fieldKind));
+  const typed = (sorting?.sorts ?? []).map((sort) => withOrder(sort, source, context.input.fieldKind));
   const sorts = order.reversed ? typed.map(flipped) : typed;
-  if (order.reversed && sorts.length === 0 && !sorting.random) {
+  const random = sorting?.random === true;
+  if (order.reversed && sorts.length === 0 && !random) {
     return partial(source, pipeline, 'It is shown in reverse of the collection’s own order.');
   }
-  const query: LoopQuery = { source, ...conditions, sorts, random: sorting.random, offset: order.offset, limit: order.limit, projection: undefined };
+  const query: LoopQuery = {
+    source,
+    ...conditions,
+    sorts,
+    random,
+    offset: order.offset,
+    limit: order.limit,
+    projection: undefined,
+    ...(customSort === undefined ? {} : { customSort }),
+  };
   const read = checked(query, pipeline, undefined);
   if (read?.kind === 'query' && base.list !== undefined) {
     return { ...read, home: { kind: 'chain', list: base.list.text, itemPath: base.list.itemPath } };
@@ -432,13 +447,19 @@ function sanityQueryOf(
     return partial(source, pipeline, 'Its items are changed by code after they are fetched.');
   }
   const random = order.sort === undefined ? false : readComparator(order.sort, [])?.random === true;
-  if (order.sort !== undefined && !random) {
+  // A sort after the fetch that is not a shuffle is a custom sort: GROQ's own
+  // order and a slice before it would both be undone by it.
+  const customSort = order.sort !== undefined && !random ? customSortOf(order.sort) : undefined;
+  if (order.sort !== undefined && !random && customSort === undefined) {
     return partial(source, pipeline, 'It is sorted by code after it is fetched.');
   }
   const sliced = order.offset > 0 || order.limit !== undefined;
   const groqSliced = groq.offset > 0 || groq.limit !== undefined;
   if (sliced && groqSliced) {
     return partial(source, pipeline, 'It is sliced twice.');
+  }
+  if (customSort !== undefined && (groq.sorts.length > 0 || groqSliced)) {
+    return partial(source, pipeline, 'It is ordered by GROQ, then again by code.');
   }
   const fieldKinds = context.input.fieldKind;
   const conditions = groq.conditions;
@@ -452,6 +473,7 @@ function sanityQueryOf(
     limit: sliced ? order.limit : groq.limit,
     projection: groq.projection,
     parameter: { kind: 'data' },
+    ...(customSort === undefined ? {} : { customSort }),
   };
   return checked(query, pipeline, base.client) ?? partial(source, pipeline, 'Its settings are outside what the list settings can show.');
 }
@@ -537,11 +559,27 @@ function stepOrder(steps: readonly Step[]): StepOrder | undefined {
   return { filters, sort, reversed, offset, limit };
 }
 
+// The comparator's own text, when it fits a custom sort's bound.
+function customSortOf(located: { readonly source: string; readonly node: Js }): string | undefined {
+  const text = located.source.slice(located.node.from, located.node.to).trim();
+  if (text === '' || text.length > LOOP_QUERY_LIMITS.customCodeCharsMax) {
+    return undefined;
+  }
+  return text;
+}
+
 function flipped(sort: LoopSort): LoopSort {
   return { ...sort, direction: sort.direction === 'ascending' ? 'descending' : 'ascending' };
 }
 
+// A comparator says how it compares a value, but a subtraction cannot say a
+// number from a time: the field's kind settles the four value orders. An
+// order that measures the value (numbers in order, length, count, file size)
+// is what the code said, and stays.
 function withOrder(sort: LoopSort, source: LoopSource, fieldKind: LoopReadInput['fieldKind']): LoopSort {
+  if (!['text', 'number', 'date', 'boolean'].includes(sort.order)) {
+    return sort;
+  }
   const kind = fieldKind?.(source, sort.field);
   const order: LoopSortOrder | undefined =
     kind === 'number' ? 'number' : kind === 'date' ? 'date' : kind === 'text' ? 'text' : kind === 'boolean' ? 'boolean' : undefined;

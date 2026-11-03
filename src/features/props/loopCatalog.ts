@@ -150,10 +150,12 @@ export function catalogFields(fields: readonly RemoteSchemaField[], kind: LoopSo
   for (const field of fields.slice(0, LOOP_CATALOG_LIMITS.fieldsMax)) {
     const mapped = catalogField(field, kind);
     if (mapped !== undefined && isFieldPath(mapped.path)) {
-      out.push(mapped);
+      out.push(mapped, ...imageMeasures(mapped, kind));
     }
   }
-  const all = kind === 'sanity' ? [...out, ...SANITY_SYSTEM_FIELDS] : out;
+  // Each field adds at most its two measures; the list keeps the catalog's bound.
+  const own = out.slice(0, LOOP_CATALOG_LIMITS.fieldsMax);
+  const all = kind === 'sanity' ? [...own, ...SANITY_SYSTEM_FIELDS] : own;
   assert(all.length <= LOOP_CATALOG_LIMITS.fieldsMax + SANITY_SYSTEM_FIELDS.length, 'Catalog fields are bounded');
   return all;
 }
@@ -200,6 +202,24 @@ function catalogField(field: RemoteSchemaField, source: LoopSourceKind): Catalog
       return exhaustive;
     }
   }
+}
+
+// An Astro image is its file's metadata, `{ src, width, height, format }`, so
+// its width and height filter and sort as numbers. A Sanity image is a
+// reference to an asset, whose size a GROQ query would have to follow.
+function imageMeasures(field: CatalogField, source: LoopSourceKind): readonly CatalogField[] {
+  if (field.kind !== 'image' || source !== 'astro') {
+    return [];
+  }
+  const measures: readonly CatalogField[] = [
+    { path: `${field.path}.width`, title: `${field.title} width`, kind: 'number', options: [], references: [] },
+    { path: `${field.path}.height`, title: `${field.title} height`, kind: 'number', options: [], references: [] },
+  ];
+  assert(
+    measures.every((measure) => isFieldPath(measure.path)),
+    'An image field names its measures',
+  );
+  return measures;
 }
 
 // A list of text or of references can be asked whether it has a value; any

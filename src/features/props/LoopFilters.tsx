@@ -4,10 +4,20 @@
 import { useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import Dropdown from '../../ui/Dropdown';
-import { LOOP_QUERY_LIMITS, operatorsFor, type LoopCondition, type LoopFieldKind, type LoopOperator, type LoopQuery } from '../../editor/loopQuery';
+import {
+  astroConditionCode,
+  groqConditionCode,
+  LOOP_QUERY_LIMITS,
+  operatorsFor,
+  type LoopCondition,
+  type LoopFieldKind,
+  type LoopOperator,
+  type LoopQuery,
+} from '../../editor/loopQuery';
+import { CodeIcon } from '../../ui/Icons';
 import { type CatalogField, type LoopCatalog } from './loopCatalog';
-import { conditionOf, conditionParts, draftFor, draftOf, fieldNamed, operatorLabel, type ConditionDraft } from './loopSettingsModel';
-import { EditorRow, ListRow, SectionHeader, fieldIcon } from './LoopRows';
+import { conditionOf, conditionParts, customFilterProblem, draftFor, draftOf, fieldNamed, operatorLabel, type ConditionDraft } from './loopSettingsModel';
+import { CodeBox, EditorRow, ListRow, SectionHeader, fieldIcon } from './LoopRows';
 import { useReferenceChoices } from './loopSettingsData';
 import { SettingDot, type BindingContext, type DraftEditor } from './LoopBinding';
 import { LinkedSetting } from './LoopLinked';
@@ -20,7 +30,26 @@ import useListReorder from '../../ui/useListReorder';
 export interface SectionProps {
   readonly query: LoopQuery;
   readonly fields: readonly CatalogField[] | undefined;
+  /** Where a kept list's items hold their fields (`fields`); absent for a collection's own `data`. */
+  readonly itemPath?: readonly string[] | undefined;
   readonly onChange: (query: LoopQuery) => void;
+}
+
+// The Field menu's entry for custom code, beside the fields; never a field
+// name (those are checked names, and this one starts with underscores).
+const CUSTOM_FIELD = '__custom';
+
+/** A filter as code, to start a custom one from: what the writer would write for it. */
+function conditionCodeOf(condition: LoopCondition, query: LoopQuery, itemPath: readonly string[] | undefined): string {
+  if (condition.kind === 'custom') {
+    return condition.code;
+  }
+  if (query.source.kind === 'sanity') {
+    return groqConditionCode(condition);
+  }
+  const name = query.parameter.kind === 'entry' ? query.parameter.name : 'entry';
+  const base = itemPath !== undefined ? [name, ...itemPath].join('.') : query.parameter.kind === 'entry' ? `${name}.data` : 'data';
+  return astroConditionCode(condition, base);
 }
 
 type FilterSectionProps = SectionProps & {
@@ -79,7 +108,7 @@ function FilterEditor(props: FilterSectionProps) {
         title="Filters"
         label={props.label}
         dot={<SettingDot setting="filter" binding={props.binding} draft={filterDraft(props)} />}
-        addable={!full && filterable.length > 0}
+        addable={!full && (filterable.length > 0 || props.operatorSet === 'code')}
         extra={query.conditions.length > 1 ? <MatchMenu query={query} onChange={props.onChange} /> : undefined}
         onAdd={() => setOpen('new')}
       />
@@ -94,6 +123,7 @@ function FilterEditor(props: FilterSectionProps) {
               <FilterChip
                 condition={condition}
                 fields={fields}
+                itemPath={props.itemPath}
                 context={props}
                 open={open === index}
                 onToggle={() => setOpen(open === index ? undefined : index)}
@@ -101,7 +131,7 @@ function FilterEditor(props: FilterSectionProps) {
               />
             </div>
           ))}
-          {open === 'new' && filterable[0] !== undefined && (
+          {open === 'new' && (
             <NewFilterRow
               first={filterable[0]}
               fields={filterable}
@@ -141,21 +171,72 @@ function MatchMenu(props: { readonly query: LoopQuery; readonly onChange: (query
 
 // A filter being added: a row with its editor open, written once it is valid.
 function NewFilterRow(props: {
-  readonly first: CatalogField;
+  readonly first: CatalogField | undefined;
   readonly fields: readonly CatalogField[];
   readonly context: ChoiceContext;
   readonly onCommit: (condition: LoopCondition) => void;
   readonly onClose: () => void;
 }) {
+  // With no field to filter by, custom code is the only filter there is.
+  const [custom, setCustom] = useState(props.first === undefined);
+  const first = props.first;
   return (
     <ListRow
-      parts={{ lead: props.first.title, rest: 'New filter' }}
+      parts={{ lead: custom || first === undefined ? 'Custom code' : first.title, rest: 'New filter' }}
       open={true}
       removeLabel="Discard filter"
-      editor={<ConditionEditor draft={draftFor(props.first)} fields={props.fields} context={props.context} onCommit={props.onCommit} />}
+      editor={
+        custom || first === undefined ? (
+          <CustomConditionEditor code="" fields={props.fields} context={props.context} onField={() => setCustom(false)} onCommit={props.onCommit} />
+        ) : (
+          <ConditionEditor draft={draftFor(first)} fields={props.fields} context={props.context} onCustom={() => setCustom(true)} onCommit={props.onCommit} />
+        )
+      }
       onToggle={props.onClose}
       onRemove={props.onClose}
     />
+  );
+}
+
+// A filter as code: the Field menu (to go back to a field), and the code box.
+function CustomConditionEditor(props: {
+  readonly code: string;
+  readonly fields: readonly CatalogField[];
+  readonly context: ChoiceContext;
+  readonly onField: (() => void) | undefined;
+  readonly onCommit: (condition: LoopCondition) => void;
+}) {
+  const source = props.context.query.source.kind;
+  return (
+    <div className="loop-settings-editor">
+      <EditorRow label="Field">
+        <FieldMenu value={CUSTOM_FIELD} fields={props.fields} custom={true} onChange={() => props.onField?.()} />
+      </EditorRow>
+      <CodeBox
+        value={props.code}
+        label="Filter code"
+        placeholder={source === 'sanity' ? 'count(serviceTimes) > 1' : 'data.title.startsWith("Pastor")'}
+        charsMax={LOOP_QUERY_LIMITS.customCodeCharsMax}
+        check={(code) => customFilterProblem(code, source)}
+        onCommit={(code) => props.onCommit({ kind: 'custom', code })}
+      />
+    </div>
+  );
+}
+
+// The fields a filter can name, and, where the list is code, custom code.
+function FieldMenu(props: {
+  readonly value: string;
+  readonly fields: readonly CatalogField[];
+  readonly custom: boolean;
+  readonly onChange: (path: string) => void;
+}) {
+  const options = [
+    ...props.fields.map((candidate) => ({ value: candidate.path, label: candidate.title, icon: fieldIcon(candidate.kind) })),
+    ...(props.custom ? [{ value: CUSTOM_FIELD, label: 'Custom code', icon: <CodeIcon size={13} /> }] : []),
+  ];
+  return (
+    <Dropdown<string> livePreview={false} value={props.value} ariaLabel="Field" searchable={options.length > 10} options={options} onChange={props.onChange} />
   );
 }
 
@@ -178,6 +259,7 @@ function operatorsIn(kind: LoopFieldKind, set: OperatorSet): readonly LoopOperat
 function FilterChip(props: {
   readonly condition: LoopCondition;
   readonly fields: readonly CatalogField[] | undefined;
+  readonly itemPath: readonly string[] | undefined;
   readonly context: ChoiceContext;
   readonly open: boolean;
   readonly onToggle: () => void;
@@ -186,24 +268,53 @@ function FilterChip(props: {
   const { condition, fields } = props;
   const field = condition.kind === 'test' ? fieldNamed(fields, condition.field) : undefined;
   const choices = useReferenceChoices(props.context, field);
+  const filterable = (fields ?? []).filter((candidate) => operatorsFor(candidate.kind).length > 0);
+  const codeAllowed = props.context.operatorSet === 'code';
+  // The editor shown: the filter's own kind, until the Field menu switches it.
+  // Switching writes nothing; the filter changes once the other editor makes
+  // a valid one. Turned into code, a filter starts as the code it already is.
+  const [shown, setShown] = useState<'code' | 'field' | undefined>(undefined);
+  // A filter on a field the collection does not list can only be shown as code.
+  const mode = shown ?? (condition.kind === 'custom' || field === undefined ? 'code' : 'field');
+  const commit = (next: LoopCondition): void => {
+    setShown(undefined);
+    props.onChange(next);
+  };
+  const editor = (): ReactNode => {
+    const first = field ?? filterable[0];
+    if (mode === 'code') {
+      return codeAllowed ? (
+        <CustomConditionEditor
+          code={conditionCodeOf(condition, props.context.query, props.itemPath)}
+          fields={filterable}
+          context={props.context}
+          onField={first === undefined ? undefined : () => setShown('field')}
+          onCommit={commit}
+        />
+      ) : undefined;
+    }
+    if (first === undefined) {
+      return undefined;
+    }
+    return (
+      <ConditionEditor
+        draft={condition.kind === 'test' ? draftOf(condition) : draftFor(first)}
+        fields={filterable}
+        context={props.context}
+        onCustom={codeAllowed ? () => setShown('code') : undefined}
+        onCommit={commit}
+      />
+    );
+  };
   return (
     <>
       <ListRow
         dragThrough={true}
         parts={conditionParts(condition, fields, choices)}
         open={props.open}
-        locked={condition.kind === 'custom'}
+        locked={condition.kind === 'custom' && !codeAllowed}
         removeLabel="Remove filter"
-        editor={
-          condition.kind === 'test' && field !== undefined ? (
-            <ConditionEditor
-              draft={draftOf(condition)}
-              fields={(fields ?? []).filter((candidate) => operatorsFor(candidate.kind).length > 0)}
-              context={props.context}
-              onCommit={(next) => props.onChange(next)}
-            />
-          ) : undefined
-        }
+        editor={editor()}
         onToggle={props.onToggle}
         onRemove={() => props.onChange(undefined)}
       />
@@ -217,6 +328,8 @@ function ConditionEditor(props: {
   readonly draft: ConditionDraft;
   readonly fields: readonly CatalogField[];
   readonly context: ChoiceContext;
+  /** Where the list is code, the Field menu offers custom code. */
+  readonly onCustom?: (() => void) | undefined;
   readonly onCommit: (condition: LoopCondition) => void;
 }) {
   const [draft, setDraft] = useState(props.draft);
@@ -231,6 +344,10 @@ function ConditionEditor(props: {
     }
   };
   const changeField = (path: string): void => {
+    if (path === CUSTOM_FIELD) {
+      props.onCustom?.();
+      return;
+    }
     const picked = fieldNamed(props.fields, path);
     if (picked !== undefined) {
       commit(draftFor(picked));
@@ -239,14 +356,7 @@ function ConditionEditor(props: {
   return (
     <div className="loop-settings-editor">
       <EditorRow label="Field">
-        <Dropdown<string>
-          livePreview={false}
-          value={draft.field}
-          ariaLabel="Field"
-          searchable={props.fields.length > 10}
-          options={props.fields.map((candidate) => ({ value: candidate.path, label: candidate.title, icon: fieldIcon(candidate.kind) }))}
-          onChange={changeField}
-        />
+        <FieldMenu value={draft.field} fields={props.fields} custom={props.onCustom !== undefined} onChange={changeField} />
       </EditorRow>
       <EditorRow label="When">
         <Dropdown

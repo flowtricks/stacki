@@ -71,6 +71,8 @@ export type WireEntry = {
   readonly hasBody?: boolean;
   readonly error?: string;
   readonly keyed?: boolean;
+  /** Its picture: the project file its collection's first image field names. */
+  readonly imageFile?: string;
 };
 
 export type WireCollection = {

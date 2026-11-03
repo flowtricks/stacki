@@ -164,3 +164,37 @@ assert.equal(withListSettingType(property('filters', 'string'), listPropsOf(expo
 assert.equal(withListSettingType(property('title', 'unknown'), listPropsOf(exportFrontmatter)).type, 'unknown', 'a prop no loop reads is left alone');
 
 console.log('loopSettings: ok');
+
+// The Items switch writes code either way, so Undo after picking Selected puts
+// Dynamic back: Selected starts with nothing picked, and Dynamic drops the picks.
+{
+  const loopQuery = load('src/editor/loopQuery.ts');
+  const dynamic = { ...loopQuery.emptyQuery({ kind: 'astro', collection: 'team' }), sorts: [{ field: 'title', direction: 'ascending', order: 'text' }] };
+  const selected = model.itemsModeQuery(dynamic, 'selected');
+  assert.deepEqual(selected?.selection, [], 'Selected starts with no items');
+  assert.deepEqual(selected?.sorts, [], "Dynamic's sort does not carry into a picked list");
+  assert.equal(model.itemsModeQuery(dynamic, 'dynamic'), undefined, 'already dynamic: nothing to write');
+  assert.equal(model.itemsModeQuery({ ...dynamic, sorts: [], selection: ['a'] }, 'selected'), undefined, 'already selected: nothing to write');
+  assert.equal(model.itemsModeQuery({ ...dynamic, sorts: [], selection: ['a'] }, 'dynamic')?.selection, undefined);
+}
+
+// Custom code is written only once it parses: one JavaScript expression for an
+// Astro filter, a GROQ condition for a Sanity one, and a two-item comparator
+// for a sort. Anything else stays in the box with the reason beside it.
+{
+  assert.equal(model.customFilterProblem('data.title.startsWith("S")', 'astro'), undefined);
+  assert.equal(model.customFilterProblem('entry.data.tags?.length > 2 && entry.id !== "x"', 'astro'), undefined);
+  assert.equal(model.customFilterProblem('data.title.startsWith(', 'astro'), 'This is not one JavaScript expression.');
+  assert.equal(model.customFilterProblem('a; b', 'astro'), 'This is not one JavaScript expression.');
+  assert.equal(model.customFilterProblem('   ', 'astro'), 'Type a condition.');
+  assert.equal(model.customFilterProblem('x'.repeat(2001), 'astro'), 'This condition is too long.');
+  assert.equal(model.customFilterProblem('count(serviceTimes) > 1', 'sanity'), undefined);
+  assert.equal(model.customFilterProblem('count(serviceTimes > 1', 'sanity'), 'This is not a GROQ condition.');
+  assert.equal(model.customFilterProblem('name == "a"] | order(x', 'sanity'), 'This is not a GROQ condition.');
+  assert.equal(model.customSortProblem('(a, b) => a.data.order - b.data.order'), undefined);
+  assert.equal(model.customSortProblem('function (a, b) { return a.id.localeCompare(b.id); }'), undefined);
+  assert.equal(model.customSortProblem('(a) => a.data.order'), 'A sort compares two items: write (a, b) => …');
+  assert.equal(model.customSortProblem('byRank'), 'A sort compares two items: write (a, b) => …');
+  assert.equal(model.customSortProblem('(a, b) =>'), 'This is not one JavaScript expression.');
+  console.log('custom code checks: ok');
+}

@@ -5,11 +5,20 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
-import { ChevronDownIcon, RepeatIcon } from '../../ui/Icons';
-import { LOOP_QUERY_LIMITS, sortOrderFor, type LoopQuery, type LoopSort } from '../../editor/loopQuery';
+import { ChevronDownIcon, CodeIcon, RepeatIcon } from '../../ui/Icons';
+import {
+  astroComparatorCode,
+  LOOP_QUERY_LIMITS,
+  sortOrderFor,
+  sortOrdersFor,
+  type LoopQuery,
+  type LoopSort,
+  type LoopSortOrder,
+  type LoopSourceKind,
+} from '../../editor/loopQuery';
 import { type CatalogField } from './loopCatalog';
-import { fieldNamed, orderLabels, sortParts, wholeNumberOf } from './loopSettingsModel';
-import { EditorRow, ListRow, SectionHeader, fieldIcon } from './LoopRows';
+import { customSortProblem, fieldNamed, orderLabels, sortParts, wholeNumberOf } from './loopSettingsModel';
+import { CodeBox, EditorRow, ListRow, SectionHeader, fieldIcon } from './LoopRows';
 import type { SectionProps } from './LoopFilters';
 import { SettingDot, type BindingContext, type DraftEditor } from './LoopBinding';
 import { moved, staysPut } from './LoopItems';
@@ -19,6 +28,8 @@ import { LinkedSetting } from './LoopLinked';
 // The Field menu's entry for a shuffle, beside the fields; never a field name
 // (those are checked names, and this one starts with underscores).
 const RANDOM_FIELD = '__random';
+// And for custom code, which, like a shuffle, runs in JS after the items are read.
+const CUSTOM_FIELD = '__custom';
 const LIMIT_DEFAULT = 6;
 
 // ---------------------------------------------------------------------------
@@ -53,12 +64,28 @@ function sortDraft(props: SortSectionProps): DraftEditor {
 function SortEditor(props: SortSectionProps) {
   const { query, fields } = props;
   const [open, setOpen] = useState<number | undefined>(undefined);
-  const sortable = (fields ?? []).filter((field) => sortOrderFor(field.kind) !== undefined);
+  const source = query.source.kind;
+  const sortable = (fields ?? []).filter((field) => sortOrderFor(field.kind, source) !== undefined);
   const first = sortable[0];
-  const addable = !query.random && query.sorts.length < LOOP_QUERY_LIMITS.sortsMax && first !== undefined;
+  const custom = query.customSort;
+  // With no field to sort by, a list that is code can still be sorted by code.
+  const codeAllowed = props.randomOrder === 'available';
+  const addable = !query.random && custom === undefined && query.sorts.length < LOOP_QUERY_LIMITS.sortsMax && (first !== undefined || codeAllowed);
+  // The sorts as code that orders the same way; a custom sort starts from it.
+  const toCustom = (): void => {
+    const itemPath = source === 'sanity' ? [] : (props.itemPath ?? ['data']);
+    const seed = query.sorts.length > 0 ? astroComparatorCode(query.sorts, itemPath) : '(a, b) => 0';
+    setOpen(undefined);
+    props.onChange({ ...query, sorts: [], random: false, customSort: seed });
+  };
   const add = (): void => {
-    const order = first === undefined ? undefined : sortOrderFor(first.kind);
-    if (first === undefined || order === undefined) {
+    if (first === undefined) {
+      toCustom();
+      setOpen(0);
+      return;
+    }
+    const order = sortOrderFor(first.kind, source);
+    if (order === undefined) {
       return;
     }
     props.onChange({ ...query, sorts: [...query.sorts, { field: first.path, direction: 'ascending', order }] });
@@ -84,6 +111,7 @@ function SortEditor(props: SortSectionProps) {
     // A shuffle runs in JS after the fetch, so a query kept in another file's
     // string cannot hold one.
     ...(props.randomOrder === 'available' ? [{ value: RANDOM_FIELD, label: 'Random order', icon: <RepeatIcon size={13} /> }] : []),
+    ...(props.randomOrder === 'available' ? [{ value: CUSTOM_FIELD, label: 'Custom code', icon: <CodeIcon size={13} /> }] : []),
   ];
   return (
     <div className="loop-settings-section">
@@ -94,9 +122,17 @@ function SortEditor(props: SortSectionProps) {
         addable={addable}
         onAdd={add}
       />
-      {(query.random || query.sorts.length > 0) && (
+      {(query.random || query.sorts.length > 0 || custom !== undefined) && (
         <div className="loop-settings-list">
           {query.random && <RandomRow onRemove={() => props.onChange({ ...query, random: false })} />}
+          {custom !== undefined && (
+            <CustomSortRow
+              code={custom}
+              open={open === 0}
+              onToggle={() => setOpen(open === 0 ? undefined : 0)}
+              onChange={(customSort) => props.onChange({ ...query, customSort })}
+            />
+          )}
           {!query.random &&
             query.sorts.map((sort, index) => (
               // The first sort decides the order, the next breaks its ties, so
@@ -104,11 +140,13 @@ function SortEditor(props: SortSectionProps) {
               <div key={`${index}:${sort.field}`} {...reorder.rowProps(index)} className={`loop-settings-sortable ${reorder.rowClass(index)}`}>
                 <SortChip
                   sort={sort}
+                  source={source}
                   fields={fields}
                   fieldOptions={fieldOptions}
                   open={open === index}
                   onToggle={() => setOpen(open === index ? undefined : index)}
                   onRandom={() => props.onChange({ ...query, random: true, sorts: [] })}
+                  onCustom={toCustom}
                   onChange={(next) => replace(index, next)}
                 />
               </div>
@@ -116,6 +154,38 @@ function SortEditor(props: SortSectionProps) {
         </div>
       )}
     </div>
+  );
+}
+
+// A sort as code: the comparator, edited in a code box; removing it returns
+// the list to its source's own order.
+function CustomSortRow(props: {
+  readonly code: string;
+  readonly open: boolean;
+  readonly onToggle: () => void;
+  readonly onChange: (code: string | undefined) => void;
+}) {
+  const firstLine = props.code.split('\n')[0] ?? props.code;
+  return (
+    <ListRow
+      parts={{ lead: 'Custom code', rest: firstLine }}
+      open={props.open}
+      removeLabel="Remove sort"
+      editor={
+        <div className="loop-settings-editor">
+          <CodeBox
+            value={props.code}
+            label="Sort code"
+            placeholder="(a, b) => a.data.order - b.data.order"
+            charsMax={LOOP_QUERY_LIMITS.customCodeCharsMax}
+            check={customSortProblem}
+            onCommit={props.onChange}
+          />
+        </div>
+      }
+      onToggle={props.onToggle}
+      onRemove={() => props.onChange(undefined)}
+    />
   );
 }
 
@@ -135,26 +205,44 @@ function RandomRow(props: { readonly onRemove: () => void }) {
 
 function SortChip(props: {
   readonly sort: LoopSort;
+  readonly source: LoopSourceKind;
   readonly fields: readonly CatalogField[] | undefined;
   readonly fieldOptions: readonly DropdownOption<string>[];
   readonly open: boolean;
   readonly onToggle: () => void;
   readonly onRandom: () => void;
+  readonly onCustom: () => void;
   readonly onChange: (sort: LoopSort | undefined) => void;
 }) {
   const { sort } = props;
-  const labels = orderLabels(sort.order);
   const changeField = (path: string): void => {
     if (path === RANDOM_FIELD) {
       props.onRandom();
       return;
     }
+    if (path === CUSTOM_FIELD) {
+      props.onCustom();
+      return;
+    }
     const field = fieldNamed(props.fields, path);
-    const order = field === undefined ? undefined : sortOrderFor(field.kind);
+    const orders = field === undefined ? [] : sortOrdersFor(field.kind, props.source);
+    // A field that sorts the same way keeps the order; another takes its own default.
+    const order = orders.includes(sort.order) ? sort.order : orders[0];
     if (order !== undefined) {
       props.onChange({ field: path, direction: sort.direction, order });
     }
   };
+  const field = fieldNamed(props.fields, sort.field);
+  const offered = field === undefined ? [] : sortOrdersFor(field.kind, props.source);
+  // A sort read from code keeps its order even when the field's kind no longer offers it.
+  const orders: readonly LoopSortOrder[] = offered.includes(sort.order) ? offered : [sort.order, ...offered];
+  const orderOptions = orders.flatMap((order) => {
+    const labels = orderLabels(order);
+    return [
+      { value: orderKey(order, 'ascending'), label: labels.ascending },
+      { value: orderKey(order, 'descending'), label: labels.descending },
+    ];
+  });
   return (
     <>
       <ListRow
@@ -178,15 +266,12 @@ function SortChip(props: {
               />
             </EditorRow>
             <EditorRow label="Order">
-              <Dropdown<'ascending' | 'descending'>
+              <Dropdown<OrderKey>
                 livePreview={false}
-                value={sort.direction}
+                value={orderKey(sort.order, sort.direction)}
                 ariaLabel="Order"
-                options={[
-                  { value: 'ascending', label: labels.ascending },
-                  { value: 'descending', label: labels.descending },
-                ]}
-                onChange={(direction) => props.onChange({ ...sort, direction })}
+                options={orderOptions}
+                onChange={(key) => props.onChange({ ...sort, ...orderOf(key, orders) })}
               />
             </EditorRow>
           </div>
@@ -196,6 +281,20 @@ function SortChip(props: {
       />
     </>
   );
+}
+
+// The Order menu lists each way the field sorts, in both directions, as one choice.
+type OrderKey = `${LoopSortOrder}:${LoopSort['direction']}`;
+
+function orderKey(order: LoopSortOrder, direction: LoopSort['direction']): OrderKey {
+  return `${order}:${direction}`;
+}
+
+function orderOf(key: OrderKey, orders: readonly LoopSortOrder[]): Pick<LoopSort, 'order' | 'direction'> {
+  const found = orders.find((order) => key === orderKey(order, 'ascending') || key === orderKey(order, 'descending'));
+  // Every key the menu offers names one of the orders it was built from.
+  assert(found !== undefined, 'An order choice names an offered order');
+  return { order: found, direction: key.endsWith(':descending') ? 'descending' : 'ascending' };
 }
 
 // ---------------------------------------------------------------------------

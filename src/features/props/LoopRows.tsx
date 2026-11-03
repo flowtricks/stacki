@@ -5,6 +5,7 @@
 import { useCallback, useLayoutEffect, useState } from 'react';
 import type { ReactNode, RefCallback } from 'react';
 import Popup from '../../ui/Popup';
+import AutoTextarea from '../../ui/AutoTextarea';
 import { dataPickerPosition } from './dataPickerPosition';
 import type { FieldPosition } from './bindingTypes';
 import {
@@ -168,6 +169,62 @@ export function fieldIcon(kind: LoopFieldKind): ReactNode {
       return exhaustive;
     }
   }
+}
+
+/**
+ * Code typed for a filter or a sort that no menu can say. It is written when
+ * the box is left or ⌘↵ is pressed, and only once `check` accepts it, so code
+ * that does not parse never reaches the page; until then the reason shows.
+ */
+export function CodeBox(props: {
+  readonly value: string;
+  readonly label: string;
+  readonly placeholder: string;
+  readonly charsMax: number;
+  readonly check: (code: string) => string | undefined;
+  readonly onCommit: (code: string) => void;
+}) {
+  const [draft, setDraft] = useState(props.value);
+  const [problem, setProblem] = useState<string | undefined>(undefined);
+  const commit = (): void => {
+    const code = draft.trim();
+    if (code === props.value.trim()) {
+      setProblem(undefined);
+      return;
+    }
+    const found = props.check(code);
+    setProblem(found);
+    if (found === undefined) {
+      props.onCommit(code);
+    }
+  };
+  return (
+    <div className="loop-settings-code">
+      <AutoTextarea
+        value={draft}
+        aria-label={props.label}
+        aria-invalid={problem !== undefined}
+        placeholder={props.placeholder}
+        maxLength={props.charsMax}
+        spellCheck={false}
+        minRows={2}
+        heightPxMax={200}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            commit();
+          }
+        }}
+      />
+      {problem !== undefined && (
+        <span className="loop-settings-code-problem" role="alert">
+          {problem}
+        </span>
+      )}
+    </div>
+  );
 }
 
 export function EditorRow(props: { readonly label: string; readonly dot?: ReactNode; readonly children: ReactNode }) {

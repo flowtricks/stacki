@@ -7,14 +7,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode, RefCallback } from 'react';
 import useListReorder from '../../ui/useListReorder';
-import { DragIcon, SearchIcon, TrashIcon } from '../../ui/Icons';
+import { CheckIcon, DragIcon, ElementImageIcon, SearchIcon, TrashIcon } from '../../ui/Icons';
+import AssetThumb from '../../ui/AssetThumb';
+import { useAssetEntries } from '../../ui/AssetField';
+import type { WireAssetEntry } from '../../../shared/ipc/ipcResults';
 import { assert } from '../../../shared/core/assert';
 import { LOOP_QUERY_LIMITS, type LoopQuery } from '../../editor/loopQuery';
 import type { LoopCatalog } from './loopCatalog';
 import { RowPopup, SectionHeader } from './LoopRows';
 import { SettingDot, type BindingContext, type DraftEditor } from './LoopBinding';
 import { LinkedSetting } from './LoopLinked';
-import { loadItems, type PickableItem } from './loopSettingsData';
+import { loadItems, type ItemPicture, type PickableItem } from './loopSettingsData';
 
 const PICKER_HEIGHT_PX_MAX = 380;
 
@@ -60,7 +63,10 @@ function ItemsEditor(props: ItemsSectionProps & { readonly dot?: ReactNode }) {
     // A drop back in its own place changes nothing, so writes nothing.
     onMove: (source, target) => (staysPut(source, target) ? undefined : write(moved(selection, source, target))),
   });
-  const titleOf = (id: string): string | undefined => items?.find((item) => item.id === id)?.title;
+  const itemOf = (id: string): PickableItem | undefined => items?.find((item) => item.id === id);
+  const pictures = (items ?? []).some((item) => item.picture !== undefined);
+  const files = useProjectFiles(props.projectPath ?? '');
+  const thumb = (picture: ItemPicture | undefined): ReactNode => <ItemThumb picture={picture} file={fileOf(files, picture)} pictures={pictures} />;
   return (
     <div className="loop-settings-section">
       <div ref={attachHeader}>
@@ -78,8 +84,9 @@ function ItemsEditor(props: ItemsSectionProps & { readonly dot?: ReactNode }) {
             <PickedRow
               key={id}
               id={id}
-              title={titleOf(id) ?? (items === undefined ? id : `${id} (not found)`)}
-              found={titleOf(id) !== undefined}
+              title={itemOf(id)?.title ?? (items === undefined ? id : `${id} (not found)`)}
+              found={itemOf(id) !== undefined}
+              thumb={thumb(itemOf(id)?.picture)}
               row={reorder.rowProps(index)}
               rowClass={reorder.rowClass(index)}
               onRemove={() => write(selection.filter((picked) => picked !== id))}
@@ -89,11 +96,64 @@ function ItemsEditor(props: ItemsSectionProps & { readonly dot?: ReactNode }) {
       )}
       {picking && (
         <RowPopup anchor={header} heightPxMax={PICKER_HEIGHT_PX_MAX} label="Select items" onClose={() => setPicking(false)}>
-          <ItemPicker items={items} selection={selection} onChange={write} />
+          <ItemPicker items={items} selection={selection} pictures={pictures} thumb={thumb} onChange={write} />
         </RowPopup>
       )}
     </div>
   );
+}
+
+type ProjectFile = Extract<WireAssetEntry, { readonly isDir: false }>;
+
+// The project's files by path, read once for the section: an Astro entry's
+// picture is one of them, drawn with the Assets panel's own thumbnail.
+function useProjectFiles(projectPath: string): ReadonlyMap<string, ProjectFile> {
+  const entries = useAssetEntries(projectPath);
+  return useMemo(() => new Map(entries.flatMap((entry) => (entry.isDir ? [] : [[entry.rel, entry] as const]))), [entries]);
+}
+
+function fileOf(files: ReadonlyMap<string, ProjectFile>, picture: ItemPicture | undefined): ProjectFile | undefined {
+  return picture?.kind === 'file' ? files.get(picture.file) : undefined;
+}
+
+// An item's first picture, or, beside items that have one, a grey square that
+// keeps the names lined up.
+function ItemThumb(props: { readonly picture: ItemPicture | undefined; readonly file: ProjectFile | undefined; readonly pictures: boolean }) {
+  if (props.picture?.kind === 'url') {
+    return (
+      <span className="loop-settings-thumb">
+        <img src={thumbnailURL(props.picture.url)} alt="" loading="lazy" draggable={false} />
+      </span>
+    );
+  }
+  if (props.file !== undefined) {
+    return <AssetThumb file={props.file} className="loop-settings-thumb" />;
+  }
+  if (!props.pictures) {
+    return undefined;
+  }
+  return (
+    <span className="loop-settings-thumb is-placeholder">
+      <ElementImageIcon size={12} />
+    </span>
+  );
+}
+
+// A Sanity CDN image asks for a thumbnail's size rather than the original.
+function thumbnailURL(url: string): string {
+  let address: URL;
+  try {
+    address = new URL(url); // The document list parsed it as https already.
+  } catch {
+    return url;
+  }
+  if (address.hostname !== 'cdn.sanity.io') {
+    return url;
+  }
+  address.searchParams.set('w', '96');
+  address.searchParams.set('h', '96');
+  address.searchParams.set('fit', 'crop');
+  return address.toString();
 }
 
 // A picked item: its grip and remove button show on hover; the row drags.
@@ -101,6 +161,7 @@ function PickedRow(props: {
   readonly id: string;
   readonly title: string;
   readonly found: boolean;
+  readonly thumb: ReactNode;
   readonly row: ReturnType<ReturnType<typeof useListReorder>['rowProps']>;
   readonly rowClass: string;
   readonly onRemove: () => void;
@@ -110,6 +171,7 @@ function PickedRow(props: {
       <span className="loop-settings-item-drag" aria-hidden="true">
         <DragIcon size={12} />
       </span>
+      {props.thumb}
       <span className={`loop-settings-picked-title${props.found ? '' : ' missing'}`} title={props.id}>
         {props.title}
       </span>
@@ -125,6 +187,8 @@ function PickedRow(props: {
 function ItemPicker(props: {
   readonly items: readonly PickableItem[] | undefined;
   readonly selection: readonly string[];
+  readonly pictures: boolean;
+  readonly thumb: (picture: ItemPicture | undefined) => ReactNode;
   readonly onChange: (selection: readonly string[]) => void;
 }) {
   const [search, setSearch] = useState('');
@@ -156,11 +220,12 @@ function ItemPicker(props: {
         <div className="loop-settings-empty">Loading items…</div>
       ) : (
         <>
-          <label className="loop-settings-picker-row all">
+          <label className={`loop-settings-picker-row all${allShown ? ' chosen' : ''}`}>
             <input type="checkbox" checked={allShown} disabled={shown.length === 0} onChange={toggleAll} />
-            <span>Select all</span>
+            <span className="loop-settings-picker-title">Select all</span>
+            <PickerCheck checked={allShown} />
           </label>
-          <PickerList shown={shown} chosen={chosen} searching={search !== ''} onToggle={toggle} />
+          <PickerList shown={shown} chosen={chosen} searching={search !== ''} pictures={props.pictures} thumb={props.thumb} onToggle={toggle} />
         </>
       )}
     </div>
@@ -171,18 +236,34 @@ function PickerList(props: {
   readonly shown: readonly PickableItem[];
   readonly chosen: ReadonlySet<string>;
   readonly searching: boolean;
+  readonly pictures: boolean;
+  readonly thumb: (picture: ItemPicture | undefined) => ReactNode;
   readonly onToggle: (id: string) => void;
 }) {
   return (
     <div className="loop-settings-picker-list">
-      {props.shown.map((item) => (
-        <label key={item.id} className="loop-settings-picker-row">
-          <input type="checkbox" checked={props.chosen.has(item.id)} onChange={() => props.onToggle(item.id)} />
-          <span>{item.title}</span>
-        </label>
-      ))}
+      {props.shown.map((item) => {
+        const checked = props.chosen.has(item.id);
+        return (
+          <label key={item.id} className={`loop-settings-picker-row${checked ? ' chosen' : ''}${props.pictures ? ' pictured' : ''}`}>
+            <input type="checkbox" checked={checked} onChange={() => props.onToggle(item.id)} />
+            {props.thumb(item.picture)}
+            <span className="loop-settings-picker-title">{item.title}</span>
+            <PickerCheck checked={checked} />
+          </label>
+        );
+      })}
       {props.shown.length === 0 && <div className="loop-settings-empty">{props.searching ? 'No items match.' : 'This collection has no items.'}</div>}
     </div>
+  );
+}
+
+// The check ends the row, as a menu's does, so pictures and names line up on the left.
+function PickerCheck(props: { readonly checked: boolean }) {
+  return (
+    <span className="loop-settings-picker-check" aria-hidden="true">
+      {props.checked && <CheckIcon size={12} />}
+    </span>
   );
 }
 

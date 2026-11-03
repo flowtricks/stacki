@@ -22,6 +22,8 @@ export const LOOP_QUERY_LIMITS = {
   projectionCharsMax: 20_000,
   collectionCharsMax: 128,
   selectionMax: 200,
+  /** Custom code typed for a filter or a sort: a few lines, never a program. */
+  customCodeCharsMax: 2_000,
   itemIdCharsMax: 256,
 } as const;
 
@@ -91,7 +93,17 @@ export type LoopCondition =
 
 export type LoopTestCondition = Extract<LoopCondition, { readonly kind: 'test' }>;
 
-export type LoopSortOrder = 'text' | 'number' | 'date' | 'boolean';
+/**
+ * How a sort key compares two items. The first four compare a field's value
+ * the way its type does. The rest compare something about the value, and are
+ * written in JavaScript after the fetch: text with its numbers in order
+ * ("Staff 2" before "Staff 10"), text by its length, a list by how many items
+ * it holds, and an Astro image by the size of its file on disk.
+ */
+export type LoopSortOrder = 'text' | 'number' | 'date' | 'boolean' | 'natural' | 'length' | 'count' | 'fileSize';
+
+/** The orders GROQ's `order()` can say; a Sanity query sorts only by these. */
+const GROQ_ORDERS: readonly LoopSortOrder[] = ['text', 'number', 'date', 'boolean'];
 
 export interface LoopSort {
   readonly field: string;
@@ -126,6 +138,12 @@ export interface LoopQuery {
    * and limit (a builder's "Selected" list). Absent is a dynamic list.
    */
   readonly selection?: readonly string[] | undefined;
+  /**
+   * A sort written as code, kept verbatim in place of sort keys: a comparator,
+   * `(a, b) => …`, run after the items are read. What a person or an AI wrote
+   * that no sort key can say still shows, and stays editable, as code.
+   */
+  readonly customSort?: string | undefined;
 }
 
 const FIELD_SEGMENT = /^[A-Za-z_$][\w$-]*$/;
@@ -161,27 +179,44 @@ export function operatorsFor(kind: LoopFieldKind): readonly LoopOperator[] {
   }
 }
 
-/** How values of a kind sort, or undefined when they don't sort meaningfully. */
-export function sortOrderFor(kind: LoopFieldKind): LoopSortOrder | undefined {
-  switch (kind) {
-    case 'text':
-      return 'text';
-    case 'number':
-      return 'number';
-    case 'date':
-      return 'date';
-    case 'boolean':
-      return 'boolean';
-    case 'list':
-    case 'reference':
-    case 'image':
-    case 'other':
-      return undefined;
-    default: {
-      const exhaustive: never = kind;
-      return exhaustive;
+/** How values of a kind sort by default, or undefined when they don't sort at all. */
+export function sortOrderFor(kind: LoopFieldKind, source: LoopSourceKind = 'astro'): LoopSortOrder | undefined {
+  return sortOrdersFor(kind, source)[0];
+}
+
+/**
+ * Every way a field of a kind can sort, the default first. A Sanity query
+ * sorts in GROQ, which compares values only; the orders that measure a value
+ * are JavaScript, offered for Astro collections. A file's size is read from
+ * disk while the page renders, which a static page does at build time.
+ */
+export function sortOrdersFor(kind: LoopFieldKind, source: LoopSourceKind): readonly LoopSortOrder[] {
+  const orders = ((): readonly LoopSortOrder[] => {
+    switch (kind) {
+      case 'text':
+        return ['text', 'natural', 'length'];
+      case 'number':
+        return ['number'];
+      case 'date':
+        return ['date'];
+      case 'boolean':
+        return ['boolean'];
+      case 'list':
+        return ['count'];
+      case 'image':
+        return ['fileSize'];
+      case 'reference':
+      case 'other':
+        return [];
+      default: {
+        const exhaustive: never = kind;
+        return exhaustive;
+      }
     }
-  }
+  })();
+  const offered = source === 'sanity' ? orders.filter((order) => GROQ_ORDERS.includes(order)) : orders;
+  assert(offered.length <= orders.length, 'A source offers a subset of the orders');
+  return offered;
 }
 
 /** A query with nothing narrowed: every item, in the source's own order. */
@@ -231,8 +266,18 @@ export function assertLoopQuery(query: LoopQuery): void {
   for (const condition of query.conditions) {
     assertCondition(condition);
   }
+  if (query.customSort !== undefined) {
+    assert(query.customSort.trim().length > 0, 'A custom sort holds code');
+    assert(query.customSort.length <= LOOP_QUERY_LIMITS.customCodeCharsMax, 'A custom sort is bounded');
+    assert(query.sorts.length === 0, 'A custom sort replaces the sort keys');
+    assert(!query.random, 'A custom sort is not a shuffle');
+  }
   for (const sort of query.sorts) {
     assertFieldPath(sort.field);
+    if (query.source.kind === 'sanity') {
+      // Paired with sortOrdersFor: GROQ cannot measure a value.
+      assert(GROQ_ORDERS.includes(sort.order), 'A Sanity query sorts by values GROQ compares');
+    }
   }
 }
 
@@ -249,6 +294,7 @@ function assertSelection(query: LoopQuery): void {
   assert(!query.random, 'A selected list is not shuffled');
   assert(query.offset === 0, 'A selected list skips nothing');
   assert(query.limit === undefined, 'A selected list has no limit');
+  assert(query.customSort === undefined, 'A selected list keeps its picked order');
   for (const id of selection) {
     assert(isItemId(id), 'A selected item is named by an id');
   }
@@ -267,7 +313,7 @@ function idsCode(ids: readonly string[]): string {
 function assertCondition(condition: LoopCondition): void {
   if (condition.kind === 'custom') {
     assert(condition.code.trim().length > 0, 'A custom condition holds code');
-    assert(condition.code.length <= LOOP_QUERY_LIMITS.valueCharsMax * 4, 'A custom condition is bounded');
+    assert(condition.code.length <= LOOP_QUERY_LIMITS.customCodeCharsMax, 'A custom condition is bounded');
     return;
   }
   assertFieldPath(condition.field);
@@ -373,7 +419,7 @@ export function astroQueryCode(query: LoopQuery, reader = 'getCollection'): stri
   }
   const filter = astroFilterCode(query);
   const read = `await ${reader}(${jsString(query.source.collection)}${filter === undefined ? '' : `, ${filter}`})`;
-  const sort = query.random ? `.sort(() => Math.random() - 0.5)` : query.sorts.length > 0 ? `.sort(${astroComparatorCode(query.sorts)})` : '';
+  const sort = sortStepCode(query, ['data']);
   const slice = sliceCode(query.offset, query.limit);
   const code = sort === '' && slice === '' ? read : `(${read})${sort}${slice}`;
   assert(code.startsWith('await') || code.startsWith('(await'), 'An Astro query awaits its collection');
@@ -402,7 +448,7 @@ export function chainQueryCode(query: LoopQuery, list: string, itemPath: readonl
   const joiner = query.match === 'all' ? ' && ' : ' || ';
   const filter =
     query.conditions.length === 0 ? '' : `.filter((${name}) => ${query.conditions.map((condition) => astroConditionCode(condition, base)).join(joiner)})`;
-  const sort = query.random ? '.sort(() => Math.random() - 0.5)' : query.sorts.length > 0 ? `.sort(${astroComparatorCode(query.sorts, itemPath)})` : '';
+  const sort = sortStepCode(query, itemPath);
   const code = `[...${list.trim()}]${filter}${sort}${sliceCode(query.offset, query.limit)}`;
   assert(code.startsWith('[...'), 'A kept list is copied');
   return code;
@@ -486,7 +532,21 @@ function groupedCode(code: string): string {
   return /\|\||&&|\?/.test(trimmed) ? `(${trimmed})` : trimmed;
 }
 
-function astroComparatorCode(sorts: readonly LoopSort[], itemPath: readonly string[] = ['data']): string {
+// The `.sort(…)` a JavaScript list takes: a shuffle, the code a custom sort
+// holds, or a comparator over the sort keys; none for the source's own order.
+function sortStepCode(query: LoopQuery, itemPath: readonly string[]): string {
+  if (query.random) {
+    return '.sort(() => Math.random() - 0.5)';
+  }
+  if (query.customSort !== undefined) {
+    return `.sort(${query.customSort.trim()})`;
+  }
+  return query.sorts.length > 0 ? `.sort(${astroComparatorCode(query.sorts, itemPath)})` : '';
+}
+
+/** The sort keys as one comparator over items that hold their fields under
+ * `itemPath`: what a custom sort starts from when the keys are turned into code. */
+export function astroComparatorCode(sorts: readonly LoopSort[], itemPath: readonly string[] = ['data']): string {
   assert(sorts.length > 0, 'A comparator compares by at least one key');
   const keys = sorts.map((sort) => {
     const [first, second] = sort.direction === 'ascending' ? ['a', 'b'] : ['b', 'a'];
@@ -512,11 +572,33 @@ function comparison(sort: LoopSort, left: string, right: string): string {
     case 'boolean':
       // Off (false or unset) before on, as a builder's switch sort has it.
       return `Number(${leftValue} === true) - Number(${rightValue} === true)`;
+    case 'natural':
+      // Numbers inside the text compare as numbers, and case is ignored.
+      return `String(${leftValue} ?? '').localeCompare(String(${rightValue} ?? ''), undefined, { numeric: true, sensitivity: 'base' })`;
+    case 'length':
+      return `String(${leftValue} ?? '').length - String(${rightValue} ?? '').length`;
+    case 'count':
+      return `(${leftValue}?.length ?? 0) - (${rightValue}?.length ?? 0)`;
+    case 'fileSize':
+      return `${fileSizeCode(leftValue)} - ${fileSizeCode(rightValue)}`;
     default: {
       const exhaustive: never = sort.order;
       return exhaustive;
     }
   }
+}
+
+/**
+ * The size in bytes of an Astro image's file, or 0. Astro gives an imported
+ * image a hidden `fsPath`; Node's file system is reached without an import
+ * (`process.getBuiltinModule`), so the query needs nothing added to the
+ * frontmatter, and where there is no file system, a missing file, or no image,
+ * the size is 0: the sort never throws while the page renders.
+ */
+function fileSizeCode(image: string): string {
+  const code = `(globalThis.process?.getBuiltinModule?.('node:fs')?.statSync(${image}?.fsPath ?? '', { throwIfNoEntry: false })?.size ?? 0)`;
+  assert(code.includes(image), 'A file size is read from its image');
+  return code;
 }
 
 function sliceCode(offset: number, limit: number | undefined): string {
@@ -526,12 +608,15 @@ function sliceCode(offset: number, limit: number | undefined): string {
   return offset > 0 ? `.slice(${offset})` : '';
 }
 
-/** `data.title`, or `data["campus-name"]` for a name that is not an identifier. */
+/** `data.title`, `data.Picture?.width` for a nested field, or `data["campus-name"]` for a name that is not an identifier. */
 export function fieldAccess(base: string, path: string): string {
   assertFieldPath(path);
   let code = base;
-  for (const segment of path.split('.')) {
-    code += /^[A-Za-z_$][\w$]*$/.test(segment) ? `.${segment}` : `[${jsString(segment)}]`;
+  // A nested field is read past a missing parent (`data.Picture?.width`): an
+  // item without the parent compares as having no value, never throws.
+  for (const [index, segment] of path.split('.').entries()) {
+    const step = index === 0 ? '' : '?.';
+    code += /^[A-Za-z_$][\w$]*$/.test(segment) ? `${index === 0 ? '.' : step}${segment}` : `${step}[${jsString(segment)}]`;
   }
   assert(code.startsWith(base), 'A field is read from its base');
   return code;
@@ -613,7 +698,9 @@ export function groqQueryText(query: LoopQuery, fields: readonly LoopField[]): s
   // query returns every match and the slice is taken from the shuffled list.
   const sorted = !query.random && query.sorts.length > 0;
   const order = sorted ? ` | order(${query.sorts.map((sort) => `${sort.field} ${sort.direction === 'ascending' ? 'asc' : 'desc'}`).join(', ')})` : '';
-  const slice = query.random ? '' : groqSlice(query.offset, query.limit);
+  // A custom sort, like a shuffle, runs on the fetched list: so does its slice.
+  const afterFetch = query.random || query.customSort !== undefined;
+  const slice = afterFetch ? '' : groqSlice(query.offset, query.limit);
   const projection = query.projection ?? defaultProjection(fields);
   const text = `*[${type}${narrowed}]${order}${slice}${projection === '' ? '' : ` ${projection}`}`;
   assert(text.startsWith('*['), 'A GROQ query starts from every document');
@@ -632,7 +719,8 @@ export function sanityQueryCode(query: LoopQuery, fields: readonly LoopField[], 
     const ids = idsCode(query.selection);
     return `(${fetch}).sort((a, b) => ${ids}.indexOf(a._id) - ${ids}.indexOf(b._id))`;
   }
-  const code = query.random ? `(${fetch}).sort(() => Math.random() - 0.5)${sliceCode(query.offset, query.limit)}` : fetch;
+  const afterFetch = query.random || query.customSort !== undefined;
+  const code = afterFetch ? `(${fetch})${sortStepCode(query, [])}${sliceCode(query.offset, query.limit)}` : fetch;
   assert(code.includes(`${client}.fetch(`), 'A Sanity query fetches through its client');
   return code;
 }

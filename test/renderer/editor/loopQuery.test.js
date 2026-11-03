@@ -876,6 +876,14 @@ const sanityPicked = loopQuery.sanityQueryCode(
   'sanityClient',
 );
 assert.deepEqual(queryOf(read(`const x = ${sanityPicked};`, 'x', sanityImports)).selection, ['p2', 'p1']);
+// Switching to Selected writes a list with nothing picked (so Undo switches
+// back): read back, it is still a selection of that type, never a dynamic list.
+const sanityNone = loopQuery.sanityQueryCode({ ...loopQuery.emptyQuery({ kind: 'sanity', collection: 'pastor' }), selection: [] }, [], 'sanityClient');
+assert.deepEqual(queryOf(read(`const x = ${sanityNone};`, 'x', sanityImports)).selection, [], 'nothing picked from Sanity is still a selection');
+const chainNone = loopQuery.chainQueryCode({ ...loopQuery.emptyQuery({ kind: 'astro', collection: 'nav-links' }), selection: [] }, 'collections["nav-links"]', [
+  'fields',
+]);
+assert.deepEqual(readLoop({ frontmatter: collectionsCode + `const items1 = ${chainNone};`, imports: exportImports, data: 'items1' }).query.selection, []);
 const exportCurated = collectionsCode + 'const items1 = ["698c", "11ab"].map(id => collections["nav-links"].find(entry => entry.id === id)).filter(Boolean);';
 const curatedReading = readLoop({ frontmatter: exportCurated, imports: exportImports, data: 'items1' });
 assert.deepEqual(curatedReading.query.selection, ['698c', '11ab']);
@@ -915,3 +923,124 @@ assert.throws(() => loopQuery.astroQueryCode({ ...astroPicked, limit: 3 }), /A s
 assert.throws(() => loopQuery.astroQueryCode({ ...astroPicked, selection: ['a\nb'] }), /A selected item is named by an id/);
 
 console.log('selected items: ok');
+
+// --- Sorting by what a value measures ------------------------------------------
+// Text with its numbers in order, text by length, a list by its count, and an
+// image by its file's size are JavaScript the writer emits after the fetch;
+// each must read back as the same sort, with the field's kind not turning it
+// back into a plain one. GROQ cannot say them, so a Sanity query refuses them.
+{
+  const kinds = { title: 'text', tags: 'list', Picture: 'image' };
+  const fieldKind = (_source, path) => kinds[path] ?? 'number';
+  const measured = [
+    { field: 'title', direction: 'ascending', order: 'natural' },
+    { field: 'title', direction: 'descending', order: 'length' },
+    { field: 'tags', direction: 'descending', order: 'count' },
+    { field: 'Picture', direction: 'ascending', order: 'fileSize' },
+    { field: 'Picture.width', direction: 'descending', order: 'number' },
+  ];
+  for (const sort of measured) {
+    const query = { ...loopQuery.emptyQuery({ kind: 'astro', collection: 'team' }), sorts: [sort] };
+    const code = loopQuery.astroQueryCode(query);
+    parseExpression(code.replace(/^\(?await /, '('));
+    assert.deepEqual(queryOf(read(`const x = ${code};`, 'x', astroImports, fieldKind)).sorts, [sort], code);
+    const chained = loopQuery.chainQueryCode({ ...query, source: { kind: 'astro', collection: 'nav-links' } }, 'collections["nav-links"]', ['fields']);
+    assert.deepEqual(
+      readLoop({ frontmatter: collectionsCode + `const items1 = ${chained};`, imports: exportImports, data: 'items1', fieldKind }).query.sorts,
+      [sort],
+      chained,
+    );
+  }
+  // All four keys in one comparator, as ties broken in order.
+  const several = { ...loopQuery.emptyQuery({ kind: 'astro', collection: 'team' }), sorts: measured.slice(0, 3) };
+  assert.deepEqual(queryOf(read(`const x = ${loopQuery.astroQueryCode(several)};`, 'x', astroImports, fieldKind)).sorts, measured.slice(0, 3));
+  // A field that happens to be named length is a number, not a measure.
+  assert.deepEqual(queryOf(read("const x = (await getCollection('team')).sort((a, b) => a.data.tags.length - b.data.tags.length);", 'x')).sorts, [
+    { field: 'tags.length', direction: 'ascending', order: 'number' },
+  ]);
+  // The file size of a page with no file system, or no image, is 0: never a throw.
+  const sizeOf = new Function(
+    'image',
+    `return ${loopQuery
+      .astroQueryCode({ ...loopQuery.emptyQuery({ kind: 'astro', collection: 't' }), sorts: [measured[3]] })
+      .match(/\(globalThis[^]*?\?\? 0\)/)[0]
+      .replace('a.data.Picture', 'image')};`,
+  );
+  assert.equal(sizeOf(undefined), 0);
+  assert.equal(sizeOf({ fsPath: '/no/such/file.png' }), 0);
+  assert.ok(sizeOf({ fsPath: __filename }) > 0, 'a real file has its size');
+  assert.deepEqual(loopQuery.sortOrdersFor('text', 'astro'), ['text', 'natural', 'length']);
+  assert.deepEqual(loopQuery.sortOrdersFor('text', 'sanity'), ['text']);
+  assert.deepEqual(loopQuery.sortOrdersFor('image', 'sanity'), []);
+  assert.throws(
+    () => loopQuery.sanityQueryCode({ ...loopQuery.emptyQuery({ kind: 'sanity', collection: 'campus' }), sorts: [measured[0]] }, [], 'sanityClient'),
+    /A Sanity query sorts by values GROQ compares/,
+  );
+  // An image's width filters as a number, and an entry with no image is simply left out.
+  const wide = loopQuery.astroQueryCode({
+    ...loopQuery.emptyQuery({ kind: 'astro', collection: 'team' }),
+    conditions: [{ kind: 'test', field: 'Picture.width', operator: 'greater', value: 400 }],
+  });
+  const filter = new Function(`return ${wide.match(/\(\{ data \}\) => .*?(?=\))/)[0]};`)();
+  assert.equal(filter({ data: {} }), false, 'no picture: no width, no throw');
+  assert.equal(filter({ data: { Picture: { width: 800 } } }), true);
+  assert.deepEqual(queryOf(read(`const x = ${wide};`, 'x')).conditions, [{ kind: 'test', field: 'Picture.width', operator: 'greater', value: 400 }]);
+  console.log('measured sorts: ok');
+}
+
+// --- Custom code: a filter or a sort no menu can say ------------------------------
+// Typed in the panel (or written by an AI), kept verbatim, and read back as the
+// same custom code rather than turning the whole list into uneditable code.
+{
+  const comparator = '(a, b) => (a.data.order ?? 99) - (b.data.order ?? 99) || a.id.localeCompare(b.id)';
+  const astro = { ...loopQuery.emptyQuery({ kind: 'astro', collection: 'team' }), customSort: comparator, limit: 3 };
+  const astroCode = loopQuery.astroQueryCode(astro);
+  const astroBack = queryOf(read(`const x = ${astroCode};`, 'x'));
+  assert.equal(astroBack.customSort, comparator, astroCode);
+  assert.deepEqual(astroBack.sorts, []);
+  assert.equal(astroBack.limit, 3);
+  // Reversing a custom sort is beyond the panel: the list stays code.
+  assert.notEqual(read(`const x = (await getCollection('team')).sort(${comparator}).reverse();`, 'x').kind, 'query');
+
+  const chainComparator = '(a, b) => a.fields.rank - b.fields.rank * 2';
+  const chained = loopQuery.chainQueryCode(
+    { ...loopQuery.emptyQuery({ kind: 'astro', collection: 'nav-links' }), customSort: chainComparator },
+    'collections["nav-links"]',
+    ['fields'],
+  );
+  assert.equal(
+    readLoop({ frontmatter: collectionsCode + `const items1 = ${chained};`, imports: exportImports, data: 'items1' }).query.customSort,
+    chainComparator,
+  );
+
+  // Sanity: the comparator runs on the fetched list, and so does the limit after it.
+  const sanity = { ...loopQuery.emptyQuery({ kind: 'sanity', collection: 'campus' }), customSort: '(a, b) => a.name.length - b.name.length * 2', limit: 4 };
+  const sanityCode = loopQuery.sanityQueryCode(sanity, [], 'sanityClient');
+  assert.match(sanityCode, /\.sort\(\(a, b\) => a\.name\.length - b\.name\.length \* 2\)\.slice\(0, 4\)$/);
+  assert.doesNotMatch(loopQuery.groqQueryText(sanity, []), /\[0\.\.\.4\]/, 'not sliced before the sort');
+  const sanityBack = queryOf(read(`const x = ${sanityCode};`, 'x', sanityImports));
+  assert.equal(sanityBack.customSort, sanity.customSort);
+  assert.equal(sanityBack.limit, 4);
+
+  // Custom filters: JavaScript over an entry's data, or a GROQ clause.
+  const filtered = { ...loopQuery.emptyQuery({ kind: 'astro', collection: 'team' }), conditions: [{ kind: 'custom', code: 'data.title.startsWith("S")' }] };
+  assert.deepEqual(queryOf(read(`const x = ${loopQuery.astroQueryCode(filtered)};`, 'x')).conditions, filtered.conditions);
+  const groqFiltered = { ...loopQuery.emptyQuery({ kind: 'sanity', collection: 'campus' }), conditions: [{ kind: 'custom', code: 'count(serviceTimes) > 1' }] };
+  assert.deepEqual(
+    queryOf(read(`const x = ${loopQuery.sanityQueryCode(groqFiltered, [], 'sanityClient')};`, 'x', sanityImports)).conditions,
+    groqFiltered.conditions,
+  );
+
+  // A custom sort replaces the keys and the shuffle, and a picked list keeps its order.
+  assert.throws(
+    () => loopQuery.astroQueryCode({ ...astro, sorts: [{ field: 'title', direction: 'ascending', order: 'text' }] }),
+    /A custom sort replaces the sort keys/,
+  );
+  assert.throws(() => loopQuery.astroQueryCode({ ...astro, random: true }), /A custom sort is not a shuffle/);
+  assert.throws(() => loopQuery.astroQueryCode({ ...astro, customSort: ' ' }), /A custom sort holds code/);
+  assert.throws(
+    () => loopQuery.astroQueryCode({ ...astro, customSort: 'x'.repeat(loopQuery.LOOP_QUERY_LIMITS.customCodeCharsMax + 1) }),
+    /A custom sort is bounded/,
+  );
+  console.log('custom code: ok');
+}
