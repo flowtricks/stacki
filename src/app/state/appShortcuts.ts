@@ -3,13 +3,19 @@
 // queries, and composing the node edits (App.tsx).
 
 import { useCallback, useEffect, useRef } from 'react';
+import { assert } from '../../../shared/core/assert';
+import { data, type Data } from '../../../shared/core/boundary';
 import type { ImportDecl } from '../../../shared/page/pageNode';
+import { loadCatalog } from '../../features/props/loopCatalog';
+import { loadSanitySample } from '../../features/props/loopSettingsData';
 import { insertTargetFor as placeInsert } from '../../editor/insertTarget';
 import { frontmatterGesture, insertGesture } from '../../editor/editGestures';
 import {
   collectionsInScope,
   type ImportedCall,
   importedCallsInScope,
+  sanityFetchesInScope,
+  type SanityFetch,
   markedQueries,
   QUERY_MARK,
   referencesInScope,
@@ -557,8 +563,10 @@ export function useSampleValues(coreState: ReturnType<typeof useCoreState>, rout
     if (!devUrl || devStatus !== 'on' || !project || !pagePath) {
       return undefined;
     }
-    const wanted = importedCallsInScope(pageFrontmatter, model?.imports ?? []).filter((call) => !(`${pagePath}|${call.name}` in valueSamples));
-    if (!wanted.length) {
+    const imports = model?.imports ?? [];
+    const wanted = importedCallsInScope(pageFrontmatter, imports).filter((call) => !(`${pagePath}|${call.name}` in valueSamples));
+    const fetches = sanityFetchesInScope(pageFrontmatter, imports).filter((fetch) => !(`${pagePath}|${fetch.name}` in valueSamples));
+    if (!wanted.length && !fetches.length) {
       return undefined;
     }
     let live = true;
@@ -572,7 +580,11 @@ export function useSampleValues(coreState: ReturnType<typeof useCoreState>, rout
       })
         .catch(() => undefined)
         .then((value) => [`${pagePath}|${call.name}`, value] as const);
-    void Promise.all(wanted.map(ask)).then((pairs) => {
+    // A Sanity query's documents, as one of them read through the CMS
+    // connection: a list of one, so a loop over the value offers its fields.
+    const fetched = fetches.length === 0 ? Promise.resolve([]) : sampleSanityFetches(project.path, pagePath, fetches);
+    void Promise.all([Promise.all(wanted.map(ask)), fetched]).then(([called, read]) => {
+      const pairs = [...called, ...read];
       if (live) {
         setValueSamples((previous) => ({ ...previous, ...Object.fromEntries(pairs) }));
       }
@@ -581,6 +593,23 @@ export function useSampleValues(coreState: ReturnType<typeof useCoreState>, rout
       live = false;
     };
   }, [devUrl, devStatus, project, pagePath, pageFrontmatter, model, valueSamples, setValueSamples]);
+}
+
+/** One document of each fetched Sanity type, keyed as useSampleValues stores
+ * values; a value with no connection or no document keeps `undefined`, so it
+ * is asked for once. */
+async function sampleSanityFetches(projectPath: string, pagePath: string, fetches: readonly SanityFetch[]): Promise<readonly (readonly [string, Data])[]> {
+  assert(fetches.length > 0, 'Only fetches are sampled');
+  const catalog = await loadCatalog(projectPath).catch(() => undefined);
+  const answers = await Promise.all(
+    fetches.map(async (fetch) => {
+      const sample = catalog === undefined ? undefined : await loadSanitySample(projectPath, catalog, fetch.type).catch(() => undefined);
+      // Field values come from the CMS: parsed as any sampled value is.
+      return [`${pagePath}|${fetch.name}`, sample === undefined ? undefined : data([sample])] as const;
+    }),
+  );
+  assert(answers.length === fetches.length, 'Every fetch has an answer');
+  return answers;
 }
 
 // Taking back queries the page stopped using.

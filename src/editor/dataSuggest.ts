@@ -34,6 +34,8 @@ export {
   collectionsInScope,
   type ImportedCall,
   importedCallsInScope,
+  type SanityFetch,
+  sanityFetchesInScope,
 } from './dataScope';
 
 export { sampleAt, sampleKey, type ReferenceNeed, referencesInScope, sampleKind, samplePreview, type TreeNode } from './dataSample';

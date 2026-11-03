@@ -274,6 +274,40 @@ export function importedCallsInScope(frontmatter: string | undefined, imports: r
   return calls;
 }
 
+/** A frontmatter value the file reads from Sanity by document type. */
+export interface SanityFetch {
+  /** The value's name: `campusEntries`. */
+  readonly name: string;
+  /** The document type its query reads: `campus`. */
+  readonly type: string;
+}
+
+// `await sanityClient.fetch('*[_type == "campus"] { … }')`, as the loop
+// settings write it, possibly wrapped to be sorted or sliced after the fetch:
+// `(await sanityClient.fetch(…)).sort(…)`. The query's own filters and
+// projection are not read; the type is what names its documents' fields.
+const SANITY_FETCH = /^\(?\s*await\s+([A-Za-z_$][\w$]*)\.fetch\(\s*(['"`])\*\[\s*_type\s*==\s*(['"])([A-Za-z_][\w.-]*)\3/;
+
+/**
+ * The values this file reads from Sanity with the `sanity:client` import. The
+ * dev server cannot sample them (its value route calls exports with no
+ * arguments), so the app samples one document of the type through the CMS
+ * connection: a loop over the value then offers its item's fields to bind.
+ */
+export function sanityFetchesInScope(frontmatter: string | undefined, imports: readonly ImportLike[]): SanityFetch[] {
+  const clients = new Set(imports.filter((entry) => entry.path === 'sanity:client' && entry.name !== undefined).map((entry) => entry.name));
+  const fetches: SanityFetch[] = [];
+  for (const [name, value] of parseDeclarations(frontmatter ?? '')) {
+    const match = SANITY_FETCH.exec(value.trim());
+    const client = match?.[1];
+    const type = match?.[4];
+    if (client !== undefined && type !== undefined && clients.has(client)) {
+      fetches.push({ name, type });
+    }
+  }
+  return fetches;
+}
+
 /** Which collections this file reads by name — what the app fetches a sample entry for. */
 export function collectionsInScope(frontmatter: string | undefined): string[] {
   const out = new Set<string>();

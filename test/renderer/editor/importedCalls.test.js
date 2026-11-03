@@ -6,7 +6,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const loadRenderer = require('../../helpers/rendererModule');
-const { dataTree, importedCallsInScope } = loadRenderer('src/editor/dataSuggest.ts');
+const { dataTree, importedCallsInScope, sanityFetchesInScope } = loadRenderer('src/editor/dataSuggest.ts');
 
 const FRONTMATTER = [
   "import { getCampusPastors, getSermons } from '@/sanity/queries.ts';",
@@ -46,4 +46,36 @@ test('the loop item over a sampled call shows each field with its value', () => 
   const unsampled = dataTree({ frontmatter: FRONTMATTER, imports: IMPORTS });
   const value = unsampled.find((node) => node.path === 'campusPastors');
   assert.equal(value.children, undefined, 'without a sample the value has no known fields');
+});
+
+// A loop over a Sanity query the loop settings wrote: `sanityClient.fetch(...)`
+// is a method call with an argument, so the dev server cannot sample it. Its
+// type is read instead, and one document of it stands for the list.
+const SANITY = [
+  "import { sanityClient } from 'sanity:client';",
+  'const campusEntries = await sanityClient.fetch(\'*[_type == "campus"] { ..., "image": image.asset->url }\'); // stacki:query',
+  'const shuffled = (await sanityClient.fetch(\'*[_type == "sermon"]\')).sort(() => Math.random() - 0.5);',
+  'const other = await client.fetch(\'*[_type == "campus"]\');',
+  'const counted = await sanityClient.fetch(\'count(*[_type == "campus"])\');',
+].join('\n');
+
+test('a Sanity query from sanity:client is sampled by its document type', () => {
+  const imports = [{ name: 'sanityClient', path: 'sanity:client' }];
+  assert.deepEqual(sanityFetchesInScope(SANITY, imports), [
+    { name: 'campusEntries', type: 'campus' },
+    { name: 'shuffled', type: 'sermon' },
+  ]);
+  assert.deepEqual(sanityFetchesInScope(SANITY, []), [], 'a client not imported from sanity:client is not asked for');
+  assert.deepEqual(sanityFetchesInScope(undefined, imports), []);
+  const tree = dataTree({
+    frontmatter: SANITY,
+    imports,
+    ancestorHeads: ['campusEntries.map((item) => ('],
+    valueSamples: { campusEntries: [{ name: 'St. Amant', address: '13423 LA-431' }] },
+  });
+  const item = tree.find((node) => node.path === 'item');
+  assert.deepEqual(
+    item?.children?.map((child) => child.path),
+    ['item.name', 'item.address'],
+  );
 });
