@@ -67,8 +67,9 @@ test('the complete channel inventory matches real main and terminal registration
   // Content collections in the CMS panel add two: their reads and their edits. A new
   // item's template (its collection's fields, edited before it is created) adds one.
   // The Selectors panel adds three: finding unused selectors, removing them, and
-  // restoring what a removal changed.
-  assert.equal(harness.handlers.size, 155);
+  // restoring what a removal changed. A gesture's several edits are written as
+  // one (page:editBatch), so the dev server never renders the page between them.
+  assert.equal(harness.handlers.size, 156);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name

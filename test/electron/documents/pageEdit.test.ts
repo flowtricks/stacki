@@ -18,7 +18,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { mainHarness } from '../../helpers/mainHarness.ts';
-import { parseEditRequest, type Edit, type NodeRef } from '#dist/shared/engine/editRequest.js';
+import { EDIT_BATCH_EDITS_MAX, parseEditBatchRequest, parseEditRequest, type Edit, type NodeRef } from '#dist/shared/engine/editRequest.js';
 import { parsePageDiskRead, parsePageEditResult, type PageDiskRead } from '#dist/shared/ipc/pageSave.js';
 import { parsePageNode, type PageNode } from '#dist/shared/page/pageNode.js';
 import { toUtf16Span } from '#dist/shared/core/span.js';
@@ -755,4 +755,87 @@ test("a page's opaque code stays intact around visual raw-node edits", async (co
     STYLED.replace('48px', '30px').replace('let count = 1', 'let count = 2'),
     'only the explicitly changed code value moved',
   );
+});
+
+// --- Batches (page:editBatch) ---------------------------------------------------------
+// A gesture's edits written as one: a loop and the query it reads, sent apart,
+// let the dev server render the page between them ("teamEntries is not
+// defined"). Each batch is checked on disk after the call: all of it, or none.
+
+async function batch(harness: Harness, file: string, authoredChecksum: string, edits: readonly Edit[]) {
+  return parsePageEditResult(await harness.invoke('page:editBatch', { pagePath: file, authoredChecksum, edits }));
+}
+
+test('parseEditBatchRequest takes two to sixteen edits and refuses every other shape', () => {
+  const one = { tag: 'remove-attribute', target: REF, name: 'title' };
+  const parsed = parseEditBatchRequest({ pagePath: '/p.astro', authoredChecksum: DIGEST, edits: [one, one] });
+  assert.equal(parsed.edits.length, 2);
+  assert.equal(
+    parseEditBatchRequest({ pagePath: '/p.astro', authoredChecksum: DIGEST, edits: Array(EDIT_BATCH_EDITS_MAX).fill(one) }).edits.length,
+    EDIT_BATCH_EDITS_MAX,
+  );
+  for (const [edits, message] of [
+    [jsonNull, /expected array/],
+    [{}, /expected array/],
+    [[], /at least two/],
+    [[one], /at least two/],
+    [Array(EDIT_BATCH_EDITS_MAX + 1).fill(one), /exceeds limit/],
+    [[one, { tag: 'nope' }], /unknown edit/],
+  ] as const) {
+    assert.throws(() => parseEditBatchRequest({ pagePath: '/p.astro', authoredChecksum: DIGEST, edits }), message);
+  }
+  assert.throws(() => parseEditBatchRequest({ pagePath: '/p.astro', edits: [one, one] }));
+  assert.throws(() => parseEditBatchRequest(jsonNull), /edit batch request object/);
+});
+
+test('a node edit and a frontmatter edit of one gesture land in one write', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  const text = "---\nimport Hero from '../components/Hero.astro';\n---\n<main>\n  <Hero />\n</main>\n";
+  fs.writeFileSync(file, text);
+  const page = await read(harness, file);
+  assert.ok(page.editable);
+  const imports = [...page.model.imports, { name: 'Card', path: '../components/Card.astro', quote: "'" }];
+  const writes: string[] = [];
+  const watcher = fs.watch(path.dirname(file), () => writes.push(fs.readFileSync(file, 'utf8')));
+  context.after(() => watcher.close());
+  const applied = await batch(harness, file, page.checksum, [
+    title(refAt(page, [0, 0]), 'New'),
+    { tag: 'set-frontmatter', model: { ...page.model, imports, nodes: [] } },
+  ]);
+  assert.ok(applied.ok, `the batch applies (${applied.ok ? '' : JSON.stringify(applied.error)})`);
+  const after =
+    "---\nimport Hero from '../components/Hero.astro';\nimport Card from '../components/Card.astro';\n---\n<main>\n  <Hero title=\"New\" />\n</main>\n";
+  assert.equal(fs.readFileSync(file, 'utf8'), after);
+  assert.equal(applied.value.checksum, sha256(after));
+  assert.equal(applied.value.source, after);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  // No reading of the file between the two edits: every observed state is the old page or the whole batch.
+  assert.ok(
+    writes.every((seen) => seen === text || seen === after || seen === ''),
+    JSON.stringify(writes),
+  );
+  const undone = await edit(harness, file, applied.value.checksum, { tag: 'revert', hunks: applied.value.inverse });
+  assert.ok(undone.ok, 'one revert undoes the whole batch');
+  assert.equal(fs.readFileSync(file, 'utf8'), text);
+});
+
+test('a batch with a refused edit, or against changed bytes, writes nothing', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  fs.writeFileSync(file, SIBLINGS);
+  const page = await read(harness, file);
+  const missing: NodeRef = { ...refAt(page, [2]), path: [9] };
+  const refused = await batch(harness, file, page.checksum, [title(refAt(page, [2]), 'New'), title(missing, 'Gone')]);
+  assert.ok(!refused.ok);
+  assert.equal(refused.error.code, 'rejected');
+  assert.equal(fs.readFileSync(file, 'utf8'), SIBLINGS, 'the first edit did not land alone');
+  fs.writeFileSync(file, SIBLINGS + '<p />\n');
+  const stale = await batch(harness, file, page.checksum, [title(refAt(page, [0]), 'A'), title(refAt(page, [2]), 'B')]);
+  assert.ok(!stale.ok);
+  assert.ok(stale.error.code === 'rejected');
+  assert.equal(stale.error.reason, 'anchor-moved');
+  assert.equal(fs.readFileSync(file, 'utf8'), SIBLINGS + '<p />\n');
 });

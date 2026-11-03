@@ -544,6 +544,7 @@ export interface IpcResults {
         readonly error: undefined | string;
       };
   readonly 'page:edit': WirePageEdit;
+  readonly 'page:editBatch': WirePageEdit;
   readonly 'page:importPathFor': {
     readonly relative: string;
     readonly srcRelative: undefined | string;

@@ -695,3 +695,52 @@ test('moveGesture: a note travels with its node, a ' + 'stale slot goes first, n
   assert.equal(Object.hasOwn(emptied.nodes[1], 'source'), false);
   assert.equal(model.nodes[1].source, '\n  <b>kept</b>\n', 'the old model keeps its own');
 });
+
+// A gesture of several requests goes as one batch (page:editBatch), so the dev
+// server never renders the page between them; a batch main refuses with the
+// page untouched falls back to sending them one at a time, and a batch that
+// may have landed is never sent again either way.
+async function batched(batchAnswer, answers = []) {
+  const step = record();
+  step.outcome = { tag: 'pending', waiting: 1, applied: [] };
+  const many = {
+    ...gesture(undefined, true),
+    request: () => [
+      { tag: 'remove-node', target: REF },
+      { tag: 'remove-node', target: REF },
+    ],
+  };
+  const origin = { checksum: sum(1), source: '', model: { imports: [], nodes: [] } };
+  const batches = [];
+  let single = 0;
+  const outcome = await edits.sendGesture({
+    path: '/p',
+    origin,
+    gesture: many,
+    record: step,
+    send: async () => answers[single++],
+    sendBatch: async (request) => {
+      batches.push(request);
+      return batchAnswer;
+    },
+  });
+  return { outcome, step, batches, single };
+}
+
+test('a gesture of several requests is written as one batch', async () => {
+  const one = await batched(PAGE_OK(sum(2)));
+  assert.equal(one.outcome.tag, 'applied');
+  assert.equal(one.batches.length, 1);
+  assert.equal(one.batches[0].edits.length, 2);
+  assert.equal(one.batches[0].authoredChecksum, sum(1));
+  assert.equal(one.single, 0, 'nothing went one at a time');
+  assert.deepEqual(one.step.outcome, { tag: 'applied', applied: [{ checksum: sum(2), inverse: [] }] });
+
+  const fallback = await batched(refusal('anchor-moved', sum(9)), [PAGE_OK(sum(2)), PAGE_OK(sum(3))]);
+  assert.equal(fallback.outcome.tag, 'applied');
+  assert.equal(fallback.single, 2, 'a refused batch is sent one at a time');
+
+  const unsure = await batched({ ok: false, error: { code: 'uncertain', message: 'maybe' } });
+  assert.equal(unsure.outcome.tag, 'uncertain');
+  assert.equal(unsure.single, 0, 'a batch that may have landed is never sent again');
+});

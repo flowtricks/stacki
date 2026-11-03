@@ -346,26 +346,11 @@ function stepIdle(state: ActorState, dependencies: ActorDependencies): ActorStep
     return reject(current, intent, planned.error, parses, earlier);
   }
   const plan = planned.value;
-  if (plan.splices.length > LIMITS.splicesPerIntentMax) {
-    return reject(current, intent, 'resource-limit', parses, earlier);
+  const checked = candidateOf(state.path, base, plan, dependencies.projector);
+  if (!checked.ok) {
+    return reject(current, intent, checked.error.reason, parses + checked.error.parses, earlier);
   }
-  if (!witnessesHold(base.bytes, plan.splices)) {
-    return reject(current, intent, 'region-externally-modified', parses, earlier);
-  }
-  const bytes = applySplices(base.bytes, plan.splices);
-  if (bytes.length > LIMITS.sourceBytesMax) {
-    return reject(current, intent, 'resource-limit', parses, earlier);
-  }
-  const candidate = dependencies.projector.candidate(state.path, base, plan, bytes);
-  assert(candidate.bytes === bytes, 'The candidate is the applied bytes');
-  if (plan.candidate === 'must-parse') {
-    if (candidate.projection.tag === 'parse-error') {
-      return reject(current, intent, 'source-invalid', parses + 1, earlier);
-    }
-    if (!postKindsHold(candidate, plan)) {
-      return reject(current, intent, 'unsupported-operation', parses + 1, earlier);
-    }
-  }
+  const candidate = checked.value;
   const phase: ActorPhase = { tag: 'planned', intent, base, plan, candidate };
   return { state: { ...current, phase }, effects: earlier, parses: parses + 1 };
 }
@@ -409,6 +394,44 @@ function staleWithoutBytes(intent: Intent): RejectionReason {
       return exhaustive;
     }
   }
+}
+
+/** The bytes `plan` leaves on `base`, checked as a write would check them
+ * (§5.2 steps 4–6): within the splice and size bounds, every witness still on
+ * `base`, and, where the plan says so, a candidate that parses with its targets'
+ * kinds intact. The actor's step and a batch planned in memory
+ * (electron/documents/editPreview.ts) share it, so a batch is held to exactly
+ * what each of its edits would be held to alone. `parses` counts the parse a
+ * refusal cost. */
+export function candidateOf(
+  path: FilePath,
+  base: Snapshot,
+  plan: Plan,
+  projector: Pick<ActorDependencies['projector'], 'candidate'>,
+): Result<Snapshot, { readonly reason: RejectionReason; readonly parses: 0 | 1 }> {
+  assert(base.path === path, 'A candidate is of the file its base is');
+  if (plan.splices.length > LIMITS.splicesPerIntentMax) {
+    return err({ reason: 'resource-limit', parses: 0 });
+  }
+  if (!witnessesHold(base.bytes, plan.splices)) {
+    return err({ reason: 'region-externally-modified', parses: 0 });
+  }
+  const bytes = applySplices(base.bytes, plan.splices);
+  if (bytes.length > LIMITS.sourceBytesMax) {
+    return err({ reason: 'resource-limit', parses: 0 });
+  }
+  const candidate = projector.candidate(path, base, plan, bytes);
+  assert(candidate.bytes === bytes, 'The candidate is the applied bytes');
+  if (plan.candidate === 'must-parse') {
+    if (candidate.projection.tag === 'parse-error') {
+      return err({ reason: 'source-invalid', parses: 1 });
+    }
+    if (!postKindsHold(candidate, plan)) {
+      return err({ reason: 'unsupported-operation', parses: 1 });
+    }
+  }
+  assert(candidate.path === path, 'The candidate is the same file');
+  return ok(candidate);
 }
 
 // The target is still there, with its expected kind (§5.2 step 6). Until step 8

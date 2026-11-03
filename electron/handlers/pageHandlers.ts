@@ -7,7 +7,7 @@ import { applyPageRename } from '../project/pageRenameWrite';
 // actor, and creating, moving and deleting pages, folders and dynamic routes.
 
 import { buildEdit } from '../documents/editRequests';
-import { previewEdit } from '../documents/editPreview';
+import { previewEdit, previewEdits } from '../documents/editPreview';
 import { createProjectText } from '../documents/documentWrites';
 import { sameFilesystemPath } from '../lib/platform';
 import { assert } from '../../shared/core/assert';
@@ -69,6 +69,42 @@ function registerPageReadHandlers({ ipcMain, documents, noteAppWrite }: Pick<Mai
     // A <style> edit reaches the canvas fresh on this one write: the preview
     // config compiles the file before Vite announces the new stylesheet
     // (avbRecompile in the generated avb-morph plugin).
+    noteAppWrite();
+    const reply = { ...parsePageSource(pagePath, text), checksum: report.checksum };
+    return { ok: true as const, ...reply, inverse: report.inverse };
+  });
+
+  // Several edits of one gesture, written once: a loop and the query it reads,
+  // sent apart, gave the dev server a page between them whose loop read a
+  // query not yet declared. They are planned in memory against the bytes the
+  // renderer read (editPreview.ts), each held to what its own write would be
+  // held to, and the result is written as one rewrite of those bytes. A page
+  // that changed since is refused untouched: the renderer then sends the edits
+  // one at a time, which rebase through outside writes.
+  ipcMain.handle('page:editBatch', async (_event, { pagePath, authoredChecksum, edits }) => {
+    const refused = (reason: RejectionReason, diskChecksum: Digest | undefined) => ({
+      ok: false as const,
+      error: pageEditError(pagePath, { tag: 'rejected', reason, message: describeRejection(reason), diskChecksum }),
+    });
+    const disk = documents.current(pagePath);
+    if (!disk.ok) {
+      return refused('write-failed', undefined);
+    }
+    if (disk.value.checksum !== authoredChecksum) {
+      return refused('anchor-moved', disk.value.checksum);
+    }
+    const planned = previewEdits(pagePath, disk.value.bytes, authoredChecksum, edits);
+    if (!planned.ok) {
+      return refused(planned.error, authoredChecksum);
+    }
+    const decoded = decodeUtf8(planned.value.bytes);
+    assert(decoded.ok, 'A plan of UTF-8 text is UTF-8');
+    const text = decoded.value;
+    const report = documents.writeText(pagePath, text, authoredChecksum);
+    if (report.tag !== 'applied') {
+      return { ok: false as const, error: pageEditError(pagePath, report) };
+    }
+    assert(report.checksum === planned.value.checksum, 'The batch wrote the bytes it planned');
     noteAppWrite();
     const reply = { ...parsePageSource(pagePath, text), checksum: report.checksum };
     return { ok: true as const, ...reply, inverse: report.inverse };

@@ -27,7 +27,7 @@
 // newest step; the older ones are `folded` into it.
 import { assert } from '../../shared/core/assert';
 import type { Digest } from '../../shared/core/brand';
-import type { Edit, EditRequest, NodeRef } from '../../shared/engine/editRequest';
+import { EDIT_BATCH_EDITS_MAX, type Edit, type EditBatchRequest, type EditRequest, type NodeRef } from '../../shared/engine/editRequest';
 import type { RejectionReason, SourceEdit } from '../../shared/engine/intent';
 import { LIMITS } from '../../shared/core/limits';
 import type { PageEditError, PageEdited } from '../../shared/ipc/pageSave';
@@ -426,6 +426,9 @@ interface GestureSendInput {
   readonly gesture: EditGesture;
   readonly record: EditsRecord;
   readonly send: (request: EditRequest) => Promise<Result<PageEdited, PageEditError>>;
+  /** Writes several requests at once (page:editBatch). Absent where nothing is
+   * written (a preview), which sends them one at a time. */
+  readonly sendBatch?: (request: EditBatchRequest) => Promise<Result<PageEdited, PageEditError>>;
 }
 
 export async function sendGesture(input: GestureSendInput): Promise<GestureSent> {
@@ -434,6 +437,19 @@ export async function sendGesture(input: GestureSendInput): Promise<GestureSent>
   const specialized = input.gesture.request(refOf);
   if (specialized === undefined || specialized.length === 0) {
     return sendReplacement(input, refOf);
+  }
+  // A gesture of several requests is one change to the page: written apart,
+  // the dev server renders the page between them (a loop reading a query not
+  // declared yet). Written together when main can; one at a time otherwise.
+  if (specialized.length > 1) {
+    if (input.sendBatch !== undefined) {
+      if (specialized.length <= EDIT_BATCH_EDITS_MAX) {
+        const batched = await sendBatched(input, specialized, input.sendBatch);
+        if (batched !== undefined) {
+          return batched;
+        }
+      }
+    }
   }
   const sent = await sendRequests(input, specialized);
   if (sent.tag !== 'refused' || sent.reason !== 'unsupported-operation') {
@@ -465,6 +481,29 @@ async function sendReplacement(input: GestureSendInput, refOf: (nodeId: string) 
   }
   const page: Edit = { tag: 'replace-page', model: replacementModel(predicted) };
   return sendRequests(input, [page]);
+}
+
+// One write of every request, or undefined when main refused the batch with
+// the page untouched (it changed since, or a request has no batched form): the
+// requests then go one at a time, which rebase through outside writes and
+// report their own refusals.
+async function sendBatched(
+  input: GestureSendInput,
+  requests: readonly Edit[],
+  sendBatch: (request: EditBatchRequest) => Promise<Result<PageEdited, PageEditError>>,
+): Promise<GestureSent | undefined> {
+  assert(requests.length > 1, 'A batch holds several requests');
+  assert(requests.length <= EDIT_BATCH_EDITS_MAX, 'A batch stays inside its bound');
+  const answer = await sendBatch({ pagePath: input.path, authoredChecksum: input.origin.checksum, edits: requests });
+  if (answer.ok) {
+    const { checksum, inverse } = answer.value;
+    recordApplied(input.record, { checksum, inverse });
+    return { tag: 'applied', replies: [answer.value] };
+  }
+  if (answer.error.code === 'rejected') {
+    return undefined;
+  }
+  return stopped(answer.error, input.origin.checksum, []);
 }
 
 async function sendRequests(input: GestureSendInput, requests: readonly Edit[]): Promise<GestureSent> {

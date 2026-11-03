@@ -121,6 +121,21 @@ export interface EditRequest {
   readonly edit: Edit;
 }
 
+/** Several edits of one gesture, written as one (page:editBatch). Sent one at
+ * a time they were separate writes, and the dev server could render the page
+ * between them: a loop reading a query its declaration had not reached yet. */
+export interface EditBatchRequest {
+  readonly pagePath: string;
+  /** The checksum of the bytes every edit's references were read from. */
+  readonly authoredChecksum: Digest;
+  readonly edits: readonly Edit[];
+}
+
+/** A gesture composes a handful of edits (a loop, its query, its imports);
+ * sixteen leaves room for every composition the editor makes, and a batch is
+ * planned in memory edit by edit, so its length bounds that work. */
+export const EDIT_BATCH_EDITS_MAX = 16;
+
 const ATTRIBUTE_NAME_RE = /^[\w@:.-]+$/;
 const IDENTIFIER_RE = /^[A-Za-z_$][\w$]*$/;
 const STYLE_PROPERTY_RE = /^(?:--[\w-]+|-?[a-z][a-z-]*)$/;
@@ -134,6 +149,33 @@ export function parseEditRequest(input: unknown): EditRequest {
     pagePath: pathText(record['pagePath']),
     authoredChecksum: digest(record['authoredChecksum']),
     edit: parseEdit(record['edit']),
+  };
+}
+
+export function parseEditBatchRequest(input: unknown): EditBatchRequest {
+  const record = toRecord(input);
+  if (record === undefined) {
+    throw new Error('Expected an edit batch request object');
+  }
+  const edits = toArray(record['edits']);
+  if (edits === undefined) {
+    throw new Error('EditBatch.edits: expected array');
+  }
+  // One edit is page:edit's; a batch exists to write several at once.
+  if (edits.length < 2) {
+    throw new Error('EditBatch.edits: expected at least two edits');
+  }
+  if (edits.length > EDIT_BATCH_EDITS_MAX) {
+    throw new Error('EditBatch.edits: exceeds limit');
+  }
+  const parsed = edits.map(parseEdit);
+  // Paired with the bound above: what crosses the wire is what was counted.
+  assert(parsed.length === edits.length, 'Every batched edit is parsed');
+  assert(parsed.length <= EDIT_BATCH_EDITS_MAX, 'A parsed batch stays inside its bound');
+  return {
+    pagePath: pathText(record['pagePath']),
+    authoredChecksum: digest(record['authoredChecksum']),
+    edits: parsed,
   };
 }
 

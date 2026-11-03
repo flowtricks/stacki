@@ -15,6 +15,7 @@ const { parsePage } = require('#dist/electron/parse/astroParser.js');
 const { parseMarkdownPage } = require('#dist/electron/parse/markdownParser.js');
 const { createNodeDocumentActors } = require('#dist/electron/documents/documentActors.js');
 const { buildEdit } = require('#dist/electron/documents/editRequests.js');
+const { previewEdits } = require('#dist/electron/documents/editPreview.js');
 const { decodeUtf8 } = require('#dist/shared/core/span.js');
 const { repoPath, stubPanels } = require('./sources.js');
 
@@ -118,6 +119,27 @@ async function mountApp(root, files, build, options = {}) {
         }
         const decoded = decodeUtf8(report.bytes);
         assert.ok(decoded.ok);
+        return { ok: true, ...read(pagePath), inverse: report.inverse };
+      },
+      // As main's page:editBatch: planned in memory, written once.
+      editPageBatch: async ({ pagePath, authoredChecksum, edits }) => {
+        calls.edits.push(...edits.map((edit) => edit.tag));
+        const disk = documents.current(pagePath);
+        assert.ok(disk.ok);
+        const rejected = (reason, diskChecksum) => ({ ok: false, error: { code: 'rejected', reason, message: reason, diskChecksum } });
+        if (disk.value.checksum !== authoredChecksum) {
+          return rejected('anchor-moved', disk.value.checksum);
+        }
+        const planned = previewEdits(pagePath, disk.value.bytes, authoredChecksum, edits);
+        if (!planned.ok) {
+          return rejected(planned.error, authoredChecksum);
+        }
+        const decoded = decodeUtf8(planned.value.bytes);
+        assert.ok(decoded.ok);
+        const report = documents.writeText(pagePath, decoded.value, authoredChecksum);
+        if (report.tag !== 'applied') {
+          return { ok: false, error: { code: 'filesystem', message: report.tag } };
+        }
         return { ok: true, ...read(pagePath), inverse: report.inverse };
       },
       importPathFor: async ({ targetPath }) => ({

@@ -30,7 +30,7 @@ import { parsePreferenceName } from './preferences';
 import { parseStudioSource } from './studioSetup';
 import { parseStudioRequestId } from './studioProgress';
 import { parsePropertyChange, propertySource } from '../properties/propertyEditing';
-import { parseEdit, parseEditRequest } from '../engine/editRequest';
+import { parseEdit, parseEditBatchRequest, parseEditRequest } from '../engine/editRequest';
 import { parsePreviewRender } from '../page/previewToken';
 // Complete invoke-channel inventory. Every main-process listener receives the
 // parsed shape below; payload field names retain the existing renderer protocol.
@@ -351,6 +351,8 @@ export const IPC_PAYLOADS = {
   // A visual edit in the renderer's terms, authored against the checksum of
   // the page it shows; main turns it into an intent (step 6).
   'page:edit': parseEditRequest,
+  // Several edits of one gesture, planned in memory and written once.
+  'page:editBatch': parseEditBatchRequest,
   'page:importPathFor': object({
     pagePath: pathText,
     targetPath: pathText,

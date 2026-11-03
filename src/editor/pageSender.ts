@@ -12,7 +12,7 @@
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import type { Digest } from '../../shared/core/brand';
-import type { EditRequest } from '../../shared/engine/editRequest';
+import type { EditBatchRequest, EditRequest } from '../../shared/engine/editRequest';
 import { describeRejection, type RejectionReason } from '../../shared/engine/intent';
 import type { PageDiskRead, PageEditError, PageEdited } from '../../shared/ipc/pageSave';
 import type { Result } from '../../shared/core/result';
@@ -37,6 +37,8 @@ export interface SenderDeps {
    * arrive later; the canvas serializes overlapping patch requests. */
   readonly onAppliedUrgentEdit?: () => void;
   readonly edit: (request: EditRequest) => Promise<Result<PageEdited, PageEditError>>;
+  /** Several requests of one gesture, written at once. */
+  readonly editBatch: (request: EditBatchRequest) => Promise<Result<PageEdited, PageEditError>>;
   readonly read: (path: string) => Promise<PageDiskRead>;
 }
 
@@ -76,6 +78,7 @@ async function sendGestureEntry(deps: SenderDeps, path: string, entry: Extract<Q
     gesture: entry.gesture,
     record: entry.record,
     send: deps.edit,
+    sendBatch: deps.editBatch,
   });
   switch (sent.tag) {
     case 'applied':

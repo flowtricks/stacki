@@ -176,6 +176,7 @@ function pageBridge() {
     readPage: invoke('page:read'),
     parsePageSource: invoke('page:parse'),
     editPage: invoke('page:edit'),
+    editPageBatch: invoke('page:editBatch'),
     previewPageEdit: invoke('page:previewEdit'),
     createPage: invoke('page:create'),
     deletePage: invoke('page:delete'),

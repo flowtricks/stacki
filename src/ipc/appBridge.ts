@@ -6,7 +6,7 @@ import type { IpcResults, WireDataRecord, WireInjectedRoute, WireRouteParams, Wi
 import { boolean, count, data, dictionary, list, optional, pathText, record, text } from '../../shared/core/boundary';
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 import { parseOkResult } from '../../shared/ipc/ipcContract';
-import type { EditRequest } from '../../shared/engine/editRequest';
+import type { EditBatchRequest, EditRequest } from '../../shared/engine/editRequest';
 import { parsePageEditResult, type PageEditError, type PageEdited } from '../../shared/ipc/pageSave';
 import { parsePreviewVerdict, type PreviewRender, type PreviewVerdict } from '../../shared/page/previewToken';
 import type { Result } from '../../shared/core/result';
@@ -93,6 +93,15 @@ export function editProjectPage(request: EditRequest): Promise<Result<PageEdited
   const payload = parseIpcPayload('page:edit', request);
   return sendPageEditWithRetry(payload, {
     send: (attempt) => window.avb.editPage(attempt).then(parsePageEditResult),
+  });
+}
+
+/** Several edits of one gesture, written at once: the page never holds one
+ * without the others. */
+export function editProjectPageBatch(request: EditBatchRequest): Promise<Result<PageEdited, PageEditError>> {
+  const payload = parseIpcPayload('page:editBatch', request);
+  return sendPageEditWithRetry(payload, {
+    send: (attempt) => window.avb.editPageBatch(attempt).then(parsePageEditResult),
   });
 }
 

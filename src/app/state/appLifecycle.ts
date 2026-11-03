@@ -35,6 +35,7 @@ import {
   startProjectPreview,
   stopProjectPreview,
   editProjectPage,
+  editProjectPageBatch,
 } from '../../ipc/appBridge';
 import { type OpenFileOptions, openFileSelection, parseTrailingSlash } from '../model/nodeFactory';
 import { savedForNavigation } from '../model/appKeys';
@@ -446,6 +447,7 @@ export function useSavers(toasts: ReturnType<typeof useToasts>, coreState: Retur
           tellCanvas({ type: 'avb:patch-now' });
         },
         edit: editProjectPage,
+        editBatch: editProjectPageBatch,
         read: readPage,
       }),
     });

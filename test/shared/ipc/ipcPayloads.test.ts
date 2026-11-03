@@ -260,6 +260,8 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
       source: '<h1>Hello</h1>',
     },
   },
+  // A batch is two edits or more (page:edit carries one).
+  'page:editBatch': { pagePath: fields.pagePath, authoredChecksum: fields.authoredChecksum, edits: [fields.edit, fields.edit] },
   'project:removeDefaultsCanvas': {
     projectPath: '/site',
     file: '.stacki/canvas/00000000-0000-4000-8000-000000000000.astro',

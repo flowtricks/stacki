@@ -68,6 +68,7 @@ interface InvokeChannels {
   readonly readPage: 'page:read';
   readonly parsePageSource: 'page:parse';
   readonly editPage: 'page:edit';
+  readonly editPageBatch: 'page:editBatch';
   readonly previewPageEdit: 'page:previewEdit';
   readonly createPage: 'page:create';
   readonly deletePage: 'page:delete';
