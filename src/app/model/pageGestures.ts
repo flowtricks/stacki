@@ -21,7 +21,7 @@ import { findEditorNodeById as findNodeById, findEditorParentList as findParentL
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { findImportPath, rebaseProjectImport, type ImportPaths } from '../../ipc/appBridge';
 import { newId, defaultText, collectUsedNames, codeText, voided, frontmatterOf } from './nodeFactory';
-import { STYLE_GLOBAL_ATTRIBUTE, styleBlockGlobal, type StyleFileKind } from './styleBlockScope';
+import { STYLE_GLOBAL_ATTRIBUTE } from './styleBlockScope';
 
 // Imports the app is willing to remove once nothing refers to them: a
 // component file of any flavour Astro renders, an image, and Astro's own
@@ -407,9 +407,9 @@ export function astroAssetGesture(
 }
 
 // A new node for an insert-palette item that needs no import, or undefined for one
-// that is not inserted as a node here. `fileKind` is the file it is written into:
-// it decides whether a style block is global (styleBlockScope.ts).
-export function insertedNode(item: InsertItem, id: NodeId, { fileKind }: { readonly fileKind: StyleFileKind }): EditorNode | undefined {
+// that is not inserted as a node here. A style block is always global
+// (styleBlockScope.ts).
+export function insertedNode(item: InsertItem, id: NodeId): EditorNode | undefined {
   let node: EditorNode | undefined = undefined;
   if (item.type === 'element') {
     const placeholder = defaultText(item.tag);
@@ -450,8 +450,7 @@ export function insertedNode(item: InsertItem, id: NodeId, { fileKind }: { reado
   } else if (item.type === 'doctype') {
     node = { id, kind: 'raw-line', value: '<!doctype html>' };
   } else if (item.type === 'style') {
-    const props = styleBlockGlobal({ fileKind }) ? { [STYLE_GLOBAL_ATTRIBUTE]: { type: 'bare' as const } } : {};
-    node = { id, kind: 'raw', name: 'style', props, inner: '' };
+    node = { id, kind: 'raw', name: 'style', props: { [STYLE_GLOBAL_ATTRIBUTE]: { type: 'bare' } }, inner: '' };
   } else if (item.type === 'script') {
     node = { id, kind: 'raw', name: 'script', props: {}, inner: '' };
   }
