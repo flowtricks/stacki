@@ -11,6 +11,9 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import { type SegmentedOption } from '../components/SegmentedControl';
 import { selectorKey, selectorsMatch } from '../model/resolved';
 import { SpinnerIcon } from './EditorBasics';
+import { loneTypedClass } from './editorModel';
+import { fuzzySegments, rankFuzzy } from '../../../lib/fuzzyRank';
+import { caretAtPoint, caretStep, chipAtCaret, chipPart, clampCaret, placementAt, type CaretKey, type ChipBox, type ChipPart } from '../model/selectorCaret';
 import {
   type SelectorSuggestion,
   useProjectClasses,
@@ -48,8 +51,12 @@ export function SelectorPicker({
     onSelect,
     onDeselect,
     onAdd,
+    shown: view.shownSelectors,
   });
   const { add, showInput } = field;
+  const removeChip = (entry: ClassifiedSelector) => {
+    removeChipFromElement(entry, { activeSelector, onDeselect });
+  };
 
   return (
     <>
@@ -68,23 +75,35 @@ export function SelectorPicker({
               <span className="u-sr-only">Finding the selectors that style this element…</span>
             </div>
           ) : undefined}
-          {view.shownSelectors.length ? (
-            <SelectorChips entries={view.shownSelectors} activeSelector={activeSelector} busy={busy} onSelect={onSelect} onDeselect={onDeselect} />
-          ) : undefined}
-          {showInput ? (
-            <SelectorAddField
-              add={add}
-              inputRef={field.inputRef}
-              listRef={field.listRef}
+          {view.shownSelectors.length || showInput ? (
+            <SelectorChips
+              entries={view.shownSelectors}
+              activeSelector={activeSelector}
               busy={busy}
-              onFocus={field.onFocus}
-              onBlur={field.onBlur}
-              apply={field.apply}
-            />
+              chipsRef={field.chipsRef}
+              caretGap={showInput ? field.caretGap : undefined}
+              onSelect={onSelect}
+              onDeselect={onDeselect}
+              onRemove={removeChip}
+            >
+              {showInput ? (
+                <SelectorAddField
+                  add={add}
+                  inputRef={field.inputRef}
+                  listRef={field.listRef}
+                  busy={busy}
+                  caret={{ gap: field.caretGap, count: view.shownSelectors.length }}
+                  onFocus={field.onFocus}
+                  onBlur={field.onBlur}
+                  apply={field.apply}
+                  onCaretKey={field.onCaretKey}
+                />
+              ) : undefined}
+            </SelectorChips>
           ) : undefined}
         </div>
       </div>
-      <SelectorFilterToggles view={view} busy={busy} />
+      <SelectorFilterToggles view={view} />
     </>
   );
 }
@@ -122,9 +141,62 @@ function onSelectorFocusRequest(listener: () => void): () => void {
   };
 }
 
+// Where the typing caret sits among the chips. `end` follows the chip count as
+// chips arrive or leave; a gap is a place the person put it (a click between two
+// chips, or ← and → with nothing typed).
+export type CaretState = { readonly kind: 'end' } | { readonly kind: 'gap'; readonly index: number };
+
+const CARET_END: CaretState = { kind: 'end' };
+
+/** The caret's gap index among `count` chips. */
+export function caretGapOf(caret: CaretState, count: number): number {
+  return caret.kind === 'end' ? count : clampCaret(caret.index, count);
+}
+
+/** A caret at `gap`; the last gap is the end, so it keeps following new chips. */
+export function caretAtGap(gap: number, count: number): CaretState {
+  const clamped = clampCaret(gap, count);
+  return clamped === count ? CARET_END : { kind: 'gap', index: clamped };
+}
+
+// The parts the shown chips stand for, for placing a typed class and for Delete.
+export function chipParts(entries: readonly ClassifiedSelector[]): readonly ChipPart[] {
+  return entries.map((entry) => chipPart(entry.selector.text, loneTypedClass(entry.selector.text)));
+}
+
+// Takes the class or attribute a chip stands for off the element (selectorRemoval.ts
+// decides whether that is safe; the host shows a refusal). A tag, a substring
+// match like `[class*="text-"]` or a compound is part of a selector, not a thing
+// written on the element, so Delete leaves it alone. Returns whether a removal
+// was asked for.
+export function removeChipFromElement(
+  entry: ClassifiedSelector,
+  panel: { readonly activeSelector: string; readonly onDeselect: () => void },
+  onApplied: () => void = () => undefined,
+): boolean {
+  const part = chipPart(entry.selector.text, loneTypedClass(entry.selector.text));
+  const host = getHost();
+  const request = part.kind === 'class' ? host.removeClass?.(part.name) : part.kind === 'attribute' ? host.removeAttribute?.(part.name) : undefined;
+  if (request === undefined) {
+    return false;
+  }
+  const wasActive = selectorsMatch(entry.selector.text, panel.activeSelector);
+  void request.then((outcome) => {
+    // The removed chip can't stay the edit target: nothing it names is left.
+    if (outcome.tag === 'refused') {
+      return;
+    }
+    if (wasActive) {
+      panel.onDeselect();
+    }
+    onApplied();
+  });
+  return true;
+}
+
 // The add-selector field's state: the draft, the suggestion list and its highlight,
-// whether the input is revealed, and the selector to restore when the field is left
-// without adding one.
+// whether the input is revealed, the caret's gap among the chips, and the selector
+// to restore when the field is left without adding one.
 export function useAddSelectorField({
   selectors,
   suggestions,
@@ -133,8 +205,14 @@ export function useAddSelectorField({
   onSelect,
   onDeselect,
   onAdd,
-}: Pick<SelectorPickerProps, 'selectors' | 'suggestions' | 'activeSelector' | 'busy' | 'onSelect' | 'onDeselect' | 'onAdd'>) {
+  shown,
+}: Pick<SelectorPickerProps, 'selectors' | 'suggestions' | 'activeSelector' | 'busy' | 'onSelect' | 'onDeselect' | 'onAdd'> & {
+  readonly shown: readonly ClassifiedSelector[];
+}) {
   const [draft, setDraft] = useState('');
+  const [caret, setCaret] = useState<CaretState>(CARET_END);
+  const chipsRef = useRef<HTMLDivElement>(null);
+  const caretGap = caretGapOf(caret, shown.length);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
   const [inputOpen, setInputOpen] = useState(false);
@@ -185,6 +263,9 @@ export function useAddSelectorField({
     if (!wellMouseDown(event, { busy, inputRef }, restoreRef)) {
       return;
     }
+    // The click's gap among the chips is where typing goes.
+    const boxes = chipBoxes(chipsRef.current ?? undefined);
+    setCaret(caretAtGap(caretAtPoint(boxes, { x: event.clientX, y: event.clientY }), shown.length));
     if (showInput) {
       inputRef.current?.focus();
     } else {
@@ -198,7 +279,11 @@ export function useAddSelectorField({
       return;
     }
     restoreRef.current = undefined; // a new selector is now the active one — nothing to restore
-    onAdd(trimmed);
+    onAdd(trimmed, placementAt(chipParts(shown), caretGap));
+    // A class typed between two chips lands there, so the caret moves past it.
+    if (caret.kind === 'gap') {
+      setCaret({ kind: 'gap', index: caretGap + 1 });
+    }
     setDraft('');
     setOpen(false);
     setHighlight(-1);
@@ -213,13 +298,60 @@ export function useAddSelectorField({
     setDraft('');
     setHighlight(-1);
     setInputOpen(false);
+    setCaret(CARET_END);
     if (restoreRef.current) {
       onSelect(restoreRef.current);
       restoreRef.current = undefined;
     }
   };
+  // ← → move the caret across chips, and Backspace / Delete take off the chip
+  // before / after it, while nothing is typed. Returns whether the key was used.
+  const onCaretKey = (key: string): boolean => {
+    if (draft !== '') {
+      return false;
+    }
+    if (key === 'ArrowLeft' || key === 'ArrowRight') {
+      const next = caretStep(caretGap, shown.length, key === 'ArrowLeft' ? -1 : 1);
+      if (next === caretGap) {
+        return false;
+      }
+      setCaret(caretAtGap(next, shown.length));
+      return true;
+    }
+    if (key === 'Backspace' || key === 'Delete') {
+      return removeAtCaret(key);
+    }
+    return false;
+  };
+  const removeAtCaret = (key: CaretKey): boolean => {
+    const index = chipAtCaret(caretGap, shown.length, key);
+    const entry = index === undefined ? undefined : shown[index];
+    if (entry === undefined) {
+      return false;
+    }
+    // Once the chip before the caret is gone, the caret steps back over its gap.
+    // A refused removal leaves the caret where it was.
+    const stepBack = () => {
+      if (key === 'Backspace') {
+        setCaret((previous) => (previous.kind === 'gap' ? { kind: 'gap', index: Math.max(previous.index - 1, 0) } : previous));
+      }
+    };
+    return removeChipFromElement(entry, { activeSelector, onDeselect }, stepBack);
+  };
   const add = { draft, setDraft, open, setOpen, highlight, setHighlight, filtered, showList };
-  return { add, showInput, listRef, inputRef, onWellMouseDown, apply, onFocus, onBlur };
+  return { add, showInput, listRef, inputRef, chipsRef, caretGap, onWellMouseDown, apply, onFocus, onBlur, onCaretKey };
+}
+
+// The chips' boxes, in chip order, for placing a click among them.
+function chipBoxes(container: HTMLDivElement | undefined): readonly ChipBox[] {
+  if (container === undefined) {
+    return [];
+  }
+  const chips = container.querySelectorAll('.embed-editor_selector-chip');
+  return Array.from(chips, (chip) => {
+    const rect = chip.getBoundingClientRect();
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+  });
 }
 
 // Clicking empty space in the well reveals + focuses the add input; clicks on a chip
@@ -303,59 +435,106 @@ export function useSelectorView({
 }
 
 // The element's own tokens first — they're what you're usually reaching for — then,
-// once you've typed something, every other class in the project (the Settings panel's
-// list), so styling a class this element doesn't carry yet is a matter of typing its
-// first letters. They're held back while the box is empty: a project's whole class
-// list would bury the handful that describe this element. Selectors already in the
-// well aren't suggestions — picking one would just be the chip that's already sitting
-// above the input.
-export function useSelectorSuggestions({ selectors, suggestions, draft }: Pick<SelectorPickerProps, 'selectors' | 'suggestions'> & { draft: string }) {
+// once you've typed something, every other class in the project (the Settings
+// panel's list), so styling a class this element doesn't carry yet is a matter of
+// typing a few of its letters. They're held back while the box is empty: a
+// project's whole class list would bury the handful that describe this element.
+// Selectors already in the well aren't suggestions — picking one would just be the
+// chip that's already sitting above the input.
+//
+// Typed text is matched fuzzily (src/lib/fuzzyRank.ts, shared with the Settings
+// panel's class box): `btnprim` finds `.button-primary`. A leading `.` is optional
+// on both sides, so `.hero` and `hero` find the same classes.
+export function useSelectorSuggestions({
+  selectors,
+  suggestions,
+  draft,
+}: Pick<SelectorPickerProps, 'selectors' | 'suggestions'> & { draft: string }): RankedSuggestion[] {
   const projectClasses = useProjectClasses();
-  const query = draft.trim().toLowerCase();
+  const query = draft.trim();
   const chipKeys = useMemo(() => new Set(selectors.map((entry) => selectorKey(entry.text))), [selectors]);
-  return useMemo(() => {
-    const own = suggestions.filter(
-      (suggestion) => (!query || suggestion.selector.toLowerCase().includes(query)) && !chipKeys.has(selectorKey(suggestion.selector)),
-    );
-    if (!query) {
-      return own;
-    }
-    const taken = new Set(own.map((suggestion) => suggestion.selector));
-    const extra: SelectorSuggestion[] = [];
-    for (const cls of projectClasses) {
-      const selector = `.${cls}`;
-      if (taken.has(selector) || chipKeys.has(selectorKey(selector))) {
-        continue;
-      }
-      if (!cls.toLowerCase().includes(query.replace(/^\./, ''))) {
-        continue;
-      }
-      taken.add(selector);
-      extra.push({ selector, kind: 'class' });
-      if (extra.length >= PROJECT_CLASS_LIMIT) {
-        break;
-      }
-    }
-    return [...own, ...extra];
-  }, [suggestions, projectClasses, query, chipKeys]);
+  return useMemo(() => rankedSuggestions({ query, own: suggestions, projectClasses, chipKeys }), [suggestions, projectClasses, query, chipKeys]);
 }
 
+/** A suggestion row, with the positions in its selector the query matched. */
+export type RankedSuggestion = SelectorSuggestion & { readonly hits: readonly number[] };
+
+// The suggestion list for a query: pure, so it is tested without React.
+export function rankedSuggestions(inputs: {
+  readonly query: string;
+  readonly own: readonly SelectorSuggestion[];
+  readonly projectClasses: readonly string[];
+  readonly chipKeys: ReadonlySet<string>;
+}): RankedSuggestion[] {
+  const { query, chipKeys } = inputs;
+  const needle = query.startsWith('.') ? query.slice(1) : query;
+  const ownFree = inputs.own.filter((suggestion) => !chipKeys.has(selectorKey(suggestion.selector)));
+  if (!query) {
+    return ownFree.map((suggestion) => ({ ...suggestion, hits: [] }));
+  }
+  const own = needle
+    ? rankFuzzy(needle, ownFree, { limit: ownFree.length }, dotless).map(({ item, hit }) => withHits(item, hit.indexes))
+    : ownFree.map((item) => withHits(item, []));
+  const taken = new Set(own.map((suggestion) => suggestion.selector));
+  const candidates = inputs.projectClasses.filter((name) => {
+    const selector = `.${name}`;
+    return !taken.has(selector) && !chipKeys.has(selectorKey(selector));
+  });
+  const extra = needle
+    ? rankFuzzy(needle, candidates, { limit: PROJECT_CLASS_LIMIT }, (name) => name).map(({ item, hit }) =>
+        withHits({ selector: `.${item}`, kind: 'class' }, hit.indexes),
+      )
+    : candidates.slice(0, PROJECT_CLASS_LIMIT).map((name) => withHits({ selector: `.${name}`, kind: 'class' }, []));
+  assert(extra.length <= PROJECT_CLASS_LIMIT, 'rankedSuggestions: project classes are capped');
+  return [...own, ...extra];
+}
+
+// A selector without its class dot, which the query need not type.
+function dotless(suggestion: SelectorSuggestion): string {
+  return suggestion.selector.startsWith('.') ? suggestion.selector.slice(1) : suggestion.selector;
+}
+
+// Matched positions are in the dotless text; the row shows the dot, so they shift by one.
+function withHits(suggestion: SelectorSuggestion, indexes: readonly number[]): RankedSuggestion {
+  const offset = suggestion.selector.startsWith('.') ? 1 : 0;
+  return { ...suggestion, hits: indexes.map((index) => index + offset) };
+}
+
+// The chips, with the add field (children) standing in the caret's gap. The field
+// is placed by CSS `order`, not moved in the DOM: moving a focused input blurs it,
+// and its blur abandons the draft. Chip i is at order 2i, the field just before
+// the chip after the caret (2·gap − 1).
 export function SelectorChips({
   entries,
   activeSelector,
   busy,
+  chipsRef,
+  caretGap,
   onSelect,
   onDeselect,
+  onRemove,
+  children,
 }: {
-  entries: ClassifiedSelector[];
+  entries: readonly ClassifiedSelector[];
   activeSelector: string;
   busy: boolean;
+  chipsRef?: React.RefObject<HTMLDivElement>;
+  /** The caret's gap while the add field is open, else undefined. */
+  caretGap?: number | undefined;
   onSelect: (selector: string) => void;
   onDeselect: () => void;
+  /** Delete or Backspace on a chip: take what it stands for off the element. */
+  onRemove?: (entry: ClassifiedSelector) => void;
+  children?: React.ReactNode;
 }) {
   return (
-    <div className="embed-editor_selector-chips">
-      {entries.map((entry) => {
+    <div className="embed-editor_selector-chips" ref={chipsRef}>
+      {children === undefined ? undefined : (
+        <div className="embed-editor_selector-caret-slot" style={{ order: 2 * (caretGap ?? entries.length) - 1 }}>
+          {children}
+        </div>
+      )}
+      {entries.map((entry, index) => {
         const selectorText = entry.selector;
         const active = selectorsMatch(selectorText.text, activeSelector);
         const dimmed = selectorText.inContext === false;
@@ -372,6 +551,16 @@ export function SelectorChips({
             aria-label={selectorAccessibleLabel(entry, label)}
             // Click the active chip again to deselect (show all winners read-only).
             onClick={() => (active ? onDeselect() : onSelect(selectorText.text))}
+            onKeyDown={(event) => {
+              if (event.key !== 'Delete' && event.key !== 'Backspace') {
+                return;
+              }
+              // Kept from the app's Delete shortcut, which would delete the element.
+              event.preventDefault();
+              event.stopPropagation();
+              onRemove?.(entry);
+            }}
+            style={{ order: 2 * index }}
             title={chipTitle(label, entry, { active, dimmed })}
           >
             {label}
@@ -418,7 +607,7 @@ export interface AddSelectorState {
   setOpen: (open: boolean) => void;
   highlight: number;
   setHighlight: React.Dispatch<React.SetStateAction<number>>;
-  filtered: SelectorSuggestion[];
+  filtered: RankedSuggestion[];
   showList: boolean;
 }
 
@@ -428,26 +617,34 @@ export function SelectorAddField({
   inputRef,
   listRef,
   busy,
+  caret,
   onFocus,
   onBlur,
   apply,
+  onCaretKey,
 }: {
   add: AddSelectorState;
   inputRef: React.RefObject<HTMLInputElement>;
   listRef: React.RefObject<HTMLDivElement>;
   busy: boolean;
+  caret?: { readonly gap: number; readonly count: number };
   onFocus: () => void;
   onBlur: () => void;
   apply: (text: string) => void;
+  onCaretKey?: (key: string) => boolean;
 }) {
   const { draft, setHighlight, showList } = add;
+  // Between chips the field is only as wide as what is typed, so the chips
+  // either side stay where they were; at the end it takes its own row.
+  const between = caret !== undefined && caret.gap < caret.count;
   return (
-    <div className="embed-editor_selector-field">
+    <div className={`embed-editor_selector-field ${between ? 'is-between' : ''}`}>
       <input
         ref={inputRef}
         className="u-input embed-editor_selector-add"
         value={draft}
-        placeholder="Add a selector (e.g. .card:hover)"
+        style={between ? { width: `${Math.max(draft.length, 1) + 1}ch` } : undefined}
+        placeholder={between ? '' : 'Add a selector (e.g. .card:hover)'}
         spellCheck={false}
         disabled={busy}
         role="combobox"
@@ -467,7 +664,14 @@ export function SelectorAddField({
           add.setOpen(true);
           setHighlight(-1);
         }}
-        onKeyDown={(event) => selectorKeyDown(event, add, apply)}
+        onKeyDown={(event) => {
+          if (onCaretKey?.(event.key) === true) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+          selectorKeyDown(event, add, apply);
+        }}
         aria-label="Add a selector"
       />
       {showList ? <SelectorSuggestions add={add} listRef={listRef} apply={apply} /> : undefined}
@@ -521,33 +725,21 @@ export function selectorKeyDown(event: ReactKeyboardEvent<HTMLInputElement>, add
 // Outside the well's box — a view option, not one of the selectors. Always here, even
 // with none to show: appearing when the scan lands moved everything under it down a
 // row, so the panel rearranged itself under the pointer just as it became usable.
-// With nothing to reveal it sits inert instead.
-export function SelectorFilterToggles({ view, busy }: { view: SelectorView; busy: boolean }) {
+// It is never disabled: the choice is remembered, so it can be set before there
+// is anything to hide, and greyed out it read as broken.
+export function SelectorFilterToggles({ view }: { view: SelectorView }) {
   const { globals, inherited } = view;
   return (
     <>
-      <label
-        className={'embed-editor_check embed-editor_selector-filter ' + (globals.length ? '' : 'is-empty')}
-        title="Tags, universal selectors, and broad states can match many elements"
-      >
-        <input
-          type="checkbox"
-          checked={view.filters.hideGlobals}
-          disabled={busy || !globals.length}
-          onChange={(event) => view.setHideGlobals(event.target.checked)}
-        />
+      <label className="embed-editor_check embed-editor_selector-filter" title="Tags, universal selectors, and broad states can match many elements">
+        <input type="checkbox" checked={view.filters.hideGlobals} onChange={(event) => view.setHideGlobals(event.target.checked)} />
         <span>Hide global selectors ({globals.length})</span>
       </label>
       <label
-        className={'embed-editor_check embed-editor_selector-filter ' + (inherited.length ? '' : 'is-empty')}
+        className="embed-editor_check embed-editor_selector-filter"
         title="Selectors that apply because this element is inside a matching parent or ancestor"
       >
-        <input
-          type="checkbox"
-          checked={view.filters.hideInherited}
-          disabled={busy || !inherited.length}
-          onChange={(event) => view.setHideInherited(event.target.checked)}
-        />
+        <input type="checkbox" checked={view.filters.hideInherited} onChange={(event) => view.setHideInherited(event.target.checked)} />
         <span>Hide inherited styles ({inherited.length})</span>
       </label>
     </>
@@ -654,7 +846,17 @@ function SelectorSuggestions({
           onMouseMove={() => setHighlight(i)}
           onClick={() => apply(suggestion.selector)}
         >
-          <span className="embed-editor_suggest-sel">{suggestion.selector}</span>
+          <span className="embed-editor_suggest-sel">
+            {fuzzySegments(suggestion.selector, suggestion.hits).map((segment, index) =>
+              segment.hit ? (
+                <mark key={index} className="embed-editor_suggest-hit">
+                  {segment.text}
+                </mark>
+              ) : (
+                segment.text
+              ),
+            )}
+          </span>
           <span className="embed-editor_suggest-kind">{SUGGESTION_KIND_LABEL[suggestion.kind]}</span>
         </button>
       ))}

@@ -1,4 +1,5 @@
 import Popup from '../../ui/Popup';
+import { fuzzyMatch, fuzzySegments, rankFuzzy } from '../../lib/fuzzyRank';
 import React, { useEffect, useRef, useState } from 'react';
 import { useClassPopup } from './useClassPopup';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
@@ -257,20 +258,35 @@ function classFamilyOf(cls: string, suggestions: readonly string[], tokens: read
   const pool = new Set([...suggestions, ...tokens]);
   return [...pool].filter((name) => name.startsWith(prefix)).sort(collator.compare);
 }
-export function classMatches(draft: string, suggestions: readonly string[], tokens: readonly string[]) {
-  const query = draft.trim().toLowerCase();
-  const matches = query
-    ? suggestions
-        .filter((name) => name.toLowerCase().includes(query) && !tokens.includes(name))
-        .sort((left, right) => {
-          // Prefix matches first, then shortest.
-          const ap = left.toLowerCase().startsWith(query) ? 0 : 1;
-          const bp = right.toLowerCase().startsWith(query) ? 0 : 1;
-          return ap - bp || left.length - right.length;
-        })
-    : [];
+// The project's classes that fit what is typed, best first. Fuzzy, like the
+// Style panel's selector field: the letters typed, in order, anywhere in the
+// name, so "btnprim" finds `button-primary`. Exact beats prefix beats a word
+// start beats a run beats scattered letters (src/lib/fuzzyRank.ts).
+export function classMatches(draft: string, suggestions: readonly string[], tokens: readonly string[]): readonly string[] {
+  const query = draft.trim();
+  if (!query) {
+    return [];
+  }
+  const free = suggestions.filter((name) => !tokens.includes(name));
+  return rankFuzzy(query, free, { limit: free.length }, (name) => name).map(({ item }) => item);
+}
 
-  return matches;
+// A suggestion with the typed letters tinted, so the reason it matched shows.
+function ClassMatchLabel({ name, draft }: { readonly name: string; readonly draft: string }) {
+  const hit = fuzzyMatch(draft.trim(), name);
+  return (
+    <span className="dd-option-label">
+      {fuzzySegments(name, hit?.indexes ?? []).map((segment, index) =>
+        segment.hit ? (
+          <mark key={index} className="class-suggest-hit">
+            {segment.text}
+          </mark>
+        ) : (
+          segment.text
+        ),
+      )}
+    </span>
+  );
 }
 function classInputKey(event: React.KeyboardEvent<HTMLInputElement>, state: ClassState): void {
   const { draft, removeAt, at, setCaret, tokens, matches, setHighlight, highlight, addToken, setDraft, inputRef } = state;
@@ -437,7 +453,7 @@ function ClassSuggestions({ state }: { readonly state: ClassState }) {
           onMouseEnter={() => setHighlight(i)}
           onClick={() => addToken(suggestion)}
         >
-          <span className="dd-option-label">{suggestion}</span>
+          <ClassMatchLabel name={suggestion} draft={draft} />
         </div>
       ))}
     </Popup>

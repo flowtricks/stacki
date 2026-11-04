@@ -8,6 +8,7 @@
 
 import { assert } from '../../../../shared/core/assert';
 import { LIMITS } from '../../../../shared/core/limits';
+import type { ClassPlacement } from '../../../editor/classAttr';
 
 type HostAttr = { readonly type: string; readonly value?: string };
 
@@ -103,7 +104,13 @@ export type HostState = {
    *  for a class the element doesn't carry would never apply. Resolves once the
    *  page edit reached disk or was refused: the stylesheet rule for that class
    *  is written only after it applied (step 6, plan §3.3 — outcome-gated). */
-  addClass: ((className: string) => Promise<ClassOutcome>) | undefined;
+  addClass: ((className: string, placement: ClassPlacement) => Promise<ClassOutcome>) | undefined;
+  /** Take a class, or an attribute, off the selected element: a chip selected in
+   *  the selector field and then Delete. Only a name written literally on the
+   *  element is removed; anything computed is refused, and the refusal says why
+   *  (the host shows it). One page edit, so one undo step. */
+  removeClass: ((className: string) => Promise<ClassOutcome>) | undefined;
+  removeAttribute: ((attributeName: string) => Promise<ClassOutcome>) | undefined;
   /** What the spacing box is pointing at, for the canvas to draw over the
    *  selected element: hovering `padding-top` lights the strip of the page that
    *  padding-top holds open. Undefined when the pointer leaves it. */
@@ -154,6 +161,8 @@ const state: HostState = {
   selectNode: undefined,
   recordUndo: undefined,
   addClass: undefined,
+  removeClass: undefined,
+  removeAttribute: undefined,
   pseudoRequest: undefined,
   onSpacingHover: undefined,
 };

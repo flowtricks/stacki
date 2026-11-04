@@ -2,6 +2,7 @@ import Popup from '../../../ui/Popup';
 // Media and container queries — picking one, adding and editing it — and the
 // style card's CSS code view (EmbedEditor.tsx).
 
+import type { ClassPlacement } from '../../../editor/classAttr';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { CodeEditor } from '../components/CssCodeEditor';
@@ -527,7 +528,7 @@ export type StyleCardProps = {
   activeSelector: string;
   onSelectActive: (selector: string) => void;
   onDeselect: () => void;
-  onAddSelector: (selector: string) => void;
+  onAddSelector: (selector: string, placement: ClassPlacement) => void;
   sourceValue: string;
   sourceOptions: SourceOption[];
   onSourceChange: (value: string) => void;

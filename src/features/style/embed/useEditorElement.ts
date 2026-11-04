@@ -12,6 +12,7 @@ import { findNode, getHost, onHostChange } from '../model/host';
 import { readNativeStyleByName, readNativeStyles, resolveIdentityElement, writeEmbedDocument, type EmbedDocument } from '../model/webflow';
 import type { NativeModel } from '../model/styleTypes';
 import { standaloneNativeClass } from './EditorBasics';
+import { PLACEMENT_END, type ClassPlacement } from '../../../editor/classAttr';
 import { loneTypedClass, type NestedInput, nativeModelCache, pseudoPickFor, rememberTypedPath, type TypedPaths, usePseudoTarget } from './editorModel';
 import { asQuery, type QuerySuggestion, COMMON_QUERIES } from './SelectorPicker';
 import { useEditorRefs, useBusyState, useScanState, useSelectionState, useNativeState, usePendingWrites } from './useEditorFoundation';
@@ -306,7 +307,7 @@ export function useTypedSelector(
   const { selectActiveSelector, selectNested } = selectorPick;
 
   const addTypedSelector = useCallback(
-    (input: string) => {
+    (input: string, placement: ClassPlacement) => {
       const trimmed = input.trim();
       if (!trimmed) {
         return;
@@ -321,7 +322,7 @@ export function useTypedSelector(
       const loneClass = loneTypedClass(trimmed);
       if (loneClass !== undefined) {
         typedClassRef.current = loneClass;
-        const gate = getHost().addClass?.(loneClass);
+        const gate = getHost().addClass?.(loneClass, placement);
         // The rule this selector will get depends on the page edit: its first
         // write waits for that edit's outcome (step 6, plan §3.3).
         if (gate) {
@@ -630,7 +631,7 @@ export function usePseudoRequest(
     if (pick?.kind === 'existing') {
       selectActiveSelector(pick.selector);
     } else if (pick?.kind === 'typed') {
-      addTypedSelector(pick.input);
+      addTypedSelector(pick.input, PLACEMENT_END);
     }
   }, [request, snapshot, model, addTypedSelector, selectActiveSelector]);
 

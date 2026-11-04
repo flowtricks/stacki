@@ -1,6 +1,7 @@
 // Settling the panel after a change: upgrading the default selector, and
 // re-syncing focus when the context moves (EmbedEditor.tsx).
 
+import { PLACEMENT_END } from '../../../editor/classAttr';
 import { useEffect } from 'react';
 import { hslaToRgba } from '../model/colorWrite';
 import { contextKeyOf, editableRuleFor, selectedRulesSetting, type SourceKey } from '../model/resolved';
@@ -357,7 +358,7 @@ export function useAddQuery(
     const query = asQuery(trimmed);
     if (mode === 'nest' && activeSelector) {
       const nestedInput = `${activeSelector} { ${query} }`;
-      addTypedSelector(nestedInput);
+      addTypedSelector(nestedInput, PLACEMENT_END);
       // Scaffold the empty nested query block (`selector { @query {} }`) into the embed
       // now, so the query persists without waiting for the first property.
       const parsed = parseNestedInput(nestedInput);

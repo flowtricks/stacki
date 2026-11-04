@@ -3,6 +3,7 @@
 
 import { useEffect, useLayoutEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import type { ClassPlacement } from '../../../editor/classAttr';
 import FieldLabel from '../components/FieldLabel';
 import { PropTip } from '../components/CssPropertyTip';
 import DirectionControl from '../DirectionControl';
@@ -361,6 +362,8 @@ export type SelectorPickerProps = {
   loading: boolean;
   onSelect: (selector: string) => void;
   onDeselect: () => void;
-  onAdd: (selector: string) => void;
+  /** Adds a typed selector; a lone class is written at `placement` among the
+   *  element's classes (the caret's gap among the chips, selectorCaret.ts). */
+  onAdd: (selector: string, placement: ClassPlacement) => void;
   onVisibleSelectorsChange?: (selectors: readonly string[]) => void;
 };

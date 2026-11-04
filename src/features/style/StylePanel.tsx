@@ -23,6 +23,8 @@ interface StylePanelProps {
   readonly onSelectNode?: HostState['selectNode'] | undefined;
   readonly onRecordUndo?: HostState['recordUndo'] | undefined;
   readonly onAddClass?: HostState['addClass'] | undefined;
+  readonly onRemoveClass?: HostState['removeClass'] | undefined;
+  readonly onRemoveAttribute?: HostState['removeAttribute'] | undefined;
   readonly onSpacingHover?: HostState['onSpacingHover'];
   readonly renderedClasses?: readonly string[] | undefined;
   readonly projectClasses?: readonly string[] | undefined;
@@ -79,6 +81,8 @@ function hostState(props: StylePanelProps, files: StyleFiles, astroFiles: StyleF
     selectNode: props.onSelectNode,
     recordUndo: props.onRecordUndo,
     addClass: props.onAddClass,
+    removeClass: props.onRemoveClass,
+    removeAttribute: props.onRemoveAttribute,
     onSpacingHover: props.onSpacingHover,
     renderedClasses: [...(props.renderedClasses ?? [])],
     projectClasses: [...(props.projectClasses ?? [])],

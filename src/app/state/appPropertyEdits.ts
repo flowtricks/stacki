@@ -21,7 +21,8 @@ import {
   withChildren,
 } from '../../editor/editGestures';
 import { readFrontmatter } from '../../../shared/page/frontmatterSource';
-import { hasClass, withClass } from '../../editor/classAttr';
+import { hasClass, withClass, type ClassPlacement } from '../../editor/classAttr';
+import { attributeRemoval, classRemoval, type PropRemoval } from '../../editor/selectorRemoval';
 import { withAttributes } from '../../editor/attributesBinding';
 import { previewAddedClass, previewClassProps } from '../../editor/previewClassPatch';
 import { cleanError } from '../../lib/cleanError';
@@ -97,6 +98,7 @@ export function useClassEdits(coreState: ReturnType<typeof useCoreState>, lifecy
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
   const addClassToNode = useAddClassToNode(coreState, lifecycle, history);
+  const { removeClassFromNode, removeAttributeFromNode } = useRemoveFromNode(coreState, lifecycle, history);
 
   // Step 6, attribute: set or remove one prop, as an edit request when it has
   // an intent form (editGestures.ts), else as a whole-model save.
@@ -149,7 +151,7 @@ export function useClassEdits(coreState: ReturnType<typeof useCoreState>, lifecy
     },
     [commitEdit, pageStateRef],
   );
-  return { addClassToNode, setProp, setProps, replaceProps };
+  return { addClassToNode, removeClassFromNode, removeAttributeFromNode, setProp, setProps, replaceProps };
 }
 
 function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
@@ -165,7 +167,7 @@ function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle
   // refused: the style panel writes the class's rule only after it applied
   // (step 6, plan §3.3 — outcome-gated, never a fabricated atomicity).
   return useCallback(
-    async (nodeId: string, className: string, previewPath?: string): Promise<ClassOutcome> => {
+    async (nodeId: string, className: string, placement: ClassPlacement, previewPath?: string): Promise<ClassOutcome> => {
       const clean = String(className || '').trim();
       const state = pageStateRef.current.pageState;
       if (!nodeId || !clean || !state?.editable) {
@@ -178,7 +180,7 @@ function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle
       if (hasClass(node.props, clean)) {
         return { tag: 'applied' };
       }
-      const edit = withClass(node.props, clean);
+      const edit = withClass(node.props, clean, placement);
       if (!edit) {
         const message = `Stacki couldn’t add the class “${clean}”. Check the class name and retry.`;
         showToast(message, 'error');
@@ -203,6 +205,61 @@ function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle
     },
     [commitEdit, flushSave, showToast, pageStateRef],
   );
+}
+
+// A chip selected in the Style panel's selector field, then Delete: the class or
+// attribute comes off the element's tag as written, as one attribute edit (one
+// undo step). What decides whether that is safe is selectorRemoval.ts; a refusal
+// is shown as a toast and nothing is written.
+function useRemoveFromNode(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
+  const { pageStateRef } = coreState;
+  const { flushSave, showToast } = lifecycle;
+  const { commitEdit } = history;
+  const removeFromNode = useCallback(
+    async (
+      nodeId: string,
+      previewPath: string | undefined,
+      plan: (props: Readonly<Record<string, Attr>> | undefined) => PropRemoval,
+    ): Promise<ClassOutcome> => {
+      const state = pageStateRef.current.pageState;
+      if (!nodeId || !state?.editable) {
+        return { tag: 'refused', message: 'no element is selected' };
+      }
+      const node = findNodeById(state.model.nodes, nodeId);
+      if (!node) {
+        return { tag: 'refused', message: 'the element is gone' };
+      }
+      assert(node.id === nodeId, 'removeFromNode: the node found is the one named');
+      const removal = plan(node.props);
+      if (removal.tag === 'refused') {
+        showToast(removal.reason, 'error');
+        return { tag: 'refused', message: removal.reason };
+      }
+      assert(removal.key.length > 0, 'removeFromNode: an edit names the prop it writes');
+      const patch = { [removal.key]: removal.value };
+      if (!commitEdit(propsGesture(nodeId, patch, { coalesceKey: undefined, urgency: true }))) {
+        return { tag: 'refused', message: 'the edit could not be queued' };
+      }
+      // The canvas drops the class at once rather than after the save's re-render.
+      previewClassProps(previewPath, node, patch);
+      try {
+        await flushSave();
+        return { tag: 'applied' };
+      } catch (error: unknown) {
+        return { tag: 'refused', message: cleanError(error) };
+      }
+    },
+    [commitEdit, flushSave, showToast, pageStateRef],
+  );
+  const removeClassFromNode = useCallback(
+    (nodeId: string, className: string, previewPath?: string) => removeFromNode(nodeId, previewPath, (props) => classRemoval(props, className)),
+    [removeFromNode],
+  );
+  const removeAttributeFromNode = useCallback(
+    (nodeId: string, attributeName: string) => removeFromNode(nodeId, undefined, (props) => attributeRemoval(props, attributeName)),
+    [removeFromNode],
+  );
+  return { removeClassFromNode, removeAttributeFromNode };
 }
 
 // Writing an asset pick into a prop.

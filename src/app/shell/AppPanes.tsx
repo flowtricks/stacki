@@ -400,8 +400,16 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
       }}
       onSelectNode={app.setSelectedId}
       onRecordUndo={app.pushCommand}
-      onAddClass={(name) =>
-        selectedId ? app.addClassToNode(selectedId, name, app.pathFor(selectedId)) : Promise.resolve({ tag: 'refused', message: 'no element is selected' })
+      onAddClass={(name, placement) =>
+        selectedId
+          ? app.addClassToNode(selectedId, name, placement, app.pathFor(selectedId))
+          : Promise.resolve({ tag: 'refused', message: 'no element is selected' })
+      }
+      onRemoveClass={(name) =>
+        selectedId ? app.removeClassFromNode(selectedId, name, app.pathFor(selectedId)) : Promise.resolve({ tag: 'refused', message: 'no element is selected' })
+      }
+      onRemoveAttribute={(name) =>
+        selectedId ? app.removeAttributeFromNode(selectedId, name) : Promise.resolve({ tag: 'refused', message: 'no element is selected' })
       }
       onSpacingHover={app.setSpacingHover}
       pathOf={app.pathFor}

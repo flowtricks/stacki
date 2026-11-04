@@ -151,7 +151,7 @@ const { class: className } = Astro.props;
     /<StylePanel[\s\S]{0,2000}?onAddClass=/.test(app),
     'onAddClass is on some other panel, so typing a class reaches nothing',
   );
-  check('the app adds classes through this rule', /withClass\(node\.props, clean\)/.test(app));
+  check('the app adds classes through this rule, at the caret’s placement', /withClass\(node\.props, clean, placement\)/.test(app));
   // Error feedback is exercised through the mounted app in styleWrites.test.js.
 
   // Step 6 (plan §3.3): the class is a page edit, the rule a stylesheet edit

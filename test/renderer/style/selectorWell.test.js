@@ -561,7 +561,9 @@ const contrastRatio = (first, second) => {
     const source = readSourceFolder('src/features/style/EmbedEditor.tsx', 'src/features/style/embed');
     const check_ = source.slice(source.indexOf('embed-editor_selector-filter'));
     check('the globals checkbox is not conditional on having any', !/\{globals\.length \? \(/.test(source), 'it still renders only when there are globals');
-    check('it disables itself instead when there are none', /disabled=\{busy \|\| !globals\.length\}/.test(check_));
+    // Never disabled: the choice is remembered before there is anything to hide,
+    // and a greyed-out box read as broken.
+    check('neither filter checkbox is ever disabled', !/disabled=/.test(check_.slice(0, check_.indexOf('</>'))), 'a filter checkbox is disabled');
     const contextualChip = css.slice(css.indexOf('.embed-editor_selector-chip:is(.is-global, .is-inherited)'));
     check(
       'global and inherited chips use the neutral grey ramp',
