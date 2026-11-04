@@ -1,6 +1,7 @@
 // The open page as the editor holds it: which file is open, and its state —
 // an editable model with the origin its edits are stated against, or the raw
 // source of a page the visual model cannot hold.
+import { assert } from '../../shared/core/assert';
 import type { Digest } from '../../shared/core/brand';
 import { LIMITS } from '../../shared/core/limits';
 import type { ParsePageResult } from '../../shared/page/pageNode';
@@ -146,6 +147,30 @@ export function carriedParse<Parsed extends ParsePageResult & { readonly source:
   const after = { source: parsed.source, seed, model: parsed.model };
   const model = carryHandles({ before, after, own: undefined, predicted: undefined });
   return { ...parsed, model };
+}
+
+/**
+ * The page the canvas shows while a component is open: the bottom of the edit
+ * stack. Opening a component makes it the current page, so the current page
+ * is the component itself, never where it is rendered; the Style panel needs
+ * the page, whose `:global()` selectors reach the component's markup
+ * (src/app/model/componentStyles.ts). Undefined when the open file is not a
+ * component, or the stack does not start at a page.
+ */
+export function canvasPageOf(stack: readonly OpenFile[]): string | undefined {
+  const open = stack.at(-1);
+  const bottom = stack[0];
+  if (open === undefined || bottom === undefined) {
+    return undefined;
+  }
+  if (open.kind === 'component') {
+    if (bottom.kind === 'page') {
+      assert(bottom.path !== open.path, 'canvasPageOf: a component is not the page it is shown on');
+      return bottom.path;
+    }
+    return undefined;
+  }
+  return undefined;
 }
 
 export function isOpenFile(page: CurrentPage | undefined): page is OpenFile {

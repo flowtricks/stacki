@@ -108,7 +108,10 @@ export default function VariableConnect(props: VariableConnectProps) {
           setOpen={setOpen}
         />
       ) : undefined}
-      {!applied.isVar ? (
+      {/* A field that is one variable is changed through its chip, so it drops the
+          dot. A code field is an expression a variable sits in (`calc(var(--a) * 2)`),
+          and a pick goes in at the caret, so it keeps the dot to add another. */}
+      {!applied.isVar || props.code === true ? (
         <ConnectDot
           dotRef={dotRef}
           disabled={disabled}

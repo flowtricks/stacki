@@ -125,6 +125,10 @@ const { repoPath, sourceSpecifier, stubSources } = require('../../helpers/source
     assert.ok(ySlider);
     assert.equal(ySlider.getAttribute('aria-disabled'), 'true', 'the slider has no number to scrub while the axis is a variable');
 
+    // An axis holding a variable still offers the dot: the field is code, so a
+    // second variable can go in beside the first (the bug: hovering it showed none).
+    assert.ok(y.querySelector('.embed-editor_varconnect-dot'), 'an axis holding a variable keeps the connect dot');
+
     // The negative space: a plain length is a plain field with a dot to connect it.
     const x = axisRow(host, 'X');
     assert.deepEqual(chipNames(x), [], 'a plain 0px has no chip');

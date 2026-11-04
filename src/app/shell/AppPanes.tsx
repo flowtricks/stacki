@@ -24,7 +24,7 @@ import type { Rename } from '../../features/props/propNodeEditors';
 import type { PropValues } from '../../features/props/propRules';
 import type { LoopApplyResult } from '../../features/props/LoopSettings';
 import type { LoopTarget } from '../../editor/loopQueryPlan';
-import { findEditorNodeById as findNodeById } from '../../editor/pageState';
+import { canvasPageOf, findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorNode } from '../../editor/pageView';
 import { useLiveValue } from '../../ui/liveValue';
 import { PropsPanel, StylePanel, CodeWindow, CmsView, ContentView, VariablesView } from '../appPanels';
@@ -411,7 +411,7 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
       selectorFocus={app.classFocus}
       openFilePath={app.openEditableFile?.path ?? undefined}
       openFileKind={app.openEditableFile?.kind ?? undefined}
-      contextPagePath={app.openEditableFile?.kind === 'component' ? app.currentPage?.path : undefined}
+      contextPagePath={canvasPageOf(app.editStack)}
     />
   );
 }
