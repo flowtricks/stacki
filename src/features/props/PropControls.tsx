@@ -27,6 +27,8 @@ import SegSwitch from './SegSwitch';
 import StyleEditor, { collapseDeclarations } from './StyleEditor';
 import { ChevronDownIcon } from '../../ui/Icons';
 import { type AssetImportFieldProps, attrText, mediaWord, boundsHint, type PropControlState, numberControlBounds } from './propFieldModel';
+import { codeRowValue, objectSeed, optionAttr, optionValue, previewsOptions } from './propKinds';
+import { itemShapeOf } from './listItemShape';
 
 export function AssetImportField({ binding, name, assetContext, onChange }: AssetImportFieldProps) {
   const [rel, setRel] = useState<string | undefined>(undefined);
@@ -196,7 +198,7 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
           current={current}
           onPick={(next) =>
             // Defaults recipes retain every explicit choice.
-            policy === 'instance' && next === defaultText ? onChange(undefined, true) : onChange({ type: field.numeric ? 'expr' : 'string', value: next }, true)
+            policy === 'instance' && next === defaultText ? onChange(undefined, true) : onChange(optionAttr(field, next), true)
           }
         />
       </div>
@@ -228,7 +230,8 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
         }))}
         // A union of numbers is still numbers: the component is typed for one,
         // so it has to be written `cols={3}`, not `cols="3"`.
-        onChange={(next) => (next === '' ? onChange(undefined, true) : onChange({ type: field.numeric ? 'expr' : 'string', value: next }, true))}
+        // and a mixed choice's `true` is written `flag={true}`, not `flag="true"`.
+        onChange={(next) => (next === '' ? onChange(undefined, true) : onChange(optionAttr(field, next), true))}
       />
     </div>
   );
@@ -237,22 +240,22 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
 function enumPreview(
   preview: React.ContextType<typeof PropPreviewContext>,
   enumField: {
-    readonly field: { readonly name: string; readonly numeric?: boolean | undefined };
+    readonly field: { readonly name: string; readonly numeric?: boolean | undefined; readonly expressionOptions?: readonly string[] | undefined };
     readonly choices: readonly string[];
     readonly omittedDefault: string | undefined;
   },
 ) {
   const { field, choices, omittedDefault } = enumField;
-  if (!preview) {
+  if (!preview || !previewsOptions(field)) {
     return {};
   }
   return {
     onPrepare: () =>
       preview.prepare(
         field.name,
-        choices.map((option) => (option === omittedDefault ? undefined : field.numeric ? Number(option) : option)),
+        choices.map((option) => (option === omittedDefault ? undefined : optionValue(field, option))),
       ),
-    onPreview: (next: string) => preview.hover(next === '' ? undefined : field.numeric ? Number(next) : next),
+    onPreview: (next: string) => preview.hover(next === '' ? undefined : optionValue(field, next)),
     onCancelPreview: preview.cancel,
     onCommitPreview: preview.commit,
   };
@@ -454,22 +457,36 @@ export function ImportedAssetControl({ state }: { readonly state: PropControlSta
   );
 }
 export function ObjectControl({ state }: { readonly state: PropControlState }) {
-  const { onChange, valueText, label } = state;
+  const { field, onChange, valueText, label } = state;
+  // An unset object starts from its default, or from blanks for its members,
+  // so its fields show before anything is set; the first edit writes it whole.
+  const seed = objectSeed(field, valueText) ?? valueText;
 
   return (
     <div className="props-field">
       {label}
-      <ObjectField value={valueText} onChange={(text, immediate) => onChange({ type: 'expr', value: text }, immediate)} />
+      <ObjectField value={seed} onChange={(text, immediate) => onChange({ type: 'expr', value: text }, immediate)} />
     </div>
   );
 }
 export function ListControl({ state }: { readonly state: PropControlState }) {
   const { field, onChange, valueText, placeholderFor, label } = state;
+  // A declared item type gives every item its fields and their controls; an
+  // unset list shows the component's default items until it is changed.
+  const itemShape = field.shapeIsList === true ? itemShapeOf(field.shape) : undefined;
+  const fallback = !state.isSet && typeof field.default === 'string' ? field.default : undefined;
 
   return (
     <div className="props-field">
       {label}
-      <ListField value={valueText} placeholder={placeholderFor(field)} onChange={(text, immediate) => onChange({ type: 'expr', value: text }, immediate)} />
+      <ListField
+        value={valueText}
+        placeholder={placeholderFor(field)}
+        itemShape={itemShape}
+        fallback={fallback}
+        projectPath={state.assetContext?.projectPath}
+        onChange={(text, immediate) => onChange({ type: 'expr', value: text }, immediate)}
+      />
     </div>
   );
 }
@@ -480,6 +497,25 @@ export function ExpressionControl({ state }: { readonly state: PropControlState 
     <div className="props-field">
       {label}
       <ExprValueField value={valueText} placeholder={placeholderFor(field)} dataContext={dataContext} onChange={onChange} />
+    </div>
+  );
+}
+// A value only code can give: an action (a function the component calls) or a
+// type no field can fill in. Read-only — what the prop takes and what it holds
+// now are shown as code, and the label's menu can still clear a value set.
+export function CodeControl({ state }: { readonly state: PropControlState }) {
+  const { field, value, label } = state;
+  const action = field.codeKind === 'function';
+  const shown = codeRowValue(field, value);
+  const note = action ? 'Action, set in code' : 'Set in code';
+  return (
+    <div className="props-field">
+      {label}
+      <div className="props-code-row" title={field.typeText === undefined ? note : `${note}: ${field.typeText}`}>
+        <span className="props-code-row-note">{note}</span>
+        {field.typeText !== undefined && <code className="props-code-row-type">{field.typeText}</code>}
+        {shown !== undefined && <code className="props-code-row-value">{shown}</code>}
+      </div>
     </div>
   );
 }

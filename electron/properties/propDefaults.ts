@@ -9,11 +9,16 @@ import * as fs from 'fs';
 import { parsePropSchema, parseExtendsTag, parseSlots, defaultSlotInline, rootTag } from '../parse/astroParser';
 import { capture } from '../lib/mainHelpers';
 import { resolveImportPath } from './importPaths';
+import { constLiteralLists } from '../parse/astroPropTypes';
+
+// Declarations followed from one imported file, the imported ones and those they use.
+const IMPORTED_DECLARATIONS_MAX = 64;
 
 // The declaration text for every type this file imports, so `type Props =
-// SeoProps` can be read when SeoProps lives in types.ts. One level deep and
-// only within the project — enough for the shape components actually use,
-// without turning this into a type checker.
+// SeoProps` can be read when SeoProps lives in types.ts. One file deep and
+// only within the project, with the types those declarations use from that
+// same file — enough for the shape components actually use, without turning
+// this into a type checker.
 export function importedTypes(source: string, filePath: string, projectPath: string) {
   const fm = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!fm) {
@@ -53,8 +58,12 @@ export function importedTypes(source: string, filePath: string, projectPath: str
       continue;
     }
     // Only the declarations that were actually imported, so an unrelated type
-    // in the same file can't shadow one the component declares itself.
-    for (const name of names) {
+    // in the same file can't shadow one the component declares itself — and
+    // the ones those use from the same file (`tone?: Tone` in CardProps, with
+    // Tone beside it), or `Tone` would reach the panel as a bare name.
+    const pending = [...names];
+    for (let index = 0; index < pending.length && index < IMPORTED_DECLARATIONS_MAX; index++) {
+      const name = pending[index] ?? '';
       const decl = new RegExp(`(?:^|\n)\\s*(?:export\\s+)?(?:type|interface)\\s+${name.replace(/[^\w$]/g, '')}\\b`).exec(text);
       if (!decl) {
         continue;
@@ -79,7 +88,13 @@ export function importedTypes(source: string, filePath: string, projectPath: str
           break;
         }
       }
-      out.push(text.slice(from, end));
+      const declaration = text.slice(from, end);
+      out.push(declaration);
+      for (const used of declaration.matchAll(/\b[A-Z][\w$]*\b/g)) {
+        if (!pending.includes(used[0]) && new RegExp(`(?:^|\n)\\s*(?:export\\s+)?(?:type|interface)\\s+${used[0].replace(/\$/g, '\\$')}\\b`).test(text)) {
+          pending.push(used[0]);
+        }
+      }
     }
   }
   return out.join('\n');
@@ -209,6 +224,11 @@ export function resolveIdentifierDefaults(schema: readonly SchemaField[], source
       return { ...field, defaultAsset };
     }
     const ident = String(field.default).trim();
+    // `Tone.Info`: a member of a const object the component declares itself.
+    const member = ident.match(/^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/);
+    if (member) {
+      return resolvedDefault(field, { value: constMemberLiteralIn(source, capture(member, 1), capture(member, 2)) });
+    }
     if (!/^[A-Za-z_$][\w$]*$/.test(ident)) {
       return field;
     }
@@ -227,17 +247,36 @@ export function resolveIdentifierDefaults(schema: readonly SchemaField[], source
         }
       }
     }
-    if (value === undefined) {
-      return field;
-    }
-    // Build a resolved field without mutating the parser's original schema.
-    const resolved = { ...field, default: value };
-    delete resolved.defaultExpr;
-    if (resolved.type === 'other') {
-      resolved.type = typeof value === 'number' ? 'number' : typeof value === 'boolean' ? 'boolean' : 'string';
-    }
-    return resolved;
+    return resolvedDefault(field, { value });
   });
+}
+
+// The field with its expression default replaced by the literal it names, or unchanged.
+function resolvedDefault(field: SchemaField, literal: { readonly value: SchemaField['default'] }): SchemaField {
+  const { value } = literal;
+  if (value === undefined) {
+    return field;
+  }
+  // Build a resolved field without mutating the parser's original schema.
+  const resolved = { ...field, default: value };
+  delete resolved.defaultExpr;
+  if (resolved.type === 'other' && resolved.codeKind === undefined) {
+    resolved.type = typeof value === 'number' ? 'number' : typeof value === 'boolean' ? 'boolean' : 'string';
+  }
+  return resolved;
+}
+
+// `NAME.key` of a `const NAME = { key: <literal> }` in the component's frontmatter.
+export function constMemberLiteralIn(source: string, name: string, key: string) {
+  const frontmatter = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!frontmatter) {
+    return undefined;
+  }
+  const list = constLiteralLists(capture(frontmatter, 1)).get(name);
+  if (list === undefined || list.kind !== 'object') {
+    return undefined;
+  }
+  return literalValue(list.entries.find(([entry]) => entry === key)?.[1]);
 }
 
 // Media a default may import; the same set the props panel previews.

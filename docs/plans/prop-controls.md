@@ -895,6 +895,16 @@ TypeScript's words, and half of them (`never`, `void`, `symbol`, `null`) are not
 
 ### 6.2 New picker: "Kind"
 
+Status: built in the Properties panel without the unified prop model
+(`src/features/componentProperties/propertyKinds.ts`, `PropertyType.tsx`): Text, Number, Switch,
+Choice, Link (`@format uri`), Image (`ImageMetadata | string`, or `import("astro").ImageMetadata |
+string` when the file does not import it), Color (`@format color`), Date, List (`readonly string[]`),
+Group (`{ label: string }`), Key–value list, Attributes (made from an element, so listed but not
+writable here), the collection-list settings, and Advanced with the TypeScript types and a "Code
+type" disclosure holding the exact expression. Number and Switch settings and the tooltip edit the
+JSDoc tags in place (`settingTags.ts`). Not yet: Rich text, Video, Variants, Tag, Class, Collection
+item(s), the item-kind picker for List, Group fields, and the instance-count warning.
+
 Rename the field to **Kind**. Use a searchable dropdown with sections and icons. Each choice maps to
 a type the form writes:
 

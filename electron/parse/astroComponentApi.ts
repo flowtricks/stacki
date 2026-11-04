@@ -326,5 +326,10 @@ export function parseExtendsTag(source: string): string | undefined {
   const fm = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   const frontmatter = fm ? required(fm[1], 'Frontmatter capture') : '';
   const match = frontmatter.match(new RegExp('interface\\s+Props\\s+extends\\s+(?:astroHTML\\.JSX\\' + '.)?HTMLAttributes\\s*<\\s*[\'"](\\w+)[\'"]\\s*>', ''));
-  return match ? required(match[1], 'Extended HTML tag capture') : undefined;
+  if (match) {
+    return required(match[1], 'Extended HTML tag capture');
+  }
+  // The same thing as an intersection: `type Props = HTMLAttributes<'button'> & { label: string }`.
+  const intersected = frontmatter.match(/type\s+Props\s*=\s*(?:astroHTML\.JSX\.)?HTMLAttributes\s*<\s*['"](\w+)['"]\s*>\s*&/);
+  return intersected ? required(intersected[1], 'Intersected HTML tag capture') : undefined;
 }

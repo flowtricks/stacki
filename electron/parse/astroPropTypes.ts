@@ -5,6 +5,8 @@
 import type { NumberRules, StatedDefault, NormalizedType } from './astroParserTypes';
 import { required } from './astroAttrs';
 import { skipStringOrComment } from './astroScan';
+import { assert } from '../../shared/core/assert';
+import { LIMITS } from '../../shared/core/limits';
 
 // ---------------------------------------------------------------------------
 // Component prop schema extraction
@@ -24,9 +26,12 @@ export function splitTypeTop(expr: string, op: string): string[] {
       continue;
     }
     const character = expr.charAt(i);
+    // The `>` of a function type's arrow closes nothing: counting it left every
+    // member after `format?: (value: number) => string;` one level too deep.
+    const arrow = character === '>' && expr.charAt(i - 1) === '=';
     if ('([{<'.includes(character)) {
       depth++;
-    } else if (')]}>'.includes(character)) {
+    } else if (')]}>'.includes(character) && !arrow) {
       depth--;
     } else if (character === op && depth === 0) {
       out.push(expr.slice(start, i));
@@ -41,14 +46,177 @@ export function splitTypeTop(expr: string, op: string): string[] {
 // holds several members between semicolons. Both walkers below read one member
 // per line, so the top-level semicolons become newlines first — nested ones
 // (inside a nested object or a generic) are left alone.
+//
+// A member whose type is an object written over several lines
+//   cta: {
+//     label: string;
+//     link: { href: string };
+//   };
+// stays one line too: its inner line breaks become spaces (and comments inside
+// it are dropped), or each inner member would read as a prop of its own.
 export function explodeMembers(block: string): string {
-  return splitTypeTop(block, ';').join('\n');
+  return splitTypeTop(block, ';').map(flattenNested).join('\n');
+}
+
+// One member's text with everything inside brackets on one line. Comments at
+// the top level stay where they are: they document the member below them.
+function flattenNested(member: string): string {
+  let out = '';
+  let depth = 0;
+  for (let i = 0; i < member.length; i++) {
+    const skipped = skipStringOrComment(member, i);
+    if (skipped !== i) {
+      const piece = member.slice(i, skipped);
+      const comment = piece.startsWith('//') || piece.startsWith('/*');
+      out += depth > 0 && comment ? ' ' : piece;
+      i = skipped - 1;
+      continue;
+    }
+    const character = member.charAt(i);
+    const arrow = character === '>' && member.charAt(i - 1) === '=';
+    if ('([{<'.includes(character)) {
+      depth++;
+    } else if (')]}>'.includes(character) && !arrow) {
+      depth = Math.max(0, depth - 1);
+    }
+    out += depth > 0 && (character === '\n' || character === '\r') ? ' ' : character;
+  }
+  assert(out.length <= member.length, 'flattenNested: flattening never adds text');
+  return out;
 }
 
 // `prelude` carries type declarations this file imports from elsewhere. A
 // component is free to write `type Props = SeoProps` with SeoProps in
 // types.ts, and without the declaration text there is nothing to read — the
 // panel would show a component with no props at all. The caller (which has
+// A const array or object of literals in the frontmatter, the way a component
+// lists its choices once and types a prop from it:
+//   const SIZES = ['sm', 'md', 'lg'] as const;     size?: (typeof SIZES)[number]
+//   const Tone = { Info: 'info' } as const;        tone?: (typeof Tone)[keyof typeof Tone]
+// Entries keep each value's literal text (`'sm'`, `3`); an array's keys are its indexes.
+export interface ConstLiterals {
+  readonly kind: 'array' | 'object';
+  readonly asConst: boolean;
+  readonly entries: readonly (readonly [key: string, literal: string])[];
+}
+
+// A frontmatter declares a few such lists; more than this are not read.
+const CONST_LISTS_MAX = 64;
+const LITERAL_RE = /^(?:"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|-?\d+(?:\.\d+)?|true|false)$/;
+
+/** Every `const X = [literals]` and `const X = { key: literal }` the code declares, by name. */
+export function constLiteralLists(code: string): ReadonlyMap<string, ConstLiterals> {
+  const out = new Map<string, ConstLiterals>();
+  const declaration = /(?:^|[\n;])\s*(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*(?::[^=\n]+)?=\s*([[{])/g;
+  for (let found = 0; found < CONST_LISTS_MAX; found++) {
+    const match = declaration.exec(code);
+    if (match === null) {
+      break;
+    }
+    const open = match.index + match[0].length - 1;
+    const close = matchingBracket(code, open);
+    if (close === -1) {
+      continue;
+    }
+    const kind = code.charAt(open) === '[' ? 'array' : 'object';
+    const entries = literalEntries(code.slice(open + 1, close), kind);
+    if (entries !== undefined) {
+      const asConst = /^\s*as\s+const\b/.test(code.slice(close + 1));
+      out.set(required(match[1], 'Const list name capture'), { kind, asConst, entries });
+    }
+  }
+  assert(out.size <= CONST_LISTS_MAX, 'constLiteralLists: bounded');
+  return out;
+}
+
+// The text with each type query over an `as const` list replaced by the union
+// it stands for, so the type reader sees `'sm' | 'md' | 'lg'`. An array's
+// values are `(typeof X)[number]` (or `typeof X[number]`), an object's values
+// `(typeof X)[keyof typeof X]`, and an object's keys `keyof typeof X`.
+export function resolveConstTypeQueries(code: string): string {
+  const lists = constLiteralLists(code);
+  if (lists.size === 0) {
+    return code;
+  }
+  const union = (name: string, part: 'values' | 'keys', kind: ConstLiterals['kind']): string | undefined => {
+    const list = lists.get(name);
+    if (list === undefined || !list.asConst || list.kind !== kind) {
+      return undefined;
+    }
+    const pieces = list.entries.map(([key, literal]) => (part === 'keys' ? JSON.stringify(key) : literal));
+    return pieces.length ? pieces.join(' | ') : undefined;
+  };
+  const resolved = code
+    .replace(
+      /(?:\(\s*)?typeof\s+([A-Za-z_$][\w$]*)(?:\s*\))?\s*\[\s*keyof\s+typeof\s+\1\s*\]/g,
+      (whole, name: string) => union(name, 'values', 'object') ?? whole,
+    )
+    .replace(/(?:\(\s*)?typeof\s+([A-Za-z_$][\w$]*)(?:\s*\))?\s*\[\s*number\s*\]/g, (whole, name: string) => union(name, 'values', 'array') ?? whole)
+    .replace(/\bkeyof\s+typeof\s+([A-Za-z_$][\w$]*)/g, (whole, name: string) => union(name, 'keys', 'object') ?? whole);
+  assert(resolved.length > 0, 'resolveConstTypeQueries: text stays');
+  return resolved;
+}
+
+// The entries between a list's brackets, when every value is a literal.
+function literalEntries(inside: string, kind: ConstLiterals['kind']): (readonly [string, string])[] | undefined {
+  const items = splitTypeTop(inside, ',');
+  if (items.length > LIMITS.propOptionsMax) {
+    return undefined;
+  }
+  const entries: (readonly [string, string])[] = [];
+  for (const [index, item] of items.entries()) {
+    if (kind === 'array') {
+      if (!LITERAL_RE.test(item)) {
+        return undefined;
+      }
+      entries.push([String(index), item]);
+      continue;
+    }
+    const member = item.match(/^([A-Za-z_$][\w$]*|"[^"\n]*"|'[^'\n]*')\s*:\s*([\s\S]+)$/);
+    const literal = member?.[2]?.trim();
+    if (member === null || literal === undefined || !LITERAL_RE.test(literal)) {
+      return undefined;
+    }
+    entries.push([memberName(required(member[1], 'Const member name capture')), literal]);
+  }
+  return entries;
+}
+
+function matchingBracket(code: string, open: number): number {
+  const opener = code.charAt(open);
+  assert(opener === '[' || opener === '{', 'matchingBracket: starts at a bracket');
+  let depth = 0;
+  for (let i = open; i < code.length; i++) {
+    const skipped = skipStringOrComment(code, i);
+    if (skipped !== i) {
+      i = skipped - 1;
+      continue;
+    }
+    const character = code.charAt(i);
+    if (character === '[' || character === '{' || character === '(') {
+      depth++;
+    } else if (character === ']' || character === '}' || character === ')') {
+      depth--;
+      if (depth === 0) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+// A member's name in a type: an identifier, or a quoted name such as
+// `'data-id'` or `"aria-label"` (attributes are spelled with dashes).
+export const MEMBER_NAME_SOURCE = String.raw`([\w$]+|'[^'\n]+'|"[^"\n]+")`;
+
+/** A member name as the prop is called: quotes taken off a quoted one. */
+export function memberName(raw: string): string {
+  const quoted = raw.match(/^(['"])(.+)\1$/);
+  const name = quoted ? required(quoted[2], 'Quoted member name capture') : raw;
+  assert(name.length > 0, 'memberName: a member has a name');
+  return name;
+}
+
 // What a doc comment promises about a prop's fallback. Returns a value when it
 // names exactly one, a hint when it names several, and nothing when it is
 // prose. Used twice: once for the field itself, and once per union branch,
@@ -179,60 +347,194 @@ export function numberRules(documentation: string | undefined): NumberRules {
 }
 
 export function normalizeType(typeText: string): NormalizedType {
-  // Union of string literals ('primary' | 'secondary') → enum with options.
-  const parts = typeText
-    .split('|')
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (parts.length > 1) {
-    const literals = parts.filter((part) => /^(['"`]).*\1$/.test(part));
-    const rest = parts.filter((part) => !/^(['"`]).*\1$/.test(part));
-    if (literals.length >= 2 && rest.every((part) => part === 'undefined' || part === 'null')) {
-      return { type: 'enum', options: literals.map((part) => part.slice(1, -1)) };
-    }
-    // The same thing written with numbers — `1 | 2 | … | 12` for a column
-    // count. A free number field would take -1, 0 and 1.5, none of which the
-    // type allows, so this is a list too. `numeric` tells the panel to write
-    // `cols={3}` rather than `cols="3"`; the component is typed for a number.
-    const nums = parts.filter((part) => /^-?\d+(?:\.\d+)?$/.test(part));
-    const notNums = parts.filter((part) => !/^-?\d+(?:\.\d+)?$/.test(part));
-    if (nums.length >= 2 && notNums.every((part) => part === 'undefined' || part === 'null')) {
-      return { type: 'enum', numeric: true, options: nums };
-    }
+  // `readonly string[]` and `readonly [min: number, max: number]` are the same
+  // values as their mutable forms; the modifier only stops the component
+  // reassigning them.
+  const text = typeText.trim().replace(/^readonly\s+/, '');
+  const choice = literalChoice(text);
+  if (choice !== undefined) {
+    return choice;
   }
   // Arrays, tuples and object literals are values only JS can express —
   // `number[]`, `(number | \`${number}x\`)[]`, `{ a: 1 }`. They must be checked
   // BEFORE the primitive prefixes, or `number[]` reads as a plain number and
   // the field writes `widths="400"` where the component wants `widths={[400]}`.
   // A text field here produces a string, and the component does .map on it.
-  const arrayish = /\[\s*\]\s*$/.test(typeText) || /^Array\s*</.test(typeText) || /^\[[\s\S]*\]$/.test(typeText);
+  const arrayish = /\[\s*\]\s*$/.test(text) || /^(?:Readonly)?Array\s*</.test(text) || /^\[[\s\S]*\]$/.test(text);
   // A plain bag of attributes still edits as name/value rows — that reads far
   // better than a JS literal. Only when it can also be an ARRAY does it have
   // to become code, since rows cannot express one.
-  if (/^(HTMLAttributes\b|astroHTML\.|Record\s*<)/.test(typeText) && !arrayish) {
+  if (/^(HTMLAttributes\b|astroHTML\.|Record\s*<)/.test(text) && !arrayish) {
     return { type: 'attrs' };
   }
-  if (arrayish || /^\{[\s\S]*\}$/.test(typeText)) {
+  if (arrayish) {
     return { type: 'code' };
   }
-  if (/^string\b/.test(typeText)) {
+  // An object is not a list: the list editor would write `[…]` into it. The
+  // panel edits a simple one as its fields and shows any other as code.
+  if (/^\{[\s\S]*\}$/.test(text) && !/^\{\s*\}$/.test(text)) {
+    return { type: 'code', codeKind: 'object' };
+  }
+  const codeKind = codeOnlyKind(text);
+  if (codeKind !== undefined) {
+    return { type: 'other', codeKind };
+  }
+  if (/^string\b/.test(text)) {
     return { type: 'string' };
   }
-  if (/^number\b/.test(typeText)) {
+  if (/^number\b/.test(text)) {
     return { type: 'number' };
   }
-  if (/^boolean\b/.test(typeText)) {
+  if (/^boolean\b/.test(text)) {
     return { type: 'boolean' };
   }
-  if (/^(['"`]).*\1$/.test(typeText)) {
+  if (/^(['"`]).*\1$/.test(text)) {
     return { type: 'string' };
   }
-  // Objects of attributes (HTMLAttributes<"div">, Record<string, …>) edit
-  // as name/value rows.
-  if (/^(HTMLAttributes\b|astroHTML\.|Record\s*<)/.test(typeText)) {
-    return { type: 'attrs' };
-  }
   return { type: 'other' };
+}
+
+// The longest type text a schema carries for the code row; longer text is cut.
+const TYPE_TEXT_CHARS_MAX = 512;
+
+/** A type's text as the panel shows it beside a value set in code: one line, bounded. */
+export function shownTypeText(typeText: string): string {
+  const flat = typeText.replace(/\s+/g, ' ').trim();
+  const shown = flat.length <= TYPE_TEXT_CHARS_MAX ? flat : `${flat.slice(0, TYPE_TEXT_CHARS_MAX - 1)}…`;
+  assert(shown.length <= TYPE_TEXT_CHARS_MAX, 'shownTypeText: bounded');
+  return shown;
+}
+
+const STRING_LITERAL_RE = /^(['"])(.*)\1$/s;
+const NUMBER_LITERAL_RE = /^-?\d+(?:\.\d+)?$/;
+const NULLISH_PARTS: ReadonlySet<string> = new Set(['undefined', 'null']);
+
+// A union of literals is a fixed set of choices: `'sm' | 'lg'`, `1 | 2 | 3`,
+// and mixed ones — `boolean | 'auto'` is true, false or auto, and
+// `'sm' | 'lg' | number` offers its two words (a number stays possible in
+// code). The options that are not strings are written as expressions, so
+// `flag={true}` stays a boolean. Undefined when the type is not such a union.
+function literalChoice(text: string): NormalizedType | undefined {
+  const parts = splitTypeTop(text, '|').filter((part) => !NULLISH_PARTS.has(part));
+  if (parts.length < 2) {
+    return undefined;
+  }
+  const options: string[] = [];
+  const expressions: string[] = [];
+  let strings = 0;
+  let widenedToNumber = false;
+  for (const part of parts) {
+    const literal = part.match(STRING_LITERAL_RE);
+    if (literal) {
+      options.push(required(literal[2], 'String literal capture'));
+      strings++;
+    } else if (NUMBER_LITERAL_RE.test(part) || part === 'true' || part === 'false') {
+      options.push(part);
+      expressions.push(part);
+    } else if (part === 'boolean') {
+      options.push('true', 'false');
+      expressions.push('true', 'false');
+    } else if (part === 'number') {
+      widenedToNumber = true;
+    } else {
+      return undefined;
+    }
+  }
+  const unique = [...new Set(options)];
+  assert(unique.length <= options.length, 'literalChoice: options never grow when made unique');
+  if (unique.length < 2 || unique.length > LIMITS.propOptionsMax) {
+    return undefined;
+  }
+  // `number | 1 | 2` is any number; only words beside `number` make a choice.
+  if (widenedToNumber && strings < 2) {
+    return undefined;
+  }
+  if (strings === 0) {
+    // `true | false` is just a boolean.
+    if (unique.every((option) => option === 'true' || option === 'false')) {
+      return { type: 'boolean' };
+    }
+    if (unique.every((option) => NUMBER_LITERAL_RE.test(option))) {
+      return { type: 'enum', numeric: true, options: unique };
+    }
+  }
+  const written = unique.filter((option) => expressions.includes(option));
+  return written.length ? { type: 'enum', options: unique, expressionOptions: written } : { type: 'enum', options: unique };
+}
+
+// Values only code can give a prop: a function (an action the component calls),
+// and types that say nothing a field could fill in — `any`, `unknown`,
+// `object`, a promise, a symbol. Undefined for every other type.
+function codeOnlyKind(text: string): 'function' | 'opaque' | undefined {
+  const parts = splitTypeTop(text, '|').filter((part) => !NULLISH_PARTS.has(part));
+  if (parts.length === 0) {
+    return undefined;
+  }
+  if (parts.every(isFunctionType)) {
+    return 'function';
+  }
+  if (
+    parts.length === 1 &&
+    /^(?:any|unknown|object|Object|\{\s*\}|symbol|unique\s+symbol|bigint|never|void|(?:Promise|PromiseLike|Map|Set|WeakMap|WeakSet)\s*<[\s\S]*>)$/.test(
+      required(parts[0], 'One part'),
+    )
+  ) {
+    return 'opaque';
+  }
+  return undefined;
+}
+
+// `(item: T) => string`, `<T>(x: T) => T`, `() => void`, `(() => void)`,
+// `new () => Thing` and `Function`.
+function isFunctionType(part: string): boolean {
+  const text = part.trim().replace(/^\(([\s\S]*)\)$/, (whole, inner: string) => (balanced(inner) ? inner.trim() : whole));
+  if (text === 'Function') {
+    return true;
+  }
+  if (!/^(?:new\s*)?[(<]/.test(text)) {
+    return false;
+  }
+  // The arrow must be at the top level, after the parameter list.
+  const arrow = topLevelArrow(text);
+  return arrow > 0;
+}
+
+function balanced(text: string): boolean {
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const character = text.charAt(i);
+    if (character === '(') {
+      depth++;
+    } else if (character === ')') {
+      depth--;
+      if (depth < 0) {
+        return false;
+      }
+    }
+  }
+  return depth === 0;
+}
+
+function topLevelArrow(text: string): number {
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const skipped = skipStringOrComment(text, i);
+    if (skipped !== i) {
+      i = skipped - 1;
+      continue;
+    }
+    const character = text.charAt(i);
+    const arrow = character === '>' && text.charAt(i - 1) === '=';
+    if (arrow && depth === 0) {
+      return i;
+    }
+    if ('([{<'.includes(character)) {
+      depth++;
+    } else if (')]}>'.includes(character) && !arrow) {
+      depth--;
+    }
+  }
+  return -1;
 }
 
 function numberRulesTags(documentation: string): NumberRules {

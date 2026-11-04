@@ -3,6 +3,7 @@
 // Kind-specific payloads remain a union so serializers cannot invent a node.
 import type { Attr, AttrSpan } from '../../shared/page/pageNode';
 import type { FrontmatterModel } from '../../shared/page/frontmatterSource';
+import type { CodeKind } from '../../shared/properties/propSchema';
 
 interface NodeMetadata {
   id?: string;
@@ -105,10 +106,17 @@ export interface PropUnion {
   readonly names: readonly string[];
   readonly branches: readonly UnionBranch[];
 }
+// What a value set in code is: an object (edited as its fields when they are
+// simple), a function (an action, never typed into a field) or a type that says
+// nothing a field could fill in (`any`, `unknown`, a promise). Lists carry none.
+export type { CodeKind } from '../../shared/properties/propSchema';
 export interface NormalizedType {
   readonly type: 'enum' | 'attrs' | 'code' | 'string' | 'number' | 'boolean' | 'other';
   readonly options?: readonly string[] | undefined;
   readonly numeric?: boolean | undefined;
+  // The options of a mixed choice written as expressions (`true`, `3`), not strings.
+  readonly expressionOptions?: readonly string[] | undefined;
+  readonly codeKind?: CodeKind | undefined;
 }
 export interface SchemaField extends NumberRules {
   readonly name: string;
@@ -121,6 +129,10 @@ export interface SchemaField extends NumberRules {
   hint?: string;
   readonly options?: readonly string[] | undefined;
   readonly numeric?: boolean | undefined;
+  readonly expressionOptions?: readonly string[] | undefined;
+  codeKind?: CodeKind | undefined;
+  // The declared type as written, for the code row; only on code-only props.
+  typeText?: string | undefined;
   readonly doc?: string | undefined;
   readonly shape?: readonly { readonly name: string; readonly type: string }[];
   readonly shapeIsList?: boolean;

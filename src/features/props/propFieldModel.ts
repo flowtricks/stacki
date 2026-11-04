@@ -15,7 +15,9 @@ import type { PickedAsset } from '../../ui/AssetField';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { findImportOf } from '../../editor/dataSuggest';
-import { arrayItems } from './arrayValue';
+import { isHrefName, isMediaName } from '../../editor/fieldNames';
+import { arrayItems, objectFields } from './arrayValue';
+import { optionAttr } from './propKinds';
 import LinkField from './LinkField';
 
 export interface AssetContext {
@@ -59,14 +61,9 @@ export function attrText(value: Attr | undefined): string | undefined {
   return value?.type === 'bare' ? undefined : value?.value;
 }
 
-export function isHrefName(name: string) {
-  const words = String(name)
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-  return words[words.length - 1] === 'href';
-}
+// What a name says a field holds lives in one place, shared with the new
+// property form and a list's item editor (fieldNames.ts).
+export { isHrefName, isMediaName, MEDIA_WORDS, mediaWord } from '../../editor/fieldNames';
 
 export const MEDIA_IMPORT_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|mp4|webm|mov|m4v|ogg|mp3|wav)(\?.*)?$/i;
 
@@ -82,22 +79,6 @@ export function assetImportOf(expr: unknown, frontmatter: unknown) {
     return undefined;
   }
   return { ident: match[1] ?? '', spec: imported.spec };
-}
-
-export const MEDIA_WORDS = new Set(['src', 'image', 'poster', 'icon', 'logo', 'avatar', 'thumb', 'thumbnail', 'photo', 'banner', 'cover', 'video', 'audio']);
-
-export function mediaWord(name: string) {
-  const words = String(name || '')
-    .replace(/[-_]+/g, ' ')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .toLowerCase()
-    .trim()
-    .split(/\s+/);
-  return words[words.length - 1] || '';
-}
-
-export function isMediaName(name: string) {
-  return MEDIA_WORDS.has(mediaWord(name));
 }
 
 export function boundsHint(field: FieldDefinition) {
@@ -135,6 +116,10 @@ export function isBoundValue(field: FieldDefinition, value: Attr | undefined) {
   // A list of plain items is a list, and the list control writes exactly that.
   // Anything else an array prop can hold — a name, a spread, an object per item
   // — is a program, and the code editor is the only field that can show one.
+  // An object of simple fields is the same: the object control writes it.
+  if (field.type === 'code' && field.codeKind === 'object') {
+    return objectFields(source) === undefined;
+  }
   if (field.type === 'code') {
     return arrayItems(source) === undefined;
   }
@@ -158,7 +143,10 @@ export function valueFromExpr(field: FieldDefinition, raw: string): Attr | undef
     return /^[-+]?(\d+\.?\d*|\.\d+)$/.test(source) ? { type: 'expr', value: source } : undefined;
   }
   if (field.type === 'enum') {
-    return (field.options || []).includes(source) ? { type: field.numeric ? 'expr' : 'string', value: source } : undefined;
+    return (field.options || []).includes(source) ? optionAttr(field, source) : undefined;
+  }
+  if (field.type === 'code' && field.codeKind === 'object') {
+    return objectFields(source) ? { type: 'expr', value: source } : undefined;
   }
   // An array of plain items survives the trip: the list can show it, so going
   // back to the control keeps the value rather than dropping the prop.
@@ -171,6 +159,9 @@ export function valueFromExpr(field: FieldDefinition, raw: string): Attr | undef
 export function controlWord(field: FieldDefinition) {
   if (field.type === 'boolean') {
     return 'toggle';
+  }
+  if (field.type === 'code' && field.codeKind === 'object') {
+    return 'fields';
   }
   if (field.type === 'code') {
     return 'list';
@@ -218,7 +209,8 @@ export function usePropFieldModel(props: PropFieldProps) {
   // A ref prop: BindField fills it with its caret API while it is mounted.
   const bindApiRef = useRef<InsertAPI | undefined>(undefined);
   useEffect(() => setCustom(false), [nodeKey, name]);
-  const bindable = type !== 'attrs' && name !== 'slot';
+  // An action is set in code only; there is nothing a binding could give it.
+  const bindable = type !== 'attrs' && name !== 'slot' && field.codeKind !== 'function';
   const valueText = attrText(value) ?? '';
   const assetBinding = assetImportOf(valueText, dataContext?.imports);
   const shownAsAsset = value?.type === 'expr' && assetBinding && assetContext?.projectPath && assetContext?.filePath;
@@ -234,7 +226,9 @@ export function usePropFieldModel(props: PropFieldProps) {
   assert(valueText.length <= LIMITS.attrCharsMax, 'PropField: value limit exceeded');
   assert((field.options?.length ?? 0) <= LIMITS.propOptionsMax, 'PropField: option limit exceeded');
   const isExpr = value?.type === 'expr' || (type === 'code' && value?.type !== 'string');
-  const isMediaAttr = isMediaName(name);
+  // An Image prop (its default imports a file, `image = placeholder`) is
+  // media whatever it is called; otherwise its name says so.
+  const isMediaAttr = isMediaName(name) || field.defaultAsset !== undefined;
   return {
     ...props,
     field,

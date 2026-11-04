@@ -1,6 +1,7 @@
 import { arrayItems, objectFields } from './arrayValue';
 import { looksLikeAssetPath } from '../../ui/AssetThumb';
-import { type PropFieldProps, isHrefName, usePropField, type PropState, type PropControlState } from './propFieldModel';
+import { type PropFieldProps, usePropField, type PropState, type PropControlState } from './propFieldModel';
+import { codeRowKind, isLinkProp, objectSeed } from './propKinds';
 import {
   BindingControl,
   StyleControl,
@@ -16,6 +17,7 @@ import {
   ObjectControl,
   ListControl,
   ExpressionControl,
+  CodeControl,
   TextControl,
 } from './PropControls';
 import { PropFieldPill, PropFieldMenu, PropFieldLabelRow, PropFieldPicker } from './PropFieldLabel';
@@ -43,8 +45,22 @@ function PropFieldControls({ state }: { readonly state: PropState }) {
 }
 function propFieldControl(view: PropControlState) {
   const { field, value, slotOptions, assetContext, linkContext, name, type, isSet, valueText, assetBinding, showExpr, isExpr, isMediaAttr } = view;
+  // Values only code can give never get a field that writes a string: an
+  // action is always the read-only row, `any` and the like while unset.
+  const codeRow = codeRowKind(field, value);
+  if (codeRow === 'action') {
+    return <CodeControl state={view} />;
+  }
   if (showExpr) {
     return <BindingControl state={view} />;
+  }
+  if (codeRow === 'code') {
+    return <CodeControl state={view} />;
+  }
+  // An object is edited as its fields when they are simple, and is otherwise
+  // set in code; the list editor would write an array into it.
+  if (type === 'code' && field.codeKind === 'object') {
+    return objectSeed(field, valueText) === undefined ? <CodeControl state={view} /> : <ObjectControl state={view} />;
   }
   if (type === 'style' && (!isSet || value?.type === 'string')) {
     return <StyleControl state={view} />;
@@ -70,7 +86,7 @@ function propFieldControl(view: PropControlState) {
   if (type === 'number') {
     return <NumberControl state={view} />;
   }
-  if (isHrefName(name) && !isExpr && linkContext && (type === 'string' || type === 'other')) {
+  if (isLinkProp(field) && !isExpr && linkContext) {
     return <LinkControl state={view} />;
   }
   if (!isExpr && assetContext?.projectPath && (isMediaAttr || looksLikeAssetPath(valueText))) {

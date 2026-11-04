@@ -193,3 +193,16 @@ test('nested schema collections and text have explicit bounds', () => {
   }
   assert.equal(parseField({ ...base, doc: 'x'.repeat(LIMITS.attrCharsMax) }, 'item').doc?.length, LIMITS.attrCharsMax);
 });
+
+// The code row and mixed choices travel with their own metadata: a function or
+// `any` prop says so, with its type, and a choice says which options are written
+// as expressions. Each is checked at the boundary like the rest.
+test('code kinds, type text and expression options are preserved, and validated', () => {
+  const action = { name: 'onSelect', type: 'other', optional: true, codeKind: 'function', typeText: '() => void' };
+  const choice = { name: 'flag', type: 'enum', optional: true, options: ['true', 'false', 'auto'], expressionOptions: ['true', 'false'] };
+  assert.deepEqual(parseField(structuredClone(action), 'onSelect'), action);
+  assert.deepEqual(parseField(structuredClone(choice), 'flag'), choice);
+  assert.throws(() => parseField({ ...action, codeKind: 'list' }, 'onSelect'), /codeKind: expected one of object, function, opaque/);
+  assert.throws(() => parseField({ ...action, typeText: 7 }, 'onSelect'), /typeText: expected string/);
+  assert.throws(() => parseField({ ...choice, expressionOptions: [true] }, 'flag'), /expressionOptions: expected string array/);
+});

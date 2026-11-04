@@ -28,6 +28,10 @@ export interface PropShapeField {
   readonly name: string;
   readonly type: string;
 }
+// What a value only code can give is (see the scan's normalizeType): an object,
+// a function (an action) or a type no field can fill in (`any`, a promise).
+export const CODE_KINDS = ['object', 'function', 'opaque'] as const;
+export type CodeKind = (typeof CODE_KINDS)[number];
 export interface PropField {
   readonly name: string;
   // Type text stays open: local schema readers may retain the authored type name.
@@ -35,6 +39,11 @@ export interface PropField {
   readonly optional: boolean;
   readonly options?: readonly string[];
   readonly numeric?: boolean;
+  // Options of a mixed choice written as expressions (`flag={true}`), not strings.
+  readonly expressionOptions?: readonly string[];
+  readonly codeKind?: CodeKind;
+  // The declared type as written, one line, on props whose value is set in code.
+  readonly typeText?: string;
   readonly default?: PropDefault | undefined;
   readonly defaultExpr?: boolean;
   // The project file an expression default imports, for its thumbnail only:
@@ -66,6 +75,8 @@ export function parseField(input: unknown, where: string): PropField {
     ...schemaOptionalMetadata(value, where),
     ...definedFields({
       options: schemaOptional(value, 'options', where, (input, at) => schemaStrings(input, at, LIMITS.propOptionsMax)),
+      expressionOptions: schemaOptional(value, 'expressionOptions', where, (input, at) => schemaStrings(input, at, LIMITS.propOptionsMax)),
+      codeKind: schemaOptional(value, 'codeKind', where, schemaCodeKind),
       shape: schemaOptional(value, 'shape', where, schemaShape),
       unions: schemaOptional(value, 'unions', where, (input, at) => schemaArray(input, at, LIMITS.propOptionsMax).map((union) => schemaUnion(union, at))),
     }),
@@ -191,7 +202,15 @@ function schemaOptionalMetadata(value: Readonly<Record<string, unknown>>, where:
     doc: schemaOptional(value, 'doc', where, schemaText),
     defaultAsset: schemaOptional(value, 'defaultAsset', where, schemaText),
     hint: schemaOptional(value, 'hint', where, schemaText),
+    typeText: schemaOptional(value, 'typeText', where, schemaText),
   });
+}
+function schemaCodeKind(input: unknown, where: string): CodeKind {
+  const kind = CODE_KINDS.find((candidate) => candidate === input);
+  if (kind === undefined) {
+    fail(where, `expected one of ${CODE_KINDS.join(', ')}`);
+  }
+  return kind;
 }
 function schemaShape(input: unknown, where: string): readonly PropShapeField[] {
   return schemaArray(input, where, LIMITS.propSchemaFieldsMax).map((item) => {

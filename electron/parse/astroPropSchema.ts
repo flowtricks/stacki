@@ -5,7 +5,9 @@ import { LIMITS } from '../../shared/core/limits';
 import type { DefaultRule, PropUnion, SchemaField } from './astroParserTypes';
 import { required } from './astroAttrs';
 import { skipStringOrComment, findMatchingBrace } from './astroScan';
-import { splitTypeTop, explodeMembers, statedDefault } from './astroPropTypes';
+import { splitTypeTop, explodeMembers, statedDefault, MEMBER_NAME_SOURCE, memberName, resolveConstTypeQueries } from './astroPropTypes';
+
+const MEMBER_DOCUMENTATION_RE = new RegExp(String.raw`^(?:readonly\s+)?${MEMBER_NAME_SOURCE}\??\s*:\s*([^;\n]+?)[;,]?\s*$`);
 import {
   parsePropSchemaExpandAlias,
   parsePropSchemaMemberEntries,
@@ -14,6 +16,8 @@ import {
   parsePropSchemaDestructure,
   parsePropSchemaSplitFallback,
   parsePropSchemaFallbacks,
+  parsePropSchemaDirectAccess,
+  propsDestructure,
 } from './astroPropFields';
 
 // `prelude` carries type declarations this file imports from elsewhere. A
@@ -23,7 +27,8 @@ import {
 // file access; this doesn't) resolves and reads them.
 export function parsePropSchema(source: string, prelude = ''): SchemaField[] {
   const fm = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  const frontmatter = (prelude ? prelude + '\n' : '') + (fm ? fm[1] : '');
+  // Type queries over `as const` lists are read as the unions they stand for.
+  const frontmatter = resolveConstTypeQueries((prelude ? prelude + '\n' : '') + (fm ? fm[1] : ''));
   const aliases = parsePropSchemaAliases(frontmatter);
 
   // Which type describes the props. `Astro.props as X` names it outright;
@@ -41,12 +46,24 @@ export function parsePropSchema(source: string, prelude = ''): SchemaField[] {
         '',
       ),
     ) ?? undefined;
-  const blocks = parsePropSchemaBlocks(aliases, propsDecl, asType);
+  // `const { a }: { a: string } = Astro.props` declares the props in the
+  // annotation; it is the Props type when there is no other.
+  const annotation = propsDecl === undefined && asType === undefined ? propsDestructure(frontmatter)?.annotation : undefined;
+  const declaration = propsDecl
+    ? { heritage: propsDecl[1], body: propsDecl[2] }
+    : annotation === undefined
+      ? undefined
+      : { heritage: undefined, body: annotation };
+  const blocks = parsePropSchemaBlocks(aliases, declaration, asType);
   const unions = parsePropSchemaUnions(aliases, propsDecl, asType);
   const sharedDocumentation = parsePropSchemaSharedDocumentation(unions);
   const { rawTypes, noted } = parsePropSchemaRawTypes(aliases, blocks);
   const schema = parsePropSchemaFields(aliases, rawTypes, noted, sharedDocumentation, unions);
   parsePropSchemaDestructure(frontmatter, schema);
+  // A component with no Props type at all may still read `Astro.props.label`.
+  if (declaration === undefined && asType === undefined) {
+    parsePropSchemaDirectAccess(source, schema);
+  }
   const splitFallback = parsePropSchemaSplitFallback(unions);
   parsePropSchemaFallbacks(frontmatter, schema, splitFallback);
   return [...schema.values()];
@@ -142,11 +159,11 @@ function parsePropSchemaMemberDocs(block: string) {
       documentation = [];
       continue;
     }
-    const match = line.match(/^(?:readonly\s+)?([\w$]+)\??\s*:\s*([^;\n]+?)[;,]?\s*$/);
+    const match = line.match(MEMBER_DOCUMENTATION_RE);
     if (match) {
       const text = documentation.join(' ').replace(/\s+/g, ' ').trim();
       if (text) {
-        out.set(required(match[1], 'Member name capture'), text);
+        out.set(memberName(required(match[1], 'Member name capture')), text);
       }
       documentation = [];
     }
@@ -209,15 +226,25 @@ function parsePropSchemaAliases(frontmatter: string): Map<string, string> {
   return aliases;
 }
 
-function parsePropSchemaBlocks(aliases: ReadonlyMap<string, string>, propsDecl: RegExpMatchArray | undefined, asType: RegExpMatchArray | undefined): string[] {
+// The declaration of the props: what `interface Props extends …` extends, and its body.
+interface PropsDeclaration {
+  readonly heritage: string | undefined;
+  readonly body: string | undefined;
+}
+
+function parsePropSchemaBlocks(
+  aliases: ReadonlyMap<string, string>,
+  declaration: PropsDeclaration | undefined,
+  asType: RegExpMatchArray | undefined,
+): string[] {
   const blocks: string[] = [];
-  if (propsDecl) {
+  if (declaration) {
     // `interface Props extends HTMLAttributes<"button">` — the extended type
     // is part of the shape too.
-    if (propsDecl[1]) {
-      parsePropSchemaMemberBlocks(aliases, propsDecl[1], new Set(), blocks);
+    if (declaration.heritage) {
+      parsePropSchemaMemberBlocks(aliases, declaration.heritage, new Set(), blocks);
     }
-    parsePropSchemaMemberBlocks(aliases, propsDecl[2], new Set(), blocks);
+    parsePropSchemaMemberBlocks(aliases, declaration.body, new Set(), blocks);
   }
   if (asType && aliases.has(required(asType[1], 'Asserted props type capture'))) {
     parsePropSchemaMemberBlocks(aliases, aliases.get(required(asType[1], 'Asserted props type capture')), new Set(), blocks);
@@ -295,6 +322,20 @@ function parsePropSchemaUnions(
       }
       return { forbids, pins, defaults, rules, docs };
     });
+    // In a union told apart by a literal field (`kind: 'link'` here, `kind:
+    // 'button'` there) a member one branch leaves out is not part of that
+    // branch: TypeScript rejects `disabled` beside `kind="link"`. It is
+    // forbidden there just as `disabled?: never` would say.
+    if (discriminated(branches.map((branch) => branch.pins))) {
+      for (const [at, branch] of branches.entries()) {
+        const map = required(maps[at], 'Union branch members exist');
+        for (const name of names) {
+          if (!map.has(name) && !branch.forbids.includes(name)) {
+            branch.forbids.push(name);
+          }
+        }
+      }
+    }
     // A union that forbids nothing and pins nothing tells the panel nothing.
     if (
       branches.some(
@@ -305,6 +346,20 @@ function parsePropSchemaUnions(
     }
   }
   return unions;
+}
+
+// Whether one field tells the branches apart: pinned in every one of them
+// (two or more), to values no two of them share.
+function discriminated(pins: readonly Readonly<Record<string, readonly string[]>>[]): boolean {
+  const names = new Set(pins.flatMap((branch) => Object.keys(branch)));
+  for (const name of names) {
+    const pinned = pins.map((branch) => branch[name]).filter((values) => values !== undefined);
+    const values = pinned.flat();
+    if (pinned.length >= 2 && pinned.length === pins.length && new Set(values).size === values.length) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function parsePropSchemaSharedDocumentation(unions: readonly PropUnion[]): Map<string, string> {

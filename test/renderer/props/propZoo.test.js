@@ -38,6 +38,9 @@ const list = (extra) => expectProp('code', 'ListControl', extra);
 // Values only code can express (functions, dates, entries, objects): an
 // expression or binding field, never a plain text box that writes a string.
 const code = (extra) => expectProp(undefined, anyOf('ExpressionControl', 'BindingControl', 'ObjectControl'), extra);
+// Values a designer never types (an action, `any`, `object`): the read-only
+// "Set in code" row, which shows the type and the value but writes nothing.
+const setInCode = (extra) => expectProp(undefined, 'CodeControl', extra);
 
 // What a designer should get. Component-level keys: slots, hasRest, extendsTag,
 // listProps (the props the list editor owns). `props` lists every prop the
@@ -140,11 +143,11 @@ const SPEC = {
   FunctionProp: {
     props: {
       value: number({ required: true }),
-      format: code({ default: '(amount) => `$${amount.toFixed(2)}`', edit: { type: 'expr', value: '(value) => `${value}!`' } }),
-      onSelect: code(),
+      format: setInCode({ default: '(amount) => `$${amount.toFixed(2)}`', edit: { type: 'expr', value: '(value) => `${value}!`' } }),
+      onSelect: setInCode(),
     },
   },
-  GenericProps: { props: { items: list({ required: true }), label: text({ required: true }), render: code({ default: '(item) => String(item)' }) } },
+  GenericProps: { props: { items: list({ required: true }), label: text({ required: true }), render: setInCode({ default: '(item) => String(item)' }) } },
   HrefProp: {
     props: {
       href: expectProp('string', 'LinkControl', { required: true }),
@@ -293,90 +296,19 @@ const SPEC = {
   TwoOptionUnion: { props: { align: choice(['left', 'right'], { default: 'left' }), theme: choice(['light', 'dark']) } },
   TypeAliasProps: { props: { title: text({ required: true }), subtitle: text({ default: 'Sub' }), level: number({ default: 2 }) } },
   TypeAliasWithExtendsTag: { hasRest: true, extendsTag: 'button', props: { label: text({ required: true }) } },
-  UnknownAnyProps: { props: { data: code(), payload: code(), thing: code() } },
+  UnknownAnyProps: { props: { data: code(), payload: setInCode(), thing: setInCode() } },
 };
 
 // Aspects that fall short today, keyed `Component.prop.aspect` (or
 // `Component.aspect` for the component itself). The value says what happens;
 // docs/plans/prop-stress-findings.md has the severity and the fix area.
 const KNOWN_GAPS = {
-  'AsConstAlias.weight.type': '`typeof WEIGHTS[number]` over an `as const` array reads as a plain string',
-  'AsConstAlias.weight.options': "the const array's values are not offered",
-  'AsConstAlias.weight.control': 'a free text box instead of the three choices',
-  'AsConstArray.size.type': '`(typeof SIZES)[number]` reads as a plain string',
-  'AsConstArray.size.options': "the const array's values are not offered",
-  'AsConstArray.size.control': 'a free text box instead of the three choices',
   'ColorProp.color.control': 'no colour control: a hex colour is a plain text box',
-  'CommentsInType.title.panelSave': 'a no-op save deletes the `//` comment above the member and rewrites `,` to `;`',
-  'CommentsInType.subtitle.panelSave': 'a no-op save rewrites the member separators',
-  'CommentsInType.count.panelSave': 'a no-op save adds a semicolon',
-  'CommentsInType.mode.panelSave': 'a no-op save rewrites the member separators',
-  'DefaultComputed.prefix.default': 'a template literal with `${}` is shown as literal text `${SITE}:`',
-  'DefaultExpression.config.control': 'an object prop gets the list editor, which writes an array',
-  'DefaultExpression.stamp.default': 'a template literal with `${}` is shown as literal text',
-  'DefaultsMismatch.extra.panelSave': 'a no-op save of an undeclared destructured prop adds it to Props',
-  'DestructureLater.level.default': 'a default in `const { \u2026 } = props` (not Astro.props) is missed',
-  'DirectAccessUntyped.label.detected': '`Astro.props.label` with no Props type is not a prop',
-  'DirectAccessUntyped.year.detected': '`Astro.props.year ?? 2026` with no Props type is not a prop',
-  'DiscriminatedUnion.disabled.control': 'a prop only the other branch has is still offered',
-  'EnumLikeObject.tone.type': '`(typeof Tone)[keyof typeof Tone]` reads as other',
-  'EnumLikeObject.tone.options': "the object's values are not offered",
-  'EnumLikeObject.tone.default': "`Tone.Info` is not resolved to 'info'",
-  'EnumLikeObject.tone.control': 'a free text box',
-  'EscapedDefaults.quote.default': 'escape sequences are kept: the default shows backslashes',
-  'EscapedDefaults.multiline.default': '`\\n` in a default shows as a backslash and n',
-  'EscapedDefaults.path.default': 'a `\\\\` in a default shows doubled',
-  'FunctionProp.onSelect.control': 'an unset callback prop gets a text box that writes a string',
-  'GenericProps.render.control': 'an unset function prop gets a text box that writes a string',
-  'HrefProp.url.control': 'a prop named url is not offered the link field',
-  'ImportedTypes.tone.type': 'an alias used inside an imported type is not followed (one level deep only)',
-  'ImportedTypes.tone.options': "the imported Tone union's options are lost",
-  'ImportedTypes.tone.control': 'a free text box',
-  'InlineAnnotation.title.type': 'an annotation on the destructure is not read as the Props type',
-  'InlineAnnotation.title.required': 'required in the annotation, optional in Stacki',
-  'InlineAnnotation.title.panelSave': 'a no-op save adds an `interface Props` of unknowns that contradicts the annotation',
-  'InlineAnnotation.count.type': 'an annotation on the destructure is not read as the Props type',
-  'InlineAnnotation.count.default': "the default runs into the annotation: '1 }: { title: string; count?: number'",
-  'InlineAnnotation.count.control': 'a text box for a number prop',
-  'InlineAnnotation.count.panelSave': 'a no-op save adds an `interface Props` of unknowns that contradicts the annotation',
-  'JsDocProps.columns.panelSave': 'a no-op save reflows a multi-line JSDoc block',
-  'JsDocProps.opacity.panelSave': 'a no-op save reflows a multi-line JSDoc block',
-  'JsDocProps.open.panelSave': 'a no-op save reflows a multi-line JSDoc block',
+  'DirectAccessUntyped.label.panel': 'the Properties panel lists declared and destructured props only, not `Astro.props.label` reads',
+  'DirectAccessUntyped.year.panel': 'the Properties panel lists declared and destructured props only, not `Astro.props.year` reads',
   'JsDocProps.text.deprecated': '@deprecated is not surfaced anywhere',
-  'JsDocProps.text.panelSave': 'a no-op save reflows a multi-line JSDoc block',
-  'JsDocProseDefault.size.panelSave': 'a no-op save deletes the `//` documentation comment',
-  'JsDocProseDefault.dated.default': "'Defaults to true.' is read as the string 'true' on a boolean",
-  'JsOnlyFrontmatter.heading.panelSave': 'a no-op save adds an `interface Props` to an untyped component',
-  'JsOnlyFrontmatter.items.type': 'an array default does not make the prop a list',
-  'JsOnlyFrontmatter.items.control': 'a text box for an array prop, which writes a string the component .map()s',
-  'JsOnlyFrontmatter.items.panelSave': 'a no-op save adds an `interface Props` to an untyped component',
-  'ListCuratedProp.items.panelSave': 'a no-op save adds an `interface Props` to an untyped component',
-  'ListLookalike.filters.control': 'an object prop gets the list editor, which writes an array',
-  'ListSortProp.sort.panelSave': 'a no-op save adds an `interface Props` to an untyped component',
-  'ListSortProp.limit.panelSave': 'a no-op save adds an `interface Props` to an untyped component',
-  'ListSortProp.skip.panelSave': 'a no-op save adds an `interface Props` to an untyped component',
-  'MixedUnion.flag.type': "`boolean | 'auto'` reads as boolean, with the string default 'auto'",
-  'MixedUnion.flag.options': "'auto' cannot be chosen",
-  'MixedUnion.flag.control': "a True/False switch that cannot write 'auto'",
-  'MixedUnion.size.type': "`'sm' | 'lg' | number` reads as a plain string",
-  'MixedUnion.size.options': 'the literal choices are lost',
-  'MixedUnion.size.control': 'a text box that can only write strings',
-  'MultiLineUnion.color.panelSave': 'a no-op save moves the leading `|` of a multi-line union',
-  'NestedObject.label.phantom': 'a member of a nested object type becomes a top-level prop',
-  'NestedObject.link.phantom': 'a member of a nested object type becomes a top-level prop',
-  'NoTypeDestructure.title.panelSave': 'a no-op save adds an `interface Props` to an untyped component',
-  'NoTypeDestructure.count.panelSave': 'a no-op save adds an `interface Props` to an untyped component',
-  'NoTypeDestructure.active.panelSave': 'a no-op save adds an `interface Props` to an untyped component',
   'PassThrough.variant.detected': "ComponentProps<typeof X> is not followed: the wrapped component's props are missing",
   'PassThrough.label.detected': "ComponentProps<typeof X> is not followed: the wrapped component's props are missing",
-  'QuotedNames.data-id.detected': 'a quoted member name is not a prop in the scan',
-  'QuotedNames.aria-label.detected': 'a quoted member name is not a prop in the scan',
-  'RestPropsPlain.label.panelSave': 'a no-op save adds `interface Props { label }`, which rejects the attributes `...rest` forwards',
-  'TupleProp.range.type': 'a readonly labelled tuple reads as other',
-  'TupleProp.range.control': 'a text box for a tuple, which writes a string',
-  'TypeAliasWithExtendsTag.extendsTag': "`type Props = HTMLAttributes<'button'> & {\u2026}` does not give the button's attributes",
-  'UnknownAnyProps.payload.control': 'an unset `any` prop gets a text box',
-  'UnknownAnyProps.thing.control': 'an unset `object` prop gets a text box that writes a string',
 };
 
 const ASPECTS = ['detected', 'type', 'options', 'default', 'required', 'doc', 'settings', 'deprecated', 'control', 'edit', 'stable', 'panel', 'panelSave'];

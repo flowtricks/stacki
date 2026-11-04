@@ -116,20 +116,25 @@ type with no value set; a text box writes `prop="…"`, a string.
 | `exponent = 1e3`, `hex = 0x10`, `separated = 1_000` (NumericFormats) | Kept as expression text | Shown as code, not as 1000/16/1000 | cosmetic | `withDestructureDefault` number test |
 | `@deprecated Use label instead.` (JsDocProps) | Not surfaced | No warning on a deprecated prop | cosmetic | `electron/parse/astroPropTypes.ts` + `src/editor/propDocumentation.ts` |
 
-### Properties panel: a save that changes nothing rewrites the file
+### Properties panel: a save that changes nothing rewrites the file (fixed)
 
 `editPropertyDefinition(source, { kind: 'save', property })` with the property
-exactly as read should leave the file alone (or refuse). It rewrites it in 23 of
-194 cases (`electron/properties/propertyDefinitions.ts`, `propertySyntax.ts`):
+exactly as read rewrote the file in 23 of 194 cases. It now returns the source
+untouched, and a changed save edits only the changed member's text
+(`electron/properties/propertyMemberEdits.ts`): its doc comment, modifiers,
+name, question mark and type, or its destructure entry's key and default. The
+cases below are held by the zoo's `panelSave` aspect and by
+`test/electron/properties/propertySave.test.js`, which also saves every zoo
+prop with a changed tooltip, default and required flag and checks that every
+other prop reads back unchanged:
 
-| Pattern | Today | Severity |
+| Pattern | Was | Now |
 |---|---|---|
-| `// The title, required.` line comment above a member (CommentsInType, JsDocProseDefault) | Comment **deleted** (`readDescription` reads only JSDoc, the save writes the empty description back) | blocker (silent loss of the agent's docs) |
-| Untyped destructure with `...rest` (RestPropsPlain) | Adds `interface Props { label?: string }`, after which every page passing `href=`/`target=` fails `astro check` | blocker |
-| Destructure annotated inline (InlineAnnotation) | Adds `interface Props { count?: unknown; title?: unknown }` beside the annotation — contradictory types | blocker |
-| Untyped components (NoTypeDestructure, JsOnlyFrontmatter, ListSortProp, ListCuratedProp), a destructured name missing from Props (DefaultsMismatch) | Adds or extends `interface Props` | confusing (an unrequested diff) |
-| Multi-line JSDoc (`/**\n * text\n * @min 1\n */`) | Reflowed to `/** text\n * @min 1 */` | cosmetic |
-| Multi-line union with leading `\|`, `,` member separators, a missing `;` | Reformatted | cosmetic |
+| `// The title, required.` line comment above a member (CommentsInType, JsDocProseDefault) | Comment deleted | The `//` lines are the tooltip; kept on every other save, replaced by a JSDoc tooltip only when the tooltip is edited |
+| Untyped destructure with `...rest` (RestPropsPlain) | Added `interface Props { label?: string }` | Never adds an interface: a default edit touches the entry, a type edit is refused with the reason |
+| Destructure annotated inline (InlineAnnotation) | Added a contradictory `interface Props` | The annotation is the props type: read for types and edited in place |
+| Untyped components, a destructured name missing from Props (DefaultsMismatch) | Added or extended `interface Props` | Only a change to the type, tooltip or flags declares it; an untyped component without rest gets an interface in panel order |
+| Multi-line JSDoc, multi-line unions, `,` separators, a missing `;` | Reformatted | Kept byte for byte; a tooltip edit keeps the block layout |
 
 Also in the Properties panel: props of `Astro.props as CardOptions` (AsAssertion) and
 of `interface Props<T>` (GenericProps) are refused with "This prop is inherited or
@@ -143,6 +148,38 @@ Props of an imported `type Props = CardProps` show type `unknown` for `title`/`h
 | `color?: string = '#ff3366'` (ColorProp) | Text box; no colour control | cosmetic | `src/features/props/PropControls.tsx` |
 | `url?: string` (HrefProp) | Text box; only `href`-like names get the link field | cosmetic | `src/features/props/propFieldModel.ts` `isHrefName` |
 | `as` of `Polymorphic<{ as: Tag }>` (PolymorphicAstro) | Text box for the tag | cosmetic | `normalizeType` (`HTMLTag` → tag list) |
+
+## Fixed on the instance side
+
+These findings are now ordinary zoo assertions (their `KNOWN_GAPS` entries are gone),
+with focused tests in `test/electron/parse/propTypeReading.test.js`,
+`test/renderer/props/propKinds.test.js` and `test/shared/properties/propSchema.test.ts`:
+
+- **Code-only values.** `normalizeType` gives function types `codeKind: 'function'` and
+  `any`/`unknown`/`object`/`{}`/`symbol`/`bigint`/`Promise<…>`/`Map<…>` `codeKind: 'opaque'`,
+  with the declared `typeText`. The Settings panel shows them as the read-only `CodeControl`
+  ("Action, set in code" / "Set in code", the type and the value or default as code): an action
+  always, an opaque value while unset. `readonly` tuples and arrays, and an untyped `[…]` default,
+  are lists.
+- **Objects.** Object types are `codeKind: 'object'`: edited as their fields (`ObjectControl`,
+  seeded from the value, the default, or blanks for simple members) or shown as code, never the
+  list editor.
+- **Phantom props.** `explodeMembers` keeps a nested object type written over lines on one member,
+  and `splitTypeTop` no longer counts the `>` of `=>` as a closing bracket.
+- **Inline annotation / later destructure.** `propsDestructure` reads the pattern to its matching
+  brace, takes the annotation as the Props type, and follows `const props = Astro.props`.
+- **Choices.** `as const` arrays and enum-like objects (`resolveConstTypeQueries`, plus `Tone.Info`
+  defaults), types used by an imported type from the same file, `boolean | 'auto'` (options written
+  as expressions via `expressionOptions`) and `'sm' | 'lg' | number`.
+- **Defaults.** Interpolated templates stay code; escapes, `1e3`/`0x10`/`1_000` and a prose
+  boolean default are decoded.
+- **Detection.** Untyped `Astro.props.x` reads, quoted member names, `type Props =
+  HTMLAttributes<'tag'> & {…}`, a discriminated union's other-branch members (hidden), and
+  `url`/`link` names (the link field).
+
+Still open: `ComponentProps<typeof X>` (PassThrough), `@deprecated`, a colour control, an
+"Edit in code" button on the code row, and the Properties panel listing untyped `Astro.props.x`
+reads (`DirectAccessUntyped.*.panel`, a new gap exposed once those props are detected).
 
 ## Not covered
 

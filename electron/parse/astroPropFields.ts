@@ -4,7 +4,16 @@
 import { LIMITS } from '../../shared/core/limits';
 import type { PropUnion, SchemaField } from './astroParserTypes';
 import { required } from './astroAttrs';
-import { splitTypeTop, explodeMembers, statedDefault, numberRules, normalizeType } from './astroPropTypes';
+import { assert } from '../../shared/core/assert';
+import { findMatchingBrace } from './astroScan';
+import { splitTypeTop, explodeMembers, statedDefault, numberRules, normalizeType, shownTypeText, MEMBER_NAME_SOURCE, memberName } from './astroPropTypes';
+
+// One member, `name?: type`, with a quoted name allowed.
+const MEMBER_RE = new RegExp(String.raw`^(?:readonly\s+)?${MEMBER_NAME_SOURCE}\??\s*:\s*([\s\S]+)$`);
+const MEMBER_FLAT_RE = new RegExp(String.raw`^(?:readonly\s+)?${MEMBER_NAME_SOURCE}\??\s*:\s*(.+?),?$`);
+const ENTRY_RE = new RegExp(String.raw`^\s*(?:readonly\s+)?${MEMBER_NAME_SOURCE}(\?)?\s*:\s*([\s\S]+?)[;,]?\s*$`);
+const ENTRY_OPEN_RE = new RegExp(String.raw`^(?:readonly\s+)?${MEMBER_NAME_SOURCE}\??\s*:\s*$`);
+const ENTRY_JOINED_RE = new RegExp(String.raw`^(?:readonly\s+)?${MEMBER_NAME_SOURCE}(\?)?\s*:\s*(.+?)[;,]?\s*$`);
 
 export function parsePropSchemaExpandAlias(aliases: ReadonlyMap<string, string>, part: string, seen = new Set<string>()): string[] {
   const body = aliases.get(part);
@@ -22,8 +31,12 @@ function parsePropSchemaShapeOf(aliases: ReadonlyMap<string, string>, parts: rea
   if (parts.length !== 1) {
     return undefined;
   }
-  const only = required(parts[0], 'Shape has exactly one type').trim();
-  const arrayMatch = only.match(/^([\s\S]*)\[\]$/) || only.match(/^Array<([\s\S]*)>$/);
+  // `readonly T[]` and `ReadonlyArray<T>` are the same list of T as `T[]`: the
+  // List property form writes the readonly spelling (AGENTS.md §7).
+  const only = required(parts[0], 'Shape has exactly one type')
+    .trim()
+    .replace(/^readonly\s+/, '');
+  const arrayMatch = only.match(/^([\s\S]*)\[\]$/) || only.match(/^(?:Readonly)?Array<([\s\S]*)>$/);
   const inner = (arrayMatch ? required(arrayMatch[1], 'Array element type capture') : only)
     .trim()
     .replace(/^\((.*)\)$/s, '$1')
@@ -58,9 +71,9 @@ export function parsePropSchemaMemberEntries(block: string) {
     // matched nothing at all, so the prop fell through to the destructuring
     // — where it has no type — and a list of rows came out as raw code.
     const text = line.trim().replace(/[;,]\s*$/, '');
-    const match = text.match(/^(?:readonly\s+)?([\w$]+)\??\s*:\s*([\s\S]+)$/);
+    const match = text.match(MEMBER_RE);
     if (match) {
-      out.set(required(match[1], 'Member name capture'), required(match[2], 'Member type capture').trim());
+      out.set(memberName(required(match[1], 'Member name capture')), required(match[2], 'Member type capture').trim());
     }
   }
   // …then whole members, for a type that spans lines:
@@ -80,9 +93,9 @@ export function parsePropSchemaMemberEntries(block: string) {
     if (!flat.includes('\n') && out.size && !/\|/.test(flat)) {
       continue;
     }
-    const match = flat.match(/^(?:readonly\s+)?([\w$]+)\??\s*:\s*(.+?),?$/);
-    if (match && !out.has(required(match[1], 'Member name capture'))) {
-      out.set(required(match[1], 'Member name capture'), required(match[2], 'Member type capture').trim());
+    const match = flat.match(MEMBER_FLAT_RE);
+    if (match && !out.has(memberName(required(match[1], 'Member name capture')))) {
+      out.set(memberName(required(match[1], 'Member name capture')), required(match[2], 'Member type capture').trim());
     }
   }
   return out;
@@ -122,13 +135,17 @@ export function parsePropSchemaFields(
   const schema = new Map<string, SchemaField>();
 
   for (const [name, rec] of rawTypes) {
-    const { type, options, numeric } = normalizeType(rec.parts.join(' | '));
+    const typeText = rec.parts.join(' | ');
+    const { type, options, numeric, expressionOptions, codeKind } = normalizeType(typeText);
     const shape = parsePropSchemaShapeOf(aliases, rec.parts);
     schema.set(name, {
       name,
       type,
       options,
       numeric,
+      ...(expressionOptions ? { expressionOptions } : {}),
+      // A value only code can give carries its type, so the panel can say what it takes.
+      ...(codeKind ? { codeKind, typeText: shownTypeText(typeText) } : {}),
       optional: rec.optional,
       // What one of these is made of, when the type says. `list` distinguishes
       // `ServiceTime[]` (a loop over it hands you one) from a plain object.
@@ -147,8 +164,71 @@ export function parsePropSchemaFields(
   return schema;
 }
 
+// The destructure that reads the props: `const { a, b = 1 } = Astro.props`,
+// annotated or not (`const { a }: { a: string } = Astro.props`), or taken from
+// a name that holds them (`const props = Astro.props; const { a } = props`).
+export interface PropsDestructure {
+  // The text between the pattern's braces.
+  readonly pattern: string;
+  // The annotation after the pattern, when it has one: `{ a: string }` or `Props`.
+  readonly annotation: string | undefined;
+}
+
+// A frontmatter declares a handful of destructures; past this many the search stops.
+const DESTRUCTURE_CANDIDATES_MAX = 64;
+
+export function propsDestructure(frontmatter: string): PropsDestructure | undefined {
+  // `const props = Astro.props` names the props; a destructure of that name reads them too.
+  const holders = [
+    'Astro\\.props',
+    ...[...frontmatter.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*Astro\.props\s*;?\s*(?:\n|$)/g)].map((match) =>
+      required(match[1], 'Props holder capture').replace(/\$/g, '\\$'),
+    ),
+  ];
+  const source = new RegExp(String.raw`^\s*=\s*(?:${holders.join('|')})(?![\w$.])`);
+  const opener = /(?:const|let|var)\s*\{/g;
+  let found: PropsDestructure | undefined;
+  for (let candidate = 0; candidate < DESTRUCTURE_CANDIDATES_MAX; candidate++) {
+    const match = opener.exec(frontmatter);
+    if (match === null) {
+      break;
+    }
+    const open = match.index + match[0].length - 1;
+    const close = findMatchingBrace(frontmatter, open);
+    if (close === -1) {
+      continue;
+    }
+    const rest = frontmatter.slice(close + 1);
+    const annotated = destructureAnnotation(rest);
+    if (source.test(rest.slice(annotated.length))) {
+      const annotation = annotated.replace(/^\s*:/, '').trim();
+      found = { pattern: frontmatter.slice(open + 1, close), annotation: annotation === '' ? undefined : annotation };
+      break;
+    }
+  }
+  assert(found === undefined || found.pattern.length < frontmatter.length, 'propsDestructure: the pattern lies inside the frontmatter');
+  return found;
+}
+
+// The `: Type` that may follow a destructure pattern, as written (empty when
+// there is none): a braced type literal read to its matching brace, or a
+// named type read to the `=`.
+function destructureAnnotation(rest: string): string {
+  const colon = rest.match(/^\s*:\s*/);
+  if (!colon) {
+    return '';
+  }
+  const at = colon[0].length;
+  if (rest.charAt(at) === '{') {
+    const close = findMatchingBrace(rest, at);
+    return close === -1 ? '' : rest.slice(0, close + 1);
+  }
+  const named = rest.slice(at).match(/^[^=;{}]+/);
+  return named ? rest.slice(0, at + named[0].length) : '';
+}
+
 export function parsePropSchemaDestructure(frontmatter: string, schema: Map<string, SchemaField>): void {
-  const destructure = frontmatter.match(/(?:const|let)\s*\{([\s\S]*?)\}\s*=\s*Astro\.props/);
+  const destructure = propsDestructure(frontmatter);
   if (!destructure) {
     return;
   }
@@ -156,40 +236,97 @@ export function parsePropSchemaDestructure(frontmatter: string, schema: Map<stri
   // its own (`filters: propFilters = {"fields": [{"fieldPath": "name"}]}`),
   // and its keys and values are not props: reading the entries with patterns
   // over the whole text listed `fields`, `fieldPath` and `name` as props.
-  for (const entry of topLevelEntries(required(destructure[1], 'Props destructure capture'))) {
+  for (const entry of topLevelEntries(destructure.pattern)) {
     // Rest params (...rest) aren't real props, and renames (class: className)
-    // register under the real prop name only.
-    const match = entry.match(/^\s*(\w+)\s*(?::\s*\w+\s*)?(?:=\s*([\s\S]+?))?\s*$/);
+    // register under the real prop name only. A quoted key (`'data-id': dataId`)
+    // is the prop's name without its quotes.
+    const match = entry.match(DESTRUCTURE_ENTRY_RE);
     if (!match?.[1] || /^\s*\.\.\./.test(entry)) {
       continue;
     }
-    const existing = schema.get(match[1]) || {
-      name: match[1],
+    const name = memberName(match[1]);
+    const existing = schema.get(name) || {
+      name,
       type: 'other',
       optional: true,
       default: undefined,
     };
-    schema.set(match[1], match[2] === undefined ? existing : withDestructureDefault(existing, match[2].trim()));
+    schema.set(name, match[2] === undefined ? existing : withDestructureDefault(existing, match[2].trim()));
   }
 }
+
+const DESTRUCTURE_ENTRY_RE = /^\s*([\w$]+|'[^'\n]+'|"[^"\n]+")\s*(?::\s*[\w$]+\s*)?(?:=\s*([\s\S]+?))?\s*$/;
+const STRING_DEFAULT_RE = /^("(?:[^"\\\n]|\\[\s\S])*"|'(?:[^'\\\n]|\\[\s\S])*'|`(?:[^`\\$]|\\[\s\S]|\$(?!\{))*`)$/;
 
 // What a default's text says about the prop: a literal sets its type and
 // value; anything else is kept as an expression for the scanner to resolve.
 function withDestructureDefault(field: SchemaField, defaultText: string): SchemaField {
-  const typed = (type: SchemaField['type']): SchemaField['type'] => (field.type === 'other' ? type : field.type);
-  if (/^["'`]/.test(defaultText)) {
-    return { ...field, optional: true, default: defaultText.slice(1, -1), type: typed('string') };
+  const typed = (type: SchemaField['type']): SchemaField['type'] => (field.type === 'other' && field.codeKind === undefined ? type : field.type);
+  // A whole string literal only: `'a' + b` and `` `${SITE}:` `` start with a
+  // quote but are expressions, and showing them as text would claim a value
+  // the component never has.
+  if (STRING_DEFAULT_RE.test(defaultText)) {
+    return { ...field, optional: true, default: decodeStringLiteral(defaultText.slice(1, -1)), type: typed('string') };
   }
   if (/^(true|false)$/.test(defaultText)) {
     return { ...field, optional: true, default: defaultText === 'true', type: typed('boolean') };
   }
-  if (/^-?\d+(\.\d+)?$/.test(defaultText)) {
-    return { ...field, optional: true, default: Number(defaultText), type: typed('number') };
+  const number = numericLiteral(defaultText);
+  if (number !== undefined) {
+    return { ...field, optional: true, default: number, type: typed('number') };
   }
   // Not a literal — an identifier or expression (e.g. SITE_TITLE). Flagged so
-  // the scanner can try resolving it to a real value; an object-literal
-  // default marks an attributes-object prop.
-  return { ...field, optional: true, default: defaultText, defaultExpr: true, type: /^\{/.test(defaultText) ? typed('attrs') : field.type };
+  // the scanner can try resolving it to a real value. An array literal makes
+  // an untyped prop a list, an object literal an attributes object, and an
+  // arrow function an action set in code.
+  const expression = { ...field, optional: true, default: defaultText, defaultExpr: true };
+  if (/^\[/.test(defaultText)) {
+    return { ...expression, type: typed('code') };
+  }
+  if (/^\{/.test(defaultText)) {
+    return { ...expression, type: typed('attrs') };
+  }
+  if (field.type === 'other' && field.codeKind === undefined && /^(?:async\s+)?(?:\([^()]*\)|[A-Za-z_$][\w$]*)\s*=>/.test(defaultText)) {
+    return { ...expression, codeKind: 'function' };
+  }
+  return expression;
+}
+
+// A number literal in any of the ways JS writes one — `-2`, `0.5`, `1e3`,
+// `0x10`, `1_000` — as its value; undefined for anything else.
+export function numericLiteral(text: string): number | undefined {
+  const match = text.match(/^(-?)(0[xX][\da-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*)?\.?\d[\d_]*(?:[eE][+-]?\d+)?)$/);
+  if (!match) {
+    return undefined;
+  }
+  const digits = required(match[2], 'Number literal digits').replace(/_/g, '');
+  const value = Number(digits);
+  if (!Number.isFinite(value)) {
+    return undefined;
+  }
+  return match[1] === '-' ? -value : value;
+}
+
+// A string literal's body as the string it stands for: `\n` is a line break,
+// `\"` a quote, `\\` one backslash, `\u00e9` an é.
+export function decodeStringLiteral(body: string): string {
+  const simple: Readonly<Record<string, string>> = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', v: '\v', '0': '\0' };
+  const decoded = body.replace(/\\(u\{[\da-fA-F]+\}|u[\da-fA-F]{4}|x[\da-fA-F]{2}|\r\n|[\s\S])/g, (_whole, escape: string) => {
+    if (escape.startsWith('u{')) {
+      const code = parseInt(escape.slice(2, -1), 16);
+      return code <= 0x10ffff ? String.fromCodePoint(code) : escape;
+    }
+    if (/^[ux][\da-fA-F]/.test(escape)) {
+      return String.fromCharCode(parseInt(escape.slice(1), 16));
+    }
+    // A backslash before a line break continues the line.
+    if (escape === '\n' || escape === '\r\n' || escape === '\r') {
+      return '';
+    }
+    return simple[escape] ?? escape;
+  });
+  assert(decoded.length <= body.length, 'decodeStringLiteral: decoding never lengthens');
+  return decoded;
 }
 
 /**
@@ -290,7 +427,11 @@ export function parsePropSchemaFallbacks(frontmatter: string, schema: Map<string
     );
     if (nullish) {
       const lit = required(nullish[1], 'Nullish default literal capture');
-      field.default = /^["'\`]/.test(lit) ? lit.slice(1, -1) : /^(true|false)$/.test(lit) ? lit === 'true' : Number(lit);
+      field.default = /^["'\`]/.test(lit) ? decodeStringLiteral(lit.slice(1, -1)) : /^(true|false)$/.test(lit) ? lit === 'true' : Number(lit);
+      // An untyped prop takes its kind from its fallback, as from a destructure default.
+      if (field.type === 'other' && field.codeKind === undefined) {
+        field.type = typeof field.default === 'string' ? 'string' : typeof field.default === 'boolean' ? 'boolean' : 'number';
+      }
       continue;
     }
 
@@ -303,7 +444,8 @@ export function parsePropSchemaFallbacks(frontmatter: string, schema: Map<string
 
     const said = statedDefault(field.doc);
     if (said.value !== undefined) {
-      field.default = said.value;
+      // "Defaults to true." on a switch is the boolean, not the word.
+      field.default = field.type === 'boolean' && (said.value === 'true' || said.value === 'false') ? said.value === 'true' : said.value;
       continue;
     }
     if (said.hint) {
@@ -339,12 +481,32 @@ export function parsePropSchemaFallbacks(frontmatter: string, schema: Map<string
   }
 }
 
+// A component may name its props only where it reads them —
+// `Astro.props.label` in the markup, `Astro.props.year ?? 2026` in the
+// frontmatter — with no type and no destructure. Each name read is a prop.
+// Only for components with no Props type: a declared type is the whole list.
+const DIRECT_ACCESS_READS_MAX = 512;
+export function parsePropSchemaDirectAccess(source: string, schema: Map<string, SchemaField>): void {
+  let reads = 0;
+  for (const match of source.matchAll(/\bAstro\.props\.([A-Za-z_$][\w$]*)/g)) {
+    reads++;
+    if (reads > DIRECT_ACCESS_READS_MAX) {
+      break;
+    }
+    const name = required(match[1], 'Direct access name capture');
+    if (!schema.has(name) && schema.size < LIMITS.propSchemaFieldsMax) {
+      schema.set(name, { name, type: 'other', optional: true, default: undefined });
+    }
+  }
+  assert(schema.size <= LIMITS.propSchemaFieldsMax, 'parsePropSchemaDirectAccess: schema stays bounded');
+}
+
 function parsePropSchemaAccumulate(
   aliases: ReadonlyMap<string, string>,
   rawTypes: Map<string, { parts: string[]; optional: boolean }>,
   match: RegExpMatchArray,
 ): string {
-  const name = required(match[1], 'Schema member name capture');
+  const name = memberName(required(match[1], 'Schema member name capture'));
   let typeText = required(match[3], 'Schema member type capture').trim();
   if (aliases.has(typeText)) {
     typeText = required(aliases.get(typeText), 'Type alias exists');
@@ -364,10 +526,9 @@ function parsePropSchemaAccumulate(
       rawTypes.set(name, { parts: [], optional: false });
     }
     const rec = required(rawTypes.get(name), 'Prop type accumulator was initialized');
-    for (const part of typeText
-      .split('|')
-      .map((x) => x.trim())
-      .filter(Boolean)) {
+    // Split at the top level only: the `|` inside `{ mode: 'a' | 'b' }` or
+    // `(x: 'a' | 'b') => void` belongs to that member, not to this union.
+    for (const part of splitTypeTop(typeText, '|')) {
       // `variant?: PlainVariant | ReversibleVariant` names two aliases
       // rather than being one, so the substitution above doesn't reach it
       // — and an unexpanded name among the literals is a non-literal, so
@@ -401,7 +562,7 @@ function parsePropSchemaRawBlock(
   // `items?: { title: string; text: string }[]` matched nothing at all, the
   // prop fell through to the destructuring — where it has no type — and a
   // list of rows came out as a code field instead of the list control.
-  const entryRe = /^\s*(?:readonly\s+)?([\w$]+)(\?)?\s*:\s*([\s\S]+?)[;,]?\s*$/;
+  const entryRe = ENTRY_RE;
   let documentation: string[] = [];
   let inBlock = false;
   const lines = explodeMembers(block).split('\n');
@@ -441,21 +602,21 @@ function parsePropSchemaRawBlock(
     // sees nothing and the prop disappears from the schema entirely. When a
     // line opens one, take the rest of the member with it. (explodeMembers
     // already ended the member at its `;`, so what follows belongs to it.)
-    if (!match && /^(?:readonly\s+)?[\w$]+\??\s*:\s*$/.test(line)) {
+    if (!match && ENTRY_OPEN_RE.test(line)) {
       const rest = [];
       while (i + 1 < lines.length) {
         const next = required(lines[i + 1], 'Following schema line exists').trim();
         if (!next || next.startsWith('/*') || next.startsWith('//')) {
           break;
         }
-        if (entryRe.test(next) || /^(?:readonly\s+)?[\w$]+\??\s*:\s*$/.test(next)) {
+        if (entryRe.test(next) || ENTRY_OPEN_RE.test(next)) {
           break;
         }
         rest.push(next);
         i += 1;
       }
       if (rest.length) {
-        match = (line + ' ' + rest.join(' ')).replace(/\s+/g, ' ').match(/^(?:readonly\s+)?([\w$]+)(\?)?\s*:\s*(.+?)[;,]?\s*$/);
+        match = (line + ' ' + rest.join(' ')).replace(/\s+/g, ' ').match(ENTRY_JOINED_RE);
       }
     }
     if (!match) {
