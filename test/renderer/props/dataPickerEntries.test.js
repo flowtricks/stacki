@@ -116,17 +116,15 @@ test('a sampled list of records pages; a list of words does not', () => {
 
 test('every group is headed by where its data lives', () => {
   const component = { file: 'src/components/Button.astro', page: 'src/pages/index.astro' };
-  assert.deepEqual(sectionHeading('props', component), { label: 'Button.astro props', note: 'Values from its use on index.astro' });
-  assert.deepEqual(sectionHeading('frontmatter', component), { label: 'Button.astro frontmatter', note: undefined });
-  assert.deepEqual(sectionHeading('collections', component), {
-    label: 'Collections in this project',
-    note: 'Works anywhere: picking one adds its query to Button.astro',
-  });
+  // A heading is only the group's name: no note says what its data depends on.
+  assert.equal(sectionHeading('props', component), 'Button.astro props');
+  assert.equal(sectionHeading('frontmatter', component), 'Button.astro frontmatter');
+  assert.equal(sectionHeading('collections', component), 'Collections in this project');
   const page = { file: 'src/pages/index.astro', page: undefined };
-  assert.deepEqual(sectionHeading('frontmatter', page), { label: 'index.astro frontmatter', note: undefined });
-  assert.deepEqual(sectionHeading('props', page), { label: 'index.astro props', note: undefined });
-  assert.deepEqual(sectionHeading('loop', page), { label: 'Loop item', note: undefined });
-  assert.deepEqual(sectionHeading('frontmatter', undefined), { label: 'Frontmatter', note: undefined });
+  assert.equal(sectionHeading('frontmatter', page), 'index.astro frontmatter');
+  assert.equal(sectionHeading('props', page), 'index.astro props');
+  assert.equal(sectionHeading('loop', page), 'Loop item');
+  assert.equal(sectionHeading('frontmatter', undefined), 'Frontmatter');
   assert.equal(sectionHeading('unknown', page), undefined);
   // Every root of a component's tree carries a section, so none is left unheaded.
   const tree = dataTree({ frontmatter: "const { href } = Astro.props;\nconst label = 'Go';", ancestorHeads: ['items.map((item) => ('] });
@@ -166,7 +164,7 @@ test('the picker renders the pager, the chosen entry, and the source headings', 
   assert.doesNotMatch(third, /Uptime/, 'only the chosen entry is shown');
   assert.match(third, /title="statsEntries\[2\]\.data\.Header/);
   assert.match(third, /Collections in this project/);
-  assert.match(third, /Works anywhere: picking one adds its query to Button\.astro/);
+  assert.doesNotMatch(third, /Works anywhere|dp-section-note/, 'a section heading carries no note');
 
   // Nothing bound: the first root opens on its first entry, whose fields are listed.
   const opened = render(undefined);

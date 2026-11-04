@@ -456,12 +456,7 @@ function DataRoots({
     section = node.section || section;
     return (
       <React.Fragment key={`s:${node.path}`}>
-        {head && (
-          <div className="dp-section">
-            {head.label}
-            {head.note !== undefined && <span className="dp-section-note">{head.note}</span>}
-          </div>
-        )}
+        {head && <div className="dp-section">{head}</div>}
         {<DataRow node={node} depth={0} showPath={false} root={undefined} state={state} onPick={onPick} onStepItem={onStepItem} />}
       </React.Fragment>
     );

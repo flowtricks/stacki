@@ -127,42 +127,27 @@ export interface DataOrigin {
   readonly page: string | undefined;
 }
 
-export interface SectionHeading {
-  readonly label: string;
-  /** One line under the heading saying what the group's data depends on. */
-  readonly note: string | undefined;
-}
-
 /**
  * What a group of rows is called, by where its data lives. The file is named,
  * because a component and the page it is shown on are two scopes and only one
  * of them is the one being bound: `Button.astro frontmatter` is the
  * component's own, and a project collection reads the same everywhere.
  */
-export function sectionHeading(section: string, origin: DataOrigin | undefined): SectionHeading | undefined {
+export function sectionHeading(section: string, origin: DataOrigin | undefined): string | undefined {
   const file = fileNameOf(origin?.file);
-  const page = fileNameOf(origin?.page);
   switch (section) {
     case 'loop':
-      return { label: 'Loop item', note: undefined };
+      return 'Loop item';
     case 'props':
-      return {
-        label: file === undefined ? 'Props' : `${file} props`,
-        // The props' values are the instance's, read from the page: the binding
-        // is the prop itself, which every use of the component passes.
-        note: page === undefined ? undefined : `Values from its use on ${page}`,
-      };
+      return file === undefined ? 'Props' : `${file} props`;
     case 'frontmatter':
-      return { label: file === undefined ? 'Frontmatter' : `${file} frontmatter`, note: undefined };
+      return file === undefined ? 'Frontmatter' : `${file} frontmatter`;
     case 'collections':
-      return {
-        label: 'Collections in this project',
-        note: file === undefined ? undefined : `Works anywhere: picking one adds its query to ${file}`,
-      };
+      return 'Collections in this project';
     case 'loop-sanity':
-      return { label: 'Sanity', note: undefined };
+      return 'Sanity';
     case 'loop-page':
-      return { label: 'On this page', note: undefined };
+      return 'On this page';
     default:
       return undefined;
   }

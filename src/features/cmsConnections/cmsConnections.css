@@ -40,7 +40,7 @@
 }
 .cms-connection-detail {
   flex: 1;
-  color: #8a8a8a;
+  color: var(--text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

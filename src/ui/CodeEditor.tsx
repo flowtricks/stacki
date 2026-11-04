@@ -104,9 +104,11 @@ export const appHighlight = syntaxHighlighting(
         color: '#82aaff',
       },
       { tag: [t.variableName, t.definition(t.variableName)], color: '#e0e0e0' },
+      // Comments stay quiet but readable: #8a8a8a holds 5:1 on the panel, where
+      // the old #616161 was 3:1.
       {
         tag: [t.comment, t.blockComment, t.lineComment],
-        color: '#616161',
+        color: '#8a8a8a',
         fontStyle: 'italic',
       },
       { tag: [t.operator, t.punctuation, t.separator], color: '#89ddff' },
@@ -125,7 +127,7 @@ export const appHighlight = syntaxHighlighting(
       { tag: [t.monospace], color: '#c3e88d' },
       { tag: [t.quote], color: '#999999', fontStyle: 'italic' },
       { tag: [t.list], color: '#89ddff' },
-      { tag: [t.processingInstruction], color: '#616161' },
+      { tag: [t.processingInstruction], color: '#8a8a8a' },
     ],
     { themeType: 'dark' },
   ),

@@ -66,11 +66,14 @@
   --color-border-strong: rgba(255, 255, 255, 0.16);
   --color-border-focus: var(--color-selection-bg); /* blue focus outline for inputs/controls */
 
-  /* Text (high → low emphasis) */
+  /* Text (high → low emphasis). Secondary and tertiary clear WCAG AA (4.5:1) up
+   * to the overlay surface, where menus and pickers list their values: #707070
+   * was 2.3:1 there. Disabled text is exempt from AA but still clears 3:1 on
+   * the page. Pinned by test/renderer/app/textContrast.test.js. */
   --color-text-primary: #f0f0f0;
-  --color-text-secondary: #a0a0a0;
-  --color-text-tertiary: #707070;
-  --color-text-disabled: #4a4a4a;
+  --color-text-secondary: #c2c2c2;
+  --color-text-tertiary: #a6a6a6;
+  --color-text-disabled: #707070;
   --color-text-inverse: #1c1c1c;
 
   /* Semantic */

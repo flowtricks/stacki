@@ -7,9 +7,13 @@
   --bg-active: rgba(255, 255, 255, 0.09);
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.14);
+  /* Text, high to low emphasis. Each step clears WCAG AA (4.5:1) on the panel,
+     the canvas, and the #232323 popovers with a hover or input fill on them:
+     #666 was 2.4:1 on a popover's section fill, too faint to read. Pinned by
+     test/renderer/app/textContrast.test.js. */
   --text: #f5f5f5;
-  --text-dim: #999999;
-  --text-faint: #666666;
+  --text-dim: #b8b8b8;
+  --text-faint: #989898;
   --accent: #0099ff;
   --accent-soft: rgba(0, 153, 255, 0.16);
   /* Selected text, everywhere. A saturated blue rather than the accent, which
@@ -1738,10 +1742,11 @@ html[data-platform='win32'] .titlebar {
 /* White, thinned — not a grey. A folded comment sits on whatever row it belongs
    to, and a component's row is green: #666 against the panel is 3.1:1 and
    against the selected green row only 2.1:1, because a flat grey can't lift
-   with the background under it. White at 45% composites over each of them and
-   holds ~4.5:1 and ~3.8:1, staying a note rather than a label either way. */
+   with the background under it. White at 55% composites over each of them and
+   holds ~6.2:1 and ~5.2:1 (45% left the green row at 4.0:1), staying a note
+   rather than a label either way. */
 .node-note {
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.55);
   font-weight: 400;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2925,8 +2930,10 @@ body > .embed-editor_provenance {
 .dp-row.path-only .dp-key {
   color: var(--text-dim);
 }
+/* A step down in colour, not an opacity: dim text at 60% fell to 3.8:1 on the
+   popover, and the value is still worth reading. */
 .dp-row.path-only .dp-val {
-  opacity: 0.6;
+  color: var(--text-faint);
 }
 /* The target is the box, not the glyph: a 10px chevron is a 10px thing to hit
    with a mouse. Padded out to 20x22 and pulled back with negative margins, so
@@ -2966,9 +2973,6 @@ body > .embed-editor_provenance {
 /* Every group of rows is headed by where its data lives (dataPickerModel.ts).
    A fill sets the heading apart from the rows, not a rule (house style). */
 .dp-section {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
   padding: 6px 8px;
   margin: 2px 0;
   border-radius: 4px;
@@ -2977,12 +2981,6 @@ body > .embed-editor_provenance {
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: var(--text-faint);
-}
-.dp-section-note {
-  font-weight: 400;
-  letter-spacing: 0;
-  text-transform: none;
   color: var(--text-faint);
 }
 .dp-loading {

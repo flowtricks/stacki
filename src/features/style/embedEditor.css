@@ -5262,8 +5262,10 @@ textarea.embed-editor_value-input.is-expanded {
 .cx-num {
   color: #d6b6ff;
 }
+/* Lighter than the variable purple it echoes so it holds 4.5:1 up to the
+   overlay surface (#9d7fd8 was 3.5:1 there). */
 .cx-unit {
-  color: #9d7fd8;
+  color: #b29ae0;
 }
 .cx-fn {
   color: #7fd1e8;
@@ -5281,7 +5283,7 @@ textarea.embed-editor_value-input.is-expanded {
   color: #c4afff;
 }
 .cx-comment {
-  color: var(--color-text-tertiary, #666);
+  color: var(--color-text-tertiary, #a6a6a6);
   font-style: italic;
 }
 
@@ -5563,7 +5565,9 @@ textarea.embed-editor_value-input.is-expanded {
   flex: none;
   display: inline-flex;
   margin-left: var(--space-2);
-  color: #7c5cff;
+  /* The connect purple, lightened so the check clears 3:1 on the selected row's
+     purple fill over the overlay (#7c5cff was 2.0:1). */
+  color: #9980ff;
 }
 /* Leading connect glyph. */
 .embed-editor_varpicker-item-icon {
