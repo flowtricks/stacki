@@ -1,3 +1,4 @@
+import { assert } from '../../shared/core/assert';
 import { authoredStyleMutation } from './frameAuthoredStyles';
 // What the frame tells the app as the page changes: the tracked rectangles,
 // following a page that moves by itself, which nodes rendered, their states
@@ -320,17 +321,32 @@ export const sendClasses = () => {
 // Selecting a node in the navigator brings it onto the page. Only scrolls
 // when the node is actually out of sight — re-selecting something already
 // on screen shouldn't move the page under the user.
+//
+// Only ever down the page, and only the page itself. A site is routinely wider
+// than the frame on purpose — a hero video bleeding off the right, a track of
+// cards, a decorative circle hanging off the edge — and clips it with
+// `overflow-x: hidden` or `clip` on the body or a wrapper. Scrolling sideways
+// to reveal such a node moves a viewport the site never meant to scroll, and
+// nothing on the canvas can scroll it back: the page stays stuck to one side.
+// `scrollIntoView` is worse still, because it also scrolls every clipping
+// ancestor on the way. So the target is computed here, vertically, and the
+// window is the one thing that moves.
 const SCROLL_MARGIN = 24;
-// Where the page has to go for a box to be on screen, along one axis: the
-// scroll position it already has when the box is comfortably inside, and
-// otherwise enough to bring it in. A box longer than the viewport is aligned
-// to its start rather than centred, which would push the beginning of it out.
-const revealAlong = (start: number, length: number, viewport: number, at: number): number => {
-  if (start >= SCROLL_MARGIN && start + length <= viewport - SCROLL_MARGIN) {
-    return at;
+// Where the page has to go for a box to be on screen, vertically: the scroll
+// position it already has when the box is comfortably inside, and otherwise
+// enough to bring it in. A box taller than the viewport is aligned to its top
+// rather than centred, which would push the beginning of it out.
+const revealTop = (top: number, height: number, viewportHeight: number, scrollTop: number): number => {
+  assert(Number.isFinite(top), 'revealTop: the box has a top');
+  assert(Number.isFinite(height), 'revealTop: the box has a height');
+  assert(viewportHeight >= 0, 'revealTop: the viewport has a height');
+  if (top >= SCROLL_MARGIN && top + height <= viewportHeight - SCROLL_MARGIN) {
+    return scrollTop;
   }
-  const offset = length >= viewport - SCROLL_MARGIN * 2 ? SCROLL_MARGIN : (viewport - length) / 2;
-  return Math.max(0, at + start - offset);
+  const offset = height >= viewportHeight - SCROLL_MARGIN * 2 ? SCROLL_MARGIN : Math.floor((viewportHeight - height) / 2);
+  const target = Math.max(0, Math.round(scrollTop + top - offset));
+  assert(target >= 0, 'revealTop: a scroll position is never negative');
+  return target;
 };
 export const scrollPathIntoView = (nodePath: string, occ: number): void => {
   const rects = rectsForPath(nodePath);
@@ -344,19 +360,13 @@ export const scrollPathIntoView = (nodePath: string, occ: number): void => {
   if (!rect) {
     return;
   }
-  const vh = window.innerHeight || document.documentElement.clientHeight;
-  const vw = window.innerWidth || document.documentElement.clientWidth;
-  const top = revealAlong(rect.y, rect.h, vh, window.scrollY);
-  // Sideways too. A site can be wider than the frame — full-bleed sliders,
-  // a track of cards, a decorative circle hanging off the edge — and once the
-  // canvas is scrolled across, everything on it reads as having slipped off
-  // to the left with no scrollbar to say otherwise. Selecting something is
-  // how you ask to see it, so it is also how you get back.
-  const left = revealAlong(rect.x, rect.w, vw, window.scrollX);
-  if (top === window.scrollY && left === window.scrollX) {
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  const top = revealTop(rect.y, rect.h, viewportHeight, window.scrollY);
+  if (top === window.scrollY) {
     return;
   }
-  window.scrollTo({ top, left, behavior: 'smooth' });
+  // No `left`: the horizontal scroll stays wherever it is (see above).
+  window.scrollTo({ top, behavior: 'smooth' });
 };
 
 // `stacki-opened` on the instance being edited — the one that was actually

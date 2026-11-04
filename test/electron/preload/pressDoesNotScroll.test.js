@@ -152,12 +152,12 @@ const press = (window, target, init = {}) => {
     check('and the click with it', !click.defaultPrevented, 'links would not work in the preview');
   }
 
-  // --- and asking for something is how you get back -----------------------------
+  // --- and asking for something reveals it downward only ---------------------
   //
-  // A press no longer travels, but a page can be scrolled sideways all the same
-  // — a trackpad, a slider's own script, a site that is simply wider than the
-  // frame. There is no scrollbar in the canvas to say so, so the way back has
-  // to be the thing you would do anyway: select what you want to look at.
+  // Selecting a node scrolls the page down to it, never across. A site wider
+  // than the frame clips its overflow on purpose, and a viewport scrolled
+  // sideways by script has no way back on the canvas (revealScrollsDown.test.js
+  // measures it in a real browser).
   {
     const { window } = await frame('#avb-design');
     const scrolls = [];
@@ -191,9 +191,7 @@ const press = (window, target, init = {}) => {
     window.dispatchEvent(go);
     await settle(30);
     const last = scrolls[scrolls.length - 1];
-    check('asking for a node off to the side scrolls sideways to it', last && typeof last.left === 'number', JSON.stringify(scrolls));
-    check('far enough to put it on screen', last && last.left < 1200 && last.left >= 0, JSON.stringify(last));
-    check('and it says where vertically too, in the same move', last && typeof last.top === 'number', JSON.stringify(last));
+    check('asking for a node off to the side never scrolls sideways', last === undefined || last.left === undefined, JSON.stringify(scrolls));
   }
 
   const source = readFolderSource('electron/preload');
