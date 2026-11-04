@@ -6,6 +6,7 @@ import type { MutableRefObject } from 'react';
 import DataPicker from './DataPicker';
 import type { DataPickerProps } from './DataPicker';
 import type { DataOrigin } from './dataPickerModel';
+import type { NewPropHost } from './newPropModel';
 import { dataTree } from '../../editor/dataSuggest';
 import type { DataContext } from '../../editor/dataSuggest';
 import { resolvePick } from '../../editor/bindings';
@@ -25,6 +26,8 @@ export interface RichContext extends DataContext {
   /** The file being bound, and the page it is shown on, for the picker's group headings. */
   readonly origin?: DataOrigin | undefined;
   readonly ensureQuery?: (collection: string) => string | undefined;
+  /** The open component, when the file being bound is one: its picker offers new props. */
+  readonly newProp?: NewPropHost | undefined;
 }
 export interface RichInsertAPI {
   readonly insert: (path: string) => void;

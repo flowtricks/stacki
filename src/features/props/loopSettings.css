@@ -923,3 +923,114 @@
   color: #ff8a8a;
   font-size: 11px;
 }
+
+/* A new component prop's settings (NewPropForm.tsx), in the loop dialog's
+   look. A name with a problem says so in red words beneath it; the field
+   itself keeps its fill, so the problem reads as text, not as an alarm. */
+.new-prop-form .loop-bind-name {
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+.new-prop-form .loop-bind-name input[aria-invalid='true'] {
+  background: var(--bg-input);
+}
+.new-prop-input {
+  width: 100%;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.new-prop-settings,
+.new-prop-attributes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.new-prop-attribute {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+.new-prop-add {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px;
+}
+/* The picker's first row in a component: a new prop for this field. */
+.dp-new-prop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #b9a6ff;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.dp-new-prop:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.dp-new-prop:disabled {
+  color: var(--text-dim);
+}
+.dp-new-prop-reason {
+  padding: 0 8px 6px 28px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.dp-kind-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-right: 6px;
+  color: var(--text-dim);
+}
+/* Advice under an attribute's Name: muted words in a filled box. */
+.attr-name-note {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.4;
+}
+/* An element's attributes connected to an attributes prop: the purple chip
+   in the header, and the line naming what an instance adds. */
+.attrs-bound-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 22px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(146, 116, 255, 0.28);
+  color: #c9bbff;
+  font: inherit;
+  font-size: 11px;
+}
+.attrs-bound-chip:hover,
+.attrs-bound-chip[aria-expanded='true'] {
+  background: rgba(146, 116, 255, 0.38);
+}
+.attrs-bound-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+}

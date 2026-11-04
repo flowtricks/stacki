@@ -8,6 +8,9 @@ import { useAppScope } from './state/appComposers';
 import { WelcomeView, AppShell } from './shell/AppShell';
 import { collectionReader } from '../editor/collectionReader';
 import { canvasPageOf } from '../editor/pageState';
+import { readPropsDestructure } from '../editor/loopProps';
+import { readRestBinding } from '../editor/propDeclaration';
+import type { NewPropHost } from '../features/props/newPropModel';
 
 export default function App() {
   const scope = useAppScope();
@@ -201,8 +204,29 @@ function bindContextOf(app: AppView, route: CanvasRoute) {
       // on: the picker heads each group of rows by where its data lives, so a
       // component's own props never read as the page's.
       origin: { file: app.currentPage?.path, page: canvasPageOf(app.editStack) },
+      // In a component (or layout), the picker offers the component's own
+      // props fitted to the field, and a new prop made for it.
+      newProp: newPropHostOf(app, editedEntry),
     }
   );
+}
+
+function newPropHostOf(
+  app: AppView,
+  entry: { readonly name: string; readonly schema?: readonly { readonly name: string }[] | undefined } | undefined,
+): NewPropHost | undefined {
+  const page = app.currentPage;
+  if (page?.kind !== 'component' || app.model === undefined) {
+    return undefined;
+  }
+  const frontmatter = app.model.extraFrontmatter;
+  const keys = new Set([...(readPropsDestructure(frontmatter)?.entries ?? []).map((prop) => prop.key), ...(entry?.schema ?? []).map((prop) => prop.name)]);
+  return {
+    componentName: page.path.split(/[\\/]/).pop() ?? page.path,
+    propKeys: [...keys],
+    restLocal: readRestBinding(frontmatter)?.local,
+    create: app.createBoundProp,
+  };
 }
 
 // Stepping through a dynamic route's entries from inside the picker. It is the SAME

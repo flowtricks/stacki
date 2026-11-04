@@ -10,6 +10,8 @@ import type { TemplateHole } from '../../editor/bindings';
 import type { RichContext } from './RichContent';
 import type { ChipsOf } from '../../ui/ExprInput';
 import type { PickerNode } from './DataPicker';
+import type { NewPropSeed } from './newPropModel';
+import type { PropDeclaration } from '../../editor/propDeclaration';
 
 export interface FieldPosition {
   readonly left: number;
@@ -67,7 +69,11 @@ export interface FieldDataPickerProps extends BindingContextProps {
   readonly pos: FieldPosition;
   readonly current?: string | undefined;
   readonly tree?: readonly PickerNode[] | undefined;
+  /** The field the picker is for: in a component, its props are fitted to it and a new one can be made for it. */
+  readonly seed?: NewPropSeed | undefined;
   readonly onPick: (path: string) => void;
+  /** Binds the whole field to a prop just made for it; picking inserts at the caret instead. */
+  readonly onBindNew?: ((path: string, declaration: PropDeclaration) => void) | undefined;
   readonly onWrite?: (() => void) | undefined;
   readonly onClose: () => void;
 }

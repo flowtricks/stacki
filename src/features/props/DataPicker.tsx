@@ -1,8 +1,20 @@
 import { useCodeAccess } from '../../ui/CodeAccess';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
-import { ChevronRightIcon, ChevronLeftIcon, CheckIcon, CodeIcon, SearchIcon, PencilIcon } from '../../ui/Icons';
+import {
+  BracesIcon,
+  ChevronRightIcon,
+  ChevronLeftIcon,
+  CheckIcon,
+  CodeIcon,
+  FieldNumberIcon,
+  FieldSwitchIcon,
+  SearchIcon,
+  PencilIcon,
+  TextIcon,
+} from '../../ui/Icons';
 import { pathSteps } from '../../editor/dataSample';
 import { entryPageOf, entryPath, pagesOfPath, sectionHeading, shownEntryRows, steppedEntryIndex, type DataOrigin, type EntryPages } from './dataPickerModel';
 
@@ -138,16 +150,19 @@ export interface DataPickerProps {
   readonly onEdit?: (() => void) | undefined;
   readonly editLabel?: string;
   readonly footer?: boolean;
+  /** Rows above the search, for what the field can do besides pick: "New Text property" in a component. */
+  readonly lead?: ReactNode;
 }
 
 export default function DataPicker(props: DataPickerProps) {
   const allowCode = useCodeAccess();
-  const { entries, onStepItem, onPick, onWrite, onEdit, editLabel = 'Edit', footer = true } = props;
+  const { entries, onStepItem, onPick, onWrite, onEdit, editLabel = 'Edit', footer = true, lead } = props;
   const state = useDataPicker(props);
   const { query, setQuery, searchRef, listRef } = state;
   const origin = props.origin;
   return (
     <div className="data-picker">
+      {lead}
       {/* Which entry the values below are FROM. A dynamic route stands for
           many, and the one on the canvas is the one being read here — so
           stepping through them previews the page against other content and
@@ -359,6 +374,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
         >
           <ChevronRightIcon size={10} />
         </span>
+        {depth === 0 && node.section === 'props' && <PropKindIcon kind={node.kind} />}
         <span className="dp-key">{showPath ? node.path : node.key}</span>
         {isCurrent && <CheckIcon size={11} className="dp-check" />}
         {/* A loop hands its item one entry of a list, and the list has more
@@ -517,4 +533,39 @@ function unquoted(preview: string): string | undefined {
     return undefined;
   }
   return preview.slice(1, -1);
+}
+
+// What a component prop holds, as the icon its row leads with: words, a
+// number, a switch or attributes. Other kinds have no icon of their own.
+function PropKindIcon({ kind }: { readonly kind: string }) {
+  switch (kind) {
+    case 'string':
+    case 'text':
+    case 'enum':
+      return (
+        <span className="dp-kind-icon" title="Text">
+          <TextIcon size={11} />
+        </span>
+      );
+    case 'number':
+      return (
+        <span className="dp-kind-icon" title="Number">
+          <FieldNumberIcon size={11} />
+        </span>
+      );
+    case 'boolean':
+      return (
+        <span className="dp-kind-icon" title="Switch">
+          <FieldSwitchIcon size={11} />
+        </span>
+      );
+    case 'rest props':
+      return (
+        <span className="dp-kind-icon" title="Attributes">
+          <BracesIcon size={11} />
+        </span>
+      );
+    default:
+      return undefined;
+  }
 }

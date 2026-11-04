@@ -9,6 +9,8 @@ import { BindHandle, FieldDataPicker } from './propBindings';
 import PropTip from './PropTip';
 import { FieldNumberIcon, ComponentPropertiesIcon, FieldSwitchIcon, BracesIcon, CodeIcon, ElementSlotIcon, VariableTextSizeIcon } from '../../ui/Icons';
 import { controlWord, type PropState } from './propFieldModel';
+import { fitOfFieldType, literalOf } from './newPropModel';
+import { withoutSettingTags } from '../../editor/propDocumentation';
 
 export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) => event.preventDefault();
 export function PropFieldPill({ state }: { readonly state: PropState }) {
@@ -67,7 +69,7 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
       {pill}
       {/* The prop's own documentation — the comment above it in the
           component's `interface Props`. */}
-      <PropTip {...(field.doc === undefined ? {} : { text: field.doc })} />
+      <PropTip {...(field.doc === undefined ? {} : { text: withoutSettingTags(field.doc) })} />
       {reason && (
         <span className="prop-inert" title={reason}>
           ignored
@@ -118,6 +120,13 @@ export function PropFieldPicker({ state }: { readonly state: PropState }) {
       <FieldDataPicker
         pos={insertAt}
         bindContext={bindContext}
+        seed={seedOf(field, value)}
+        // A prop made for this field is the whole of its value, as a builder binds one.
+        onBindNew={(path) => {
+          setInsertAt(undefined);
+          setCustom(true);
+          onChange({ type: 'expr', value: path }, true);
+        }}
         onPick={(path) => {
           setInsertAt(undefined);
           // Into the value field's caret when there is one — so a chip can land
@@ -141,4 +150,10 @@ export function PropFieldPicker({ state }: { readonly state: PropState }) {
       />
     )
   );
+}
+
+// What a new prop for this field starts from: its kind, its name and its value.
+function seedOf(field: PropState['field'], value: PropState['value']) {
+  const fit = fitOfFieldType(field.type, { numeric: field.numeric });
+  return fit === undefined ? undefined : { fit, label: field.name, value: literalOf(value) };
 }

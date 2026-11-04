@@ -203,3 +203,12 @@
   flex: 1;
   min-width: 0;
 }
+
+/* A prop nothing in the component reads: a muted warning at the row's end. */
+.property-unused {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 4px;
+  color: var(--text-dim);
+}

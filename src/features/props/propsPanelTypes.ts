@@ -42,6 +42,8 @@ export interface PropsPanelProps {
   readonly linkContext?: React.ComponentProps<typeof LinkField>['context'] | undefined;
   readonly onSetProp: SetProp;
   readonly onSetProps?: SetProps;
+  /** Writes an element's whole attribute list in a new order: an attributes prop's spread and the defaults before it. */
+  readonly onReplaceProps?: ((nodeId: string, props: Readonly<Record<string, Attr>>) => void) | undefined;
   readonly onSetAssetProp?: (nodeId: string, name: string, picked: PickedAsset, reference: AssetReference) => void;
   readonly onRenameProp: (previous: string, next: string) => void;
   readonly onChangeTag?: TagFieldProps['onChangeTag'];

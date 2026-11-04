@@ -52,6 +52,9 @@ import {
   useQueryCleanup,
 } from './appShortcuts';
 import { useScopeSamples } from './scopeSamples';
+import { newPropGesture } from '../model/newPropGesture';
+import type { PropDeclaration } from '../../editor/propDeclaration';
+import { err, ok, type Result } from '../../../shared/core/result';
 
 // Shortcuts, previews and the data the page reads.
 export function useShortcuts(
@@ -373,7 +376,7 @@ export function useSelectionModel(
 ) {
   const { model } = shortcuts;
   const { devStatus, devUrl, sampleAskedRef, selectedId, setCollectionSamples } = coreState;
-  const { commitEdit } = history;
+  const { commitEdit, holdForNextEdit } = history;
 
   // ----------------------------------------------------------------
   // Selection helpers
@@ -455,7 +458,22 @@ export function useSelectionModel(
     commitEdit(frontmatterGesture(model, { coalesceKey: undefined, urgency: false }, queried));
     return name;
   };
+  // A prop declared from the binding picker of an open component: held for
+  // the field's edit that binds it, so Create is one undo step, and answered
+  // with the name the field binds.
+  const createBoundProp = (declaration: PropDeclaration): Result<string, string> => {
+    if (!model) {
+      return err('Open the component first.');
+    }
+    const made = newPropGesture(model, declaration);
+    if (!made.ok) {
+      return made;
+    }
+    holdForNextEdit(made.value.gesture);
+    return ok(made.value.local);
+  };
   return {
+    createBoundProp,
     ensureCollectionQuery,
     frontmatterCode,
     requestCollectionSample,

@@ -48,6 +48,12 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
             <FieldDataPicker
               pos={contentPicker}
               bindContext={bindContext || loopContext}
+              seed={{ fit: 'content', label: 'Text', value: plainContent(node.children) }}
+              // A prop made for the content is the whole of it, its words now the prop's default.
+              onBindNew={(path) => {
+                setContentPicker(undefined);
+                onSetInline([{ kind: 'expr', value: path }]);
+              }}
               onPick={(path) => {
                 setContentPicker(undefined);
                 contentInsertRef.current?.insert(path);
@@ -320,7 +326,12 @@ export function ElementStyle({ state }: { readonly state: ElementState }) {
 }
 
 export function ElementAttributes({ state }: { readonly state: ElementState }) {
-  const { node, allowAttrs, loopContext, bindContext, onSetProp, onSetProps, onRenameProp, projectPath, attrNames } = state;
+  const { node, allowAttrs, loopContext, bindContext, onSetProp, onSetProps, onRenameProp, projectPath, attrNames, onReplaceProps, onSetFrontmatter, schema } =
+    state;
+  // An HTML element is checked against its tag and can be connected to the
+  // component's attributes prop; an instance's attributes would collide with
+  // the props its component declares.
+  const element = node.kind === 'element' && /^[a-z][a-z0-9-]*$/.test(String(node.name));
   return (
     <>
       {allowAttrs && (
@@ -328,6 +339,10 @@ export function ElementAttributes({ state }: { readonly state: ElementState }) {
           key="attrs"
           node={node}
           names={attrNames}
+          tag={element ? String(node.name) : undefined}
+          reservedNames={node.kind === 'component' ? schema.map((field) => field.name) : undefined}
+          onReplaceProps={onReplaceProps === undefined || !element ? undefined : (props) => onReplaceProps(node.id, props)}
+          onSetFrontmatter={onSetFrontmatter}
           projectPath={projectPath}
           bindContext={bindContext || loopContext}
           onSetProp={onSetProp}
@@ -390,4 +405,15 @@ export function elementOpenContentPicker(state: ElementState, host: Element | un
     return;
   }
   state.setContentPicker(dataPickerPosition(rectangle));
+}
+
+// The element's content as words, when it is only words; '' otherwise.
+function plainContent(children: ElementState['node']['children']): string {
+  const kids = children ?? [];
+  return kids.every((child) => child.kind === 'text')
+    ? kids
+        .map((child) => (child.kind === 'text' ? String(child.value ?? '') : ''))
+        .join('')
+        .trim()
+    : '';
 }

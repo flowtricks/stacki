@@ -9,6 +9,7 @@ import { assert } from '../../../shared/core/assert';
 import { definedFields } from '../../../shared/core/boundary';
 import { resolveAssetImport } from '../../ipc/assetBridge';
 import { BindField, ExprValueField } from './propBindings';
+import { statedSwitchLabels } from '../../editor/propDocumentation';
 import { ObjectAttrsField, parseObjectLiteral, serializeObjectLiteral } from './propAttributes';
 import { looksLikeAssetPath, mediaKindFor } from '../../ui/AssetThumb';
 import AssetField from '../../ui/AssetField';
@@ -266,13 +267,15 @@ export function BooleanControl({ state }: { readonly state: PropControlState }) 
   // Show the effective boolean while the label tracks only an explicit override.
   const fallback = !!field.default;
   const current = value ? value.type !== 'expr' || value.value === 'true' : fallback;
+  // A switch prop's own words for its sides, from its doc's @onLabel and @offLabel.
+  const labels = statedSwitchLabels(field.doc);
   return (
     <div className="props-field">
       {label}
       <SegSwitch
         options={[
-          { value: true, label: 'True' },
-          { value: false, label: 'False' },
+          { value: true, label: labels?.onLabel ?? 'True' },
+          { value: false, label: labels?.offLabel ?? 'False' },
         ]}
         current={current}
         onPick={(next) =>

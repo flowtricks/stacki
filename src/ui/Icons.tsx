@@ -597,6 +597,32 @@ export const HelpCircleIcon = ({ size = 16, className, style }: IconProps) => (
   </svg>
 );
 
+// A warning: a triangle with an exclamation mark, the triangle at 40% so the mark reads first.
+export const WarningTriangleIcon = ({ size = 16, className, style }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    className={className}
+    style={{ display: 'block', flexShrink: 0, ...style }}
+    aria-hidden="true"
+  >
+    <path d="M8 5V9H9V5H8Z" fill="currentColor" />
+    <path
+      d="M8.5 12C9.05228 12 9.5 11.5523 9.5 11C9.5 10.4477 9.05228 10 8.5 10C7.94772 10 7.5 10.4477 7.5 11C7.5 11.5523 7.94772 12 8.5 12Z"
+      fill="currentColor"
+    />
+    <path
+      opacity="0.4"
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M7.63392 2C8.01883 1.33333 8.98107 1.33333 9.36597 2L15.4282 12.5C15.8131 13.1667 15.3319 14 14.5621 14H2.43777C1.66797 14 1.18685 13.1667 1.57175 12.5L7.63392 2ZM8.49995 2.5L2.43777 13L14.5621 13L8.49995 2.5Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
 export const GearIcon = (props: IconProps) => (
   <I {...props}>
     <circle cx="8" cy="8" r="2.15" />

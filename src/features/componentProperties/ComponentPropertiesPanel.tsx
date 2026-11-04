@@ -6,7 +6,8 @@ import type { ComponentProperties, ComponentProperty, PropertyChange } from '../
 import useListReorder from '../../ui/useListReorder';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
 import ListFieldRow from '../../ui/ListFieldRow';
-import { CheckIcon, ComponentPropertiesIcon, FieldNumberIcon, FieldSwitchIcon, FilterIcon, SortIcon } from '../../ui/Icons';
+import { CheckIcon, ComponentPropertiesIcon, FieldNumberIcon, FieldSwitchIcon, FilterIcon, SortIcon, WarningTriangleIcon } from '../../ui/Icons';
+import { unusedProps } from '../../editor/propUsage';
 import { listPropsOf } from '../../editor/listProps';
 import { SETTING_PROP_TYPES } from '../../editor/optionsBinding';
 import { PropertyGrip, movePropertyItem } from './PropertyReorder';
@@ -132,6 +133,15 @@ function PropertyList({ data, busy, onSelect, onChange }: PropertyListProps) {
   // A prop the component's loop reads a list setting from shows that setting's
   // icon even while its declared type is still loose (`unknown`).
   const listProps = useMemo(() => listPropsOf(data.frontmatter), [data.frontmatter]);
+  // A prop nothing in the component reads is flagged at the row's end.
+  const unused = useMemo(
+    () =>
+      unusedProps(
+        data.source,
+        data.properties.map((property) => property.name),
+      ),
+    [data.source, data.properties],
+  );
   return (
     <div className="property-list list-field">
       {data.properties.length === 0 && <p className="property-help">No properties yet. Add a property to define what each instance can customize.</p>}
@@ -148,6 +158,13 @@ function PropertyList({ data, busy, onSelect, onChange }: PropertyListProps) {
           removeLabel={`Delete ${property.name}`}
           onOpen={() => onSelect(property)}
           onRemove={() => void onChange({ kind: 'remove', name: property.name })}
+          trailing={
+            unused.has(property.name) ? (
+              <span className="property-unused" title="Not used in this component" role="img" aria-label="Not used in this component">
+                <WarningTriangleIcon size={14} />
+              </span>
+            ) : undefined
+          }
         >
           {property.name}
           {property.required && (

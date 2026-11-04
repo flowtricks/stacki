@@ -155,7 +155,7 @@ export function propTooltip(frontmatter: string, key: string): string {
 
 // Where an entry is added: after the last entry, before any trailing comma
 // and the closing brace's own line.
-function destructureEnd(frontmatter: string, destructure: PropsDestructure): number {
+export function destructureEnd(frontmatter: string, destructure: PropsDestructure): number {
   const inside = frontmatter.slice(destructure.pattern.from + 1, destructure.pattern.to - 1);
   const kept = inside.replace(/[\s,]*$/, '');
   assert(kept.length <= inside.length, 'Trimming keeps a prefix');
@@ -163,7 +163,7 @@ function destructureEnd(frontmatter: string, destructure: PropsDestructure): num
 }
 
 // The position just before `interface Props`' closing brace's line.
-function propsInterfaceEnd(frontmatter: string): number | undefined {
+export function propsInterfaceEnd(frontmatter: string): number | undefined {
   const body = propsInterfaceBody(frontmatter);
   if (body === undefined) {
     return undefined;
@@ -176,7 +176,7 @@ function propsInterfaceEnd(frontmatter: string): number | undefined {
 }
 
 // The `{ … }` of `interface Props`, if the frontmatter declares one.
-function propsInterfaceBody(frontmatter: string): SyntaxNode | undefined {
+export function propsInterfaceBody(frontmatter: string): SyntaxNode | undefined {
   const source = frontmatter.length > LOOP_SYNTAX_LIMITS.sourceCharsMax ? '' : frontmatter;
   const tree = typescript.parse(source);
   for (
@@ -192,7 +192,7 @@ function propsInterfaceBody(frontmatter: string): SyntaxNode | undefined {
   return undefined;
 }
 
-function propsPattern(frontmatter: string): SyntaxNode | undefined {
+export function propsPattern(frontmatter: string): SyntaxNode | undefined {
   const source = frontmatter.length > LOOP_SYNTAX_LIMITS.sourceCharsMax ? '' : frontmatter;
   const tree = typescript.parse(source);
   for (

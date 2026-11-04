@@ -489,6 +489,7 @@ export function settingsHandlers(app: ShellView) {
       }
     },
     onSetProps: (nodeId: string, patch: PropValues) => app.setProps(nodeId, patch, true, app.pathFor(nodeId)),
+    onReplaceProps: (nodeId: string, props: Readonly<Record<string, Attr>>) => app.replaceProps(nodeId, props),
     onSetAssetProp: (nodeId: string, propName: string, picked: PickedAsset, reference: AssetReference) => {
       void app.setAssetProp(nodeId, propName, picked, reference).catch(app.reportFailure);
     },

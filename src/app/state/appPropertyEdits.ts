@@ -22,6 +22,7 @@ import {
 } from '../../editor/editGestures';
 import { readFrontmatter } from '../../../shared/page/frontmatterSource';
 import { hasClass, withClass } from '../../editor/classAttr';
+import { withAttributes } from '../../editor/attributesBinding';
 import { previewAddedClass, previewClassProps } from '../../editor/previewClassPatch';
 import { cleanError } from '../../lib/cleanError';
 import type { AssetReference, PickedAsset } from '../../ui/AssetField';
@@ -132,7 +133,23 @@ export function useClassEdits(coreState: ReturnType<typeof useCoreState>, lifecy
     },
     [commitEdit, pageStateRef],
   );
-  return { addClassToNode, setProp, setProps };
+  // An element's whole attribute list, in order: connecting it to an
+  // attributes prop puts the defaults before the spread and its own after,
+  // which a patch (new names last) cannot say. One node rewrite, one undo.
+  const replaceProps = useCallback(
+    (nodeId: string, props: Readonly<Record<string, Attr>>) => {
+      const state = pageStateRef.current.pageState;
+      const node = state?.editable ? findNodeById(state.model.nodes, nodeId) : undefined;
+      if (node === undefined) {
+        return;
+      }
+      assert(node.id === nodeId, 'replaceProps: the node found is the one named');
+      const next = withAttributes(node, props);
+      commitEdit(nodeGesture(nodeId, next, { coalesceKey: undefined, urgency: true }));
+    },
+    [commitEdit, pageStateRef],
+  );
+  return { addClassToNode, setProp, setProps, replaceProps };
 }
 
 function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {

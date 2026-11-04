@@ -253,6 +253,11 @@ function numberRulesTags(documentation: string): NumberRules {
   if (step !== undefined) {
     rules.step = step;
   }
+  // `@decimals 2` is the precision the property settings form writes: a step of 0.01.
+  const decimals = tag('decimals');
+  if (decimals !== undefined && Number.isSafeInteger(decimals) && decimals >= 0 && decimals <= 10 && rules.step === undefined) {
+    rules.step = Number((10 ** -decimals).toFixed(decimals));
+  }
   if (/@(?:int|integer)\b/i.test(documentation) && rules.step === undefined) {
     rules.step = 1;
   }

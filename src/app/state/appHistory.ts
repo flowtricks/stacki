@@ -12,6 +12,7 @@ import { assert } from '../../../shared/core/assert';
 import { scanContainsFile } from '../../editor/pagePersistence';
 import { createCoalescedRun } from '../../lib/coalescedRun';
 import { type AppliedEdit, type EditGesture, type EditsRecord } from '../../editor/pageEdits';
+import { sequence } from '../../editor/editGestures';
 import { saveStateAccepted, saveStateBase, saveStateEdited, saveStateNeedsWrite, saveStateRefused } from '../../editor/saveState';
 import type { Digest } from '../../../shared/core/brand';
 import { cleanError } from '../../lib/cleanError';
@@ -500,8 +501,17 @@ export function useCommitEdit(
   // cannot state still queues: pageEdits derives a minimal node rewrite from
   // the gesture's model effect. Past the queue's bound a gesture is refused,
   // never queued (plan §8).
+  // A gesture held for the next one, so the two are one undo step: a prop
+  // declared from the binding picker and the field's edit that binds it
+  // (holdForNextEdit). The field's edit is made by the field itself, as any
+  // pick is, so the declaration waits for it rather than knowing its shape.
+  const heldRef = useRef<EditGesture | undefined>(undefined);
   const commitEdit = useCallback(
-    (gesture: EditGesture, step: { readonly files?: StepFiles } = {}): boolean => {
+    (next: EditGesture, step: { readonly files?: StepFiles } = {}): boolean => {
+      const held = heldRef.current;
+      heldRef.current = undefined;
+      const gesture = held === undefined ? next : sequence(held, next);
+      assert(held === undefined || step.files === undefined, 'A held declaration joins a page edit, not a step that made files');
       if (propertySave.saving.current) {
         return false;
       }
@@ -532,7 +542,22 @@ export function useCommitEdit(
     },
     [scheduleSave, pushEditHistory, propertySave.saving, editDrafts, typedCodeUnparsed, showToast, pageStateRef, setPageState],
   );
-  return { commitEdit, keepLocalVersion };
+  // The held gesture goes in with the next edit; a field that made none
+  // (the pick was refused) leaves it to go in alone once the click is done,
+  // so a declared prop is never lost and never joins an unrelated edit.
+  const commitRef = useRef(commitEdit);
+  commitRef.current = commitEdit;
+  const holdForNextEdit = useCallback((gesture: EditGesture): void => {
+    assert(heldRef.current === undefined, 'One gesture is held at a time');
+    heldRef.current = gesture;
+    window.setTimeout(() => {
+      if (heldRef.current === gesture) {
+        heldRef.current = undefined;
+        commitRef.current(gesture);
+      }
+    }, 0);
+  }, []);
+  return { commitEdit, holdForNextEdit, keepLocalVersion };
 }
 
 // Typed code.

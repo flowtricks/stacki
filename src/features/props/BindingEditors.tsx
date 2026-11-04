@@ -19,6 +19,8 @@ import { dataTree, findDeclaration, findImportOf, scopeChips, scopeCompletions }
 import { resolvePick } from '../../editor/bindings';
 import { checkStatement } from './jsCheck';
 import DataPicker from './DataPicker';
+import NewPropForm from './NewPropForm';
+import { fittingTree, newPropTitle, type NewPropHost, type NewPropSeed } from './newPropModel';
 import ExprInput from '../../ui/ExprInput';
 import { CodeIcon, CloseIcon, PencilIcon, PlusIcon } from '../../ui/Icons';
 import {
@@ -162,6 +164,11 @@ export function ConditionField({ test, scope, chipsOf, bindContext, onSetText }:
           pos={pick.pos}
           bindContext={bindContext}
           current={pick.chip?.path ?? undefined}
+          seed={pick.chip === undefined ? { fit: 'boolean', label: 'Visible', value: '' } : undefined}
+          onBindNew={(path) => {
+            setPick(undefined);
+            onSetText(path);
+          }}
           onPick={(path) => {
             const chip = pick.chip;
             setPick(undefined);
@@ -250,9 +257,15 @@ export function BindHandle({ active, onOpen }: BindHandleProps) {
   );
 }
 
-export function FieldDataPicker({ pos: position, bindContext, current, tree, onPick, onWrite, onClose }: FieldDataPickerProps) {
+export function FieldDataPicker({ pos: position, bindContext, current, tree, seed, onPick, onBindNew, onWrite, onClose }: FieldDataPickerProps) {
   const pick = (path: string, query: PickerNode['query'] | undefined) => onPick(resolvePick(path, query ?? undefined, bindContext ?? undefined));
-
+  const [creating, setCreating] = useState(false);
+  // In a component, the field's own props come first and a new one can be
+  // made for it; on a page there is no component to give a prop to, and the
+  // picker is as it always was.
+  const host = bindContext?.newProp;
+  const offer = host !== undefined && seed !== undefined ? { host, seed } : undefined;
+  const fullTree: readonly PickerNode[] = tree || dataTree(bindContext || {});
   return (
     <Popup
       mode="popover"
@@ -261,18 +274,44 @@ export function FieldDataPicker({ pos: position, bindContext, current, tree, onP
       className="dd-popup bind-menu"
       style={{ left: position.left, top: position.top, width: position.width }}
     >
-      <DataPicker
-        tree={tree || dataTree(bindContext || {})}
-        current={current ?? undefined}
-        entries={bindContext?.entryNav ?? undefined}
-        {...definedFields({ onStepItem: bindContext?.onStepItem })}
-        onPick={pick}
-        onExpand={(node, index) => node.query && bindContext?.onNeedSample?.(node.query.collection, index)}
-        origin={bindContext?.origin}
-        {...definedFields({ onWrite })}
-        footer={!!onWrite}
-      />
+      {offer !== undefined && creating ? (
+        <NewPropForm
+          host={offer.host}
+          seed={offer.seed}
+          onCancel={() => setCreating(false)}
+          onCreated={(path, declaration) => (onBindNew === undefined ? onPick(path) : onBindNew(path, declaration))}
+        />
+      ) : (
+        <DataPicker
+          tree={offer === undefined ? fullTree : fittingTree(fullTree, offer.seed.fit)}
+          current={current ?? undefined}
+          entries={bindContext?.entryNav ?? undefined}
+          {...definedFields({ onStepItem: bindContext?.onStepItem })}
+          onPick={pick}
+          onExpand={(node, index) => node.query && bindContext?.onNeedSample?.(node.query.collection, index)}
+          origin={bindContext?.origin}
+          {...definedFields({ onWrite })}
+          footer={!!onWrite}
+          lead={offer === undefined ? undefined : <NewPropRow host={offer.host} seed={offer.seed} onOpen={() => setCreating(true)} />}
+        />
+      )}
     </Popup>
+  );
+}
+
+// "New Text property": the top row of a component's picker. An attributes
+// list can take one rest binding, so a component that has one says so here
+// and connects to it below instead.
+function NewPropRow({ host, seed, onOpen }: { readonly host: NewPropHost; readonly seed: NewPropSeed; readonly onOpen: () => void }) {
+  const blocked = seed.fit === 'attributes' && host.restLocal !== undefined;
+  return (
+    <>
+      <button type="button" className="dp-new-prop" disabled={blocked} onMouseDown={(event) => event.preventDefault()} onClick={onOpen}>
+        <PlusIcon size={11} />
+        New {newPropTitle(seed.fit)} property
+      </button>
+      {blocked && <div className="dp-new-prop-reason">A component passes its other attributes on once, as {host.restLocal}.</div>}
+    </>
   );
 }
 

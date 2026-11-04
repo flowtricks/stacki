@@ -14,6 +14,9 @@ import AssetField from '../../ui/AssetField';
 import { looksLikeAssetPath, mediaKindFor } from '../../ui/AssetThumb';
 import { BindField, BindHandle, FieldDataPicker, ValueCodeEditor } from './propBindings';
 import { BracesIcon, PlusIcon, TrashIcon, ElementImageIcon, MaximizeIcon } from '../../ui/Icons';
+import { AttributesPropControl, AttributesPropNote } from './AttributesPropBinding';
+import { readAttributesBinding, spreadKey } from '../../editor/attributesBinding';
+import { attributeNameNote } from '../../editor/htmlAttributes';
 import { type AttributePair, type ObjectEntry, decodeAttr, attributeDisplayName, encodeAttr, parseAttrPaste, decodeRaw, encodeRaw } from './attributeText';
 export { parseAttrPaste, parseObjectLiteral, serializeObjectLiteral } from './attributeText';
 
@@ -39,8 +42,17 @@ interface AttributesSectionProps extends ContextProps {
   readonly onSetProp: SetProp;
   readonly onSetProps?: SetProps | undefined;
   readonly onRenameProp: (previous: string, next: string) => void;
+  /** The element's tag, when it is an HTML element: its attributes prop is typed by it, and names are checked against it. */
+  readonly tag?: string | undefined;
+  /** The names an attribute here would collide with: an instance's component props. */
+  readonly reservedNames?: readonly string[] | undefined;
+  /** Writes the whole attribute list in order, for connecting it to an attributes prop. */
+  readonly onReplaceProps?: ((props: Readonly<Record<string, Attr>>) => void) | undefined;
+  readonly onSetFrontmatter?: ((source: string) => void) | undefined;
 }
 interface AttrEditorProps extends ContextProps {
+  readonly tag?: string | undefined;
+  readonly reservedNames?: readonly string[] | undefined;
   readonly pos: FieldPosition;
   readonly triggerRootRef: RefObject<HTMLElement>;
   readonly name: string;
@@ -63,7 +75,16 @@ interface ObjectAttrsFieldProps extends ContextProps {
 
 export function AttributesSection(props: AttributesSectionProps) {
   const state = useAttributesSection(props);
-  const { node, names, onSetProp, editor, setEditor, listRef, openEditor } = state;
+  const { node, onSetProp, editor, setEditor, listRef, openEditor, tag, onReplaceProps, bindContext } = state;
+  // Connected to the component's attributes prop: the spread and the defaults
+  // before it are the prop's, edited from its settings; the rows are the
+  // element's own.
+  const restLocal = bindContext?.newProp?.restLocal;
+  const binding = restLocal === undefined ? undefined : readAttributesBinding(node.props, restLocal);
+  const names =
+    binding === undefined || restLocal === undefined
+      ? state.names
+      : state.names.filter((name) => name !== spreadKey(restLocal) && !binding.defaults.some((entry) => entry.name === name));
 
   return (
     <div className="props-field" ref={listRef}>
@@ -74,6 +95,15 @@ export function AttributesSection(props: AttributesSectionProps) {
           <BracesIcon size={12} className="prop-label-icon" />
           Attributes
         </span>
+        {tag !== undefined && onReplaceProps !== undefined && (
+          <AttributesPropControl
+            props={node.props}
+            tag={tag}
+            bindContext={bindContext}
+            onReplaceProps={onReplaceProps}
+            onSetFrontmatter={state.onSetFrontmatter}
+          />
+        )}
         <button className="ghost" title="Add attribute" data-attribute-editor-trigger onClick={() => openEditor(undefined)}>
           <PlusIcon size={12} />
         </button>
@@ -117,6 +147,7 @@ export function AttributesSection(props: AttributesSectionProps) {
         </div>
       )}
 
+      {binding !== undefined && restLocal !== undefined && <AttributesPropNote local={restLocal} />}
       <AttributesSectionPopup state={state} />
     </div>
   );
@@ -160,6 +191,8 @@ function AttributesSectionPopup({ state }: { readonly state: AttributesState }) 
       projectPath={projectPath ?? undefined}
       bindContext={bindContext}
       dataContext={bindContext}
+      tag={state.tag}
+      reservedNames={state.reservedNames}
       name={attributeDisplayName(editor.attr ?? '', value)}
       value={syntax === 'pair' ? decodeAttr(value) : ''}
       syntax={syntax}
@@ -235,6 +268,7 @@ function AttrEditor(props: AttrEditorProps) {
   return (
     <div ref={ref} className="attr-editor" style={{ top: position.top, left: position.left, width: position.width }}>
       <AttributeName state={state} />
+      <AttributeNameNote name={state.draftName} tag={state.tag} reserved={state.reservedNames ?? []} syntax={state.syntax} />
       {/* The field sits beside its label like the name row, whichever kind it
           is; `top` just stops the label and toggle from centring against a
           tall field. */}
@@ -353,6 +387,21 @@ function useAttrEditorDismiss(ref: RefObject<HTMLElement>, triggerRootRef: RefOb
       document.removeEventListener('keydown', onKey);
     };
   }, [onClose, ref, triggerRootRef]);
+}
+// Advice under the Name, never a refusal: a name this tag does not take, or
+// one the component already means something by, still saves (htmlAttributes.ts).
+export function AttributeNameNote(props: {
+  readonly name: string;
+  readonly tag: string | undefined;
+  readonly reserved: readonly string[];
+  readonly syntax: 'pair' | 'spread';
+}) {
+  const note = props.syntax === 'spread' ? undefined : attributeNameNote(props.name, props.tag, props.reserved);
+  return note === undefined ? undefined : (
+    <div className="attr-name-note" role="note">
+      {note}
+    </div>
+  );
 }
 function AttributeName({ state }: { readonly state: AttributeState }) {
   const { syntax, isNew, draftName, setDraftName, setDraftValue, onCommitPair, onCommitMany, commitName } = state;
@@ -526,6 +575,12 @@ function AttributePopups({ state }: { readonly state: AttributeState }) {
         <FieldDataPicker
           pos={insertAt}
           bindContext={bindContext}
+          seed={{ fit: 'text', label: draftName || 'value', value: draftValue.startsWith('{') ? '' : draftValue }}
+          onBindNew={(path) => {
+            setInsertAt(undefined);
+            setDraftValue(`{${path}}`);
+            onChangeValue(`{${path}}`);
+          }}
           onPick={(path) => {
             setInsertAt(undefined);
             // Into the caret when the field has one, so a chip lands beside
