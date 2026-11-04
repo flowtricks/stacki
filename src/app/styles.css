@@ -2963,14 +2963,26 @@ body > .embed-editor_provenance {
 }
 /* Collections the page doesn't read yet — a different kind of thing from what
    is already in scope, so it says so rather than running on as one list. */
+/* Every group of rows is headed by where its data lives (dataPickerModel.ts).
+   A fill sets the heading apart from the rows, not a rule (house style). */
 .dp-section {
-  padding: 8px 8px 4px;
-  margin-top: 2px;
-  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  margin: 2px 0;
+  border-radius: 4px;
+  background: var(--bg-hover);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+  color: var(--text-faint);
+}
+.dp-section-note {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--text-faint);
 }
 .dp-loading {

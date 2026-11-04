@@ -267,7 +267,8 @@ export function FieldDataPicker({ pos: position, bindContext, current, tree, onP
         entries={bindContext?.entryNav ?? undefined}
         {...definedFields({ onStepItem: bindContext?.onStepItem })}
         onPick={pick}
-        onExpand={(node) => node.query && bindContext?.onNeedSample?.(node.query.collection)}
+        onExpand={(node, index) => node.query && bindContext?.onNeedSample?.(node.query.collection, index)}
+        origin={bindContext?.origin}
         {...definedFields({ onWrite })}
         footer={!!onWrite}
       />

@@ -27,7 +27,7 @@ export interface SourcePickerData {
   readonly tree: readonly TreeNode[];
   /** One sampled item per collection, by name, once asked for. */
   readonly samples: Readonly<Record<string, unknown>>;
-  readonly onNeedSample?: ((collection: string) => void) | undefined;
+  readonly onNeedSample?: ((collection: string, index?: number) => void) | undefined;
   readonly onStepItem?: DataPickerProps['onStepItem'];
   /** The frontmatter, so imported functions are not offered as lists. */
   readonly frontmatter: string;
@@ -91,11 +91,11 @@ export function SourcePicker(props: {
               current={props.current}
               footer={false}
               {...(props.data?.onStepItem ? { onStepItem: props.data.onStepItem } : {})}
-              onExpand={(node) => {
+              onExpand={(node, index) => {
                 if (node.path.startsWith('sanity:')) {
                   sanity.load(node.query?.collection);
                 } else if (node.query !== undefined) {
-                  props.data?.onNeedSample?.(node.query.collection);
+                  props.data?.onNeedSample?.(node.query.collection, index);
                 }
               }}
               onPick={(path) => {

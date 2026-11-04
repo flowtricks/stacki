@@ -419,7 +419,7 @@ export function pageLists(tree: readonly TreeNode[]): readonly LoopListOption[] 
       continue;
     }
     if ('pickable' in node && node.pickable === true) {
-      out.push({ path: node.path, label: node.path, hint: node.preview || node.section || '' });
+      out.push({ path: node.path, label: node.path, hint: node.preview || '' });
     }
     for (const child of [...(node.children ?? [])].reverse()) {
       pending.push(child);

@@ -199,7 +199,9 @@ export const IPC_PAYLOADS = {
   'content:remoteEdit': object({ ...project, request: parseAstroRemoteEdit }),
   'content:remoteRead': object({ ...project, request: parseAstroRemoteRead }),
   'content:renamePlan': object({ ...named, from: text, to: text }),
-  'content:sampleEntry': object({ devUrl: maybeText, name: text, id: maybeText }),
+  // `index` is a position in getCollection's own order: the picker's entry pager
+  // reads `stats[2]` as the page's code would.
+  'content:sampleEntry': object({ devUrl: maybeText, name: text, id: maybeText, index: optional(count) }),
   'content:sampleValue': object({
     ...project,
     devUrl: maybeText,

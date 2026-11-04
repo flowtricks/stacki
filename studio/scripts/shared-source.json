@@ -338,6 +338,7 @@
     "src/features/props/attributeText.ts",
     "src/features/props/bindingTypes.ts",
     "src/features/props/chipKeys.ts",
+    "src/features/props/dataPickerModel.ts",
     "src/features/props/dataPickerPosition.ts",
     "src/features/props/elementState.ts",
     "src/features/props/jsCheck.ts",

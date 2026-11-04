@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import DataPicker from './DataPicker';
 import type { DataPickerProps } from './DataPicker';
+import type { DataOrigin } from './dataPickerModel';
 import { dataTree } from '../../editor/dataSuggest';
 import type { DataContext } from '../../editor/dataSuggest';
 import { resolvePick } from '../../editor/bindings';
@@ -19,7 +20,10 @@ export type { InlineNode } from './richContentModel';
 export interface RichContext extends DataContext {
   readonly entryNav?: DataPickerProps['entries'];
   readonly onStepItem?: DataPickerProps['onStepItem'];
-  readonly onNeedSample?: (collection: string) => void;
+  /** Reads a collection's representative entry, or (with `index`) the entry at that position. */
+  readonly onNeedSample?: (collection: string, index?: number) => void;
+  /** The file being bound, and the page it is shown on, for the picker's group headings. */
+  readonly origin?: DataOrigin | undefined;
   readonly ensureQuery?: (collection: string) => string | undefined;
 }
 export interface RichInsertAPI {
@@ -346,7 +350,8 @@ function RichChipMenu({
         entries={bindContext?.entryNav ?? undefined}
         {...(bindContext?.onStepItem ? { onStepItem: bindContext.onStepItem } : {})}
         onPick={(path, query) => pickExpr(resolvePick(path, query ?? undefined, bindContext ?? undefined))}
-        onExpand={(node) => node.query && bindContext?.onNeedSample?.(node.query.collection)}
+        onExpand={(node, index) => node.query && bindContext?.onNeedSample?.(node.query.collection, index)}
+        origin={bindContext?.origin}
         footer={false}
       />
     </Popup>

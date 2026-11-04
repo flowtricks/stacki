@@ -190,8 +190,10 @@ export function readContentCollections(projectPath: string): Promise<readonly Ap
   return window.avb.contentCollections(payload).then((input) => list(parseAppCollection)(record(input)['collections']));
 }
 
-export function readSampleEntry(devUrl: string, name: string, id?: string): Promise<Data> {
-  const raw = id === undefined ? { devUrl, name } : { devUrl, name, id };
+// One entry of a collection: the one `id` names, the one at `index` in the
+// collection's own order, or (neither) the first one a list would show.
+export function readSampleEntry(devUrl: string, name: string, id?: string, index?: number): Promise<Data> {
+  const raw = id === undefined ? (index === undefined ? { devUrl, name } : { devUrl, name, index }) : { devUrl, name, id };
   const payload = parseIpcPayload('content:sampleEntry', raw);
   return window.avb.sampleEntry(payload).then((input) => {
     const entry = record(input)['entry'];

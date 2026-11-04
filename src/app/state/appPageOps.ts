@@ -4,6 +4,7 @@ import { useListProps } from './useListProps';
 // and folders, the selection's model, creating from a selection, the
 // selected schema, and composing the shortcuts (App.tsx).
 
+import { assert } from '../../../shared/core/assert';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { ScanPage, ScanComponent } from '../../../shared/properties/projectScan';
 import { confirmDialog } from '../../ui/ConfirmDialog';
@@ -16,6 +17,7 @@ import { namesIn } from '../../editor/classAttr';
 import { toComponentName } from '../../features/palette/componentName';
 import { cleanError } from '../../lib/cleanError';
 import { autoQueryName, namesInScope, queriesInScope, QUERY_MARK } from '../../editor/dataSuggest';
+import { entrySampleKey } from '../../editor/dataSample';
 import type { FieldDefinition } from '../../features/props/propRules';
 import type { ComponentCreationSource } from '../../features/palette/PaletteDialogs';
 import { type FrontmatterSubject } from '../../features/code/codeWindowTarget';
@@ -388,24 +390,31 @@ export function useSelectionModel(
   // The ref stops a row from asking again while its question is out; a read
   // that found nothing is forgotten, so opening the row again asks again
   // rather than leaving it reading forever.
-  const requestCollectionSample = (name: string): void => {
+  //
+  // With `index`, the entry at that position — the picker's entry pager asking
+  // for `stats[2]` — filed under its own key (entrySampleKey) so it never
+  // stands in for the collection's representative entry.
+  const requestCollectionSample = (name: string, index?: number): void => {
     if (!name || !devUrl || devStatus !== 'on') {
       return;
     }
-    if (sampleAskedRef.current.has(name)) {
+    assert(index === undefined || Number.isSafeInteger(index), 'requestCollectionSample: index is an integer');
+    assert(index === undefined || index >= 0, 'requestCollectionSample: index is not negative');
+    const key = index === undefined ? name : entrySampleKey(name, index);
+    if (sampleAskedRef.current.has(key)) {
       return;
     }
-    sampleAskedRef.current.add(name);
+    sampleAskedRef.current.add(key);
     const forget = (): void => {
-      sampleAskedRef.current.delete(name);
+      sampleAskedRef.current.delete(key);
     };
-    readSampleEntry(devUrl, name)
+    readSampleEntry(devUrl, name, undefined, index)
       .then((entry) => {
         if (entry === undefined) {
           forget();
           return;
         }
-        setCollectionSamples((previous) => ({ ...previous, [name]: entry }));
+        setCollectionSamples((previous) => ({ ...previous, [key]: entry }));
       })
       .catch(forget);
   };

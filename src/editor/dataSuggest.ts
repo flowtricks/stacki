@@ -17,7 +17,7 @@ import {
   collectionCallIn,
   referenceCallIn,
 } from './dataSource';
-import { sampleAt, sampleKey, type TreeNode, sampleNode, literalNode } from './dataSample';
+import { entrySampleKey, sampleAt, sampleKey, type TreeNode, sampleNode, literalNode } from './dataSample';
 import { queriesInScope, namesInScope, type CollectionReader, type DataContext, type SchemaField, autoQueryName } from './dataScope';
 import { loopSourcePath, parseLoopHead } from './loopSource';
 export {
@@ -467,12 +467,17 @@ function buildCollectionNodes(
     const identifier = autoQueryName(collection.name, taken);
     taken.add(identifier);
     const entry = samples[collection.name];
-    const node: TreeNode = entry
-      ? sampleNode(identifier, collection.name, [entry], 0)
-      : { path: identifier, key: collection.name, kind: 'list', preview: '', children: undefined };
-    node.key = collection.name;
+    const children = collectionEntryNodes(identifier, collection, samples);
+    const node: TreeNode = { path: identifier, key: collection.name, kind: 'list', preview: '', children };
     node.preview = collection.count === undefined ? 'collection' : `${collection.count} entries`;
     node.section = 'collections';
+    // Browsed one entry at a time (DataPicker's pager), across the whole
+    // collection: an entry not read yet is asked for when it is stepped to.
+    // Without a count there is nothing to step through but what was read.
+    const entryCount = collection.count ?? children?.length ?? 0;
+    if (entryCount > 1) {
+      node.entryCount = entryCount;
+    }
     // What picking anything under this node has to write first.
     node.query = { collection: collection.name, name: identifier };
     // Nothing fetched yet: the picker asks for it when this row is opened,
@@ -481,6 +486,42 @@ function buildCollectionNodes(
     addUnique(out, node, seen);
   }
   return out;
+}
+
+// The entries of a project collection the app has read, each at its place in
+// the collection: `stats[2]` is the third entry of getCollection('stats'), as
+// the query the pick writes will read it. The representative sample — the
+// first entry a list would show — stands in for `[0]` until that exact entry
+// has been read: they differ only when the first entry is a draft.
+function collectionEntryNodes(
+  identifier: string,
+  collection: { readonly name: string; readonly count?: number },
+  samples: Record<string, unknown>,
+): TreeNode[] | undefined {
+  const indexes = new Set<number>();
+  const prefix = `${collection.name}[`;
+  for (const key of Object.keys(samples)) {
+    const match = key.startsWith(prefix) ? /^\[(\d{1,6})\]$/.exec(key.slice(collection.name.length)) : undefined;
+    const index = match?.[1] === undefined ? undefined : Number(match[1]);
+    if (index !== undefined && (collection.count === undefined || index < collection.count)) {
+      indexes.add(index);
+    }
+  }
+  if (samples[collection.name] !== undefined) {
+    indexes.add(0);
+  }
+  assert(indexes.size <= LIMITS.treeNodesMax, 'Collection entries exceed the node limit');
+  const nodes = [...indexes]
+    .sort((left, right) => left - right)
+    .map((index) => {
+      const entry = samples[entrySampleKey(collection.name, index)] ?? (index === 0 ? samples[collection.name] : undefined);
+      return sampleNode(`${identifier}[${index}]`, String(index), entry, 1);
+    });
+  assert(
+    nodes.every((node) => node.path.startsWith(`${identifier}[`)),
+    'Collection entries are written under the query name',
+  );
+  return nodes.length > 0 ? nodes : undefined;
 }
 
 // Every field any entry in a list has, each shown with a value from the entry
@@ -646,8 +687,17 @@ export function dataTree(context: DataContext | undefined): TreeNode[] {
 
   // The loop item leads: inside a loop, it is what the markup is FOR — every
   // field in there is a field of that item. Then this file's props, then
-  // everything else it holds.
-  return [...loops, ...props, ...values];
+  // everything else it holds. Each root says which of those it is, so the
+  // picker can head each group with where its data lives (dataPickerModel.ts).
+  const tree = [...inSection(loops, 'loop'), ...inSection(props, 'props'), ...inSection(values, 'frontmatter')];
+  assert(tree.length === loops.length + props.length + values.length, 'Sectioning keeps every root');
+  return tree;
+}
+
+// Roots without a section of their own take `section`; a project collection
+// keeps 'collections', because it is not this file's data at all.
+function inSection(nodes: readonly TreeNode[], section: string): TreeNode[] {
+  return nodes.map((node) => (node.section === undefined ? { ...node, section } : node));
 }
 
 // `items1`, read through the loop reader to the collection it lists, with one

@@ -1,0 +1,177 @@
+// The data picker's decisions that are not about drawing: which entry of a
+// list is being read, where stepping goes, and what each group of rows is
+// called. Pure, so the tests can pin them without a renderer.
+//
+// Entry pages. A list of records — a project collection, a sampled
+// `getCollection` value — opens onto ONE entry at a time behind the same
+// ‹ n/total › arrows a loop item has, rather than a column of `0`, `1`, `2`.
+// The entry shown is the entry picked from: its rows are `stats[2].data.Header`,
+// and choosing one binds `stats[2].data.Header`. That differs from a loop
+// item's arrows on purpose. A loop item's fields are item-relative
+// (`service.title`), so its arrows only change which values are previewed and
+// can never change the binding; a list's entries are addressed by position, so
+// a preview-only pager would show one stat's values while binding another's.
+// Stepping here is choosing which entry to bind, and every row says which in
+// its own path.
+
+import { assert } from '../../../shared/core/assert';
+import { LIMITS } from '../../../shared/core/limits';
+import { pathSteps } from '../../editor/dataSample';
+
+export interface EntryPage {
+  readonly index: number;
+  readonly count: number;
+}
+
+/** The entry each list shows, by the list's path. A list not in here shows its first. */
+export type EntryPages = Readonly<Record<string, number>>;
+
+interface PagedNode {
+  readonly path: string;
+  readonly entryCount?: number | undefined;
+  readonly children: readonly { readonly path: string }[] | undefined;
+}
+
+/**
+ * Which entry of `node` is shown, and of how many — or undefined when the
+ * node is not a list of entries worth paging: one entry, or none, is simply
+ * shown, with nothing to step to.
+ */
+export function entryPageOf(node: PagedNode, pages: EntryPages): EntryPage | undefined {
+  const count = node.entryCount;
+  if (count === undefined || node.children === undefined) {
+    return undefined;
+  }
+  assert(Number.isSafeInteger(count), 'entryPageOf: entry count is an integer');
+  if (count < 2) {
+    return undefined;
+  }
+  const asked = pages[node.path] ?? 0;
+  // A remembered place past the end — the list shrank under it — reads as the last entry.
+  const index = Math.min(Math.max(asked, 0), count - 1);
+  assert(index < count, 'entryPageOf: the shown entry is inside the list');
+  return { index, count };
+}
+
+/**
+ * Where one step from `page` lands. Wraps at both ends, as a loop item's
+ * arrows do (App.tsx onStepItem), so the two pagers in one picker agree.
+ */
+export function steppedEntryIndex(page: EntryPage, step: -1 | 1): number {
+  assert(page.count >= 2, 'steppedEntryIndex: a single entry has nowhere to step');
+  assert(page.index >= 0, 'steppedEntryIndex: the index is not negative');
+  assert(page.index < page.count, 'steppedEntryIndex: the index is inside the list');
+  const next = (((page.index + step) % page.count) + page.count) % page.count;
+  assert(next >= 0, 'steppedEntryIndex: the step lands at or after the first entry');
+  assert(next < page.count, 'steppedEntryIndex: the step lands at or before the last entry');
+  return next;
+}
+
+/** The path of the entry at `index` of the list at `listPath`: `stats[2]`. */
+export function entryPath(listPath: string, index: number): string {
+  assert(Number.isSafeInteger(index), 'entryPath: index is an integer');
+  assert(index >= 0, 'entryPath: index is not negative');
+  return `${listPath}[${index}]`;
+}
+
+/**
+ * The rows a paged list shows beneath it: the chosen entry, when it has been
+ * read, and any row kept only to show the current binding (a path the data
+ * does not have). `unread` is true when the chosen entry still has to be asked
+ * for.
+ */
+export function shownEntryRows<Row extends { readonly path: string; readonly missing?: boolean | undefined }>(
+  listPath: string,
+  children: readonly Row[],
+  page: EntryPage,
+): { readonly rows: readonly Row[]; readonly unread: boolean } {
+  assert(children.length <= LIMITS.treeNodesMax, 'shownEntryRows: node limit exceeded');
+  const chosen = entryPath(listPath, page.index);
+  const entry = children.find((child) => child.path === chosen);
+  const rows = children.filter((child) => child === entry || child.missing === true);
+  assert(rows.length <= children.length, 'shownEntryRows: rows are drawn from the children');
+  return { rows, unread: entry === undefined };
+}
+
+/**
+ * The entries a binding names, as pages: `stats[2].data.Header` opens `stats`
+ * on its third entry, so the picker opens ON what the chip points at. Every
+ * `[n]` step counts — a list inside an entry has its own place.
+ */
+export function pagesOfPath(path: string | undefined): EntryPages {
+  const text = path ?? '';
+  assert(text.length <= LIMITS.attrCharsMax, 'pagesOfPath: binding path limit exceeded');
+  const steps = pathSteps(text) ?? [];
+  const pages: Record<string, number> = {};
+  let listEnd = 0;
+  for (const step of steps) {
+    if (typeof step.key === 'number' && listEnd > 0) {
+      pages[text.slice(0, listEnd)] = step.key;
+    }
+    listEnd = step.end;
+  }
+  assert(Object.keys(pages).length <= steps.length, 'pagesOfPath: at most one page per step');
+  return pages;
+}
+
+// ---------------------------------------------------------------------------
+// Where each group of rows comes from.
+// ---------------------------------------------------------------------------
+
+/**
+ * The file a picker binds in, and — when that file is a component shown on a
+ * page — the page. Paths are project paths; only their file names are shown.
+ */
+export interface DataOrigin {
+  readonly file: string | undefined;
+  readonly page: string | undefined;
+}
+
+export interface SectionHeading {
+  readonly label: string;
+  /** One line under the heading saying what the group's data depends on. */
+  readonly note: string | undefined;
+}
+
+/**
+ * What a group of rows is called, by where its data lives. The file is named,
+ * because a component and the page it is shown on are two scopes and only one
+ * of them is the one being bound: `Button.astro frontmatter` is the
+ * component's own, and a project collection reads the same everywhere.
+ */
+export function sectionHeading(section: string, origin: DataOrigin | undefined): SectionHeading | undefined {
+  const file = fileNameOf(origin?.file);
+  const page = fileNameOf(origin?.page);
+  switch (section) {
+    case 'loop':
+      return { label: 'Loop item', note: undefined };
+    case 'props':
+      return {
+        label: file === undefined ? 'Props' : `${file} props`,
+        // The props' values are the instance's, read from the page: the binding
+        // is the prop itself, which every use of the component passes.
+        note: page === undefined ? undefined : `Values from its use on ${page}`,
+      };
+    case 'frontmatter':
+      return { label: file === undefined ? 'Frontmatter' : `${file} frontmatter`, note: undefined };
+    case 'collections':
+      return {
+        label: 'Collections in this project',
+        note: file === undefined ? undefined : `Works anywhere: picking one adds its query to ${file}`,
+      };
+    case 'loop-sanity':
+      return { label: 'Sanity', note: undefined };
+    case 'loop-page':
+      return { label: 'On this page', note: undefined };
+    default:
+      return undefined;
+  }
+}
+
+function fileNameOf(path: string | undefined): string | undefined {
+  if (path === undefined || path === '') {
+    return undefined;
+  }
+  const name = path.split(/[\\/]/).pop() ?? '';
+  return name === '' ? undefined : name;
+}

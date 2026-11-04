@@ -197,12 +197,12 @@ function registerContentRenameHandlers({ ipcMain, noteAppWrite, send }: Pick<Mai
   // One entry of a collection, sampled — what a picker shows beside the fields
   // of a page that lists them. Answered by the dev server because only it can
   // run the project's loaders; without one there is simply no sample.
-  ipcMain.handle('content:sampleEntry', async (_event, { devUrl, name, id }) => {
+  ipcMain.handle('content:sampleEntry', async (_event, { devUrl, name, id, index }) => {
     if (!devUrl || !name) {
       return { entry: undefined };
     }
     try {
-      const query = `c=${encodeURIComponent(name)}${id ? `&id=${encodeURIComponent(id)}` : ''}`;
+      const query = `c=${encodeURIComponent(name)}${id ? `&id=${encodeURIComponent(id)}` : ''}${index === undefined ? '' : `&i=${index}`}`;
       const first = await fetchSampleEntry(`${devUrl}/__avb/data?${query}`);
       if (first.error !== undefined) {
         return first;

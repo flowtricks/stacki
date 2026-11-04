@@ -306,6 +306,16 @@ test('taking back a created component names the file and the bytes it was create
   assert.throws(() => parseIpcPayload('component:discard', { ...request, force: 'yes' }), /Expected/);
 });
 
+test('a sample entry is asked for by id, by position, or as the first a list shows', () => {
+  const request = { devUrl: 'http://localhost:4321', name: 'stats' };
+  assert.deepEqual(parseIpcPayload('content:sampleEntry', request), request);
+  assert.equal(parseIpcPayload('content:sampleEntry', { ...request, index: 2 }).index, 2);
+  assert.equal(parseIpcPayload('content:sampleEntry', { ...request, index: 0 }).index, 0);
+  assert.throws(() => parseIpcPayload('content:sampleEntry', { ...request, index: -1 }), /Expected nonnegative integer/);
+  assert.throws(() => parseIpcPayload('content:sampleEntry', { ...request, index: 1.5 }), /Expected safe integer/);
+  assert.throws(() => parseIpcPayload('content:sampleEntry', { ...request, index: '2' }), /Expected number/);
+});
+
 test('content writes accept the storage locator used by ContentView', () => {
   const payload = parseIpcPayload('content:writeEntry', {
     projectPath: '/site',

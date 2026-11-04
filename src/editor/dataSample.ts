@@ -71,6 +71,13 @@ export const isRef = (candidate: unknown): candidate is { id: string; collection
 /** How a fetched entry is keyed. One per collection+id, so refs to the same entry share. */
 export const sampleKey = (collection: string, id?: string): string => (id ? `${collection}#${id}` : collection);
 
+/**
+ * How the entry at a position in a collection is keyed: `stats[2]`, written as
+ * the page's code would index it. A collection name is a bare word (the data
+ * route refuses anything else), so this never collides with `sampleKey`.
+ */
+export const entrySampleKey = (collection: string, index: number): string => `${collection}[${index}]`;
+
 export interface ReferenceNeed {
   readonly key: string;
   readonly collection: string;
@@ -207,6 +214,13 @@ export interface TreeNode {
   children: TreeNode[] | undefined;
   section?: string;
   nav?: { index: number; count: number };
+  /**
+   * A list whose children are its entries (`[0]`, `[1]`, …): how many there
+   * are, so the picker can show one at a time behind a pager rather than a
+   * column of numbers. Counts the entries the picker can reach — a sampled
+   * list's sampled ones, or a project collection's real total.
+   */
+  entryCount?: number;
   query?: { collection: string; name: string };
   lazy?: boolean;
   /** The whole address of an image the value names: the preview is clipped. */
@@ -238,14 +252,29 @@ export function fromSample(value: unknown, base: string, depth: number): TreeNod
 export function sampleNode(path: string, key: string, value: unknown, depth: number): TreeNode {
   const children = fromSample(value, path, depth);
   const image = typeof value === 'string' && IMAGE_URL.test(value) ? value : undefined;
+  const kind = sampleKind(value);
+  const entryCount = kind === 'list' ? entryCountOf(children) : undefined;
   return {
     path,
     key,
-    kind: sampleKind(value),
+    kind,
     preview: samplePreview(value),
     children: children && children.length ? children : undefined,
     ...(image === undefined ? {} : { image }),
+    ...(entryCount === undefined ? {} : { entryCount }),
   };
+}
+
+// A list of records is a list of entries, browsed one at a time; a list of
+// words or numbers reads best as it is, every value in a column.
+function entryCountOf(children: readonly TreeNode[] | undefined): number | undefined {
+  if (children === undefined) {
+    return undefined;
+  }
+  if (children.length < 2) {
+    return undefined;
+  }
+  return children.every((child) => child.children !== undefined) ? children.length : undefined;
 }
 
 export const LITERAL_DEPTH_MAX = 4;

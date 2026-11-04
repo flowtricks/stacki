@@ -7,6 +7,7 @@ import { schemaFor } from './model/pageGestures';
 import { useAppScope } from './state/appComposers';
 import { WelcomeView, AppShell } from './shell/AppShell';
 import { collectionReader } from '../editor/collectionReader';
+import { canvasPageOf } from '../editor/pageState';
 
 export default function App() {
   const scope = useAppScope();
@@ -196,6 +197,10 @@ function bindContextOf(app: AppView, route: CanvasRoute) {
       // that fetches it, and answers with the name it ended up under.
       ensureQuery: app.ensureCollectionQuery,
       entryNav: entryNavOf(app, dynamicEntry),
+      // Which file a binding is written into, and the page a component is shown
+      // on: the picker heads each group of rows by where its data lives, so a
+      // component's own props never read as the page's.
+      origin: { file: app.currentPage?.path, page: canvasPageOf(app.editStack) },
     }
   );
 }

@@ -226,7 +226,8 @@ function BindFieldMenu({ state }: { readonly state: BindingViewState }) {
           entries={bindContext?.entryNav ?? undefined}
           {...definedFields({ onStepItem: bindContext?.onStepItem })}
           onPick={pick}
-          onExpand={(node) => node.query && bindContext?.onNeedSample?.(node.query.collection)}
+          onExpand={(node, index) => node.query && bindContext?.onNeedSample?.(node.query.collection, index)}
+          origin={bindContext?.origin}
           onEdit={editTarget ? editChip : undefined}
           editLabel={editTarget === 'file' ? `Open where ${editName} is defined` : `Edit ${editName}`}
           onWrite={() => {

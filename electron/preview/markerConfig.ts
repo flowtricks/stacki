@@ -118,8 +118,12 @@ export async function GET({ url }) {
   // — and otherwise the first one a page would show: a draft or an archived
   // entry is what lists filter out, and its fields are often still empty.
   const id = url.searchParams.get('id') || '';
+  // Or a position in the collection, as the page's own code indexes it: the
+  // picker's entry pager shows \`stats[2]\`, and that is getCollection's third
+  // entry, drafts and all — not the third one a list would show.
+  const at = url.searchParams.get('i') || '';
   const body = { entry: null, error: null };
-  if (!/^[\\w-]+$/.test(name) || (id && (!/^[\\w\\-./]+$/.test(id) || id.includes('..')))) {
+  if (!/^[\\w-]+$/.test(name) || (id && (!/^[\\w\\-./]+$/.test(id) || id.includes('..'))) || (at && !/^\\d{1,6}$/.test(at))) {
     body.error = 'Bad collection or entry name';
     return json(body);
   }
@@ -130,6 +134,10 @@ export async function GET({ url }) {
     const { getCollection, getEntry } = await import('astro:content');
     if (id) {
       const entry = await getEntry(name, id);
+      body.entry = entry ? SAMPLE(entry) : null;
+    } else if (at) {
+      const entries = (await getCollection(name)) || [];
+      const entry = entries[Number(at)];
       body.entry = entry ? SAMPLE(entry) : null;
     } else {
       const entries = (await getCollection(name)) || [];

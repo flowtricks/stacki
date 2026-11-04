@@ -1,9 +1,10 @@
 import { useCodeAccess } from '../../ui/CodeAccess';
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { ChevronRightIcon, ChevronLeftIcon, CheckIcon, CodeIcon, SearchIcon, PencilIcon } from '../../ui/Icons';
 import { pathSteps } from '../../editor/dataSample';
+import { entryPageOf, entryPath, pagesOfPath, sectionHeading, shownEntryRows, steppedEntryIndex, type DataOrigin, type EntryPages } from './dataPickerModel';
 
 // The data behind the page, as something you can look through rather than
 // something you have to already know. Every row is a value that is in scope
@@ -50,13 +51,6 @@ function flatten(nodes: readonly PickerNode[]): PickerNode[] {
   }
   return out;
 }
-
-const SECTION_LABEL: Readonly<Record<string, string>> = {
-  collections: 'Collections in this project',
-  // The loop's Source picker (LoopSourcePicker.tsx) groups its rows these ways too.
-  'loop-sanity': 'Sanity',
-  'loop-page': 'On this page',
-};
 
 // A field can be bound to something this entry doesn't have — an optional
 // field left unset, or data the app can't see the shape of. The path is still
@@ -120,6 +114,7 @@ export interface PickerNode {
   readonly children: readonly PickerNode[] | undefined;
   readonly section?: string;
   readonly nav?: Navigation;
+  readonly entryCount?: number;
   readonly query?: { readonly collection: string; readonly name: string };
   readonly lazy?: boolean;
   readonly pickable?: boolean;
@@ -132,7 +127,13 @@ export interface DataPickerProps {
   readonly entries?: Entries | undefined;
   readonly onStepItem?: (path: string, step: -1 | 1, count: number) => void;
   readonly onPick: (path: string, query: PickerNode['query'] | undefined) => void;
-  readonly onExpand?: (node: PickerNode) => void;
+  /**
+   * A row needs data the app has not read: a collection opened for the first
+   * time (`index` undefined), or the entry its pager stepped to.
+   */
+  readonly onExpand?: (node: PickerNode, index: number | undefined) => void;
+  /** Which file is being bound, so each group of rows can say where its data lives. */
+  readonly origin?: DataOrigin | undefined;
   readonly onWrite?: () => void;
   readonly onEdit?: (() => void) | undefined;
   readonly editLabel?: string;
@@ -144,6 +145,7 @@ export default function DataPicker(props: DataPickerProps) {
   const { entries, onStepItem, onPick, onWrite, onEdit, editLabel = 'Edit', footer = true } = props;
   const state = useDataPicker(props);
   const { query, setQuery, searchRef, listRef } = state;
+  const origin = props.origin;
   return (
     <div className="data-picker">
       {/* Which entry the values below are FROM. A dynamic route stands for
@@ -155,7 +157,7 @@ export default function DataPicker(props: DataPickerProps) {
         <SearchIcon size={12} />
         <input ref={searchRef} value={query} placeholder="Search data…" spellCheck={false} autoFocus onChange={(event) => setQuery(event.target.value)} />
       </div>
-      <DataPickerResults state={state} onPick={onPick} onStepItem={onStepItem} listRef={listRef} />
+      <DataPickerResults state={state} origin={origin} onPick={onPick} onStepItem={onStepItem} listRef={listRef} />
       {/* Above "Write an expression…", because it is about the thing already
           bound rather than about replacing it. Only ever rendered for a picker
           opened on a specific chip — the field's own handle opens this on
@@ -178,11 +180,13 @@ export default function DataPicker(props: DataPickerProps) {
 
 function DataPickerResults({
   state,
+  origin,
   onPick,
   onStepItem,
   listRef,
 }: {
   readonly state: PickerState;
+  readonly origin: DataOrigin | undefined;
   readonly onPick: DataPickerProps['onPick'];
   readonly onStepItem: DataPickerProps['onStepItem'];
   readonly listRef: React.RefObject<HTMLDivElement>;
@@ -194,7 +198,7 @@ function DataPickerResults({
       {matches ? (
         matches.map((node) => <DataRow key={node.path} node={node} depth={0} showPath root={undefined} state={state} onPick={onPick} onStepItem={onStepItem} />)
       ) : (
-        <DataRoots nodes={tree} state={state} onPick={onPick} onStepItem={onStepItem} />
+        <DataRoots nodes={tree} origin={origin} state={state} onPick={onPick} onStepItem={onStepItem} />
       )}
       {((matches && !matches.length) || (!matches && !tree.length)) && (
         <div className="dp-empty">{matches ? 'Nothing matches' : 'No data in scope here — add a prop to this file, or a const to its frontmatter.'}</div>
@@ -206,6 +210,8 @@ function DataPickerResults({
 function useDataPicker({ tree: rawTree, current, onExpand }: DataPickerProps) {
   const [query, setQuery] = useState('');
   const tree = useMemo(() => withCurrent(rawTree ?? [], current), [rawTree, current]);
+  // Which entry each list of entries shows: the one the binding names, else the first.
+  const [pages, setPages] = useState<EntryPages>(() => pagesOfPath(current));
   const [open, setOpen] = useState(() => {
     const start = new Set(ancestorsOf(current));
     // Nothing bound yet: open the first root that holds anything, so the panel
@@ -214,6 +220,10 @@ function useDataPicker({ tree: rawTree, current, onExpand }: DataPickerProps) {
       const first = (tree || []).find((node) => node.children?.length);
       if (first) {
         start.add(first.path);
+        const page = entryPageOf(first, pages);
+        if (page !== undefined) {
+          start.add(entryPath(first.path, page.index));
+        }
       }
     }
     return start;
@@ -248,23 +258,54 @@ function useDataPicker({ tree: rawTree, current, onExpand }: DataPickerProps) {
     return flatten(tree || []).filter((node) => node.path.toLowerCase().includes(needle) || String(node.preview).toLowerCase().includes(needle));
   }, [needle, tree]);
 
+  // A paged list opened, or stepped, onto an entry the app has not read asks
+  // for it. After render rather than in the click, because a list opened on a
+  // binding (`stats[2]…`) is open before anything is clicked. The app drops a
+  // question already out, so asking again on a later render costs nothing.
+  useEffect(() => {
+    if (onExpand === undefined) {
+      return;
+    }
+    for (const node of flatten(tree)) {
+      const page = open.has(node.path) && node.query !== undefined ? entryPageOf(node, pages) : undefined;
+      if (page !== undefined && shownEntryRows(node.path, node.children ?? [], page).unread) {
+        onExpand(node, page.index);
+      }
+    }
+  }, [tree, open, pages, onExpand]);
+
   const toggle = (node: PickerNode) => {
     // A collection nobody has looked at yet has no rows until it is asked for.
     if (node.lazy && !node.children?.length) {
-      onExpand?.(node);
+      onExpand?.(node, undefined);
     }
+    const page = entryPageOf(node, pages);
     setOpen((previous) => {
       const next = new Set(previous);
       if (next.has(node.path)) {
         next.delete(node.path);
       } else {
         next.add(node.path);
+        // A list of entries opens onto its entry's fields: the entry row is
+        // the only row beneath it, so leaving it closed is one more click
+        // for nothing.
+        if (page !== undefined) {
+          next.add(entryPath(node.path, page.index));
+        }
       }
       return next;
     });
   };
 
-  return { query, setQuery, tree, open, searchRef, listRef, selectedRef, matches, toggle, current };
+  const stepEntry = (node: PickerNode, step: -1 | 1) => {
+    const page = entryPageOf(node, pages);
+    assert(page !== undefined, 'DataPicker: only a list of entries is stepped');
+    const index = steppedEntryIndex(page, step);
+    setPages((previous) => ({ ...previous, [node.path]: index }));
+    setOpen((previous) => new Set(previous).add(entryPath(node.path, index)));
+  };
+
+  return { query, setQuery, tree, open, pages, searchRef, listRef, selectedRef, matches, toggle, stepEntry, current };
 }
 
 type PickerState = ReturnType<typeof useDataPicker>;
@@ -279,9 +320,13 @@ interface RowProps {
 }
 function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: RowProps) {
   assert(depth <= LIMITS.treeDepthMax, 'DataPicker: render depth limit exceeded');
-  const { open, current, selectedRef, toggle } = state;
+  const { open, pages, current, selectedRef, toggle, stepEntry } = state;
   const expandable = !!node.children?.length || node.lazy;
   const isOpen = open.has(node.path);
+  // An open list of entries shows one of them, with arrows to choose which;
+  // closed, it says how many it holds like any other row.
+  const page = isOpen ? entryPageOf(node, pages) : undefined;
+  const shown = page === undefined ? undefined : shownEntryRows(node.path, node.children ?? [], page);
   const from = root || node;
   const isCurrent = node.path === current;
   return (
@@ -324,12 +369,25 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
               which the open rows beneath already show. */}
         {node.nav && onStepItem ? (
           <ItemNavigation path={node.path} nav={node.nav} onStepItem={onStepItem} />
+        ) : page !== undefined ? (
+          <ItemNavigation path={node.path} nav={page} onStepItem={(_path, step) => stepEntry(node, step)} />
         ) : (
           <PreviewValue preview={node.preview} kind={node.kind} image={node.image} />
         )}
       </div>
       {isOpen &&
-        (node.children?.length ? (
+        (shown !== undefined ? (
+          <>
+            {shown.rows.map((child) => (
+              <DataRow key={child.path} node={child} depth={depth + 1} showPath={false} root={from} state={state} onPick={onPick} onStepItem={onStepItem} />
+            ))}
+            {shown.unread && (
+              <div className="dp-loading" style={{ paddingLeft: 6 + (depth + 1) * DEPTH_INDENT_PX }}>
+                Reading one entry…
+              </div>
+            )}
+          </>
+        ) : node.children?.length ? (
           node.children.map((child) => (
             <DataRow key={child.path} node={child} depth={depth + 1} showPath={false} root={from} state={state} onPick={onPick} onStepItem={onStepItem} />
           ))
@@ -381,22 +439,29 @@ function ItemNavigation({
 // in scope, and reading as one list would hide that.
 function DataRoots({
   nodes,
+  origin,
   state,
   onPick,
   onStepItem,
 }: {
   readonly nodes: readonly PickerNode[];
+  readonly origin: DataOrigin | undefined;
   readonly state: PickerState;
   readonly onPick: DataPickerProps['onPick'];
   readonly onStepItem: DataPickerProps['onStepItem'];
 }) {
   let section: string | undefined;
   return (nodes || []).map((node) => {
-    const head = node.section && node.section !== section ? SECTION_LABEL[node.section] : undefined;
+    const head = node.section && node.section !== section ? sectionHeading(node.section, origin) : undefined;
     section = node.section || section;
     return (
       <React.Fragment key={`s:${node.path}`}>
-        {head && <div className="dp-section">{head}</div>}
+        {head && (
+          <div className="dp-section">
+            {head.label}
+            {head.note !== undefined && <span className="dp-section-note">{head.note}</span>}
+          </div>
+        )}
         {<DataRow node={node} depth={0} showPath={false} root={undefined} state={state} onPick={onPick} onStepItem={onStepItem} />}
       </React.Fragment>
     );
