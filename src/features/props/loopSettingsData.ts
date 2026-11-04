@@ -233,3 +233,41 @@ function pictureFile(input: unknown): ItemPicture | undefined {
   }
   return { kind: 'file', file: input };
 }
+
+/**
+ * One item of a collection, as its fields, so the Field pickers can show what
+ * each field holds: a Sanity document read through the CMS connection, or an
+ * Astro entry's `data`. Undefined until it is read, or when there is none.
+ */
+export function useCollectionSample(projectPath: string | undefined, catalog: LoopCatalog | undefined, source: LoopSource): unknown {
+  const key = sourceKey(source);
+  const [loaded, setLoaded] = useState<{ readonly key: string; readonly sample: unknown } | undefined>(undefined);
+  useEffect(() => {
+    const parsed = parseSourceKey(key);
+    if (projectPath === undefined || catalog === undefined || parsed?.kind !== 'collection') {
+      return undefined;
+    }
+    let live = true;
+    void collectionSample(projectPath, catalog, parsed.source).then((sample) => {
+      if (live) {
+        setLoaded({ key, sample });
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [projectPath, catalog, key]);
+  return loaded?.key === key ? loaded.sample : undefined;
+}
+
+async function collectionSample(projectPath: string, catalog: LoopCatalog, source: LoopSource): Promise<unknown> {
+  if (source.kind === 'sanity') {
+    return loadSanitySample(projectPath, catalog, source.collection).catch(() => undefined);
+  }
+  const payload = parseIpcPayload('content:entries', { projectPath, name: source.collection });
+  const answer: unknown = await cmsTransport.contentEntries(payload).catch(() => undefined);
+  const entries = toRecord(answer)?.['entries'];
+  const first: unknown = Array.isArray(entries) ? entries[0] : undefined;
+  // An entry keeps its fields under `data`, the paths a field names.
+  return toRecord(first)?.['data'];
+}

@@ -373,6 +373,8 @@ function QuerySections(props: {
       <SortSection
         query={props.query}
         fields={props.fields}
+        catalog={props.catalog}
+        projectPath={props.projectPath}
         itemPath={props.itemPath}
         randomOrder={randomOrder}
         binding={props.binding}

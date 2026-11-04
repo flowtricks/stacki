@@ -198,3 +198,70 @@ console.log('loopSettings: ok');
   assert.equal(model.customSortProblem('(a, b) =>'), 'This is not one JavaScript expression.');
   console.log('custom code checks: ok');
 }
+
+// Inside an object or a map position, its fields are fields too, by dotted
+// path, so anything an item holds can be filtered and sorted by; a list's
+// items are not reached into, and nesting stops at its bound.
+{
+  const field = (name, type, title = '') => ({ name, title, description: '', required: false, rules: [], type });
+  const string = { kind: 'string', options: [] };
+  // Objects nested `depth` levels around a string, built from the inside out.
+  const deep = (depth) => {
+    let type = string;
+    for (let level = 1; level <= depth; level++) {
+      type = { kind: 'object', name: `o${level}`, fields: [field('inner', type)] };
+    }
+    return type;
+  };
+  const nested = catalog.catalogFields(
+    [
+      field('name', string),
+      field('location', { kind: 'geopoint' }, 'Map position'),
+      field('hero', {
+        kind: 'object',
+        name: 'hero',
+        fields: [field('cta', { kind: 'object', name: 'cta', fields: [field('label', string)] }), field('slug', { kind: 'slug', options: [] })],
+      }),
+      field('serviceTimes', { kind: 'array', of: [{ kind: 'object', name: 'time', fields: [field('day', string)] }] }),
+      field('deep', deep(6)),
+    ],
+    'sanity',
+  );
+  const kinds = Object.fromEntries(nested.map((entry) => [entry.path, entry.kind]));
+  assert.equal(kinds['location.lat'], 'number');
+  assert.equal(kinds['location.lng'], 'number');
+  assert.equal(kinds.location, 'other', 'the object itself can still be asked whether it is set');
+  assert.equal(kinds['hero.cta.label'], 'text');
+  assert.equal(kinds['hero.slug.current'], 'text');
+  assert.equal(kinds['serviceTimes.day'], undefined, "a list's items are not one value");
+  assert.equal(kinds['deep.inner.inner.inner'], 'other');
+  assert.equal(kinds['deep.inner.inner.inner.inner'], undefined, 'nesting stops at its bound');
+  assert.equal(nested.find((entry) => entry.path === 'location.lat').title, 'Map position › Latitude');
+  // Top-level fields come first, whatever an object holds.
+  assert.deepEqual(
+    nested.slice(0, 5).map((entry) => entry.path),
+    ['name', 'location', 'hero', 'serviceTimes', 'deep'],
+  );
+
+  // The Field picker's tree: a field under the one its path continues, a bare
+  // row for a parent that is not a field (`slug` of `slug.current`), values
+  // from a sampled item, and only usable fields chosen.
+  const { fieldTree } = load('src/features/props/LoopFieldPicker.tsx');
+  const sample = { name: 'St. Amant', location: { lat: 30.26, lng: -90.85 }, hero: { slug: { current: 'sta' } } };
+  const tree = fieldTree(nested, sample, (entry) => entry.kind === 'text' || entry.kind === 'number');
+  const location = tree.find((node) => node.path === 'location');
+  assert.equal(location.pickable, false);
+  assert.deepEqual(
+    location.children.map((node) => [node.path, node.key, node.preview, node.pickable]),
+    [
+      ['location.lat', 'Latitude', '30.26', true],
+      ['location.lng', 'Longitude', '-90.85', true],
+    ],
+  );
+  const slug = tree.find((node) => node.path === 'hero').children.find((node) => node.path === 'hero.slug');
+  assert.equal(slug.kind, 'object', 'a bare parent row');
+  assert.equal(slug.children[0].path, 'hero.slug.current');
+  assert.equal(slug.children[0].preview, '"sta"', 'text previews as the data picker shows it');
+  assert.equal(tree.find((node) => node.path === 'name').preview, '"St. Amant"');
+  console.log('nested fields: ok');
+}

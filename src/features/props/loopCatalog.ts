@@ -19,6 +19,8 @@ export const LOOP_CATALOG_LIMITS = {
   fieldsMax: 200,
   optionsMax: 500,
   projectsCachedMax: 8,
+  /** How deep an object's fields are listed: `location.lat`, `hero.cta.label`. */
+  nestingDepthMax: 4,
   packageCharsMax: 1_000_000,
 } as const;
 
@@ -144,13 +146,33 @@ const SANITY_SYSTEM_FIELDS: readonly CatalogField[] = [
   { path: '_updatedAt', title: 'Updated on', kind: 'date', options: [], references: [] },
 ];
 
-/** A schema's top-level fields as filter and sort fields. */
+/**
+ * A schema's fields as filter and sort fields: each top-level field, and
+ * inside an object (or a map position) the fields it holds, by their dotted
+ * paths (`location.lat`), so anything an item holds can be filtered and
+ * sorted by. A list's items are not reached into: "a list holds an item
+ * whose …" is not one value to compare.
+ */
 export function catalogFields(fields: readonly RemoteSchemaField[], kind: LoopSourceKind): readonly CatalogField[] {
   const out: CatalogField[] = [];
-  for (const field of fields.slice(0, LOOP_CATALOG_LIMITS.fieldsMax)) {
-    const mapped = catalogField(field, kind);
+  // Breadth first, so a deep object never crowds out a later top-level field.
+  const pending: { readonly field: RemoteSchemaField; readonly parent: CatalogField | undefined; readonly depth: number }[] = fields
+    .slice(0, LOOP_CATALOG_LIMITS.fieldsMax)
+    .map((field) => ({ field, parent: undefined, depth: 0 }));
+  for (let index = 0; index < pending.length && out.length < LOOP_CATALOG_LIMITS.fieldsMax; index++) {
+    const entry = pending[index];
+    assert(entry !== undefined, 'A pending field is in bounds');
+    const own = catalogField(entry.field, kind);
+    const mapped = own === undefined || entry.parent === undefined ? own : nestedIn(own, entry.parent);
     if (mapped !== undefined && isFieldPath(mapped.path)) {
       out.push(mapped, ...imageMeasures(mapped, kind));
+      if (entry.depth + 1 < LOOP_CATALOG_LIMITS.nestingDepthMax) {
+        for (const inner of innerFields(entry.field)) {
+          if (pending.length < LOOP_CATALOG_LIMITS.fieldsMax * 2) {
+            pending.push({ field: inner, parent: mapped, depth: entry.depth + 1 });
+          }
+        }
+      }
     }
   }
   // Each field adds at most its two measures; the list keeps the catalog's bound.
@@ -202,6 +224,29 @@ function catalogField(field: RemoteSchemaField, source: LoopSourceKind): Catalog
       return exhaustive;
     }
   }
+}
+
+// The fields an object or a map position holds, as fields of their own.
+function innerFields(field: RemoteSchemaField): readonly RemoteSchemaField[] {
+  const type = field.type;
+  if (type.kind === 'object') {
+    return type.fields;
+  }
+  if (type.kind === 'geopoint') {
+    const number = { kind: 'number' as const, options: [] };
+    return [
+      { name: 'lat', title: 'Latitude', type: number },
+      { name: 'lng', title: 'Longitude', type: number },
+    ].map((inner) => ({ ...field, ...inner }));
+  }
+  return [];
+}
+
+// A field inside another: its path and title follow its parent's.
+function nestedIn(field: CatalogField, parent: CatalogField): CatalogField {
+  const path = `${parent.path}.${field.path}`;
+  assert(path.startsWith(parent.path), 'A nested field is under its parent');
+  return { ...field, path, title: `${parent.title} › ${field.title}` };
 }
 
 // An Astro image is its file's metadata, `{ src, width, height, format }`, so

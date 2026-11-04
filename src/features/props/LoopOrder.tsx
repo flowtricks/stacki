@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
-import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
+import Dropdown from '../../ui/Dropdown';
 import { ChevronDownIcon, CodeIcon, RepeatIcon } from '../../ui/Icons';
 import {
   astroComparatorCode,
@@ -16,9 +16,11 @@ import {
   type LoopSortOrder,
   type LoopSourceKind,
 } from '../../editor/loopQuery';
-import { type CatalogField } from './loopCatalog';
+import { type CatalogField, type LoopCatalog } from './loopCatalog';
+import { FieldPicker, type FieldExtra } from './LoopFieldPicker';
+import { useCollectionSample } from './loopSettingsData';
 import { customSortProblem, fieldNamed, orderLabels, sortParts, wholeNumberOf } from './loopSettingsModel';
-import { CodeBox, EditorRow, ListRow, SectionHeader, fieldIcon } from './LoopRows';
+import { CodeBox, EditorRow, ListRow, SectionHeader } from './LoopRows';
 import type { SectionProps } from './LoopFilters';
 import { SettingDot, type BindingContext, type DraftEditor } from './LoopBinding';
 import { moved, staysPut } from './LoopItems';
@@ -38,6 +40,9 @@ const LIMIT_DEFAULT = 6;
 
 type SortSectionProps = SectionProps & {
   readonly randomOrder: 'available' | 'unavailable';
+  /** Where an item is read from, so the Field picker can show its values. */
+  readonly catalog?: LoopCatalog | undefined;
+  readonly projectPath?: string | undefined;
   readonly binding?: BindingContext | undefined;
   /** The section's label, when it says more than its title (a page's own value). */
   readonly label?: ReactNode;
@@ -106,13 +111,16 @@ function SortEditor(props: SortSectionProps) {
     const sorts = sort === undefined ? query.sorts.filter((_, at) => at !== index) : query.sorts.map((existing, at) => (at === index ? sort : existing));
     props.onChange({ ...query, sorts });
   };
-  const fieldOptions = [
-    ...sortable.map((field) => ({ value: field.path, label: field.title, icon: fieldIcon(field.kind) })),
-    // A shuffle runs in JS after the fetch, so a query kept in another file's
-    // string cannot hold one.
-    ...(props.randomOrder === 'available' ? [{ value: RANDOM_FIELD, label: 'Random order', icon: <RepeatIcon size={13} /> }] : []),
-    ...(props.randomOrder === 'available' ? [{ value: CUSTOM_FIELD, label: 'Custom code', icon: <CodeIcon size={13} /> }] : []),
-  ];
+  // A shuffle and custom code run in JS after the fetch, so a query kept in
+  // another file's string cannot hold either.
+  const extras: readonly FieldExtra[] = codeAllowed
+    ? [
+        { value: RANDOM_FIELD, label: 'Random order', icon: <RepeatIcon size={13} /> },
+        { value: CUSTOM_FIELD, label: 'Custom code', icon: <CodeIcon size={13} /> },
+      ]
+    : [];
+  // One item, read once for the section: every Field picker shows its values.
+  const sample = useCollectionSample(props.projectPath, props.catalog, query.source);
   return (
     <div className="loop-settings-section">
       <SectionHeader
@@ -142,7 +150,8 @@ function SortEditor(props: SortSectionProps) {
                   sort={sort}
                   source={source}
                   fields={fields}
-                  fieldOptions={fieldOptions}
+                  extras={extras}
+                  sample={sample}
                   open={open === index}
                   onToggle={() => setOpen(open === index ? undefined : index)}
                   onRandom={() => props.onChange({ ...query, random: true, sorts: [] })}
@@ -207,7 +216,8 @@ function SortChip(props: {
   readonly sort: LoopSort;
   readonly source: LoopSourceKind;
   readonly fields: readonly CatalogField[] | undefined;
-  readonly fieldOptions: readonly DropdownOption<string>[];
+  readonly extras: readonly FieldExtra[];
+  readonly sample: unknown;
   readonly open: boolean;
   readonly onToggle: () => void;
   readonly onRandom: () => void;
@@ -253,15 +263,12 @@ function SortChip(props: {
         editor={
           <div className="loop-settings-editor">
             <EditorRow label="Field">
-              <Dropdown<string>
-                livePreview={false}
+              <FieldPicker
                 value={sort.field}
-                ariaLabel="Sort field"
-                options={
-                  props.fieldOptions.some((option) => option.value === sort.field)
-                    ? props.fieldOptions
-                    : [...props.fieldOptions, { value: sort.field, label: sort.field }]
-                }
+                fields={props.fields ?? []}
+                sample={props.sample}
+                extras={props.extras}
+                usable={(field) => sortOrdersFor(field.kind, props.source).length > 0}
                 onChange={changeField}
               />
             </EditorRow>

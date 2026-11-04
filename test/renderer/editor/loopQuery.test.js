@@ -1044,3 +1044,24 @@ console.log('selected items: ok');
   );
   console.log('custom code: ok');
 }
+
+// Nested fields from the Field picker: written and read back by their dotted
+// paths, in GROQ as in JavaScript (where `?.` keeps a missing parent safe).
+{
+  const lat = { kind: 'test', field: 'location.lat', operator: 'greater', value: 30 };
+  const bySlug = { field: 'hero.slug.current', direction: 'descending', order: 'text' };
+  const sanity = { ...loopQuery.emptyQuery({ kind: 'sanity', collection: 'campus' }), conditions: [lat], sorts: [bySlug] };
+  const groq = loopQuery.groqQueryText(sanity, []);
+  assert.match(groq, /location\.lat > 30/);
+  assert.match(groq, /order\(hero\.slug\.current desc\)/);
+  const back = queryOf(read(`const x = ${loopQuery.sanityQueryCode(sanity, [], 'sanityClient')};`, 'x', sanityImports, () => 'text'));
+  assert.deepEqual(back.conditions, [lat]);
+  assert.deepEqual(back.sorts, [bySlug]);
+  const astro = { ...loopQuery.emptyQuery({ kind: 'astro', collection: 'campus' }), conditions: [lat], sorts: [bySlug] };
+  const code = loopQuery.astroQueryCode(astro);
+  assert.match(code, /data\.location\?\.lat > 30/);
+  const astroBack = queryOf(read(`const x = ${code};`, 'x', astroImports, (_source, path) => (path === 'location.lat' ? 'number' : 'text')));
+  assert.deepEqual(astroBack.conditions, [lat]);
+  assert.deepEqual(astroBack.sorts, [bySlug]);
+  console.log('nested paths: ok');
+}
