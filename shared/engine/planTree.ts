@@ -120,7 +120,7 @@ export function planInsertNode(context: PlanContext, anchor: AnchorRef, operatio
     return resolved;
   }
   const target = resolved.value;
-  if (!placeWritable(currentProjection(context), target.current, operation.placement)) {
+  if (!placeWritable(context.current.bytes, currentProjection(context), target.current, operation.placement)) {
     return err('unsupported-operation');
   }
   const current = currentProjection(context);
@@ -226,7 +226,7 @@ export function planMoveNode(context: PlanContext, anchor: AnchorRef, operation:
       return err('unsupported-operation');
     }
   }
-  if (!placeWritable(currentProjection(context), destination.value.current, operation.placement)) {
+  if (!placeWritable(context.current.bytes, currentProjection(context), destination.value.current, operation.placement)) {
     return err('unsupported-operation');
   }
   if (startsWith(destination.value.current.path, moved.path)) {
@@ -490,8 +490,12 @@ function insertionAt(
     // A condition's branch or a loop's body is JavaScript around markup: a
     // second node beside the first can land outside the parentheses (a bare
     // `: other ? …` branch) and break the expression. The legacy printer
-    // rewraps it; until a planner rule does, the page is saved whole.
-    return err('unsupported-operation');
+    // rewraps it; until a planner rule does, the page is saved whole. Between
+    // two roots of a loop written as markup, the node joins the run of
+    // siblings the parentheses already hold.
+    if (!betweenLoopRoots(bytes, projection, anchor, placement)) {
+      return err('unsupported-operation');
+    }
   }
   const separator = separatorBefore(bytes, projection, anchor);
   if (placement === 'after') {
@@ -584,6 +588,16 @@ function insertionInside(
   if (parent.kind === 'branch') {
     return ok({ range: parent.span, text, anchorPath: parent.path });
   }
+  if (parent.kind === 'map') {
+    // A loop with nothing in it yet returns `(null)`: the serializer writes
+    // that, because `() => ()` does not parse. Its first item takes the
+    // placeholder's place, which leaves `=> (<item />)`, the loop's markup form.
+    const placeholder = emptyLoopPlaceholder(bytes, parent);
+    if (placeholder === undefined) {
+      return err('unsupported-operation'); // An empty callback this cannot read.
+    }
+    return ok({ range: placeholder, text, anchorPath: parent.path });
+  }
   if (!tag) {
     return err('unsupported-operation');
   }
@@ -648,6 +662,29 @@ function branchChildAsMarkup(bytes: ByteString, parent: ProjectedNode, child: Pr
   assert(child.span.end <= parent.span.end, 'A branch child ends inside its branch');
   const source = textOf(bytes, child.span);
   return source.startsWith('{') ? source : `{${source}}`;
+}
+
+// The `null` of an empty loop's `=> (null))}`, as the parser reads that form
+// (astroTemplate.ts, parseMapEmpty). Anything else returning nothing is
+// callback code, which the projection marks and placeWritable has refused.
+const EMPTY_LOOP_TAIL = /=>[ \t\r\n]*\([ \t\r\n]*null[ \t\r\n]*\)[ \t\r\n]*\)[ \t\r\n]*\}?[ \t\r\n]*$/;
+
+function emptyLoopPlaceholder(bytes: ByteString, loop: ProjectedNode): ByteSpan | undefined {
+  assert(loop.kind === 'map', 'Only a loop holds an empty-loop placeholder');
+  assert(loop.callback !== true, 'A callback loop is refused before its placeholder is read');
+  const source = textOf(bytes, loop.span);
+  const match = EMPTY_LOOP_TAIL.exec(source);
+  if (match === null) {
+    return undefined;
+  }
+  const keyword = source.lastIndexOf('null');
+  assert(keyword > match.index, 'The placeholder lies inside the matched tail');
+  // The tail after the keyword is ASCII whitespace and brackets, so its UTF-16
+  // length is its length in bytes.
+  const tailBytes = source.length - keyword;
+  const start = loop.span.end - tailBytes;
+  assert(start >= loop.span.start, 'The placeholder starts inside the loop');
+  return toByteSpan(start, start + 'null'.length);
 }
 
 // How the node is set apart from what precedes it: the whitespace run between
@@ -732,7 +769,7 @@ function shifted(path: readonly number[]): readonly number[] {
 }
 
 // Beside a node, the list it sits in is written; inside it, its own content.
-function placeWritable(projection: ValidProjection, node: ProjectedNode, placement: Placement): boolean {
+function placeWritable(bytes: ByteString, projection: ValidProjection, node: ProjectedNode, placement: Placement): boolean {
   if (inside(placement)) {
     if (node.callback === true) {
       return false; // Separate return sites cannot receive one shared sibling insertion.
@@ -745,9 +782,38 @@ function placeWritable(projection: ValidProjection, node: ProjectedNode, placeme
     const parent = nodeAtPath(projection, parentPath(node.path));
     assert(parent !== undefined, 'A repeated source node has an enclosing owner');
     assert(node.list === 'markup', 'Repeated source nodes belong to markup syntax');
-    return parent.kind === 'element' || parent.kind === 'component';
+    if (parent.kind === 'element' || parent.kind === 'component') {
+      return true;
+    }
+    return betweenLoopRoots(bytes, projection, node, placement);
   }
   return nodePlaceable(node);
+}
+
+// Beside a root of a loop written as markup, `=> (<a /> <b />)`, with another
+// root on that side: the insertion lands inside the run of siblings the
+// parentheses hold, which the parser reads back as the loop's markup. At
+// either edge it is addressed inside the loop instead (first-child or
+// last-child, insertionInside), so it can never stand outside the run; and a
+// callback's roots are separate JavaScript return sites, never one run.
+function betweenLoopRoots(bytes: ByteString, projection: ValidProjection, node: ProjectedNode, placement: Placement): boolean {
+  assert(!inside(placement), 'Only a placement beside a root stands between roots');
+  assert(node.path.length > 1, 'A loop root has a parent');
+  const parent = nodeAtPath(projection, parentPath(node.path));
+  assert(parent !== undefined, 'A nested node has a parent');
+  if (parent.kind !== 'map') {
+    return false;
+  }
+  if (parent.callback === true) {
+    return false;
+  }
+  const roots = siblingsOf(projection, node).filter((sibling) => !blankText(bytes, sibling));
+  const index = roots.indexOf(node);
+  assert(index >= 0, 'A loop root is among its siblings');
+  if (placement === 'before') {
+    return 0 < index;
+  }
+  return index + 1 < roots.length;
 }
 
 function inside(placement: Placement): boolean {

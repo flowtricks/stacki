@@ -183,7 +183,11 @@ function bindContextOf(app: AppView, route: CanvasRoute) {
       propsSample: app.currentPage?.kind === 'component' ? app.instanceProps : dynamicEntry?.props || undefined,
       propsSchema: schemaFor(editedEntry),
       collectionSamples: app.collectionSamples,
-      valueSamples: valueSamplesOf(app.valueSamples, app.currentPage?.path),
+      // The render's own values win: they are what the canvas is showing.
+      valueSamples: {
+        ...valueSamplesOf(app.valueSamples, app.currentPage?.path),
+        ...valueSamplesOf(app.scopeSamples, app.currentPage?.path),
+      },
       collections: app.collections,
       // Opening a collection in the picker asks for one entry of it; nothing is
       // fetched for collections nobody looks at.

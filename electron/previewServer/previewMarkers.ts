@@ -22,6 +22,7 @@ import { toDigest } from '../../shared/core/brand';
 import { LIMITS } from '../../shared/core/limits';
 import { stampComment, stampPathProblem, type PreviewStamp } from '../../shared/page/previewToken';
 import { markChunkHtml, parsePage, resolveChunks, serializePageMarked } from '../parse/astroParser';
+import { withScopeCapture } from './scopeCapture';
 
 export interface MarkedSource {
   /** The marked template Vite compiles in place of the file. */
@@ -67,9 +68,13 @@ export function markSourceFile(file: string, projectDirectories: readonly string
   const stamp: PreviewStamp = { file: relativePath, checksum };
   const marked = page ? serializePageMarked(parsed.model, '', stamp) : serializePageMarked(parsed.model, `${relativePath}|`, stamp);
   assert(marked.endsWith('\n'), 'The marked serializer ends on a line of its own');
+  // The frontmatter files what it computed under this path as it finishes, so
+  // the binding picker can show a loop's real items (scopeCapture.ts).
+  const captured = withScopeCapture(marked, relativePath);
+  assert(captured.endsWith('\n'), 'The scope capture keeps the template’s last line');
   // Last, at the top level of the file's template, where the compiler keeps a
   // plain comment: after `</html>` for a page, which leaves the doctype alone.
-  return { code: `${marked}${stampComment(stamp)}\n`, source, page };
+  return { code: `${captured}${stampComment(stamp)}\n`, source, page };
 }
 
 /** The marked copy of a chunk imported as `?raw` (see serializePageMarked's

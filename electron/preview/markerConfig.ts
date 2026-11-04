@@ -3,6 +3,7 @@
 // it serves to the canvas.
 
 import { assert } from '../../shared/core/assert';
+import { PREVIEW_SCOPE_LIMITS, SCOPE_STORE_KEY } from '../../shared/page/previewScope';
 
 // Wraps the project's Astro config (dev preview only) with a Vite plugin
 // that swaps each page's source for a marker-annotated equivalent — every
@@ -149,6 +150,122 @@ const json = (body) =>
   new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
 `;
 
+// The fourth: what a file's frontmatter computed on its last render, as the
+// statement previewServer/scopeCapture.ts files it — every top-level value,
+// whatever produced it (a fetch, a JSON import, Astro.glob, a CMS client). This
+// runs nothing: the values are the render's own, already in memory, and only
+// read here. Reading is still bounded, because a value is whatever the page
+// made: only own data properties are followed (a getter is code, and could do
+// anything), a promise is never awaited, and the whole answer shares one node
+// budget on top of the per-value string, list, key and depth bounds.
+//
+// Asked for right after an edit, the record is the render before it; `since`
+// says how new a record the editor wants, and the route waits a bounded time
+// for the canvas's next render to file one before answering with what it has.
+//
+// Plain JavaScript with no imports and no exports of its own, so the value
+// route embeds it and a test can run it as it is.
+export const SCOPE_SOURCE = `
+const SCOPE_KEY = Symbol.for(${JSON.stringify(SCOPE_STORE_KEY)});
+const SCOPE_LIMITS = {
+  stringCharsMax: 160,
+  itemsMax: 8,
+  keysMax: 64,
+  depthMax: 6,
+  nodesMax: 4000,
+  namesMax: ${PREVIEW_SCOPE_LIMITS.namesMax},
+  waitMsMax: 8000,
+  pollMs: 100,
+};
+const SCOPE_FILE = /^[\\w@+()\\[\\]\\-. /]+\\.astro$/;
+
+function sampleScopeValue(value, budget, depth) {
+  if (budget.nodes <= 0) return { __stacki: 'deep' };
+  budget.nodes -= 1;
+  if (value === null || value === undefined) return null;
+  const t = typeof value;
+  if (t === 'string') {
+    return value.length > SCOPE_LIMITS.stringCharsMax ? value.slice(0, SCOPE_LIMITS.stringCharsMax) + '…' : value;
+  }
+  if (t === 'number') return Number.isFinite(value) ? value : null;
+  if (t === 'boolean') return value;
+  if (t !== 'object') return undefined; // functions, symbols, bigints
+  if (value instanceof Date) {
+    return { __stacki: 'date', value: isNaN(value.getTime()) ? null : value.toISOString() };
+  }
+  if (value instanceof URL) return value.href;
+  if (value instanceof Promise) return undefined; // never awaited: that would be running it
+  if (depth >= SCOPE_LIMITS.depthMax) return { __stacki: 'deep' };
+  if (Array.isArray(value)) {
+    const out = [];
+    const shown = Math.min(value.length, SCOPE_LIMITS.itemsMax);
+    for (let i = 0; i < shown; i++) {
+      const item = ownValue(value, String(i));
+      const s = item.data ? sampleScopeValue(item.value, budget, depth + 1) : undefined;
+      out.push(s === undefined ? null : s);
+    }
+    if (value.length > shown) out.push({ __stacki: 'more', count: value.length - shown });
+    return out;
+  }
+  const out = {};
+  const keys = Object.keys(value).slice(0, SCOPE_LIMITS.keysMax);
+  for (const key of keys) {
+    const field = ownValue(value, key);
+    const s = field.data ? sampleScopeValue(field.value, budget, depth + 1) : undefined;
+    if (s !== undefined) out[key] = s;
+  }
+  return out;
+}
+
+// A property's value when it is plain data; an accessor is not data:
+// reading a getter would run the page's code at a time the page never does.
+function ownValue(holder, key) {
+  const descriptor = Object.getOwnPropertyDescriptor(holder, key);
+  return descriptor && 'value' in descriptor ? { data: true, value: descriptor.value } : { data: false, value: undefined };
+}
+
+function sampleCapture(capture) {
+  const budget = { nodes: SCOPE_LIMITS.nodesMax };
+  const values = {};
+  const names = Object.keys(capture.values).slice(0, SCOPE_LIMITS.namesMax);
+  for (const name of names) {
+    let value;
+    try {
+      // The capture's own getter: it only returns the binding.
+      value = capture.values[name];
+    } catch {
+      continue; // a binding the render never reached
+    }
+    const s = sampleScopeValue(value, budget, 0);
+    if (s !== undefined) values[name] = s;
+  }
+  return values;
+}
+
+// \`waitMs\` is how long to wait for a record as new as \`sinceMs\`, never more
+// than the bound; the route always waits the bound, and a test waits less.
+async function readScope(file, sinceMs, waitMs) {
+  if (!SCOPE_FILE.test(file) || file.includes('..')) {
+    return { value: null, error: 'Not a project .astro file' };
+  }
+  const waitedMs = Math.min(Math.max(waitMs, 0), SCOPE_LIMITS.waitMsMax);
+  const deadline = Date.now() + waitedMs;
+  const pollsMax = Math.ceil(waitedMs / SCOPE_LIMITS.pollMs) + 1;
+  for (let poll = 0; poll < pollsMax; poll++) {
+    const store = globalThis[SCOPE_KEY];
+    const capture = store instanceof Map ? store.get(file) : undefined;
+    const fresh = capture !== undefined && capture.at >= sinceMs;
+    if (fresh || Date.now() >= deadline) {
+      return capture === undefined
+        ? { value: null, error: 'The file has not rendered yet' }
+        : { value: sampleCapture(capture), error: null };
+    }
+    await new Promise((resolve) => setTimeout(resolve, SCOPE_LIMITS.pollMs));
+  }
+  return { value: null, error: 'The file has not rendered yet' };
+}
+`;
+
 // The third half: a page whose data comes from its own code rather than a
 // collection — `const pastors = await getCampusPastors()`, a CMS query in a
 // project module. Only the dev server can run it, so it does, the same way the
@@ -165,6 +282,12 @@ const modules = import.meta.glob(['/src/**/*.{js,mjs,ts,mts}', '!/src/**/*.d.ts'
 const CALL_MS_MAX = 10000;
 
 export async function GET({ url }) {
+  // A file's own last-rendered values, by its project path (SCOPE_SOURCE).
+  const scoped = url.searchParams.get('p');
+  if (scoped !== null) {
+    const since = Number(url.searchParams.get('since') || '0');
+    return json(await readScope(scoped, Number.isSafeInteger(since) && since >= 0 ? since : 0, SCOPE_LIMITS.waitMsMax));
+  }
   const rel = url.searchParams.get('m') || '';
   const name = url.searchParams.get('f') || '';
   const body = { value: null, error: null };
@@ -197,7 +320,7 @@ export async function GET({ url }) {
 
 const json = (body) =>
   new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
-`;
+${SCOPE_SOURCE}`;
 
 // Keep static generated source outside functions so the assembly stays reviewable.
 export const MARKER_CONFIG_PARTS = [

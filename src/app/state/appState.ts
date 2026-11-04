@@ -208,6 +208,10 @@ export function useDataState() {
   // What the open file's calls to its imports returned (`await getCampusPastors()`),
   // sampled by the dev server; a key present with no value has no answer.
   const [valueSamples, setValueSamples] = useState<ValueSamples>({});
+  // What the open file's frontmatter values held on the canvas's last render,
+  // keyed as value samples are. Kept apart so they win over a value sampled
+  // some other way, whichever answer arrives last (scopeSamples.ts).
+  const [scopeSamples, setScopeSamples] = useState<ValueSamples>({});
   // Every collection the project has, so data anywhere in the site is
   // reachable from the picker — not only what this page already reads.
   const [collections, setCollections] = useState<readonly AppCollection[]>([]);
@@ -230,6 +234,8 @@ export function useDataState() {
     setCollections,
     setValueSamples,
     valueSamples,
+    scopeSamples,
+    setScopeSamples,
     setDynamicError,
     setDynamicIndex,
     setDynamicPaths,

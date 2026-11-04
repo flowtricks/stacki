@@ -19,6 +19,7 @@ import {
 } from './dataSource';
 import { sampleAt, sampleKey, type TreeNode, sampleNode, literalNode } from './dataSample';
 import { queriesInScope, namesInScope, type CollectionReader, type DataContext, type SchemaField, autoQueryName } from './dataScope';
+import { loopSourcePath, parseLoopHead } from './loopSource';
 export {
   QUERY_MARK,
   type MarkedQuery,
@@ -53,8 +54,6 @@ export {
   collectionCallIn,
   referenceCallIn,
 } from './dataSource';
-
-const MAP_HEAD_RE = /^([\s\S]+?)\.map\(\s*\(\s*([\w$]+)\s*(?:,\s*([\w$]+)\s*)?\)\s*=>\s*\($/;
 
 /**
  * The names an expression field can offer while it is typed, for the scope it
@@ -287,7 +286,7 @@ function buildValueNodes(
     // query's real entries, with every field they carry.
     const returned = valueSamples[name];
     if (returned !== undefined && returned !== null) {
-      addUnique(values, sampleNode(name, name, returned, 0), seen);
+      addUnique(values, sampledValueNode(name, value, returned), seen);
       continue;
     }
     // A collection read by name gets the real thing: one entry, sampled, with
@@ -323,6 +322,12 @@ function buildValueNodes(
     if (/^Astro\.props\b/.test(destructure.from)) {
       continue;
     }
+    // `const { items } = await response.json()`: the render's own value.
+    const destructured = valueSamples[destructure.name];
+    if (destructured !== undefined && destructured !== null) {
+      addUnique(values, sampleNode(destructure.name, destructure.name, destructured, 0), seen);
+      continue;
+    }
     const shape = /\brender\s*\(/.test(destructure.from) ? RENDER_SHAPE[destructure.name] : undefined;
     addUnique(
       values,
@@ -338,12 +343,33 @@ function buildValueNodes(
       seen,
     );
   }
-  addImportNodes(values, decls, imports, seen);
+  addImportNodes(values, decls, imports, seen, valueSamples);
   return values;
 }
 
-// The imports that may hold data, for a value read straight from one.
-function addImportNodes(values: TreeNode[], decls: ReadonlyMap<string, string>, imports: readonly ImportLike[], seen: Set<string>): void {
+// A value the render computed, sampled. One read from a collection by name
+// keeps saying which: "stats entries" says where the list comes from, which
+// "8 items" does not.
+function sampledValueNode(name: string, declaration: string, sampled: unknown): TreeNode {
+  const node = sampleNode(name, name, sampled, 0);
+  const call = /^[{[]/.test(declaration.trim()) ? undefined : collectionCallIn(declaration);
+  if (call !== undefined) {
+    node.preview = `${call.name} ${call.fn === 'getEntry' ? 'entry' : 'entries'}`;
+  }
+  assert(node.path === name, 'A sampled value is named as the page names it');
+  return node;
+}
+
+// The imports that may hold data, for a value read straight from one — with
+// what it held on the last render when the dev server has said
+// (`import team from '../data/team.json'`).
+function addImportNodes(
+  values: TreeNode[],
+  decls: ReadonlyMap<string, string>,
+  imports: readonly ImportLike[],
+  seen: Set<string>,
+  valueSamples: Record<string, unknown>,
+): void {
   for (const imp of imports) {
     if (imp.name === undefined || decls.has(imp.name)) {
       continue;
@@ -351,7 +377,12 @@ function addImportNodes(values: TreeNode[], decls: ReadonlyMap<string, string>, 
     if (!mayHoldData(imp)) {
       continue;
     }
-    addUnique(values, { path: imp.name, key: imp.name, kind: 'import', preview: '', children: undefined }, seen);
+    const sampled = valueSamples[imp.name];
+    const node =
+      sampled === undefined || sampled === null
+        ? { path: imp.name, key: imp.name, kind: 'import', preview: '', children: undefined }
+        : sampleNode(imp.name, imp.name, sampled, 0);
+    addUnique(values, node, seen);
   }
 }
 
@@ -488,7 +519,9 @@ function everyField(entries: readonly TreeNode[] | undefined, at = 0): TreeNode[
 
 // 3. Loop items, resolved against everything above: an enclosing
 //    `posts.map((post) => …)` hands `post` one element of `posts`, so the
-//    item shows that element's fields with its values.
+//    item shows that element's fields with its values. Resolved outermost
+//    first, because an inner loop's list is often a field of an outer item
+//    (`item.pastors.map((pastor) => …)`), then listed innermost first.
 function buildLoopNodes(
   ancestorHeads: readonly string[],
   props: readonly TreeNode[],
@@ -509,50 +542,72 @@ function buildLoopNodes(
   index(props, 0);
   index(values, 0);
 
+  const resolved: TreeNode[][] = [];
+  for (const head of ancestorHeads) {
+    const loop = parseLoopHead(String(head));
+    if (loop === undefined) {
+      continue;
+    }
+    const item = loopItemNode(loop.item, loop.source, byPath, itemIndex);
+    // The item shadows any outer name it repeats, fields and all.
+    for (const path of [...byPath.keys()]) {
+      if (path === loop.item || path.startsWith(`${loop.item}.`) || path.startsWith(`${loop.item}[`)) {
+        byPath.delete(path);
+      }
+    }
+    index([item], 0);
+    const nodes = [item];
+    if (loop.index !== undefined) {
+      nodes.push({ path: loop.index, key: loop.index, kind: 'number', preview: '0', children: undefined });
+    }
+    resolved.push(nodes);
+  }
+  assert(resolved.length <= ancestorHeads.length, 'One loop item per loop head at most');
   // Innermost first: the loop you are standing in is the one whose item you
   // are most likely reaching for, and an outer loop is further away in every
   // sense.
   const loops: TreeNode[] = [];
-  for (const head of [...ancestorHeads].reverse()) {
-    const match = String(head).trim().match(MAP_HEAD_RE);
-    const sourceName = match?.[1];
-    const item = match?.[2];
-    if (!match || sourceName === undefined || item === undefined) {
-      continue;
-    }
-    const source = byPath.get(sourceName.trim());
-    const first = source?.kind === 'list' ? source.children?.[0] : undefined;
-    // Which entry of the list the item is being read as. One list, one place
-    // in it — the arrows on the row move it (see `nav` below).
-    const entries = source?.kind === 'list' ? (source.children ?? []) : [];
-    const at = Math.min(Math.max(itemIndex?.[item] ?? 0, 0), Math.max(entries.length - 1, 0));
-    const shown = entries[at] ?? first;
-    addUnique(
-      loops,
-      {
-        path: item,
-        key: item,
-        kind: first ? first.kind : 'loop item',
-        preview: shown ? shown.preview : '',
-        // What the arrows on this row say, and what they have to step through.
-        // Only when there is more than one entry to look at: a list of one, or a
-        // shape with no values behind it at all, has nowhere to go.
-        ...(entries.length > 1 ? { nav: { index: at, count: entries.length } } : {}),
-        // Re-rooted onto the item's name: `posts[0].title` is `post.title` here.
-        // Every entry contributes: a field the first one happens not to have — a
-        // campus on one service and not another — is still a field of the item,
-        // and leaving it out meant typing `service.campus` from memory to reach
-        // a value the picker was already holding.
-        children: shown ? rebase(everyField(entries, at), shown.path, item) : undefined,
-      },
-      seen,
-    );
-    const indexName = match[3];
-    if (indexName !== undefined) {
-      addUnique(loops, { path: indexName, key: indexName, kind: 'number', preview: '0', children: undefined }, seen);
+  for (const nodes of [...resolved].reverse()) {
+    for (const node of nodes) {
+      addUnique(loops, node, seen);
     }
   }
   return loops;
+}
+
+// What a loop hands `item`: one element of the list `source` names, with
+// every field any element has. "no sample" when the list is not one the app
+// has values for — the item is still offered, with whatever fields are known.
+function loopItemNode(item: string, source: string, byPath: ReadonlyMap<string, TreeNode>, itemIndex: Record<string, number> | undefined): TreeNode {
+  const named = loopSourcePath(source);
+  const list = named === undefined ? undefined : byPath.get(named.path);
+  // A list's elements are its children; so are an object's values, for
+  // `Object.values(modules)`.
+  const listed = named?.kind === 'values' ? list?.kind === 'object' : list?.kind === 'list';
+  const entries = listed ? (list?.children ?? []) : [];
+  const first = entries[0];
+  // Which entry of the list the item is being read as. One list, one place
+  // in it — the arrows on the row move it (see `nav` below).
+  const at = Math.min(Math.max(itemIndex?.[item] ?? 0, 0), Math.max(entries.length - 1, 0));
+  const shown = entries[at] ?? first;
+  const node: TreeNode = {
+    path: item,
+    key: item,
+    kind: first ? first.kind : 'loop item',
+    preview: shown ? shown.preview : listed && list?.preview === '0 items' ? 'no items' : 'no sample',
+    // What the arrows on this row say, and what they have to step through.
+    // Only when there is more than one entry to look at: a list of one, or a
+    // shape with no values behind it at all, has nowhere to go.
+    ...(entries.length > 1 ? { nav: { index: at, count: entries.length } } : {}),
+    // Re-rooted onto the item's name: `posts[0].title` is `post.title` here.
+    // Every entry contributes: a field the first one happens not to have — a
+    // campus on one service and not another — is still a field of the item,
+    // and leaving it out meant typing `service.campus` from memory to reach
+    // a value the picker was already holding.
+    children: shown ? rebase(everyField(entries, at), shown.path, item) : undefined,
+  };
+  assert(node.path === item, 'A loop item is named as its loop names it');
+  return node;
 }
 
 /**

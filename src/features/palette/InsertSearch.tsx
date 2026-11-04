@@ -196,11 +196,13 @@ function insertTags({ allowSlot }: { readonly allowSlot: boolean | undefined }):
     icon: elementIcon(tag, 14),
   }));
 }
-const OTHER_ITEMS: readonly InsertItem[] = [
+export const OTHER_ITEMS: readonly InsertItem[] = [
   {
     type: 'map',
     label: 'Loop',
     sub: 'items.map',
+    // What a builder calls it: Webflow's Collection List, a CMS list.
+    search: 'loop map repeat repeater each for list collection list cms collection items iterate',
     cat: 'other',
     icon: <RepeatIcon size={14} style={{ color: '#c4afff' }} />,
   },
