@@ -19,11 +19,21 @@ import type { InsertTarget } from '../../editor/insertTarget';
 import { type NodeClipboard } from '../appTypes';
 import { findEditorNodeById as findNodeById, findEditorParentList as findParentList } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
-import { createProjectComponent, findImportPath, onSoundSettingChanged, readComponentUsage, readAppSettings } from '../../ipc/appBridge';
+import { confirmDialog } from '../../ui/ConfirmDialog';
+import { componentStyles } from '../model/componentStyles';
+import { createdComponentFiles } from '../model/componentCreation';
+import {
+  createProjectComponent,
+  discardProjectComponent,
+  findImportPath,
+  onSoundSettingChanged,
+  readComponentUsage,
+  readAppSettings,
+} from '../../ipc/appBridge';
 import { parseShortcutMessage } from '../../features/preview/previewMessages';
 import { namesInSubtree, offerStyleCleanup } from '../../features/selectors/deleteCleanup';
 import { newId, withNewIds, usesPageScope, slotHostOf, definitionOf, frontmatterOf } from '../model/nodeFactory';
-import { extractionGesture, createdComponentMessage, pasteNeeds, pastedImports, pastePlace } from '../model/pageGestures';
+import { extractionGesture, styleBlockGestures, createdComponentMessage, pasteNeeds, pastedImports, pastePlace } from '../model/pageGestures';
 import { pastedInScope, broughtMessage } from '../model/appKeys';
 import { prunedAfterRemoval } from '../model/pageQueries';
 import { loadComponentInstance, componentInstancePlacement } from '../model/componentInstances';
@@ -225,6 +235,13 @@ export function useCreateComponent(
   // the page ends up with `<Card />` where the element was — so this is one
   // edit to two files, and the component file is written first: a page that
   // imports a file that isn't there yet is a broken page, however briefly.
+  //
+  // The page's CSS keeps styling the markup (componentStyles.ts): its
+  // `<style>` is scoped to the page and stopped reaching markup that lives in
+  // another file, so the selectors that matched it are opened with
+  // `:global()` in the same edit. And it is one undo step: ⌘Z restores the
+  // page, its styles and the markup, and takes the new file back
+  // (componentCreation.ts).
   const createComponentFromSelection = useCallback(
     async (name: string, options: { readonly withProps?: boolean } = {}) => {
       const { withProps = true } = options;
@@ -237,34 +254,62 @@ export function useCreateComponent(
         return;
       }
       const props = withProps ? propsNeededFor(model, node) : [];
+      const styles = componentStyles(model, node.id);
+      const input = {
+        projectPath,
+        pagePath: page.path,
+        name,
+        nodes: node,
+        imports: model.imports || [],
+        props,
+      };
       let created;
       try {
-        created = await createProjectComponent({
-          projectPath,
-          pagePath: page.path,
-          name,
-          nodes: node,
-          imports: model.imports || [],
-          props,
-        });
+        created = await createProjectComponent(input);
       } catch (error: unknown) {
         showToast(cleanError(error), 'error');
         return;
       }
+      const createdPath = created.path;
+      const files = createdComponentFiles(
+        {
+          discard: async ({ checksum, force }) => (await discardProjectComponent({ projectPath, path: createdPath, checksum, force })).outcome,
+          create: async () => (await createProjectComponent(input)).checksum,
+          confirmDelete: async () =>
+            (await confirmDialog({
+              title: `Delete ${created.rel}?`,
+              body: 'It has changed since it was created. Undo has restored the page either way.',
+              confirmLabel: 'Delete file',
+              cancelLabel: 'Keep file',
+              danger: true,
+            })) === true,
+          rescan: async () => {
+            await rescan(projectPath);
+          },
+        },
+        created.checksum,
+      );
       const paths = await findImportPath(projectPath, page.path, created.path);
       const id = newId();
       // Step 9: the instance goes in before the markup, the markup comes out,
       // and the import follows — one undo step, the markup's bytes moved to
-      // the new file rather than reprinted in the page.
+      // the new file rather than reprinted in the page. The page's styles are
+      // restated first, while the tree is still the one they were read from.
       const now = pageStateRef.current.pageState;
       const shown = now?.editable ? now.model : undefined;
       const found = shown ? findWithParent(shown.nodes, node.id) : undefined;
       if (!shown || !found) {
+        await files.undo(); // The page moved on meanwhile: nothing will import the file.
         return;
       }
       const place = { parentId: found.parent?.id ?? undefined, index: found.index };
       const extracted = { id, name, props, place, paths };
-      commitEdit(extractionGesture(shown, node.id, extracted));
+      const extraction = extractionGesture(shown, node.id, extracted);
+      const restyled = styleBlockGestures(shown, styles.pageBlocks);
+      if (!commitEdit(restyled === undefined ? extraction : sequence(restyled, extraction), { files })) {
+        await files.undo(); // Refused: the page won't import the file, so it doesn't stay.
+        return;
+      }
       setSelectedId(id);
       await rescan(projectPath);
       // Anything left reading the page's scope can't be reconnected on its own

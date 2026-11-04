@@ -3,8 +3,10 @@ import { parseAstroFileChanges, type AstroFileChange } from '../../shared/proper
 import { parsePreviewFailure } from '../../shared/ipc/previewFailure';
 import type { Data } from '../../shared/core/boundary';
 import type { IpcResults, WireDataRecord, WireInjectedRoute, WireRouteParams, WireUsageFile } from '../../shared/ipc/ipcResults';
-import { boolean, count, data, dictionary, list, optional, pathText, record, text } from '../../shared/core/boundary';
+import { boolean, count, data, dictionary, digest, list, optional, pathText, record, text } from '../../shared/core/boundary';
+import type { Digest } from '../../shared/core/brand';
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
+import { parseScopeSamples } from '../../shared/page/previewScope';
 import { parseOkResult } from '../../shared/ipc/ipcContract';
 import type { EditBatchRequest, EditRequest } from '../../shared/engine/editRequest';
 import { parsePageEditResult, type PageEditError, type PageEdited } from '../../shared/ipc/pageSave';
@@ -206,11 +208,26 @@ export function readSampleValue(request: {
   readonly spec: string;
   readonly name: string;
 }): Promise<Data> {
-  const payload = parseIpcPayload('content:sampleValue', request);
+  const { spec, name, ...page } = request;
+  const payload = parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'call', spec, name } });
   return window.avb.sampleValue(payload).then((input) => {
     const value = record(input)['value'];
     return value === null ? undefined : data(value);
   });
+}
+
+// What a page's frontmatter values held on its last render, by name — no
+// earlier than `sinceMs` when the dev server gets one in time. Empty when the
+// page has not rendered or the dev server cannot say.
+export function readScopeSamples(request: {
+  readonly projectPath: string;
+  readonly devUrl: string;
+  readonly pagePath: string;
+  readonly sinceMs: number;
+}): Promise<Readonly<Record<string, Data>>> {
+  const { sinceMs, ...page } = request;
+  const payload = parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'scope', sinceMs } });
+  return window.avb.sampleValue(payload).then((input) => parseScopeSamples(record(input)['value']));
 }
 
 export function createProjectPage(projectPath: string, name: string, layout: unknown): Promise<string> {
@@ -285,8 +302,28 @@ export function createProjectComponent(input: CreateComponentInput): Promise<Ipc
       path: pathText(value['path']),
       rel: pathText(value['rel']),
       name: text(value['name']),
+      checksum: digest(value['checksum']),
     };
   });
+}
+
+/** Undo of creating a component: delete its file while it holds the bytes it
+ *  was created with (`checksum`), or regardless when `force` (the person said so). */
+export function discardProjectComponent(input: {
+  readonly projectPath: string;
+  readonly path: string;
+  readonly checksum: Digest;
+  readonly force: boolean;
+}): Promise<IpcResults['component:discard']> {
+  const payload = parseIpcPayload('component:discard', input);
+  return window.avb.discardComponent(payload).then((raw) => ({ outcome: discardOutcome(record(raw)['outcome']) }));
+}
+
+function discardOutcome(input: unknown): IpcResults['component:discard']['outcome'] {
+  if (input === 'deleted' || input === 'edited' || input === 'missing') {
+    return input;
+  }
+  throw new Error('Unknown component discard outcome');
 }
 
 export function readComponentUsage(projectPath: string, name: string, exclude: string): Promise<IpcResults['component:usage']> {

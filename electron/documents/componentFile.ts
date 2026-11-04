@@ -21,6 +21,9 @@ import fs from 'fs';
 import path from 'path';
 
 import { assert } from '../../shared/core/assert';
+import type { Digest } from '../../shared/core/brand';
+import { isPathDescendant } from '../lib/platform';
+import { digestOf } from './atomicWrite';
 import { serializePage, serializeNodes } from '../parse/astroParser';
 
 const toPosix = (filePath: string): string => filePath.split(path.sep).join('/');
@@ -134,4 +137,43 @@ function newPageText(input: { readonly pagePath: string; readonly layout: NewPag
   return text;
 }
 
-export { componentFile, newPageText };
+/** What taking back a created component found: the file as it was written and
+ *  now gone, a file someone changed since (kept unless forced), or no file. */
+export type ComponentDiscard = 'deleted' | 'edited' | 'missing';
+
+interface ComponentDiscardArgs {
+  readonly projectPath: string;
+  readonly path: string;
+  /** The checksum the file was created with. */
+  readonly checksum: Digest;
+  /** Delete it even when it changed since: the person said so. */
+  readonly force: boolean;
+}
+
+/**
+ * Undo of "create component": the file goes only while it holds exactly what
+ * was written, so an edit made to it since is never lost without a question.
+ * Only a component file can go — the request crosses a process boundary, and a
+ * path anywhere else is refused rather than deleted.
+ */
+function discardComponentFile({ projectPath, path: target, checksum, force }: ComponentDiscardArgs): ComponentDiscard {
+  const componentsDirectory = path.join(projectPath, 'src', 'components');
+  if (!isPathDescendant(componentsDirectory, target)) {
+    throw new Error('Only a component file can be taken back.');
+  }
+  if (path.extname(target) !== '.astro') {
+    throw new Error('Only a component file can be taken back.');
+  }
+  if (!fs.existsSync(target)) {
+    return 'missing';
+  }
+  const unchanged = digestOf(fs.readFileSync(target)) === checksum;
+  if (unchanged || force) {
+    fs.rmSync(target);
+    assert(!fs.existsSync(target), 'A discarded component is gone');
+    return 'deleted';
+  }
+  return 'edited';
+}
+
+export { componentFile, discardComponentFile, newPageText };

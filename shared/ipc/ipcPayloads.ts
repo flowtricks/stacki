@@ -34,7 +34,7 @@ import { parseEdit, parseEditBatchRequest, parseEditRequest } from '../engine/ed
 import { parsePreviewRender } from '../page/previewToken';
 // Complete invoke-channel inventory. Every main-process listener receives the
 // parsed shape below; payload field names retain the existing renderer protocol.
-import { object, text, pathText, boolean, count, optional, nullable, list, dictionary, data, digest } from '../core/boundary';
+import { object, text, pathText, boolean, count, optional, nullable, list, dictionary, data, digest, record } from '../core/boundary';
 import type { Parsed } from '../core/boundary';
 import { toArray } from '../core/record';
 
@@ -72,6 +72,22 @@ function restoreDirection(input: unknown): 'before' | 'after' {
     return input;
   }
   throw new Error('Unknown restore direction');
+}
+// What the binding picker asks the dev server to sample from a page: one of
+// its imports called as the page calls it (`await getCampusPastors()`), or the
+// values the page's own last render computed, filed no earlier than `sinceMs`
+// (a wall-clock time in milliseconds; 0 takes any render).
+export type SampleValueSource = { readonly kind: 'call'; readonly spec: string; readonly name: string } | { readonly kind: 'scope'; readonly sinceMs: number };
+export function sampleValueSource(input: unknown): SampleValueSource {
+  const source = record(input);
+  const kind = source['kind'];
+  if (kind === 'call') {
+    return { kind, spec: pathText(source['spec']), name: text(source['name']) };
+  }
+  if (kind === 'scope') {
+    return { kind, sinceMs: count(source['sinceMs']) };
+  }
+  throw new Error('Unknown sample source');
 }
 const maybePath = optional(nullable(pathText));
 // The renderer sends no target as a missing field or as `null`.
@@ -163,6 +179,7 @@ export const IPC_PAYLOADS = {
     imports: optional(list(object({ name: optional(text), path: optional(text) }))),
     props: optional(list(data)),
   }),
+  'component:discard': object({ ...project, path: pathText, checksum: digest, force: maybeFlag }),
   'component:properties': object({ ...project, file: pathText }),
   // Undo of a property batch (step 6): the token its edit returned. Main
   // holds the inverse batch; the renderer can apply only what an edit wrote.
@@ -187,8 +204,7 @@ export const IPC_PAYLOADS = {
     ...project,
     devUrl: maybeText,
     pagePath: pathText,
-    spec: pathText,
-    name: text,
+    source: sampleValueSource,
   }),
   'content:targets': object({ ...named }),
   'content:validate': object({ ...project, collection: text, data }),

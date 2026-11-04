@@ -35,6 +35,7 @@ import {
 } from '../../ipc/appBridge';
 import { newId, routeToPath } from '../model/nodeFactory';
 import { astroAssetGesture, insertedNode } from '../model/pageGestures';
+import { editedFileKind } from '../model/styleBlockScope';
 import { type AppKeys, handleAppKeyDown, copySelectionTrail, inEditable, type MenuEdits, menuCopy, menuPaste } from '../model/appKeys';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
@@ -85,7 +86,7 @@ export function useInsertItem(
   lifecycle: ReturnType<typeof useLifecycle>,
   history: ReturnType<typeof useHistory>,
 ) {
-  const { cmsRel, contentName, insertables, leftTab, pageStateRef, selectedIdRef } = coreState;
+  const { cmsRel, contentName, insertables, leftTab, pageStateRef, projectRef, selectedIdRef } = coreState;
   const { setSelectedId } = coreState;
   const { addComponent, setInsertOpen } = nodeEdits;
   const { reportFailure } = lifecycle;
@@ -124,7 +125,10 @@ export function useInsertItem(
       }
 
       const id = newId();
-      const node = insertedNode(item, id);
+      // The file the node is written into: the open component's own file while
+      // one is open, otherwise the page (styleBlockScope.ts).
+      const fileKind = editedFileKind(pageStateRef.current.currentPage, projectRef.current?.path, window.avb.platform);
+      const node = insertedNode(item, id, { fileKind });
       if (!node) {
         return;
       }
@@ -132,7 +136,7 @@ export function useInsertItem(
       commitEdit(insertGesture(state.model, node, target, { urgency: true }));
       setSelectedId(id);
     },
-    [insertTargetFor, addComponent, commitEdit, reportFailure, pageStateRef, selectedIdRef, setInsertOpen, setSelectedId],
+    [insertTargetFor, addComponent, commitEdit, reportFailure, pageStateRef, projectRef, selectedIdRef, setInsertOpen, setSelectedId],
   );
 
   // True while the CMS covers the canvas: the page-editing shortcuts below

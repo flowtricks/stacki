@@ -9,8 +9,10 @@ import { ASTRO_ASSETS_MODULE, PLACEHOLDER_PROPS } from '../../features/palette/a
 import { getElementSchema, VOID_TAGS } from '../../editor/elementSchemas';
 import { isInlineOnly } from '../../features/props/RichContent';
 import { type EditGesture } from '../../editor/pageEdits';
-import { type InsertPlace, frontmatterGesture, insertGesture, removalGesture, sequence } from '../../editor/editGestures';
+import { type InsertPlace, frontmatterGesture, insertGesture, nodeGesture, removalGesture, sequence } from '../../editor/editGestures';
+import type { StyleBlockChange } from './componentStyles';
 import type { NodeId } from '../../../shared/core/brand';
+import { assert } from '../../../shared/core/assert';
 import { nodeAtPath } from '../../editor/editorTree';
 import { namesUsedIn, neededFrontmatter, withStatements } from '../../editor/frontmatterMove';
 import type { FieldDefinition } from '../../features/props/propRules';
@@ -21,6 +23,7 @@ import { findEditorNodeById as findNodeById, findEditorParentList as findParentL
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { findImportPath, rebaseProjectImport, type ImportPaths } from '../../ipc/appBridge';
 import { newId, defaultText, collectUsedNames, codeText, voided, frontmatterOf } from './nodeFactory';
+import { STYLE_GLOBAL_ATTRIBUTE, styleBlockGlobal, type StyleFileKind } from './styleBlockScope';
 
 // Imports the app is willing to remove once nothing refers to them: a
 // component file of any flavour Astro renders, an image, and Astro's own
@@ -242,6 +245,28 @@ export function extractionGesture(
   return frontmatterOf(imports(after)) === frontmatterOf(after) ? replaced : sequence(replaced, frontmatterGesture(after, urgent, imports));
 }
 
+// The page's `<style>` blocks restated without the rules the new component
+// took (componentStyles.ts), as one gesture; undefined when none changes. A
+// block whose text is no longer the one the change was read from is left as
+// it is: its rules then stay on the page as well, which costs nothing.
+export function styleBlockGestures(shown: EditorModel, changes: readonly StyleBlockChange[]): EditGesture | undefined {
+  const urgent = { coalesceKey: undefined, urgency: true };
+  let gesture: EditGesture | undefined;
+  for (const change of changes) {
+    const node = findNodeById(shown.nodes, change.nodeId);
+    if (node?.kind !== 'raw') {
+      continue;
+    }
+    if (node.inner !== change.before) {
+      continue;
+    }
+    assert(change.css !== change.before, 'styleBlockGestures: a change changes the block');
+    const restated = nodeGesture(node.id, { ...node, inner: change.css }, urgent);
+    gesture = gesture === undefined ? restated : sequence(gesture, restated);
+  }
+  return gesture;
+}
+
 // What creating a component says it did.
 export function createdComponentMessage(rel: string, propCount: number, { stranded }: { readonly stranded: boolean }): string {
   if (stranded) {
@@ -406,8 +431,9 @@ export function astroAssetGesture(
 }
 
 // A new node for an insert-palette item that needs no import, or undefined for one
-// that is not inserted as a node here.
-export function insertedNode(item: InsertItem, id: NodeId): EditorNode | undefined {
+// that is not inserted as a node here. `fileKind` is the file it is written into:
+// it decides whether a style block is global (styleBlockScope.ts).
+export function insertedNode(item: InsertItem, id: NodeId, { fileKind }: { readonly fileKind: StyleFileKind }): EditorNode | undefined {
   let node: EditorNode | undefined = undefined;
   if (item.type === 'element') {
     const placeholder = defaultText(item.tag);
@@ -447,8 +473,11 @@ export function insertedNode(item: InsertItem, id: NodeId): EditorNode | undefin
     node = { id, kind: 'expr', value: '{/* code */}' };
   } else if (item.type === 'doctype') {
     node = { id, kind: 'raw-line', value: '<!doctype html>' };
-  } else if (item.type === 'style' || item.type === 'script') {
-    node = { id, kind: 'raw', name: item.type, props: {}, inner: '' };
+  } else if (item.type === 'style') {
+    const props = styleBlockGlobal({ fileKind }) ? { [STYLE_GLOBAL_ATTRIBUTE]: { type: 'bare' as const } } : {};
+    node = { id, kind: 'raw', name: 'style', props, inner: '' };
+  } else if (item.type === 'script') {
+    node = { id, kind: 'raw', name: 'script', props: {}, inner: '' };
   }
   return node;
 }

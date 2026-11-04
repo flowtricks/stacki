@@ -30,6 +30,18 @@ export interface UndoCommand {
 export interface EditsEntry {
   readonly kind: 'edits';
   readonly record: EditsRecord;
+  /** Files the same step made, such as a component created from the selection
+   *  (src/app/model/componentCreation.ts): one ⌘Z takes back both. */
+  readonly files?: StepFiles;
+}
+
+/** A step's work on files beside its page writes. Undo runs once the page's
+ *  writes are reverted, redo before they are replayed, so the page never
+ *  imports a file that is not there. Both are idempotent: a step that undid
+ *  only part of its page writes is undone again later, and runs them again. */
+export interface StepFiles {
+  readonly undo: () => Promise<void>;
+  readonly redo: () => Promise<void>;
 }
 
 export type HistoryEntry = UndoCommand | EditsEntry;

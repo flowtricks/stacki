@@ -17,6 +17,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { gesture, mountApp, nodeAt, select, tick, undo } = require('../../helpers/appGestures.js');
+const { digestOf } = require('#dist/electron/documents/atomicWrite.js');
 
 const PAGE = [
   '---',
@@ -174,8 +175,10 @@ test('paste and extract-to-component insert, remove and import as requests', asy
   // comes out, and the page imports it.
   const created = path.join(root, 'src/components/Two.astro');
   global.avb.createComponent = async () => {
-    fs.writeFileSync(created, '<div>Two<p class="a">One</p></div>\n');
-    return { path: created, rel: 'src/components/Two.astro', name: 'Two' };
+    const bytes = '<div>Two<p class="a">One</p></div>\n';
+    fs.writeFileSync(created, bytes);
+    // The checksum of what was written: undo deletes the file only while it still holds it.
+    return { path: created, rel: 'src/components/Two.astro', name: 'Two', checksum: digestOf(bytes) };
   };
   await select(app, [0, 1]);
   const components = [...document.querySelectorAll('.rail-btn')].find((button) => String(button.getAttribute('aria-label')).startsWith('Components'));

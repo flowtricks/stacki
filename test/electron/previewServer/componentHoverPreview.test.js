@@ -86,6 +86,7 @@ const labels = data.entries.map((entry) => entry.label);
   assert.deepEqual(componentPreviewInputs(source, 'Overview'), {
     props: { heading: 'Overview' },
     missing: ['data'],
+    slot: { kind: 'name' },
   });
 });
 
@@ -105,6 +106,7 @@ const { data, items = [], count = 0, title = '', visible = false, tag } = Astro.
   assert.deepEqual(componentPreviewInputs(source, 'Card'), {
     props: { tag: 'h2' },
     missing: [],
+    slot: { kind: 'name' },
   });
 });
 
@@ -116,7 +118,23 @@ interface Props { src: string; count: number; active: boolean; items: Item[]; da
   assert.deepEqual(componentPreviewInputs(source, 'Card'), {
     props: {},
     missing: ['src', 'count', 'active', 'items', 'data'],
+    slot: { kind: 'name' },
   });
+});
+
+test('a sampled instance supplies props, fills required inputs and replaces the name slot', () => {
+  const source = `---
+interface Props { variant?: 'primary' | 'secondary'; text?: string; src: string; data: PageData; }
+const { variant = 'primary', text = 'Button Text' } = Astro.props;
+---
+<div class={variant}>{text}<slot /></div>`;
+  const sample = { props: { text: 'Choose a campus', variant: 'secondary', src: '/a.png' }, slot: { kind: 'none' } };
+  assert.deepEqual(componentPreviewInputs(source, 'ButtonMain', sample), {
+    props: { text: 'Choose a campus', variant: 'secondary', src: '/a.png' },
+    missing: ['data'],
+    slot: { kind: 'none' },
+  });
+  assert.deepEqual(componentPreviewInputs(source, 'ButtonMain').slot, { kind: 'name' }, 'without an instance the name stays the slot placeholder');
 });
 
 test('exact project paths distinguish duplicate component names and support layouts', () => {
@@ -155,6 +173,10 @@ test('generated Astro route keeps its default slot and loads the selected source
   assert.match(template, /src\/layouts\/\*\*\/\*\.astro/);
   assert.match(template, /<C \{\.\.\.props\}>/);
   assert.match(template, /<C \{\.\.\.props\}>\{name\}<\/C>/);
+  assert.match(template, /<C \{\.\.\.props\}><Fragment set:html=\{slot\.html\} \/><\/C>/, 'sampled plain children fill the slot');
+  assert.match(template, /<C \{\.\.\.props\} \/>/, 'a self-closing instance renders without slot content');
+  assert.match(template, /<html \{\.\.\.htmlAttributes\}>/);
+  assert.match(template, /<body \{\.\.\.bodyAttributes\}>\s*\{contextStyles\.map/, 'site-wide styles follow the project stylesheets');
   assert.match(template, /avb:component-preview/);
   assert.match(template, /reportStatus\('empty'\)/);
   assert.match(template, /reportStatus\('ready'\)/);
@@ -189,9 +211,11 @@ test('generated Astro route keeps its default slot and loads the selected source
     .split('---')[1]
     .replace(/export const prerender = false;/, '')
     .replace("import 'virtual:stacki-component-preview-styles';", '')
+    .replace("import { contextStyles, htmlAttributes, bodyAttributes } from 'virtual:stacki-component-preview-context';", '')
     .replace("import { packageModules, packageInputs } from 'virtual:stacki-package-components';", '')
     .replaceAll('import.meta.glob', 'glob');
-  const run = vm.runInNewContext(`(async () => { ${frontmatter}; return { name, C, props }; })`, {
+  assert.doesNotMatch(frontmatter, /import /, 'every virtual import is removed before the frontmatter runs');
+  const run = vm.runInNewContext(`(async () => { ${frontmatter}; return { name, C, props, slot }; })`, {
     Astro: { url: new URL('http://localhost/__avb/preview?p=' + selected) },
     packageModules: {},
     packageInputs: {},
@@ -200,6 +224,7 @@ test('generated Astro route keeps its default slot and loads the selected source
   const result = await run();
   assert.equal(result.name, 'Card');
   assert.deepEqual({ ...result.props }, { heading: 'Card' });
+  assert.equal(result.slot.kind, 'name');
   assert.deepEqual(loaded, [selected + '?raw&stacki-preview-props', selected]);
 
   loaded.length = 0;
@@ -221,9 +246,9 @@ test('Vite metadata exports plain ESM data and reflects source edits', async (co
   assert.match(first, /^export default /);
   assert.doesNotMatch(first, /require|exports|node:|Astro\.props/);
   const imported = await import('data:text/javascript,' + encodeURIComponent(first));
-  assert.deepEqual(imported.default, { props: { heading: 'AccordionItem' }, missing: [] });
+  assert.deepEqual(imported.default, { props: { heading: 'AccordionItem' }, missing: [], slot: { kind: 'name' } });
   fs.writeFileSync(file, accordion.replace('heading, headingTag', "heading = 'Saved', headingTag"));
-  assert.equal(plugin.load(id), 'export default {"props":{},"missing":[]};', 'a later load sees authored defaults after a source edit');
+  assert.equal(plugin.load(id), 'export default {"props":{},"missing":[],"slot":{"kind":"name"}};', 'a later load sees authored defaults after a source edit');
   for (const query of ['', '?raw', '?stacki-preview-props', '?raw&not-stacki-preview-props']) {
     assert.equal(plugin.load(file + query), undefined);
   }

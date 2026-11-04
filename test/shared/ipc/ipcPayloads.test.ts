@@ -108,6 +108,7 @@ const fields = {
   model: { imports: [], nodes: [{ kind: 'text', id: 'one', value: 'Hello' }] },
   baseChecksum: 'a'.repeat(64),
   authoredChecksum: 'a'.repeat(64),
+  checksum: 'a'.repeat(64),
   token: '00000000-0000-4000-8000-000000000000',
   edit: {
     tag: 'remove-node',
@@ -266,6 +267,13 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
     projectPath: '/site',
     file: '.stacki/canvas/00000000-0000-4000-8000-000000000000.astro',
   },
+  // A page's value: one import called (`call`), or its last render's values (`scope`).
+  'content:sampleValue': {
+    projectPath: '/site',
+    devUrl: 'http://localhost:4321',
+    pagePath: fields.pagePath,
+    source: { kind: 'scope', sinceMs: 0 },
+  },
 };
 
 for (const [channel, parse] of Object.entries(IPC_PAYLOADS)) {
@@ -288,6 +296,15 @@ for (const [channel, parse] of Object.entries(IPC_PAYLOADS)) {
     }
   });
 }
+
+test('taking back a created component names the file and the bytes it was created with', () => {
+  const request = { projectPath: '/site', path: '/site/src/components/Button.astro', checksum: 'c'.repeat(64) };
+  assert.deepEqual(parseIpcPayload('component:discard', request), request);
+  assert.equal(parseIpcPayload('component:discard', { ...request, force: true }).force, true);
+  assert.throws(() => parseIpcPayload('component:discard', { ...request, checksum: 'short' }), /Digest: expected 64 lowercase hex/);
+  assert.throws(() => parseIpcPayload('component:discard', { ...request, path: undefined }), /Expected/);
+  assert.throws(() => parseIpcPayload('component:discard', { ...request, force: 'yes' }), /Expected/);
+});
 
 test('content writes accept the storage locator used by ContentView', () => {
   const payload = parseIpcPayload('content:writeEntry', {
@@ -457,4 +474,18 @@ test('terminal startup and resize reject unmeasured or unrepresentable native gr
     }
     assert.throws(() => parseIpcPayload(channel, { id: 'terminal', cwd: '/site' }));
   }
+});
+
+test('a sampled value names its source: an import call or the render’s own scope', () => {
+  const page = { projectPath: '/site', devUrl: 'http://localhost:4321', pagePath: fields.pagePath };
+  const call = parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'call', spec: '@/sanity/queries.ts', name: 'getPastors' } });
+  assert.deepEqual(call.source, { kind: 'call', spec: '@/sanity/queries.ts', name: 'getPastors' });
+  const scope = parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'scope', sinceMs: 1_700_000_000_000 } });
+  assert.deepEqual(scope.source, { kind: 'scope', sinceMs: 1_700_000_000_000 });
+  // The old flat shape, an unknown kind, a missing field, and a time that is not a count all fail.
+  assert.throws(() => parseIpcPayload('content:sampleValue', { ...page, spec: '../data', name: 'getPastors' }), /Expected object/);
+  assert.throws(() => parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'module' } }), /Unknown sample source/);
+  assert.throws(() => parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'call', spec: '../data' } }), /Expected string/);
+  assert.throws(() => parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'scope', sinceMs: -1 } }), /nonnegative/);
+  assert.throws(() => parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'scope', sinceMs: 1.5 } }), /safe integer/);
 });

@@ -187,6 +187,7 @@ function pageBridge() {
     importPathFor: invoke('page:importPathFor'),
     rebaseImport: invoke('page:rebaseImport'),
     createComponent: invoke('component:create'),
+    discardComponent: invoke('component:discard'),
     componentProperties: invoke('component:properties'),
     editComponentProperties: invoke('component:editProperties'),
     revertComponentProperties: invoke('component:revertProperties'),

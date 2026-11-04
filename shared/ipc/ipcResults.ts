@@ -28,6 +28,7 @@ export interface StudioEventResults {
 import type { ComponentProperties } from '../properties/propertyEditing';
 import type { PreviewVerdict } from '../page/previewToken';
 import type { Result } from '../core/result';
+import type { Digest } from '../core/brand';
 import type { Data } from '../core/boundary';
 import {
   type WireAssetEntry,
@@ -209,6 +210,10 @@ export interface IpcResults {
     readonly path: string;
     readonly rel: string;
     readonly name: string;
+    readonly checksum: Digest;
+  };
+  readonly 'component:discard': {
+    readonly outcome: 'deleted' | 'edited' | 'missing';
   };
   readonly 'component:usage': {
     readonly files: ReadonlyArray<WireUsageFile>;

@@ -49,6 +49,7 @@ import {
   useSampleValues,
   useQueryCleanup,
 } from './appShortcuts';
+import { useScopeSamples } from './scopeSamples';
 
 // Shortcuts, previews and the data the page reads.
 export function useShortcuts(
@@ -67,6 +68,7 @@ export function useShortcuts(
   useCollections(coreState);
   useSampleEntries(coreState, routes);
   useSampleValues(coreState, routes);
+  useScopeSamples(coreState, routes);
   useQueryCleanup(routes, history);
   return { ...insertItemScope, ...interactivePreview, ...routes };
 }

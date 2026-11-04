@@ -5,6 +5,15 @@ import { assert } from '../../shared/core/assert';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { componentPreviewStylesModule } from './componentPreviewStyles';
+import {
+  componentPreviewContextModule,
+  componentPreviewSample,
+  readPreviewProjectIndex,
+  type PreviewProjectIndex,
+  type PreviewSample,
+  type PreviewSampleValue,
+  type PreviewSlot,
+} from './componentPreviewContext';
 
 const PREVIEW_LIMITS = {
   sourceCharsMax: 10 * 1024 * 1024,
@@ -14,16 +23,17 @@ const PREVIEW_LIMITS = {
 } as const;
 
 export interface ComponentPreviewInputs {
-  readonly props: Readonly<Record<string, string | boolean>>;
+  readonly props: Readonly<Record<string, PreviewSampleValue>>;
   readonly missing: readonly string[];
+  readonly slot: PreviewSlot;
 }
 
-export function componentPreviewInputs(source: unknown, name: unknown): ComponentPreviewInputs {
+export function componentPreviewInputs(source: unknown, name: unknown, sample?: PreviewSample): ComponentPreviewInputs {
   const text = previewText(source, PREVIEW_LIMITS.sourceCharsMax, 'Component source');
   const label = previewText(name, PREVIEW_LIMITS.nameCharsMax, 'Component name');
   const schema = parsePropSchema(text);
   assert(schema.length <= PREVIEW_LIMITS.fieldsMax, 'Preview prop count exceeds limit');
-  const props: Record<string, string | boolean> = {};
+  const props: Record<string, PreviewSampleValue> = {};
   for (const field of schema) {
     // Even false, empty, or expression defaults belong to the component author.
     if (field.default !== undefined || field.defaultExpr) {
@@ -42,6 +52,9 @@ export function componentPreviewInputs(source: unknown, name: unknown): Componen
       }
     }
   }
+  // A real instance shows the component as the site uses it: its literal props win over
+  // invented ones, and its plain children replace the name placeholder in the slot.
+  Object.assign(props, sample?.props ?? {});
   // Imported objects and page-scoped values cannot be invented safely. Do not execute
   // a standalone component when its declared required inputs are unavailable.
   const missing = schema
@@ -50,7 +63,7 @@ export function componentPreviewInputs(source: unknown, name: unknown): Componen
     .filter((field) => !Object.hasOwn(props, field.name))
     .map((field) => field.name);
   assert(missing.length <= schema.length, 'Missing preview inputs belong to the prop schema');
-  return { props, missing };
+  return { props, missing, slot: sample?.slot ?? { kind: 'name' } };
 }
 
 export function componentPreviewPath(paths: readonly string[], requestedPath: unknown, requestedName: unknown): string | undefined {
@@ -84,13 +97,34 @@ export function componentPreviewPlugin(projectDirectories: readonly string[], pa
   assert(projectDirectories.length > 0, 'Preview plugin requires a project root');
   assert(projectDirectories.length <= PREVIEW_LIMITS.rootsMax, 'Preview root count exceeds limit');
   const roots = projectDirectories.map((directory) => path.resolve(directory));
+  const root = roots[0];
+  assert(root !== undefined, 'Preview plugin requires a project root');
+  // Rendering the route loads every component's preview inputs once. They share one read
+  // of the project, which any .astro change discards.
+  let index: PreviewProjectIndex | undefined;
+  const projectIndex = (): PreviewProjectIndex => {
+    index ??= readPreviewProjectIndex(root);
+    return index;
+  };
   return {
     name: 'avb-component-preview',
     enforce: 'pre' as const,
     resolveId(id: string): string | undefined {
-      return ['virtual:stacki-component-preview-styles', 'virtual:stacki-package-components'].includes(id) ? '\0' + id : undefined;
+      return PREVIEW_VIRTUAL_MODULES.includes(id) ? '\0' + id : undefined;
     },
-    load(id: string): string | undefined {
+    watchChange(id: string): void {
+      if (id.endsWith('.astro')) {
+        index = undefined;
+      }
+    },
+    load(this: unknown, id: string): string | undefined {
+      if (id === '\0virtual:stacki-component-preview-context') {
+        const context = componentPreviewContextModule(root, projectIndex());
+        for (const file of context.watchFiles) {
+          addWatchFile(this, file);
+        }
+        return context.code;
+      }
       if (id === '\0virtual:stacki-package-components') {
         const root = roots[0];
         assert(root !== undefined, 'Package preview requires a project root');
@@ -110,18 +144,42 @@ export function componentPreviewPlugin(projectDirectories: readonly string[], pa
         return undefined;
       }
       const file = path.resolve(id.slice(0, separator));
-      const allowed = roots.some((root) => {
-        const relative = path.relative(root, file).split(path.sep).join('/');
-        return /^src\/(components|layouts)\/.+\.astro$/.test(relative);
-      });
-      assert(allowed, 'Preview metadata must belong to a project component or layout');
+      const relative = roots
+        .map((candidate) => path.relative(candidate, file).split(path.sep).join('/'))
+        .find((candidate) => /^src\/(components|layouts)\/.+\.astro$/.test(candidate));
+      assert(relative !== undefined, 'Preview metadata must belong to a project component or layout');
       const bytes = fs.statSync(file).size;
       assert(bytes <= PREVIEW_LIMITS.sourceCharsMax, 'Component source exceeds size limit');
       const source = fs.readFileSync(file, 'utf8');
       const name = path.basename(file, '.astro');
-      return 'export default ' + JSON.stringify(componentPreviewInputs(source, name)) + ';';
+      const found = componentPreviewSample(projectIndex(), relative);
+      if (found !== undefined) {
+        // Editing the sampled instance changes what the preview should show.
+        addWatchFile(this, path.join(root, found.host));
+      }
+      return 'export default ' + JSON.stringify(componentPreviewInputs(source, name, found?.sample)) + ';';
     },
   };
+}
+
+const PREVIEW_VIRTUAL_MODULES: readonly string[] = [
+  'virtual:stacki-component-preview-context',
+  'virtual:stacki-component-preview-styles',
+  'virtual:stacki-package-components',
+];
+
+/**
+ * Registers a file whose edits must reload a virtual module. Vite passes its plugin
+ * context as `this`; tests call `load` on the plugin object, which has no watcher.
+ */
+function addWatchFile(context: unknown, file: string): void {
+  assert(path.isAbsolute(file), 'Watched preview files are absolute');
+  if (typeof context !== 'object' || context === null || !('addWatchFile' in context)) {
+    return;
+  }
+  const watch = context.addWatchFile;
+  assert(typeof watch === 'function', 'A plugin context addWatchFile is a function');
+  Reflect.apply(watch, context, [file]);
 }
 
 export function renderComponentPreviewPage(): string {
@@ -158,13 +216,16 @@ function previewText(input: unknown, maximum: number, label: string): string {
 
 const PREVIEW_PAGE = `---
 // Generated by Stacki (dev preview only) — do not edit.
-// Styles and the default slot retain the project's appearance. The stage uses
+// Styles and the default slot retain the project's appearance. Site-wide inline
+// styles sit at the start of the body, after the project's stylesheets, where the
+// pages' own global components put them. The stage uses
 // desktop layout dimensions before fitting its rendered bounds into the card.
 // On-demand so Astro.url keeps its query string (prerendered pages get
 // their searchParams stripped, even in dev).
 export const prerender = false;
 __STACKI_PREVIEW_PATH__
 import 'virtual:stacki-component-preview-styles';
+import { contextStyles, htmlAttributes, bodyAttributes } from 'virtual:stacki-component-preview-context';
 import { packageModules, packageInputs } from 'virtual:stacki-package-components';
 const mods = {
   ...import.meta.glob(['/src/components/**/*.astro', '/src/layouts/**/*.astro']), ...packageModules,
@@ -184,14 +245,15 @@ const name = selected ? selected.split('/').pop().replace(/\\.astro$/, '') : '';
 let C = null;
 let props = {};
 let missing = [];
+let slot = { kind: 'name' };
 if (selected) {
-  ({ props, missing } = await inputs[selected]());
+  ({ props, missing, slot } = await inputs[selected]());
   if (missing.length === 0) {
     C = (await mods[selected]()).default;
   }
 }
 ---
-{DefaultCanvas ? <DefaultCanvas /> : <html>
+{DefaultCanvas ? <DefaultCanvas /> : <html {...htmlAttributes}>
   <head>
     <meta charset="utf-8" />
     <style>
@@ -219,8 +281,10 @@ if (selected) {
       body.avb-is-empty #avb-empty { display: flex; }
     </style>
   </head>
-  <body>
-    <div id="avb-stage">{C ? <C {...props}>{name}</C> : null}</div>
+  <body {...bodyAttributes}>
+    {contextStyles.map((css) => <style is:inline set:html={css}></style>)}
+    <div id="avb-stage">{C ? (slot.kind === 'html' ? <C {...props}><Fragment set:html={slot.html} /></C>
+      : slot.kind === 'none' ? <C {...props} /> : <C {...props}>{name}</C>) : null}</div>
     <div id="avb-empty">{missing.length > 0
       ? 'Preview needs data for: ' + missing.join(', ') + '. Open an instance on a page.'
       : 'Nothing to preview — this component needs props or slot content.'}</div>

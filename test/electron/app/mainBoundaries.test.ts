@@ -69,7 +69,8 @@ test('the complete channel inventory matches real main and terminal registration
   // The Selectors panel adds three: finding unused selectors, removing them, and
   // restoring what a removal changed. A gesture's several edits are written as
   // one (page:editBatch), so the dev server never renders the page between them.
-  assert.equal(harness.handlers.size, 156);
+  // Undo of creating a component takes its file back (component:discard).
+  assert.equal(harness.handlers.size, 157);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name

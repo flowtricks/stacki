@@ -79,6 +79,7 @@ interface InvokeChannels {
   readonly importPathFor: 'page:importPathFor';
   readonly rebaseImport: 'page:rebaseImport';
   readonly createComponent: 'component:create';
+  readonly discardComponent: 'component:discard';
   readonly componentProperties: 'component:properties';
   readonly editComponentProperties: 'component:editProperties';
   readonly revertComponentProperties: 'component:revertProperties';

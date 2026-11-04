@@ -128,7 +128,7 @@ function ComponentNameField({
       {error ? (
         <ErrorToast message={error} />
       ) : (
-        <div className="hint-text">
+        <div className="hint-text component-name-hint">
           {source.label} becomes <code>&lt;{name || 'Name'} /&gt;</code>, saved as <code>src/components/{name || 'Name'}.astro</code>
         </div>
       )}

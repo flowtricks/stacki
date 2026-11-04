@@ -17,7 +17,7 @@ import { assert } from '../../shared/core/assert';
 import { ok } from '../../shared/core/result';
 import * as path from 'path';
 import * as fs from 'fs';
-import { componentFile } from '../documents/componentFile';
+import { componentFile, discardComponentFile } from '../documents/componentFile';
 import { componentUsage } from '../properties/componentUsage';
 import { toPosix } from '../lib/mainHelpers';
 import { selectionTrail } from '../documents/pageRequests';
@@ -36,11 +36,19 @@ export function registerComponentHandlers(host: Pick<MainHost, 'clipboard' | 'do
 function registerComponentCreateHandlers({ ipcMain, documents, noteAppWrite }: Pick<MainHost, 'ipcMain' | 'documents' | 'noteAppWrite'>): void {
   // Turn a piece of a page into a component of its own. The file is worked out
   // in componentFile.js; writing it belongs here, with every other write.
+  // The checksum is what Undo hands back to `component:discard`: the file goes
+  // only while it still holds these bytes.
   ipcMain.handle('component:create', async (_event, options) => {
     const { path: target, rel, text } = componentFile(options);
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    createProjectText(target, text);
-    return { path: target, rel, name: options.name };
+    const checksum = createProjectText(target, text);
+    return { path: target, rel, name: options.name, checksum };
+  });
+
+  // Undo of creating a component: one step with the page edit that placed it.
+  ipcMain.handle('component:discard', async (_event, { projectPath, path: target, checksum, force }) => {
+    noteAppWrite();
+    return { outcome: discardComponentFile({ projectPath, path: target, checksum, force: force === true }) };
   });
 
   // Component property edits validate their revision before updating project sources.

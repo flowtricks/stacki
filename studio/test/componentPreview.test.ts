@@ -34,11 +34,11 @@ test('preview metadata reads current component source and rejects files outside 
     const file = path.join(root, 'src/components/Card.astro');
     const plugin = componentPreviewPlugin([root]);
     await writeFile(file, '---\ntype Props = { label?: string };\n---\n<slot />');
-    assert.equal(plugin.load(file + '?raw&stacki-preview-props'), 'export default {"props":{"label":"Card"},"missing":[]};');
+    assert.equal(plugin.load(file + '?raw&stacki-preview-props'), 'export default {"props":{"label":"Card"},"missing":[],"slot":{"kind":"name"}};');
     await writeFile(file, "---\ntype Props = { label?: string };\nconst { label = 'Saved' } = Astro.props;\n---\n<slot />");
-    assert.equal(plugin.load(file + '?raw&stacki-preview-props'), 'export default {"props":{},"missing":[]};');
+    assert.equal(plugin.load(file + '?raw&stacki-preview-props'), 'export default {"props":{},"missing":[],"slot":{"kind":"name"}};');
     await writeFile(file, '---\ninterface Props { data: PageData; }\n---\n<slot />');
-    assert.equal(plugin.load(file + '?raw&stacki-preview-props'), 'export default {"props":{},"missing":["data"]};');
+    assert.equal(plugin.load(file + '?raw&stacki-preview-props'), 'export default {"props":{},"missing":["data"],"slot":{"kind":"name"}};');
     assert.throws(() => plugin.load(path.join(root, 'src/pages/index.astro?raw&stacki-preview-props')));
   } finally {
     await rm(root, { recursive: true, force: true });
