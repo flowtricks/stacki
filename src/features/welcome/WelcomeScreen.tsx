@@ -12,7 +12,7 @@ import {
 } from './welcomeBridge';
 import { AstroIcon, CloseIcon, FolderIcon, GitHubIcon, LayersIcon, LumosIcon } from '../../ui/Icons';
 import StackiLogo from './StackiLogo';
-import WelcomeBackdrop from './WelcomeBackdrop';
+import WelcomeShaderBackground from './WelcomeShaderBackground';
 import { NewProjectWizard, StarterWizard } from './WelcomeWizards';
 
 interface WelcomeScreenProps {
@@ -30,7 +30,7 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
 
   return (
     <div className="welcome">
-      <WelcomeBackdrop />
+      <WelcomeShaderBackground />
       <WelcomeHero
         hasRecents={recent.projects.length > 0}
         error={error}

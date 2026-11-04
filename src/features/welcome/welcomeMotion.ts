@@ -43,8 +43,8 @@ export function welcomeMotionAllowed(processors: unknown, memoryGB: unknown): bo
 }
 
 export function welcomeDrawingSize(width: number, height: number) {
-  assert(Number.isFinite(width), 'WelcomeBackground: width must be finite');
-  assert(Number.isFinite(height), 'WelcomeBackground: height must be finite');
+  assert(Number.isFinite(width), 'WelcomeShaderBackground: width must be finite');
+  assert(Number.isFinite(height), 'WelcomeShaderBackground: height must be finite');
   const widthPixels = Math.max(1, width);
   const heightPixels = Math.max(1, height);
   // This blurred artwork gains little from Retina resolution. Bound both its
@@ -58,8 +58,8 @@ export function welcomeDrawingSize(width: number, height: number) {
     width: Math.max(1, Math.floor(widthPixels * scale)),
     height: Math.max(1, Math.floor(heightPixels * scale)),
   };
-  assert(size.width <= MOTION_LIMITS.dimensionMax, 'WelcomeBackground: width exceeds budget');
-  assert(size.height <= MOTION_LIMITS.dimensionMax, 'WelcomeBackground: height exceeds budget');
+  assert(size.width <= MOTION_LIMITS.dimensionMax, 'WelcomeShaderBackground: width exceeds budget');
+  assert(size.height <= MOTION_LIMITS.dimensionMax, 'WelcomeShaderBackground: height exceeds budget');
   return size;
 }
 

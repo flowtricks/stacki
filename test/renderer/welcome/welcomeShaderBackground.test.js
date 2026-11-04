@@ -1,8 +1,8 @@
 // Goal: the reel-shader backdrop runs at its scaled reel pace, bounds its pixel and clock
-// inputs, shows a still frame under reduced motion, and falls back to the classic
-// wave whenever WebGL refuses or loses its context.
-// Method: bundle the welcome modules with esbuild, test the pure choice and timing
-// helpers at and beyond their bounds, then mount WelcomeBackdrop in jsdom against a
+// inputs, shows a still frame under reduced motion, and falls back to the
+// static CSS gradient whenever WebGL refuses or loses its context.
+// Method: bundle the welcome modules with esbuild, test the pure surface and timing
+// helpers at and beyond their bounds, then mount WelcomeShaderBackground in jsdom against a
 // fake WebGL context and a deterministic animation-frame queue.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
@@ -89,11 +89,7 @@ function graphics() {
 async function main() {
   const directory = repoPath('node_modules/.stacki-test/welcome-shader-background');
   await require('esbuild').build({
-    entryPoints: [
-      repoPath('src/features/welcome/WelcomeBackdrop.tsx'),
-      repoPath('src/features/welcome/welcomeShader.ts'),
-      repoPath('src/features/welcome/welcomeBackgroundChoice.ts'),
-    ],
+    entryPoints: [repoPath('src/features/welcome/WelcomeShaderBackground.tsx'), repoPath('src/features/welcome/welcomeShader.ts')],
     outdir: directory,
     bundle: true,
     format: 'cjs',
@@ -102,16 +98,14 @@ async function main() {
     external: ['react', 'react-dom', 'react/jsx-runtime'],
     logLevel: 'silent',
   });
-  const WelcomeBackdrop = require(path.join(directory, 'WelcomeBackdrop.js')).default;
+  const WelcomeShaderBackground = require(path.join(directory, 'WelcomeShaderBackground.js')).default;
   const shader = require(path.join(directory, 'welcomeShader.js'));
-  const choice = require(path.join(directory, 'welcomeBackgroundChoice.js'));
 
-  await test('the backdrop choice defaults to the shader and falls back to classic', () => {
-    assert.equal(choice.WELCOME_BACKGROUND, 'shader');
-    assert.equal(choice.welcomeBackgroundKind('shader', 'available'), 'shader');
-    assert.equal(choice.welcomeBackgroundKind('shader', 'unavailable'), 'classic');
-    assert.equal(choice.welcomeBackgroundKind('classic', 'available'), 'classic');
-    assert.equal(choice.welcomeBackgroundKind('classic', 'unavailable'), 'classic');
+  await test('only a drawn frame shows the canvas; otherwise the CSS gradient shows', () => {
+    assert.equal(shader.welcomeShaderSurface('drawn'), 'canvas');
+    for (const context of ['pending', 'refused', 'lost']) {
+      assert.equal(shader.welcomeShaderSurface(context), 'gradient', context);
+    }
   });
 
   await test('motion is still under reduced motion or modest hardware', () => {
@@ -196,12 +190,16 @@ async function main() {
   const container = document.getElementById('root');
   const mount = async () => {
     const root = createRoot(container);
-    await act(async () => root.render(React.createElement(WelcomeBackdrop)));
+    await act(async () => root.render(React.createElement(WelcomeShaderBackground)));
     return root;
   };
-  const shaderShown = () => container.querySelector('.welcome-bg-shader') !== null;
+  // The backdrop element always stays; its CSS gradient shows wherever the canvas is hidden.
+  const canvasShown = () => {
+    assert.ok(container.querySelector('.welcome-bg'), 'the backdrop element is always rendered');
+    return container.querySelector('canvas').style.visibility === 'visible';
+  };
 
-  await test('a refused WebGL context renders the classic background', async () => {
+  await test('a refused WebGL context leaves the static gradient', async () => {
     motionPreference(false);
     const types = [];
     window.HTMLCanvasElement.prototype.getContext = (type) => {
@@ -209,7 +207,8 @@ async function main() {
       return undefined;
     };
     const root = await mount();
-    assert.equal(shaderShown(), false);
+    assert.equal(canvasShown(), false);
+    assert.equal(types.length, 1);
     assert.equal(types[0], 'webgl');
     assert.equal(frames.size, 0);
     await act(async () => root.unmount());
@@ -220,11 +219,10 @@ async function main() {
     const { calls, context } = graphics();
     window.HTMLCanvasElement.prototype.getContext = () => context;
     const root = await mount();
-    assert.equal(shaderShown(), true);
+    assert.equal(canvasShown(), true);
     assert.equal(calls.draws, 1);
     assert.deepEqual(calls.times, [shader.SHADER_LIMITS.secondsStill]);
     assert.equal(frames.size, 0);
-    assert.equal(container.querySelector('canvas').style.visibility, 'visible');
     window.dispatchEvent(new window.Event('resize'));
     assert.equal(calls.draws, 2);
     await act(async () => root.unmount());
@@ -258,21 +256,23 @@ async function main() {
     assert.equal(calls.programsDeleted, 1);
   });
 
-  await test('a lost context swaps in the classic background', async () => {
+  await test('a lost context hides the canvas over the static gradient and stops drawing', async () => {
     motionPreference(false);
     const { calls, context } = graphics();
-    let requests = 0;
-    window.HTMLCanvasElement.prototype.getContext = () => {
-      requests += 1;
-      return requests === 1 ? context : undefined;
-    };
+    window.HTMLCanvasElement.prototype.getContext = () => context;
     const root = await mount();
-    assert.equal(shaderShown(), true);
+    assert.equal(canvasShown(), false, 'hidden until the first frame is drawn');
+    tick(performance.now() + 100);
+    assert.equal(canvasShown(), true);
     await act(async () => container.querySelector('canvas').dispatchEvent(new window.Event('webglcontextlost')));
-    assert.equal(shaderShown(), false);
-    assert.equal(calls.programsDeleted, 1);
+    assert.equal(canvasShown(), false);
     assert.equal(frames.size, 0);
+    const draws = calls.draws;
+    window.dispatchEvent(new window.Event('focus'));
+    tick(performance.now() + 200);
+    assert.equal(calls.draws, draws);
     await act(async () => root.unmount());
+    assert.equal(calls.programsDeleted, 1);
   });
   dom.window.close();
 }

@@ -4783,38 +4783,22 @@ body > .embed-editor_provenance {
   flex-direction: column;
   background: #000;
 }
-/* The static wave remains when motion or hardware cannot afford WebGL. */
+/* The reel shader's backdrop. Its gradient approximates the shader's still
+   frame (dark purple top, violet, lavender, pink-white lower right) and shows
+   until the first frame, and for good when WebGL is refused or lost, so the
+   screen is never blank. The stops are the shader ramp's colours at the
+   positions its light edge puts them along the 150deg diagonal. */
 .welcome-bg {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: linear-gradient(108deg, #c9b9c5 0%, #24104e 34%, #1b03a2 49%, #050008 70%);
+  background: linear-gradient(150deg, #0b000d 0%, #0b000d 19%, #2b0554 41%, #6100ff 54%, #b399ff 68%, #fcf0fc 84%);
 }
 .welcome-bg-canvas {
   display: block;
   width: 100%;
   height: 100%;
-}
-/* The wave sweeps through near-white, which would swallow the white logo and
-   buttons — a soft scrim keeps the hero readable wherever the wave drifts. */
-.welcome-bg::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    /* Bottom band keeps the recents rail readable now that the strip itself
-       is transparent. */
-    linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.6) 14%, rgba(0, 0, 0, 0.2) 26%, transparent 34%),
-    radial-gradient(ellipse 70% 60% at 50% 42%, rgba(0, 0, 0, 0.74) 0%, rgba(0, 0, 0, 0.55) 45%, rgba(0, 0, 0, 0.28) 100%);
-}
-/* The reel shader is drawn as designed: its own darkest stop shows before the
-   first frame, and none of the classic wave's scrim dims it. */
-.welcome-bg.welcome-bg-shader {
-  background: #0b000d;
-}
-.welcome-bg.welcome-bg-shader::after {
-  content: none;
 }
 /* Lift just the start screen's own sections above the backdrop — a blanket
    child rule would also re-position overlays (the new-project modal is
@@ -4998,46 +4982,20 @@ body > .embed-editor_provenance {
   }
 }
 
-/* Recents strip pinned to the bottom, separated by a hairline divider. Cards
-   scroll horizontally in one row, so the section is left-aligned and its
-   height never depends on how many projects there are. */
+/* Recents strip pinned to the bottom. Cards scroll horizontally in one row, so
+   the section's height never depends on how many projects there are. The
+   shader is light where it sits (its lavender to pink-white lower edge), so
+   the row needs no line to set it apart and its text is black at the
+   strengths the panel uses white at. */
 .welcome .recents {
   position: relative;
   flex-shrink: 0;
-  border-top: 1px solid var(--border);
   padding: 16px 0 20px;
 }
-/* Fade the trailing edge so a rail that runs past the window reads as
-   scrollable rather than abruptly cut. */
-.welcome .recents::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 56px;
-  pointer-events: none;
-  background: linear-gradient(to left, rgba(10, 10, 10, 0.9), transparent);
-}
-/* Over the shader the painted fade read as a dark strip with a hard top edge.
-   Fading the cards themselves keeps the scroll hint and leaves the backdrop one
-   continuous surface. */
-.welcome:has(> .welcome-bg-shader) .recents::after {
-  content: none;
-}
-.welcome:has(> .welcome-bg-shader) .recent-rail {
-  mask-image: linear-gradient(to left, transparent, #000 56px);
-}
-/* The shader is light where the recent projects sit (its lavender to
-   pink-white lower edge), so their text is black at the strengths the panel
-   uses white at, and the row needs no line to set it apart. */
-.welcome:has(> .welcome-bg-shader) .recents {
-  border-top: 0;
-}
-.welcome:has(> .welcome-bg-shader) .recent-name {
+.welcome .recent-name {
   color: rgb(0 0 0 / 85%);
 }
-.welcome:has(> .welcome-bg-shader) .recent-path {
+.welcome .recent-path {
   color: rgb(0 0 0 / 55%);
 }
 .recent-rail {
@@ -5052,6 +5010,10 @@ body > .embed-editor_provenance {
   padding: 2px 24px 6px;
   scroll-snap-type: x proximity;
   scrollbar-width: thin;
+  /* Fade the cards at the trailing edge so a rail that runs past the window
+     reads as scrollable. Fading the cards, not painting over them, leaves the
+     backdrop one continuous surface. */
+  mask-image: linear-gradient(to left, transparent, #000 56px);
 }
 .recent-rail > * {
   scroll-snap-align: start;

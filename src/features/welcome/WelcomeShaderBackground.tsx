@@ -1,8 +1,9 @@
 // Real-time WebGL backdrop for the start screen: the launch reel's flowing violet
 // noise, drawn on a full-screen triangle. The reel advanced time by frame number;
 // here requestAnimationFrame supplies elapsed wall time at the same visual speed.
-// Reduced motion or modest hardware gets one still frame; a refused or lost
-// WebGL context reports itself so WelcomeBackdrop can swap in the classic wave.
+// Reduced motion or modest hardware gets one still frame. When WebGL is refused
+// or lost the canvas stays hidden over .welcome-bg's static gradient, which
+// approximates that still frame.
 import { useEffect, useRef } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { welcomeDrawingSize, welcomeFrames, welcomeMotionAllowed } from './welcomeMotion';
@@ -13,13 +14,11 @@ import {
   welcomeShaderMotion,
   welcomeShaderPixelRatio,
   welcomeShaderSeconds,
+  welcomeShaderSurface,
+  type WelcomeShaderContext,
 } from './welcomeShader';
 
-interface WelcomeShaderBackgroundProps {
-  readonly onUnavailable: () => void;
-}
-
-export default function WelcomeShaderBackground({ onUnavailable }: WelcomeShaderBackgroundProps) {
+export default function WelcomeShaderBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -33,16 +32,16 @@ export default function WelcomeShaderBackground({ onUnavailable }: WelcomeShader
       stencil: false,
       preserveDrawingBuffer: false,
       powerPreference: 'low-power',
-      // Software rendering would spend CPU on decoration; the classic fallback is cheaper.
+      // Software rendering would spend CPU on decoration; the CSS gradient is free.
       failIfMajorPerformanceCaveat: true,
     });
     if (!gl) {
-      onUnavailable();
+      shaderShow(canvas, 'refused');
       return;
     }
     const resources = shaderResources(gl);
     if (!resources) {
-      onUnavailable();
+      shaderShow(canvas, 'refused');
       return;
     }
     // A missing matchMedia gives no answer about motion; stillness is the safe reading.
@@ -59,7 +58,7 @@ export default function WelcomeShaderBackground({ onUnavailable }: WelcomeShader
     const contextLost = (): void => {
       stop?.();
       stop = undefined;
-      onUnavailable();
+      shaderShow(canvas, 'lost');
     };
     motion?.addEventListener('change', update);
     canvas.addEventListener('webglcontextlost', contextLost);
@@ -71,14 +70,18 @@ export default function WelcomeShaderBackground({ onUnavailable }: WelcomeShader
       gl.deleteBuffer(resources.buffer);
       gl.deleteProgram(resources.program);
     };
-  }, [onUnavailable]);
-  // .welcome-bg supplies the layout; .welcome-bg-shader drops the classic
-  // gradient and scrim, so the shader shows exactly as the reel drew it.
+  }, []);
   return (
-    <div className="welcome-bg welcome-bg-shader" aria-hidden="true">
+    <div className="welcome-bg" aria-hidden="true">
       <canvas ref={canvasRef} className="welcome-bg-canvas" style={{ visibility: 'hidden' }} />
     </div>
   );
+}
+
+// The one place the canvas is shown or hidden, from the pure surface decision.
+function shaderShow(canvasElement: HTMLCanvasElement, context: WelcomeShaderContext): void {
+  const surface = welcomeShaderSurface(context);
+  canvasElement.style.visibility = surface === 'canvas' ? 'visible' : 'hidden';
 }
 
 interface ShaderResources {
@@ -171,7 +174,7 @@ function shaderDrawer(canvasElement: HTMLCanvasElement, gl: WebGLRenderingContex
     gl.uniform2f(resources.resolutionLocation, width, height);
     gl.uniform1f(resources.timeLocation, seconds);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    canvasElement.style.visibility = 'visible';
+    shaderShow(canvasElement, 'drawn');
   };
 }
 

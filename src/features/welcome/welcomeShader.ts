@@ -173,3 +173,25 @@ export function welcomeShaderPixelRatio(ratio: unknown): number {
   assert(clamped <= SHADER_LIMITS.pixelRatioMax, 'WelcomeShaderBackground: pixel ratio exceeds its cap');
   return clamped;
 }
+
+// Where the WebGL context stands. Only a drawn frame shows the canvas: before it,
+// and for good once WebGL is refused (no context, software rendering, a failed
+// compile) or lost, the backdrop's static CSS gradient shows instead, so the
+// screen is never blank.
+export type WelcomeShaderContext = 'pending' | 'drawn' | 'refused' | 'lost';
+export type WelcomeShaderSurface = 'canvas' | 'gradient';
+
+export function welcomeShaderSurface(context: WelcomeShaderContext): WelcomeShaderSurface {
+  switch (context) {
+    case 'drawn':
+      return 'canvas';
+    case 'pending':
+    case 'refused':
+    case 'lost':
+      return 'gradient';
+    default: {
+      const exhaustive: never = context;
+      return exhaustive;
+    }
+  }
+}
