@@ -2,6 +2,7 @@
 // labels, the marks on rendered nodes, the selection's paths and the
 // overlay's info (appViewModel.ts).
 
+import { requestCanvasReports } from '../../editor/canvasQuery';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { isFragmentNode, liveClassesById as classesByNodeId } from '../../editor/liveClasses';
 import { isDataBound } from '../../editor/bindings';
@@ -252,6 +253,10 @@ export function useCrumbLabels(
     setRenderedPaths(undefined);
     setNodeStates(undefined);
     setNodeClasses(undefined);
+    // The canvas sends a report only when it changes, so one dropped here was
+    // never sent again when the page's answer stayed the same: ask for all of
+    // them. They arrive after the page has re-rendered to the new tree.
+    requestCanvasReports();
   }, [structure, setNodeClasses, setNodeStates, setRenderedPaths]);
 
   // What the spacing box is pointing at, drawn over the selected element on the

@@ -12,7 +12,7 @@ import type { PreviewCrumb, PreviewDevice } from './PreviewToolbar';
 import { DevOffline } from './DevOffline';
 import { PreviewOverlays } from './PreviewOverlays';
 import { PreviewToolbar } from './PreviewToolbar';
-import { usePreviewRuntime, type JudgeCanvasEvent, type PreviewRuntimeProps } from './previewRuntime';
+import { usePreviewRuntime, type CanvasSelectInfo, type JudgeCanvasEvent, type PreviewRuntimeProps } from './previewRuntime';
 import type { PreviewVerdict } from '../../../shared/page/previewToken';
 import type { PreviewReloadReason } from './previewMessages';
 import './previewViewport.css';
@@ -47,7 +47,7 @@ interface PreviewPaneProps {
   /** The selection's ::before or ::after layer, when one is picked. */
   readonly selPseudo?: PseudoLayer | undefined;
   readonly overlayInfo?: (path: string) => OverlayInfo | undefined;
-  readonly onSelectPath?: (path: string | undefined, info: { readonly outside: boolean }) => void;
+  readonly onSelectPath?: (path: string | undefined, info: CanvasSelectInfo) => void;
   readonly onContextPath?: NonNullable<PreviewRuntimeProps['onContextPath']>;
   readonly onOpenPath?: (path: string | undefined, occurrence: number) => void;
   readonly judgeEvent: JudgeCanvasEvent;
@@ -222,7 +222,7 @@ function DesignPreview({
           {...(props.spacingHover === undefined ? {} : { spacingHover: props.spacingHover })}
           selPath={props.selPath}
           selPseudo={props.selPseudo}
-          hoverPseudo={props.navHoverPath === undefined ? undefined : props.navHoverPseudo}
+          hoverPseudo={runtime.hoverPseudo}
           focusPath={props.focusPath}
           focusWhole={props.focusWhole ?? false}
           {...(props.overlayInfo === undefined ? {} : { overlayInfo: props.overlayInfo })}

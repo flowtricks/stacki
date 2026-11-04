@@ -31,6 +31,8 @@ import { PropsPanel, StylePanel, CodeWindow, CmsView, ContentView, VariablesView
 import { holdsInlineText, commentAbove, trailOf } from '../model/pageGestures';
 import type { ShellView } from '../App';
 import { editLoopProperty, type LoopPropertyEdit } from '../state/loopPropertyEdit';
+import { assert } from '../../../shared/core/assert';
+import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 
 export function CanvasPane({ app }: { readonly app: ShellView }) {
   const hoverNodeId = useLiveValue(app.hoverNode);
@@ -151,12 +153,23 @@ function canvasContextPosition(app: ShellView, path: string | undefined, point: 
 // path or with nothing, and nothing has two causes that want opposite things: a click
 // the open file doesn't own, and a click on something inside it the canvas couldn't
 // name.
-export function selectCanvasPath(app: ShellView, path: string | undefined, info: { readonly outside: boolean } | undefined): void {
+export function selectCanvasPath(
+  app: ShellView,
+  path: string | undefined,
+  info: { readonly outside: boolean; readonly pseudo?: PseudoLayer | undefined } | undefined,
+): void {
   const reveal = (node: EditorNode | undefined) => {
     if (!node) {
       return;
     }
     app.setSelectedId(node.id);
+    // A click on a ::before or ::after picks it as its navigator row does; a
+    // click on the element itself puts down whatever pseudo-element was held.
+    if (info?.pseudo === undefined) {
+      app.setPseudoPick(undefined);
+    } else {
+      pickPseudo(app, node.id, info.pseudo);
+    }
     // Code and canvas are two views of the same selection. Keep
     // code open when it is already in use; every other panel gives
     // way to the navigator so the selected row is visible.
@@ -187,6 +200,23 @@ export function selectCanvasPath(app: ShellView, path: string | undefined, info:
     return;
   }
   reveal(model && path ? nodeAtPath(model.nodes, trailOf(path)) : undefined);
+}
+
+/**
+ * Picks the ::before or ::after of the node `id` (already selected by the
+ * caller): the Style panel is asked for that pseudo-element's selector, and
+ * the count makes a repeat of the same pick a new ask. Shared by the
+ * navigator's pseudo rows and canvas clicks, so both pick the same way.
+ * The right panel stays on its tab, as selecting any element does: the Style
+ * panel reads the pick when it is next shown (usePseudoRequest).
+ */
+export function pickPseudo(app: Pick<ShellView, 'setPseudoPick'>, id: string, pseudo: PseudoLayer): void {
+  assert(id.length > 0, 'pickPseudo: a pseudo-element belongs to a node');
+  app.setPseudoPick((held) => {
+    const serial = (held?.serial ?? 0) + 1;
+    assert(Number.isSafeInteger(serial), 'pickPseudo: the pick count stays an integer');
+    return { nodeId: id, pseudo, serial };
+  });
 }
 
 // Double-clicking a component on the canvas drills into it. With no path the click
@@ -381,6 +411,7 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
       selectorFocus={app.classFocus}
       openFilePath={app.openEditableFile?.path ?? undefined}
       openFileKind={app.openEditableFile?.kind ?? undefined}
+      contextPagePath={app.openEditableFile?.kind === 'component' ? app.currentPage?.path : undefined}
     />
   );
 }

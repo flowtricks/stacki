@@ -7,6 +7,8 @@ import { inlineTextPathAt } from './inlineText';
 import { isElement } from './frameBasics';
 import { PATH_ATTR, announceMapped, collectRegions, inFocus, inScope, pathsOf, regions, renderToken, runsOf, taggedAncestor } from './frameRegions';
 import { thinAt } from './frameMeasure';
+import { forgetPseudoBoxes, pseudoTargetAt } from './framePseudoTarget';
+import { type PseudoLayer } from '../../shared/page/pseudoPath';
 import { LOOK_EVERY, mutationKind, occurrenceOf, queueRects, remeasure, remeasureStyles, watchMotion } from './frameReports';
 
 // The app tracks a node, so the frame is the canvas: clicks select.
@@ -15,11 +17,15 @@ export function enterDesignMode(): void {
 }
 
 // The hover the app was last told about; undefined until it has been told.
-let lastHover: { readonly path: string | undefined; readonly occurrence: number } | undefined;
+let lastHover: { readonly path: string | undefined; readonly occurrence: number; readonly pseudo: PseudoLayer | undefined } | undefined;
 
 // Deepest marked node whose rendered DOM contains the target, plus which
 // instance of it was hit — the app outlines only that one.
-const nodeAt = (target: Node | undefined, x?: number, y?: number): { path: string | undefined; occurrence: number; outside: boolean } => {
+const nodeAt = (
+  target: Node | undefined,
+  x?: number,
+  y?: number,
+): { path: string | undefined; occurrence: number; outside: boolean; pseudo: PseudoLayer | undefined } => {
   const tagged = taggedFor(target, x, y);
   // Whether anything at all was under the pointer, focus aside. No path
   // means the canvas could not place the click; `outside` means it could,
@@ -29,12 +35,20 @@ const nodeAt = (target: Node | undefined, x?: number, y?: number): { path: strin
   // other.
   const anyTag = target instanceof Element ? target.closest(`[${PATH_ATTR}]`) : undefined;
   const best = deepestRegionAt(target, x, y, tagged && pathsOf(tagged).find(inScope));
+  // A ::before or ::after is hit as its host, so the browser cannot say the
+  // pointer is on one; its measured box can. Inside it, it is the target.
+  if (best && x !== undefined && y !== undefined) {
+    const pseudo = pseudoTargetAt(best, target, x, y);
+    if (pseudo) {
+      return { path: pseudo.path, occurrence: occurrenceOf(pseudo.path, target), outside: false, pseudo: pseudo.pseudo };
+    }
+  }
   // Nothing containing the cursor can be flat, so this runs last, over the
   // node that did win: a zero-height child of it takes precedence.
   if (x !== undefined && y !== undefined) {
     const thin = thinAt(x, y, best);
     if (thin) {
-      return { path: thin.path, occurrence: occurrenceOf(thin.path, thin.el), outside: false };
+      return { path: thin.path, occurrence: occurrenceOf(thin.path, thin.el), outside: false, pseudo: undefined };
     }
   }
   // Words beside a tagged sibling — the text around a <strong> — have no
@@ -42,7 +56,7 @@ const nodeAt = (target: Node | undefined, x?: number, y?: number): { path: strin
   if (best && x !== undefined && y !== undefined) {
     const text = inlineTextPathAt(best, x, y);
     if (text) {
-      return { path: text, occurrence: occurrenceOf(best, target), outside: false };
+      return { path: text, occurrence: occurrenceOf(best, target), outside: false, pseudo: undefined };
     }
   }
   // Resolved separately from the search above: when the winning path came
@@ -51,6 +65,7 @@ const nodeAt = (target: Node | undefined, x?: number, y?: number): { path: strin
     path: best,
     occurrence: best ? occurrenceOf(best, target) : 0,
     outside: !best && !!anyTag,
+    pseudo: undefined,
   };
 };
 
@@ -226,10 +241,10 @@ const lookForMotion = () => {
 // Hover, double-click and click, each resolved to the node under the pointer.
 const listenForPointer = () => {
   document.addEventListener('mousemove', (event) => {
-    const { path: nodePath, occurrence } = nodeAtEvent(event);
-    if (lastHover === undefined || nodePath !== lastHover.path || occurrence !== lastHover.occurrence) {
-      lastHover = { path: nodePath, occurrence };
-      postLocated('avb:hover-node', { path: nodePath, occurrence });
+    const { path: nodePath, occurrence, pseudo } = nodeAtEvent(event);
+    if (lastHover === undefined || nodePath !== lastHover.path || occurrence !== lastHover.occurrence || pseudo !== lastHover.pseudo) {
+      lastHover = { path: nodePath, occurrence, pseudo };
+      postLocated('avb:hover-node', { path: nodePath, occurrence, ...pseudoField(pseudo) });
     }
   });
   document.documentElement.addEventListener('mouseleave', startOutlinesClearHover);
@@ -272,11 +287,14 @@ const listenForPointer = () => {
       // A click that hits no marked node still reports (no path), with
       // `outside` saying whether it landed on something the open file simply
       // doesn't own — which is what the app backs out of a component on.
-      const { path: nodePath, occurrence, outside } = nodeAtEvent(event);
+      // The pseudo boxes kept for hover may be stale; a click measures afresh.
+      forgetPseudoBoxes();
+      const { path: nodePath, occurrence, outside, pseudo } = nodeAtEvent(event);
       postLocated('avb:click-node', {
         path: nodePath || undefined,
         occurrence,
         outside: !!outside,
+        ...pseudoField(pseudo),
       });
     },
     true,
@@ -307,12 +325,20 @@ function listenForContextMenu(): void {
 }
 
 function startOutlinesClearHover(): void {
+  // Coming back in, the page may have changed under the kept pseudo boxes.
+  forgetPseudoBoxes();
   // Told nothing yet, or told of a node: either way, the pointer has left.
   if (lastHover === undefined || lastHover.path !== undefined) {
-    lastHover = { path: undefined, occurrence: 0 };
+    lastHover = { path: undefined, occurrence: 0, pseudo: undefined };
     // Clear messages use the same located-message contract as hover hits.
     postLocated('avb:hover-node', { path: undefined, occurrence: 0 });
   }
+}
+
+// The pseudo-element a hover or click landed on, said only when there is one:
+// a message about the element itself keeps the shape it always had.
+function pseudoField(pseudo: PseudoLayer | undefined): { readonly pseudo?: PseudoLayer } {
+  return pseudo === undefined ? {} : { pseudo };
 }
 
 // Every located event names the rendering it landed on (step 7): the app

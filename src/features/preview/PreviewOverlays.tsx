@@ -9,6 +9,7 @@ import { spacingBands, withLiveSpacing } from './spacingBands';
 import {
   BranchIcon,
   CodeIcon,
+  PseudoElementIcon,
   CommentIcon,
   ComponentEditIcon,
   CornerIcon,
@@ -216,7 +217,7 @@ function PseudoOutline({ outline, rects, scale }: { readonly outline: OutlineTar
   return boxes.map((box, index) => (
     <div key={`${outline.type}-pseudo-${index}`} className={`node-outline ${outline.type} element`} style={boxStyle(box, scale)}>
       <span className={`node-outline-tag ${box.y * scale < 20 ? 'inside' : ''}`}>
-        <CodeIcon size={11} />
+        <PseudoElementIcon size={11} />
         ::{outline.pseudo}
       </span>
     </div>

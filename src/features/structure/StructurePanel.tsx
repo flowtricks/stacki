@@ -8,6 +8,7 @@ import { ElementContextMenu } from './ElementContextMenu';
 import type { WrapperTag } from '../../editor/wrapRules';
 import { CollapseVerticalIcon, CodeIcon, DragIcon, ExpandVerticalIcon } from '../../ui/Icons';
 import { hidesChildRows } from '../../editor/treeSelection';
+import { navigatorArrowTarget } from './navigatorArrows';
 import {
   collapseMap,
   defaultCollapsed,
@@ -185,7 +186,7 @@ function useTreeState(props: EditableProps): TreeState {
   });
   useArrowNavigation(props, toggled, setToggled);
   useSelectionExpansion(props, setToggled);
-  useRevealRow(bodyRef, props.revealTick ?? 0, props.selectedId);
+  useRevealRow(bodyRef, props.revealTick ?? 0, props.selectedId, props.selectedPseudo);
   return {
     dropTarget,
     setDropTarget,
@@ -232,14 +233,43 @@ function useArrowNavigation(
         return;
       }
       event.preventDefault();
-      const next = arrowTarget(key, found, toggled, setToggled);
-      if (next) {
-        props.onSelect(next.id);
+      // ::before and ::after are rows too (navigatorArrows.ts): ↓ enters them, ← → step past them.
+      const next = navigatorArrowTarget(key, found, props.selectedPseudo, {
+        childrenOf: shownChildren,
+        pseudosOf: (id) => pseudoKindsFor(id, props.pseudoNodeIds),
+      });
+      if (next === undefined) {
+        return;
+      }
+      if (key === 'ArrowDown' && collapsedState(found.node, toggled)) {
+        setToggled((previous) => new Map(previous).set(found.node.id, false));
+      }
+      if (next.kind === 'node') {
+        props.onSelect(next.node.id);
+      } else {
+        props.onSelectPseudo?.(next.nodeId, next.pseudo);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [props, setToggled, toggled]);
+}
+
+// The children a node lists as rows: none where the tree folds them into it.
+function shownChildren(node: NavigatorNode): readonly NavigatorNode[] {
+  const children = navigatorChildren(node);
+  return hidesChildRows(node, children) ? [] : children;
+}
+
+function pseudoKindsFor(id: string, pseudoNodeIds: PseudoNodeIds | undefined): readonly PseudoKind[] {
+  const kinds: PseudoKind[] = [];
+  if (pseudoNodeIds?.before.has(id) === true) {
+    kinds.push('before');
+  }
+  if (pseudoNodeIds?.after.has(id) === true) {
+    kinds.push('after');
+  }
+  return kinds;
 }
 
 type ArrowKey = 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown';
@@ -263,42 +293,21 @@ function parseArrowKey(event: KeyboardEvent): ArrowKey | undefined {
   }
 }
 
-function arrowTarget(
-  key: ArrowKey,
-  found: ReturnType<typeof findVisibleNode> & {},
-  toggled: ReadonlyMap<string, boolean>,
-  setToggled: React.Dispatch<React.SetStateAction<ReadonlyMap<string, boolean>>>,
-): NavigatorNode | undefined {
-  if (key === 'ArrowLeft') {
-    return found.siblings[found.index - 1];
-  }
-  if (key === 'ArrowRight') {
-    return found.siblings[found.index + 1];
-  }
-  if (key === 'ArrowUp') {
-    return found.parent; // Undefined at the root.
-  }
-  const children = navigatorChildren(found.node);
-  if (children.length === 0 || hidesChildRows(found.node, children)) {
-    return undefined;
-  }
-  if (collapsedState(found.node, toggled)) {
-    setToggled((previous) => new Map(previous).set(found.node.id, false));
-  }
-  return children[0];
-}
-
 function useSelectionExpansion(props: EditableProps, setToggled: React.Dispatch<React.SetStateAction<ReadonlyMap<string, boolean>>>): void {
   useEffect(() => {
     if (!props.selectedId || props.selectedId === 'frontmatter') {
       return;
     }
     const ancestors = navigatorAncestors(props.pageState.model.nodes, props.selectedId);
-    if (ancestors.length === 0) {
+    // A picked ::before or ::after is a row inside its element, so the element
+    // opens too (a canvas click on one left it shut, the row out of sight).
+    const own = props.selectedPseudo === undefined ? undefined : findVisibleNode(props.pageState.model.nodes, props.selectedId)?.node;
+    const opened = own === undefined ? ancestors : [...ancestors, own];
+    if (opened.length === 0) {
       return;
     }
-    setToggled((previous) => expandAncestors(previous, ancestors));
-  }, [props.pageState.model.nodes, props.selectedId, setToggled]);
+    setToggled((previous) => expandAncestors(previous, opened));
+  }, [props.pageState.model.nodes, props.selectedId, props.selectedPseudo, setToggled]);
 }
 
 function expandAncestors(previous: ReadonlyMap<string, boolean>, ancestors: readonly NavigatorNode[]): ReadonlyMap<string, boolean> {
@@ -313,7 +322,12 @@ function expandAncestors(previous: ReadonlyMap<string, boolean>, ancestors: read
   return changed ? next : previous;
 }
 
-function useRevealRow(bodyRef: React.RefObject<HTMLDivElement>, revealTick: number, selectedId: string | undefined): void {
+function useRevealRow(
+  bodyRef: React.RefObject<HTMLDivElement>,
+  revealTick: number,
+  selectedId: string | undefined,
+  selectedPseudo: PseudoKind | undefined,
+): void {
   const lastReveal = useRef(revealTick);
   useEffect(() => {
     if (revealTick === lastReveal.current) {
@@ -323,13 +337,17 @@ function useRevealRow(bodyRef: React.RefObject<HTMLDivElement>, revealTick: numb
     if (!selectedId) {
       return;
     }
-    const frame = requestAnimationFrame(() => revealRow(bodyRef.current ?? undefined, selectedId));
+    const frame = requestAnimationFrame(() => revealRow(bodyRef.current ?? undefined, selectedId, selectedPseudo));
     return () => cancelAnimationFrame(frame);
-  }, [bodyRef, revealTick, selectedId]);
+  }, [bodyRef, revealTick, selectedId, selectedPseudo]);
 }
 
-function revealRow(bodyElement: HTMLDivElement | undefined, selectedId: string): void {
-  const row = bodyElement?.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(selectedId)}"]`);
+function revealRow(bodyElement: HTMLDivElement | undefined, selectedId: string, selectedPseudo: PseudoKind | undefined): void {
+  const id = CSS.escape(selectedId);
+  // The picked ::before / ::after row when there is one, else the element's own.
+  const selector = selectedPseudo === undefined ? `[data-node-id="${id}"]` : `[data-pseudo-of="${id}"][data-pseudo="${selectedPseudo}"]`;
+  // Its element's row when the pseudo row is not drawn yet (the element opens a frame later).
+  const row = bodyElement?.querySelector<HTMLElement>(selector) ?? bodyElement?.querySelector<HTMLElement>(`[data-node-id="${id}"]`);
   if (!bodyElement || !row) {
     return;
   }

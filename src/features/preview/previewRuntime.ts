@@ -32,7 +32,7 @@ export interface PreviewRuntimeProps {
   readonly pathScope?: string;
   readonly refreshKey?: string | number;
   readonly device: PreviewDevice;
-  readonly onSelectPath?: (path: string | undefined, info: { readonly outside: boolean }) => void;
+  readonly onSelectPath?: (path: string | undefined, info: CanvasSelectInfo) => void;
   readonly onContextPath?: (
     path: string | undefined,
     point: ContextPoint & {
@@ -58,6 +58,13 @@ export interface PreviewRuntimeProps {
   readonly onPreviewReload?: (reason: PreviewReloadReason) => void;
 }
 
+/** What a canvas click said besides its path: whether it landed outside the
+ * open file, and the ::before or ::after it landed on, if any. */
+export interface CanvasSelectInfo {
+  readonly outside: boolean;
+  readonly pseudo: PseudoLayer | undefined;
+}
+
 export interface PreviewRuntime {
   readonly iframeRef: React.RefObject<HTMLIFrameElement>;
   readonly rects: RectMap;
@@ -65,6 +72,8 @@ export interface PreviewRuntime {
   readonly selOcc: number | undefined;
   readonly hoverPath: string | undefined;
   readonly hoverOcc: number | undefined;
+  /** The hovered path's ::before or ::after, when that is what is hovered. */
+  readonly hoverPseudo: PseudoLayer | undefined;
   /** What the column guide is drawn from; undefined until the frame reports. */
   readonly guide: GuideMetrics | undefined;
   /** Text of the selected instance the pointer is on, or that was clicked. */
@@ -82,17 +91,21 @@ export function usePreviewRuntime(props: PreviewRuntimeProps, url: string | unde
   const [rects, setRects] = useState<RectMap>({});
   const [spacing, setSpacing] = useState<SpacingMap>({});
   const [canvasHover, setCanvasHover] = useState<string | undefined>(undefined);
+  // The ::before or ::after of `canvasHover` the pointer is on, if any.
+  const [canvasHoverPseudo, setCanvasHoverPseudo] = useState<PseudoLayer | undefined>(undefined);
   const [selectedOccurrence, setSelectedOccurrence] = useState<number | undefined>(undefined);
   const [hoverOcc, setHoverOcc] = useState(0);
   const [guide, setGuide] = useState<GuideMetrics | undefined>(undefined);
   const [textMarks, setTextMarks] = useState<TextMarks>(NO_TEXT_MARKS);
-  const { hoverPath, trackPaths } = useTrackedPaths(props, canvasHover);
+  const hoverPseudo = hoveredPseudo(props, canvasHover, canvasHoverPseudo);
+  const { hoverPath, trackPaths } = useTrackedPaths(props, canvasHover, hoverPseudo);
   const refs = useRuntimeRefs(props, selectedOccurrence);
   const setters = useMemo(
     () => ({
       setRects,
       setSpacing,
       setCanvasHover,
+      setCanvasHoverPseudo,
       setSelectedOccurrence,
       setHoverOcc,
       setGuide,
@@ -130,6 +143,7 @@ export function usePreviewRuntime(props: PreviewRuntimeProps, url: string | unde
     selOcc: selectedOccurrence,
     hoverPath,
     hoverOcc: props.navHoverPath ? 0 : hoverOcc,
+    hoverPseudo,
     guide,
     textMarks,
     registerFrame,
@@ -214,14 +228,22 @@ function useOccurrenceSelection(
   }, [props.navigatorSelectionTick, props.selPath, refs, setSelectedOccurrence]);
 }
 
+// The hovered ::before or ::after, from the same source as the hovered path:
+// the navigator's row while one is hovered, else the canvas's pointer.
+function hoveredPseudo(props: PreviewRuntimeProps, canvasHover: string | undefined, canvasHoverPseudo: PseudoLayer | undefined): PseudoLayer | undefined {
+  if (props.navHoverPath !== undefined) {
+    return props.navHoverPseudo;
+  }
+  return canvasHover === undefined ? undefined : canvasHoverPseudo;
+}
+
 // The paths the frame measures. It measures only these, so both hover sources
 // must use the same active path for measurement requests and outline rendering.
-function useTrackedPaths(props: PreviewRuntimeProps, canvasHover: string | undefined) {
+function useTrackedPaths(props: PreviewRuntimeProps, canvasHover: string | undefined, hoverPseudo: PseudoLayer | undefined) {
   const { hoverPath, selectedBoxPath, hoverBoxPath, loopBoxPaths } = outlinePaths(props, canvasHover);
   // A picked or hovered ::before / ::after is measured on its own (framePseudo.ts).
   const selectedPseudoPath = props.selPath !== undefined && props.selPseudo !== undefined ? pseudoPath(props.selPath, props.selPseudo) : undefined;
-  const hoverPseudoPath =
-    props.navHoverPath !== undefined && props.navHoverPseudo !== undefined ? pseudoPath(props.navHoverPath, props.navHoverPseudo) : undefined;
+  const hoverPseudoPath = hoverPath !== undefined && hoverPseudo !== undefined ? pseudoPath(hoverPath, hoverPseudo) : undefined;
   const trackPaths = useMemo(
     // The loop's child paths come joined as one string, so the list is rebuilt
     // only when they change rather than on every render.
@@ -254,6 +276,7 @@ interface RuntimeSetters {
   readonly setRects: React.Dispatch<React.SetStateAction<RectMap>>;
   readonly setSpacing: React.Dispatch<React.SetStateAction<SpacingMap>>;
   readonly setCanvasHover: React.Dispatch<React.SetStateAction<string | undefined>>;
+  readonly setCanvasHoverPseudo: React.Dispatch<React.SetStateAction<PseudoLayer | undefined>>;
   readonly setSelectedOccurrence: React.Dispatch<React.SetStateAction<number | undefined>>;
   readonly setHoverOcc: React.Dispatch<React.SetStateAction<number>>;
   readonly setGuide: React.Dispatch<React.SetStateAction<GuideMetrics | undefined>>;
@@ -330,9 +353,11 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       // A picture, not a selection: only the rendering has to be the latest.
       if (judgeEventToken(message.token, refs.render.current).tag === 'current') {
         setters.setCanvasHover(message.path);
+        setters.setCanvasHoverPseudo(message.pseudo);
         setters.setHoverOcc(message.occurrence);
       } else {
         setters.setCanvasHover(undefined);
+        setters.setCanvasHoverPseudo(undefined);
       }
       break;
     case 'context-node':
@@ -340,7 +365,9 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       break;
     case 'click-node':
       gateEvent(message.token, refs, { kind: 'click', path: message.path, outside: message.outside }, (path) =>
-        applyClick({ ...message, path: path ?? message.path }, refs, setters),
+        // A pseudo-element belongs to the node the click named; when the gate
+        // re-resolved the path to another node, it no longer applies.
+        applyClick({ ...message, path: path ?? message.path, pseudo: path === undefined || path === message.path ? message.pseudo : undefined }, refs, setters),
       );
       break;
     case 'render':
@@ -435,7 +462,7 @@ function applyClick(message: Extract<PreviewMessage, { readonly kind: 'click-nod
   clickPendingRef.current = true;
   lastClickRef.current = { path };
   setters.setSelectedOccurrence(message.occurrence);
-  refs.props.current.onSelectPath?.(path, { outside: message.outside });
+  refs.props.current.onSelectPath?.(path, { outside: message.outside, pseudo: message.pseudo });
 }
 
 function useFrameRegistration(props: PreviewRuntimeProps, url: string | undefined, registerFrame: () => void, sendTrack: () => void): void {
@@ -495,6 +522,7 @@ function useResetOnReload(props: PreviewRuntimeProps, url: string | undefined, r
     const { selectedClasses: selectedClassesRef, clickPending: clickPendingRef, lastClick: lastClickRef } = refs;
     setters.setRects({});
     setters.setCanvasHover(undefined);
+    setters.setCanvasHoverPseudo(undefined);
     setters.setSpacing({});
     setters.setGuide(undefined);
     setters.setTextMarks(NO_TEXT_MARKS);

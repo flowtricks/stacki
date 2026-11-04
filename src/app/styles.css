@@ -197,9 +197,11 @@ textarea {
   /* The back button gives up its name when the bar runs short (below). */
   container: titlebar / inline-size;
 }
-/* Clear of the traffic lights at any zoom: they are system-drawn and never scale. */
+/* Clear of the traffic lights at any zoom: they are system-drawn and never scale.
+   92px, not 80: the back button's hover fill reaches 6px left of its icon
+   (.project-back's margin), and at 80 the button sat against the green light. */
 html[data-platform='darwin'] .titlebar {
-  padding-left: calc(80px / var(--window-zoom, 1));
+  padding-left: calc(92px / var(--window-zoom, 1));
 }
 html[data-platform='win32'] .titlebar {
   padding-right: 148px;
@@ -1887,7 +1889,8 @@ html[data-platform='win32'] .titlebar {
   border-radius: 0;
   background: transparent;
 }
-.af-thumb img {
+.af-thumb img,
+.af-thumb video {
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -4518,6 +4521,16 @@ body > .embed-editor_provenance {
   padding: 1px 4px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.08);
+}
+/* The Create component hint sits under an input and explains the result, so it reads in the
+   secondary text colour (the faint one is too low-contrast) with a step of air above it. The
+   chips keep their fill and take the same colour; no border, per the fills-not-borders rule. */
+.hint-text.component-name-hint {
+  margin-top: var(--space-2, 4px); /* The token lives in the style panel's sheet: hold the gap without it. */
+  color: var(--text-dim);
+}
+.hint-text.component-name-hint code {
+  color: var(--text-dim);
 }
 
 /* Files that would ride along on a branch switch. */

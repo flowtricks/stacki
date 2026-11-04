@@ -49,7 +49,8 @@ function placesOf(nodePath: string): Element[] {
   return elements.length > 0 ? elements : elementsWithPath(nodePath);
 }
 
-function measurePseudo(host: Element, pseudo: PseudoLayer): Box | undefined {
+/** The box `host`'s `pseudo` draws, in viewport pixels, or undefined where it draws none. */
+export function measurePseudo(host: Element, pseudo: PseudoLayer): Box | undefined {
   const style = window.getComputedStyle(host, `::${pseudo}`);
   if (!drawn(style)) {
     return undefined;

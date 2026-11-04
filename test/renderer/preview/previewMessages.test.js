@@ -51,6 +51,24 @@ test('preview message parser preserves every supported message variant', () => {
   assert.deepEqual(parsePreviewMessage(messages[0]).spacing['0'], [spacing]);
 });
 
+test('a hover or click on a ::before or ::after names the pseudo-element with its node', () => {
+  for (const type of ['avb:hover-node', 'avb:click-node']) {
+    const located = { type, path: '0.2', occurrence: 1, outside: false };
+    // Without the field the message is about the element itself, as it always was.
+    assert.equal(parsePreviewMessage(located).pseudo, undefined);
+    assert.equal(parsePreviewMessage({ ...located, pseudo: undefined }).pseudo, undefined);
+    assert.equal(parsePreviewMessage({ ...located, pseudo: 'before' }).pseudo, 'before');
+    assert.equal(parsePreviewMessage({ ...located, pseudo: 'after' }).pseudo, 'after');
+    assert.equal(parsePreviewMessage({ ...located, pseudo: 'after' }).path, '0.2');
+    // Anything else is malformed: other pseudo-elements, the CSS spelling, the
+    // wrong type, null, and a pseudo-element with no node to belong to.
+    for (const pseudo of ['marker', '::before', 'Before', '', 1, true, {}, PLATFORM_NULL]) {
+      assert.equal(parsePreviewMessage({ ...located, pseudo }), undefined, `${type} pseudo ${String(pseudo)}`);
+    }
+    assert.equal(parsePreviewMessage({ ...located, path: undefined, pseudo: 'before' }), undefined);
+  }
+});
+
 test('located events carry the rendering token they landed on (step 7)', () => {
   const click = { type: 'avb:click-node', path: '0', occurrence: 0, outside: false };
   assert.equal(parsePreviewMessage({ ...click, token: TOKEN }).token, TOKEN);

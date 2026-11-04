@@ -3,6 +3,7 @@
 // token that says which rendering the frame shows. Lowest of the frame's
 // modules; the measuring, reporting and hit-testing above it read this state.
 
+import { assert } from '../../shared/core/assert';
 import type { Box, Rect, TaggedPlace } from './frameBasics';
 import { PRELOAD_LIMITS, isChildNode, isComment, isElement, isText } from './frameBasics';
 
@@ -44,7 +45,17 @@ export let focusPath = '';
 export let focusOcc = 0;
 // A run whose every node has left the document isn't an instance any more:
 // a patched page collects fresh runs and leaves the old ones in the map.
-const isLive = (run: Node[]) => run.some((node) => node.isConnected);
+// Content decides it when the run has any: a patch that removes a card can
+// leave the blank text beside it in place, and that whitespace alone kept
+// the removed card's run answering for its path. A run of nothing but
+// whitespace (a comment's region) is live while that whitespace is.
+const isLive = (run: Node[]) => {
+  const content = run.filter((node) => isElement(node) || (isText(node) && node.textContent.trim() !== ''));
+  if (content.length > 0) {
+    return content.some((node) => node.isConnected);
+  }
+  return run.some((node) => node.isConnected);
+};
 // Undefined until asked, then the answer: no roots (nothing to narrow) or
 // the run of nodes the focused instance rendered. Recomputed whenever the
 // DOM moves — a patched page rebuilds the regions these come from.
@@ -492,6 +503,9 @@ export const collectRegions = () => {
   // What each path was found to hold this pass, so a tag left on an element
   // the region no longer contains can be taken off again (untagStale).
   const collected = new Map<string, Set<Node>>();
+  // This pass's runs, gathered apart from what earlier passes recorded and
+  // then put in their place whole (see replaceRuns).
+  const fresh = new Map<string, Node[][]>();
   for (const start of starts) {
     const nodePath = markerPath(start, 's');
     if (nodePath === undefined) {
@@ -506,8 +520,9 @@ export const collectRegions = () => {
     for (const node of run) {
       set.add(node);
     }
-    recordRun(nodePath, run);
+    recordRun(fresh, nodePath, run);
   }
+  replaceRuns(fresh, collected);
   untagStale(collected);
   for (const node of markers) {
     if (isChildNode(node)) {
@@ -596,21 +611,73 @@ const runAfter = (start: Node, nodePath: string): Node[] => {
   return run;
 };
 
-// The same place, collected again: it replaces itself. Appending would
-// make one node look like many — the same box drawn over and over (and
-// the overlays are translucent, so a node hovered after fourteen edits
-// was painted fourteen times, an opaque wash over the page), and every
-// count of "which copy" off by however many edits had been made.
-const recordRun = (nodePath: string, run: Node[]) => {
-  if (!regions.has(nodePath)) {
-    regions.set(nodePath, []);
+// The same place, collected again in one pass: it replaces itself.
+// Appending would make one node look like many — the same box drawn over
+// and over (and the overlays are translucent, so a node hovered after
+// fourteen edits was painted fourteen times, an opaque wash over the
+// page), and every count of "which copy" off by however many edits had
+// been made.
+const recordRun = (fresh: Map<string, Node[][]>, nodePath: string, run: Node[]) => {
+  const runs = fresh.get(nodePath) ?? [];
+  if (!fresh.has(nodePath)) {
+    fresh.set(nodePath, runs);
   }
-  const runs = regions.get(nodePath) ?? [];
   const again = runs.findIndex((other) => other.some((node) => run.includes(node)));
   if (again >= 0) {
     runs[again] = run;
   } else {
     runs.push(run);
+  }
+  if (run.length > 0) {
+    assert(runs.includes(run), 'recordRun: a collected run is recorded for its path');
+  }
+};
+
+// A path this pass found markers for is exactly the runs it found: what an
+// earlier pass recorded for it is dropped, not merged in. Merging assumed a
+// patch either morphs a node in place as the same place or takes it away,
+// but a patch reuses nodes by position. Moving two cards into a loop, or
+// taking them out again, turned cards into copies of other loop children;
+// the old runs stayed live and kept their paths, and the loop's second
+// child answered with the "43%" card, a copy of the FIRST child.
+//
+// A path with no markers this pass keeps its live runs (pruneRegions): a
+// page script may have moved its nodes where the anchor sync could not put
+// markers back, and an old run is still the best answer for those. Not a
+// run whose nodes this pass placed somewhere else, though: those nodes now
+// stand for another place, and the path they were is gone from the page.
+// Its narrowed node set goes into `collected`, so the tags it put on them
+// come off too (untagStale).
+const replaceRuns = (fresh: ReadonlyMap<string, Node[][]>, collected: Map<string, Set<Node>>) => {
+  const claimed = new Set<Node>();
+  for (const nodes of collected.values()) {
+    for (const node of nodes) {
+      claimed.add(node);
+    }
+  }
+  for (const [nodePath, runs] of regions) {
+    if (fresh.has(nodePath)) {
+      continue;
+    }
+    const kept = runs.filter((run) => !run.some((node) => claimed.has(node)));
+    if (kept.length === runs.length) {
+      continue;
+    }
+    if (kept.length > 0) {
+      regions.set(nodePath, kept);
+    } else {
+      regions.delete(nodePath);
+    }
+    collected.set(nodePath, new Set(kept.flat()));
+  }
+  for (const [nodePath, runs] of fresh) {
+    regions.set(nodePath, runs);
+  }
+  for (const [nodePath, runs] of fresh) {
+    assert(regions.get(nodePath) === runs, 'replaceRuns: a path collected this pass holds only this pass runs');
+  }
+  for (const runs of regions.values()) {
+    assert(runs.length > 0, 'replaceRuns: a recorded path has at least one run');
   }
 };
 

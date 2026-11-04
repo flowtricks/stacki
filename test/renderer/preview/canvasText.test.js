@@ -194,6 +194,31 @@ test('split animation wrappers can map to a single unchanged source text segment
     assert.equal(result.nodes.map((node) => node.data).join(''), 'Hello');
   });
 });
+test('text either side of a tagged <br> is edited as its own run', () => {
+  // The preview tags the break with its path (astroSerialize inlineString); an
+  // untagged one read as an unknown element and the heading was refused.
+  const source = '<h1 class="hero_title">Messaging with<br class="hero_break" />actual wings.</h1>';
+  matching('<h1 data-avb-p="0">Messaging with<br class="hero_break" data-avb-p="0.1">actual wings.</h1>', source, (match, targets) => {
+    const heading = document.querySelector('h1');
+    const first = targets.find((entry) => entry.target.value === 'Messaging with');
+    const second = targets.find((entry) => entry.target.value === 'actual wings.');
+    assert.equal(
+      match(first.target, heading)
+        ?.nodes.map((node) => node.data)
+        .join(''),
+      'Messaging with',
+    );
+    assert.equal(
+      match(second.target, heading)
+        ?.nodes.map((node) => node.data)
+        .join(''),
+      'actual wings.',
+    );
+  });
+  matching('<h1 data-avb-p="0">Messaging with<br>actual wings.</h1>', source, (match, targets) => {
+    assert.equal(match(targets[0].target, document.querySelector('h1')), undefined, 'an untagged break is still refused');
+  });
+});
 test('runtime text changes, duplicates and lost authored spans refuse fallback editing', () => {
   for (const html of ['<h1 data-avb-p="0"><span>Different</span></h1>', '<h1 data-avb-p="0">Hello<button>separator</button>Hello</h1>']) {
     matching(html, '<h1>Hello</h1>', (match, targets) => {

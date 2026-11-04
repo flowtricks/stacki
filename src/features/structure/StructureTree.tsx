@@ -7,10 +7,10 @@ import { isDataBound } from '../../editor/bindings';
 import { allowDragEffect, clearDrag, getDrag, setDrag } from '../../editor/dragState';
 import { elementLabel } from '../../editor/classNames';
 import { hidesChildRows, noteText } from '../../editor/treeSelection';
-import { thenBranch } from '../../editor/branches';
 import {
   BranchIcon,
   CodeIcon,
+  PseudoElementIcon,
   CornerIcon,
   CustomElementIcon,
   ElementComponentIcon,
@@ -25,6 +25,7 @@ import {
   elementIcon,
 } from '../../ui/Icons';
 import { defaultCollapsed, navigatorChildren, navigatorHost } from './structureModel';
+import { navigatorHostsDrop } from './navigatorDrop';
 import { isFragmentNode } from '../../editor/liveClasses';
 
 export interface StructureTreeContext {
@@ -115,7 +116,9 @@ interface GapProps extends StructureTreeContext {
 function Gap(props: GapProps) {
   const { parentId, index, depth, dropTarget, setDropTarget, isDndPayload, performDrop } = props;
   const active = dropTarget?.kind === 'gap' && dropTarget.parentId === parentId && dropTarget.index === index;
-  const accepted = acceptsDrag(parentId === undefined ? undefined : props.nodeById(parentId));
+  const parent = parentId === undefined ? undefined : props.nodeById(parentId);
+  // A gap is a drop inside its parent, so the parent's own rule decides it too.
+  const accepted = (parent === undefined || navigatorHostsDrop(parent)) && acceptsDrag(parent);
   const location = { parentId, index };
   if (props.editRootId && (!parentId || !props.canEdit(parentId))) {
     return undefined;
@@ -228,6 +231,7 @@ function PseudoRow(props: {
     <div
       className={`structure-node is-pseudo${props.selected ? ' selected' : ''}`}
       data-pseudo-of={props.nodeId}
+      data-pseudo={props.pseudo}
       style={{ paddingLeft: 6 + props.depth * 16 }}
       onMouseEnter={() => props.onHover(props.nodeId, props.pseudo)}
       onMouseLeave={props.onLeave}
@@ -238,7 +242,7 @@ function PseudoRow(props: {
     >
       <span className="drag-handle" />
       <span className="icon">
-        <CodeIcon size={12} />
+        <PseudoElementIcon size={12} />
       </span>
       <span className="label">::{props.pseudo}</span>
     </div>
@@ -307,7 +311,7 @@ function nodeView(props: TreeNodeProps, shape: Pick<NodeView, 'children' | 'host
     children,
     host,
     showChildren,
-    canHostChildren: canHostChildren(node),
+    canHostChildren: navigatorHostsDrop(node),
     collapsed: props.isCollapsed(node),
     component,
     fragment,
@@ -478,17 +482,6 @@ function NodeStatus({ rendersNothing, hidden, inert }: { readonly rendersNothing
         </span>
       )}
     </span>
-  );
-}
-
-function canHostChildren(node: NavigatorNode): boolean {
-  return (
-    node.kind === 'component' ||
-    node.kind === 'element' ||
-    node.kind === 'chunk-group' ||
-    node.kind === 'map' ||
-    node.kind === 'branch' ||
-    thenBranch(node) !== undefined
   );
 }
 

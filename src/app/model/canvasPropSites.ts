@@ -3,11 +3,17 @@
 // (inline content the canvas format bar can mark up), or handed on as
 // `<Title text={heading} />` and shown by the nested component. Each component
 // is read once per catalog; nesting is followed a few levels.
+//
+// The template prints the name the frontmatter reads a prop by, which is not
+// always the prop's own: `const { text: propText = "…" } = Astro.props` prints
+// `{propText}` for the prop `text`. Every printed name is turned back into its
+// prop through that destructure before it is matched against the schema.
 
 import type { Attr, ImportDecl } from '../../../shared/page/pageNode';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { assert } from '../../../shared/core/assert';
 import { componentReference } from './componentReference';
+import { readPropsDestructure } from '../../editor/loopProps';
 
 /** One place a component shows one of its props, in its own file's canvas paths. */
 export type PropTextSite =
@@ -53,7 +59,12 @@ export interface PropNode {
 export interface ComponentSource {
   readonly nodes: readonly PropNode[];
   readonly imports: readonly ImportDecl[];
+  /** The frontmatter's code after its imports, where `Astro.props` is destructured. */
+  readonly extraFrontmatter: string;
 }
+
+/** The prop a template name reads, or undefined when it reads none. */
+type PropOf = (local: string) => string | undefined;
 
 export type InstanceNode = PropNode & {
   readonly kind: 'component';
@@ -96,18 +107,19 @@ async function readSites(
   if (!source || props.size === 0) {
     return [];
   }
+  const propOf = propReader(source.extraFrontmatter, props);
   const rel = context.relative(component.path);
   const walked = templateNodes(source.nodes);
   const paths = new Map(walked.map(({ node, path }) => [node, `${rel}|${path}`]));
   const pathOf = (node: PropNode) => paths.get(node);
   const sites: PropTextSite[] = [];
   for (const { node, parent } of walked) {
-    const shown = printedSite(node, parent, props, pathOf) ?? htmlSite(node, parent, props, pathOf);
+    const shown = printedSite(node, parent, propOf, pathOf) ?? htmlSite(node, parent, propOf, pathOf);
     if (shown) {
       sites.push(shown);
     }
     if (isInstance(node)) {
-      sites.push(...(await handedOn(node, component, source, props, context, depth, inner)));
+      sites.push(...(await handedOn(node, component, source, propOf, context, depth, inner)));
     }
   }
   assert(
@@ -117,15 +129,24 @@ async function readSites(
   return sites.slice(0, SITES_MAX);
 }
 
+// Template names back to props: a destructured local reads its key, and a
+// prop's own name reads it only when the destructure does not rename it (then
+// that name is some other variable). Only the schema's props are answered.
+function propReader(frontmatter: string, props: ReadonlySet<string>): PropOf {
+  const entries = readPropsDestructure(frontmatter)?.entries ?? [];
+  const locals = new Map(entries.map((entry) => [entry.local, entry.key]));
+  const renamed = new Set(entries.filter((entry) => entry.local !== entry.key).map((entry) => entry.key));
+  assert(locals.size <= entries.length, 'Each local names one destructure entry');
+  return (local) => {
+    const key = locals.get(local) ?? (renamed.has(local) ? undefined : local);
+    return key !== undefined && props.has(key) ? key : undefined;
+  };
+}
+
 // `{prop}` printed straight into an element or a nested component's content.
-function printedSite(
-  node: PropNode,
-  parent: PropNode | undefined,
-  props: ReadonlySet<string>,
-  pathOf: (node: PropNode) => string | undefined,
-): PropTextSite | undefined {
-  const prop = node.kind === 'expr' ? propName(node.value ?? '') : undefined;
-  if (prop === undefined || !parent || !props.has(prop)) {
+function printedSite(node: PropNode, parent: PropNode | undefined, propOf: PropOf, pathOf: (node: PropNode) => string | undefined): PropTextSite | undefined {
+  const prop = node.kind === 'expr' ? propOf(propName(node.value ?? '')) : undefined;
+  if (prop === undefined || !parent) {
     return undefined;
   }
   if (parent.kind !== 'element' && parent.kind !== 'component') {
@@ -152,15 +173,10 @@ function printedSite(
 
 // `<h2 set:html={prop} />`, or `<Fragment set:html={prop} />` as the only
 // content of its element: the element's whole content is the prop's HTML.
-function htmlSite(
-  node: PropNode,
-  parent: PropNode | undefined,
-  props: ReadonlySet<string>,
-  pathOf: (node: PropNode) => string | undefined,
-): PropTextSite | undefined {
+function htmlSite(node: PropNode, parent: PropNode | undefined, propOf: PropOf, pathOf: (node: PropNode) => string | undefined): PropTextSite | undefined {
   const attr = 'props' in node ? node.props?.['set:html'] : undefined;
-  const prop = attr?.type === 'expr' ? propName(attr.value) : undefined;
-  if (prop === undefined || !props.has(prop)) {
+  const prop = attr?.type === 'expr' ? propOf(propName(attr.value)) : undefined;
+  if (prop === undefined) {
     return undefined;
   }
   const fragment = node.kind === 'component' && 'name' in node && node.name === 'Fragment';
@@ -181,12 +197,15 @@ async function handedOn(
   node: InstanceNode,
   component: ScanComponent,
   source: ComponentSource,
-  props: ReadonlySet<string>,
+  propOf: PropOf,
   context: PropSiteContext,
   depth: number,
   inner: (component: ScanComponent, depth: number) => Promise<PropTextSite[]>,
 ): Promise<PropTextSite[]> {
-  const handed = Object.entries(('props' in node ? node.props : undefined) ?? {}).filter(([, attr]) => attr.type === 'expr' && props.has(propName(attr.value)));
+  const handed = Object.entries(('props' in node ? node.props : undefined) ?? {}).flatMap(([name, attr]) => {
+    const prop = attr.type === 'expr' ? propOf(propName(attr.value)) : undefined;
+    return prop === undefined ? [] : [{ name, prop }];
+  });
   if (handed.length === 0) {
     return [];
   }
@@ -201,9 +220,7 @@ async function handedOn(
     return [];
   }
   const sites = await inner(nested, depth + 1);
-  return handed.flatMap(([name, attr]) =>
-    attr.type === 'expr' ? sites.filter((site) => site.prop === name).map((site) => ({ ...site, prop: propName(attr.value) })) : [],
-  );
+  return handed.flatMap(({ name, prop }) => sites.filter((site) => site.prop === name).map((site) => ({ ...site, prop })));
 }
 
 // A component's template, each node with its parent and its tree path — the

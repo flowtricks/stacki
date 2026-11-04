@@ -87,5 +87,5 @@ async function readComponent(path: string): Promise<ComponentSource | undefined>
   if (!parsed.editable || !('imports' in parsed.model)) {
     return undefined;
   }
-  return { nodes: parsed.model.nodes, imports: parsed.model.imports };
+  return { nodes: parsed.model.nodes, imports: parsed.model.imports, extraFrontmatter: parsed.model.extraFrontmatter };
 }

@@ -137,6 +137,13 @@ export function listenForQueries(): void {
       reportRender();
       return;
     }
+    if (data['type'] === 'avb:resend-reports') {
+      // The app dropped what the page told it (its tree changed shape): say it all again.
+      forgetReportedKeys();
+      sendRendered();
+      sendClasses();
+      return;
+    }
     if (data['type'] === 'avb:hide-pending') {
       hidePending(data['path']);
       return;

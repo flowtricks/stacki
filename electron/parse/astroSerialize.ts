@@ -54,7 +54,10 @@ function inlineString(nodes: readonly ParserNode[], depth: number): string {
     } else if (node.kind !== 'element') {
       assert(false, 'Inline runs contain only text, expressions, and elements');
     } else if (node.children === undefined) {
-      out += node.name === 'br' ? '<br />' : `<${node.name}${serializeAttrs(node.props, node.attrOrder)} />`;
+      // A void element keeps its attributes, `<br>` included: written bare, a
+      // `<br class="hero_break" />` lost its class from the file and its path
+      // tag from the preview, and the canvas then refused the text around it.
+      out += `<${node.name}${serializeAttrs(node.props, node.attrOrder)} />`;
     } else if (node.children.length === 0) {
       // Written as a pair with nothing between them. Closing it as `<span />`
       // says the same thing to a browser and a different thing to a diff.

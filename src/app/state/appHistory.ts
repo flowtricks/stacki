@@ -11,12 +11,13 @@ import { LIMITS } from '../../../shared/core/limits';
 import { assert } from '../../../shared/core/assert';
 import { scanContainsFile } from '../../editor/pagePersistence';
 import { createCoalescedRun } from '../../lib/coalescedRun';
-import { type EditGesture, type EditsRecord } from '../../editor/pageEdits';
+import { type AppliedEdit, type EditGesture, type EditsRecord } from '../../editor/pageEdits';
 import { saveStateAccepted, saveStateBase, saveStateEdited, saveStateNeedsWrite, saveStateRefused } from '../../editor/saveState';
 import type { Digest } from '../../../shared/core/brand';
 import { cleanError } from '../../lib/cleanError';
 import { sourceNodeAtOffset } from '../../features/code/codePanelModel';
-import { type EditsEntry, type HistoryEntry, type UndoCommand } from '../appTypes';
+import { type EditsEntry, type HistoryEntry, type StepFiles, type UndoCommand } from '../appTypes';
+import { stepWithFiles, type PageStep } from '../model/componentCreation';
 import { findEditorNodeById as findNodeById, toEditorPageState, carriedParse, type EditorPageState } from '../../editor/pageState';
 import { type EditorModel } from '../../editor/pageView';
 import { onFilesChanged } from '../../ipc/appBridge';
@@ -59,9 +60,11 @@ export function useHistoryPush(coreState: ReturnType<typeof useCoreState>, lifec
   // splices only): its record collects each applied write's inverse.
   // Consecutive edits with the same coalesceKey within 800 ms share one step
   // (typing bursts, dropdown hover-scrubs); structural edits (no key) always
-  // get their own.
+  // get their own. A step that made files beside its page writes carries them
+  // (StepFiles, appTypes.ts), and is never folded into another.
   const pushEditHistory = useCallback(
-    (coalesceKey: string | undefined): EditsRecord => {
+    (coalesceKey: string | undefined, files: StepFiles | undefined = undefined): EditsRecord => {
+      assert(files === undefined || coalesceKey === undefined, 'A step that made files is a step of its own');
       const record: EditsRecord = { outcome: { tag: 'applied', applied: [] } };
       if (!pageStateRef.current.pageState) {
         record.outcome = { tag: 'dropped' };
@@ -77,7 +80,7 @@ export function useHistoryPush(coreState: ReturnType<typeof useCoreState>, lifec
       if (coalesce && previous?.kind === 'edits') {
         return previous.record;
       }
-      history.past.push({ kind: 'edits', record });
+      history.past.push(files === undefined ? { kind: 'edits', record } : { kind: 'edits', record, files });
       if (history.past.length > LIMITS.undoEntriesMax) {
         history.past.shift();
       }
@@ -231,7 +234,9 @@ export function useStepEdits(lifecycle: ReturnType<typeof useLifecycle>, coreSta
   // out as reverts, newest first, each against the checksum it came back with,
   // so an outside edit since is mapped through or refused — never reverted.
   // What was undone becomes the step in the other direction; a refusal stops
-  // there, keeps what is left where it was, and says why (plan §7).
+  // there, keeps what is left where it was, and says why (plan §7). Files the
+  // step made (a component created from the selection) step with it, after
+  // the page on undo and before it on redo (componentCreation.ts).
   const stepEdits = useCallback(
     async (entry: EditsEntry, direction: 'undo' | 'redo') => {
       const history = historyRef.current;
@@ -255,30 +260,57 @@ export function useStepEdits(lifecycle: ReturnType<typeof useLifecycle>, coreSta
         showToast(`Couldn’t ${direction}: this page has edits that are not saved yet.`, 'error');
         return;
       }
-      const startOrigin = state.editable ? state.origin : undefined;
-      const reverted = await revertedSteps(path, outcome.applied, startOrigin);
-      if (reverted.refusal !== undefined) {
-        showToast(`Couldn’t ${direction}: ${reverted.refusal}`, 'error');
-      }
-      const { done, written, origin } = reverted;
-      const left = outcome.applied.slice(0, outcome.applied.length - done.length);
-      if (left.length > 0) {
-        back({ kind: 'edits', record: { outcome: { tag: 'applied', applied: left } } });
-      }
-      if (written === undefined) {
-        return;
-      }
-      forth({ kind: 'edits', record: { outcome: { tag: 'applied', applied: done } } });
-      const reply = written;
-      const shown = origin === undefined ? toEditorPageState(carriedParse(state, reply)) : toEditorPageState({ ...reply, editable: true, model: origin.model });
-      // Installed only over the state the undo started from: a newer edit
-      // made meanwhile keeps its model, and main rebases it past the revert.
-      setPageState((current) => (current === state ? shown : current));
-      if (shown.editable) {
-        const model = shown.model;
-        const named = (id: string) => id === 'layout' || id === 'frontmatter';
-        const gone = (id: string) => !named(id) && !findNodeById(model.nodes, id);
-        setSelectedId((id) => (id && gone(id) ? undefined : id));
+      // Both halves of a partly reverted step keep the files: their calls are
+      // idempotent, so whichever half is stepped last does the file's work.
+      const files = entry.files;
+      const entryOf = (applied: readonly AppliedEdit[]): EditsEntry =>
+        files === undefined
+          ? { kind: 'edits', record: { outcome: { tag: 'applied', applied } } }
+          : { kind: 'edits', record: { outcome: { tag: 'applied', applied } }, files };
+      const revert = async (): Promise<PageStep> => {
+        const startOrigin = state.editable ? state.origin : undefined;
+        const reverted = await revertedSteps(path, outcome.applied, startOrigin);
+        if (reverted.refusal !== undefined) {
+          showToast(`Couldn’t ${direction}: ${reverted.refusal}`, 'error');
+        }
+        const { done, written, origin } = reverted;
+        const left = outcome.applied.slice(0, outcome.applied.length - done.length);
+        if (left.length > 0) {
+          back(entryOf(left));
+        }
+        if (written === undefined) {
+          return 'none';
+        }
+        forth(entryOf(done));
+        const reply = written;
+        const shown =
+          origin === undefined ? toEditorPageState(carriedParse(state, reply)) : toEditorPageState({ ...reply, editable: true, model: origin.model });
+        // Installed only over the state the undo started from: a newer edit
+        // made meanwhile keeps its model, and main rebases it past the revert.
+        setPageState((current) => (current === state ? shown : current));
+        if (shown.editable) {
+          const model = shown.model;
+          const named = (id: string) => id === 'layout' || id === 'frontmatter';
+          const gone = (id: string) => !named(id) && !findNodeById(model.nodes, id);
+          setSelectedId((id) => (id && gone(id) ? undefined : id));
+        }
+        return left.length === 0 ? 'whole' : 'part';
+      };
+      const stepped = await stepWithFiles(direction, files, revert);
+      switch (stepped.tag) {
+        case 'stepped':
+          return;
+        case 'refused':
+          back(entry); // Nothing changed: the step waits where it was.
+          showToast(`Couldn’t ${direction}: ${stepped.message}`, 'error');
+          return;
+        case 'files-failed':
+          showToast(`The page was restored, but its component file was not: ${stepped.message}`, 'error');
+          return;
+        default: {
+          const exhaustive: never = stepped;
+          return exhaustive;
+        }
       }
     },
     [autosave, editDrafts, showToast, historyRef, pageStateRef, setPageState, setSelectedId],
@@ -317,9 +349,15 @@ export function useUndoRedo(
       } catch (error: unknown) {
         showToast(`Couldn’t undo${entry.label ? ` ${entry.label}` : ''}: ${cleanError(error)}`, 'error');
       }
+      setHistoryTick((count) => count + 1); // See below: the undo has landed.
       return;
     }
     await stepEdits(entry, 'undo');
+    // Again now that the undo has landed. The tick above is read at once by the
+    // Style panel, which re-read the CSS before the undo had changed it and kept
+    // showing the old value (a background's Type, its layer row) until its next
+    // poll. This one is read with the restored page in hand.
+    setHistoryTick((count) => count + 1);
   }, [showToast, propertySave.saving, stepEdits, historyRef, setHistoryTick]);
 
   const redo = useCallback(async () => {
@@ -341,9 +379,15 @@ export function useUndoRedo(
       } catch (error: unknown) {
         showToast(`Couldn’t redo${entry.label ? ` ${entry.label}` : ''}: ${cleanError(error)}`, 'error');
       }
+      setHistoryTick((count) => count + 1); // See below: the redo has landed.
       return;
     }
     await stepEdits(entry, 'redo');
+    // Again now that the redo has landed. The tick above is read at once by the
+    // Style panel, which re-read the CSS before the redo had changed it and kept
+    // showing the old value (a background's Type, its layer row) until its next
+    // poll. This one is read with the restored page in hand.
+    setHistoryTick((count) => count + 1);
   }, [showToast, propertySave.saving, stepEdits, historyRef, setHistoryTick]);
   return { redo, undo };
 }
@@ -457,7 +501,7 @@ export function useCommitEdit(
   // the gesture's model effect. Past the queue's bound a gesture is refused,
   // never queued (plan §8).
   const commitEdit = useCallback(
-    (gesture: EditGesture): boolean => {
+    (gesture: EditGesture, step: { readonly files?: StepFiles } = {}): boolean => {
       if (propertySave.saving.current) {
         return false;
       }
@@ -479,7 +523,7 @@ export function useCommitEdit(
         showToast('Too many edits are waiting to be saved — try again in a moment.', 'error');
         return false;
       }
-      const record = pushEditHistory(gesture.coalesceKey);
+      const record = pushEditHistory(gesture.coalesceKey, step.files);
       const queued = editDrafts.addGesture(path, gesture, record);
       assert(queued === 'queued', 'A gesture inside the bound is queued');
       setPageState((current) => (current?.editable ? { ...current, model: gesture.apply(current.model), save: saveStateEdited(current.save) } : current));

@@ -4,6 +4,7 @@ import type { Spacing } from './spacingBands';
 import { boolean, count, dictionary, digest, list, optional, pathText, record } from '../../../shared/core/boundary';
 import type { Digest } from '../../../shared/core/brand';
 import { parsePreviewRender, type PreviewRender } from '../../../shared/page/previewToken';
+import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import { GUIDE_LIMITS, parseGuideVariableName, type GuideMetrics } from './guideModel';
 
 export type PreviewMessage =
@@ -27,8 +28,9 @@ export type PreviewMessage =
       readonly after: readonly string[];
     }
   | { readonly kind: 'modifiers'; readonly shiftKey: boolean; readonly altKey: boolean }
-  | ({ readonly kind: 'hover-node' } & LocatedEvent)
-  | ({ readonly kind: 'click-node'; readonly outside: boolean } & LocatedEvent)
+  /** `pseudo` names the ::before or ::after the pointer is on, when it is on one. */
+  | ({ readonly kind: 'hover-node'; readonly pseudo: PseudoLayer | undefined } & LocatedEvent)
+  | ({ readonly kind: 'click-node'; readonly outside: boolean; readonly pseudo: PseudoLayer | undefined } & LocatedEvent)
   | ({ readonly kind: 'open-node' } & LocatedEvent)
   | ({ readonly kind: 'context-node'; readonly outside: boolean } & LocatedEvent & ContextPoint)
   | { readonly kind: 'canvas-ready' }
@@ -170,12 +172,13 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
         altKey: boolean(value['altKey']),
       };
     case 'avb:hover-node':
-      return { kind: 'hover-node', ...parseLocatedMessage(value) };
+      return { kind: 'hover-node', ...parseLocatedMessage(value), pseudo: parseLocatedPseudo(value) };
     case 'avb:click-node':
       return {
         kind: 'click-node',
         ...parseLocatedMessage(value),
         outside: boolean(value['outside']),
+        pseudo: parseLocatedPseudo(value),
       };
     case 'avb:context-node':
       return {
@@ -277,6 +280,22 @@ function parseLocatedMessage(value: Readonly<Record<string, unknown>>): LocatedE
     occurrence: count(value['occurrence']),
     token: optional(digest)(value['token']),
   };
+}
+
+// The ::before or ::after a hover or click landed on. It belongs to the node
+// the message names, so a pseudo-element with no node is malformed.
+function parseLocatedPseudo(value: Readonly<Record<string, unknown>>): PseudoLayer | undefined {
+  const pseudo = value['pseudo'];
+  if (pseudo === undefined) {
+    return undefined;
+  }
+  if (pseudo !== 'before' && pseudo !== 'after') {
+    throw new Error('Preview pseudo-element: expected before or after');
+  }
+  if (value['path'] === undefined) {
+    throw new Error('Preview pseudo-element: expected the node it belongs to');
+  }
+  return pseudo;
 }
 
 function parseBox(input: unknown): Box {

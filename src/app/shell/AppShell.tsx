@@ -34,7 +34,7 @@ import { openExternalURL, restoreProjectFile, restoreProjectVersion } from '../.
 import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel } from '../appPanels';
 import { prewarmSelectorReport } from '../../features/selectors/selectorsBridge';
 import { useEffect } from 'react';
-import { CanvasPane, CanvasCovers, OldVersionCover, RightPanel, CodeWindowHost, ConflictNotice, BusyOverlay } from './AppPanes';
+import { CanvasPane, CanvasCovers, OldVersionCover, RightPanel, CodeWindowHost, ConflictNotice, BusyOverlay, pickPseudo } from './AppPanes';
 import type { AppView, ShellView } from '../App';
 
 // The start screen, before a project is open.
@@ -423,8 +423,7 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
   const selectPseudo = (id: string, pseudo: 'before' | 'after'): void => {
     app.setNavigatorSelectionTick((tick) => tick + 1);
     app.setSelectedId(id);
-    app.setPseudoPick((held) => ({ nodeId: id, pseudo, serial: (held?.serial ?? 0) + 1 }));
-    app.setRightTab('style');
+    pickPseudo(app, id, pseudo);
   };
   return (
     <StructurePanel

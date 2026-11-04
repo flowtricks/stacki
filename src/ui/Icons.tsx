@@ -137,6 +137,13 @@ export const CodeIcon = (props: IconProps) => (
   </I>
 );
 
+// A ::before / ::after layer: the two colons that name a pseudo-element.
+export const PseudoElementIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="M5.5 5.25h.01M5.5 10.75h.01M10.5 5.25h.01M10.5 10.75h.01" strokeWidth={2.4} />
+  </I>
+);
+
 export const PencilIcon = (props: IconProps) => (
   <I {...props}>
     <path d="M11.2 2.6a1.3 1.3 0 0 1 1.85 1.85L5.6 11.9l-2.45.6.6-2.45Z" />

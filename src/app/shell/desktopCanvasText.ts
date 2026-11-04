@@ -60,7 +60,7 @@ async function readComponent(path: string): Promise<ComponentSource | undefined>
   if (!read.editable || !('imports' in read.model)) {
     return undefined;
   }
-  return { nodes: read.model.nodes, imports: read.model.imports };
+  return { nodes: read.model.nodes, imports: read.model.imports, extraFrontmatter: read.model.extraFrontmatter };
 }
 
 // The canvas bar's presses, saved the way the Content field saves: the whole

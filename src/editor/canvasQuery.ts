@@ -67,6 +67,12 @@ export function hasCanvas(): boolean {
   return !!frame;
 }
 
+/** Ask the canvas to send its page reports again (rendered nodes, states,
+ *  classes), after the app dropped the ones it held. */
+export function requestCanvasReports(): boolean {
+  return tellCanvas({ type: 'avb:resend-reports' });
+}
+
 /** Say something to the canvas that needs no answer. */
 export function tellCanvas(message: unknown): boolean {
   try {

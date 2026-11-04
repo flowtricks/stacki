@@ -5,6 +5,7 @@ import { authoredStyleMutation } from './frameAuthoredStyles';
 // one pass per frame. Mutations are classified here, so the frame's own
 // writes never trigger a pass.
 
+import type { PseudoLayer } from '../../shared/page/pseudoPath';
 import type { Rect, Spacing } from './frameBasics';
 import { PROBE_ATTR, isComment, isElement, isText } from './frameBasics';
 import {
@@ -221,11 +222,19 @@ const drawsPseudo = (element: Element, pseudo: '::before' | '::after'): boolean 
   const style = window.getComputedStyle(element, pseudo);
   return style.content !== 'none' && style.content !== 'normal' && style.content !== '' && style.display !== 'none';
 };
+// The nodes the last pass found drawing a ::before or ::after, kept for the
+// pointer (frameTargets.ts): a pseudo-element is measured under the cursor
+// only for a node listed here, so moving over the rest of the page costs no
+// computed-style read at all.
+let drawnBefore: ReadonlySet<string> = new Set<string>();
+let drawnAfter: ReadonlySet<string> = new Set<string>();
+/** Whether the last pass found the node at `nodePath` drawing `pseudo`. */
+export const drawsPseudoAt = (nodePath: string, pseudo: PseudoLayer): boolean => (pseudo === 'before' ? drawnBefore : drawnAfter).has(nodePath);
 const sendStates = (rendered: string[]): void => {
   const hidden = [];
   const inert = [];
-  const before = [];
-  const after = [];
+  const before: string[] = [];
+  const after: string[] = [];
   for (const nodePath of rendered) {
     const element = firstElementFor(nodePath);
     if (!element) {
@@ -249,6 +258,8 @@ const sendStates = (rendered: string[]): void => {
       /* an element that cannot be measured says nothing about itself */
     }
   }
+  drawnBefore = new Set(before);
+  drawnAfter = new Set(after);
   const key = `${hidden.join(' ')}|${inert.join(' ')}|${before.join(' ')}|${after.join(' ')}`;
   if (key === lastStatesKey) {
     return;
@@ -266,9 +277,13 @@ const sendStates = (rendered: string[]): void => {
 let lastClassKey = '';
 
 // The app asked a different question (its scope or focused instance changed),
-// so the next rendered-nodes and classes reports are sent even if unchanged.
+// or dropped what it held (its tree changed shape), so the next rendered-nodes,
+// states and classes reports are sent even if unchanged. The states were left
+// out: the app dropped them on an edit, the page said nothing new, and the
+// navigator lost its ::before rows and hidden marks until something changed.
 export function forgetReportedKeys(): void {
   lastRenderedKey = '';
+  lastStatesKey = '';
   lastClassKey = '';
 }
 export const sendClasses = () => {
