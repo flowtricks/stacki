@@ -34,6 +34,7 @@ import { editLoopProperty, type LoopPropertyEdit } from '../state/loopPropertyEd
 
 export function CanvasPane({ app }: { readonly app: ShellView }) {
   const hoverNodeId = useLiveValue(app.hoverNode);
+  const hoverPseudo = useLiveValue(app.hoverPseudo);
   const context = useCanvasContextMenu(app);
   return (
     <>
@@ -67,6 +68,8 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         selPath={app.pathFor(app.selectedId)}
         navigatorSelectionTick={app.navigatorSelectionTick}
         navHoverPath={app.pathFor(hoverNodeId)}
+        navHoverPseudo={hoverPseudo}
+        selPseudo={app.pseudoPick?.nodeId === app.selectedId ? app.pseudoPick?.pseudo : undefined}
         overlayInfo={app.overlayInfo}
         focusPath={app.focusPath}
         focusOcc={app.focusOcc}
@@ -374,6 +377,8 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
       renderedClasses={app.classesForRef.current === selectedId ? app.selectedClasses : []}
       projectClasses={app.projectClasses}
       historyTick={app.historyTick}
+      pseudoRequest={app.pseudoPick}
+      selectorFocus={app.classFocus}
       openFilePath={app.openEditableFile?.path ?? undefined}
       openFileKind={app.openEditableFile?.kind ?? undefined}
     />

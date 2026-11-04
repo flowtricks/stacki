@@ -85,14 +85,22 @@ const check = (what, condition, detail) => {
   // resolve to nothing and the measurements are of a page that never existed.
   fs.writeFileSync(
     path.join(pageDirectory, 'app.css'),
-    ['src/features/style/tokens.css', 'src/app/styles.css', 'src/features/style/utilities.css', 'src/features/style/embedEditor.css']
+    [
+      'src/features/style/tokens.css',
+      'src/app/styles.css',
+      'src/ui/popup.css',
+      'src/features/style/utilities.css',
+      'src/features/style/embedEditor.css',
+      'src/features/style/components/PanelSheet.css',
+    ]
       .map((file) => fs.readFileSync(path.join(root, file), 'utf8'))
       .join('\n'),
   );
   fs.writeFileSync(
     path.join(pageDirectory, 'index.html'),
     '<!doctype html><meta charset=utf-8><link rel="stylesheet" href="app.css">' +
-      '<style>body{margin:0;background:#1a1a1a}</style><div id="root"></div>' +
+      // A style panel at the right of the window, where StylePanel would publish it.
+      '<style>body{margin:0;background:#1a1a1a}:root{--style-panel-left:400px;--style-panel-top:0px;--style-panel-width:320px;--style-panel-height:900px}</style><div id="root"></div>' +
       '<script src="bundle.js"></script>',
   );
 
@@ -115,7 +123,9 @@ const check = (what, condition, detail) => {
          const heads = [...document.querySelectorAll('.embed-editor_grid-section-head')];
          const body = document.querySelector('.embed-editor_grid-modal-body');
          const bodyLeft = body.getBoundingClientRect().left;
+         const sheet = document.querySelector('.embed-editor_grid-modal').getBoundingClientRect();
          return {
+           sheet: { left: Math.round(sheet.left), right: Math.round(sheet.right), top: Math.round(sheet.top), bottom: Math.round(sheet.bottom) },
            portaledOutOfHost: !main.closest('.style-panel-host'),
            inSurface: !!main.closest('.style-panel-surface'),
            justify: getComputedStyle(main).justifyContent,
@@ -156,6 +166,10 @@ const check = (what, condition, detail) => {
     // The premise: this really is a surface outside the host.
     check('the modal is portaled out of the panel host', resting.portaledOutOfHost, 'it is inside the host — this test is no longer testing anything');
     check('and carries the panel-surface scope', resting.inSurface, 'without it the global button rules apply');
+
+    // Over the style panel and nowhere else: never centred on the window, over the canvas.
+    check('the sheet sits over the style panel only', resting.sheet.left === 400 && resting.sheet.right === 720, JSON.stringify(resting.sheet));
+    check('and inside its height', resting.sheet.top >= 0 && resting.sheet.bottom <= 900, JSON.stringify(resting.sheet));
 
     // Left-aligned: the label starts at the row's left, not the middle of it.
     check('a track label is not centred', resting.justify !== 'center', resting.justify);

@@ -2428,18 +2428,10 @@
   flex: none;
   border-radius: 1px;
   background: var(--color-text-primary);
-  /* Re-enable events (the preview is click-through) so the bars take the
-     double-click that toggles Space between / collapses to an alignment. */
-  pointer-events: auto;
-  cursor: pointer;
 }
-/* The bar is only ~2px thick — extend an invisible hit area around it so the
-   double-click is easy to land (bars only overlap when clustered, where any of them
-   maps to the same Space-between toggle). */
-.embed-editor_align-bar::before {
-  content: '';
-  position: absolute;
-  inset: -6px;
+/* Focus is in the box once a dot is clicked; the arrow keys then move the alignment. */
+.embed-editor_align-box:focus-within {
+  background: var(--color-bg-active);
 }
 /* Baseline preview: the A and ↓ markers replace the bars, bright like them, and are
    spread by the preview's justify-content (so they track the X alignment). */
@@ -5544,6 +5536,20 @@ textarea.embed-editor_value-input.is-expanded {
   width: 16px;
   height: 16px;
   color: var(--color-text-tertiary);
+}
+/* A colour variable's swatch, in the icon's place: its resolved fill over a
+   checkerboard, so a translucent value reads as one. */
+.embed-editor_varpicker-item-swatch {
+  flex: none;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: repeating-conic-gradient(#808080 0% 25%, #a0a0a0 0% 50%) 50% / 8px 8px;
+}
+.embed-editor_varpicker-item-swatch > span {
+  flex: 1;
 }
 .embed-editor_varpicker-item-name {
   flex: 0 0 auto;

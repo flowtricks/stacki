@@ -147,6 +147,9 @@ export function useLayerRows<T>({
     const next = [...rows, { item: blank(), hidden: false }];
     write(next, { live: false });
     setOpenIndex(next.length - 1);
+    // Its row is not drawn yet: no editor shows until it is clicked, never one
+    // anchored under the row opened before it.
+    setAnchorElement(undefined);
   };
   const remove = (i: number) => {
     write(
@@ -178,8 +181,13 @@ export function useLayerRows<T>({
       rows.map((row, other) => (other === i ? { ...row, hidden: !row.hidden } : row)),
       { live: false },
     );
+  // A click on the open row closes it; on any other, or on a row marked open
+  // with no editor showing yet (one just added: its row had not been drawn to
+  // anchor to), it opens. Toggling on the index alone made a new layer's first
+  // click close an editor that was never shown, so it took two to open.
   const open = (i: number, element: HTMLElement) => {
-    setOpenIndex((previous) => (previous === i ? undefined : i));
+    const showing = openIndex === i && anchorElement === element;
+    setOpenIndex(showing ? undefined : i);
     setAnchorElement(element);
   };
   const close = () => setOpenIndex(undefined);

@@ -9,6 +9,11 @@ import { type ProjectVariable } from './model/webflow';
 import { panelBox, panelSpan } from './model/panelBox';
 import { CheckIcon, VariableTypeIcon, ChevronRightIcon } from './VariableIcons';
 import { varTypeAllowed, byCollection } from './sharedVars';
+import { useResolvedColor } from './model/computedColor';
+import { getHost } from './model/host';
+import { hasCanvas, queryCanvas } from '../../editor/canvasQuery';
+import { assert } from '../../../shared/core/assert';
+import { LIMITS } from '../../../shared/core/limits';
 
 // Where the picker sits horizontally.
 //
@@ -66,7 +71,8 @@ export function VariablePicker({
   const style = usePickerPosition(ref, anchor);
   usePickerFocus(searchRef);
   const query = search.trim().toLowerCase();
-  const filtered = pickerVariables(vars, prop, query);
+  const defined = useDefinedVariables(vars);
+  const filtered = pickerVariables(vars, prop, query).filter((variable) => defined === undefined || defined.has(customPropertyOf(variable.binding) ?? ''));
 
   return (
     <Popup
@@ -219,9 +225,13 @@ export function PickerItem({
       onClick={() => onPick(variable.binding)}
       title={`${collection} / ${groupPrefix}${variable.name}${valueSuffix}`}
     >
-      <span className="embed-editor_varpicker-item-icon" aria-hidden="true">
-        <VariableTypeIcon type={variable.type} />
-      </span>
+      {variable.type === 'Color' ? (
+        <VariableSwatch binding={variable.binding} />
+      ) : (
+        <span className="embed-editor_varpicker-item-icon" aria-hidden="true">
+          <VariableTypeIcon type={variable.type} />
+        </span>
+      )}
       <span className="embed-editor_varpicker-item-name">{variable.name}</span>
       <span className="embed-editor_varpicker-item-value">{variable.value}</span>
       {selected ? (
@@ -230,6 +240,61 @@ export function PickerItem({
         </span>
       ) : undefined}
     </button>
+  );
+}
+
+// The custom property a binding names: `--dark-900` from `var(--dark-900)` or itself.
+export function customPropertyOf(binding: string): string | undefined {
+  return /--[\w-]+/.exec(binding)?.[0];
+}
+
+// The variables that exist on the selected element: declared on `:root`, or on
+// a selector it or one of its parents matches. A variable declared on
+// `.pricing_wrap` is listed in the styles, but on an element outside that
+// wrapper it resolves to nothing (and its swatch to black), so it is not
+// offered there. Asked of the page once per opening, since only the page
+// knows which rules reach the element; undefined until it answers, or when
+// there is no canvas or selection to ask, which shows every variable.
+function useDefinedVariables(vars: readonly ProjectVariable[]): ReadonlySet<string> | undefined {
+  const names = [...new Set(vars.flatMap((variable) => customPropertyOf(variable.binding) ?? []))].sort();
+  const key = names.join(' ');
+  const [defined, setDefined] = useState<{ readonly key: string; readonly names: ReadonlySet<string> } | undefined>(undefined);
+  useEffect(() => {
+    const host = getHost();
+    const path = host.selectedId ? host.pathOf?.(host.selectedId) : undefined;
+    const asked = key === '' ? [] : key.split(' ');
+    // Past what one canvas question may hold, every variable is shown, unasked.
+    if (path === undefined || !hasCanvas() || asked.length === 0 || asked.length > LIMITS.scanEntriesMax) {
+      return undefined;
+    }
+    let live = true;
+    assert(
+      asked.every((name) => name.startsWith('--')),
+      'Only custom properties are asked about',
+    );
+    void queryCanvas(path, [], [], asked).then((answer) => {
+      if (live && answer !== undefined) {
+        setDefined({ key, names: new Set(asked.filter((name) => (answer.computedProps[name] ?? '').trim() !== '')) });
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [key]);
+  return defined?.key === key ? defined.names : undefined;
+}
+
+// A colour variable's swatch: what it resolves to on the selected element,
+// asked of the page (computedColor.ts), since a variable means nothing in the
+// panel's own document and can differ by element (a theme class, a scheme).
+// The checkerboard behind shows through a transparent or translucent value.
+function VariableSwatch({ binding }: { binding: string }) {
+  const reference = binding.trim().startsWith('--') ? `var(${binding.trim()})` : binding;
+  const fill = useResolvedColor(reference);
+  return (
+    <span className="embed-editor_varpicker-item-swatch" aria-hidden="true">
+      <span style={{ background: fill.trim() || 'transparent' }} />
+    </span>
   );
 }
 

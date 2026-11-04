@@ -10,7 +10,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { aliasMap, type Alias } from '../content/cmsRefs';
 import { instanceCounts, instancesIn } from '../properties/componentUsage';
-import { toPosix, capture } from '../lib/mainHelpers';
+import { toPosix } from '../lib/mainHelpers';
+import { classNamesIn, classSourceKind } from '../../shared/page/classNames';
 import { listAstroFiles, routeForPage } from '../project/projectFiles';
 import { scanPageTitles } from '../properties/pageTitles';
 import { safeSchema } from '../properties/propDefaults';
@@ -128,14 +129,17 @@ function scanComponentOrigin(root: string, file: string) {
 }
 
 function registerProjectClassesHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
-  // Every CSS class name used anywhere under src/ — class attributes in markup
-  // plus selectors in stylesheets and <style> blocks — for the class-prop
-  // autocomplete in the props panel.
+  // Every CSS class name used anywhere under src/ and public/ — written in
+  // markup, added or queried by scripts, styled by stylesheets and <style>
+  // blocks — for the class field's suggestions in the props panel. public/
+  // holds files served as they are: a stylesheet linked from the page, a
+  // script, plain HTML, each with classes the page uses.
   ipcMain.handle('project:classes', async (_event, projectPath) => {
     const out = new Set<string>();
-    const exts = /\.(astro|css|scss|less|html|jsx|tsx|js|ts|vue|svelte)$/i;
+    const exts = /\.(astro|css|scss|sass|less|html|jsx|tsx|js|mjs|cjs|ts|mts|cts|vue|svelte|mdx)$/i;
     const files: string[] = [];
-    const checkDirectory = directoryBudget(path.join(projectPath, 'src'));
+    // One budget over both folders: together they are bounded as one walk.
+    const checkDirectory = directoryBudget(projectPath);
     const walk = (folder: string, depth: number): void => {
       let entries;
       try {
@@ -154,39 +158,24 @@ function registerProjectClassesHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): 
         }
       }
     };
-    walk(path.join(projectPath, 'src'), 0);
+    for (const folder of ['src', 'public']) {
+      walk(path.join(projectPath, folder), 1);
+    }
 
-    const addCssClasses = (css: string) => {
-      const re = /(?:^|[\s,{>~+()])\.(-?[A-Za-z_][A-Za-z0-9_-]*)/g;
-      let match;
-      while ((match = re.exec(css)) !== null) {
-        out.add(capture(match, 1));
-      }
-    };
+    // shared/page/classNames.ts reads each file: markup, scripts and stylesheets alike.
     for (const file of files) {
+      const kind = classSourceKind(file);
+      if (kind === undefined) {
+        continue;
+      }
       let content;
       try {
         content = readSource(file);
       } catch {
         continue;
       }
-      if (/\.(css|scss|less)$/i.test(file)) {
-        addCssClasses(content);
-        continue;
-      }
-      const attrRe = /class(?:Name)?\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
-      let match;
-      while ((match = attrRe.exec(content)) !== null) {
-        for (const token of (match[1] ?? match[2] ?? '').split(/\s+/)) {
-          if (token) {
-            out.add(token);
-          }
-        }
-      }
-      const styleRe = /<style[^>]*>([\s\S]*?)<\/style>/gi;
-      let sm;
-      while ((sm = styleRe.exec(content)) !== null) {
-        addCssClasses(capture(sm, 1));
+      for (const name of classNamesIn(content, kind)) {
+        out.add(name);
       }
     }
     return [...out].sort();

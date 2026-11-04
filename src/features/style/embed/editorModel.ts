@@ -4,6 +4,7 @@
 // view across remounts (EmbedEditor.tsx).
 
 import { useEffect, useRef, useState } from 'react';
+import { assert } from '../../../../shared/core/assert';
 import { type RuleModel } from '../model/cascade';
 import { snapshotTokens, tokensToSelector } from '../model/elementTokens';
 import { selectorsMatch, stateForSelector, STATES, type MatchedSelector, type StyleContext } from '../model/resolved';
@@ -20,7 +21,8 @@ import {
   type NestStep,
 } from '../model/css';
 import { canonicalCompound, compareSpecificity } from '../model/selectors';
-import { findNode, getHost, onHostChange, propText } from '../model/host';
+import { normalizePseudoElement } from '../model/selectorParse';
+import { findNode, getHost, onHostChange, propText, type HostNode } from '../model/host';
 import {
   dedupeByKey,
   loadEmbedDocs,
@@ -175,6 +177,29 @@ export interface ChipInputs {
   tokens: ReturnType<typeof snapshotTokens>;
   classList: string[];
   removedClasses: ReadonlySet<string>;
+  /** The pseudo-element layer picked in the navigator, when one is. */
+  pseudo?: PseudoTarget | undefined;
+}
+
+/** A pseudo-element the navigator shows as a layer of its own. */
+export type PseudoTarget = '::before' | '::after';
+
+/** The chips a pseudo-element layer shows: those styling it, or all with no layer picked. */
+export function pseudoLayerChips(list: readonly MatchedSelector[], pseudo: PseudoTarget | undefined): MatchedSelector[] {
+  if (pseudo === undefined) {
+    return [...list];
+  }
+  const shown = list.filter((entry) => chipPseudoElement(entry.text) === pseudo);
+  assert(shown.length <= list.length, 'pseudoLayerChips: a filter never adds');
+  return shown;
+}
+
+// The pseudo-element a chip's selector styles, `::before` for `.a{&::before}`'s
+// display `.a::before`; the empty string for one that styles the element itself.
+// A grouped chip (`.a::before, .a::after`) styles both; it counts as its first.
+function chipPseudoElement(text: string): string {
+  const first = text.split(',')[0] ?? '';
+  return normalizePseudoElement(canonicalCompound(first).pseudoElement);
 }
 
 // Every selector (with styles) that targets the element in the current context, for
@@ -200,9 +225,13 @@ export function chipsFor(inputs: ChipInputs): MatchedSelector[] {
   if (pending) {
     list.push(pending);
   }
+  // A ::before or ::after layer picked in the navigator is its own target: only
+  // the selectors that style that pseudo-element are about it, so the element's
+  // own (`.stat_wrap`) and the other pseudo-element's are left out.
+  const shown = pseudoLayerChips(list, inputs.pseudo);
   // Order for readability: tag → base class + pseudos → applied combo chain + pseudos
   // → standalone/global classes → data attributes → complex selectors.
-  return inChipOrder(list, inputs.classList, { byOrder: true }).map((selector) =>
+  return inChipOrder(shown, inputs.classList, { byOrder: true }).map((selector) =>
     // In a query context, show the display with an `@` at the query position;
     // on Base / other contexts show the plain nested display.
     currentContext.embedAtContext && selector.inContext !== false && selector.queryDisplay ? { ...selector, display: selector.queryDisplay } : selector,
@@ -424,6 +453,46 @@ export function resolveStatus(content: Content, model: RuleModel): string {
 export type NativeAttempt = { applied: boolean; created?: boolean; reason: string };
 export type EmbedWriteResult = Awaited<ReturnType<typeof writeEmbedDocument>>;
 export type NestedInput = NonNullable<ReturnType<typeof parseNestedInput>>;
+
+/**
+ * The nesting paths of selectors typed with braces (`.faq_summary{&::before}`),
+ * so the first edit of each writes NESTED source into the parent's rule rather
+ * than a flat `.faq_summary::before`. Kept by selector and query context, and
+ * taken when that selector's rule is created: re-picking a selector (the panel
+ * re-picks on its own as the canvas reports matches) no longer loses the path,
+ * which a single slot cleared on every pick did.
+ */
+export type TypedPaths = Map<string, NestedInput['path']>;
+
+// A panel holds a handful of typed selectors at once; past this the oldest goes.
+const TYPED_PATHS_MAX = 32;
+
+function typedPathKey(selector: string, context: string): string {
+  return `${selector.trim()}\u0000${context}`;
+}
+
+export function rememberTypedPath(paths: TypedPaths, selector: string, context: string, path: NestedInput['path']): void {
+  assert(path.length >= 2, 'A typed path nests at least one level');
+  const key = typedPathKey(selector, context);
+  paths.delete(key);
+  paths.set(key, path);
+  while (paths.size > TYPED_PATHS_MAX) {
+    const oldest = paths.keys().next().value;
+    if (oldest === undefined) {
+      break;
+    }
+    paths.delete(oldest);
+  }
+  assert(paths.size <= TYPED_PATHS_MAX, 'Typed paths are bounded');
+}
+
+/** The typed path for this selector in this context, removed: its rule is being created. */
+export function takeTypedPath(paths: TypedPaths, selector: string, context: string): NestedInput['path'] | undefined {
+  const key = typedPathKey(selector, context);
+  const path = paths.get(key);
+  paths.delete(key);
+  return path;
+}
 export type CanvasAnswer = Awaited<ReturnType<typeof askCanvasAbout>>;
 
 // A forced rescan re-walks the component tree for embeds; otherwise the cached
@@ -613,3 +682,111 @@ export function withoutClasses(snapshot: ElementSnapshot | undefined, hidden: Re
 // element serves instantly from here while a background re-read reconciles; cleared
 // on any native edit, since a class change can affect every element that uses it.
 export const nativeModelCache = new Map<string, NativeModel>();
+
+/**
+ * The selector a navigator ::before or ::after row picks for `node`: the
+ * pseudo-element nested in the element's first class (`.faq_summary{&::after}`),
+ * or in its tag when it has no class, as if typed into the selector box, so a
+ * new rule is written nested in that class's own rule and an existing one is
+ * picked as it is. Undefined for a node with neither.
+ */
+export function pseudoSelectorInput(node: HostNode | undefined, pseudo: 'before' | 'after'): string | undefined {
+  const first = propText(node, 'class').trim().split(/\s+/)[0] ?? '';
+  const base = /^-?[A-Za-z_][\w-]*$/.test(first)
+    ? `.${first}`
+    : node?.kind === 'element' && node.name !== undefined && /^[a-z][\w-]*$/i.test(node.name)
+      ? node.name
+      : undefined;
+  if (base === undefined) {
+    return undefined;
+  }
+  const input = `${base}{&::${pseudo}}`;
+  assert(input.endsWith(`::${pseudo}}`), 'A pseudo pick names its pseudo-element');
+  return input;
+}
+
+/**
+ * The pseudo-element layer the navigator has picked on the selected element,
+ * or undefined while the element itself is the target. A pick on another node
+ * is stale (the selection moved on), so it counts as none.
+ */
+export function usePseudoTarget(): PseudoTarget | undefined {
+  const [target, setTarget] = useState(readPseudoTarget);
+  useEffect(() => onHostChange(() => setTarget(readPseudoTarget())), []);
+  return target;
+}
+
+function readPseudoTarget(): PseudoTarget | undefined {
+  const host = getHost();
+  const request = host.pseudoRequest;
+  if (request === undefined) {
+    return undefined;
+  }
+  if (request.nodeId === host.selectedId) {
+    return request.pseudo === 'before' ? '::before' : '::after';
+  }
+  return undefined;
+}
+
+/**
+ * What a navigator ::before / ::after row picks, given what the panel knows of
+ * the element: the rule that already styles that pseudo-element on it (the
+ * strongest one the element matches, `.divider::before` on
+ * `section.stat_wrap.divider`), or, with none, the pseudo-element nested in
+ * the element's first class (pseudoSelectorInput). Waits (undefined) while the
+ * panel's scan is of another element: its rules say nothing about this one.
+ */
+export function pseudoPickFor(
+  node: HostNode | undefined,
+  pseudo: 'before' | 'after',
+  scan: { readonly snapshot: ElementSnapshot | undefined; readonly model: RuleModel | undefined },
+): { readonly kind: 'existing'; readonly selector: string } | { readonly kind: 'typed'; readonly input: string } | { readonly kind: 'wait' } | undefined {
+  const { snapshot, model } = scan;
+  if (snapshot === undefined || model === undefined || !snapshotIs(snapshot, node)) {
+    return { kind: 'wait' };
+  }
+  const strongest = strongestPseudoSelector(model, `::${pseudo}`);
+  if (strongest !== undefined) {
+    return { kind: 'existing', selector: strongest };
+  }
+  const input = pseudoSelectorInput(node, pseudo);
+  return input === undefined ? undefined : { kind: 'typed', input };
+}
+
+// The strongest unconditional selector that styles `wanted` (`::before`) on the
+// element: the cascade files pseudo-element rules with the conditional ones
+// (cascade.ts classifyHit), so both lists are searched. A rule inside an
+// at-rule is left out: it styles the pseudo-element only in that query.
+// Specificity decides, then source order, as the cascade does.
+function strongestPseudoSelector(model: RuleModel, wanted: string): string | undefined {
+  assert(wanted.startsWith('::'), 'strongestPseudoSelector: a pseudo-element is named with ::');
+  let strongest: { readonly text: string; readonly specificity: MatchedSelector['specificity']; readonly order: number } | undefined;
+  for (const matched of [...model.base, ...model.conditional]) {
+    if (matched.rule.atContext.length > 0) {
+      continue;
+    }
+    for (const selector of matched.matchedSelectors) {
+      if (normalizePseudoElement(selector.pseudoElement) !== wanted) {
+        continue;
+      }
+      const stronger =
+        strongest === undefined ||
+        compareSpecificity(selector.specificity, strongest.specificity) > 0 ||
+        (compareSpecificity(selector.specificity, strongest.specificity) === 0 && matched.rule.order >= strongest.order);
+      if (stronger) {
+        strongest = { text: selector.text, specificity: selector.specificity, order: matched.rule.order };
+      }
+    }
+  }
+  assert(strongest === undefined || strongest.text.includes(wanted.slice(1)), 'strongestPseudoSelector: the pick names its pseudo-element');
+  return strongest?.text;
+}
+
+// Whether a snapshot is of `node`: the same tag, and every class its source writes.
+function snapshotIs(snapshot: ElementSnapshot, node: HostNode | undefined): boolean {
+  if (node?.kind !== 'element' || snapshot.tag !== node.name?.toLowerCase()) {
+    return false;
+  }
+  const written = propText(node, 'class').trim().split(/\s+/).filter(Boolean);
+  return written.every((name) => snapshot.classList.includes(name) || snapshot.classes.includes(name));
+}

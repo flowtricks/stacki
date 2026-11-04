@@ -2,7 +2,7 @@
 // editor opens in, loaded only when it is (EffectsSection.tsx).
 
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import Popup from '../../ui/Popup';
+import LayerPopover from './LayerPopover';
 import { displayOf } from './model/styleDisplay';
 import { type Props, EffLabel } from './EffectsKit';
 
@@ -112,40 +112,34 @@ export function clipPathType(value: string): string {
   return 'Custom';
 }
 
-// The editor in a full-panel modal, portaled to <body> and rendered at the panel's
-// own scale (it used to re-apply moden's compact zoom — see embedEditor.css). The
+// The editor in the panel's own layer popover, under its row, as Transform and
+// Transitions open: over the right panel, which greys behind it, never over the
+// canvas (a centred window-wide modal, it covered the page being clipped). The
 // editor's clip-path writes are routed to the panel's selected selector via
 // setProp/clearProp (so its own class picker is hidden).
-export function ClipPathModal({ props, onClose }: { props: Props; onClose: () => void }) {
+export function ClipPathModal({ props, anchor, onClose }: { props: Props; anchor: HTMLElement; onClose: () => void }) {
   const { onApply, onClear } = useSettledClipPath(props);
+  // What the panel shows now, read once: the editor opens on it (ClipPathProps.initialValue).
+  const [initialValue] = useState(() => clipPathValueOf(props));
   return (
-    <Popup
-      className="embed-editor_clip-modal u-surface-page"
-
-      label="Clip path"
-      onClose={onClose}
-    >
-      {({ close }) => (
-        <>
-          <div className="embed-editor_clip-modal-head">
-            <span className="embed-editor_clip-modal-title">Clip path</span>
-            <div className="embed-editor_clip-modal-actions">
-              {/* Portal target for the editor's shortcut-help control (it renders nothing
-                when this is absent). Provided here since it's no longer a hosted tool. */}
-              <div id="clip-path_header-shortcuts" />
-              <button type="button" className="embed-editor_bg-modal-close" onClick={close} aria-label="Close">
-                <ClipCloseIcon />
-              </button>
-            </div>
-          </div>
-          <div className="embed-editor_clip-modal-body">
-            <Suspense fallback={<div className="embed-editor_clip-loading">Loading editor…</div>}>
-              <ClipPathEditor onApply={onApply} onClear={onClear} hideClassPicker />
-            </Suspense>
-          </div>
-        </>
-      )}
-    </Popup>
+    <LayerPopover anchorEl={anchor} onClose={onClose} ariaLabel="Clip path">
+      <div className="embed-editor_clip-modal-head">
+        <span className="embed-editor_clip-modal-title">Clip path</span>
+        <div className="embed-editor_clip-modal-actions">
+          {/* Portal target for the editor's shortcut-help control (it renders nothing
+            when this is absent). Provided here since it's no longer a hosted tool. */}
+          <div id="clip-path_header-shortcuts" />
+          <button type="button" className="embed-editor_bg-modal-close" onClick={onClose} aria-label="Close">
+            <ClipCloseIcon />
+          </button>
+        </div>
+      </div>
+      <div className="embed-editor_clip-modal-body">
+        <Suspense fallback={<div className="embed-editor_clip-loading">Loading editor…</div>}>
+          <ClipPathEditor onApply={onApply} onClear={onClear} hideClassPicker initialValue={initialValue} />
+        </Suspense>
+      </div>
+    </LayerPopover>
   );
 }
 
@@ -191,25 +185,40 @@ export function useSettledClipPath({ setProp, liveSetProp, clearProp }: Props) {
   return { onApply, onClear };
 }
 
+// The clip-path the panel reads for its selected selector, or the prefixed one.
+function clipPathValueOf({ read }: Pick<Props, 'read'>): string {
+  const display = displayOf(read('clip-path'));
+  return display.present ? display.value : displayOf(read('-webkit-clip-path')).value;
+}
+
 // The Clip row: the label (blue/clear/provenance like every other prop) + a button
 // showing the current clip-path type. Clicking opens the visual editor popup.
 export function ClipPathRow({ props }: { props: Props }) {
-  const { read, busy } = props;
-  const display = displayOf(read('clip-path'));
-  const raw = display.present ? display.value : displayOf(read('-webkit-clip-path')).value;
-  const [open, setOpen] = useState(false);
+  const { busy } = props;
+  const raw = clipPathValueOf(props);
+  // The trigger the editor opens under, as the element itself once clicked.
+  const [open, setOpen] = useState<HTMLElement | undefined>(undefined);
   const type = clipPathType(raw);
   return (
     <div className="embed-editor_size-row">
       <EffLabel label="Clip" prop="clip-path" props={props} />
-      <button type="button" className="embed-editor_clip-trigger" disabled={busy} aria-haspopup="dialog" onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        className="embed-editor_clip-trigger"
+        disabled={busy}
+        aria-haspopup="dialog"
+        onClick={(event) => {
+          const trigger = event.currentTarget;
+          setOpen((current) => (current === undefined ? trigger : undefined));
+        }}
+      >
         <span className="embed-editor_clip-trigger-type">
           <ClipGlyph type={type} />
           <span className="embed-editor_clip-trigger-label">{type}</span>
         </span>
         <ClipEditIcon />
       </button>
-      {open ? <ClipPathModal props={props} onClose={() => setOpen(false)} /> : undefined}
+      {open !== undefined ? <ClipPathModal props={props} anchor={open} onClose={() => setOpen(undefined)} /> : undefined}
     </div>
   );
 }

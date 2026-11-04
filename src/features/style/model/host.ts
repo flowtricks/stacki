@@ -114,7 +114,15 @@ export type HostState = {
    *  don't go through the page model, so without this ⌘Z would skip straight
    *  past them to the last layout change. */
   recordUndo: ((command: UndoCommand) => void) | undefined;
+  /**
+   * A ::before or ::after picked in the navigator: when its element is the
+   * selection, the panel picks that pseudo-element's selector. `serial` makes
+   * picking it again a new request.
+   */
+  pseudoRequest: PseudoRequest | undefined;
 };
+
+export type PseudoRequest = { readonly nodeId: string; readonly pseudo: 'before' | 'after'; readonly serial: number };
 
 export type UndoCommand = {
   label?: string;
@@ -141,6 +149,7 @@ const state: HostState = {
   selectNode: undefined,
   recordUndo: undefined,
   addClass: undefined,
+  pseudoRequest: undefined,
   onSpacingHover: undefined,
 };
 

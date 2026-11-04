@@ -4,7 +4,7 @@
 // (BackgroundSection.tsx).
 
 import { useEffect, useRef } from 'react';
-import Popup from '../../ui/Popup';
+import PanelSheet from './components/PanelSheet';
 import type { ReactNode } from 'react';
 import { useFieldDraft } from './model/fieldDraft';
 import FieldLabel from './components/FieldLabel';
@@ -334,13 +334,8 @@ export function BgFieldInput({ prop, label, placeholder, field }: { prop: string
 // (label left / control right, divider-separated) run edge to edge like Webflow.
 export function LayerEditorModal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
   return (
-    <Popup
-      className="embed-editor_bg-modal u-surface-surface"
-
-      label="Background layer"
-      onClose={onClose}
-    >
+    <PanelSheet className="embed-editor_bg-modal u-surface-surface" label="Background layer" onClose={onClose}>
       {children}
-    </Popup>
+    </PanelSheet>
   );
 }

@@ -200,7 +200,9 @@ function useMenuPlacement({
     const leftLimit = bounds.left + margin;
     const rightLimit = bounds.right - margin;
     const next = naturalLeft < leftLimit ? leftLimit - naturalLeft : naturalRight > rightLimit ? rightLimit - naturalRight : 0;
-    element.style.transform = next ? `translateX(${next}px)` : '';
+    // `translate`, not `transform`: the popup's own open motion is a transform
+    // it transitions, so a transform here replaced it and slid the menu in sideways.
+    element.style.translate = next ? `${next}px 0` : '';
     // Vertical flip: if opening below would overflow the container's bottom and
     // there's more room above (a bottom-row label), open the menu above the label.
     const overflowsBelow = rootRect.bottom + element.offsetHeight + margin > bounds.bottom;

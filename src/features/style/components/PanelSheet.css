@@ -1,0 +1,21 @@
+/* Within the style panel's own column, centred in its height; never over the
+   canvas. `translate`, not `transform`: the popup's open motion is a transform.
+   Doubled to outrank each editor's own sizing (`width: 100%` was a dialog's). */
+.panel-sheet.panel-sheet {
+  position: fixed;
+  z-index: var(--z-modal);
+  left: var(--style-panel-left, auto);
+  right: auto;
+  top: calc(var(--style-panel-top, 0px) + var(--style-panel-height, 100vh) / 2);
+  width: var(--style-panel-width, 320px);
+  max-width: var(--style-panel-width, 100vw);
+  max-height: calc(var(--style-panel-height, 100vh) - 32px);
+  margin: 0;
+  translate: 0 -50%;
+  overflow: auto;
+}
+/* An editor given its own frame (left and width inline) keeps it; the sheet
+   centres it vertically, so its own centring transform would move it twice. */
+.panel-sheet.panel-sheet.is-framed {
+  transform: none;
+}

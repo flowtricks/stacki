@@ -11,7 +11,17 @@ import type { ParsedDeclaration, ParsedRule, StyleRegion } from './styleTypes';
 import { parseSelectorList, selectorListMembers } from './selectors';
 import { assert } from '../../../../shared/core/assert';
 import { LIMITS } from '../../../../shared/core/limits';
-import { type DeclarationValue, squash, childRule, childAtRule, findChildRuleBySelector, setDeclOnRule, appendDecl, setDeclDirect } from './cssRegions';
+import {
+  type DeclarationValue,
+  squash,
+  childRule,
+  childAtRule,
+  findChildRuleBySelector,
+  setDeclOnRule,
+  appendDecl,
+  placeChild,
+  setDeclDirect,
+} from './cssRegions';
 export { type DeclarationValue, extractStyleRegions, parseRegion, splitEmbed, renderEmbed, directDecls, appendDecl } from './cssRegions';
 
 export { atRuleQueryText, queryKey, splitQuery, countAtRuleQuery, renameAtRuleQuery } from './cssQueries';
@@ -234,6 +244,9 @@ export function createNestedRule(region: StyleRegion, path: NestStep[], prop: st
     const level = findOrMakeStep(container, step);
     if (level.created) {
       container.append(level.node);
+      if (container.type !== 'root') {
+        placeChild(container, level.node);
+      }
     }
     container = level.node;
   }
@@ -243,7 +256,7 @@ export function createNestedRule(region: StyleRegion, path: NestStep[], prop: st
   }
   if (container.type === 'rule') {
     assert(leaf.kind === 'selector', 'createNestedRule: a selector step builds a rule');
-    container.append({ prop: cleanProp, value: cleanValue, important: declared.important });
+    appendDecl(container, cleanProp, { value: cleanValue, important: declared.important });
     container.raws.semicolon = true;
     return true;
   }
@@ -515,8 +528,9 @@ export function ensureNestPath(region: StyleRegion, path: NestStep[]): boolean {
     if (level.created) {
       if (container === root) {
         appendTopLevel(root, level.node);
-      } else {
+      } else if (container.type !== 'root') {
         container.append(level.node);
+        placeChild(container, level.node);
       }
     }
     container = level.node;

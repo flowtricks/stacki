@@ -6,15 +6,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { defaultSelectorTokens, selectorToClassTokens, tokensToSelector } from '../model/elementTokens';
 import { stateForSelector, STATES, type ContextKey } from '../model/resolved';
-import { listAtRuleBlocks, parseNestedInput, type NestStep, renameAtRuleQuery, atRuleQueryText, queryKey, splitQuery } from '../model/css';
+import { listAtRuleBlocks, parseNestedInput, renameAtRuleQuery, atRuleQueryText, queryKey, splitQuery } from '../model/css';
 import { canonicalCompound } from '../model/selectors';
-import { getHost } from '../model/host';
+import { findNode, getHost, onHostChange } from '../model/host';
 import { readNativeStyleByName, readNativeStyles, resolveIdentityElement, writeEmbedDocument, type EmbedDocument } from '../model/webflow';
 import type { NativeModel } from '../model/styleTypes';
 import { standaloneNativeClass } from './EditorBasics';
-import { loneTypedClass, type NestedInput, nativeModelCache } from './editorModel';
+import { loneTypedClass, type NestedInput, nativeModelCache, pseudoPickFor, rememberTypedPath, type TypedPaths, usePseudoTarget } from './editorModel';
 import { asQuery, type QuerySuggestion, COMMON_QUERIES } from './SelectorPicker';
 import { useEditorRefs, useBusyState, useScanState, useSelectionState, useNativeState, usePendingWrites } from './useEditorFoundation';
+import { assert } from '../../../../shared/core/assert';
 import { useRefreshDerived } from './useEditorScanning';
 import { useApplyEdit, useElementTokens } from './useEditorRuleEdits';
 
@@ -247,9 +248,9 @@ export function useSelectorPick(
   // Queries typed into the add-selector field that may not exist in an embed yet —
   // kept so they're selectable in the dropdown until the rule is created.
   const [typedContexts, setTypedContexts] = useState<string[]>([]);
-  // The nesting path from a typed selector (`.hero { @container { .title } }`), so the
-  // first edit writes NESTED source into the embed rather than a flat selector.
-  const typedPathRef = useRef<{ selector: string; ctx: string; path: NestStep[] } | undefined>(undefined);
+  // The nesting paths of typed selectors (`.hero { @container { .title } }`), so each
+  // one's first edit writes NESTED source into the embed rather than a flat selector.
+  const typedPathsRef = useRef<TypedPaths>(new Map());
   const selectActiveSelector = useCallback(
     (text: string) => {
       const trimmed = text.trim();
@@ -257,7 +258,6 @@ export function useSelectorPick(
         return;
       }
       pendingDefaultRef.current = false;
-      typedPathRef.current = undefined; // a manual pick cancels a typed nesting path
       setSelectedSelectorText(trimmed);
       const simple = canonicalCompound(trimmed).simple;
       const matchedTokens = simple ? selectorToClassTokens(trimmed, tokens) : undefined;
@@ -285,16 +285,12 @@ export function useSelectorPick(
       }
       selectActiveSelector(parsed.selector);
       if (parsed.path.length >= 2) {
-        typedPathRef.current = {
-          selector: parsed.selector,
-          ctx: contextKey,
-          path: parsed.path,
-        };
+        rememberTypedPath(typedPathsRef.current, parsed.selector, contextKey, parsed.path);
       }
     },
     [selectActiveSelector, setContext],
   );
-  return { selectActiveSelector, selectNested, setTypedContexts, typedContexts, typedPathRef };
+  return { selectActiveSelector, selectNested, setTypedContexts, typedContexts, typedPathsRef };
 }
 
 // Add a typed selector, or deselect.
@@ -599,4 +595,62 @@ export function useQuerySuggestions(pendingWrites: ReturnType<typeof usePendingW
     return out.sort((left, right) => bySize(left.query) - bySize(right.query));
   }, [documentByKey]);
   return { querySuggestions };
+}
+
+// A ::before or ::after picked in the navigator: once its element is the
+// selection, pick its pseudo-element's selector the way typing it would.
+// Each request is handled once (by its serial), and waits while the element
+// is not yet the selection.
+export function usePseudoRequest(
+  typedSelector: ReturnType<typeof useTypedSelector>,
+  selectorPick: ReturnType<typeof useSelectorPick>,
+  elementTokens: ReturnType<typeof useElementTokens>,
+  selectionState: ReturnType<typeof useSelectionState>,
+) {
+  const { addTypedSelector } = typedSelector;
+  const { selectActiveSelector } = selectorPick;
+  const { model, snapshot } = elementTokens;
+  const { defaultTokensRef, pendingDefaultRef, setSelectedSelectorText, setSelectedTokens } = selectionState;
+  const [request, setRequest] = useState(() => getHost().pseudoRequest);
+  useEffect(() => onHostChange(() => setRequest(getHost().pseudoRequest)), []);
+  const handledRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (request === undefined || handledRef.current === request.serial) {
+      return;
+    }
+    const host = getHost();
+    if (host.selectedId !== request.nodeId) {
+      return;
+    }
+    const pick = pseudoPickFor(findNode(host.nodes, request.nodeId), request.pseudo, { snapshot, model });
+    if (pick?.kind === 'wait') {
+      return; // The panel's rules are still another element's.
+    }
+    handledRef.current = request.serial;
+    if (pick?.kind === 'existing') {
+      selectActiveSelector(pick.selector);
+    } else if (pick?.kind === 'typed') {
+      addTypedSelector(pick.input);
+    }
+  }, [request, snapshot, model, addTypedSelector, selectActiveSelector]);
+
+  // Leaving the layer for its own element (the element's row, same selection):
+  // the pseudo-element's selector is no longer the target, so the panel goes
+  // back to the element's default pick, as selecting the element does.
+  const target = usePseudoTarget();
+  const heldTargetRef = useRef(target);
+  useEffect(() => {
+    const held = heldTargetRef.current;
+    heldTargetRef.current = target;
+    if (held === undefined) {
+      return;
+    }
+    if (target !== undefined) {
+      return;
+    }
+    assert(held !== target, 'usePseudoRequest: the layer changed');
+    setSelectedTokens(defaultTokensRef.current);
+    setSelectedSelectorText(undefined);
+    pendingDefaultRef.current = true;
+  }, [target, defaultTokensRef, pendingDefaultRef, setSelectedSelectorText, setSelectedTokens]);
 }

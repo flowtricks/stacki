@@ -5,6 +5,7 @@ import { GroupLabel } from './TypographySection';
 import type { ResolvedProp } from './model/resolved';
 import { useHighlight } from './model/computedStyle';
 import { commitInPlace } from './model/commitInPlace';
+import { assert } from '../../../shared/core/assert';
 
 // Webflow's flex-alignment control: a live preview grid on the left (3×3 click
 // targets under a real-flex bar preview) plus the X / Y axis dropdowns. The X axis
@@ -373,13 +374,84 @@ function AxisSelect(props: AxisSelectProps) {
   );
 }
 
-const ALIGN_POSITIONS = ['flex-start', 'center', 'flex-end'];
+const ALIGN_POSITIONS = ['flex-start', 'center', 'flex-end'] as const;
+type AlignPosition = (typeof ALIGN_POSITIONS)[number];
 
-// The 3×3 click targets: start / center / end on each screen axis.
-function AlignDots({ column, busy, onSet }: Pick<Props, 'column' | 'busy' | 'onSet'>) {
-  // Screen X → horizontal property, screen Y → vertical property (flip on column).
-  const xProp = column ? 'align-items' : 'justify-content';
-  const yProp = column ? 'justify-content' : 'align-items';
+/** The box's values in screen terms: which property each axis drives and what it holds. */
+export interface AlignBoxState {
+  readonly justify: string;
+  readonly align: string;
+  readonly column: boolean;
+}
+
+/** A write the box makes: one property, one value. */
+export type AlignWrite = readonly [prop: string, value: string];
+
+// Screen X → horizontal property, screen Y → vertical property (flip on column).
+function axisProps(state: Pick<AlignBoxState, 'column'>): { readonly x: string; readonly y: string } {
+  return state.column ? { x: 'align-items', y: 'justify-content' } : { x: 'justify-content', y: 'align-items' };
+}
+
+function positionIndex(value: string): number {
+  return ALIGN_POSITIONS.findIndex((position) => position === value);
+}
+
+function valueOf(state: AlignBoxState, prop: string): string {
+  return norm(prop === 'justify-content' ? state.justify : state.align);
+}
+
+// Space between and Space around spread the items along the main axis: a dot
+// there names a cross-axis position, not a reason to bunch the items up again.
+function distributed(value: string): boolean {
+  return value === 'space-between' || value === 'space-around';
+}
+
+/**
+ * The writes a click on dot (x, y) makes. A distributed main axis keeps its
+ * distribution, so with Space between a dot in the vertical middle sets only
+ * the vertical alignment to center.
+ */
+export function alignDotWrites(state: AlignBoxState, x: AlignPosition, y: AlignPosition): readonly AlignWrite[] {
+  const props = axisProps(state);
+  const writes: AlignWrite[] = [];
+  for (const [prop, position] of [
+    [props.x, x],
+    [props.y, y],
+  ] as const) {
+    if (!(prop === 'justify-content' && distributed(valueOf(state, prop)))) {
+      writes.push([prop, position]);
+    }
+  }
+  assert(writes.length >= 1, 'A dot always sets the cross axis');
+  return writes;
+}
+
+/**
+ * The write an arrow key makes while the box has focus: Up and Down step the
+ * vertical alignment through start, center and end, Left and Right the
+ * horizontal one; a value that is not one of the three (stretch, baseline,
+ * space between) steps to center first. Undefined at an end, or for another key.
+ */
+export function alignArrowWrite(state: AlignBoxState, key: string): AlignWrite | undefined {
+  const props = axisProps(state);
+  const step = key === 'ArrowUp' || key === 'ArrowLeft' ? -1 : key === 'ArrowDown' || key === 'ArrowRight' ? 1 : 0;
+  if (step === 0) {
+    return undefined;
+  }
+  const prop = key === 'ArrowUp' || key === 'ArrowDown' ? props.y : props.x;
+  const at = positionIndex(valueOf(state, prop));
+  const next = at === -1 ? 'center' : ALIGN_POSITIONS[at + step];
+  if (next === undefined) {
+    return undefined;
+  }
+  assert(ALIGN_POSITIONS.includes(next), 'An arrow steps to a position');
+  return [prop, next];
+}
+
+// The 3×3 click targets: start / center / end on each screen axis. A
+// double-click toggles the main axis between Space between and that position.
+function AlignDots({ justify, align, column, busy, onSet }: Pick<Props, 'justify' | 'align' | 'column' | 'busy' | 'onSet'>) {
+  const state: AlignBoxState = { justify, align, column };
   return (
     <div className="embed-editor_align-dots">
       {ALIGN_POSITIONS.map((ry) =>
@@ -390,9 +462,15 @@ function AlignDots({ column, busy, onSet }: Pick<Props, 'column' | 'busy' | 'onS
             className="embed-editor_align-dot"
             disabled={busy}
             aria-label={`Align ${axisLabel(cx, 'x')} ${axisLabel(ry, 'y')}`}
+            title={norm(justify) === 'space-between' ? 'Double-click to align here' : 'Double-click for Space between'}
             onClick={() => {
-              onSet(xProp, cx);
-              onSet(yProp, ry);
+              for (const [prop, value] of alignDotWrites(state, cx, ry)) {
+                onSet(prop, value);
+              }
+            }}
+            onDoubleClick={() => {
+              const position = column ? ry : cx;
+              onSet('justify-content', norm(justify) === 'space-between' ? position : 'space-between');
             }}
           >
             <span />
@@ -423,8 +501,20 @@ function AlignBox({ justify, align, column, busy, onSet }: Pick<Props, 'justify'
     alignItems: isBaseline ? 'flex-start' : alignValue,
   };
   return (
-    <div className="embed-editor_align-box">
-      <AlignDots column={column} busy={busy} onSet={onSet} />
+    <div
+      className="embed-editor_align-box"
+      role="group"
+      aria-label="Alignment"
+      onKeyDown={(event) => {
+        // Arrow keys move the alignment while focus is in the box (a dot just clicked).
+        const write = busy ? undefined : alignArrowWrite({ justify, align, column }, event.key);
+        if (write !== undefined) {
+          event.preventDefault();
+          onSet(write[0], write[1]);
+        }
+      }}
+    >
+      <AlignDots justify={justify} align={align} column={column} busy={busy} onSet={onSet} />
       <div className="embed-editor_align-preview" style={previewStyle} aria-hidden="true">
         {isBaseline ? (
           <>
@@ -432,17 +522,9 @@ function AlignBox({ justify, align, column, busy, onSet }: Pick<Props, 'justify'
             <span className="embed-editor_align-baseline">{BASELINE_ARROW}</span>
           </>
         ) : (
-          // Double-click the clustered bars → space-between; double-click a spread bar
-          // → collapse the main axis to that bar's position (start / center / end).
-          ALIGN_POSITIONS.map((position, i) => (
-            <span
-              key={i}
-              className="embed-editor_align-bar"
-              style={barStyle}
-              title={justifyValue === 'space-between' ? 'Double-click to align here' : 'Double-click for Space between'}
-              onDoubleClick={() => onSet('justify-content', justifyValue === 'space-between' ? position : 'space-between')}
-            />
-          ))
+          // Shown only: clicks fall through to the dots beneath, which a stretched
+          // bar used to cover, so its middle never set center.
+          ALIGN_POSITIONS.map((position) => <span key={position} className="embed-editor_align-bar" style={barStyle} />)
         )}
       </div>
     </div>

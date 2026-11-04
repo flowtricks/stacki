@@ -1166,12 +1166,14 @@ body.is-scrubbing * {
 }
 
 /* Non-selectable group subheader (e.g. a component grouping its embeds). */
+/* Secondary, not tertiary: on the raised menu surface the tertiary grey was too
+   faint to read as a group name. */
 .u-select-heading {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2);
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
   font-family: var(--font-family-sans);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
@@ -1182,7 +1184,7 @@ body.is-scrubbing * {
   margin-top: var(--space-1);
 }
 .u-select-heading .u-select-icon {
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
 }
 /* The link variant's headings are component NAMES → Webflow's component-tag green. */
 .u-select.is-link .u-select-heading,

@@ -187,9 +187,39 @@ function compactForm(values: ReadonlyMap<string, SideValue>): readonly Compact[]
   if (SIDES.every((side) => equal('top', side))) {
     return written('padding', 'top');
   }
+  // Every side set alike (same importance, no var() whose sides could not be
+  // read back apart): one `padding` in its shortest form, as it is written by
+  // hand: `padding: 0.2em 0.59em`, not `padding-block` and `padding-inline`.
+  const whole = shorthandOf(values);
+  if (whole !== undefined) {
+    return [whole];
+  }
   const block = equal('top', 'bottom') ? written('padding-block', 'top') : [...written('padding-top', 'top'), ...written('padding-bottom', 'bottom')];
   const inline = equal('left', 'right') ? written('padding-inline', 'left') : [...written('padding-right', 'right'), ...written('padding-left', 'left')];
   return [...block, ...inline];
+}
+
+function shorthandOf(values: ReadonlyMap<string, SideValue>): Compact | undefined {
+  const sides = SIDES.map((side) => values.get(`padding-${side}`));
+  const [top, right, bottom, left] = sides;
+  if (top === undefined || right === undefined || bottom === undefined || left === undefined) {
+    return undefined;
+  }
+  // A side read off a shorthand may carry no `important` at all: unset is not important.
+  const important = top.important === true;
+  if (sides.some((side) => side === undefined || (side.important === true) !== important || isSubstitution(side.value))) {
+    return undefined;
+  }
+  // SIDES is top, right, bottom, left: the shorthand's own order.
+  const parts = [top.value, right.value, bottom.value, left.value];
+  if (right.value === left.value) {
+    parts.pop();
+    if (top.value === bottom.value) {
+      parts.pop();
+    }
+  }
+  assert(parts.length >= 2, 'A shorthand of unequal sides names at least two');
+  return { prop: 'padding', value: parts.join(' '), important };
 }
 
 // Rewrite the node's own padding in its shortest form, where its first padding

@@ -17,7 +17,7 @@ import { breakpointTier, buildStyleContexts, nativeContribsFor, nativeHasValues,
 import { listAtRuleBlocks } from '../model/css';
 import { nativeStylingAvailable } from '../model/webflow';
 import { EMPTY_RULE_MODEL } from './EditorBasics';
-import { chipsFor, styledSelectorsFor } from './editorModel';
+import { chipsFor, styledSelectorsFor, usePseudoTarget } from './editorModel';
 import { isGlobalSelector } from './LayoutRows';
 import { useScanState, useSelectionState, useNativeState, usePendingWrites } from './useEditorFoundation';
 import { useElementTokens } from './useEditorRuleEdits';
@@ -289,6 +289,7 @@ export function useSelectorChips(
   const { model, snapshot, tokens } = elementTokens;
   const { activeSelector } = activeSelectorHook;
   const { currentContext, styleContexts } = styleContextsHook;
+  const pseudo = usePseudoTarget();
 
   // Every selector (with styles) that targets this element in the current context —
   // the element's own classes, stateful, and complex/ancestor selectors — for the
@@ -305,8 +306,9 @@ export function useSelectorChips(
         tokens,
         classList: snapshot?.classList ?? [],
         removedClasses,
+        pseudo,
       }),
-    [model, nativeModel, currentContext, activeSelector, selectedSelectorText, tokens, snapshot, removedClasses],
+    [model, nativeModel, currentContext, activeSelector, selectedSelectorText, tokens, snapshot, removedClasses, pseudo],
   );
 
   // Per-context dropdown info: embed hasStyles/combos (for the dot + auto-highlight)

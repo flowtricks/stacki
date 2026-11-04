@@ -3,7 +3,7 @@
 // modal editor (SizeSection.tsx).
 
 import { useEffect, useRef, useState } from 'react';
-import Popup from '../../ui/Popup';
+import PanelSheet from './components/PanelSheet';
 import type { ReactNode } from 'react';
 import FieldLabel from './components/FieldLabel';
 import { PropTip } from './components/CssPropertyTip';
@@ -132,14 +132,9 @@ export function asPositionOffset(typed: string): string {
 // editors use; closes on backdrop click or Escape.
 export function PositionModal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
   return (
-    <Popup
-      className="embed-editor_bg-modal embed-editor_pos-modal u-surface-surface"
-
-      label="Object position"
-      onClose={onClose}
-    >
+    <PanelSheet className="embed-editor_bg-modal embed-editor_pos-modal u-surface-surface" label="Object position" onClose={onClose}>
       {children}
-    </Popup>
+    </PanelSheet>
   );
 }
 

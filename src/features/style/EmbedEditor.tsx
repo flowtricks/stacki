@@ -36,6 +36,7 @@ import {
   useSelectorPick,
   useTypedSelector,
   useFocusProp,
+  usePseudoRequest,
   useSourceDocument,
   useRenameQuery,
   useContextKeys,
@@ -183,6 +184,7 @@ function useEditorElement(editorFoundation: ReturnType<typeof useEditorFoundatio
   const selectorPick = useSelectorPick(editorRefs, selectionState, elementTokens);
   const typedSelector = useTypedSelector(editorRefs, selectionState, applyEditHook, selectorPick);
   const focusPropHook = useFocusProp(editorRefs, selectorPick);
+  usePseudoRequest(typedSelector, selectorPick, elementTokens, selectionState);
   return {
     activeSelectorHook,
     elementTokens,

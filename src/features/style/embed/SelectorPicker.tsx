@@ -2,6 +2,9 @@ import Popup from '../../../ui/Popup';
 // The selector well: the chips a selection is styled by, picking and adding
 // one, and filtering global selectors (EmbedEditor.tsx).
 
+import { parentClassPrefix } from '../model/classPrefix';
+import { getHost } from '../model/host';
+import { assert } from '../../../../shared/core/assert';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
 import { type SegmentedOption } from '../components/SegmentedControl';
@@ -98,6 +101,26 @@ export function useHighlightInView({ listRef, highlight, showList }: { listRef: 
   }, [highlight, showList, listRef]);
 }
 
+// Who answers a ⌘Enter: the mounted selector field. One at most, the Style panel's.
+const selectorFocusListeners = new Set<() => void>();
+const SELECTOR_FOCUS_LISTENERS_MAX = 8;
+
+/** Opens the Style panel's selector field and focuses it. False when no field is mounted yet. */
+export function requestSelectorFocus(): boolean {
+  for (const listener of selectorFocusListeners) {
+    listener();
+  }
+  return selectorFocusListeners.size > 0;
+}
+
+function onSelectorFocusRequest(listener: () => void): () => void {
+  selectorFocusListeners.add(listener);
+  assert(selectorFocusListeners.size <= SELECTOR_FOCUS_LISTENERS_MAX, 'onSelectorFocusRequest: listeners are released on unmount');
+  return () => {
+    selectorFocusListeners.delete(listener);
+  };
+}
+
 // The add-selector field's state: the draft, the suggestion list and its highlight,
 // whether the input is revealed, and the selector to restore when the field is left
 // without adding one.
@@ -138,6 +161,24 @@ export function useAddSelectorField({
       inputRef.current?.focus();
     }
   }, [showInput]);
+
+  // ⌘Enter (requestSelectorFocus): open the field and put the caret in it,
+  // as clicking the empty well does. The input does not exist until then.
+  useEffect(
+    () =>
+      onSelectorFocusRequest(() => {
+        if (busy) {
+          return;
+        }
+        if (inputRef.current) {
+          inputRef.current.focus();
+          return;
+        }
+        wantFocus.current = true;
+        setInputOpen(true);
+      }),
+    [busy],
+  );
 
   const onWellMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (!wellMouseDown(event, { busy, inputRef }, restoreRef)) {
@@ -430,10 +471,22 @@ export function SelectorAddField({
 
 // The add input's keys: ↓/↑ move the highlight (opening the list), Enter adds the
 // highlighted suggestion or the typed text, Tab fills the highlighted (or first)
-// suggestion in to keep editing, Escape closes the list.
+// suggestion in to keep editing, Escape closes the list, and → in the empty box
+// fills in the start of the parent's class.
 export function selectorKeyDown(event: ReactKeyboardEvent<HTMLInputElement>, add: AddSelectorState, apply: (text: string) => void) {
   const { highlight, filtered, showList } = add;
-  if (event.key === 'ArrowDown') {
+  if (event.key === 'ArrowRight' && add.draft === '') {
+    // → in the empty box starts a class in the parent's naming scheme:
+    // `.stat_card_` from a parent's `stat_card_title` (classPrefix.ts).
+    const host = getHost();
+    const prefix = parentClassPrefix(host.nodes, host.selectedId);
+    if (prefix !== undefined) {
+      event.preventDefault();
+      add.setDraft(prefix);
+      add.setOpen(true);
+      add.setHighlight(-1);
+    }
+  } else if (event.key === 'ArrowDown') {
     event.preventDefault();
     add.setOpen(true);
     add.setHighlight((previous) => Math.min(previous + 1, filtered.length - 1));

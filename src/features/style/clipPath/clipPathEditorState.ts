@@ -69,6 +69,11 @@ export type ClipPathProps = {
   onApply?: (value: string) => void;
   onClear?: () => void;
   hideClassPicker?: boolean;
+  /** The clip-path the Style panel shows for its selected selector. Embedded, the
+      tool's own style lookup sees only native class styles, so a clip-path written
+      in a <style> or stylesheet read as none and the editor opened cleared: this
+      is what it opens on instead. */
+  initialValue?: string | undefined;
 };
 
 // The shape being edited, its code text, and the preset menu.

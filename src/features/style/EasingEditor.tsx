@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import Popup from '../../ui/Popup';
+import PanelSheet from './components/PanelSheet';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { easingToBezier, bezierToEasing, isEasing } from './model/transition';
 import VariableConnect from './VariableConnect';
@@ -367,10 +367,9 @@ export default function EasingEditor({
   };
 
   return (
-    <Popup
+    <PanelSheet
       className={`embed-editor_ease-modal u-surface-surface${frame ? ' is-framed' : ''}`}
       style={frame ? framedStyle(frame) : undefined}
-
       label="Easing editor"
       onClose={onClose}
     >
@@ -397,7 +396,7 @@ export default function EasingEditor({
           </div>
         </>
       )}
-    </Popup>
+    </PanelSheet>
   );
 }
 

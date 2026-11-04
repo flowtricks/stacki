@@ -197,38 +197,11 @@ test('values the box cannot read side by side set no side', async () => {
 test('a padding edit rewrites the rule’s padding in its shortest form', () => {
   const cases = [
     [['3rem', '3rem', '3rem', '3rem'], [['padding', '3rem', false]]],
-    [
-      ['1rem', '2rem', '1rem', '2rem'],
-      [
-        ['padding-block', '1rem', false],
-        ['padding-inline', '2rem', false],
-      ],
-    ],
-    [
-      ['1rem', '2rem', '3rem', '2rem'],
-      [
-        ['padding-top', '1rem', false],
-        ['padding-bottom', '3rem', false],
-        ['padding-inline', '2rem', false],
-      ],
-    ],
-    [
-      ['1rem', '2rem', '1rem', '4rem'],
-      [
-        ['padding-block', '1rem', false],
-        ['padding-right', '2rem', false],
-        ['padding-left', '4rem', false],
-      ],
-    ],
-    [
-      ['1rem', '2rem', '3rem', '4rem'],
-      [
-        ['padding-top', '1rem', false],
-        ['padding-bottom', '3rem', false],
-        ['padding-right', '2rem', false],
-        ['padding-left', '4rem', false],
-      ],
-    ],
+    // Every side set: one `padding`, in the fewest values that say it.
+    [['1rem', '2rem', '1rem', '2rem'], [['padding', '1rem 2rem', false]]],
+    [['1rem', '2rem', '3rem', '2rem'], [['padding', '1rem 2rem 3rem', false]]],
+    [['1rem', '2rem', '1rem', '4rem'], [['padding', '1rem 2rem 1rem 4rem', false]]],
+    [['1rem', '2rem', '3rem', '4rem'], [['padding', '1rem 2rem 3rem 4rem', false]]],
   ];
   for (const [values, expected] of cases) {
     const rule = edited('color: red; padding: 2rem;', eachSide(values));
@@ -237,20 +210,12 @@ test('a padding edit rewrites the rule’s padding in its shortest form', () => 
 });
 
 test('one side dragged off a shorthand keeps the three others, and no more', () => {
-  assert.deepEqual(paddingOf(edited('padding: 2rem;', [['padding-left', '3rem']])), [
-    ['padding-block', '2rem', false],
-    ['padding-right', '2rem', false],
-    ['padding-left', '3rem', false],
-  ]);
+  assert.deepEqual(paddingOf(edited('padding: 2rem;', [['padding-left', '3rem']])), [['padding', '2rem 2rem 2rem 3rem', false]]);
   // Only what the rule declares is compacted: no side is invented from elsewhere.
   assert.deepEqual(paddingOf(edited('', [['padding-left', '2rem']])), [['padding-left', '2rem', false]]);
   // A longhand written before the shorthand lost to it; the edit must win.
   const reordered = edited('padding-top: 9rem; padding: 2rem;', [['padding-top', '1rem']]);
-  assert.deepEqual(paddingOf(reordered), [
-    ['padding-top', '1rem', false],
-    ['padding-bottom', '2rem', false],
-    ['padding-inline', '2rem', false],
-  ]);
+  assert.deepEqual(paddingOf(reordered), [['padding', '1rem 2rem 2rem', false]]);
   // Editing the shorthand itself replaces the sides that overrode it.
   const whole = edited('padding: 2rem; padding-top: 9rem;', [['padding', '3rem']]);
   assert.deepEqual(paddingOf(whole), [['padding', '3rem', false]]);
@@ -352,3 +317,16 @@ test('the padding writer refuses a property that is not padding', () => {
   });
   assert.equal(rule.toString(), '.card { margin: 0 }', 'and writes nothing');
 });
+
+// A padding side the rule has no declaration of yet joins its padding
+// shorthand: `padding: 0.2em` with a left and right set is one
+// `padding: 0.2em 0.59em`, not two longhands written after it.
+{
+  const postcss = require('postcss');
+  const { addDeclaration } = require('../../helpers/rendererModule')('src/features/style/model/css.ts');
+  const root = postcss.parse('code {\n  border-width: 1px;\n  padding: 0.2em;\n  border-radius: 4px;\n}');
+  const rule = root.first;
+  addDeclaration({ node: rule }, 'padding-left', { value: '0.59em', important: false });
+  addDeclaration({ node: rule }, 'padding-right', { value: '0.59em', important: false });
+  assert.equal(root.toString(), 'code {\n  border-width: 1px;\n  padding: 0.2em 0.59em;\n  border-radius: 4px;\n}');
+}

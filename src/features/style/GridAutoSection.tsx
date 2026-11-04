@@ -3,7 +3,7 @@
 // (GridSettings.tsx).
 
 import { useState } from 'react';
-import Popup from '../../ui/Popup';
+import PanelSheet from './components/PanelSheet';
 import type { ReactNode } from 'react';
 import { GroupLabel } from './TypographySection';
 import { serializeTrackSize, trackLabel, type TrackSize } from './model/gridTemplate';
@@ -106,12 +106,7 @@ export function AutoTrackPopover({
 
 export function Modal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
   return (
-    <Popup
-      className="style-panel-surface embed-editor_grid-modal u-surface-surface"
-
-      label="Grid settings"
-      onClose={onClose}
-    >
+    <PanelSheet className="style-panel-surface embed-editor_grid-modal u-surface-surface" label="Grid settings" onClose={onClose}>
       {({ close }) => (
         <>
           <div className="embed-editor_grid-modal-head">
@@ -123,6 +118,6 @@ export function Modal({ onClose, children }: { onClose: () => void; children: Re
           <div className="embed-editor_grid-modal-body">{children}</div>
         </>
       )}
-    </Popup>
+    </PanelSheet>
   );
 }

@@ -8,7 +8,7 @@ import { mediaParamsForBreakpoint, optionsFor } from '../model/nativeStyles';
 import { ensureNestPath, ensureQueryBlock, parseNestedInput, type NestStep } from '../model/css';
 import { applyNativePropertyAt, applyNativeToNewBaseClass, removeNativePropertyAt, webflowApi, writeEmbedDocument, type EmbedDocument } from '../model/webflow';
 import { type PropWrite } from './EditorBasics';
-import { upgradedDefault, type EmbedRegion, embedWriteTarget, createRuleForWrite, type NativeAttempt, styledSelectorsFor } from './editorModel';
+import { upgradedDefault, type EmbedRegion, embedWriteTarget, createRuleForWrite, type NativeAttempt, styledSelectorsFor, takeTypedPath } from './editorModel';
 import { EMBED_ONLY_PROPS } from './ResolvedRows';
 import { isGlobalSelector } from './LayoutRows';
 import { asQuery } from './SelectorPicker';
@@ -172,7 +172,7 @@ export function useWriteNewRule(
   const { setStatus } = scanState;
   const { settleEmbedWrite } = pendingWrites;
   const { refreshDerived } = refreshDerivedHook;
-  const { typedPathRef } = selectorPick;
+  const { typedPathsRef } = selectorPick;
   const { resolved } = resolvedHook;
 
   // Writes target the picked selector's rule in the current context/state, and
@@ -201,11 +201,7 @@ export function useWriteNewRule(
     // try/finally so `busy` always clears even if creating the rule / writing throws
     // (a stuck busy would disable every button in the panel).
     try {
-      const typed = typedPathRef.current;
-      const nested = typed && typed.selector === fullSelector && typed.ctx === (embedContext ?? '') ? typed.path : undefined;
-      if (nested) {
-        typedPathRef.current = undefined;
-      }
+      const nested = takeTypedPath(typedPathsRef.current, fullSelector, embedContext ?? '');
       const ok = createRuleForWrite(region, {
         nested,
         bpMedia,
@@ -340,7 +336,7 @@ export function useAddQuery(
   const { nativeModel } = nativeState;
   const { onSetProp } = propEdits;
   const { activeSelector } = activeSelectorHook;
-  const { setTypedContexts, typedPathRef } = selectorPick;
+  const { setTypedContexts } = selectorPick;
   const { addTypedSelector } = typedSelector;
   const { canNative } = nativeTarget;
   const { nativeContextOk, resolved, selectedNativeIndex } = resolvedHook;
@@ -370,7 +366,6 @@ export function useAddQuery(
       }
       return;
     }
-    typedPathRef.current = undefined;
     setTypedContexts((previous) => (previous.includes(query) ? previous : [...previous, query]));
     setContext(query);
     // Scaffold the empty top-level query block (`@query {}`) into the embed now.

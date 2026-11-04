@@ -2,7 +2,8 @@
 // is made of: finding a child rule, setting, appending and terminating
 // declarations (css.ts).
 
-import postcss, { type Root, type Rule, type AtRule, type Declaration } from 'postcss';
+import postcss, { type AtRule, type ChildNode, type Declaration, type Document, type Root, type Rule } from 'postcss';
+import { assert } from '../../../../shared/core/assert';
 import type { StyleRegion } from './styleTypes';
 import { selectorKey } from './resolved';
 import { isPaddingProperty, setPaddingDeclaration } from './spacingShorthand';
@@ -157,7 +158,13 @@ export function directDecls(node: Rule | AtRule): Declaration[] {
 
 /** Append a declaration, placing it before any nested rules so a parent's own decls stay
  *  grouped above its nested rules (e.g. bare decls at the top of a query block). */
-export function appendDecl(node: Rule | AtRule, prop: string, declared: DeclarationValue): Declaration {
+export function appendDecl(node: Rule | AtRule, prop: string, declared: DeclarationValue): void {
+  // A padding side joins the rule's padding (`padding: 0.2em` with a new left
+  // and right becomes `padding: 0.2em 0.59em`), never a longhand after it.
+  if (isPaddingProperty(prop)) {
+    setPaddingDeclaration(node, prop, declared);
+    return;
+  }
   const decl = postcss.decl({ prop, value: declared.value, important: declared.important });
   const firstNested = node.nodes?.find((child) => child.type === 'rule' || child.type === 'atrule');
   if (firstNested) {
@@ -165,8 +172,70 @@ export function appendDecl(node: Rule | AtRule, prop: string, declared: Declarat
   } else {
     node.append(decl);
   }
+  placeChild(node, decl);
   terminateDeclarations(node);
-  return decl;
+}
+
+/**
+ * Lines a node just added inside `parent` up one level deeper than the parent:
+ * a declaration on its own line, a nested rule with its closing brace under
+ * its selector. PostCSS guesses a new node's indentation from the first
+ * declaration in the whole stylesheet, so in an indented <style> block a
+ * declaration of a nested rule (`&::after { … }`) landed at the top level's
+ * depth plus the block's, and its closing brace somewhere else. A parent
+ * written on one line (`.a { color: red }`) keeps PostCSS's own spacing.
+ */
+export function placeChild(parent: Rule | AtRule, child: ChildNode): void {
+  const indent = indentInside(parent);
+  if (indent === undefined) {
+    return;
+  }
+  assert(!indent.includes('\n'), 'An indentation is one line');
+  const block = child.type === 'rule' || child.type === 'atrule';
+  child.assign({ raws: { ...child.raws, before: `\n${indent}`, ...(block ? { after: `\n${indent}` } : {}) } });
+  assert(child.parent === parent, 'A placed node is inside its parent');
+}
+
+// The indentation of `parent`'s children: that of one already on its own line,
+// or, with none, the parent's own plus the step this stylesheet indents by.
+function indentInside(parent: Rule | AtRule): string | undefined {
+  const own = lineIndentOf(parent.raws.before);
+  const children = (parent.nodes ?? []).filter((node) => node.raws.before !== undefined);
+  const lined = children.find((node) => lineIndentOf(node.raws.before) !== undefined);
+  if (lined !== undefined) {
+    return lineIndentOf(lined.raws.before);
+  }
+  if (children.length > 0 || own === undefined) {
+    return undefined; // One line, or a parent not on a line of its own.
+  }
+  return own + indentStep(parent.root());
+}
+
+// What follows the last line break of a node's leading whitespace; undefined
+// when it does not start a line.
+function lineIndentOf(raw: string | undefined): string | undefined {
+  if (raw === undefined || !raw.includes('\n')) {
+    return undefined;
+  }
+  return raw.slice(raw.lastIndexOf('\n') + 1).replace(/\S/g, '');
+}
+
+// How far this stylesheet indents a declaration inside its rule: the first
+// declaration on its own line under a rule on its own line says; two spaces
+// when none does.
+function indentStep(root: Root | Document): string {
+  let step: string | undefined;
+  root.walkDecls((decl) => {
+    const parent = decl.parent;
+    const inner = lineIndentOf(decl.raws.before);
+    const outer = parent?.type === 'rule' ? lineIndentOf(parent.raws.before) : undefined;
+    if (inner !== undefined && outer !== undefined && inner.length > outer.length && inner.startsWith(outer)) {
+      step = inner.slice(outer.length);
+      return false;
+    }
+    return undefined;
+  });
+  return step ?? '  ';
 }
 
 /** Set (update-or-append) a DIRECT declaration on a node — scoped so a nested rule's

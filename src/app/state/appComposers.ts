@@ -2,6 +2,8 @@
 // group of hooks on the ones before it, then the property edits and the view
 // model (App.tsx).
 
+import { useMemo } from 'react';
+import { classNamesIn, classSourceKind } from '../../../shared/page/classNames';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useNavigation } from './appHistory';
@@ -108,6 +110,7 @@ export function useViewModel(
   const canvasMarks = useCanvasMarks(coreState, shortcuts, pageOps, crumbLabels, canvasNotices);
   const selectionPaths = useSelectionPaths(shortcuts, pageOps, canvasNotices, coreState);
   const overlayInfoScope = useOverlayInfo(shortcuts, pageOps, crumbLabels);
+  const projectClasses = usePageClasses(coreState);
   return {
     ...scopeContext,
     ...tagOptionsScope,
@@ -119,5 +122,24 @@ export function useViewModel(
     ...canvasMarks,
     ...selectionPaths,
     ...overlayInfoScope,
+    projectClasses,
   };
+}
+
+// The class field's suggestions: the project's classes as last scanned, and
+// the open file's own as it reads now, so a class just written into the page
+// is offered at once rather than after the next scan.
+function usePageClasses(coreState: ReturnType<typeof useCoreState>): readonly string[] {
+  const { projectClasses, pageState, currentPage } = coreState;
+  const source = pageState?.source;
+  const file = currentPage?.path;
+  return useMemo(() => {
+    const kind = file === undefined ? undefined : classSourceKind(file);
+    if (source === undefined || kind === undefined) {
+      return projectClasses;
+    }
+    const known = new Set(projectClasses);
+    const own = classNamesIn(source, kind).filter((name) => !known.has(name));
+    return own.length === 0 ? projectClasses : [...projectClasses, ...own].sort();
+  }, [projectClasses, source, file]);
 }

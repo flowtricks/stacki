@@ -594,6 +594,14 @@
 .clip-path_preset-button:hover {
   background: var(--color-bg-surface-raised);
 }
+/* In the Style panel's layer popover, which is itself the surface colour, the
+   button takes the raised fill so it still reads as a control. */
+.embed-editor_layer-popover .clip-path_preset-button {
+  background: var(--color-bg-surface-raised);
+}
+.embed-editor_layer-popover .clip-path_preset-button:hover {
+  background: var(--color-bg-surface-high);
+}
 .clip-path_preset-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 var(--border-width-default) var(--color-border-focus);

@@ -1,6 +1,7 @@
 // Asking the rendered page which selectors match an element: the forms a
 // selector can be asked in, and the answers turned into matches (webflow.ts).
 
+import { assert } from '../../../../shared/core/assert';
 import type { CanvasAnswer } from '../../../editor/canvasReply';
 import { getHost } from './host';
 import type { ParsedRule } from './styleTypes';
@@ -54,13 +55,32 @@ export const PSEUDO_ELEMENT_NAMES = [
 export const PSEUDO_ELEMENT_RE = new RegExp(`::?(?:${PSEUDO_ELEMENT_NAMES.join('|')})(?![\\w-])|::(?:part|slotted)\\([^)]*\\)`, 'g');
 
 export function askableForm(text: string): string | undefined {
-  const bare = text.replace(PSEUDO_ELEMENT_RE, '').replace(STATE_PSEUDO_RE, '').trim();
+  const bare = text.replace(PSEUDO_ELEMENT_RE, standIn).replace(STATE_PSEUDO_RE, standIn).trim();
   // What's left has to still be a selector: `:hover {}` on its own strips to
   // nothing, and `.a > :hover` to a dangling combinator.
   if (!bare || /[>+~]\s*$/.test(bare) || bare.startsWith('>')) {
     return undefined;
   }
+  // Only stand-ins left (`:hover {}`, `::before {}` on their own): that asks
+  // about every element, not this one.
+  if (bare.replace(/[\s*>+~]/g, '') === '') {
+    return undefined;
+  }
   return bare;
+}
+
+// What a stripped pseudo leaves in its place: nothing inside a compound
+// (`details:open` → `details`), and `*` where it was the whole compound, so
+// `:open > .faq_summary` (from `:open > &` nested in `.faq_summary`) asks
+// `* > .faq_summary` rather than the dangling `> .faq_summary`, which is no
+// selector, and the rule was never shown for the element it styles.
+function standIn(match: string, offset: number, whole: string): string {
+  assert(whole.slice(offset, offset + match.length) === match, 'A stand-in replaces what it matched');
+  const before = offset === 0 ? '' : (whole[offset - 1] ?? '');
+  const after = whole[offset + match.length] ?? '';
+  const startsCompound = before === '' || /[\s>+~(,]/.test(before);
+  const endsCompound = after === '' || /[\s>+~),:]/.test(after);
+  return startsCompound && endsCompound ? '*' : '';
 }
 
 /** The selectors worth asking the DOM about, mapped back to the rule texts

@@ -1,4 +1,5 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import { requestSelectorFocus } from './embed/SelectorPicker';
 import React, { useEffect, useRef } from 'react';
 import { useStyleFiles } from './useStyleFiles';
 import type { HostState } from './model/host';
@@ -28,6 +29,9 @@ interface StylePanelProps {
   readonly historyTick?: number;
   readonly openFilePath?: string | undefined;
   readonly openFileKind?: HostState['openFileKind'];
+  readonly pseudoRequest?: HostState['pseudoRequest'];
+  /** Counts ⌘Enter presses: each new one puts the caret in the selector field. */
+  readonly selectorFocus?: number;
 }
 
 type StyleFiles = HostState['files'];
@@ -42,6 +46,7 @@ export default function StylePanel(props: StylePanelProps) {
   useEffect(() => setHost(host), [host]);
   const hostRef = useRef<HTMLDivElement>(null);
   usePanelBounds(hostRef);
+  useSelectorFocus(hostRef, props.selectorFocus ?? 0);
   const popupOpen = usePopupOpen(hostRef);
   if (!props.project) {
     return undefined;
@@ -75,7 +80,39 @@ function hostState(props: StylePanelProps, files: StyleFiles, astroFiles: StyleF
     renderedClasses: [...(props.renderedClasses ?? [])],
     projectClasses: [...(props.projectClasses ?? [])],
     historyTick: props.historyTick ?? 0,
+    pseudoRequest: props.pseudoRequest,
   };
+}
+
+// The ⌘Enter presses already answered: the panel remounts with each tab
+// switch, and an old press must not take the caret again.
+let selectorFocusHandled = 0;
+const SELECTOR_FOCUS_FRAMES_MAX = 30;
+
+// Puts the caret in the selector field on a new ⌘Enter press, waiting a few
+// frames for the field when the panel has only just been switched to.
+function useSelectorFocus(hostRef: React.RefObject<HTMLDivElement>, tick: number): void {
+  useEffect(() => {
+    if (tick <= selectorFocusHandled) {
+      return undefined;
+    }
+    selectorFocusHandled = tick;
+    let frames = 0;
+    let request = 0;
+    // The field's input is only mounted once the well is opened, so the
+    // picker is asked to open it; it waits for a picker that has mounted.
+    const tryFocus = (): void => {
+      if (requestSelectorFocus()) {
+        return;
+      }
+      frames += 1;
+      if (frames < SELECTOR_FOCUS_FRAMES_MAX) {
+        request = requestAnimationFrame(tryFocus);
+      }
+    };
+    tryFocus();
+    return () => cancelAnimationFrame(request);
+  }, [hostRef, tick]);
 }
 
 function usePanelBounds(hostRef: React.RefObject<HTMLDivElement>): void {
