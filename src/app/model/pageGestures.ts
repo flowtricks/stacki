@@ -9,10 +9,8 @@ import { ASTRO_ASSETS_MODULE, PLACEHOLDER_PROPS } from '../../features/palette/a
 import { getElementSchema, VOID_TAGS } from '../../editor/elementSchemas';
 import { isInlineOnly } from '../../features/props/RichContent';
 import { type EditGesture } from '../../editor/pageEdits';
-import { type InsertPlace, frontmatterGesture, insertGesture, nodeGesture, removalGesture, sequence } from '../../editor/editGestures';
-import type { StyleBlockChange } from './componentStyles';
+import { type InsertPlace, frontmatterGesture, insertGesture, removalGesture, sequence } from '../../editor/editGestures';
 import type { NodeId } from '../../../shared/core/brand';
-import { assert } from '../../../shared/core/assert';
 import { nodeAtPath } from '../../editor/editorTree';
 import { namesUsedIn, neededFrontmatter, withStatements } from '../../editor/frontmatterMove';
 import type { FieldDefinition } from '../../features/props/propRules';
@@ -243,28 +241,6 @@ export function extractionGesture(
           imports: [...pageModel.imports, { name, path: chooseImportPath(pageModel, paths), quote: "'" }],
         };
   return frontmatterOf(imports(after)) === frontmatterOf(after) ? replaced : sequence(replaced, frontmatterGesture(after, urgent, imports));
-}
-
-// The page's `<style>` blocks restated without the rules the new component
-// took (componentStyles.ts), as one gesture; undefined when none changes. A
-// block whose text is no longer the one the change was read from is left as
-// it is: its rules then stay on the page as well, which costs nothing.
-export function styleBlockGestures(shown: EditorModel, changes: readonly StyleBlockChange[]): EditGesture | undefined {
-  const urgent = { coalesceKey: undefined, urgency: true };
-  let gesture: EditGesture | undefined;
-  for (const change of changes) {
-    const node = findNodeById(shown.nodes, change.nodeId);
-    if (node?.kind !== 'raw') {
-      continue;
-    }
-    if (node.inner !== change.before) {
-      continue;
-    }
-    assert(change.css !== change.before, 'styleBlockGestures: a change changes the block');
-    const restated = nodeGesture(node.id, { ...node, inner: change.css }, urgent);
-    gesture = gesture === undefined ? restated : sequence(gesture, restated);
-  }
-  return gesture;
 }
 
 // What creating a component says it did.

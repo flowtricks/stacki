@@ -396,9 +396,9 @@ export class SelectorBuilder {
       this.addSpecificity(mostSpecific(inner));
     } else if (value === ':global') {
       // Astro's `:global(.button)` is `.button` with the file's scope left off
-      // (the opening componentStyles.ts writes so a page's rules reach markup
-      // it renders through a component): it matches what its argument matches,
-      // at its argument's weight.
+      // (how a user lets a page's rules reach markup it renders through a
+      // component): it matches what its argument matches, at its argument's
+      // weight.
       const inner = compileFunctionalArg(node);
       if (inner.length) {
         this.current.requireAny.push(inner);

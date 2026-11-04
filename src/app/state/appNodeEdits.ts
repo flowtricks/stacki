@@ -20,7 +20,6 @@ import { type NodeClipboard } from '../appTypes';
 import { findEditorNodeById as findNodeById, findEditorParentList as findParentList } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { confirmDialog } from '../../ui/ConfirmDialog';
-import { componentStyles } from '../model/componentStyles';
 import { createdComponentFiles } from '../model/componentCreation';
 import {
   createProjectComponent,
@@ -33,7 +32,7 @@ import {
 import { parseShortcutMessage } from '../../features/preview/previewMessages';
 import { namesInSubtree, offerStyleCleanup } from '../../features/selectors/deleteCleanup';
 import { newId, withNewIds, usesPageScope, slotHostOf, definitionOf, frontmatterOf } from '../model/nodeFactory';
-import { extractionGesture, styleBlockGestures, createdComponentMessage, pasteNeeds, pastedImports, pastePlace } from '../model/pageGestures';
+import { extractionGesture, createdComponentMessage, pasteNeeds, pastedImports, pastePlace } from '../model/pageGestures';
 import { pastedInScope, broughtMessage } from '../model/appKeys';
 import { prunedAfterRemoval } from '../model/pageQueries';
 import { loadComponentInstance, componentInstancePlacement } from '../model/componentInstances';
@@ -236,11 +235,9 @@ export function useCreateComponent(
   // edit to two files, and the component file is written first: a page that
   // imports a file that isn't there yet is a broken page, however briefly.
   //
-  // The page's CSS keeps styling the markup (componentStyles.ts): its
-  // `<style>` is scoped to the page and stopped reaching markup that lives in
-  // another file, so the selectors that matched it are opened with
-  // `:global()` in the same edit. And it is one undo step: ⌘Z restores the
-  // page, its styles and the markup, and takes the new file back
+  // The page's CSS is the user's and is never rewritten here: its `<style>`
+  // blocks stay byte for byte as they were. And it is one undo step: ⌘Z
+  // restores the page and the markup, and takes the new file back
   // (componentCreation.ts).
   const createComponentFromSelection = useCallback(
     async (name: string, options: { readonly withProps?: boolean } = {}) => {
@@ -254,7 +251,6 @@ export function useCreateComponent(
         return;
       }
       const props = withProps ? propsNeededFor(model, node) : [];
-      const styles = componentStyles(model, node.id);
       const input = {
         projectPath,
         pagePath: page.path,
@@ -293,8 +289,7 @@ export function useCreateComponent(
       const id = newId();
       // Step 9: the instance goes in before the markup, the markup comes out,
       // and the import follows — one undo step, the markup's bytes moved to
-      // the new file rather than reprinted in the page. The page's styles are
-      // restated first, while the tree is still the one they were read from.
+      // the new file rather than reprinted in the page.
       const now = pageStateRef.current.pageState;
       const shown = now?.editable ? now.model : undefined;
       const found = shown ? findWithParent(shown.nodes, node.id) : undefined;
@@ -305,8 +300,7 @@ export function useCreateComponent(
       const place = { parentId: found.parent?.id ?? undefined, index: found.index };
       const extracted = { id, name, props, place, paths };
       const extraction = extractionGesture(shown, node.id, extracted);
-      const restyled = styleBlockGestures(shown, styles.pageBlocks);
-      if (!commitEdit(restyled === undefined ? extraction : sequence(restyled, extraction), { files })) {
+      if (!commitEdit(extraction, { files })) {
         await files.undo(); // Refused: the page won't import the file, so it doesn't stay.
         return;
       }

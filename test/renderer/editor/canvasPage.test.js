@@ -2,7 +2,7 @@
 // shows it on, never the component itself. Opening a component makes it the
 // current page, and handing that path on as the page made the panel skip the
 // page's `<style>`: a button turned into a component showed no selector chips,
-// though the page's `.button, :global(.button)` rule styled it on the canvas.
+// though a page rule written `:global(.button)` styled it on the canvas.
 // Method: edit stacks as the app builds them (the page, then each component
 // opened from it), checked through canvasPageOf; then the negative space: a
 // page alone, an empty stack, a stack that starts at a component, and the

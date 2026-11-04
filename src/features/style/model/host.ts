@@ -68,8 +68,8 @@ export type HostState = {
    *  the same model shape in both, so their provenance must be carried separately. */
   openFileKind: 'page' | 'component' | undefined;
   /** While a component is open, the page the canvas shows it on. Selectors of
-   *  that page's scoped `<style>` written `:global(…)` reach the component's
-   *  markup (src/app/model/componentStyles.ts), so they are in its cascade. */
+   *  that page's scoped `<style>` that the user wrote `:global(…)` reach the
+   *  component's markup, so they are in its cascade. */
   contextPagePath: string | undefined;
   /**
    * Bumped by the app whenever undo or redo runs. The panel reads its rules

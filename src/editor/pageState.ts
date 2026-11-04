@@ -153,8 +153,8 @@ export function carriedParse<Parsed extends ParsePageResult & { readonly source:
  * The page the canvas shows while a component is open: the bottom of the edit
  * stack. Opening a component makes it the current page, so the current page
  * is the component itself, never where it is rendered; the Style panel needs
- * the page, whose `:global()` selectors reach the component's markup
- * (src/app/model/componentStyles.ts). Undefined when the open file is not a
+ * the page, whose selectors written `:global(…)` reach the component's
+ * markup. Undefined when the open file is not a
  * component, or the stack does not start at a page.
  */
 export function canvasPageOf(stack: readonly OpenFile[]): string | undefined {

@@ -63,7 +63,7 @@ export type EmbedSource = {
     | { kind: 'file'; path: string }
     | { kind: 'node'; nodeId: string; filePath: string | undefined }
     /** `reach: 'page'`: the page a component is open on, whose scoped blocks
-     *  reach the component through their `:global()` selectors only. */
+     *  reach the component only through selectors written `:global(…)`. */
     | { kind: 'astro'; path: string; reach?: 'page' };
 };
 
@@ -201,9 +201,9 @@ function styleSources(): EmbedSource[] {
   }
 
   // The page a component is open on: its scoped `<style>` reaches the
-  // component through the selectors written `:global(…)` (componentStyles.ts
-  // opens them when a component is made from the page's markup), and an edit
-  // to one of those rules is an edit to the page's own rule.
+  // component through selectors written `:global(…)` (by the user; Stacki
+  // never rewrites selectors), and an edit to one of those rules is an edit to
+  // the page's own rule.
   if (contextPage !== undefined && !contextPageListed) {
     out.push({
       key: `astro:${contextPage}`,
@@ -474,7 +474,7 @@ export function rebuildRules(docs: EmbedDocument[]): ParsedRule[] {
         order,
       });
       // A scoped block of the page reaches the open component only through
-      // its `:global()` selectors; its other rules style the page alone.
+      // selectors written `:global(…)`; its other rules style the page alone.
       const scopedToPage = reachesPage && !isGlobalRegion(region);
       rules.push(...(scopedToPage ? collected.filter(reachesComponent) : collected));
     });
