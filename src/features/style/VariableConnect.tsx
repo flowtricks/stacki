@@ -2,14 +2,16 @@ import { cloneElement, isValidElement, useRef, useState } from 'react';
 import type { MutableRefObject, ReactElement, ReactNode, RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { type ProjectVariable } from './model/webflow';
-import { caretOffset } from './model/cssCode';
+import { selectionOffsets, setCaretOffset } from './model/cssCode';
 import CustomValue, { doesNotFit } from './CustomValueEditor';
-import { insertBinding } from './model/insertBinding';
+import { insertBindingAt, type ValueSelection } from './model/insertBinding';
+import { completeTypedVariable, fieldOffsetOf, replaceVariableAt, typedVariableAt, type TypedVariable } from './model/typedVariable';
+import type { PickerNavigation } from './VariablePicker';
 import { PlusIcon } from './VariableIcons';
 import { varTypeAllowed, useSharedVars } from './sharedVars';
 import { VariablePicker } from './VariablePicker';
 import VariableHint from './VariableHint';
-import { type Chip, CHIP_MARK, fieldText, serializeTokens, TokenField } from './TokenField';
+import { type Chip, CHIP_MARK, fieldText, type PressedChip, serializeTokens, TokenField } from './TokenField';
 import './embedEditor.css';
 import {
   childValue,
@@ -62,9 +64,11 @@ type VariableConnectProps = {
  * second opinion on a question already answered — and when the first answer
  * was "replace", it turned a picked variable into a wiped value.
  */
-export function connectCustomField(field: ReactElement, onDraft: (value: string) => void): ReactNode {
+export function connectCustomField(field: ReactElement, prop: string | undefined, onDraft: (value: string) => void): ReactNode {
+  // The property travels with the value: without it the chooser in the big box
+  // offered every variable, colours in a gap and sizes in a background.
   return (
-    <VariableConnect className="is-multiline" code onDraft={onDraft} onPick={onDraft}>
+    <VariableConnect className="is-multiline" code onDraft={onDraft} onPick={onDraft} {...(prop === undefined ? {} : { prop })}>
       {field}
     </VariableConnect>
   );
@@ -74,8 +78,69 @@ export default function VariableConnect(props: VariableConnectProps) {
   const { onPick, disabled, ariaLabel = 'Connect to variable', prop } = props;
   const connect = useVariableConnect(props);
   const { open, setOpen, big, setBig, value, applied, showToken, field, wrapRef } = connect;
-  const { editorRef, dotRef, chipText, liveValue, caretRef, readCaret, hintValue } = connect;
-  const anchor = showToken ? editorRef.current : dotRef.current;
+  const { editorRef, dotRef, chipText, liveValue, selectionRef, readCaret, hintValue } = connect;
+  const { chipTarget, setChipTarget, suggest, setSuggest, navigationRef } = connect;
+  const anchor = (showToken ? editorRef.current : dotRef.current) ?? undefined;
+  const { openedRef } = connect;
+  // The value as it would be with `chosen` picked, worked out from the value
+  // the chooser opened on: previews change the field, and a pick after three
+  // of them must still be one change from where it started.
+  const withChosen = (chosen: string): string => {
+    const base = openedRef.current?.value ?? liveValue();
+    if (chipTarget !== undefined) {
+      return replaceVariableAt(base, chipTarget.index, chosen);
+    }
+    return insertBindingAt(base, chosen, selectionRef.current);
+  };
+  // Shown, not written: the field's draft, the path typing takes, so the page
+  // previews it the same way it previews a value being typed.
+  const draftTo = (next: string): void => {
+    if (props.onDraft === undefined) {
+      pushDraft(field, next);
+    } else {
+      props.onDraft(next);
+    }
+  };
+  const openChooser = (): void => {
+    openedRef.current = { value: liveValue(), previewed: false };
+    setOpen(true);
+  };
+  const closeChooser = (): void => {
+    const opened = openedRef.current;
+    openedRef.current = undefined;
+    // Closed without a pick: whatever the arrows previewed goes back.
+    if (opened !== undefined && opened.previewed) {
+      draftTo(opened.value);
+    }
+    setChipTarget(undefined);
+    setSuggest(undefined);
+    setOpen(false);
+  };
+  // A pick from a pressed chip swaps that chip; a pick from typing completes
+  // what was typed; any other pick replaces the selection or goes in at the caret.
+  const pick = (chosen: string): void => {
+    const current = liveValue();
+    if (suggest !== undefined) {
+      const completed = completeTypedVariable(current, suggest, chosen);
+      setSuggest(undefined);
+      onPick(completed.value);
+      placeCaretAfterPick(editorRef, field.inputRef, completed);
+      return;
+    }
+    const next = withChosen(chosen);
+    openedRef.current = undefined;
+    onPick(next);
+    setChipTarget(undefined);
+    setOpen(false);
+  };
+  const preview = (chosen: string): void => {
+    const opened = openedRef.current;
+    if (opened === undefined) {
+      return;
+    }
+    openedRef.current = { ...opened, previewed: true };
+    draftTo(withChosen(chosen));
+  };
   const extraClassName = props.className ? ` ${props.className}` : '';
   const tokenClassName = showToken ? ' is-token' : '';
   return (
@@ -83,15 +148,27 @@ export default function VariableConnect(props: VariableConnectProps) {
       ref={wrapRef}
       className={`embed-editor_varconnect${extraClassName}${tokenClassName}`}
       {...connectWrapperHandlers({ showToken, field, readCaret })}
-      {...bigEditorTriggers({
-        disabled,
-        big,
-        expanded: props.expanded,
-        open,
-        wrapRef,
-        liveValue,
-        onOpen: setBig,
-      })}
+      {...composeKeyDownCapture(
+        bigEditorTriggers({
+          disabled,
+          big,
+          expanded: props.expanded,
+          open,
+          wrapRef,
+          liveValue,
+          onOpen: setBig,
+        }),
+        (event) => suggestKeyDown(event, { suggest, navigationRef, onDismiss: () => setSuggest(undefined) }),
+      )}
+      onInput={(event) => {
+        readCaret();
+        // Only the field's own typing: the chooser's search and a big editor
+        // opened from here are React children too, and their input bubbles here.
+        if (disabled || !(event.target instanceof Node) || !wrapRef.current?.contains(event.target)) {
+          return;
+        }
+        setSuggest(typedAtSelection(liveValue(), selectionRef.current));
+      }}
     >
       {field.prepared}
       {showToken ? (
@@ -105,7 +182,11 @@ export default function VariableConnect(props: VariableConnectProps) {
           field={field}
           editorRef={editorRef}
           setActive={connect.setActive}
-          setOpen={setOpen}
+          onChip={(chip) => {
+            setSuggest(undefined);
+            setChipTarget(chip);
+            openChooser();
+          }}
         />
       ) : undefined}
       {/* A field that is one variable is changed through its chip, so it drops the
@@ -118,11 +199,19 @@ export default function VariableConnect(props: VariableConnectProps) {
           ariaLabel={ariaLabel}
           open={open}
           onPress={readCaret}
-          onToggle={() => setOpen((previous) => !previous)}
+          onToggle={() => {
+            if (open) {
+              closeChooser();
+              return;
+            }
+            setChipTarget(undefined);
+            setSuggest(undefined);
+            openChooser();
+          }}
         />
       ) : undefined}
       <ConnectPopups
-        picker={open && anchor ? { anchor } : undefined}
+        picker={pickerOf({ open, anchor, suggest, chipTarget, applied, navigationRef })}
         applied={applied}
         prop={prop}
         big={big}
@@ -131,13 +220,11 @@ export default function VariableConnect(props: VariableConnectProps) {
         value={value}
         liveValue={liveValue}
         // A plain value is replaced; an expression has the variable put in where
-        // the caret was, so picking one inside a calc() no longer throws the calc
-        // away. See insertBinding.ts.
-        onPick={(chosen) => {
-          onPick(insertBinding(liveValue(), chosen, caretRef.current));
-          setOpen(false);
-        }}
-        onClosePicker={() => setOpen(false)}
+        // the caret was, or over what was selected, so picking one inside a
+        // calc() no longer throws the calc away. See insertBinding.ts.
+        onPick={pick}
+        onPreview={preview}
+        onClosePicker={closeChooser}
         onCloseBig={() => setBig(undefined)}
         onSave={onPick}
       />
@@ -165,7 +252,13 @@ function useVariableConnect({ prop, code, children }: VariableConnectProps) {
   const field = useWrappedField(children);
   const chipText = applied.binding ?? applied.varText;
   const liveValue = (): string => fieldLiveValue(editorRef, field.inputRef, chipText, value);
-  const { caretRef, readCaret } = useCaretTracker(editorRef, field.inputRef);
+  const { selectionRef, readCaret } = useCaretTracker(editorRef, field.inputRef);
+  // The chip a press opened the chooser for, and the reference being typed.
+  const [chipTarget, setChipTarget] = useState<PressedChip | undefined>(undefined);
+  const [suggest, setSuggest] = useState<TypedVariable | undefined>(undefined);
+  const navigationRef = useRef<PickerNavigation | undefined>(undefined);
+  // The value the chooser opened on, and whether the arrows have previewed another.
+  const openedRef = useRef<{ readonly value: string; readonly previewed: boolean } | undefined>(undefined);
   const [big, setBig] = useState<DOMRect | undefined>(undefined);
   const wrapRef = useRef<HTMLSpanElement>(null);
   return {
@@ -181,8 +274,14 @@ function useVariableConnect({ prop, code, children }: VariableConnectProps) {
     chipText,
     hintValue: applied.isVar ? hintValue : '',
     liveValue,
-    caretRef,
+    selectionRef,
     readCaret,
+    chipTarget,
+    setChipTarget,
+    suggest,
+    setSuggest,
+    navigationRef,
+    openedRef,
     big,
     setBig,
     wrapRef,
@@ -200,7 +299,7 @@ function ConnectTokenField({
   field,
   editorRef,
   setActive,
-  setOpen,
+  onChip,
 }: {
   connect: VariableConnectProps;
   ariaLabel: string;
@@ -211,7 +310,7 @@ function ConnectTokenField({
   field: WrappedField;
   editorRef: RefObject<HTMLDivElement>;
   setActive: (active: boolean) => void;
-  setOpen: (open: boolean) => void;
+  onChip: (chip: PressedChip) => void;
 }) {
   const { disabled, code, stepMin } = connect;
   return (
@@ -227,12 +326,18 @@ function ConnectTokenField({
         placeholder={hintValue ? '' : childPlaceholder(connect.children)}
         {...(disabled === undefined ? {} : { disabled })}
         editorRef={editorRef}
-        {...tokenFieldHandlers({ field, setActive, disabled, setOpen })}
+        {...tokenFieldHandlers({ field, setActive, disabled, onChip })}
         {...(code === undefined ? {} : { code })}
         {...(stepMin === undefined ? {} : { stepMin })}
       />
       {hintValue ? (
-        <VariableHint value={hintValue} chips={chips} className={field.childClass} disabled={disabled ?? false} onPick={() => setOpen(true)} />
+        <VariableHint
+          value={hintValue}
+          chips={chips}
+          className={field.childClass}
+          disabled={disabled ?? false}
+          onPick={() => onChip({ index: 0, binding: chips[0]?.text ?? '' })}
+        />
       ) : undefined}
     </>
   );
@@ -249,11 +354,12 @@ function ConnectPopups({
   value,
   liveValue,
   onPick,
+  onPreview,
   onClosePicker,
   onCloseBig,
   onSave,
 }: {
-  picker: { anchor: HTMLElement } | undefined;
+  picker: PickerOpening | undefined;
   applied: ReturnType<typeof useAppliedVariable>;
   prop: string | undefined;
   big: DOMRect | undefined;
@@ -262,6 +368,7 @@ function ConnectPopups({
   value: string;
   liveValue: () => string;
   onPick: (binding: string) => void;
+  onPreview: (binding: string) => void;
   onClosePicker: () => void;
   onCloseBig: () => void;
   onSave: (value: string) => void;
@@ -274,7 +381,9 @@ function ConnectPopups({
           vars={applied.vars}
           loading={applied.loading}
           {...(prop === undefined ? {} : { prop })}
-          {...(!applied.isVar || applied.binding === undefined ? {} : { selectedBinding: applied.binding })}
+          {...(picker.selectedBinding === undefined ? {} : { selectedBinding: picker.selectedBinding })}
+          {...(picker.typing === undefined ? {} : { typing: picker.typing })}
+          onPreview={onPreview}
           onPick={onPick}
           onClose={onClosePicker}
         />
@@ -284,6 +393,7 @@ function ConnectPopups({
           connectField={connectCustomField}
           value={liveValue()}
           label={label}
+          prop={prop}
           anchor={big}
           anchorEl={wrapRef.current ?? undefined}
           onCancel={onCloseBig}
@@ -468,12 +578,12 @@ function tokenFieldHandlers({
   field,
   setActive,
   disabled,
-  setOpen,
+  onChip,
 }: {
   field: WrappedField;
   setActive: (active: boolean) => void;
   disabled: boolean | undefined;
-  setOpen: (open: boolean) => void;
+  onChip: (chip: PressedChip) => void;
 }) {
   return {
     onFocusField: () => {
@@ -495,9 +605,9 @@ function tokenFieldHandlers({
       field.childHandlersRef.current?.onBlur?.(field.fakeEvent());
       setActive(false);
     },
-    onChipClick: () => {
+    onChipClick: (chip: PressedChip) => {
       if (!disabled) {
-        setOpen(true);
+        onChip(chip);
       }
     },
   };
@@ -520,7 +630,6 @@ function connectWrapperHandlers({ showToken, field, readCaret }: { showToken: bo
     onMouseLeave: showToken ? (event: React.MouseEvent) => field.childHandlersRef.current?.onMouseLeave?.(event) : undefined,
     onKeyUp: readCaret,
     onMouseUp: readCaret,
-    onInput: readCaret,
     onSelect: readCaret,
     onFocus: readCaret,
   };
@@ -657,27 +766,29 @@ function ConnectDot({
 // one measured against the other lands in the wrong place, so the marks
 // before the caret are expanded to the length they serialize to.
 function useCaretTracker(editorRef: RefObject<HTMLDivElement>, inputRef: MutableRefObject<FieldRefValue>) {
-  const caretRef = useRef<number | undefined>(undefined);
+  const selectionRef = useRef<ValueSelection | undefined>(undefined);
   const readCaret = () => {
     const editor = editorRef.current;
     if (!editor) {
       const input = inputRef.current;
-      caretRef.current = typeof input?.selectionStart === 'number' ? input.selectionStart : undefined;
+      const start = input?.selectionStart;
+      const end = input?.selectionEnd;
+      selectionRef.current = typeof start === 'number' && typeof end === 'number' ? { start: Math.min(start, end), end: Math.max(start, end) } : undefined;
       return;
     }
-    const at = caretOffset(editor);
+    const selection = selectionOffsets(editor);
     // Nothing selected IN THE FIELD at this moment — the wrapper hears focus and
     // select events from everything inside it, and the field itself goes quiet the
     // instant the picker takes focus. Keep the last position we knew rather than
     // forgetting it: recording the caret as it moves is only worth anything if the
     // answer survives until the pick, and a forgotten one puts the variable at the
     // end of the value.
-    if (at === undefined) {
+    if (selection === undefined) {
       return;
     }
-    caretRef.current = serializedOffset(editor, at);
+    selectionRef.current = { start: serializedOffset(editor, selection.start), end: serializedOffset(editor, selection.end) };
   };
-  return { caretRef, readCaret };
+  return { selectionRef, readCaret };
 }
 
 // The caret offset `at` (chips counted as one character) as an offset into the
@@ -696,4 +807,135 @@ function serializedOffset(editor: HTMLElement, at: number): number {
     }
   }
   return length;
+}
+
+// How the chooser opens: from where, with which variable marked, and, while a
+// reference is being typed, the name typed so far and the keys it answers.
+interface PickerOpening {
+  readonly anchor: HTMLElement;
+  readonly selectedBinding: string | undefined;
+  readonly typing: { readonly query: string; readonly navigationRef: MutableRefObject<PickerNavigation | undefined> } | undefined;
+}
+
+// Typing outranks the dot: a reference being typed shows the chooser even with
+// the dot's own chooser closed. A pressed chip marks its own variable; the dot
+// marks the field's variable when the field is one.
+function pickerOf({
+  open,
+  anchor,
+  suggest,
+  chipTarget,
+  applied,
+  navigationRef,
+}: {
+  open: boolean;
+  anchor: HTMLElement | undefined;
+  suggest: TypedVariable | undefined;
+  chipTarget: PressedChip | undefined;
+  applied: ReturnType<typeof useAppliedVariable>;
+  navigationRef: MutableRefObject<PickerNavigation | undefined>;
+}): PickerOpening | undefined {
+  if (anchor === undefined) {
+    return undefined;
+  }
+  if (suggest !== undefined) {
+    return { anchor, selectedBinding: undefined, typing: { query: suggest.query, navigationRef } };
+  }
+  if (!open) {
+    return undefined;
+  }
+  if (chipTarget !== undefined) {
+    return { anchor, selectedBinding: chipTarget.binding || undefined, typing: undefined };
+  }
+  return { anchor, selectedBinding: applied.isVar ? applied.binding : undefined, typing: undefined };
+}
+
+// The reference being typed at a collapsed caret; a selection is not typing.
+function typedAtSelection(value: string, selection: ValueSelection | undefined): TypedVariable | undefined {
+  if (selection === undefined) {
+    return undefined;
+  }
+  if (selection.start !== selection.end) {
+    return undefined;
+  }
+  if (selection.end > value.length) {
+    return undefined;
+  }
+  return typedVariableAt(value, selection.end);
+}
+
+// While the chooser follows typing, the field's arrow keys move through it,
+// Enter and Tab take the marked variable, and Escape puts it away. Caught on the
+// way down so the field never sees them: Enter would commit, and an arrow in a
+// code field steps the number under the caret.
+function suggestKeyDown(
+  event: React.KeyboardEvent,
+  {
+    suggest,
+    navigationRef,
+    onDismiss,
+  }: { suggest: TypedVariable | undefined; navigationRef: MutableRefObject<PickerNavigation | undefined>; onDismiss: () => void },
+): void {
+  if (suggest === undefined) {
+    return;
+  }
+  const navigation = navigationRef.current;
+  if (navigation === undefined) {
+    return;
+  }
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    event.stopPropagation();
+    navigation.move(event.key === 'ArrowDown' ? 1 : -1);
+  } else if (event.key === 'Enter' || event.key === 'Tab') {
+    if (navigation.pick()) {
+      event.preventDefault();
+      event.stopPropagation();
+    } else {
+      onDismiss();
+    }
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    onDismiss();
+  }
+}
+
+// Two capture-phase key listeners on one element, the first given the first word.
+function composeKeyDownCapture<T extends { onKeyDownCapture: (event: React.KeyboardEvent) => void }>(
+  handlers: T,
+  first: (event: React.KeyboardEvent) => void,
+): T {
+  return {
+    ...handlers,
+    onKeyDownCapture: (event: React.KeyboardEvent) => {
+      first(event);
+      if (!event.isPropagationStopped()) {
+        handlers.onKeyDownCapture(event);
+      }
+    },
+  };
+}
+
+// After a typed reference is completed, the caret goes just past the variable,
+// ready for whatever comes next in the expression. The field rebuilds from the
+// new value first, so this waits a frame.
+function placeCaretAfterPick(
+  editorRef: RefObject<HTMLDivElement>,
+  inputRef: MutableRefObject<FieldRefValue>,
+  completed: { readonly value: string; readonly caret: number },
+): void {
+  requestAnimationFrame(() => {
+    const editor = editorRef.current;
+    if (editor !== null && editor.isConnected) {
+      editor.focus();
+      setCaretOffset(editor, fieldOffsetOf(completed.value, completed.caret));
+      return;
+    }
+    const input = inputRef.current;
+    if (input !== null && 'setSelectionRange' in input && input.isConnected) {
+      input.focus();
+      input.setSelectionRange(completed.caret, completed.caret);
+    }
+  });
 }

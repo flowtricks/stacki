@@ -3,9 +3,11 @@
 // stepping over whole chips (VariableConnect.tsx).
 
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import type { RefObject } from 'react';
+import type { MutableRefObject, RefObject } from 'react';
 import { caretOffset, highlightCss, setCaretOffset, stepNumberAt, stepSize } from './model/cssCode';
 import { isHTMLElementInDocument } from './model/dom';
+import { assert } from '../../../shared/core/assert';
+import { EMPTY_FIELD_HISTORY, type FieldHistory, type FieldSnapshot, recordEdit, redoStep, undoStep } from './tokenFieldHistory';
 
 // ── Inline token editor ──────────────────────────────────────────────────────
 // The applied variable renders as a purple chip *inside* the field, with editable
@@ -304,12 +306,26 @@ export function TokenField({
   // Every edit, to whoever is holding this field's value. Recorded as synced too: a
   // parent that stores it hands it straight back as `value`, and rebuilding the field
   // from a value it already shows would throw the caret to the end mid-word.
-  const synced = useTokenFieldSync({ value, chips, code, editorRef });
+  const historyRef = useRef<FieldHistory>(EMPTY_FIELD_HISTORY);
+  const synced = useTokenFieldSync({ value, chips, code, editorRef, historyRef });
   const report = (element: HTMLElement) => {
     const next = serializeTokens(element, chipBare, chipVar);
     synced.current = next;
     onDraft?.(next);
   };
+  const record = (element: HTMLElement, kind: string) => {
+    historyRef.current = recordEdit(historyRef.current, captureField(element), { kind, atMs: Date.now(), grouped: GROUPED_EDITS.has(kind) });
+  };
+  const travel = (element: HTMLElement, direction: 'undo' | 'redo'): void => {
+    const step = (direction === 'undo' ? undoStep : redoStep)(historyRef.current, captureField(element));
+    if (step === undefined) {
+      return;
+    }
+    historyRef.current = step.history;
+    restoreField(element, step.show, { code: !!code });
+    report(element);
+  };
+  useFieldHistoryInput(editorRef, { record, travel });
   return (
     <div
       ref={editorRef}
@@ -343,15 +359,47 @@ export function TokenField({
         }
         paint(element, fieldText(element), caretOffset(element), chipsOf(element));
       }}
-      onKeyDown={(event) => tokenFieldKeyDown(event, { code: !!code, stepMin, report })}
-      onMouseDown={(event) => {
-        if (isHTMLElementInDocument(event.target, event.currentTarget.ownerDocument) && event.target.closest('[data-chip]')) {
+      onKeyDown={(event) => {
+        const direction = historyKey(event);
+        if (direction !== undefined) {
+          // The field's own history, not the page's: the app's ⌘Z listener
+          // sees this was handled and leaves the page alone.
           event.preventDefault();
-          onChipClick();
+          historyKeyAtMs = Date.now();
+          travel(event.currentTarget, direction);
+          return;
+        }
+        tokenFieldKeyDown(event, { code: !!code, stepMin, report, record });
+      }}
+      onMouseDown={(event) => {
+        const chip = pressedChip(event.currentTarget, event.target);
+        if (chip !== undefined) {
+          event.preventDefault();
+          onChipClick(chip);
         }
       }}
     />
   );
+}
+
+// A chip the person pressed: its place among the field's chips, and its variable.
+export interface PressedChip {
+  readonly index: number;
+  readonly binding: string;
+}
+
+// The chip under a press in `field`, if the press landed on one.
+export function pressedChip(field: HTMLElement, target: EventTarget): PressedChip | undefined {
+  if (!isHTMLElementInDocument(target, field.ownerDocument)) {
+    return undefined;
+  }
+  const chip = target.closest<HTMLElement>('[data-chip]');
+  if (chip === null || !field.contains(chip)) {
+    return undefined;
+  }
+  const index = [...field.querySelectorAll('[data-chip]')].indexOf(chip);
+  assert(index >= 0, 'pressedChip: a chip inside the field is among its chips');
+  return { index, binding: chip.dataset['binding'] ?? '' };
 }
 
 export type TokenFieldProps = {
@@ -374,7 +422,8 @@ export type TokenFieldProps = {
   /** The value as it is being typed. Nothing is written — this is for whatever
    *  is watching the field rather than storing it. */
   onDraft?: (value: string) => void;
-  onChipClick: () => void;
+  /** A chip was pressed: which one, so a pick can swap that chip and no other. */
+  onChipClick: (chip: PressedChip) => void;
   /** Treat the value as code: colour it as it is typed, and let the arrow keys
    *  step the number the caret is in. */
   code?: boolean;
@@ -385,7 +434,13 @@ export type TokenFieldProps = {
 // Keeps the field's markup in step with `value`. Returns the value the DOM already
 // reflects, so our own edits (which round-trip back through `value`) don't rebuild
 // innerHTML and reset the caret.
-export function useTokenFieldSync({ value, chips, code, editorRef }: Pick<TokenFieldProps, 'value' | 'chips' | 'editorRef'> & { code: boolean | undefined }) {
+export function useTokenFieldSync({
+  value,
+  chips,
+  code,
+  editorRef,
+  historyRef,
+}: Pick<TokenFieldProps, 'value' | 'chips' | 'editorRef'> & { code: boolean | undefined; historyRef: MutableRefObject<FieldHistory> }) {
   const synced = useRef<string | undefined>(undefined);
   // The chips are compared by what they amount to, not by array identity (the
   // caller builds a fresh array every render); the effects read the latest ones.
@@ -406,6 +461,12 @@ export function useTokenFieldSync({ value, chips, code, editorRef }: Pick<TokenF
     // field you are typing in is torn out from under you. So carry the caret across.
     const focused = element.ownerDocument.activeElement === element;
     const at = focused ? caretOffset(element) : undefined;
+    // A value set while the field is in use (a variable picked into it) is a
+    // step ⌘Z can take back. One set from elsewhere starts the field afresh:
+    // its old steps describe a value that is no longer there.
+    historyRef.current = focused
+      ? recordEdit(historyRef.current, captureField(element), { kind: 'replace', atMs: Date.now(), grouped: false })
+      : EMPTY_FIELD_HISTORY;
     element.innerHTML = buildTokenHtml(value, latest.current.chips, code);
     if (!focused) {
       return;
@@ -414,7 +475,7 @@ export function useTokenFieldSync({ value, chips, code, editorRef }: Pick<TokenF
     if (at !== undefined) {
       setCaretOffset(element, Math.min(at, fieldText(element).length));
     }
-  }, [value, chipsKey, code, editorRef]);
+  }, [value, chipsKey, code, editorRef, historyRef]);
 
   // Refresh the chip label if it resolves later (async variable load) — but only while
   // unfocused, so an active caret is never disturbed. A change of value alone is the
@@ -434,7 +495,12 @@ export function useTokenFieldSync({ value, chips, code, editorRef }: Pick<TokenF
 // the arrow keys step the number under the caret; Left/Right step over a chip.
 export function tokenFieldKeyDown(
   event: React.KeyboardEvent<HTMLDivElement>,
-  { code, stepMin, report }: { code: boolean; stepMin: number | undefined; report: (element: HTMLElement) => void },
+  {
+    code,
+    stepMin,
+    report,
+    record,
+  }: { code: boolean; stepMin: number | undefined; report: (element: HTMLElement) => void; record: (element: HTMLElement, kind: string) => void },
 ): void {
   if (event.key === 'Enter') {
     event.preventDefault();
@@ -447,6 +513,7 @@ export function tokenFieldKeyDown(
     if (edit !== 'unhandled') {
       if (edit !== undefined) {
         event.preventDefault();
+        record(element, `key:${event.key}`);
         paint(element, edit.text, edit.caret, chipsOf(element));
         report(element);
       }
@@ -506,4 +573,86 @@ export function bracketEdit(text: string, at: number, key: string): { text: stri
     return { text: text.slice(0, at - 1) + text.slice(at + 1), caret: at - 1 };
   }
   return undefined;
+}
+
+// Edits that group into one undo step when they follow each other quickly.
+const GROUPED_EDITS: ReadonlySet<string> = new Set(['insertText', 'deleteContentBackward', 'deleteContentForward']);
+
+// When the field last answered ⌘Z itself. The menu's Undo may also reach the
+// field a moment later as a `historyUndo` input; that is the same press, and
+// taking it again would undo two steps.
+let historyKeyAtMs = 0;
+const HISTORY_ECHO_MS = 250;
+
+/** ⌘Z is undo; ⇧⌘Z and ⌘Y are redo; anything else is neither. */
+export function historyKey(event: {
+  readonly key: string;
+  readonly metaKey: boolean;
+  readonly ctrlKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+}): 'undo' | 'redo' | undefined {
+  if (!event.metaKey && !event.ctrlKey) {
+    return undefined;
+  }
+  if (event.altKey) {
+    return undefined;
+  }
+  const key = event.key.toLowerCase();
+  if (key === 'z') {
+    return event.shiftKey ? 'redo' : 'undo';
+  }
+  return key === 'y' && !event.shiftKey ? 'redo' : undefined;
+}
+
+// Every change the browser is about to make to the field is recorded first, so
+// it can be undone; the menu's Undo and Redo arrive here as history inputs and
+// are answered from the field's own history.
+function useFieldHistoryInput(
+  editorRef: RefObject<HTMLDivElement>,
+  handlers: { readonly record: (element: HTMLElement, kind: string) => void; readonly travel: (element: HTMLElement, direction: 'undo' | 'redo') => void },
+): void {
+  const latest = useRef(handlers);
+  latest.current = handlers;
+  useEffect(() => {
+    const element = editorRef.current;
+    if (!element) {
+      return undefined;
+    }
+    const onBeforeInput = (event: InputEvent): void => {
+      if (event.inputType === 'historyUndo' || event.inputType === 'historyRedo') {
+        event.preventDefault();
+        if (Date.now() - historyKeyAtMs > HISTORY_ECHO_MS) {
+          latest.current.travel(element, event.inputType === 'historyUndo' ? 'undo' : 'redo');
+        }
+        return;
+      }
+      latest.current.record(element, event.inputType);
+    };
+    element.addEventListener('beforeinput', onBeforeInput);
+    return () => element.removeEventListener('beforeinput', onBeforeInput);
+  }, [editorRef]);
+}
+
+/** What the field shows now: its text with each chip as one mark, the chips, and the caret. */
+export function captureField(element: HTMLElement): FieldSnapshot {
+  const text = fieldText(element);
+  return { text, chips: chipsOf(element), caret: caretOffset(element) ?? text.length };
+}
+
+/** Show `snapshot` in the field, caret included. */
+export function restoreField(element: HTMLElement, snapshot: FieldSnapshot, options: { readonly code: boolean }): void {
+  const write = options.code ? highlightCss : escapeHtml;
+  const parts = snapshot.text.split(CHIP_MARK);
+  assert(parts.length - 1 <= snapshot.chips.length, 'restoreField: every mark in the text has its chip');
+  let html = write(parts[0] ?? '');
+  for (let index = 1; index < parts.length; index++) {
+    const chip = snapshot.chips[index - 1];
+    html += (chip === undefined ? '' : tokenChipHtml(chip)) + write(parts[index] ?? '');
+  }
+  element.innerHTML = html;
+  assert(fieldText(element).length === snapshot.text.length, 'restoreField: the field shows the snapshot text');
+  if (element.ownerDocument.activeElement === element) {
+    setCaretOffset(element, Math.min(snapshot.caret, snapshot.text.length));
+  }
 }

@@ -3,7 +3,7 @@
 // (VariableConnect.tsx).
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties, RefCallback } from 'react';
+import type { CSSProperties, MutableRefObject, RefCallback } from 'react';
 import Popup from '../../ui/Popup';
 import { type ProjectVariable } from './model/webflow';
 import { panelBox, panelSpan } from './model/panelBox';
@@ -48,6 +48,8 @@ export function VariablePicker({
   loading,
   prop,
   selectedBinding,
+  typing,
+  onPreview,
   onPick,
   onClose,
 }: {
@@ -57,12 +59,25 @@ export function VariablePicker({
   prop?: string;
   /** The currently-applied binding — highlighted and scrolled into view on open. */
   selectedBinding?: string;
+  /**
+   * Set while a reference is being typed in the field: the list follows the
+   * typed name instead of its own search, focus stays in the field, and the
+   * field's keys drive the list through `navigationRef`.
+   */
+  typing?: { readonly query: string; readonly navigationRef: MutableRefObject<PickerNavigation | undefined> };
+  /**
+   * The arrows moved the mark in the chooser's own search box: show this
+   * variable in the value for now. Enter or a click makes it so; closing any
+   * other way is the caller's cue to put the original back.
+   */
+  onPreview?: (binding: string) => void;
   onPick: (binding: string) => void;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const [search, setSearch] = useState('');
+  const [ownSearch, setSearch] = useState('');
+  const search = typing === undefined ? ownSearch : typing.query;
   // Held here rather than in the list, which unmounts while a search matches
   // nothing: what was collapsed, and whether the selection was scrolled to, both
   // outlive that.
@@ -73,6 +88,11 @@ export function VariablePicker({
   const query = search.trim().toLowerCase();
   const defined = useDefinedVariables(vars);
   const filtered = pickerVariables(vars, prop, query).filter((variable) => defined === undefined || defined.has(customPropertyOf(variable.binding) ?? ''));
+  const { activeBinding, navigation } = usePickerNavigation(ref, filtered, { typing, search }, onPreview, onPick);
+  // With its own search box the arrows move the purple mark itself, from the
+  // applied variable to the one being previewed. Following typing, the mark
+  // stays on the applied variable and the keyboard row is tinted instead.
+  const markedBinding = typing === undefined ? (activeBinding ?? selectedBinding) : selectedBinding;
 
   return (
     <Popup
@@ -85,16 +105,19 @@ export function VariablePicker({
       label="Connect to variable"
       style={style}
     >
-      <input
-        ref={searchRef}
-        className="u-input embed-editor_varpicker-search"
-        value={search}
-        placeholder="Search variables, functions"
-        spellCheck={false}
-        autoFocus
-        onChange={(event) => setSearch(event.target.value)}
-        aria-label="Search variables"
-      />
+      {typing === undefined ? (
+        <input
+          ref={searchRef}
+          className="u-input embed-editor_varpicker-search"
+          value={search}
+          placeholder="Search variables, functions"
+          spellCheck={false}
+          autoFocus
+          onChange={(event) => setSearch(event.target.value)}
+          onKeyDown={(event) => searchKeyDown(event, navigation)}
+          aria-label="Search variables"
+        />
+      ) : undefined}
       <div className="embed-editor_varpicker-list">
         {loading && !vars.length ? (
           <p className="embed-editor_varpicker-empty">Loading variables…</p>
@@ -105,7 +128,8 @@ export function VariablePicker({
             variables={filtered}
             query={query}
             collapsed={collapsed}
-            selectedBinding={selectedBinding}
+            selectedBinding={markedBinding}
+            activeBinding={typing === undefined ? undefined : activeBinding}
             selectedItemRef={selectedItemRef}
             onToggleCollapse={toggleCollapse}
             onPick={onPick}
@@ -151,6 +175,7 @@ export function PickerCollections({
   query,
   collapsed,
   selectedBinding,
+  activeBinding,
   selectedItemRef,
   onToggleCollapse,
   onPick,
@@ -159,6 +184,8 @@ export function PickerCollections({
   query: string;
   collapsed: ReadonlySet<string>;
   selectedBinding: string | undefined;
+  /** The row the keyboard is on while a reference is typed, if any. */
+  activeBinding?: string | undefined;
   selectedItemRef: RefCallback<HTMLButtonElement>;
   onToggleCollapse: (name: string) => void;
   onPick: (binding: string) => void;
@@ -184,7 +211,8 @@ export function PickerCollections({
                     variable={variable}
                     collection={collection}
                     group={group}
-                    selected={!!selectedBinding && variable.binding === selectedBinding}
+                    selected={sameVariable(variable.binding, selectedBinding)}
+                    active={variable.binding === activeBinding}
                     selectedItemRef={selectedItemRef}
                     onPick={onPick}
                   />
@@ -203,6 +231,7 @@ export function PickerItem({
   collection,
   group,
   selected,
+  active,
   selectedItemRef,
   onPick,
 }: {
@@ -210,10 +239,11 @@ export function PickerItem({
   collection: string;
   group: string;
   selected: boolean;
+  active?: boolean;
   selectedItemRef: RefCallback<HTMLButtonElement>;
   onPick: (binding: string) => void;
 }) {
-  const selectedClassName = selected ? 'is-selected' : '';
+  const selectedClassName = `${selected ? 'is-selected' : ''}${active === true ? ' is-active' : ''}`;
   const groupPrefix = group ? `${group} / ` : '';
   const valueSuffix = variable.value ? ` — ${variable.value}` : '';
   return (
@@ -222,6 +252,11 @@ export function PickerItem({
       type="button"
       className={`embed-editor_varpicker-item ${selectedClassName}`}
       aria-current={selected || undefined}
+      data-binding={variable.binding}
+      // A press must not take focus from the field being typed in: the pick
+      // puts the caret back after the variable, and a focus change would commit
+      // the half-typed value first.
+      onMouseDown={(event) => event.preventDefault()}
       onClick={() => onPick(variable.binding)}
       title={`${collection} / ${groupPrefix}${variable.name}${valueSuffix}`}
     >
@@ -308,14 +343,162 @@ export function useScrollToSelected(): RefCallback<HTMLButtonElement> {
       return;
     }
     scrolledToSelected.current = true;
-    const list = element.closest<HTMLElement>('.embed-editor_varpicker-list');
-    if (!list) {
+    // The picker mounts hidden and unsized, and is given its place and height
+    // in a layout effect that runs after this ref. Centred now, the row was
+    // centred in a list that then changed height under it; wait for the frame
+    // that shows the list at the size it will have.
+    requestAnimationFrame(() => centreInList(element));
+  };
+}
+
+// Scroll the list so `element` sits in its vertical middle.
+export function centreInList(element: HTMLElement): void {
+  const list = element.closest<HTMLElement>('.embed-editor_varpicker-list');
+  if (!list) {
+    return;
+  }
+  const listRect = list.getBoundingClientRect();
+  const itemRect = element.getBoundingClientRect();
+  list.scrollTop += Math.round(itemRect.top - listRect.top - (list.clientHeight - element.clientHeight) / 2);
+}
+
+// Scroll the list just enough to show `element`. The list's own scroll, never
+// scrollIntoView, which would also scroll the panels behind the portalled picker.
+export function revealInList(element: HTMLElement): void {
+  const list = element.closest<HTMLElement>('.embed-editor_varpicker-list');
+  if (!list) {
+    return;
+  }
+  const listRect = list.getBoundingClientRect();
+  const itemRect = element.getBoundingClientRect();
+  if (itemRect.top < listRect.top) {
+    list.scrollTop -= Math.ceil(listRect.top - itemRect.top);
+  } else if (itemRect.bottom > listRect.bottom) {
+    list.scrollTop += Math.ceil(itemRect.bottom - listRect.bottom);
+  }
+}
+
+// Is `binding` the same variable as `selected`? Compared by custom property, so
+// `var(--h3)` and `var(--h3, 4.5rem)` are one variable.
+export function sameVariable(binding: string, selected: string | undefined): boolean {
+  if (selected === undefined || selected === '') {
+    return false;
+  }
+  const property = customPropertyOf(binding);
+  if (property === undefined) {
+    return binding === selected;
+  }
+  return property === customPropertyOf(selected);
+}
+
+/** What the field's keys do to the list while a reference is typed. */
+export interface PickerNavigation {
+  /** Move the marked row up (-1) or down (1), wrapping at the ends. */
+  readonly move: (step: 1 | -1) => void;
+  /** Pick the marked row; false when there is none to pick. */
+  readonly pick: () => boolean;
+}
+
+// The keyboard's row in the list. Moved by the arrows over the rows on screen,
+// in the order they are drawn, so a collapsed collection is stepped over.
+//
+// While a reference is typed in the field the first match is marked from the
+// start, since Enter there means "take it"; the keys land on the field and reach
+// this through the caller's `navigationRef`. With the chooser's own search box,
+// nothing is marked until an arrow is pressed, and the first press starts from
+// the variable already applied, so its neighbours are one key away; Enter with
+// nothing marked takes the first match of the search.
+function usePickerNavigation(
+  ref: React.RefObject<HTMLDivElement>,
+  variables: readonly ProjectVariable[],
+  {
+    typing,
+    search,
+  }: {
+    readonly typing: { readonly query: string; readonly navigationRef: MutableRefObject<PickerNavigation | undefined> } | undefined;
+    readonly search: string;
+  },
+  onPreview: ((binding: string) => void) | undefined,
+  onPick: (binding: string) => void,
+): { readonly activeBinding: string | undefined; readonly navigation: PickerNavigation } {
+  const [marked, setMarked] = useState<string | undefined>(undefined);
+  useEffect(() => setMarked(undefined), [search]);
+  const fallback = typing === undefined ? undefined : variables[0]?.binding;
+  const visible = marked !== undefined && variables.some((variable) => variable.binding === marked) ? marked : undefined;
+  const activeBinding = visible ?? fallback;
+  const rows = (): HTMLElement[] => [...(ref.current?.querySelectorAll<HTMLElement>('.embed-editor_varpicker-item') ?? [])];
+  const navigation: PickerNavigation = {
+    move: (step) => {
+      const list = rows();
+      if (list.length === 0) {
+        return;
+      }
+      const from = startingRow(list, activeBinding);
+      const next = from < 0 ? (step === 1 ? 0 : list.length - 1) : (from + step + list.length) % list.length;
+      assert(next >= 0, 'usePickerNavigation: the next row is on the list');
+      assert(next < list.length, 'usePickerNavigation: the next row is on the list');
+      const binding = list[next]?.dataset['binding'];
+      setMarked(binding);
+      if (typing === undefined && binding !== undefined) {
+        onPreview?.(binding);
+      }
+    },
+    pick: () => {
+      const binding = activeBinding ?? variables[0]?.binding;
+      if (binding === undefined) {
+        return false;
+      }
+      onPick(binding);
+      return true;
+    },
+  };
+  const navigationRef = typing?.navigationRef;
+  useEffect(() => {
+    if (navigationRef === undefined) {
+      return undefined;
+    }
+    navigationRef.current = navigation;
+    return () => {
+      navigationRef.current = undefined;
+    };
+  });
+  // Keep the marked row in sight as the arrows move it.
+  useEffect(() => {
+    if (activeBinding === undefined) {
       return;
     }
-    const listRect = list.getBoundingClientRect();
-    const itemRect = element.getBoundingClientRect();
-    list.scrollTop += itemRect.top - listRect.top - (list.clientHeight - element.clientHeight) / 2;
-  };
+    const row = [...(ref.current?.querySelectorAll<HTMLElement>('.embed-editor_varpicker-item') ?? [])].find(
+      (item) => item.dataset['binding'] === activeBinding,
+    );
+    if (row !== undefined) {
+      revealInList(row);
+    }
+  }, [activeBinding, ref]);
+  return { activeBinding, navigation };
+}
+
+// Where the arrows start: the marked row, else the applied variable's row, else none (-1).
+function startingRow(rows: readonly HTMLElement[], activeBinding: string | undefined): number {
+  if (activeBinding !== undefined) {
+    const index = rows.findIndex((row) => row.dataset['binding'] === activeBinding);
+    if (index >= 0) {
+      return index;
+    }
+  }
+  return rows.findIndex((row) => row.classList.contains('is-selected'));
+}
+
+// The chooser's own search box: ↑ and ↓ move through the list, Enter takes the
+// marked row (or the first match).
+function searchKeyDown(event: React.KeyboardEvent<HTMLInputElement>, navigation: PickerNavigation): void {
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    navigation.move(event.key === 'ArrowDown' ? 1 : -1);
+  } else if (event.key === 'Enter') {
+    if (navigation.pick()) {
+      event.preventDefault();
+    }
+  }
 }
 
 // Autofocus the search on open. React's `autoFocus` no-ops because the picker mounts
@@ -323,6 +506,7 @@ export function useScrollToSelected(): RefCallback<HTMLButtonElement> {
 // frame, once the positioning effect has made it visible.
 export function usePickerFocus(searchRef: React.RefObject<HTMLInputElement>): void {
   useEffect(() => {
+    // No search box while a reference is typed: focus stays in the field.
     const id = requestAnimationFrame(() => searchRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, [searchRef]);

@@ -1,3 +1,5 @@
+import { assert } from '../../../../shared/core/assert';
+
 // Where a picked variable goes in the field.
 //
 // Picking one used to replace the whole value, which is right for most fields:
@@ -99,4 +101,49 @@ export function insertBinding(value: string, binding: string, caret: number | un
     return body.slice(0, around.start) + binding + body.slice(around.end) + suffix;
   }
   return body.slice(0, at) + binding + body.slice(at) + suffix;
+}
+
+/** A selection in the field's value, as offsets: `start` is not after `end`. */
+export interface ValueSelection {
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * The value to write when `binding` is picked with `selection` recorded in the
+ * field. Text that was selected is what the person meant to change, so the
+ * variable takes its place: `2rem` selected in `calc(2rem + 1rem)` becomes
+ * `calc(var(--h3) + 1rem)`. A selection that cuts into a variable takes the
+ * whole of that variable, because half a `var()` is not a value. A collapsed
+ * selection is a caret, and insertBinding decides.
+ */
+export function insertBindingAt(value: string, binding: string, selection: ValueSelection | undefined): string {
+  const text = String(value ?? '');
+  if (selection === undefined) {
+    return insertBinding(text, binding, undefined);
+  }
+  assert(selection.start <= selection.end, 'insertBindingAt: the selection does not end before it starts');
+  const start = Math.max(0, Math.min(selection.start, text.length));
+  const end = Math.max(start, Math.min(selection.end, text.length));
+  if (start === end) {
+    return insertBinding(text, binding, start);
+  }
+  const widened = widenOverVariables(text, { start, end });
+  assert(widened.start <= start, 'insertBindingAt: widening never shrinks the selection');
+  return text.slice(0, widened.start) + binding + text.slice(widened.end);
+}
+
+// The selection grown to cover every `var()` it cuts into.
+function widenOverVariables(value: string, selection: ValueSelection): ValueSelection {
+  let { start, end } = selection;
+  const re = /var\(\s*--[A-Za-z0-9_-]+\s*(?:,[^)]*)?\)/gi;
+  for (let match = re.exec(value); match !== null; match = re.exec(value)) {
+    const matchStart = match.index;
+    const matchEnd = matchStart + match[0].length;
+    if (matchStart < end && matchEnd > start) {
+      start = Math.min(start, matchStart);
+      end = Math.max(end, matchEnd);
+    }
+  }
+  return { start, end };
 }

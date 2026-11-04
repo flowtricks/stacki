@@ -1,7 +1,7 @@
 import { useCodeAccess, ManagedValue } from '../../ui/CodeAccess';
 import React, { useEffect, useRef, useState } from 'react';
 import { EditorView, keymap, highlightSpecialChars, drawSelection, placeholder as cmPlaceholder } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
+import { EditorState, Transaction } from '@codemirror/state';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { StreamLanguage } from '@codemirror/language';
@@ -228,8 +228,11 @@ function EditableStyleEditor({ value, onChange, autoFocus, placeholder = '' }: S
     if (collapseDeclarations(view.state.doc.toString()) === next) {
       return;
     }
+    // A value arriving from outside is not an edit made here: kept off the
+    // editor's undo stack, so ⌘Z never undoes it back to a stale value.
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: expandDeclarations(next) },
+      annotations: Transaction.addToHistory.of(false),
     });
   }, [value]);
 

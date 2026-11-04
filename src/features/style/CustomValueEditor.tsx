@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import type { CSSProperties, ReactElement, ReactNode, RefObject } from 'react';
 import Popup from '../../ui/Popup';
 import { popupBox } from '../../ui/Dropdown';
+import { usePopupScrollLock } from '../../ui/popupScrollLock';
 
 // The whole value, in a box big enough to read it.
 //
@@ -54,6 +55,8 @@ let closeOpenCustom: (() => void) | undefined;
 interface CustomValueProps {
   readonly value: string;
   readonly label?: string;
+  /** The CSS property being edited, so the chooser offers only variables that fit it. */
+  readonly prop?: string | undefined;
   readonly anchor?: DOMRect | undefined;
   readonly anchorEl?: HTMLElement | undefined;
   readonly onCancel: () => void;
@@ -63,7 +66,7 @@ interface CustomValueProps {
    * connectCustomField). Passed in rather than imported: the picker opens this
    * editor, so importing it back would make the two modules a cycle.
    */
-  readonly connectField: (field: ReactElement, onDraft: (value: string) => void) => ReactNode;
+  readonly connectField: (field: ReactElement, prop: string | undefined, onDraft: (value: string) => void) => ReactNode;
 }
 function CustomValue(props: CustomValueProps) {
   const state = useCustomValue(props);
@@ -105,6 +108,7 @@ function CustomValue(props: CustomValueProps) {
              CSS value has no need for a line break, and the field that actually
              has focus is usually the rich one in front of this. */
         />,
+        props.prop,
         state.setDraft,
       )}
       <div className="var-custom-foot">
@@ -166,29 +170,7 @@ function useCustomClose(boxRef: RefObject<HTMLDivElement>, commit: () => string,
       }
     };
   }, [commit]);
-  useCustomScrollLock(boxRef);
-}
-
-function customContains(box: HTMLElement | undefined, target: unknown): boolean {
-  const NodeType = box?.ownerDocument.defaultView?.Node;
-  return !!box && !!NodeType && target instanceof NodeType && box.contains(target);
-}
-
-function useCustomScrollLock(boxRef: RefObject<HTMLDivElement>): void {
-  useEffect(() => {
-    // Refuse scrolling outside the box so the anchored field cannot move underneath it.
-    const onWheel = (event: Event): void => {
-      if (!customContains(boxRef.current ?? undefined, event.target)) {
-        event.preventDefault();
-      }
-    };
-    document.addEventListener('wheel', onWheel, { passive: false, capture: true });
-    document.addEventListener('touchmove', onWheel, { passive: false, capture: true });
-    return () => {
-      document.removeEventListener('wheel', onWheel, { capture: true });
-      document.removeEventListener('touchmove', onWheel, { capture: true });
-    };
-  }, [boxRef]);
+  usePopupScrollLock(boxRef);
 }
 
 function useCustomFocus(boxRef: RefObject<HTMLDivElement>, fieldRef: RefObject<HTMLTextAreaElement>) {

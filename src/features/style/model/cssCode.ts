@@ -185,7 +185,31 @@ export function caretOffset(root: HTMLElement): number | undefined {
     return undefined;
   }
   const range = selection.getRangeAt(0);
-  if (!root.contains(range.endContainer)) {
+  return pointOffset(root, range.endContainer, range.endOffset);
+}
+
+/**
+ * The field's selection as offsets into its text, start before end; a caret is
+ * a selection whose start and end are the same. Undefined when the selection is
+ * not wholly in the field.
+ */
+export function selectionOffsets(root: HTMLElement): { readonly start: number; readonly end: number } | undefined {
+  const selection = root.ownerDocument.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return undefined;
+  }
+  const range = selection.getRangeAt(0);
+  const start = pointOffset(root, range.startContainer, range.startOffset);
+  const end = pointOffset(root, range.endContainer, range.endOffset);
+  if (start === undefined || end === undefined) {
+    return undefined;
+  }
+  return start <= end ? { start, end } : { start: end, end: start };
+}
+
+// A DOM position (a container and an offset in it) as characters into the field.
+function pointOffset(root: HTMLElement, container: Node, containerOffset: number): number | undefined {
+  if (!root.contains(container)) {
     return undefined;
   }
   let offset = 0;
@@ -199,11 +223,11 @@ export function caretOffset(root: HTMLElement): number | undefined {
     if (found) {
       return;
     }
-    if (node === range.endContainer && node.nodeType !== Node.TEXT_NODE) {
+    if (node === container && node.nodeType !== Node.TEXT_NODE) {
       // A container-level position counts the children before it.
       let i = 0;
       for (const child of Array.from(node.childNodes)) {
-        if (i++ >= range.endOffset) {
+        if (i++ >= containerOffset) {
           break;
         }
         walk(child, depth + 1);
@@ -212,8 +236,8 @@ export function caretOffset(root: HTMLElement): number | undefined {
       return;
     }
     if (node.nodeType === Node.TEXT_NODE) {
-      if (node === range.endContainer) {
-        offset += range.endOffset;
+      if (node === container) {
+        offset += containerOffset;
         found = true;
       } else {
         offset += (node.textContent ?? '').length;
@@ -226,7 +250,11 @@ export function caretOffset(root: HTMLElement): number | undefined {
     }
     node.childNodes.forEach((child) => walk(child, depth + 1));
   };
-  root.childNodes.forEach((child) => walk(child, 0));
+  if (container === root) {
+    walk(root, -1);
+  } else {
+    root.childNodes.forEach((child) => walk(child, 0));
+  }
   return found ? offset : undefined;
 }
 

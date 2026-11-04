@@ -58,11 +58,22 @@ export function handleAppKeyDown(event: KeyboardEvent, keys: AppKeys): void {
 // ⌘Z undoes, ⇧⌘Z / ⌘Y redoes. True when the key was one of those.
 export function handleHistoryKey(event: KeyboardEvent, keys: AppKeys): boolean {
   const mod = event.metaKey || event.ctrlKey;
-  // Undo/redo take priority over native field undo so history stays
-  // consistent no matter where focus is. Handled before the CMS check
-  // below and without requiring an open page: the stack also holds CSS,
-  // CMS and asset changes, which are undoable from anywhere.
+  // Handled before the CMS check below and without requiring an open page:
+  // the stack also holds CSS, CMS and asset changes, which are undoable from
+  // anywhere.
   if (mod && (event.key.toLowerCase() === 'z' || event.key.toLowerCase() === 'y')) {
+    // A field that answered the key itself (the token field, a code editor)
+    // has undone its own typing; undoing a page step as well would take two.
+    if (event.defaultPrevented) {
+      return true;
+    }
+    // Typing is the field's to undo, the same rule the menu's Undo follows: a
+    // value half-typed in a box is not a step on the page's stack, and taking
+    // the key for the page threw the typing's undo away whenever the page had
+    // anything to undo.
+    if (inEditable()) {
+      return true;
+    }
     const history = keys.historyRef.current;
     const wantsRedo = event.key.toLowerCase() === 'y' || event.shiftKey;
     if (!(wantsRedo ? history.future : history.past).length) {
@@ -80,12 +91,20 @@ export function handleHistoryKey(event: KeyboardEvent, keys: AppKeys): boolean {
   return false;
 }
 
-// ⌘F / ⌘E, ⌘⇧A and ⌘Enter, which work from inside fields too. True when the key was one.
+// The letters that open the insert palette with ⌘: F, E and K all do, so the
+// palette answers whichever a person's other tools taught them.
+export const INSERT_PALETTE_KEYS: ReadonlySet<string> = new Set(['f', 'e', 'k']);
+
+// ⌘F / ⌘E / ⌘K, ⌘⇧A and ⌘Enter, which work from inside fields too. True when the key was one.
 export function handleCommandKey(event: KeyboardEvent, keys: AppKeys): boolean {
   const mod = event.metaKey || event.ctrlKey;
-  // ⌘F / ⌘E open the insert palette (works from anywhere except the
+  // ⌘F / ⌘E / ⌘K open the insert palette (works from anywhere except the
   // code editor, which keeps its own find).
-  if (mod && (event.key.toLowerCase() === 'f' || event.key.toLowerCase() === 'e')) {
+  if (mod && INSERT_PALETTE_KEYS.has(event.key.toLowerCase())) {
+    // A rich text field claims ⌘K (link) and ⌘E (code) for itself first.
+    if (event.defaultPrevented) {
+      return true;
+    }
     if (!keys.pageStateRef.current.pageState?.editable) {
       return true;
     }

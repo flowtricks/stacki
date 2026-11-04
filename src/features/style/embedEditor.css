@@ -1386,8 +1386,10 @@
   display: grid;
   place-content: center;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-bg-inset);
+  /* A filled box, lighter than the panel: the black inset fill with a hairline
+     border vanished against the panel's own dark background. */
+  border: 0;
+  background: rgba(255, 255, 255, 0.18);
   cursor: pointer;
   transition:
     background var(--transition-fast),
@@ -3797,10 +3799,22 @@ textarea.embed-editor_value-input.is-expanded {
   cursor: text;
 }
 .embed-editor_selector-chips {
+  /* The suggestion list hangs under the whole chip row, wherever the caret is. */
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
+}
+/* The add field sits in the caret's gap (its CSS order, SelectorPicker.tsx). At the
+   end it takes a row of its own at the bottom, as it always has; between two chips
+   it is only as wide as what is typed (the width is set inline from the draft). */
+.embed-editor_selector-caret-slot {
+  flex: 1 0 100%;
+  min-width: 0;
+}
+.embed-editor_selector-caret-slot:has(.embed-editor_selector-field.is-between) {
+  flex: 0 0 auto;
 }
 
 /* The well before its chips have been counted. An empty black box reads as "this
@@ -3819,11 +3833,6 @@ textarea.embed-editor_value-input.is-expanded {
   width: 12px;
   height: 12px;
   animation: embed-editor-spin 0.7s linear infinite;
-}
-/* Nothing to reveal (or not counted yet): the row holds its place, quietly. */
-.embed-editor_selector-filter.is-empty {
-  opacity: 0.45;
-  cursor: default;
 }
 
 /* Solid-blue, near-square tags with white text (Webflow class-tag styling). */
@@ -3926,7 +3935,7 @@ textarea.embed-editor_value-input.is-expanded {
 /* The add input has no chrome of its own — just a text line at the bottom of the
    well. Scoped under the well so it wins over `.u-input`'s inset background. */
 .embed-editor_selector-field {
-  position: relative;
+  min-width: 0;
 }
 .embed-editor_selector-well .embed-editor_selector-add {
   width: 100%;
@@ -3936,6 +3945,10 @@ textarea.embed-editor_value-input.is-expanded {
   border-radius: 0;
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
+}
+.embed-editor_selector-well .embed-editor_selector-field.is-between .embed-editor_selector-add {
+  min-width: 2ch;
+  padding: 0;
 }
 .embed-editor_selector-well .embed-editor_selector-add:focus,
 .embed-editor_selector-well .embed-editor_selector-add:hover {
@@ -3977,6 +3990,13 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_suggest-item.is-active {
   background: var(--color-info-border);
   color: var(--color-text-primary);
+}
+/* The letters a typed query matched (fuzzyRank.ts): a tint behind them, not a
+   border, so the name keeps its width and reads as one word. */
+.embed-editor_suggest-hit {
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--color-info) 28%, transparent);
+  color: inherit;
 }
 .embed-editor_suggest-sel {
   min-width: 0;
@@ -5416,6 +5436,11 @@ textarea.embed-editor_value-input.is-expanded {
   display: inline-flex;
   align-items: center;
   align-self: center;
+  /* In a multi-line field the chip sits in a line of monospace text, where it
+     would otherwise rest on the baseline and ride high: its sans label is
+     smaller and padded. Centred on the line, it sits level with the code. A
+     single-line field is a flex row, and align-self above does the same there. */
+  vertical-align: middle;
   gap: var(--space-2);
   margin: 0 1px;
   padding: 1px var(--space-2);
@@ -5548,6 +5573,10 @@ textarea.embed-editor_value-input.is-expanded {
   cursor: pointer;
 }
 .embed-editor_varpicker-item:hover {
+  background: var(--color-bg-hover);
+}
+/* The row the arrow keys are on while a reference is typed in the field. */
+.embed-editor_varpicker-item.is-active {
   background: var(--color-bg-hover);
 }
 /* The currently-applied variable: a purple tint + a trailing check + purple glyph/name. */

@@ -8,7 +8,7 @@ import type { Completion, CompletionContext } from '@codemirror/autocomplete';
 import type { TemplateHole } from '../editor/bindings';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
-import { EditorState, StateEffect, StateField } from '@codemirror/state';
+import { EditorState, StateEffect, StateField, Transaction } from '@codemirror/state';
 import { javascript } from '@codemirror/lang-javascript';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
@@ -203,7 +203,9 @@ function EditableExprInput(props: ExprInputProps) {
     }
     const current = editor.state.doc.toString();
     if (syncValue !== current) {
-      editor.dispatch({ changes: { from: 0, to: current.length, insert: syncValue } });
+      // A value arriving from outside is not an edit made here: kept off the
+      // field's undo stack, so ⌘Z never undoes it back to a stale value.
+      editor.dispatch({ changes: { from: 0, to: current.length, insert: syncValue }, annotations: Transaction.addToHistory.of(false) });
     }
   }, [syncValue]);
   return <div ref={hostRef} className={`expr-input ${invalid ? 'invalid' : ''} ${className}`} />;
