@@ -9,10 +9,12 @@ import {
   ChevronLeftIcon,
   CheckIcon,
   CodeIcon,
+  ElementImageIcon,
   FieldNumberIcon,
   FieldSwitchIcon,
   SearchIcon,
   PencilIcon,
+  RepeatIcon,
   TextIcon,
 } from '../../ui/Icons';
 import { pathSteps } from '../../editor/dataSample';
@@ -536,7 +538,8 @@ function unquoted(preview: string): string | undefined {
 }
 
 // What a component prop holds, as the icon its row leads with: words, a
-// number, a switch or attributes. Other kinds have no icon of their own.
+// number, a switch, attributes, an image or a list of items. Other kinds have
+// no icon of their own.
 function PropKindIcon({ kind }: { readonly kind: string }) {
   switch (kind) {
     case 'string':
@@ -563,6 +566,19 @@ function PropKindIcon({ kind }: { readonly kind: string }) {
       return (
         <span className="dp-kind-icon" title="Attributes">
           <BracesIcon size={11} />
+        </span>
+      );
+    case 'image':
+    case 'image url':
+      return (
+        <span className="dp-kind-icon" title="Image">
+          <ElementImageIcon size={11} />
+        </span>
+      );
+    case 'list':
+      return (
+        <span className="dp-kind-icon" title="List">
+          <RepeatIcon size={11} />
         </span>
       );
     default:

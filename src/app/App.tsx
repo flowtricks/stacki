@@ -10,7 +10,7 @@ import { collectionReader } from '../editor/collectionReader';
 import { canvasPageOf } from '../editor/pageState';
 import { readPropsDestructure } from '../editor/loopProps';
 import { readRestBinding } from '../editor/propDeclaration';
-import type { NewPropHost } from '../features/props/newPropModel';
+import { imagePropsOf, type NewPropHost } from '../features/props/newPropModel';
 
 export default function App() {
   const scope = useAppScope();
@@ -221,12 +221,34 @@ function newPropHostOf(
   }
   const frontmatter = app.model.extraFrontmatter;
   const keys = new Set([...(readPropsDestructure(frontmatter)?.entries ?? []).map((prop) => prop.key), ...(entry?.schema ?? []).map((prop) => prop.name)]);
+  const projectPath = app.project?.path;
   return {
     componentName: page.path.split(/[\\/]/).pop() ?? page.path,
     propKeys: [...keys],
     restLocal: readRestBinding(frontmatter)?.local,
     create: app.createBoundProp,
+    imageProps: imagePropsOf(frontmatter),
+    projectPath,
+    fileDirectory: projectDirectoryOf(projectPath, page.path),
   };
+}
+
+// The folder a file is in, relative to the project (`src/components`), or
+// undefined for a file outside it.
+function projectDirectoryOf(projectPath: string | undefined, filePath: string): string | undefined {
+  if (projectPath === undefined) {
+    return undefined;
+  }
+  const root = projectPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const file = filePath.replace(/\\/g, '/');
+  // A path is the project's own when it is under its folder, or already relative to it.
+  const absolute = file.startsWith('/') || /^[A-Za-z]:\//.test(file);
+  if (absolute && !file.startsWith(`${root}/`)) {
+    return undefined;
+  }
+  const relative = absolute ? file.slice(root.length + 1) : file;
+  const slash = relative.lastIndexOf('/');
+  return slash < 0 ? '' : relative.slice(0, slash);
 }
 
 // Stepping through a dynamic route's entries from inside the picker. It is the SAME

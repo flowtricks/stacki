@@ -3,7 +3,9 @@
 // collection opens to one of its items, so its fields can be seen before it
 // is chosen, and a list inside an item (every campus's pastors) can be
 // chosen itself; a list on the page opens the same way, down to the lists in
-// its items. None and Custom list sit above the tree.
+// its items. None and Custom list sit above the tree, and in a component
+// "New List property" too: it declares a list prop with the fields its items
+// have and loops over it, so the items' fields are the loop item's fields.
 //
 // The tree is the data picker's own (DataPicker.tsx), fed with the project's
 // collections from the catalog and the page's lists from its data tree.
@@ -11,7 +13,9 @@
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode, RefCallback } from 'react';
 import DataPicker, { type DataPickerProps, type PickerNode } from './DataPicker';
-import { ChevronDownIcon, TextIcon, CloseIcon } from '../../ui/Icons';
+import NewPropForm from './NewPropForm';
+import type { NewPropHost, NewPropSeed } from './newPropModel';
+import { ChevronDownIcon, TextIcon, CloseIcon, PlusIcon } from '../../ui/Icons';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { fromSample, type TreeNode } from '../../editor/dataSample';
@@ -41,6 +45,13 @@ export type SourcePick =
   | { readonly kind: 'field'; readonly list: FieldList }
   | { readonly kind: 'value'; readonly data: string };
 
+/** A List property the Source menu can make: the component it goes in, and what the form starts from. */
+export interface NewListOffer {
+  /** Its `create` declares the prop and points the loop at it. */
+  readonly host: NewPropHost;
+  readonly seed: NewPropSeed;
+}
+
 const PICKER_HEIGHT_PX_MAX = 460;
 const FIELD_PATH_DEPTH_MAX = 8;
 
@@ -53,9 +64,13 @@ export function SourcePicker(props: {
   readonly data: SourcePickerData | undefined;
   /** One document of a Sanity type, so its row opens to what documents hold. */
   readonly loadSanitySample?: ((type: string) => Promise<unknown>) | undefined;
+  /** In a component: "New List property", which makes one and loops over it. */
+  readonly newList?: NewListOffer | undefined;
   readonly onPick: (pick: SourcePick) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const newList = props.newList;
   const sanity = useSanitySamples(props.loadSanitySample);
   const [anchor, setAnchor] = useState<HTMLButtonElement | undefined>(undefined);
   const attach = useCallback<RefCallback<HTMLButtonElement>>((element) => setAnchor(element ?? undefined), []);
@@ -65,17 +80,38 @@ export function SourcePicker(props: {
   };
   return (
     <>
-      <button ref={attach} type="button" className="dd-trigger loop-source-trigger" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button
+        ref={attach}
+        type="button"
+        className="dd-trigger loop-source-trigger"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => {
+          setCreating(false);
+          setOpen(!open);
+        }}
+      >
         <span className="dd-icon">{props.icon}</span>
         <span className="dd-label">{props.label}</span>
         <span className="dd-chevron">
           <ChevronDownIcon size={11} />
         </span>
       </button>
-      {open && (
+      {open && creating && newList !== undefined && (
+        <RowPopup anchor={anchor} heightPxMax={PICKER_HEIGHT_PX_MAX} label="New List property" onClose={() => setOpen(false)}>
+          <NewPropForm host={newList.host} seed={newList.seed} onCancel={() => setCreating(false)} onCreated={() => setOpen(false)} />
+        </RowPopup>
+      )}
+      {open && !creating && (
         <RowPopup anchor={anchor} heightPxMax={PICKER_HEIGHT_PX_MAX} label="Source" onClose={() => setOpen(false)}>
           <div className="loop-source-picker">
             <div className="loop-source-extras">
+              {newList !== undefined && (
+                <button type="button" className="dp-new-prop" onClick={() => setCreating(true)}>
+                  <PlusIcon size={11} />
+                  New List property
+                </button>
+              )}
               <button type="button" className="dp-row" onClick={() => choose({ kind: 'empty' })}>
                 <CloseIcon size={11} />
                 <span className="dp-key">None</span>

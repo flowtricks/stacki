@@ -1,16 +1,17 @@
 // A component prop declared from the binding picker, as the frontmatter
 // gesture the app holds for the field's own edit (holdForNextEdit in
 // appHistory.ts), so the declaration and the binding are one undo step. The
-// text edit is propDeclaration.ts's; this adds the type import an attributes
-// prop needs, once, and names every binding in scope so the prop is read by
-// its own name only when nothing else has it.
+// text edit is propDeclaration.ts's; this adds the imports the prop needs
+// (an attributes prop's HTMLAttributes, an image prop's ImageMetadata and its
+// default's file), each once, and names every binding in scope so the prop is
+// read by its own name only when nothing else has it.
 
 import { assert } from '../../../shared/core/assert';
 import { err, ok, type Result } from '../../../shared/core/result';
 import { frontmatterGesture } from '../../editor/editGestures';
 import type { EditGesture } from '../../editor/pageEdits';
 import { namesInScope } from '../../editor/dataSuggest';
-import { ATTRIBUTES_TYPE, declaredProp, type PropDeclaration } from '../../editor/propDeclaration';
+import { declaredProp, type PropDeclaration, type PropImport } from '../../editor/propDeclaration';
 import type { EditorModel } from '../../editor/pageView';
 
 /** The gesture declaring the prop, and the name the field binds. */
@@ -24,25 +25,28 @@ export function newPropGesture(model: EditorModel, declaration: PropDeclaration)
     return err('Only an Astro component takes properties.');
   }
   const taken = namesInScope(model.extraFrontmatter, model.imports);
-  const declared = declaredProp(model.extraFrontmatter, declaration, taken);
+  const declared = declaredProp(model.extraFrontmatter, declaration, taken, model.imports);
   if (!declared.ok) {
     return declared;
   }
-  const imports = declaration.kind === 'attributes' ? withAttributesType(model.imports) : model.imports;
+  const imports = withImports(model.imports, declared.value.imports);
   const { frontmatter, local } = declared.value;
   const gesture = frontmatterGesture(model, { coalesceKey: undefined, urgency: true }, (shown) => ({ ...shown, extraFrontmatter: frontmatter, imports }));
   assert(gesture.coalesceKey === undefined, 'A declared prop is a step of its own');
   return ok({ gesture, local });
 }
 
-// `import type { HTMLAttributes } from "astro/types"`, unless the file already imports it.
-function withAttributesType(imports: EditorModel['imports']): EditorModel['imports'] {
-  const has = imports.some((entry) => entry.name === ATTRIBUTES_TYPE.name);
-  if (has) {
-    return imports;
-  }
-  const entry = { name: ATTRIBUTES_TYPE.name, imported: ATTRIBUTES_TYPE.name, path: ATTRIBUTES_TYPE.path, quote: '"', named: true, typeOnly: true };
-  const out = [...imports, entry];
-  assert(out.length === imports.length + 1, 'withAttributesType: one import is added');
+// The file's imports with each one the prop needs, unless the file already
+// imports that name: `import type { HTMLAttributes } from "astro/types"`.
+function withImports(imports: EditorModel['imports'], needed: readonly PropImport[]): EditorModel['imports'] {
+  const added = needed
+    .filter((wanted) => !imports.some((entry) => entry.name === wanted.name))
+    .map((wanted) =>
+      wanted.named
+        ? { name: wanted.name, imported: wanted.name, path: wanted.path, quote: '"', named: true, typeOnly: wanted.typeOnly }
+        : { name: wanted.name, path: wanted.path, quote: '"' },
+    );
+  const out = [...imports, ...added];
+  assert(out.length <= imports.length + needed.length, 'withImports: at most the needed imports are added');
   return out;
 }

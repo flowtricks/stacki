@@ -4,6 +4,7 @@ import type { PropValuePolicy } from './propValuePolicy';
 
 import type { PageNode, PairedNode, ChunkGroupNode, Attr, ValueNode, ImportDecl } from '../../../shared/page/pageNode';
 import type { LoopTarget } from '../../editor/loopQueryPlan';
+import type { PropDeclaration } from '../../editor/propDeclaration';
 import type { ListProp } from '../../editor/listProps';
 import type { LoopApplyResult } from './LoopSettings';
 import type { FieldDefinition, PropValues } from './propRules';
@@ -55,7 +56,8 @@ export interface PropsPanelProps {
   readonly frontmatterSource?: string;
   /** The open file's imports: what a loop's source is read against. */
   readonly frontmatterImports?: readonly ImportDecl[] | undefined;
-  readonly onSetLoopSource?: (target: LoopTarget, sanityClient: 'available' | 'unavailable') => LoopApplyResult;
+  /** Points the loop at a list; with a declaration, declares that List property first, in the same undo step. */
+  readonly onSetLoopSource?: (target: LoopTarget, sanityClient: 'available' | 'unavailable', declaration?: PropDeclaration) => LoopApplyResult;
   /** Renames a list setting's property, or changes its tooltip; resolves with why it could not. */
   readonly onEditLoopProperty?: (key: string, edit: { readonly name: string; readonly description: string }) => Promise<string | undefined>;
   readonly onOpenSymbol?: (name: string) => void;

@@ -20,7 +20,7 @@ import { resolvePick } from '../../editor/bindings';
 import { checkStatement } from './jsCheck';
 import DataPicker from './DataPicker';
 import NewPropForm from './NewPropForm';
-import { fittingTree, newPropTitle, type NewPropHost, type NewPropSeed } from './newPropModel';
+import { boundPath, fittingTree, newPropTitle, type NewPropHost, type NewPropSeed } from './newPropModel';
 import ExprInput from '../../ui/ExprInput';
 import { CodeIcon, CloseIcon, PencilIcon, PlusIcon } from '../../ui/Icons';
 import {
@@ -258,13 +258,18 @@ export function BindHandle({ active, onOpen }: BindHandleProps) {
 }
 
 export function FieldDataPicker({ pos: position, bindContext, current, tree, seed, onPick, onBindNew, onWrite, onClose }: FieldDataPickerProps) {
-  const pick = (path: string, query: PickerNode['query'] | undefined) => onPick(resolvePick(path, query ?? undefined, bindContext ?? undefined));
-  const [creating, setCreating] = useState(false);
   // In a component, the field's own props come first and a new one can be
   // made for it; on a page there is no component to give a prop to, and the
   // picker is as it always was.
   const host = bindContext?.newProp;
   const offer = host !== undefined && seed !== undefined ? { host, seed } : undefined;
+  // An imported image picked for a field that takes a URL is read by its `.src`.
+  const pick = (path: string, query: PickerNode['query'] | undefined) => {
+    const image = offer?.host.imageProps?.get(path);
+    const bound = image === undefined ? path : boundPath(path, image, offer?.seed.reference);
+    onPick(resolvePick(bound, query ?? undefined, bindContext ?? undefined));
+  };
+  const [creating, setCreating] = useState(false);
   const fullTree: readonly PickerNode[] = tree || dataTree(bindContext || {});
   return (
     <Popup
@@ -283,7 +288,7 @@ export function FieldDataPicker({ pos: position, bindContext, current, tree, see
         />
       ) : (
         <DataPicker
-          tree={offer === undefined ? fullTree : fittingTree(fullTree, offer.seed.fit)}
+          tree={offer === undefined ? fullTree : fittingTree(fullTree, offer.seed.fit, offer.host.imageProps)}
           current={current ?? undefined}
           entries={bindContext?.entryNav ?? undefined}
           {...definedFields({ onStepItem: bindContext?.onStepItem })}

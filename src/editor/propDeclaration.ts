@@ -22,6 +22,16 @@
 // since the extends clause has no comment of its own. A rest binding cannot
 // have a default in JavaScript, so its defaults are attributes written on the
 // element before the spread (attributesBinding.ts).
+//
+// A list prop is a list of items that each hold the same fields, typed
+// `readonly { title: string; text: string }[]` (or by a type the file already
+// declares with those fields) and always given a default, `[]` when no items
+// were given, so the markup can loop over it (listPropType.ts). An image prop
+// is typed by its default: an imported file in src/ makes it `ImageMetadata`,
+// read by `import placeholder from "../assets/placeholder.svg"` (both imports
+// are answered to the caller to add), and a URL makes it a `string`
+// (imagePropDefault.ts). An image prop always has a default, since an <img>
+// with nothing to show renders a broken image.
 
 import type { SyntaxNode } from '@lezer/common';
 import { assert } from '../../shared/core/assert';
@@ -30,9 +40,11 @@ import { err, ok, type Result } from '../../shared/core/result';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import { destructureEnd, freeLocal, propsInterfaceBody, propsInterfaceEnd, propsPattern, readPropsDestructure } from './loopProps';
 import { NUMBER_DECIMALS_MAX, type NumberSettings, type SwitchSettings } from './propDocumentation';
+import { listDefaultCode, listSettingsProblem, listTypeText, type ListSettings } from './listPropType';
+import { IMAGE_TYPE, imageDefaultOf, imageTypeText, type ImageDefault } from './imagePropDefault';
 
-/** What a new prop holds: words, a number, a switch, one of a list of words, or attributes. */
-export type NewPropKind = 'string' | 'number' | 'boolean' | 'option' | 'attributes';
+/** What a new prop holds: words, a number, a switch, one of a list of words, attributes, a list of items or an image. */
+export type NewPropKind = 'string' | 'number' | 'boolean' | 'option' | 'attributes' | 'list' | 'image';
 
 /** One `name = value` default of an attributes prop. */
 export interface AttributeDefault {
@@ -57,12 +69,33 @@ export interface PropDeclaration {
   readonly attributes: readonly AttributeDefault[];
   /** The tag of the element an attributes prop is first connected to. Empty for every other kind. */
   readonly tag: string;
+  /** A list prop's item fields and default items. Read only for a list. */
+  readonly list: ListSettings;
+  /** An image prop's default: an asset path relative to the component, a rooted path or a URL. Read only for an image. */
+  readonly image: string;
 }
 
-/** The frontmatter with the prop declared, and the name the markup reads it by. */
+/** An import the declared prop needs: a type to name it by, or the file its default is. */
+export interface PropImport {
+  readonly name: string;
+  readonly path: string;
+  /** A named import (`{ HTMLAttributes }`); a default import otherwise. */
+  readonly named: boolean;
+  readonly typeOnly: boolean;
+}
+
+/** The frontmatter with the prop declared, the name the markup reads it by, and the imports it needs. */
 export interface DeclaredProp {
   readonly frontmatter: string;
   readonly local: string;
+  readonly imports: readonly PropImport[];
+}
+
+/** An import the file already has, as far as reusing one reads it. */
+export interface ExistingImport {
+  readonly name: string;
+  readonly path: string;
+  readonly named?: boolean | undefined;
 }
 
 /** The rest binding of the props destructure: `...rest`. */
@@ -191,7 +224,18 @@ export function withRestTooltip(frontmatter: string, tooltip: string): Result<st
  * for no default; an error says why the text cannot be one. A number default
  * has to sit inside the number settings, at their precision.
  */
-export function defaultCode(declaration: Pick<PropDeclaration, 'kind' | 'defaultText' | 'options' | 'number'>): Result<string | undefined, string> {
+export function defaultCode(
+  declaration: Pick<PropDeclaration, 'kind' | 'defaultText' | 'options' | 'number' | 'list' | 'image'>,
+): Result<string | undefined, string> {
+  // A list and an image always have a default, whatever was typed as text.
+  if (declaration.kind === 'list') {
+    const problem = listSettingsProblem(declaration.list);
+    return problem === undefined ? ok(listDefaultCode(declaration.list)) : err(problem);
+  }
+  if (declaration.kind === 'image') {
+    const image = imageDefaultOf(declaration.image);
+    return image.ok ? ok(imageDefaultCode(image.value, image.value.kind === 'asset' ? image.value.base : '')) : image;
+  }
   const text = declaration.defaultText.trim();
   assert(text.length <= PROPERTY_LIMITS.textCharsMax, 'defaultCode: default text is bounded');
   if (text === '') {
@@ -224,6 +268,21 @@ export function defaultCode(declaration: Pick<PropDeclaration, 'kind' | 'default
   }
 }
 
+// An image default as code: the import's name, or the URL as a string.
+function imageDefaultCode(image: ImageDefault, local: string): string {
+  switch (image.kind) {
+    case 'asset':
+      assert(/^[A-Za-z_$][\w$]*$/.test(local), 'imageDefaultCode: an import is read by an identifier');
+      return local;
+    case 'url':
+      return JSON.stringify(image.url);
+    default: {
+      const exhaustive: never = image;
+      return exhaustive;
+    }
+  }
+}
+
 function numberDefault(text: string, settings: NumberSettings): Result<string, string> {
   const value = Number(text);
   if (!Number.isFinite(value)) {
@@ -242,8 +301,8 @@ function numberDefault(text: string, settings: NumberSettings): Result<string, s
   return ok(String(value));
 }
 
-/** The TypeScript type a prop is declared with. */
-export function typeText(declaration: Pick<PropDeclaration, 'kind' | 'options'>): Result<string, string> {
+/** The TypeScript type a prop is declared with; a list reuses a type `frontmatter` declares for its items. */
+export function typeText(declaration: Pick<PropDeclaration, 'kind' | 'options' | 'list' | 'image'>, frontmatter = ''): Result<string, string> {
   switch (declaration.kind) {
     case 'string':
     case 'number':
@@ -255,6 +314,14 @@ export function typeText(declaration: Pick<PropDeclaration, 'kind' | 'options'>)
     }
     case 'attributes':
       return ok(ATTRIBUTES_TYPE.name);
+    case 'list': {
+      const problem = listSettingsProblem(declaration.list);
+      return problem === undefined ? ok(listTypeText(frontmatter, declaration.list.fields)) : err(problem);
+    }
+    case 'image': {
+      const image = imageDefaultOf(declaration.image);
+      return image.ok ? ok(imageTypeText(image.value)) : image;
+    }
     default: {
       const exhaustive: never = declaration.kind;
       return exhaustive;
@@ -340,22 +407,28 @@ export function attributeDefaultsProblem(defaults: readonly AttributeDefault[]):
  * by an alias (`propLabel`) when it is not. An attributes prop also needs
  * ATTRIBUTES_TYPE imported, which the caller adds to the imports.
  */
-export function declaredProp(frontmatter: string, declaration: PropDeclaration, taken: ReadonlySet<string>): Result<DeclaredProp, string> {
+export function declaredProp(
+  frontmatter: string,
+  declaration: PropDeclaration,
+  taken: ReadonlySet<string>,
+  existing: readonly ExistingImport[] = [],
+): Result<DeclaredProp, string> {
   assert(IDENTIFIER.test(declaration.key), 'declaredProp: a new prop is named by an identifier');
   assert(declaration.key.length <= PROPERTY_LIMITS.nameCharsMax, 'declaredProp: a prop name is bounded');
   const refused = declarationProblem(frontmatter, declaration);
   if (refused !== undefined) {
     return err(refused);
   }
-  const type = typeText(declaration);
+  const type = typeText(declaration, frontmatter);
   if (!type.ok) {
     return type;
   }
-  const fallback = defaultCode(declaration);
+  const local = taken.has(declaration.key) || RESERVED.has(declaration.key) ? freeLocal(declaration.key, taken) : declaration.key;
+  const needed = neededImports(declaration, new Set([...taken, local]), existing);
+  const fallback = needed.defaultCode === undefined ? defaultCode(declaration) : ok(needed.defaultCode);
   if (!fallback.ok) {
     return fallback;
   }
-  const local = taken.has(declaration.key) || RESERVED.has(declaration.key) ? freeLocal(declaration.key, taken) : declaration.key;
   const entry = entryText(declaration, local, fallback.value);
   const restBefore = readRestBinding(frontmatter) !== undefined;
   const typing =
@@ -371,7 +444,42 @@ export function declaredProp(frontmatter: string, declaration: PropDeclaration, 
     out = `${out.slice(0, edit.at)}${edit.text}${out.slice(edit.at)}`;
   }
   assertDeclared(out, declaration, local);
-  return ok({ frontmatter: out, local });
+  return ok({ frontmatter: out, local, imports: needed.imports });
+}
+
+const IMPORT_SUFFIX_MAX = 100;
+
+// The imports a declaration needs, and for an imported image the name its
+// default reads the file by: the import the file already has for it, else the
+// file's own name, numbered when that is taken (`placeholder2`).
+function neededImports(
+  declaration: PropDeclaration,
+  taken: ReadonlySet<string>,
+  existing: readonly ExistingImport[],
+): { readonly imports: readonly PropImport[]; readonly defaultCode: string | undefined } {
+  if (declaration.kind === 'attributes') {
+    return { imports: [{ name: ATTRIBUTES_TYPE.name, path: ATTRIBUTES_TYPE.path, named: true, typeOnly: true }], defaultCode: undefined };
+  }
+  if (declaration.kind !== 'image') {
+    return { imports: [], defaultCode: undefined };
+  }
+  const image = imageDefaultOf(declaration.image);
+  if (!image.ok || image.value.kind !== 'asset') {
+    return { imports: [], defaultCode: undefined };
+  }
+  const { specifier, base } = image.value;
+  const type: PropImport = { name: IMAGE_TYPE.name, path: IMAGE_TYPE.path, named: true, typeOnly: true };
+  const reused = existing.find((entry) => entry.path === specifier && entry.named !== true);
+  if (reused !== undefined) {
+    return { imports: [type], defaultCode: reused.name };
+  }
+  let name = base;
+  for (let suffix = 2; taken.has(name) || RESERVED.has(name); suffix++) {
+    assert(suffix <= IMPORT_SUFFIX_MAX, 'neededImports: a free import name is found within the suffix bound');
+    name = `${base}${suffix}`;
+  }
+  assert(!taken.has(name), 'neededImports: the import name is free');
+  return { imports: [type, { name, path: specifier, named: false, typeOnly: false }], defaultCode: name };
 }
 
 // Why the declaration cannot be added to this frontmatter at all.
@@ -408,6 +516,12 @@ function kindSettingsProblem(declaration: PropDeclaration, rest: RestBinding | u
       return numberSettingsProblem(declaration.number);
     case 'boolean':
       return switchSettingsProblem(declaration.switch);
+    case 'list':
+      return listSettingsProblem(declaration.list);
+    case 'image': {
+      const image = imageDefaultOf(declaration.image);
+      return image.ok ? undefined : image.error;
+    }
     case 'string':
     case 'option':
       return undefined;
@@ -543,6 +657,23 @@ function literalType(value: string): string {
 // a line opening with `@` would read as a tag.
 function tooltipText(tooltip: string): string {
   return tooltip.replace(/\*\//g, '* /').replace(/\s+/g, ' ').trim().replace(/^@+/, '').slice(0, DECLARATION_LIMITS.tooltipCharsMax);
+}
+
+/** Each member of `interface Props` and its type as written: `image → ImageMetadata`. */
+export function memberTypes(frontmatter: string): ReadonlyMap<string, string> {
+  const out = new Map<string, string>();
+  const body = propsInterfaceBody(frontmatter);
+  let child = body?.firstChild ?? undefined;
+  for (let count = 0; child !== undefined && count < LIMITS.propSchemaFieldsMax; count++) {
+    const name = child.name === 'PropertyType' ? (child.getChild('PropertyDefinition') ?? undefined) : undefined;
+    const type = child.getChild('TypeAnnotation')?.lastChild ?? undefined;
+    if (name !== undefined && type !== undefined) {
+      out.set(frontmatter.slice(name.from, name.to), frontmatter.slice(type.from, type.to).trim());
+    }
+    child = child.nextSibling ?? undefined;
+  }
+  assert(out.size <= LIMITS.propSchemaFieldsMax, 'memberTypes: the members are bounded');
+  return out;
 }
 
 function hasMember(frontmatter: string, key: string): boolean {

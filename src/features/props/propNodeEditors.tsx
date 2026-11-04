@@ -1,11 +1,10 @@
 import Popup from '../../ui/Popup';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ImportDecl, MapNode } from '../../../shared/page/pageNode';
-import type { LoopTarget } from '../../editor/loopQueryPlan';
 import type { LoopReadInput } from '../../editor/loopQueryRead';
 import type { TreeNode } from '../../editor/dataSuggest';
 import type { SourcePickerData } from './LoopSourcePicker';
-import LoopSettings, { type LoopApplyResult, type LoopListOption, type LoopSettingsProps } from './LoopSettings';
+import LoopSettings, { type LoopListOption, type LoopSettingsProps } from './LoopSettings';
 import type { RichContext } from './RichContent';
 import type { FieldPosition, SourceContext } from './propBindings';
 import { assert } from '../../../shared/core/assert';
@@ -30,7 +29,7 @@ interface MapEditorProps {
   /** The file's imports, which say where a loop's list comes from. */
   readonly imports?: readonly ImportDecl[] | undefined;
   readonly projectPath?: string | undefined;
-  readonly onSetLoopSource?: ((target: LoopTarget, sanityClient: 'available' | 'unavailable') => LoopApplyResult) | undefined;
+  readonly onSetLoopSource?: LoopSettingsProps['onApply'] | undefined;
   readonly onEditLoopProperty?: LoopSettingsProps['onEditProperty'];
 }
 export interface TagOption {
@@ -395,6 +394,7 @@ function MapListSettings({
       filePath={dataContext?.filePath}
       lists={lists}
       pickerData={pickerData}
+      newProp={context?.newProp}
       onApply={onSetLoopSource}
       onEditProperty={props.onEditLoopProperty}
       sourceButton={(name) => <SourceEditButton name={name} dataContext={dataContext} anchorRef={anchorRef} />}

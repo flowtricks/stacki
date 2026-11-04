@@ -24,6 +24,7 @@ import type { Rename } from '../../features/props/propNodeEditors';
 import type { PropValues } from '../../features/props/propRules';
 import type { LoopApplyResult } from '../../features/props/LoopSettings';
 import type { LoopTarget } from '../../editor/loopQueryPlan';
+import type { PropDeclaration } from '../../editor/propDeclaration';
 import { canvasPageOf, findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorNode } from '../../editor/pageView';
 import { useLiveValue } from '../../ui/liveValue';
@@ -509,8 +510,8 @@ export function settingsHandlers(app: ShellView) {
     },
     onOpenCode: app.openCodeWindow,
     onSetFrontmatter: app.setExtraFrontmatter,
-    onSetLoopSource: (target: LoopTarget, sanityClient: 'available' | 'unavailable'): LoopApplyResult =>
-      selectedId ? app.setLoopSource(selectedId, target, sanityClient) : { ok: false, message: 'Select the loop first.' },
+    onSetLoopSource: (target: LoopTarget, sanityClient: 'available' | 'unavailable', declaration?: PropDeclaration): LoopApplyResult =>
+      selectedId ? app.setLoopSource(selectedId, target, sanityClient, declaration) : { ok: false, message: 'Select the loop first.' },
     onEditLoopProperty: loopPropertyEditor(app),
     onOpenSymbol: app.onOpenSymbol,
     onToggleElse: (want: boolean) => {

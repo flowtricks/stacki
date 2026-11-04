@@ -21,7 +21,7 @@ import type { LoopTarget } from '../../editor/loopQueryPlan';
 import { literalCode, literalItems, STARTER_ITEMS } from '../../editor/loopLiteral';
 import { LiteralItemsSection } from './LoopLiteralItems';
 import { fieldListOf, type FieldList } from '../../editor/loopFieldList';
-import { fieldListPath, SourcePicker, sourcePath, type SourcePick, type SourcePickerData } from './LoopSourcePicker';
+import { fieldListPath, SourcePicker, sourcePath, type NewListOffer, type SourcePick, type SourcePickerData } from './LoopSourcePicker';
 import { loadFields, LOOP_CATALOG_LIMITS, titled, type CatalogField, type LoopCatalog } from './loopCatalog';
 import { fieldNamed, itemsModeQuery, readingKey, sourceKey } from './loopSettingsModel';
 import { connectableProps, propNameProblem, SETTING_TITLES } from '../../editor/optionsBinding';
@@ -35,6 +35,9 @@ import { editableTrace, loadSanitySample, useCatalogFields, useLoopCatalog, writ
 import { ItemsSection } from './LoopItems';
 import { LoopDetails } from './LoopRows';
 import SegSwitch from './SegSwitch';
+import { err, ok, type Result } from '../../../shared/core/result';
+import type { PropDeclaration } from '../../editor/propDeclaration';
+import type { NewPropHost } from './newPropModel';
 import './loopSettings.css';
 
 /** What applying a change did: nothing to say, or why it could not be done. */
@@ -56,13 +59,16 @@ export interface LoopSettingsProps {
   readonly filePath: string | undefined;
   /** Lists on the page — props, constants, an outer item's lists. */
   readonly lists: readonly LoopListOption[];
-  readonly onApply: (target: LoopTarget, sanityClient: 'available' | 'unavailable') => LoopApplyResult;
+  /** Applies a change; with a declaration, declares that List property and loops over it, as one undo step. */
+  readonly onApply: (target: LoopTarget, sanityClient: 'available' | 'unavailable', declaration?: PropDeclaration) => LoopApplyResult;
   /** Renames a linked setting's property or changes its tooltip, across the site. */
   readonly onEditProperty?: ((key: string, edit: { readonly name: string; readonly description: string }) => Promise<string | undefined>) | undefined;
   /** A button opening the code that declares `name`, the list's holder. */
   readonly sourceButton?: ((name: string) => ReactNode) | undefined;
   /** The page's data, for the Source picker's tree of what a loop can go over. */
   readonly pickerData?: SourcePickerData | undefined;
+  /** The open component, when the loop is in one: the Source menu can make a List property for it. */
+  readonly newProp?: NewPropHost | undefined;
   /** What follows the settings (the loop's Code field), before Details at the end. */
   readonly children?: ReactNode;
 }
@@ -83,6 +89,8 @@ interface SourceRowProps {
   readonly traced: TracedCollection | undefined;
   readonly onChoose: (target: LoopTarget) => void;
   readonly onNotice: (text: string) => void;
+  /** Making a List property from the Source menu, in a component. */
+  readonly newList: NewListOffer | undefined;
 }
 
 interface Notice {
@@ -147,6 +155,7 @@ export default function LoopSettings(props: LoopSettingsProps) {
         traced={traced.collection}
         onChoose={apply}
         onNotice={(text) => setNotice({ tone: 'error', text })}
+        newList={newListOffer(props, catalog, setNotice)}
       />
       {notice !== undefined && <NoticeBanner notice={notice} onDismiss={() => setNotice(undefined)} />}
       <ReadingSettings {...shared} reading={reading} traced={traced} fields={fields} binding={binding} literal={literal} onApply={apply} />
@@ -154,6 +163,30 @@ export default function LoopSettings(props: LoopSettingsProps) {
       <ReadingDetails reading={reading} data={props.input.data} traced={traced} catalog={catalog} />
     </div>
   );
+}
+
+// In a component, the Source menu makes a List property and loops over it:
+// declared and pointed at in one apply, so one undo takes both back. The form
+// is answered with the prop's name, or why it could not be made.
+function newListOffer(
+  props: Pick<LoopSettingsProps, 'newProp' | 'onApply'>,
+  catalog: LoopCatalog | undefined,
+  setNotice: (notice: Notice | undefined) => void,
+): NewListOffer | undefined {
+  const host = props.newProp;
+  if (host === undefined) {
+    return undefined;
+  }
+  const client = catalog?.sanity.kind === 'connected' ? catalog.sanity.client : 'unavailable';
+  const create = (declaration: PropDeclaration): Result<string, string> => {
+    const result = props.onApply({ kind: 'value', data: declaration.key }, client, declaration);
+    if (!result.ok) {
+      return err(result.message);
+    }
+    setNotice(noticeFor(result, undefined));
+    return ok(declaration.key);
+  };
+  return { host: { ...host, create }, seed: { fit: 'list', label: 'items', value: '' } };
 }
 
 // A component's list can link its settings to its properties: one kept as
@@ -508,6 +541,7 @@ function SourceRow(props: SourceRowProps) {
           current={pickerPath(props, reading)}
           catalog={catalog}
           data={props.pickerData}
+          newList={props.newList}
           loadSanitySample={(type) =>
             props.projectPath !== undefined && catalog !== undefined ? loadSanitySample(props.projectPath, catalog, type) : Promise.resolve(undefined)
           }

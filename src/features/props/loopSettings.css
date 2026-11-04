@@ -957,6 +957,17 @@
   align-items: center;
   gap: 6px;
 }
+/* A list's item field: its name, its kind, and the bin. */
+.new-prop-list-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 92px) auto;
+  align-items: center;
+  gap: 6px;
+}
+.new-prop-note {
+  color: var(--text-dim);
+  font-size: 11px;
+}
 .new-prop-add {
   display: inline-flex;
   align-items: center;

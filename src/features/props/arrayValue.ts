@@ -66,7 +66,14 @@ function objectFrom(source: string): { fields: ItemField[] } | undefined {
     if (!/^[A-Za-z_$][\w$]*$/.test(key)) {
       return undefined;
     }
-    const value = itemFrom(part.slice(colon + 1));
+    // A yes/no field is a switch in the item's popup (listItemShape.ts), so
+    // `{ title: "Fast", featured: true }` is still a row and not code.
+    const raw = part.slice(colon + 1).trim();
+    if (raw === 'true' || raw === 'false') {
+      fields.push({ key, keyQuote, text: raw, quote: undefined });
+      continue;
+    }
+    const value = itemFrom(raw);
     // A field holds a word or a number. An object inside an object is a shape
     // with no depth of fields to show it in, and the popup would have nowhere
     // to put it.
@@ -343,8 +350,9 @@ export function objectText(fields: readonly ObjectRow[] | undefined): string {
 }
 
 // What a row calls an item. An object is named by the field a person would read
-// it by — its label, its name, its title — and falls back to the first field it
-// has, because a row with nothing written on it is a row nobody can aim at.
+// it by — its label, its name, its title — and falls back to its first text
+// field, then its first field, because a row with nothing written on it is a
+// row nobody can aim at.
 const NAMES = ['label', 'name', 'title', 'text', 'value'] as const;
 
 export function itemLabel(item: Item | undefined): string {
@@ -362,7 +370,8 @@ export function itemLabel(item: Item | undefined): string {
       return String(field.text);
     }
   }
-  return String(item.fields[0]?.text ?? '');
+  const words = item.fields.find((field) => field.quote !== undefined && String(field.text).trim());
+  return String((words ?? item.fields[0])?.text ?? '');
 }
 
 /**

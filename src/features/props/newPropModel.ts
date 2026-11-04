@@ -11,15 +11,29 @@
 // A prop whose type Stacki cannot read is offered everywhere but an attribute
 // list: hiding a prop that would have worked is worse than offering one that
 // might not.
+//
+// An image field (an <img> or <video> src, an asset prop) takes an Image prop:
+// one typed ImageMetadata fits only there, never a text field, and one typed
+// as a URL string fits both, since a URL is words too. A list (a loop's
+// source) takes a List prop: a prop whose type says it is a list of items.
+// The picker's tree says a prop is a list from its declared shape; it cannot
+// say a prop is an image, so the host names those (NewPropHost.imageProps).
 
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import type { Result } from '../../../shared/core/result';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
-import type { NewPropKind, PropDeclaration } from '../../editor/propDeclaration';
+import { memberTypes, type NewPropKind, type PropDeclaration } from '../../editor/propDeclaration';
+import { readPropsDestructure } from '../../editor/loopProps';
+import { isMediaName } from '../../editor/fieldNames';
+import { isImageType } from '../../editor/imagePropDefault';
+import type { ItemFieldDeclaration } from '../../editor/listPropType';
 
 /** The kind of field a picker was opened on. */
-export type FieldFit = 'content' | 'text' | 'number' | 'boolean' | 'attributes';
+export type FieldFit = 'content' | 'text' | 'number' | 'boolean' | 'attributes' | 'image' | 'list';
+
+/** How an image prop is typed: an imported file's ImageMetadata, or a URL string. */
+export type ImagePropKind = 'asset' | 'url';
 
 /** The component a picker binds in, and how to give it a new prop. Absent on a page. */
 export interface NewPropHost {
@@ -31,6 +45,12 @@ export interface NewPropHost {
   readonly restLocal: string | undefined;
   /** Declares the prop and holds it for the field's binding, so both are one undo step; answers the path to bind. */
   readonly create: (declaration: PropDeclaration) => Result<string, string>;
+  /** The component's image props, by the name the markup reads them by, and how each is typed. */
+  readonly imageProps?: ReadonlyMap<string, ImagePropKind> | undefined;
+  /** The project, for the Image form's asset picker. */
+  readonly projectPath?: string | undefined;
+  /** The component's folder in the project (`src/components`), which an imported image's path is relative to. */
+  readonly fileDirectory?: string | undefined;
 }
 
 /** What a field's picker offers a new prop from: its kind, its label and its current literal value. */
@@ -40,6 +60,14 @@ export interface NewPropSeed {
   readonly value: string;
   /** The tag of the element, for an attributes prop's typing. */
   readonly tag?: string | undefined;
+  /**
+   * What an image field takes from an imported image: its URL (`image.src`,
+   * for an <img> or a prop typed string) or the ImageMetadata itself (for
+   * astro:assets <Image>). The same rule as assetReferenceFor in elementState.ts.
+   */
+  readonly reference?: 'url' | 'module' | undefined;
+  /** The fields a list field's items have, which a new List prop for it starts with. */
+  readonly itemFields?: readonly ItemFieldDeclaration[] | undefined;
 }
 
 /** A row of the picker's data tree, as far as fitting reads it. */
@@ -56,6 +84,8 @@ export const FIT_KINDS: Readonly<Record<FieldFit, readonly NewPropKind[]>> = {
   number: ['number'],
   boolean: ['boolean'],
   attributes: ['attributes'],
+  image: ['image'],
+  list: ['list'],
 };
 
 /** What each kind is called in the menu and the form: `New Text property`. */
@@ -65,6 +95,8 @@ export const KIND_TITLES: Readonly<Record<NewPropKind, string>> = {
   boolean: 'Switch',
   option: 'Option',
   attributes: 'Attributes',
+  list: 'List',
+  image: 'Image',
 };
 
 /** The word in a field's `New … property` row. */
@@ -80,6 +112,10 @@ export function newPropTitle(fit: FieldFit): string {
       return 'Switch';
     case 'attributes':
       return 'Attributes';
+    case 'image':
+      return 'Image';
+    case 'list':
+      return 'List';
     default: {
       const exhaustive: never = fit;
       return exhaustive;
@@ -87,10 +123,13 @@ export function newPropTitle(fit: FieldFit): string {
   }
 }
 
+/** The tree kind an image prop is listed as: `image` for ImageMetadata, `image url` for a URL string. */
+export const IMAGE_NODE_KINDS: Readonly<Record<ImagePropKind, string>> = { asset: 'image', url: 'image url' };
+
 // What a data-tree kind is, as fitting reads it. The kinds come from two
 // places: a schema type (`string`, `enum`, `number`) and a sampled value
 // (`text`, `number`, `list`).
-type PropShape = 'words' | 'number' | 'switch' | 'attributes' | 'structure' | 'unknown';
+type PropShape = 'words' | 'number' | 'switch' | 'attributes' | 'image' | 'imageUrl' | 'list' | 'structure' | 'unknown';
 
 function shapeOf(kind: string): PropShape {
   switch (kind) {
@@ -105,7 +144,12 @@ function shapeOf(kind: string): PropShape {
       return 'switch';
     case 'rest props':
       return 'attributes';
+    case 'image':
+      return 'image';
+    case 'image url':
+      return 'imageUrl';
     case 'list':
+      return 'list';
     case 'object':
     case 'code':
     case 'slot':
@@ -123,13 +167,17 @@ export function propFits(kind: string, fit: FieldFit): boolean {
   switch (fit) {
     case 'content':
     case 'text':
-      return shape === 'words' || shape === 'number' || shape === 'unknown';
+      return shape === 'words' || shape === 'number' || shape === 'imageUrl' || shape === 'unknown';
     case 'number':
       return shape === 'number' || shape === 'unknown';
     case 'boolean':
       return shape === 'switch' || shape === 'unknown';
     case 'attributes':
       return shape === 'attributes';
+    case 'image':
+      return shape === 'image' || shape === 'imageUrl' || shape === 'unknown';
+    case 'list':
+      return shape === 'list' || shape === 'unknown';
     default: {
       const exhaustive: never = fit;
       return exhaustive;
@@ -141,11 +189,21 @@ export function propFits(kind: string, fit: FieldFit): boolean {
  * The picker's tree for a field in a component: the component's own props
  * narrowed to those that fit (a prop with fields beneath it stays, so a field
  * of it can be reached), every other source as it was. An attributes list
- * binds to the component's rest props and nothing else.
+ * binds to the component's rest props and nothing else. The image props the
+ * host names are listed as images first (IMAGE_NODE_KINDS), so they fit, and
+ * show, as one.
  */
-export function fittingTree<Node extends FitNode>(tree: readonly Node[], fit: FieldFit): readonly Node[] {
+export function fittingTree<Node extends FitNode & { readonly path: string }>(
+  tree: readonly Node[],
+  fit: FieldFit,
+  imageProps: ReadonlyMap<string, ImagePropKind> = new Map(),
+): readonly Node[] {
   assert(tree.length <= LIMITS.treeNodesMax, 'fittingTree: node limit exceeded');
-  const out = tree.filter((node) => {
+  const kinded = tree.map((node) => {
+    const image = node.section === 'props' ? imageProps.get(node.path) : undefined;
+    return image === undefined ? node : { ...node, kind: IMAGE_NODE_KINDS[image] };
+  });
+  const out = kinded.filter((node) => {
     if (node.section !== 'props') {
       return fit !== 'attributes';
     }
@@ -207,9 +265,21 @@ export function suggestedRestName(host: Pick<NewPropHost, 'propKeys' | 'restLoca
 
 /**
  * The fit of a settings field by its schema type, or undefined for a field a
- * new prop is not offered for (code, style, slot, an object).
+ * new prop is not offered for (code, style, slot, an object). A field whose
+ * name says it holds media (`src`, `poster`, `heroImage`) is an image field,
+ * whether typed as a string (<img src>) or not at all (astro:assets <Image src>).
  */
-export function fitOfFieldType(type: string, options: { readonly numeric?: boolean | undefined } = {}): FieldFit | undefined {
+export function fitOfFieldType(
+  type: string,
+  options: { readonly numeric?: boolean | undefined; readonly media?: boolean | undefined; readonly list?: boolean | undefined } = {},
+): FieldFit | undefined {
+  if (options.media === true && ['string', 'other', 'url', 'image', 'media'].includes(type)) {
+    return 'image';
+  }
+  // A child component's list prop (`items={…}`): a List prop of the same items passes it on.
+  if (options.list === true && type === 'code') {
+    return 'list';
+  }
   switch (type) {
     case 'number':
       return 'number';
@@ -239,4 +309,50 @@ export function literalOf(value: { readonly type: string; readonly value?: strin
   }
   const code = (value.value ?? '').trim();
   return /^(true|false|-?\d+(\.\d+)?)$/.test(code) ? code : '';
+}
+
+/**
+ * The expression a field binds to a new prop: the prop itself, or its URL
+ * (`image.src`) when the prop is an imported image and the field takes a URL
+ * (an <img>'s src renders an ImageMetadata object as "[object Object]").
+ */
+export function boundPath(local: string, image: ImagePropKind | undefined, reference: NewPropSeed['reference']): string {
+  assert(/^[A-Za-z_$][\w$]*$/.test(local), 'boundPath: a prop is read by an identifier');
+  const out = image === 'asset' && reference === 'url' ? `${local}.src` : local;
+  assert(out.startsWith(local), 'boundPath: the binding reads the prop');
+  return out;
+}
+
+/** The name a new prop for a field starts from: an image field's `src` makes an `image` prop. */
+export function seedName(seed: Pick<NewPropSeed, 'fit' | 'label'>): string {
+  return seed.fit === 'image' && /^(src|data-src)$/i.test(seed.label) ? 'image' : seed.label;
+}
+
+const IMAGE_FILE = /\.(png|jpe?g|webp|avif|gif|svg)(\?.*)?$/i;
+
+/**
+ * The component's image props, by the name the markup reads each by: one
+ * typed ImageMetadata is an imported image (`asset`); one typed `string` is a
+ * URL image (`url`) when its name says media (`heroImage`) or its default is
+ * an image file's address, as the Image form writes one.
+ */
+export function imagePropsOf(frontmatter: string): ReadonlyMap<string, ImagePropKind> {
+  const types = memberTypes(frontmatter);
+  const out = new Map<string, ImagePropKind>();
+  for (const entry of readPropsDestructure(frontmatter)?.entries ?? []) {
+    const type = types.get(entry.key);
+    if (type === undefined) {
+      continue;
+    }
+    if (isImageType(type)) {
+      out.set(entry.local, 'asset');
+      continue;
+    }
+    const fallback = entry.defaultValue === undefined ? '' : frontmatter.slice(entry.defaultValue.from, entry.defaultValue.to);
+    if (type === 'string' && (isMediaName(entry.key) || IMAGE_FILE.test(fallback.replace(/^["'`]|["'`]$/g, '')))) {
+      out.set(entry.local, 'url');
+    }
+  }
+  assert(out.size <= types.size, 'imagePropsOf: only declared props are images');
+  return out;
 }

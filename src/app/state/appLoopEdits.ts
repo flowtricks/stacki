@@ -1,6 +1,9 @@
 // A loop's list settings, written to the page: the query, the loop head, the
 // children re-pointed at the new item, and whatever the old source leaves
 // unused, planned in one pass (loopQueryPlan.ts) and committed as one undo step.
+// A List property made from the Source menu is declared in the same step: the
+// plan is made against the frontmatter with the prop in it, so the loop reads
+// it and nothing the plan writes takes the declaration back out.
 
 import { useCallback, useRef } from 'react';
 import { assert } from '../../../shared/core/assert';
@@ -9,7 +12,10 @@ import { frontmatterGesture, nodeGesture, sequence } from '../../editor/editGest
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import type { EditorModel, EditorNode } from '../../editor/pageView';
 import type { LoopApplyResult } from '../../features/props/LoopSettings';
+import type { EditGesture } from '../../editor/pageEdits';
+import type { PropDeclaration } from '../../editor/propDeclaration';
 import { frontmatterOf } from '../model/nodeFactory';
+import { newPropGesture } from '../model/newPropGesture';
 import type { useCoreState } from './appLifecycle';
 import type { useHistory } from './appNodeEdits';
 
@@ -26,12 +32,19 @@ export function useLoopEdits(coreState: ReturnType<typeof useCoreState>, history
   // the snapshot would undo it, so the loop is re-pointed instead.
   const loopMemoryRef = useRef<LoopMemory>(new Map());
   const setLoopSource = useCallback(
-    (nodeId: string, target: LoopTarget, sanityClient: 'available' | 'unavailable'): LoopApplyResult => {
+    (nodeId: string, requested: LoopTarget, sanityClient: 'available' | 'unavailable', declaration?: PropDeclaration): LoopApplyResult => {
       const state = pageStateRef.current.pageState;
       if (!state?.editable) {
         return { ok: false, message: 'This page can’t be edited right now.' };
       }
-      const loop = findNodeById(state.model.nodes, nodeId);
+      // A new List property: declared first, and the loop goes over it by the name it is read by.
+      const declared = declaration === undefined ? undefined : newPropGesture(state.model, declaration);
+      if (declared !== undefined && !declared.ok) {
+        return { ok: false, message: declared.error };
+      }
+      const model = declared === undefined ? state.model : declared.value.gesture.apply(state.model);
+      const target: LoopTarget = declared === undefined ? requested : { kind: 'value', data: declared.value.local };
+      const loop = findNodeById(model.nodes, nodeId);
       if (loop?.kind !== 'map') {
         return { ok: false, message: 'That loop is no longer on the page.' };
       }
@@ -39,7 +52,7 @@ export function useLoopEdits(coreState: ReturnType<typeof useCoreState>, history
       const memory = loopMemoryRef.current.get(nodeId);
       const fresh = memory !== undefined && memory.produced === childrenFingerprint(children);
       const restore = fresh ? memory.snapshots.get(targetKey(target)) : undefined;
-      const planned = planLoop({ model: state.model, loop, target, sanityClient, restore });
+      const planned = planLoop({ model, loop, target, sanityClient, restore });
       if (!planned.ok) {
         return planned;
       }
@@ -58,16 +71,15 @@ export function useLoopEdits(coreState: ReturnType<typeof useCoreState>, history
       // what it already says), and that refusal read as an editor error.
       const loopChanged = plan.loop.head !== loop.head || plan.loop.children !== loop.children;
       const loopEdit = loopChanged ? nodeGesture(nodeId, plan.loop, options) : undefined;
-      const after = loopEdit === undefined ? state.model : loopEdit.apply(state.model);
+      const after = loopEdit === undefined ? model : loopEdit.apply(model);
       const frontmatterChanged = frontmatterOf(written(after)) !== frontmatterOf(after);
       const frontmatterEdit = frontmatterChanged ? frontmatterGesture(after, options, written) : undefined;
-      if (loopEdit !== undefined && frontmatterEdit !== undefined) {
-        commitEdit(sequence(loopEdit, frontmatterEdit));
-      } else if (loopEdit !== undefined || frontmatterEdit !== undefined) {
-        const only = loopEdit ?? frontmatterEdit;
-        assert(only !== undefined, 'One of the two edits is there');
-        commitEdit(only);
+      const edits = [declared?.value.gesture, loopEdit, frontmatterEdit].filter((edit): edit is EditGesture => edit !== undefined);
+      const first = edits[0];
+      if (first !== undefined) {
+        commitEdit(edits.slice(1).reduce((joined, edit) => sequence(joined, edit), first));
       }
+      assert(declared === undefined || edits.length > 0, 'A declared list prop is committed');
       return { ok: true, unbound: plan.unbound, lost: plan.lost, restored: plan.restored };
     },
     [commitEdit, pageStateRef],

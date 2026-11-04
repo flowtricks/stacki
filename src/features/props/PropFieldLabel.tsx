@@ -9,8 +9,11 @@ import { BindHandle, FieldDataPicker } from './propBindings';
 import PropTip from './PropTip';
 import { FieldNumberIcon, ComponentPropertiesIcon, FieldSwitchIcon, BracesIcon, CodeIcon, ElementSlotIcon, VariableTextSizeIcon } from '../../ui/Icons';
 import { controlWord, type PropState } from './propFieldModel';
-import { fitOfFieldType, literalOf } from './newPropModel';
+import { fitOfFieldType, literalOf, type NewPropSeed } from './newPropModel';
 import { withoutSettingTags } from '../../editor/propDocumentation';
+import { isMediaName } from '../../editor/fieldNames';
+import { arrayItems } from './arrayValue';
+import { itemShapeOf } from './listItemShape';
 
 export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) => event.preventDefault();
 export function PropFieldPill({ state }: { readonly state: PropState }) {
@@ -153,7 +156,20 @@ export function PropFieldPicker({ state }: { readonly state: PropState }) {
 }
 
 // What a new prop for this field starts from: its kind, its name and its value.
-function seedOf(field: PropState['field'], value: PropState['value']) {
-  const fit = fitOfFieldType(field.type, { numeric: field.numeric });
-  return fit === undefined ? undefined : { fit, label: field.name, value: literalOf(value) };
+// A media field (an <img> src, an image prop) offers an Image prop, and says
+// whether it takes an imported image's URL (typed string) or the image itself.
+// A list field of a child component offers a List prop with its items' fields,
+// starting from the items it holds.
+function seedOf(field: PropState['field'], value: PropState['value']): NewPropSeed | undefined {
+  const list = field.shapeIsList === true;
+  const fit = fitOfFieldType(field.type, { numeric: field.numeric, media: isMediaName(field.name), list });
+  if (fit === undefined) {
+    return undefined;
+  }
+  const reference = field.type === 'string' ? 'url' : 'module';
+  if (fit === 'list') {
+    const items = value?.type === 'expr' && arrayItems(value.value) !== undefined ? value.value : '';
+    return { fit, label: field.name, value: items, reference, itemFields: itemShapeOf(field.shape) };
+  }
+  return { fit, label: field.name, value: literalOf(value), reference };
 }
