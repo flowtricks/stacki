@@ -1,3 +1,4 @@
+import { assert } from '../../../shared/core/assert';
 import Popup from '../../ui/Popup';
 import { dataPickerPosition } from './dataPickerPosition';
 import React, { useEffect, useRef, useState } from 'react';
@@ -8,7 +9,7 @@ import { dataTree } from '../../editor/dataSuggest';
 import type { DataContext } from '../../editor/dataSuggest';
 import { resolvePick } from '../../editor/bindings';
 import { deleteChipAtCaret } from './chipKeys';
-import { nodesToHtml, isChippable } from './richContentModel';
+import { LITERAL_ATTRIBUTE, nodesToHtml, isChippable } from './richContentModel';
 import type { InlineNode } from './richContentModel';
 import { richApplyLink, richContentNodes, richExec, richReadStates, richWrapTag, type FormatState, type RichTarget } from './richFormat';
 import { RichFormatButtons, RichLinkField, richBubblePlace, type Bubble, type BubblePosition } from './RichFormatButtons';
@@ -58,6 +59,14 @@ export default function RichContent({ nodes, onChange, bindContext, insertRef }:
         spellCheck={false}
         onBlur={onBlur}
         onInput={emit}
+        // Plain text only: a paste from a page or a document would bring its
+        // fonts, sizes and markup into the content. Its line breaks stay as
+        // the <br> this field writes for Enter.
+        onPaste={(event) => {
+          event.preventDefault();
+          document.execCommand('insertHTML', false, plainPasteHTML(event.clipboardData.getData('text/plain')));
+          emit();
+        }}
         onMouseDown={onChipMouseDown}
         onKeyDown={(event) => {
           // Keep formatting shortcuts local; Enter inserts <br> (inline field).
@@ -412,4 +421,13 @@ function useRichBlur(state: RichState): () => void {
       setBubble((bubble) => (linkMode ? bubble : undefined));
     }, 150);
   };
+}
+
+/** Pasted text as markup that holds only its characters and its line breaks. */
+// Inside a literal run: pasted text is text, braces and all (LITERAL_ATTRIBUTE).
+export function plainPasteHTML(text: string): string {
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const html = escaped.replace(/\r\n?/g, '\n').replace(/\n/g, '<br>');
+  assert(!/<(?!br>)/.test(html), 'Pasted markup holds only line breaks');
+  return html === '' ? '' : `<span ${LITERAL_ATTRIBUTE}="">${html}</span>`;
 }

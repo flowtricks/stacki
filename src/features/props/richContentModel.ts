@@ -111,7 +111,9 @@ function richSerialize(nodes: readonly InlineNode[], budget: Budget, depth: numb
   for (const node of nodes) {
     budget.take(1, 'RichContent: serialization node limit exceeded');
     if (node.kind === 'text') {
-      out += esc(node.value);
+      // Braces in text are text: drawn as literal, so reading the field back
+      // (richReadDOM) keeps them, where typed `{name}` would become a binding.
+      out += /[{}]/.test(node.value) ? `<span ${LITERAL_ATTRIBUTE}="">${esc(node.value)}</span>` : esc(node.value);
     } else if (node.kind === 'expr') {
       // An atomic chip: contentEditable=false makes the caret step over it
       // as one unit, so it can't be part-deleted into broken code, while
@@ -155,7 +157,9 @@ function richReadDOM(element: Element, budget: Budget, depth: number): InlineNod
         out.push(...textNodes);
       }
     } else if (isDOMElement(node)) {
-      if (node.classList.contains('expr-chip')) {
+      if (node.hasAttribute(LITERAL_ATTRIBUTE)) {
+        out.push(...richReadLiteral(node, budget));
+      } else if (node.classList.contains('expr-chip')) {
         out.push({
           kind: 'expr',
           value: node.getAttribute('data-expr') || `{${node.textContent}}`,
@@ -174,6 +178,36 @@ function richReadDOM(element: Element, budget: Budget, depth: number): InlineNod
 // browser renders the same thing either way, but every save echoes back
 // through the parser, and a value that comes back different from the last
 // emission makes the field's sync rewrite the DOM and reset the caret.
+/**
+ * Marks text that is text whatever it holds: pasted words, and text with
+ * braces in it. The field turns `{name}` typed into its text into a binding,
+ * which pasted code (`import { Pidgin }`, `{ apiKey: "…" }`) is not: read as
+ * expressions, they wrote code into the page that did not compile.
+ */
+export const LITERAL_ATTRIBUTE = 'data-rich-literal';
+
+// A literal run: its text as text (the canonical value, as any text), and its line breaks.
+function richReadLiteral(node: Element, budget: Budget): InlineNode[] {
+  const out: InlineNode[] = [];
+  for (const child of node.childNodes) {
+    budget.take(1, 'RichContent: DOM node limit exceeded');
+    if (child.nodeType === 3) {
+      if (child.textContent) {
+        out.push({ kind: 'text', value: textValueCanonical(child.textContent) });
+      }
+    } else if (isDOMElement(child) && child.tagName.toLowerCase() === 'br') {
+      out.push({ kind: 'element', name: 'br', props: {}, children: undefined });
+    } else if (child.textContent) {
+      out.push({ kind: 'text', value: textValueCanonical(child.textContent) });
+    }
+  }
+  assert(
+    out.every((item) => item.kind !== 'expr'),
+    'A literal run holds no expressions',
+  );
+  return out;
+}
+
 function richReadText(raw: string): InlineNode[] {
   assert(raw.length <= LIMITS.nodeValueCharsMax, 'RichContent: text limit exceeded');
   const out: InlineNode[] = [];

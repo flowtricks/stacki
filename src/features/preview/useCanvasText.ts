@@ -1,4 +1,5 @@
 import { cmsTransport } from '../../ipc/editorEnvironment';
+import { noteCanvasTextEditing } from '../../editor/canvasTextFocus';
 import type { CanvasEditFormat, CanvasTextEdit } from './canvasTextSource';
 import { useEffect, useRef, type RefObject } from 'react';
 import { canvasTextUnfolded, parseCanvasTextEvent, type CanvasTextCatalog } from '../../../shared/properties/canvasText';
@@ -144,6 +145,7 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
       return;
     }
     if (message.type === 'avb:text-active' || message.type === 'avb:text-inactive') {
+      noteCanvasTextEditing(message.type === 'avb:text-active' ? 'active' : 'inactive');
       options.overlay.receive(message);
       if (!busy) {
         clearCanvasTextDraft(options.session);

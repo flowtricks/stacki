@@ -433,9 +433,9 @@ export function useCopyNode(
         })),
         pagePath: pageStateRef.current.currentPage?.path || undefined,
       };
-      showToast(`Copied ${node.name || 'text'}`, 'success');
+      // Copying is silent, as it is everywhere else: a notice for it only gets in the way.
     },
-    [showToast, nodeClipboardRef, pageStateRef],
+    [nodeClipboardRef, pageStateRef],
   );
 
   const duplicateNode = useCallback(

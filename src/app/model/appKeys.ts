@@ -3,6 +3,7 @@
 // page, copying the selection as a trail, layout and import gestures, and
 // whether focus is in an editable field (App.tsx).
 
+import { canvasTextHasFocus } from '../../editor/canvasTextFocus';
 import React from 'react';
 import type { ScanComponent, ScanResult } from '../../../shared/properties/projectScan';
 import { readPage } from '../../ipc/bridge';
@@ -118,9 +119,9 @@ export function handleCommandKey(event: KeyboardEvent, keys: AppKeys): boolean {
     return true;
   }
 
-  // ⌘Enter goes straight to the class field: Settings tab, Settings group
-  // open, caret in the class input. Before the "am I typing" guard below,
-  // so it also works from another field in the panel.
+  // ⌘Enter goes straight to the selector field: Style tab, caret in its
+  // "Add a selector" input. Before the "am I typing" guard below, so it also
+  // works from another field in the panel.
   if (mod && !event.altKey && !event.shiftKey && event.key === 'Enter') {
     if (!keys.selectedIdRef.current) {
       return true;
@@ -130,7 +131,7 @@ export function handleCommandKey(event: KeyboardEvent, keys: AppKeys): boolean {
       return true;
     }
     event.preventDefault();
-    keys.setRightTab('settings');
+    keys.setRightTab('style');
     keys.setClassFocus((count) => count + 1);
     return true;
   }
@@ -398,6 +399,10 @@ export async function savedForNavigation(
 // Whether a text field, a box or anything a caret is in has focus.
 export function inEditable(): boolean {
   const active = document.activeElement;
+  // Canvas text being edited is a field too: the menu's Copy, Cut and Paste go to it.
+  if (canvasTextHasFocus()) {
+    return true;
+  }
   return active instanceof HTMLElement && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
 }
 

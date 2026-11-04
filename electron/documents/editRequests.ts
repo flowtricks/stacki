@@ -23,6 +23,8 @@ import { TAG_NAME_RE } from '../../shared/engine/intent';
 import type { Operation, Placement, RejectionReason, SourceEdit } from '../../shared/engine/intent';
 import { renameSites } from '../../shared/engine/loopScope';
 import { closeTagStart, lineIndent, nodeAtPath, openTagEnd, tagNameEnd, textOf } from '../../shared/engine/planSupport';
+import { diffCodePatch } from '../../shared/engine/codePatch';
+import { encodeText } from '../../shared/page/htmlText';
 import { parsePageResult, type PageNode } from '../../shared/page/pageNode';
 import { toAnchorRef, type AnchorRef } from '../../shared/page/ref';
 import { err, ok, type Result } from '../../shared/core/result';
@@ -235,6 +237,18 @@ function replaceDraft(authored: Authored, anchor: AnchorRef, next: PageNode): Re
   if (previous === undefined) {
     return err('anchor-moved');
   }
+  if (previous.kind === 'raw' && next.kind === 'raw') {
+    const contents = rawContentsDraft(authored, anchor, { previous, next });
+    if (contents !== undefined) {
+      return contents;
+    }
+  }
+  if (previous.kind === 'text' && next.kind === 'text') {
+    const words = textDraft(authored, anchor, { previous, next });
+    if (words !== undefined) {
+      return words;
+    }
+  }
   const bytes = authored.snapshot.bytes;
   const eol = authored.text.includes('\r\n') ? '\r\n' : '\n';
   const indent = lineIndent(bytes, projected.span.start);
@@ -250,6 +264,97 @@ function replaceDraft(authored: Authored, anchor: AnchorRef, next: PageNode): Re
   }
   const moved = shiftedHunks(hunks.value, projected.span.start);
   return ok({ anchor, operation: { tag: 'rewrite-node', hunks: moved } });
+}
+
+/**
+ * A `<style>` or `<script>` whose contents alone changed: the contents are
+ * kept byte for byte, so the change is the diff of the old contents and the
+ * new, written where the contents sit between the tags. Printing the element
+ * instead re-indents its contents by the element's own indentation, and a
+ * change the diff could not place on the file through that re-indented text
+ * was refused as an editor error (typing a comment into a page's `<style>`,
+ * a style panel edit): or, placed, wrote new lines at the doubled indent.
+ * Undefined when the tag itself changed or the contents on disk are not the
+ * ones the node holds; the printed path decides those.
+ */
+function rawContentsDraft(
+  authored: Authored,
+  anchor: AnchorRef,
+  nodes: { readonly previous: RawPageNode; readonly next: RawPageNode },
+): Result<IntentDraft, RejectionReason> | undefined {
+  const { previous, next } = nodes;
+  if (previous.name !== next.name || JSON.stringify([previous.props, previous.attrOrder]) !== JSON.stringify([next.props, next.attrOrder])) {
+    return undefined;
+  }
+  const projected = nodeAtPath(authored.projection, anchor.path);
+  assert(projected?.kind === 'raw', 'A raw page node is a projected raw node');
+  const bytes = authored.snapshot.bytes;
+  const open = openTagEnd(bytes, projected);
+  const close = open.selfClosing ? undefined : closeTagStart(bytes, projected, open.end);
+  if (close === undefined || textOf(bytes, toByteSpan(open.end, close)) !== previous.inner) {
+    return undefined;
+  }
+  const change = diffCodePatch(previous.inner, next.inner);
+  if (!change.ok) {
+    return change;
+  }
+  if (change.value.length === 0) {
+    return err('unsupported-operation'); // Nothing to write; the gesture had no change.
+  }
+  const hunks = shiftedHunks(
+    change.value.map((hunk) => ({ span: hunk.span, text: hunk.text })),
+    open.end,
+  );
+  assert(
+    hunks.every((hunk) => hunk.span.start >= open.end && hunk.span.end <= close),
+    'A contents edit stays between the tags',
+  );
+  return ok({ anchor, operation: { tag: 'rewrite-node', hunks } });
+}
+
+type RawPageNode = Extract<PageNode, { readonly kind: 'raw' }>;
+// A text run's node: the value kinds share one shape, `text` among them.
+type TextPageNode = Extract<PageNode, { readonly kind: 'text' | 'expr' | 'raw-line' }>;
+
+/**
+ * A run of text whose words changed: written as the diff of its old text and
+ * its new, where the run sits. The printer writes a run without the space at
+ * either end (on a line of its own that space is the layout's), so a change to
+ * that space alone printed the same before and after and was refused as an
+ * editor error: deleting the space in `Send your first pigeon <span>`.
+ * Undefined unless the file holds the run exactly as its text spells it; the
+ * printed path decides the rest (text wrapped across lines, say).
+ */
+function textDraft(
+  authored: Authored,
+  anchor: AnchorRef,
+  nodes: { readonly previous: TextPageNode; readonly next: TextPageNode },
+): Result<IntentDraft, RejectionReason> | undefined {
+  const { previous, next } = nodes;
+  const projected = nodeAtPath(authored.projection, anchor.path);
+  assert(projected?.kind === 'text', 'A text page node is a projected text node');
+  const own = textOf(authored.snapshot.bytes, projected.span);
+  const before = encodeText(previous.value);
+  if (own !== before || own.includes('\n')) {
+    return undefined;
+  }
+  const after = encodeText(next.value);
+  const change = diffCodePatch(before, after);
+  if (!change.ok) {
+    return change;
+  }
+  if (change.value.length === 0) {
+    return err('unsupported-operation'); // Nothing to write; the gesture had no change.
+  }
+  const hunks = shiftedHunks(
+    change.value.map((hunk) => ({ span: hunk.span, text: hunk.text })),
+    projected.span.start,
+  );
+  assert(
+    hunks.every((hunk) => hunk.span.start >= projected.span.start && hunk.span.end <= projected.span.end),
+    'A text edit stays inside its run',
+  );
+  return ok({ anchor, operation: { tag: 'rewrite-node', hunks } });
 }
 
 // Attributes live on tags: elements, component invocations, `<style>`/`<script>`.

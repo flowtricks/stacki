@@ -839,3 +839,66 @@ test('a batch with a refused edit, or against changed bytes, writes nothing', as
   assert.equal(stale.error.reason, 'anchor-moved');
   assert.equal(fs.readFileSync(file, 'utf8'), SIBLINGS + '<p />\n');
 });
+
+// A <style> inside the page's <head>, its CSS at the tag's own indentation,
+// as a hand-written HTML page has it. Its contents are kept byte for byte, so
+// a change to them (typing in the code panel, a style panel write) is written
+// as their diff between the tags: printing the element re-indented the CSS,
+// and a change that could not be placed through that text was refused as an
+// "editor error" (or, placed, wrote new rules at a doubled indent).
+test('a style block edit writes its contents exactly, never re-indented', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  const css = ['', '    .faq_summary {', '      cursor: pointer;', '      & > span {', '        color: red;', '      }', '    }', '    '].join('\n');
+  const page = (inner: string) =>
+    `<html lang="en">\n  <head>\n    <style>${inner}</style>\n  </head>\n  <body>\n    <p class="faq_summary">Q</p>\n  </body>\n</html>\n`;
+  fs.writeFileSync(file, page(css));
+  const changes = [
+    (inner: string) => inner.replace('cursor: pointer;', 'cursor: pointer;\n      /* note */'),
+    (inner: string) => inner.replace(/\n {4}$/, '\n    .faq_summary::after {\n      content: "+";\n    }\n    '),
+    (inner: string) => inner.replace('        color: red;', '        color: red;\n        background: white;'),
+    (inner: string) => `\n    /* top */${inner}`,
+  ];
+  let current = css;
+  for (const change of changes) {
+    const shown = await read(harness, file);
+    const style = nodeAt(shown, [0, 0, 0]);
+    assert.ok(style.kind === 'raw');
+    assert.equal(style.inner, current);
+    const next = change(current);
+    const applied = await edit(harness, file, shown.checksum, { tag: 'replace-node', target: refAt(shown, [0, 0, 0]), node: { ...style, inner: next } });
+    assert.ok(applied.ok, `the edit applies (${applied.ok ? '' : JSON.stringify(applied.error)})`);
+    assert.equal(fs.readFileSync(file, 'utf8'), page(next));
+    current = next;
+  }
+});
+
+// A run of text whose only change is the space at its end: the printer writes
+// a run without its boundary spaces, so deleting `pigeon `'s space printed the
+// same before and after and was refused as an editor error. The run is now
+// written as the diff of its own text, so the space goes and nothing else moves.
+test('removing the space at the end of a text run before an element applies', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  const before =
+    '<div class="button-wrapper">\n      <a href="#" class="button secondary"\n        >Send your first pigeon <span>→</span></a\n      >\n    </div>\n';
+  fs.writeFileSync(file, before);
+  for (const [from, to] of [
+    ['Send your first pigeon ', 'Send your first pigeon'],
+    ['Send your first pigeon', 'Send your first pigeon '],
+    ['Send your first pigeon ', 'Send a <pigeon> & go '],
+  ] as const) {
+    const page = await read(harness, file);
+    const text = nodeAt(page, [0, 0, 0]);
+    assert.ok(text.kind === 'text');
+    assert.equal(text.value, from);
+    const applied = await edit(harness, file, page.checksum, { tag: 'replace-node', target: refAt(page, [0, 0, 0]), node: { ...text, value: to } });
+    assert.ok(applied.ok, `${JSON.stringify(from)} → ${JSON.stringify(to)} applies (${applied.ok ? '' : JSON.stringify(applied.error)})`);
+    const echo = nodeAt(await read(harness, file), [0, 0, 0]);
+    assert.ok(echo.kind === 'text');
+    assert.equal(echo.value, to);
+  }
+  assert.equal(fs.readFileSync(file, 'utf8'), before.replace('Send your first pigeon ', 'Send a &lt;pigeon&gt; &amp; go '));
+});

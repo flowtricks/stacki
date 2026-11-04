@@ -84,3 +84,27 @@ assert.deepEqual(domToNodes(host), [{ kind: 'text', value: 'a &amp; b' }]);
 
 dom.window.close();
 console.log('renderer-rich: inline round trips, invalid shapes, and traversal limits passed');
+
+// Pasted code is text, braces and all: read as bindings, `{ apiKey: "…" }`
+// wrote an expression into the page that did not compile. A literal run reads
+// back as text, and text holding braces is drawn as a literal run again, so
+// the next edit does not turn its braces into bindings. Typing `{name}` still binds.
+{
+  const { plainPasteHTML } = loadRenderer('src/features/props/RichContent.tsx');
+  host.innerHTML = `Install: ${plainPasteHTML('import { Pidgin } from "@pidgin/sdk";\nnew Pidgin({ apiKey: "x" });')}`;
+  const pasted = domToNodes(host);
+  assert.ok(
+    pasted.every((node) => node.kind !== 'expr'),
+    JSON.stringify(pasted),
+  );
+  assert.deepEqual(
+    pasted.map((node) => (node.kind === 'text' ? node.value : node.name)),
+    ['Install: ', 'import { Pidgin } from "@pidgin/sdk";', 'br', 'new Pidgin({ apiKey: "x" });'],
+  );
+  // Redrawn and read again, the braces are still text.
+  host.innerHTML = nodesToHtml(pasted);
+  assert.deepEqual(domToNodes(host), pasted);
+  host.innerHTML = 'Hi {post.title}';
+  assert.deepEqual(domToNodes(host)[1], { kind: 'expr', value: '{post.title}' }, 'a typed binding still binds');
+  assert.equal(plainPasteHTML(''), '');
+}
