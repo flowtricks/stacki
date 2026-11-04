@@ -15,6 +15,31 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.2 pseudo-element layers, loop settings, Style panel fixes
+
+- ::before and ::after are Navigator layers. Picking one selects the rule that styles it and
+  lists only the selectors that style that pseudo-element; hovering or selecting it outlines
+  its own box on the canvas.
+- Loops: Selected items show each item's picture and start with none picked (Undo returns to
+  Dynamic); sorts by natural text order, length, list size and image file size; Custom code
+  filters and sorts; filter and sort fields picked from a tree that reaches nested fields; a
+  Sanity loop item's fields can be bound. Changing a loop's source, filter or sort is written
+  as one edit, so the page no longer flashes "teamEntries is not defined".
+- A comment typed in a `<style>` block and a deleted trailing space no longer fail with
+  "couldn't apply this edit"; text is pasted plain, and pasting code into Content no longer
+  crashes the page; paste and undo work while editing canvas text; copying shows no toast.
+- Style panel: nested selectors (`.faq_summary{&::before}`) are written inside the existing
+  rule, indented as the file is; selectors such as `:open > &::after` show for the element;
+  padding is written as one shorthand; the variable chooser shows a swatch per variable and
+  only variables defined on the element; the align box steps with the arrow keys.
+- ⌘Enter puts the caret in the selector field; → in the empty field fills in the parent's
+  class up to its last underscore (`.stat_card_`). Class suggestions include classes used in
+  markup and scripts, in src/ and public/.
+- Grid, background, object-position, easing and clip-path editors open over the Style panel
+  only; the clip-path editor reopens on the value it was given; a new effect layer opens on
+  the first click; menu group headings are easier to read.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.2.
+
 ## 1.0.1 content collection fixes, quieter guide
 
 - A content collection's list shows each entry's picture when its image field holds a root path
