@@ -48,7 +48,7 @@ export function useLifecycle(coreState: ReturnType<typeof useCoreState>) {
   const withBranchChange = useBranchPreview(coreState, previewStart.startPreview);
   const savers = useSavers(toasts, coreState);
   const flushing = useFlushing(savers, coreState, toasts);
-  const openFileScope = useOpenFile(flushing, toasts, coreState);
+  const openFileScope = useOpenFile(flushing, toasts, coreState, scans);
   return {
     ...assetPickScope,
     ...toasts,

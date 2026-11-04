@@ -20,7 +20,7 @@ import { EditDrafts } from '../../editor/pageEdits';
 import { type RejectionReason } from '../../../shared/engine/intent';
 import { cleanError, stripAnsi } from '../../lib/cleanError';
 import { type AppHistory, type ProjectScans, type ToastKind } from '../appTypes';
-import { toEditorPageState, type EditorPageState, type OpenFile } from '../../editor/pageState';
+import { toEditorPageState, type CurrentPage, type EditorPageState, type OpenFile } from '../../editor/pageState';
 import {
   closeProject,
   onFilesChanged,
@@ -539,11 +539,17 @@ export function useFlushing(savers: ReturnType<typeof useSavers>, coreState: Ret
 }
 
 // Opening a page or a component file for editing.
-export function useOpenFile(flushing: ReturnType<typeof useFlushing>, toasts: ReturnType<typeof useToasts>, coreState: ReturnType<typeof useCoreState>) {
+export function useOpenFile(
+  flushing: ReturnType<typeof useFlushing>,
+  toasts: ReturnType<typeof useToasts>,
+  coreState: ReturnType<typeof useCoreState>,
+  scans: ReturnType<typeof useScans>,
+) {
   const { dropPageHistory, flushSave, pageLoadRef } = flushing;
   const { showToast } = toasts;
-  const { pageStateRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState } = coreState;
+  const { pageStateRef, projectRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState } = coreState;
   const { setSelectedId } = coreState;
+  const { rescan } = scans;
 
   // Opens any .astro file for editing — a page, or a component drilled into.
   // `currentPage` is simply whatever is being edited, so saving, undo, the
@@ -575,6 +581,21 @@ export function useOpenFile(flushing: ReturnType<typeof useFlushing>, toasts: Re
       if (!(await savedForNavigation(flushSave, latestRequest, showToast))) {
         return;
       }
+      // The scan is what every instance of a component reads its props and
+      // slots from, and the app's own saves never reach it: the watcher drops
+      // a write it hears coming back (projectWatcher.ts). A component file
+      // edited while open — a <slot> typed in code — would leave the page's
+      // instances offering the old settings until some unrelated event
+      // rescanned. Leaving the file is when those instances come back into
+      // view, so the scan is brought up to date, after the last save, first.
+      if (leavesComponentFile(beforeRead.currentPage, entry)) {
+        const project = projectRef.current;
+        assert(project !== undefined, 'A component is open only inside a project');
+        await rescanBeforeOpen(project.path, rescan);
+        if (!latestRequest()) {
+          return;
+        }
+      }
       const latest = pageStateRef.current;
       // Reopening the same file must not replace an edit made during the read
       // with the older snapshot that read returned.
@@ -593,7 +614,53 @@ export function useOpenFile(flushing: ReturnType<typeof useFlushing>, toasts: Re
       setSelectedId(start?.id ?? undefined);
       dropPageHistory(); // page snapshots don't apply to another page; commands stay
     },
-    [flushSave, showToast, dropPageHistory, pageLoadRef, pageStateRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState, setSelectedId],
+    [
+      flushSave,
+      showToast,
+      dropPageHistory,
+      pageLoadRef,
+      pageStateRef,
+      projectRef,
+      rescan,
+      setCurrentPage,
+      setEditStack,
+      setHoverNodeId,
+      setPageState,
+      setSelectedId,
+    ],
   );
   return { openFile };
+}
+
+// Whether a navigation leaves a component (or layout) file for another file:
+// the one case whose own saves can change what the scan says about it.
+export function leavesComponentFile(from: CurrentPage | undefined, to: OpenFile): boolean {
+  assert(to.path.length > 0, 'A navigation names the file it opens');
+  if (from === undefined) {
+    return false;
+  }
+  switch (from.kind) {
+    case 'component':
+      assert(from.path.length > 0, 'An open component has a path');
+      return from.path !== to.path;
+    case 'page':
+    case 'route':
+      return false;
+    default: {
+      const exhaustive: never = from;
+      return exhaustive;
+    }
+  }
+}
+
+// A failed scan must not trap the user inside the component: the file is
+// saved, and the next scan (any watcher event, the window regaining focus)
+// brings the settings up to date. The navigation goes on without it.
+async function rescanBeforeOpen(projectPath: string, rescan: (projectPath: string) => Promise<ScanResult>): Promise<void> {
+  assert(projectPath.length > 0, 'A rescan names its project');
+  try {
+    await rescan(projectPath);
+  } catch (error: unknown) {
+    console.warn(`Scan after leaving a component failed: ${String(error)}`);
+  }
 }
