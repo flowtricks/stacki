@@ -7,23 +7,36 @@ import { ResetMenu } from '../../ui/ResetLabel';
 import { partsFromValue, valueFromParts } from '../../editor/bindings';
 import { BindHandle, FieldDataPicker } from './propBindings';
 import PropTip from './PropTip';
-import { FieldNumberIcon, ComponentPropertiesIcon, FieldSwitchIcon, BracesIcon, CodeIcon, ElementSlotIcon, VariableTextSizeIcon } from '../../ui/Icons';
+import {
+  FieldNumberIcon,
+  ComponentPropertiesIcon,
+  FieldSwitchIcon,
+  BracesIcon,
+  CodeIcon,
+  ElementSlotIcon,
+  VariableTextSizeIcon,
+  ResetIcon,
+} from '../../ui/Icons';
 import { controlWord, type PropState } from './propFieldModel';
 import { fitOfFieldType, literalOf, type NewPropSeed } from './newPropModel';
-import { withoutSettingTags } from '../../editor/propDocumentation';
+import { fieldTooltip } from '../../editor/propDocumentation';
 import { isMediaName } from '../../editor/fieldNames';
 import { arrayItems } from './arrayValue';
 import { itemShapeOf } from './listItemShape';
 
 export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) => event.preventDefault();
 export function PropFieldPill({ state }: { readonly state: PropState }) {
-  const { name, type, isSet, showExpr, onLabelClick } = state;
+  const { name, type, isSet, showExpr, onLabelClick, onLabelContextMenu, required, missingRequired, deprecated } = state;
+  // Set is the overridden state: the label takes the accent, as a value the
+  // instance gives rather than the component's default.
+  const classes = ['prop-label', ...(isSet ? ['set'] : []), ...(deprecated === undefined ? [] : ['deprecated'])];
 
   return (
     <span
-      className={`prop-label${isSet ? ' set' : ''}`}
-      title={isSet ? '⌥-click to reset to default' : showExpr ? 'Click for options' : undefined}
+      className={classes.join(' ')}
+      title={isSet ? 'Overridden — click to reset, ⌥-click resets at once' : showExpr ? 'Click for options' : undefined}
       onClick={onLabelClick}
+      onContextMenu={onLabelContextMenu}
     >
       {type === 'number' && <FieldNumberIcon size={12} className="prop-label-icon" />}
       {type === 'boolean' && <FieldSwitchIcon size={12} className="prop-label-icon" />}
@@ -33,7 +46,27 @@ export function PropFieldPill({ state }: { readonly state: PropState }) {
       {(type === 'slot' || name === 'slot') && <ElementSlotIcon size={12} className="prop-label-icon" />}
       {(type === 'string' || type === 'other') && name !== 'slot' && <VariableTextSizeIcon size={12} className="prop-label-icon" />}
       {name}
+      {required && (
+        <span
+          className={`prop-required${missingRequired ? ' missing' : ''}`}
+          role="img"
+          aria-label={missingRequired ? 'Required, not set' : 'Required'}
+          title={missingRequired ? 'Required — the component needs a value' : 'Required'}
+        />
+      )}
     </span>
+  );
+}
+
+// The line under a field that names what it is missing (PropField.tsx).
+export function PropFieldNote({ state }: { readonly state: PropState }) {
+  if (!state.missingRequired) {
+    return undefined;
+  }
+  return (
+    <div className="prop-field-note required" role="note">
+      Required — the component needs a value
+    </div>
   );
 }
 export function PropFieldMenu({ state }: { readonly state: PropState }) {
@@ -72,7 +105,12 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
       {pill}
       {/* The prop's own documentation — the comment above it in the
           component's `interface Props`. */}
-      <PropTip {...(field.doc === undefined ? {} : { text: withoutSettingTags(field.doc) })} />
+      <PropTip text={fieldTooltip(field.doc, state.deprecated)} />
+      {state.deprecated !== undefined && (
+        <span className="prop-deprecated" title={state.deprecated === '' ? 'Deprecated' : `Deprecated: ${state.deprecated}`}>
+          Deprecated
+        </span>
+      )}
       {reason && (
         <span className="prop-inert" title={reason}>
           ignored
@@ -83,6 +121,13 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
           cannot hold — `href={page.url}` is not a link setting — and until this
           existed the only way in was to pick data, which is a value rather than
           the code somebody had in mind. */}
+      {/* Reset to default, one click away while the field is hovered; the
+          label's menu holds the same action. */}
+      {state.isSet && (
+        <button type="button" className="prop-reset" title="Reset to default" aria-label="Reset to default" onClick={state.reset}>
+          <ResetIcon size={11} />
+        </button>
+      )}
       {bindable && (
         <button
           type="button"

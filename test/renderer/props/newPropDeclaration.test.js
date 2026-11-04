@@ -248,7 +248,7 @@ test('a new prop starts from the field’s label, deduplicated and validated', (
 });
 
 test('the schema reader turns the number settings into the instance field’s bounds', () => {
-  const types = load('electron/parse/astroPropTypes.ts');
+  const types = load('electron/parse/propModel/propProse.ts');
   assert.deepEqual({ ...types.numberRules('Count\n@min 0\n@max 10\n@decimals 2') }, { min: 0, max: 10, step: 0.01 });
   assert.deepEqual({ ...types.numberRules('@decimals 0') }, { step: 1 }, 'no decimals is a whole number');
   assert.deepEqual({ ...types.numberRules('@decimals 99') }, {}, 'decimals past the bound is ignored');

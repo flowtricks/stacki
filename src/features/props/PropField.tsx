@@ -18,9 +18,10 @@ import {
   ListControl,
   ExpressionControl,
   CodeControl,
+  ColorControl,
   TextControl,
 } from './PropControls';
-import { PropFieldPill, PropFieldMenu, PropFieldLabelRow, PropFieldPicker } from './PropFieldLabel';
+import { PropFieldPill, PropFieldMenu, PropFieldLabelRow, PropFieldPicker, PropFieldNote } from './PropFieldLabel';
 
 export { type AssetContext, type PropFieldProps, assetImportOf } from './propFieldModel';
 
@@ -41,7 +42,14 @@ function PropFieldControls({ state }: { readonly state: PropState }) {
     </>
   );
   const view = { ...state, pill, menu, label };
-  return propFieldControl(view);
+  // The note sits under the field, outside it: every control lays out its own
+  // box, and a note is about the field, not part of any one control.
+  return (
+    <>
+      {propFieldControl(view)}
+      <PropFieldNote state={state} />
+    </>
+  );
 }
 function propFieldControl(view: PropControlState) {
   const { field, value, slotOptions, assetContext, linkContext, name, type, isSet, valueText, assetBinding, showExpr, isExpr, isMediaAttr } = view;
@@ -85,6 +93,11 @@ function propFieldControl(view: PropControlState) {
   }
   if (type === 'number') {
     return <NumberControl state={view} />;
+  }
+  // A colour typed as one (`@format color`) or named for one with a colour
+  // default: a swatch beside the text, never a bare text box.
+  if (view.isColor && !isExpr) {
+    return <ColorControl state={view} />;
   }
   if (isLinkProp(field) && !isExpr && linkContext) {
     return <LinkControl state={view} />;

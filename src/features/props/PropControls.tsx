@@ -26,7 +26,16 @@ import { calendarValue } from '../../ui/dateFieldModel';
 import SegSwitch from './SegSwitch';
 import StyleEditor, { collapseDeclarations } from './StyleEditor';
 import { ChevronDownIcon } from '../../ui/Icons';
-import { type AssetImportFieldProps, attrText, mediaWord, boundsHint, type PropControlState, numberControlBounds } from './propFieldModel';
+import {
+  type AssetImportFieldProps,
+  attrText,
+  mediaWord,
+  boundsHint,
+  type PropControlState,
+  numberControlBounds,
+  isColorText,
+  hexOfColor,
+} from './propFieldModel';
 import { codeRowValue, objectSeed, optionAttr, optionValue, previewsOptions } from './propKinds';
 import { itemShapeOf } from './listItemShape';
 
@@ -519,6 +528,45 @@ export function CodeControl({ state }: { readonly state: PropControlState }) {
     </div>
   );
 }
+// A colour held as text: a swatch that opens the system colour picker, and the
+// text beside it, typed freely. The style panel's own picker sits in another
+// feature this one may not import (eslint.config.mjs featureEdges), so the
+// swatch is the platform's. Unset, both show the component's default, dimmed,
+// and nothing is written until a colour is picked or typed.
+export function ColorControl({ state }: { readonly state: PropControlState }) {
+  const { field, value, onChange, name, placeholderFor, label } = state;
+  const text = attrText(value) ?? '';
+  const fallback = placeholderFor(field);
+  const shown = text === '' ? fallback : text;
+  // A variable names a colour of the page, not of this panel: painting it here
+  // would paint Stacki's own token, so the swatch shows it as unknown.
+  const paint = isColorText(shown) && !shown.trim().startsWith('var(') ? shown.trim() : undefined;
+  return (
+    <div className="props-field">
+      {label}
+      <div className={`prop-color${text === '' ? ' is-default' : ''}`}>
+        <span className={`prop-color-swatch${paint === undefined ? ' is-unknown' : ''}`}>
+          <span className="prop-color-fill" style={paint === undefined ? undefined : { background: paint }} />
+          <input
+            type="color"
+            aria-label={`Choose the colour for ${name}`}
+            value={hexOfColor(shown) ?? '#000000'}
+            // A drag through the picker is one stream of edits, saved as one step.
+            onChange={(event) => onChange({ type: 'string', value: event.target.value })}
+          />
+        </span>
+        <input
+          value={text}
+          placeholder={fallback || '#000000'}
+          spellCheck={false}
+          aria-label={name}
+          onChange={(event) => (event.target.value === '' ? onChange(undefined) : onChange({ type: 'string', value: event.target.value }))}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function TextControl({ state }: { readonly state: PropControlState }) {
   const { field, onChange, name, valueText, placeholderFor, label } = state;
   // A bare attribute has no authored text value; preserve that absence in the input.

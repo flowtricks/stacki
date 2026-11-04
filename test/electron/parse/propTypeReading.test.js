@@ -4,30 +4,43 @@
 // `as const` list is a choice, and a destructure annotated inline, a nested
 // object type or a quoted member name are read as written.
 //
-// Methodology: the pure readers (normalizeType, explodeMembers,
-// resolveConstTypeQueries, propsDestructure, the literal decoders) are called
-// directly on known-good and known-bad text; parsePropSchema is then run on
-// small components, one shape each, the way the prop zoo
-// (test/renderer/props/propZoo.test.js) runs whole files. Each case also checks
+// Methodology: small components, one shape each, run through parsePropSchema
+// (the schema projection of the prop model, electron/parse/propModel/)
+// the way the prop zoo (test/renderer/props/propZoo.test.js) runs whole files.
+// `normalizeType` below is the old text classifier's contract, now answered by
+// the model for a prop declared with that type, so the pinned table of type
+// → kind still holds after the regex reader was retired. Each case also checks
 // the negative space next to it: the nearby shape that must NOT change.
 // Run on its own with `node test/electron/parse/propTypeReading.test.js`.
 
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const {
-  normalizeType,
-  explodeMembers,
-  splitTypeTop,
-  resolveConstTypeQueries,
-  constLiteralLists,
-  memberName,
-  shownTypeText,
-} = require('#dist/electron/parse/astroPropTypes.js');
-const { propsDestructure, decodeStringLiteral, numericLiteral } = require('#dist/electron/parse/astroPropFields.js');
 const { parsePropSchema, parseExtendsTag } = require('#dist/electron/parse/astroParser.js');
+const { shownTypeText } = require('#dist/shared/properties/propModelSchema.js');
 
 const schema = (frontmatter, template = '<div />') => parsePropSchema(`---\n${frontmatter}\n---\n${template}`);
 const field = (frontmatter, name, template) => schema(frontmatter, template).find((entry) => entry.name === name);
+
+// The kind a prop declared with `typeText` reads as: type, options, numeric,
+// expression options and code kind, each only when it is set.
+function normalizeType(typeText) {
+  const read = field(`interface Props {\n  x: ${typeText};\n}`, 'x');
+  assert.ok(read, `x is read from ${typeText}`);
+  const out = { type: read.type };
+  if (read.numeric) {
+    out.numeric = true;
+  }
+  if (read.options !== undefined) {
+    out.options = read.options;
+  }
+  if (read.expressionOptions !== undefined) {
+    out.expressionOptions = read.expressionOptions;
+  }
+  if (read.codeKind !== undefined) {
+    out.codeKind = read.codeKind;
+  }
+  return out;
+}
 
 test('functions and types no field can fill are code-only', () => {
   assert.deepEqual(normalizeType('(item: T) => string'), { type: 'other', codeKind: 'function' });
@@ -38,8 +51,9 @@ test('functions and types no field can fill are code-only', () => {
   for (const opaque of ['any', 'unknown', 'object', '{}', 'symbol', 'bigint', 'Promise<string[]>', 'Map<string, number>']) {
     assert.deepEqual(normalizeType(opaque), { type: 'other', codeKind: 'opaque' }, opaque);
   }
-  // Negative space: a parenthesised union is not a function, and a named type is not opaque.
-  assert.deepEqual(normalizeType("('a' | 'b')"), { type: 'other' });
+  // Negative space: a parenthesised union is not a function (it is the
+  // union inside, which the syntax tree opens), and a named type is not opaque.
+  assert.deepEqual(normalizeType("('a' | 'b')"), { type: 'enum', options: ['a', 'b'] });
   assert.deepEqual(normalizeType('ImageMetadata'), { type: 'other' });
   assert.deepEqual(normalizeType('string | (() => string)'), { type: 'string' });
 });
@@ -70,32 +84,35 @@ test('unions of literals are choices, mixed ones included', () => {
 });
 
 test('a function type does not unbalance the members after it', () => {
-  assert.deepEqual(splitTypeTop('format?: (value: number) => string; onSelect?: () => void; label: string', ';'), [
-    'format?: (value: number) => string',
-    'onSelect?: () => void',
-    'label: string',
-  ]);
+  const fields = schema('interface Props { format?: (value: number) => string; onSelect?: () => void; label: string }');
+  assert.deepEqual(
+    fields.map((entry) => [entry.name, entry.type, entry.codeKind]),
+    [
+      ['format', 'other', 'function'],
+      ['onSelect', 'other', 'function'],
+      ['label', 'string', undefined],
+    ],
+  );
 });
 
 test('a nested object type written over lines stays one member', () => {
-  const block =
-    '\n  cta: {\n    // The words.\n    label: string;\n    link: { href: string; external?: boolean };\n  };\n  /** Shown. */\n  open?: boolean;\n';
-  const lines = explodeMembers(block)
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-  assert.equal(lines.length, 3, JSON.stringify(lines));
-  assert.match(lines[0], /^cta: \{\s+label: string;\s+link: \{ href: string; external\?: boolean \};\s+\}$/);
-  assert.equal(lines[1], '/** Shown. */');
-  const names = schema('interface Props {\n  cta: {\n    label: string;\n    link: { href: string };\n  };\n}').map((entry) => entry.name);
-  assert.deepEqual(names, ['cta']);
+  const names = schema(
+    'interface Props {\n  cta: {\n    // The words.\n    label: string;\n    link: { href: string; external?: boolean };\n  };\n  /** Shown. */\n  open?: boolean;\n}',
+  );
+  assert.deepEqual(
+    names.map((entry) => [entry.name, entry.type, entry.doc]),
+    [
+      ['cta', 'code', undefined],
+      ['open', 'boolean', 'Shown.'],
+    ],
+  );
+  assert.deepEqual(
+    schema('interface Props {\n  cta: {\n    label: string;\n    link: { href: string };\n  };\n}').map((entry) => entry.name),
+    ['cta'],
+  );
 });
 
 test('quoted member names are props', () => {
-  assert.equal(memberName("'data-id'"), 'data-id');
-  assert.equal(memberName('title'), 'title');
-  assert.equal(memberName('"aria-label"'), 'aria-label');
-  assert.throws(() => memberName(''), /Assertion failed: memberName/);
   const fields = schema(
     "interface Props {\n  'data-id': string;\n  \"aria-label\"?: string;\n}\nconst { 'data-id': dataId, 'aria-label': ariaLabel = 'Zoo' } = Astro.props;",
   );
@@ -109,36 +126,22 @@ test('quoted member names are props', () => {
 });
 
 test('as const lists and enum-like objects are choices', () => {
-  const lists = constLiteralLists("const SIZES = ['sm', 'md'] as const;\nconst Tone = { Info: 'info', Warn: 'warn' } as const;\nconst LOOSE = ['a', b];");
-  assert.deepEqual([...lists.keys()], ['SIZES', 'Tone']);
-  assert.equal(lists.get('Tone').asConst, true);
-  assert.equal(resolveConstTypeQueries("const S = ['a', 'b'] as const;\ntype T = (typeof S)[number];"), "const S = ['a', 'b'] as const;\ntype T = 'a' | 'b';");
-  assert.equal(resolveConstTypeQueries("const S = ['a', 'b'] as const;\ntype T = typeof S[number];"), "const S = ['a', 'b'] as const;\ntype T = 'a' | 'b';");
-  assert.equal(
-    resolveConstTypeQueries("const O = { A: 'a', B: 2 } as const;\ntype V = (typeof O)[keyof typeof O];\ntype K = keyof typeof O;"),
-    'const O = { A: \'a\', B: 2 } as const;\ntype V = \'a\' | 2;\ntype K = "A" | "B";',
-  );
-  // Negative space: without `as const` the type is just string, and stays unresolved.
-  assert.equal(resolveConstTypeQueries("const S = ['a', 'b'];\ntype T = (typeof S)[number];"), "const S = ['a', 'b'];\ntype T = (typeof S)[number];");
   const size = field(
     "const SIZES = ['sm', 'md', 'lg'] as const;\ninterface Props { size?: (typeof SIZES)[number] }\nconst { size = 'md' } = Astro.props;",
     'size',
   );
   assert.deepEqual([size.type, size.options, size.default], ['enum', ['sm', 'md', 'lg'], 'md']);
+  assert.deepEqual(field("const S = ['a', 'b'] as const;\ninterface Props { x: typeof S[number] }", 'x').options, ['a', 'b']);
+  const values = field("const O = { A: 'a', B: 2 } as const;\ninterface Props { x: (typeof O)[keyof typeof O] }", 'x');
+  assert.deepEqual([values.type, values.options, values.expressionOptions], ['enum', ['a', '2'], ['2']]);
+  assert.deepEqual(field("const O = { A: 'a', B: 2 } as const;\ninterface Props { x: keyof typeof O }", 'x').options, ['A', 'B']);
+  // Negative space: without `as const` the type is just string, and stays unread;
+  // a list holding a name is not a list of literals.
+  assert.equal(field("const S = ['a', 'b'];\ninterface Props { x: (typeof S)[number] }", 'x').type, 'other');
+  assert.equal(field("const b = 'b';\nconst LOOSE = ['a', b] as const;\ninterface Props { x: (typeof LOOSE)[number] }", 'x').type, 'other');
 });
 
 test('the props destructure is found with an annotation, or through a holder', () => {
-  assert.deepEqual(propsDestructure('const { title, count = 1 }: { title: string; count?: number } = Astro.props;'), {
-    pattern: ' title, count = 1 ',
-    annotation: '{ title: string; count?: number }',
-  });
-  assert.deepEqual(propsDestructure('const { a }: Props = Astro.props;'), { pattern: ' a ', annotation: 'Props' });
-  assert.deepEqual(propsDestructure('const props = Astro.props;\nconst { title, level = 2 } = props;'), {
-    pattern: ' title, level = 2 ',
-    annotation: undefined,
-  });
-  // Negative space: other destructures, and a member of the holder, are not the props.
-  assert.equal(propsDestructure('const { a } = other;\nconst props = Astro.props;\nconst { b } = props.nested;'), undefined);
   const fields = schema('const { title, count = 1 }: { title: string; count?: number } = Astro.props;');
   assert.deepEqual(
     fields.map((entry) => [entry.name, entry.type, entry.optional, entry.default]),
@@ -147,19 +150,40 @@ test('the props destructure is found with an annotation, or through a holder', (
       ['count', 'number', true, 1],
     ],
   );
+  const held = schema('const props = Astro.props;\nconst { title, level = 2 } = props;');
+  assert.deepEqual(
+    held.map((entry) => [entry.name, entry.default]),
+    [
+      ['title', undefined],
+      ['level', 2],
+    ],
+  );
+  // Negative space: other destructures are not the props; a holder's member is a prop it reads.
+  assert.deepEqual(
+    schema('const { a } = other;\nconst props = Astro.props;\nconst { b } = props.nested;').map((entry) => entry.name),
+    ['nested'],
+  );
 });
 
 test('defaults: escapes decoded, number formats read, templates with ${} kept as code', () => {
-  assert.equal(decodeStringLiteral('He said \\"hi\\"'), 'He said "hi"');
-  assert.equal(decodeStringLiteral('line one\\nline two'), 'line one\nline two');
-  assert.equal(decodeStringLiteral('C:\\\\zoo'), 'C:\\zoo');
-  assert.equal(decodeStringLiteral('caf\\u00e9 \\u{1F992}'), 'café 🦒');
-  assert.equal(numericLiteral('1e3'), 1000);
-  assert.equal(numericLiteral('0x10'), 16);
-  assert.equal(numericLiteral('1_000'), 1000);
-  assert.equal(numericLiteral('-2.5'), -2.5);
-  assert.equal(numericLiteral('MAX * 2'), undefined);
-  assert.equal(numericLiteral('1..2'), undefined);
+  const literals = schema(
+    "const { quote = 'He said \\\"hi\\\"', lines = 'line one\\nline two', path = 'C:\\\\zoo', accent = 'caf\\u00e9 \\u{1F992}' } = Astro.props;",
+  );
+  assert.deepEqual(
+    literals.map((entry) => entry.default),
+    ['He said "hi"', 'line one\nline two', 'C:\\zoo', 'café 🦒'],
+  );
+  const numbers = schema('const { a = 1e3, b = 0x10, c = 1_000, d = -2.5, e = MAX * 2 } = Astro.props;');
+  assert.deepEqual(
+    numbers.map((entry) => [entry.default, entry.defaultExpr]),
+    [
+      [1000, undefined],
+      [16, undefined],
+      [1000, undefined],
+      [-2.5, undefined],
+      ['MAX * 2', true],
+    ],
+  );
   const fields = schema(
     "const SITE = 'Zoo';\ninterface Props { prefix?: string; plain?: string; joined?: string }\nconst { prefix = `${SITE}:`, plain = `just text`, joined = 'a' + SITE } = Astro.props;",
   );

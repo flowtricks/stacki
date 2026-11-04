@@ -23,7 +23,6 @@ import { LIMITS } from '../../shared/core/limits';
 import type { ParserNode, ParsedPage, SourceLocation } from './astroParserTypes';
 import { assignPathIds, parseAttrs, serializeAttrs, required } from './astroAttrs';
 import { parseState, resetParseBail } from './astroParseState';
-import { numberRules } from './astroPropTypes';
 import { serializeNode, serializeNodes } from './astroSerialize';
 import { parseTemplate } from './astroTemplate';
 import { serializeNodeMarked } from './astroSerializeMarked';
@@ -46,7 +45,6 @@ export {
   parseSlots,
   defaultSlotInline,
   rootTag,
-  numberRules,
   parseAttrs,
   serializeAttrs,
 };

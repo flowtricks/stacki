@@ -3,7 +3,8 @@
 // Kind-specific payloads remain a union so serializers cannot invent a node.
 import type { Attr, AttrSpan } from '../../shared/page/pageNode';
 import type { FrontmatterModel } from '../../shared/page/frontmatterSource';
-import type { CodeKind } from '../../shared/properties/propSchema';
+import type { CodeKind, PropFieldUsage } from '../../shared/properties/propSchema';
+import type { SchemaFieldType } from '../../shared/properties/propModelSchema';
 
 interface NodeMetadata {
   id?: string;
@@ -90,11 +91,6 @@ export interface DefaultRule {
   readonly then: string;
   readonly otherwise: string;
 }
-export interface StatedDefault {
-  readonly value?: string | number;
-  readonly hint?: string;
-  readonly when?: DefaultRule;
-}
 export interface UnionBranch {
   readonly forbids: readonly string[];
   readonly pins: Readonly<Record<string, readonly string[]>>;
@@ -110,17 +106,9 @@ export interface PropUnion {
 // simple), a function (an action, never typed into a field) or a type that says
 // nothing a field could fill in (`any`, `unknown`, a promise). Lists carry none.
 export type { CodeKind } from '../../shared/properties/propSchema';
-export interface NormalizedType {
-  readonly type: 'enum' | 'attrs' | 'code' | 'string' | 'number' | 'boolean' | 'other';
-  readonly options?: readonly string[] | undefined;
-  readonly numeric?: boolean | undefined;
-  // The options of a mixed choice written as expressions (`true`, `3`), not strings.
-  readonly expressionOptions?: readonly string[] | undefined;
-  readonly codeKind?: CodeKind | undefined;
-}
 export interface SchemaField extends NumberRules {
   readonly name: string;
-  type: NormalizedType['type'];
+  type: SchemaFieldType;
   optional: boolean;
   default: string | number | boolean | undefined;
   defaultExpr?: boolean;
@@ -137,6 +125,9 @@ export interface SchemaField extends NumberRules {
   readonly shape?: readonly { readonly name: string; readonly type: string }[];
   readonly shapeIsList?: boolean;
   readonly unions?: readonly PropUnion[] | undefined;
+  // The `@deprecated` notice, and whether the component reads the prop (shared/properties/propSchema.ts).
+  readonly deprecated?: string;
+  readonly usage?: PropFieldUsage;
 }
 
 export type RenderTag = { readonly tag: string; readonly prop?: string } | { readonly prop: string } | { readonly options: readonly string[] };

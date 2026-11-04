@@ -2,7 +2,9 @@ import { readPropertyOrigins } from './propertyOrigins';
 import { readPropertyContracts } from './propertyContracts';
 import type { PropertyContracts } from './propertyContracts';
 import type { PropertyOrigins } from './propertyOrigins';
-import type { SchemaField } from '../parse/astroParserTypes';
+import type { ModelSchemaField } from '../../shared/properties/propModelSchema';
+import { schemaFieldsOf } from '../../shared/properties/propModelSchema';
+import { readPropModel } from '../parse/propModel/readPropModel';
 import { createPropertyTypeReader } from './propertyTypes';
 import { bindComponentDefault } from './propertyRename';
 import ts from 'typescript';
@@ -10,7 +12,6 @@ import { assert } from '../../shared/core/assert';
 import type { ComponentProperties, ComponentProperty, PropertyChange, PropertyEditing } from '../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import { err, ok, type Result } from '../../shared/core/result';
-import { parsePropSchema } from '../parse/astroParser';
 import {
   applySourceEdits,
   defaultExpression,
@@ -54,8 +55,16 @@ function readDefinitionFields(definitions: Definitions): ReadonlyMap<string, Com
     ...definitions.members.map((member) => propertyKey(member.name)),
     ...definitions.bindings.map((binding) => propertyKey(binding.propertyName ?? binding.name)),
   ]);
-  for (const field of parsePropSchema(definitions.document.source)) {
-    if (!definitions.advanced && !names.has(field.name)) {
+  // The list starts from the prop model, the reader every panel shares, so a
+  // prop the instance panel offers is one this panel lists. A simple
+  // component's own members and bindings are what it edits; a prop the code
+  // only reads (`Astro.props.label`, with no type and no destructure) is
+  // listed too, so it can be given a type or a default here.
+  const model = readPropModel(definitions.document.source);
+  for (const field of schemaFieldsOf(model)) {
+    const prop = model.props.find((entry) => entry.name === field.name);
+    assert(prop !== undefined, 'Every schema field has its prop');
+    if (!definitions.advanced && !names.has(field.name) && prop.declared) {
       continue;
     }
     fields.set(field.name, {
@@ -101,7 +110,7 @@ function readDefinitionFields(definitions: Definitions): ReadonlyMap<string, Com
   return fields;
 }
 
-function schemaPropertyType(field: SchemaField): string {
+function schemaPropertyType(field: ModelSchemaField): string {
   if (field.type === 'enum' && field.options?.length) {
     return field.options.map((value) => (field.numeric ? value : JSON.stringify(value))).join(' | ');
   }

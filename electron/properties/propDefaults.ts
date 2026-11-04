@@ -9,7 +9,9 @@ import * as fs from 'fs';
 import { parsePropSchema, parseExtendsTag, parseSlots, defaultSlotInline, rootTag } from '../parse/astroParser';
 import { capture } from '../lib/mainHelpers';
 import { resolveImportPath } from './importPaths';
-import { constLiteralLists } from '../parse/astroPropTypes';
+import ts from 'typescript';
+import { literalPartValue, typeScope } from '../parse/propModel/propTypes';
+import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 
 // Declarations followed from one imported file, the imported ones and those they use.
 const IMPORTED_DECLARATIONS_MAX = 64;
@@ -18,35 +20,33 @@ const IMPORTED_DECLARATIONS_MAX = 64;
 // SeoProps` can be read when SeoProps lives in types.ts. One file deep and
 // only within the project, with the types those declarations use from that
 // same file — enough for the shape components actually use, without turning
-// this into a type checker.
+// this into a type checker. Both files are read on the TypeScript syntax
+// tree, the way the prop model reads the component itself; an import renamed
+// with `as` is declared under the name the component uses.
 export function importedTypes(source: string, filePath: string, projectPath: string) {
   const fm = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!fm) {
     return '';
   }
+  const frontmatter = ts.createSourceFile('component.ts', capture(fm, 1), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const out: string[] = [];
-  const seen = new Set();
-  // `import type { A, B } from '…'`, `import { type A } from '…'`, and the
-  // default form — a type-only import is the common way to write this, but a
-  // plain `import { X }` of a type is legal too.
-  const re = /import\s+(?:type\s+)?(\{[^}]*\}|[\w$]+)\s*from\s*['"]([^'"]+)['"]/g;
-  let match;
-  while ((match = re.exec(capture(fm, 1))) !== null) {
-    const names = capture(match, 1)
-      .replace(/[{}]/g, '')
-      .split(',')
-      .map(
-        (specifier) =>
-          specifier
-            .replace(/\btype\b/, '')
-            .split(/\s+as\s+/)[0]
-            ?.trim() ?? '',
-      )
-      .filter(Boolean);
-    if (!names.length) {
+  const seen = new Set<string>();
+  for (const statement of frontmatter.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
       continue;
     }
-    const target = resolveImportPath(projectPath, filePath, capture(match, 2));
+    const bindings = statement.importClause?.namedBindings;
+    // `import type { A, B } from '…'`, `import { type A } from '…'`: a
+    // type-only import is the common way to write this, but a plain
+    // `import { X }` of a type is legal too.
+    const names =
+      bindings !== undefined && ts.isNamedImports(bindings)
+        ? bindings.elements.map((item) => ({ original: (item.propertyName ?? item.name).text, local: item.name.text }))
+        : [];
+    if (names.length === 0) {
+      continue;
+    }
+    const target = resolveImportPath(projectPath, filePath, statement.moduleSpecifier.text);
     if (!target || seen.has(target) || target.endsWith('.astro')) {
       continue;
     }
@@ -57,47 +57,62 @@ export function importedTypes(source: string, filePath: string, projectPath: str
     } catch {
       continue;
     }
-    // Only the declarations that were actually imported, so an unrelated type
-    // in the same file can't shadow one the component declares itself — and
-    // the ones those use from the same file (`tone?: Tone` in CardProps, with
-    // Tone beside it), or `Tone` would reach the panel as a bare name.
-    const pending = [...names];
-    for (let index = 0; index < pending.length && index < IMPORTED_DECLARATIONS_MAX; index++) {
-      const name = pending[index] ?? '';
-      const decl = new RegExp(`(?:^|\n)\\s*(?:export\\s+)?(?:type|interface)\\s+${name.replace(/[^\w$]/g, '')}\\b`).exec(text);
-      if (!decl) {
-        continue;
-      }
-      const from = decl.index;
-      // To the end of the declaration: an interface ends at its closing brace,
-      // a type alias at the semicolon that closes it.
-      let depth = 0;
-      let end = text.length;
-      for (let i = from; i < text.length; i++) {
-        const character = text.charAt(i);
-        if ('{(['.includes(character)) {
-          depth++;
-        } else if ('})]'.includes(character)) {
-          depth--;
-          if (depth === 0 && /\{/.test(text.slice(from, i))) {
-            end = i + 1;
-            break;
-          }
-        } else if (character === ';' && depth === 0 && from !== i) {
-          end = i + 1;
-          break;
-        }
-      }
-      const declaration = text.slice(from, end);
-      out.push(declaration);
-      for (const used of declaration.matchAll(/\b[A-Z][\w$]*\b/g)) {
-        if (!pending.includes(used[0]) && new RegExp(`(?:^|\n)\\s*(?:export\\s+)?(?:type|interface)\\s+${used[0].replace(/\$/g, '\\$')}\\b`).test(text)) {
-          pending.push(used[0]);
-        }
+    out.push(...importedDeclarations(ts.createSourceFile(target, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS), names));
+  }
+  return out.join('\n');
+}
+
+// Only the declarations that were actually imported, so an unrelated type in
+// the same file can't shadow one the component declares itself — and the ones
+// those use from the same file (`tone?: Tone` in CardProps, with Tone beside
+// it), or `Tone` would reach the panel as a bare name.
+function importedDeclarations(file: ts.SourceFile, names: readonly { readonly original: string; readonly local: string }[]): readonly string[] {
+  const declarations = new Map<string, ts.InterfaceDeclaration | ts.TypeAliasDeclaration>();
+  for (const statement of file.statements) {
+    if ((ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) && !declarations.has(statement.name.text)) {
+      declarations.set(statement.name.text, statement);
+    }
+  }
+  const pending = names.map((name) => ({ ...name }));
+  const out: string[] = [];
+  for (let index = 0; index < pending.length && index < IMPORTED_DECLARATIONS_MAX; index++) {
+    const name = pending[index];
+    const declaration = name === undefined ? undefined : declarations.get(name.original);
+    if (name === undefined || declaration === undefined) {
+      continue;
+    }
+    const text = declaration.getText(file);
+    const nameStart = declaration.name.getStart(file) - declaration.getStart(file);
+    out.push(name.local === name.original ? text : text.slice(0, nameStart) + name.local + text.slice(nameStart + name.original.length));
+    for (const used of usedTypeNames(declaration)) {
+      if (declarations.has(used) && !pending.some((entry) => entry.original === used)) {
+        pending.push({ original: used, local: used });
       }
     }
   }
-  return out.join('\n');
+  return out;
+}
+
+// The type names a declaration refers to: its references and `extends` clauses,
+// each once.
+function usedTypeNames(declaration: ts.Node): ReadonlySet<string> {
+  const used = new Set<string>();
+  const pending: ts.Node[] = [declaration];
+  for (let index = 0; index < pending.length && index < PROPERTY_LIMITS.nodesMax; index++) {
+    const node = pending[index];
+    if (node === undefined) {
+      continue;
+    }
+    if (ts.isTypeReferenceNode(node) && ts.isIdentifier(node.typeName)) {
+      used.add(node.typeName.text);
+    } else if (ts.isExpressionWithTypeArguments(node) && ts.isIdentifier(node.expression)) {
+      used.add(node.expression.text);
+    }
+    node.forEachChild((child) => {
+      pending.push(child);
+    });
+  }
+  return used;
 }
 
 export function safeSchema(filePath: string, projectPath: string) {
@@ -266,17 +281,20 @@ function resolvedDefault(field: SchemaField, literal: { readonly value: SchemaFi
   return resolved;
 }
 
-// `NAME.key` of a `const NAME = { key: <literal> }` in the component's frontmatter.
+// `NAME.key` of a `const NAME = { key: <literal> }` in the component's frontmatter,
+// read on the same syntax tree the prop model reads its `as const` lists from.
 export function constMemberLiteralIn(source: string, name: string, key: string) {
   const frontmatter = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!frontmatter) {
     return undefined;
   }
-  const list = constLiteralLists(capture(frontmatter, 1)).get(name);
+  const file = ts.createSourceFile('component.ts', capture(frontmatter, 1), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const list = typeScope([file]).constLists.get(name);
   if (list === undefined || list.kind !== 'object') {
     return undefined;
   }
-  return literalValue(list.entries.find(([entry]) => entry === key)?.[1]);
+  const literal = list.entries.find(([entry]) => entry === key)?.[1];
+  return literal === undefined ? undefined : literalPartValue(literal);
 }
 
 // Media a default may import; the same set the props panel previews.

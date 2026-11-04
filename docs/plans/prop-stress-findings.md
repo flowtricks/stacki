@@ -177,9 +177,21 @@ with focused tests in `test/electron/parse/propTypeReading.test.js`,
   HTMLAttributes<'tag'> & {…}`, a discriminated union's other-branch members (hidden), and
   `url`/`link` names (the link field).
 
-Still open: `ComponentProps<typeof X>` (PassThrough), `@deprecated`, a colour control, an
-"Edit in code" button on the code row, and the Properties panel listing untyped `Astro.props.x`
-reads (`DirectAccessUntyped.*.panel`, a new gap exposed once those props are detected).
+Closed by Phase 1 of the prop-controls plan (one prop model, `electron/parse/propModel/`):
+the Properties panel lists untyped `Astro.props.x` reads (`DirectAccessUntyped.*.panel`), since both
+panels now derive from the same model, and `@deprecated` reaches the schema as `deprecated`
+(`JsDocProps.text.deprecated`). The regex reader the file paths above name (`astroPropFields.ts`,
+`astroPropTypes.ts`) was retired then; its behaviour lives on in the model, held by
+`test/electron/properties/propModelParity.test.js`.
+
+Closed by Phase 2's instance-side UX (the Settings panel, `src/features/props/`): a colour prop
+(`@format color`, or named for a colour with a colour default) gets a swatch and text
+(`ColorControl`, `ColorProp.color.control`), and the instance field shows the deprecation as a
+"Deprecated" tag with its notice in the tooltip. Required markers, the missing-required note,
+the overridden label and Reset to default are held by `test/renderer/props/propInstanceUX.test.js`
+and `test/renderer/app/propReset.test.js`.
+
+Still open: `ComponentProps<typeof X>` (PassThrough) and an "Edit in code" button on the code row.
 
 ## Not covered
 

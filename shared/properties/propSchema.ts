@@ -28,7 +28,7 @@ export interface PropShapeField {
   readonly name: string;
   readonly type: string;
 }
-// What a value only code can give is (see the scan's normalizeType): an object,
+// What a value only code can give is (see propModelSchema.ts schemaTypeOf): an object,
 // a function (an action) or a type no field can fill in (`any`, a promise).
 export const CODE_KINDS = ['object', 'function', 'opaque'] as const;
 export type CodeKind = (typeof CODE_KINDS)[number];
@@ -59,7 +59,14 @@ export interface PropField {
   readonly shape?: readonly PropShapeField[];
   readonly shapeIsList?: boolean;
   readonly unions?: readonly PropUnion[];
+  // The prop's `@deprecated` notice ('' for the bare tag); absent when it is not deprecated.
+  readonly deprecated?: string;
+  // 'unread' when the component never reads the prop (the "Not used" tag); absent when it does or cannot tell.
+  readonly usage?: PropFieldUsage;
 }
+/** Whether a component reads a prop, as the prop model states it (propModel.ts PROP_USAGES). */
+export const PROP_FIELD_USAGES = ['read', 'unread', 'unknown'] as const;
+export type PropFieldUsage = (typeof PROP_FIELD_USAGES)[number];
 export type PropSchema = ReadonlyMap<string, PropField>;
 
 export function parseField(input: unknown, where: string): PropField {
@@ -77,6 +84,7 @@ export function parseField(input: unknown, where: string): PropField {
       options: schemaOptional(value, 'options', where, (input, at) => schemaStrings(input, at, LIMITS.propOptionsMax)),
       expressionOptions: schemaOptional(value, 'expressionOptions', where, (input, at) => schemaStrings(input, at, LIMITS.propOptionsMax)),
       codeKind: schemaOptional(value, 'codeKind', where, schemaCodeKind),
+      usage: schemaOptional(value, 'usage', where, schemaUsage),
       shape: schemaOptional(value, 'shape', where, schemaShape),
       unions: schemaOptional(value, 'unions', where, (input, at) => schemaArray(input, at, LIMITS.propOptionsMax).map((union) => schemaUnion(union, at))),
     }),
@@ -203,6 +211,7 @@ function schemaOptionalMetadata(value: Readonly<Record<string, unknown>>, where:
     defaultAsset: schemaOptional(value, 'defaultAsset', where, schemaText),
     hint: schemaOptional(value, 'hint', where, schemaText),
     typeText: schemaOptional(value, 'typeText', where, schemaText),
+    deprecated: schemaOptional(value, 'deprecated', where, schemaText),
   });
 }
 function schemaCodeKind(input: unknown, where: string): CodeKind {
@@ -211,6 +220,13 @@ function schemaCodeKind(input: unknown, where: string): CodeKind {
     fail(where, `expected one of ${CODE_KINDS.join(', ')}`);
   }
   return kind;
+}
+function schemaUsage(input: unknown, where: string): PropFieldUsage {
+  const usage = PROP_FIELD_USAGES.find((candidate) => candidate === input);
+  if (usage === undefined) {
+    fail(where, `expected one of ${PROP_FIELD_USAGES.join(', ')}`);
+  }
+  return usage;
 }
 function schemaShape(input: unknown, where: string): readonly PropShapeField[] {
   return schemaArray(input, where, LIMITS.propSchemaFieldsMax).map((item) => {

@@ -1100,6 +1100,14 @@ the same bounds and labels (a pair assertion across the two readers, which AGENT
 
 ### Phase 1: One prop model (foundation, no new UI)
 
+Status: built. The model is `shared/properties/propModel.ts`, produced by
+`electron/parse/propModel/readPropModel.ts` (in the parse layer rather than
+`electron/properties/`, because the component preview server reads props too and may
+import only parse); the regex reader is retired, and
+`test/electron/properties/propModelParity.test.js` holds the model to its output (with the
+stated, deliberate differences). `propNestingDepthMax` and `propVariantsMax` sit in
+`PROP_MODEL_LIMITS` beside the parser until D14 is approved for `shared/core/limits.ts`.
+
 Scope:
 - `shared/properties/propModel.ts`: types, `parsePropModel`, limits (request approval for new
   `shared/core/limits.ts` entries: `propNestingDepthMax`, `propVariantsMax`).

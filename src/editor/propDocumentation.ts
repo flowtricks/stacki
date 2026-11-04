@@ -6,13 +6,23 @@
 //   @decimals 0     how many decimals it keeps (0 is a whole number)
 //   @onLabel Shown  what a switch prop's on side is called
 //   @offLabel Hidden
+//   @format color   what a text prop holds (a colour, a link); the Kind picker writes it
+//
+// `@deprecated` is the author's, not a setting: the instance field shows a
+// "Deprecated" tag with its text in the tooltip.
 //
 // A tag left out is the setting's default: no bound, any precision, On and
 // Off. The text before the first tag is the tooltip. The doc arrives as the
-// schema read it from the file, so every value is checked here before use.
+// schema read it from the file, so every value is checked before use.
+//
+// The tags are read by shared/properties/propTags.ts, the one tag reader the
+// main process's prop model reads them with too, so a setting this form
+// writes is the setting every panel shows (docs/plans/prop-controls.md §1.1).
 
 import { assert } from '../../shared/core/assert';
-import { LIMITS } from '../../shared/core/limits';
+import { PROP_TAG_LIMITS, deprecationOf, readPropTags, withoutSettingTags } from '../../shared/properties/propTags';
+
+export { deprecationOf, withoutSettingTags };
 
 /** A number prop's range and precision; undefined is None (or Auto for decimals). */
 export interface NumberSettings {
@@ -32,32 +42,24 @@ export interface PropDocumentation {
   readonly tooltip: string;
   readonly number: NumberSettings;
   readonly switch: SwitchSettings;
+  // The `@format` word (`color`, `uri`), or undefined when the doc states none.
+  readonly format: string | undefined;
+  // The `@deprecated` text ('' for the bare tag), or undefined when the prop is not deprecated.
+  readonly deprecated: string | undefined;
 }
 
-export const NUMBER_DECIMALS_MAX = 10;
+export const NUMBER_DECIMALS_MAX = PROP_TAG_LIMITS.decimalsMax;
 export const SWITCH_LABELS = { onLabel: 'On', offLabel: 'Off' } as const;
-const LABEL_CHARS_MAX = 40;
-const NUMBER = /^-?\d+(?:\.\d+)?$/;
 
 /** The tooltip and settings a doc comment states; tags that are not valid settings are ignored. */
 export function readPropDocumentation(documentation: string | undefined): PropDocumentation {
-  const text = documentation ?? '';
-  assert(text.length <= LIMITS.attrCharsMax * 4, 'readPropDocumentation: doc text is bounded');
-  const tagAt = text.search(/(^|\s)@\w/);
-  const tooltip = (tagAt < 0 ? text : text.slice(0, tagAt)).replace(/\s+/g, ' ').trim();
-  const min = numberTag(text, 'min');
-  const max = numberTag(text, 'max');
-  const decimals = numberTag(text, 'decimals');
-  const number: NumberSettings = {
-    min,
-    // A max below the min contradicts it; the min, written first, stands.
-    max: min !== undefined && max !== undefined && max < min ? undefined : max,
-    decimals: decimals !== undefined && Number.isSafeInteger(decimals) && decimals >= 0 && decimals <= NUMBER_DECIMALS_MAX ? decimals : undefined,
-  };
+  const tags = readPropTags(documentation);
   const result: PropDocumentation = {
-    tooltip,
-    number,
-    switch: { onLabel: labelTag(text, 'onLabel') ?? SWITCH_LABELS.onLabel, offLabel: labelTag(text, 'offLabel') ?? SWITCH_LABELS.offLabel },
+    tooltip: tags.tooltip,
+    number: { min: tags.min, max: tags.max, decimals: tags.decimals },
+    switch: { onLabel: tags.onLabel ?? SWITCH_LABELS.onLabel, offLabel: tags.offLabel ?? SWITCH_LABELS.offLabel },
+    format: tags.format,
+    deprecated: tags.deprecated,
   };
   assert(
     result.number.min === undefined || result.number.max === undefined || result.number.min <= result.number.max,
@@ -100,24 +102,26 @@ export function numberNote(value: number, settings: NumberSettings): string | un
   return undefined;
 }
 
-function numberTag(text: string, name: string): number | undefined {
-  const match = new RegExp(`@${name}[ \\t]+(\\S+)`).exec(text) ?? undefined;
-  const value = match?.[1];
-  return value !== undefined && NUMBER.test(value) ? Number(value) : undefined;
-}
+const DEPRECATED_LINE = /(?<=^|\s)@deprecated\b[^@]*/g;
 
-function labelTag(text: string, name: string): string | undefined {
-  const match = new RegExp(`@${name}[ \\t]+([^\\n@*]+)`).exec(text) ?? undefined;
-  const label = match?.[1]?.trim();
-  return label === undefined || label === '' || label.length > LABEL_CHARS_MAX ? undefined : label;
-}
-
-const SETTING_TAG = /(?<=^|\s)@(min|max|decimals|onLabel|offLabel)\b[^\n@]*/g;
-
-/** The doc as a reader sees it: the settings tags this module writes taken out, every other word kept. */
-export function withoutSettingTags(documentation: string): string {
-  assert(documentation.length <= LIMITS.attrCharsMax * 4, 'withoutSettingTags: doc text is bounded');
-  return documentation.replace(SETTING_TAG, '').replace(/\s+/g, ' ').trim();
+/**
+ * The tooltip an instance field shows: its deprecation first, as a sentence,
+ * then the doc without its setting tags or its `@deprecated` line. Empty when
+ * there is nothing to say. The deprecation is passed in, so a schema that
+ * states it as a field of its own reads the same as one left in the doc.
+ */
+export function fieldTooltip(documentation: string | undefined, deprecated: string | undefined): string {
+  const words = withoutSettingTags(documentation ?? '')
+    .replace(DEPRECATED_LINE, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (deprecated === undefined) {
+    return words;
+  }
+  const notice = deprecated === '' ? 'Deprecated.' : `Deprecated: ${deprecated}`;
+  const out = words === '' ? notice : `${notice}\n${words}`;
+  assert(out.startsWith('Deprecated'), 'fieldTooltip: a deprecation leads the tooltip');
+  return out;
 }
 
 /** A switch prop's labels, when its doc names them; undefined keeps the field's own words. */

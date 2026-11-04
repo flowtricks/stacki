@@ -62,7 +62,7 @@ const SPEC = {
   CollectionEntryProp: { props: { post: code({ required: true }), showDate: boolean({ default: true }) } },
   ColorProp: {
     props: {
-      // Stacki has no colour control; a hex typed into a text box is the gap.
+      // A hex default on a prop named for a colour: the swatch and its text.
       color: expectProp('string', 'ColorControl', { default: '#ff3366' }),
       background: text({ default: 'transparent' }),
       opacity: number({ default: 1 }),
@@ -303,10 +303,6 @@ const SPEC = {
 // `Component.aspect` for the component itself). The value says what happens;
 // docs/plans/prop-stress-findings.md has the severity and the fix area.
 const KNOWN_GAPS = {
-  'ColorProp.color.control': 'no colour control: a hex colour is a plain text box',
-  'DirectAccessUntyped.label.panel': 'the Properties panel lists declared and destructured props only, not `Astro.props.label` reads',
-  'DirectAccessUntyped.year.panel': 'the Properties panel lists declared and destructured props only, not `Astro.props.year` reads',
-  'JsDocProps.text.deprecated': '@deprecated is not surfaced anywhere',
   'PassThrough.variant.detected': "ComponentProps<typeof X> is not followed: the wrapped component's props are missing",
   'PassThrough.label.detected': "ComponentProps<typeof X> is not followed: the wrapped component's props are missing",
 };
@@ -364,8 +360,9 @@ function propAspects(record, name, spec) {
     }
   }
   if (spec.deprecated) {
-    // Nothing in the schema or the documentation reader carries it yet.
-    out.push(['deprecated', true, 'deprecated' in field || 'deprecated' in (documentation ?? {})]);
+    // The schema carries it from the prop model (`deprecated`), and the documentation reader reads the tag.
+    // Stated means a notice is read, not merely that the key exists.
+    out.push(['deprecated', true, typeof field.deprecated === 'string' || typeof documentation?.deprecated === 'string']);
   }
   out.push(['control', spec.control, record.controls.get(name)]);
   const edit = record.edits.get(name);

@@ -608,7 +608,18 @@ build (`test/legacy-parity.bench.js`) was retired at step 10 with the
   `ByteOffset`, `Utf16Offset`, and `IntentId` after validating the primitive value.
 - `projectScan.ts` validates project pages, layouts, components, schemas, and scan
   collection limits.
-- `propSchema.ts` validates component field schemas and their nested options.
+- `propSchema.ts` validates component field schemas and their nested options, including the
+  optional `deprecated` notice and `usage` the prop model adds.
+- `propModel.ts` is the one description of a component's props (docs/plans/prop-controls.md §2):
+  `parsePropModel` checks every control kind, fallback and union table, and the nesting
+  (`propNestingDepthMax`) and variant (`propVariantsMax`) bounds kept beside it. The main process
+  builds it (`electron/parse/propModel/readPropModel.ts`, on the TypeScript syntax tree) and
+  parses its own output; `propModelSchema.ts` projects it onto `PropField`, and the Properties
+  panel's list comes from the same model, so the panels cannot disagree. No IPC channel carries
+  the model yet; the scan still carries its `PropField` projection.
+- `propTags.ts` reads a prop's JSDoc tags (`@min @max @step @decimals @int @onLabel @offLabel
+  @format @group @deprecated`) for every reader: the model in main and the renderer's
+  `propDocumentation.ts`.
 - `frontmatter.ts` validates import members and source slots.
 - `boundary.ts` supplies bounded primitive, list, dictionary, and data parsers.
 - `result.ts` defines the expected-failure channel.

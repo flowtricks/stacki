@@ -25,7 +25,7 @@ const model = load('src/features/props/newPropModel.ts');
 const shape = load('src/features/props/listItemShape.ts');
 const arrays = load('src/features/props/arrayValue.ts');
 const suggest = load('src/editor/dataSuggest.ts');
-const schemaReader = load('electron/parse/astroPropSchema.ts');
+const schemaReader = require('#dist/electron/parse/astroPropSchema.js');
 
 const NONE = { min: undefined, max: undefined, decimals: undefined };
 const SWITCH = { onLabel: 'On', offLabel: 'Off' };

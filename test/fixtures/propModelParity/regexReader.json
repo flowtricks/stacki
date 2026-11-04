@@ -1,0 +1,4214 @@
+{
+ "source": "parsePropSchema and readComponentProperties at commit 00c79b97 (the regex schema reader), one entry per .astro file under test/",
+ "files": {
+  "test/corpus/apostrophe-in-markup.astro": {
+   "schema": [
+    {
+     "name": "render",
+     "type": "boolean",
+     "optional": true,
+     "default": true
+    },
+    {
+     "name": "show",
+     "type": "boolean",
+     "optional": true,
+     "default": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "render",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "true",
+     "description": ""
+    },
+    {
+     "name": "show",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "true",
+     "description": ""
+    }
+   ]
+  },
+  "test/corpus/comments-and-doctype.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/copyright-as-authored.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/default-imports.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/dynamic-tag.astro": {
+   "schema": [
+    {
+     "name": "as",
+     "type": "string",
+     "optional": true,
+     "default": "section"
+    }
+   ],
+   "panel": [
+    {
+     "name": "as",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'section'",
+     "description": ""
+    }
+   ]
+  },
+  "test/corpus/empty-frontmatter-dashes-in-body.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/empty-raw-blocks.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/expressions.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/four-space-indent.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/frontmatter-after-blank-line.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/frontmatter-before-import.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/frontmatter-blank-lines.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/frontmatter-import-forms.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/frontmatter-only-blank-lines.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/full-page.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/inline-run.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/interleaved-frontmatter.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/map-loop.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/markup-inside-a-script.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/named-imports.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/namespace-import.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/nested-components.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/no-frontmatter.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/props-interface.astro": {
+   "schema": [
+    {
+     "name": "icon",
+     "type": "string",
+     "optional": true,
+     "default": "*"
+    },
+    {
+     "name": "title",
+     "type": "string",
+     "optional": true,
+     "default": "Feature title"
+    },
+    {
+     "name": "description",
+     "type": "string",
+     "optional": true,
+     "default": "Describe this feature here."
+    }
+   ],
+   "panel": [
+    {
+     "name": "icon",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'*'",
+     "description": ""
+    },
+    {
+     "name": "title",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'Feature title'",
+     "description": ""
+    },
+    {
+     "name": "description",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'Describe this feature here.'",
+     "description": ""
+    }
+   ]
+  },
+  "test/corpus/prototype-attribute.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/shorthand-fragments.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/side-effect-css-import.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/slots-named.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/spread-props.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/style-and-script.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/text-beside-block-element.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/void-elements.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/corpus/why-a-loop-exists.astro": {
+   "schema": [
+    {
+     "name": "items",
+     "type": "code",
+     "optional": true,
+     "default": "[]",
+     "defaultExpr": true
+    },
+    {
+     "name": "ratio",
+     "type": "string",
+     "optional": true,
+     "default": "1x1"
+    }
+   ],
+   "panel": [
+    {
+     "name": "items",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "[]",
+     "description": ""
+    },
+    {
+     "name": "ratio",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "\"1x1\"",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/editor-core/conditional-template.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/docs-conditional.astro": {
+   "schema": [
+    {
+     "name": "route",
+     "type": "other",
+     "optional": true
+    },
+    {
+     "name": "guide",
+     "type": "other",
+     "optional": true
+    },
+    {
+     "name": "page",
+     "type": "other",
+     "optional": true
+    },
+    {
+     "name": "webhook",
+     "type": "other",
+     "optional": true
+    },
+    {
+     "name": "Content",
+     "type": "other",
+     "optional": true
+    },
+    {
+     "name": "pageMarkdown",
+     "type": "other",
+     "optional": true
+    },
+    {
+     "name": "dataVersionForPath",
+     "type": "other",
+     "optional": true
+    },
+    {
+     "name": "readFernFile",
+     "type": "other",
+     "optional": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "route",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "guide",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "page",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "webhook",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "Content",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "pageMarkdown",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "dataVersionForPath",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "readFernFile",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/editor-core/duplicate-siblings.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/duplicate-siblings.expected.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/frontmatter-slots.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/frontmatter-slots.expected.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/inline-run-gaps.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/inline-styles.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/loop-rename.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/loop-rename.expected.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/malformed.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/native-nodes.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/strip-bindings.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/strip-bindings.expected.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/stylesheet-page.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/stylesheet-page.expected.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/unicode-offsets.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/editor-core/unicode-offsets.expected.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/large/bytes-100.astro": {
+   "schema": [],
+   "panelError": "Error: Assertion failed: Component source is bounded"
+  },
+  "test/fixtures/large/bytes-25.astro": {
+   "schema": [],
+   "panelError": "Error: Assertion failed: Component source is bounded"
+  },
+  "test/fixtures/large/bytes-50.astro": {
+   "schema": [],
+   "panelError": "Error: Assertion failed: Component source is bounded"
+  },
+  "test/fixtures/large/nodes-100.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/large/nodes-25.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/large/nodes-50.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/propZoo/src/components/ArrayObjects.astro": {
+   "schema": [
+    {
+     "name": "links",
+     "type": "code",
+     "optional": false,
+     "shape": [
+      {
+       "name": "label",
+       "type": "string"
+      },
+      {
+       "name": "href",
+       "type": "string"
+      }
+     ],
+     "shapeIsList": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "links",
+     "type": "{ label: string; href: string }[]",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/ArrayPrimitives.astro": {
+   "schema": [
+    {
+     "name": "tags",
+     "type": "code",
+     "optional": false
+    },
+    {
+     "name": "scores",
+     "type": "code",
+     "optional": true,
+     "default": "[1, 2, 3]",
+     "defaultExpr": true
+    },
+    {
+     "name": "flags",
+     "type": "code",
+     "optional": true,
+     "default": "[]",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "tags",
+     "type": "string[]",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "scores",
+     "type": "Array<number>",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "[1, 2, 3]",
+     "description": ""
+    },
+    {
+     "name": "flags",
+     "type": "readonly boolean[]",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "[]",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/AsAssertion.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "compact",
+     "type": "boolean",
+     "optional": true,
+     "default": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "compact",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "false",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/AsConstAlias.astro": {
+   "schema": [
+    {
+     "name": "weight",
+     "type": "enum",
+     "options": [
+      "light",
+      "regular",
+      "bold"
+     ],
+     "optional": true,
+     "default": "regular"
+    }
+   ],
+   "panel": [
+    {
+     "name": "weight",
+     "type": "Weight",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'regular'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/AsConstArray.astro": {
+   "schema": [
+    {
+     "name": "size",
+     "type": "enum",
+     "options": [
+      "sm",
+      "md",
+      "lg"
+     ],
+     "optional": true,
+     "default": "md"
+    }
+   ],
+   "panel": [
+    {
+     "name": "size",
+     "type": "(typeof SIZES)[number]",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'md'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/ClassListVariants.astro": {
+   "schema": [
+    {
+     "name": "variant",
+     "type": "enum",
+     "options": [
+      "primary",
+      "secondary"
+     ],
+     "optional": true,
+     "default": "primary"
+    },
+    {
+     "name": "size",
+     "type": "enum",
+     "options": [
+      "sm",
+      "md",
+      "lg"
+     ],
+     "optional": true,
+     "default": "md"
+    },
+    {
+     "name": "rounded",
+     "type": "boolean",
+     "optional": true,
+     "default": false
+    },
+    {
+     "name": "class",
+     "type": "string",
+     "optional": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "variant",
+     "type": "'primary' | 'secondary'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'primary'",
+     "description": ""
+    },
+    {
+     "name": "size",
+     "type": "'sm' | 'md' | 'lg'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'md'",
+     "description": ""
+    },
+    {
+     "name": "rounded",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "false",
+     "description": ""
+    },
+    {
+     "name": "class",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/CollectionEntryProp.astro": {
+   "schema": [
+    {
+     "name": "post",
+     "type": "other",
+     "optional": false
+    },
+    {
+     "name": "showDate",
+     "type": "boolean",
+     "optional": true,
+     "default": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "post",
+     "type": "CollectionEntry<'blog'>",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "showDate",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "true",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/ColorProp.astro": {
+   "schema": [
+    {
+     "name": "color",
+     "type": "string",
+     "optional": true,
+     "default": "#ff3366"
+    },
+    {
+     "name": "background",
+     "type": "string",
+     "optional": true,
+     "default": "transparent"
+    },
+    {
+     "name": "opacity",
+     "type": "number",
+     "optional": true,
+     "default": 1
+    }
+   ],
+   "panel": [
+    {
+     "name": "color",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'#ff3366'",
+     "description": ""
+    },
+    {
+     "name": "background",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'transparent'",
+     "description": ""
+    },
+    {
+     "name": "opacity",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "1",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/CommentsInType.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": false,
+     "doc": "The title, required."
+    },
+    {
+     "name": "count",
+     "type": "number",
+     "optional": true,
+     "default": 1,
+     "doc": "A block comment."
+    },
+    {
+     "name": "mode",
+     "type": "enum",
+     "options": [
+      "a",
+      "b"
+     ],
+     "optional": true,
+     "default": "a"
+    },
+    {
+     "name": "subtitle",
+     "type": "string",
+     "optional": true,
+     "default": "a; b"
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": "The title, required."
+    },
+    {
+     "name": "count",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "1",
+     "description": ""
+    },
+    {
+     "name": "mode",
+     "type": "'a' | 'b'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'a'",
+     "description": ""
+    },
+    {
+     "name": "subtitle",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'a; b'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/ConditionalRender.astro": {
+   "schema": [
+    {
+     "name": "showBadge",
+     "type": "boolean",
+     "optional": true,
+     "default": false
+    },
+    {
+     "name": "showIcon",
+     "type": "boolean",
+     "optional": true,
+     "default": true
+    },
+    {
+     "name": "title",
+     "type": "string",
+     "optional": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "showBadge",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "false",
+     "description": ""
+    },
+    {
+     "name": "showIcon",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "true",
+     "description": ""
+    },
+    {
+     "name": "title",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/DateProp.astro": {
+   "schema": [
+    {
+     "name": "published",
+     "type": "other",
+     "optional": false
+    },
+    {
+     "name": "updated",
+     "type": "other",
+     "optional": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "published",
+     "type": "Date",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "updated",
+     "type": "Date | string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/DefaultComputed.astro": {
+   "schema": [
+    {
+     "name": "brand",
+     "type": "string",
+     "optional": true,
+     "default": "SITE",
+     "defaultExpr": true
+    },
+    {
+     "name": "prefix",
+     "type": "string",
+     "optional": true,
+     "default": "`${SITE}:`",
+     "defaultExpr": true
+    },
+    {
+     "name": "limit",
+     "type": "number",
+     "optional": true,
+     "default": "MAX * 2",
+     "defaultExpr": true
+    },
+    {
+     "name": "heading",
+     "type": "string",
+     "optional": true,
+     "default": "SITE.toUpperCase()",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "brand",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "SITE",
+     "description": ""
+    },
+    {
+     "name": "prefix",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "`${SITE}:`",
+     "description": ""
+    },
+    {
+     "name": "limit",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "MAX * 2",
+     "description": ""
+    },
+    {
+     "name": "heading",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "SITE.toUpperCase()",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/DefaultExpression.astro": {
+   "schema": [
+    {
+     "name": "year",
+     "type": "number",
+     "optional": true,
+     "default": "new Date().getFullYear()",
+     "defaultExpr": true
+    },
+    {
+     "name": "items",
+     "type": "code",
+     "optional": true,
+     "default": "[]",
+     "defaultExpr": true
+    },
+    {
+     "name": "config",
+     "type": "code",
+     "codeKind": "object",
+     "typeText": "{ dense: boolean }",
+     "optional": true,
+     "shape": [
+      {
+       "name": "dense",
+       "type": "boolean"
+      }
+     ],
+     "shapeIsList": false,
+     "default": "{ dense: false }",
+     "defaultExpr": true
+    },
+    {
+     "name": "stamp",
+     "type": "string",
+     "optional": true,
+     "default": "`built-${Date.now()}`",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "year",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "new Date().getFullYear()",
+     "description": ""
+    },
+    {
+     "name": "items",
+     "type": "string[]",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "[]",
+     "description": ""
+    },
+    {
+     "name": "config",
+     "type": "{ dense: boolean }",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "{ dense: false }",
+     "description": ""
+    },
+    {
+     "name": "stamp",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "`built-${Date.now()}`",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/DefaultImportedConst.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": true,
+     "default": "SITE_TITLE",
+     "defaultExpr": true
+    },
+    {
+     "name": "max",
+     "type": "number",
+     "optional": true,
+     "default": "MAX_ITEMS",
+     "defaultExpr": true
+    },
+    {
+     "name": "banner",
+     "type": "boolean",
+     "optional": true,
+     "default": "SHOW_BANNER",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "SITE_TITLE",
+     "description": ""
+    },
+    {
+     "name": "max",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "MAX_ITEMS",
+     "description": ""
+    },
+    {
+     "name": "banner",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "SHOW_BANNER",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/DefaultLiteral.astro": {
+   "schema": [
+    {
+     "name": "label",
+     "type": "string",
+     "optional": true,
+     "default": "Click me"
+    },
+    {
+     "name": "size",
+     "type": "number",
+     "optional": true,
+     "default": 3
+    },
+    {
+     "name": "open",
+     "type": "boolean",
+     "optional": true,
+     "default": false
+    },
+    {
+     "name": "ratio",
+     "type": "number",
+     "optional": true,
+     "default": 0.5
+    },
+    {
+     "name": "offset",
+     "type": "number",
+     "optional": true,
+     "default": -2
+    }
+   ],
+   "panel": [
+    {
+     "name": "label",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'Click me'",
+     "description": ""
+    },
+    {
+     "name": "size",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "3",
+     "description": ""
+    },
+    {
+     "name": "open",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "false",
+     "description": ""
+    },
+    {
+     "name": "ratio",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "0.5",
+     "description": ""
+    },
+    {
+     "name": "offset",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "-2",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/DefaultsMismatch.astro": {
+   "schema": [
+    {
+     "name": "align",
+     "type": "enum",
+     "options": [
+      "left",
+      "center"
+     ],
+     "optional": true,
+     "default": "center",
+     "doc": "@default \"left\""
+    },
+    {
+     "name": "undeclared",
+     "type": "string",
+     "optional": true
+    },
+    {
+     "name": "extra",
+     "type": "string",
+     "optional": true,
+     "default": "not in Props"
+    }
+   ],
+   "panel": [
+    {
+     "name": "align",
+     "type": "'left' | 'center'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'center'",
+     "description": "@default \"left\""
+    },
+    {
+     "name": "undeclared",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "extra",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'not in Props'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/DestructureLater.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "level",
+     "type": "number",
+     "optional": true,
+     "default": 2
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "level",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/DirectAccess.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "tagline",
+     "type": "string",
+     "optional": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "tagline",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/DirectAccessUntyped.astro": {
+   "schema": [
+    {
+     "name": "year",
+     "type": "number",
+     "optional": true,
+     "default": 2026
+    },
+    {
+     "name": "label",
+     "type": "other",
+     "optional": true
+    }
+   ],
+   "panel": []
+  },
+  "test/fixtures/propZoo/src/components/DiscriminatedNever.astro": {
+   "schema": [
+    {
+     "name": "mode",
+     "type": "enum",
+     "options": [
+      "image",
+      "quote"
+     ],
+     "optional": false,
+     "unions": [
+      {
+       "names": [
+        "mode",
+        "src",
+        "alt",
+        "caption"
+       ],
+       "branches": [
+        {
+         "forbids": [
+          "caption"
+         ],
+         "pins": {
+          "mode": [
+           "image"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        },
+        {
+         "forbids": [
+          "src",
+          "alt"
+         ],
+         "pins": {
+          "mode": [
+           "quote"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "src",
+     "type": "string",
+     "optional": false,
+     "unions": [
+      {
+       "names": [
+        "mode",
+        "src",
+        "alt",
+        "caption"
+       ],
+       "branches": [
+        {
+         "forbids": [
+          "caption"
+         ],
+         "pins": {
+          "mode": [
+           "image"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        },
+        {
+         "forbids": [
+          "src",
+          "alt"
+         ],
+         "pins": {
+          "mode": [
+           "quote"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "alt",
+     "type": "string",
+     "optional": false,
+     "unions": [
+      {
+       "names": [
+        "mode",
+        "src",
+        "alt",
+        "caption"
+       ],
+       "branches": [
+        {
+         "forbids": [
+          "caption"
+         ],
+         "pins": {
+          "mode": [
+           "image"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        },
+        {
+         "forbids": [
+          "src",
+          "alt"
+         ],
+         "pins": {
+          "mode": [
+           "quote"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "caption",
+     "type": "string",
+     "optional": false,
+     "unions": [
+      {
+       "names": [
+        "mode",
+        "src",
+        "alt",
+        "caption"
+       ],
+       "branches": [
+        {
+         "forbids": [
+          "caption"
+         ],
+         "pins": {
+          "mode": [
+           "image"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        },
+        {
+         "forbids": [
+          "src",
+          "alt"
+         ],
+         "pins": {
+          "mode": [
+           "quote"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "panel": [
+    {
+     "name": "mode",
+     "type": "'image' | 'quote'",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "src",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "alt",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "caption",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/DiscriminatedUnion.astro": {
+   "schema": [
+    {
+     "name": "kind",
+     "type": "enum",
+     "options": [
+      "link",
+      "button"
+     ],
+     "optional": false,
+     "unions": [
+      {
+       "names": [
+        "kind",
+        "href",
+        "label",
+        "disabled"
+       ],
+       "branches": [
+        {
+         "forbids": [
+          "disabled"
+         ],
+         "pins": {
+          "kind": [
+           "link"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        },
+        {
+         "forbids": [
+          "href"
+         ],
+         "pins": {
+          "kind": [
+           "button"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "href",
+     "type": "string",
+     "optional": false,
+     "unions": [
+      {
+       "names": [
+        "kind",
+        "href",
+        "label",
+        "disabled"
+       ],
+       "branches": [
+        {
+         "forbids": [
+          "disabled"
+         ],
+         "pins": {
+          "kind": [
+           "link"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        },
+        {
+         "forbids": [
+          "href"
+         ],
+         "pins": {
+          "kind": [
+           "button"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "optional": false,
+     "unions": [
+      {
+       "names": [
+        "kind",
+        "href",
+        "label",
+        "disabled"
+       ],
+       "branches": [
+        {
+         "forbids": [
+          "disabled"
+         ],
+         "pins": {
+          "kind": [
+           "link"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        },
+        {
+         "forbids": [
+          "href"
+         ],
+         "pins": {
+          "kind": [
+           "button"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "disabled",
+     "type": "boolean",
+     "optional": true,
+     "unions": [
+      {
+       "names": [
+        "kind",
+        "href",
+        "label",
+        "disabled"
+       ],
+       "branches": [
+        {
+         "forbids": [
+          "disabled"
+         ],
+         "pins": {
+          "kind": [
+           "link"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        },
+        {
+         "forbids": [
+          "href"
+         ],
+         "pins": {
+          "kind": [
+           "button"
+          ]
+         },
+         "defaults": {},
+         "rules": {},
+         "docs": {}
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "panel": [
+    {
+     "name": "kind",
+     "type": "'link' | 'button'",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "href",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "disabled",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/EnumLikeObject.astro": {
+   "schema": [
+    {
+     "name": "tone",
+     "type": "enum",
+     "options": [
+      "info",
+      "warn",
+      "error"
+     ],
+     "optional": true,
+     "default": "Tone.Info",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "tone",
+     "type": "ToneValue",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "Tone.Info",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/EscapedDefaults.astro": {
+   "schema": [
+    {
+     "name": "quote",
+     "type": "string",
+     "optional": true,
+     "default": "He said \"hi\""
+    },
+    {
+     "name": "emoji",
+     "type": "string",
+     "optional": true,
+     "default": "🦒 zoo"
+    },
+    {
+     "name": "multiline",
+     "type": "string",
+     "optional": true,
+     "default": "line one\nline two"
+    },
+    {
+     "name": "path",
+     "type": "string",
+     "optional": true,
+     "default": "C:\\zoo"
+    }
+   ],
+   "panel": [
+    {
+     "name": "quote",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "\"He said \\\"hi\\\"\"",
+     "description": ""
+    },
+    {
+     "name": "emoji",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'🦒 zoo'",
+     "description": ""
+    },
+    {
+     "name": "multiline",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'line one\\nline two'",
+     "description": ""
+    },
+    {
+     "name": "path",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'C:\\\\zoo'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/ExportInterface.astro": {
+   "schema": [
+    {
+     "name": "message",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "urgent",
+     "type": "boolean",
+     "optional": true,
+     "default": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "message",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "urgent",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "false",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/FunctionProp.astro": {
+   "schema": [
+    {
+     "name": "value",
+     "type": "number",
+     "optional": false
+    },
+    {
+     "name": "format",
+     "type": "other",
+     "codeKind": "function",
+     "typeText": "(value: number) => string",
+     "optional": true,
+     "default": "(amount) => `$${amount.toFixed(2)}`",
+     "defaultExpr": true
+    },
+    {
+     "name": "onSelect",
+     "type": "other",
+     "codeKind": "function",
+     "typeText": "() => void",
+     "optional": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "value",
+     "type": "number",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "format",
+     "type": "(value: number) => string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "(amount) => `$${amount.toFixed(2)}`",
+     "description": ""
+    },
+    {
+     "name": "onSelect",
+     "type": "() => void",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/GenericProps.astro": {
+   "schema": [
+    {
+     "name": "items",
+     "type": "code",
+     "optional": false
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "render",
+     "type": "other",
+     "codeKind": "function",
+     "typeText": "(item: T) => string",
+     "optional": true,
+     "default": "(item) => String(item)",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "items",
+     "type": "T[]",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "render",
+     "type": "(item: T) => string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "(item) => String(item)",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/HrefProp.astro": {
+   "schema": [
+    {
+     "name": "href",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "optional": true,
+     "default": "Read more"
+    },
+    {
+     "name": "target",
+     "type": "enum",
+     "options": [
+      "_blank",
+      "_self"
+     ],
+     "optional": true,
+     "default": "_self"
+    },
+    {
+     "name": "url",
+     "type": "string",
+     "optional": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "href",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'Read more'",
+     "description": ""
+    },
+    {
+     "name": "target",
+     "type": "'_blank' | '_self'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'_self'",
+     "description": ""
+    },
+    {
+     "name": "url",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/HtmlAttributesProp.astro": {
+   "schema": [
+    {
+     "name": "label",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "linkAttrs",
+     "type": "attrs",
+     "optional": true,
+     "default": "{}",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "label",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "linkAttrs",
+     "type": "HTMLAttributes<'a'>",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "{}",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/ImageMetadataProp.astro": {
+   "schema": [
+    {
+     "name": "image",
+     "type": "other",
+     "optional": true,
+     "default": "square",
+     "defaultExpr": true
+    },
+    {
+     "name": "alt",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "width",
+     "type": "number",
+     "optional": true,
+     "default": 40
+    }
+   ],
+   "panel": [
+    {
+     "name": "image",
+     "type": "ImageMetadata",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "square",
+     "description": ""
+    },
+    {
+     "name": "alt",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "width",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "40",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/ImageUrl.astro": {
+   "schema": [
+    {
+     "name": "src",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "alt",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "poster",
+     "type": "string",
+     "optional": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "src",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "alt",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "poster",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/ImportedMember.astro": {
+   "schema": [
+    {
+     "name": "author",
+     "type": "code",
+     "codeKind": "object",
+     "typeText": "{ name: string; avatar?: string; url?: string; }",
+     "optional": false,
+     "shape": [
+      {
+       "name": "name",
+       "type": "string"
+      },
+      {
+       "name": "avatar",
+       "type": "string"
+      },
+      {
+       "name": "url",
+       "type": "string"
+      }
+     ],
+     "shapeIsList": false
+    },
+    {
+     "name": "tone",
+     "type": "enum",
+     "options": [
+      "info",
+      "success",
+      "warning",
+      "danger"
+     ],
+     "optional": true,
+     "default": "success"
+    },
+    {
+     "name": "links",
+     "type": "code",
+     "optional": true,
+     "shape": [
+      {
+       "name": "label",
+       "type": "string"
+      },
+      {
+       "name": "href",
+       "type": "string"
+      }
+     ],
+     "shapeIsList": true,
+     "default": "[]",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "author",
+     "type": "Author",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "tone",
+     "type": "Tone",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'success'",
+     "description": ""
+    },
+    {
+     "name": "links",
+     "type": "LinkItem[]",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "[]",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/ImportedTypes.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": false,
+     "doc": "The card's heading."
+    },
+    {
+     "name": "body",
+     "type": "string",
+     "optional": true,
+     "default": "Body text",
+     "doc": "Short supporting text."
+    },
+    {
+     "name": "tone",
+     "type": "enum",
+     "options": [
+      "info",
+      "success",
+      "warning",
+      "danger"
+     ],
+     "optional": true,
+     "default": "info"
+    },
+    {
+     "name": "href",
+     "type": "string",
+     "optional": true,
+     "doc": "Where the card links to."
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "body",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'Body text'",
+     "description": ""
+    },
+    {
+     "name": "tone",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'info'",
+     "description": ""
+    },
+    {
+     "name": "href",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/InlineAnnotation.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "count",
+     "type": "number",
+     "optional": true,
+     "default": 1
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "count",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "1",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/Intersection.astro": {
+   "schema": [
+    {
+     "name": "id",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "hidden",
+     "type": "boolean",
+     "optional": true,
+     "default": false
+    },
+    {
+     "name": "title",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "tone",
+     "type": "enum",
+     "options": [
+      "calm",
+      "loud"
+     ],
+     "optional": true,
+     "default": "calm"
+    }
+   ],
+   "panel": [
+    {
+     "name": "id",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "hidden",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "false",
+     "description": ""
+    },
+    {
+     "name": "title",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "tone",
+     "type": "'calm' | 'loud'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'calm'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/JsDocProps.astro": {
+   "schema": [
+    {
+     "name": "label",
+     "type": "string",
+     "optional": true,
+     "default": "Go",
+     "doc": "The text on the button."
+    },
+    {
+     "name": "columns",
+     "type": "number",
+     "optional": true,
+     "default": 3,
+     "doc": "How many columns the grid uses. @default 3 @min 1 @max 6 @decimals 0",
+     "min": 1,
+     "max": 6,
+     "step": 1
+    },
+    {
+     "name": "opacity",
+     "type": "number",
+     "optional": true,
+     "default": 0.8,
+     "doc": "Opacity of the overlay. @min 0 @max 1 @decimals 2",
+     "min": 0,
+     "max": 1,
+     "step": 0.01
+    },
+    {
+     "name": "open",
+     "type": "boolean",
+     "optional": true,
+     "default": true,
+     "doc": "Whether the panel starts open. @onLabel Shown @offLabel Hidden"
+    },
+    {
+     "name": "text",
+     "type": "string",
+     "optional": true,
+     "doc": "The old name for label. @deprecated Use `label` instead."
+    },
+    {
+     "name": "density",
+     "type": "enum",
+     "options": [
+      "compact",
+      "medium",
+      "comfortable"
+     ],
+     "optional": true,
+     "default": "medium",
+     "doc": "@default \"medium\""
+    }
+   ],
+   "panel": [
+    {
+     "name": "label",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'Go'",
+     "description": "The text on the button."
+    },
+    {
+     "name": "columns",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "3",
+     "description": "How many columns the grid uses.\n@default 3\n@min 1\n@max 6\n@decimals 0"
+    },
+    {
+     "name": "opacity",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "0.8",
+     "description": "Opacity of the overlay.\n@min 0\n@max 1\n@decimals 2"
+    },
+    {
+     "name": "open",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "true",
+     "description": "Whether the panel starts open.\n@onLabel Shown\n@offLabel Hidden"
+    },
+    {
+     "name": "text",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": "The old name for label.\n@deprecated Use `label` instead."
+    },
+    {
+     "name": "density",
+     "type": "'compact' | 'medium' | 'comfortable'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'medium'",
+     "description": "@default \"medium\""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/JsDocProseDefault.astro": {
+   "schema": [
+    {
+     "name": "heading",
+     "type": "string",
+     "optional": true,
+     "default": "Welcome",
+     "doc": "The heading. Defaults to \"Welcome\"."
+    },
+    {
+     "name": "size",
+     "type": "number",
+     "optional": true,
+     "default": 12,
+     "doc": "Line comment documentation. Defaults to 12."
+    },
+    {
+     "name": "dated",
+     "type": "boolean",
+     "optional": true,
+     "default": true,
+     "doc": "Whether to show the date. Defaults to true."
+    }
+   ],
+   "panel": [
+    {
+     "name": "heading",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": "The heading. Defaults to \"Welcome\"."
+    },
+    {
+     "name": "size",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": "Line comment documentation. Defaults to 12."
+    },
+    {
+     "name": "dated",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": "Whether to show the date. Defaults to true."
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/JsOnlyFrontmatter.astro": {
+   "schema": [
+    {
+     "name": "heading",
+     "type": "other",
+     "optional": true
+    },
+    {
+     "name": "items",
+     "type": "code",
+     "optional": true,
+     "default": "['one', 'two']",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "heading",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "items",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "['one', 'two']",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/ListCuratedProp.astro": {
+   "schema": [
+    {
+     "name": "items",
+     "type": "attrs",
+     "optional": true,
+     "default": "{ \"itemIds\": [] }",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "items",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "{ \"itemIds\": [] }",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/ListFilterProp.astro": {
+   "schema": [
+    {
+     "name": "filters",
+     "type": "code",
+     "codeKind": "object",
+     "typeText": "{ filterFor: 'ALL' | 'ANY'; fields: { fieldPath: string; operatorName: string; value?: unknown }[] }",
+     "optional": true,
+     "shape": [
+      {
+       "name": "filterFor",
+       "type": "enum"
+      },
+      {
+       "name": "fields",
+       "type": "code"
+      }
+     ],
+     "shapeIsList": false,
+     "default": "{ \"filterFor\": \"ALL\", \"fields\": [] }",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "filters",
+     "type": "{ filterFor: 'ALL' | 'ANY'; fields: { fieldPath: string; operatorName: string; value?: unknown }[] }",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "{ \"filterFor\": \"ALL\", \"fields\": [] }",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/ListLookalike.astro": {
+   "schema": [
+    {
+     "name": "filters",
+     "type": "code",
+     "codeKind": "object",
+     "typeText": "{ filterFor: 'ALL' | 'ANY'; fields: { fieldPath: string; operatorName: string; value?: unknown }[] }",
+     "optional": true,
+     "shape": [
+      {
+       "name": "filterFor",
+       "type": "enum"
+      },
+      {
+       "name": "fields",
+       "type": "code"
+      }
+     ],
+     "shapeIsList": false,
+     "default": "{ filterFor: 'ALL', fields: [] }",
+     "defaultExpr": true
+    },
+    {
+     "name": "sort",
+     "type": "code",
+     "optional": true,
+     "shape": [
+      {
+       "name": "field",
+       "type": "string"
+      },
+      {
+       "name": "direction",
+       "type": "enum"
+      }
+     ],
+     "shapeIsList": true,
+     "default": "[]",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "filters",
+     "type": "{ filterFor: 'ALL' | 'ANY'; fields: { fieldPath: string; operatorName: string; value?: unknown }[] }",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "{ filterFor: 'ALL', fields: [] }",
+     "description": ""
+    },
+    {
+     "name": "sort",
+     "type": "{ field: string; direction: 'asc' | 'desc' }[]",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "[]",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/ListSortProp.astro": {
+   "schema": [
+    {
+     "name": "sort",
+     "type": "code",
+     "optional": true,
+     "default": "[{ \"field\": \"title\", \"direction\": \"asc\" }]",
+     "defaultExpr": true
+    },
+    {
+     "name": "limit",
+     "type": "number",
+     "optional": true,
+     "default": 2
+    },
+    {
+     "name": "skip",
+     "type": "number",
+     "optional": true,
+     "default": 0
+    }
+   ],
+   "panel": [
+    {
+     "name": "sort",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "[{ \"field\": \"title\", \"direction\": \"asc\" }]",
+     "description": ""
+    },
+    {
+     "name": "limit",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "2",
+     "description": ""
+    },
+    {
+     "name": "skip",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "0",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/LocalAliasUnion.astro": {
+   "schema": [
+    {
+     "name": "level",
+     "type": "enum",
+     "options": [
+      "h1",
+      "h2",
+      "h3"
+     ],
+     "optional": true,
+     "default": "h2"
+    },
+    {
+     "name": "emphasis",
+     "type": "enum",
+     "options": [
+      "none",
+      "italic"
+     ],
+     "optional": true,
+     "default": "none"
+    }
+   ],
+   "panel": [
+    {
+     "name": "level",
+     "type": "'h1' | 'h2' | 'h3'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'h2'",
+     "description": ""
+    },
+    {
+     "name": "emphasis",
+     "type": "'none' | 'italic'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'none'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/LoopCount.astro": {
+   "schema": [
+    {
+     "name": "count",
+     "type": "number",
+     "optional": true,
+     "default": 3,
+     "doc": "How many stars to draw. @min 0 @max 10",
+     "min": 0,
+     "max": 10
+    }
+   ],
+   "panel": [
+    {
+     "name": "count",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "3",
+     "description": "How many stars to draw. @min 0 @max 10"
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/MixedUnion.astro": {
+   "schema": [
+    {
+     "name": "value",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "flag",
+     "type": "enum",
+     "options": [
+      "true",
+      "false",
+      "auto"
+     ],
+     "expressionOptions": [
+      "true",
+      "false"
+     ],
+     "optional": true,
+     "default": "auto"
+    },
+    {
+     "name": "size",
+     "type": "enum",
+     "options": [
+      "sm",
+      "lg"
+     ],
+     "optional": true,
+     "default": "sm"
+    }
+   ],
+   "panel": [
+    {
+     "name": "value",
+     "type": "string | number",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "flag",
+     "type": "boolean | 'auto'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'auto'",
+     "description": ""
+    },
+    {
+     "name": "size",
+     "type": "'sm' | 'lg' | number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'sm'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/MultiLineUnion.astro": {
+   "schema": [
+    {
+     "name": "color",
+     "type": "enum",
+     "options": [
+      "gray",
+      "blue",
+      "green",
+      "red"
+     ],
+     "optional": true,
+     "default": "gray",
+     "doc": "How the badge is coloured."
+    },
+    {
+     "name": "shape",
+     "type": "enum",
+     "options": [
+      "pill",
+      "square"
+     ],
+     "optional": true,
+     "default": "pill"
+    }
+   ],
+   "panel": [
+    {
+     "name": "color",
+     "type": "'gray' | 'blue' | 'green' | 'red'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'gray'",
+     "description": "How the badge is coloured."
+    },
+    {
+     "name": "shape",
+     "type": "'pill' | 'square'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'pill'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/NestedDestructure.astro": {
+   "schema": [
+    {
+     "name": "author",
+     "type": "code",
+     "codeKind": "object",
+     "typeText": "{ name: string; avatar?: string }",
+     "optional": false,
+     "shape": [
+      {
+       "name": "name",
+       "type": "string"
+      },
+      {
+       "name": "avatar",
+       "type": "string"
+      }
+     ],
+     "shapeIsList": false
+    },
+    {
+     "name": "meta",
+     "type": "code",
+     "codeKind": "object",
+     "typeText": "{ tags?: string[]; reading?: number }",
+     "optional": true,
+     "shape": [
+      {
+       "name": "tags",
+       "type": "code"
+      },
+      {
+       "name": "reading",
+       "type": "number"
+      }
+     ],
+     "shapeIsList": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "author",
+     "type": "{ name: string; avatar?: string }",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "meta",
+     "type": "{ tags?: string[]; reading?: number }",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "{}",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/NestedObject.astro": {
+   "schema": [
+    {
+     "name": "cta",
+     "type": "code",
+     "codeKind": "object",
+     "typeText": "{ label: string; link: { href: string; external?: boolean }; }",
+     "optional": false,
+     "shape": [
+      {
+       "name": "label",
+       "type": "string"
+      },
+      {
+       "name": "link",
+       "type": "code"
+      }
+     ],
+     "shapeIsList": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "cta",
+     "type": "{\n    label: string;\n    link: { href: string; external?: boolean };\n  }",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/NoTypeDestructure.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": true,
+     "default": "No types here"
+    },
+    {
+     "name": "count",
+     "type": "number",
+     "optional": true,
+     "default": 2
+    },
+    {
+     "name": "active",
+     "type": "boolean",
+     "optional": true,
+     "default": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'No types here'",
+     "description": ""
+    },
+    {
+     "name": "count",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "2",
+     "description": ""
+    },
+    {
+     "name": "active",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "true",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/Nullable.astro": {
+   "schema": [
+    {
+     "name": "subtitle",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "count",
+     "type": "number",
+     "optional": true
+    },
+    {
+     "name": "note",
+     "type": "string",
+     "optional": true,
+     "default": "null",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "subtitle",
+     "type": "string | null",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "count",
+     "type": "number | undefined",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "note",
+     "type": "string | null",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "null",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/NumberUnion.astro": {
+   "schema": [
+    {
+     "name": "cols",
+     "type": "enum",
+     "options": [
+      "1",
+      "2",
+      "3",
+      "4"
+     ],
+     "numeric": true,
+     "optional": true,
+     "default": 3
+    },
+    {
+     "name": "gap",
+     "type": "enum",
+     "options": [
+      "0",
+      "0.5",
+      "1",
+      "2"
+     ],
+     "numeric": true,
+     "optional": true,
+     "default": 1
+    }
+   ],
+   "panel": [
+    {
+     "name": "cols",
+     "type": "1 | 2 | 3 | 4",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "3",
+     "description": ""
+    },
+    {
+     "name": "gap",
+     "type": "0 | 0.5 | 1 | 2",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "1",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/NumericFormats.astro": {
+   "schema": [
+    {
+     "name": "negative",
+     "type": "number",
+     "optional": true,
+     "default": -1
+    },
+    {
+     "name": "decimal",
+     "type": "number",
+     "optional": true,
+     "default": 0.25
+    },
+    {
+     "name": "exponent",
+     "type": "number",
+     "optional": true,
+     "default": 1000
+    },
+    {
+     "name": "hex",
+     "type": "number",
+     "optional": true,
+     "default": 16
+    },
+    {
+     "name": "separated",
+     "type": "number",
+     "optional": true,
+     "default": 1000
+    }
+   ],
+   "panel": [
+    {
+     "name": "negative",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "-1",
+     "description": ""
+    },
+    {
+     "name": "decimal",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "0.25",
+     "description": ""
+    },
+    {
+     "name": "exponent",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "1e3",
+     "description": ""
+    },
+    {
+     "name": "hex",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "0x10",
+     "description": ""
+    },
+    {
+     "name": "separated",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "1_000",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/OptionalChainDefault.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": true
+    },
+    {
+     "name": "subtitle",
+     "type": "string",
+     "optional": true,
+     "default": "Fallback subtitle"
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "subtitle",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/OptionalRequired.astro": {
+   "schema": [
+    {
+     "name": "name",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "nickname",
+     "type": "string",
+     "optional": true
+    },
+    {
+     "name": "age",
+     "type": "number",
+     "optional": true
+    },
+    {
+     "name": "verified",
+     "type": "boolean",
+     "optional": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "name",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "nickname",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "age",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "verified",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/PassThrough.astro": {
+   "schema": [
+    {
+     "name": "wrapperClass",
+     "type": "string",
+     "optional": true,
+     "default": "pass-through"
+    }
+   ],
+   "panel": [
+    {
+     "name": "wrapperClass",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'pass-through'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/PolymorphicAs.astro": {
+   "schema": [
+    {
+     "name": "as",
+     "type": "enum",
+     "options": [
+      "h1",
+      "h2",
+      "h3",
+      "p"
+     ],
+     "optional": true,
+     "default": "h2"
+    },
+    {
+     "name": "text",
+     "type": "string",
+     "optional": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "as",
+     "type": "'h1' | 'h2' | 'h3' | 'p'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'h2'",
+     "description": ""
+    },
+    {
+     "name": "text",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/PolymorphicAstro.astro": {
+   "schema": [
+    {
+     "name": "as",
+     "type": "string",
+     "optional": true,
+     "default": "div"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "optional": true,
+     "default": "Polymorphic"
+    }
+   ],
+   "panel": [
+    {
+     "name": "as",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'div'",
+     "description": ""
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'Polymorphic'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/PrimBigint.astro": {
+   "schema": [
+    {
+     "name": "big",
+     "type": "other",
+     "codeKind": "opaque",
+     "typeText": "bigint",
+     "optional": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "big",
+     "type": "bigint",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/PrimBoolean.astro": {
+   "schema": [
+    {
+     "name": "visible",
+     "type": "boolean",
+     "optional": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "visible",
+     "type": "boolean",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/PrimNumber.astro": {
+   "schema": [
+    {
+     "name": "count",
+     "type": "number",
+     "optional": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "count",
+     "type": "number",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/PrimString.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/PromiseProp.astro": {
+   "schema": [
+    {
+     "name": "names",
+     "type": "other",
+     "codeKind": "opaque",
+     "typeText": "Promise<string[]>",
+     "optional": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "names",
+     "type": "Promise<string[]>",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/PropsObject.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "count",
+     "type": "number",
+     "optional": true,
+     "default": 1
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "count",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/QuotedNames.astro": {
+   "schema": [
+    {
+     "name": "data-id",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "aria-label",
+     "type": "string",
+     "optional": true,
+     "default": "Zoo"
+    },
+    {
+     "name": "title",
+     "type": "string",
+     "optional": true,
+     "default": "Quoted"
+    }
+   ],
+   "panel": [
+    {
+     "name": "data-id",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "aria-label",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'Zoo'",
+     "description": ""
+    },
+    {
+     "name": "title",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'Quoted'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/ReadonlyMembers.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "items",
+     "type": "code",
+     "optional": true,
+     "default": "[]",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true,
+     "readonly": true,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "items",
+     "type": "readonly string[]",
+     "required": false,
+     "readonly": true,
+     "defaultValue": "[]",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/RecordProp.astro": {
+   "schema": [
+    {
+     "name": "labels",
+     "type": "attrs",
+     "optional": false
+    },
+    {
+     "name": "totals",
+     "type": "attrs",
+     "optional": true,
+     "default": "{ a: 1, b: 2 }",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "labels",
+     "type": "Record<string, string>",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "totals",
+     "type": "Record<'a' | 'b', number>",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "{ a: 1, b: 2 }",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/RenamedDestructure.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": true,
+     "default": "Untitled"
+    },
+    {
+     "name": "class",
+     "type": "string",
+     "optional": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'Untitled'",
+     "description": ""
+    },
+    {
+     "name": "class",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/RestPropsExtends.astro": {
+   "schema": [
+    {
+     "name": "label",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "variant",
+     "type": "enum",
+     "options": [
+      "solid",
+      "outline"
+     ],
+     "optional": true,
+     "default": "solid"
+    }
+   ],
+   "panel": [
+    {
+     "name": "label",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "variant",
+     "type": "'solid' | 'outline'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'solid'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/RestPropsPlain.astro": {
+   "schema": [
+    {
+     "name": "label",
+     "type": "string",
+     "optional": true,
+     "default": "Link"
+    }
+   ],
+   "panel": [
+    {
+     "name": "label",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'Link'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/RichText.astro": {
+   "schema": [
+    {
+     "name": "html",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "content",
+     "type": "string",
+     "optional": true,
+     "default": "<em>Default rich</em>"
+    }
+   ],
+   "panel": [
+    {
+     "name": "html",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "content",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'<em>Default rich</em>'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/SlotsDefault.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": true,
+     "default": "Card"
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'Card'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/SlotsNamed.astro": {
+   "schema": [
+    {
+     "name": "bordered",
+     "type": "boolean",
+     "optional": true,
+     "default": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "bordered",
+     "type": "boolean",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "false",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/SlotsRender.astro": {
+   "schema": [
+    {
+     "name": "items",
+     "type": "code",
+     "optional": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "items",
+     "type": "string[]",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/StringUnion.astro": {
+   "schema": [
+    {
+     "name": "variant",
+     "type": "enum",
+     "options": [
+      "primary",
+      "secondary",
+      "ghost"
+     ],
+     "optional": true,
+     "default": "primary"
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "optional": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "variant",
+     "type": "'primary' | 'secondary' | 'ghost'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'primary'",
+     "description": ""
+    },
+    {
+     "name": "label",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/StyleAndClass.astro": {
+   "schema": [
+    {
+     "name": "class",
+     "type": "string",
+     "optional": true
+    },
+    {
+     "name": "style",
+     "type": "string",
+     "optional": true
+    },
+    {
+     "name": "id",
+     "type": "string",
+     "optional": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "class",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "style",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "id",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/TemplateLiteral.astro": {
+   "schema": [
+    {
+     "name": "width",
+     "type": "string",
+     "optional": true,
+     "default": "120px"
+    },
+    {
+     "name": "anchor",
+     "type": "string",
+     "optional": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "width",
+     "type": "`${number}px`",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'120px'",
+     "description": ""
+    },
+    {
+     "name": "anchor",
+     "type": "`section-${string}`",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/TupleProp.astro": {
+   "schema": [
+    {
+     "name": "point",
+     "type": "code",
+     "optional": false
+    },
+    {
+     "name": "range",
+     "type": "code",
+     "optional": true,
+     "default": "[0, 10]",
+     "defaultExpr": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "point",
+     "type": "[number, number]",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "range",
+     "type": "readonly [min: number, max: number]",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "[0, 10]",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/TwoOptionUnion.astro": {
+   "schema": [
+    {
+     "name": "align",
+     "type": "enum",
+     "options": [
+      "left",
+      "right"
+     ],
+     "optional": true,
+     "default": "left"
+    },
+    {
+     "name": "theme",
+     "type": "enum",
+     "options": [
+      "light",
+      "dark"
+     ],
+     "optional": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "align",
+     "type": "'left' | 'right'",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'left'",
+     "description": ""
+    },
+    {
+     "name": "theme",
+     "type": "\"light\" | \"dark\"",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/TypeAliasProps.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": false
+    },
+    {
+     "name": "subtitle",
+     "type": "string",
+     "optional": true,
+     "default": "Sub"
+    },
+    {
+     "name": "level",
+     "type": "number",
+     "optional": true,
+     "default": 2
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "subtitle",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'Sub'",
+     "description": ""
+    },
+    {
+     "name": "level",
+     "type": "number",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "2",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/TypeAliasWithExtendsTag.astro": {
+   "schema": [
+    {
+     "name": "label",
+     "type": "string",
+     "optional": false
+    }
+   ],
+   "panel": [
+    {
+     "name": "label",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/components/UnknownAnyProps.astro": {
+   "schema": [
+    {
+     "name": "data",
+     "type": "other",
+     "codeKind": "opaque",
+     "typeText": "unknown",
+     "optional": true
+    },
+    {
+     "name": "payload",
+     "type": "other",
+     "codeKind": "opaque",
+     "typeText": "any",
+     "optional": true
+    },
+    {
+     "name": "thing",
+     "type": "other",
+     "codeKind": "opaque",
+     "typeText": "object",
+     "optional": true
+    }
+   ],
+   "panel": [
+    {
+     "name": "data",
+     "type": "unknown",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "payload",
+     "type": "any",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    },
+    {
+     "name": "thing",
+     "type": "object",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/layouts/Base.astro": {
+   "schema": [
+    {
+     "name": "title",
+     "type": "string",
+     "optional": false,
+     "doc": "The page title."
+    },
+    {
+     "name": "description",
+     "type": "string",
+     "optional": true,
+     "default": "Every prop shape Astro can express."
+    }
+   ],
+   "panel": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true,
+     "readonly": false,
+     "defaultValue": "",
+     "description": "The page title."
+    },
+    {
+     "name": "description",
+     "type": "string",
+     "required": false,
+     "readonly": false,
+     "defaultValue": "'Every prop shape Astro can express.'",
+     "description": ""
+    }
+   ]
+  },
+  "test/fixtures/propZoo/src/pages/index.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/round-trip/page-bom-crlf.astro": {
+   "schema": [],
+   "panel": []
+  },
+  "test/fixtures/round-trip/page-bom.astro": {
+   "schema": [],
+   "panel": []
+  }
+ }
+}

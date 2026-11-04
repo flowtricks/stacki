@@ -217,6 +217,8 @@ function editFor(kind, field, current) {
       return { type: 'string', value: 'Zoo "edit" & <b>' };
     case 'LinkControl':
       return { type: 'string', value: '/zoo-edit' };
+    case 'ColorControl':
+      return { type: 'string', value: '#00aa55' };
     case 'MediaControl':
       return { type: 'string', value: '/zoo-edit.png' };
     case 'StyleControl':

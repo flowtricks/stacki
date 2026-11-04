@@ -18,6 +18,7 @@ import { findImportOf } from '../../editor/dataSuggest';
 import { isHrefName, isMediaName } from '../../editor/fieldNames';
 import { arrayItems, objectFields } from './arrayValue';
 import { optionAttr } from './propKinds';
+import { deprecationOf, readPropDocumentation } from '../../editor/propDocumentation';
 import LinkField from './LinkField';
 
 export interface AssetContext {
@@ -229,6 +230,12 @@ export function usePropFieldModel(props: PropFieldProps) {
   // An Image prop (its default imports a file, `image = placeholder`) is
   // media whatever it is called; otherwise its name says so.
   const isMediaAttr = isMediaName(name) || field.defaultAsset !== undefined;
+  // Required and its note are an instance's concern: a defaults recipe or a
+  // CMS entry states its own obligations (remoteCms.css marks those).
+  const required = policy === 'instance' && isRequiredField(props.field, branchDefault);
+  const missingRequired = required && !isSet && !spreadsProps(assetContext?.siblingProps);
+  const deprecated = fieldDeprecation(props.field);
+  const isColor = isColorField(props.field);
   return {
     ...props,
     field,
@@ -252,7 +259,78 @@ export function usePropFieldModel(props: PropFieldProps) {
     placeholderFor,
     isExpr,
     isMediaAttr,
+    required,
+    missingRequired,
+    deprecated,
+    isColor,
   };
+}
+
+/**
+ * A prop the component cannot do without: declared without `?` and with no
+ * default, neither its own nor its variant's. A destructure default makes the
+ * runtime fine, so it is not flagged (docs/plans/prop-controls.md §7.1).
+ * Element attributes leave `optional` unset and are never required.
+ */
+export function isRequiredField(field: FieldDefinition, branchDefault: string | number | undefined): boolean {
+  if (field.optional !== false) {
+    return false;
+  }
+  if (field.default !== undefined) {
+    return false;
+  }
+  if (field.defaultExpr === true) {
+    return false;
+  }
+  return branchDefault === undefined;
+}
+
+// A spread (`{...rest}`) on the instance may well carry any prop, so a missing
+// one is not reported as missing.
+function spreadsProps(siblings: PropValues | undefined): boolean {
+  const values = Object.values(siblings ?? {});
+  assert(values.length <= LIMITS.attrsPerNodeMax, 'spreadsProps: attribute limit exceeded');
+  return values.some((sibling) => sibling?.type === 'spread');
+}
+
+/**
+ * A prop's `@deprecated` text ('' for the bare tag), or undefined. The schema
+ * states it when the prop model read it; a schema from elsewhere (a CMS, an
+ * older scan) still has the tag in its doc comment.
+ */
+export function fieldDeprecation(field: FieldDefinition): string | undefined {
+  return field.deprecated ?? deprecationOf(field.doc);
+}
+
+// A literal colour: hex, a colour function, or a CSS variable (a token).
+const COLOR_HEX = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const COLOR_FUNCTION = /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^()]*\)$/i;
+const COLOR_VARIABLE = /^var\(--[\w-]+(?:\s*,[^()]*)?\)$/;
+const COLOR_NAME = /(?:^|[a-z])colou?r$/i;
+
+/** Whether text is a CSS colour a swatch can be painted with, or a token that names one. */
+export function isColorText(text: string): boolean {
+  const value = text.trim();
+  assert(value.length <= LIMITS.attrCharsMax, 'isColorText: value limit exceeded');
+  return COLOR_HEX.test(value) || COLOR_FUNCTION.test(value) || COLOR_VARIABLE.test(value);
+}
+
+/**
+ * A text prop that holds a colour: typed so by its Kind (`@format color`), or
+ * named for one (`color`, `accentColour`) with a colour for its default. The
+ * name alone is not enough — `color="primary"` is a word, not a colour.
+ */
+export function isColorField(field: FieldDefinition): boolean {
+  if (field.type !== 'string' && field.type !== 'other') {
+    return false;
+  }
+  if (readPropDocumentation(field.doc).format === 'color') {
+    return true;
+  }
+  if (!COLOR_NAME.test(field.name)) {
+    return false;
+  }
+  return typeof field.default === 'string' && isColorText(field.default);
 }
 export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
   const { setMenuPosition, onChange, setCustom, value, field, isSet, showExpr } = state;
@@ -279,7 +357,15 @@ export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
     const rect = event.currentTarget.getBoundingClientRect();
     setMenuPosition({ left: rect.left, top: rect.bottom + 4 });
   };
-  return { reset, fromCustom, onLabelClick };
+  // The label's context menu is the same menu, opened where the click was.
+  const onLabelContextMenu = (event: React.MouseEvent<HTMLSpanElement>) => {
+    if (!isSet && !showExpr) {
+      return;
+    }
+    event.preventDefault();
+    setMenuPosition({ left: event.clientX, top: event.clientY });
+  };
+  return { reset, fromCustom, onLabelClick, onLabelContextMenu };
 }
 export type PropState = ReturnType<typeof usePropField>;
 export type PropControlState = PropState & {
@@ -367,4 +453,16 @@ export function numberControlBounds(field: FieldDefinition) {
     return Math.round(clamped * 1e6) / 1e6;
   };
   return { bounded, allows, clamp };
+}
+
+/** A colour as the six-digit hex the platform picker takes, or undefined when it is not a hex colour. */
+export function hexOfColor(text: string): string | undefined {
+  const match = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(text.trim()) ?? undefined;
+  const digits = match?.[1];
+  if (digits === undefined) {
+    return undefined;
+  }
+  const full = digits.length <= 4 ? [...digits.slice(0, 3)].map((digit) => digit + digit).join('') : digits.slice(0, 6);
+  assert(full.length === 6, 'hexOfColor: six digits');
+  return `#${full.toLowerCase()}`;
 }
