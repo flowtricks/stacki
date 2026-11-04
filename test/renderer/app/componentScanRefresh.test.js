@@ -193,6 +193,18 @@ test('backing out of an edited component rescans before its instance is shown', 
       await tick();
     });
     assert.equal(scanCalls.length, scansOnPage, 'drilling into a component from a page does not rescan');
+
+    // Leaving it again without an edit: the app changed nothing the watcher
+    // would miss, so the scan is still right and nothing rescans.
+    const backAgain = dom.window.document.querySelector('.comp-back');
+    assert.ok(backAgain, 'the Back button shows inside the component again');
+    await act(async () => {
+      backAgain.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await tick();
+      await tick();
+    });
+    assert.equal(__panels.PropsPanel.filePath, page.path, 'Back returns to the page again');
+    assert.equal(scanCalls.length, scansOnPage, 'leaving an unedited component does not rescan');
   } finally {
     await act(async () => root.unmount());
     dom.window.close();

@@ -550,6 +550,9 @@ export function useOpenFile(
   const { pageStateRef, projectRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState } = coreState;
   const { setSelectedId } = coreState;
   const { rescan } = scans;
+  // The text of the file as it was opened, so leaving it can tell whether the
+  // app changed it (componentEditedSince).
+  const openedSourceRef = useRef<OpenedSource | undefined>(undefined);
 
   // Opens any .astro file for editing — a page, or a component drilled into.
   // `currentPage` is simply whatever is being edited, so saving, undo, the
@@ -587,8 +590,11 @@ export function useOpenFile(
       // edited while open — a <slot> typed in code — would leave the page's
       // instances offering the old settings until some unrelated event
       // rescanned. Leaving the file is when those instances come back into
-      // view, so the scan is brought up to date, after the last save, first.
-      if (leavesComponentFile(beforeRead.currentPage, entry)) {
+      // view, so the scan is brought up to date, after the last save, first —
+      // only when the app changed the file while it was open. A change from
+      // outside the app (an editor, an AI) reaches the scan through the
+      // watcher, so leaving an untouched component costs nothing.
+      if (leavesComponentFile(beforeRead.currentPage, entry) && componentEditedSince(openedSourceRef.current, beforeRead)) {
         const project = projectRef.current;
         assert(project !== undefined, 'A component is open only inside a project');
         await rescanBeforeOpen(project.path, rescan);
@@ -609,6 +615,7 @@ export function useOpenFile(
       setEditStack(options.nextStack);
       setCurrentPage(entry);
       setPageState(nextState);
+      openedSourceRef.current = { path: entry.path, source: nextState.source };
       setHoverNodeId(undefined);
       const start = openFileSelection(entry, result, options.selectionPath);
       setSelectedId(start?.id ?? undefined);
@@ -651,6 +658,31 @@ export function leavesComponentFile(from: CurrentPage | undefined, to: OpenFile)
       return exhaustive;
     }
   }
+}
+
+/** A file's text as it was opened for editing. */
+export interface OpenedSource {
+  readonly path: string;
+  readonly source: string;
+}
+
+// Whether the open file's text differs from the text it was opened with: the
+// app saved a change to it (typed code or a gesture), which the watcher does
+// not report. Unknown (nothing recorded for this file) counts as changed, so
+// a missed record costs a scan rather than stale settings.
+export function componentEditedSince(
+  opened: OpenedSource | undefined,
+  now: { readonly currentPage: CurrentPage | undefined; readonly pageState: EditorPageState | undefined },
+): boolean {
+  const path = now.currentPage?.path;
+  if (path === undefined || now.pageState === undefined) {
+    return false;
+  }
+  if (opened === undefined || opened.path !== path) {
+    return true;
+  }
+  assert(opened.path.length > 0, 'An opened file has a path');
+  return opened.source !== now.pageState.source;
 }
 
 // A failed scan must not trap the user inside the component: the file is
