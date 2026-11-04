@@ -6,6 +6,7 @@ import { PropertyOptions } from './PropertyOptions';
 import type { PropertyOptionChange } from './PropertyOptions';
 import { PropertyType } from './PropertyType';
 import { PropertyDefault, propertyDefaultText } from './PropertyDefault';
+import { PropertyDefaultNote, PropertyKindSettings, PropertyTooltip } from './PropertySettings';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
 export { literalOptions };
 import { useRef, useState } from 'react';
@@ -146,20 +147,28 @@ function PropertyEditorFields({ property, originalName, frontmatter, access, onS
   return (
     <fieldset disabled={access === 'saving'}>
       <PropertyIdentity property={property} originalName={originalName} inherited={inherited} update={update} />
-      <PropertyType type={property.type} onChange={(type) => update('type', type)} />
+      <PropertyType
+        property={property}
+        frontmatter={frontmatter}
+        onChange={(change) => {
+          // Picking the kind it already is changes nothing, and keeps pending option renames.
+          if (change.type !== property.type) {
+            update('type', change.type);
+          }
+          if (change.description !== property.description) {
+            update('description', change.description);
+          }
+          if (change.defaultValue !== property.defaultValue) {
+            update('defaultValue', change.defaultValue);
+          }
+        }}
+      />
       <PropertyOptions type={property.type} disabled={access === 'saving'} onChange={changeOptions} />
+      <PropertyKindSettings key={`${property.type} settings`} property={property} onChange={(description) => update('description', description)} />
       <PropertyFlags property={property} update={update} />
       <PropertyDefault key={property.type} property={property} frontmatter={frontmatter} onChange={(value) => update('defaultValue', value)} />
-      <label>
-        Tooltip
-        <textarea
-          value={property.description}
-          rows={5}
-          maxLength={PROPERTY_LIMITS.textCharsMax}
-          placeholder="Describe how to use this property…"
-          onChange={(event) => update('description', event.target.value)}
-        />
-      </label>
+      <PropertyDefaultNote property={property} />
+      <PropertyTooltip property={property} onChange={(description) => update('description', description)} />
       {error && <ErrorToast message={error} />}
       <PropertyActions originalName={originalName} removable={!inherited} onSave={onSave} submit={submit} />
     </fieldset>

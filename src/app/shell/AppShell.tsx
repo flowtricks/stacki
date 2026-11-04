@@ -377,6 +377,9 @@ export function PropertiesTab({ app }: { readonly app: ShellView }) {
       onSavePhase={app.propertySave.changePhase}
       onSaved={app.completePropertySave}
       onRecordUndo={app.recordPropertyUndo}
+      nodes={app.model?.nodes}
+      onSelectNode={app.setSelectedId}
+      onReplaceProps={app.replaceProps}
     />
   );
 }

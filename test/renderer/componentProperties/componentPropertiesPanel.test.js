@@ -452,14 +452,17 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   assert.match(data.source, /other\?: ContainerGap/);
   assert.match(data.source, /Props extends HTMLAttributes<'section'>/);
   assert.match(data.source, /type ContainerGap = 'small' \| 'medium' \| 'large'/);
-  // Type controls reuse the searchable dropdown and preserve expressions across
-  // mode toggles. Browsing choices does not replace the current union.
+  // The Kind picker reuses the searchable dropdown; the Code type disclosure
+  // shows the exact expression. Browsing kinds does not replace the current union.
   await act(async () => document.querySelector('.property-row-main').click());
-  assert.match(document.querySelector('.property-type .dd-trigger').textContent, /Options/);
-  const toggleType = async (label) => act(async () => document.querySelector(`[aria-label="${label}"]`).click());
-  await toggleType('Write a type expression');
-  assert.equal(document.querySelector('input[aria-label="Type expression"]').value, editedGap.type);
-  await toggleType('Use the type dropdown');
+  assert.match(document.querySelector('.property-type .dd-trigger').textContent, /Choice/);
+  const codeInput = () => document.querySelector('input[aria-label="Code type"]');
+  const toggleCode = async () => act(async () => document.querySelector('.property-code-toggle').click());
+  assert.ok(codeInput() === null);
+  await toggleCode();
+  assert.equal(codeInput().value, editedGap.type);
+  await toggleCode();
+  assert.ok(codeInput() === null);
   assert.equal(optionValues()[0], 'large');
   await act(async () => document.querySelector('.property-type .dd-trigger').click());
   assert(document.querySelector('.dd-search'));
@@ -473,13 +476,12 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   await setValue(document.querySelector('.dd-search'), 'boolean');
   await act(async () => document.querySelector('.dd-option').click());
   assert.ok(document.querySelector('.property-options .list-field') === null);
-  await toggleType('Write a type expression');
-  assert.equal(document.querySelector('input[aria-label="Type expression"]').value, 'boolean');
-  await setValue(document.querySelector('input[aria-label="Type expression"]'), 'typeof designTheme');
-  await toggleType('Use the type dropdown');
-  assert.match(document.querySelector('.property-type .dd-trigger').textContent, /typeof designTheme/);
-  await toggleType('Write a type expression');
-  assert.equal(document.querySelector('input[aria-label="Type expression"]').value, 'typeof designTheme');
+  assert.match(document.querySelector('.property-type .dd-trigger').textContent, /Switch/);
+  await toggleCode();
+  assert.equal(codeInput().value, 'boolean');
+  await setValue(codeInput(), 'typeof designTheme');
+  assert.match(document.querySelector('.property-type .dd-trigger').textContent, /Code type/);
+  assert.equal(codeInput().value, 'typeof designTheme');
   // Existing unsupported types open directly as ordinary inputs.
   data = {
     ...data,
@@ -488,7 +490,7 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   };
   await notify();
   await act(async () => document.querySelector('.property-row-main').click());
-  assert.equal(document.querySelector('input[aria-label="Type expression"]').value, 'typeof designTheme');
+  assert.equal(codeInput().value, 'typeof designTheme');
   // A default that names another frontmatter value is shown as a binding. Its
   // chip opens the same scoped picker used by prop values and can be repointed.
   const boundDefault = `---
@@ -530,16 +532,16 @@ const { tag = 'h2', variant = tag } = Astro.props;
   await notify();
   await act(async () => document.querySelector('.property-row-main').click());
   await dragOptions(4, 0);
-  await toggleType('Write a type expression');
-  assert.equal(document.querySelector('input[aria-label="Type expression"]').value, '"1" | true | false | "true" | 1');
-  await toggleType('Use the type dropdown');
+  await toggleCode();
+  assert.equal(codeInput().value, '"1" | true | false | "true" | 1');
+  await toggleCode();
   await act(async () => document.querySelectorAll('.property-options .list-field-text')[4].click());
   await setValue(document.querySelector('.list-item-field input'), '-');
   await setValue(document.querySelector('.list-item-field input'), '-2');
   await act(async () => document.querySelector('.list-item-editor [title="Close"]').click());
-  await toggleType('Write a type expression');
-  assert.equal(document.querySelector('input[aria-label="Type expression"]').value, '"1" | true | false | "true" | -2');
-  await toggleType('Use the type dropdown');
+  await toggleCode();
+  assert.equal(codeInput().value, '"1" | true | false | "true" | -2');
+  await toggleCode();
   await act(async () => document.querySelector('.property-options .list-field-add').click());
   assert.equal(document.querySelector('.list-item-field input').value, '');
   assert.equal(optionValues().length, 5);

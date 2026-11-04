@@ -6,7 +6,7 @@ export default function PropertyReadOnlyFields({ property }: { readonly property
     <div className="property-readonly-fields">
       <p className="property-help">{reason}</p>
       <ReadOnlyField label="Name" value={property.name} />
-      <ReadOnlyField label="Type expression" value={property.type} />
+      <ReadOnlyField label="Code type" value={property.type} />
       <div className="property-flags">
         <label>
           <input type="checkbox" checked={property.required} disabled />

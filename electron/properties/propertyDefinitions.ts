@@ -23,6 +23,7 @@ import {
   validatePropertyCode,
 } from './propertySyntax';
 import type { PropertySyntax, SourceEdit } from './propertySyntax';
+import { bindingEdits, memberComment, memberEdits, sameDeclaration, sameProperty } from './propertyMemberEdits';
 
 interface Definitions {
   readonly document: PropertySyntax;
@@ -220,7 +221,9 @@ function readDefinitions(source: string): Definitions {
       (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) && statement.name.text === 'Props',
   );
   const declaration = declarations[0];
-  const container = definitionContainer(declaration);
+  // With no Props declaration, a destructure annotated inline
+  // (`const { title }: { title: string } = Astro.props`) is the props' type.
+  const container = definitionContainer(declaration) ?? (declarations.length === 0 ? annotationContainer(document.syntax) : undefined);
   const members = container?.members.filter(ts.isPropertySignature) ?? [];
   const patterns = syntaxNodes(document.syntax)
     .filter(ts.isVariableDeclaration)
@@ -252,6 +255,14 @@ function readDefinitions(source: string): Definitions {
   };
 }
 
+function annotationContainer(syntax: ts.SourceFile): ts.TypeLiteralNode | undefined {
+  const annotated = syntaxNodes(syntax)
+    .filter(ts.isVariableDeclaration)
+    .filter((node) => isAstroProps(node.initializer) && ts.isObjectBindingPattern(node.name));
+  const type = annotated.length === 1 ? annotated[0]?.type : undefined;
+  return type !== undefined && ts.isTypeLiteralNode(type) ? type : undefined;
+}
+
 function definitionContainer(
   declaration: ts.InterfaceDeclaration | ts.TypeAliasDeclaration | undefined,
 ): ts.InterfaceDeclaration | ts.TypeLiteralNode | undefined {
@@ -269,14 +280,9 @@ function definitionContainer(
 }
 
 function readDescription(member: ts.PropertySignature, source: string): string {
-  const leading = source.slice(member.getFullStart(), member.getStart());
-  const match = /\/\*\*([\s\S]*?)\*\//.exec(leading);
-  return (match?.[1] ?? '')
-    .split('\n')
-    .map((line) => line.replace(/^\s*\*?\s?/, ''))
-    .join('\n')
-    .trim();
+  return memberComment(source, member)?.description ?? '';
 }
+
 function renderDefinition(property: ComponentProperty): string {
   const documentation = property.description.trim();
   const description = documentation ? `  /** ${documentation.replace(/\*\//g, '* /').replace(/\n/g, '\n   * ')} */\n` : '';
@@ -288,7 +294,8 @@ function saveDefinition(definitions: Definitions, originalName: string, property
     return valid;
   }
   const snapshot = readComponentProperties(definitions.document.source);
-  if (originalName && !snapshot.properties.some((field) => field.name === originalName)) {
+  const previous = originalName ? snapshot.properties.find((field) => field.name === originalName) : undefined;
+  if (originalName && previous === undefined) {
     return err({ code: 'missing', message: 'This property no longer exists. Reload the panel.' });
   }
   if (originalName !== property.name && snapshot.properties.some((field) => field.name === property.name)) {
@@ -297,44 +304,84 @@ function saveDefinition(definitions: Definitions, originalName: string, property
   if (!originalName && snapshot.properties.length >= PROPERTY_LIMITS.fieldsMax) {
     return err({ code: 'limit', message: 'The component property limit has been reached.' });
   }
-  const member = definitions.members.find((item) => propertyKey(item.name) === originalName);
-  const edits: SourceEdit[] = [];
-  if (member) {
-    edits.push({
-      start: member.getFullStart(),
-      end: member.end,
-      text: renderSavedDefinition(definitions, member, property),
-    });
-  } else if (definitions.container) {
-    edits.push({
-      start: definitions.container.end - 1,
-      end: definitions.container.end - 1,
-      text: renderDefinition(property) + '\n',
-    });
-  } else {
-    const fields = snapshot.properties.filter((field) => field.name !== originalName);
-    edits.push({
-      start: 0,
-      end: 0,
-      text: `interface Props {${[...fields, property].map(renderDefinition).join('')}\n}\n`,
-    });
+  // A save that changes nothing writes nothing: the file is the author's.
+  if (previous !== undefined && sameProperty(previous, property)) {
+    return ok(definitions.document.source);
   }
-  const binding = saveDefinitionBinding(definitions, originalName, property);
+  const declaration = declarationEdits(definitions, originalName, previous, property);
+  if (!declaration.ok) {
+    return declaration;
+  }
+  const binding = saveDefinitionBinding(definitions, originalName, previous, property);
   if (!binding.ok) {
     return binding;
   }
-  edits.push(...binding.value);
-  const frontmatter = applySourceEdits(definitions.document.frontmatter, edits);
+  const frontmatter = applySourceEdits(definitions.document.frontmatter, [...declaration.value, ...binding.value]);
   const error = syntaxError(frontmatter);
   if (error) {
     return err({ code: 'syntax', message: error });
   }
   const output = replaceFrontmatter(definitions.document, frontmatter);
-  if (property.defaultValue.trim()) {
+  assert(output !== definitions.document.source || previous === undefined || !sameProperty(previous, property), 'A changed save writes its change');
+  const defaultChanged = property.defaultValue.trim() !== (previous?.defaultValue.trim() ?? '');
+  if (property.defaultValue.trim() && defaultChanged) {
     const local = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === originalName)?.name.getText() ?? property.name;
     return bindComponentDefault(output, originalName || property.name, local);
   }
   return ok(output);
+}
+
+// The type side of a save: the member's own text edited in place, a member
+// appended to the type the file already has, or (for a component with no
+// types at all) a new `interface Props`. A component that types its props
+// another way, or forwards attributes through an untyped `...rest`, is never
+// given an interface: one would contradict its types or reject the attributes.
+function declarationEdits(
+  definitions: Definitions,
+  originalName: string,
+  previous: ComponentProperty | undefined,
+  property: ComponentProperty,
+): Result<readonly SourceEdit[]> {
+  const member = definitions.members.find((item) => propertyKey(item.name) === originalName);
+  if (member) {
+    assert(previous !== undefined, 'A declared member was read before its save');
+    return ok(memberEdits(definitions.document.frontmatter, member, previous, property));
+  }
+  if (previous !== undefined && sameDeclaration(previous, property)) {
+    return ok([]);
+  }
+  if (definitions.container) {
+    return ok([{ start: definitions.container.end - 1, end: definitions.container.end - 1, text: renderDefinition(property) + '\n' }]);
+  }
+  if (previous === undefined && LOOSE_TYPES.has(property.type.trim()) && !property.description.trim() && !property.required && !property.readonly) {
+    // A new prop that states nothing a type would carry needs only its destructure entry.
+    return ok([]);
+  }
+  const reason = untypedReason(definitions);
+  if (reason !== undefined) {
+    return err({ code: 'untyped', message: reason });
+  }
+  const snapshot = readComponentProperties(definitions.document.source);
+  // The new interface lists the props in the order the panel shows them, the saved one in its place.
+  const fields =
+    previous === undefined ? [...snapshot.properties, property] : snapshot.properties.map((field) => (field.name === originalName ? property : field));
+  return ok([{ start: 0, end: 0, text: `interface Props {${fields.map(renderDefinition).join('')}\n}\n` }]);
+}
+
+const LOOSE_TYPES = new Set(['', 'unknown']);
+
+// Why a component without a Props declaration cannot be given one, if it cannot.
+function untypedReason(definitions: Definitions): string | undefined {
+  const annotated = syntaxNodes(definitions.document.syntax)
+    .filter(ts.isVariableDeclaration)
+    .find((node) => isAstroProps(node.initializer) && node.type !== undefined);
+  if (annotated?.type !== undefined) {
+    return `This component types its props as ${annotated.type.getText()}. Change the prop's type there.`;
+  }
+  if (definitions.patterns.some((pattern) => pattern.elements.some((element) => element.dotDotDotToken !== undefined))) {
+    return 'This component passes other attributes on with ...rest and has no Props type; a Props type would have to list every attribute it forwards. Set this prop in source.';
+  }
+  return undefined;
 }
 
 function saveDefinitionOptions(definitions: Definitions, name: string, type: string): Result<string> {
@@ -347,25 +394,19 @@ function saveDefinitionOptions(definitions: Definitions, name: string, type: str
   return saveDefinition(definitions, name, { ...property, type });
 }
 
-function renderSavedDefinition(definitions: Definitions, member: ts.PropertySignature, property: ComponentProperty): string {
-  const type = member.type;
-  // Required, tooltip, default, and name edits must retain the authored alias.
-  // An option edit affects this property alone, not other consumers of that alias.
-  if (type && property.type === definitions.readType(type)) {
-    return renderDefinition({ ...property, type: type.getText() });
-  }
-  return renderDefinition(property);
-}
-
-function saveDefinitionBinding(definitions: Definitions, originalName: string, property: ComponentProperty): Result<readonly SourceEdit[]> {
+function saveDefinitionBinding(
+  definitions: Definitions,
+  originalName: string,
+  previous: ComponentProperty | undefined,
+  property: ComponentProperty,
+): Result<readonly SourceEdit[]> {
   const binding = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === originalName);
-  const fallback = property.defaultValue.trim() ? ` = ${defaultExpression(property.defaultValue.trim())}` : '';
   if (binding) {
+    assert(previous !== undefined, 'A destructured prop was read before its save');
     // Keep the lexical binding: aliases prevent accidental edits to shadowed locals in templates.
-    const local = binding.name.getText();
-    const name = local === property.name ? property.name : `${property.name}: ${local}`;
-    return ok([{ start: binding.getStart(), end: binding.end, text: name + fallback }]);
+    return ok(bindingEdits(binding, previous, property));
   }
+  const fallback = property.defaultValue.trim() ? ` = ${defaultExpression(property.defaultValue.trim())}` : '';
   if (!fallback && originalName) {
     return ok([]);
   }
@@ -415,6 +456,10 @@ function reorderDefinitions(definitions: Definitions, names: readonly string[]):
     .join('');
   const container = definitions.container;
   if (!container) {
+    const reason = untypedReason(definitions);
+    if (reason !== undefined) {
+      return err({ code: 'untyped', message: reason });
+    }
     return ok(replaceFrontmatter(definitions.document, `interface Props {${text}\n}\n${definitions.document.frontmatter}`));
   }
   const first = definitions.members[0];

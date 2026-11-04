@@ -212,3 +212,108 @@
   padding: 0 4px;
   color: var(--text-dim);
 }
+
+/* The Kind picker's escape hatch: the exact type expression, shown on demand. */
+.property-code-toggle {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 2px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.property-code-toggle:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* A kind's settings (a Number's range, a Switch's labels) side by side. */
+.property-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.property-settings-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 8px;
+}
+.property-settings-row label {
+  min-width: 0;
+}
+.property-settings-row input {
+  min-width: 0;
+  width: 100%;
+}
+.property-settings-problem,
+.property-default-note {
+  color: var(--amber);
+}
+
+/* A row's kind, after its name: muted, at the row's end. */
+.property-row-kind {
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* The attributes prop: a chip for its name, rows for its defaults and connections. */
+.property-attributes-name,
+.property-attribute-defaults-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-dim);
+}
+.property-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  background: var(--accent-soft);
+}
+.property-attribute-defaults,
+.property-connections {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-dim);
+}
+.property-attribute-default {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+.property-attribute-default input {
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.property-connection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  text-align: left;
+  color: var(--text);
+  background: var(--bg-input);
+  overflow-wrap: anywhere;
+}
+.property-connection:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.property-connection:disabled {
+  color: var(--text-dim);
+}
