@@ -11,8 +11,7 @@ import { groupPaletteComponents, parseComponentUsage, prettyComponentName } from
 import { ComponentPlusIcon, ElementComponentIcon, LayoutIcon } from '../../ui/Icons';
 import { CreateComponentModal, InstancesPopup } from './PaletteDialogs';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
-
-const TOOLTIP_DELAY_MS = 500;
+import { useDelayedTooltip } from '../../ui/delayedTooltip';
 
 interface PalettePanelProps {
   readonly components: readonly ScanComponent[];
@@ -74,22 +73,6 @@ function useCreateRequest(request: number, source: ComponentCreationSource, setC
       setCreating(true);
     }
   }, [request, setCreating, source.kind]);
-}
-
-function useDelayedTooltip() {
-  const [value, setValue] = useState<Point | undefined>(undefined);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  const show = useCallback((event: React.MouseEvent<HTMLElement>): void => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => setValue({ left: rect.left + rect.width / 2, top: rect.bottom + 8 }), TOOLTIP_DELAY_MS);
-  }, []);
-  const hide = useCallback((): void => {
-    clearTimeout(timer.current);
-    setValue(undefined);
-  }, []);
-  return { value, show, hide };
 }
 
 function useComponentPreview() {

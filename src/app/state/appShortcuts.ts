@@ -416,6 +416,53 @@ export function useEscapeKeys(
   }, [inPreview, editStack.length, closeComponent]);
 }
 
+// ⌥P toggles the interactive preview: into it from the editor, back out of it
+// (or out of an older version) from either. Matched on the physical key, because
+// Option rewrites `event.key` on a Mac ("π" for P). A field keeps the key, so
+// typing ⌥P there still types its character.
+export function usePreviewKey(
+  navigation: ReturnType<typeof useNavigation>,
+  interactivePreview: ReturnType<typeof useInteractivePreview>,
+  coreState: ReturnType<typeof useCoreState>,
+) {
+  const { inPreview, previewRef } = coreState;
+  const { exitCommitPreview } = navigation;
+  const { enterPreview, exitPreview } = interactivePreview;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (!isPreviewKey(event)) {
+        return;
+      }
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]')) {
+        return;
+      }
+      event.preventDefault();
+      if (previewRef) {
+        // Leaving the old version cannot fail: a server that will not stop is ignored.
+        void exitCommitPreview();
+      } else if (inPreview) {
+        exitPreview();
+      } else {
+        enterPreview();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [inPreview, previewRef, enterPreview, exitPreview, exitCommitPreview]);
+}
+
+// Option and P alone: no Command, Control or Shift.
+export function isPreviewKey(event: Pick<KeyboardEvent, 'altKey' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'code'>): boolean {
+  if (!event.altKey) {
+    return false;
+  }
+  if (event.metaKey || event.ctrlKey || event.shiftKey) {
+    return false;
+  }
+  return event.code === 'KeyP';
+}
+
 // Injected routes and a dynamic page’s entries.
 export function useRoutes(coreState: ReturnType<typeof useCoreState>) {
   const { currentPage, devStatus, devUrl, editStack, pageState, project, scan } = coreState;

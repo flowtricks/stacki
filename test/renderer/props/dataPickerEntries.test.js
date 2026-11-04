@@ -119,7 +119,7 @@ test('every group is headed by where its data lives', () => {
   // A heading is only the group's name: no note says what its data depends on.
   assert.equal(sectionHeading('props', component), 'Button.astro props');
   assert.equal(sectionHeading('frontmatter', component), 'Button.astro frontmatter');
-  assert.equal(sectionHeading('collections', component), 'Collections in this project');
+  assert.equal(sectionHeading('collections', component), 'Content Collections');
   const page = { file: 'src/pages/index.astro', page: undefined };
   assert.equal(sectionHeading('frontmatter', page), 'index.astro frontmatter');
   assert.equal(sectionHeading('props', page), 'index.astro props');
@@ -163,14 +163,15 @@ test('the picker renders the pager, the chosen entry, and the source headings', 
   assert.match(third, /Teams/);
   assert.doesNotMatch(third, /Uptime/, 'only the chosen entry is shown');
   assert.match(third, /title="statsEntries\[2\]\.data\.Header/);
-  assert.match(third, /Collections in this project/);
+  assert.match(third, /Content Collections/);
   assert.doesNotMatch(third, /Works anywhere|dp-section-note/, 'a section heading carries no note');
 
-  // Nothing bound: the first root opens on its first entry, whose fields are listed.
-  const opened = render(undefined);
-  assert.match(opened, /dp-item-count">1\/4</);
-  assert.match(opened, /title="statsEntries\[0\]\.data — object"/);
-  assert.doesNotMatch(opened, /title="statsEntries\[2\]/);
+  // Nothing bound: a content collection stays closed, saying how many entries
+  // it holds, and carries Astro's mark so it reads as a collection.
+  const closed = render(undefined);
+  assert.doesNotMatch(closed, /dp-item-count/, 'no entry is opened');
+  assert.doesNotMatch(closed, /title="statsEntries\[0\]\.data/, 'no entry fields are listed');
+  assert.match(closed, /title="Content collection"/, 'the collection row carries the Astro mark');
 
   // Bound to an entry not read yet: the reading row stands in for it.
   const unread = render('statsEntries[1].data.Header');

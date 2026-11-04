@@ -91,7 +91,10 @@ export function describePreviewReload(reason: PreviewReloadReason): string | und
 /** A shortcut the canvas frame forwards while it holds keyboard focus
  * (electron/preload/frameDesign.ts): the app replays it as its own key event. */
 export type ShortcutMessage =
-  { readonly name: 'insert' } | { readonly name: 'arrow'; readonly key: string } | { readonly name: 'key'; readonly key: string; readonly meta: boolean };
+  | { readonly name: 'insert' }
+  | { readonly name: 'preview' }
+  | { readonly name: 'arrow'; readonly key: string }
+  | { readonly name: 'key'; readonly key: string; readonly meta: boolean };
 
 // A KeyboardEvent key is one character or a short name ("ArrowDown").
 const SHORTCUT_KEY_CHARS_MAX = 32;
@@ -117,6 +120,8 @@ export function parseShortcutMessage(input: unknown): ShortcutMessage | undefine
     switch (value['name']) {
       case 'insert':
         return { name: 'insert' };
+      case 'preview':
+        return { name: 'preview' };
       case 'arrow':
         return { name: 'arrow', key: shortcutKey(value['key']) };
       case 'key':

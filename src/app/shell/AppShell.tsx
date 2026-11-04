@@ -29,6 +29,7 @@ import { openAppSettings } from '../settings/Settings';
 import { AssetPickOverlay, assetPickTitle } from '../../ui/AssetPickOverlay';
 import type { HistoryCommit, HistoryCommitFile } from '../../features/history/historyBridge';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
+import { useDelayedTooltip } from '../../ui/delayedTooltip';
 import { type LeftTab } from '../appTypes';
 import { openExternalURL, restoreProjectFile, restoreProjectVersion } from '../../ipc/appBridge';
 import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel } from '../appPanels';
@@ -308,17 +309,48 @@ export function TitleActions({ app }: { readonly app: ShellView }) {
           than working in — the interactive preview, and an older version —
           and this button is where both of them end. Lit for either, so it
           is never on while the only button that turns it off looks idle. */}
-      <button
-        className={`titlebar-btn preview-btn ${app.inPreview || app.previewRef ? 'on' : ''}`}
-        title={app.previewRef ? 'Back to now (Esc)' : app.inPreview ? 'Exit preview (Esc)' : 'Preview the site'}
-        disabled={!app.devUrl}
-        onClick={() => togglePreview(app)}
-      >
-        <PreviewIcon size={15} />
-      </button>
+      <PreviewButton app={app} />
       <SettingsButton />
     </div>
   );
+}
+
+// Lit for either kind of looking-not-working (see TitleActions). Its tip waits for
+// a resting pointer and names ⌥P, the key that does the same from anywhere.
+function PreviewButton({ app }: { readonly app: ShellView }) {
+  const tooltip = useDelayedTooltip();
+  const label = previewButtonLabel(app, currentDesktopPlatform());
+  return (
+    <>
+      <button
+        className={`titlebar-btn preview-btn ${app.inPreview || app.previewRef ? 'on' : ''}`}
+        aria-label={label}
+        disabled={!app.devUrl}
+        onMouseEnter={tooltip.show}
+        onMouseLeave={tooltip.hide}
+        onClick={() => {
+          tooltip.hide();
+          togglePreview(app);
+        }}
+      >
+        <PreviewIcon size={15} />
+      </button>
+      {tooltip.value ? (
+        <div className="rail-tooltip below" style={tooltip.value}>
+          {label}
+        </div>
+      ) : undefined}
+    </>
+  );
+}
+
+// What the preview button does now, with the key for it.
+function previewButtonLabel(app: Pick<ShellView, 'inPreview' | 'previewRef'>, platform: NodeJS.Platform): string {
+  const key = platform === 'darwin' ? '⌥P' : 'Alt+P';
+  if (app.previewRef) {
+    return `Back to now (${key})`;
+  }
+  return app.inPreview ? `Exit preview (${key})` : `Preview (${key})`;
 }
 
 // The preview button: back from an older version, out of the preview, or into it.

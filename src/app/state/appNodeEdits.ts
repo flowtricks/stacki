@@ -565,7 +565,7 @@ export function useInsertPalette(coreState: ReturnType<typeof useCoreState>) {
   const { setTermOpen } = coreState;
 
   // ----------------------------------------------------------------
-  // Insert palette (⌘F / ⌘E) — quick-add components, tags, loops, …
+  // Insert palette (⌘F / ⌘E / ⌘K) — quick-add components, tags, loops, …
   // ----------------------------------------------------------------
 
   // ⌘J / ⌃` toggle the terminal dock, the two bindings people already have in
@@ -615,7 +615,7 @@ export function useCanvasMessages(coreState: ReturnType<typeof useCoreState>, in
   const { setInsertOpen } = insertPalette;
 
   // Open requests from the app menu (⌘E accelerator) and from canvas iframes
-  // (which forward ⌘F/⌘E when they hold keyboard focus).
+  // (which forward ⌘F/⌘E/⌘K when they hold keyboard focus).
   useEffect(() => {
     const openIfEditable = () => {
       if (pageStateRef.current.pageState?.editable && !inPreviewRef.current) {
@@ -639,6 +639,11 @@ export function useCanvasMessages(coreState: ReturnType<typeof useCoreState>, in
       switch (message.name) {
         case 'insert':
           openIfEditable();
+          return;
+        // ⌥P from the canvas or the live preview, replayed as the physical
+        // key so the one handler (usePreviewKey) decides what it does.
+        case 'preview':
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', code: 'KeyP', altKey: true, bubbles: true, cancelable: true }));
           return;
         // Arrow keys pressed while the canvas iframe holds focus: replay them
         // on the app window so tree navigation behaves the same whether the

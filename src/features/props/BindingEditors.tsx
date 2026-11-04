@@ -20,6 +20,8 @@ import { resolvePick } from '../../editor/bindings';
 import { checkStatement } from './jsCheck';
 import DataPicker from './DataPicker';
 import NewPropForm from './NewPropForm';
+// The "New … property" row is drawn here, so its styles load with it.
+import './loopSettings.css';
 import { boundPath, fittingTree, newPropTitle, type NewPropHost, type NewPropSeed } from './newPropModel';
 import ExprInput from '../../ui/ExprInput';
 import { CodeIcon, CloseIcon, PencilIcon, PlusIcon } from '../../ui/Icons';

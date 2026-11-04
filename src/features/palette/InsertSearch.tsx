@@ -25,7 +25,7 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number]['key'];
 
-// Quick-insert palette (⌘F / ⌘E): fuzzy-searches components, HTML tags, and
+// Quick-insert palette (⌘F / ⌘E / ⌘K): fuzzy-searches components, HTML tags, and
 // special node types; Enter or click inserts at the current selection.
 interface InsertComponent {
   readonly path?: string;

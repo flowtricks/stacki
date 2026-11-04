@@ -1556,7 +1556,7 @@ html[data-platform='win32'] .titlebar {
   max-width: none;
 }
 
-/* Insert palette (⌘F / ⌘E) */
+/* Insert palette (⌘F / ⌘E / ⌘K) */
 .insert-overlay {
   position: fixed;
   inset: 0;
@@ -3749,6 +3749,103 @@ body > .embed-editor_provenance {
 .prop-label.set:hover {
   background: rgba(0, 153, 255, 0.26);
 }
+/* A deprecated prop still works, so it stays where it is, its name struck
+   through in the dim grey and the "Deprecated" tag beside it. */
+.prop-label.deprecated {
+  text-decoration: line-through;
+  text-decoration-color: var(--text-faint);
+}
+.prop-deprecated {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: var(--bg-active);
+  cursor: help;
+}
+/* Required: a small dot after the name of a prop the component needs (no `?`
+   and no default). Quiet while a value is given; red when the instance is
+   missing it, with the note under the field saying so. */
+.prop-required {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 2px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.prop-required.missing {
+  background: var(--red);
+}
+.prop-field-note {
+  margin: -8px 12px 12px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-faint);
+}
+.prop-field-note.required {
+  color: var(--red);
+}
+/* Reset to default: beside the name of a set field while it is hovered. The
+   label's menu (click, right-click) holds the same action. */
+.prop-reset {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 4px;
+  padding: 2px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  opacity: 0;
+}
+.props-field:hover > label > .prop-reset,
+.prop-reset:focus-visible {
+  opacity: 1;
+}
+.prop-reset:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* A colour prop: the swatch opens the system picker (the native input fills
+   it, invisible), and the text beside it holds any CSS colour or token. */
+.prop-color {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.prop-color-swatch {
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: repeating-conic-gradient(#808080 0% 25%, #a0a0a0 0% 50%) 50% / 10px 10px;
+  cursor: pointer;
+}
+.prop-color-swatch.is-unknown {
+  background: var(--bg-input);
+}
+.prop-color.is-default .prop-color-fill {
+  opacity: 0.55;
+}
+.prop-color-fill {
+  position: absolute;
+  inset: 0;
+}
+.prop-color-swatch > input[type='color'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
 
 /* The `{}` beside a prop's name: the switch between the control the field
    normally shows and a plain expression. It sits quiet — the weight of the `?`
@@ -5293,6 +5390,12 @@ body > .embed-editor_provenance {
 .class-input-field.empty {
   width: 2px;
   margin: 0 -4px;
+}
+/* The letters a fuzzy class match found, tinted rather than outlined. */
+.class-suggest-hit {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: inherit;
 }
 .class-suggest {
   z-index: 500;

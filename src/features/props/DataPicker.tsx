@@ -7,6 +7,7 @@ import {
   BracesIcon,
   ChevronRightIcon,
   ChevronLeftIcon,
+  AstroIcon,
   CheckIcon,
   CodeIcon,
   ElementImageIcon,
@@ -232,9 +233,11 @@ function useDataPicker({ tree: rawTree, current, onExpand }: DataPickerProps) {
   const [open, setOpen] = useState(() => {
     const start = new Set(ancestorsOf(current));
     // Nothing bound yet: open the first root that holds anything, so the panel
-    // opens on data rather than on a list of closed names.
+    // opens on data rather than on a list of closed names. Never a project
+    // collection: it is a whole list of entries, the page does not read it
+    // yet, and opened it buried the data that is in scope under its rows.
     if (!start.size) {
-      const first = (tree || []).find((node) => node.children?.length);
+      const first = (tree || []).find((node) => node.children?.length && node.section !== 'collections');
       if (first) {
         start.add(first.path);
         const page = entryPageOf(first, pages);
@@ -377,6 +380,13 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
           <ChevronRightIcon size={10} />
         </span>
         {depth === 0 && node.section === 'props' && <PropKindIcon kind={node.kind} />}
+        {/* A content collection says it is one, with Astro's mark: it is Astro's
+            own content layer, not a remote CMS. */}
+        {depth === 0 && node.section === 'collections' && (
+          <span className="dp-kind-icon" title="Content collection">
+            <AstroIcon size={11} />
+          </span>
+        )}
         <span className="dp-key">{showPath ? node.path : node.key}</span>
         {isCurrent && <CheckIcon size={11} className="dp-check" />}
         {/* A loop hands its item one entry of a list, and the list has more

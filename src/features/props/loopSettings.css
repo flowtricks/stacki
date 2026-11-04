@@ -978,6 +978,8 @@
 .dp-new-prop {
   display: flex;
   align-items: center;
+  /* Left, like the rows under it: a button centres its content unless told otherwise. */
+  justify-content: flex-start;
   gap: 8px;
   width: 100%;
   height: 28px;

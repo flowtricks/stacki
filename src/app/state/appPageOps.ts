@@ -45,6 +45,7 @@ import {
   useMenuShortcuts,
   useInteractivePreview,
   useEscapeKeys,
+  usePreviewKey,
   useRoutes,
   useCollections,
   useSampleEntries,
@@ -69,6 +70,7 @@ export function useShortcuts(
   useMenuShortcuts(lifecycle, coreState, insertItemScope, nodeEdits, history);
   const interactivePreview = useInteractivePreview(coreState, navigation);
   useEscapeKeys(coreState, navigation, interactivePreview);
+  usePreviewKey(navigation, interactivePreview, coreState);
   const routes = useRoutes(coreState);
   useCollections(coreState);
   useSampleEntries(coreState, routes);

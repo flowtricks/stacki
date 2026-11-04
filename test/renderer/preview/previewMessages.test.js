@@ -151,6 +151,8 @@ test('preview message parser ignores unknown and malformed project messages', ()
 test('forwarded shortcuts parse each variant and ignore every other or malformed message', () => {
   const shortcut = (fields) => parseShortcutMessage({ type: 'avb:shortcut', ...fields });
   assert.deepEqual(shortcut({ name: 'insert' }), { name: 'insert' });
+  // ⌥P from a canvas or preview frame carries nothing but its name.
+  assert.deepEqual(shortcut({ name: 'preview', key: 'π', meta: true }), { name: 'preview' });
   assert.deepEqual(shortcut({ name: 'arrow', key: 'ArrowUp' }), { name: 'arrow', key: 'ArrowUp' });
   assert.deepEqual(parseShortcutMessage({ type: 'avb:shortcut', name: 'key', key: 'd', meta: true }), { name: 'key', key: 'd', meta: true });
   // Anything but a literal true is no modifier: a page cannot smuggle one in.

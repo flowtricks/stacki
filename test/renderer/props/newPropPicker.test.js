@@ -198,7 +198,7 @@ test('in a component: fitting props, CMS data, and a new prop bound in one undo 
   assert.ok(rows.includes('count'), 'a number prop prints as words, so it is listed');
   assert.ok(!rows.includes('shown'), 'a switch does not fit a text field');
   const headings = [...menu.querySelectorAll('.dp-section')].map((heading) => heading.textContent);
-  assert.deepEqual(headings, ['Button.astro props', 'Collections in this project'], 'props first, then the CMS data');
+  assert.deepEqual(headings, ['Button.astro props', 'Content Collections'], 'props first, then the CMS data');
   assert.ok(menu.querySelector('.dp-kind-icon'), 'each prop row leads with its type icon');
 
   await click(byText('New Plain Text property'));
@@ -248,7 +248,7 @@ test('on a page: the CMS data as before, and no new property', async (context) =
   assert.equal(menu.querySelector('.dp-new-prop') ?? undefined, undefined, 'no new property on a page');
   const rows = [...menu.querySelectorAll('.dp-row .dp-key')].map((row) => row.textContent);
   assert.ok(rows.includes('shown'), 'nothing is narrowed away on a page');
-  assert.ok([...menu.querySelectorAll('.dp-section')].some((heading) => heading.textContent === 'Collections in this project'));
+  assert.ok([...menu.querySelectorAll('.dp-section')].some((heading) => heading.textContent === 'Content Collections'));
   await act(async () => root.unmount());
 });
 

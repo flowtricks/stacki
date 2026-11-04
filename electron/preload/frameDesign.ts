@@ -143,13 +143,27 @@ function forwardModifiers(): void {
 }
 
 // Forward app shortcuts when the canvas has keyboard focus — otherwise
-// ⌘F/⌘E die inside the iframe and the insert palette never opens.
+// ⌘F/⌘E/⌘K die inside the iframe and the insert palette never opens.
 function forwardShortcut(event: KeyboardEvent): void {
+  // ⌥P toggles the preview, so it is forwarded from the live preview too, where
+  // the canvas does not select. Matched on the physical key: Option turns P
+  // into "π". A field in the page keeps it.
+  if (isPreviewKey(event)) {
+    if (!eventInField(event)) {
+      event.preventDefault();
+      try {
+        window.parent.postMessage({ type: 'avb:shortcut', name: 'preview' }, '*');
+      } catch {
+        /* ignore */
+      }
+    }
+    return;
+  }
   if (!canvasSelects()) {
     return;
   }
   const mod = event.metaKey || event.ctrlKey;
-  if (mod && (event.key.toLowerCase() === 'f' || event.key.toLowerCase() === 'e')) {
+  if (mod && ['f', 'e', 'k'].includes(event.key.toLowerCase())) {
     event.preventDefault();
     try {
       window.parent.postMessage({ type: 'avb:shortcut', name: 'insert' }, '*');
@@ -158,11 +172,7 @@ function forwardShortcut(event: KeyboardEvent): void {
     }
     return;
   }
-  const target = event.target;
-  const typing =
-    target instanceof window.HTMLElement &&
-    (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
-  if (typing) {
+  if (eventInField(event)) {
     return;
   }
 
@@ -203,4 +213,24 @@ function forwardShortcut(event: KeyboardEvent): void {
       /* ignore */
     }
   }
+}
+
+// Option and P alone, the preview toggle (usePreviewKey in the app).
+function isPreviewKey(event: KeyboardEvent): boolean {
+  if (!event.altKey) {
+    return false;
+  }
+  if (event.metaKey || event.ctrlKey || event.shiftKey) {
+    return false;
+  }
+  return event.code === 'KeyP';
+}
+
+// Is the key going to a field in the page, which keeps it for typing?
+function eventInField(event: KeyboardEvent): boolean {
+  const target = event.target;
+  return (
+    target instanceof window.HTMLElement &&
+    (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)
+  );
 }

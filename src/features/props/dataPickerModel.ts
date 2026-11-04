@@ -143,7 +143,8 @@ export function sectionHeading(section: string, origin: DataOrigin | undefined):
     case 'frontmatter':
       return file === undefined ? 'Frontmatter' : `${file} frontmatter`;
     case 'collections':
-      return 'Collections in this project';
+      // Astro's own name for them, so it matches the docs and the config file.
+      return 'Content Collections';
     case 'loop-sanity':
       return 'Sanity';
     case 'loop-page':
