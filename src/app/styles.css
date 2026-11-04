@@ -4808,6 +4808,14 @@ body > .embed-editor_provenance {
     linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.6) 14%, rgba(0, 0, 0, 0.2) 26%, transparent 34%),
     radial-gradient(ellipse 70% 60% at 50% 42%, rgba(0, 0, 0, 0.74) 0%, rgba(0, 0, 0, 0.55) 45%, rgba(0, 0, 0, 0.28) 100%);
 }
+/* The reel shader is drawn as designed: its own darkest stop shows before the
+   first frame, and none of the classic wave's scrim dims it. */
+.welcome-bg.welcome-bg-shader {
+  background: #0b000d;
+}
+.welcome-bg.welcome-bg-shader::after {
+  content: none;
+}
 /* Lift just the start screen's own sections above the backdrop — a blanket
    child rule would also re-position overlays (the new-project modal is
    position: fixed) and drop them into the flow. */
@@ -4835,13 +4843,6 @@ body > .embed-editor_provenance {
 .welcome-logo {
   color: var(--text);
 }
-.welcome-tagline {
-  color: var(--text-dim);
-  font-size: 13px;
-  font-weight: 450;
-  letter-spacing: 0.01em;
-  margin-top: 16px;
-}
 .welcome h1 {
   font-size: 20px;
   font-weight: 700;
@@ -4859,7 +4860,9 @@ body > .embed-editor_provenance {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  margin-top: 16px;
+  /* With the hero's 10px gap, 58px between the logo and the buttons: the
+     logo stands on its own, and the buttons read as the next step. */
+  margin-top: 48px;
 }
 .welcome .actions-row {
   display: flex;
@@ -4899,6 +4902,21 @@ body > .embed-editor_provenance {
 }
 .welcome .welcome-split-button > .welcome-split-arrow.primary {
   border-left-color: rgb(0 0 0 / 14%);
+}
+/* The secondary action sits over the welcome background, which runs from
+   near-black to pink-white. A translucent dark grey with the background
+   blurred behind it reads as lifted on both ends: black would vanish on the
+   dark side, and white would on the light side. */
+/* Only while its menu is shut: open, both halves turn white with the menu
+   (the rules below), and this would paint a hovered half dark again. */
+.welcome .welcome-split-button:not(:has(> .welcome-split-menu)) > button:not(.primary) {
+  background: rgb(52 52 58 / 45%);
+  color: #fff;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+.welcome .welcome-split-button:not(:has(> .welcome-split-menu)) > button:not(.primary):hover:not(:disabled) {
+  background: rgb(64 64 72 / 55%);
 }
 .welcome-split-arrow svg {
   transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -5001,16 +5019,33 @@ body > .embed-editor_provenance {
   pointer-events: none;
   background: linear-gradient(to left, rgba(10, 10, 10, 0.9), transparent);
 }
-.recents-title {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text);
-  /* 24px rail padding + the card's 1px border + its 6px padding, so the label
-     lines up with the thumbnails rather than the card's outer edge. */
-  margin: 0 0 10px 31px;
+/* Over the shader the painted fade read as a dark strip with a hard top edge.
+   Fading the cards themselves keeps the scroll hint and leaves the backdrop one
+   continuous surface. */
+.welcome:has(> .welcome-bg-shader) .recents::after {
+  content: none;
+}
+.welcome:has(> .welcome-bg-shader) .recent-rail {
+  mask-image: linear-gradient(to left, transparent, #000 56px);
+}
+/* The shader is light where the recent projects sit (its lavender to
+   pink-white lower edge), so their text is black at the strengths the panel
+   uses white at, and the row needs no line to set it apart. */
+.welcome:has(> .welcome-bg-shader) .recents {
+  border-top: 0;
+}
+.welcome:has(> .welcome-bg-shader) .recent-name {
+  color: rgb(0 0 0 / 85%);
+}
+.welcome:has(> .welcome-bg-shader) .recent-path {
+  color: rgb(0 0 0 / 55%);
 }
 .recent-rail {
   display: flex;
+  /* Centred under the actions when the cards fit the window. `safe` falls back
+     to the start when they don't, so an overflowing rail still scrolls from
+     its first card instead of cutting cards off on both sides. */
+  justify-content: safe center;
   gap: 12px;
   overflow-x: auto;
   overflow-y: hidden;

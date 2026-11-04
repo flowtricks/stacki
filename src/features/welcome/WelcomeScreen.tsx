@@ -12,7 +12,7 @@ import {
 } from './welcomeBridge';
 import { AstroIcon, CloseIcon, FolderIcon, GitHubIcon, LayersIcon, LumosIcon } from '../../ui/Icons';
 import StackiLogo from './StackiLogo';
-import WelcomeBackground from './WelcomeBackground';
+import WelcomeBackdrop from './WelcomeBackdrop';
 import { NewProjectWizard, StarterWizard } from './WelcomeWizards';
 
 interface WelcomeScreenProps {
@@ -30,7 +30,7 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
 
   return (
     <div className="welcome">
-      <WelcomeBackground />
+      <WelcomeBackdrop />
       <WelcomeHero
         hasRecents={recent.projects.length > 0}
         error={error}
@@ -207,7 +207,6 @@ function WelcomeHero({
   return (
     <div className="welcome-hero">
       <StackiLogo width={320} className="welcome-logo" />
-      <p className="welcome-tagline">Visual Builder for Astro</p>
       <div className="actions">
         <div className="actions-row">
           <WelcomeSplitButton
@@ -253,7 +252,6 @@ function RecentRail({
   }
   return (
     <div className="recents">
-      <div className="recents-title">Recent projects</div>
       <div className="recent-rail">
         {projects.map((project) => (
           <div key={project.path} className="recent-card" title={project.path} onClick={() => open(project.path)}>
