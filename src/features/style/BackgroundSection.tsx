@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { layerPreviewStyle, useResolvedCustomProperties } from './GradientCode';
 import Select from './components/Select';
 import { blankLayer, layerLabel, parseLayers, serializeLayers, splitBackgroundShorthand, type BgLayer } from './model/background';
 import LayerList from './LayerList';
@@ -25,15 +26,19 @@ export default function BackgroundSection(props: Props) {
   const { read, busy, setProp, clearProp, onProvenance, onSelectSelector } = props;
   const stack = useLayerStack(props);
   const { layers, applyLayers, openLayer, setOpenLayer } = stack;
+  // The layers come from the `background` shorthand when no `background-image`
+  // is set (useLayerStack), so the label does too: `.divider::before { background:
+  // radial-gradient(…) }` set the layers and left "Image & gradient" unlit.
+  const labelProp = layerSourceProp(read);
   return (
     <div className="embed-editor_size embed-editor_background">
       {/* Image & gradient — the layer stack (top layer first). */}
       <div className="embed-editor_bg-layers-head">
         <BgLabel
           label="Image & gradient"
-          prop="background-image"
-          d={displayOf(read('background-image'))}
-          contributors={read('background-image')?.contributors ?? []}
+          prop={labelProp}
+          d={displayOf(read(labelProp))}
+          contributors={read(labelProp)?.contributors ?? []}
           busy={busy}
           onClear={() => applyLayers([])}
           onProvenance={onProvenance}
@@ -121,28 +126,38 @@ const CLIP_OPTIONS = [
   { value: 'text', label: 'Clip background to text' },
 ];
 
+/** The property the layer stack is read from: `background-image`, or the
+ *  `background` shorthand when only that sets the layers (as useLayerStack). */
+export function layerSourceProp(read: Props['read']): 'background-image' | 'background' {
+  const image = displayOf(read('background-image'));
+  if (image.present && image.value.trim() !== '' && image.value.trim().toLowerCase() !== 'none') {
+    return 'background-image';
+  }
+  return displayOf(read('background')).present ? 'background' : 'background-image';
+}
+
 // A row of the layer list: its thumbnail and its label.
 function layerRow(layers: BgLayer[], i: number) {
   const layer = layers[i];
   if (layer === undefined) {
     throw new Error(`Background layer ${i} is missing`);
   }
-  return { preview: <LayerPreview image={layer.image} />, label: layerLabel(layer.image) };
+  return { preview: <LayerPreview layer={layer} />, label: layerLabel(layer.image) };
 }
 
 // A layer's thumbnail in the list.
-function LayerPreview({ image }: { image: string }) {
-  const url = imageUrlOf(image);
-  // A gradient is CSS this window paints as it stands.
+function LayerPreview({ layer }: { layer: BgLayer }) {
+  const url = imageUrlOf(layer.image);
+  // A gradient is CSS this window paints, with the variables it reads filled in
+  // from the selected element (this document defines none of them, so a
+  // `var(--divider-size)` gradient painted nothing), at the layer's own size
+  // and tiling when it has them.
+  const values = useResolvedCustomProperties([layer.image, layer.size, layer.position]);
   if (!url) {
     return (
       <span
         className="embed-editor_bg-layer-preview"
-        style={{
-          background: image,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
+        style={{ backgroundSize: 'cover', backgroundPosition: 'center', ...layerPreviewStyle(layer, values) }}
         aria-hidden="true"
       />
     );

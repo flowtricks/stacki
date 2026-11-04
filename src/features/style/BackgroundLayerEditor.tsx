@@ -1,9 +1,11 @@
 // The editor for one background layer: its type switch, the fields for its
 // kind, its raw value and tiling (BackgroundSection.tsx).
 
+import { assert } from '../../../shared/core/assert';
 import SegmentedControl from './components/SegmentedControl';
 import { blankLayer, layerKind, serializeLayers, type BgLayer, type LayerKind } from './model/background';
-import { blankGradientOf, parseGradient, serializeGradient, type GradientType } from './model/gradient';
+import { gradientFitsEditor, parseGradient, serializeGradient, type GradientType } from './model/gradient';
+import { GradientCode } from './GradientCode';
 import GradientEditor from './GradientEditor';
 import { type WriteOptions, replaceLayer } from './BackgroundKit';
 import {
@@ -72,14 +74,16 @@ export function LayerEditor(props: LayerEditorProps) {
   return (
     <div className="embed-editor_bg-editor">
       {typeRow}
-      {gradient ? (
+      {gradient !== undefined && gradientFitsEditor(gradient) ? (
         <GradientEditor gradient={gradient} busy={busy} onChange={(next, live) => writeImage(serializeGradient(next), { live })} />
+      ) : isGradient ? (
+        <GradientCode layers={layers} index={index} busy={busy} applyLayers={props.applyLayers} liveSetProp={liveSetProp} />
       ) : (
         <LayerRawFields displayKind={displayKind} props={props} />
       )}
       {/* Tile (background-repeat) + Fixed (background-attachment) apply to image
-          layers only — Webflow omits them for gradients (which have their own
-          repeat toggle inside the gradient editor). */}
+          layers only: the visual gradient editor has its own repeat toggle, and
+          a gradient edited as code writes its tiling in the code. */}
       {!isGradient ? <LayerTileFields layer={layer} props={props} /> : undefined}
     </div>
   );
@@ -95,35 +99,21 @@ export function displayKindOf(kind: ReturnType<typeof layerKind>): LayerKind {
 
 export const isGradientType = (value: LayerKind): value is GradientType => value === 'linear' || value === 'radial' || value === 'conic';
 
-// Switch a layer's kind. Switching between gradient kinds keeps the colours.
-//
-// The stops are the work — picked, positioned, adjusted — and the kind is just how
-// they are painted. Seeding a blank layer threw them away, so trying radial to see how
-// it looked cost the whole gradient and there was no way back to it.
-//
-// The geometry does NOT carry, because it does not mean the same thing: an angle is a
-// direction for a linear gradient and nothing at all for a radial one, and a centre
-// point is the reverse. Each kind starts on its own defaults and keeps the colours.
+// Switch a layer's kind. The layer starts over as that kind's default: its
+// image, and its size, position and tiling cleared. Colours used to carry
+// between gradient kinds, but a switch is a choice of a different thing, and a
+// gradient carried into a kind it does not fit (a `var()` stop position, a
+// tiled pattern's size) kept the old one's parts under the new type's buttons.
+// Undo returns the layer as it was.
 export function setLayerKind({ next, displayKind, props }: { next: LayerKind; displayKind: LayerKind; props: LayerEditorProps }) {
   const { layers, index, applyLayers } = props;
   const layer = layers[index];
   if (next === displayKind || layer === undefined) {
     return;
   }
-  if (isGradientType(next) && isGradientType(displayKind)) {
-    const current = parseGradient(layer.image);
-    if (current?.stops?.length) {
-      const carried = serializeGradient({
-        ...blankGradientOf(next),
-        repeating: current.repeating,
-        stops: current.stops,
-      });
-      applyLayers(replaceLayer(layers, index, { image: carried }));
-      return;
-    }
-  }
   const seeded = blankLayer(next);
-  applyLayers(replaceLayer(layers, index, { image: seeded.image }));
+  assert(layerKind(seeded.image) === next, 'setLayerKind: the new layer is of the kind asked for');
+  applyLayers(layers.map((entry, i) => (i === index ? seeded : entry)));
 }
 
 // An image layer's picker, or an unparsed gradient's raw text; then Size and Position.

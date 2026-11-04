@@ -7,6 +7,7 @@ import type { AssetDimensions } from './AssetThumb';
 import AssetThumb from './AssetThumb';
 import { requestAsset } from './assetPick';
 import { assetRelCandidates, assetValueFor, isExternalAsset } from './assetPath';
+import { classifyRemoteMedia, remotePosterSource, type RemoteMediaHint } from './remoteMedia';
 
 const kindLabel = { image: 'Image', video: 'Video', audio: 'Audio', asset: 'Asset' };
 // Refreshes one read may chain while watcher events keep arriving. Each is a
@@ -43,22 +44,58 @@ const remoteHost = (url: string) => {
   }
 };
 
-// An image the project doesn't hold, shown from wherever it is hosted — the
-// card is the same one a local file gets, so pointing a field at a CDN still
-// shows what it points at.
-function RemoteThumb({ url, onLoad }: { readonly url: string; readonly onLoad?: (dimensions: AssetDimensions) => void }) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [url]);
-  if (failed) {
+// Media the project doesn't hold, shown from wherever it is hosted — the card
+// is the same one a local file gets, so pointing a field at a CDN still shows
+// what it points at. classifyRemoteMedia decides what may load: an image as
+// an <img>, a video as a paused, muted <video> that fetches only its metadata
+// and one frame (or shows its poster), and anything else nothing at all. A
+// failed load drops back to the generic icon rather than a broken glyph.
+export function RemoteThumb({
+  url,
+  hint,
+  poster,
+  onLoad,
+}: {
+  readonly url: string;
+  readonly hint: RemoteMediaHint;
+  readonly poster?: string | undefined;
+  readonly onLoad?: ((dimensions: AssetDimensions) => void) | undefined;
+}) {
+  const media = useMemo(() => classifyRemoteMedia(url, hint), [url, hint]);
+  const posterSource = useMemo(() => remotePosterSource(poster), [poster]);
+  const [failedSource, setFailedSource] = useState<string | undefined>(undefined);
+  if (media.kind === 'unknown') {
     return <ElementImageIcon size={18} />;
   }
+  if (failedSource === media.source) {
+    return <ElementImageIcon size={18} />;
+  }
+  if (media.kind === 'image') {
+    return (
+      <img
+        key={media.source}
+        src={media.source}
+        alt=""
+        draggable={false}
+        onLoad={(event) => onLoad?.({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })}
+        onError={() => setFailedSource(media.source)}
+      />
+    );
+  }
   return (
-    <img
-      src={url}
-      alt=""
+    <video
+      key={media.source}
+      src={media.source}
+      {...(posterSource === undefined ? {} : { poster: posterSource })}
+      // Never autoplays and never loops: the card is a still. "metadata" keeps
+      // the download to the headers and the frame the #t fragment seeks to.
+      muted
+      playsInline
+      preload="metadata"
+      autoPlay={false}
       draggable={false}
-      onLoad={(event) => onLoad?.({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })}
-      onError={() => setFailed(true)}
+      onLoadedMetadata={(event) => onLoad?.({ w: event.currentTarget.videoWidth, h: event.currentTarget.videoHeight })}
+      onError={() => setFailedSource(media.source)}
     />
   );
 }
@@ -90,6 +127,8 @@ export interface AssetFieldProps {
   readonly srcRel?: string | undefined;
   readonly baseDir?: string | undefined;
   readonly onCurrentDimensions?: ((dimensions: AssetDimensions) => void) | undefined;
+  /** A video's poster attribute, which an external video's card shows when it is an allowed image URL. */
+  readonly posterValue?: string | undefined;
   /** Where the Assets panel opens to choose (assetPick.ts); the side panel by default. */
   readonly pickPresentation?: AssetRequest['presentation'];
 }
@@ -98,7 +137,7 @@ export default function AssetField(props: AssetFieldProps) {
   const { showModeToggle = true, plainLabel = 'URL', mediaKind = 'asset', onChange } = props;
   const state = useAssetField(props);
   const toggle = showModeToggle && <AssetMode mode={state.mode} onMode={state.setMode} plainLabel={plainLabel} />;
-  const remoteCard = state.external && <RemoteCard state={state} />;
+  const remoteCard = state.external && <RemoteCard state={state} mediaKind={mediaKind} posterValue={props.posterValue} />;
   if (state.mode === 'url') {
     return (
       <div className="asset-field">
@@ -241,12 +280,20 @@ function AssetMode({
     </div>
   );
 }
-function RemoteCard({ state }: { readonly state: AssetFieldState }) {
+function RemoteCard({
+  state,
+  mediaKind,
+  posterValue,
+}: {
+  readonly state: AssetFieldState;
+  readonly mediaKind: RemoteMediaHint;
+  readonly posterValue: string | undefined;
+}) {
   const { current, noteDims, dims } = state;
   return (
     <div className="af-card">
       <div className="af-thumb">
-        <RemoteThumb url={current} onLoad={noteDims} />
+        <RemoteThumb url={current} hint={mediaKind} poster={posterValue} onLoad={noteDims} />
       </div>
       <div className="af-meta">
         <div className="af-name" title={current}>

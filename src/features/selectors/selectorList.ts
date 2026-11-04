@@ -17,6 +17,9 @@ export interface SelectorGroup {
 
 export type SelectorCounts = Readonly<Record<SelectorFilter, number>>;
 
+const NO_HELD_ROWS: ReadonlySet<string> = new Set();
+const NO_HELD_REASONS: ReadonlyMap<string, string> = new Map();
+
 // What the panel lists: selectors a clean-up could ever act on, once each.
 // A selector with no class or id (`h1`, `:is([data-x])`) is never removed, so
 // it is not listed; the same selector written in several rules of one file
@@ -56,11 +59,22 @@ export function selectorCounts(report: SelectorReport): SelectorCounts {
   return { all: listed.length, unused, unknown, kept };
 }
 
-export function selectorGroups(report: SelectorReport, filter: SelectorFilter, search: string): readonly SelectorGroup[] {
+// `held` names rows that keep their place though their verdict has left the
+// filter: a row whose lock was just clicked stays while it animates out.
+export function selectorGroups(
+  report: SelectorReport,
+  filter: SelectorFilter,
+  search: string,
+  held: ReadonlySet<string> = NO_HELD_ROWS,
+): readonly SelectorGroup[] {
   const query = search.trim().toLowerCase();
   const groups = new Map<string, SelectorEntry[]>();
   for (const entry of listedEntries(report)) {
-    if (!matchesFilter(entry.verdict.kind, filter)) {
+    if (matchesFilter(entry.verdict.kind, filter)) {
+      // Listed by its verdict.
+    } else if (held.has(entry.id)) {
+      // Listed until its animation ends.
+    } else {
       continue;
     }
     if (query !== '') {
@@ -81,12 +95,15 @@ export interface ReasonGroup {
   readonly entries: readonly SelectorEntry[];
 }
 
-export function unknownReasons(report: SelectorReport, search: string): readonly ReasonGroup[] {
+// `held` maps a row that has just left "Can't tell" to the reason it was
+// listed under, so it stays in its group while it animates out.
+export function unknownReasons(report: SelectorReport, search: string, held: ReadonlyMap<string, string> = NO_HELD_REASONS): readonly ReasonGroup[] {
   const query = search.trim().toLowerCase();
   const groups = new Map<string, SelectorEntry[]>();
   for (const entry of listedEntries(report)) {
     const { verdict } = entry;
-    if (verdict.kind !== 'unknown') {
+    const reason = verdict.kind === 'unknown' ? verdict.reason : held.get(entry.id);
+    if (reason === undefined) {
       continue;
     }
     if (query !== '') {
@@ -94,9 +111,9 @@ export function unknownReasons(report: SelectorReport, search: string): readonly
         continue;
       }
     }
-    const group = groups.get(verdict.reason) ?? [];
+    const group = groups.get(reason) ?? [];
     group.push(entry);
-    groups.set(verdict.reason, group);
+    groups.set(reason, group);
   }
   return [...groups].map(([reason, entries]) => ({ reason, entries })).sort((left, right) => right.entries.length - left.entries.length);
 }
@@ -171,7 +188,8 @@ export function exactPatterns(keepList: StyleKeepList, names: readonly string[])
   return keepList.keep.filter((pattern) => wanted.has(pattern));
 }
 
-function matchesFilter(kind: SelectorVerdictKind, filter: SelectorFilter): boolean {
+/** Whether a verdict is listed under a filter's tab. */
+export function matchesFilter(kind: SelectorVerdictKind, filter: SelectorFilter): boolean {
   switch (filter) {
     case 'all':
       return true;

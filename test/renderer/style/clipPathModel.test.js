@@ -10,7 +10,10 @@
 // test/fixtures/clipPath/characterization.json were recorded from ClipPath.tsx
 // while it was still one file. The functions are bundled from the modules they
 // now live in and run in jsdom (SVG import parses with DOMParser); every recorded
-// value must come back equal.
+// value must come back equal. One deliberate change since: the preview draws
+// absolute lengths at their real size (a px is a screen pixel, a rem 16px), so
+// the eight recorded `preview` values with px or rem lengths were re-recorded,
+// and nothing else.
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');

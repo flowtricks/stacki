@@ -6,6 +6,7 @@
 // stays editable as raw text (the caller falls back), so this never has to be
 // exhaustive — just faithful for the shapes Webflow emits.
 
+import { assert } from '../../../../shared/core/assert';
 import { splitTopLevelCommas, splitTopLevelSpaces } from './background';
 
 export type GradientType = 'linear' | 'radial' | 'conic';
@@ -138,6 +139,28 @@ export function parseGradient(image: string): Gradient | undefined {
     return undefined;
   } // not a usable gradient
   return { ...blankGradientOf(type), repeating: !!match[1], ...geometry, stops };
+}
+
+/**
+ * Whether the visual editor can show and write `gradient` as it is. Each stop
+ * must be one colour and at most one plain length, and the geometry plain
+ * values: a stop like `transparent var(--divider-size)` (a position the parser
+ * cannot read as one) or `red 10% 20%` (two positions) was read as a colour
+ * named by the whole text, so the editor showed it wrongly and rewrote it
+ * wrongly. Those are edited as code instead.
+ */
+export function gradientFitsEditor(gradient: Gradient): boolean {
+  assert(gradient.stops.length >= 2, 'gradientFitsEditor: a gradient has two stops');
+  for (const stop of gradient.stops) {
+    if (splitTopLevelSpaces(stop.color).length !== 1) {
+      return false;
+    }
+    if (stop.pos !== '' && !isLength(stop.pos)) {
+      return false;
+    }
+  }
+  const geometry = [gradient.angle, gradient.shape, gradient.size, gradient.from, gradient.posX, gradient.posY];
+  return geometry.every((value) => !value.includes('('));
 }
 
 type Geometry = Partial<Pick<Gradient, 'angle' | 'shape' | 'size' | 'from' | 'posX' | 'posY'>>;

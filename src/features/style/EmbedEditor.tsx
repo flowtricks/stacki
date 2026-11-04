@@ -229,7 +229,7 @@ function useEditorResolution(
   editorElement: ReturnType<typeof useEditorElement>,
   editorContexts: ReturnType<typeof useEditorContexts>,
 ) {
-  const { nativeState, scanState, selectionState } = editorFoundation;
+  const { nativeState, pendingWrites, scanState, selectionState } = editorFoundation;
   const { activeSelectorHook, elementTokens, selectorPick, tokenDefault } = editorElement;
   const { componentSource, nativeTarget, styleContextsHook } = editorContexts;
 
@@ -243,7 +243,7 @@ function useEditorResolution(
     nativeTarget,
     componentSource,
   );
-  const selectorChipsHook = useSelectorChips(scanState, selectionState, nativeState, elementTokens, activeSelectorHook, styleContextsHook);
+  const selectorChipsHook = useSelectorChips(scanState, selectionState, nativeState, elementTokens, activeSelectorHook, styleContextsHook, pendingWrites);
   const contextChange = useContextChange(selectionState, nativeState, elementTokens, activeSelectorHook, selectorPick, styleContextsHook);
   useDefaultUpgrade(selectionState, nativeState, elementTokens, tokenDefault, selectorPick, styleContextsHook);
   return { contextChange, resolvedHook, selectorChipsHook };
@@ -392,7 +392,7 @@ function useEditorCardView(
   const { refreshHook } = editorSelection;
   const { ruleActions } = editorRuleEdits;
   const { elementTokens } = editorElement;
-  const { nativeTarget, querySuggestionsHook, renameQuery, sourceDocumentHook, styleContextsHook } = editorContexts;
+  const { nativeTarget, querySuggestionsHook, renameQuery, sourceDocumentHook } = editorContexts;
   const { contextChange, resolvedHook, selectorChipsHook } = editorResolution;
   const { writeNewRuleHook } = editorRuleWrites;
   const { addQuery } = editorNativeCalls;
@@ -406,7 +406,6 @@ function useEditorCardView(
     sourceDocumentHook,
     renameQuery,
     querySuggestionsHook,
-    styleContextsHook,
     resolvedHook,
     selectorChipsHook,
     contextChange,

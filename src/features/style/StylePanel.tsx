@@ -29,6 +29,8 @@ interface StylePanelProps {
   readonly historyTick?: number;
   readonly openFilePath?: string | undefined;
   readonly openFileKind?: HostState['openFileKind'];
+  /** The page a component is being edited on, whose styles reach it (HostState). */
+  readonly contextPagePath?: string | undefined;
   readonly pseudoRequest?: HostState['pseudoRequest'];
   /** Counts ⌘Enter presses: each new one puts the caret in the selector field. */
   readonly selectorFocus?: number;
@@ -72,6 +74,7 @@ function hostState(props: StylePanelProps, files: StyleFiles, astroFiles: StyleF
     astroFiles,
     openFilePath: props.openFilePath,
     openFileKind: props.openFileKind,
+    contextPagePath: props.contextPagePath,
     writeStyleNode: props.onWriteStyleNode,
     selectNode: props.onSelectNode,
     recordUndo: props.onRecordUndo,

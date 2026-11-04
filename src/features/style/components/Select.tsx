@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, RefObject } from 'react';
-import { panelBounds } from '../model/panelBox';
+import { menuPlacement, menuWidthMaxPx, panelBounds } from '../model/panelBox';
+import { assert } from '../../../../shared/core/assert';
 import { isHTMLElementInDocument } from '../model/dom';
 import { endDragNotes, hoverNote } from '../../../ui/sound';
 import { type SelectOption, type Props } from './selectTypes';
@@ -589,15 +590,25 @@ function useListPlacement({
 // derived from the TRIGGER (stable) + the menu's width, not the just-mounted list's
 // rect (which measured wrong on the first open). Bounds = the app's scroll container
 // (the panel can be a sub-region of a wider Designer window).
+//
+// The shift is written to `translate`, never `transform`. The list is a popup
+// surface whose open motion is a transform it transitions (popup.css); an inline
+// transform replaced that motion, so the menu opened at its natural spot and slid
+// sideways to the clamped one. `translate` composes with the transform instead, so
+// the menu opens in place with the standard rise and scale.
 function clampLinkMenu(trigger: HTMLDivElement, listElement: HTMLDivElement): void {
-  const margin = 8;
-  const rect = trigger.getBoundingClientRect();
   const bounds = panelBounds(trigger);
-  const naturalLeft = rect.left; // menu is anchored left:0 to the trigger
-  const naturalRight = rect.left + listElement.offsetWidth;
-  const next =
-    naturalRight > bounds.right - margin ? bounds.right - margin - naturalRight : naturalLeft < bounds.left + margin ? bounds.left + margin - naturalLeft : 0;
-  listElement.style.transform = next ? `translateX(${next}px)` : '';
+  // Cap the width before measuring it: the measured width is what the shift is for.
+  listElement.style.maxWidth = `${menuWidthMaxPx(bounds)}px`;
+  const rect = trigger.getBoundingClientRect();
+  const { shiftPx } = menuPlacement({
+    anchorLeftPx: rect.left, // the menu is anchored left:0 to the trigger
+    menuWidthPx: listElement.offsetWidth,
+    boundsLeftPx: bounds.left,
+    boundsRightPx: bounds.right,
+  });
+  listElement.style.translate = shiftPx === 0 ? '' : `${shiftPx}px 0`;
+  assert(listElement.style.transform === '', 'clampLinkMenu: the open motion owns transform');
 }
 
 // Vertical scroll — only the LIST's own overflow (never scrollIntoView, whose inline

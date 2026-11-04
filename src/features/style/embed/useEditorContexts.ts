@@ -13,9 +13,11 @@ import {
   type SourceKey,
   type StyleContext,
 } from '../model/resolved';
-import { breakpointTier, buildStyleContexts, nativeContribsFor, nativeHasValues, selectedNativeIndexFor } from '../model/nativeStyles';
+import { breakpointForAtContext, breakpointTier, buildStyleContexts, nativeContribsFor, nativeHasValues, selectedNativeIndexFor } from '../model/nativeStyles';
 import { listAtRuleBlocks } from '../model/css';
-import { nativeStylingAvailable } from '../model/webflow';
+import { nativeStylingAvailable, rebuildRules } from '../model/webflow';
+import { indexQueriesByClass, orderContexts, relativeContexts, relativesOf } from '../model/contextOrder';
+import { getHost } from '../model/host';
 import { EMPTY_RULE_MODEL } from './EditorBasics';
 import { chipsFor, styledSelectorsFor, usePseudoTarget } from './editorModel';
 import { isGlobalSelector } from './LayoutRows';
@@ -242,6 +244,7 @@ export function useResolved(
   // Native contributions for the current context + state, folded into the model.
   const nativeContribs = useMemo(() => nativeContribsFor(nativeModel, currentContext, stateKey), [nativeModel, currentContext, stateKey]);
 
+  const pseudoLayer = usePseudoTarget();
   const resolved = useMemo(
     () =>
       resolveStyle(model ?? EMPTY_RULE_MODEL, currentContext.embedAtContext ?? ' native-only', activeSelector, {
@@ -250,8 +253,9 @@ export function useResolved(
         selectedIndex: selectedNativeIndex,
         selectedEmbedKey,
         ...(currentContext.breakpoint ? { currentTier: breakpointTier(currentContext.breakpoint) } : {}),
+        pseudoLayer,
       }),
-    [model, currentContext, activeSelector, effectiveSource, nativeContribs, selectedNativeIndex, selectedEmbedKey],
+    [model, currentContext, activeSelector, effectiveSource, nativeContribs, selectedNativeIndex, selectedEmbedKey, pseudoLayer],
   );
 
   // The stylesheet the active selector's rule already lives in. resolveStyle
@@ -282,8 +286,10 @@ export function useSelectorChips(
   elementTokens: ReturnType<typeof useElementTokens>,
   activeSelectorHook: ReturnType<typeof useActiveSelector>,
   styleContextsHook: ReturnType<typeof useStyleContexts>,
+  pendingWrites: ReturnType<typeof usePendingWrites>,
 ) {
   const { removedClasses } = scanState;
+  const { documentByKey } = pendingWrites;
   const { selectedSelectorText } = selectionState;
   const { nativeModel } = nativeState;
   const { model, snapshot, tokens } = elementTokens;
@@ -330,7 +336,27 @@ export function useSelectorChips(
       };
     });
   }, [model, styleContexts, nativeModel]);
-  return { contextInfos, selectorChips };
+
+  // The dropdown's order (model/contextOrder.ts): Base, the queries this element
+  // has styles in, the ones its nearest relatives have styles in, then the rest.
+  // The class index is rebuilt per scan (documentByKey is), which is also when
+  // the selection or the rules change; relatives come from the host's page tree,
+  // so ordering asks the canvas nothing.
+  const queryIndex = useMemo(
+    () =>
+      indexQueriesByClass(rebuildRules([...documentByKey.values()]), (atContext) => {
+        const breakpoint = breakpointForAtContext(atContext);
+        return breakpoint === undefined ? atContext : `bp:${breakpoint}`;
+      }),
+    [documentByKey],
+  );
+  const orderedContexts = useMemo(() => {
+    const own = new Set(contextInfos.filter((info) => info.hasStyles).map((info) => info.key));
+    const host = getHost();
+    const relatives = relativeContexts(relativesOf(host.nodes, host.selectedId), queryIndex);
+    return orderContexts(styleContexts, own, relatives);
+  }, [contextInfos, queryIndex, styleContexts]);
+  return { contextInfos, orderedContexts, selectorChips };
 }
 
 // Switch context, keeping or re-picking a selector styled there.

@@ -192,13 +192,14 @@ export function SelectRow<T extends string>({
       }}
       onClick={onChoose}
     >
-      <span className="u-select-check" aria-hidden="true">
-        {selected ? CHECK : undefined}
-      </span>
       {icon}
       <span className="u-select-label">{option.label}</span>
       {option.marked ? <span className="u-select-dot" aria-hidden="true" /> : undefined}
       {option.action ? <RowAction action={option.action} onCancel={onCancel} /> : undefined}
+      {/* The check ends the row, so icons align down the left edge (a rule across the app). */}
+      <span className="u-select-check" aria-hidden="true">
+        {selected ? CHECK : undefined}
+      </span>
     </div>
   );
 }

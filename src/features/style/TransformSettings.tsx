@@ -4,6 +4,7 @@ import SegmentedControl, { type SegmentedOption } from './components/SegmentedCo
 import DragSlider from './components/DragSlider';
 import { PositionGrid, NumberField } from './components/PositionGrid';
 import FieldLabel from './components/FieldLabel';
+import VariableConnect from './VariableConnect';
 import { PropTip, useHoverTip } from './components/CssPropertyTip';
 import { useHighlight } from './model/computedStyle';
 import { handleArrowStep } from './model/numberStep';
@@ -189,28 +190,39 @@ function DistanceRow({
           onInput={(amount) => onLive(`${amount}px`)}
           onCommit={(amount) => onCommit(amount === 0 ? '' : `${amount}px`)}
         />
-        <input
-          className="u-input embed-editor_size-input embed-editor_shadow-num"
-          value={draft}
-          spellCheck={false}
+        {/* Connected like every other single-value field, so a var() distance
+            reads as a chip and the dot can pick or swap one. */}
+        <VariableConnect
+          code
+          ariaLabel={`Connect ${ariaLabel} to a variable`}
           disabled={busy}
-          aria-label={ariaLabel}
-          placeholder="0"
-          onChange={(event) => setDraft(event.target.value)}
-          onFocus={() => {
-            focused.current = true;
-          }}
-          onBlur={() => {
-            focused.current = false;
-            onCommit(distanceText(draft));
-          }}
-          onKeyDown={(event) => {
-            const stepped = stepDistanceKey(event);
-            if (stepped !== undefined) {
-              setDraft(stepped);
-            }
-          }}
-        />
+          className="is-fill"
+          prop="perspective"
+          onPick={(binding) => onCommit(binding)}
+        >
+          <input
+            className="u-input embed-editor_size-input embed-editor_shadow-num"
+            value={draft}
+            spellCheck={false}
+            disabled={busy}
+            aria-label={ariaLabel}
+            placeholder="0"
+            onChange={(event) => setDraft(event.target.value)}
+            onFocus={() => {
+              focused.current = true;
+            }}
+            onBlur={() => {
+              focused.current = false;
+              onCommit(distanceText(draft));
+            }}
+            onKeyDown={(event) => {
+              const stepped = stepDistanceKey(event);
+              if (stepped !== undefined) {
+                setDraft(stepped);
+              }
+            }}
+          />
+        </VariableConnect>
         <span className="embed-editor_tsettings-unit">PX</span>
       </div>
     </div>

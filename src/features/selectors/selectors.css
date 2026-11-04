@@ -178,11 +178,19 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
-/* The tooltip renders outside the panel, so it names its tint directly. */
+/* The tooltip renders outside the panel, so it names its tints directly, and
+   takes the row's state: orange when unused, yellow when it can't tell, blue
+   when locked — the same colours as the row it describes. */
 .selectors-tip .selectors-flag {
   padding: 0;
   background: transparent;
   color: #ff9f4a;
+}
+.selectors-tip.is-unknown .selectors-flag {
+  color: #e8c35a;
+}
+.selectors-tip.is-kept .selectors-flag {
+  color: #7cc4ff;
 }
 .selectors-row.is-used .selectors-selector,
 .selectors-row.is-checking .selectors-selector {
@@ -192,6 +200,8 @@
   padding: 0;
   background: transparent;
   color: var(--selectors-unused);
+  /* Locking or unlocking eases the names into their new state's colour. */
+  transition: color 200ms ease;
 }
 .selectors-row.is-unknown .selectors-flag {
   color: var(--selectors-unknown);
@@ -231,8 +241,71 @@
   padding: 3px;
   color: var(--text-faint);
 }
+/* The lock takes its row's tint, so unlocking eases it from blue to the same
+   orange (or yellow) as the names beside it, and the shackle opening stays
+   visible; grey would fade it out mid-swing. */
+.selectors-row.is-unused .selectors-lock {
+  color: var(--selectors-unused);
+}
+.selectors-row.is-unknown .selectors-lock {
+  color: var(--selectors-unknown);
+}
 .selectors-lock.on {
   color: var(--selectors-kept);
+}
+.selectors-lock {
+  transition: color 200ms ease;
+}
+
+/* The padlock's shackle pivots on its left leg, where it meets the body
+   (5.5, 7 in the icon's 16-unit box). Unlocking lifts it, then swings it open;
+   locking swings it shut, then drops it in. Each way takes 200ms. */
+.selectors-shackle {
+  transform-box: view-box;
+  transform-origin: 5.5px 7px;
+  transition:
+    rotate 120ms ease-in-out,
+    translate 80ms ease-in 120ms;
+}
+.selectors-lock-icon.is-open .selectors-shackle {
+  translate: 0 -1px;
+  rotate: -22deg;
+  transition:
+    translate 80ms ease-out,
+    rotate 120ms ease-in-out 80ms;
+}
+
+/* A row leaving the open tab closes after its lock and colour have changed:
+   the slot's one grid track shrinks from the row's height to nothing, so the
+   rows below slide up into its place. */
+.selectors-row-slot {
+  display: grid;
+  /* A grid item is as wide as its content unless its track says otherwise:
+     minmax(0, 1fr) keeps a long selector's row to the list's width, so the
+     selector ends in an ellipsis and the lock stays at the visible end. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 200ms ease,
+    opacity 200ms ease;
+}
+.selectors-row-slot.is-collapsing {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+.selectors-row-slot.is-collapsing > .selectors-row {
+  min-height: 0;
+  overflow: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .selectors-flag,
+  .selectors-lock,
+  .selectors-shackle,
+  .selectors-lock-icon.is-open .selectors-shackle,
+  .selectors-row-slot {
+    transition: none;
+  }
 }
 
 .selectors-more {

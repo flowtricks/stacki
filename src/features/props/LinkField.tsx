@@ -5,23 +5,23 @@ import { LIMITS } from '../../../shared/core/limits';
 import Dropdown from '../../ui/Dropdown';
 import AssetField from '../../ui/AssetField';
 import { ElementLinkIcon, FileIcon, PhoneIcon, ElementImageIcon } from '../../ui/Icons';
+import { anchorTargetExists, detectLinkType, type LinkType, type LinkTypeContext } from './linkType';
 
 // Webflow-style link settings for href props: a Type segmented control
 // (URL / Page / Section / Email / Phone / Asset) whose fields all compile
 // down to one href string. Plain URL mode stays available for anything
-// custom; the value's shape picks the initial type.
+// custom; the value's shape picks the initial type (see linkType.ts).
 //
 // context: { pages: [{name, route}], sectionIds: [string], projectPath }
 
-const TYPES = [
+const TYPES: ReadonlyArray<{ readonly id: LinkType; readonly title: string; readonly icon: React.ReactNode }> = [
   { id: 'url', title: 'URL', icon: <ElementLinkIcon size={13} /> },
   { id: 'page', title: 'Page', icon: <FileIcon size={13} /> },
   { id: 'section', title: 'Page section', icon: <b style={{ fontSize: 12 }}>#</b> },
   { id: 'email', title: 'Email', icon: <b style={{ fontSize: 12 }}>@</b> },
   { id: 'phone', title: 'Phone', icon: <PhoneIcon size={13} /> },
   { id: 'asset', title: 'File / asset', icon: <ElementImageIcon size={13} /> },
-] as const;
-type LinkType = (typeof TYPES)[number]['id'];
+];
 interface LinkPage {
   readonly name: string;
   readonly route: string;
@@ -35,28 +35,6 @@ function linkPageLabel(page: LinkPage): string {
     return name;
   }
   return `${name}  ·  ${page.route}`;
-}
-
-function detectType(text: string, pages: readonly LinkPage[] | undefined): LinkType {
-  if (!text) {
-    return 'url';
-  }
-  if (text.startsWith('#')) {
-    return 'section';
-  }
-  if (text.startsWith('mailto:')) {
-    return 'email';
-  }
-  if (text.startsWith('tel:')) {
-    return 'phone';
-  }
-  if ((pages || []).some((page) => page.route === text)) {
-    return 'page';
-  }
-  if (text.startsWith('/') && /\.[a-z0-9]+$/i.test(text)) {
-    return 'asset';
-  }
-  return 'url';
 }
 
 function parseMailto(text: string) {
@@ -83,19 +61,26 @@ interface LinkFieldProps {
   readonly context: LinkContext;
   readonly onChange: (value: Attr, immediate?: boolean) => void;
 }
+function linkTypeContext(context: LinkContext): LinkTypeContext {
+  return { routes: (context.pages ?? []).map((page) => page.route), sectionIds: context.sectionIds ?? [] };
+}
+
 type Commit = (value: string, options?: { readonly immediate: boolean }) => void;
 export default function LinkField({ value, context, onChange }: LinkFieldProps) {
   const text = value?.type === 'string' ? value.value : '';
-  const [type, setType] = useState(() => detectType(text, context.pages));
-  const lastRef = useRef(text);
   assert((context.pages?.length ?? 0) <= LIMITS.scanEntriesMax, 'LinkField: page limit exceeded');
   assert((context.sectionIds?.length ?? 0) <= LIMITS.treeNodesMax, 'LinkField: section limit exceeded');
+  const [type, setType] = useState(() => detectLinkType(text, linkTypeContext(context)));
+  // The last value this field wrote or saw. Only a value that differs from it
+  // came from outside (undo, another element, the canvas), so only then is the
+  // tab re-detected; the user's own typing never moves the tab they picked.
+  const lastRef = useRef(text);
   useEffect(() => {
     if (text !== lastRef.current) {
-      setType(detectType(text, context.pages));
+      setType(detectLinkType(text, linkTypeContext(context)));
       lastRef.current = text;
     }
-  }, [text, context.pages]);
+  }, [text, context]);
   const commit: Commit = (next, options) => {
     lastRef.current = next;
     onChange({ type: 'string', value: next }, options?.immediate ?? false);
@@ -150,7 +135,7 @@ function LinkControl({
     case 'asset':
       return (
         <AssetField
-          value={detectType(text, context.pages) === 'asset' ? text : ''}
+          value={detectLinkType(text, linkTypeContext(context)) === 'asset' ? text : ''}
           mediaKind="asset"
           projectPath={context.projectPath}
           showModeToggle={false}
@@ -168,7 +153,7 @@ function LinkSection({ text, sections, commit }: { readonly text: string; readon
   if (sections.length > 0) {
     return (
       <Dropdown
-        value={text.startsWith('#') && sections.includes(text.slice(1)) ? text : ''}
+        value={anchorTargetExists(text, sections) ? text : ''}
         placeholder="Choose a section…"
         options={sections.map((id) => ({ value: `#${id}`, label: `#${id}` }))}
         onChange={(value) => commit(value, { immediate: true })}

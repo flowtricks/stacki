@@ -41,7 +41,7 @@ const model = require(bundle);
 
 // The picked selector's resolved style over `css`, for an element that matches
 // exactly the selectors in `matching`.
-async function resolve(css, activeSelector, matching) {
+async function resolve(css, activeSelector, matching, options) {
   const region = model.parseRegion({ start: 0, end: css.length, css, root: undefined });
   const rules = model.collectRules(region, {
     embedKey: 'file:/site.css',
@@ -56,7 +56,7 @@ async function resolve(css, activeSelector, matching) {
   const domMatched = new Map(selectors.map((text) => [text, matching.includes(text)]));
   const target = { rootKey: 'root', view: undefined, domMatched };
   const ruleModel = await model.computeRuleModel(rules, target);
-  return model.resolveStyle(ruleModel, '', activeSelector);
+  return model.resolveStyle(ruleModel, '', activeSelector, options);
 }
 
 // Which rule of the stylesheet, by its position in the file (0-based).
@@ -113,4 +113,20 @@ test('no rule for the picked selector: the edit creates one', async () => {
   assert.equal(resolved.selectedRule, undefined);
   assert.equal(model.editableRuleFor(resolved, 'color'), undefined);
   assert.equal(resolved.selectedRules.size, 0);
+});
+
+test('a navigator ::after layer shows the ::after styles while no ::after chip is picked', async () => {
+  // Deselecting the chip falls back to the element's own selector; on the
+  // ::after layer the panel still shows that box, not the element.
+  const css = ['.faq_summary { color: red; }', '.faq_summary::after { border-style: solid; }', '.faq_summary:hover::after { rotate: 45deg; }'].join('\n');
+  const matching = ['.faq_summary', '.faq_summary::after', '.faq_summary:hover::after'];
+  const layer = { source: 'embed', contribs: [], selectedIndex: undefined, pseudoLayer: '::after' };
+  const onLayer = await resolve(css, '.faq_summary', matching, layer);
+  assert.ok(onLayer.props.has('border-style'), 'the ::after rule shows');
+  assert.ok(!onLayer.props.has('color'), 'the element rule does not');
+  const element = await resolve(css, '.faq_summary', matching);
+  assert.ok(element.props.has('color'), 'without the layer, the element shows');
+  assert.ok(!element.props.has('border-style'));
+  const picked = await resolve(css, '.faq_summary::after', matching, { ...layer, pseudoLayer: '::before' });
+  assert.ok(picked.props.has('border-style'), 'a picked pseudo-element selector names its own target');
 });

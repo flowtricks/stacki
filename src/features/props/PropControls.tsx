@@ -414,11 +414,15 @@ export function MediaControl({ state }: { readonly state: PropControlState }) {
               : ['img', 'source', 'picture', 'image'].includes(nodeName)
                 ? 'image'
                 : 'asset';
+  // A video's src card shows its poster while the frame loads, or instead of
+  // one that never does; only a literal poster has a value to show.
+  const poster = /^src$/i.test(name) ? assetContext.siblingProps?.['poster'] : undefined;
   return (
     <div className="props-field">
       {label}
       <AssetField
         value={state.isSet ? valueText : undefined}
+        posterValue={poster?.type === 'string' ? poster.value : undefined}
         fallbackValue={renderedFallback ?? fallbackValue}
         mediaKind={mediaKind}
         // A non-media prop only lands here because its value is an asset

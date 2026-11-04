@@ -3,7 +3,6 @@
 // which of their styles holds clip-path, and following the default selection
 // (ClipPath.tsx).
 
-import { assert } from '../../../../shared/core/assert';
 import { useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 import type { StyleHandle, StyleTargetOptions, WebflowApi } from './webflowDesigner';
@@ -146,40 +145,18 @@ export function isCurrentRead(session: SelectionSession, read: SelectionRead): b
   return read.readSeq === session.readerRef.current.selectionReadSeqRef.current;
 }
 
-// No clip-path on the selection: forget the style and show none, or, embedded
-// in the Style panel, the value the panel shows (loadPanelValue).
+// No clip-path on the selection: forget the style and show none. Embedded in
+// the Style panel, the shape on screen stays: the panel's value was loaded.
 export function loadNoneIfChanged(reader: SelectionReader, { force }: { force: boolean }): void {
   const { styleRef } = reader;
   styleRef.current = undefined;
   showNoClipPathSource(reader);
-  if (loadPanelValue(reader)) {
-    return;
+  if (reader.onApplyRef.current !== undefined) {
+    return; // Embedded: the panel's value is loaded (ClipPath usePanelValue); a lookup that sees no CSS says nothing.
   }
   if (shouldReloadNone(reader, { force })) {
     reader.loadShapeFromSelection(NONE_SHAPE, 'none');
   }
-}
-
-// The Style panel's own value for the selector it edits (ClipPathProps.initialValue):
-// the tool's lookup reads native class styles only, so for a clip-path written in
-// CSS it finds none. Loaded once, when the editor opens, so a shape cleared in the
-// editor stays cleared. True when it was loaded.
-function loadPanelValue(reader: SelectionReader): boolean {
-  const value = reader.initialValue?.trim() ?? '';
-  if (value === '') {
-    return false;
-  }
-  if (value === 'none') {
-    return false;
-  }
-  // Loaded once: the editor's own state is the truth from here on. The reader
-  // is the editor object itself (ClipPath.tsx composes the props into it), so
-  // this marks the prop as used, not a caller's value.
-  Object.assign(reader, { initialValue: undefined });
-  const normalized = normalizeClipPathValue(value);
-  assert(normalized.css.length > 0, 'loadPanelValue: a clip-path value normalizes to CSS');
-  reader.loadShapeFromSelection(normalized.shape, normalized.css);
-  return true;
 }
 
 // No clip-path on the selection, which a later write can go to `style`.
@@ -187,8 +164,8 @@ export function loadNoneForWritableStyle(reader: SelectionReader, style: StyleHa
   const { styleRef } = reader;
   styleRef.current = style || undefined;
   showNoClipPathSource(reader);
-  if (loadPanelValue(reader)) {
-    return;
+  if (reader.onApplyRef.current !== undefined) {
+    return; // Embedded: the panel's value is loaded (ClipPath usePanelValue); a lookup that sees no CSS says nothing.
   }
   if (shouldReloadNone(reader, { force })) {
     reader.loadShapeFromSelection(NONE_SHAPE, 'none');

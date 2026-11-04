@@ -366,7 +366,6 @@ export function useContextCard(
   sourceDocumentHook: ReturnType<typeof useSourceDocument>,
   renameQuery: ReturnType<typeof useRenameQuery>,
   querySuggestionsHook: ReturnType<typeof useQuerySuggestions>,
-  styleContextsHook: ReturnType<typeof useStyleContexts>,
   resolvedHook: ReturnType<typeof useResolved>,
   selectorChipsHook: ReturnType<typeof useSelectorChips>,
   contextChange: ReturnType<typeof useContextChange>,
@@ -379,9 +378,8 @@ export function useContextCard(
   const { queryUses, sourceDocument } = sourceDocumentHook;
   const { onRenameQuery } = renameQuery;
   const { querySuggestions } = querySuggestionsHook;
-  const { styleContexts } = styleContextsHook;
   const { resolved } = resolvedHook;
-  const { contextInfos } = selectorChipsHook;
+  const { contextInfos, orderedContexts } = selectorChipsHook;
   const { onContextChange } = contextChange;
   const { onAddQuery } = addQuery;
   const { embedLabelByKey } = embedNavHook;
@@ -391,7 +389,7 @@ export function useContextCard(
     onToggleCssCode: () => setCssCodeOpen((open) => !open),
     model: model ?? EMPTY_RULE_MODEL,
     resolved: resolved ?? EMPTY_RESOLVED,
-    contexts: styleContexts,
+    contexts: orderedContexts,
     contextInfos,
     context,
     onContext: onContextChange,

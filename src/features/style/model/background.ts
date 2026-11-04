@@ -1,3 +1,4 @@
+import { assert } from '../../../../shared/core/assert';
 // Multi-layer `background` model. CSS backgrounds are parallel comma-separated
 // lists — background-image holds the layers (index 0 = the TOP layer), and
 // background-size / -position / -repeat / -attachment hold one entry per layer.
@@ -182,6 +183,46 @@ export function splitBackgroundShorthand(bg: string): BackgroundLonghands & { co
     repeat: join(repeats, 'repeat'),
     attachment: join(attachments, 'scroll'),
     color,
+  };
+}
+
+/** One layer as `background` shorthand text: its image, then position / size,
+ *  tiling and attachment where set. What the code view of a layer edits. */
+export function layerShorthand(layer: BgLayer): string {
+  const parts = [layer.image.trim()];
+  const position = layer.position.trim();
+  const size = layer.size.trim();
+  if (size !== '') {
+    parts.push(`${position !== '' ? position : '0 0'} / ${size}`);
+  } else if (position !== '') {
+    parts.push(position);
+  }
+  for (const part of [layer.repeat, layer.attachment]) {
+    if (part.trim() !== '') {
+      parts.push(part.trim());
+    }
+  }
+  const text = parts.join(' ');
+  assert(text.startsWith(parts[0] ?? ''), 'layerShorthand: the image leads');
+  return text;
+}
+
+/** The layer a shorthand text describes, or undefined when it names no image
+ *  (an empty or colour-only text is not a layer). */
+export function parseLayerShorthand(text: string): BgLayer | undefined {
+  if (splitTopLevelCommas(text).length !== 1) {
+    return undefined; // One layer per code block: a comma here would start a second.
+  }
+  const tokens = parseBackgroundLayer(text.trim(), { isLastLayer: false });
+  if (!tokens.image) {
+    return undefined;
+  }
+  return {
+    image: tokens.image,
+    size: tokens.sizeTokens.join(' '),
+    position: tokens.positionTokens.join(' '),
+    repeat: tokens.repeat,
+    attachment: tokens.attachment,
   };
 }
 

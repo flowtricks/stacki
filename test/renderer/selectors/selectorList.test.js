@@ -70,6 +70,36 @@ test('"can\u2019t tell" is grouped by reason, largest first', () => {
   );
 });
 
+test('a held row keeps its place in a tab it has left, and only while held', () => {
+  // `.is-open` was just locked from the Unused tab; it stays between its neighbours while it animates out.
+  const held = new Set(['b|0|0|0']);
+  assert.deepEqual(
+    selectorGroups(report, 'unused', '', held).flatMap((group) => group.entries.map((item) => item.selector)),
+    ['.ghost', '.is-open'],
+  );
+  assert.deepEqual(
+    selectorGroups(report, 'unused', 'ghost', held).flatMap((group) => group.entries.map((item) => item.selector)),
+    ['.ghost'],
+    'a held row still answers to the search',
+  );
+  assert.deepEqual(selectorGroups(report, 'unused', '', new Set()), selectorGroups(report, 'unused', ''), 'nothing held is the plain filter');
+  assert.deepEqual(
+    selectorGroups(report, 'unused', '', new Set(['gone|0|0|0'])).flatMap((group) => group.entries.map((item) => item.selector)),
+    ['.ghost'],
+    'a held id the report no longer has adds nothing',
+  );
+  // `.is-open` left "Can't tell" for Locked; it stays in the reason group it was under.
+  const reasons = unknownReasons(report, '', new Map([['b|0|0|0', 'pieces']]));
+  assert.deepEqual(
+    reasons.map((group) => [group.reason, group.entries.map((item) => item.selector)]),
+    [
+      ['pieces', ['.is-open', '.btn-large']],
+      ['x.astro loads a script', ['.w--current']],
+    ],
+  );
+  assert.deepEqual(unknownReasons(report, '', new Map()), unknownReasons(report, ''));
+});
+
 test('the names a verdict is about are found in the selector as written, escapes included', () => {
   const pieces = (selector, names) =>
     selectorSegments(selector, names)

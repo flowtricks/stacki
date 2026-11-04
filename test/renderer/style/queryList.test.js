@@ -259,15 +259,18 @@ const SHEET = `.card {
   check('a query the file uses is offered, though this element has nothing in it', has(/prefers-reduced-motion/), options.join(' | '));
   check('and so is a container query', has(/width > 40em|container/), options.join(' | '));
   check('adding a new one is still offered', has(/Add query/i), options.join(' | '));
-  // A query from another stylesheet is reachable too, but it isn't what's being
-  // worked on — the open file's own queries lead.
+  // A query from another stylesheet is reachable too. `.plain` has styles in
+  // it and in the nested reduced-motion block, and the queries the element has
+  // styles in lead (model/contextOrder.ts), whichever file holds them; among
+  // those, this file's own come first, and the query only the file uses follows.
   check('a query from another stylesheet is offered as well', has(/width > 90em/), options.join(' | '));
   const rowAt = (re) => options.findIndex((option) => re.test(option));
   check(
-    "this file's queries come before another file's",
-    rowAt(/width > 40em/) < rowAt(/width > 90em/) && rowAt(/prefers-reduced-motion/) < rowAt(/width > 90em/),
+    "the element's styled queries come before one it has nothing in",
+    rowAt(/prefers-reduced-motion/) < rowAt(/width > 40em/) && rowAt(/width > 90em/) < rowAt(/width > 40em/),
     options.join(' | '),
   );
+  check("and among them this file's come first", rowAt(/prefers-reduced-motion/) < rowAt(/width > 90em/), options.join(' | '));
   check('and Base still leads', rowAt(/^Base/) === 0, options.join(' | '));
 
   // ── Editing one ───────────────────────────────────────────────────────────

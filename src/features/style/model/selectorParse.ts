@@ -394,6 +394,16 @@ export class SelectorBuilder {
       const inner = compileFunctionalArg(node);
       this.current.negations.push(...inner);
       this.addSpecificity(mostSpecific(inner));
+    } else if (value === ':global') {
+      // Astro's `:global(.button)` is `.button` with the file's scope left off
+      // (the opening componentStyles.ts writes so a page's rules reach markup
+      // it renders through a component): it matches what its argument matches,
+      // at its argument's weight.
+      const inner = compileFunctionalArg(node);
+      if (inner.length) {
+        this.current.requireAny.push(inner);
+      }
+      this.addSpecificity(mostSpecific(inner));
     } else if (value === ':is' || value === ':matches' || value === ':where') {
       // :is()/:where() are static structural matchers, NOT state pseudo-
       // classes — the element must match one of their arguments. :where

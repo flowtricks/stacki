@@ -67,6 +67,10 @@ export type HostState = {
   /** Whether the open editable file is a page or a component. Style nodes have
    *  the same model shape in both, so their provenance must be carried separately. */
   openFileKind: 'page' | 'component' | undefined;
+  /** While a component is open, the page the canvas shows it on. Selectors of
+   *  that page's scoped `<style>` written `:global(…)` reach the component's
+   *  markup (src/app/model/componentStyles.ts), so they are in its cascade. */
+  contextPagePath: string | undefined;
   /**
    * Bumped by the app whenever undo or redo runs. The panel reads its rules
    * from files and from the page model, and an undo rewrites both behind its
@@ -143,6 +147,7 @@ const state: HostState = {
   astroFiles: [],
   openFilePath: undefined,
   openFileKind: undefined,
+  contextPagePath: undefined,
   renderedClasses: [],
   projectClasses: [],
   writeStyleNode: undefined,

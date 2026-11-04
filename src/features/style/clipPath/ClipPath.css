@@ -902,3 +902,9 @@
   display: flex;
   flex-direction: column;
 }
+/* The code takes the inset fill, not the popover's own surface grey, so it
+   reads as a field. Three classes: the editor's theme sets its background with
+   two, and is injected after this sheet. */
+.clip-path_code.code-editor .cm-editor {
+  background-color: var(--color-bg-inset);
+}

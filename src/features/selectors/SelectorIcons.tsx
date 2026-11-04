@@ -40,7 +40,10 @@ export function SweepIcon({ size = 16 }: IconProps) {
   );
 }
 
-export function LockIcon({ size = 14 }: IconProps) {
+// One padlock with two states, so a change between them can animate: the
+// shackle lifts and swings open about its left leg (selectors.css), rather
+// than one icon being swapped for another.
+export function LockIcon({ size = 14, open }: IconProps & { readonly open: boolean }) {
   return (
     <svg
       width={size}
@@ -52,28 +55,10 @@ export function LockIcon({ size = 14 }: IconProps) {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
+      className={`selectors-lock-icon ${open ? 'is-open' : ''}`}
     >
       <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" />
-      <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
-    </svg>
-  );
-}
-
-export function UnlockIcon({ size = 14 }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.3"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" />
-      <path d="M5.5 7V5a2.5 2.5 0 0 1 4.8-1" />
+      <path className="selectors-shackle" d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
     </svg>
   );
 }

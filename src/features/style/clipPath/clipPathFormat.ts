@@ -301,10 +301,16 @@ export function previewAxisSize(axis: 'x' | 'y', size: CanvasSize) {
   return axis === 'x' ? size.width : size.height;
 }
 
+// Absolute lengths are drawn at their real size: a CSS pixel is a screen pixel
+// in the preview, a rem the 16px root font size. The preview used to stand for
+// a 1600px element and make a rem 1% of the box, so `round 2rem` drew 7px
+// corners and read as square: the shape has to look like what it will be.
+const PREVIEW_ROOT_FONT_PX = 16;
+
 export function previewUnitPx(unit: string, axis: 'x' | 'y', size: CanvasSize) {
   const axisSize = previewAxisSize(axis, size);
   const normalized = unit.toLowerCase();
-  const pxUnit = axisSize / 1600;
+  const pxUnit = 1;
 
   if (normalized === '%') {
     return axisSize / 100;
@@ -312,11 +318,14 @@ export function previewUnitPx(unit: string, axis: 'x' | 'y', size: CanvasSize) {
   if (normalized === 'px') {
     return pxUnit;
   }
-  if (normalized === 'em' || normalized === 'rem' || normalized === 'lh' || normalized === 'rlh') {
-    return axisSize / 100;
+  if (normalized === 'em' || normalized === 'rem') {
+    return PREVIEW_ROOT_FONT_PX;
+  }
+  if (normalized === 'lh' || normalized === 'rlh') {
+    return PREVIEW_ROOT_FONT_PX * 1.5; // A normal line height.
   }
   if (normalized === 'ch' || normalized === 'ex') {
-    return axisSize / 200;
+    return PREVIEW_ROOT_FONT_PX / 2;
   }
   if (normalized === 'vw' || normalized === 'svw' || normalized === 'lvw' || normalized === 'dvw') {
     return size.width / 100;

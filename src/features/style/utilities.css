@@ -921,8 +921,10 @@ body.is-scrubbing * {
   height: 12px;
 }
 /* Anchored to the trigger's left with a fixed width, capped to the panel width on a
-   narrow sidebar (the JS clamp then nudges it away from the edge). */
+   narrow sidebar (the JS clamp then nudges it away from the edge). Border-box so
+   the clamp's pixel cap is the menu's outer width, padding included. */
 .u-select.is-link .u-select-list {
+  box-sizing: border-box;
   left: 0;
   right: auto;
   width: 20rem;
@@ -1143,13 +1145,20 @@ body.is-scrubbing * {
 .u-select-option.is-active {
   background: var(--color-bg-hover);
 }
-/* Selection is shown by the leading checkmark (Webflow-style), not a fill — so a
-   selected row only takes a background when it's also the active/hover row. */
+/* Selection is shown by the trailing checkmark, not a fill — so a selected row
+   only takes a background when it's also the active/hover row. */
 .u-select-option.is-active.is-selected {
   background: var(--color-bg-hover);
 }
-/* Leading checkmark gutter: a fixed column so labels stay aligned whether or not the
-   row is selected; the checkmark shows only on the selected row. */
+/* The label takes the row's free space, so whatever follows it (dot, action,
+   check) is pinned to the right end. */
+.u-select-option > .u-select-label {
+  flex: 1 1 auto;
+}
+/* Trailing checkmark column: the check ends the row so icons align down the left
+   edge (a rule across the app). The column is held open on every row so trailing
+   dots line up whether or not the row is selected; the check shows only on the
+   selected row. */
 .u-select-check {
   flex: 0 0 auto;
   width: 16px;
@@ -1159,10 +1168,10 @@ body.is-scrubbing * {
   justify-content: center;
   color: var(--color-text-primary);
 }
-/* Nested under a group subheader — the checkmark gutter already offsets options from
-   the flush-left heading, so only a small extra indent is needed. */
+/* Nested under a group subheader: indented by a checkmark column plus a gap, the
+   offset the leading check gave these rows before it moved to the end. */
 .u-select-option.is-indented {
-  padding-left: var(--space-1);
+  padding-left: calc(var(--space-1) + 16px + var(--space-2));
 }
 
 /* Non-selectable group subheader (e.g. a component grouping its embeds). */

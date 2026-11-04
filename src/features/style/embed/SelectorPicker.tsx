@@ -2,6 +2,7 @@ import Popup from '../../../ui/Popup';
 // The selector well: the chips a selection is styled by, picking and adding
 // one, and filtering global selectors (EmbedEditor.tsx).
 
+import { loadSelectorFilters, saveSelectorFilters, type SelectorFilters } from '../model/toolPreferences';
 import { parentClassPrefix } from '../model/classPrefix';
 import { getHost } from '../model/host';
 import { assert } from '../../../../shared/core/assert';
@@ -255,7 +256,7 @@ export function wellMouseDown(
 
 export type SelectorView = ReturnType<typeof useSelectorView>;
 
-// Broad selectors are folded away behind category toggles. A selector the user picked
+// Broad selectors can be folded away behind category toggles (shown by default). A selector the user picked
 // stays visible so the editor below always has an understandable target. The texts
 // shown are reported to `onVisibleSelectorsChange`.
 export function useSelectorView({
@@ -266,8 +267,14 @@ export function useSelectorView({
 }: Pick<SelectorPickerProps, 'selectors' | 'activeSelector' | 'activePicked'> & {
   onVisibleSelectorsChange: SelectorPickerProps['onVisibleSelectorsChange'] | undefined;
 }) {
-  const [showGlobals, setShowGlobals] = useState(false);
-  const [showInherited, setShowInherited] = useState(false);
+  // Kept for the person, across projects and launches (toolPreferences.ts).
+  const [filters, setFilters] = useState(loadSelectorFilters);
+  const updateFilters = (next: SelectorFilters): void => {
+    setFilters(next);
+    saveSelectorFilters(next);
+  };
+  const showGlobals = !filters.hideGlobals;
+  const showInherited = !filters.hideInherited;
   const classified = useMemo(() => selectors.map(classifySelector), [selectors]);
   const globals = useMemo(() => classified.filter((entry) => entry.global), [classified]);
   const inherited = useMemo(() => classified.filter((entry) => entry.inherited), [classified]);
@@ -289,10 +296,9 @@ export function useSelectorView({
     globals,
     inherited,
     shownSelectors,
-    showGlobals,
-    setShowGlobals,
-    showInherited,
-    setShowInherited,
+    filters,
+    setHideGlobals: (hideGlobals: boolean) => updateFilters({ ...filters, hideGlobals }),
+    setHideInherited: (hideInherited: boolean) => updateFilters({ ...filters, hideInherited }),
   };
 }
 
@@ -526,11 +532,11 @@ export function SelectorFilterToggles({ view, busy }: { view: SelectorView; busy
       >
         <input
           type="checkbox"
-          checked={view.showGlobals && globals.length > 0}
+          checked={view.filters.hideGlobals}
           disabled={busy || !globals.length}
-          onChange={(event) => view.setShowGlobals(event.target.checked)}
+          onChange={(event) => view.setHideGlobals(event.target.checked)}
         />
-        <span>Show global selectors ({globals.length})</span>
+        <span>Hide global selectors ({globals.length})</span>
       </label>
       <label
         className={'embed-editor_check embed-editor_selector-filter ' + (inherited.length ? '' : 'is-empty')}
@@ -538,11 +544,11 @@ export function SelectorFilterToggles({ view, busy }: { view: SelectorView; busy
       >
         <input
           type="checkbox"
-          checked={view.showInherited && inherited.length > 0}
+          checked={view.filters.hideInherited}
           disabled={busy || !inherited.length}
-          onChange={(event) => view.setShowInherited(event.target.checked)}
+          onChange={(event) => view.setHideInherited(event.target.checked)}
         />
-        <span>Show inherited styles ({inherited.length})</span>
+        <span>Hide inherited styles ({inherited.length})</span>
       </label>
     </>
   );

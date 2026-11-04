@@ -15,11 +15,6 @@ import { type Props, EffLabel } from './EffectsKit';
 // and writes `clip-path` to its native class style itself — no props).
 export const ClipPathEditor = lazy(() => import('./clipPath/ClipPath'));
 
-export const ClipCloseIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-  </svg>
-);
 export const ClipEditIcon = () => (
   <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
     <path d="M10.5 2.5 13.5 5.5 6 13l-3.5.5L3 10l7.5-7.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
@@ -129,9 +124,7 @@ export function ClipPathModal({ props, anchor, onClose }: { props: Props; anchor
           {/* Portal target for the editor's shortcut-help control (it renders nothing
             when this is absent). Provided here since it's no longer a hosted tool. */}
           <div id="clip-path_header-shortcuts" />
-          <button type="button" className="embed-editor_bg-modal-close" onClick={onClose} aria-label="Close">
-            <ClipCloseIcon />
-          </button>
+          {/* No close button: the popover closes on a click outside it or Escape, as Transform's does. */}
         </div>
       </div>
       <div className="embed-editor_clip-modal-body">

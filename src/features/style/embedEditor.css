@@ -1152,11 +1152,13 @@
   flex-direction: column;
 }
 .embed-editor_bg-editor > .embed-editor_size-row,
-.embed-editor_bg-editor > .embed-editor_grad {
+.embed-editor_bg-editor > .embed-editor_grad,
+.embed-editor_bg-editor > .embed-editor_gradient-code {
   padding: var(--space-3) var(--space-4);
 }
 .embed-editor_bg-editor > .embed-editor_size-row:not(:last-child),
-.embed-editor_bg-editor > .embed-editor_grad:not(:last-child) {
+.embed-editor_bg-editor > .embed-editor_grad:not(:last-child),
+.embed-editor_bg-editor > .embed-editor_gradient-code:not(:last-child) {
   border-bottom: var(--border-width-thin) solid var(--color-border-default);
 }
 
@@ -1288,6 +1290,38 @@
     0 5px,
     5px -5px,
     -5px 0;
+}
+/* A gradient edited as code (GradientCode.tsx): the layer painted at its own
+   size and tiling over the same checkerboard as the stops bar, so a pattern
+   with transparent parts reads as one. */
+.embed-editor_gradient-code-preview {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #bdbdbd 25%, transparent 25%), linear-gradient(-45deg, #bdbdbd 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #bdbdbd 75%), linear-gradient(-45deg, transparent 75%, #bdbdbd 75%);
+  background-size: 10px 10px;
+  background-position:
+    0 0,
+    0 5px,
+    5px -5px,
+    -5px 0;
+}
+.embed-editor_gradient-code-preview > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* The whole layer as one block of code, full width under the preview, padded
+   like the editor's other rows (.embed-editor_bg-editor > …). */
+.embed-editor_gradient-code {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
 }
 /* The gradient preview, painted over the checkerboard and under the handles. */
 .embed-editor_grad-bar::before {
@@ -2181,6 +2215,7 @@
    this textarea when there are variables to draw as chips, so the two have to
    agree on size, spacing and line height. */
 .embed-editor_grid-expression,
+.embed-editor_gradient-code-field,
 .embed-editor_varconnect.is-multiline.is-token > .embed-editor_varconnect-editor {
   width: 100%;
   min-height: 76px;
@@ -2194,7 +2229,8 @@
   line-height: 1.6;
   resize: vertical;
 }
-.embed-editor_grid-expression:focus-visible {
+.embed-editor_grid-expression:focus-visible,
+.embed-editor_gradient-code-field:focus-visible {
   outline: none;
   box-shadow: 0 0 0 var(--border-width-default) var(--color-border-focus);
 }

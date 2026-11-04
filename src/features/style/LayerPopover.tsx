@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import Popup from '../../ui/Popup';
 import type { ReactNode, RefObject } from 'react';
 import { panelSpan } from './model/panelBox';
+import { assert } from '../../../shared/core/assert';
 
 // A layer editor anchored directly below the row it edits (flips above when there's no
 // room to drop down), spanning the panel's full width — measured, since the panel is a
@@ -68,20 +69,42 @@ export default function LayerPopover({
 
 // The popover's top edge: directly below the anchor row, or flipped above it
 // when there is no room to drop down. Undefined until the first measurement.
+// Measured again whenever the popover's size changes: an editor that loads
+// lazily (clip path) is a one-line "Loading" box at mount, which fits below,
+// and kept that place once the full editor arrived and ran off the bottom.
 function usePopoverTop(ref: RefObject<HTMLDivElement>, anchorElement: HTMLElement): number | undefined {
   const [top, setTop] = useState<number | undefined>(undefined);
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) {
-      return;
+      return undefined;
     }
-    const anchorRect = anchorElement.getBoundingClientRect();
-    const gap = 6;
-    // Rendered height (the zoomed content already collapsed it).
-    const height = element.offsetHeight;
-    const below = anchorRect.bottom + gap + height <= window.innerHeight;
-    setTop(below ? anchorRect.bottom + gap : Math.max(gap, anchorRect.top - gap - height));
+    const place = (): void => setTop(popoverTopFor(anchorElement.getBoundingClientRect(), element.offsetHeight, window.innerHeight));
+    place();
+    const resize = new ResizeObserver(place);
+    resize.observe(element);
+    return () => resize.disconnect();
   }, [ref, anchorElement]);
+  return top;
+}
+
+const POPOVER_GAP_PX = 6;
+
+/** Below the anchor when the popover fits there, else above it; with room for
+ *  neither, as low as the window lets it sit whole (taller than the window, it
+ *  starts at the top and scrolls), so none of it is out of reach. */
+export function popoverTopFor(anchor: Pick<DOMRect, 'top' | 'bottom'>, heightPx: number, windowHeightPx: number): number {
+  assert(heightPx >= 0, 'popoverTopFor: a height is not negative');
+  const roomBelowPx = windowHeightPx - anchor.bottom - POPOVER_GAP_PX;
+  const roomAbovePx = anchor.top - POPOVER_GAP_PX;
+  if (heightPx <= roomBelowPx) {
+    return anchor.bottom + POPOVER_GAP_PX;
+  }
+  if (heightPx <= roomAbovePx) {
+    return anchor.top - POPOVER_GAP_PX - heightPx;
+  }
+  const top = Math.max(POPOVER_GAP_PX, windowHeightPx - POPOVER_GAP_PX - heightPx);
+  assert(top >= POPOVER_GAP_PX, 'popoverTopFor: the popover starts inside the window');
   return top;
 }
 

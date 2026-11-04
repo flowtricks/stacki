@@ -59,7 +59,12 @@ export type EmbedSource = {
   instance?: AnyElement;
   /** Where the CSS lives — the panel writes back through this. `astro` is a
    *  component file whose `<style is:global>` blocks are edited in place. */
-  origin: { kind: 'file'; path: string } | { kind: 'node'; nodeId: string; filePath: string | undefined } | { kind: 'astro'; path: string };
+  origin:
+    | { kind: 'file'; path: string }
+    | { kind: 'node'; nodeId: string; filePath: string | undefined }
+    /** `reach: 'page'`: the page a component is open on, whose scoped blocks
+     *  reach the component through their `:global()` selectors only. */
+    | { kind: 'astro'; path: string; reach?: 'page' };
 };
 
 /** One source's CSS, parsed into live regions. Its code advances only through its own
@@ -175,19 +180,40 @@ function styleSources(): EmbedSource[] {
   // empty panel even though the element is clearly styled on the canvas. The
   // open file is skipped: its own <style> blocks come from the model below,
   // and reading it twice would let the two copies write over each other.
+  const contextPage = host.openFileKind === 'component' && host.contextPagePath !== host.openFilePath ? host.contextPagePath : undefined;
+  let contextPageListed = false;
   for (const file of host.astroFiles) {
     if (host.openFilePath && file.path === host.openFilePath) {
       continue;
     }
+    const isContextPage = file.path === contextPage;
+    contextPageListed ||= isContextPage;
     out.push({
       key: `astro:${file.path}`,
       label: file.name,
       classNames: [],
-      fromComponent: true,
-      componentName: file.name.replace(/\.astro$/i, ''),
+      fromComponent: !isContextPage,
+      componentName: isContextPage ? undefined : file.name.replace(/\.astro$/i, ''),
       order: order++,
       element: file.path,
-      origin: { kind: 'astro', path: file.path },
+      origin: isContextPage ? { kind: 'astro', path: file.path, reach: 'page' } : { kind: 'astro', path: file.path },
+    });
+  }
+
+  // The page a component is open on: its scoped `<style>` reaches the
+  // component through the selectors written `:global(…)` (componentStyles.ts
+  // opens them when a component is made from the page's markup), and an edit
+  // to one of those rules is an edit to the page's own rule.
+  if (contextPage !== undefined && !contextPageListed) {
+    out.push({
+      key: `astro:${contextPage}`,
+      label: contextPage.split(/[\\/]/).pop() ?? contextPage,
+      classNames: [],
+      fromComponent: false,
+      componentName: undefined,
+      order: order++,
+      element: contextPage,
+      origin: { kind: 'astro', path: contextPage, reach: 'page' },
     });
   }
 
@@ -268,7 +294,8 @@ function documentForSource(source: EmbedSource, code: string): EmbedDocument {
   // an element in another component.
   if (source.origin.kind === 'astro') {
     const { segments, regions } = splitEmbed(code);
-    const parsed = regions.map((region) => (isGlobalRegion(region) ? parseRegion(region) : region));
+    const reachesPage = source.origin.reach === 'page';
+    const parsed = regions.map((region) => (isGlobalRegion(region) || reachesPage ? parseRegion(region) : region));
     return new EmbedDocument(source, code, segments, parsed);
   }
   const region = parseRegion({ start: 0, end: code.length, css: code, root: undefined });
@@ -431,24 +458,32 @@ export function rebuildRules(docs: EmbedDocument[]): ParsedRule[] {
   const ordered = [...docs].sort((left, right) => left.source.order - right.source.order);
 
   for (const embedDocument of ordered) {
+    const origin = embedDocument.source.origin;
+    const reachesPage = origin.kind === 'astro' && origin.reach === 'page';
     embedDocument.regions.forEach((region, regionIndex) => {
       if (!region.root) {
         return;
       }
-      rules.push(
-        ...collectRules(region, {
-          embedKey: embedDocument.source.key,
-          embedLabel: embedDocument.source.label,
-          fromComponent: embedDocument.source.fromComponent,
-          componentName: embedDocument.source.componentName,
-          regionIndex,
-          idSeed: embedDocument.source.key,
-          order,
-        }),
-      );
+      const collected = collectRules(region, {
+        embedKey: embedDocument.source.key,
+        embedLabel: embedDocument.source.label,
+        fromComponent: embedDocument.source.fromComponent,
+        componentName: embedDocument.source.componentName,
+        regionIndex,
+        idSeed: embedDocument.source.key,
+        order,
+      });
+      // A scoped block of the page reaches the open component only through
+      // its `:global()` selectors; its other rules style the page alone.
+      const scopedToPage = reachesPage && !isGlobalRegion(region);
+      rules.push(...(scopedToPage ? collected.filter(reachesComponent) : collected));
     });
   }
   return rules;
+}
+
+function reachesComponent(rule: ParsedRule): boolean {
+  return rule.selectors.some((selector) => selector.text.includes(':global('));
 }
 
 // Selecting the <style> node a rule lives in; a stylesheet isn't in the tree,
@@ -457,7 +492,7 @@ export async function navigateToEmbed(source: EmbedSource, _pageInstances?: unkn
   if (source.origin.kind === 'astro') {
     return {
       ok: false,
-      error: `These styles live in ${source.label} — open that component to see them in the tree.`,
+      error: `These styles live in ${source.label} — open that ${source.origin.reach === 'page' ? 'page' : 'component'} to see them in the tree.`,
     };
   }
   if (source.origin.kind !== 'node') {

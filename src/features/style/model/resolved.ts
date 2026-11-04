@@ -79,6 +79,10 @@ export type NativeResolveInput = {
    *  "set here" (blue) only at this tier; a lower tier means it's inherited from a
    *  wider breakpoint (orange). Undefined → don't gate (Base / non-breakpoint). */
   currentTier?: number;
+  /** The ::before or ::after layer picked in the navigator (`::after`). With no
+   *  selector picked, the panel shows that box's styles, not the element's: the
+   *  pseudo-element otherwise comes only from the active selector. */
+  pseudoLayer?: string | undefined;
 };
 
 export type Contributor = {
@@ -410,7 +414,11 @@ export function resolveStyle(model: RuleModel, context: ContextKey, activeSelect
     context,
     activeSelector,
     state: stateOf(activeCanon.pseudoClasses),
-    activePseudo: activeCanon.pseudoElement,
+    // A picked pseudo-element selector names its own target. Otherwise, on a
+    // navigator ::after layer, that box is the target: with no chip picked the
+    // active selector falls back to the element's own (`.faq_summary`), whose
+    // view showed the element's styles and none of the ::after's.
+    activePseudo: activeCanon.pseudoElement || (native?.pseudoLayer ?? ''),
   };
 
   const byProp = new Map<string, Contributor[]>();

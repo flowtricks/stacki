@@ -10,6 +10,7 @@ import SegmentedControl, { type SegmentedOption } from './components/SegmentedCo
 import useScrub from './components/useScrub';
 import LayerList from './LayerList';
 import LayerPopover from './LayerPopover';
+import VariableConnect from './VariableConnect';
 import {
   parseTransforms,
   serializeTransforms,
@@ -192,16 +193,30 @@ export function AxisInput(props: AxisInputProps) {
           onInput={(slider) => onLive(fmt(slider))}
           onCommit={(slider) => onCommit(fmt(slider))}
         />
-        <input
-          {...field.scrub.input}
-          className="u-input embed-editor_size-input embed-editor_shadow-num"
-          value={draft}
-          {...field.handlers}
+        {/* The same wrapper every single-value field in the panel uses: a
+            var() in the axis reads as a chip, a calc() around one tokenises
+            like the custom value editor, and the dot picks or swaps the
+            variable. Without it the axis was the one field that showed
+            `var(--_offset)` as bare text. */}
+        <VariableConnect
+          code
+          ariaLabel={`Connect ${label} to a variable`}
           disabled={busy}
-          spellCheck={false}
-          placeholder={placeholder}
-          aria-label={label}
-        />
+          className="is-fill"
+          prop="transform"
+          onPick={(binding) => onCommit(binding)}
+        >
+          <input
+            {...field.scrub.input}
+            className="u-input embed-editor_size-input embed-editor_shadow-num"
+            value={draft}
+            {...field.handlers}
+            disabled={busy}
+            spellCheck={false}
+            placeholder={placeholder}
+            aria-label={label}
+          />
+        </VariableConnect>
       </div>
     </div>
   );

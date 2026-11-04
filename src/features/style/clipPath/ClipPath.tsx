@@ -1,3 +1,6 @@
+import { useLayoutEffect, useRef } from 'react';
+import { assert } from '../../../../shared/core/assert';
+import { isNoneClipPathValue, normalizeClipPathValue } from './svgContours';
 import {
   type ClipPathProps,
   useShapeState,
@@ -81,7 +84,7 @@ function useClipPathEditorPart1(editor: ClipPathProps) {
   const stage3 = Object.assign(stage2, useShapeFitState());
   const stage4 = Object.assign(stage3, useStyleSourceState());
   const stage5 = Object.assign(stage4, useCanvasRefs());
-  const stage6 = Object.assign(stage5, useWriteRefs());
+  const stage6 = Object.assign(stage5, useWriteRefs(editor.onApply === undefined ? undefined : 'none'));
   const stage7 = Object.assign(stage6, useSelectionRefs());
   const stage8 = Object.assign(stage7, useShapeRefs(stage7));
   const stage9 = Object.assign(stage8, useCodeHighlights(stage8));
@@ -151,5 +154,29 @@ function useClipPathEditorPart3(editor: EditorAfterPointEditActions) {
 export default function ClipPath(props: ClipPathProps = {}) {
   // A copy: the composers widen the object they are given into the editor.
   const editor = useClipPathEditorPart3(useClipPathEditorPart2(useClipPathEditorPart1({ ...props })));
+  usePanelValue(editor);
   return <ClipPathView editor={editor} />;
+}
+
+// Embedded in the Style panel, the editor opens on the panel's value for its
+// selector (ClipPathProps.initialValue), loaded as a selection read loads one,
+// before the first paint and before any write could run. The tool's own read
+// sees native class styles only, so for CSS it never finds this value.
+function usePanelValue(editor: ReturnType<typeof useClipPathEditorPart3>): void {
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
+  useLayoutEffect(() => {
+    const current = editorRef.current;
+    const value = current.initialValue?.trim() ?? '';
+    if (value === '') {
+      return;
+    }
+    if (isNoneClipPathValue(value)) {
+      return;
+    }
+    const normalized = normalizeClipPathValue(value);
+    assert(normalized.css !== 'none', 'usePanelValue: a clip-path other than none loads a shape');
+    current.loadShapeFromSelection(normalized.shape, normalized.css);
+    assert(current.lastWrittenRef.current === normalized.css, 'usePanelValue: the loaded value counts as written');
+  }, []);
 }

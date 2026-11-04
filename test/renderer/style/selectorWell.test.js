@@ -93,6 +93,15 @@ const contrastRatio = (first, second) => {
     disconnect() {}
   };
   global.ResizeObserver = dom.window.ResizeObserver;
+  // The well's Hide toggles are the person's preference, kept in storage across
+  // projects (toolPreferences.ts). Off by default; this person has both on, so
+  // the folding below starts from hidden, and each toggle is remembered.
+  const stored = new Map([['stacki.styleEditor.selectorFilters', JSON.stringify({ hideGlobals: true, hideInherited: true })]]);
+  global.localStorage = {
+    getItem: (key) => stored.get(key),
+    setItem: (key, value) => stored.set(key, String(value)),
+    removeItem: (key) => stored.delete(key),
+  };
   global.MutationObserver = dom.window.MutationObserver;
   global.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
   global.cancelAnimationFrame = dom.window.cancelAnimationFrame.bind(dom.window);

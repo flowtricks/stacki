@@ -940,7 +940,7 @@
      "fillRule": "evenodd"
     }
    },
-   "preview": "polygon(evenodd, 0.625% 0.625%, 90% 0.625%, 50% 90%)",
+   "preview": "polygon(evenodd, 5% 10%, 90% 10%, 50% 90%)",
    "previewNoSize": "polygon(evenodd, 10px 10px, 90% 10px, 50% 90%)",
    "highlights": [
     {
@@ -1926,7 +1926,7 @@
      }
     }
    },
-   "preview": "circle(2.5% at 30% 70%)",
+   "preview": "circle(20% at 30% 70%)",
    "previewNoSize": "circle(40px at 30% 70%)",
    "highlights": [
     {
@@ -2469,7 +2469,7 @@
      }
     }
    },
-   "preview": "ellipse(25% 40% at 1.25% 1.875%)",
+   "preview": "ellipse(25% 40% at 10% 30%)",
    "previewNoSize": "ellipse(25% 40% at 20px 30px)",
    "highlights": [
     {
@@ -3246,7 +3246,7 @@
      }
     }
    },
-   "preview": "inset(0.625% 20% 0.625% 20%)",
+   "preview": "inset(10% 20% 10% 20%)",
    "previewNoSize": "inset(10px 20% 10px 20%)",
    "highlights": [
     {
@@ -3449,7 +3449,7 @@
      }
     }
    },
-   "preview": "inset(5% 10% 15% 20% round 0.5% 0.5% 0.5% 0.5%)",
+   "preview": "inset(5% 10% 15% 20% round 4% 4% 4% 4% / 8% 8% 8% 8%)",
    "previewNoSize": "inset(5% 10% 15% 20% round 8px)",
    "highlights": [
     {
@@ -3768,7 +3768,7 @@
      }
     }
    },
-   "preview": "inset(0% 0% 0% 0% round 10% 20% 30% 40% / 0.3125% 0.375% 0.3125% 0.375%)",
+   "preview": "inset(0% 0% 0% 0% round 10% 20% 30% 40% / 5% 6% 5% 6%)",
    "previewNoSize": "inset(0% 0% 0% 0% round 10% 20% 30% 40% / 5px 6px)",
    "highlights": [
     {
@@ -3967,7 +3967,7 @@
     "value": "inset(calc(10% + 4px) 0)",
     "preset": "Inset"
    },
-   "preview": "inset(calc(10% + 0.25%) 0 calc(10% + 0.25%) 0)",
+   "preview": "inset(calc(10% + 4%) 0 calc(10% + 4%) 0)",
    "previewNoSize": "inset(calc(10% + 4px) 0)",
    "highlights": [],
    "tokens": [],
@@ -4000,7 +4000,7 @@
     "value": "inset(var(--gap, 10px))",
     "preset": "Inset"
    },
-   "preview": "inset(var(--gap, 0.625%) var(--gap, 0.625%) var(--gap, 0.625%) var(--gap, 0.625%))",
+   "preview": "inset(var(--gap, 10%) var(--gap, 5%) var(--gap, 10%) var(--gap, 5%))",
    "previewNoSize": "inset(var(--gap, 10px))",
    "highlights": [],
    "tokens": [],

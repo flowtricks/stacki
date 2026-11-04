@@ -13,12 +13,13 @@ import { usePanelData } from '../../lib/usePanelData';
 import { onPropertyFilesChanged, onVariablesChanged } from '../../ipc/editorEnvironment';
 import { SearchIcon, TrashIcon } from '../../ui/Icons';
 import { verdictNames, type SelectorEntry, type SelectorReport } from '../../../shared/properties/selectorUsage';
-import { LockIcon, SweepIcon, UnlockIcon } from './SelectorIcons';
+import { LockIcon, SweepIcon } from './SelectorIcons';
 import {
   exactPatterns,
   firstRows,
   initialFilter,
   LIST_PAGE_ROWS,
+  matchesFilter,
   selectorCounts,
   selectorGroups,
   selectorSegments,
@@ -37,6 +38,8 @@ import {
   updateKeepList,
   type StoredKeepList,
 } from './selectorsBridge';
+import { heldReasons, lockShownClosed, type RowTransition, type RowTransitions } from './rowTransitions';
+import { useRowTransitions, type RowTransitionActions } from './useRowTransitions';
 import './selectors.css';
 
 export interface SelectorsPanelProps {
@@ -119,8 +122,18 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
     void removeEntries(unused.filter((other) => other.rel === entry.rel && other.selector === entry.selector));
   };
 
+  // A row whose lock is clicked stays through the change, then collapses if
+  // its new verdict has left the open tab (rowTransitions.ts).
+  const belongs = (id: string): boolean => {
+    const entry = report?.entries.find((other) => other.id === id);
+    return entry === undefined ? true : matchesFilter(entry.verdict.kind, filter);
+  };
+  const transitions = useRowTransitions(filter, belongs);
   const toggleKeep = (entry: SelectorEntry): void => {
-    void keep.toggle(entry).then(refresh);
+    // The tooltip names the row's state, which is about to change.
+    hover.leave();
+    const reason = entry.verdict.kind === 'unknown' ? entry.verdict.reason : undefined;
+    transitions.run(entry, reason, () => keep.toggle(entry).then(refresh));
   };
 
   if (confirming && report !== undefined) {
@@ -170,17 +183,19 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
                 limit={limit}
                 onMore={more}
                 keepList={keep.stored}
+                transitions={transitions}
                 onToggleKeep={toggleKeep}
                 hover={hover}
                 onRemove={busy ? undefined : removeOne}
               />
             ) : (
               <SelectorGroups
-                groups={selectorGroups(report, filter, search)}
+                groups={selectorGroups(report, filter, search, new Set(transitions.rows.keys()))}
                 limit={limit}
                 onMore={more}
                 empty={emptyText(report, filter)}
                 keepList={keep.stored}
+                transitions={transitions}
                 onToggleKeep={toggleKeep}
                 hover={hover}
                 onRemove={busy ? undefined : removeOne}
@@ -249,7 +264,8 @@ function SelectorTip({ tip, onClose }: { readonly tip: HoverTip | undefined; rea
       open
       dismissible={false}
       onClose={onClose}
-      className="popup-tooltip selectors-tip"
+      // The row's state too, so the names it tints match the row's colour (a locked one is blue).
+      className={`popup-tooltip selectors-tip is-${entry.verdict.kind}`}
       style={{ position: 'fixed', left: tip.left, top: tip.top }}
     >
       <SelectorText entry={entry} className="selectors-tip-selector" />
@@ -415,6 +431,8 @@ function emptyText(report: SelectorReport, filter: SelectorFilter): string {
 
 interface RowActions {
   readonly keepList: StoredKeepList | undefined;
+  /** The rows animating after a lock click; undefined where rows have no lock. */
+  readonly transitions: RowTransitionActions | undefined;
   readonly onToggleKeep: (entry: SelectorEntry) => void;
   readonly hover: HoverActions | undefined;
   /** Removes an unused row's selector; undefined where rows cannot be removed. */
@@ -432,6 +450,7 @@ function SelectorGroups({
   onMore,
   empty,
   keepList,
+  transitions,
   onToggleKeep,
   hover,
   onRemove,
@@ -448,7 +467,15 @@ function SelectorGroups({
             {group.rel.slice(group.rel.lastIndexOf('/') + 1)}
           </h3>
           {group.entries.map((entry) => (
-            <SelectorRow key={entry.id} entry={entry} keepList={keepList} onToggleKeep={onToggleKeep} hover={hover} onRemove={onRemove} />
+            <SelectorRow
+              key={entry.id}
+              entry={entry}
+              keepList={keepList}
+              transitions={transitions}
+              onToggleKeep={onToggleKeep}
+              hover={hover}
+              onRemove={onRemove}
+            />
           ))}
         </section>
       ))}
@@ -465,11 +492,12 @@ function ReasonList({
   limit,
   onMore,
   keepList,
+  transitions,
   onToggleKeep,
   hover,
   onRemove,
 }: { readonly report: SelectorReport; readonly search: string } & RowActions & Paging) {
-  const all = unknownReasons(report, search);
+  const all = unknownReasons(report, search, heldReasons(transitions?.rows ?? NO_ROWS));
   if (all.length === 0) {
     return <p className="selectors-empty">Nothing is uncertain: every style was checked.</p>;
   }
@@ -480,7 +508,15 @@ function ReasonList({
         <section key={group.reason} className="selectors-group">
           <p className="selectors-reason">{sentence(group.reason)}</p>
           {group.entries.map((entry) => (
-            <SelectorRow key={entry.id} entry={entry} keepList={keepList} onToggleKeep={onToggleKeep} hover={hover} onRemove={onRemove} />
+            <SelectorRow
+              key={entry.id}
+              entry={entry}
+              keepList={keepList}
+              transitions={transitions}
+              onToggleKeep={onToggleKeep}
+              hover={hover}
+              onRemove={onRemove}
+            />
           ))}
         </section>
       ))}
@@ -527,34 +563,55 @@ function sentence(text: string): string {
   return capital.endsWith('.') ? capital : `${capital}.`;
 }
 
-function SelectorRow({ entry, keepList, onToggleKeep, hover, onRemove }: { readonly entry: SelectorEntry } & RowActions) {
+const NO_ROWS: RowTransitions = new Map();
+
+function SelectorRow({ entry, keepList, transitions, onToggleKeep, hover, onRemove }: { readonly entry: SelectorEntry } & RowActions) {
   const { verdict } = entry;
   const names = verdictNames(verdict);
   const locked = verdict.kind === 'kept';
   const lockable = names.length > 0 && keepList !== undefined && verdict.kind !== 'checking';
+  const transition: RowTransition | undefined = transitions?.rows.get(entry.id);
+  // While the keep list is written the lock already shows where the click is going.
+  const closed = lockShownClosed(transition, verdict.kind);
+  const collapsing = transition?.phase === 'collapsing';
   return (
-    <div className={`selectors-row is-${verdict.kind}`} onMouseEnter={(event) => hover?.enter(entry, event.currentTarget)} onMouseLeave={() => hover?.leave()}>
-      <SelectorText entry={entry} className="selectors-selector" />
-      {(lockable || (verdict.kind === 'unused' && onRemove !== undefined)) && (
-        // Floats over the end of the row, so a hidden button takes no width from the selector.
-        <span className="selectors-actions">
-          {lockable && (
-            <button
-              className={`ghost selectors-lock ${locked ? 'on' : ''}`}
-              aria-label={locked ? `Unlock ${names.join(', ')}` : `Lock ${names.join(', ')} so clean-ups keep it`}
-              disabled={locked && exactPatterns(keepList.keepList, names).length === 0}
-              onClick={() => onToggleKeep(entry)}
-            >
-              {locked ? <LockIcon size={12} /> : <UnlockIcon size={12} />}
-            </button>
-          )}
-          {verdict.kind === 'unused' && onRemove !== undefined && (
-            <button className="ghost selectors-remove-one" aria-label={`Remove ${entry.selector}`} onClick={() => onRemove(entry)}>
-              <TrashIcon size={12} />
-            </button>
-          )}
-        </span>
-      )}
+    // The slot closes the row's height (a grid track from 1fr to 0fr) so the rows below slide up.
+    <div
+      className={`selectors-row-slot ${collapsing ? 'is-collapsing' : ''}`}
+      aria-hidden={collapsing ? true : undefined}
+      onTransitionEnd={(event) => {
+        if (collapsing && event.target === event.currentTarget && event.propertyName === 'grid-template-rows') {
+          transitions?.collapsed(entry.id);
+        }
+      }}
+    >
+      <div
+        className={`selectors-row is-${verdict.kind}`}
+        onMouseEnter={(event) => hover?.enter(entry, event.currentTarget)}
+        onMouseLeave={() => hover?.leave()}
+      >
+        <SelectorText entry={entry} className="selectors-selector" />
+        {(lockable || (verdict.kind === 'unused' && onRemove !== undefined)) && (
+          // Floats over the end of the row, so a hidden button takes no width from the selector.
+          <span className="selectors-actions">
+            {lockable && (
+              <button
+                className={`ghost selectors-lock ${closed ? 'on' : ''}`}
+                aria-label={locked ? `Unlock ${names.join(', ')}` : `Lock ${names.join(', ')} so clean-ups keep it`}
+                disabled={locked && exactPatterns(keepList.keepList, names).length === 0}
+                onClick={() => onToggleKeep(entry)}
+              >
+                <LockIcon size={12} open={!closed} />
+              </button>
+            )}
+            {verdict.kind === 'unused' && onRemove !== undefined && (
+              <button className="ghost selectors-remove-one" aria-label={`Remove ${entry.selector}`} onClick={() => onRemove(entry)}>
+                <TrashIcon size={12} />
+              </button>
+            )}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -610,6 +667,7 @@ function CleanupConfirm({
           onMore={() => undefined}
           empty=""
           keepList={undefined}
+          transitions={undefined}
           onToggleKeep={() => undefined}
           hover={undefined}
           onRemove={undefined}

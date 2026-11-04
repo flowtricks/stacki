@@ -247,11 +247,14 @@ export function useCanvasRefs() {
 
 export type EditorAfterCanvasRefs = EditorAfterStyleSourceState & ReturnType<typeof useCanvasRefs>;
 
-// Mutable state of the write path and of the keyboard.
-export function useWriteRefs() {
+// Mutable state of the write path and of the keyboard. `startingCss` is what
+// counts as already written when the editor opens: embedded in the Style panel,
+// the editor's own starting `none` is not a value to write, or opening it
+// cleared the selector's clip-path before its shape had loaded.
+export function useWriteRefs(startingCss: string | undefined) {
   const styleRef = useRef<StyleHandle | undefined>(undefined);
   const latestCssRef = useRef<string>('');
-  const lastWrittenRef = useRef<string | undefined>(undefined);
+  const lastWrittenRef = useRef<string | undefined>(startingCss);
   const writeTimerRef = useRef<number | undefined>(undefined);
   const localWritePendingRef = useRef(false);
   const selectedHandleRef = useRef<HandleTarget | undefined>(undefined);
