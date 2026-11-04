@@ -142,13 +142,27 @@ const check = (what, condition, detail) => {
          };
        })()\`);
        const resting = await read();
-       const pt = await win.webContents.executeJavaScript(\`(() => {
-         const m = document.querySelector('.embed-editor_grid-track-main');
-         const r = m.getBoundingClientRect();
-         return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) };
-       })()\`);
-       win.webContents.sendInputEvent({ type: 'mouseMove', x: pt.x, y: pt.y });
-       await sleep(300);
+       // The sheet eases into place, and a slow runner (Linux under xvfb) can
+       // still be moving it when one pointer move lands, so the row is not
+       // under the pointer when it is read. Aim at the row where it is now and
+       // move again until it reports :hover, a bounded number of times.
+       const HOVER_TRIES_MAX = 20;
+       for (let attempt = 0; attempt < HOVER_TRIES_MAX; attempt += 1) {
+         const pt = await win.webContents.executeJavaScript(\`(() => {
+           const m = document.querySelector('.embed-editor_grid-track-main');
+           const r = m.getBoundingClientRect();
+           return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) };
+         })()\`);
+         win.webContents.sendInputEvent({ type: 'mouseMove', x: pt.x, y: pt.y });
+         await sleep(150);
+         const over = await win.webContents.executeJavaScript(
+           \`document.querySelector('.embed-editor_grid-track').matches(':hover')\`,
+         );
+         if (over) {
+           break;
+         }
+       }
+       await sleep(150);
        const hovered = await read();
        console.log(JSON.stringify({ resting, hovered }));
        app.quit();

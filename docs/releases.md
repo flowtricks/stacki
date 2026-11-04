@@ -15,6 +15,15 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.3 Linux release correction
+
+The 1.0.2 release stopped at the Linux build: the Style panel surface test moved the pointer
+once and read the grid row's hover 300 ms later, while the grid editor, now a pop-up over the
+panel, could still be easing into place on the slower Linux runner. The app was not at fault.
+The test now aims at the row where it is and moves again until the row reports `:hover`, a
+bounded number of times. Version 1.0.2 has its tag but no Desktop release; Desktop, the Studio
+source bundle and `create-stacki` are aligned at 1.0.3 with the 1.0.2 changes below.
+
 ## 1.0.2 pseudo-element layers, loop settings, Style panel fixes
 
 - ::before and ::after are Navigator layers. Picking one selects the rule that styles it and
@@ -38,7 +47,7 @@ include later changes.
 - Grid, background, object-position, easing and clip-path editors open over the Style panel
   only; the clip-path editor reopens on the value it was given; a new effect layer opens on
   the first click; menu group headings are easier to read.
-- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.2.
+- Desktop, the Studio source bundle and `create-stacki` were to align at 1.0.2; they align at 1.0.3.
 
 ## 1.0.1 content collection fixes, quieter guide
 
