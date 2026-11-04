@@ -48,6 +48,20 @@ export type DevStatus = 'off' | 'starting' | 'on';
 export interface NodeStates {
   readonly hidden: readonly string[];
   readonly inert: readonly string[];
+  /** Nodes whose ::before is drawn, and whose ::after is: layers in the navigator. */
+  readonly before: readonly string[];
+  readonly after: readonly string[];
+}
+
+/**
+ * A ::before or ::after picked in the navigator: its element, which one, and a
+ * count that makes picking the same one again a new request for the Style
+ * panel to select its selector.
+ */
+export interface PseudoPick {
+  readonly nodeId: string;
+  readonly pseudo: 'before' | 'after';
+  readonly serial: number;
 }
 
 export interface PreviewCommitInfo {

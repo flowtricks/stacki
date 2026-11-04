@@ -198,6 +198,10 @@ export const sendRendered = () => {
 // rule in any stylesheet, so the source cannot answer and the navigator has
 // no way to ask per row.
 //
+// The same pass notes each element whose ::before or ::after is drawn (it has
+// `content` and is displayed): a pseudo-element exists only in CSS, so the
+// navigator, which lists the source, could not show it as a layer.
+//
 // Read in the same pass, and only for nodes that put an element on the page:
 // a computed style is cheap to read one at a time and not free by the
 // hundred, so this rides the walk that already happens rather than adding
@@ -212,9 +216,16 @@ const firstElementFor = (nodePath: string): Element | undefined => {
   }
   return elementsWithPath(nodePath)[0] || undefined;
 };
+// Whether a pseudo-element is drawn: `content` other than none/normal, and displayed.
+const drawsPseudo = (element: Element, pseudo: '::before' | '::after'): boolean => {
+  const style = window.getComputedStyle(element, pseudo);
+  return style.content !== 'none' && style.content !== 'normal' && style.content !== '' && style.display !== 'none';
+};
 const sendStates = (rendered: string[]): void => {
   const hidden = [];
   const inert = [];
+  const before = [];
+  const after = [];
   for (const nodePath of rendered) {
     const element = firstElementFor(nodePath);
     if (!element) {
@@ -228,16 +239,22 @@ const sendStates = (rendered: string[]): void => {
       if (cs.pointerEvents === 'none') {
         inert.push(nodePath);
       }
+      if (drawsPseudo(element, '::before')) {
+        before.push(nodePath);
+      }
+      if (drawsPseudo(element, '::after')) {
+        after.push(nodePath);
+      }
     } catch {
       /* an element that cannot be measured says nothing about itself */
     }
   }
-  const key = `${hidden.join(' ')}|${inert.join(' ')}`;
+  const key = `${hidden.join(' ')}|${inert.join(' ')}|${before.join(' ')}|${after.join(' ')}`;
   if (key === lastStatesKey) {
     return;
   }
   lastStatesKey = key;
-  window.parent.postMessage({ type: 'avb:node-states', hidden, inert }, '*');
+  window.parent.postMessage({ type: 'avb:node-states', hidden, inert, before, after }, '*');
 };
 
 // The classes each node actually ended up with. `class:list={[...]}` and

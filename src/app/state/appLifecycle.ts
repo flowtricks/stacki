@@ -40,7 +40,17 @@ import {
 import { type OpenFileOptions, openFileSelection, parseTrailingSlash } from '../model/nodeFactory';
 import { savedForNavigation } from '../model/appKeys';
 import { keepsAcrossPages } from '../model/pageQueries';
-import { useProjectState, useCanvasReportState, useDevState, useDataState, usePanelState, useWindowState, useSessionRefs, useTypedCodeRefs } from './appState';
+import {
+  useProjectState,
+  useCanvasReportState,
+  useDevState,
+  useDataState,
+  usePanelState,
+  useWindowState,
+  useSessionRefs,
+  useTypedCodeRefs,
+  usePseudoPickFollowsSelection,
+} from './appState';
 
 // The app’s state.
 export function useCoreState() {
@@ -52,6 +62,7 @@ export function useCoreState() {
   const windowState = useWindowState();
   const sessionRefs = useSessionRefs(projectState);
   const typedCodeRefs = useTypedCodeRefs(sessionRefs, projectState, canvasReportState, panelState);
+  usePseudoPickFollowsSelection({ ...projectState, ...canvasReportState });
   return {
     ...projectState,
     ...canvasReportState,

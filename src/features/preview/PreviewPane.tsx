@@ -1,4 +1,5 @@
 import { useCanvasText, type CanvasTextDocument } from './useCanvasText';
+import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import React from 'react';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewSource } from './usePreviewSource';
@@ -41,6 +42,10 @@ interface PreviewPaneProps {
   readonly selPath?: string | undefined;
   readonly navigatorSelectionTick?: number;
   readonly navHoverPath?: string | undefined;
+  /** The ::before or ::after row hovered in the navigator, of `navHoverPath`. */
+  readonly navHoverPseudo?: PseudoLayer | undefined;
+  /** The selection's ::before or ::after layer, when one is picked. */
+  readonly selPseudo?: PseudoLayer | undefined;
   readonly overlayInfo?: (path: string) => OverlayInfo | undefined;
   readonly onSelectPath?: (path: string | undefined, info: { readonly outside: boolean }) => void;
   readonly onContextPath?: NonNullable<PreviewRuntimeProps['onContextPath']>;
@@ -50,7 +55,12 @@ interface PreviewPaneProps {
   readonly onPreviewReload?: (reason: PreviewReloadReason) => void;
   readonly onSelectedClasses?: (classes: readonly string[]) => void;
   readonly onRenderedPaths?: (paths: readonly string[]) => void;
-  readonly onNodeStates?: (states: { readonly hidden: readonly string[]; readonly inert: readonly string[] }) => void;
+  readonly onNodeStates?: (states: {
+    readonly hidden: readonly string[];
+    readonly inert: readonly string[];
+    readonly before: readonly string[];
+    readonly after: readonly string[];
+  }) => void;
   readonly onNodeClasses?: (classes: Readonly<Record<string, readonly string[]>>) => void;
   readonly focusPath?: string | undefined;
   readonly focusOcc?: number | undefined;
@@ -211,6 +221,8 @@ function DesignPreview({
           scale={scale}
           {...(props.spacingHover === undefined ? {} : { spacingHover: props.spacingHover })}
           selPath={props.selPath}
+          selPseudo={props.selPseudo}
+          hoverPseudo={props.navHoverPath === undefined ? undefined : props.navHoverPseudo}
           focusPath={props.focusPath}
           focusWhole={props.focusWhole ?? false}
           {...(props.overlayInfo === undefined ? {} : { overlayInfo: props.overlayInfo })}

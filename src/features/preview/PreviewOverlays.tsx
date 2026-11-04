@@ -1,5 +1,6 @@
 import React from 'react';
 import { assert } from '../../../shared/core/assert';
+import { pseudoPath, type PseudoLayer } from '../../../shared/page/pseudoPath';
 import type { Box } from './outlineBoxes';
 import type { PreviewMessage } from './previewMessages';
 import { NO_TEXT_MARKS, type TextMarks } from './previewMessages';
@@ -56,6 +57,10 @@ interface PreviewOverlaysProps {
   readonly selOcc: number | undefined;
   readonly hoverPath: string | undefined;
   readonly hoverOcc: number | undefined;
+  /** The selection's ::before or ::after layer: its outline is drawn instead of the element's. */
+  readonly selPseudo?: PseudoLayer | undefined;
+  /** The hovered ::before or ::after layer, of `hoverPath`. */
+  readonly hoverPseudo?: PseudoLayer | undefined;
   readonly focusPath: string | undefined;
   readonly focusWhole: boolean;
   /** Hovered or picked text of the selected instance; absent where the canvas reports none. */
@@ -102,6 +107,9 @@ function SpacingOverlays(props: PreviewOverlaysProps) {
 function NodeOutlines(props: PreviewOverlaysProps) {
   const outlines = outlineTargets(props);
   return outlines.flatMap((outline) => {
+    if (outline.pseudo !== undefined) {
+      return <PseudoOutline key={`${outline.type}-pseudo`} outline={outline} rects={props.rects} scale={props.scale} />;
+    }
     const info = props.overlayInfo?.(outline.path);
     const geometryPath = outlineBoxPath(outline.path, info?.nodeKind);
     const all = props.rects[geometryPath] ?? props.rects[outline.path];
@@ -177,17 +185,42 @@ interface OutlineTarget {
   readonly path: string;
   readonly type: 'hover' | 'sel';
   readonly occ: number | undefined;
+  readonly pseudo: PseudoLayer | undefined;
 }
 
 function outlineTargets(props: PreviewOverlaysProps): readonly OutlineTarget[] {
   const targets: OutlineTarget[] = [];
-  if (props.hoverPath && !hoverIsSelection({ path: props.hoverPath, occ: props.hoverOcc }, { path: props.selPath, occ: props.selOcc })) {
-    targets.push({ path: props.hoverPath, type: 'hover', occ: props.hoverOcc });
+  if (props.hoverPath) {
+    // The element and its ::before are different layers: hovering one while the other is selected outlines it.
+    const samePseudo = props.hoverPseudo === props.selPseudo;
+    if (!samePseudo || !hoverIsSelection({ path: props.hoverPath, occ: props.hoverOcc }, { path: props.selPath, occ: props.selOcc })) {
+      targets.push({ path: props.hoverPath, type: 'hover', occ: props.hoverOcc, pseudo: props.hoverPseudo });
+    }
   }
   if (props.selPath) {
-    targets.push({ path: props.selPath, type: 'sel', occ: props.selOcc });
+    targets.push({ path: props.selPath, type: 'sel', occ: props.selOcc, pseudo: props.selPseudo });
   }
   return targets;
+}
+
+// A ::before or ::after outline: its own measured box (framePseudo.ts), named
+// as its navigator row is, with no component button (it is CSS, not markup).
+function PseudoOutline({ outline, rects, scale }: { readonly outline: OutlineTarget; readonly rects: RectMap; readonly scale: number }) {
+  assert(outline.pseudo !== undefined, 'PseudoOutline: the outline is a pseudo-element');
+  const all = rects[pseudoPath(outline.path, outline.pseudo)];
+  if (!all) {
+    return [];
+  }
+  const selected = outline.occ === undefined ? undefined : all[outline.occ];
+  const boxes = outline.occ === undefined ? onePerPlace(all) : selected ? [selected] : all.slice(0, 1);
+  return boxes.map((box, index) => (
+    <div key={`${outline.type}-pseudo-${index}`} className={`node-outline ${outline.type} element`} style={boxStyle(box, scale)}>
+      <span className={`node-outline-tag ${box.y * scale < 20 ? 'inside' : ''}`}>
+        <CodeIcon size={11} />
+        ::{outline.pseudo}
+      </span>
+    </div>
+  ));
 }
 
 function outlineIcon(info: OverlayInfo): React.ReactNode {

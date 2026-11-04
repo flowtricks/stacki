@@ -1,4 +1,5 @@
 import { frameContextPoint, type ContextPoint } from './contextPosition';
+import { pseudoPath, type PseudoLayer } from '../../../shared/page/pseudoPath';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import type { OverlayInfo, RectMap, SpacingMap } from './PreviewOverlays';
@@ -23,6 +24,8 @@ export interface PreviewRuntimeProps {
   readonly selPath: string | undefined;
   readonly navigatorSelectionTick?: number;
   readonly navHoverPath?: string | undefined;
+  readonly navHoverPseudo?: PseudoLayer | undefined;
+  readonly selPseudo?: PseudoLayer | undefined;
   readonly overlayInfo?: ((path: string) => OverlayInfo | undefined) | undefined;
   readonly focusPath?: string | undefined;
   readonly focusOcc?: number | undefined;
@@ -40,7 +43,12 @@ export interface PreviewRuntimeProps {
   readonly onOpenPath?: (path: string | undefined, occurrence: number) => void;
   readonly onSelectedClasses?: (classes: readonly string[]) => void;
   readonly onRenderedPaths?: (paths: readonly string[]) => void;
-  readonly onNodeStates?: (states: { readonly hidden: readonly string[]; readonly inert: readonly string[] }) => void;
+  readonly onNodeStates?: (states: {
+    readonly hidden: readonly string[];
+    readonly inert: readonly string[];
+    readonly before: readonly string[];
+    readonly after: readonly string[];
+  }) => void;
   readonly onNodeClasses?: (classes: Readonly<Record<string, readonly string[]>>) => void;
   /** The preview-token gate (step 7): an event from a stale rendering never
    * selects, and the refusal is shown, never swallowed. */
@@ -210,11 +218,16 @@ function useOccurrenceSelection(
 // must use the same active path for measurement requests and outline rendering.
 function useTrackedPaths(props: PreviewRuntimeProps, canvasHover: string | undefined) {
   const { hoverPath, selectedBoxPath, hoverBoxPath, loopBoxPaths } = outlinePaths(props, canvasHover);
+  // A picked or hovered ::before / ::after is measured on its own (framePseudo.ts).
+  const selectedPseudoPath = props.selPath !== undefined && props.selPseudo !== undefined ? pseudoPath(props.selPath, props.selPseudo) : undefined;
+  const hoverPseudoPath =
+    props.navHoverPath !== undefined && props.navHoverPseudo !== undefined ? pseudoPath(props.navHoverPath, props.navHoverPseudo) : undefined;
   const trackPaths = useMemo(
     // The loop's child paths come joined as one string, so the list is rebuilt
     // only when they change rather than on every render.
-    () => trackedPaths(props.selPath, hoverPath, props.focusPath, selectedBoxPath, hoverBoxPath, ...loopBoxPaths.split('\n')),
-    [props.focusPath, hoverPath, hoverBoxPath, props.selPath, selectedBoxPath, loopBoxPaths],
+    () =>
+      trackedPaths(props.selPath, hoverPath, props.focusPath, selectedBoxPath, hoverBoxPath, selectedPseudoPath, hoverPseudoPath, ...loopBoxPaths.split('\n')),
+    [props.focusPath, hoverPath, hoverBoxPath, props.selPath, selectedBoxPath, selectedPseudoPath, hoverPseudoPath, loopBoxPaths],
   );
   return { hoverPath, trackPaths };
 }
@@ -308,7 +321,7 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       refs.props.current.onRenderedPaths?.(message.paths);
       break;
     case 'node-states':
-      refs.props.current.onNodeStates?.({ hidden: message.hidden, inert: message.inert });
+      refs.props.current.onNodeStates?.({ hidden: message.hidden, inert: message.inert, before: message.before, after: message.after });
       break;
     case 'modifiers':
       setModifiers({ shiftKey: message.shiftKey, altKey: message.altKey });

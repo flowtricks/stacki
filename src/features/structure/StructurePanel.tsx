@@ -2,7 +2,7 @@ import { TreeDragRow, useTreeDragCleanup } from '../../ui/TreeDragDrop';
 import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { NavigatorNode, StructurePageState, StructureProjection, DropLocation, DropTarget } from './structureModel';
-import type { StructureTreeContext } from './StructureTree';
+import type { PseudoKind, PseudoNodeIds, StructureTreeContext } from './StructureTree';
 import type { ContextPosition } from './StructureContextMenu';
 import { ElementContextMenu } from './ElementContextMenu';
 import type { WrapperTag } from '../../editor/wrapRules';
@@ -42,10 +42,14 @@ interface StructurePanelProps {
   readonly emptyNodeIds?: ReadonlySet<string>;
   readonly hiddenNodeIds?: ReadonlySet<string>;
   readonly inertNodeIds?: ReadonlySet<string>;
+  readonly pseudoNodeIds?: PseudoNodeIds;
+  readonly selectedPseudo?: PseudoKind | undefined;
+  readonly onSelectPseudo?: (id: string, pseudo: PseudoKind) => void;
   readonly liveClassesById?: ReadonlyMap<string, readonly string[]>;
   readonly revealTick?: number;
   readonly onSelect: (id: string) => void;
   readonly onHoverNode?: (id: string | undefined) => void;
+  readonly onHoverPseudo?: (id: string, pseudo: PseudoKind) => void;
   readonly onOpenComponent?: (name: string, id: string) => void;
   /** A row holding code (frontmatter, <style>, <script>) was double-clicked. */
   readonly onOpenCode?: (id: string) => void;
@@ -347,6 +351,9 @@ function treeContextOf(props: EditableProps, state: TreeState): StructureTreeCon
     ...(props.emptyNodeIds === undefined ? {} : { emptyNodeIds: props.emptyNodeIds }),
     ...(props.hiddenNodeIds === undefined ? {} : { hiddenNodeIds: props.hiddenNodeIds }),
     ...(props.inertNodeIds === undefined ? {} : { inertNodeIds: props.inertNodeIds }),
+    ...(props.pseudoNodeIds === undefined ? {} : { pseudoNodeIds: props.pseudoNodeIds }),
+    selectedPseudo: props.selectedPseudo,
+    ...(props.onSelectPseudo === undefined ? {} : { onSelectPseudo: props.onSelectPseudo }),
     ...(props.liveClassesById === undefined ? {} : { liveClassesById: props.liveClassesById }),
     currentLayoutName: props.currentLayoutName,
     dropTarget: state.dropTarget,
@@ -361,6 +368,7 @@ function treeContextOf(props: EditableProps, state: TreeState): StructureTreeCon
       }
     },
     ...(props.onHoverNode === undefined ? {} : { onHoverNode: props.onHoverNode }),
+    ...(props.onHoverPseudo === undefined ? {} : { onHoverPseudo: props.onHoverPseudo }),
     ...(props.onOpenComponent === undefined ? {} : { onOpenComponent: props.onOpenComponent }),
     ...(props.onOpenCode === undefined ? {} : { onOpenCode: props.onOpenCode }),
     toggleCollapse: (node) => {

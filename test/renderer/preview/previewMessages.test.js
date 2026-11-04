@@ -31,7 +31,7 @@ test('preview message parser preserves every supported message variant', () => {
     },
     { type: 'avb:node-classes', classes: { 0: ['card'] } },
     { type: 'avb:rendered-nodes', paths: ['0'] },
-    { type: 'avb:node-states', hidden: ['0'], inert: [] },
+    { type: 'avb:node-states', hidden: ['0'], inert: [], before: ['0.1'], after: [] },
     { type: 'avb:modifiers', shiftKey: true, altKey: false },
     { type: 'avb:hover-node', path: undefined, occurrence: 0 },
     { type: 'avb:click-node', path: '0', occurrence: 1, outside: false },

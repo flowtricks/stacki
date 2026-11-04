@@ -6,6 +6,8 @@ import type { Box, GapBand, GapRow, Rect, Spacing, ThinTarget } from './frameBas
 import { isElement } from './frameBasics';
 import { PATH_ATTR, addNode, elementsWithPath, inFocus, inScope, pathsOf, regions, runsOf, taggedPlaces, toRect } from './frameRegions';
 import { inlineTextRuns } from './inlineText';
+import { rectsForPseudo } from './framePseudo';
+import { splitPseudoPath } from '../../shared/page/pseudoPath';
 
 // One rect per marker-pair occurrence (a loop child renders once per
 // item — each instance gets its own box), unioned across the nodes
@@ -75,6 +77,12 @@ const rectsForInlineText = (nodePath: string): Rect[] => {
 };
 
 export const rectsForPath = (nodePath: string): Rect[] | undefined => {
+  // A ::before or ::after layer (shared/page/pseudoPath.ts) is measured on its element.
+  const pseudo = splitPseudoPath(nodePath);
+  if (pseudo !== undefined) {
+    const boxes = rectsForPseudo(pseudo.nodePath, pseudo.pseudo);
+    return boxes.length > 0 ? boxes : undefined;
+  }
   const runs = runsOf(nodePath);
   if (!runs) {
     const places = taggedPlaces(nodePath);

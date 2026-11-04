@@ -35,6 +35,11 @@ export interface StructureTreeContext {
   readonly emptyNodeIds?: ReadonlySet<string>;
   readonly hiddenNodeIds?: ReadonlySet<string>;
   readonly inertNodeIds?: ReadonlySet<string>;
+  /** Elements whose ::before, and whose ::after, the canvas draws: rows of their own. */
+  readonly pseudoNodeIds?: PseudoNodeIds;
+  /** The pseudo-element row picked, when its element is the selection. */
+  readonly selectedPseudo?: PseudoKind | undefined;
+  readonly onSelectPseudo?: (id: string, pseudo: PseudoKind) => void;
   readonly liveClassesById?: ReadonlyMap<string, readonly string[]>;
   readonly currentLayoutName: string;
   readonly dropTarget: DropTarget | undefined;
@@ -45,10 +50,18 @@ export interface StructureTreeContext {
   readonly nodeById: (id: string) => NavigatorNode | undefined;
   readonly onSelect: (id: string) => void;
   readonly onHoverNode?: (id: string | undefined) => void;
+  readonly onHoverPseudo?: (id: string, pseudo: PseudoKind) => void;
   readonly onOpenComponent?: (name: string, id: string) => void;
   readonly onOpenCode?: (id: string) => void;
   readonly toggleCollapse: (node: NavigatorNode) => void;
   readonly openContextMenu: (left: number, top: number, nodeId: string) => void;
+}
+
+export type PseudoKind = 'before' | 'after';
+
+export interface PseudoNodeIds {
+  readonly before: ReadonlySet<string>;
+  readonly after: ReadonlySet<string>;
 }
 
 interface NodeListProps extends StructureTreeContext {
@@ -154,13 +167,81 @@ function TreeNode(props: TreeNodeProps) {
   }, [selected]);
   const children = navigatorChildren(node);
   const host = navigatorHost(node);
-  const showChildren = children.length > 0 && !hidesChildRows(node, children);
+  const listsChildren = children.length > 0 && !hidesChildRows(node, children);
+  // A ::before sits above an element's children and an ::after below them, as
+  // the browser draws them: rows of their own, so an element with one opens.
+  const pseudos = pseudoKindsOf(node.id, props.pseudoNodeIds);
+  const showChildren = listsChildren || pseudos.length > 0;
   const view = nodeView(props, { children, host, showChildren, selected });
+  const pseudoRow = (pseudo: PseudoKind): React.ReactNode =>
+    pseudos.includes(pseudo) ? (
+      <PseudoRow
+        nodeId={node.id}
+        pseudo={pseudo}
+        depth={depth + 1}
+        selected={selected && props.selectedPseudo === pseudo}
+        onHover={(id, kind) => props.onHoverPseudo?.(id, kind)}
+        onLeave={() => props.onHoverNode?.(undefined)}
+        onSelect={props.onSelectPseudo ?? ((id) => props.onSelect(id))}
+      />
+    ) : undefined;
   return (
     <>
-      <TreeRow {...props} {...view} rowRef={rowRef} />
-      {showChildren && !view.collapsed && <NodeList {...context} nodes={children} parentId={host.id} depth={depth + 1} />}
+      <TreeRow {...props} {...view} selected={selected && props.selectedPseudo === undefined} rowRef={rowRef} />
+      {showChildren && !view.collapsed && (
+        <>
+          {pseudoRow('before')}
+          {listsChildren && <NodeList {...context} nodes={children} parentId={host.id} depth={depth + 1} />}
+          {pseudoRow('after')}
+        </>
+      )}
     </>
+  );
+}
+
+function pseudoKindsOf(id: string, pseudoNodeIds: PseudoNodeIds | undefined): readonly PseudoKind[] {
+  if (pseudoNodeIds === undefined) {
+    return [];
+  }
+  const kinds: PseudoKind[] = [];
+  if (pseudoNodeIds.before.has(id)) {
+    kinds.push('before');
+  }
+  if (pseudoNodeIds.after.has(id)) {
+    kinds.push('after');
+  }
+  return kinds;
+}
+
+// A pseudo-element: drawn by CSS, so it is selected (its element, with its
+// selector in the Style panel) and never dragged, renamed or deleted.
+function PseudoRow(props: {
+  readonly nodeId: string;
+  readonly pseudo: PseudoKind;
+  readonly depth: number;
+  readonly selected: boolean;
+  readonly onHover: (id: string, pseudo: PseudoKind) => void;
+  readonly onLeave: () => void;
+  readonly onSelect: (id: string, pseudo: PseudoKind) => void;
+}) {
+  return (
+    <div
+      className={`structure-node is-pseudo${props.selected ? ' selected' : ''}`}
+      data-pseudo-of={props.nodeId}
+      style={{ paddingLeft: 6 + props.depth * 16 }}
+      onMouseEnter={() => props.onHover(props.nodeId, props.pseudo)}
+      onMouseLeave={props.onLeave}
+      onClick={(event) => {
+        event.stopPropagation();
+        props.onSelect(props.nodeId, props.pseudo);
+      }}
+    >
+      <span className="drag-handle" />
+      <span className="icon">
+        <CodeIcon size={12} />
+      </span>
+      <span className="label">::{props.pseudo}</span>
+    </div>
   );
 }
 
@@ -173,6 +254,9 @@ function treeContextFromRow(props: TreeNodeProps): StructureTreeContext {
     ...(props.emptyNodeIds === undefined ? {} : { emptyNodeIds: props.emptyNodeIds }),
     ...(props.hiddenNodeIds === undefined ? {} : { hiddenNodeIds: props.hiddenNodeIds }),
     ...(props.inertNodeIds === undefined ? {} : { inertNodeIds: props.inertNodeIds }),
+    ...(props.pseudoNodeIds === undefined ? {} : { pseudoNodeIds: props.pseudoNodeIds }),
+    selectedPseudo: props.selectedPseudo,
+    ...(props.onSelectPseudo === undefined ? {} : { onSelectPseudo: props.onSelectPseudo }),
     ...(props.liveClassesById === undefined ? {} : { liveClassesById: props.liveClassesById }),
     currentLayoutName: props.currentLayoutName,
     dropTarget: props.dropTarget,
@@ -183,6 +267,7 @@ function treeContextFromRow(props: TreeNodeProps): StructureTreeContext {
     nodeById: props.nodeById,
     onSelect: props.onSelect,
     ...(props.onHoverNode === undefined ? {} : { onHoverNode: props.onHoverNode }),
+    ...(props.onHoverPseudo === undefined ? {} : { onHoverPseudo: props.onHoverPseudo }),
     ...(props.onOpenComponent === undefined ? {} : { onOpenComponent: props.onOpenComponent }),
     ...(props.onOpenCode === undefined ? {} : { onOpenCode: props.onOpenCode }),
     toggleCollapse: props.toggleCollapse,

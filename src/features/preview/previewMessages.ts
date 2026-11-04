@@ -22,6 +22,9 @@ export type PreviewMessage =
       readonly kind: 'node-states';
       readonly hidden: readonly string[];
       readonly inert: readonly string[];
+      /** Nodes whose ::before is drawn, then whose ::after is. */
+      readonly before: readonly string[];
+      readonly after: readonly string[];
     }
   | { readonly kind: 'modifiers'; readonly shiftKey: boolean; readonly altKey: boolean }
   | ({ readonly kind: 'hover-node' } & LocatedEvent)
@@ -157,6 +160,8 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
         kind: 'node-states',
         hidden: list(pathText)(value['hidden']),
         inert: list(pathText)(value['inert']),
+        before: list(pathText)(value['before']),
+        after: list(pathText)(value['after']),
       };
     case 'avb:modifiers':
       return {

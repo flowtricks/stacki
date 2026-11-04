@@ -6,6 +6,8 @@
 import { usePropertySaveGuard } from '../usePropertySaveGuard';
 import type { RemoteCmsSelection } from '../../features/cms/remoteCmsShared';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { assert } from '../../../shared/core/assert';
+import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import type { ScanResult } from '../../../shared/properties/projectScan';
 import { nodeAtPath, pathOfNode } from '../../editor/editorTree';
 import type { DevDiagnosis } from '../../features/preview/DevOffline';
@@ -23,6 +25,7 @@ import {
   type ItemIndexes,
   type LeftTab,
   type NodeStates,
+  type PseudoPick,
   type PreviewCommitInfo,
   type ProjectIdentity,
   type RightTab,
@@ -101,6 +104,8 @@ export function useCanvasReportState() {
   // The navigator row under the pointer: a live value, read by the canvas pane
   // alone, so crossing rows does not re-render the app (src/ui/liveValue.ts).
   const [hoverNode] = useState(() => createLiveValue<string | undefined>(undefined));
+  // The ::before or ::after row under the pointer, of the hovered node above.
+  const [hoverPseudo] = useState(() => createLiveValue<PseudoLayer | undefined>(undefined));
   // Paths the page reports as having actually rendered something. Null until
   // the page has said anything, which is not the same as "nothing rendered".
   const [renderedPaths, setRenderedPathsState] = useState<readonly string[] | undefined>(undefined);
@@ -110,6 +115,8 @@ export function useCanvasReportState() {
   // Path to the classes that node rendered with, for labelling rows whose
   // class is an expression the source can't resolve.
   const [nodeClasses, setNodeClassesState] = useState<Readonly<Record<string, readonly string[]>> | undefined>(undefined);
+  // The ::before or ::after last picked in the navigator (see PseudoPick).
+  const [pseudoPick, setPseudoPick] = useState<PseudoPick | undefined>(undefined);
   // The canvas re-reports after every walk of the page, mostly with what it
   // said last time. A report equal to the one held keeps the held one, and
   // React skips the render a new array or object would have cost the app.
@@ -123,9 +130,11 @@ export function useCanvasReportState() {
     classesForRef,
     classesTick,
     hoverNode,
+    hoverPseudo,
     navigatorSelectionTick,
     nodeClasses,
     nodeStates,
+    pseudoPick,
     renderedPaths,
     selectedClasses,
     setClassesTick,
@@ -133,6 +142,7 @@ export function useCanvasReportState() {
     setNodeClasses,
     setNodeStates,
     setNavigatorSelectionTick,
+    setPseudoPick,
     setRenderedPaths,
     setSelectedClasses,
   };
@@ -459,4 +469,34 @@ export function useTypedCodeRefs(
     typedCodeUnparsed,
     typedSourceRef,
   };
+}
+
+/**
+ * A ::before / ::after pick belongs to one selection. When the selection moves
+ * to another node the pick is dropped, so coming back to the element later
+ * selects the element, not its layer. The one move it survives is a remap: an
+ * edit gave the same element a new id (see the selection effect above), and
+ * its old id is gone from the page.
+ */
+export function usePseudoPickFollowsSelection(
+  state: Pick<ReturnType<typeof useProjectState>, 'pageState' | 'selectedId'> & Pick<ReturnType<typeof useCanvasReportState>, 'setPseudoPick'>,
+): void {
+  const { pageState, selectedId, setPseudoPick } = state;
+  useEffect(() => {
+    const nodes = pageState?.editable ? pageState.model.nodes : undefined;
+    setPseudoPick((held) => {
+      if (held === undefined || held.nodeId === selectedId) {
+        return held;
+      }
+      if (selectedId === undefined || nodes === undefined) {
+        return undefined;
+      }
+      if (findNodeById(nodes, held.nodeId)) {
+        return undefined; // The element is still there: the user moved on.
+      }
+      const moved = { ...held, nodeId: selectedId };
+      assert(moved.nodeId !== held.nodeId, 'usePseudoPickFollowsSelection: a remap changes the id');
+      return moved;
+    });
+  }, [pageState, selectedId, setPseudoPick]);
 }

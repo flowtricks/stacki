@@ -415,7 +415,16 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
   const page = app.currentPage;
   const selectNavigatorNode = (id: string | undefined): void => {
     app.setNavigatorSelectionTick((tick) => tick + 1);
+    app.setPseudoPick(undefined);
     app.setSelectedId(id);
+  };
+  // A ::before or ::after row selects its element, and asks the Style panel
+  // for that pseudo-element's selector (the count makes a repeat a new ask).
+  const selectPseudo = (id: string, pseudo: 'before' | 'after'): void => {
+    app.setNavigatorSelectionTick((tick) => tick + 1);
+    app.setSelectedId(id);
+    app.setPseudoPick((held) => ({ nodeId: id, pseudo, serial: (held?.serial ?? 0) + 1 }));
+    app.setRightTab('style');
   };
   return (
     <StructurePanel
@@ -428,10 +437,20 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
       emptyNodeIds={app.emptyNodeIds ?? new Set<string>()}
       hiddenNodeIds={app.stateIds.hidden}
       inertNodeIds={app.stateIds.inert}
+      pseudoNodeIds={{ before: app.stateIds.before, after: app.stateIds.after }}
+      selectedPseudo={app.pseudoPick?.nodeId === app.selectedId ? app.pseudoPick?.pseudo : undefined}
+      onSelectPseudo={selectPseudo}
       liveClassesById={app.liveClassesById ?? new Map<string, readonly string[]>()}
       revealTick={app.revealTick}
       onSelect={selectNavigatorNode}
-      onHoverNode={app.setHoverNodeId}
+      onHoverNode={(id) => {
+        app.hoverPseudo.set(undefined);
+        app.setHoverNodeId(id);
+      }}
+      onHoverPseudo={(id, pseudo) => {
+        app.hoverPseudo.set(pseudo);
+        app.setHoverNodeId(id);
+      }}
       {...desktopElementActions(app)}
       onOpenCode={app.openCodeWindowById}
       onChangeLayout={app.onChangeLayout}

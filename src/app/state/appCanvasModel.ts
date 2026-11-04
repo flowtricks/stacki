@@ -184,13 +184,12 @@ export function useCrumbLabels(
   pageOps: ReturnType<typeof usePageOps>,
   canvasNotices: ReturnType<typeof useCanvasNotices>,
   coreState: ReturnType<typeof useCoreState>,
-  shortcuts: ReturnType<typeof useShortcuts>,
+  _shortcuts: ReturnType<typeof useShortcuts>,
 ) {
-  const { currentLayoutName } = pageOps;
+  const { currentLayoutName, tree } = pageOps;
   const { liveLabel } = canvasNotices;
   const { currentPage, editStack, project, setNodeClasses, setNodeStates } = coreState;
   const { setRenderedPaths } = coreState;
-  const { model } = shortcuts;
 
   // Breadcrumb trail for the canvas toolbar: page → ancestors → selection.
   const crumbLabel = (node: EditorNode): string => {
@@ -241,14 +240,19 @@ export function useCrumbLabels(
     const rel = projectRelativePath(project.path, path, window.avb.platform);
     return rel.startsWith('src/') ? rel.slice(4) : rel;
   })();
-  // An edit renumbers paths, so a report from before it describes nodes that
-  // have since moved. Drop it and show nothing until the page has re-rendered
-  // and said so again — a marker on the wrong row is worse than none.
+  // An edit that renumbers paths leaves a report from before it describing
+  // nodes that have since moved. Drop it and show nothing until the page has
+  // re-rendered and said so again — a marker on the wrong row is worse than
+  // none. An edit that keeps every path (a style, a text, an attribute) keeps
+  // the report: the canvas only re-sends what changed, so dropping it there
+  // lost the navigator's ::before rows, and its hidden and inert marks, until
+  // something else changed.
+  const structure = React.useMemo(() => [...tree.byPath.keys()].join('|'), [tree]);
   useEffect(() => {
     setRenderedPaths(undefined);
     setNodeStates(undefined);
     setNodeClasses(undefined);
-  }, [model, setNodeClasses, setNodeStates, setRenderedPaths]);
+  }, [structure, setNodeClasses, setNodeStates, setRenderedPaths]);
 
   // What the spacing box is pointing at, drawn over the selected element on the
   // canvas — see spacingBands.js.
@@ -309,7 +313,7 @@ export function useCanvasMarks(
   // The reported paths as node ids, so the navigator can mark rows without
   // knowing anything about index paths.
   const stateIds = React.useMemo(() => {
-    const empty = { hidden: new Set<string>(), inert: new Set<string>() };
+    const empty = { hidden: new Set<string>(), inert: new Set<string>(), before: new Set<string>(), after: new Set<string>() };
     if (!nodeStates || !model) {
       return empty;
     }
@@ -325,7 +329,7 @@ export function useCanvasMarks(
       }
       return set;
     };
-    return { hidden: ids(nodeStates.hidden), inert: ids(nodeStates.inert) };
+    return { hidden: ids(nodeStates.hidden), inert: ids(nodeStates.inert), before: ids(nodeStates.before), after: ids(nodeStates.after) };
   }, [nodeStates, model, editedRel, tree]);
   return { crumbs, emptyNodeIds, stateIds };
 }
