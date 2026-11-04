@@ -4,6 +4,12 @@
 // CMS's own "New item" page does. Creating makes the item, then writes each
 // field it holds, through the calls the editor already uses, so it works the
 // same for a connected CMS and for the project's content collections.
+//
+// An Astro entry is a file its site builds from, and Astro's own schema check
+// fails the build on an empty required field, so Create refuses while one is
+// empty (requiredFieldsMissing). Each says so under its control once it has been
+// edited or Create was pressed, not on the fresh form. A Sanity item is a
+// draft, which the Studio lets be saved incomplete; only Publish waits.
 import { useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import {
@@ -19,7 +25,11 @@ import { ErrorToast } from '../../ui/ErrorToast';
 import { RemoteFieldList } from './RemoteFieldList';
 import { useEditContext } from './RemoteItemFields';
 import type { RemoteCmsSelection } from './remoteCmsShared';
-import { createRemoteDocument, writeRemoteDocument } from '../../ipc/remoteSource';
+import { createRemoteDocument, renameContentEntry, writeRemoteDocument } from '../../ipc/remoteSource';
+import { isAstroContent } from '../../../shared/properties/astroContent';
+import { requiredFieldsMissing, valuesOf } from './remoteValidation';
+import { EntrySlugField } from './EntrySlugField';
+import { copiedSlug, draftName, draftSlugBlock, draftSlugText, draftSlugToSave, FOLLOWS_NAME, type SlugDraft } from './entrySlugDraft';
 
 /** An item being made: what it is called until it exists, and its fields. */
 export interface PendingItem {
@@ -39,11 +49,27 @@ export function RemotePendingItem(props: {
   const { pending } = props;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  // Fields edited so far, and whether Create was pressed: what decides which empty required fields say so.
+  const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
+  const [attempted, setAttempted] = useState(false);
   const context = useEditContext(props.projectPath, props.selection.connection.id, pending.document);
+  const enforced = isAstroContent(props.selection.connection);
+  const missing = enforced ? requiredFieldsMissing(pending.document.fields, valuesOf(pending.document)) : [];
+  const requiredShown = new Set(attempted ? missing : missing.filter((name) => touched.has(name)));
+  // An Astro entry's slug follows its name until one is typed (entrySlugDraft.ts).
+  const [slugDraft, setSlugDraft] = useState<SlugDraft>(FOLLOWS_NAME);
+  const slugText = draftSlugText(pending.document, slugDraft);
+  const slugBlocked = draftSlugBlock(pending.document.slug, slugText) !== undefined;
+  const blocked = missing.length > 0 || slugBlocked;
   const create = async () => {
+    if (blocked) {
+      setAttempted(true);
+      return;
+    }
     setBusy(true);
     setError(undefined);
-    const made = await createFromDocument(props.projectPath, props.selection, pending.document);
+    const slug = draftSlugToSave(pending.document.slug, slugText);
+    const made = await createFromDocument(props.projectPath, props.selection, { document: pending.document, slug });
     setBusy(false);
     if (made.ok) {
       props.onCreated(made.value);
@@ -64,7 +90,13 @@ export function RemotePendingItem(props: {
           <button type="button" disabled={busy} onClick={props.onCancel}>
             Cancel
           </button>
-          <button type="button" className="primary" disabled={busy} onClick={() => void create()}>
+          <button
+            type="button"
+            className="primary"
+            disabled={busy}
+            title={blocked ? 'Fill in the required fields and a free slug first' : undefined}
+            onClick={() => void create()}
+          >
             {busy ? 'Creating…' : 'Create'}
           </button>
         </div>
@@ -72,7 +104,24 @@ export function RemotePendingItem(props: {
       <div className="cms-detail-body">
         <div className="remote-cms-fields">
           {error && <ErrorToast message={error} />}
-          <RemoteFieldList document={pending.document} context={context} onSave={(field, value) => props.onChange(withValue(pending, field, value))} />
+          {pending.document.slug && (
+            <EntrySlugField
+              slug={pending.document.slug}
+              text={slugText}
+              placeholder="Made from the name when left empty"
+              onType={(text) => setSlugDraft({ kind: 'typed', text })}
+              onCommit={() => undefined}
+            />
+          )}
+          <RemoteFieldList
+            document={pending.document}
+            context={context}
+            requiredShown={requiredShown}
+            onSave={(field, value) => {
+              setTouched((known) => new Set([...known, field.name]));
+              props.onChange(withValue(pending, field, value));
+            }}
+          />
         </div>
       </div>
     </div>
@@ -92,7 +141,8 @@ export function duplicateOf(document: RemoteDocument, title: string): PendingIte
     return field;
   });
   assert(fields.length === document.fields.length, 'A copy has every field of its source');
-  return { title: `${title} (copy)`, document: { ...document, fields } };
+  const copy = document.slug === undefined ? { ...document, fields } : { ...document, fields, slug: copiedSlug(document.slug) };
+  return { title: `${title} (copy)`, document: copy };
 }
 
 // The pending item with one field's new value; the title follows its name field.
@@ -106,7 +156,12 @@ function withValue(pending: PendingItem, changed: RemoteDocumentField, value: Re
 }
 
 /** Makes the item, then writes each field it holds: one whole value per field, in order. */
-async function createFromDocument(projectPath: string, selection: RemoteCmsSelection, document: RemoteDocument): Promise<RemoteResult<RemoteDocumentSummary>> {
+async function createFromDocument(
+  projectPath: string,
+  selection: RemoteCmsSelection,
+  request: { readonly document: RemoteDocument; readonly slug: string | undefined },
+): Promise<RemoteResult<RemoteDocumentSummary>> {
+  const { document } = request;
   const connectionId = selection.connection.id;
   assert(document.fields.length <= CMS_REMOTE_LIMITS.fieldsMax, 'A document has bounded fields');
   const made = await createRemoteDocument(projectPath, connectionId, selection.collection);
@@ -128,7 +183,19 @@ async function createFromDocument(projectPath: string, selection: RemoteCmsSelec
     }
   }
   assert(made.value.id !== document.id, 'A created item is a new one');
-  return { ok: true, value: { ...made.value, title } };
+  // An Astro entry is listed by the title rule (entryTitle.ts); it is shown by it at once too.
+  if (document.slug !== undefined) {
+    title = draftName(document) ?? (request.slug === undefined ? title : `${document.slug.folder}${request.slug}`);
+  }
+  if (request.slug === undefined) {
+    return { ok: true, value: { ...made.value, title } };
+  }
+  // Renamed last, once every field is written under the id it was made with.
+  const renamed = await renameContentEntry(projectPath, made.value.id, request.slug);
+  if (!renamed.ok) {
+    return { ok: false, message: `The item was made, but its slug: ${renamed.message}` };
+  }
+  return { ok: true, value: { ...made.value, id: renamed.value.id, title } };
 }
 
 const NAME_FIELDS: readonly string[] = ['title', 'name', 'heading', 'label'];

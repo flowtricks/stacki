@@ -65,6 +65,8 @@ function editRemote(service: AstroRemoteService, request: AstroRemoteEdit): Prom
   switch (request.operation) {
     case 'write':
       return service.write(request.write);
+    case 'rename':
+      return service.rename(request.id, request.slug);
     case 'create':
       return service.create(request.collection);
     case 'delete':
@@ -226,25 +228,22 @@ function registerContentRenameHandlers({ ipcMain, noteAppWrite, send }: Pick<Mai
     }
   });
 
-  // What a page's own data call returns — `await getCampusPastors()` — sampled
-  // by the dev server, which runs it as the page's render does. The import is
-  // resolved here, so only a project module under src is ever asked for.
-  ipcMain.handle('content:sampleValue', async (_event, { projectPath, devUrl, pagePath, spec, name }) => {
-    const target = devUrl ? resolveImport(projectPath, pagePath, spec) : undefined;
-    const rel = target ? toPosix(path.relative(projectPath, target)) : '';
-    if (!devUrl || !rel.startsWith('src/')) {
+  // What a page holds, sampled by the dev server: one of its own data calls —
+  // `await getCampusPastors()` — run as the page's render does, or the values
+  // its last render computed (previewServer/scopeCapture.ts).
+  ipcMain.handle('content:sampleValue', async (_event, { projectPath, devUrl, pagePath, source }) => {
+    if (!devUrl) {
       return { value: undefined };
     }
-    try {
-      const query = `m=${encodeURIComponent('/' + rel)}&f=${encodeURIComponent(name)}`;
-      const response = await fetch(`${devUrl}/__avb/value?${query}`);
-      if (!response.ok) {
-        return { value: undefined, error: `Dev server returned ${response.status}` };
+    switch (source.kind) {
+      case 'call':
+        return sampleCall(devUrl, projectPath, pagePath, source);
+      case 'scope':
+        return sampleScope(devUrl, projectPath, pagePath, source.sinceMs);
+      default: {
+        const exhaustive: never = source;
+        return exhaustive;
       }
-      const input: unknown = await response.json();
-      return parseSampleValue(input);
-    } catch (error: unknown) {
-      return { value: undefined, error: errorMessage(error) };
     }
   });
 
@@ -255,6 +254,51 @@ function registerContentRenameHandlers({ ipcMain, noteAppWrite, send }: Pick<Mai
   ipcMain.handle('project:resolveImport', async (_event, { projectPath, fromFile, spec }) => ({
     path: resolveImport(projectPath, fromFile, spec) ?? undefined,
   }));
+}
+
+// The value route waits up to 8 s for a render (SCOPE_SOURCE) and a call may
+// take 10 s (VALUE_ENDPOINT); past this the dev server is not answering.
+const SAMPLE_VALUE_MS_MAX = 15_000;
+
+// One import's export, called with no arguments. The import is resolved here,
+// so only a project module under src is ever asked for.
+async function sampleCall(
+  devUrl: string,
+  projectPath: string,
+  pagePath: string,
+  call: { readonly spec: string; readonly name: string },
+): Promise<ReturnType<typeof parseSampleValue>> {
+  const target = resolveImport(projectPath, pagePath, call.spec);
+  const rel = target ? toPosix(path.relative(projectPath, target)) : '';
+  if (!rel.startsWith('src/')) {
+    return { value: undefined };
+  }
+  const query = `m=${encodeURIComponent('/' + rel)}&f=${encodeURIComponent(call.name)}`;
+  return fetchSampleValue(`${devUrl}/__avb/value?${query}`);
+}
+
+// The page's own last-rendered frontmatter values, by name. Only a project
+// .astro file under src is asked for: that is what the preview marks.
+async function sampleScope(devUrl: string, projectPath: string, pagePath: string, sinceMs: number): Promise<ReturnType<typeof parseSampleValue>> {
+  const rel = toPosix(path.relative(projectPath, path.resolve(projectPath, pagePath)));
+  if (!rel.startsWith('src/') || !rel.endsWith('.astro')) {
+    return { value: undefined };
+  }
+  return fetchSampleValue(`${devUrl}/__avb/value?p=${encodeURIComponent(rel)}&since=${sinceMs}`);
+}
+
+async function fetchSampleValue(url: string): Promise<ReturnType<typeof parseSampleValue>> {
+  assert(url.includes('/__avb/value?'), 'A value is read from the value route');
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(SAMPLE_VALUE_MS_MAX) });
+    if (!response.ok) {
+      return { value: undefined, error: `Dev server returned ${response.status}` };
+    }
+    const input: unknown = await response.json();
+    return parseSampleValue(input);
+  } catch (error: unknown) {
+    return { value: undefined, error: errorMessage(error) };
+  }
 }
 
 async function fetchSampleEntry(url: string): Promise<ReturnType<typeof parseSampleEntry>> {

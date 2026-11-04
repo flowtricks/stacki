@@ -136,6 +136,10 @@ function OpenItem(
           onRemoved={() => props.openItem(undefined)}
           onSaved={props.reload}
           onDuplicate={(document) => props.setPending(duplicateOf(document, selection.item?.title ?? 'Item'))}
+          onRenamed={(item) => {
+            props.reload();
+            props.onSelect({ ...selection, item });
+          }}
         />
       )}
     </>

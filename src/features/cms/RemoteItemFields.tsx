@@ -1,10 +1,13 @@
 // One connected-CMS item's fields, beside its collection's column of names.
 // Every field is editable by its type; a saved field becomes a draft in the
-// CMS, and nothing is published.
+// CMS, and nothing is published. An Astro entry's edit that would leave a
+// required field empty is not written (saveRefused): the file keeps its value,
+// and the field says it is required, as every empty required field of the
+// entry does from the start.
 import { useMemo, useState } from 'react';
 import { ChevronLeftIcon } from '../../ui/Icons';
 import { ErrorToast } from '../../ui/ErrorToast';
-import { remoteDocument, writeRemoteDocument } from '../../ipc/remoteSource';
+import { remoteDocument, renameContentEntry, writeRemoteDocument } from '../../ipc/remoteSource';
 import type { RemoteAsset, RemoteDocument, RemoteDocumentField } from '../../../shared/properties/cmsRemote';
 import { RemoteItemActions } from './RemoteItemActions';
 import type { RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
@@ -16,6 +19,9 @@ import { DOCUMENTS, documentKey } from './remoteCmsCache';
 import { RemoteDocumentActions } from './RemoteDocumentActions';
 import { isAstroContent } from '../../../shared/properties/astroContent';
 import { relativeTime } from './remoteTime';
+import { saveRefused } from './remoteValidation';
+import { EntrySlugField } from './EntrySlugField';
+import type { EntrySlug } from '../../../shared/properties/entrySlug';
 
 export function RemoteItemFields(props: {
   readonly projectPath: string;
@@ -27,6 +33,8 @@ export function RemoteItemFields(props: {
   readonly onSaved: () => void;
   /** Opens a copy of this item, to be created or cancelled. */
   readonly onDuplicate: (document: RemoteDocument) => void;
+  /** The item's id changed (an Astro entry's slug was renamed): it is this item now. */
+  readonly onRenamed: (item: { readonly id: string; readonly title: string }) => void;
 }) {
   const { projectPath, selection } = props;
   const { connection } = selection;
@@ -35,8 +43,13 @@ export function RemoteItemFields(props: {
   // once and is refreshed behind the view; a save shows the CMS's answer.
   const { result, retry, replace } = useRemote(DOCUMENTS, documentKey(connection.id, id), () => remoteDocument(projectPath, connection.id, id));
   const [error, setError] = useState<string | undefined>(undefined);
+  const enforced = isAstroContent(connection);
   const save = async (field: RemoteDocumentField, value: RemoteValue | undefined) => {
     setError(undefined);
+    if (enforced && saveRefused(field, value)) {
+      // Its control already says the field is required; the file is left as it was.
+      return;
+    }
     const write = { id, field: field.name, value };
     const written = await writeRemoteDocument(projectPath, connection.id, write);
     if (written.ok) {
@@ -46,8 +59,27 @@ export function RemoteItemFields(props: {
       setError(written.message);
     }
   };
+  // One rename moves the file and every reference to it; the item is then named by its new id.
+  const rename = async (slug: EntrySlug, to: string) => {
+    setError(undefined);
+    const renamed = await renameContentEntry(projectPath, id, to);
+    if (renamed.ok) {
+      const before = `${slug.folder}${slug.value}`;
+      const title = selection.item?.title ?? before;
+      props.onRenamed({ id: renamed.value.id, title: title === before ? `${slug.folder}${to}` : title });
+    } else {
+      setError(renamed.message);
+    }
+  };
+  const renameTo = (loaded: RemoteDocument, to: string) => {
+    if (loaded.slug !== undefined) {
+      void rename(loaded.slug, to);
+    }
+  };
   const document = result?.ok ? result.value : undefined;
   const context = useEditContext(projectPath, connection.id, document);
+  // Every required field may say so: an empty one on an entry already saved is a problem now.
+  const requiredShown = enforced && document !== undefined ? new Set(document.fields.filter((field) => field.required).map((field) => field.name)) : undefined;
   return (
     <div className="cms-detail remote-cms-item">
       <ItemHeader
@@ -68,7 +100,8 @@ export function RemoteItemFields(props: {
           {(loaded) => (
             <div className="remote-cms-fields">
               {error && <ErrorToast message={error} />}
-              <RemoteFieldList document={loaded} context={context} onSave={(field, value) => void save(field, value)} />
+              {loaded.slug && <EntrySlugField slug={loaded.slug} onCommit={(to) => renameTo(loaded, to)} />}
+              <RemoteFieldList document={loaded} context={context} requiredShown={requiredShown} onSave={(field, value) => void save(field, value)} />
               <RemoteItemActions
                 projectPath={projectPath}
                 selection={selection}

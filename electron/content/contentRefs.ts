@@ -341,6 +341,31 @@ function entryMove(
   return { kind: 'unknown', note: `Nothing in ${entry.file} says what this entry's id is.` };
 }
 
+/**
+ * Why an entry's id cannot be renamed here, or nothing when it can: a loader
+ * that builds ids in code, a parser between the file and the entry, or a
+ * record that does not write its id down.
+ */
+function entryRenameLock(collection: CollectionLike & { readonly loader: { readonly parser?: unknown } }, entry: ListedEntry): string | undefined {
+  if (collection.loader.parser) {
+    return `${collection.name} is parsed by a function in the content config, so its ids are not in the file.`;
+  }
+  const move = entryMove(collection, entry, { name: collection.name, from: entry.id, to: entry.id });
+  switch (move.kind) {
+    case 'generated':
+    case 'unknown':
+      return move.note;
+    case 'file':
+    case 'key':
+    case 'field':
+      return undefined;
+    default: {
+      const exhaustive: never = move;
+      return exhaustive;
+    }
+  }
+}
+
 // Moving the file moves what its image paths are relative to.
 function movedImageEdits(collection: CollectionLike, entry: ListedEntry, movedTo: string): ImageEdit[] {
   const imageEdits: ImageEdit[] = [];
@@ -407,4 +432,4 @@ function applyRename(projectPath: string, plan: RenamePlan): { renamed: boolean;
   };
 }
 
-export { planRename, applyRename, referencePaths, matchingPaths, rewriteRelative, mentions };
+export { planRename, applyRename, entryRenameLock, referencePaths, matchingPaths, rewriteRelative, mentions };

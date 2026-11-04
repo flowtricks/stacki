@@ -21,6 +21,8 @@ import { slugInStep, slugify, slugPairOf, slugValue, type SlugPair } from './slu
 export function RemoteFieldList(props: {
   readonly document: RemoteDocument;
   readonly context: RemoteEditContext;
+  /** The required fields that say so while empty; none when absent. */
+  readonly requiredShown?: ReadonlySet<string> | undefined;
   readonly onSave: (field: RemoteDocumentField, value: RemoteValue | undefined) => void;
 }) {
   const { document } = props;
@@ -37,6 +39,7 @@ export function RemoteFieldList(props: {
         context={props.context}
         follow={field.name === pair?.slug ? sync.follow : undefined}
         onDraft={field.name === pair?.source ? sync.nameTyped : undefined}
+        requiredShown={props.requiredShown?.has(field.name) === true}
         onSave={(value) => props.onSave(field, value)}
       />
     );

@@ -5,6 +5,8 @@
 // when the CMS requires it; its help is the `?` beside it; a broken rule shows
 // under the control, red when it blocks publishing and amber when it only warns.
 // A field the Studio locks (`readOnly`) shows its value without a control.
+// Where an empty required field blocks saving (an Astro entry), it says so
+// under the control once the editor asks it to (`requiredShown`).
 import {
   isLocked,
   remoteObject,
@@ -15,7 +17,7 @@ import {
 } from '../../../shared/properties/cmsRemoteSchema';
 import { CmsFieldFrame, CmsPropField, type CmsScalar, type CmsScalarKind } from './CmsPropField';
 import { fieldTypeOf } from './remoteFieldTypes';
-import { problemsOf } from './remoteValidation';
+import { problemsOf, requiredMessage } from './remoteValidation';
 import { fieldTitle, isEmptyValue } from './remoteValues';
 import { RemoteValueEditor, type RemoteEditContext } from './RemoteValueEditor';
 import AssetField from '../../ui/AssetField';
@@ -28,9 +30,12 @@ export function RemoteField(props: {
   readonly field: RemoteSchemaField;
   readonly value: RemoteValue | undefined;
   readonly context: RemoteEditContext;
+  /** Says "… is required" while the field is required and empty. */
+  readonly requiredShown?: boolean | undefined;
   readonly onChange: (value: RemoteValue | undefined) => void;
 }) {
   const { field, value } = props;
+  const missing = props.requiredShown === true && field.required && isEmptyValue(value);
   const name = fieldTitle(field);
   const help = field.description;
   const scalar = scalarOf(field.type);
@@ -63,6 +68,7 @@ export function RemoteField(props: {
           <RemoteValueEditor type={field.type} label={name} value={value} context={props.context} onChange={props.onChange} />
         </CmsFieldFrame>
       )}
+      {missing && <span className="remote-cms-problem is-error">{requiredMessage(field)}</span>}
       {/* Required is the label's asterisk; Publish still waits for it (remoteValidation.ts). */}
       {problemsOf(field, value)
         .filter((problem) => problem.message !== 'Required')

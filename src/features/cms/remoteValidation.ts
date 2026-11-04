@@ -35,6 +35,48 @@ export function publishBlockers(document: RemoteDocument): string[] {
   );
 }
 
+/**
+ * The required fields whose value is empty, by name, in the order the fields
+ * come: blank or whitespace-only text, an empty list, an unset image or
+ * reference (isEmptyValue). A field that is optional, defaulted or nullable is
+ * never required (astroRemoteSchema.ts sets `required` from the schema), so it
+ * never appears here. One rule for both the create and the save path of an
+ * Astro content entry; a Sanity draft may be saved with them empty, and only
+ * Publish waits for them (publishBlockers).
+ */
+export function requiredFieldsMissing(
+  fields: readonly Pick<RemoteSchemaField, 'name' | 'required'>[],
+  values: ReadonlyMap<string, RemoteValue | undefined>,
+): readonly string[] {
+  const missing = fields.filter((field) => field.required && isEmptyValue(values.get(field.name))).map((field) => field.name);
+  assert(missing.length <= fields.length, 'Only given fields are missing');
+  assert(new Set(missing).size === missing.length, 'Each field is missing once');
+  return missing;
+}
+
+/** A document's values by field name, as requiredFieldsMissing reads them. */
+export function valuesOf(document: Pick<RemoteDocument, 'fields'>): ReadonlyMap<string, RemoteValue | undefined> {
+  const values = new Map(document.fields.map((field) => [field.name, field.value] as const));
+  assert(values.size <= document.fields.length, 'One value per field');
+  return values;
+}
+
+/**
+ * Whether one field's edit to an existing entry may be written: refused while
+ * it would leave that required field empty. Another field already empty does
+ * not refuse it, since writing this one leaves the file no less complete.
+ */
+export function saveRefused(field: Pick<RemoteSchemaField, 'name' | 'required'>, value: RemoteValue | undefined): boolean {
+  const missing = requiredFieldsMissing([field], new Map([[field.name, value]]));
+  assert(missing.length <= 1, 'One field checked');
+  return missing.length === 1;
+}
+
+/** What an empty required field says under its control. */
+export function requiredMessage(field: Pick<RemoteSchemaField, 'name' | 'title'>): string {
+  return `${fieldTitle(field)} is required`;
+}
+
 function check(rule: RemoteRule, value: RemoteValue | undefined): string | undefined {
   // An empty field breaks only `required`; every other rule checks a value that is there.
   if (isEmptyValue(value)) {

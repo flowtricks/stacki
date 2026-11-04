@@ -37,13 +37,15 @@ import {
 import { REMOTE_SCHEMA_LIMITS, parseRemoteValue, type RemoteOption, type RemoteSchemaField, type RemoteValue } from '../../shared/properties/cmsRemoteSchema';
 import { astroSchemaFields, labelize, referencedCollections } from './astroRemoteSchema';
 import { createAstroCollection } from './astroCollectionConfig';
-import { changeCollectionSettings, readCollectionSettings } from './astroCollectionSettings';
+import { changeCollectionSettings, readCollectionSettings, renameEntryInSources } from './astroCollectionSettings';
 import type { CollectionSettings, SettingsChange } from '../../shared/properties/collectionSettings';
 import { addDataRecord, removeDataRecords } from './astroDataRecords';
 import { entryImage, projectImage, withInferredReferences, type RecordCollection } from './astroRecordReferences';
 
 export { projectImage };
 import { globToRegExp, listEntries, writeEntry, type ContentCollection, type Entry } from './contentEntries';
+import { applyRename, entryRenameLock, planRename } from './contentRefs';
+import { ENTRY_SLUG_LIMITS, splitEntryId, type EntrySlug } from '../../shared/properties/entrySlug';
 
 export interface AstroRemoteService {
   readonly collections: () => Promise<RemoteCollection[]>;
@@ -53,6 +55,8 @@ export interface AstroRemoteService {
   /** A collection's fields with no values, edited before a new entry is created. */
   readonly template: (collection: string) => Promise<RemoteDocument>;
   readonly write: (write: RemoteWrite) => Promise<RemoteDocument>;
+  /** Renames an entry's id to `slug` in its folder, with every reference and getEntry() call to it. */
+  readonly rename: (id: string, slug: string) => Promise<RemoteDocument>;
   readonly create: (collection: string) => Promise<RemoteDocumentSummary>;
   readonly remove: (ids: readonly string[]) => Promise<number>;
   readonly createCollection: (name: string) => Promise<RemoteCollection>;
@@ -125,6 +129,16 @@ export function astroRemoteService(projectPath: string, host: AstroRemoteHost): 
       const { collection, entry } = await located(write.id);
       writeField(projectPath, { collection, entry, write });
       return document(write.id);
+    },
+    rename: async (id, slug) => {
+      const { collection, entry } = await located(id);
+      const to = renamedId(collection, entry, slug);
+      if (to !== entry.id) {
+        const collections = (await editable()).map(renameable);
+        applyRename(projectPath, planRename(projectPath, collections, { collection: collection.name, from: entry.id, to }));
+        renameEntryInSources(projectPath, { collection: collection.name, from: entry.id, to });
+      }
+      return document(documentId(collection.name, to));
     },
     create: async (name) => createEntry(projectPath, await collectionNamed(name)),
     remove: async (ids) => removeEntries(projectPath, host, await Promise.all(ids.map(located))),
@@ -285,6 +299,7 @@ function documentOf(
   });
   const body = bodyField(entry, declared);
   const editedAt = modified(projectPath, entry.file);
+  const slug = entrySlugOf(collection, { entry, entries: own.entries });
   assert(fields.length <= CMS_REMOTE_LIMITS.fieldsMax, 'A document has bounded fields');
   return {
     id: documentId(collection.name, entry.id),
@@ -296,6 +311,7 @@ function documentOf(
     publishedAt: undefined,
     editURL: undefined,
     file: entry.file,
+    slug,
   };
 }
 
@@ -378,7 +394,53 @@ async function templateOf(projectPath: string, collection: Collection, collectio
     editedAt: undefined,
     publishedAt: undefined,
     editURL: undefined,
+    slug: entrySlugOf(collection, { entry: undefined, entries: own.entries }),
   };
+}
+
+// The id's last segment as the Slug field edits it, and the slugs beside it in
+// its folder; a new entry (no `entry`) is made at the collection's root.
+function entrySlugOf(collection: Collection, context: { readonly entry: Entry | undefined; readonly entries: readonly Entry[] }): EntrySlug {
+  const { entry, entries } = context;
+  const own = entry === undefined ? { folder: '', value: '' } : splitEntryId(entry.id);
+  const taken = entries
+    .filter((other) => other.id !== entry?.id)
+    .map((other) => splitEntryId(other.id))
+    .filter((other) => other.folder === own.folder)
+    .map((other) => other.value)
+    .slice(0, ENTRY_SLUG_LIMITS.takenMax);
+  const lock = entry === undefined ? collectionRenameLock(collection) : entryRenameLock(renameable(collection), entry);
+  assert(taken.length <= ENTRY_SLUG_LIMITS.takenMax, 'Taken slugs are bounded');
+  assert(own.folder === '' || own.folder.endsWith('/'), 'A folder ends with its slash');
+  return { ...own, taken, rename: lock === undefined ? { kind: 'editable' } : { kind: 'locked', reason: lock.slice(0, ENTRY_SLUG_LIMITS.reasonCharsMax) } };
+}
+
+// Why a new entry of the collection could not be given its slug, before it exists.
+function collectionRenameLock(collection: Collection): string | undefined {
+  if (collection.loader?.parser) {
+    return `${collection.name} is parsed by a function in the content config, so its ids are not in the file.`;
+  }
+  if (collection.loader?.generateId) {
+    return `${collection.name} builds its ids in its loader, so its id cannot be changed by renaming a file.`;
+  }
+  return undefined;
+}
+
+// The id an entry is renamed to: the slug, in the folder the entry is in already.
+function renamedId(collection: Collection, entry: Entry, slug: string): string {
+  const lock = entryRenameLock(renameable(collection), entry);
+  if (lock !== undefined) {
+    throw new Error(lock);
+  }
+  const { folder } = splitEntryId(entry.id);
+  const to = `${folder}${slug}`;
+  assert(splitEntryId(to).folder === folder, 'A rename keeps the entry’s folder');
+  return to;
+}
+
+// A collection as the rename planner reads it: every collection has a loader kind there.
+function renameable(collection: Collection): Collection & { readonly loader: { readonly kind: string } } {
+  return { ...collection, loader: { ...collection.loader, kind: collection.loader?.kind ?? 'none' } };
 }
 
 // A glob collection whose files are Markdown (or MDX, Markdoc): its entries have a body.

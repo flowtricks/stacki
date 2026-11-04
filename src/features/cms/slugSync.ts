@@ -4,10 +4,11 @@
 import { assert } from '../../../shared/core/assert';
 import { remoteObject, type RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
 import type { RemoteDocumentField } from '../../../shared/properties/cmsRemote';
+import { ENTRY_SLUG_LIMITS, slugify as entrySlugify } from '../../../shared/properties/entrySlug';
 
 export const SLUG_SYNC_LIMITS = {
   /** Sanity's own slug default; a longer name is cut at a word where it can be. */
-  slugCharsMax: 96,
+  slugCharsMax: ENTRY_SLUG_LIMITS.charsMax,
 } as const;
 
 /** The slug field and the text field it follows. */
@@ -35,20 +36,8 @@ export function slugPairOf(fields: readonly RemoteDocumentField[]): SlugPair | u
   return undefined;
 }
 
-/** "Mncedisi Hlatshwayo" → "mncedisi-hlatshwayo": lower case, accents dropped, dashes. */
-export function slugify(text: string): string {
-  const words = text
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  const slug = cut(words, SLUG_SYNC_LIMITS.slugCharsMax);
-  assert(slug.length <= SLUG_SYNC_LIMITS.slugCharsMax, 'A slug stays within its bound');
-  assert(!slug.startsWith('-'), 'A slug never starts with a dash');
-  return slug;
-}
+/** "Mncedisi Hlatshwayo" → "mncedisi-hlatshwayo": one rule with an Astro entry's slug (entrySlug.ts). */
+export const slugify: (text: string) => string = entrySlugify;
 
 /** A slug field's text, from its stored `{ _type: "slug", current }`. */
 export function slugText(value: RemoteValue | undefined): string {
@@ -69,14 +58,4 @@ export function slugValue(text: string): RemoteValue | undefined {
 export function slugInStep(source: RemoteValue | undefined, slug: RemoteValue | undefined) {
   const current = slugText(slug);
   return current === '' || current === slugify(typeof source === 'string' ? source : '');
-}
-
-// Cut at the last dash before the bound, so a long name loses whole words.
-function cut(slug: string, max: number): string {
-  if (slug.length <= max) {
-    return slug;
-  }
-  const head = slug.slice(0, max);
-  const lastDash = head.lastIndexOf('-');
-  return (lastDash > 0 ? head.slice(0, lastDash) : head).replace(/-+$/, '');
 }

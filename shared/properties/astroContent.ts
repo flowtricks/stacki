@@ -13,6 +13,7 @@ import { record, text } from '../core/boundary';
 import { assert } from '../core/assert';
 import type { CmsConnection } from './cmsConnections';
 import { parseSettingsChange, type CollectionSettings, type SettingsChange } from './collectionSettings';
+import { parseEntrySlugText } from './entrySlug';
 import {
   parseRemoteCollectionName,
   type RemoteCollection,
@@ -70,6 +71,8 @@ export type AstroRemoteEditAnswer = RemoteDocument | RemoteDocumentSummary | num
 /** What the panel changes in them: a field, a new or removed entry, a new collection. */
 export type AstroRemoteEdit =
   | { readonly operation: 'write'; readonly write: RemoteWrite }
+  /** A new slug for an entry's id: its file, or its key in a data file, and every reference to it. */
+  | { readonly operation: 'rename'; readonly id: string; readonly slug: string }
   | { readonly operation: 'create'; readonly collection: string }
   | { readonly operation: 'delete'; readonly ids: readonly string[] }
   | { readonly operation: 'createCollection'; readonly name: string }
@@ -113,6 +116,11 @@ export function parseAstroRemoteEdit(input: unknown): AstroRemoteEdit {
       const write = parseRemoteWrite(value['write']);
       assert(!write.field.startsWith('_'), 'A write names a content field, not a system key');
       return { operation: 'write', write };
+    }
+    case 'rename': {
+      const slug = parseEntrySlugText(value['slug']);
+      assert(slug.length > 0, 'A rename names its new slug');
+      return { operation: 'rename', id: parseRemoteDocumentId(value['id']), slug };
     }
     case 'create':
       return { operation: 'create', collection: parseRemoteCollectionName(value['collection']) };

@@ -21,6 +21,8 @@ export function RemoteFieldInput(props: {
   readonly follow?: { readonly value: RemoteValue | undefined } | undefined;
   /** Each edit as it is typed, before it is saved. */
   readonly onDraft?: ((value: RemoteValue | undefined) => void) | undefined;
+  /** Says "… is required" while the field is required and its draft is empty. */
+  readonly requiredShown?: boolean | undefined;
   readonly onSave: (value: RemoteValue | undefined) => void;
 }) {
   const { field, follow } = props;
@@ -47,6 +49,7 @@ export function RemoteFieldInput(props: {
         field={field}
         value={save.draft}
         context={props.context}
+        requiredShown={props.requiredShown}
         onChange={(value) => {
           save.change(value);
           props.onDraft?.(value);

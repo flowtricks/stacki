@@ -10,6 +10,7 @@
 import { record, text } from '../core/boundary';
 import { assert } from '../core/assert';
 import { parseConnectionId } from './cmsConnections';
+import { parseEntrySlug, type EntrySlug } from './entrySlug';
 import { parseProjectFile, parseRemoteSchemaField, parseRemoteValue, type RemoteSchemaField, type RemoteValue } from './cmsRemoteSchema';
 
 export const CMS_REMOTE_LIMITS = {
@@ -141,6 +142,8 @@ export interface RemoteDocument {
    * (an Astro content entry): its image paths are relative to that file's folder.
    */
   readonly file?: string;
+  /** An Astro content entry's id, as its Slug field edits it (entrySlug.ts); a CMS document has none. */
+  readonly slug?: EntrySlug;
 }
 
 export type RemoteResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string };
@@ -322,6 +325,7 @@ export function parseRemoteDocument(input: unknown): RemoteDocument {
     editURL: editURL === undefined ? undefined : parseHTTPS(editURL),
     ...(value['fieldGroups'] === undefined ? {} : { fieldGroups: parseRemoteFieldGroups(value['fieldGroups']) }),
     ...(value['file'] === undefined ? {} : { file: parseProjectFile(value['file']) }),
+    ...(value['slug'] === undefined ? {} : { slug: parseEntrySlug(value['slug']) }),
   };
 }
 

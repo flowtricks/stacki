@@ -567,6 +567,27 @@
 .remote-cms-problem.is-warning {
   color: var(--amber);
 }
+/* What a typed slug is saved as: information, not a problem. */
+.remote-cms-problem.is-note {
+  color: var(--text-dim);
+}
+
+/* An Astro entry's Slug field (EntrySlugField.tsx): the folder its id keeps,
+   then the slug. A slug that cannot be saved fills its box red, with no border. */
+.entry-slug-input {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.entry-slug-input input {
+  flex: 1;
+  min-width: 0;
+}
+.entry-slug-folder {
+  color: var(--text-faint);
+  white-space: nowrap;
+}
 
 /* An item's header changes layout at set widths of the item's own column,
    not wherever a box happens to overflow:

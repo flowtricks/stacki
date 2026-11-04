@@ -8,11 +8,13 @@
 // A type with no preview is titled by its usual name fields.
 
 import { assert } from '../../shared/core/assert';
+import { NAME_KEYS } from '../../shared/properties/entryTitle';
 import type { SanityPreview } from './sanitySchema';
 
 const KEY = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 const PATH = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){0,2}$/;
-const FALLBACK_TITLE = 'title, name, heading, label, slug.current';
+// The name fields Astro entries are titled by too (entryTitle.ts), then the slug.
+const FALLBACK_TITLE = `${NAME_KEYS.join(', ')}, slug.current`;
 const SUBTITLE_CHARS_MAX = 200;
 
 /** The query projection that reads a list row's preview values. */

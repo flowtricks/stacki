@@ -226,6 +226,29 @@ export function renameCollectionIn(source: string, from: string, to: string): st
     .replace(new RegExp(`(CollectionEntry<\\s*)(['"])${name}\\2`, 'g'), `$1$2${to}$2`);
 }
 
+/**
+ * Code fetching entry `from` of `collection` by its id, renamed to `to`:
+ * `getEntry('stats', 'old')` and its siblings, and `{ collection: 'stats', id: 'old' }`.
+ * A reference field's value is an entry's own data, renamed with the entry (contentRefs.ts).
+ */
+export function renameEntryIn(source: string, rename: { readonly collection: string; readonly from: string; readonly to: string }): string {
+  assert(rename.from !== '', 'A rename names the id it changes');
+  assert(rename.to !== '', 'A rename names the id it makes');
+  const name = escape(rename.collection);
+  const from = escape(rename.from);
+  const calls = `((?:getEntry|getEntryBySlug|getDataEntryById|getLiveEntry)\\(\\s*(['"\`])${name}\\2\\s*,\\s*)(['"\`])${from}\\3`;
+  const objects = `(collection:\\s*(['"\`])${name}\\2\\s*,\\s*(?:id|slug):\\s*)(['"\`])${from}\\3`;
+  // A function, so nothing in the new id is read as a replacement pattern.
+  const swap = (_match: string, head: string, _collectionQuote: string, quote: string): string => `${head}${quote}${rename.to}${quote}`;
+  return source.replace(new RegExp(calls, 'g'), swap).replace(new RegExp(objects, 'g'), swap);
+}
+
+/** Renames entry `from` of `collection` in every code file under src; how many files changed. */
+export function renameEntryInSources(projectPath: string, rename: { readonly collection: string; readonly from: string; readonly to: string }): number {
+  const config = configPathOf(projectPath);
+  return rewriteSources(projectPath, config?.rel ?? '', (source) => renameEntryIn(source, rename));
+}
+
 /** Whether code reads collection `name`, so its field reads can be renamed. */
 export function namesCollection(source: string, name: string): boolean {
   // The calls' pattern holds the first group, so the quote is the second there, the first here.

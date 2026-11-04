@@ -7,6 +7,7 @@ import { toRecord, toArray } from '../../shared/core/record';
 import { MAIN_LIMITS } from '../lib/mainLimits';
 import { writeProjectText } from '../documents/documentWrites';
 import { assertContentWitness } from './contentWitness';
+import { entryTitleOf, titleFieldsOf } from '../../shared/properties/entryTitle';
 import * as frontmatter from './formats/markdownEntry';
 import * as jsonFormat from './formats/json';
 import * as yamlFormat from './formats/yaml';
@@ -118,23 +119,6 @@ function walkFiles(directory: string, base = directory, out: string[] = [], dept
   return out;
 }
 
-// The title an entry shows in a list. Its own name if it has one, its id
-// otherwise — an id is always something, which is more than can be said for a
-// record whose fields are all optional.
-const TITLE_KEYS = ['title', 'name', 'label', 'heading', 'question', 'siteName', 'quote'] as const;
-function titleOf(data: unknown, id: string): string {
-  const record = toRecord(data);
-  if (record) {
-    for (const key of TITLE_KEYS) {
-      const value = record[key];
-      if (typeof value === 'string' && value.trim()) {
-        return value.trim();
-      }
-    }
-  }
-  return id;
-}
-
 export interface LoaderInfo {
   readonly kind?: string;
   readonly base?: string;
@@ -220,6 +204,7 @@ function globEntries(projectPath: string, collection: ContentCollection): ListRe
   const files = walkFiles(root).filter((rel) => matchers.some((re) => re.test(rel)));
   files.sort();
 
+  const titleFields = titleFieldsOf(collection.schema);
   const entries: Entry[] = [];
   for (const rel of files) {
     const abs = path.join(root, rel);
@@ -255,7 +240,7 @@ function globEntries(projectPath: string, collection: ContentCollection): ListRe
     } catch (error: unknown) {
       entry = { ...base, error: String(error instanceof Error ? error.message : error), data: {} };
     }
-    entries.push({ ...entry, title: titleOf(entry.data, entry.id) });
+    entries.push({ ...entry, title: entryTitleOf(entry.data, { id: entry.id, fields: titleFields }) });
   }
 
   const generated = loader.generateId;
@@ -398,6 +383,7 @@ function fileEntries(projectPath: string, collection: ContentCollection): ListRe
   }
 
   const { shape, records } = locateRecords(data);
+  const titleFields = titleFieldsOf(collection.schema);
   const entries: Entry[] = records.map(({ id, locator, record, keyed }) => ({
     id,
     file: rel,
@@ -405,7 +391,7 @@ function fileEntries(projectPath: string, collection: ContentCollection): ListRe
     locator,
     keyed: !!keyed,
     data: record,
-    title: titleOf(record, id),
+    title: entryTitleOf(record, { id, fields: titleFields }),
   }));
 
   return {

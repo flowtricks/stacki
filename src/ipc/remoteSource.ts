@@ -58,6 +58,11 @@ export function writeRemoteDocument(projectPath: string, connectionId: string, w
     : connections.writeRemoteDocument(projectPath, connectionId, write);
 }
 
+/** Renames an Astro content entry's id to `slug`, with its file and every reference to it. */
+export function renameContentEntry(projectPath: string, id: string, slug: string): Promise<RemoteResult<RemoteDocument>> {
+  return edit(projectPath, { operation: 'rename', id, slug }, parseRemoteDocument);
+}
+
 export function createRemoteDocument(projectPath: string, connectionId: string, collection: string): Promise<RemoteResult<RemoteDocumentSummary>> {
   return connectionId === ASTRO_CONTENT_ID
     ? edit(projectPath, { operation: 'create', collection }, parseSummary)
