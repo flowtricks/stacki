@@ -15,6 +15,31 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.4 component props, variable chooser, welcome screen
+
+- Component props: the bind dot on a class, data attribute or text lists the component's props
+  and creates a new one (name, tooltip, default and kind: plain text, number with min, max and
+  decimals, switch with On/Off labels, attributes, list, image). Every prop shape Astro can
+  express is read correctly — code-only props show "Set in code" instead of a text box — by one
+  prop model all panels share. Instances mark required props, show defaults dimmed, reset a
+  prop from its label, tag deprecated props and give colour props a swatch. Saving a property
+  unchanged no longer rewrites the file.
+- Variable chooser: scrolls with the wheel from the custom-value box; a chip opens it on its
+  own variable and a pick swaps that chip only; typing `var(` or `--` suggests as you type;
+  ↑/↓ preview variables live, and a press outside puts the original back; a pick replaces
+  selected text; only variables that fit the property are offered.
+- Undo and redo work while typing in Style fields and the custom-value box.
+- Selector field: click between class chips to type there; Delete removes a selected class or
+  data attribute when it is written literally; class suggestions match fuzzily ("btnprim"
+  finds `button-primary`) here and in the Settings class box. The filter checkboxes are always
+  available.
+- ⌘K opens the insert palette; ⌥P toggles the preview, and the preview button names it.
+- Every new Style Block is `<style is:global>`; making a component leaves page CSS untouched.
+- The data picker heads project collections "Content Collections" with the Astro logo, closed
+  until opened, and pages through a list's entries.
+- Welcome screen: a slow WebGL background; readable text contrast across the app.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.4.
+
 ## 1.0.3 Linux release correction
 
 The 1.0.2 release stopped at the Linux build: the Style panel surface test moved the pointer
