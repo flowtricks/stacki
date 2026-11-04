@@ -1,0 +1,8 @@
+---
+interface Props {
+  as?: 'h1' | 'h2' | 'h3' | 'p';
+  text: string;
+}
+const { as: Tag = 'h2', text } = Astro.props;
+---
+<Tag class="polymorphic-as">{text}</Tag>

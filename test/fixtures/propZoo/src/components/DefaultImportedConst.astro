@@ -1,0 +1,14 @@
+---
+import { SITE_TITLE, MAX_ITEMS, SHOW_BANNER } from '../consts.mjs';
+interface Props {
+  title?: string;
+  max?: number;
+  banner?: boolean;
+}
+const { title = SITE_TITLE, max = MAX_ITEMS, banner = SHOW_BANNER } = Astro.props;
+---
+<header class="default-imported-const">
+  {banner && <strong>Banner</strong>}
+  <h1>{title}</h1>
+  <small>max {max}</small>
+</header>

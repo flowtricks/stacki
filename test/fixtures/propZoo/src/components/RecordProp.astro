@@ -1,0 +1,11 @@
+---
+interface Props {
+  labels: Record<string, string>;
+  totals?: Record<'a' | 'b', number>;
+}
+const { labels, totals = { a: 1, b: 2 } } = Astro.props;
+---
+<dl class="record-prop">
+  {Object.entries(labels).map(([key, value]) => <><dt>{key}</dt><dd>{value}</dd></>)}
+  <dt>a+b</dt><dd>{totals.a + totals.b}</dd>
+</dl>

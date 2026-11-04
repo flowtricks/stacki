@@ -1,0 +1,9 @@
+---
+interface Props {
+  data?: unknown;
+  payload?: any;
+  thing?: object;
+}
+const { data, payload, thing } = Astro.props;
+---
+<pre class="unknown-any-props">{JSON.stringify({ data, payload, thing })}</pre>

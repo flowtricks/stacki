@@ -1,0 +1,9 @@
+---
+interface Props {
+  title: string;
+  count?: number;
+}
+const props = Astro.props;
+const count = props.count ?? 1;
+---
+<div class="props-object">{props.title} ({count})</div>

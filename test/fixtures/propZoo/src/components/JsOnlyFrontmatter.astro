@@ -1,0 +1,10 @@
+---
+// Plain JavaScript, the way an agent writes a quick component: no types at all.
+let { heading, items = ['one', 'two'] } = Astro.props;
+heading = heading ?? 'Fallback heading';
+const upper = heading.toUpperCase();
+---
+<section class="js-only-frontmatter">
+  <h4>{upper}</h4>
+  <ul>{items.map((item) => <li>{item}</li>)}</ul>
+</section>

@@ -1,0 +1,9 @@
+---
+const WEIGHTS = ['light', 'regular', 'bold'] as const;
+type Weight = typeof WEIGHTS[number];
+interface Props {
+  weight?: Weight;
+}
+const { weight = 'regular' } = Astro.props;
+---
+<span class="as-const-alias" data-weight={weight}>Weight {weight}</span>

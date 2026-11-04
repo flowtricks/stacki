@@ -1,0 +1,9 @@
+---
+interface Props<T> {
+  items: T[];
+  label: string;
+  render?: (item: T) => string;
+}
+const { items, label, render = (item) => String(item) } = Astro.props;
+---
+<div class="generic-props"><strong>{label}</strong> {items.map((item) => render(item)).join(' · ')}</div>

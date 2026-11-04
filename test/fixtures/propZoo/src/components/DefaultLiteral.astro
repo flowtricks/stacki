@@ -1,0 +1,11 @@
+---
+interface Props {
+  label?: string;
+  size?: number;
+  open?: boolean;
+  ratio?: number;
+  offset?: number;
+}
+const { label = 'Click me', size = 3, open = false, ratio = 0.5, offset = -2 } = Astro.props;
+---
+<button class="default-literal" data-size={size} data-open={open} data-ratio={ratio} data-offset={offset}>{label}</button>

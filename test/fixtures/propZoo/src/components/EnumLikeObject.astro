@@ -1,0 +1,9 @@
+---
+const Tone = { Info: 'info', Warn: 'warn', Error: 'error' } as const;
+type ToneValue = (typeof Tone)[keyof typeof Tone];
+interface Props {
+  tone?: ToneValue;
+}
+const { tone = Tone.Info } = Astro.props;
+---
+<div class={`enum-like-object tone-${tone}`}>Tone: {tone}</div>

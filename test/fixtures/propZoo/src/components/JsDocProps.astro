@@ -1,0 +1,36 @@
+---
+interface Props {
+  /** The text on the button. */
+  label?: string;
+  /**
+   * How many columns the grid uses.
+   * @default 3
+   * @min 1
+   * @max 6
+   * @decimals 0
+   */
+  columns?: number;
+  /**
+   * Opacity of the overlay.
+   * @min 0
+   * @max 1
+   * @decimals 2
+   */
+  opacity?: number;
+  /**
+   * Whether the panel starts open.
+   * @onLabel Shown
+   * @offLabel Hidden
+   */
+  open?: boolean;
+  /**
+   * The old name for label.
+   * @deprecated Use `label` instead.
+   */
+  text?: string;
+  /** @default "medium" */
+  density?: 'compact' | 'medium' | 'comfortable';
+}
+const { label = 'Go', columns = 3, opacity = 0.8, open = true, text, density = 'medium' } = Astro.props;
+---
+<div class="jsdoc-props" data-columns={columns} data-open={open} data-density={density} style={`opacity:${opacity}`}>{text ?? label}</div>

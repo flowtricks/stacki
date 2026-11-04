@@ -1,0 +1,7 @@
+---
+import { getCollection } from 'astro:content';
+import { queryItems } from '../lib/queryItems.mjs';
+const { sort: propSort = [{ "field": "title", "direction": "asc" }], limit: propLimit = 2, skip: propSkip = 0 } = Astro.props;
+const posts = queryItems((await getCollection("blog")) || [], ({ "sort": propSort, "limit": propLimit, "offset": propSkip }), {});
+---
+<ol class="list-sort-prop">{posts.map((post) => <li>{post.data.title}</li>)}</ol>

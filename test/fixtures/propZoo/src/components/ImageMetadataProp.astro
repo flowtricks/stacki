@@ -1,0 +1,11 @@
+---
+import { Image } from 'astro:assets';
+import square from '../assets/square.svg';
+interface Props {
+  image?: ImageMetadata;
+  alt: string;
+  width?: number;
+}
+const { image = square, alt, width = 40 } = Astro.props;
+---
+<figure class="image-metadata-prop"><Image src={image} alt={alt} width={width} /></figure>

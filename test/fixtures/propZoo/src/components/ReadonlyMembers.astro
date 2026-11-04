@@ -1,0 +1,8 @@
+---
+interface Props {
+  readonly title: string;
+  readonly items?: readonly string[];
+}
+const { title, items = [] } = Astro.props;
+---
+<p class="readonly-members">{title} {items.length}</p>

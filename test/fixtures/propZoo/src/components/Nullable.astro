@@ -1,0 +1,9 @@
+---
+interface Props {
+  subtitle: string | null;
+  count?: number | undefined;
+  note?: string | null;
+}
+const { subtitle, count, note = null } = Astro.props;
+---
+<div class="nullable">{subtitle ?? 'No subtitle'} {count ?? 0} {note ?? ''}</div>

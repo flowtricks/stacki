@@ -1,0 +1,8 @@
+---
+interface Props {
+  published: Date;
+  updated?: Date | string;
+}
+const { published, updated } = Astro.props;
+---
+<p class="date-prop"><time datetime={published.toISOString()}>{published.toDateString()}</time> {updated && `(updated ${String(updated)})`}</p>

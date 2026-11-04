@@ -1,0 +1,9 @@
+---
+interface Props {
+  class?: string;
+  style?: string;
+  id?: string;
+}
+const { class: className, style, id } = Astro.props;
+---
+<div class:list={['style-and-class', className]} style={style} id={id}>Style and class</div>

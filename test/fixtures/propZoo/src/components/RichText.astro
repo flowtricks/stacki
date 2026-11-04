@@ -1,0 +1,11 @@
+---
+interface Props {
+  html: string;
+  content?: string;
+}
+const { html, content = '<em>Default rich</em>' } = Astro.props;
+---
+<div class="rich-text">
+  <div set:html={html} />
+  <Fragment set:html={content} />
+</div>

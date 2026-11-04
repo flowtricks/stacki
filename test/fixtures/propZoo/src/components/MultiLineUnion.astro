@@ -1,0 +1,13 @@
+---
+interface Props {
+  /** How the badge is coloured. */
+  color?:
+    | 'gray'
+    | 'blue'
+    | 'green'
+    | 'red';
+  shape?: 'pill' | 'square';
+}
+const { color = 'gray', shape = 'pill' } = Astro.props;
+---
+<span class={`multi-line-union badge-${color} badge-${shape}`}>Badge</span>

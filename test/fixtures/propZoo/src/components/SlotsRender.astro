@@ -1,0 +1,11 @@
+---
+interface Props {
+  items: string[];
+}
+const { items } = Astro.props;
+const rendered = Astro.slots.has('default') ? await Astro.slots.render('default', ['zoo']) : 'Nothing passed';
+---
+<div class="slots-render">
+  <p set:html={rendered} />
+  <ul>{items.map((item) => <li>{item}</li>)}</ul>
+</div>

@@ -1,0 +1,12 @@
+---
+interface Props {
+  tags: string[];
+  scores?: Array<number>;
+  flags?: readonly boolean[];
+}
+const { tags, scores = [1, 2, 3], flags = [] } = Astro.props;
+---
+<ul class="array-primitives" data-flags={flags.length}>
+  {tags.map((tag) => <li>{tag}</li>)}
+  <li>Total {scores.reduce((sum, score) => sum + score, 0)}</li>
+</ul>

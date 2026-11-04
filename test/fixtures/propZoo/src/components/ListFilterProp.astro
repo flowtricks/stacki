@@ -1,0 +1,10 @@
+---
+import { getCollection } from 'astro:content';
+import { queryItems } from '../lib/queryItems.mjs';
+interface Props {
+  filters?: { filterFor: 'ALL' | 'ANY'; fields: { fieldPath: string; operatorName: string; value?: unknown }[] };
+}
+const { filters: propFilters = { "filterFor": "ALL", "fields": [] } } = Astro.props;
+const posts = queryItems((await getCollection("blog")) || [], ({ "filter": propFilters, "limit": 3 }), {});
+---
+<ul class="list-filter-prop">{posts.map((post) => <li>{post.data.title}</li>)}</ul>

@@ -1,0 +1,9 @@
+---
+type Props =
+  | { mode: 'image'; src: string; alt: string; caption?: never }
+  | { mode: 'quote'; caption: string; src?: never; alt?: never };
+const { mode, src, alt, caption } = Astro.props;
+---
+<figure class="discriminated-never">
+  {mode === 'image' ? <img src={src} alt={alt} width="80" height="40" /> : <blockquote>{caption}</blockquote>}
+</figure>

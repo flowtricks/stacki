@@ -1,0 +1,178 @@
+---
+// Every zoo component, once, with a few prop values each. Stacki's prop stress
+// suite selects each instance here, reads its Settings panel and edits it.
+import { getCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import ArrayObjects from '../components/ArrayObjects.astro';
+import ArrayPrimitives from '../components/ArrayPrimitives.astro';
+import AsAssertion from '../components/AsAssertion.astro';
+import AsConstAlias from '../components/AsConstAlias.astro';
+import AsConstArray from '../components/AsConstArray.astro';
+import ClassListVariants from '../components/ClassListVariants.astro';
+import CollectionEntryProp from '../components/CollectionEntryProp.astro';
+import ColorProp from '../components/ColorProp.astro';
+import CommentsInType from '../components/CommentsInType.astro';
+import ConditionalRender from '../components/ConditionalRender.astro';
+import DateProp from '../components/DateProp.astro';
+import DefaultComputed from '../components/DefaultComputed.astro';
+import DefaultExpression from '../components/DefaultExpression.astro';
+import DefaultImportedConst from '../components/DefaultImportedConst.astro';
+import DefaultLiteral from '../components/DefaultLiteral.astro';
+import DefaultsMismatch from '../components/DefaultsMismatch.astro';
+import DestructureLater from '../components/DestructureLater.astro';
+import DirectAccess from '../components/DirectAccess.astro';
+import DirectAccessUntyped from '../components/DirectAccessUntyped.astro';
+import DiscriminatedNever from '../components/DiscriminatedNever.astro';
+import DiscriminatedUnion from '../components/DiscriminatedUnion.astro';
+import EnumLikeObject from '../components/EnumLikeObject.astro';
+import EscapedDefaults from '../components/EscapedDefaults.astro';
+import ExportInterface from '../components/ExportInterface.astro';
+import FunctionProp from '../components/FunctionProp.astro';
+import GenericProps from '../components/GenericProps.astro';
+import HrefProp from '../components/HrefProp.astro';
+import HtmlAttributesProp from '../components/HtmlAttributesProp.astro';
+import ImageMetadataProp from '../components/ImageMetadataProp.astro';
+import ImageUrl from '../components/ImageUrl.astro';
+import ImportedMember from '../components/ImportedMember.astro';
+import ImportedTypes from '../components/ImportedTypes.astro';
+import InlineAnnotation from '../components/InlineAnnotation.astro';
+import Intersection from '../components/Intersection.astro';
+import JsDocProps from '../components/JsDocProps.astro';
+import JsDocProseDefault from '../components/JsDocProseDefault.astro';
+import JsOnlyFrontmatter from '../components/JsOnlyFrontmatter.astro';
+import ListCuratedProp from '../components/ListCuratedProp.astro';
+import ListFilterProp from '../components/ListFilterProp.astro';
+import ListLookalike from '../components/ListLookalike.astro';
+import ListSortProp from '../components/ListSortProp.astro';
+import LocalAliasUnion from '../components/LocalAliasUnion.astro';
+import LoopCount from '../components/LoopCount.astro';
+import MixedUnion from '../components/MixedUnion.astro';
+import MultiLineUnion from '../components/MultiLineUnion.astro';
+import NestedDestructure from '../components/NestedDestructure.astro';
+import NestedObject from '../components/NestedObject.astro';
+import NoTypeDestructure from '../components/NoTypeDestructure.astro';
+import Nullable from '../components/Nullable.astro';
+import NumberUnion from '../components/NumberUnion.astro';
+import NumericFormats from '../components/NumericFormats.astro';
+import OptionalChainDefault from '../components/OptionalChainDefault.astro';
+import OptionalRequired from '../components/OptionalRequired.astro';
+import PassThrough from '../components/PassThrough.astro';
+import PolymorphicAs from '../components/PolymorphicAs.astro';
+import PolymorphicAstro from '../components/PolymorphicAstro.astro';
+import PrimBigint from '../components/PrimBigint.astro';
+import PrimBoolean from '../components/PrimBoolean.astro';
+import PrimNumber from '../components/PrimNumber.astro';
+import PrimString from '../components/PrimString.astro';
+import PromiseProp from '../components/PromiseProp.astro';
+import PropsObject from '../components/PropsObject.astro';
+import QuotedNames from '../components/QuotedNames.astro';
+import ReadonlyMembers from '../components/ReadonlyMembers.astro';
+import RecordProp from '../components/RecordProp.astro';
+import RenamedDestructure from '../components/RenamedDestructure.astro';
+import RestPropsExtends from '../components/RestPropsExtends.astro';
+import RestPropsPlain from '../components/RestPropsPlain.astro';
+import RichText from '../components/RichText.astro';
+import SlotsDefault from '../components/SlotsDefault.astro';
+import SlotsNamed from '../components/SlotsNamed.astro';
+import SlotsRender from '../components/SlotsRender.astro';
+import StringUnion from '../components/StringUnion.astro';
+import StyleAndClass from '../components/StyleAndClass.astro';
+import TemplateLiteral from '../components/TemplateLiteral.astro';
+import TupleProp from '../components/TupleProp.astro';
+import TwoOptionUnion from '../components/TwoOptionUnion.astro';
+import TypeAliasProps from '../components/TypeAliasProps.astro';
+import TypeAliasWithExtendsTag from '../components/TypeAliasWithExtendsTag.astro';
+import UnknownAnyProps from '../components/UnknownAnyProps.astro';
+import square from '../assets/square.svg';
+
+const [post] = await getCollection('blog');
+const names = Promise.resolve(['Ada', 'Grace']);
+---
+<Base title="Prop Zoo">
+  <main>
+    <PrimString title="Hello zoo" />
+    <PrimNumber count={4} />
+    <PrimBoolean visible={true} />
+    <PrimBigint big={10n} />
+    <OptionalRequired name="Ada" age={36} />
+    <DefaultLiteral label="Press" />
+    <DefaultExpression year={2026} />
+    <DefaultComputed brand="Zoo Co" />
+    <DefaultImportedConst />
+    <RenamedDestructure title="Renamed" class="extra" />
+    <NestedDestructure author={{ name: 'Ada' }} meta={{ tags: ['math'] }} />
+    <RestPropsPlain label="Docs" href="/docs" target="_blank" />
+    <RestPropsExtends label="Extends" href="/x" />
+    <TypeAliasProps title="Alias" level={3} />
+    <ExportInterface message="Exported" urgent />
+    <NoTypeDestructure title="Untyped" count={5} />
+    <JsOnlyFrontmatter heading="Plain JS" />
+    <DirectAccess title="Direct" />
+    <PropsObject title="Props object" count={2} />
+    <DirectAccessUntyped label="Untyped direct" year={2025} />
+    <StringUnion variant="secondary" label="Union" />
+    <TwoOptionUnion align="right" />
+    <NumberUnion cols={2} />
+    <AsConstArray size="lg" />
+    <AsConstAlias weight="bold" />
+    <EnumLikeObject tone="warn" />
+    <LocalAliasUnion level="h3" />
+    <MultiLineUnion color="blue" />
+    <DiscriminatedUnion kind="link" href="/go" label="Go" />
+    <DiscriminatedNever mode="quote" caption="A quote" />
+    <MixedUnion value={42} flag={true} />
+    <Nullable subtitle={null} count={3} />
+    <ArrayPrimitives tags={['a', 'b']} scores={[3, 4]} />
+    <ArrayObjects links={[{ label: 'Home', href: '/' }, { label: 'About', href: '/about' }]} />
+    <NestedObject cta={{ label: 'Start', link: { href: '/start', external: false } }} />
+    <RecordProp labels={{ one: '1', two: '2' }} />
+    <TupleProp point={[1, 2]} />
+    <TemplateLiteral anchor="section-zoo" width="200px" />
+    <GenericProps items={[1, 2, 3]} label="Numbers" />
+    <Intersection id="sect" title="Intersected" tone="loud" />
+    <ImportedTypes title="Imported" tone="warning" />
+    <ImportedMember author={{ name: 'Grace' }} tone="danger" />
+    <CollectionEntryProp post={post} />
+    <ImageMetadataProp image={square} alt="A square" />
+    <ImageUrl src="/favicon.svg" alt="Favicon" />
+    <HrefProp href="/about" label="About us" />
+    <ColorProp color="#0055ff" />
+    <RichText html="<strong>Bold</strong> text" />
+    <PolymorphicAs as="h3" text="Polymorphic" />
+    <PolymorphicAstro as="section" label="Astro polymorphic" />
+    <ConditionalRender title="Conditional" showBadge />
+    <LoopCount count={5} />
+    <ClassListVariants variant="secondary" size="lg" rounded />
+    <SlotsDefault title="With slot">Passed body</SlotsDefault>
+    <SlotsNamed bordered>
+      <h4 slot="header">Header</h4>
+      Body
+      <p slot="footer">Footer</p>
+    </SlotsNamed>
+    <SlotsRender items={['x', 'y']}>{(word: string) => <em>{word}</em>}</SlotsRender>
+    <PassThrough variant="ghost" label="Passed through" />
+    <FunctionProp value={9.5} format={(value: number) => `${value} pts`} />
+    <DateProp published={new Date('2026-01-02')} />
+    <PromiseProp names={names} />
+    <JsDocProps columns={4} opacity={0.5} />
+    <JsDocProseDefault />
+    <QuotedNames data-id="q1" />
+    <ReadonlyMembers title="Readonly" />
+    <AsAssertion title="Asserted" />
+    <InlineAnnotation title="Inline" />
+    <StyleAndClass class="extra" style="color: red" />
+    <CommentsInType title="Comments" mode="b" />
+    <EscapedDefaults />
+    <NumericFormats decimal={0.75} />
+    <OptionalChainDefault title="Chained" />
+    <UnknownAnyProps data={{ a: 1 }} />
+    <HtmlAttributesProp label="Attrs" linkAttrs={{ href: '/a', rel: 'nofollow' }} />
+    <TypeAliasWithExtendsTag label="Button tag" type="submit" />
+    <DestructureLater title="Later" />
+    <DefaultsMismatch />
+    <ListFilterProp />
+    <ListSortProp limit={1} />
+    <ListCuratedProp />
+    <ListLookalike />
+  </main>
+</Base>

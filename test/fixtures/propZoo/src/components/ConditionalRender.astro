@@ -1,0 +1,13 @@
+---
+interface Props {
+  showBadge?: boolean;
+  showIcon?: boolean;
+  title: string;
+}
+const { showBadge = false, showIcon = true, title } = Astro.props;
+---
+<div class="conditional-render">
+  {showIcon && <span aria-hidden="true">★</span>}
+  {title}
+  {showBadge ? <span class="badge">New</span> : null}
+</div>

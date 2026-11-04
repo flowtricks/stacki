@@ -1,0 +1,8 @@
+---
+interface Props {
+  align?: 'left' | 'right';
+  theme?: "light" | "dark";
+}
+const { align = 'left', theme } = Astro.props;
+---
+<div class="two-option-union" style={`text-align: ${align}`} data-theme={theme}>Aligned {align}</div>

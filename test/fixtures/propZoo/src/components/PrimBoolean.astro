@@ -1,0 +1,7 @@
+---
+interface Props {
+  visible: boolean;
+}
+const { visible } = Astro.props;
+---
+<p class="prim-boolean">{visible ? 'Visible' : 'Hidden'}</p>

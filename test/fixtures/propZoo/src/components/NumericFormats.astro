@@ -1,0 +1,11 @@
+---
+interface Props {
+  negative?: number;
+  decimal?: number;
+  exponent?: number;
+  hex?: number;
+  separated?: number;
+}
+const { negative = -1, decimal = 0.25, exponent = 1e3, hex = 0x10, separated = 1_000 } = Astro.props;
+---
+<p class="numeric-formats">{negative} {decimal} {exponent} {hex} {separated}</p>

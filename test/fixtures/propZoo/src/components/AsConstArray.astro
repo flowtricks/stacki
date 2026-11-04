@@ -1,0 +1,8 @@
+---
+const SIZES = ['sm', 'md', 'lg'] as const;
+interface Props {
+  size?: (typeof SIZES)[number];
+}
+const { size = 'md' } = Astro.props;
+---
+<span class={`as-const-array size-${size}`}>Size {size}</span>
