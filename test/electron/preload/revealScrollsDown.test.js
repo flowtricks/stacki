@@ -112,15 +112,25 @@ const HOST_PAGE = `<!doctype html><meta charset=utf-8>
        const reveal = (nodePath, id) => run(\`(async () => {
          const frame = document.getElementById('canvas').contentWindow;
          frame.postMessage({ type: 'avb:scroll-to', path: '\${nodePath}', occ: 0 }, '*');
-         const SETTLE_TRIES_MAX = 40;
+         // Settled means the element is on screen and the page has stopped, or
+         // the page has held still for ten readings. Two equal readings were not
+         // enough: on the Linux runner a smooth scroll can pause between frames
+         // for longer than one 60 ms reading, and was read 9px into its way.
+         const element = frame.document.getElementById('\${id}');
+         const SETTLE_TRIES_MAX = 80;
+         const STILL_READINGS_MAX = 10;
          let last = -1;
+         let still = 0;
          for (let attempt = 0; attempt < SETTLE_TRIES_MAX; attempt += 1) {
            await new Promise((r) => setTimeout(r, 60));
            const now = frame.scrollY + frame.scrollX * 100000;
-           if (attempt > 4 && now === last) { break; }
+           still = now === last ? still + 1 : 0;
            last = now;
+           const box = element.getBoundingClientRect();
+           const onScreen = box.top >= 0 && box.bottom <= frame.innerHeight;
+           if (attempt > 4 && still >= 2 && onScreen) { break; }
+           if (still >= STILL_READINGS_MAX) { break; }
          }
-         const element = frame.document.getElementById('\${id}');
          const lefts = [];
          for (let node = element; node; node = node.parentElement) {
            lefts.push(node.scrollLeft);

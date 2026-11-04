@@ -15,6 +15,17 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.5 release correction
+
+The 1.0.4 release stopped on every platform at the prop model's parity test: its snapshot
+listed six generated benchmark pages under `test/fixtures/large/`, which are git-ignored and so
+exist only in a working copy that generated them, never in a clean checkout. The snapshot now
+holds only files the repository carries, and the test asserts that none from there return. On
+Linux, the reveal test also read a smooth scroll 9px into its way; it now waits until the
+element is on screen and the page has stopped, or the page has held still, within a bound.
+The app was not at fault. Version 1.0.4 has its tag but no Desktop release; Desktop, the
+Studio source bundle and `create-stacki` are aligned at 1.0.5 with the 1.0.4 changes below.
+
 ## 1.0.4 component props, variable chooser, welcome screen
 
 - Component props: the bind dot on a class, data attribute or text lists the component's props
@@ -38,7 +49,7 @@ include later changes.
 - The data picker heads project collections "Content Collections" with the Astro logo, closed
   until opened, and pages through a list's entries.
 - Welcome screen: a slow WebGL background; readable text contrast across the app.
-- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.4.
+- Desktop, the Studio source bundle and `create-stacki` were to align at 1.0.4; they align at 1.0.5.
 
 ## 1.0.3 Linux release correction
 

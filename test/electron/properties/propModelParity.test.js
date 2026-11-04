@@ -112,7 +112,10 @@ function differences(reader, before, after) {
 
 test('the snapshot covers every component under test/', () => {
   const files = Object.keys(SNAPSHOT.files);
-  assert.ok(files.length >= 140, `the corpus has ${files.length} files`);
+  assert.ok(files.length >= 135, `the corpus has ${files.length} files`);
+  // Only files the repository carries: the generated benchmark pages in
+  // test/fixtures/large are git-ignored, so a clean checkout (CI) has none.
+  assert.ok(!files.some((file) => file.startsWith('test/fixtures/large/')), 'no generated fixture is in the corpus');
   assert.ok(files.filter((file) => file.startsWith(`${ZOO}src/components/`)).length === 80, 'the whole prop zoo is in the corpus');
   for (const key of Object.keys(INTENDED)) {
     assert.ok(SNAPSHOT.files[key.split('#')[0]], `${key}: an intended change names a corpus file`);
