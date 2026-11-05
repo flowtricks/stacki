@@ -15,6 +15,18 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.10 new collections load in a running preview, clean new entries
+
+- Astro reads `src/content.config.*` only when the dev server starts, so a collection added while
+  the preview ran (the CMS's first collection, or a config written by hand) read as empty and the
+  data picker said "Reading one entry…" forever. An empty read from a preview that started before
+  its content config existed now restarts the preview once, on the same address, and reads again.
+- A new Markdown entry starts as an empty `---`/`---` frontmatter, which was not recognised: the
+  first field written added a second block above it, and new or duplicated entries kept `---`
+  lines in their body. The empty block is now filled in place.
+- `create-stacki` 1.0.9 was never published. Desktop, the Studio source bundle and
+  `create-stacki` are aligned at 1.0.10.
+
 ## 1.0.9 one-letter tags no longer crash the app
 
 - 1.0.8's element tooltip asserted that every chip was longer than one character, so selecting
