@@ -32,7 +32,8 @@ export function cmsHandlers() {
     },
   };
   registerCmsHandlers(host);
-  registerContentHandlers(host);
+  // Studio's dev server is not Desktop's DevServers; it has no restart here.
+  registerContentHandlers(host, { restartForNewContentConfig: async () => false });
   return handlers;
 }
 // Only imported by the upstream engine running in an isolated staging directory.

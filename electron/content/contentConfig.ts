@@ -36,6 +36,11 @@ const CONFIG_FILES = [
   'src/content/config.mjs',
 ];
 
+/** Whether the project has a content config in any place Astro reads one from. */
+export function hasContentConfig(projectPath: string): boolean {
+  return configPathOf(projectPath) !== undefined;
+}
+
 function configPathOf(projectPath: string): { abs: string; rel: string } | undefined {
   for (const rel of CONFIG_FILES) {
     const abs = path.join(projectPath, rel);

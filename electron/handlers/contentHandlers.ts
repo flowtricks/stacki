@@ -17,9 +17,15 @@ import { errorMessage, toPosix } from '../lib/mainHelpers';
 import { collectionOf } from './cmsFiles';
 import type { MainHost } from './mainHost';
 
-export function registerContentHandlers(host: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send' | 'shell'>): void {
+/** What the content handlers ask of the running preview. */
+export interface ContentPreview {
+  /** Restart the dev server at this URL if its content config is newer than it (DevServers). */
+  readonly restartForNewContentConfig: (devUrl: string) => Promise<boolean>;
+}
+
+export function registerContentHandlers(host: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send' | 'shell'>, preview: ContentPreview): void {
   registerContentConfigHandlers(host);
-  registerContentRenameHandlers(host);
+  registerContentRenameHandlers(host, preview);
   registerContentRemoteHandlers(host);
 }
 
@@ -167,7 +173,7 @@ function registerContentConfigHandlers({ ipcMain, noteAppWrite, send }: Pick<Mai
   });
 }
 
-function registerContentRenameHandlers({ ipcMain, noteAppWrite, send }: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send'>): void {
+function registerContentRenameHandlers({ ipcMain, noteAppWrite, send }: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send'>, preview: ContentPreview): void {
   ipcMain.handle('content:rename', async (_event, { projectPath, name, from, to }) => {
     const config = parseContentConfig(await readContentConfig(projectPath));
     const plan = planRename(
@@ -222,7 +228,17 @@ function registerContentRenameHandlers({ ipcMain, noteAppWrite, send }: Pick<Mai
       if (refreshError !== undefined) {
         return { entry: undefined, error: refreshError };
       }
-      return await fetchSampleEntry(`${devUrl}/__avb/data?${query}`);
+      const synced = await fetchSampleEntry(`${devUrl}/__avb/data?${query}`);
+      if (synced.error !== undefined || (synced.entry !== undefined && synced.entry !== null)) {
+        return synced;
+      }
+      // Still none: a server started before the project had a content config
+      // never loaded it, and no sync will. It restarts once with the config,
+      // and is asked again.
+      if (await preview.restartForNewContentConfig(devUrl)) {
+        return await fetchSampleEntry(`${devUrl}/__avb/data?${query}`);
+      }
+      return synced;
     } catch (error: unknown) {
       return { entry: undefined, error: errorMessage(error) };
     }

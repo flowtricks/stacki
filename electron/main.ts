@@ -933,7 +933,7 @@ const host: MainHost = {
 registerAssetHandlers(host);
 registerCmsHandlers(host);
 registerComponentHandlers(host);
-registerContentHandlers(host);
+registerContentHandlers(host, { restartForNewContentConfig: (devUrl) => devServers.restartForNewContentConfig(devUrl) });
 registerCssVariableHandlers(host);
 registerGitHandlers(host);
 registerGitRepositoryHandlers(host);

@@ -6,6 +6,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFile, type ChildProcess } from 'child_process';
+import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import { toRecord } from '../../shared/core/record';
 import type { IpcResults } from '../../shared/ipc/ipcResults';
@@ -32,6 +33,7 @@ import {
   serverAlive,
   trailingSlashFromSource,
 } from '../preview/devServerChecks';
+import { hasContentConfig } from '../content/contentConfig';
 import { DATA_ENDPOINT, PATHS_ENDPOINT, VALUE_ENDPOINT, renderMarkerConfig } from '../preview/markerConfig';
 import { PROGRESS_CLEARED, installDependencies } from './projectHandlers';
 import type { MainHost } from './mainHost';
@@ -90,6 +92,12 @@ const MORPH_TAG_HTML = MORPH_CLIENT ? "<script>import 'virtual:avb-morph';</scri
 
 export class DevServers {
   private server: DevServer | undefined = undefined;
+  // Whether the running server's project had a content config when it started.
+  // Astro reads src/content.config.* once, at startup: a config that appears
+  // later (the CMS's first collection, or one written by hand) is never loaded,
+  // and its collections read as empty for as long as that server runs. The
+  // content-sync hook cannot fix it, since it re-syncs the config it has.
+  private contentConfigAtStart: { readonly url: string; readonly present: boolean } | undefined = undefined;
   private logBuffer: string[] = [];
   // Serialize dev:start calls — concurrent spawns race Astro's daemon lock and
   // the loser dies with "exited before becoming ready".
@@ -152,6 +160,47 @@ export class DevServers {
     }
     // External servers have no owned process and stay running.
     stopProcessTree(proc);
+  }
+
+  /**
+   * Restarts the dev server at `devUrl` when its project gained a content
+   * config after it started, so Astro loads the collections it declares.
+   * Once per server: the restarted one starts with the config, so it never
+   * asks again. Resolves true when the server is back at the same address
+   * (its port comes from the project path, so it normally is) — the canvas's
+   * Vite client reconnects to it by itself. False when there was nothing to
+   * do, or the server came back somewhere else; the app then hears of it as
+   * an exit and offers to start the preview again.
+   */
+  async restartForNewContentConfig(devUrl: string): Promise<boolean> {
+    const server = this.server;
+    const atStart = this.contentConfigAtStart;
+    if (server === undefined || server.external === true || server.url !== devUrl) {
+      return false;
+    }
+    if (atStart === undefined || atStart.url !== devUrl || atStart.present) {
+      return false;
+    }
+    if (!hasContentConfig(server.projectPath)) {
+      return false;
+    }
+    // Cleared before the restart, so a second empty read meanwhile does not
+    // start another one.
+    this.contentConfigAtStart = undefined;
+    const { projectPath } = server;
+    this.pushLog('\n[stacki] the content config appeared after the preview started; restarting it so Astro loads its collections.\n');
+    await this.pause();
+    const restarted = await this.run(projectPath, async (assertActive) => ({
+      ...(await this.start(projectPath, assertActive)),
+      trailingSlash: this.readTrailingSlash(projectPath),
+    }));
+    assert(restarted.url.length > 0, 'A restarted server has an address');
+    assert(hasContentConfig(projectPath), 'A server restarted for its content config starts with one');
+    if (restarted.url !== devUrl) {
+      this.host.send('dev:exit', { code: 0, log: this.recentLog() });
+      return false;
+    }
+    return true;
   }
 
   /** The trailing-slash mode the project's dev server serves. */
@@ -273,15 +322,16 @@ export class DevServers {
 
     // A lock file means a daemon exists (possibly stale, possibly started
     // without the app's marker config) — pass --force so ours replaces it.
+    const configPresent = hasContentConfig(projectPath);
     let lastError: unknown = undefined;
     for (let attempt = 0; attempt < 2; attempt++) {
       const force = attempt > 0 || !!readAstroLock(projectPath);
       try {
         // Retry with --force: first-attempt daemon startup can flake (stale
         // daemon state, vite re-optimizing after a config change).
-        return {
-          url: await this.spawn(projectPath, localBin, { force, bare: false }, assertActive),
-        };
+        const url = await this.spawn(projectPath, localBin, { force, bare: false }, assertActive);
+        this.contentConfigAtStart = { url, present: configPresent };
+        return { url };
       } catch (error: unknown) {
         assertActive();
         lastError = error;
