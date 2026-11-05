@@ -128,6 +128,25 @@ const check = (what, condition, detail) => {
          await new Promise((r) => setTimeout(r, 30));
          lefts.push(await js("(() => { const l = document.querySelector('.u-select-list'); return l ? l.getBoundingClientRect().left : null })()"));
        }
+       // The insets are measured at rest. A hidden window on a slow runner can
+       // still be in the open motion (scale 0.985) after the samples above,
+       // which read 8px margins as 9.98px on Linux CI; wait for the popup to
+       // leave its opening phase and for its transitions to finish, bounded.
+       const settled = await js(\`(async () => {
+         for (let i = 0; i < 100; i += 1) {
+           const list = document.querySelector('.u-select-list');
+           const phased = list ? list.closest('[data-popup-phase]') : null;
+           const opening = phased !== null && phased.getAttribute('data-popup-phase') === 'opening';
+           if (list && !opening) {
+             await Promise.all(list.getAnimations({ subtree: true }).map((a) => a.finished));
+             if (phased) { await Promise.all(phased.getAnimations().map((a) => a.finished)); }
+             return true;
+           }
+           await new Promise((r) => setTimeout(r, 30));
+         }
+         return false;
+       })()\`);
+       if (!settled) { throw new Error('the menu never finished opening'); }
        const out = await js(\`(() => {
          const list = document.querySelector('.u-select-list');
          const l = list.getBoundingClientRect();
