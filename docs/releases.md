@@ -15,6 +15,16 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.8 typed classes land on the element, element tooltip
+
+- A name typed without a dot in the Style panel's selector box (`hero_wrap`) was read as a tag
+  selector for an element nobody has, so the class never went on the element and the Settings
+  class box missed it until a style was set. It is now a class, added at once, unless it is an
+  HTML or SVG tag or the selected element's own tag; `.`, `#`, `[` and `:` stay as typed.
+- Resting on the element line above the selector field shows the whole element as chips: the
+  tag and id grey, each class blue, every authored attribute purple.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.8.
+
 ## 1.0.7 loops that hold text, data picker marks
 
 - A Text element dropped into a loop was written as `( Text )`, which Astro reads as a
